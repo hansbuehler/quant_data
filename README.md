@@ -55,9 +55,18 @@ python -c "import quantdata; print(quantdata.__version__)"
 
 ## Tests
 
+The pytest test suite enables test mode automatically by setting `QUANTDATA_TEST_MODE=1` in `tests/conftest.py` before test modules are imported. That bootstrap also creates the local `tests/stored_data/raw`, `tests/stored_data/processing`, and `tests/stored_data/training` directories if they do not already exist.
+
 Run the test suite with:
 
 ```powershell
+python -m pytest
+```
+
+If you want to reproduce the same behavior manually in a terminal, run:
+
+```powershell
+$env:QUANTDATA_TEST_MODE = "1"
 python -m pytest
 ```
 

@@ -1,4 +1,4 @@
-"""Numeric helper functions used to validate packaging, testing, and docs."""
+"""Just here for checking testing works"""
 
 from __future__ import annotations
 

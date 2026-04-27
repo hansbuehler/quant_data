@@ -45,12 +45,14 @@ class Locations:
     * :attr:`raw`: for raw data downloads, typically not fast (e.g. a NAS drive)
     * :attr:`processing`: for intermediate data products, e.g. cleaned and merged datasets. Medium storage speed, mostly CPU accessed.
     * :attr:`training`: for final training input data. This location should be fast to access for training.
+    * :attr:`temp`: for temporary caching of data, e.g. from API calls. Assume this data expires after the process ends.
 
     Underneath these locations each data source has its own subdirectory e.g. "wrds".
     Under these, further structure is typically imposed by cached files and their parameters.
 
-    Note that all directories are overwritten if the environment variable ``QUANTDATA_TEST_MODE`` is set to ``1``,
+    Note that all directories are reset if the environment variable ``QUANTDATA_TEST_MODE`` is set to ``1``,
     in which case they point to a local data store in ``tests/stored_data/raw``, ``tests/stored_data/processing``, and ``tests/stored_data/training`` respectively. 
+    This is used for testing.
     """
     raw: SubDir #: for raw data downloads, e.g. from WRDS (the actual WRDS locations defined in :attr:`quantdata.wrds`)
     processing: SubDir #: for intermediate data products, e.g. cleaned and merged datasets
@@ -126,50 +128,51 @@ class Environment(object):
     This will force the code to always fetch fresh data and not use any cached files.
     """
 
+    CACHE_EXCLUDE_ARGS = ["self", Context, "WRDSClient", "MassiveClient"]
+
     def __init__(self):
         # identify directories
         # ---------------------
         self.test_mode  : bool = os.environ.get("QUANTDATA_TEST_MODE", "0") == "1"  # turn off any connections
         self._wrds = None
 
-        raw        = os.environ.get("QUANTDATA_RAW_DATA", None)
-        processing = os.environ.get("QUANTDATA_PROCESSING_DATA", None)
-        training   = os.environ.get("QUANTDATA_TRAINING_DATA", None)
-        temp       = os.environ.get("QUANTDATA_TEMP_DATA", "!/quantdata")
-        def_root   = os.environ.get("QUANTDATA_ROOT", None)
-        cache_mode = os.environ.get("QUANTDATA_CACHE_MODE", None)
-
-        if not cache_mode is None:
-            try:
-                cache_mode = CacheMode(cache_mode)
-            except ValueError as e:
-                raise ValueError(f"Invalid cache mode specified in environment variable QUANTDATA_CACHE_MODE: '{cache_mode}': {e}.") from e
-            warnings.warn(f"Using cache mode '{cache_mode}' as specified in environment variable QUANTDATA_CACHE_MODE.")
-
-        raw        = SubDir(raw) if not raw is None else None
-        processing = SubDir(processing) if not processing is None else None
-        training   = SubDir(training) if not training is None else None
-        temp       = SubDir(temp) if not temp is None else None
-
-        if raw is None or processing is None or training is None:
-            if def_root is None:
-                raise RuntimeError( "Could not identify all working directories: use the following environment variables: "+\
-                                   f"QUANTDATA_RAW_DATA: '{'(missing)' if raw is None else raw }'; "+\
-                                   f"QUANTDATA_PROCESSING_DATA: '{'(missing)' if processing is None else processing }'; "+\
-                                   f"QUANTDATA_TRAINING_DATA: '{'(missing)' if training is None else training }'; "+\
-                                   f"QUANTDATA_TEMP_DATA: '{'(missing)' if temp is None else temp }'. "+
-                                   "Alternatively you may set a generic QUANTDATA_ROOT directory")
-                                
-            def_root = SubDir(def_root)
-            raw = def_root("raw") if raw is None else raw
-            processing = def_root("processing") if processing is None else processing
-            training = def_root("training") if training is None else training
-            temp = def_root("temp") if temp is None else temp
-
-        exclude = [Context, "WRDSConnection", "PolyClient"]
-        cc = CacheController(exclude_arg_types=exclude, cache_mode=cache_mode)
-
         if not self.test_mode:
+            raw        = os.environ.get("QUANTDATA_RAW_DATA", None)
+            processing = os.environ.get("QUANTDATA_PROCESSING_DATA", None)
+            training   = os.environ.get("QUANTDATA_TRAINING_DATA", None)
+            temp       = os.environ.get("QUANTDATA_TEMP_DATA", "!/quantdata")
+            def_root   = os.environ.get("QUANTDATA_ROOT", None)
+            cache_mode = os.environ.get("QUANTDATA_CACHE_MODE", None)
+
+            if not cache_mode is None:
+                try:
+                    cache_mode = CacheMode(cache_mode)
+                except ValueError as e:
+                    raise ValueError(f"Invalid cache mode specified in environment variable QUANTDATA_CACHE_MODE: '{cache_mode}': {e}.") from e
+                warnings.warn(f"Using cache mode '{cache_mode}' as specified in environment variable QUANTDATA_CACHE_MODE.")
+
+            raw        = SubDir(raw) if not raw is None else None
+            processing = SubDir(processing) if not processing is None else None
+            training   = SubDir(training) if not training is None else None
+            temp       = SubDir(temp) if not temp is None else None
+
+            if raw is None or processing is None or training is None:
+                if def_root is None:
+                    raise RuntimeError( "Could not identify all working directories: use the following environment variables: "+\
+                                    f"QUANTDATA_RAW_DATA: '{'(missing)' if raw is None else raw }'; "+\
+                                    f"QUANTDATA_PROCESSING_DATA: '{'(missing)' if processing is None else processing }'; "+\
+                                    f"QUANTDATA_TRAINING_DATA: '{'(missing)' if training is None else training }'; "+\
+                                    f"QUANTDATA_TEMP_DATA: '{'(missing)' if temp is None else temp }'. "+
+                                    "Alternatively you may set a generic QUANTDATA_ROOT directory")
+                                    
+                def_root = SubDir(def_root)
+                raw = def_root("raw") if raw is None else raw
+                processing = def_root("processing") if processing is None else processing
+                training = def_root("training") if training is None else training
+                temp = def_root("temp") if temp is None else temp
+
+            cc = CacheController(exclude_arg_types=self.CACHE_EXCLUDE_ARGS, cache_mode=cache_mode)
+
             raw = SubDir(raw, cache_controller=cc)
             processing = SubDir(processing, cache_controller=cc)
             training = SubDir(training, cache_controller=cc)
@@ -180,14 +183,14 @@ class Environment(object):
             # ---------
             # In test mode, we use locally stored data.
             # We also do not write to the cache (which is now pointing to a local data store)
-            test_cc = CacheController(exclude_arg_types=exclude, cache_mode="cacheonly")
+            test_cc = CacheController(exclude_arg_types=self.CACHE_EXCLUDE_ARGS, cache_mode="cacheonly")
             parent  = SubDir( str(Path(__file__).parent.parent / "tests" / "stored_data"), create_directory=False, cache_controller=test_cc )
             raw = parent("raw", cache_controller=test_cc)
             training = parent("training", cache_controller=test_cc)
             processing = parent("processing", cache_controller=test_cc)
 
             # temp is different: will create a directory which self-deletes upon deletion of the object.
-            temp = SubDir("?/quantdata_test_temp", cache_controller=cc, create_directory=True) # this can always read/write. 
+            temp = SubDir("?/quantdata_test_temp", cache_controller=test_cc, create_directory=True) # this can always read/write. 
 
             if not raw.path_exists():
                 raise FileNotFoundError(f"Could not find stored raw data for testing at: {raw.path}")
