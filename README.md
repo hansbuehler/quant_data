@@ -30,16 +30,6 @@ Upgrade pip and install the project in editable mode:
 
 ```powershell
 python -m pip install --upgrade pip
-python -m pip install -e .
-```
-
-### Install optional dependency groups
-
-The project defines optional extras in `pyproject.toml`:
-
-```powershell
-python -m pip install -e .[test]
-python -m pip install -e .[docs]
 python -m pip install -e .[dev]
 ```
 
@@ -52,6 +42,31 @@ After installation, the package should be importable from the active environment
 ```powershell
 python -c "import quantdata; print(quantdata.__version__)"
 ```
+
+## Environment Variables
+
+You will need to set your directory and data access variables.
+
+* ``QUANTDATA_RAW_DATA``: root directory for storing raw cached data. Usually does not need to be fast, e.g. a network drive.
+* ``QUANTDATA_PROCESSING_DATA``: intermediate processing: good for multi-process CPU access, but does not need to deliver to GPU.
+* ``QUANTDATA_TRAINING_DATA``: training data with the most effective disk to GPU location.
+
+* ``QUANTDATA_ROOT``: if you have everything in one place anyway, use this to set all of the above in one step.
+
+### Caching
+
+* ``QUANTDATA_CACHE_MODE``: is the project-wide caching mode. Use ``off`` to disable, or ``update`` to for an update. Default is ``on``.
+
+### Data Access
+
+* ``MASSIVE_TOKEN`` is the [massive](http://www.massive.com) token.
+* ``WRDS_USERNAME``: is the [WRDS](https://wrds-www.wharton.upenn.edu/login/) username.
+
+### Ignore for now
+
+* ``QUANTDATA_TEST_MODE``: global flag to tell the project we are in testing mode. In this mode, no data is downloaded from any data source.
+* ``QUANTDATA_TEMP_DATA``: local ephermal caching. Very useful for exceedingly slow processes. Not used at the moment.
+
 
 ## Tests
 
