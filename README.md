@@ -1,6 +1,6 @@
 # quantdata
 
-Pythin environment for systematically processing financial data and building pipelines to feed it to models.
+Python environment for systematically processing financial data and building pipelines to feed it to models.
 The aim of the project is to joinly develop robust data pipelines which lead to standadized benchmarks in finance.
 
 
