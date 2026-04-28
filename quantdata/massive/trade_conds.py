@@ -267,18 +267,16 @@ MICROSTRUCTURE_HARD_EXCLUDE = (
 )
 
 NORMAL_TRADE_EXCLUDE_FLAGS = (
-MICROSTRUCTURE_HARD_EXCLUDE # options realy
-| ConditionFlag.AUCTION
-| ConditionFlag.CROSS
-| ConditionFlag.OPENING_PRINT
-| ConditionFlag.CLOSING_PRINT
-| ConditionFlag.OFFICIAL_OPEN
-| ConditionFlag.OFFICIAL_CLOSE
-| ConditionFlag.ODD_LOT
-| ConditionFlag.CONTINGENT
-| ConditionFlag.QCT
-| ConditionFlag.TRADE_THRU_EXEMPT
-| ConditionFlag.ISO
+    MICROSTRUCTURE_HARD_EXCLUDE  # data quality issues (late, cancelled, corrections, etc.)
+    | ConditionFlag.CROSS  # cross trades are reported separately, not normal market trades
+    | ConditionFlag.OPENING_PRINT  # opening prints are special print conditions, not regular trades
+    | ConditionFlag.CLOSING_PRINT  # closing prints are special print conditions, not regular trades
+    | ConditionFlag.OFFICIAL_OPEN  # official open prices are reference/index, not actual trades
+    | ConditionFlag.OFFICIAL_CLOSE  # official close prices are reference/index, not actual trades
+    | ConditionFlag.ODD_LOT  # odd lots are non-standard size trades
+    | ConditionFlag.CONTINGENT  # contingent trades are conditional, not unconditional normal trades
+    | ConditionFlag.QCT  # qualified contingent trades are special conditions
+    | ConditionFlag.TRADE_THRU_EXEMPT  # exemptions indicate special trade handling
 )
 
 

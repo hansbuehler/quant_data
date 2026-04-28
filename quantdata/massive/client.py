@@ -234,10 +234,18 @@ class MassiveClient(object):
                     exclude_args=["self"] )
     def fetch_trades(self,
                      ticker: str, 
-                     d: date) -> pl.DataFrame:
+                     d: date
+                     ) -> pl.DataFrame:
         """
         Gets trades from /v3/trades/{ticker} sorted by sip_timestamp asc.
         Used both for options and underlyings.
+
+        The returned :class:`polars.DataFrame` has the following columns:
+        * ts_ns: Datetime[ns, tz]: time zone information with nanonsecond resolutuin.
+        * price: Float64
+        * size: Float64
+        * trade_code: UInt32. Compressed & Packed trade conditions, see :func:`quantdata.massive.trade_conds.pack_conditions`.
+          It is recommended to remove trades with uncommon conditions, see :attr:`quantdata.massive.trade_conds.NORMAL_TRADE_EXCLUDE_FLAGS`.
 
         Parameters
         ----------
@@ -257,7 +265,7 @@ class MassiveClient(object):
             * ts_ns: Datetime[ns, tz]
             * price: Float64
             * size: Float64
-            * trade_code: UInt32
+            * trade_code: UInt32. Compressed & Packed trade conditions, see :func:`quantdata.massive.trade_conds.pack_conditions`.
         """
         url = f"{self.BASE_URL}/v3/trades/{ticker}"
         params = {
@@ -357,14 +365,17 @@ class MassiveClient(object):
 
     @_cache(fmt=SubDir.PICKLE).cache(
                     "0.1",
-                    label=lambda ticker,d,adjusted,can_be_none: f"ocv/{ticker}/{fmt_date(d)} {'a1' if adjusted else 'a0'} {'c0' if can_be_none else 'c1'}",
+                    label=lambda ticker,d,adjusted,can_be_none: f"open-close/{ticker}/{fmt_date(d)} {'a1' if adjusted else 'a0'} {'c0' if can_be_none else 'c1'}",
                     exclude_args=["self"] )  
-    def fetch_day_ocv(self, ticker: str, d: date, *, adjusted : bool, can_be_none : bool = False ) -> dict | None:
+    def fetch_day_summary(self, ticker: str, d: date, *, adjusted : bool, can_be_none : bool = False ) -> dict | None:
         """
-        Fetch open/close/volume for ``ticker`` on date ``d``.
-        Returns dict with keys: open, close, volume, adjusted
+        Fetch open/close/volume/high/low for ``ticker`` on date ``d``.
+        Returns dict with keys: open, close, low, high, volume, adjusted and optionally afterHours and preMarket if available.  
 
-        If no trade was recorded raise an exception except of ``can_be_none`` is True, in which case return ``None``.
+        See https://massive.com/docs/rest/options/aggregates/daily-ticker-summary
+
+        If no trade was recorded raise an exception except of ``can_be_none`` is True,
+        in which case return ``None``.
 
         Parameters
         ----------
@@ -383,7 +394,7 @@ class MassiveClient(object):
         Returns
         -------
         dict
-            Dict with keys: ``open [float]``, ``close [float]``, ``volume [float]``, ``adjusted [bool]``
+            Dict with keys: ``open [float]``, ``close [float]``, ``low [float]``, ``high [float]``, ``volume [float]``, ``adjusted [bool]``, and optionally ``afterHours [float|None]`` and ``preMarket [float|None]`` if available.
         """
         url = f"{self.BASE_URL}/v1/open-close/{ticker}/{d:%Y-%m-%d}"
         try:
@@ -397,16 +408,26 @@ class MassiveClient(object):
         open = data.get("open")
         close = data.get("close")
         volume = data.get("volume")
-        has_data = open is not None and close is not None and volume is not None
+        high = data.get("high")
+        low = data.get("low")
+        has_data = open is not None and close is not None and volume is not None and high is not None and low is not None
         if not has_data:
             if can_be_none:
                 return None
-            raise RuntimeError(f"Cannot get {'adjusted' if adjusted else 'unadjusted'} open/close/volume for {ticker} on {d}. Massive URL used: '{url}'.")
+            raise RuntimeError(f"Cannot get {'adjusted' if adjusted else 'unadjusted'} open/close/volume/high/low for {ticker} on {d}. Massive URL used: '{url}'.")
+
+        def get_optional(item, type=float):
+            x = data.get(item, None)
+            return x if x is None else type(x)
 
         return {
             "open": float(open),
             "close": float(close),
             "volume": float(volume),
+            "high": float(high),
+            "low": float(low),
+            "afterHours": float(get_optional("afterHours")),
+            "preMarket": float(get_optional("preMarket")),
             "adjusted": adjusted,
         }
 

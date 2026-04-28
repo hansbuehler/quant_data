@@ -13,7 +13,7 @@ from quantdata.biz_calendar import DateRange, get_business_days, add_business_da
 #rom aae.locations import locations, SubDir
 #from aae.market import nyse
 #from aae.poly import PolyHandle, POLY_START_DATE
-#from aae.poly.fetch import fetch_day_ocv, has_any_quotes, has_any_trades
+#from aae.poly.fetch import fetch_day_summary, has_any_quotes, has_any_trades
 #from aae.tickers.calendar import polygon_splits
 from cdxcore.version import version
 from cdxcore.err import verify
@@ -94,7 +94,7 @@ class ContractsFilter:
 # -----------------------------
 
 @_cache(fmt=SubDir.POLARS_PARQUET).cache(
-    "0.2", dependencies=[MassiveClient.list_all_contracts_expiring_after_day, MassiveClient.fetch_day_ocv, ContractsFilter],
+    "0.2", dependencies=[MassiveClient.list_all_contracts_expiring_after_day, MassiveClient.fetch_day_summary, ContractsFilter],
     uid=lambda underlying, d, contracts_filter, exclude_half_days: f"{named_unique_filename48_8(str(contracts_filter),contracts_filter,exclude_half_days)}/{underlying}/contracts/{d}",
     exclude_args=['pool_config','client','verbose'])
 def filter_contracts(
@@ -134,10 +134,10 @@ def filter_contracts(
 
     context = PrettyObject()
     context.prev_d           = add_business_days(d,-1, exclude_half_days=exclude_half_days)  # previous business day (NB: if d is a Monday then this is the previous Friday, so we correctly skip the weekend)
-    context.close_adj_prev   = client.fetch_day_ocv(underlying, context.prev_d, adjusted=True, can_be_none=False)['close']
-    context.close_unadj_prev = client.fetch_day_ocv(underlying, context.prev_d, adjusted=True, can_be_none=False)['close']
-    context.close_adj        = client.fetch_day_ocv(underlying, d, adjusted=True, can_be_none=False)['close']
-    ocv_today_unadj          = client.fetch_day_ocv(underlying, d, adjusted=False, can_be_none=False)
+    context.close_adj_prev   = client.fetch_day_summary(underlying, context.prev_d, adjusted=True, can_be_none=False)['close']
+    context.close_unadj_prev = client.fetch_day_summary(underlying, context.prev_d, adjusted=True, can_be_none=False)['close']
+    context.close_adj        = client.fetch_day_summary(underlying, d, adjusted=True, can_be_none=False)['close']
+    ocv_today_unadj          = client.fetch_day_summary(underlying, d, adjusted=False, can_be_none=False)
     context.close_unadj      = ocv_today_unadj['close']
     context.open_unadj       = ocv_today_unadj['open']
     F_today                  = context.close_unadj / context.close_adj
@@ -196,8 +196,8 @@ def filter_contracts(
             c['has_today_trades'] = client.has_any_trades(opt_ticker, d)
 
         with timing("Fetch open close volume"):
-            oc_prev = client.fetch_day_ocv(opt_ticker, context.prev_d, adjusted=False, can_be_none=True)
-            oc_today = client.fetch_day_ocv(opt_ticker, d, adjusted=False, can_be_none=True)
+            oc_prev = client.fetch_day_summary(opt_ticker, context.prev_d, adjusted=False, can_be_none=True)
+            oc_today = client.fetch_day_summary(opt_ticker, d, adjusted=False, can_be_none=True)
 
         def approx_cash_vol_k(oc: dict | None) -> float | None:
             if oc is None:
