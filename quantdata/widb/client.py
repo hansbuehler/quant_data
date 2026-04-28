@@ -1,47 +1,48 @@
 """
-WRDS connection and OptionMetrics query helpers.
+WIDB connection and OptionMetrics query helpers.
 
 Wraps the ``wrds`` Python library to execute SQL queries against
-the OptionMetrics (IvyDB) dataset on WRDS into a :class:`quantdata.wrds.WRDSConnection` class
+the OptionMetrics (IvyDB) dataset into a :class:`quantdata.widb.WIDBClient` class
 which provides access via the following functions:
 
-* :meth:`quantdata.wrds.WRDSConnection.lookup_secid(ticker)`: look up the OptionMetrics secid for a given ticker symbol.
-* :meth:`quantdata.wrds.WRDSConnection.zero_curve(date)`: fetch the zero-coupon yield curve for a given date.
-* :meth:`quantdata.wrds.WRDSConnection.spot_price(secid, date)`: fetch the spot price of the underlying for a given secid and date.
-* :meth:`quantdata.wrds.WRDSConnection.option_prices(secid, date)`: fetch raw option price records for a given secid and date.
-* :meth:`quantdata.wrds.WRDSConnection.forward_prices(secid, date)`: fetch forward prices for a given secid and date
-
+* :meth:`quantdata.widb.WIDBClient.lookup_secid(ticker)`: look up the OptionMetrics secid for a given ticker symbol.
+* :meth:`quantdata.widb.WIDBClient.zero_curve(date)`: fetch the zero-coupon yield curve for a given date.
+* :meth:`quantdata.widb.WIDBClient.spot_price(secid, date)`: fetch the spot price of the underlying for a given secid and date.
+* :meth:`quantdata.widb.WIDBClient.option_prices(secid, date)`: fetch raw option price records for a given secid and date.
+* :meth:`quantdata.widb.WIDBClient.forward_prices(secid, date)`: fetch forward prices for a given secid and date
 """
 
 from __future__ import annotations
 
-from quantdata import env, PrettyObject, Locations
+from quantdata import env
+from quantdata.biz_calendar import to_date
 from cdxcore.subdir import SubDir, verify, version
 from cdxcore.verbose import Context
-from cdxcore.util import fmt_date
+from cdxcore.util import fmt_date, verify_inp
 import datetime as dt
 import pandas as pd
 import wrds as wrds
 from dataclasses import dataclass
 import warnings as warnings
 import os as os
+import numpy as np
 
 # Cache available table names per (library, username)
 _TABLES_CACHE: dict[tuple[str, str], set[str]] = {}
 
 def _pick_optionm_library(conn: wrds.Connection) -> str:
-    """Pick an OptionMetrics library that exists for this WRDS account."""
+    """Pick an OptionMetrics library that exists for this WIDB account."""
     libs = conn.list_libraries()
     for lib in ("optionm_all", "optionm"):
         if lib in libs:
             return lib
     raise RuntimeError(
-        "WRDS libraries do not include 'optionm_all' or 'optionm'. "
-        "Your WRDS account may not have OptionMetrics/IvyDB access."
+        "WIDB libraries do not include 'optionm_all' or 'optionm'. "
+        "Your WIDB account may not have OptionMetrics/IvyDB access."
     )
 
 def _tables_in_library(conn: wrds.Connection, library: str) -> set[str]:
-    username = WRDSClient.credentials().username
+    username = WIDBClient.credentials().username
     key = (library, username)
     if key not in _TABLES_CACHE:
         _TABLES_CACHE[key] = set(conn.list_tables(library))
@@ -56,7 +57,7 @@ def _resolve_table(
 ) -> str:
     """Resolve a logical table name to an existing qualified table.
 
-    OptionMetrics on WRDS is often year-partitioned (e.g. opprcd2010) and/or
+    OptionMetrics on WIDB is often year-partitioned (e.g. opprcd2010) and/or
     uses base names without the "_all" suffix.
     """
     lib = _pick_optionm_library(conn)
@@ -77,32 +78,32 @@ def _resolve_table(
 
     raise RuntimeError(
         f"Could not resolve OptionMetrics table for '{logical}'. Tried: {expanded} in library '{lib}'. "
-        "Your WRDS account may not have the required dataset access, or the table names differ."
+        "Your WIDB account may not have the required dataset access, or the table names differ."
     )
 
 @version("0.1")
 @dataclass(frozen=True)
 class WRDSCredentials:
-    """ WRDS login credentials read from environment variables. """
-    username: str #: User account name for `WRDS <https://wrds-www.wharton.upenn.edu/>`__. For live access, set the environment variable ``WRDS_USERNAME`` to your account name.
-    wrds_off: bool = False #: If ``True``, WRDS access is disabled. To disable WRDS access, set the environment variable ``WRDS_OFF`` to ``1``.
+    """ WIDB login credentials read from environment variables. """
+    username: str #: User account name for `WIDB <https://wrds-www.wharton.upenn.edu/>`__. For live access, set the environment variable ``WRDS_USERNAME`` to your account name.
+    wrds_off: bool = False #: If ``True``, WIDB access is disabled. To disable WIDB access, set the environment variable ``WRDS_OFF`` to ``1``.
 
     @staticmethod
     def create() -> WRDSCredentials:
-        """ Returns :class:`dys.core.Environment.WRDSCredentials` with WRDS credentials read from ``WRDS_USERNAME`` """
+        """ Returns :class:`dys.core.Environment.WRDSCredentials` with WIDB credentials read from ``WRDS_USERNAME`` """
         username = os.environ.get("WRDS_USERNAME", None)
         wrds_off = os.environ.get("WRDS_OFF", None) == "1"
 
         if username is None:
-            raise RuntimeError("For live access to WRDS, set the environment variable WRDS_USERNAME: currently " + ("not set" if username is None else f"'{username}'")+".")
+            raise RuntimeError("For live access to WIDB, set the environment variable WRDS_USERNAME: currently " + ("not set" if username is None else f"'{username}'")+".")
         if wrds_off:
-            warnings.warn("WRDS is disabled")
+            warnings.warn("WIDB is disabled")
         return WRDSCredentials(username=username,wrds_off=wrds_off)
 
 @version("1.0", dependencies=[WRDSCredentials])
-class WRDSClient(object):
+class WIDBClient(object):
     """
-    WRDS connectivity.
+    WIDB connectivity.
     See `the IvyDB reference manual <https://wrds-www.wharton.upenn.edu/documents/1995/IvyDB_US_v6.0_Reference_Manual.pdf>`_ for details on the OptionMetrics dataset and table schemas.
 
     Paramemers
@@ -111,10 +112,10 @@ class WRDSClient(object):
         If True, establish the connection immediately. Otherwise, delay until the first query is executed.
     """
 
-    locations = env.locations("wrds", default_fmt=SubDir.PANDAS_PARQUET)
+    locations = env.locations("widb", default_fmt=SubDir.PANDAS_PARQUET)
 
-    _conn : wrds.Connection | None = None #: Active WRDS connection, or None if not connected.
-    _credentials : WRDSCredentials | None = None # Credentials for WRDS connection, read from environment variables when first needed.
+    _conn : wrds.Connection | None = None #: Active WIDB connection, or None if not connected.
+    _credentials : WRDSCredentials | None = None # Credentials for WIDB connection, read from environment variables when first needed.
 
     OPTION_COLS = {
         'symbol',
@@ -143,20 +144,22 @@ class WRDSClient(object):
         if connect:
             self.connect()
 
-    def credentials(self) -> WRDSCredentials:
-        """ Returns WRDS credentials read from environment variables. """
-        if WRDSClient._credentials is None:
-            WRDSClient._credentials = WRDSCredentials.create()
-        return WRDSClient._credentials
+    @staticmethod   
+    def credentials() -> WRDSCredentials:
+        """ Returns WIDB credentials read from environment variables. """
+        if WIDBClient._credentials is None:
+            WIDBClient._credentials = WRDSCredentials.create()
+        return WIDBClient._credentials
     
-    def connect(self) -> wrds.Connection:
-        """ Establish a WRDS connection if not already connected. Returns a :class:`wrds.Connection` object. """
-        if WRDSClient._conn is None:
-            verify( not environment.test_mode, "Attempted to connect to WRDS in test mode. Set QUANTDATA_TEST_MODE=0 to enable connections." )
-            credentials = self.credentials()
-            verify( not credentials.wrds_off, "Attempted to connect to WRDS while WRDS access is disabled. Set QUANTDATA_WRDS_OFF=0 to enable connections." )
-            WRDSClient._conn  = wrds.Connection(wrds_username=credentials.username) 
-        return WRDSClient._conn
+    @staticmethod
+    def connect() -> wrds.Connection:
+        """ Establish a WIDB connection if not already connected. Returns a :class:`wrds.Connection` object. """
+        if WIDBClient._conn is None:
+            verify( not env.test_mode, "Attempted to connect to WRDS IvyDB in test mode. Set QUANTDATA_TEST_MODE=0 to enable connections." )
+            credentials = WIDBClient.credentials()
+            verify( not credentials.wrds_off, "Attempted to connect to WRDS IvyDB while WRDS IvyDB access is disabled. Set QUANTDATA_WRDS_OFF=0 to enable connections." )
+            WIDBClient._conn  = wrds.Connection(wrds_username=credentials.username) 
+        return WIDBClient._conn
     
     @locations.raw(fmt=SubDir.PICKLE).cache(
                     "0.2",
@@ -165,7 +168,7 @@ class WRDSClient(object):
     def ticker_to_secid_map(self) -> dict[str, int]:
         """
         Fetch a mapping of all tickers to secids from the securd table.
-        Use :meth:`quantdata.wrds.client.WRDSConnection.lookup_secid` for individual lookups, which is cached separately.
+        Use :meth:`quantdata.widb.client.WIDBClient.lookup_secid` for individual lookups, which is cached separately.
         """
         conn = self.connect()
         assert not conn is None, "WRDS connection is not established."
@@ -175,7 +178,7 @@ class WRDSClient(object):
             FROM {securd}
         """
         df = conn.raw_sql(query)
-        return int( dict(zip(df["ticker"], df["secid"])) )
+        return dict(zip(df["ticker"], df["secid"]))
 
     @version("0.3", dependencies=["ticker_to_secid_map"])
     def lookup_secid(self, ticker: str) -> int:
@@ -188,25 +191,51 @@ class WRDSClient(object):
 
         Returns
         -------
-        int
+        secid : int
             The secid.
 
         Raises
         ------
-        ValueError
+        Not found: :class:`LookupError`
             If the ticker is not found.
         """
         ticker_map = self.ticker_to_secid_map()
         secid      = ticker_map.get(ticker, None) 
         if secid is None:
-            raise ValueError(f"Ticker '{ticker}' not found in OptionMetrics securd table.")
+            raise LookupError(f"Ticker '{ticker}' not found in OptionMetrics securd table.")
         return int(secid)
+    
+    @version("0.1", dependencies=[ticker_to_secid_map])
+    def lookup_ticker(self, secid: int) -> str:
+        """Look up the ticker symbol for a given OptionMetrics (IvyDB) secid.
 
-    @locations.raw("option_prices", fmt=SubDir.PANDAS_PARQUET).cache(
+        Parameters
+        ----------
+        secid : int
+            The secid.
+
+        Returns
+        -------
+        ticker : str
+            Ticker symbol, e.g. 'SPX'.
+
+        Raises
+        ------
+        Not found: :class:`LookupError`
+            If the secid is not found.
+        """
+        verify_inp( isinstance(secid, int), f"'secid' must be an integer; found '{secid}' of type {type(secid)}")
+        ticker_map = self.ticker_to_secid_map()
+        for ticker, tsecod in ticker_map.items():
+            if int(tsecod) == secid:
+                return ticker
+        raise LookupError(f"SecID '{secid}' not found in OptionMetrics securd table.")  
+
+    @locations.raw("options", fmt=SubDir.PANDAS_PARQUET).cache(
                     "0.4", 
                     uid = lambda secid, date : f"{int(secid)}/{fmt_date(date)}", 
                     exclude_args=['self', 'verbose'])
-    def option_prices(
+    def options(
         self,
         secid: int,
         date: dt.date,
@@ -215,14 +244,14 @@ class WRDSClient(object):
     ) -> pd.DataFrame:
         """Fetch all option price records for a given secid on a single date.
 
-        Columns returned are contained in :attr:`quantdata.wrds.client.WRDSConnection.OPTION_COLS`, which includes:
+        Columns returned are contained in :attr:`quantdata.widb.client.WIDBClient.OPTION_COLS`, which includes:
         'symbol', 'optionid', 'am_settlement', 'cp_flag', 'exercise_style', 'strike_price', 'exdate', 'best_bid', 'best_offer', 'volume', 'open_interest', 'impl_volatility', 'delta', 'gamma', 'vega', 'theta', 'ss_flag', 'expiry_indicator', 'contract_size'.
         See `the IvyDB reference manual <https://wrds-www.wharton.upenn.edu/documents/1995/IvyDB_US_v6.0_Reference_Manual.pdf>`_ page 20.
 
         Parameters
         ----------
         secid : int
-            OptionMetrics security ID. Use :meth:`quantdata.wrds.client.WRDSConnection.lookup_secid` to obtain the secid for a given ticker.
+            OptionMetrics security ID. Use :meth:`quantdata.widb.client.WIDBClient.lookup_secid` to obtain the secid for a given ticker.
         date : :class:`dt.date`
             Observation date.
         verbose : :class:`cdxcore.verbose.Context`, default :attr:`cdxcore.verbose.Context.quiet`
@@ -233,9 +262,11 @@ class WRDSClient(object):
         pd.DataFrame
             Raw option prices for the date.
         """
+        verify_inp( isinstance(secid, int), f"'secid' must be an integer; found '{secid}'")
+        date  = to_date(date)
         secid = int(secid)
         conn = self.connect()
-        assert not conn is None, "WRDS connection is not established."
+        assert not conn is None, "WIDB connection is not established."
 
         opprcd = _resolve_table(
             conn,
@@ -289,20 +320,25 @@ class WRDSClient(object):
         Returns columns: 'date', 'days', 'rate'
         Rate is continuously compounded using ACT/365, i.e. ``df = exp(-rate * calendar_days/365)``.
 
+        Use :func:`quantdata.widb.client.interpolate_zero_curve`
+        to interpolate discount factors for specific days to expiry.
+
         Parameters
         ----------
         date : :class:`dt.date`
             Observation date.
-        verbose : :class:`cdxcore.verbose.Context`, default :attr:`cdxcore.verbose.Context.quiet`
+        verbose : :class:`cdxcore.verbose.Context`, default ``Context.quiet``
             Channel to print verbosity information, if any.
 
         Returns
         -------
-        pd.DataFrame
-            Zero-curve data.
+        Zero curve: :class:`pandas.DataFrame`
+            Zero-curve data. Use :func:`quantdata.widb.client.interpolate_zero_curve`
+            to interpolate discount factors for specific days to expiry.
         """
+        date  = to_date(date)
         conn = self.connect()
-        assert not conn is None, "WRDS connection is not established."
+        assert not conn is None, "WIDB connection is not established."
         zerocd = _resolve_table(conn, logical="zerocd", candidates=["zerocd"])
         query = f"""
             SELECT date, days, rate
@@ -313,11 +349,11 @@ class WRDSClient(object):
         verbose.write(lambda : f"Fetching USD zero curve for {date}.")
         return conn.raw_sql(query)
 
-    @locations.raw("forward_prices", fmt=SubDir.PANDAS_PARQUET).cache(
+    @locations.raw("forwards", fmt=SubDir.PANDAS_PARQUET).cache(
                     "0.3",
                     uid = lambda secid, date : f"{int(secid)}/{fmt_date(date)}",
                     exclude_args=['self','verbose'])
-    def forward_prices(
+    def forwards(
         self,
         secid: int,
         date: dt.date,
@@ -331,20 +367,22 @@ class WRDSClient(object):
         Parameters
         ----------
         secid : int
-            OptionMetrics security ID. Use :meth:`quantdata.wrds.client.WRDSConnection.lookup_secid` to obtain the secid for a given ticker.
+            OptionMetrics security ID. Use :meth:`quantdata.widb.client.WIDBClient.lookup_secid` to obtain the secid for a given ticker.
         date : :class:`dt.date`
             Observation date.
-        verbose : :class:`cdxcore.verbose.Context`, default :attr:`cdxcore.verbose.Context.quiet`
+        verbose : :class:`cdxcore.verbose.Context`, default ``Context.quiet``
             Channel to print verbosity information, if any.
 
         Returns
         -------
-        pd.DataFrame
-            Forward price data.
+        Forward table: :class:`pandas.DataFrame`
+            Forward price data with columns ``date``, ``exdate``, ``am_settlement``, ``forward_price``.
         """
+        verify_inp( isinstance(secid, int), f"'secid' must be an integer; found '{secid}'")
+        date  = to_date(date)
         secid = int(secid)
         conn = self.connect()
-        assert not conn is None, "WRDS connection is not established."
+        assert not conn is None, "WIDB connection is not established."
         fwdprd = _resolve_table(
             conn,
             logical="fwdprd",
@@ -380,25 +418,28 @@ class WRDSClient(object):
         Parameters
         ----------
         secid : int
-            OptionMetrics security ID. Use :meth:`quantdata.wrds.client.WRDSConnection.lookup_secid` to obtain the secid for a given ticker.
+            OptionMetrics security ID. Use :meth:`quantdata.widb.client.WIDBClient.lookup_secid` to obtain the secid for a given ticker.
         date : :class:`dt.date`
             Observation date.
-        verbose : :class:`cdxcore.verbose.Context`, default :attr:`cdxcore.verbose.Context.quiet`
+        verbose : :class:`cdxcore.verbose.Context`, default ``Context.quiet``   
             Channel to print verbosity information, if any.
 
         Returns
         -------
-        float
+        Spot : float
             Spot price.
 
         Raises
         ------
-        ValueError
-            If no spot price is available.
+        Spot not found: :class:`LookupError`
+            If no spot price is available. This likely means either the ``secid`` is not covered by Option Metrics,
+            or ``date`` is not a business day for this underlying.
         """
+        verify_inp( isinstance(secid, int), f"'secid' must be an integer; found '{secid}'")
+        date  = to_date(date)
         secid = int(secid)
         conn = self.connect()
-        assert not conn is None, "WRDS connection is not established."
+        assert not conn is None, "WIDB connection is not established."
         secprd = _resolve_table(
             conn,
             logical="secprd",
@@ -411,9 +452,38 @@ class WRDSClient(object):
             WHERE secid = {secid}
             AND date = '{date}'
         """
-        verbose.write(lambda : f"Fetching spot price for secid={secid} date={date}")
+        verbose.write(lambda : f"Fetching spot price for secid {secid} on {date}.")
         df = conn.raw_sql(query)
         if df.empty:
-            raise ValueError(f"No spot price found for secid={secid} on {date}")
+            raise LookupError(f"No spot price found for secid {secid} on {date}.")
         return float(df["close"].iloc[0])
+
+@version("0.1")
+def interpolate_zero_curve(
+    zero_curve: pd.DataFrame,
+    days_to_expiry: np.ndarray,
+) -> np.ndarray:
+    """
+    Interpolate discount factors from the zero-coupon curve using ACT/365.
+
+    Parameters
+    ----------
+    zero_curve : :class:`pandas.DataFrame`
+        Must have columns ``days`` and ``rate``.
+    days_to_expiry : :class:`numpy.ndarray`
+        Calendar days to each expiry, as floats
+
+    Returns
+    -------
+    Discount factors: :class:`numpy.ndarray`
+        Discount factors ``exp(-rate * days / 365)``.
+    """
+    assert "days" in zero_curve.columns and "rate" in zero_curve.columns, (
+        "zero_curve must have 'days' and 'rate' columns"
+    )
+    curve_days = zero_curve["days"].values.astype(float)
+    curve_rates = zero_curve["rate"].values.astype(float) # in pcnt e.g. 3 = 3%
+    dte_float = days_to_expiry.astype(float)
+    rates = np.interp(dte_float, curve_days, curve_rates)
+    return np.exp(-rates * dte_float / 36500.0)
 

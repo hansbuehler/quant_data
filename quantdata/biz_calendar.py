@@ -56,7 +56,7 @@ def to_date( d: str | dt.datetime | dt.date | np.datetime64 | None ) -> dt.date 
     if d is None:
         return d
     if isinstance(d, np.datetime64):
-        d = d.item()
+        d = d.astype("datetime64[D]").astype(dt.date)
     if isinstance(d, dt.datetime):
         return d.date()
     if isinstance(d, dt.date):
