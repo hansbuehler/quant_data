@@ -55,6 +55,12 @@ You will need to set your directory and data access variables.
 
 ### Caching
 
+Caching in dynamic-sanos is version-aware. You will note that a number of functions have a ``@version``
+or ``@cache`` decorator. A functions version often also depends on other function versions. 
+A change to the version will trigger a refesh of any cache affected by the respected function - so be careful,
+as this can be slow; also do not change the version of a function or class without good reason as it may
+trigger refreshs for others once they check out.
+
 * ``QUANTDATA_CACHE_MODE``: is the project-wide caching mode. Use ``off`` to disable, or ``update`` to for an update. Default is ``on``.
 
 ### Data Access
