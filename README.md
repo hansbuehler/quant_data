@@ -15,7 +15,7 @@ This project targets Python 3.12. The repository includes `.python-version` and 
 
 #### Linux/venv
 
-You will need python 3.12. Future versions will support 3.12.
+You will need python 3.12. Future versions will support 3.13 or higher.
 Under Linux, if your defaul Python is not 3.12, you can install a different version with
 
 ```bash
