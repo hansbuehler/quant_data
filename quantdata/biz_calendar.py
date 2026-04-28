@@ -30,6 +30,9 @@ AM_EXIRY_SUBTRACT = 0.2
 NYSE_CALENDAR = mcal.get_calendar("NYSE")
 """ NYSE calendar provided by `pandas market calendars <https://pandas-market-calendars.readthedocs.io/en/latest/usage.html>`__ """
 
+_BUSINESS_DAYS_CACHE = {}
+_EARLY_DAYS_CACHE = {}
+
 class NMS:
     r"""
     NMS(z,t) := exp( scale * z * sqrt((eps+t)/(eps+1))
@@ -63,7 +66,7 @@ def to_date( d: str | dt.datetime | dt.date | np.datetime64 | None ) -> dt.date 
     raise ValueError(f"Unsupported type for date conversion: {type(d)}")
 
 @version("0.1")
-def get_business_days( start : str|dt.date, end: str|dt.date, exclude_half_days: bool = True ) -> list[dt.date]:
+def get_business_days( start : str|dt.date, end: str|dt.date, exclude_half_days: bool = False ) -> list[dt.date]:
     """
     Return NYSE trading days within start and end.
     
@@ -76,7 +79,7 @@ def get_business_days( start : str|dt.date, end: str|dt.date, exclude_half_days:
         Start date (inclusive).
     end : str | :class:`datetime.date`
         End date (inclusive).
-    exclude_half_days : bool, default ``True``
+    exclude_half_days : bool, default ``False``
         If True, remove early-close trading sessions from the calendar.
 
     Returns
@@ -88,12 +91,18 @@ def get_business_days( start : str|dt.date, end: str|dt.date, exclude_half_days:
     pd.DatetimeIndex
         Sorted trading dates (timezone-naive, date-only precision).
     """
+    global _BUSINESS_DAYS_CACHE
     start             = to_date(start)
     end               = to_date(end)
     exclude_half_days = bool(exclude_half_days)
 
     if start > end:
         raise ValueError(f"start ({start}) must be <= end ({end})")
+
+    key               = (start, end, exclude_half_days)
+    schedule          = _BUSINESS_DAYS_CACHE.get(key, None)
+    if schedule is not None:
+        return schedule
 
     schedule = NYSE_CALENDAR.schedule(start_date=str(start), end_date=str(end))
 
@@ -103,6 +112,8 @@ def get_business_days( start : str|dt.date, end: str|dt.date, exclude_half_days:
 
     schedule = schedule.index.normalize().tz_localize(None)  # index is a DatetimeIndex of trading days in the range
     schedule = [dt.date(d.year,d.month,d.day) for d in schedule]
+
+    _BUSINESS_DAYS_CACHE[key] = schedule
     return schedule
 
 @version("0.1", dependencies=[get_business_days])
@@ -157,7 +168,7 @@ def count_business_days_between(
     return (hi - lo).astype(np.int32)
 
 @version("0.1", dependencies=[get_business_days])
-def add_business_days( start: dt.date, num_days: int, exclude_half_days: bool = False ) -> dt.date:
+def add_business_days( start: dt.date, num_days: int, exclude_half_days: bool = False, *, count_start: bool = False ) -> dt.date:
     """
     Add a number of business days to a date.
 
@@ -169,8 +180,16 @@ def add_business_days( start: dt.date, num_days: int, exclude_half_days: bool = 
     num_days : int
         Number of business days to add. Can be negative to subtract business days.
     exclude_half_days : bool, default ``False``
-        If True, remove early-close trading sessions from the calendar before counting.
+        If ``True``, remove early-close trading sessions from the calendar before counting.
+    count_start : bool, default ``False``
+        Whether to count ``start`` if it is a business day. If ``False``, then the counts starts from the first business day after start.
+        This flag has no effect if ``start`` is a business day.
 
+        If ``start`` is not a business day, and if ``count_start`` is ``True``, then:
+
+        * If ``num_days=1`` then the function will the return the first business day following the non-business day ``start``.
+        * If ``num_days=-1`` then the function will return the first business day preceding the non-business day ``start``.
+    
     Returns
     -------
     ``datetime.date``
@@ -191,33 +210,117 @@ def add_business_days( start: dt.date, num_days: int, exclude_half_days: bool = 
     num_days = int(num_days)
 
     if num_days >= 0:
-        schedule = get_business_days( start, start + dt.timedelta(days=num_days*2+5), exclude_half_days=exclude_half_days   )
+        schedule = get_business_days( start, start + dt.timedelta(days=(num_days%5)*7+7), exclude_half_days=exclude_half_days )
+        assert len(schedule) > 0, "Internal error - this should never happen"
         assert schedule[0] >= start, f"Schedule should start on or after {start}, but starts at {schedule[0]}"
-        if not start == schedule[0]:
-            raise ValueError(f"'start' {start} is not a{' full' if exclude_half_days else ''} business day")
+        if start == schedule[0] and count_start:
+            # start is a business day
+            num_days = max(0, num_days-1) # count start, so we need to subtract 1 from num_days
         return schedule[num_days]
     
     else:
-        schedule = get_business_days( start + dt.timedelta(days=num_days*2-5), start, exclude_half_days=exclude_half_days )
+        schedule = get_business_days( start + dt.timedelta(days=-( abs(num_days)%5*7+7 )), start, exclude_half_days=exclude_half_days )
+        assert len(schedule) > 0, "Internal error - this should never happen"
         assert schedule[-1] <= start, f"Schedule should end on or before {start}, but ends at {schedule[-1]}"
-        if not start == schedule[-1]:
-            raise ValueError(f"'start' {start} is not a{' full' if exclude_half_days else ''} business day")
-        return schedule[len(schedule)-1+num_days]
+        schedule.reverse() # reverse to count backwards
+        num_days = -num_days
+        if start == schedule[0] and count_start:
+            # start is a business day
+            num_days = max(0, num_days-1) # count start, so we need to subtract 1 from num_days
+        return schedule[num_days]
 
-@dataclass(frozen=True)
+@version("0.1", dependencies=[add_business_days])
+def prev_business_day( date: dt.date, exclude_half_days: bool = False, *, count_start: bool = False ) -> dt.date:
+    """
+    Get the strictly previous business day before the given date.
+
+    Parameters
+    ----------
+    date : ``datetime.date``
+        Reference date. This date does not have to be a business day.
+    exclude_half_days : bool, default ``False``
+        If True, remove early-close trading sessions from the calendar before counting.
+    count_start : bool, default ``False``
+        Whether to count ``date`` if it is a business day. If ``False``, then the counts starts from the first business day before date.
+        That means even if ``date`` is a business day, the function will return the previous business day before it. 
+        If ``True``, then if ``date`` is a business day, the function will return that date.
+
+        This flag has no effect if ``date`` is a business day.   
+
+    Returns
+    -------
+    ``datetime.date``
+        Previous business day before the given date.
+    """
+    return add_business_days(date, -1, exclude_half_days=exclude_half_days, count_start=count_start)
+
+@version("0.1", dependencies=[add_business_days])
+def next_business_day( date: dt.date, exclude_half_days: bool = False, *, count_start: bool = False ) -> dt.date:
+    """
+    Get the strictly next business day after the given date.
+
+    Parameters
+    ----------
+    date : ``datetime.date``
+        Reference date. This date does not have to be a business day.
+    exclude_half_days : bool, default ``False``
+        If True, remove early-close trading sessions from the calendar before counting. 
+    count_start : bool, default ``False``
+        Whether to count ``date`` if it is a business day. If ``False``, then the counts starts from the first business day after date.
+        That means even if ``date`` is a business day, the function will return the next business day after it. 
+        If ``True``, then if ``date`` is a business day, the function will return that date.
+        This flag has no effect if ``date`` is a business day.
+
+    Returns
+    -------
+    ``datetime.date``
+        Next business day after the given date.
+    """
+    return add_business_days(date, 1, exclude_half_days=exclude_half_days, count_start=count_start)
+
+@version("0.1")
+def get_half_days( start : dt.date, end : dt.date ) -> list[dt.date]:
+    """
+    Return a list of half days (early closes) between start and end, inclusive.
+    """
+    global _EARLY_DAYS_CACHE
+
+    start             = to_date(start)
+    end               = to_date(end)
+    if start > end:
+        raise ValueError(f"start ({start}) must be <= end ({end})")
+
+    key               = (start, end)
+    schedule          = _EARLY_DAYS_CACHE.get(key, None)
+    if schedule is not None:
+        return schedule
+
+    schedule = NYSE_CALENDAR.schedule(start_date=str(start), end_date=str(end))
+    schedule = NYSE_CALENDAR.early_closes(schedule=schedule)
+    schedule = schedule.index.normalize().tz_localize(None)  # index is a DatetimeIndex of trading days in the range
+    schedule = [dt.date(d.year,d.month,d.day) for d in schedule]
+    _EARLY_DAYS_CACHE[key] = schedule
+    return schedule
+
+@version("0.1", dependencies=[get_business_days, get_half_days])
+@dataclass
 class DateRange:
     """ A simple date range class. """
-    start: dt.date
-    end: dt.date
-    exclude_half_days: bool = True
+    start: dt.date|str  #: Start date (inclusive).
+    end: dt.date|str    #: End date (inclusive).
+    exclude_half_days: bool = True #: Whether to exclude half days (early closes) from the business day count. Default is True.
 
     def __post_init__(self):
+        if isinstance(self.start, str):
+            self.start = dt.date.fromisoformat(self.start)
+        if isinstance(self.end, str):
+            self.end = dt.date.fromisoformat(self.end)
         verify_inp( isinstance(self.start, dt.date), f"'start' must be a datetime.date, but found {type(self.start)}" )
         verify_inp( isinstance(self.end, dt.date), f"'end' must be a datetime.date, but found {type(self.end)}" )
 
         if self.start > self.end:
             raise ValueError(f"'start' ({self.start}) must be at or before 'end' ({self.end})")
-        
+
         bdays = self.get_business_days()
         if len(bdays) == 0:
             raise ValueError(f"No business days in the range {self.start} to {self.end} with half days {'excluded' if self.exclude_half_days else 'included'}")
@@ -225,7 +328,14 @@ class DateRange:
     def __str__(self):
         return f"{self.start}_{self.end}{'x' if self.exclude_half_days else 'i'}"
     
+    def __hash__(self):
+        return hash((self.start, self.end, self.exclude_half_days))
+
     def get_business_days(self) -> list[dt.date]:
         """ Get business days in this date range. """
         return get_business_days(self.start, self.end, exclude_half_days=self.exclude_half_days)
+    
+    def get_half_days(self) -> list[dt.date]:
+        """ Get half days (early closes) in this date range. """
+        return get_half_days(self.start, self.end) if not self.exclude_half_days else []
     

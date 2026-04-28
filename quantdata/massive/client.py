@@ -6,6 +6,8 @@ Simple client wrapper for the [www.massive.com](https://www.massive.com) API.
 
 from __future__ import annotations
 
+from numpy.testing import verbose
+
 from quantdata import env
 from quantdata.biz_calendar import TZ_NY, add_business_days
 from quantdata.massive.trade_conds import pack_conditions
@@ -25,7 +27,7 @@ from massive import RESTClient
 import polars as pl
 
 _massive_locations = env.locations("massive", fmt_raw=SubDir.PICKLE, fmt_processing=SubDir.PANDAS_PARQUET, fmt_training=SubDir.PYTREE_HDF5)
-_cache = _massive_locations.raw("fetch", fmt=SubDir.PANDAS_PARQUET)
+_cache = _massive_locations.raw
 
 # --------------------------------------------------------------------
 # Low-level HTTP helpers
@@ -56,7 +58,8 @@ class MassiveClient(object):
 
     BASE_URL                  = "https://api.massive.com" #: Base URL for requests.
     START_DATE                = date(2022,3,7)  #: Start date for quote and trade requests for options, https://massive.com/docs/rest/options/trades-quotes/quotes
-    
+    TIME_SPANS                = {'second', 'minute', 'hour', 'day', 'week', 'month', 'quarter', 'year'}  #: standard time spans, e.g. for https://massive.com/docs/rest/stocks/aggregates/custom-bars
+
     """
     Static members
     """
@@ -228,6 +231,13 @@ class MassiveClient(object):
         """ Whether ``ticker`` has any trades on date ``d``. """
         return self.has_any_quotes_or_trades(ticker, d)[1]
     
+    SCHEMA_TRADES = {
+        "ts_ns": pl.Datetime("ns", TZ_NY),
+        "price": pl.Float64,
+        "size": pl.Float64,
+        "trade_code": pl.UInt32,
+    }
+
     @_cache(fmt=SubDir.POLARS_PARQUET).cache(
                     "0.1",
                     label=lambda ticker,d: f"trades/{ticker}/{fmt_date(d)}",
@@ -253,14 +263,12 @@ class MassiveClient(object):
             Ticker symbol, e.g. "AAPL230616C00150000" for Apple 150 call expiring on 2023-06-16.
         d : date
             Date for which to fetch trades.
-        client : MassiveClient, optional
-            MassiveClient to use for the request. If None, a new MassiveClient is created.
-            Passing a client is useful for caching.
 
         Returns
         -------
         Result : :class:`polars.DataFrame`
-            Returns a data frame with the below columns. The dataframe can have lenght zero, but it will have the correct data schema.
+            Returns a data frame with schema :attr:`MassiveClient.SCHEMA_TRADES`.
+            The dataframe can have length zero (but it will have the correct data schema).
             
             * ts_ns: Datetime[ns, tz]
             * price: Float64
@@ -279,15 +287,9 @@ class MassiveClient(object):
                     size=r["size"], 
                     sip_timestamp=r["sip_timestamp"],
                     trade_code=pack_conditions(r.get("conditions", []))) for r in rows ]
-        schema = {
-            "ts_ns": pl.Datetime("ns", TZ_NY),
-            "price": pl.Float64,
-            "size": pl.Float64,
-            "trade_code": pl.UInt32,
-        }
 
         if not rows:
-            return pl.DataFrame(schema=schema)
+            return pl.DataFrame(schema=MassiveClient.SCHEMA_TRADES)
 
         df = pl.DataFrame(rows, infer_schema_length=None)
         out = df.select(
@@ -298,7 +300,16 @@ class MassiveClient(object):
                 pl.col("size").cast(pl.Float64),
                 pl.col("trade_code").cast(pl.UInt32),
             ).sort("ts_ns")
+        assert set(out.columns) == set(MassiveClient.SCHEMA_TRADES), f"Internal error: expected columns {set(MassiveClient.SCHEMA_TRADES)} but got {set(out.columns)}. Sanity check the request and contact the authors if you need help."  
         return out
+
+    SCHEMA_QUOTES = {
+        "ts_ns": pl.Datetime("ns", TZ_NY),
+        "bid_price": pl.Float64,
+        "bid_size": pl.Float64,
+        "ask_price": pl.Float64,
+        "ask_size": pl.Float64,
+    }
 
     @_cache(fmt=SubDir.POLARS_PARQUET).cache(
                     "0.1",
@@ -315,14 +326,12 @@ class MassiveClient(object):
             Ticker symbol, e.g. "AAPL230616C00150000" for Apple 150 call expiring on 2023-06-16.
         d : date
             Date for which to fetch quotes.
-        client : MassiveClient, optional
-            MassiveClient to use for the request. If None, a new MassiveClient is created.
-            Passing a client is useful for caching.
 
         Returns
         -------
         Result : :class:`polars.DataFrame`
-            Returns a data frame with the below columns. The dataframe can have lenght zero, but it will have the correct data schema.
+            Returns a data frame with schema :attr:`MassiveClient.SCHEMA_QUOTES`.
+            The dataframe can have length zero (but it will have the correct data schema).
             
             * ts_ns: Datetime[ns, tz]
             * bid_price: Float64
@@ -338,15 +347,8 @@ class MassiveClient(object):
             "sort": "sip_timestamp",
         }
         rows = self.paginate(url, params)
-        schema = {
-            "ts_ns": pl.Datetime("ns", TZ_NY),
-            "bid_price": pl.Float64,
-            "bid_size": pl.Float64,
-            "ask_price": pl.Float64,
-            "ask_size": pl.Float64,
-        }
         if not rows:
-            return pl.DataFrame(schema=schema)
+            return pl.DataFrame(schema=MassiveClient.SCHEMA_QUOTES)
 
         df = pl.DataFrame(rows, infer_schema_length=None)
         out = (
@@ -361,8 +363,89 @@ class MassiveClient(object):
             )
             .sort("ts_ns")
         )
+        assert set(out.columns) == set(MassiveClient.SCHEMA_QUOTES), f"Internal error: expected columns {set(MassiveClient.SCHEMA_QUOTES)} but got {set(out.columns)}. Sanity check the request and contact the authors if you need help."
         return out
+    
 
+    SCHEMA_BARS = {
+        "ts_ms": pl.Datetime("ms", TZ_NY),
+        "close": pl.Float64,
+        "open": pl.Float64,
+        "high": pl.Float64,
+        "low": pl.Float64,
+        "volume": pl.Float64,
+        "vwap": pl.Float64,
+        "num_trades": pl.Int64,
+    }
+    
+    @_cache(fmt=SubDir.PANDAS_PARQUET).cache(
+            "0.1",
+            uid=lambda ticker, start, end, adjusted, timespan : f"bars/{timespan}/{'adj' if adjusted else 'raw'}/{ticker}/{fmt_date(start)}_{fmt_date(end)}_{timespan}",
+            exclude_args=['self']) # excluding 'self' is not necessary; should be excluded automatically
+    def fetch_bars(self, ticker: str, start : date, end : date, adjusted : bool, timespan : str ) -> pl.DataFrame:
+        """
+        Download daily bars for a ticker accross a number of dates; convert timestamp to datetime in NY/ns.
+        See https://massive.com/docs/rest/stocks/aggregates/custom-bars
+
+        Parameters
+        ----------
+        ticker : str
+            Ticker symbol, e.g. "AAPL" for Apple.   
+        start : :class:`datetime.date`
+            Start date for bars.
+        end : :class:`datetime.date`
+            End date for bars.
+        adjusted : bool
+            Whether to fetch adjusted bars.
+        timespan : str
+            Timespan for the bars, e.g. "day", "week", "month".
+            Must be one of 'second', 'minute', 'hour', 'day', 'week', 'month', 'quarter', 'year'.
+
+        Returns
+        -------
+        Result : :class:`polars.DataFrame`
+            Data frame wiwh schema :attr:`MassiveClient.SCHEMA_BARS`. The dataframe can have length zero (but it will have the correct data schema).
+
+            - ts_ms: Datetime[ms, tz]: time zone information with millisecond precision
+            - close: Float64
+            - open: Float64
+            - high: Float64
+            - low: Float64
+            - volume: Float64
+            - vwap: Float64
+            - num_trades: Int64
+        """
+        if timespan not in self.TIME_SPANS:
+            raise ValueError(f"Cannot retrieve bars for {ticker} between {start} and {end}: invalid timespan '{timespan}'. Must be one of {sorted(self.TIME_SPANS)}")
+        if start > end:
+            raise ValueError(f"Cannot retrieve bars for {ticker} between {start} and {end}: start date must be before end date.")
+
+        url  = f"{self.BASE_URL}/v2/aggs/ticker/{ticker}/range/1/{timespan}/{start:%Y-%m-%d}/{end:%Y-%m-%d}"
+        rows = self.paginate(url, params={"adjusted": "false" if not adjusted else "true", "limit": 50000, "sort": "asc"})
+
+        if not rows:
+            return pl.DataFrame(schema=MassiveClient.SCHEMA_BARS)
+
+        df = pl.DataFrame(rows, infer_schema_length=None)
+        out = (
+            df.select(
+                pl.from_epoch(pl.col("t").cast(pl.Int64), time_unit="ms")
+                .dt.replace_time_zone("UTC")
+                .dt.convert_time_zone(TZ_NY.key)
+                .alias("ts_ms"),
+                pl.col("c").cast(pl.Float64).alias("close"),
+                pl.col("o").cast(pl.Float64).alias("open"),
+                pl.col("h").cast(pl.Float64).alias("high"),
+                pl.col("l").cast(pl.Float64).alias("low"),
+                pl.col("v").cast(pl.Float64).alias("volume"),
+                pl.col("vw").cast(pl.Float64).alias("vwap"),
+                pl.col("n").cast(pl.Int64).alias("num_trades"),
+            )
+            .sort("ts_ms")
+        )
+        assert set(out.columns) == set(MassiveClient.SCHEMA_BARS), f"Internal error: expected columns {set(MassiveClient.SCHEMA_BARS)} but got {set(out.columns)}. Sanity check the request and contact the authors if you need help."    
+        return out
+    
     @_cache(fmt=SubDir.PICKLE).cache(
                     "0.1",
                     label=lambda ticker,d,adjusted,can_be_none: f"open-close/{ticker}/{fmt_date(d)} {'a1' if adjusted else 'a0'} {'c0' if can_be_none else 'c1'}",
@@ -387,14 +470,20 @@ class MassiveClient(object):
             Whether to fetch adjusted or unadjusted open/close/volume.
         can_be_none : bool, default False
             If True, return None if no trade was recorded for the day. If False, raise an exception if no trade was recorded for the day.
-        client : MassiveClient, optional
-            MassiveClient to use for the request. If None, a new MassiveClient is created.
-            Passing a client is useful for caching.
 
         Returns
         -------
-        dict
-            Dict with keys: ``open [float]``, ``close [float]``, ``low [float]``, ``high [float]``, ``volume [float]``, ``adjusted [bool]``, and optionally ``afterHours [float|None]`` and ``preMarket [float|None]`` if available.
+        Result : dict
+            Dict with keys:
+            
+            * ``open [float]``
+            * ``close [float]``
+            * ``low [float]``
+            * ``high [float]``
+            * ``volume [float]``
+            * ``adjusted [bool]``
+            * ``afterHours [float|None]`` (optional)
+            * ``preMarket [float|None]`` (optional)
         """
         url = f"{self.BASE_URL}/v1/open-close/{ticker}/{d:%Y-%m-%d}"
         try:
@@ -405,6 +494,7 @@ class MassiveClient(object):
             raise requests.exceptions.HTTPError(f"No open/close/volume for {ticker} on {d} url {url}: {e.response.text}", response=e.response, request=e.request) from e
 
         # Polygon open-close has "open","close","volume" (and more)
+        assert not 'next_url' in data, f"Internal error: pagination not expected for open-close endpoint, url '{url}' response '{data}'. Sanity check request & contact the authors."
         open = data.get("open")
         close = data.get("close")
         volume = data.get("volume")
@@ -426,15 +516,15 @@ class MassiveClient(object):
             "volume": float(volume),
             "high": float(high),
             "low": float(low),
-            "afterHours": float(get_optional("afterHours")),
-            "preMarket": float(get_optional("preMarket")),
+            "afterHours": get_optional("afterHours"),
+            "preMarket": get_optional("preMarket"),
             "adjusted": adjusted,
         }
 
     @_cache(fmt=SubDir.PICKLE).cache(
                 "0.1", 
                 label=lambda underlying,d,max_dte: f"all_contracts/max_dte={max_dte if not max_dte is None else "all"}/{underlying}/{fmt_date(d)}",
-                exclude_args=["self"] )
+                exclude_args=["self"] ) # excluding 'self' is not necessary; should be excluded automatically
     def list_all_contracts_expiring_after_day(self, underlying: str, d: date, max_dte:int=None) -> list[dict]:
         """
         Download ALL option contracts with expiration_date >= d, with an optional upper bound.
@@ -468,3 +558,283 @@ class MassiveClient(object):
             verify_inp( max_expiry >= d, f"'max_dte' {max_dte} leads to max_expiry {max_expiry} before date {d}")
             params["expiration_date.lte"] = max_expiry.strftime("%Y-%m-%d")
         return self.paginate(url, params)
+    
+        
+    @_cache(fmt=SubDir.PANDAS_PARQUET).cache(
+            "0.1",
+            uid=lambda ticker, start, end : f"adjfactors/{ticker}/{fmt_date(start)}_{fmt_date(end)}",
+            exclude_args=['self']) # excluding 'self' is not necessary; should be excluded automatically
+    def adjustment_factors( self, ticker: str, start : date, end : date ) -> pl.DataFrame:
+        """
+        Download daily bars adjusted + unadjusted and compute per-day close scaling factor.
+
+        See https://massive.com/docs/rest/stocks/aggregates/custom-bars
+
+        Returns a Polars frame with:
+        - date
+        - close_unadj
+        - close_adj
+        - factor_close = close_adj / close_unadj
+
+        Notes:
+        - Uses NY timezone to derive the trading date from 't'.
+        - Uses only 'close' as requested.
+        - If you later want volume/cash-vol invariance checks, also download 'v' and compute factors similarly.
+        """
+        verify_inp( start <= end, lambda : f"Cannot find adjustment factors for {ticker}: dates must be in order; found start {fmt_date(start)} vs end {fmt_date(end)}")
+
+        unadjusted = self.fetch_bars(ticker, start, end, adjusted=False, timespan="day")
+        adjusted   = self.fetch_bars(ticker, start, end, adjusted=True, timespan="day")
+
+        if len(unadjusted) == 0 or len(adjusted) == 0:
+            raise RuntimeError(f"Cannot find adjustment factors for {ticker} between {fmt_date(start)} and {fmt_date(end)}: no bars found for {'adjusted' if len(adjusted) == 0 else 'unadjusted'} data. Please check that the ticker is correct and that there were trades for this ticker between {fmt_date(start)} and {fmt_date(end)}. If you need help, please contact the authors.")
+
+        unadjusted = ( 
+            unadjusted.with_columns(pl.col("ts_ms").dt.date().alias("date"))
+            .rename({"close": "unadj_close"})
+            .select(["date", "unadj_close"])
+        )
+        adjusted = ( 
+            adjusted.with_columns(pl.col("ts_ms").dt.date().alias("date"))
+            .rename({"close": "adj_close"})
+            .select(["date", "adj_close"])
+        )
+
+        # Join + factor
+        out = (
+            unadjusted.join(adjusted, on="date", how="outer")
+            .sort("date")
+            .with_columns(
+                (pl.col("adj_close") / pl.col("unadj_close")).cast(pl.Float32).alias("adjfactor")
+            )
+        )
+        err = out.filter(pl.col("adjfactor").is_infinite() | pl.col("adjfactor").is_nan())
+        if err.height > 0:
+            print(err.head()) # print stats to stdout
+            raise RuntimeError(f"Unexpected data error: found infinite/NaN adjustment factor for ticker {ticker} between {fmt_date(start)} and {fmt_date(end)}. This likely indicates a data error in the underlying bars, e.g. a missing unadjusted close price. Please check the underlying bars and contact the authors if you need help.")
+
+        out = out.select(["date", "adjfactor"])
+        return out
+
+    @_cache(fmt=SubDir.PICKLE).cache(
+            "0.1",
+            uid=lambda ticker : f"reference/{ticker}",
+            exclude_args=['self']) # excluding 'self' is not necessary; should be excluded automatically
+    def ticker_reference_data( self, ticker : str ) -> dict:
+        """
+        Return reference data for a given ticker. 
+        See https://massive.com/docs/rest/stocks/tickers/ticker-overview for details.
+
+        This function converts boolean, integer, floats and dates.
+
+        Parameters
+        ----------
+        ticker : str
+            Ticker symbol, e.g. "AAPL230616C00150000" for Apple 150 call expiring on 2023-06-16.
+
+        Returns
+        -------
+        Result : dict
+            Dict with reference data for the ticker. See https://massive.com/docs/rest/stocks/tickers/ticker-overview.
+            The following conversions will be performed:
+            
+            * active [bool|None]
+            * list_date [date|None]
+            * delisted_utc [date|None]
+            * market_cap [float|None]
+            * round_lot [int|None]
+            * total_employees [int|None]
+            * weighted_shares_outstanding [int|None]
+            * share_class_shares_outstanding [int|None]
+
+        Raises
+        ------
+        Ticker not found: :class:`FileNotFoundError`
+            If the request for reference data from massive did not yield and results.
+        """
+
+        url      = f"{self.BASE_URL}/v3/reference/tickers/{ticker}"
+        response = self.get(url)
+        results  = response.get("results", {})
+
+        if len(results) == 0:
+            raise FileNotFoundError(f"No reference data found for ticker {ticker} on massive.com. URL {url}.")
+
+        bool_fields = ['active']
+        date_fields = ['list_date','delisted_utc']
+        float_fields = ['market_cap']
+        int_fields = ['round_lot','total_employees','weighted_shares_outstanding','share_class_shares_outstanding','sic_code']
+
+        for f in bool_fields:
+            if f in results:
+                results[f] = bool(results[f])
+
+        for f in date_fields:
+            if f in results and results[f] is not None:
+                results[f] = date.fromisoformat(results[f])
+
+        for f in float_fields:
+            if f in results and results[f] is not None:
+                results[f] = float(results[f])
+
+        for f in int_fields:
+            if f in results and results[f] is not None:
+                results[f] = int(results[f])
+
+        return results
+    
+    # ----------------------------
+    # corporate events etc
+    # ----------------------------
+    
+    def _process_massive( self, what, rows: list[dict], schema: dict[str, pl.DataType], sort_by: list[str]|str, drop_ticker:bool ) -> pl.DataFrame:
+        """
+        Helper function to process corporate events data (dividends, splits) and convert to Polars DataFrame with correct schema.
+        """
+        if not rows:
+            return pl.DataFrame(schema=schema)
+
+        df = pl.DataFrame(rows, infer_schema_length=None)
+        if drop_ticker:
+            df = df.drop("ticker")
+
+        for k, t in schema.items():
+            if k not in df.columns:
+                df = df.with_columns(pl.lit(None).cast(t).alias(k))
+            elif t == pl.Date:
+                df = df.with_columns(pl.col(k).str.strptime(pl.Date, "%Y-%m-%d").alias(k))
+            else:
+                df = df.with_columns(pl.col(k).cast(t).alias(k))
+
+        df = df.sort(sort_by)
+        assert set(df.columns) == set(schema), f"Internal error {what()}: expected columns {set(schema)} but got {set(df.columns)}. Sanity check the request and contact the authors if you need help."
+        return df
+
+    SCHEMA_DIVIDENDS = {
+      "cash_amount": pl.Float64,
+      "currency": pl.String,
+      "declaration_date": pl.Date,
+      "distribution_type": pl.String,
+      "ex_dividend_date": pl.Date,
+      "frequency": pl.Int16,
+      "historical_adjustment_factor": pl.Float64,
+      "id": pl.String,
+      "pay_date": pl.Date,
+      "record_date": pl.Date,
+      "split_adjusted_cash_amount": pl.Float64
+    }
+
+    @_cache(fmt=SubDir.POLARS_PARQUET).cache(
+            "0.1",
+            uid=lambda ticker, start, end : f"dividends/{ticker}/{fmt_date(start)}_{fmt_date(end)}",
+            exclude_args=['self']) # excluding 'self' is not necessary; should be excluded automatically
+    def get_dividends( self, ticker: str, start: date, end: date) -> pl.DataFrame:
+        """
+        Retrieve dividends which go ex div between two dates from /stocks/v1/dividends.
+        See https://massive.com/docs/rest/stocks/corporate-actions/dividends
+
+        Parameters
+        ----------
+        ticker : str
+            Ticker symbol, e.g. "AAPL" for Apple.
+        start : :class:`datetime.date`
+            Start date for dividends.
+        end : :class:`datetime.date`
+            End date for dividends. 
+
+        Returns
+        -------
+        :class:`polars.DataFrame`
+            DataFrame with dividend information using schema :class:`MassiveClient.SCHEMA_DIVIDENDS`.
+            The dataframe can have length zero (but it will have the correct data schema).
+        """
+
+        verify_inp( start <= end, lambda : f"Cannot find adjustment factors for {ticker}: dates must be in order; found start {fmt_date(start)} vs end {fmt_date(end)}")
+
+        url = f"{self.BASE_URL}/stocks/v1/dividends"
+        params = {
+            "ticker": ticker,
+            "ex_dividend_date.gte": start.strftime("%Y-%m-%d"),
+            "ex_dividend_date.lte": end.strftime("%Y-%m-%d"),
+            "limit": 1000,
+            "order": "asc",
+            "sort": "ex_dividend_date",
+        }
+        rows = self.paginate(url, params)
+        return self._process_massive( what=lambda : f"dividends for {ticker} between {fmt_date(start)} and {fmt_date(end)}",
+                                      rows=rows,
+                                      schema=MassiveClient.SCHEMA_DIVIDENDS,
+                                      sort_by="ex_dividend_date",
+                                      drop_ticker=True )
+
+    SCHEMA_SPLITS = {
+      "adjustment_type": pl.String,
+      "execution_date": pl.Date,
+      "historical_adjustment_factor": pl.Float64,
+      "id": pl.String,
+      "split_from": pl.Int32,
+      "split_to": pl.Int32
+    }
+
+    @_cache(fmt=SubDir.POLARS_PARQUET).cache(
+            "0.1",
+            uid=lambda ticker, start, end : f"splits/{ticker}/{fmt_date(start)}_{fmt_date(end)}",
+            exclude_args=['self']) # excluding 'self' is not necessary; should be excluded automatically
+    def get_splits(self, ticker: str, start: date, end: date) -> pl.DataFrame:
+        """Retrieve stock splits between two dates from /stocks/v1/splits (fast)."""
+        url = f"{self.BASE_URL}/stocks/v1/splits"
+        params = {
+            "ticker": ticker,
+            "execution_date.gte": start.strftime("%Y-%m-%d"),
+            "execution_date.lte": end.strftime("%Y-%m-%d"),
+            "limit": 1000,
+            "order": "asc",
+            "sort": "execution_date",
+        }
+        rows = self.paginate(url, params)
+        return self._process_massive( what=lambda : f"splits for {ticker} between {fmt_date(start)} and {fmt_date(end)}",
+                                      rows=rows,
+                                      schema=MassiveClient.SCHEMA_SPLITS,
+                                      sort_by="execution_date",
+                                      drop_ticker=True )
+
+    SCHEMA_HAS_TICKER_CHANGES = {
+        "date": pl.Date,
+        "has_ticker_change": pl.Boolean,
+    }
+
+    @_cache(fmt=SubDir.POLARS_PARQUET).cache(
+            "0.1",
+            uid=lambda ticker, start, end : f"ticker_changes/{ticker}/{fmt_date(start)}_{fmt_date(end)}",
+            exclude_args=['self']) # excluding 'self' is not necessary; should be excluded automatically
+    def has_ticker_changes( self, ticker: str, start: date, end: date) -> pl.DataFrame:
+        """
+        Find dates at which an underlying had ticker changes.
+        If the endpoint is not available return an empty frame.
+        At the moment ticker changes are the only events massive supports.
+        """
+
+        client = self.get_rest_client()
+        events = client.get_ticker_events(ticker)
+        events = events.events
+        if len(events) == 0:
+            return pl.DataFrame(schema=MassiveClient.SCHEMA_HAS_TICKER_CHANGES)
+        df = pl.DataFrame(events)
+        event_types = set(df.select(pl.col("type").unique()).get_column("type").to_list())
+        assert event_types == {"ticker_change"}, f"Internal error retrieving ticker changes for {ticker} between {fmt_date(start)} and {fmt_date(end)}: expected event type 'ticker_change' but got {sorted(event_types)}. Please update code. Ref: https://massive.com/docs/rest/stocks/corporate-actions/ticker-events"
+
+        df = df.select(
+            pl.col("date").str.slice(0, 10).str.strptime(pl.Date, "%Y-%m-%d").alias("date")
+        )
+
+        # filter by requested window
+        df = df.filter((pl.col("date") >= start) & (pl.col("date") <= end))
+        if df.is_empty():
+            return pl.DataFrame(schema=MassiveClient.SCHEMA_HAS_TICKER_CHANGES)
+
+        df = df.unique(subset=["date"]).sort("date").with_columns(pl.lit(True).alias("has_ticker_change"))
+        df = df.sort("date")
+        assert df.height > 0
+        assert set(df.columns) == set(MassiveClient.SCHEMA_HAS_TICKER_CHANGES), f"Internal error retrieving ticker changes for {ticker} between {fmt_date(start)} and {fmt_date(end)}: expected columns {set(MassiveClient.SCHEMA_HAS_TICKER_CHANGES)} but got {set(df.columns)}. Please update code. Ref: https://massive.com/docs/rest/stocks/corporate-actions/ticker-events"    
+        return df
+
