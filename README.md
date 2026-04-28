@@ -158,7 +158,7 @@ GitHub Actions also runs the test suite on pushes to `main` and on pull requests
 ## Documentation
 
 Please make an effort to document any files you commit. The project uses [reStructuredText](https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html)
-which is tedious but the standard.
+which is tedious but the standard. Here is a [comprehensive introduction](https://www.sphinx-doc.org/en/master/).
 
 You build the documentation with
 ```
