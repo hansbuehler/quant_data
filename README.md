@@ -1,39 +1,75 @@
 # quantdata
 
-Minimal Python package scaffold for the `quantdata` library.
+Pythin environment for systematically processing financial data and building pipelines to feed it to models.
+The aim of the project is to joinly develop robust data pipelines which lead to standadized benchmarks in finance.
+
 
 ## Python requirement
 
-This project targets Python 3.12. The repository includes `.python-version` and the package metadata enforces `>=3.12,<3.13`.
-
-## Installation
+Clone the directory ``quant_data``. Change into that directory.
 
 ### Create a Python 3.12 environment
 
-On this machine, the simplest path is a local conda environment pinned to Python 3.12:
+This project targets Python 3.12. The repository includes `.python-version` and the package metadata enforces `>=3.12,<3.13`. 
+*TODO: make it work an test uner 3.13*
 
-```powershell
+#### Linux/venv
+
+You will need python 3.12. Future versions will support 3.12.
+Under Linux, if your defaul Python is not 3.12, you can install a different version with
+
+```bash
+sudo apt install python3.12 python3.12-venv  
+``` 
+
+Then create a python environment:
+
+```bash
+python3.12 -m venv .vqdata # if you need to specify a particular version
+python -m venv .vqdata     # otherwise
+ 
+source .vqdata\bin\activate   # activate it
+python --version
+
+python -m pip install --upgrade pip pip-review  # update pip
+python -m pip install -e .[dev]                 # install local package 
+````
+Use `.[dev]` for the full local development toolchain. It includes testing and documentation tools.
+
+#### Windows/venv
+
+Under windows you can use the Windows Store to install Python. Once Python 3.12 is installed
+create the environment:
+
+```cmd
+py -3.12 -m venv .vqdata     # create environemnt
+.vqdata\Scripts\Activate     # activate it 
+python --version
+
+python -m pip install --upgrade pip pip-review  # update pip
+python -m pip install -e .[dev]                 # install local package 
+```
+Use `.[dev]` for the full local development toolchain. It includes testing and documentation tools.
+
+#### Windows/Anaconda
+
+Using Anaconda, the simplest path is a local conda environment pinned to Python 3.12:
+
+```cmd
 conda create --prefix .\.vqdata python=3.12
 conda activate .\.vqdata
 python --version
+
+python -m pip install --upgrade pip pip-review  # update pip
+python -m pip install -e .[dev]                 # install local package 
 ```
+Use `.[dev]` for the full local development toolchain. It includes testing and documentation tools.
 
 If conda plugin warnings interfere with environment creation, retry with:
 
-```powershell
+```cmd
 conda create --no-plugins --prefix .\.vqdata python=3.12
 ```
-
-### Install the package
-
-Upgrade pip and install the project in editable mode:
-
-```powershell
-python -m pip install --upgrade pip
-python -m pip install -e .[dev]
-```
-
-Use `.[dev]` for the full local development toolchain. It includes testing and documentation tools.
 
 ### Verify the installation
 
@@ -73,21 +109,14 @@ trigger refreshs for others once they check out.
 * ``QUANTDATA_TEST_MODE``: global flag to tell the project we are in testing mode. In this mode, no data is downloaded from any data source.
 * ``QUANTDATA_TEMP_DATA``: local ephermal caching. Very useful for exceedingly slow processes. Not used at the moment.
 
-
 ## Tests
 
-The pytest test suite enables test mode automatically by setting `QUANTDATA_TEST_MODE=1` in `tests/conftest.py` before test modules are imported. That bootstrap also creates the local `tests/stored_data/raw`, `tests/stored_data/processing`, and `tests/stored_data/training` directories if they do not already exist.
+The pytest test suite enables test mode automatically by setting ``QUANTDATA_TEST_MODE=1`` in
+``tests/conftest.py`` before test modules are imported. This avoids access to external data sources during testing.
 
-Run the test suite with:
+Run the test suite from the project root with:
 
-```powershell
-python -m pytest
 ```
-
-If you want to reproduce the same behavior manually in a terminal, run:
-
-```powershell
-$env:QUANTDATA_TEST_MODE = "1"
 python -m pytest
 ```
 
@@ -115,12 +144,12 @@ Terminal -> python -m pytest
 If test discovery is empty, the usual fix is:
 
 1. Confirm the selected interpreter is the `.vqdata` environment.
-2. Install the test dependencies with `python -m pip install -e .[test]` or `python -m pip install -e .[dev]`.
+2. Install the test dependencies with `python -m pip install -e .[dev]`.
 3. Run `Python: Refresh Tests` from the Command Palette.
 
 Install the Git hook runner and register the local `pytest` pre-commit hook with:
 
-```powershell
+```
 python -m pre_commit install
 ```
 
@@ -128,9 +157,11 @@ GitHub Actions also runs the test suite on pushes to `main` and on pull requests
 
 ## Documentation
 
-Build the Sphinx documentation with:
+Please make an effort to document any files you commit. The project uses [reStructuredText](https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html)
+which is tedious but the standard.
 
-```powershell
+You build the documentation with
+```
 python -m sphinx -b html docs docs\_build\html
 ```
 
