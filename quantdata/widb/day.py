@@ -3,35 +3,29 @@ Generating one clean day of data
 """
 from __future__ import annotations
 
-from pandas import arrays
-from yfinance import tickers
-
 from quantdata.widb import WIDBClient, interpolate_zero_curve
-from quantdata.biz_calendar import count_business_days_between, DAYS_PER_YEAR, AM_EXIRY_SUBTRACT, to_date, NMS
+from quantdata.biz_calendar import count_business_days_between, DAYS_PER_YEAR, AM_EXIRY_SUBTRACT, to_date, NMS, prev_business_day, DateRange
 from quantdata.widb.client import WIDBClient
 from quantdata.widb.bad import BAD
 from quantdata.pool import PoolConfig
 
 from cdxcore.version import version
 from cdxcore.verbose import Context
-from cdxcore.subdir import SubDir, CacheMustExistError
-from cdxcore.util import fmt_date, fmt_list, fmt_dict, fmt_big_byte_number
+from cdxcore.util import fmt_date, fmt_list
 from cdxcore.bs import bs
 from cdxcore.err import verify_inp
 from cdxcore.pretty import PrettyObject
-from cdxcore.uniquehash import named_unique_filename48_8, unique_hash8
-from cdxcore.jcpool import JCPool
+from cdxcore.subdir import SubDir
+from cdxcore.uniquehash import named_unique_filename48_8
 
 import datetime as dt
 import numpy as np
 import pandas as pd
 import math as math
 import warnings
-from prettytable import PrettyTable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field    
 
 _processing = WIDBClient.locations.processing("day",fmt=SubDir.PANDAS_PARQUET)
-_training   = WIDBClient.locations.training("block",fmt=SubDir.PANDAS_PARQUET)
 
 def _create_empty_df( schema ):
     return pd.DataFrame({c: pd.Series(dtype=dtype) for c,dtype in schema.items()})
@@ -45,6 +39,7 @@ SCHEMA_RAW_DAY = {
     'ticker' : np.dtype('O'),
     'date' : np.dtype("datetime64[s]"),  # [D] not supported in storage
     'spot' : np.float32,
+    'spot_prev' : np.float32,
     'call_symbol' : np.dtype("O"),
     'put_symbol' : np.dtype("O"),
     'call_opt_id' : np.int32,
@@ -68,7 +63,7 @@ SCHEMA_RAW_DAY = {
     'mkt_put_log_open_interest' : np.float32, 
 }
 
-@version("0.2")
+@version("0.4")
 @dataclass(frozen=True)
 class RawDayFilter:
     min_bid : float = 0.011  # minimum bid value, typically above one tick.
@@ -76,11 +71,11 @@ class RawDayFilter:
     def __post_init__(self):
         verify_inp(self.min_bid >= 0., lambda : f"'min_bid' must be non-negative, found {self.min_bid:.3f}")
 
-    def __str__(self):
+    def __str__(self):#by convention use a some what readable string with comma separated key=value pairs
         return f"bid={self.min_bid:.3f}"
 
 @_processing(fmt=SubDir.PANDAS_PARQUET).cache(
-            "0.5",
+            "0.6",
             dependencies=[interpolate_zero_curve, WIDBClient],
             uid=lambda ticker, d, raw_day_filter : f"{named_unique_filename48_8(f'raw {str(raw_day_filter)}',raw_day_filter)}/{ticker}/{fmt_date(d)}",
             exclude_args=['verbose','raise_if_bad'])
@@ -125,6 +120,10 @@ def collect_raw_day( ticker : str,
         and consider adding the date/ticker to the BAD data sets if the issue is confirmed.
     """
 
+    if d >= BAD.LAST_LIKELY_VALID_DATE:
+        raise ValueError(f"{d} is on or after the BAD.LAST_LIKELY_VALID_DATE ({BAD.LAST_LIKELY_VALID_DATE}). Data for this date is likely to be missing from Option Metrics. "+\
+                          "If you are sure this is not the case, please update widb/bad.py.")
+
     if d in BAD.DAYS_ALL:
         if not raise_if_bad:
             return _create_empty_df(SCHEMA_RAW_DAY)
@@ -138,11 +137,18 @@ def collect_raw_day( ticker : str,
     secid       = conn.lookup_secid(ticker)
 
     with verbose.write_t(f"Collecting raw market data for {ticker} on {d}.") as tme:
-        try:    
+        try:
             spot    = conn.spot_price(secid, d, verbose=verbose(1))
         except LookupError as e:
             raise LookupError(f"Failed to fetch spot price for {ticker} on {d}. "+\
                             f"This likely means either the corresponding secid {secid} is not covered by Option Metrics, or {d} is not a business day for this underlying. Please check the date range and calendar settings.") from e
+
+        try:
+            prev_d  = prev_business_day(d, count_start=False)
+            spot_d  = conn.spot_price(secid, prev_d, verbose=verbose(1))
+        except LookupError as e:
+            raise LookupError(f"Failed to fetch spot price for {ticker} on previous business day {prev_d} (relative to {d}).") from e
+
         zero_curve  = conn.zero_curve(d, verbose=verbose(1))
         opts_pd     = conn.options(secid, d, verbose=verbose(1))
         fwd_table   = conn.forwards(secid, d, verbose=verbose(1))
@@ -155,8 +161,6 @@ def collect_raw_day( ticker : str,
             raise EOFError(f"No option data found for {ticker} on {d}. Please check the date range and calendar settings.") 
         if zero_curve.empty:
             raise EOFError(f"No zero-curve data for {d}")
-        if spot is None:
-            raise EOFError(f"No spot price for {ticker} on {d}")
         if fwd_table.empty:
             raise EOFError(f"No forward price data for {ticker} on {d}")
     
@@ -400,6 +404,7 @@ def collect_raw_day( ticker : str,
 
         r = PrettyObject()
         r.spot = np.float32(spot)
+        r.spot_prev = np.float32(spot_d)
         r.date = np.array(d, dtype="datetime64[s]")
         r.ticker = ticker
         r.call_symbol = opts_pd["call_symbol"].astype(str).values.tolist()
@@ -428,12 +433,25 @@ def collect_raw_day( ticker : str,
             expiry_dates.year * 100000
             + expiry_dates.month * 1000
             + expiry_dates.day * 10
-            + np.where(r.is_am, 1, 0)
+            + np.where(r.is_am, 0, 1)
         ).astype(np.int32)
 
-        r.bdte = count_business_days_between(d, expiry_dates.to_numpy(dtype="datetime64[D]")).astype(np.float32)  # returns integers
-        r.bdte = r.bdte - np.where( r.is_am, AM_EXIRY_SUBTRACT, 0. ).astype(np.float32) # adjust for AM settlement if needed
-        assert np.min(r.bdte) > 0., f"Internal error: {ticker} {d}: found non-positive business days to expiry after adjusting for AM  treatment: min={np.min(r.bdte)}. Please contact the authors with an example. {expiry_dates} / {r.bdte}"
+        r.bdte = count_business_days_between(d, expiry_dates.to_numpy(dtype="datetime64[D]"))  # returns integers
+
+        if np.min(r.bdte) <= 0:
+            # historically end of month expiries might fall on a Saturday AM
+            # we check that if BDTE is zero, those are the cases
+            bad_expiries = np.unique( r.expiry[r.bdte <= 0] )
+            bad_is_am    = np.unique( r.is_am[r.bdte <= 0] )
+            bad_bdte     = np.unique( r.bdte[r.bdte <= 0] )
+
+            for be, bam, bb in zip(bad_expiries, bad_is_am, bad_bdte):
+                be = to_date(be)
+                assert bb == 0, f"Internal error: expected non-positive business days to expiry to be exactly zero, found {bb} for expiry {be} with is_am={bam}. Please contact the authors with an example."
+                assert be.weekday() == 5, f"Internal error: expected bad expiry {be} to be a Saturday, found weekday {be.weekday()}. Please contact the authors with an example."
+                assert bam == True, f"Internal error: expected bad expiry {be} to be an AM settlement, found is_am={bam}. Please contact the authors with an example."
+
+        r.bdte = np.clip( r.bdte.astype(np.float32) - np.where(r.is_am, AM_EXIRY_SUBTRACT / DAYS_PER_YEAR, 0.0), min=0. ).astype(np.float32)
         r.tte_y = r.bdte / DAYS_PER_YEAR
         return pd.DataFrame(dict(r))
 
@@ -493,7 +511,7 @@ class ExpiryFilter:
         verify_inp(self.num_min_either_traded >= 0, lambda : f"'num_min_either_traded' must be non-negative, found {self.num_min_either_traded}")
         verify_inp(self.num_min_both_traded >= 0, lambda : f"'num_min_both_traded' must be non-negative, found {self.num_min_both_traded}")
 
-    def __str__(self):
+    def __str__(self):#by convention use a some what readable string with comma separated key=value pairs
         return f"eth={self.num_min_either_traded},bth={self.num_min_both_traded}"
 
 def _uid(ticker, d, raw_day_filter, expiry_filter) -> str:
@@ -706,290 +724,6 @@ def enrich_day( ticker : str, d : dt.date, data : pd.DataFrame|None = None, *,
 
     return data
 
-# ---------------------------------------------------------------------------
-# Enriched data, day
-# Optimal forward computation, implied volatilities, (pure) greeks.
-# Also translates everything in calls.
-# ---------------------------------------------------------------------------
-
-DEFAULT_SAMPLE_EXCLUDE_FIELDS = {
-    'ticker',
-    'call_symbol', 
-    'put_symbol', 
-    'call_opt_id', 
-    'put_opt_id', 
-    'date', 
-    'expiry', 
-    'expiry_id',
-    'is_american', 
-    'is_am',
-    'mkt_call_ask',
-    'mkt_call_bid',
-    'mkt_call_log_volume',
-    'mkt_call_log_open_interest',
-    'mkt_put_ask',
-    'mkt_put_bid',
-    'mkt_put_log_volume',
-    'mkt_put_log_open_interest',
-    }
-
-@version("0.2")
-@dataclass(frozen=True)
-class SampleDaysConfig:
-    max_num_options: int = 1000                 #: Maximum number of options. Options are sorted by NMS, expiry and call/put, and only the top max_num_options are kept. This is applied after all other filters.
-    max_business_days_to_expiry: int = 252*3    #: Maximum business days to expiry. 
-    max_nms: float = 4.                         #: Maximum |NMS|. 
-    min_vegaSqrtVar: float = 0.001              #: Minimum vega * sqrt(tte), i.e. the derivative in sqrtVar: BSsq(K,sqrtVar) = BSvol(K,sqrtVar/sqrt(t),t). This is a measure of how much the option price moves with volatility, normalized by time to expiry. It is used to filter out options that are too close to expiry or too far OTM, which can have very low vega and lead to noisy implied volatilities.
-    min_log_volume: float = 1.0                 #: Minimum log volume. 
-    min_log_open_interest: float = 1.0          #: Minimum log open interest. 
-    remove_am: bool = False                     #: Whether to remove options that settled at the AM price. 
-    exclude_fields : set[str] = field(default_factory=lambda: set(DEFAULT_SAMPLE_EXCLUDE_FIELDS)) #: List of fields of :attr:`SCHEMA_ENRICHED_DAY` to exclude from the final data set. The default is :attr:`DEFAULT_SAMPLE_EXCLUDE_FIELDS`, which excludes fields that are not commonly used for modeling and can be easily retrieved from the option symbol or other fields. If a field is in both :attr:`exclude_fields` and :attr:`include_fields`, it will be included (i.e. :attr:`include_fields` takes precedence over :attr:`exclude_fields`).
-    include_fields : set[str] = field(default_factory=set) #: List of fields of :attr:`SCHEMA_ENRICHED_DAY` to include in the final data set. If non-empty, only these fields will be included in the final data set.
-
-    def __post_init__(self):
-        verify_inp(self.max_num_options >= 10, lambda : f"'max_num_options' must be at least 10, found {self.max_num_options}")
-        verify_inp(self.max_business_days_to_expiry > 0, lambda : f"'max_business_days_to_expiry' must be positive, found {self.max_business_days_to_expiry}")
-        verify_inp(self.max_nms > 0, lambda : f"'max_nms' must be positive, found {self.max_nms}")
-        verify_inp(self.min_vegaSqrtVar >= 0, lambda : f"'min_vegaSqrtVar' must be non-negative, found {self.min_vegaSqrtVar}")
-        verify_inp(self.min_log_volume >= 0, lambda : f"'min_log_volume' must be non-negative, found {self.min_log_volume}")
-        verify_inp(self.min_log_open_interest >= 0, lambda : f"'min_log_open_interest' must be non-negative, found {self.min_log_open_interest}")
-
-        available_fields = set(SCHEMA_ENRICHED_DAY)
-        verify_inp( set(self.exclude_fields) <= available_fields, lambda : f"'exclude_fields' must be a subset of {available_fields}; unknown fields found: {sorted(set(self.exclude_fields) - available_fields)}")
-        verify_inp( set(self.include_fields) <= available_fields, lambda : f"'include_fields' must be a subset of {available_fields}; unknown fields found: {sorted(set(self.include_fields) - available_fields)}")
-
-        flds = {f for f in SCHEMA_ENRICHED_DAY if f in self.include_fields} if len(self.include_fields) > 0 else set(SCHEMA_ENRICHED_DAY)
-        if len(self.exclude_fields) > 0:
-            flds = flds - set(self.exclude_fields)
-        verify_inp( len(flds) > 0, lambda : f"No fields left after applying include/exclude filters. Include_fields: {sorted(self.include_fields)}, exclude_fields: {sorted(self.exclude_fields)}, available fields={sorted(SCHEMA_ENRICHED_DAY)}")
-
-    def __str__(self):
-        if len(self.include_fields) > 0 or len(self.exclude_fields) > 0:
-            field_id = ",fld=" + unique_hash8( set(self.include_fields) | set(self.exclude_fields) )
-        else:
-            field_id = ""
-        return f"nopt={self.max_num_options},bdte={self.max_business_days_to_expiry},nms={self.max_nms},lvolu={self.min_log_volume},loi={self.min_log_open_interest},rmam={self.remove_am},vegaSqrtVar={self.min_vegaSqrtVar}{field_id}"
-    
-    def _filter(self, df : pd.DataFrame) -> pd.DataFrame:
-        """ Remove all relevant data """
-
-        assert set(df.columns) >= set(SCHEMA_ENRICHED_DAY), f"Internal error: DataFrame has missing columns. Missing: {fmt_list(set(SCHEMA_ENRICHED_DAY) - set(df.columns))}. Please contact the authors with an example."
-        assert not df.isna().any().any(), f"Internal error: filter resulted in NaN values. Please contact the authors with an example."
-
-        if not df.empty:
-            df = df[df['bdte'] <= self.max_business_days_to_expiry]
-            df = df[np.abs(df['nms']) <= self.max_nms]
-            df = df[df['log_volume'] >= self.min_log_volume]  if self.min_log_volume > 0. else df
-            df = df[df['log_open_interest'] >= self.min_log_open_interest] if self.min_log_open_interest > 0. else df
-            if self.remove_am:
-                df = df[~df['is_am']]
-
-            if not df.empty and len(df) > self.max_num_options:
-                df['max_nms'] = np.abs(df['nms'])
-                df = df.sort_values(by=["max_nms", "tte_y"], ascending=[True, True])
-                df = df.head(self.max_num_options)
-                df.drop(columns=["max_nms"], inplace=True)
-                assert len(df) == self.max_num_options, f"Internal error: after filtering by max_num_options, the number of options is not equal to max_num_options. Please contact the authors with an example."
-
-            if df.empty:
-                raise RuntimeError(f"Internal error: filter resulted in an empty data set. Please contact the authors with an example.")
-
-        df  = df.loc[:, self.include_fields] if len(self.include_fields) > 0 else df
-        if len(self.exclude_fields) > 0:
-            df.drop(columns=self.exclude_fields, inplace=True)
-        assert len(df.columns) > 0, f"Internal error: no columns left after applying include/exclude filters. Include_fields: {sorted(self.include_fields)}, exclude_fields: {sorted(self.exclude_fields)}, available fields={sorted(SCHEMA_ENRICHED_DAY)}. Please contact the authors with an example."
-        assert not df.isna().any().any(), f"Internal error: filter resulted in NaN values. Please contact the authors with an example."
-        return df
-
-def _uid( 
-        ticker: str,
-        date_range : DateRange, 
-        raw_day_filter : RawDayFilter, 
-        expiry_filter : ExpiryFilter, 
-        sample_days_config : SampleDaysConfig ):
-    return f"{named_unique_filename48_8(f'sample {str(raw_day_filter)},{str(expiry_filter)}',raw_day_filter,expiry_filter)}/"+\
-           f"{named_unique_filename48_8(str(sample_days_config),sample_days_config)}/"+\
-           f"{ticker}/{str(date_range)}"
-
-@_training(fmt=SubDir.PYTREE_HDF5).cache(
-        "0.1",
-        dependencies=[enrich_day],
-        uid = _uid,
-        exclude_args=['verbose','dates','refresh_cache','raise_if_bad'])
-def collect_days( ticker : str,
-                  date_range : DateRange, *,
-                  raw_day_filter : RawDayFilter, 
-                  expiry_filter : ExpiryFilter, 
-                  sample_days_config : SampleDaysConfig,
-                  pool_config : PoolConfig = PoolConfig.off(),
-                  refresh_cache : bool = False, 
-                  verbose : Context = Context.all ):
-    """
-    Collect enriched data for a list of tickers and a date range, and write it into a single HDF5 file.
-    """
-
-    dates = date_range.get_business_days()
-
-    verbose.write(lambda: f"Collecting enriched data for ticker {ticker} for {len(dates)} business days from {fmt_date(dates[0])} to {fmt_date(dates[-1])} {'excluding' if date_range.exclude_half_days else 'including'} half days.")
-    verbose.report(2,lambda: f"Sample Days Config: {sample_days_config}")
-    verbose.report(2,lambda: f"Raw Day Filter: {raw_day_filter}")
-    verbose.report(2,lambda: f"Expiry filter: {expiry_filter}")
-    verbose.report(2,lambda: f"Pool config: {pool_config}")
-
-    # which data do we have
-    # ---------------------
-
-
-    def generate():
-
-        thread_pool = JCPool(num_workers=pool_config.num_workers, threading=True)
-        existing = {}
-        missing = []
-
-        if refresh_cache:
-            verbose.verbose("Regenerating all files.")
-            missing = dates
-        else:
-            with verbose.write_t(lambda: f"Checking which enriched daily data files for ticker {ticker} and the {len(dates)} business days from {fmt_date(dates[0])} to {fmt_date(dates[-1])} {'excluding' if date_range.exclude_half_days else 'including'} half days exist in the cache... ", end='') as tme:
-                def process(d):
-                    try:
-                        df = enrich_day( ticker, d, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, verbose=Context.quiet, 
-                                         raise_if_bad=False, 
-                                         refresh_cache=False, 
-                                         override_cache_mode="cacheonly" )
-                    except CacheMustExistError:
-                        return None
-                    return sample_days_config._filter(df)
-
-                for d, df in thread_pool.parallel( { d: thread_pool.delayed(process)(d) for d in dates } ):
-                    if df is None:
-                        missing.append(d)
-                    else:   
-                        existing[d] = df
-
-                if len(missing) > 0:
-                    verbose.write(lambda: f"found {len(missing)}/{len(dates)} business days with missing daily data. Regenerating those. This took {tme}.", head=False)
-                else:
-                    verbose.write(lambda: f"all daily data files exist and have been loaded. This took {tme}.", head=False)
-
-        if len(missing) > 0:
-            # generate missing data with parallel processing
-            pool = JCPool(num_workers=pool_config.num_workers, threading=False)
-
-            def process( ticker, d, raw_day_filter, expiry_filter, refresh_cache ):
-                r = enrich_day( ticker, d, raw_day_filter=raw_day_filter, 
-                                       expiry_filter=expiry_filter, 
-                                       refresh_cache=refresh_cache, 
-                                       raise_if_bad=False, 
-                                       verbose=Context.quiet, 
-                                       override_cache_mode="update", 
-                                       cache_generate_only=True )
-                return d, r
-
-            tme = verbose.timer()
-            cnt = 0
-            for d, status in pool.parallel( pool.delayed(process)( ticker, d, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, refresh_cache=refresh_cache ) for d in missing ):
-                cnt += 1
-                if tme.interval_test(1.):
-                    verbose.write(lambda: f"\r{ticker}: generating enriched data for {cnt}/{len(missing)} missing business days using {pool_config.num_workers} processes, now {d}. So far this took {tme}... ", end='')
-            verbose.write(lambda: f"\rGenerated all {len(missing)} missing business days for {ticker} using {pool_config.num_workers} processes. This took {tme}.")
-
-            pool.terminate()
-
-            with verbose.write_t(lambda: f"Reading the generated enriched data for the {len(missing)} missing business days for {ticker} in the main process... ", end='') as tme:
-                # read them back
-                def process(d):
-                    try:
-                        df = enrich_day( ticker, d, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, override_cache_mode="cacheonly", refresh_cache=False, raise_if_bad=False, verbose=Context.quiet )
-                    except CacheMustExistError as e:
-                        raise RuntimeError(f"Internal error: {ticker} {d}: expected enriched data to be available in the cache after generation, but it was not found. Please contact the authors with an example. Original error message: {str(e)}")
-                    df = sample_days_config._filter(df)
-                    return df
-
-                for d, df in thread_pool.parallel( { d: thread_pool.delayed(process)(d) for d in missing } ):
-                    assert not df is None
-                    existing[d] = df
-
-                verbose.write(lambda: f"done; this took {tme}.", head=False)
-        del missing
-
-        # clear empty days
-        max_num_options = 0
-        results = {}
-        exdates = sorted(existing)
-        for d in exdates:
-            df = existing[d]
-            if not df.empty:
-                max_num_options = max(max_num_options, len(df))
-                results[d] = df
-
-        if len(results) < len(existing):
-            removed = sorted( set(existing) - set(results) )
-            verbose.report(1,lambda: f"The following {len(existing)-len(results)} business days where removed because they had no data after filtering: {fmt_list(removed)}.")
-
-        return results, max_num_options
-
-    results, max_num_options = generate()
-    num_steps = len(results)
-
-    # allocate memory
-    # ===============
-
-    with verbose.write_t(lambda: f"Generating sample for {num_steps} business days and at most {max_num_options} options per day for ticker {ticker}... ", end='') as tme:
-
-        def allocate():
-            df0 = results[list(results.keys())[0]] # touch one df to get the schema
-            r = PrettyObject()
-            r.is_valid = np.zeros((num_steps,max_num_options), dtype=bool )
-            r.ticker = ticker
-
-            for c in df0.columns:
-                v = df0[c].to_numpy()
-                assert len(v.shape) == 1, f"Internal error: {ticker} {d}: enriched DataFrame column '{c}' has unexpected shape. Expected 1D array, found shape {v.shape}. Please contact the authors with an example."
-                r[c] = np.zeros((num_steps, max_num_options), dtype=v.dtype) if len(v) > 0 else np.zeros((num_steps, 1), dtype=v.dtype)
-
-            for i, d in enumerate(sorted(results)):
-                df = results[d]
-                ln = len(df)
-                r.is_valid[i,:ln] = True
-                for c in df.columns:
-                    v = df[c].to_numpy()
-                    r[c][i,:len(v)] = v
-
-            for k,v in r.items():
-                if k!="ticker" and v.dtype != np.dtype("O"):
-                    try:
-                        assert np.all( np.isfinite(v) ), f"Internal error: {ticker}: array for column '{k}' contains non-finite values. Please contact the authors with an example."
-                    except TypeError as e:
-                        raise RuntimeError(f"Internal error: {ticker}: failed to check for finite values in column '{k}' with dtype {v.dtype}. Please contact the authors with an example. Original error message: {str(e)}")
-
-            return r
-        
-        r = allocate()
-
-        verbose.write(lambda: f"done; this tool {tme}.", head=False)
-
-        if verbose.shall_report(2):
-            nsize = 0
-
-            tbl = PrettyTable()
-            tbl.field_names = ["Field", "Shape", "Dtype", "Size", "Mean", "Std", "Min", "Max" ]
-
-            for k, v in r.items():
-                if k == "ticker":
-                    continue
-
-                try:
-                    tbl.add_row([k, v.shape, v.dtype, fmt_big_byte_number(v.nbytes), f"{np.mean(v[r.is_valid]):.4g}", f"{np.std(v[r.is_valid]):.4g}", f"{np.min(v[r.is_valid]):.4g}", f"{np.max(v[r.is_valid]):.4g}" ])
-                except Exception:
-                    tbl.add_row([k, v.shape, v.dtype, fmt_big_byte_number(v.nbytes), "", "", "", ""])
-                nsize += v.nbytes   
-
-            tbl.add_row(["TOTAL", "", "", fmt_big_byte_number(nsize), "", "", "", ""])
-            verbose.report(2, tbl)
-
-    return dict(r)  # for HDF5 
-
 # ================================================================
 # Command-line interface
 # *** something wired is broken with the command line version ***
@@ -997,35 +731,6 @@ def collect_days( ticker : str,
 
 import click
 from quantdata.widb import cli_defaults
-from quantdata.biz_calendar import to_date, DateRange
-from quantdata.pool import PoolConfig
-from cdxcore.err import verify_inp
-from cdxcore.util import fmt_list
-
-def main_works():
-    tickers          = ["SPX"]
-
-    start, end       = ( dt.date(2015, 1, 1), dt.date(2025, 1, 1) )
-    date_range       = DateRange(start=to_date(start), end=to_date(end), exclude_half_days=True)
-    pool_config      = PoolConfig(num_workers=4, threading=False)
-    raw_day_filter   = RawDayFilter()   
-    expiry_filter    = ExpiryFilter()
-    sample_days_config = SampleDaysConfig()
-    refresh = False
-
-    dates            = date_range.get_business_days()
-
-    verbose = Context.all
-    verbose.write(lambda: f"Enriching data for tickers {fmt_list(tickers)} from {fmt_date(start)} to {fmt_date(end)} {'excluding' if date_range.exclude_half_days else 'including'} half days. Total business days: {len(dates)}.")
-    verbose.report(1,lambda: f"Sample Days Config: {sample_days_config}")
-    verbose.report(1,lambda: f"Raw Day Filter: {raw_day_filter}")
-    verbose.report(1,lambda: f"Expiry filter: {expiry_filter}")
-    verbose.report(1,lambda: f"Pool config: {pool_config}")
-    for it, ticker in enumerate(tickers):  
-        verbose.report(1,lambda: f"\rProcessing ticker {it+1}/{len(tickers)} {ticker} from {fmt_date(start)} to {fmt_date(end)}.")
-        collect_days(ticker, date_range, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter,
-                     sample_days_config=sample_days_config, pool_config=pool_config, refresh_cache=refresh, verbose=verbose(2) )
-    verbose.write(f"All {len(tickers)} tickers processed.")
 
 @click.command()
 @click.argument("tickers", nargs=-1, required=True)
@@ -1043,27 +748,32 @@ def main(tickers : list[str],
         threading : bool, 
         refresh : bool,
         debug : bool):
-    
-    if debug:
-        main_works()
-        return
-    
+
     verify_inp( len(tickers) > 0, "At least one ticker must be specified")
     verify_inp( period is not None and len(period) == 2, "A start and end date must be specified")
 
-    start, end       = period
-    date_range       = DateRange(start=to_date(start), end=to_date(end), exclude_half_days=not halfdays)
-    pool_config      = PoolConfig(num_workers=workers, threading=threading)
-    raw_day_filter   = RawDayFilter()   
-    expiry_filter    = ExpiryFilter()
+    from quantdata.widb.sampler import sample_days, SampleDaysConfig
 
-    dates            = date_range.get_business_days()
+    start, end         = period
+    date_range         = DateRange(start=to_date(start), end=to_date(end), exclude_half_days=not halfdays)
+    pool_config        = PoolConfig(num_workers=workers, threading=threading)
+    raw_day_filter     = RawDayFilter()   
+    expiry_filter      = ExpiryFilter()
+    sample_days_config = SampleDaysConfig()
+
+    dates              = date_range.get_business_days()
 
     verbose = Context.all
-    verbose.write(lambda: f"Enriching data for tickers {fmt_list(tickers)} from {fmt_date(start)} to {fmt_date(end)} {'excluding' if date_range.exclude_half_days else 'including'} half days. Total business days: {len(dates)}. Pool config: {pool_config}. Raw Day Filter: {raw_day_filter}. Expiry filter: {expiry_filter}.")
+    verbose.write(lambda: f"Enriching data for tickers {fmt_list(tickers)} from {fmt_date(start)} to {fmt_date(end)} {'excluding' if date_range.exclude_half_days else 'including'} half days. Total business days: {len(dates)}.")
+    verbose.report(1,lambda: f"Sample Days Config: {sample_days_config}")
+    verbose.report(1,lambda: f"Raw Day Filter: {raw_day_filter}")
+    verbose.report(1,lambda: f"Expiry filter: {expiry_filter}")
+    verbose.report(1,lambda: f"Pool config: {pool_config}")
+
     for it, ticker in enumerate(tickers):  
-        verbose.report(1,lambda: f"\rProcessing {len(tickers)} tickers: {int(it*100//len(tickers))}% done. Now processing {ticker} from {fmt_date(start)} to {fmt_date(end)}.")
-        _refresh_all_days( ticker, dates, raw_day_filter, expiry_filter, pool_config, refresh_cache=refresh, verbose=verbose(2), raise_if_bad=False )
+        verbose.report(1,lambda: f"\rProcessing ticker {it+1}/{len(tickers)} {ticker} from {fmt_date(date_range.start)} to {fmt_date(date_range.end)}.")
+        sample_days(ticker, date_range, include_fields=None, exclude_fields=None, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter,
+                     sample_days_config=sample_days_config, pool_config=pool_config, refresh_cache=refresh, verbose=verbose(2) )
     verbose.write(f"All {len(tickers)} tickers processed.")
 
 if __name__ == "__main__":
