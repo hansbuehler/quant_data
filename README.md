@@ -32,7 +32,7 @@ source .vqdata\bin\activate   # activate it
 python --version
 
 python -m pip install --upgrade pip pip-review  # update pip
-python -m pip install -e .[dev]                 # install local package 
+python -m pip install -e ".[dev]"                 # install local package 
 ````
 Use `.[dev]` for the full local development toolchain. It includes testing and documentation tools.
 
