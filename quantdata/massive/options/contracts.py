@@ -239,37 +239,69 @@ def filter_contracts(
 
         timing.lap_time("Prep")
 
-        # ---- check any trades/quotes; volume filter using option open/close/volume (prev and today), unadjusted
-
-        with timing("Fetch quotes & trades"):
-            c["has_prev_quotes"] = client.has_any_quotes(opt_ticker, context.prev_d)
-            c["has_prev_trades"] = client.has_any_trades(opt_ticker, context.prev_d)
-            c["has_today_quotes"] = client.has_any_quotes(opt_ticker, d)
-            c["has_today_trades"] = client.has_any_trades(opt_ticker, d)
-
-        with timing("Fetch open close volume"):
-            oc_prev = client.fetch_day_summary(
-                opt_ticker, context.prev_d, adjusted=False, can_be_none=True
-            )
-            oc_today = client.fetch_day_summary(opt_ticker, d, adjusted=False, can_be_none=True)
-
         def approx_cash_vol_k(oc: dict | None) -> float | None:
             if oc is None:
                 return None
             opx, cpx, vol = oc["open"], oc["close"], oc["volume"]
             return float(vol) * 0.5 * (float(opx) + float(cpx)) / 1000.0
 
-        c["approx_cash_vol_prev_k"] = approx_cash_vol_k(oc_prev)
-        c["approx_cash_vol_today_k"] = approx_cash_vol_k(oc_today)
+        # ---- volume filter first: cheapest check that rejects the most contracts
+        with timing("Fetch open close volume prev"):
+            oc_prev = client.fetch_day_summary(
+                opt_ticker, context.prev_d, adjusted=False, can_be_none=True
+            )
 
-        if not c["has_prev_quotes"] and not c["has_prev_trades"]:
-            c["reject_code"] = REJECTED.PREV_NO_QUOTES_OR_TRADES
-        elif c["approx_cash_vol_prev_k"] is None:
+        c["approx_cash_vol_prev_k"] = approx_cash_vol_k(oc_prev)
+
+        if oc_prev is None:
+            c["approx_cash_vol_today_k"] = None
+            c["has_prev_quotes"] = None
+            c["has_prev_trades"] = None
+            c["has_today_quotes"] = None
+            c["has_today_trades"] = None
             c["reject_code"] = REJECTED.PREV_VOLUME_MISSING
-        elif c["approx_cash_vol_prev_k"] < contracts_filter.min_opt_vol_k:
+            return c, timing
+
+        if c["approx_cash_vol_prev_k"] < contracts_filter.min_opt_vol_k:
+            c["approx_cash_vol_today_k"] = None
+            c["has_prev_quotes"] = None
+            c["has_prev_trades"] = None
+            c["has_today_quotes"] = None
+            c["has_today_trades"] = None
             c["reject_code"] = REJECTED.VOLUME
-        elif not c["has_today_quotes"]:
+            return c, timing
+
+        # ---- prev quotes/trades check
+        with timing("Fetch quotes & trades"):
+            has_prev_quotes, has_prev_trades = client.has_any_quotes_or_trades(
+                opt_ticker, context.prev_d
+            )
+            c["has_prev_quotes"] = has_prev_quotes
+            c["has_prev_trades"] = has_prev_trades
+
+        if not has_prev_quotes and not has_prev_trades:
+            c["approx_cash_vol_today_k"] = None
+            c["has_today_quotes"] = None
+            c["has_today_trades"] = None
+            c["reject_code"] = REJECTED.PREV_NO_QUOTES_OR_TRADES
+            return c, timing
+
+        # ---- today quotes check
+        with timing("Fetch quotes & trades"):
+            has_today_quotes, has_today_trades = client.has_any_quotes_or_trades(opt_ticker, d)
+            c["has_today_quotes"] = has_today_quotes
+            c["has_today_trades"] = has_today_trades
+
+        if not has_today_quotes:
+            c["approx_cash_vol_today_k"] = None
             c["reject_code"] = REJECTED.NO_TODAY_QUOTES
+            return c, timing
+
+        # ---- today volume (diagnostic only, not used for rejection)
+        with timing("Fetch open close volume today"):
+            oc_today = client.fetch_day_summary(opt_ticker, d, adjusted=False, can_be_none=True)
+
+        c["approx_cash_vol_today_k"] = approx_cash_vol_k(oc_today)
 
         return c, timing
 
