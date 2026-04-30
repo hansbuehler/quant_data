@@ -13,6 +13,8 @@ from cdxcore.err import verify_inp
 from cdxcore.uniquehash import unique_hash8
 from cdxcore.pretty import PrettyObject 
 
+from quantdata.utils.add_cdxcore import quantile_m_o_m
+
 import torch as torch
 
 @dataclass(frozen=True)
@@ -266,7 +268,7 @@ class AEC(BaseModel):
             loss, weights, excess = loss_f( fit_vol, bid_vol, ask_vol )
     
         else:
-            assert self.config.fit_what == "vol", f"Invalid value for 'fit_what': {self.config.fit_what}"
+            assert self.config.fit_what == "sqrtVar", f"Invalid value for 'fit_what': {self.config.fit_what}"
             loss, weights, excess = loss_f( fit_sqrtVar, bid_vol*sqrtT, ask_vol*sqrtT )
 
         loss         = torch.sum(loss)
@@ -364,6 +366,7 @@ class Visualizer(BaseVisualizer):
 
                 if is_first:
                     self.axsF.loss.legend(loc="upper right")
+                self.axsF.loss.set_ylim( quantile_m_o_m(trn_losses, vld_losses, hi=0.9, lo=0., pos_floor=0.1, buf=0.01) )
 
                 self.figStat.suptitle( f"Progress {epoch}" )
                 self.figStat.render()

@@ -308,7 +308,7 @@ class Trainer(object):
                     }
                 if not vld_val_loss is None and (self._best_val_loss is None or vld_val_loss < self._best_val_loss):
                     ffn = self._path.full_file_name("best")
-                    str_prev = f" vs. {self._best_val_loss:.4g} at epoch {self._best_epoch}" if self._best_val_loss is not None else "None"
+                    str_prev = f" vs. {self._best_val_loss:.4g} at epoch {self._best_epoch}" if self._best_val_loss is not None else ""
                     with verbose1.write_t(f"Epoch {epoch}: Saving new best validation loss {vld_val_loss:.4g}{str_prev} to '{ffn}'... ", end='') as tme:
                         self._best_epoch = epoch
                         self._best_val_loss = vld_val_loss
