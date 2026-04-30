@@ -34,7 +34,7 @@ dependencies = [
     "cvxpy",
     "cdxcore",
     "pyarrow",
-    "scikit-learn"
+    "scikit-learn",
 ]
 
 [project.optional-dependencies]
@@ -47,6 +47,7 @@ dev = [
   "sphinx>=7.4",
   "jupyterlab",
   "ipykernel",
+  "ipynbname"
 ]
 docs = [
   "sphinx>=7.4",

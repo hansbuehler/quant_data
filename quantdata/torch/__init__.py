@@ -11,6 +11,7 @@ from cdxcore.pretty import PrettyObject
 from enum import IntEnum
 from dataclasses import dataclass
 from collections.abc import Mapping
+import numpy as nnp
 
 @version("1.0")
 class BaseEnvironment(object):
@@ -124,7 +125,7 @@ class BaseModel(tnn.Module):
         """
         raise NotImplementedError("Forward method must be implemented by subclass.")
         
-    def visualizer(self, sampler : sampler.BaseSampler) -> BaseVisualizer:
+    def visualizer(self, sampler : BaseSampler) -> BaseVisualizer:
         """
         Return visualizer for this model. This is a helper function to create a visualizer that can be used to visualize the model's performance during training and validation.
         """
@@ -300,14 +301,14 @@ class MetricTacker(object):
     def __init__( self ):
         self.metrics = {}
 
-    def record( self, epoch, loss, metrics : Mapping[str, float] ):
+    def record( self, epoch : int, loss : float, metrics : Mapping[str, float] ):
         """ Update the metric tracker with new metrics and their corresponding weights """
         assert not 'loss' in metrics, f"'loss' should not be included in the metrics dictionary, but should be passed as a separate argument to the record method."
         self.record_metric( epoch, "loss", loss )
         for k,v in metrics.items():
             self.record_metric( epoch, k, v )
 
-    def record_metric( self, epoch, name, value ):
+    def record_metric( self, epoch : int, name : str, value : float ):
         """ Add a single metric """
         tm = self.metrics.get(name, None)
         if tm is None:
@@ -328,3 +329,13 @@ class MetricTacker(object):
     def get(self, name, default=None):
         """ Get metric by name with default """
         return self.metrics.get(name, default)
+
+    def state_dict(self):
+        """ Get a serializable copy of the tracked metrics as numpy arrays """
+        return { k: { 'epochs': nnp.asarray(v['epochs'], dtype=nnp.int32), 'values': nnp.asarray(v['values'], dtype=nnp.float32) } for k,v in self.metrics.items() }
+
+    def load_state_dict(self, state):
+        """ Load tracked metrics from a serializable state """
+        assert isinstance(state, dict), f"Expected tracker state to be a dict, but got {type(state)}"
+        self.metrics = { k: { 'epochs': x['epochs'].tolist(), 'values': x['values'].tolist() } for k,x in state.items() }
+        return self

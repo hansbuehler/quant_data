@@ -10,17 +10,23 @@ from quantdata.torch.bbtorch import BackboneTorch
 from quantdata.biz_calendar import DAYS_PER_YEAR
 from dataclasses import dataclass, field
 from cdxcore.err import verify_inp
+from cdxcore.uniquehash import unique_hash8
 from cdxcore.pretty import PrettyObject 
 
 import torch as torch
 
 @dataclass(frozen=True)
 class VisualizerConfig:
-    seed    : int = 1234
-    num_viz : int = 4
-    use_trn : bool = True
-    details : bool = False
-    num_tte : int = 8 # for details
+    """ Configuration for model visualization """
+    seed    : int = 1234     #: Random seed for visualization sampling, used to select a fixed set of samples for visualization across epochs
+    num_viz : int = 4        #: How many samples to render
+    use_trn : bool = True    #: Whether to render training or validation samples
+    details : bool = False   #: Show expiry detrails
+    num_tte : int = 8        #: Number of time-to-expiry bins for details
+
+    def __post_init__(self):
+        verify_inp( self.num_viz > 0, lambda : f"'num_viz' must be positive, but found {self.num_viz}" )
+        verify_inp( self.num_tte > 0, lambda : f"'num_tte' must be positive, but found {self.num_tte}" )
 
 class AEC(BaseModel):
     """
@@ -32,12 +38,13 @@ class AEC(BaseModel):
     @dataclass(frozen=True)
     class Config:
         encode_what         : str = "vol"                                #: vol, sqrtVar, price
+        fit_what            : str = "price"                              #: vol, sqrtVar, price
         num_state           : int = 32                                   #: Hidden state dimension
         num_compress        : int = 128                                  #: Internal state compression dimension for deep set
         encoder_set_config  : FeedForward.Config = FeedForward.Config()  #: Configuration for the encoder
         encoder_fix_config  : FeedForward.Config = FeedForward.Config()  #: Configuration for the encoder
         decoder_config      : FeedForward.Config = FeedForward.Config()  #: Configuration for the encoder
-        vizualizer_config   : VisualizerConfig = VisualizerConfig()      #: Configuration for the visualizer
+        vizualizer_config   : VisualizerConfig|None = VisualizerConfig() #: Configuration for the visualizer. Set to ``None`` for no visualizer.
 
         weight_by_spread    : bool = True    # whether to weight the loss by the bid-ask spread, which puts more weight on liquid options and is a common practice in the literature; if False, all options are weighted equally
         min_pure_spread     : float = 1E-5   # floor to sprear for relative error
@@ -54,6 +61,14 @@ class AEC(BaseModel):
 
             if self.encode_what not in {"vol", "sqrtVar", "price"}:
                 raise ValueError(f"Invalid value for encode_what: {self.encode_what}. Expected 'vol', 'sqrtVar' or 'price'.")           
+            if self.fit_what not in {"vol", "sqrtVar", "price"}:
+                raise ValueError(f"Invalid value for fit_what: {self.fit_what}. Expected 'vol', 'sqrtVar' or 'price'.")     
+            if self.encode_what == "price":
+                verify_inp( self.fit_what == "price", lambda : f"If 'encode_what' is 'price', then 'fit_what' must also be 'price', but found {self.fit_what}" )      
+
+        def unique_id(self) -> str:
+            """ Unique ID for the model configuration. """
+            return unique_hash8(self)
 
     X_FEATURES = [
         # first element must have full dimension (B,S,O) to determine the number of options O
@@ -135,7 +150,12 @@ class AEC(BaseModel):
 
     def visualizer(self, sampler : SimpleSampler):
         """ Return visualizer for this model """
-        return Visualizer(sampler, config = self.config.vizualizer_config )
+        return Visualizer(sampler, config = self.config.vizualizer_config ) if not self.config.vizualizer_config is None else None
+    
+    def qualified_label(self, label : str|None ) -> str:
+        """ Returns a qualified label for the model, including configuration information. If 'label' is provided and not empty, it will be used as the label. Otherwise, a label will be generated based on the model class name and configuration."""
+        label = None if label == "" else label
+        return f"{self.__class__.__name__} {self.config.unique_id() if label is None else str(label)}"
     
     def forward(self, data          : dict, 
                       training      : bool = False,
@@ -206,34 +226,49 @@ class AEC(BaseModel):
         sqrtT       = data['tte_y'].sqrt() 
         pure_ask    = data['ask_pure_price']
         pure_bid    = data['bid_pure_price']
-        pure_mid    = 0.5*(pure_ask + pure_bid)
-        pure_spread = torch.clip( pure_ask - pure_bid, min=self.config.min_pure_spread )
+        ask_vol     = data['ask_vol']
+        bid_vol     = data['bid_vol']
 
         if self.config.encode_what == "vol":
-            fit_vol   = self.softplus(decoded)+self.config.vol_floor # ensure positive output for volatility prediction
-            fit_price = self.bb.bs_price( strikes=pure_strike, sqrtVars=fit_vol*sqrtT, mask=mask, high_precision=False, debug_verify_bounds=False )
+            fit_vol      = self.softplus(decoded)+self.config.vol_floor # ensure positive output for volatility prediction
+            fit_sqrtVar  = fit_vol*sqrtT
+            fit_price    = self.bb.bs_price( strikes=pure_strike, sqrtVars=fit_sqrtVar, mask=mask, high_precision=False, debug_verify_bounds=False )
     
         elif self.config.encode_what == "sqrtVar":
             fit_sqrtVar = self.softplus(decoded)+self.config.vol_floor*sqrtT # ensure positive output for sqrt variance prediction  
-            fit_price = self.bb.bs_price( strikes=pure_strike, sqrtVars=fit_sqrtVar, mask=mask, high_precision=False, debug_verify_bounds=False )
-            fit_vol   = fit_sqrtVar / torch.where( mask, sqrtT, 1. )
-            del fit_sqrtVar
+            fit_price   = self.bb.bs_price( strikes=pure_strike, sqrtVars=fit_sqrtVar, mask=mask, high_precision=False, debug_verify_bounds=False )
+            fit_vol     = fit_sqrtVar / torch.where( mask, sqrtT, 1. )
 
         else:
             assert self.config.encode_what == "price", f"Invalid value for 'encode_what': {self.config.encode_what}"
-            fit_vol    = None
-            fit_price  = decoded # keep a linear head so the price objective stays differentiable
+            fit_price   = decoded # keep a linear head so the price objective stays differentiable
+            fit_vol     = None
+            fit_sqrtVar = None
 
         self.verify( lambda: torch.isfinite(fit_price).all(), "Infinite mid price")
 
         # loss function
         # -------------
 
-        weights      = torch.where( mask, self.mean_pure_spread/torch.where(mask, pure_spread, 1.), 0. ) if self.config.weight_by_spread else\
-                       torch.where( mask, 1., 0. )       
-        excess       = torch.relu( fit_price - pure_ask ) + torch.relu( pure_bid - fit_price )
-        loss         = weights * ( (1.-self.config.mid_fit_weight ) * excess + self.config.mid_fit_weight * ( fit_price - pure_mid )**2 )
+        def loss_f( fit, bid, ask ):
+            mid          = 0.5*(ask + bid)
+            spread       = torch.clip( ask - bid, min=self.config.min_pure_spread )
+            weights      = torch.where( mask, spread/torch.where(mask, spread, 1.), 0. ) if self.config.weight_by_spread else\
+                           torch.where( mask, 1., 0. )       
+            excess       = torch.relu( fit - ask ) + torch.relu( bid - fit )
+            loss         = weights * ( (1.-self.config.mid_fit_weight ) * excess + self.config.mid_fit_weight * ( fit - mid )**2 )
+            return loss, weights, excess
+
+        if self.config.fit_what == "price":
+            loss, weights, excess = loss_f( fit_price, pure_bid, pure_ask )
+
+        elif self.config.fit_what == "vol":
+            loss, weights, excess = loss_f( fit_vol, bid_vol, ask_vol )
     
+        else:
+            assert self.config.fit_what == "vol", f"Invalid value for 'fit_what': {self.config.fit_what}"
+            loss, weights, excess = loss_f( fit_sqrtVar, bid_vol*sqrtT, ask_vol*sqrtT )
+
         loss         = torch.sum(loss)
         with torch.no_grad():
             weight  = torch.sum(weights)
@@ -305,12 +340,22 @@ class Visualizer(BaseVisualizer):
                     self.axsF.loss.set_yscale("log")
                     self.axsF.loss.set_xlabel("Epoch")
                     self.axsF.loss.set_ylabel("Log-Loss")
+                    self.axsF.loss2 = self.axsF.loss.twinx()
+                    self.axsF.loss2.set_ylabel("Learning Rate")
+
+                trn_lr_tracker = trn_tracker.get("lr", None)
+                if trn_lr_tracker is not None:
+                    trn_epochs = nnp.array(trn_lr_tracker['epochs'], dtype=nnp.float32)
+                    trn_lr = nnp.array(trn_lr_tracker['values'], dtype=nnp.float32)
+                    assert trn_epochs.shape == trn_lr.shape, f"Expected epochs and learning rates to have the same shape, but found {trn_epochs.shape} and {trn_lr.shape}"
+                    self.store += self.axsF.loss2.plot( trn_epochs, trn_lr, "--", label="Training LR", color="green")
 
                 trn_loss_tracker = trn_tracker["loss"]
                 trn_epochs = nnp.array(trn_loss_tracker['epochs'], dtype=nnp.float32)
                 trn_losses = nnp.array(trn_loss_tracker['values'], dtype=nnp.float32)
                 assert trn_epochs.shape == trn_losses.shape, f"Expected epochs and losses to have the same shape, but found {trn_epochs.shape} and {trn_losses.shape}"
                 self.store += self.axsF.loss.plot( trn_epochs, trn_losses, ".-", label="Training", color="orange")
+                
                 vld_loss_tracker = vld_tracker["loss"]
                 vld_epochs = nnp.array(vld_loss_tracker['epochs'], dtype=nnp.float32)
                 vld_losses = nnp.array(vld_loss_tracker['values'], dtype=nnp.float32)

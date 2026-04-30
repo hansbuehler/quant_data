@@ -23,6 +23,7 @@ You will need python 3.12. Future versions will support 3.13 or higher.
 Under Linux, if your defaul Python is not 3.12, you can install a different version with
 
 ```bash
+sudo apt update
 sudo apt install python3.12 python3.12-venv  
 ``` 
 

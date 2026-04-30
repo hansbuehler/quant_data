@@ -17,7 +17,7 @@ from cdxcore.util import fmt_date, fmt_dict, fmt_list
 from cdxcore.err import verify_inp
 from cdxcore.pretty import PrettyObject
 from cdxcore.subdir import SubDir
-from cdxcore.uniquehash import named_unique_filename48_8
+from cdxcore.uniquehash import named_unique_filename48_8, unique_hash16
 from cdxcore.jcpool import JCPool
 
 import datetime as dt
@@ -59,12 +59,20 @@ class SimpleConfig:
         verify_inp( isinstance(self.tickers, Sequence) and len(self.tickers) > 0, "'tickers' must be a list of strings" )
         verify_inp( len(set(self.tickers)) == len(self.tickers), "'tickers' must not contain duplicates" )
 
-    def base_cache_uid(self) -> str:
-        """ Base UID until ticker """
+    def base_cache_dir_uid(self) -> str:
+        """ Base directory UID up to ticker """
         x1   = named_unique_filename48_8( f"{self.raw_day_filter},{self.expiry_filter}", self.raw_day_filter, self.expiry_filter )
         x2   = named_unique_filename48_8( f"{self.sample_days_config}", self.sample_days_config )
         x3   = named_unique_filename48_8( f"{self.sampling_config}", self.sampling_config )
         return f"{x1}/{x2}/{x3}/{str(self.date_range)}"
+    
+    def cache_dir_uid(self) -> str:
+        """ UID including directory informaton """
+        return f"{self.base_cache_dir_uid()}/{named_unique_filename48_8( fmt_list(sorted(self.tickers)), sorted(self.tickers))}"
+    
+    def unique_id(self) -> str:
+        """ Unique ID for the configuration, including tickers. """
+        return unique_hash16(self.cache_dir_uid())
 
 SIMPLE_INCLUDE_FIELDS = {
     'spot',
@@ -133,7 +141,7 @@ SIMPLE_FEATURES = {
 @training_root_simple(fmt=SubDir.PYTREE_HDF5).cache(
     "0.1",
     dependencies=[SimpleConfig, sample_days],
-    uid = lambda ticker, simple_config: f"{simple_config.base_cache_uid()}/{ticker}",
+    uid = lambda ticker, simple_config: f"{simple_config.base_cache_dir_uid()}/{ticker}",
     exclude_args=['pool_config', 'refresh_cache', 'verbose']
 )
 def sample_simple_days(  ticker : str,
@@ -391,6 +399,16 @@ class SimpleSampler(BlockSampler):
         verbose.write(lambda : f"Created {len(self.trn_samples_ids)} training samples and {len(self.vld_samples_ids)} validation samples based on the date split at {first_vld_date}. "+\
                                f"That implies {len(self.vld_samples_ids)/(len(self.trn_samples_ids)+len(self.vld_samples_ids)):.0%} of all samples are validation samples.")
         verbose.write(lambda : f"Total time taken: {tme_all}.")
+
+    @property
+    def unique_data_id(self) -> str:
+        """ Unique ID for the data, based on the configuration. """
+        return self.simple_config.unique_id()
+    
+    @property
+    def unique_data_dir_uid(self) -> str:
+        """ Unique directory UID for the data, based on the configuration. """
+        return self.simple_config.cache_dir_uid()
 
     @property
     def num_steps(self):
