@@ -52,20 +52,16 @@ class TrainConfig:
         verify_inp(self.chkpnt_epochs > 0, lambda : f"'chkpnt_epochs' must be a positive integer; found {self.chkpnt_epochs}")
         verify_inp(self.chkpnt_minutes > 0., lambda : f"'chkpnt_minutes' must be a positive float; found {self.chkpnt_minutes}")
 
-    def learning_rate( self, init_epoch ) -> callable:
+    def learning_rate( self, epoch ) -> callable:
         """ Return function to compute learning rate based on the initial epoch """
-        def learning_rate( step ):
-            """ Compute learning rate for a given epoch, using exponential decay from lr_init to lr_final over lr_decay_steps """
-            epoch = step + init_epoch            
-            if epoch <= self.lr_init_steps:
-                return 1.
-            elif epoch >= self.lr_init_steps + self.lr_decay_steps:
-                return self.lr_final/self.lr_init
-            else:
-                decay_factor = (self.lr_final / self.lr_init) ** ((epoch - self.lr_init_steps) / self.lr_decay_steps)
-                assert 0. < decay_factor <= 1., f"Internal error: decay_factor should be in (0,1], but got {decay_factor} for epoch {epoch}"
-                return decay_factor
-        return learning_rate
+        if epoch <= self.lr_init_steps:
+            return self.lr_init
+        elif epoch >= self.lr_init_steps + self.lr_decay_steps:
+            return self.lr_final
+        else:
+            decay_factor = (self.lr_final / self.lr_init) ** ((epoch - self.lr_init_steps) / self.lr_decay_steps)
+            assert 0. < decay_factor <= 1., f"Internal error: decay_factor should be in (0,1], but got {decay_factor} for epoch {epoch}"
+            return decay_factor*self.lr_init
 
     def unique_id(self) -> str:
         return unique_hash8(self)
@@ -96,6 +92,7 @@ class Trainer(object):
         self._rndg       = torch.Generator(device="cpu")
         self._visualizer = model.visualizer(sampler) # might be None
         self._rndg.manual_seed(config.seed)
+        self._optimizer  = torch.optim.Adam(model.parameters(), lr=config.lr_init)
 
         self._track_val_trn = MetricTacker()
         self._track_val_vld = MetricTacker()
@@ -108,6 +105,7 @@ class Trainer(object):
             s = f"Trainer for '{self.qualified_label}' on data {sampler.unique_data_id}"
             verbose.write(s+'\n'+("="*len(s)))
             del s
+
 
         deleted_best = False
         if not self._path is None and restart and self._path.exists("last"):
@@ -128,10 +126,7 @@ class Trainer(object):
                 self._track_val_trn.load_state_dict(state["track_val_trn"])
                 self._track_val_vld.load_state_dict(state["track_val_vld"])
 
-                self._optimizer = torch.optim.Adam(model.parameters(), lr=config.lr_init)
-                self._scheduler = torch.optim.lr_scheduler.LambdaLR(self._optimizer, lr_lambda=config.learning_rate(self._current_epoch))
                 self._optimizer.load_state_dict(state["optimizer_state_dict"])
-                self._scheduler.load_state_dict(state["scheduler_state_dict"])
                 rndg_state = state["rndg_state_dict"]
                 if not isinstance(rndg_state, torch.Tensor):
                     rndg_state = torch.as_tensor(rndg_state, dtype=torch.uint8)
@@ -139,9 +134,6 @@ class Trainer(object):
                     rndg_state = rndg_state.detach().cpu().to(dtype=torch.uint8)
                 self._rndg.set_state(rndg_state)
                 verbose1.write(f"done; this took {tme}.", head=False)
-        else:
-            self._optimizer = torch.optim.Adam(model.parameters(), lr=config.lr_init)
-            self._scheduler = torch.optim.lr_scheduler.LambdaLR(self._optimizer, lr_lambda=config.learning_rate(self._current_epoch))
 
         verbose.report(1,lambda : f"Model is ready. Current epoch to train is {self._current_epoch}.")
 
@@ -183,9 +175,15 @@ class Trainer(object):
 
         last_checkpoint_time = None
 
+        def set_lr(lr: float) -> None:
+            for group in self._optimizer.param_groups:
+                group["lr"] = lr
+
         for epoch in range(self._current_epoch+1, epochs+1):
             assert all(torch.isfinite(p).all().item() for p in model.parameters()), "Model parameters contain non-finite values before training step"
             grad_norm = 0.
+            lr = config.learning_rate(epoch)
+            set_lr(lr)
 
             with tracker("training"):
                 def train():
@@ -194,7 +192,6 @@ class Trainer(object):
                     weight = 0.
                     model.train()
                     for imini in range(config.batch_per_epoch):
-                        lr   = self._scheduler.get_last_lr()[0] if self._scheduler is not None else config.lr_init
                         verbose.write(lambda : f"\rTraining epoch {epoch}/{epochs} mini batch {imini+1}/{config.batch_per_epoch} with learning rate {lr:.2e}: so far this took {tme}...", end='')
 
                         batch = sampler( self._rndg, trn=True, batch_size=config.trn_batch_size, device=self.device, return_batch_indices=False )
@@ -220,12 +217,10 @@ class Trainer(object):
 
                         loss    += ls.detach().item()
                         weight  += wg.detach().item()
-                    self._scheduler.step() if not self._scheduler is None else None  # decay LR by 5%
                     return loss / weight, grad_norm
 
                 trn_loss, grad_norm = train()
-
-            lr = self._scheduler.get_last_lr()[0] if self._scheduler is not None else config.lr_init
+                
             if verbose.shall_report():
                 str_tme_trn = f"{tracker['training'].fmt_average_lap_seconds()}"
                 verbose.write(f"\rTraining epoch {epoch}/{epochs} error avg trn {trn_loss:.4g} [{str_tme_trn}] learning rate {lr:.2e} grad norm {grad_norm:.4g}... running valuation... ", end='')
@@ -305,7 +300,6 @@ class Trainer(object):
                         "epoch": int(epoch),
                         "model_state_dict": self._model.state_dict(),
                         "optimizer_state_dict": self._optimizer.state_dict(),
-                        "scheduler_state_dict": None if self._scheduler is None else self._scheduler.state_dict(),
                         "rndg_state_dict": self._rndg.get_state(),
                         "track_val_trn": self._track_val_trn.state_dict(),
                         "track_val_vld": self._track_val_vld.state_dict(),
