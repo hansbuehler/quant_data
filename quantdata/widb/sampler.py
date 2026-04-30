@@ -10,7 +10,7 @@ from quantdata.widb.day import enrich_day, SCHEMA_ENRICHED_DAY, RawDayFilter, Ex
 from cdxcore.version import version
 from cdxcore.verbose import Context
 from cdxcore.subdir import CacheMustExistError
-from cdxcore.util import fmt_date, fmt_list, fmt_big_byte_number
+from cdxcore.util import fmt_date, fmt_list, fmt_big_byte_number, fmt_dict
 from cdxcore.err import verify_inp, verify
 from cdxcore.pretty import PrettyObject
 from cdxcore.jcpool import JCPool
@@ -21,21 +21,23 @@ import pandas as pd
 import math as math
 from prettytable import PrettyTable
 from dataclasses import dataclass, field
+import warnings as warnings
 
 # ======================================================================
 # Sample days for a given ticker
 # ======================================================================
 
-@version("0.2")
+@version("0.5")
 @dataclass(frozen=True)
 class SampleDaysConfig:
-    max_num_options: int = 1000                 #: Maximum number of options. Options are sorted by NMS, expiry and call/put, and only the top max_num_options are kept. This is applied after all other filters.
+    max_num_options: int = 1000                 #: Maximum number of options. Options are sorted by NMS, expiry and call/put, and only the top max_num_options are kept. This is applied after all other filters.#
     max_business_days_to_expiry: int = 252*3    #: Maximum business days to expiry. 
     max_nms: float = 4.                         #: Maximum |NMS|. 
     min_vegaSqrtVar: float = 0.001              #: Minimum vega * sqrt(tte), i.e. the derivative in sqrtVar: BSsq(K,sqrtVar) = BSvol(K,sqrtVar/sqrt(t),t). This is a measure of how much the option price moves with volatility, normalized by time to expiry. It is used to filter out options that are too close to expiry or too far OTM, which can have very low vega and lead to noisy implied volatilities.
     min_log_volume: float = 1.0                 #: Minimum log volume. 
     min_log_open_interest: float = 1.0          #: Minimum log open interest. 
     remove_am: bool = False                     #: Whether to remove options that settled at the AM price. 
+    min_opt_per_expiry: int = 6                 #: Minimum number of options per expiry. This is applied *before* the max_num_options filter, and can lead to fewer than max_num_options being returned if there are many expiries with few options.
 
     def __post_init__(self):
         verify_inp(self.max_num_options >= 10, lambda : f"'max_num_options' must be at least 10, found {self.max_num_options}")
@@ -44,15 +46,17 @@ class SampleDaysConfig:
         verify_inp(self.min_vegaSqrtVar >= 0, lambda : f"'min_vegaSqrtVar' must be non-negative, found {self.min_vegaSqrtVar}")
         verify_inp(self.min_log_volume >= 0, lambda : f"'min_log_volume' must be non-negative, found {self.min_log_volume}")
         verify_inp(self.min_log_open_interest >= 0, lambda : f"'min_log_open_interest' must be non-negative, found {self.min_log_open_interest}")
+        verify_inp(self.min_opt_per_expiry > 0, lambda : f"'min_opt_per_expiry' must be positive, found {self.min_opt_per_expiry}")
 
     def __str__(self):#by convention use a some what readable string with comma separated key=value pairs
-        return f"nopt={self.max_num_options},bdte={self.max_business_days_to_expiry},nms={self.max_nms},lvolu={self.min_log_volume},loi={self.min_log_open_interest},rmam={self.remove_am},vegaSqrtVar={self.min_vegaSqrtVar}"
+        return f"nopt={self.max_num_options},bdte={self.max_business_days_to_expiry},nms={self.max_nms},lvolu={self.min_log_volume},loi={self.min_log_open_interest},rmam={self.remove_am},vegaSV={self.min_vegaSqrtVar},mxpp={self.min_opt_per_expiry}"
     
-    def _filter(self, df : pd.DataFrame) -> pd.DataFrame:
+    def _filter(self, ticker : str, d : dt.date, df : pd.DataFrame) -> pd.DataFrame:
         """ Remove all relevant data """
 
-        assert set(df.columns) >= set(SCHEMA_ENRICHED_DAY), f"Internal error: DataFrame has missing columns. Missing: {fmt_list(set(SCHEMA_ENRICHED_DAY) - set(df.columns))}. Please contact the authors with an example."
-        assert not df.isna().any().any(), f"Internal error: filter resulted in NaN values. Please contact the authors with an example."
+        assert set(df.columns) >= set(SCHEMA_ENRICHED_DAY), f"Internal error {ticker} {d}: DataFrame has missing columns. Missing: {fmt_list(set(SCHEMA_ENRICHED_DAY) - set(df.columns))}. Please contact the authors with an example."
+        assert not df.isna().any().any(), f"Internal error {ticker} {d}: filter resulted in NaN values. Please contact the authors with an example."
+        n_init = len(df)
 
         if not df.empty:
             df = df[df['bdte'] <= self.max_business_days_to_expiry]
@@ -62,17 +66,29 @@ class SampleDaysConfig:
             if self.remove_am:
                 df = df[~df['is_am']]
 
+            # filter expiries
+            if not df.empty:
+                expiry_counts = df['expiry_id'].value_counts()
+                valid_expiries = expiry_counts[expiry_counts >= self.min_opt_per_expiry].index
+                df = df[df['expiry_id'].isin(valid_expiries)]
+                if df.empty:
+                    expiry_counts = expiry_counts.to_dict()
+                    expiry_counts = { d: expiry_counts[d] for d in sorted(expiry_counts) }
+                    warnings.warn(f"{ticker} {d}: after filtering no expiry had {self.min_opt_per_expiry} options left. This means this sample is not eligible. Here are the options per filtered expiry: {fmt_dict(expiry_counts)}.")
+                    return df
+
+            # remove excess options
             if not df.empty and len(df) > self.max_num_options:
-                df['max_nms'] = np.abs(df['nms'])
-                df = df.sort_values(by=["max_nms", "tte_y"], ascending=[True, True])
+                df['abs_nms'] = np.abs(df['nms'])
+                df = df.sort_values(by=["abs_nms", "tte_y"], ascending=[True, True])
                 df = df.head(self.max_num_options)
-                df.drop(columns=["max_nms"], inplace=True)
-                assert len(df) == self.max_num_options, f"Internal error: after filtering by max_num_options, the number of options is not equal to max_num_options. Please contact the authors with an example."
+                df.drop(columns=["abs_nms"], inplace=True)
+                assert len(df) <= self.max_num_options, f"Internal error {ticker} {d}: after filtering by max_num_options, the number of options exceeds max_num_options. Please contact the authors with an example."
 
             if df.empty:
-                raise RuntimeError(f"Internal error: filter resulted in an empty data set. Please contact the authors with an example.")
+                raise RuntimeError(f"Internal error {ticker} {d}: filter resulted in an empty data set. Please contact the authors with an example.")
 
-        assert not df.isna().any().any(), f"Internal error: filter resulted in NaN values. Please contact the authors with an example."
+        assert not df.isna().any().any(), f"Internal error {ticker} {d}: filter resulted in NaN values. Please contact the authors with an example."
         return df
 
 @version("0.1",dependencies=[enrich_day, SampleDaysConfig] )
@@ -175,7 +191,7 @@ def sample_days(  ticker : str,
                                          override_cache_mode="cacheonly" )
                     except CacheMustExistError:
                         return None
-                    df = sample_days_config._filter(df)
+                    df = sample_days_config._filter(ticker,d,df)
                     df = filter_fields(d, df)
                     return df
 
@@ -221,7 +237,8 @@ def sample_days(  ticker : str,
                         df = enrich_day( ticker, d, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, override_cache_mode="cacheonly", refresh_cache=False, raise_if_bad=False, verbose=Context.quiet )
                     except CacheMustExistError as e:
                         raise RuntimeError(f"Internal error: {ticker} {d}: expected enriched data to be available in the cache after generation, but it was not found. Please contact the authors with an example. Original error message: {str(e)}")
-                    df = sample_days_config._filter(df)
+                    assert not df is None, f"Internal error: {ticker} {d}: enrich_day returned None after generation. Please contact the authors with an example."
+                    df = sample_days_config._filter(ticker, d, df)
                     df = filter_fields(d, df)
                     return df
 

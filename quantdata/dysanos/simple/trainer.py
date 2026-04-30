@@ -5,7 +5,7 @@ Dysanos trainer
 from __future__ import annotations
 
 from quantdata.torch import get, pop, compute_grad_norm, detect_grad_issues, MetricTacker, BaseEnvironment, BaseModel
-from quantdata.torch.sampler import BlockSampler
+from quantdata.torch.block_sampler import BlockSampler
 from dataclasses import dataclass
 from cdxcore.err import verify_inp, verify
 from cdxcore.util import TrackTime, fmt_seconds, fmt_list

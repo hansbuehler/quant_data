@@ -62,6 +62,7 @@ class BaseEnvironment(object):
         else:
             raise ValueError(f"Unsupported precision {self._precision}; supported values are 16, 32, and 64.")   
 
+
 class BaseVisualizer(object):
     """ Base visualizer class to visualize model performance during training and validation. """
     def update( self, model : BaseModel, epoch : int ):

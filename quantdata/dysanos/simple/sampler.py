@@ -9,7 +9,7 @@ from quantdata.dysanos.simple import training_root_simple
 from quantdata.widb.sampler import sample_days, SampleDaysConfig, RawDayFilter, ExpiryFilter, SCHEMA_ENRICHED_DAY, table_of_sample_days#NOQA
 from quantdata.biz_calendar import DateRange
 from quantdata.pool import PoolConfig
-from quantdata.torch.sampler import BlockSampler
+from quantdata.torch.block_sampler import BlockSampler
 
 from cdxcore.version import version
 from cdxcore.verbose import Context
@@ -240,7 +240,7 @@ class SimpleSampler(BlockSampler):
         """
         Create full sampler.
         """
-        np.random.seed( simple_config.sampling_config.seed )
+        rng = np.random.default_rng(simple_config.sampling_config.seed)
         self.tickers = sorted( set(simple_config.tickers) ) #: sorted list of tickers
         self.data : dict[str, dict] = None #: data per ticker
         self.max_options : int = 0 #: max number of options across the tickers and dates, used for padding
@@ -340,8 +340,8 @@ class SimpleSampler(BlockSampler):
 
             trn_samples_ids = list(trn_samples_ids)
             vld_samples_ids = list(vld_samples_ids)            
-            np.random.shuffle( trn_samples_ids )
-            np.random.shuffle( vld_samples_ids )
+            rng.shuffle( trn_samples_ids )
+            rng.shuffle( vld_samples_ids )
             return trn_samples_ids, vld_samples_ids
         
         self.trn_samples_ids,\

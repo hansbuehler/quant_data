@@ -7,12 +7,11 @@ from quantdata.dysanos.simple.sampler import SimpleSampler
 from quantdata.torch import BaseVisualizer, pop, BaseEnvironment, BaseModel, MetricTacker
 from quantdata.torch.ffw import FeedForward
 from quantdata.torch.bbtorch import BackboneTorch
+from quantdata.biz_calendar import DAYS_PER_YEAR
 from dataclasses import dataclass, field
 from cdxcore.err import verify_inp
 from cdxcore.pretty import PrettyObject 
 
-from enum import IntEnum
-from collections.abc import Mapping
 import torch as torch
 
 @dataclass(frozen=True)
@@ -20,6 +19,8 @@ class VisualizerConfig:
     seed    : int = 1234
     num_viz : int = 4
     use_trn : bool = True
+    details : bool = False
+    num_tte : int = 8 # for details
 
 class AEC(BaseModel):
     """
@@ -42,6 +43,7 @@ class AEC(BaseModel):
         min_pure_spread     : float = 1E-5   # floor to sprear for relative error
         mid_fit_weight      : float = 1E-3   # weight for fitting the mid price in the loss function vs exceeding bid/ask
         vol_floor           : float = 0.01   # floor for predicted volatility when using 'vol' or 'sqrtVar' 
+        fit_average         : bool = False   # fit average per sample, rather than average accross all samples
 
         def __post_init__(self):
             verify_inp( self.num_state > 0, lambda : f"'num_state' must be positive, but found {self.num_state}" )
@@ -236,6 +238,10 @@ class AEC(BaseModel):
         with torch.no_grad():
             weight  = torch.sum(weights)
 
+        if self.config.fit_average:
+            loss   = loss / weight
+            weight = weight*0.+1.
+
         if training or return_what == self.ReturnWhat.LOSS_WEIGHT:
             return loss, weight
         if return_what == self.ReturnWhat.VALUATION:
@@ -270,6 +276,7 @@ class Visualizer(BaseVisualizer):
         self.figStat = None
         self.figV    = None
         self.figP    = None
+        self.details = None
         self.axsV    = None
         self.axsP    = None
         self.axsF    = PrettyObject()
@@ -284,59 +291,21 @@ class Visualizer(BaseVisualizer):
 
         model.eval()
         with torch.no_grad():
-            batch         = self.sampler.generate_batch( self.sample_ids, device = model._env.device )
-            pathwise      = model( batch, training=False, return_what=model.ReturnWhat.PATHWISE )
 
-            is_valid      = batch['is_valid'].detach().cpu().numpy()
-            num_opts      = is_valid.shape[-1]
-            is_valid      = is_valid[:,-1,:]
-            assert is_valid.shape[0] == self.config.num_viz, f"Expected number of valid samples to match number of visualizations {self.config.num_viz}, but found {is_valid.shape[0]}"
-
-            pure_ask      = batch['ask_pure_price'][:,-1,:].detach().cpu().numpy()
-            pure_bid      = batch['bid_pure_price'][:,-1,:].detach().cpu().numpy()
-            bid_vols      = batch['bid_vol'][:,-1,:].detach().cpu().numpy()
-            ask_vols      = batch['ask_vol'][:,-1,:].detach().cpu().numpy()
-            nms           = batch['nms'][:,-1,:].detach().cpu().numpy()
-            tte_y         = batch['tte_y'][:,-1,:].detach().cpu().numpy()
-            fwd           = batch['fwd'][:,-1,:].detach().cpu().numpy()
-            strike        = batch['strike'][:,-1,:].detach().cpu().numpy()
-            pure_strike   = strike / nnp.where( is_valid, fwd, 1. ) # set pure_strike to strike for invalid samples to prevent NaNs in visualization
-            sqrtT         = nnp.sqrt(tte_y)
-            spread        = nnp.where( is_valid, pure_ask - pure_bid, 1. )
-
-            fit_price     = pathwise['fit_price'][:,-1,:].detach().cpu().numpy()
-            fit_vols      = pathwise['fit_vol'][:,-1,:].detach().cpu().numpy() if pathwise['fit_vol'] is not None else None
-
-            num_plots     = fit_price.shape[0]
             is_first      = self.figV is None
-            if is_first:
-                self.figStat = figure( title="Training Statistics", col_size=6, row_size=4, columns=4 )
-                self.axsF.loss = self.figStat.add_subplot("Losses")
-                self.axsF.loss.set_yscale("log")
-                self.axsF.loss.set_xlabel("Epoch")
-                self.axsF.loss.set_ylabel("Log-Loss")
-
-                self.figV = figure( title="Model vs Market Vols", col_size=6, row_size=4, columns=4 )
-                self.axsV = [ self.figV.add_subplot(f"Implied Vols Sample {sid.ticker} {sid.date}") for sid in self.sample_ids ]
-                for axV in self.axsV:
-                    axV.set_xlabel("NMS")
-                    axV.set_ylabel("Implied Volatility")
-
-                self.figP = figure( title="Model vs Market Prices", col_size=6, row_size=4, columns=4 )
-                self.axsP = [ self.figP.add_subplot(f"Call Price Differences Sample {sid.ticker} {sid.date}") for sid in self.sample_ids ]
-                for axP in self.axsP:
-                    axP.set_xlabel("NMS")
-                    axP.set_ylabel("Price Difference")
-
-                for axP in self.axsP:
-                    axP.axhline(0., color="gray", linestyle="--", linewidth=1)
-
             self.store.clear()
 
             # convergence
             # -----------
 
             def progress():
+                if is_first:
+                    self.figStat = figure( title="Training Statistics", col_size=6, row_size=4, columns=4 )
+                    self.axsF.loss = self.figStat.add_subplot("Losses")
+                    self.axsF.loss.set_yscale("log")
+                    self.axsF.loss.set_xlabel("Epoch")
+                    self.axsF.loss.set_ylabel("Log-Loss")
+
                 trn_loss_tracker = trn_tracker["loss"]
                 trn_epochs = nnp.array(trn_loss_tracker['epochs'], dtype=nnp.float32)
                 trn_losses = nnp.array(trn_loss_tracker['values'], dtype=nnp.float32)
@@ -350,47 +319,150 @@ class Visualizer(BaseVisualizer):
 
                 if is_first:
                     self.axsF.loss.legend(loc="upper right")
+
+                self.figStat.suptitle( f"Progress {epoch}" )
+                self.figStat.render()
             progress()
 
             # Per sample
             # ----------
-            for ip, (axV, axP) in enumerate(zip(self.axsV, self.axsP)):
-                ivld       = is_valid[ip,:]
-                inms       = nms[ip,:][ivld]
-                ixs        = nnp.argsort(inms)
-                inms       = inms[ixs]
-                ipure_k    = pure_strike[ip,:][ixs]
-                isqrtT     = sqrtT[ip,:][ixs]
-                ifit       = fit_price[ip,:][ixs]
-                ibid       = pure_bid[ip,:][ixs]
-                iask       = pure_ask[ip,:][ixs]
-                ibid_vols  = bid_vols[ip,:][ixs]
-                iask_vols  = ask_vols[ip,:][ixs]
 
-                if not fit_vols is None:
-                    ifit_vols  = fit_vols[ip,:][ixs]
-                else:
-                    ifit_vols  = bs.implied( ipure_k, ifit, sqrtT=isqrtT, on_exceed_bounds="quiet" )
+            batch         = self.sampler.generate_batch( self.sample_ids, device = model._env.device )
+            pathwise      = model( batch, training=False, return_what=model.ReturnWhat.PATHWISE )
 
-                self.store += axV.plot( inms, ifit_vols, ".-", color="orange", label=f"Fit {ip}" )
-                self.store += axV.plot( inms, ibid_vols, "^:", color="green")
-                self.store += axV.plot( inms, iask_vols, "v:", color="red")
+            is_valid      = batch['is_valid'].detach().cpu().numpy()
+            is_valid      = is_valid[:,-1,:]
+            assert is_valid.shape[0] == self.config.num_viz, f"Expected number of valid samples to match number of visualizations {self.config.num_viz}, but found {is_valid.shape[0]}"
 
-                self.store += axP.plot( inms, ibid - ifit, "^:", color="green", label=f"Bid-Fit {ip}")
-                self.store += axP.plot( inms, iask - ifit, "v:", color="red", label=f"Ask-Fit {ip}")
+            pure_ask      = batch['ask_pure_price'][:,-1,:].detach().cpu().numpy()
+            pure_bid      = batch['bid_pure_price'][:,-1,:].detach().cpu().numpy()
+            bid_vols      = batch['bid_vol'][:,-1,:].detach().cpu().numpy()
+            ask_vols      = batch['ask_vol'][:,-1,:].detach().cpu().numpy()
+            nms           = batch['nms'][:,-1,:].detach().cpu().numpy()
+            tte_y         = batch['tte_y'][:,-1,:].detach().cpu().numpy()
+            fwd           = batch['fwd'][:,-1,:].detach().cpu().numpy()
+            strike        = batch['strike'][:,-1,:].detach().cpu().numpy()
+            pure_strike   = strike / nnp.where( is_valid, fwd, 1. ) # set pure_strike to strike for invalid samples to prevent NaNs in visualization
+            sqrtT         = nnp.sqrt(tte_y)
 
-                axV.set_ylim( *m_o_m(ifit_vols, ibid_vols, iask_vols ))
-                axP.set_ylim( *m_o_m(ibid - ifit, iask - ifit) )
+            fit_price     = pathwise['fit_price'][:,-1,:].detach().cpu().numpy()
+            fit_vols      = pathwise['fit_vol'][:,-1,:].detach().cpu().numpy() if pathwise['fit_vol'] is not None else None
 
+            def per_sample():
                 if is_first:
-                    axV.legend(loc="upper left")
-                    axP.legend(loc="upper left")
-            self.figV.suptitle( f"Model vs Market Vols Epoch {epoch}" )
-            self.figP.suptitle( f"Model vs Market Prices Epoch {epoch}" )
-            self.figStat.suptitle( f"Progress {epoch}" )
-            self.figStat.render()
-            self.figV.render()
-            self.figP.render()
+                    self.figV = figure( title="Model vs Market Vols", col_size=6, row_size=4, columns=None )
+                    self.axsV = [ self.figV.add_subplot(f"Implied Vols Sample {sid.ticker} {sid.date}") for sid in self.sample_ids ]
+                    for axV in self.axsV:
+                        axV.set_xlabel("Ask Vol")
+                        axV.set_ylabel("Implied Volatility")
+
+                    self.figP = figure( title="Model vs Market Prices", col_size=6, row_size=4, columns=None )
+                    self.axsP = [ self.figP.add_subplot(f"Call Price Differences Sample {sid.ticker} {sid.date}") for sid in self.sample_ids ]
+                    for axP in self.axsP:
+                        axP.set_xlabel("NMS")
+                        axP.set_ylabel("Price Difference")
+                    for axP in self.axsP:
+                        axP.axhline(0., color="gray", linestyle="--", linewidth=1)
+
+                for ip, (axV, axP) in enumerate(zip(self.axsV, self.axsP)):
+                    ivld       = is_valid[ip,:]
+                    ipure_k    = pure_strike[ip,:][ivld]
+                    inms       = nms[ip,:][ivld]
+                    isqrtT     = sqrtT[ip,:][ivld]
+                    ifit       = fit_price[ip,:][ivld]
+                    ibid       = pure_bid[ip,:][ivld]
+                    iask       = pure_ask[ip,:][ivld]
+                    ibid_vols  = bid_vols[ip,:][ivld]
+                    iask_vols  = ask_vols[ip,:][ivld]
+                    if not fit_vols is None:
+                        ifit_vols  = fit_vols[ip,:][ivld]
+                    else:
+                        ifit_vols  = bs.implied( ipure_k, ifit, sqrtT=isqrtT, on_exceed_bounds="quiet" )
+
+                    ixs        = nnp.argsort(iask_vols)
+                    ibid_vols_ = ibid_vols[ixs]
+                    iask_vols_ = iask_vols[ixs]
+                    ifit_vols_ = ifit_vols[ixs]
+
+                    self.store += axV.plot( iask_vols_, ifit_vols_, ".-", color="orange", label=f"Fit {ip}" )
+                    self.store += axV.plot( iask_vols_, ibid_vols_, "^:", color="green")
+                    self.store += axV.plot( iask_vols_, iask_vols_, "v:", color="red")
+
+                    ixs        = nnp.argsort(inms)
+                    inms_      = inms[ixs]
+                    ifit_      = ifit[ixs]
+                    ibid_      = ibid[ixs]
+                    iask_      = iask[ixs]
+                    self.store += axP.plot( iask_vols_, ibid_ - ifit_, "^:", color="green", label=f"Bid-Fit {ip}")
+                    self.store += axP.plot( iask_vols_, iask_ - ifit_, "v:", color="red", label=f"Ask-Fit {ip}")
+
+                    axV.set_ylim( *m_o_m(ifit_vols, ibid_vols, iask_vols ))
+                    axP.set_ylim( *m_o_m(ibid - ifit, iask - ifit) )
+
+                    if is_first:
+                        axV.legend(loc="upper left")
+                        axP.legend(loc="upper left")
+                self.figV.suptitle( f"Model vs Market Vols Epoch {epoch}" )
+                self.figP.suptitle( f"Model vs Market Prices Epoch {epoch}" )
+                self.figV.render()
+                self.figP.render()
+            per_sample()
+
+            # details
+            # -------
+
+            def details():
+                if not self.config.details:
+                    return
+                
+                if is_first:
+                    def create_detail_fig(sid):
+                        r = PrettyObject()
+                        r.fig = figure( title=f"Model Details {sid.ticker} {sid.date}", col_size=3, row_size=3, columns=None )
+                        r.axs = []
+                        for i in range(self.config.num_tte):
+                            ax = r.fig.add_subplot(f"TTE #{i}")
+                            ax.set_xlabel("NMS")
+                            ax.set_ylabel("Vol")
+                            ax.title.set_size(4)
+                            r.axs.append(ax)
+                        return r
+                    self.details = [ create_detail_fig(sid) for sid in self.sample_ids ]
+
+                for ip, siddata in enumerate(self.details):
+                    sid = self.sample_ids[ip]
+
+                    xis_valid = is_valid[ip,:]
+                    xnms     = nms[ip,:][xis_valid]
+                    ixs      = nnp.argsort(xnms)
+                    xnms     = xnms[ixs]
+                    xtte_y   = tte_y[ip,:][xis_valid][ixs]
+                    xask_vols = ask_vols[ip,:][xis_valid][ixs]
+                    xbid_vols = bid_vols[ip,:][xis_valid][ixs]
+                    xfit_vols = fit_vols[ip,:][xis_valid][ixs]
+
+                    uttes = nnp.unique(xtte_y).tolist()
+                    uttes = uttes if len(uttes) <= self.config.num_tte else ( uttes[:self.config.num_tte-2] + uttes[-2:] ) # limit number of TTEs visualized in deta
+
+                    for tte, ax in zip(uttes, siddata.axs[:len(uttes)]):
+                        mask = xtte_y == tte
+
+                        xav = xask_vols[mask]
+                        xbv = xbid_vols[mask]
+                        xfv = xfit_vols[mask]
+                        xnm = xnms[mask]
+
+                        self.store += ax.plot( xnm, xav, ".:", color="red", label="Ask Vol" )
+                        self.store += ax.plot( xnm, xbv, ".:", color="green", label="Bid Vol" )
+                        self.store += ax.plot( xnm, xfv, ".-", color="orange", label="Fit Vol" )
+
+                        ax.set_ylim( m_o_m(xav,xbv,xfv) )
+                        ax.set_title( f"TTE {tte*DAYS_PER_YEAR:.2f}d" )
+
+                    siddata.fig.render()
+            details()
+
+                
 
 
 
