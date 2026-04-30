@@ -10,9 +10,9 @@ from cdxcore.err import verify_inp
 import math as math
 
 @dataclass(frozen=True)
-class FastForwardConfig:
+class FeedForwardConfig:
     """
-    Configuration for FastForward.
+    Configuration for FeedForward.
     This is a separate class so it can be imported without importing torch.
 
     The default is a one-layer linear network with a width of 16.
@@ -36,7 +36,7 @@ class FastForwardConfig:
         verify_inp( not f is None, f"Cannot find activation function 'torch.nn.{self.activation}'" )
         return f()
 
-class FastForward(BaseModel):
+class FeedForward(BaseModel):
     """
     Dense network applies to list of inputs (instead of a stack).
 
@@ -71,7 +71,7 @@ class FastForward(BaseModel):
         Set to zero to return ``(A,...,B)``.
         Accepts a tuple for multi-dimensional output, see :class:`torch.nn.Linear`.
 
-    config : :class:`quantdata.torch.ffw.FastForwardConfig`, default is a one-layer linear network.
+    config : :class:`quantdata.torch.ffw.FeedForwardConfig`, default is a one-layer linear network.
         User config of the network.
 
     use_final_bias : bool, default ``True``
@@ -82,12 +82,12 @@ class FastForward(BaseModel):
 
     """
 
-    Config = FastForwardConfig
+    Config = FeedForwardConfig
 
     def __init__(self, env            : BaseEnvironment, 
                        num_input      : int,                                  # number of inputs [ (A,...,B) ] ~ (A,....B,num_input)
                        num_output     : int|tuple[int],                       # last dimension of output ie output is (A,...,B,num_output). Set to zero to return (A,...,B). Can handle tuple for multi-dimensional output.
-                       config         : FastForwardConfig = FastForwardConfig(), *,   # config, see above 
+                       config         : FeedForwardConfig = FeedForwardConfig(), *,   # config, see above 
                        use_final_bias : bool = True,                          # whether the final linear layer adds a bias
                        use_final_activation : bool = False                    # whether to apply activation after the final linear layer  
             ):
@@ -143,7 +143,7 @@ class FastForward(BaseModel):
         """
         input = [ input[...,i] for i in range(input.shape[-1]) ] if isinstance(input, torch.Tensor ) else input
         verify_inp( len(input) == self.num_input, lambda : f"Input length error: expected {self.num_input}, got {len(input)}" )
-        self.verify( lambda : torch.any(mask), lambda : f"{FastForward}: Mask is all False, no valid input to process" ) if not mask is None else None
+        self.verify( lambda : torch.any(mask), lambda : f"{FeedForward}: Mask is all False, no valid input to process" ) if not mask is None else None
 
         def lin_has_finite_weights( lin : tnn.Linear ) -> bool:
             if lin.bias is None:
@@ -153,40 +153,40 @@ class FastForward(BaseModel):
         x = None
         for iinp, (inp, I0) in enumerate(zip(input, self.I0)):
             inp  = inp if mask is None else torch.where( mask, inp, 0. )
-            self.verify( lambda : torch.isfinite(inp), lambda :  f"{FastForward}: Input #{iinp} is not finite" )
-            self.verify( lambda : lin_has_finite_weights(I0), lambda : f"{FastForward}: Input #{iinp} weights or bias are not finite"    )
+            self.verify( lambda : torch.isfinite(inp), lambda :  f"{FeedForward}: Input #{iinp} is not finite" )
+            self.verify( lambda : lin_has_finite_weights(I0), lambda : f"{FeedForward}: Input #{iinp} weights or bias are not finite"    )
             inp_ = inp
             inp = I0( inp[...,None] )
-            verify_inp( torch.isfinite(inp).all(), lambda : f"{FastForward}: Iteration #{iinp} activation 'inp' is not finite" )
+            verify_inp( torch.isfinite(inp).all(), lambda : f"{FeedForward}: Iteration #{iinp} activation 'inp' is not finite" )
             x = inp if x is None else (x+inp)
             del inp
         del input
-        self.verify( lambda : torch.isfinite(x), lambda : f"{FastForward}: Composed input 'x' is not finite" )  
+        self.verify( lambda : torch.isfinite(x), lambda : f"{FeedForward}: Composed input 'x' is not finite" )  
 
         for iI, I in enumerate(self.In):
             x_ = x
             x = self.activation(x)
-            self.verify( lambda : torch.isfinite(x), lambda : f"{FastForward}: Iteration #{iI} activation 'x' is not finite" )
-            self.verify( lambda : lin_has_finite_weights(I), lambda : f"{FastForward}: Input #{iI} weights or bias are not finite"    )
+            self.verify( lambda : torch.isfinite(x), lambda : f"{FeedForward}: Iteration #{iI} activation 'x' is not finite" )
+            self.verify( lambda : lin_has_finite_weights(I), lambda : f"{FeedForward}: Input #{iI} weights or bias are not finite"    )
             x = I(x)
-            self.verify( lambda : torch.isfinite(x), lambda : f"{FastForward}: Iteration #{iI} 'x' is not finite" )
+            self.verify( lambda : torch.isfinite(x), lambda : f"{FeedForward}: Iteration #{iI} 'x' is not finite" )
         if self.use_final_activation:
             x = self.activation(x)
-            self.verify( lambda : torch.isfinite(x), lambda : f"{FastForward}: Final activation 'x' is not finite" )
+            self.verify( lambda : torch.isfinite(x), lambda : f"{FeedForward}: Final activation 'x' is not finite" )
 
         if self.num_output == 0:
             assert x.shape[-1] == 1, ("Internal error: output shape mismatch:", x.shape)
             x = x[...,0]
             x = torch.where(mask, x, 0.)     if not mask is None else x
-            self.verify( lambda : torch.isfinite(x), lambda : f"{FastForward}: Output 'x' is not finite (num_output=0)" )
+            self.verify( lambda : torch.isfinite(x), lambda : f"{FeedForward}: Output 'x' is not finite (num_output=0)" )
         elif isinstance(self.num_output, int):
             assert x.shape[-1] == self.num_output, ("Internal error: output shape mismatch:", x.shape, "vs", self.num_output)    
             x = torch.where(mask[...,None], x, 0.) if not mask is None else x
-            self.verify( lambda : torch.isfinite(x), lambda : f"{FastForward}: Output 'x' is not finite (num_output={self.num_output})" )
+            self.verify( lambda : torch.isfinite(x), lambda : f"{FeedForward}: Output 'x' is not finite (num_output={self.num_output})" )
         else:
             x = x.reshape( x.shape[:-1] + self.num_output )
             if not mask is None:
                 m = mask.reshape( mask.shape + (1,)*(len(x.shape)-len(mask.shape)) )
                 x = torch.where(m, x, 0.) if not mask is None else x
-                self.verify( lambda : torch.isfinite(x), lambda : f"{FastForward}: Output 'x' is not finite (num_output={self.num_output})" )
+                self.verify( lambda : torch.isfinite(x), lambda : f"{FeedForward}: Output 'x' is not finite (num_output={self.num_output})" )
         return x

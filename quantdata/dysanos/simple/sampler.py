@@ -1,12 +1,11 @@
 """
-Simple data for SANOS: basically just data at 't' plus spot return.
+Simple data for SANOS
 """
 
 from __future__ import annotations
 
 from quantdata import env#NOQA
-from quantdata.dysanos.data import _training_root
-
+from quantdata.dysanos.simple import training_root_simple
 from quantdata.widb.sampler import sample_days, SampleDaysConfig, RawDayFilter, ExpiryFilter, SCHEMA_ENRICHED_DAY, table_of_sample_days#NOQA
 from quantdata.biz_calendar import DateRange
 from quantdata.pool import PoolConfig
@@ -26,8 +25,6 @@ import numpy as np
 import math as math
 from dataclasses import dataclass, field    
 from collections.abc import Sequence
-
-_training   = _training_root("simple", fmt=SubDir.PYTREE_HDF5)
 
 @version("0.1")
 @dataclass(frozen=True)
@@ -133,7 +130,7 @@ SIMPLE_FEATURES = {
     'bid_pure_dk'
 }
 
-@_training(fmt=SubDir.PYTREE_HDF5).cache(
+@training_root_simple(fmt=SubDir.PYTREE_HDF5).cache(
     "0.1",
     dependencies=[SimpleConfig, sample_days],
     uid = lambda ticker, simple_config: f"{simple_config.base_cache_uid()}/{ticker}",
@@ -252,6 +249,10 @@ class SimpleSampler(BlockSampler):
         self.vld_samples_ids : list[SampleID] = None #: List of :class:`SampleID`s for the validation samples, sorted by date and ticker.   
         self._shapes : dict[str, tuple] = None
 
+        self.stats : PrettyObject = None #: training set based stats.
+
+        tme_all = verbose.timer()
+
         def collate():
             # Cannot thread on top of multipricessing
             results = {}
@@ -361,8 +362,35 @@ class SimpleSampler(BlockSampler):
             return shapes
         self._shapes = make_shapes()
 
+        # get some descriptive stats from training data
+        # ---------------------------------------------
+
+        def trn_stats():
+            stats = PrettyObject()
+            stats.mean_pure_spread = 0.
+            cnt = 0
+
+            for sid in self.trn_samples_ids:
+                tdata    = self.data[sid.ticker]
+                slc      = slice( sid.index, sid.index+self.simple_config.sampling_config.num_steps )
+                num_tdates = len(tdata.dates)
+                assert slc.stop <= num_tdates, f"Internal error: {sid.ticker} sample index {slc.start} + num_steps {self.simple_config.sampling_config.num_steps} exceeds number of dates {num_tdates} for ticker {sid.ticker} with sample length {self.simple_config.sampling_config.num_steps}"
+                is_valid = tdata.is_valid[slc,:]
+                pure_call_ask  = tdata.ask_pure_price[slc,:][is_valid]
+                pure_call_bid  = tdata.bid_pure_price[slc,:][is_valid]
+                pure_spread    = pure_call_ask - pure_call_bid
+                stats.mean_pure_spread += pure_spread.sum()
+                cnt += len(pure_spread)
+            assert cnt > 0, f"Internal error: no valid options found in the training samples to compute stats."
+
+            for stat in stats.values():
+                stat /= float(cnt)
+            return stats
+        self.stats = trn_stats()
+
         verbose.write(lambda : f"Created {len(self.trn_samples_ids)} training samples and {len(self.vld_samples_ids)} validation samples based on the date split at {first_vld_date}. "+\
                                f"That implies {len(self.vld_samples_ids)/(len(self.trn_samples_ids)+len(self.vld_samples_ids)):.0%} of all samples are validation samples.")
+        verbose.write(lambda : f"Total time taken: {tme_all}.")
 
     @property
     def num_steps(self):
@@ -530,4 +558,45 @@ class SimpleSampler(BlockSampler):
                 yield self.generate_batch( batch_ids=batch_ids, device=device )
 
 
+# ================================================================
+# Command-line interface
+# ================================================================
 
+import click
+from quantdata.widb import cli_defaults
+from quantdata.biz_calendar import to_date
+
+@click.command()
+@click.argument("tickers", nargs=-1, required=True)
+@click.option("--period",nargs=2, type=click.DateTime(formats=["%Y-%m-%d"]), default=cli_defaults.period, metavar="START END", help="Period YYYY-MM-DD YYYY-MM-DD")
+@click.option('--halfdays', is_flag=True, help="Include half days")
+@click.option('--workers', default=cli_defaults.workers, help='Number of workers', type=int)
+@click.option('--threading', is_flag=True, help="Use only threading, no multiprocessing")
+@click.option('--refresh', is_flag=True, help="Refresh data (this will only refresh the top level files)")
+@click.option('--debug', is_flag=True, help="Enable debug mode with more verbose output and checks")
+
+def main(tickers : list[str],
+        period : list[dt.datetime], 
+        halfdays : bool, 
+        workers : int, 
+        threading : bool, 
+        refresh : bool,
+        debug : bool):
+
+    simple_config = SimpleConfig(
+            tickers = tickers,
+            date_range = DateRange(start=to_date(period[0]), end=to_date(period[1]), exclude_half_days=not halfdays),
+            raw_day_filter = RawDayFilter(),
+            expiry_filter = ExpiryFilter(),
+            sample_days_config = SampleDaysConfig(),
+            sampling_config = SamplingConfig(num_samples=None)
+    )
+    pool_config = PoolConfig(num_workers=workers, threading=threading)
+    verbose = Context.all
+    refresh_cache = refresh
+
+    SimpleSampler(simple_config=simple_config, pool_config=pool_config, refresh_cache=refresh_cache, verbose=verbose)
+    print("Done.")
+
+if __name__ == "__main__":
+    main()

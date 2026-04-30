@@ -726,7 +726,6 @@ def enrich_day( ticker : str, d : dt.date, data : pd.DataFrame|None = None, *,
 
 # ================================================================
 # Command-line interface
-# *** something wired is broken with the command line version ***
 # ================================================================
 
 import click

@@ -158,7 +158,8 @@ class Environment(object):
 
             if raw is None or processing is None or training is None:
                 if def_root is None:
-                    raise RuntimeError( "Could not identify all working directories: use the following environment variables: "+\
+                    raise RuntimeError(
+                                    "Could not identify all working directories: use the following environment variables: "+\
                                     f"QUANTDATA_RAW_DATA: '{'(missing)' if raw is None else raw }'; "+\
                                     f"QUANTDATA_PROCESSING_DATA: '{'(missing)' if processing is None else processing }'; "+\
                                     f"QUANTDATA_TRAINING_DATA: '{'(missing)' if training is None else training }'; "+\

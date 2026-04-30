@@ -7,6 +7,10 @@ from __future__ import annotations
 import torch as torch
 import torch.nn as tnn
 from cdxcore.version import version
+from cdxcore.pretty import PrettyObject
+from enum import IntEnum
+from dataclasses import dataclass
+from collections.abc import Mapping
 
 @version("1.0")
 class BaseEnvironment(object):
@@ -58,10 +62,21 @@ class BaseEnvironment(object):
         else:
             raise ValueError(f"Unsupported precision {self._precision}; supported values are 16, 32, and 64.")   
 
+class BaseVisualizer(object):
+    """ Base visualizer class to visualize model performance during training and validation. """
+    def update( self, model : BaseModel, epoch : int ):
+        """ Update visualizer with new model and epoch number """
+        raise NotImplementedError("Visualizer must implement update method.")
+
 class BaseModel(tnn.Module):
     """ Base class for torch models """
 
     Tensor = torch.Tensor
+
+    class ReturnWhat(IntEnum):
+        LOSS_WEIGHT = 0  #: return float ``loss`` (with gradient) and float ``weight`` (without gradient) for training. 
+        VALUATION = 1    #: return ``loss``, ``weight`` and a dictionary of additional float metrics.
+        PATHWISE = 2     #: return pathwise metrics
 
     def __init__(self, env : BaseEnvironment):
         """ Initialize model """
@@ -87,6 +102,32 @@ class BaseModel(tnn.Module):
     def idtype(self) -> torch.dtype:
         """ Get default integer dtype from environment """
         return self._env.idtype
+
+    def forward(self, data          : dict, 
+                      training      : bool = False,
+                      return_what   : ReturnWhat = ReturnWhat.LOSS_WEIGHT ) -> tuple[torch.Tensor, torch.Tensor]|tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]|dict[str, torch.Tensor]:
+        """
+        Forward method.
+
+        Parameters
+        ----------
+        data : dict
+            Input data dictionary containing tensors for the model. The expected keys and tensor shapes depend on the specific model implementation.
+        training : bool, default ``False``
+            Whether the model is in training mode.
+        return_what : :class:`BaseModel.ReturnWhat`, default ``ReturnWhat.LOSS_WEIGHT``
+            Specifies what the model should return. Options are:
+            - ``ReturnWhat.LOSS_WEIGHT``: return float ``loss`` (with gradient) and float ``weight`` (without gradient) for training.
+            - ``ReturnWhat.VALUATION``: return ``loss``, ``weight`` and a dictionary of additional float metrics.
+            - ``ReturnWhat.PATHWISE``: return pathwise metrics as dictionary.
+        """
+        raise NotImplementedError("Forward method must be implemented by subclass.")
+        
+    def visualizer(self, sampler : sampler.BaseSampler) -> BaseVisualizer:
+        """
+        Return visualizer for this model. This is a helper function to create a visualizer that can be used to visualize the model's performance during training and validation.
+        """
+        return None
 
     def verify( self, condition: callable, message: str | callable, exception : Exception = RuntimeError )-> None:    
         """
@@ -248,3 +289,41 @@ def compute_grad_norm(model : torch.nn.Module):
         return None
     grad_norm = torch.sqrt(total_grad_sq/num_grad_tensors)
     return grad_norm.item()
+
+
+class MetricTacker(object):
+    """
+    Simple utility class to track metrics during training
+    """
+
+    def __init__( self ):
+        self.metrics = {}
+
+    def record( self, epoch, loss, metrics : Mapping[str, float] ):
+        """ Update the metric tracker with new metrics and their corresponding weights """
+        assert not 'loss' in metrics, f"'loss' should not be included in the metrics dictionary, but should be passed as a separate argument to the record method."
+        self.record_metric( epoch, "loss", loss )
+        for k,v in metrics.items():
+            self.record_metric( epoch, k, v )
+
+    def record_metric( self, epoch, name, value ):
+        """ Add a single metric """
+        tm = self.metrics.get(name, None)
+        if tm is None:
+            self.metrics[name] = dict(epochs=[epoch], values=[value])
+        else:
+            assert tm['epochs'][-1] < epoch, f"Epoch {epoch} is not greater than last epoch {tm['epochs'][-1]} for metric {name}"
+            tm['epochs'].append(epoch)
+            tm['values'].append(value)
+
+    def items(self):
+        """ Get all metrics as an iterable of (name, epochs, values) tuples """
+        return self.metrics.items()
+    
+    def __getitem__(self, name):
+        """ Get metric by name """
+        return self.metrics[name]
+
+    def get(self, name, default=None):
+        """ Get metric by name with default """
+        return self.metrics.get(name, default)
