@@ -69,12 +69,12 @@ class Backbone(object):
         prices : Array
             The Black-Scholes price of the call options.            
         """
-        out_dtype = spot.dtype
+        out_dtype = strikes.dtype
         if high_precision:
             strikes = self.astype(strikes, dtype=self.float64)
-            spot    = self.astype(spot, dtype=self.float64)
+            spot    = self.astype(spot, dtype=self.float64) if not spot is None else None
             sqrtVars= self.astype(sqrtVars, dtype=self.float64)
-        spot = spot if spot is not None else 1.
+        spot = spot if spot is not None else (strikes*0.+1.) # TODO: provide better "1"
         k    = strikes/spot if spot is not None else strikes
         intr = (k<self.BS_EPS) | (sqrtVars<self.EPS_VOL)
         intr = intr if mask is None else (intr|~mask)
@@ -98,7 +98,7 @@ class Backbone(object):
                 self.verify( self.where( mask, price >= inc - eps, True ), lambda : f"Option price must exceed intrinsic, found min {self.min((price-inc)[mask]):.4g}; eps {eps}" )
                 self.verify( self.where( mask, price <= spot + eps, True ), lambda : f"Option price must be less than or equal to spot, found max {self.max((price-spot)[mask]):.4g}; eps {eps}" )       
                  
-        price = self.maximum( price, inc )  # enforce price >= intrinsic to avoid numerical issues in sanos. In ``debug`` these get caught above.
+        price = self.clip( price, min=inc, max=spot )  # enforce price >= intrinsic to avoid numerical issues in sanos. In ``debug`` these get caught above.
         price = self.minimum( price, spot ) # enforce price <= spot to avoid numerical issues in sanos. In ``debug`` these get caught above.
         return self.astype( price, dtype=out_dtype ) if high_precision else price
 

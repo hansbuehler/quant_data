@@ -22,6 +22,12 @@ class BackboneTorch(Backbone):
 
     def norm_cdf( self, arr ):
         return torch.special.ndtr( arr )
+    
+    def to_atomic( self, data, dtype : type | None = None ) -> Backbone.Array:
+        """ Convert data to a scalar tensor. Stops gradient calculation if data is a tensor. """
+        if isinstance( data, nnp.ndarray ):
+            return torch.from_numpy( data ).to( dtype=dtype, device=self.device ).item()
+        return torch.tensor( data, dtype=dtype, device=self.device ).item()
 
     def to_array( self, data, dtype : type | None = None ) -> Backbone.Array:
         """ Create an array; do not copy if data is already an array of the correct dtype. Stops gradient calculation if data is a tensor. """

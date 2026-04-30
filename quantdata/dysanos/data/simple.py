@@ -10,6 +10,7 @@ from quantdata.dysanos.data import _training_root
 from quantdata.widb.sampler import sample_days, SampleDaysConfig, RawDayFilter, ExpiryFilter, SCHEMA_ENRICHED_DAY, table_of_sample_days#NOQA
 from quantdata.biz_calendar import DateRange
 from quantdata.pool import PoolConfig
+from quantdata.torch.sampler import BlockSampler
 
 from cdxcore.version import version
 from cdxcore.verbose import Context
@@ -231,7 +232,7 @@ class SampleID:
         return f"{self.ticker} {self.index}:{fmt_date(self.date)} "
     
 @version("0.1", dependencies=[SimpleConfig, sample_simple_days, SampleID])
-class SimpleSampler(object):
+class SimpleSampler(BlockSampler):
 
     FEATURES = SIMPLE_FEATURES
 
