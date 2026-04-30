@@ -213,4 +213,38 @@ def are_broadcastable(shape1, shape2) -> bool:
         return True
     except RuntimeError:
         return False
-    
+
+# ---------------------------------------
+# Debugging
+# ---------------------------------------
+
+def detect_grad_issues(model : torch.nn.Module):
+    """
+    Detect common gradient issues such as missing gradients or non-finite values. This is a helper function to perform checks during model execution.
+    If any issues are detected, an AssertionError will be raised with a message describing the problems
+    """
+    grad_problems = []
+    for name, parameter in model.named_parameters():
+        if parameter.grad is None:
+            grad_problems.append(f"{name}: missing grad")
+        elif not torch.isfinite(parameter.grad).all():
+            grad_problems.append(f"{name}: non-finite grad")
+    assert not grad_problems, "Gradient diagnostics failed before optimizer step: " + "; ".join(grad_problems[:5])
+
+def compute_grad_norm(model : torch.nn.Module):
+    """
+    Compute the average L2 norm of the gradients across all parameters in the model. This is a helper function to perform checks during model execution.
+    If there are no gradients, this function will return None.
+    """
+    total_grad_sq = None
+    num_grad_tensors = 0
+
+    for parameter in model.parameters():
+        if parameter.grad is not None:
+            grad = parameter.grad.detach()
+            total_grad_sq = total_grad_sq + torch.sum(grad * grad) if total_grad_sq is not None else torch.sum(grad * grad)
+            num_grad_tensors += 1
+    if num_grad_tensors == 0:
+        return None
+    grad_norm = torch.sqrt(total_grad_sq/num_grad_tensors)
+    return grad_norm.item()
