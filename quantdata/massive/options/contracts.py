@@ -4,11 +4,9 @@ Get contracts for underylings
 
 from __future__ import annotations
 
-import math
-import threading
 import warnings as warnings
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 import polars as pl
 from cdxcore.err import verify
@@ -18,11 +16,6 @@ from cdxcore.uniquehash import named_unique_filename48_8
 from cdxcore.util import TrackTime, fmt_date, fmt_digits, fmt_list
 from cdxcore.verbose import Context
 
-# rom aae.locations import locations, SubDir
-# from aae.market import nyse
-# from aae.poly import PolyHandle, POLY_START_DATE
-# from aae.poly.fetch import fetch_day_summary, has_any_quotes, has_any_trades
-# from aae.tickers.calendar import polygon_splits
 from cdxcore.version import version
 from prettytable import PrettyTable
 

@@ -1,10 +1,14 @@
 # quantdata
 
 Python environment for systematically processing financial data and building pipelines to feed it to models.
-The aim of the project is to joinly develop robust data pipelines which lead to standadized benchmarks in finance.
+The aim of the project is to joinly develop robust data pipelines which lead to standadized benchmarks in quantitative finance.
+
+Principles:
+* [Data Handling](DATA.md)
+* [Model Benchmarking](BENCHMARKING.md) [not written yet]
 
 
-## Python requirement
+## Python requirements
 
 Clone the directory ``quant_data``. Change into that directory.
 
@@ -24,15 +28,22 @@ sudo apt install python3.12 python3.12-venv
 
 Then create a python environment:
 
+If you need to specify a particular python version
 ```bash
-python3.12 -m venv .vqdata # if you need to specify a particular version
-python -m venv .vqdata     # otherwise
+python3.12 -m venv .vqdata 
+```
+Otherwise
+```bash
+python -m venv .vqdata   
+```
  
+Then activate and install dependencies:
+ ```bash
 source .vqdata\bin\activate   # activate it
 python --version
 
-python -m pip install --upgrade pip pip-review  # update pip
-python -m pip install -e ".[dev]"                 # install local package 
+python -m pip install --upgrade pip pip-review 
+python -m pip install -e ".[dev]"              
 ````
 Use `.[dev]` for the full local development toolchain. It includes testing and documentation tools.
 
@@ -42,12 +53,12 @@ Under windows you can use the Windows Store to install Python. Once Python 3.12 
 create the environment:
 
 ```cmd
-py -3.12 -m venv .vqdata     # create environemnt
-.vqdata\Scripts\Activate     # activate it 
+py -3.12 -m venv .vqdata     
+.vqdata\Scripts\Activate     
 python --version
 
-python -m pip install --upgrade pip pip-review  # update pip
-python -m pip install -e .[dev]                 # install local package 
+python -m pip install --upgrade pip pip-review  
+python -m pip install -e .[dev]                 
 ```
 Use `.[dev]` for the full local development toolchain. It includes testing and documentation tools.
 
@@ -60,8 +71,8 @@ conda create --prefix .\.vqdata python=3.12
 conda activate .\.vqdata
 python --version
 
-python -m pip install --upgrade pip pip-review  # update pip
-python -m pip install -e .[dev]                 # install local package 
+python -m pip install --upgrade pip pip-review  
+python -m pip install -e .[dev]                
 ```
 Use `.[dev]` for the full local development toolchain. It includes testing and documentation tools.
 
@@ -81,33 +92,74 @@ python -c "import quantdata; print(quantdata.__version__)"
 
 ## Environment Variables
 
-You will need to set your directory and data access variables.
+The project environment is organised around two main inputs: data storage/caching locations on one hand side, and access tokens to data sources on the other.
 
-* ``QUANTDATA_RAW_DATA``: root directory for storing raw cached data. Usually does not need to be fast, e.g. a network drive.
-* ``QUANTDATA_PROCESSING_DATA``: intermediate processing: good for multi-process CPU access, but does not need to deliver to GPU.
-* ``QUANTDATA_TRAINING_DATA``: training data with the most effective disk to GPU location.
+### Data Locations
+
+The project is organized around proactive caching of:
+
+* **raw data**: downloaded from a data source. Such data can be stored in slower drives. The point of the cache is to reduce download overhead and intensity.
+* **processed data**: enriched data. Can also be stored in a slower drive location. This data is cached because processing itself is slow.
+* **training data**: data stored in a format optimized for training a particular model class. This should be stored at a location which allows for fast access during training, i.e. the local SSD drive.
+
+*Please delete all data whose license expires.*
+
+#### Caching
+
+Caching in is version-aware. You will note that a number of functions have a ``@version`` or ``@cache`` decorator. A functions version often also depends on other
+function versions. A change to the version will trigger a refesh of any cache affected by the respected function - so be careful, as this can be slow; also do not change the version of a function or class
+without good reason as it may trigger refreshs for others once they check out.
+
+Please also check the documentation for [``@version``](https://quantitative-research.de/docs/cdxcore/api/generated/cdxcore.version.html) and [``@cache``](https://quantitative-research.de/docs/cdxcore/api/generated/cdxcore.subdir.html#cdxcore.subdir.SubDir.cache) with the package ``cdxcore``.
+
+#### Defining Data Directories
+
+You will need to set your directory and data access variables.
+All directory definitions follow the [``cdxcore.subdir``](https://quantitative-research.de/docs/cdxcore/api/generated/cdxcore.subdir.html) notation, i.e. you can refer to the temporary directory by ``"!"`` and to your home directory by ``"~"``. Note that under Linux data stored in ``/tmp/`` are deleted upon reboot. On Windows, 
+If you do not need to/can/want to split data across storage locations, you can just set:
 
 * ``QUANTDATA_ROOT``: if you have everything in one place anyway, use this to set all of the above in one step.
 
-### Caching
+To optimize access speed, you can split each area by device:
 
-Caching in dynamic-sanos is version-aware. You will note that a number of functions have a ``@version``
-or ``@cache`` decorator. A functions version often also depends on other function versions. 
-A change to the version will trigger a refesh of any cache affected by the respected function - so be careful,
-as this can be slow; also do not change the version of a function or class without good reason as it may
-trigger refreshs for others once they check out.
+* ``QUANTDATA_RAW_DATA``: root directory for storing raw cached data. Usually does not need to be fast, e.g. a network drive. Defaults to ``QUANTDATA_ROOT/raw``.
+* ``QUANTDATA_PROCESSING_DATA``: intermediate processing: good for multi-process CPU access, but does not need to deliver to GPU. Defaults to ``QUANTDATA_ROOT/processing``.
+* ``QUANTDATA_TRAINING_DATA``: training data with the most effective disk to GPU location.
+  Defaults to ``QUANTDATA_ROOT/training``.
 
-* ``QUANTDATA_CACHE_MODE``: is the project-wide caching mode. Use ``off`` to disable, or ``update`` to for an update. Default is ``on``.
+* ``QUANTDATA_TEMP_DATA``: local ephermal caching. Very useful for exceedingly slow processes. Not used at the moment. Defaults to ``!/quantdata``.
+
+In Linux, setting the environment variables can be achieved by adding the following to ``~/.bashrc``:
+
+```bash
+# Data directories
+export QUANTDATA_RAW_DATA=/path/to/data/raw
+export QUANTDATA_PROCESSING_DATA=/path/to/data/processing
+export QUANTDATA_TRAINING_DATA=/fast_path/to/data/training
+```
+Alternatively, you can set a global directory. Example here to make it relative to ``$HOME``:
+```bash
+export QUANTDATA_ROOT=~/quantdata_data/
+```
 
 ### Data Access
 
-* ``MASSIVE_TOKEN`` is the [massive](http://www.massive.com) token.
-* ``WRDS_USERNAME``: is the [WRDS](https://wrds-www.wharton.upenn.edu/login/) username.
+Each data source support by our project will require you to register the respective login data, also as environment variables. At this point the following two sources are supported:
 
-### Ignore for now
+* **[Massive.com](DATA_MASSIVE.md)**.
+  1. Ensure you have an account and test it.
+  2. Set the ``MASSIVE_TOKEN`` environment variable to your API token.
+* **[WRDS](WRDS.md)** including **Option Metrics**
+  1. [Create an account](https://wrds-www.wharton.upenn.edu/pages/support/getting-started/) and [enable MFA](https://wrds-www.wharton.upenn.edu/pages/about/log-in-to-wrds-using-two-factor-authentication/).
+  2. [Follow the WRDS instructions](https://wrds-www.wharton.upenn.edu/pages/support/programming-wrds/programming-python/python-from-your-computer/) to ensure you have 
+    the ``pgpass`` pass file. *This is important.*
+  3. Set the ``WRDS_USERNAME`` variable to your username.   
 
+### Other Useful Environment Variables
+
+* ``QUANTDATA_CACHE_MODE``: sets the global [``cdxcore.subdir.CacheMode``](https://quantitative-research.de/docs/cdxcore/api/generated/cdxcore.subdir.html#cdxcore.subdir.CacheMode).
+  For example, to turn off all caching use ``QUANTDATA_CACHE_MODE="off"``. To update all cached data used, use ``QUANTDATA_CACHE_MODE="update".
 * ``QUANTDATA_TEST_MODE``: global flag to tell the project we are in testing mode. In this mode, no data is downloaded from any data source.
-* ``QUANTDATA_TEMP_DATA``: local ephermal caching. Very useful for exceedingly slow processes. Not used at the moment.
 
 ## Tests
 

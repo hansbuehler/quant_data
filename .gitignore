@@ -216,3 +216,4 @@ __marimo__/
 # ignore python
 .vdys*
 /.vqdata
+/.vqdatalx
