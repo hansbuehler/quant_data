@@ -443,6 +443,10 @@ class Visualizer(BaseVisualizer):
                     iask_      = iask[ixs]
                     self.store += axP.plot( iask_vols_, ibid_ - ifit_, "^:", color="green", label=f"Bid-Fit {ip}")
                     self.store += axP.plot( iask_vols_, iask_ - ifit_, "v:", color="red", label=f"Ask-Fit {ip}")
+                    if is_first:
+                        ispread_ = iask_ - ibid_
+                        assert nnp.min(ispread_) > 0., f"Negative spread found in sample {ip}: min spread is {nnp.min(ispread_):.4g}"
+                        axP.fill_between( iask_vols_, -ispread_, +ispread_, color="blue", alpha=0.2, label="Spread" )
 
                     axV.set_ylim( *m_o_m(ifit_vols, ibid_vols, iask_vols ))
                     axP.set_ylim( *m_o_m(ibid - ifit, iask - ifit) )

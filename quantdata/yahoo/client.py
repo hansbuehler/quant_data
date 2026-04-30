@@ -8,6 +8,7 @@ from datetime import date
 import yfinance as yf
 import polars as pl
 from cdxcore.util import fmt_date
+from cdxcore.err import verify
 
 _yfinance_locations = env.locations("yfinance", fmt_raw=SubDir.PICKLE, fmt_processing=SubDir.PANDAS_PARQUET, fmt_training=SubDir.PYTREE_HDF5)
 _cache = _yfinance_locations.raw("fetch", fmt=SubDir.PANDAS_PARQUET)
@@ -20,6 +21,10 @@ class YFClient(object):
 
     def __init__(self):
         pass
+
+    def validate_status(self):
+        """ Check that I am not in test mode """
+        verify( not env.test_mode, "Attempted to connect to Yahoo Finance in test mode. Set QUANTDATA_TEST_MODE=0 to enable connections." )
 
     NO_EARNINGS_QUOTE_TYPES = {
         "ETF",
@@ -42,6 +47,7 @@ class YFClient(object):
         exclude_args=['self']) # excluding 'self' is not necessary; should be excluded automatically
     def has_earnings(self, ticker: str, start: date, end: date) -> pl.DataFrame:
         """Use yfinance to get earnings dates and ex-dividend dates for a ticker."""
+        self.validate_status()
         t = yf.Ticker(ticker)
 
         # find quote

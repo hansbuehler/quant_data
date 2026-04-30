@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
+import numpy as np
 import pytest
 
 from quantdata.biz_calendar import (
@@ -12,6 +13,7 @@ from quantdata.biz_calendar import (
     get_half_days,
     next_business_day,
     prev_business_day,
+    to_date,
 )
 
 
@@ -91,3 +93,13 @@ def test_date_range_requires_at_least_one_business_day() -> None:
         DateRange(date(2024, 12, 25), date(2024, 12, 25))
 
     assert get_business_days(date(2024, 12, 25), date(2024, 12, 25)) == []
+
+
+def test_to_date_handles_common_inputs() -> None:
+    assert to_date("2024-12-24") == date(2024, 12, 24)
+    assert to_date(date(2024, 12, 24)) == date(2024, 12, 24)
+    assert to_date(np.datetime64("2024-12-24")) == date(2024, 12, 24)
+    assert to_date(None) is None
+
+    with pytest.raises(ValueError, match="Unsupported type for date conversion"):
+        to_date(123)

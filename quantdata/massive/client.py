@@ -85,6 +85,7 @@ class MassiveClient(object):
     def get_token():
         """Reads massive token from the ``MASSIVE_TOKEN`` environment variable"""
         if MassiveClient._MASSIVE_TOKEN is None:
+            verify( not env.test_mode, "Attempted to connect to massive.com in test mode. Set QUANTDATA_TEST_MODE=0 to enable connections." )
             MassiveClient._MASSIVE_TOKEN = os.environ.get("MASSIVE_TOKEN", None)
             verify(
                 not MassiveClient._MASSIVE_TOKEN is None,

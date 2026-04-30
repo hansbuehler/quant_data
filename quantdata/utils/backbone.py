@@ -178,7 +178,7 @@ class BackboneNumpy(Backbone):
         
     def to_array( self, data, dtype : type | None = None ) -> Backbone.Array:
         """ Create an array; do not copy if data is already an array of the correct dtype """
-        return data.astype( dtype=dtype, copy=False ) if dtype is not None else data
+        return nnp.asarray(data, dtype=dtype) if dtype is not None else nnp.asarray(data)
     
     def to_numpy( self, arr : Backbone.Array ) -> nnp.ndarray:
         assert isinstance( arr, nnp.ndarray ), f"Expected a numpy array, got type {type(arr)}"

@@ -126,6 +126,11 @@ class Environment(object):
     The package uses caching throughout which can obfuscate errors if the error is in some of the cached files.
     To turn off caching globally, set the environment variable ``QUANTDATA_CACHE_MODE`` to ``"off"``.
     This will force the code to always fetch fresh data and not use any cached files.
+
+    Developer Comment
+    ^^^^^^^^^^^^^^^^^
+    To generate test cases for offline testing, data sourcing will be redirected to ``tests/stored_data/``.
+    To generate tests in for this directory, you can use the protected member ``_test_data_locations``.
     """
 
     CACHE_EXCLUDE_ARGS = ["self", Context, "WRDSClient", "MassiveClient"]
@@ -134,15 +139,33 @@ class Environment(object):
         # identify directories
         # ---------------------
         self.test_mode  : bool = os.environ.get("QUANTDATA_TEST_MODE", "0") == "1"  # turn off any connections
-        self._wrds = None
+
+        cache_mode = os.environ.get("QUANTDATA_CACHE_MODE", None)
+        cc = CacheController(exclude_arg_types=self.CACHE_EXCLUDE_ARGS, cache_mode=cache_mode)
+
+        # where tests are stored.   
+        # in non-test mode, use these for generation
+
+        def generate_test_location():
+            cc = CacheController(exclude_arg_types=self.CACHE_EXCLUDE_ARGS, cache_mode="on")
+            root = SubDir( str(Path(__file__).parent.parent / "tests" / "stored_data"), create_directory=False ) # directory for generating tests.
+            return Locations(
+                raw = root("raw", create_directory=False),
+                processing= root("processing", create_directory=False),
+                training = root("training", create_directory=False),
+                temp = root("!/quantdata", create_directory=False)
+            )
+        self._test_data_locations = generate_test_location() #: Locations for test data. Used for developers only.
+
+        # generate environment
+        # test or not
 
         if not self.test_mode:
             raw        = os.environ.get("QUANTDATA_RAW_DATA", None)
             processing = os.environ.get("QUANTDATA_PROCESSING_DATA", None)
             training   = os.environ.get("QUANTDATA_TRAINING_DATA", None)
-            temp       = os.environ.get("QUANTDATA_TEMP_DATA", "!/quantdata")
             def_root   = os.environ.get("QUANTDATA_ROOT", None)
-            cache_mode = os.environ.get("QUANTDATA_CACHE_MODE", None)
+            temp       = os.environ.get("QUANTDATA_TEMP_DATA", "!/quantdata")
 
             if not cache_mode is None:
                 try:
@@ -172,8 +195,6 @@ class Environment(object):
                 training = def_root("training") if training is None else training
                 temp = def_root("temp") if temp is None else temp
 
-            cc = CacheController(exclude_arg_types=self.CACHE_EXCLUDE_ARGS, cache_mode=cache_mode)
-
             raw = SubDir(raw, cache_controller=cc)
             processing = SubDir(processing, cache_controller=cc)
             training = SubDir(training, cache_controller=cc)
@@ -184,14 +205,13 @@ class Environment(object):
             # ---------
             # In test mode, we use locally stored data.
             # We also do not write to the cache (which is now pointing to a local data store)
-            test_cc = CacheController(exclude_arg_types=self.CACHE_EXCLUDE_ARGS, cache_mode="cacheonly")
-            parent  = SubDir( str(Path(__file__).parent.parent / "tests" / "stored_data"), create_directory=False, cache_controller=test_cc )
-            raw = parent("raw", cache_controller=test_cc)
-            training = parent("training", cache_controller=test_cc)
-            processing = parent("processing", cache_controller=test_cc)
+            test_cc    = CacheController(exclude_arg_types=self.CACHE_EXCLUDE_ARGS, cache_mode="cacheonly")
 
+            raw        = self._test_data_locations.raw(cache_controller=test_cc)
+            training   = self._test_data_locations.training(cache_controller=test_cc)
+            processing = self._test_data_locations.processing(cache_controller=test_cc)
             # temp is different: will create a directory which self-deletes upon deletion of the object.
-            temp = SubDir("?/quantdata_test_temp", cache_controller=test_cc, create_directory=True) # this can always read/write. 
+            temp       = SubDir("?/quantdata_test_temp", cache_controller=test_cc, create_directory=True) # this can always read/write. 
 
             if not raw.path_exists():
                 raise FileNotFoundError(f"Could not find stored raw data for testing at: {raw.path}")
@@ -206,6 +226,9 @@ class Environment(object):
             training = training,
             temp = temp
         )
+
+    def generate_raw_test_targe():
+        pass
 
 env = Environment()
 """ One global instande of the :class:`quantdata.Environment` class, which defines the operating environment. """
