@@ -158,7 +158,10 @@ class WIDBClient(object):
             verify( not env.test_mode, "Attempted to connect to WRDS IvyDB in test mode. Set QUANTDATA_TEST_MODE=0 to enable connections." )
             credentials = WIDBClient.credentials()
             verify( not credentials.wrds_off, "Attempted to connect to WRDS IvyDB while WRDS IvyDB access is disabled. Set QUANTDATA_WRDS_OFF=0 to enable connections." )
-            WIDBClient._conn  = wrds.Connection(wrds_username=credentials.username) 
+            try:
+               WIDBClient._conn  = wrds.Connection(wrds_username=credentials.username) 
+            except Exception as e:
+                raise RuntimeError(f"Failed to connect to WRDS with username '{credentials.username}': {str(e)}") from e
         return WIDBClient._conn
     
     @locations.raw(fmt=SubDir.PICKLE).cache(

@@ -7,7 +7,7 @@ from __future__ import annotations
 from quantdata import env#NOQA
 from quantdata.dysanos.data import _training_root
 
-from quantdata.widb.sampler import sample_days, SampleDaysConfig, RawDayFilter, ExpiryFilter, SCHEMA_ENRICHED_DAY
+from quantdata.widb.sampler import sample_days, SampleDaysConfig, RawDayFilter, ExpiryFilter, SCHEMA_ENRICHED_DAY, table_of_sample_days#NOQA
 from quantdata.biz_calendar import DateRange
 from quantdata.pool import PoolConfig
 
@@ -98,7 +98,39 @@ SIMPLE_INCLUDE_FIELDS = {
     'ask_pure_dk',
     'bid_pure_dk'
 }
+""" Fields the function requests """
 assert SIMPLE_INCLUDE_FIELDS <= set(SCHEMA_ENRICHED_DAY)|{'is_valid'}, f"SIMPLE_INCLUDE_FIELDS must be a subset of the available fields in SCHEMA_ENRICHED_DAY. Unknown fields: {sorted(SIMPLE_INCLUDE_FIELDS - set(SCHEMA_ENRICHED_DAY))}"
+
+SIMPLE_FEATURES = {
+    'spot_ref',  # actual $
+    'spot_ret',  # spot(t) / spot(t-1) - 1
+    'is_valid',
+    'is_american',
+    'is_am',
+    'strike', # divided by spot_ref
+    'df',
+    'tte_y',
+    'fwd',    # divided by spot_ref
+    'nms',
+    'call_ask',  # divided by spot_ref
+    'call_bid',  # divided by spot_ref
+    'ask_vol',
+    'bid_vol',
+    'log_volume',
+    'log_open_interest',
+    'ask_pure_price',
+    'bid_pure_price',
+    'ask_pure_delta',
+    'bid_pure_delta',
+    'ask_pure_gamma',
+    'bid_pure_gamma',
+    'bid_pure_vega',
+    'ask_pure_vega',
+    'bid_pure_theta',
+    'ask_pure_theta',
+    'ask_pure_dk',
+    'bid_pure_dk'
+}
 
 @_training(fmt=SubDir.PYTREE_HDF5).cache(
     "0.1",
@@ -135,11 +167,18 @@ def sample_simple_days(  ticker : str,
 
     S, O = r.spot.shape
 
+    if np.min(r.spot[r.is_valid]) <= 0.:
+        raise ValueError(f"Expected positive spot, got {np.min(r.spot[r.is_valid]):.4g} for ticker {ticker}.")
+    if np.min(r.spot_prev[r.is_valid]) <= 0.:
+        raise ValueError(f"Expected positive spot_prev, got {np.min(r.spot_prev[r.is_valid]):.4g} for ticker {ticker}.")
+
     r.spot_ref = r.spot
-    r.spot_ret = r.spot / r.spot_prev - 1.0
-    r.call_ask /= r.spot
-    r.call_bid /= r.spot
-    r.fwd /= r.spot
+    r.spot_ret = np.where( r.is_valid, r.spot / np.where( r.is_valid, r.spot_prev, 1. ) - 1.0, 0. )
+    valid_spot = np.where( r.is_valid, r.spot, 1. )
+    r.call_ask /= valid_spot
+    r.call_bid /= valid_spot
+    r.fwd /= valid_spot
+    r.strike /= valid_spot
     # generate sortable date_ids for 
     r.spot_ref = r.spot_ref[:,:1] # spot is the same for all options
     r.spot_ret = r.spot_ret[:,:1] # spot return is the same for all options
@@ -147,12 +186,32 @@ def sample_simple_days(  ticker : str,
     date_diffs = [ b-a for b,a in zip(r.dates[1:], r.dates[:-1]) ]
     date_diffs = [ d.total_seconds() for d in date_diffs ]
     assert min(date_diffs) > 0., "Internal error: date_ids should be strictly increasing with a step of at least 0.5 to ensure proper ordering and separation of samples. Please contact the authors with an example if you encounter this error."
+
+    if set(r) != SIMPLE_FEATURES|{"dates"}:
+        extra = set(r) - SIMPLE_FEATURES - {"dates"}
+        missing = SIMPLE_FEATURES - set(r)
+        msg = f"Internal error: unexpected fields returned by sample_days for ticker {ticker}:"
+        if extra:
+            msg += f" extra fields: {sorted(extra)}."
+        if missing:
+            msg += f" missing fields: {sorted(missing)}."
+        raise RuntimeError(msg)
+
+    for k,v in r.items():
+        if not isinstance(v, np.ndarray):
+            continue
+        try:
+            v = v.astype(np.float32)
+        except:
+            continue
+        assert np.all( np.isfinite(v) ), f"Expected all finite values for field '{k}', got non-finite values for ticker {ticker}."
     return dict(r) # for HDF5
 
 # --------------------------------------------------------------
 # Sampler
 # --------------------------------------------------------------
 
+@version("0.1")
 @dataclass(frozen=True)
 class SampleID:
     date: dt.date   #: the end date
@@ -174,6 +233,8 @@ class SampleID:
 @version("0.1", dependencies=[SimpleConfig, sample_simple_days, SampleID])
 class SimpleSampler(object):
 
+    FEATURES = SIMPLE_FEATURES
+
     def __init__( self, simple_config: SimpleConfig, *, 
                         pool_config : PoolConfig = PoolConfig.off(), 
                         refresh_cache=False, 
@@ -191,14 +252,23 @@ class SimpleSampler(object):
         self._shapes : dict[str, tuple] = None
 
         def collate():
-            pool = JCPool( pool_config.num_workers, threading=True )
-            def process(ticker):
-                return sample_simple_days( ticker=ticker, simple_config=simple_config, pool_config=pool_config, refresh_cache=refresh_cache, override_cache_mode="update" if refresh_cache else None, verbose=Context.quiet )
-            with verbose.write_t(lambda : f"Generating samples for {len(self.tickers)} tickers {fmt_list(self.tickers)} with from {simple_config.date_range.start} to {simple_config.date_range.end}... ", end='') as tme:
-                results = {}
-                for ticker, tdata in pool.parallel( {ticker: pool.delayed(process)(ticker) for ticker in self.tickers} ):
-                    results[ticker] = PrettyObject(tdata)
-                verbose.write(lambda : f"done; this took {tme}.", head=False )
+            # Cannot thread on top of multipricessing
+            results = {}
+
+            if pool_config.threading:
+                pool = JCPool( pool_config.num_workers, threading=True )
+                def process(ticker):
+                    return sample_simple_days( ticker=ticker, simple_config=simple_config, pool_config=pool_config, refresh_cache=refresh_cache, override_cache_mode="update" if refresh_cache else None, verbose=Context.quiet )
+                with verbose.write_t(lambda : f"Generating samples for {len(self.tickers)} tickers {fmt_list(self.tickers)} with from {simple_config.date_range.start} to {simple_config.date_range.end}... ", end='') as tme:
+                    for ticker, tdata in pool.parallel( {ticker: pool.delayed(process)(ticker) for ticker in self.tickers} ):
+                        results[ticker] = PrettyObject(tdata)
+                    verbose.write(lambda : f"done; this took {tme}.", head=False )
+            else:
+                with verbose.write_t(lambda : f"Generating samples for {len(self.tickers)} tickers {fmt_list(self.tickers)} with from {simple_config.date_range.start} to {simple_config.date_range.end}... ", end='') as tme:
+                    for ticker in self.tickers:
+                        tdata = sample_simple_days( ticker=ticker, simple_config=simple_config, pool_config=pool_config, refresh_cache=refresh_cache, override_cache_mode="update" if refresh_cache else None, verbose=verbose(1) )
+                        results[ticker] = PrettyObject(tdata)
+                    verbose.write(lambda : f"done; this took {tme}.", head=False )
             return results
         
         self.data = collate()

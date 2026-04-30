@@ -291,10 +291,10 @@ def sample_days(  ticker : str,
 
         verbose.write(lambda: f"done; this took {tme}.", head=False)
         if verbose.shall_report(2):
-            verbose.report(2, str(verbose_sample_days(r)))
+            verbose.report(2, str(table_of_sample_days(r)))
     return r
 
-def verbose_sample_days( r : dict[str:np.array|str|type] ) -> PrettyTable:
+def table_of_sample_days( r : dict[str:np.array|str|type] ) -> PrettyTable:
     """ Prints out the result from sample_days() as a nice table """
     nsize = 0
     tbl = PrettyTable()
