@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas_market_calendars as mcal
+import polars as pl
 from cdxcore.err import verify_inp
 from cdxcore.version import version
 
@@ -396,3 +397,46 @@ class DateRange:
     def get_half_days(self) -> list[dt.date]:
         """Get half days (early closes) in this date range."""
         return get_half_days(self.start, self.end) if not self.exclude_half_days else []
+
+
+@version("0.1", dependencies=[get_half_days])
+def session_open_close(d: dt.date) -> tuple[dt.datetime, dt.datetime, int, bool]:
+    """
+    NYSE RTH session open and close for date ``d``.
+
+    Returns
+    -------
+    (open_dt, close_dt, session_seconds, is_half_day)
+        * open_dt: 09:30 NY
+        * close_dt: 13:00 NY on half-days, 16:00 NY otherwise
+        * session_seconds: total session length in seconds
+        * is_half_day: whether this is an early-close day
+    """
+    is_hd = bool(get_half_days(d, d))
+    open_dt = dt.datetime(d.year, d.month, d.day, 9, 30, tzinfo=TZ_NY)
+    close_dt = (
+        dt.datetime(d.year, d.month, d.day, 13, 0, tzinfo=TZ_NY)
+        if is_hd
+        else dt.datetime(d.year, d.month, d.day, 16, 0, tzinfo=TZ_NY)
+    )
+    session_seconds = int((close_dt - open_dt).total_seconds())
+    return open_dt, close_dt, session_seconds, is_hd
+
+
+@version("0.1")
+def full_second_grid_ns(open_dt: dt.datetime, close_dt: dt.datetime) -> pl.Series:
+    """
+    Per-second Polars Series for RTH bins: ``[open_dt, open_dt+1s, ..., close_dt-1s]``.
+
+    The grid is end-exclusive so the last bin key is ``close_dt - 1s`` and represents
+    ``[close_dt-1s, close_dt]`` (inclusive close handled by timestamp mapping in the caller).
+    """
+    s = pl.datetime_range(
+        open_dt,
+        close_dt,
+        interval="1s",
+        time_zone=TZ_NY.key,
+        eager=True,
+        closed="left",
+    )
+    return s.dt.cast_time_unit("ns").rename("dt_ns")

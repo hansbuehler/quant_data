@@ -2,51 +2,46 @@
 Build special calendar for a given ticker
 """
 
-from quantdata.tickers import tickers_cache, SubDir, version
-from quantdata.massive import MassiveClient
-from quantdata.yahoo import YFClient
-from quantdata.biz_calendar import DateRange, prev_business_day, next_business_day, get_business_days
-
-from cdxcore.err import verify
-from cdxcore.util import fmt_date
-from cdxcore.pretty import PrettyObject
-from cdxcore.jcpool import SubDir
-import os as os
-import polars as pl
-from datetime import date, timedelta
 import warnings as warnings
-import numpy as np
+from datetime import date, timedelta
 from enum import IntEnum
 
-
-"""
-Build special calendar for a given ticker
-"""
-
-from poly.locations import locations, version, Context, SubDir
-from poly.market import nyse
-from poly.poly import PolyHandle
-from cdxcore.err import verify
-from cdxcore.util import fmt_date
-from cdxcore.pretty import PrettyObject
+import numpy as np
 import polars as pl
-from datetime import date, timedelta
-import warnings as warnings
+from cdxcore.err import verify
+from cdxcore.pretty import PrettyObject
+from cdxcore.util import fmt_date
+
+from quantdata.biz_calendar import (
+    DateRange,
+    get_business_days,
+    next_business_day,
+    prev_business_day,
+)
+from quantdata.massive import MassiveClient
+from quantdata.tickers import Context, SubDir, tickers_cache, version
+from quantdata.yahoo import YFClient
+
 
 class EXPIRY(IntEnum):
-    """ Expory codes """
-    NONE = 0            # not an expiry
-    STANDARD = 1        # not one of the mechanical expiries below, but still an expiry (e.g. 0DTE or weeklies)
-    QUAD_WITCHING = 2   # third friday of March, June, September, December
-    MONTHLY = 3         # third friday of other months
-    QUARTERLY = 4       # quarterly expiry, i.e. third friday of March, June, September, December (same as quad witching, but we keep it separate for now in case we want to add more codes later)
-    EOM = 5             # end of month expiry (last business day of the month, if not quad witching or monthly)
+    """Expory codes"""
 
-def _date_code( d : date ) -> int:
-    return d.year*10000 + d.month*100 + d.day
+    NONE = 0  # not an expiry
+    STANDARD = (
+        1  # not one of the mechanical expiries below, but still an expiry (e.g. 0DTE or weeklies)
+    )
+    QUAD_WITCHING = 2  # third friday of March, June, September, December
+    MONTHLY = 3  # third friday of other months
+    QUARTERLY = 4  # quarterly expiry, i.e. third friday of March, June, September, December (same as quad witching, but we keep it separate for now in case we want to add more codes later)
+    EOM = 5  # end of month expiry (last business day of the month, if not quad witching or monthly)
+
+
+def _date_code(d: date) -> int:
+    return d.year * 10000 + d.month * 100 + d.day
+
 
 @version("0.1")
-def get_standard_expiries( date_range : DateRange ) -> pl.DataFrame:
+def get_standard_expiries(date_range: DateRange) -> pl.DataFrame:
     """
     Computes standard expiry codes for a list of dates.
     Expiry codes computed by this function are mechanical:
@@ -64,60 +59,87 @@ def get_standard_expiries( date_range : DateRange ) -> pl.DataFrame:
 
     Returns
     -------
-    Expiries : :class:`polars.DataFrame`    
+    Expiries : :class:`polars.DataFrame`
         DataFrame with columns:
         * ``date``: date of the expiry
         * ``expiry_code``: expiry code, one of the values of the :class:`EXPIRY` enum.
     """
 
-    start_year    = date_range.start.year
-    end_year      = date_range.end.year
-    business_days = set( date_range.get_business_days() )
-    dates         = get_business_days(date_range.start,
-                                      next_business_day(date_range.end, exclude_half_days=False, count_start=False),
-                                      exclude_half_days=False) # (this is cached, in case its equal to businbess days)
-    datecodes     = np.array( [ _date_code(d) for d in dates ], dtype=np.int32 )
-    assert np.min(np.diff(datecodes)) >= 1, f"Internal error: business days should be at least 1 day apart not {np.min(np.diff(datecodes))}"
+    start_year = date_range.start.year
+    end_year = date_range.end.year
+    business_days = set(date_range.get_business_days())
+    dates = get_business_days(
+        date_range.start,
+        next_business_day(date_range.end, exclude_half_days=False, count_start=False),
+        exclude_half_days=False,
+    )  # (this is cached, in case its equal to businbess days)
+    datecodes = np.array([_date_code(d) for d in dates], dtype=np.int32)
+    assert np.min(np.diff(datecodes)) >= 1, (
+        f"Internal error: business days should be at least 1 day apart not {np.min(np.diff(datecodes))}"
+    )
 
     expiries = []
-    codes    = []
+    codes = []
 
-    for year in range(start_year, end_year+2):
+    for year in range(start_year, end_year + 2):
         for month in range(1, 13):
-            first_day           = date(year, month, 1)
+            first_day = date(year, month, 1)
 
             # get last business of previous month
-            last_prev_month     = first_day - timedelta(days=1)
-            lpm_code            = _date_code(last_prev_month)
-            ix                  = np.searchsorted(datecodes, lpm_code, side="right")
+            last_prev_month = first_day - timedelta(days=1)
+            lpm_code = _date_code(last_prev_month)
+            ix = np.searchsorted(datecodes, lpm_code, side="right")
             if ix > 0:
-                assert lpm_code >= datecodes[ix-1], f"Internal error: lpm_code {lpm_code} should be >= datecodes[{ix-1}]={datecodes[ix-1]}"
-                if dates[ix-1] in business_days:
-                    print(f"Adding last month {last_prev_month} expiry for {dates[ix-1]} with code {EXPIRY.EOM if last_prev_month.month not in {3, 6, 9, 12} else EXPIRY.QUARTERLY}")
+                assert lpm_code >= datecodes[ix - 1], (
+                    f"Internal error: lpm_code {lpm_code} should be >= datecodes[{ix - 1}]={datecodes[ix - 1]}"
+                )
+                if dates[ix - 1] in business_days:
+                    print(
+                        f"Adding last month {last_prev_month} expiry for {dates[ix - 1]} with code {EXPIRY.EOM if last_prev_month.month not in {3, 6, 9, 12} else EXPIRY.QUARTERLY}"
+                    )
                     print(dates)
-                    assert not dates[ix-1] in expiries, f"Internal error: duplicate expiry date {dates[ix-1]}"
-                    expiries.append( dates[ix-1] )
-                    codes.append( int( EXPIRY.EOM if last_prev_month.month not in {3, 6, 9, 12} else EXPIRY.QUARTERLY ) )
+                    assert not dates[ix - 1] in expiries, (
+                        f"Internal error: duplicate expiry date {dates[ix - 1]}"
+                    )
+                    expiries.append(dates[ix - 1])
+                    codes.append(
+                        int(
+                            EXPIRY.EOM
+                            if last_prev_month.month not in {3, 6, 9, 12}
+                            else EXPIRY.QUARTERLY
+                        )
+                    )
 
             # get third friday of this month
             first_friday_offset = (4 - first_day.weekday()) % 7
-            third_friday        = first_day + timedelta(days=first_friday_offset + 14)
-            tf_code             = _date_code(third_friday)
-            ix                  = np.searchsorted(datecodes, tf_code, side="right")
+            third_friday = first_day + timedelta(days=first_friday_offset + 14)
+            tf_code = _date_code(third_friday)
+            ix = np.searchsorted(datecodes, tf_code, side="right")
             if ix > 0:
-                assert tf_code >= datecodes[ix-1], f"Internal error: tf_code {tf_code} should be >= datecodes[{ix-1}]={datecodes[ix-1]}"
-                if dates[ix-1] in business_days:
-                    print(f"Adding third friday {third_friday} expiry for {dates[ix-1]} with code {EXPIRY.QUAD_WITCHING if month in {3, 6, 9, 12} else EXPIRY.MONTHLY}")
+                assert tf_code >= datecodes[ix - 1], (
+                    f"Internal error: tf_code {tf_code} should be >= datecodes[{ix - 1}]={datecodes[ix - 1]}"
+                )
+                if dates[ix - 1] in business_days:
+                    print(
+                        f"Adding third friday {third_friday} expiry for {dates[ix - 1]} with code {EXPIRY.QUAD_WITCHING if month in {3, 6, 9, 12} else EXPIRY.MONTHLY}"
+                    )
                     print(dates)
-                    assert not dates[ix-1] in expiries, f"Internal error: duplicate expiry date {dates[ix-1]}"
-                    expiries.append( dates[ix-1] )
-                    codes.append( int( EXPIRY.QUAD_WITCHING if month in {3, 6, 9, 12} else EXPIRY.MONTHLY ) )
+                    assert not dates[ix - 1] in expiries, (
+                        f"Internal error: duplicate expiry date {dates[ix - 1]}"
+                    )
+                    expiries.append(dates[ix - 1])
+                    codes.append(
+                        int(EXPIRY.QUAD_WITCHING if month in {3, 6, 9, 12} else EXPIRY.MONTHLY)
+                    )
 
-            if year==end_year+1:
+            if year == end_year + 1:
                 # we only had to handle the first month of the next year
                 break
- 
-    return pl.DataFrame({"date": pl.Series(expiries, dtype=pl.Date), "expiry_code": pl.Series(codes, dtype=pl.Int8) }).sort("date")
+
+    return pl.DataFrame(
+        {"date": pl.Series(expiries, dtype=pl.Date), "expiry_code": pl.Series(codes, dtype=pl.Int8)}
+    ).sort("date")
+
 
 @version("0.1", dependencies=[MassiveClient.get_dividends])
 def has_dividends(ticker: str, start: date, end: date) -> pl.DataFrame:
@@ -125,23 +147,25 @@ def has_dividends(ticker: str, start: date, end: date) -> pl.DataFrame:
     Retrieve dividends between two dates from /stocks/v1/dividends.
     """
     client = MassiveClient()
-    df     = client.get_dividends(ticker, start, end)
-    df     = df.rename({"ex_dividend_date": "date"})
-    df     = df.unique(subset=["date"]).sort("date").with_columns(pl.lit(True).alias("is_ex_div"))
-    df     = df.select(["date", "is_ex_div"])   
+    df = client.get_dividends(ticker, start, end)
+    df = df.rename({"ex_dividend_date": "date"})
+    df = df.unique(subset=["date"]).sort("date").with_columns(pl.lit(True).alias("is_ex_div"))
+    df = df.select(["date", "is_ex_div"])
     return df
+
 
 @version("0.1", dependencies=[MassiveClient.get_splits])
 def has_splits(ticker: str, start: date, end: date) -> pl.DataFrame:
     """Retrieve stock splits between two dates from /stocks/v1/splits."""
     client = MassiveClient()
-    df     = client.get_splits(ticker, start, end)
-    df     = df.rename({"execution_date": "date"})  
-    df     = df.unique(subset=["date"]).sort("date").with_columns(pl.lit(True).alias("is_split"))
-    df     = df.select(["date", "is_split"])
+    df = client.get_splits(ticker, start, end)
+    df = df.rename({"execution_date": "date"})
+    df = df.unique(subset=["date"]).sort("date").with_columns(pl.lit(True).alias("is_split"))
+    df = df.select(["date", "is_split"])
     return df
 
-@tickers_cache(fmt=SubDir.PANDAS_PARQUET).cache(
+
+@tickers_cache(fmt=SubDir.POLARS_PARQUET).cache(
     "0.1",
     dependencies=[
         MassiveClient.get_dividends,
@@ -155,7 +179,8 @@ def has_splits(ticker: str, start: date, end: date) -> pl.DataFrame:
 )
 def build_ticker_calendar(
     ticker: str,
-    date_range: DateRange, *,
+    date_range: DateRange,
+    *,
     verbose: Context = Context("all"),
 ) -> pl.DataFrame:
     """
@@ -166,43 +191,101 @@ def build_ticker_calendar(
 
     dfs = PrettyObject()
     start = date_range.start
-    end = date_range.end    
+    end = date_range.end
 
-    with verbose.write_t(lambda: f"Building calendar for {ticker} between {fmt_date(start)} and {fmt_date(end)}:") as tmx:
+    with verbose.write_t(
+        lambda: f"Building calendar for {ticker} between {fmt_date(start)} and {fmt_date(end)}:"
+    ) as tmx:
         verbose1 = verbose(1)
         if not date_range.exclude_half_days:
-            with verbose1.write_t(lambda: f"Retrieving half days for {ticker} between {fmt_date(start)} and {fmt_date(end)}:") as tme:
+            with verbose1.write_t(
+                lambda: (
+                    f"Retrieving half days for {ticker} between {fmt_date(start)} and {fmt_date(end)}:"
+                )
+            ) as tme:
                 half_days = date_range.get_half_days()
                 if not len(half_days) == 0:
-                    dfs.half_days = pl.DataFrame({
-                                        "date": pl.Series(half_days, dtype=pl.Date),
-                                        "is_half_day": pl.Series([True] * len(half_days), dtype=pl.Boolean),
-                                    })
+                    dfs.half_days = pl.DataFrame(
+                        {
+                            "date": pl.Series(half_days, dtype=pl.Date),
+                            "is_half_day": pl.Series([True] * len(half_days), dtype=pl.Boolean),
+                        }
+                    )
 
-        with verbose1.write_t(lambda: f"Retrieving dividends for {ticker} between {fmt_date(start)} and {fmt_date(end)}... ", end="") as tme:
+        with verbose1.write_t(
+            lambda: (
+                f"Retrieving dividends for {ticker} between {fmt_date(start)} and {fmt_date(end)}... "
+            ),
+            end="",
+        ) as tme:
             dfs.expiries = get_standard_expiries(date_range)
-            assert set(dfs.expiries.columns) == {"date", "expiry_code"}, f"Internal error retrieving expiries for {ticker} between {fmt_date(start)} and {fmt_date(end)}: expected columns {{'date', 'expiry_code'}} but got {set(dfs.expiries.columns)}."
-            verbose1.write(lambda: f"done; {ticker} has {dfs.expiries.height} expiries. This took {tme}.", head=False)
+            assert set(dfs.expiries.columns) == {"date", "expiry_code"}, (
+                f"Internal error retrieving expiries for {ticker} between {fmt_date(start)} and {fmt_date(end)}: expected columns {{'date', 'expiry_code'}} but got {set(dfs.expiries.columns)}."
+            )
+            verbose1.write(
+                lambda: f"done; {ticker} has {dfs.expiries.height} expiries. This took {tme}.",
+                head=False,
+            )
 
-        with verbose1.write_t(lambda: f"Retrieving dividends for {ticker} between {fmt_date(start)} and {fmt_date(end)}... ", end="") as tme:
+        with verbose1.write_t(
+            lambda: (
+                f"Retrieving dividends for {ticker} between {fmt_date(start)} and {fmt_date(end)}... "
+            ),
+            end="",
+        ) as tme:
             dfs.divs = has_dividends(ticker, start=start, end=end)
-            assert set(dfs.divs.columns) == {"date", "is_ex_div"}, f"Internal error retrieving dividends for {ticker} between {fmt_date(start)} and {fmt_date(end)}: expected columns {{'date', 'is_ex_div'}} but got {set(dfs.divs.columns)}."
-            verbose1.write(lambda: f"done; {ticker} has {dfs.divs.height} dividends. This took {tme}.", head=False)
+            assert set(dfs.divs.columns) == {"date", "is_ex_div"}, (
+                f"Internal error retrieving dividends for {ticker} between {fmt_date(start)} and {fmt_date(end)}: expected columns {{'date', 'is_ex_div'}} but got {set(dfs.divs.columns)}."
+            )
+            verbose1.write(
+                lambda: f"done; {ticker} has {dfs.divs.height} dividends. This took {tme}.",
+                head=False,
+            )
 
-        with verbose1.write_t(lambda: f"Retrieving splits for {ticker} between {fmt_date(start)} and {fmt_date(end)}... ", end="") as tme:
+        with verbose1.write_t(
+            lambda: (
+                f"Retrieving splits for {ticker} between {fmt_date(start)} and {fmt_date(end)}... "
+            ),
+            end="",
+        ) as tme:
             dfs.splits = has_splits(ticker, start=start, end=end)
-            assert set(dfs.splits.columns) == {"date", "is_split"}, f"Internal error retrieving splits for {ticker} between {fmt_date(start)} and {fmt_date(end)}: expected columns {{'date', 'is_split'}} but got {set(dfs.splits.columns)}."
-            verbose1.write(lambda: f"done; {ticker} has {dfs.splits.height} splits. This took {tme}.", head=False)
+            assert set(dfs.splits.columns) == {"date", "is_split"}, (
+                f"Internal error retrieving splits for {ticker} between {fmt_date(start)} and {fmt_date(end)}: expected columns {{'date', 'is_split'}} but got {set(dfs.splits.columns)}."
+            )
+            verbose1.write(
+                lambda: f"done; {ticker} has {dfs.splits.height} splits. This took {tme}.",
+                head=False,
+            )
 
-        with verbose1.write_t(lambda: f"Retrieving ticker changes for {ticker} between {fmt_date(start)} and {fmt_date(end)}... ", end="") as tme:
+        with verbose1.write_t(
+            lambda: (
+                f"Retrieving ticker changes for {ticker} between {fmt_date(start)} and {fmt_date(end)}... "
+            ),
+            end="",
+        ) as tme:
             dfs.events = MassiveClient().has_ticker_changes(ticker, start=start, end=end)
-            assert set(dfs.events.columns) == {"date", "has_ticker_change"}, f"Internal error retrieving ticker changes for {ticker} between {fmt_date(start)} and {fmt_date(end)}: expected columns {{'date', 'has_ticker_change'}} but got {set(dfs.events.columns)}."
-            verbose1.write(lambda: f"done; {ticker} has {dfs.events.height} ticker changes. This took {tme}.", head=False)
+            assert set(dfs.events.columns) == {"date", "has_ticker_change"}, (
+                f"Internal error retrieving ticker changes for {ticker} between {fmt_date(start)} and {fmt_date(end)}: expected columns {{'date', 'has_ticker_change'}} but got {set(dfs.events.columns)}."
+            )
+            verbose1.write(
+                lambda: f"done; {ticker} has {dfs.events.height} ticker changes. This took {tme}.",
+                head=False,
+            )
 
-        with verbose1.write_t(lambda: f"Retrieving earnings {ticker} between {fmt_date(start)} and {fmt_date(end)}... ", end="") as tme:
+        with verbose1.write_t(
+            lambda: (
+                f"Retrieving earnings {ticker} between {fmt_date(start)} and {fmt_date(end)}... "
+            ),
+            end="",
+        ) as tme:
             dfs.earnings = YFClient().has_earnings(ticker, start=start, end=end)
-            assert set(dfs.earnings.columns) == {"date", "is_earnings"}, f"Internal error retrieving earnings for {ticker} between {fmt_date(start)} and {fmt_date(end)}: expected columns {{'date', 'is_earnings'}} but got {set(dfs.earnings.columns)}."
-            verbose1.write(lambda: f"done; {ticker} has {dfs.earnings.height} earnings. This took {tme}.", head=False)
+            assert set(dfs.earnings.columns) == {"date", "is_earnings"}, (
+                f"Internal error retrieving earnings for {ticker} between {fmt_date(start)} and {fmt_date(end)}: expected columns {{'date', 'is_earnings'}} but got {set(dfs.earnings.columns)}."
+            )
+            verbose1.write(
+                lambda: f"done; {ticker} has {dfs.earnings.height} earnings. This took {tme}.",
+                head=False,
+            )
 
         del verbose1
 
@@ -213,7 +296,12 @@ def build_ticker_calendar(
 
             # Detect duplicate dates in this fdata BEFORE joining
             if fdata.select(pl.col("date").is_duplicated().any()).item():
-                dupes = fdata.filter(pl.col("date").is_duplicated()).select("date").unique().sort("date")
+                dupes = (
+                    fdata.filter(pl.col("date").is_duplicated())
+                    .select("date")
+                    .unique()
+                    .sort("date")
+                )
                 raise RuntimeError(
                     f"{fname} contains duplicate 'date' entries (showing up to 10): "
                     f"{dupes.head(10).to_dict(as_series=False)['date']}"
@@ -223,7 +311,10 @@ def build_ticker_calendar(
 
         bool_cols = ["is_ex_div", "is_split", "has_ticker_change", "is_earnings", "is_half_day"]
         columns = ["date", "expiry_code"] + bool_cols
-        assert set(columns) >= set(df.columns), ("Internal error: unknonw columns", set(df.columns) - set(columns) )
+        assert set(columns) >= set(df.columns), (
+            "Internal error: unknonw columns",
+            set(df.columns) - set(columns),
+        )
 
         for col in bool_cols:
             if col not in df.columns:
@@ -243,6 +334,10 @@ def build_ticker_calendar(
             warnings.warn(str(dupes.head()))
             raise RuntimeError("Date duplicates found!")
 
-        verbose.write(lambda: f"Built calendar for {ticker} between {fmt_date(start)} and {fmt_date(end)}. This took {tmx}.")
+        verbose.write(
+            lambda: (
+                f"Built calendar for {ticker} between {fmt_date(start)} and {fmt_date(end)}. This took {tmx}."
+            )
+        )
 
     return df.sort("date")

@@ -2,15 +2,22 @@
 Yahoo finance
 """
 
-from quantdata import env, SubDir, Context, version#NOQA
+from quantdata import env, SubDir, Context, version  # NOQA
 
 from datetime import date
 import yfinance as yf
 import polars as pl
 from cdxcore.util import fmt_date
 
-_yfinance_locations = env.locations("yfinance", fmt_raw=SubDir.PICKLE, fmt_processing=SubDir.PANDAS_PARQUET, fmt_training=SubDir.PYTREE_HDF5)
+_yfinance_locations = env.locations(
+    "yfinance",
+    fmt_raw=SubDir.PICKLE,
+    fmt_processing=SubDir.PANDAS_PARQUET,
+    fmt_training=SubDir.PYTREE_HDF5,
+)
 _cache = _yfinance_locations.raw("fetch", fmt=SubDir.PANDAS_PARQUET)
+_cache_polars = _yfinance_locations.raw("fetch", fmt=SubDir.POLARS_PARQUET)
+
 
 @version("0.1")
 class YFClient(object):
@@ -36,10 +43,11 @@ class YFClient(object):
         "is_earnings": pl.Boolean,
     }
 
-    @_cache(fmt=SubDir.PANDAS_PARQUET).cache(
+    @_cache_polars.cache(
         "0.1",
-        uid=lambda ticker, start, end : f"has_earnings/{ticker}/{fmt_date(start)}_{fmt_date(end)}",
-        exclude_args=['self']) # excluding 'self' is not necessary; should be excluded automatically
+        uid=lambda ticker, start, end: f"has_earnings/{ticker}/{fmt_date(start)}_{fmt_date(end)}",
+        exclude_args=["self"],
+    )  # excluding 'self' is not necessary; should be excluded automatically
     def has_earnings(self, ticker: str, start: date, end: date) -> pl.DataFrame:
         """Use yfinance to get earnings dates and ex-dividend dates for a ticker."""
         t = yf.Ticker(ticker)
@@ -68,5 +76,7 @@ class YFClient(object):
             )
         )
         df = df.sort("date")
-        assert set(df.columns) == set(self.SCHEMA_EARNINGS), f"Internal error retrieving earnings for {ticker} between {fmt_date(start)} and {fmt_date(end)}: expected columns {set(self.SCHEMA_EARNINGS)} but got {set(df.columns)}. Please update code. Ref: https://massive.com/docs/rest/stocks/corporate-actions/earnings"
+        assert set(df.columns) == set(self.SCHEMA_EARNINGS), (
+            f"Internal error retrieving earnings for {ticker} between {fmt_date(start)} and {fmt_date(end)}: expected columns {set(self.SCHEMA_EARNINGS)} but got {set(df.columns)}. Please update code. Ref: https://massive.com/docs/rest/stocks/corporate-actions/earnings"
+        )
         return df

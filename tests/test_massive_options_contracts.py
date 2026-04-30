@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import date
+from pathlib import Path
 
 import polars as pl
 import pytest
@@ -12,9 +13,15 @@ from quantdata.massive.options.contracts import (
     filter_contracts,
 )
 
+_test_mode = os.environ.get("QUANTDATA_TEST_MODE", "0") == "1"
+_stored_massive = Path(__file__).parent / "stored_data" / "raw" / "massive"
+_has_massive_data = _stored_massive.exists() and any(_stored_massive.iterdir())
+
 requires_key = pytest.mark.skipif(
-    "MASSIVE_TOKEN" not in os.environ,
-    reason="MASSIVE_TOKEN not set",
+    "MASSIVE_TOKEN" not in os.environ or (_test_mode and not _has_massive_data),
+    reason="MASSIVE_TOKEN not set"
+    if "MASSIVE_TOKEN" not in os.environ
+    else "no stored test data in tests/stored_data/",
 )
 
 
