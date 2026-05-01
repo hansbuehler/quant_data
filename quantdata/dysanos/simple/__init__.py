@@ -2,6 +2,7 @@
 Simple dysanos model
 """
 
-from quantdata.dysanos import training_root_dysanos, env, SubDir, version
+from quantdata.dysanos import locations_dysanos, env, SubDir, version
 
-training_root_simple = training_root_dysanos("simple", fmt=SubDir.PYTREE_HDF5)
+locations_simple = locations_dysanos("simple", fmt_training=SubDir.PYTREE_HDF5, fmt_experiments=SubDir.PYTREE_HDF5)
+

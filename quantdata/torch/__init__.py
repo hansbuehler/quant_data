@@ -8,6 +8,7 @@ import torch as torch
 import torch.nn as tnn
 from cdxcore.version import version
 from cdxcore.pretty import PrettyObject
+from cdxcore.verbose import Context
 from enum import IntEnum
 from dataclasses import dataclass
 from collections.abc import Mapping
@@ -63,13 +64,6 @@ class BaseEnvironment(object):
         else:
             raise ValueError(f"Unsupported precision {self._precision}; supported values are 16, 32, and 64.")   
 
-
-class BaseVisualizer(object):
-    """ Base visualizer class to visualize model performance during training and validation. """
-    def update( self, model : BaseModel, epoch : int ):
-        """ Update visualizer with new model and epoch number """
-        raise NotImplementedError("Visualizer must implement update method.")
-
 class BaseModel(tnn.Module):
     """ Base class for torch models """
 
@@ -84,6 +78,11 @@ class BaseModel(tnn.Module):
         """ Initialize model """
         super().__init__()
         self._env = env
+
+    @property
+    def environment(self) -> BaseEnvironment:
+        """ Get environment """
+        return self._env
 
     @property
     def debug(self) -> bool:
@@ -153,6 +152,29 @@ class BaseModel(tnn.Module):
             condition = torch.all( condition() if callable(condition) else condition )
             if not condition.item():
                 raise exception( message() if callable(message) else message )
+
+class BaseVisualizer(object):
+    """ Base visualizer class to visualize model performance during training and validation. """
+    def update( self, model : BaseModel, epoch : int ):
+        """ Update visualizer with new model and epoch number """
+        raise NotImplementedError("Visualizer must implement update method.")
+
+class BaseSampler(object):
+    """ Base sampler class to sample data for training and validation. """
+    def sample( self, epoch : int ) -> dict:
+        """ Sample data for a given epoch number. The expected output is a dictionary containing tensors for the model. The specific keys and tensor shapes depend on the model implementation. """
+        raise NotImplementedError("Sampler must implement sample method.")
+
+@dataclass(frozen=True)
+class BaseSamplerConfig:
+    """ Base class for a sampler configuration """
+
+    def instantiate_from_cache( self, *, verbose : Context = Context.quiet ) -> BaseSampler:
+        """ 
+        Creates the Sampler corresponding to this config from cache only.
+        This function will fail if not all data are availanle.
+        """
+        raise NotImplementedError("SamplerConfig must implement instantiate_from_cache method.")
 
 # General torch utilities
 # -----------------------
@@ -334,8 +356,10 @@ class MetricTacker(object):
         """ Get a serializable copy of the tracked metrics as numpy arrays """
         return { k: { 'epochs': nnp.asarray(v['epochs'], dtype=nnp.int32), 'values': nnp.asarray(v['values'], dtype=nnp.float32) } for k,v in self.metrics.items() }
 
-    def load_state_dict(self, state):
+    @staticmethod
+    def load_state_dict(state):
         """ Load tracked metrics from a serializable state """
         assert isinstance(state, dict), f"Expected tracker state to be a dict, but got {type(state)}"
-        self.metrics = { k: { 'epochs': x['epochs'].tolist(), 'values': x['values'].tolist() } for k,x in state.items() }
-        return self
+        tracker = MetricTacker()
+        tracker.metrics = { k: { 'epochs': x['epochs'].tolist(), 'values': x['values'].tolist() } for k,x in state.items() }
+        return tracker

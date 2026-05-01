@@ -18,5 +18,6 @@ class PoolConfig:
     def off():
         """ Pool configuration for no parallel processing. """
         return PoolConfig(num_workers=0, threading=True)
-    
-    
+
+
+

@@ -15,7 +15,7 @@ from cdxcore.util import fmt_date, fmt_list
 from cdxcore.bs import bs
 from cdxcore.err import verify_inp
 from cdxcore.pretty import PrettyObject
-from cdxcore.subdir import SubDir
+from cdxcore.subdir import SubDir, CacheMode
 from cdxcore.uniquehash import named_unique_filename48_8
 
 import datetime as dt
@@ -526,7 +526,7 @@ def _uid(ticker, d, raw_day_filter, expiry_filter) -> str:
 def enrich_day( ticker : str, d : dt.date, data : pd.DataFrame|None = None, *, 
                 raw_day_filter : RawDayFilter = RawDayFilter(), 
                 expiry_filter : ExpiryFilter = ExpiryFilter(), 
-                refresh_cache : bool = False,
+                override_cache_mode : CacheMode|None = None,
                 raise_if_bad : bool = True,
                 verbose : Context = Context.quiet ):
     """
@@ -549,8 +549,9 @@ def enrich_day( ticker : str, d : dt.date, data : pd.DataFrame|None = None, *,
         Configuration for data collection
     expiry_filter : :class:`ExpiryFilter`
         Filter for expiries to be able to compute implied forwards
-    refresh_cache : bool, default ``False``
-        If ``True``, forces refreshing the cache for the raw day data.
+    override_cache_mode : :class:`CacheMode` | None, default ``None``
+        If not ``None``, overrides the cache mode for the raw day data. Set to ``"update"`` to
+        refresh the underlying raw cache.
     raise_if_bad : bool, default ``True``
         If ``True``, raises an error if the date is in the BAD data sets.
         If ``False``, returns an empty data set instead. (In no other condition will an empty data set returned)
@@ -576,7 +577,7 @@ def enrich_day( ticker : str, d : dt.date, data : pd.DataFrame|None = None, *,
         and consider adding the date/ticker to the BAD data sets if the issue is confirmed.
     """
 
-    data         = data if data is not None else collect_raw_day(ticker, d, raw_day_filter, verbose=verbose, override_cache_mode="update" if refresh_cache else None, raise_if_bad = raise_if_bad)
+    data         = data if data is not None else collect_raw_day(ticker, d, raw_day_filter, verbose=verbose, override_cache_mode=override_cache_mode, raise_if_bad = raise_if_bad)
 
     if data.empty:
         return _create_empty_df(SCHEMA_ENRICHED_DAY)
@@ -772,7 +773,7 @@ def main(tickers : list[str],
     for it, ticker in enumerate(tickers):  
         verbose.report(1,lambda: f"\rProcessing ticker {it+1}/{len(tickers)} {ticker} from {fmt_date(date_range.start)} to {fmt_date(date_range.end)}.")
         sample_days(ticker, date_range, include_fields=None, exclude_fields=None, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter,
-                     sample_days_config=sample_days_config, pool_config=pool_config, refresh_cache=refresh, verbose=verbose(2) )
+                     sample_days_config=sample_days_config, pool_config=pool_config, override_cache_mode="update" if refresh else None, verbose=verbose(2) )
     verbose.write(f"All {len(tickers)} tickers processed.")
 
 if __name__ == "__main__":

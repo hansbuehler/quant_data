@@ -9,7 +9,7 @@ from quantdata.widb.day import enrich_day, SCHEMA_ENRICHED_DAY, RawDayFilter, Ex
 
 from cdxcore.version import version
 from cdxcore.verbose import Context
-from cdxcore.subdir import CacheMustExistError
+from cdxcore.subdir import CacheMode, CacheMustExistError
 from cdxcore.util import fmt_date, fmt_list, fmt_big_byte_number, fmt_dict
 from cdxcore.err import verify_inp, verify
 from cdxcore.pretty import PrettyObject
@@ -90,7 +90,7 @@ class SampleDaysConfig:
 
         assert not df.isna().any().any(), f"Internal error {ticker} {d}: filter resulted in NaN values. Please contact the authors with an example."
         return df
-
+    
 @version("0.1",dependencies=[enrich_day, SampleDaysConfig] )
 def sample_days(  ticker : str,
                   date_range : DateRange, *,
@@ -100,7 +100,7 @@ def sample_days(  ticker : str,
                   expiry_filter : ExpiryFilter, 
                   sample_days_config : SampleDaysConfig,
                   pool_config : PoolConfig = PoolConfig.off(),
-                  refresh_cache : bool = False, 
+                  override_cache_mode : CacheMode|None = None,
                   verbose : Context = Context.all ):
     """
     Collect enriched data for a list of tickers and a date range.
@@ -124,9 +124,8 @@ def sample_days(  ticker : str,
         Configuration for filtering and sampling the enriched day data.
     pool_config : :class:`PoolConfig`, default ``PoolConfig.off()``
         Configuration for parallel processing. By default, no parallel processing is used.
-    refresh_cache : bool, default ``False``
-        If ``True``, forces refreshing the cache for the enriched day data.
-        This regenerates all "processing" data, not raw input data.
+    override_cache_mode : :class:`cdxcore.subdir.CacheMode` | None, default ``None``
+        If not ``None``, overrides the cache mode for the enriched day data. Set to ``"update"`` to refresh the underlying raw cache.
     verbose : :class:`cdxcore.verbose.Context`, default ``Context.all``
         Verbose context for logging.
 
@@ -164,7 +163,7 @@ def sample_days(  ticker : str,
         return sorted(flds)
 
     fields = get_fields()
-
+    
     def generate():
 
         def filter_fields( d, df ):
@@ -178,8 +177,11 @@ def sample_days(  ticker : str,
         existing = {}
         missing = []
 
-        if refresh_cache:
-            verbose.write("Regenerating all files.")
+        if not override_cache_mode is None and not override_cache_mode.read:
+            if override_cache_mode.write:
+                verbose.write("Regenerating all files.")
+            else:
+                verbose.write("Regenerting all files without writing them to cache.")
             missing = dates
         else:
             with verbose.write_t(lambda: f"Checking which enriched daily data files for ticker {ticker} and the {len(dates)} business days from {fmt_date(dates[0])} to {fmt_date(dates[-1])} {'excluding' if date_range.exclude_half_days else 'including'} half days exist in the cache... ", end='') as tme:
@@ -187,7 +189,6 @@ def sample_days(  ticker : str,
                     try:
                         df = enrich_day( ticker, d, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, verbose=Context.quiet, 
                                          raise_if_bad=False, 
-                                         refresh_cache=False, 
                                          override_cache_mode="cacheonly" )
                     except CacheMustExistError:
                         return None
@@ -207,22 +208,24 @@ def sample_days(  ticker : str,
                     verbose.write(lambda: f"all daily data files exist and have been loaded. This took {tme}.", head=False)
 
         if len(missing) > 0:
+            if not override_cache_mode is None and not override_cache_mode.write:
+                raise RuntimeError(f"{ticker}: {len(missing)} business days are missing from cache (cache generation is off).")
+
             # generate missing data with parallel processing
             pool = JCPool(num_workers=pool_config.num_workers, threading=False)
 
-            def process( ticker, d, raw_day_filter, expiry_filter, refresh_cache ):
+            def process( ticker, d, raw_day_filter, expiry_filter, override_cache_mode ):
                 r = enrich_day( ticker, d, raw_day_filter=raw_day_filter, 
                                        expiry_filter=expiry_filter, 
-                                       refresh_cache=refresh_cache, 
                                        raise_if_bad=False, 
                                        verbose=Context.quiet, 
-                                       override_cache_mode="update", 
+                                       override_cache_mode=override_cache_mode, 
                                        cache_generate_only=True )
                 return d, r
 
             tme = verbose.timer()
             cnt = 0
-            for d, status in pool.parallel( pool.delayed(process)( ticker, d, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, refresh_cache=refresh_cache ) for d in missing ):
+            for d, status in pool.parallel( pool.delayed(process)( ticker, d, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, override_cache_mode=override_cache_mode ) for d in missing ):
                 cnt += 1
                 if tme.interval_test(1.):
                     verbose.write(lambda: f"\r{ticker}: generating enriched data for {cnt}/{len(missing)} missing business days using {pool_config.num_workers} processes, now {d}. So far this took {tme}... ", end='')
@@ -234,7 +237,7 @@ def sample_days(  ticker : str,
                 # read them back
                 def process(d):
                     try:
-                        df = enrich_day( ticker, d, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, override_cache_mode="cacheonly", refresh_cache=False, raise_if_bad=False, verbose=Context.quiet )
+                        df = enrich_day( ticker, d, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, override_cache_mode="cacheonly", raise_if_bad=False, verbose=Context.quiet )
                     except CacheMustExistError as e:
                         raise RuntimeError(f"Internal error: {ticker} {d}: expected enriched data to be available in the cache after generation, but it was not found. Please contact the authors with an example. Original error message: {str(e)}")
                     assert not df is None, f"Internal error: {ticker} {d}: enrich_day returned None after generation. Please contact the authors with an example."

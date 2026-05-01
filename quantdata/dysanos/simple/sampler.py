@@ -5,20 +5,22 @@ Simple data for SANOS
 from __future__ import annotations
 
 from quantdata import env#NOQA
-from quantdata.dysanos.simple import training_root_simple
+from quantdata.dysanos.simple import locations_simple
 from quantdata.widb.sampler import sample_days, SampleDaysConfig, RawDayFilter, ExpiryFilter, SCHEMA_ENRICHED_DAY, table_of_sample_days#NOQA
 from quantdata.biz_calendar import DateRange
 from quantdata.pool import PoolConfig
-from quantdata.torch.block_sampler import BlockSampler
+from quantdata.torch import BaseSamplerConfig, BaseSampler
 
 from cdxcore.version import version
 from cdxcore.verbose import Context
 from cdxcore.util import fmt_date, fmt_dict, fmt_list
 from cdxcore.err import verify_inp
 from cdxcore.pretty import PrettyObject
-from cdxcore.subdir import SubDir
+from cdxcore.subdir import SubDir, CacheMode
 from cdxcore.uniquehash import named_unique_filename48_8, unique_hash16
 from cdxcore.jcpool import JCPool
+
+training_root_simple = locations_simple.training
 
 import datetime as dt
 import numpy as np
@@ -29,6 +31,7 @@ from collections.abc import Sequence
 @version("0.1")
 @dataclass(frozen=True)
 class SamplingConfig:
+    """ Chose the sampling parameters """
     num_samples : int|None = None    #: Number of samples used or ``None`` for all available samples.
     num_steps: int = 25              #: Steps per sample, including terminal 'y'
     num_slide: int = 5               #: Number of steps to slide for the next sample. If num_slide < num_steps, samples will overlap.
@@ -46,7 +49,7 @@ class SamplingConfig:
 
 @version("0.1", dependencies=[RawDayFilter,ExpiryFilter,SampleDaysConfig,SamplingConfig])
 @dataclass(frozen=True)
-class SimpleConfig:
+class SimpleConfig(BaseSamplerConfig):
     """ BlockSampler configuration """
     tickers : list[str] = field(default_factory=lambda: ["SPY"])  #: Tickers to include in the sampler. Can be a single ticker as a string, or a list of tickers.
     date_range : DateRange = field(default_factory=lambda: DateRange(start=dt.date(2025, 1, 1), end=dt.date(2025, 2, 1), exclude_half_days=True))  # which dates
@@ -73,6 +76,13 @@ class SimpleConfig:
     def unique_id(self) -> str:
         """ Unique ID for the configuration, including tickers. """
         return unique_hash16(self.cache_dir_uid())
+
+    def instantiate_from_cache( self, *, verbose : Context = Context.quiet ) -> BaseSampler:
+        """ 
+        Creates the Sampler corresponding to this config from cache only.
+        This function will fail if not all data are available.
+        """
+        return SimpleSampler( simple_config=self, pool_config=PoolConfig.off(), override_cache_mode="cacheonly", verbose=verbose )
 
 SIMPLE_INCLUDE_FIELDS = {
     'spot',
@@ -147,7 +157,7 @@ SIMPLE_FEATURES = {
 def sample_simple_days(  ticker : str,
                          simple_config : SimpleConfig, *,
                          pool_config : PoolConfig = PoolConfig.off(),
-                         refresh_cache : bool = False, 
+                         override_cache_mode : CacheMode|None = None,
                          verbose : Context = Context.all ) -> dict:
     """
     Cached version of sample_days
@@ -161,7 +171,7 @@ def sample_simple_days(  ticker : str,
                   expiry_filter = simple_config.expiry_filter,
                   sample_days_config = simple_config.sample_days_config,
                   pool_config = pool_config,
-                  refresh_cache = refresh_cache,
+                  override_cache_mode = override_cache_mode,
                   verbose = verbose )
     
     expected = set(SIMPLE_INCLUDE_FIELDS) | {"dates", "ticker"}
@@ -237,13 +247,14 @@ class SampleID:
         return f"{self.ticker} {self.index}:{fmt_date(self.date)} "
     
 @version("0.1", dependencies=[SimpleConfig, sample_simple_days, SampleID])
-class SimpleSampler(BlockSampler):
+class SimpleSampler(BaseSampler):
 
     FEATURES = SIMPLE_FEATURES
+    Config = SamplingConfig
 
-    def __init__( self, simple_config: SimpleConfig, *, 
-                        pool_config : PoolConfig = PoolConfig.off(), 
-                        refresh_cache=False, 
+    def __init__( self, simple_config : SimpleConfig, *, 
+                        pool_config   : PoolConfig = PoolConfig.off(), 
+                        cache_mode    : CacheMode|None = None,
                         verbose: Context = Context.quiet ) -> None:
         """
         Create full sampler.
@@ -252,12 +263,11 @@ class SimpleSampler(BlockSampler):
         self.tickers = sorted( set(simple_config.tickers) ) #: sorted list of tickers
         self.data : dict[str, dict] = None #: data per ticker
         self.max_options : int = 0 #: max number of options across the tickers and dates, used for padding
-        self.simple_config : SimpleConfig = simple_config #: :class:`SimpleConfig` configuration for the sampler.
+        self.config : SimpleConfig = simple_config #: :class:`SimpleConfig` configuration for the sampler.
         self.trn_samples_ids : list[SampleID] = None #: List of :class:`SampleID`s for the training samples, sorted by date and ticker.
         self.vld_samples_ids : list[SampleID] = None #: List of :class:`SampleID`s for the validation samples, sorted by date and ticker.   
         self._shapes : dict[str, tuple] = None
-
-        self.stats : PrettyObject = None #: training set based stats.
+        self._stats : PrettyObject = None #: training set based stats.
 
         tme_all = verbose.timer()
 
@@ -268,7 +278,7 @@ class SimpleSampler(BlockSampler):
             if pool_config.threading:
                 pool = JCPool( pool_config.num_workers, threading=True )
                 def process(ticker):
-                    return sample_simple_days( ticker=ticker, simple_config=simple_config, pool_config=pool_config, refresh_cache=refresh_cache, override_cache_mode="update" if refresh_cache else None, verbose=Context.quiet )
+                    return sample_simple_days( ticker=ticker, simple_config=simple_config, pool_config=pool_config, override_cache_mode=cache_mode, verbose=Context.quiet )
                 with verbose.write_t(lambda : f"Generating samples for {len(self.tickers)} tickers {fmt_list(self.tickers)} with from {simple_config.date_range.start} to {simple_config.date_range.end}... ", end='') as tme:
                     for ticker, tdata in pool.parallel( {ticker: pool.delayed(process)(ticker) for ticker in self.tickers} ):
                         results[ticker] = PrettyObject(tdata)
@@ -276,7 +286,7 @@ class SimpleSampler(BlockSampler):
             else:
                 with verbose.write_t(lambda : f"Generating samples for {len(self.tickers)} tickers {fmt_list(self.tickers)} with from {simple_config.date_range.start} to {simple_config.date_range.end}... ", end='') as tme:
                     for ticker in self.tickers:
-                        tdata = sample_simple_days( ticker=ticker, simple_config=simple_config, pool_config=pool_config, refresh_cache=refresh_cache, override_cache_mode="update" if refresh_cache else None, verbose=verbose(1) )
+                        tdata = sample_simple_days( ticker=ticker, simple_config=simple_config, pool_config=pool_config, override_cache_mode=cache_mode, verbose=verbose(1) )
                         results[ticker] = PrettyObject(tdata)
                     verbose.write(lambda : f"done; this took {tme}.", head=False )
             return results
@@ -380,9 +390,9 @@ class SimpleSampler(BlockSampler):
 
             for sid in self.trn_samples_ids:
                 tdata    = self.data[sid.ticker]
-                slc      = slice( sid.index, sid.index+self.simple_config.sampling_config.num_steps )
+                slc      = slice( sid.index, sid.index+self.config.sampling_config.num_steps )
                 num_tdates = len(tdata.dates)
-                assert slc.stop <= num_tdates, f"Internal error: {sid.ticker} sample index {slc.start} + num_steps {self.simple_config.sampling_config.num_steps} exceeds number of dates {num_tdates} for ticker {sid.ticker} with sample length {self.simple_config.sampling_config.num_steps}"
+                assert slc.stop <= num_tdates, f"Internal error: {sid.ticker} sample index {slc.start} + num_steps {self.config.sampling_config.num_steps} exceeds number of dates {num_tdates} for ticker {sid.ticker} with sample length {self.config.sampling_config.num_steps}"
                 is_valid = tdata.is_valid[slc,:]
                 pure_call_ask  = tdata.ask_pure_price[slc,:][is_valid]
                 pure_call_bid  = tdata.bid_pure_price[slc,:][is_valid]
@@ -394,7 +404,7 @@ class SimpleSampler(BlockSampler):
             for stat in stats.values():
                 stat /= float(cnt)
             return stats
-        self.stats = trn_stats()
+        self._stats = trn_stats()
 
         verbose.write(lambda : f"Created {len(self.trn_samples_ids)} training samples and {len(self.vld_samples_ids)} validation samples based on the date split at {first_vld_date}. "+\
                                f"That implies {len(self.vld_samples_ids)/(len(self.trn_samples_ids)+len(self.vld_samples_ids)):.0%} of all samples are validation samples.")
@@ -403,27 +413,31 @@ class SimpleSampler(BlockSampler):
     @property
     def unique_data_id(self) -> str:
         """ Unique ID for the data, based on the configuration. """
-        return self.simple_config.unique_id()
+        return self.config.unique_id()
     
     @property
     def unique_data_dir_uid(self) -> str:
         """ Unique directory UID for the data, based on the configuration. """
-        return self.simple_config.cache_dir_uid()
+        return self.config.cache_dir_uid()
 
     @property
     def num_steps(self):
-        return self.simple_config.sampling_config.num_steps
+        return self.config.sampling_config.num_steps
     
     @property
     def num_trn_samples(self) -> int:
         """ Get the number of training samples """
-        return len(self.trn_samples_ids)    
+        return len(self.trn_samples_ids)
     
     @property
     def num_vld_samples(self) -> int:
         """ Get the number of validation samples """
         return len(self.vld_samples_ids)
 
+    def stats(self) -> PrettyObject:
+        """ Training stats for data scaling """
+        return self._stats
+    
     def shapes( self, batch_size : int|None = None ) -> dict:
         """ Get the shapes of the tensors returned by __call__, based on the batch size and the internal shape information. The shapes will be of the form (batch_size, num_steps | 1, num_options | 1) """
         if batch_size is None:

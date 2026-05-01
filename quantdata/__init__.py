@@ -57,12 +57,15 @@ class Locations:
     raw: SubDir #: for raw data downloads, e.g. from WRDS (the actual WRDS locations defined in :attr:`quantdata.wrds`)
     processing: SubDir #: for intermediate data products, e.g. cleaned and merged datasets
     training: SubDir #: for final training input data
+    experiments : SubDir #: for experiment storage
     temp: SubDir #: for temporary caching of data, e.g. from API calls. This is typically a local directory with fast read/write access, and is used for caching API calls for speed. This directory is not meant for long-term storage of data, and may be cleared at any time. Use the other locations for long-term storage of data.
+
 
     def __post_init__(self):
         verify_inp( isinstance( self.raw, SubDir), f"Expected 'raw' to be of type SubDir, found {type(self.raw)}")
         verify_inp( isinstance( self.processing, SubDir), f"Expected 'processing' to be of type SubDir, found {type(self.processing)}")
         verify_inp( isinstance( self.training, SubDir), f"Expected 'training' to be of type SubDir, found {type(self.training)}")
+        verify_inp( isinstance( self.experiments, SubDir), f"Expected 'experiments' to be of type SubDir, found {type(self.experiments)}")
         verify_inp( isinstance( self.temp, SubDir), f"Expected 'temp' to be of type SubDir, found {type(self.temp)}")
 
     def __call__(self, name: str, *, 
@@ -70,6 +73,7 @@ class Locations:
                  fmt_raw : SubDir.Format | None = None,
                  fmt_processing : SubDir.Format | None = None,
                  fmt_training : SubDir.Format | None = None,
+                 fmt_experiments : SubDir.Format | None = None,
                  fmt_temp : SubDir.Format | None = None) -> Locations:
         """
         Create locations and :attr:`cdxcore.subdir.Format` for a specific data source.
@@ -94,6 +98,8 @@ class Locations:
             A :attr:`cdxcore.subdir.Format` format for the processing data. If ``None``, use ``default_fmt``.
         fmt_training : SubDir.Format | None, default ``None``
             A :attr:`cdxcore.subdir.Format` format for the training data. If ``None``, use ``default_fmt``.
+        fmt_experiments : SubDir.Format | None, default ``None``
+            A :attr:`cdxcore.subdir.Format` format for the experiments data. If ``None``, use ``default_fmt``.
         fmt_temp : SubDir.Format | None, default ``None``
             A :attr:`cdxcore.subdir.Format` format for the temporary data. If  ``None``, use ``default_fmt``.
         """
@@ -101,6 +107,7 @@ class Locations:
             raw = self.raw(name, fmt=default_fmt if fmt_raw is None else fmt_raw),
             processing = self.processing(name, fmt=default_fmt if fmt_processing is None else fmt_processing),
             training = self.training(name, fmt=default_fmt if fmt_training is None else fmt_training),
+            experiments = self.experiments(name, fmt=default_fmt if fmt_experiments is None else fmt_experiments),
             temp = self.temp(name, fmt=default_fmt if fmt_temp is None else fmt_temp)
         )
 
@@ -115,6 +122,7 @@ class Environment(object):
       * :attr:`locations.raw`: for raw data downloads, e.g. from WRDS (the actual WRDS locations defined in :attr:`quantdata.wrds`)
       * :attr:`locations.processing`: for intermediate data products, e.g. cleaned and merged datasets
       * :attr:`locations.training`: for final training input data
+      * :attr:`locations.experiments`: for experiment management
       * :attr:`locations.temp`: for temporary caching of data, e.g. from API calls. This is typically a local directory with fast read/write access, and is used for caching API calls for speed. This directory is not meant for long-term storage of data, and may be cleared at any time. Use the other locations for long-term storage of data.
    
     * :attr:`quantdata.Environment.test_mode` is a boolean which indicates whether the code is running in test mode.
@@ -153,6 +161,7 @@ class Environment(object):
                 raw = root("raw", create_directory=False),
                 processing= root("processing", create_directory=False),
                 training = root("training", create_directory=False),
+                experiments = root("experiments", create_directory=False),
                 temp = root("!/quantdata", create_directory=False)
             )
         self._test_data_locations = generate_test_location() #: Locations for test data. Used for developers only.
@@ -161,11 +170,12 @@ class Environment(object):
         # test or not
 
         if not self.test_mode:
-            raw        = os.environ.get("QUANTDATA_RAW_DATA", None)
-            processing = os.environ.get("QUANTDATA_PROCESSING_DATA", None)
-            training   = os.environ.get("QUANTDATA_TRAINING_DATA", None)
-            def_root   = os.environ.get("QUANTDATA_ROOT", None)
-            temp       = os.environ.get("QUANTDATA_TEMP_DATA", "!/quantdata")
+            raw         = os.environ.get("QUANTDATA_RAW_DATA", None)
+            processing  = os.environ.get("QUANTDATA_PROCESSING_DATA", None)
+            training    = os.environ.get("QUANTDATA_TRAINING_DATA", "~/quantdata/training")
+            experiments = os.environ.get("QUANTDATA_EXPERIMENTS", "~/quantdata/experiments")
+            def_root    = os.environ.get("QUANTDATA_ROOT", None)
+            temp        = os.environ.get("QUANTDATA_TEMP_DATA", "!/quantdata")
 
             if not cache_mode is None:
                 try:
@@ -177,27 +187,30 @@ class Environment(object):
             raw        = SubDir(raw) if not raw is None else None
             processing = SubDir(processing) if not processing is None else None
             training   = SubDir(training) if not training is None else None
+            experiments = SubDir(experiments) if not experiments is None else None
             temp       = SubDir(temp) if not temp is None else None
 
             if raw is None or processing is None or training is None:
                 if def_root is None:
                     raise RuntimeError(
-                                    "Could not identify all working directories: use the following environment variables: "+\
+                                    f"Could not identify all working directories: you can use QUANTDATA_ROOT to set an overall root directory; the following were found/missing: "+\
                                     f"QUANTDATA_RAW_DATA: '{'(missing)' if raw is None else raw }'; "+\
                                     f"QUANTDATA_PROCESSING_DATA: '{'(missing)' if processing is None else processing }'; "+\
                                     f"QUANTDATA_TRAINING_DATA: '{'(missing)' if training is None else training }'; "+\
-                                    f"QUANTDATA_TEMP_DATA: '{'(missing)' if temp is None else temp }'. "+
-                                    "Alternatively you may set a generic QUANTDATA_ROOT directory")
+                                    f"QUANTDATA_EXPERIMENTS: '{'(missing)' if experiments is None else experiments }'; "+\
+                                    f"QUANTDATA_TEMP_DATA: '{'(missing)' if temp is None else temp }'. ")
                                     
                 def_root = SubDir(def_root)
                 raw = def_root("raw") if raw is None else raw
                 processing = def_root("processing") if processing is None else processing
                 training = def_root("training") if training is None else training
+                experiments = def_root("experiments") if experiments is None else experiments
                 temp = def_root("temp") if temp is None else temp
 
             raw = SubDir(raw, cache_controller=cc)
             processing = SubDir(processing, cache_controller=cc)
             training = SubDir(training, cache_controller=cc)
+            experiments = SubDir(experiments, cache_controller=cc)
             temp = SubDir(temp, cache_controller=cc)
 
         else:
@@ -210,6 +223,7 @@ class Environment(object):
             raw        = self._test_data_locations.raw(cache_controller=test_cc)
             training   = self._test_data_locations.training(cache_controller=test_cc)
             processing = self._test_data_locations.processing(cache_controller=test_cc)
+            experiments = self._test_data_locations.experiments(cache_controller=test_cc)
             # temp is different: will create a directory which self-deletes upon deletion of the object.
             temp       = SubDir("?/quantdata_test_temp", cache_controller=test_cc, create_directory=True) # this can always read/write. 
 
@@ -219,11 +233,14 @@ class Environment(object):
                 raise FileNotFoundError(f"Could not find stored training data for testing at: {training.path}")
             if not processing.path_exists():
                 raise FileNotFoundError(f"Could not find stored processing data for testing at: {processing.path}")
+            if not experiments.path_exists():
+                raise FileNotFoundError(f"Could not find stored experiments data for testing at: {experiments.path}")
             
         self.locations = Locations(
             raw = raw,
             processing = processing,
             training = training,
+            experiments = experiments,
             temp = temp
         )
 

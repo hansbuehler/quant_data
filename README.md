@@ -15,12 +15,12 @@ Clone the directory ``quant_data``. Change into that directory.
 ### Create a Python 3.12 environment
 
 This project targets Python 3.12. The repository includes `.python-version` and the package metadata enforces `>=3.12,<3.13`. 
-*TODO: make it work an test uner 3.13*
+*TODO: make it work an test under 3.13*
 
 #### Linux/venv
 
 You will need python 3.12. Future versions will support 3.13 or higher.
-Under Linux, if your defaul Python is not 3.12, you can install a different version with
+Under Linux, if your default Python is not 3.12, you can install a different version with
 
 ```bash
 sudo apt update
@@ -28,23 +28,21 @@ sudo apt install python3.12 python3.12-venv
 ``` 
 
 Then create a python environment:
-
-If you need to specify a particular python version
 ```bash
 python3.12 -m venv .vqdata 
 ```
-Otherwise
+or
 ```bash
 python -m venv .vqdata   
 ```
  
 Then activate and install dependencies:
  ```bash
-source .vqdata\bin\activate   # activate it
+source .vqdata/bin/activate   # activate it
 python --version
 
-python -m pip install --upgrade pip pip-review 
-python -m pip install -e ".[dev]"              
+python -m pip install -U pip pip-review 
+python -m pip install -U -e ".[dev]"              
 ````
 Use `.[dev]` for the full local development toolchain. It includes testing and documentation tools.
 
@@ -72,8 +70,8 @@ conda create --prefix .\.vqdata python=3.12
 conda activate .\.vqdata
 python --version
 
-python -m pip install --upgrade pip pip-review  
-python -m pip install -e .[dev]                
+python -m pip install -U pip pip-review  
+python -m pip install -U -e .[dev]                
 ```
 Use `.[dev]` for the full local development toolchain. It includes testing and documentation tools.
 
@@ -107,9 +105,11 @@ The project is organized around proactive caching of:
 
 #### Caching
 
-Caching in is version-aware. You will note that a number of functions have a ``@version`` or ``@cache`` decorator. A functions version often also depends on other
+Caching in is version-aware. You will note that a number of functions have a ``@version`` or ``@cache`` decorator. The version of a function often also depends on other
 function versions. A change to the version will trigger a refesh of any cache affected by the respected function - so be careful, as this can be slow; also do not change the version of a function or class
 without good reason as it may trigger refreshs for others once they check out.
+Chaning a core function - e.g. massive's client version - will trigger a
+redownload and recalculation of *everything* you have on disk. (If such hard refresh is ever required, either just delete all data or set the environment variable ``QUANTDATA_CACHE_MODE`` to ``"update"``, see also below.)
 
 Please also check the documentation for [``@version``](https://quantitative-research.de/docs/cdxcore/api/generated/cdxcore.version.html) and [``@cache``](https://quantitative-research.de/docs/cdxcore/api/generated/cdxcore.subdir.html#cdxcore.subdir.SubDir.cache) with the package ``cdxcore``.
 

@@ -3,19 +3,22 @@ Dysanos trainer
 """
 
 from __future__ import annotations
+from copyreg import pickle
 
-from quantdata.torch import get, pop, compute_grad_norm, detect_grad_issues, MetricTacker, BaseEnvironment, BaseModel
-from quantdata.torch.block_sampler import BlockSampler
-from dataclasses import dataclass
+from quantdata.dysanos.simple import locations_simple
+from quantdata.torch import get, pop, compute_grad_norm, detect_grad_issues, MetricTacker, BaseEnvironment, BaseModel, BaseSampler
+from dataclasses import dataclass, asdict
 from cdxcore.err import verify_inp, verify
-from cdxcore.util import TrackTime, fmt_seconds, fmt_list
+from cdxcore.util import TrackTime, fmt_filename, fmt_seconds, fmt_list
 from cdxcore.verbose import Context
 from cdxcore.subdir import SubDir, version
 from cdxcore.uniquehash import named_unique_filename48_8, unique_hash8
+from cdxcore.pretty import PrettyObject
 import torch as torch
 import numpy as nnp
 import copy as copy
 import time as time
+import pickle as pickle
 
 @version("0.1")
 @dataclass(frozen=True)
@@ -40,6 +43,8 @@ class TrainConfig:
     seed            : int = 123123  #: Random seed for reproducibility. This controls the random sampling of training batches, but does not affect the model initialization, which should be controlled by the model itself.
     chkpnt_epochs   : int = 10      #: After how many epochs to write a checkpoint
     chkpnt_minutes  : float = 1.    #: After how many minutes to write a checkpoint
+    experiment_group: str = ""      #: Subdirectory for check points
+    experiment_root : str|SubDir|None = None #: The root training directory, overwriting the system default ``locations_simple.experiments``.
 
     def __post_init__(self):
         verify_inp(self.trn_batch_size > 0, lambda : f"'trn_batch_size' must be a positive integer; found {self.trn_batch_size}")
@@ -65,30 +70,45 @@ class TrainConfig:
 
     def unique_id(self) -> str:
         return unique_hash8(self)
-    
+
+    def get_experiment_directory( self, unique_data_id : str, model_label : str|None = None, *, ext : str|None = None, fmt : SubDir.Format|str|None = None ) -> SubDir:
+        """
+        Get the experiment directory for this training configuration, model label and unique data id.
+        
+        * The unique data id should uniquely identify the data that is being trained on, and can be obtained from the sampler or its config.
+        * The model label should be a human-readable label for the model, which can be generated from the model class name and the training configuration.
+          If omitted, this will return the root of the experiment group.
+        * The ``fmt`` and ``ext`` arguments are passed to :class:`cdxcore.subdir.SubDir`.
+        """
+        experiment = SubDir(locations_simple.experiments if self.experiment_root is None else self.experiment_root,
+                                  ext=ext, 
+                                  fmt=fmt) 
+        experiment = experiment(unique_data_id)
+        experiment = experiment(self.experiment_group) if self.experiment_group != "" else experiment
+        experiment = experiment(named_unique_filename48_8(model_label)) if not model_label is None else experiment
+        return experiment
+
 @version("0.1", dependencies=[TrainConfig])
 class Trainer(object):
+    """ Trainer for dysanos simple """
 
     def __init__(self, 
                  label   : str|None,
                  model   : BaseModel,
-                 sampler : BlockSampler,
+                 sampler : BaseSampler,
                  config  : TrainConfig,
-                 path    : SubDir|None = None,
                  restart : bool = False,
                  verbose : Context = Context.all ):
         """
         Main training loop
         """
-        import numpy as nnp
-
         self._qual_label = f"{model.qualified_label(label)} {sampler.unique_data_id}"
         self._label      = label if ( not label is None and label != "") else model.qualified_label(None)
         self._model      = model
         self._sampler    = sampler
         self._config     = config
         self._verbose    = verbose
-        self._path       = path(sampler.unique_data_id)(named_unique_filename48_8(self._label), ext="pt") if path is not None else None # data is unique, but model depends only on the label
+        self._path       = config.get_experiment_directory( sampler.unique_data_id, self._label, ext="pt", fmt=SubDir.PICKLE )
         self._rndg       = torch.Generator(device="cpu")
         self._visualizer = model.visualizer(sampler) # might be None
         self._rndg.manual_seed(config.seed)
@@ -106,7 +126,6 @@ class Trainer(object):
             verbose.write(s+'\n'+("="*len(s)))
             del s
 
-
         deleted_best = False
         if not self._path is None and restart and self._path.exists("last"):
             deleted_best = self._path.exists("best")
@@ -116,26 +135,32 @@ class Trainer(object):
 
         if not self._path is None and self._path.exists("last"):
             verbose1 = verbose(1)
-            with verbose1.write_t(f"Restoring checkpoint from '{self._path.full_file_name('last')}'... ", end='') as tme:
-                state         = torch.load(self._path.full_file_name("last"), map_location=model.device, weights_only=False)
-                model.load_state_dict(state["model_state_dict"])
-                self._current_epoch    = int(state["epoch"])
-                self._best_epoch    = state.get("best_epoch", None) if not deleted_best else None
-                self._best_val_loss = state.get("best_val_loss", None) if not deleted_best else None
+            ffn = self._path.full_file_name('last')
+            with verbose1.write_t(f"Restoring checkpoint from '{ffn}'... ", end='') as tme:
+                state         = torch.load(ffn, map_location=model.device, weights_only=False)
+                lbl           = state.pop("label", None)
+                assert lbl is None or lbl == self._label, f"Internal error '{ffn}': checkpoint label '{lbl}' does not match model label '{self._label}' ?"
 
-                self._track_val_trn.load_state_dict(state["track_val_trn"])
-                self._track_val_vld.load_state_dict(state["track_val_vld"])
+                self._current_epoch = int(state.pop("epoch"))
+                self._best_epoch    = state.pop("best_epoch", None) if not deleted_best else None
+                self._best_val_loss = state.pop("best_val_loss", None) if not deleted_best else None
 
-                self._optimizer.load_state_dict(state["optimizer_state_dict"])
-                rndg_state = state["rndg_state_dict"]
+                self._track_val_trn = MetricTacker.load_state_dict(state.pop("track_val_trn"))
+                self._track_val_vld = MetricTacker.load_state_dict(state.pop("track_val_vld"))
+
+                self._model.load_state_dict(state.pop("model_state_dict"))
+                self._optimizer.load_state_dict(state.pop("optimizer_state_dict"))
+                rndg_state = state.pop("rndg_state_dict")
                 if not isinstance(rndg_state, torch.Tensor):
                     rndg_state = torch.as_tensor(rndg_state, dtype=torch.uint8)
                 else:
                     rndg_state = rndg_state.detach().cpu().to(dtype=torch.uint8)
                 self._rndg.set_state(rndg_state)
                 verbose1.write(f"done; this took {tme}.", head=False)
+                del state
 
         verbose.report(1,lambda : f"Model is ready. Current epoch to train is {self._current_epoch}.")
+        verbose.report(1,lambda : f"Experiment path is {self._path.path}.") 
 
     @property
     def qualified_label(self) -> str:
@@ -150,25 +175,74 @@ class Trainer(object):
     @property
     def device(self):
         return self._model.device
+    
+    def get_state(self) -> dict:
+        """ Return current state as dictionary """
+        return {
+            "label": self._label, # user-specififed label
+            "epoch": int(self._current_epoch),
+            "model_state_dict": self._model.state_dict(),
+            "optimizer_state_dict": self._optimizer.state_dict(),
+            "rndg_state_dict": self._rndg.get_state(),
+            "track_val_trn": self._track_val_trn.state_dict(),
+            "track_val_vld": self._track_val_vld.state_dict(),
+            "best_epoch": self._best_epoch,
+            "best_val_loss": self._best_val_loss,
+            "sampler_config": pickle.dumps(self._sampler.config),
+            "model_config": pickle.dumps(self._model.config),
+            "model_env": pickle.dumps(self._model.environment)
+        }
+    
+    @staticmethod   
+    def instantiate_model_and_sampler_from_cache( path: SubDir|str, device : torch.device|str|None = "cpu", *, best : bool = False, verbose : Context = Context.quiet ) -> dict:
+        """ load state dictionary """
+        try:
+            path   = SubDir(path, ext="pt")
+            ffn    = path.full_file_name("last" if not best else "best")
+            with verbose.write_t(lambda : f"Loading {'best' if best else 'last'} checkpoint from '{ffn}'... ", end='') as tme:
+                state   = torch.load(ffn, map_location=device, weights_only=False)
+                verbose.write(lambda : f"done; this took {tme}.", head=False)
+
+            # instantiate sampler and model
+            r = PrettyObject()
+            r.label          = state.pop("label")
+            assert not r.label is None, f"Internal error: checkpoint '{ffn}' is missing the 'label' field."
+            r.epoch          = int(state.pop("epoch"))
+            r.best_epoch     = state.pop("best_epoch", None)
+            r.best_val_loss  = state.pop("best_val_loss", None)
+            r.track_val_trn  = MetricTacker.load_state_dict(state.pop("track_val_trn"))
+            r.track_val_vld  = MetricTacker.load_state_dict(state.pop("track_val_vld"))
+            r.sampler_config = pickle.loads(state.pop("sampler_config"))
+            r.model_config   = pickle.loads(state.pop("model_config"))
+            r.env            = pickle.loads(state.pop("model_env"))
+            if not device is None:
+                r.env.device = device
+            r.sampler        = r.sampler_config.instantiate_from_cache(verbose=verbose(1))
+            r.model          = r.model_config.instantiate_from_cache(env=r.env, sampler=r.sampler, verbose=verbose(1))
+        except Exception as e:
+            raise type(e)(f"Failed to instantiate model and sampler from checkpoint '{ffn}': {str(e)}") from e
+        verbose.write(lambda : f"Model '{r.model.qualified_label}' instantiated from checkpoint '{ffn}' for epoch {r.epoch} with best validation loss {r.best_val_loss} at epoch {r.best_epoch} on device {r.env.device}.")
+        return r
 
     def __call__( self, epochs : int, *, total : bool = False ) -> BaseModel:
-
+        """ Run model """
         verbose = self._verbose
         model   = self._model
         tracker = self._tracker
         config  = self._config
         sampler = self._sampler
 
-        if total and self._current_epoch >= epochs:
-            verbose.write(lambda : f"Model '{self.qualified_label}' was already trained for {self._current_epoch} epochs.")
-            return model
         epochs = epochs if not total else ( epochs - self._current_epoch )
+        if self._current_epoch >= epochs:
+            verbose.write(lambda : f"Model '{self.qualified_label}' was already trained for {self._current_epoch} epochs.")
+            if self._visualizer is not None:
+                self._visualizer.update(model,epoch=self._current_epoch, trn_tracker=self._track_val_trn, vld_tracker=self._track_val_vld) 
+            return model
 
         verbose.write(lambda : f"Launching '{self.qualified_label}' training for {epochs} epochs over {self._sampler.num_trn_samples} training and {self._sampler.num_vld_samples} validation samples, using a mini bastch size of "+\
                                f"{config.trn_batch_size} for {config.batch_per_epoch} batches per epoch, and a batch size of {config.val_batch_size} for valuation. "+\
                                f"The model has {sum(p.numel() for p in model.parameters())} parameters." +\
                                (f" Resuming from epoch {self._current_epoch}." if self._current_epoch>0 else ""))
-
 
         # training
         # --------
@@ -295,17 +369,7 @@ class Trainer(object):
                   last_checkpoint_time is None or\
                   config.chkpnt_minutes*60. <= (time.time() - last_checkpoint_time)):
                 verbose1 = verbose(1)
-                def get_state():
-                    return {
-                        "epoch": int(epoch),
-                        "model_state_dict": self._model.state_dict(),
-                        "optimizer_state_dict": self._optimizer.state_dict(),
-                        "rndg_state_dict": self._rndg.get_state(),
-                        "track_val_trn": self._track_val_trn.state_dict(),
-                        "track_val_vld": self._track_val_vld.state_dict(),
-                        "best_epoch": self._best_epoch,
-                        "best_val_loss": self._best_val_loss
-                    }
+                state    = None
                 if not vld_val_loss is None and (self._best_val_loss is None or vld_val_loss < self._best_val_loss):
                     ffn = self._path.full_file_name("best")
                     str_prev = f" vs. {self._best_val_loss:.4g} at epoch {self._best_epoch}" if self._best_val_loss is not None else ""
@@ -313,13 +377,14 @@ class Trainer(object):
                         self._best_epoch = epoch
                         self._best_val_loss = vld_val_loss
                         self._path.create_directory()
-                        torch.save(get_state(), ffn)
+                        state = self.get_state()
+                        torch.save(state, ffn)
                         verbose1.write(f"done; this took {tme}.", head=False)
 
                 ffn = self._path.full_file_name("last")
                 with verbose1.write_t(f"Saving checkpoint to {ffn}... ", end='') as tme:
                     self._path.create_directory()
-                    torch.save(get_state(), ffn)
+                    torch.save(self.get_state() if state is None else state, ffn)
                     verbose1.write(f"done; this took {tme}.", head=False)
 
                 last_checkpoint_time = time.time()

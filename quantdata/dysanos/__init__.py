@@ -4,4 +4,4 @@ Dysanos
 
 from quantdata import env, SubDir, version
 
-training_root_dysanos = env.locations.training("dysanos", fmt=SubDir.PYTREE_HDF5)
+locations_dysanos = env.locations("dysanos", fmt_training=SubDir.PYTREE_HDF5, fmt_experiments=SubDir.PYTREE_HDF5)

@@ -4,16 +4,16 @@ Dysanos simple benchmark
 from __future__ import annotations
 
 from quantdata.dysanos.simple.sampler import SimpleSampler
-from quantdata.torch import BaseVisualizer, pop, BaseEnvironment, BaseModel, MetricTacker
+from quantdata.pool import PoolConfig
+from quantdata.torch import BaseVisualizer, pop, BaseEnvironment, BaseModel, MetricTacker, BaseSampler
 from quantdata.torch.ffw import FeedForward
 from quantdata.torch.bbtorch import BackboneTorch
 from quantdata.biz_calendar import DAYS_PER_YEAR
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from cdxcore.err import verify_inp
 from cdxcore.uniquehash import unique_hash8
 from cdxcore.pretty import PrettyObject 
-
-from quantdata.utils.add_cdxcore import quantile_m_o_m
+from cdxcore.verbose import Context
 
 import torch as torch
 
@@ -30,6 +30,66 @@ class VisualizerConfig:
         verify_inp( self.num_viz > 0, lambda : f"'num_viz' must be positive, but found {self.num_viz}" )
         verify_inp( self.num_tte > 0, lambda : f"'num_tte' must be positive, but found {self.num_tte}" )
 
+@dataclass(frozen=True)
+class AECConfig:
+    """ AEC Model configuration """
+    encode_what         : str = "vol"                                #: vol, sqrtVar, price
+    fit_what            : str = "price"                              #: vol, sqrtVar, price
+    num_state           : int = 32                                   #: Hidden state dimension
+    num_compress        : int = 128                                  #: Internal state compression dimension for deep set
+    encoder_set_config  : FeedForward.Config = FeedForward.Config()  #: Configuration for the encoder
+    encoder_fix_config  : FeedForward.Config = FeedForward.Config()  #: Configuration for the encoder
+    decoder_config      : FeedForward.Config = FeedForward.Config()  #: Configuration for the encoder
+    vizualizer_config   : VisualizerConfig|None = VisualizerConfig() #: Configuration for the visualizer. Set to ``None`` for no visualizer.
+
+    weight_by_spread    : bool = True    # whether to weight the loss by the bid-ask spread, which puts more weight on liquid options and is a common practice in the literature; if False, all options are weighted equally
+    min_pure_spread     : float = 1E-5   # floor to sprear for relative error
+    mid_fit_weight      : float = 1E-3   # weight for fitting the mid price in the loss function vs exceeding bid/ask
+    vol_floor           : float = 0.01   # floor for predicted volatility when using 'vol' or 'sqrtVar' 
+    fit_average         : bool = False   # fit average per sample, rather than average accross all samples
+
+    def __post_init__(self):
+        verify_inp( self.num_state > 0, lambda : f"'num_state' must be positive, but found {self.num_state}" )
+        verify_inp( self.num_compress > 0, lambda : f"'num_compress' must be positive, but found {self.num_compress}" )
+        verify_inp( self.min_pure_spread > 0., lambda : f"'min_pure_spread' must be positive, but found {self.min_pure_spread:.4g}" )
+        verify_inp( 0. <= self.mid_fit_weight <= 1., lambda : f"'mid_fit_weight' must be in [0,1], but found {self.mid_fit_weight:.4g}" )
+        verify_inp( self.vol_floor >= 0., lambda : f"'vol_floor' must be non-negative, but found {self.vol_floor:.4g}" )
+
+        if self.encode_what not in {"vol", "sqrtVar", "price"}:
+            raise ValueError(f"Invalid value for encode_what: {self.encode_what}. Expected 'vol', 'sqrtVar' or 'price'.")           
+        if self.fit_what not in {"vol", "sqrtVar", "price"}:
+            raise ValueError(f"Invalid value for fit_what: {self.fit_what}. Expected 'vol', 'sqrtVar' or 'price'.")     
+        if self.encode_what == "price":
+            verify_inp( self.fit_what == "price", lambda : f"If 'encode_what' is 'price', then 'fit_what' must also be 'price', but found {self.fit_what}" )      
+
+    def __unique_hash__( self, unique_hash, debug_trace  ) -> str:
+        """ Unique hash excludes 'vizualizer_config' """
+        return unique_hash( self.encode_what,
+                            self.fit_what,
+                            self.num_state,
+                            self.num_compress,
+                            self.encoder_set_config,
+                            self.encoder_fix_config,
+                            self.decoder_config,
+                            self.weight_by_spread,
+                            self.min_pure_spread,
+                            self.mid_fit_weight,
+                            self.vol_floor,
+                            self.fit_average,
+                            debug_trace=debug_trace
+        )
+
+    def unique_id(self) -> str:
+        """ Unique ID for the model configuration. Excludes 'vizualizer_config' as it does not affect the model itself. """
+        return unique_hash8(self)
+
+    def instantiate_from_cache( self, env : BaseEnvironment, sampler : BaseSampler, *, verbose : Context = Context.quiet ) -> BaseModel:
+            """ 
+            Creates the model corresponding to this configuration, loading any necessary data from cache. This function will be called by the trainer when instantiating the model for training or evaluation. The 'verbose' argument can be used to control the verbosity of the loading process. Note that
+            This function will fail if not all data are available.
+            """
+            return AEC( env=env, sampler=sampler, config=self, pool_config=PoolConfig.off(), override_cache_mode="cacheonly", verbose=verbose )
+
 class AEC(BaseModel):
     """
     Basic AutoEncoder for Call options (AEC) model for the Dysanos simple benchmark.
@@ -37,40 +97,6 @@ class AEC(BaseModel):
 
     VisualizerConfig = VisualizerConfig
 
-    @dataclass(frozen=True)
-    class Config:
-        encode_what         : str = "vol"                                #: vol, sqrtVar, price
-        fit_what            : str = "price"                              #: vol, sqrtVar, price
-        num_state           : int = 32                                   #: Hidden state dimension
-        num_compress        : int = 128                                  #: Internal state compression dimension for deep set
-        encoder_set_config  : FeedForward.Config = FeedForward.Config()  #: Configuration for the encoder
-        encoder_fix_config  : FeedForward.Config = FeedForward.Config()  #: Configuration for the encoder
-        decoder_config      : FeedForward.Config = FeedForward.Config()  #: Configuration for the encoder
-        vizualizer_config   : VisualizerConfig|None = VisualizerConfig() #: Configuration for the visualizer. Set to ``None`` for no visualizer.
-
-        weight_by_spread    : bool = True    # whether to weight the loss by the bid-ask spread, which puts more weight on liquid options and is a common practice in the literature; if False, all options are weighted equally
-        min_pure_spread     : float = 1E-5   # floor to sprear for relative error
-        mid_fit_weight      : float = 1E-3   # weight for fitting the mid price in the loss function vs exceeding bid/ask
-        vol_floor           : float = 0.01   # floor for predicted volatility when using 'vol' or 'sqrtVar' 
-        fit_average         : bool = False   # fit average per sample, rather than average accross all samples
-
-        def __post_init__(self):
-            verify_inp( self.num_state > 0, lambda : f"'num_state' must be positive, but found {self.num_state}" )
-            verify_inp( self.num_compress > 0, lambda : f"'num_compress' must be positive, but found {self.num_compress}" )
-            verify_inp( self.min_pure_spread > 0., lambda : f"'min_pure_spread' must be positive, but found {self.min_pure_spread:.4g}" )
-            verify_inp( 0. <= self.mid_fit_weight <= 1., lambda : f"'mid_fit_weight' must be in [0,1], but found {self.mid_fit_weight:.4g}" )
-            verify_inp( self.vol_floor >= 0., lambda : f"'vol_floor' must be non-negative, but found {self.vol_floor:.4g}" )
-
-            if self.encode_what not in {"vol", "sqrtVar", "price"}:
-                raise ValueError(f"Invalid value for encode_what: {self.encode_what}. Expected 'vol', 'sqrtVar' or 'price'.")           
-            if self.fit_what not in {"vol", "sqrtVar", "price"}:
-                raise ValueError(f"Invalid value for fit_what: {self.fit_what}. Expected 'vol', 'sqrtVar' or 'price'.")     
-            if self.encode_what == "price":
-                verify_inp( self.fit_what == "price", lambda : f"If 'encode_what' is 'price', then 'fit_what' must also be 'price', but found {self.fit_what}" )      
-
-        def unique_id(self) -> str:
-            """ Unique ID for the model configuration. """
-            return unique_hash8(self)
 
     X_FEATURES = [
         # first element must have full dimension (B,S,O) to determine the number of options O
@@ -112,15 +138,23 @@ class AEC(BaseModel):
         'strike'
     ]
 
+    Config = AECConfig
+
     def __init__(self, env         : BaseEnvironment, *,
-                       shapes      : dict[str, tuple], # shapes of the input data fields, used for verification and to determine the number of features
-                       stats       : PrettyObject, # data stats, used for verification and normalization
-                       num_steps   : int, # expected number of steps
-                       max_options : int, # expected maximum number of options per step
-                       config      : Config = Config()
+                       sampler     : SimpleSampler|SimpleSampler.Config,
+                       config      : Config = Config(),
+                       pool_config : PoolConfig = PoolConfig.off()
                  ):
         """ Initialize model """
         super().__init__(env=env)
+
+        if isinstance(sampler, SimpleSampler.Config):
+            sampler = SimpleSampler(sampler,pool_config=pool_config)
+
+        shapes      = sampler.shapes()
+        stats       = sampler.stats()
+        num_steps   = sampler.num_steps
+        max_options = sampler.max_options
 
         if set(shapes) != set(SimpleSampler.FEATURES):
             superfluous = set(shapes) - set(SimpleSampler.FEATURES)
@@ -138,6 +172,7 @@ class AEC(BaseModel):
             raise RuntimeError(f"Model {self.__class__.__name__} requires characteristics that are not provided by the data sampler: {sorted(set(self.CHARACTERISTICS) - set(SimpleSampler.FEATURES))}.")
 
         self.config            = config
+        self.sampler_config    = sampler.config
         self.num_features      = len(self.X_FEATURES)
         self.num_characteristics = len(self.CHARACTERISTICS)
         self.num_steps         = num_steps
@@ -158,7 +193,7 @@ class AEC(BaseModel):
         """ Returns a qualified label for the model, including configuration information. If 'label' is provided and not empty, it will be used as the label. Otherwise, a label will be generated based on the model class name and configuration."""
         label = None if label == "" else label
         return f"{self.__class__.__name__} {self.config.unique_id() if label is None else str(label)}"
-    
+
     def forward(self, data          : dict, 
                       training      : bool = False,
                       return_what   : BaseModel.ReturnWhat = BaseModel.ReturnWhat.LOSS_WEIGHT ) -> tuple[torch.Tensor, torch.Tensor]|tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]|dict[str, torch.Tensor]:
@@ -322,7 +357,7 @@ class Visualizer(BaseVisualizer):
     def update( self, model : AEC, *, epoch : int, trn_tracker : MetricTacker, vld_tracker : MetricTacker ):
         """ Update visualizer with new model and epoch number """
         assert isinstance(model, AEC), f"Expected model to be an instance of AEC, but got {type(model)}"
-        from cdxcore.dynaplot import figure, m_o_m, colors_tableau
+        from cdxcore.dynaplot import figure, m_o_m, quantile_m_o_m
         from cdxcore.bs import bs
         import numpy as nnp
 
