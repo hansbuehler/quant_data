@@ -730,17 +730,17 @@ class Visualizer(BaseVisualizer):
                     if stds is not None:
                         rx = nnp.exp( -stds/values )  # ~ 1-stds
                         self.store += ax.fill_between(epochs, values * rx, values / rx, color=color, alpha=0.1)
-                    return values 
+                    return values, stds
 
                 def add_metric(metric):
                     ax = self.axsF[metric]
-                    trn_v = add_trn_vld_metric( ax, trn_tracker.get(metric, None), metric, "Training", color="orange" )
-                    vld_v = add_trn_vld_metric( ax, vld_tracker.get(metric, None), metric, "Validation", color="lightblue" )
+                    trn_v, trn_std = add_trn_vld_metric( ax, trn_tracker.get(metric, None), metric, "Training", color="orange" )
+                    vld_v, vld_std = add_trn_vld_metric( ax, vld_tracker.get(metric, None), metric, "Validation", color="lightblue" )
                     if is_first:
                         ax.legend(loc="upper right")
                     if not trn_v is None and not vld_v is None:
                         ax.set_ylim( quantile_m_o_m(trn_v, vld_v, hi=0.9, lo=0., pos_floor=0.1, buf=0.01) )
-                        ax.set_title( f"{metric}\n{nnp.mean(trn_v[-10:]):.2g}/{nnp.mean(vld_v[-10:]):.2g}" )
+                        ax.set_title( f"{metric}\n{nnp.mean(trn_v[-10:]):.2g} [{nnp.mean(trn_std[-10:]):.2g}] / {nnp.mean(vld_v[-10:]):.2g} [{nnp.mean(vld_std[-10:]):.2g}]" )
                     
                     if not trn_lr_tracker is None and metric == "loss":
                         ax2 = self.axsF2.get(metric, None)
