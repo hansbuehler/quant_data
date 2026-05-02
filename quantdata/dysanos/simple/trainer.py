@@ -105,9 +105,8 @@ class Trainer(object):
         """
         label = None if label == "" else label
 
-        self._info_label = f"{model.default_label()} {sampler.unique_data_id}" if label is None else\
-                           f"{model.__class__.__name__} {label} [{sampler.unique_data_id}]"
-        self._label      = label if label is not None else model.default_label()
+        self._info_label = model.info_qualified_label(label) # this is for printing user information
+        self._label      = label if label is not None else model.default_label
         self._model      = model
         self._sampler    = sampler
         self._config     = config

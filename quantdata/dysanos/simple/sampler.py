@@ -47,7 +47,7 @@ class SamplingConfig:
     def __str__(self):#by convention use a some what readable string with comma separated key=value pairs
         return f"ns={self.num_samples if not self.num_samples is None else 'all'},stp={self.num_steps},sld={self.num_slide},vld={self.pct_validation:.2f},seed={self.seed}"
 
-@version("0.1", dependencies=[RawDayFilter,ExpiryFilter,SampleDaysConfig,SamplingConfig])
+@version("0.", dependencies=[RawDayFilter,ExpiryFilter,SampleDaysConfig,SamplingConfig])
 @dataclass(frozen=True)
 class SimpleConfig(BaseSamplerConfig):
     """ BlockSampler configuration """
@@ -114,7 +114,7 @@ SIMPLE_INCLUDE_FIELDS = {
     'ask_pure_dk',
     'bid_pure_dk'
 }
-""" Fields the function requests """
+""" Fields the function requests from the data source """
 assert SIMPLE_INCLUDE_FIELDS <= set(SCHEMA_ENRICHED_DAY)|{'is_valid'}, f"SIMPLE_INCLUDE_FIELDS must be a subset of the available fields in SCHEMA_ENRICHED_DAY. Unknown fields: {sorted(SIMPLE_INCLUDE_FIELDS - set(SCHEMA_ENRICHED_DAY))}"
 
 SIMPLE_FEATURES = {
@@ -123,10 +123,11 @@ SIMPLE_FEATURES = {
     'is_valid',
     'is_american',
     'is_am',
-    'strike', # divided by spot_ref
+    'strike',   # divided by spot_ref
+    'pure_strike', # strike/fwd, in dollars
     'df',
     'tte_y',
-    'fwd',    # divided by spot_ref
+    'fwd',       # divided by spot_ref
     'nms',
     'call_ask',  # divided by spot_ref
     'call_bid',  # divided by spot_ref
@@ -149,7 +150,7 @@ SIMPLE_FEATURES = {
 }
 
 @training_root_simple(fmt=SubDir.PYTREE_HDF5).cache(
-    "0.1",
+    "0.2",
     dependencies=[SimpleConfig, sample_days],
     uid = lambda ticker, simple_config: f"{simple_config.base_cache_dir_uid()}/{ticker}",
     exclude_args=['pool_config', 'refresh_cache', 'verbose']
@@ -191,10 +192,12 @@ def sample_simple_days(  ticker : str,
     r.spot_ref = r.spot
     r.spot_ret = np.where( r.is_valid, r.spot / np.where( r.is_valid, r.spot_prev, 1. ) - 1.0, 0. )
     valid_spot = np.where( r.is_valid, r.spot, 1. )
+    r.pure_strike = np.where( r.is_valid, r.strike / np.where( r.is_valid, r.fwd, 1. ), 1. )
     r.call_ask /= valid_spot
     r.call_bid /= valid_spot
     r.fwd /= valid_spot
     r.strike /= valid_spot
+
     # generate sortable date_ids for 
     r.spot_ref = r.spot_ref[:,:1] # spot is the same for all options
     r.spot_ret = r.spot_ret[:,:1] # spot return is the same for all options

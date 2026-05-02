@@ -85,7 +85,7 @@ def run( label, *,
                 version=version,
                 visualizer_config=visualizer_config,
                 config=aec_config )
-    print("model created.")
+    print(f"Model {model.info_qualified_label(label)} created.")
 
     train_config = TrainConfig(
         lr_init = 1E-3,
