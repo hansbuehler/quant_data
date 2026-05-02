@@ -17,10 +17,10 @@ class FeedForwardConfig:
 
     The default is a one-layer linear network with a width of 16.
     """
-    activation : str = 'Softplus'   # Activation function. Use "identity" for activation; see https://docs.pytorch.org/docs/stable/nn.html
+    activation : str = 'Softplus'   # Activation module; see https://docs.pytorch.org/docs/stable/nn.html
     num_depth : int = 0             # Depth; if zero then the network becomes a single linear layer.
-    num_width : int = 16            # Inner width; use a negative number as multiplier of ``num_output`` (output dimension).
-    use_bias : bool = True          # Whether to use bias in the inner layers.
+    num_width : int = 16            # Inner width; use a negative number as multiplier of ``num_output`` (output dimension). If ``num_depth`` is zero, then this is ignored.
+    use_bias : bool = True          # Whether to use bias in the inner layers. If ``num_depth`` is zero, then this is ignored.
 
     def __post_init__(self):
         verify_inp( not isinstance(self.activation,str) or hasattr(torch.nn, self.activation), f"Unknown torchh activation function 'torch.nn.{self.activation}' see https://docs.pytorch.org/docs/stable/nn.html")
@@ -35,6 +35,11 @@ class FeedForwardConfig:
         f = getattr(torch.nn, self.activation, None)
         verify_inp( not f is None, f"Cannot find activation function 'torch.nn.{self.activation}'" )
         return f()
+    
+    @staticmethod
+    def linear_config( activation : str = 'Identity' ) -> FeedForwardConfig:
+        """ Returns a config for a simple one-layer linear network with the specified activation. """
+        return FeedForwardConfig( activation=activation, num_depth=0, num_width=16, use_bias=True )
 
 class FeedForward(BaseModel):
     """
@@ -157,7 +162,7 @@ class FeedForward(BaseModel):
             self.verify( lambda : lin_has_finite_weights(I0), lambda : f"{FeedForward}: Input #{iinp} weights or bias are not finite"    )
             inp_ = inp
             inp = I0( inp[...,None] )
-            verify_inp( torch.isfinite(inp).all(), lambda : f"{FeedForward}: Iteration #{iinp} activation 'inp' is not finite" )
+            self.verify( lambda :torch.isfinite(inp).all(), lambda : f"{FeedForward}: Iteration #{iinp} activation 'inp' is not finite" )
             x = inp if x is None else (x+inp)
             del inp
         del input

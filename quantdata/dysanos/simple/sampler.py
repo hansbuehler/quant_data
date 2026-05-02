@@ -386,6 +386,8 @@ class SimpleSampler(BaseSampler):
         def trn_stats():
             stats = PrettyObject()
             stats.mean_pure_spread = 0.
+            stats.mean_vol_spread = 0.
+            stats.mean_sqrtVar_spread = 0.
             cnt = 0
 
             for sid in self.trn_samples_ids:
@@ -397,13 +399,19 @@ class SimpleSampler(BaseSampler):
                 pure_call_ask  = tdata.ask_pure_price[slc,:][is_valid]
                 pure_call_bid  = tdata.bid_pure_price[slc,:][is_valid]
                 pure_spread    = pure_call_ask - pure_call_bid
+                ask_vol        = tdata.ask_vol[slc,:][is_valid] 
+                bid_vol        = tdata.bid_vol[slc,:][is_valid]
+                vol_spread     = ask_vol - bid_vol
+                sqrtT          = np.sqrt( tdata.tte_y[slc,:][is_valid] )
+                sqrtVar_spread = vol_spread * sqrtT
+
+                stats.mean_vol_spread += vol_spread.sum()
                 stats.mean_pure_spread += pure_spread.sum()
+                stats.mean_sqrtVar_spread += sqrtVar_spread.sum()
                 cnt += len(pure_spread)
             assert cnt > 0, f"Internal error: no valid options found in the training samples to compute stats."
+            return PrettyObject({ k : x / float(cnt) for k, x in stats.items() })
 
-            for stat in stats.values():
-                stat /= float(cnt)
-            return stats
         self._stats = trn_stats()
 
         verbose.write(lambda : f"Created {len(self.trn_samples_ids)} training samples and {len(self.vld_samples_ids)} validation samples based on the date split at {first_vld_date}. "+\
@@ -589,7 +597,6 @@ class SimpleSampler(BaseSampler):
             else:
                 yield self.generate_batch( batch_ids=batch_ids, device=device )
 
-
 # ================================================================
 # Command-line interface
 # ================================================================
@@ -627,7 +634,7 @@ def main(tickers : list[str],
     verbose = Context.all
     refresh_cache = refresh
 
-    SimpleSampler(simple_config=simple_config, pool_config=pool_config, refresh_cache=refresh_cache, verbose=verbose)
+    SimpleSampler(simple_config=simple_config, pool_config=pool_config, cache_mode="update" if refresh_cache else "on", verbose=verbose)
     print("Done.")
 
 if __name__ == "__main__":

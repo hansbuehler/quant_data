@@ -4,6 +4,7 @@ Dysanos trainer
 
 from __future__ import annotations
 from copyreg import pickle
+import warnings
 
 from quantdata.dysanos.simple import locations_simple
 from quantdata.torch import get, pop, compute_grad_norm, detect_grad_issues, MetricTacker, BaseEnvironment, BaseModel, BaseSampler
@@ -102,13 +103,25 @@ class Trainer(object):
         """
         Main training loop
         """
-        self._qual_label = f"{model.qualified_label(label)} {sampler.unique_data_id}"
-        self._label      = label if ( not label is None and label != "") else model.qualified_label(None)
+        label = None if label == "" else label
+
+        self._info_label = f"{model.default_label()} {sampler.unique_data_id}" if label is None else\
+                           f"{model.__class__.__name__} {label} [{sampler.unique_data_id}]"
+        self._label      = label if label is not None else model.default_label()
         self._model      = model
         self._sampler    = sampler
         self._config     = config
         self._verbose    = verbose
+
+        # the path is unique per experiment
+        # if a label is provided, it is essentially
+        # keyed by:
+        # * Market data, via ``sampler.unique_data_id``;
+        # * The ``experiment_group`` in the training configuration;
+        # * The user's ``label`` which defaults to the 
+        #   models' qualified name (e.g. keyed by its configuration)
         self._path       = config.get_experiment_directory( sampler.unique_data_id, self._label, ext="pt", fmt=SubDir.PICKLE )
+
         self._rndg       = torch.Generator(device="cpu")
         self._visualizer = model.visualizer(sampler) # might be None
         self._rndg.manual_seed(config.seed)
@@ -122,50 +135,58 @@ class Trainer(object):
         self._tracker       = TrackTime()
 
         if verbose.shall_report():
-            s = f"Trainer for '{self.qualified_label}' on data {sampler.unique_data_id}"
+            s = f"Trainer for '{self.info_label}' on data {sampler.unique_data_id}"
             verbose.write(s+'\n'+("="*len(s)))
             del s
+        if model.debug:
+            warnings.warn("** WARNING: model is running in (very slow) debug mode. **")
 
         deleted_best = False
         if not self._path is None and restart and self._path.exists("last"):
             deleted_best = self._path.exists("best")
             self._path.delete("last")
             self._path.delete("best") if deleted_best else None
-            verbose.write(lambda : f"'{self.qualified_label}': Deleted existing recovery checkpoint '{self._path.full_file_name('last')}'{' and the best-state checkpoint' if deleted_best else ''}.")
+            verbose.write(lambda : f"'{self.info_label}': Deleted existing recovery checkpoint '{self._path.full_file_name('last')}'{' and the best-state checkpoint' if deleted_best else ''}.")
 
         if not self._path is None and self._path.exists("last"):
-            verbose1 = verbose(1)
-            ffn = self._path.full_file_name('last')
-            with verbose1.write_t(f"Restoring checkpoint from '{ffn}'... ", end='') as tme:
-                state         = torch.load(ffn, map_location=model.device, weights_only=False)
-                lbl           = state.pop("label", None)
-                assert lbl is None or lbl == self._label, f"Internal error '{ffn}': checkpoint label '{lbl}' does not match model label '{self._label}' ?"
+            def restore(verbose):
+                ffn = self._path.full_file_name('last')
+                with verbose.write_t(f"Restoring checkpoint from '{ffn}'... ", end='') as tme:
+                    state         = torch.load(ffn, map_location=model.device, weights_only=False)
+                    lbl           = state.pop("label", None)
+                    assert not lbl is None, f"Internal error: checkpoint '{ffn}' is missing the 'label' field."
+                    if lbl != self._label:
+                        raise RuntimeError(f"Internal error '{ffn}': checkpoint label '{lbl}' does not match model label '{self._label}' ?")
 
-                self._current_epoch = int(state.pop("epoch"))
-                self._best_epoch    = state.pop("best_epoch", None) if not deleted_best else None
-                self._best_val_loss = state.pop("best_val_loss", None) if not deleted_best else None
+                    version       = state.pop("version", "<unknown>") # for backward compatibility with checkpoints that do not contain the version field
+                    if version != model.version:
+                        verbose.write(f"checkpoint version '{version}' does not match model version '{model.version}' - restarting experiment.", head=False)
+                        return
 
-                self._track_val_trn = MetricTacker.load_state_dict(state.pop("track_val_trn"))
-                self._track_val_vld = MetricTacker.load_state_dict(state.pop("track_val_vld"))
+                    self._current_epoch = int(state.pop("epoch"))
+                    self._best_epoch    = state.pop("best_epoch", None) if not deleted_best else None
+                    self._best_val_loss = state.pop("best_val_loss", None) if not deleted_best else None
 
-                self._model.load_state_dict(state.pop("model_state_dict"))
-                self._optimizer.load_state_dict(state.pop("optimizer_state_dict"))
-                rndg_state = state.pop("rndg_state_dict")
-                if not isinstance(rndg_state, torch.Tensor):
-                    rndg_state = torch.as_tensor(rndg_state, dtype=torch.uint8)
-                else:
-                    rndg_state = rndg_state.detach().cpu().to(dtype=torch.uint8)
-                self._rndg.set_state(rndg_state)
-                verbose1.write(f"done; this took {tme}.", head=False)
-                del state
+                    self._track_val_trn = MetricTacker.load_state_dict(state.pop("track_val_trn"))
+                    self._track_val_vld = MetricTacker.load_state_dict(state.pop("track_val_vld"))
 
+                    self._model.load_state_dict(state.pop("model_state_dict"))
+                    self._optimizer.load_state_dict(state.pop("optimizer_state_dict"))
+                    rndg_state = state.pop("rndg_state_dict")
+                    if not isinstance(rndg_state, torch.Tensor):
+                        rndg_state = torch.as_tensor(rndg_state, dtype=torch.uint8)
+                    else:
+                        rndg_state = rndg_state.detach().cpu().to(dtype=torch.uint8)
+                    self._rndg.set_state(rndg_state)
+                    verbose.write(f"done; this took {tme}.", head=False)
+            restore(verbose(1))
         verbose.report(1,lambda : f"Model is ready. Current epoch to train is {self._current_epoch}.")
         verbose.report(1,lambda : f"Experiment path is {self._path.path}.") 
 
     @property
-    def qualified_label(self) -> str:
-        """Qualified label for the model, including configuration information."""
-        return self._qual_label
+    def info_label(self) -> str:
+        """ label for user information """
+        return self._info_label
     
     @property
     def label(self) -> str:
@@ -181,6 +202,7 @@ class Trainer(object):
         return {
             "label": self._label, # user-specififed label
             "epoch": int(self._current_epoch),
+            "version": self._model.version,
             "model_state_dict": self._model.state_dict(),
             "optimizer_state_dict": self._optimizer.state_dict(),
             "rndg_state_dict": self._rndg.get_state(),
@@ -221,7 +243,7 @@ class Trainer(object):
             r.model          = r.model_config.instantiate_from_cache(env=r.env, sampler=r.sampler, verbose=verbose(1))
         except Exception as e:
             raise type(e)(f"Failed to instantiate model and sampler from checkpoint '{ffn}': {str(e)}") from e
-        verbose.write(lambda : f"Model '{r.model.qualified_label}' instantiated from checkpoint '{ffn}' for epoch {r.epoch} with best validation loss {r.best_val_loss} at epoch {r.best_epoch} on device {r.env.device}.")
+        verbose.write(lambda : f"Model '{r.model.info_label}' instantiated from checkpoint '{ffn}' for epoch {r.epoch} with best validation loss {r.best_val_loss} at epoch {r.best_epoch} on device {r.env.device}.")
         return r
 
     def __call__( self, epochs : int, *, total : bool = False ) -> BaseModel:
@@ -234,12 +256,12 @@ class Trainer(object):
 
         epochs = epochs if not total else ( epochs - self._current_epoch )
         if self._current_epoch >= epochs:
-            verbose.write(lambda : f"Model '{self.qualified_label}' was already trained for {self._current_epoch} epochs.")
+            verbose.write(lambda : f"Model '{self.info_label}' was already trained for {self._current_epoch} epochs.")
             if self._visualizer is not None:
                 self._visualizer.update(model,epoch=self._current_epoch, trn_tracker=self._track_val_trn, vld_tracker=self._track_val_vld) 
             return model
 
-        verbose.write(lambda : f"Launching '{self.qualified_label}' training for {epochs} epochs over {self._sampler.num_trn_samples} training and {self._sampler.num_vld_samples} validation samples, using a mini bastch size of "+\
+        verbose.write(lambda : f"Launching '{self.info_label}' training for {epochs} epochs over {self._sampler.num_trn_samples} training and {self._sampler.num_vld_samples} validation samples, using a mini bastch size of "+\
                                f"{config.trn_batch_size} for {config.batch_per_epoch} batches per epoch, and a batch size of {config.val_batch_size} for valuation. "+\
                                f"The model has {sum(p.numel() for p in model.parameters())} parameters." +\
                                (f" Resuming from epoch {self._current_epoch}." if self._current_epoch>0 else ""))
@@ -314,17 +336,24 @@ class Trainer(object):
                     for batch in sampler.all( trn=trn, batch_size=config.val_batch_size, device=self.device ):
                         ls, wg, lm = model( batch, training=False, return_what=model.ReturnWhat.VALUATION )
                         ls      = ls.detach().item()
-                        wg      = wg.detach().item()   
-                        lm      = { k: v.detach().item() for k,v in lm.items() }
+                        wg      = wg.detach().item()
                         assert nnp.isfinite(ls) and nnp.isfinite(wg) and wg > 0, f"Internal error: {ls} {wg}"
                         verify( not 'loss' in lm, f"'loss' should not be returned as a separate metric, but should be included in the loss value returned by the model.")
                         loss    += ls
                         weight  += wg
-                        metrics = { k: metrics.get(k, 0.) + v for k,v in lm.items() }
 
-                    count   = metrics.pop("count")
-                    assert count > 0, f"Internal error: no valid samples"
-                    metrics = { k: v/count for k,v in metrics.items() }                
+                        # each metric contains a nominator and denominator, to be aggregated accross all samples
+                        for metric, mvalues in lm.items():
+                            assert len(mvalues) == 2, f"Internal error: metric '{metric}' has {len(xvalues)} values so far, but the current batch returned {len(mvalues)} values."
+                            xvalues = metrics.setdefault( metric, [0.,0.] )
+                            v       = mvalues[0].detach().item()
+                            w       = mvalues[1].detach().item()
+                            assert nnp.isfinite(v) and nnp.isfinite(w) and w >= 0, f"Internal error: metric '{metric}' has non-finite or negative values: {v} and {w}"
+                            xvalues[0] += v
+                            xvalues[1] += w
+
+                    # take averages
+                    metrics = { metric: (mvalues[0] / mvalues[1]) for metric, mvalues in metrics.items() }
                     return loss / weight, metrics
                 
                 with tracker("val_trn"):

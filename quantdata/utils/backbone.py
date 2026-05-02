@@ -42,6 +42,7 @@ class Backbone(object):
                         sqrtVars : Array, *, 
                         mask : Array | None = None, 
                         spot : Array | None = None,
+                        logK : Array | None = None,
                         high_precision : bool = False, 
                         debug_verify_bounds : bool = False,
                         eps : float = 1E-6 ) -> Array:
@@ -78,7 +79,7 @@ class Backbone(object):
         k    = strikes/spot if spot is not None else strikes
         intr = (k<self.BS_EPS) | (sqrtVars<self.EPS_VOL)
         intr = intr if mask is None else (intr|~mask)
-        logK = self.log( self.where( intr, 1., k ) )
+        logK = self.log( self.where( intr, 1., k ) ) if logK is None else logK
         vf_  = self.where( intr, 1., sqrtVars )
         d1    = (-logK / vf_) + 0.5 * vf_
         d2    = d1 - vf_
