@@ -226,7 +226,7 @@ class SimpleDecoderFactory(DecoderFactory):
         return Functional() 
 
 @dataclass(frozen=True)
-class AttentionDecoderFactory(DecoderFactory):
+class GatingDecoderFactory(DecoderFactory):
     num_head    : int = 16    # number of heads to generate in the decoder
     num_QK      : int = 4     # projection dimension for query and key in the decoder attention mechanism.
     V_config    : FeedForward.Config = FeedForward.Config.linear_config()       #: Configuration for the decoder value projection as multi-head output.
@@ -322,16 +322,15 @@ class AECConfig:
     decoder             : DecoderFactory = SimpleDecoderFactory()  #: decoder factory to use
 
     weight_by_spread    : bool = True    #: whether to weight the loss by the bid-ask spread, which puts more weight on liquid options and is a common practice in the literature; if False, all options are weighted equally
-    max_weight          : float = 100.   #: maximim weight for spread. We weight by average_spread/spread    
-    mid_fit_weight      : float = 1E-3   #: weight for fitting the mid price in the loss function vs exceeding bid/ask
     vol_floor           : float = 0.01   #: floor for predicted volatility when using 'vol' or 'sqrtVar' 
     fit_average         : bool = False   #: fit average per sample, rather than average accross all samples
+    min_mean_spread_frac: float = 0.05   #: spread must be at least this fraction of average spread
+    clip_huber_square   : bool = True    #: whether to clip the squared term in the Huber loss
 
     def __post_init__(self):
         verify_inp( self.num_state > 0, lambda : f"'num_state' must be positive, but found {self.num_state}" )
-        verify_inp( self.max_weight > 0., lambda : f"'max_weight' must be positive, but found {self.max_weight:.4g}" )
-        verify_inp( 0. <= self.mid_fit_weight <= 1., lambda : f"'mid_fit_weight' must be in [0,1], but found {self.mid_fit_weight:.4g}" )
         verify_inp( self.vol_floor >= 0., lambda : f"'vol_floor' must be non-negative, but found {self.vol_floor:.4g}" )
+        verify_inp( 0. <= self.min_mean_spread_frac <= 1., lambda : f"'min_mean_spread_frac' must be in [0,1], but found {self.min_mean_spread_frac:.4g}" )
 
         if self.encode_what not in {"vol", "sqrtVar", "price"}:
             raise ValueError(f"Invalid value for encode_what: {self.encode_what}. Expected 'vol', 'sqrtVar' or 'price'.")           
@@ -361,18 +360,18 @@ class AEC(BaseModel):
 
     VisualizerConfig = VisualizerConfig
 
-    CHARACTERISTICS = {
+    CHARACTERISTICS = [
         'tte_y',
         'nms',
         'pure_strike'
-    }
-    X_FEATURES = CHARACTERISTICS | {
+    ]
+    X_FEATURES = CHARACTERISTICS + [
         # first element must have full dimension (B,S,O) to determine the number of options O
         'ask_pure_price',
         'bid_pure_price',
         'ask_vol',
         'bid_vol',
-    }
+    ]
     __MAY_USE = [
         #'is_american',
         #'is_am',
@@ -418,21 +417,26 @@ class AEC(BaseModel):
         stats       = sampler.stats()
         num_steps   = sampler.num_steps
         max_options = sampler.max_options
-
-        if set(shapes) != set(SimpleSampler.FEATURES):
-            superfluous = set(shapes) - set(SimpleSampler.FEATURES)
-            missing = set(SimpleSampler.FEATURES) - set(shapes)
+        
+        set_f = set(SimpleSampler.FEATURES)
+        if set(shapes) != set_f:
+            superfluous = set(shapes) - set_f
+            missing = set_f - set(shapes)
             msg = "Data Input mismatch:"
             if superfluous:
                 msg += f" Superfluous fields: {superfluous}."
             if missing:
                 msg += f" Missing fields: {missing}."   
             raise ValueError(msg)
-        
-        if set(self.X_FEATURES) > set(SimpleSampler.FEATURES):
-            raise RuntimeError(f"Model {self.__class__.__name__} requires features that are not provided by the data sampler: {sorted(set(self.X_FEATURES) - set(SimpleSampler.FEATURES))}.")
-        if set(self.CHARACTERISTICS) > set(SimpleSampler.FEATURES):
-            raise RuntimeError(f"Model {self.__class__.__name__} requires characteristics that are not provided by the data sampler: {sorted(set(self.CHARACTERISTICS) - set(SimpleSampler.FEATURES))}.")
+
+        set_x = set(self.X_FEATURES)
+        set_c = set(self.CHARACTERISTICS)
+        if set_x > set_f:
+            raise RuntimeError(f"Model {self.__class__.__name__} requires features that are not provided by the data sampler: {sorted(set_x - set_f)}.")
+        if set_c > set_f:
+            raise RuntimeError(f"Model {self.__class__.__name__} requires characteristics that are not provided by the data sampler: {sorted(set_c - set_f)}.")
+        assert len(self.X_FEATURES) == len(set_x), f"Duplicate features in X_FEATURES: {self.X_FEATURES}"
+        assert len(self.CHARACTERISTICS) == len(set_c), f"Duplicate features in CHARACTERISTICS: {self.CHARACTERISTICS}"
 
         self.version           = str(version)
         self.config            = config
@@ -541,91 +545,101 @@ class AEC(BaseModel):
             fit_price   = self.softplus(decoded) # keep positivity
             fit_vol     = None
             fit_sqrtVar = None
+        del decoded
 
         self.verify( lambda: torch.isfinite(fit_price).all(), "Infinite mid price")
+
+        if return_what == self.ReturnWhat.PATHWISE:
+            return dict(fit_price=torch.where( mask, fit_price, 0.),
+                        fit_vol=torch.where( mask, fit_vol, 0.) if fit_vol is not None else None
+                    )
 
         # loss function
         # -------------
 
-        def loss_f( fit, bid, ask, mean_spread, native_weight_scale = False ):
+        def loss_f( fit, bid, ask, mean_spread, mask ):
             """
             Computes a weighted loss.
             In theory we want to express the loss per option in relation to bid/ask.
             However, this is too large for initial values hence we scale it back to
             average spread. 
             """
-            mid          = 0.5*(ask + bid)
-            spread       = torch.clip( ask - bid, min=mean_spread/self.config.max_weight )
-            scale        = 1. if native_weight_scale else mean_spread
-            sprd_weights = torch.where( mask, scale/torch.where(mask, spread, 1.), 0. ) 
-            weights      = sprd_weights if self.config.weight_by_spread else torch.where( mask, 1., 0. )
-            excess       = torch.relu( fit - ask ) + torch.relu( bid - fit )
-            loss         = weights * ( (1.-self.config.mid_fit_weight ) * excess + self.config.mid_fit_weight * ( fit - mid )**2 )
-            return loss, weights, excess, sprd_weights
+            half_spread  = torch.where( mask, torch.clip( ask - bid, min=self.config.min_mean_spread_frac * mean_spread ), 1. ) / 2.
+            x            = torch.where( mask, ( fit - bid )/half_spread, 0. )
+            excess       = torch.relu( x-1.) + torch.relu( 1.-x ) # excess is 0 between bid and ask, and grows linearly outside of the bid-ask
+            xsq          = torch.clip( x**2, max=1.) if self.config.clip_huber_square else (x**2) # huber loss for better stability at the beginning of training; quadratic loss with flat minimum between bid and ask; value is 0 at the mid, 1 at the bid and ask, and grows quadratically outside of the bid-ask
+            loss         = xsq + excess # quadratic loss with flat minimum between bid and ask; value is 0 at the mid, 1 at the bid and ask, and grows quadratically outside of the bid-ask
+
+            if not self.config.fit_average:
+                with torch.no_grad():
+                    loss_sq  = torch.sum(loss**2)
+                    weights  = torch.sum(mask)
+                loss     = torch.sum(loss)
+
+            else:
+                mask2 =  torch.sum(mask, dim=2)
+                self.verify( lambda :mask2.min() > 0, "Internal error - all samples must have some options")
+                with torch.no_grad():
+                    loss_sq = torch.sum( torch.sum( loss**2, dim=2 ) / mask2 )  # we cannot
+                    weights = torch.sum( torch.any(mask, dim=2) )
+                loss    = torch.sum( torch.sum( loss, dim=2 ) / mask2 )  # we cannot
+            return loss, loss_sq, weights
         
         if self.config.fit_what == "price":
-            loss, weights, _, _ = loss_f( fit_price, pure_bid, pure_ask, self.stats.mean_pure_spread )
+            loss, loss_sq, weights = loss_f( fit_price, pure_bid, pure_ask, self.stats.mean_pure_spread, mask )
 
         elif self.config.fit_what == "vol":
-            loss, weights, _, _ = loss_f( fit_vol, bid_vol, ask_vol, self.stats.mean_vol_spread )
+            loss, loss_sq, weights = loss_f( fit_vol, bid_vol, ask_vol, self.stats.mean_vol_spread, mask )
     
         else:
             assert self.config.fit_what == "sqrtVar", f"Invalid value for 'fit_what': {self.config.fit_what}"
-            loss, weights, _, _ = loss_f( fit_sqrtVar, bid_vol*sqrtT, ask_vol*sqrtT, self.stats.mean_sqrtVar_spread )
-
-        # take averages
-        # -------------
-
-        if not self.config.fit_average:
-            loss         = torch.sum(loss)
-            with torch.no_grad():
-                weight      = torch.sum(weights)
-
-        else:
-            loss    = torch.sum( torch.sum( loss, dim=2 ) / torch.sum( weights, dim=2 ) )
-            with torch.no_grad():
-                weight = torch.sum( torch.any(mask, dim=2) )
+            loss, loss_sq, weights = loss_f( fit_sqrtVar, bid_vol*sqrtT, ask_vol*sqrtT, self.stats.mean_sqrtVar_spread, mask )
 
         if training or return_what == self.ReturnWhat.LOSS_WEIGHT:
-            return loss, weight
+            return loss, weights
 
         # return metrics
         # --------------
 
-        if return_what == self.ReturnWhat.VALUATION:
-            with torch.no_grad():
-                # we compute weights here without dividind by mean_spread
-                # to get an understandable excess in relation to the spread
-                _, _, std_price_excess, std_price_sprd_weights = loss_f( fit_price, pure_bid, pure_ask, self.stats.mean_pure_spread, native_weight_scale=True ) 
-                sum_dim_mask     = torch.sum( mask, dim=2 )
-                sum_any_mask     = torch.sum( torch.any(mask, dim=2) )
-                sum_mask         = torch.sum(mask)
-                self.verify( lambda : torch.all(sum_dim_mask > 0), "Some samples have no valid options, which would lead to division by zero when computing average excess. Consider setting 'fit_average' to False or ensuring that all samples have at least one valid option." )
+        assert return_what == self.ReturnWhat.VALUATION, f"Invalid value for 'return_what': {return_what}"
+        with torch.no_grad():
+            # to get an understandable excess in relation to the spread
+            excess           = torch.where( mask, torch.relu( fit_price - pure_ask ) + torch.relu( pure_bid - fit_price ), 0. )
+            half_spread      = torch.where( mask, torch.clip( pure_ask - pure_bid, min=self.config.min_mean_spread_frac * self.stats.mean_pure_spread ), 1. )
+            inv_spread       = torch.where( mask, 1./half_spread, 0. )
+            rel_excess       = excess*inv_spread
+            rel_excess_sq    = rel_excess**2
+            excess_sq        = excess**2
+            sum_dim_mask     = torch.sum( mask, dim=2 )
+            sum_any_mask     = torch.sum( torch.any(mask, dim=2) )
+            sum_mask         = torch.sum(mask)
+            self.verify( lambda : torch.all(sum_dim_mask > 0), "Some samples have no valid options, which would lead to division by zero when computing average excess. Consider setting 'fit_average' to False or ensuring that all samples have at least one valid option." )
 
-                metrics = dict(
-                    excess_weighted =     ( torch.sum(std_price_sprd_weights*std_price_excess),
-                                            torch.sum(std_price_sprd_weights) ),
-                    excess_weighted_avg = ( torch.sum( torch.sum( std_price_sprd_weights*std_price_excess, dim=2 ) / torch.sum(std_price_sprd_weights, dim=2) ),
-                                            sum_any_mask ),
-                    excess_spread   =     ( torch.sum(std_price_sprd_weights*std_price_excess),
-                                            sum_mask ),
-                    excess_spread_avg =   ( torch.sum( torch.sum( std_price_sprd_weights*std_price_excess, dim=2 ) / sum_dim_mask ),
-                                            sum_any_mask ),
-                    excess =              ( torch.sum( torch.where(mask, std_price_excess, 0.) ), 
-                                            torch.sum(mask) ),
-                    excess_avg =          ( torch.sum( torch.sum( torch.where(mask, std_price_excess, 0.), dim=2 ) / sum_dim_mask ),
-                                            sum_any_mask )
-                )
+            metrics = dict(
+                # excess, weighted by spread, then normalized.
+                excess_weighted =     ( torch.sum(inv_spread*excess) / torch.sum(inv_spread),
+                                        torch.sum(inv_spread*excess_sq) / torch.sum(inv_spread),
+                                        torch.sum(inv_spread) ),
+                excess_weighted_avg = ( torch.sum( torch.sum(inv_spread*excess, dim=2 ) / torch.sum(inv_spread, dim=2) ),
+                                        torch.sum( torch.sum(inv_spread*excess_sq, dim=2 ) / torch.sum(inv_spread, dim=2) ),
+                                        sum_any_mask ),
+                # excess weighted by spread
+                excess_spread   =     ( torch.sum(rel_excess),
+                                        torch.sum(rel_excess_sq),
+                                        sum_mask ),
+                excess_spread_avg =   ( torch.sum( torch.sum(rel_excess, dim=2 ) / sum_dim_mask  ),
+                                        torch.sum( torch.sum(rel_excess_sq, dim=2 ) / sum_dim_mask  ),
+                                        sum_any_mask ),
+                # raw violation in $
+                excess =              ( torch.sum( torch.where(mask, excess, 0.) ), 
+                                        torch.sum( torch.where(mask, excess_sq, 0.) ), 
+                                        torch.sum(mask) ),
+                excess_avg =          ( torch.sum( torch.sum( torch.where(mask, excess, 0.), dim=2 ) / sum_dim_mask ),
+                                        torch.sum( torch.sum( torch.where(mask, excess_sq, 0.), dim=2 ) / sum_dim_mask ),
+                                        sum_any_mask )
+            )
 
-            return loss, weight, metrics
-
-        # return pathwise results
-        # -----------------------
-
-        assert return_what == self.ReturnWhat.PATHWISE, f"Invalid value for 'return_what': {return_what}"
-        return dict(fit_price=torch.where( mask, fit_price, 0.),
-                    fit_vol=torch.where( mask, fit_vol, 0.) if fit_vol is not None else None
-                )
+        return loss, loss_sq, weights, metrics
 
 # -------------------------------------------------------
 # Visualization
@@ -655,7 +669,9 @@ class Visualizer(BaseVisualizer):
         self.axsV    = None
         self.axsP    = None
         self.axsF    = PrettyObject()
+        self.axsF2   = PrettyObject()
         self.store   = store()
+        self.metrics = self.config.metrics if 'loss' in self.config.metrics else ( ['loss'] + self.config.metrics )
 
     def update( self, model : AEC, *, epoch : int, trn_tracker : MetricTacker, vld_tracker : MetricTacker ):
         """ Update visualizer with new model and epoch number """
@@ -666,217 +682,222 @@ class Visualizer(BaseVisualizer):
 
         is_first      = self.figV is None
         self.store.clear()
+        import matplotlib.pyplot as plt
 
-        TITLE_FONT_SIZE = 10
+        _SMALL_FONTS = {
+            "font.size": 8,
+            "axes.titlesize": 9,
+            "axes.labelsize": 8,
+            "xtick.labelsize": 7,
+            "ytick.labelsize": 7,
+            "legend.fontsize": 7,
+            "figure.titlesize": 10,
+        }
+        with plt.rc_context(_SMALL_FONTS):
 
-        # convergence
-        # -----------
+            # convergence
+            # -----------
 
-        def progress():
-            if is_first:
-                self.figStat = figure( title="Training Statistics", col_size=4, row_size=4, columns=None )
-                self.axsF.loss = self.figStat.add_subplot("Losses")
-                self.axsF.loss.set_yscale("log")
-                self.axsF.loss.set_xlabel("Epoch")
-                self.axsF.loss.set_ylabel("Loss (log scale)")
-                self.axsF.loss2 = self.axsF.loss.twinx()
-                self.axsF.loss2.set_ylabel("Learning Rate")
-
-                for metric in self.config.metrics:
-                    ax = self.figStat.add_subplot(metric)
-                    ax.set_yscale("log")
-                    ax.set_xlabel("Epoch")
-                    ax.set_ylabel(f"{metric[0].upper()}{metric[1:]} (log scale)")
-                    self.axsF[metric] = ax
-
-            trn_lr_tracker = trn_tracker.get("lr", None)
-            if trn_lr_tracker is not None:
-                trn_epochs = nnp.array(trn_lr_tracker['epochs'], dtype=nnp.float32)
-                trn_lr = nnp.array(trn_lr_tracker['values'], dtype=nnp.float32)
-                assert trn_epochs.shape == trn_lr.shape, f"Expected epochs and learning rates to have the same shape, but found {trn_epochs.shape} and {trn_lr.shape}"
-                self.store += self.axsF.loss2.plot( trn_epochs, trn_lr, "--", label="Training LR", color="green")
-
-            # loss
-            def add_trn_vld_metric(ax, tracker, metric : str, label:str, color:int):
-                if tracker is None:
-                    return None
-                epochs = nnp.array(tracker['epochs'], dtype=nnp.float32)
-                values = nnp.array(tracker['values'], dtype=nnp.float32)
-                assert epochs.shape == values.shape, f"'{metric}' '{label}': epochs and values to have the same shape, but found {epochs.shape} and {values.shape}"
-                if len(values) == 0:
-                    return None
-                self.store += ax.plot( epochs, values, ".-", label=label, color=color)
-                return values 
-
-            def add_metric(ax, metric):
-                trn_v = add_trn_vld_metric( ax, trn_tracker.get(metric, None), metric, "Training", color="orange" )
-                vld_v = add_trn_vld_metric( ax, vld_tracker.get(metric, None), metric, "Validation", color="lightblue" )
-                if is_first:
-                    ax.legend(loc="upper right")
-                if not trn_v is None and not vld_v is None:
-                    ax.set_ylim( quantile_m_o_m(trn_v, vld_v, hi=0.9, lo=0., pos_floor=0.1, buf=0.01) )
-                    ax.set_title( f"{metric}\n{nnp.mean(trn_v[-10:]):.2g}/{nnp.mean(vld_v[-10:]):.2g}" )
-                    ax.title.set_size(TITLE_FONT_SIZE)
-
-            add_metric(self.axsF.loss, "loss")
-
-            # others                
-
-            for metric in self.config.metrics:
-                add_metric(self.axsF[metric], metric)
-
-            self.figStat.suptitle( f"Progress {epoch}" )
-            self.figStat.render()
-        progress()  
-
-        # model evaluation
-        # ----------------
-
-        model.eval()
-        with torch.no_grad():
-            batch         = self.sampler.generate_batch( self.sample_ids, device = model._env.device )
-            pathwise      = model( batch, training=False, return_what=model.ReturnWhat.PATHWISE )
-
-        is_valid      = batch['is_valid'].detach().cpu().numpy()
-        is_valid      = is_valid[:,-1,:]
-        assert is_valid.shape[0] == self.config.num_viz, f"Expected number of valid samples to match number of visualizations {self.config.num_viz}, but found {is_valid.shape[0]}"
-
-        pure_ask      = batch['ask_pure_price'][:,-1,:].detach().cpu().numpy()
-        pure_bid      = batch['bid_pure_price'][:,-1,:].detach().cpu().numpy()
-        bid_vols      = batch['bid_vol'][:,-1,:].detach().cpu().numpy()
-        ask_vols      = batch['ask_vol'][:,-1,:].detach().cpu().numpy()
-        nms           = batch['nms'][:,-1,:].detach().cpu().numpy()
-        tte_y         = batch['tte_y'][:,-1,:].detach().cpu().numpy()
-        fwd           = batch['fwd'][:,-1,:].detach().cpu().numpy()
-        strike        = batch['strike'][:,-1,:].detach().cpu().numpy()
-        pure_strike   = strike / nnp.where( is_valid, fwd, 1. ) # set pure_strike to strike for invalid samples to prevent NaNs in visualization
-        sqrtT         = nnp.sqrt(tte_y)
-
-        fit_price     = pathwise['fit_price'][:,-1,:].detach().cpu().numpy()
-        fit_vols      = pathwise['fit_vol'][:,-1,:].detach().cpu().numpy() if pathwise['fit_vol'] is not None else None
-        fit_vols      = bs.implied( pure_strike, fit_price, sqrtT=sqrtT, mask=is_valid, on_exceed_bounds="quiet" ) if not fit_vols is None else fit_vols
-        del batch, pathwise
-
-        # per sample, aggregate price and vol error
-        # ------------------------------------------
-
-        def per_sample():
-            if is_first:
-                self.figV = figure( title="Model vs Market Vols", col_size=6, row_size=4, columns=None )
-                self.axsV = [ self.figV.add_subplot(f"Implied Vols Sample {sid.ticker} {sid.date}") for sid in self.sample_ids ]
-                for axV in self.axsV:
-                    axV.set_xlabel("Ask Vol")
-                    axV.set_ylabel("Implied Volatility")
-                    axV.title.set_size(TITLE_FONT_SIZE)
-
-                self.figP = figure( title="Model vs Market Prices", col_size=6, row_size=4, columns=None )
-                self.axsP = [ self.figP.add_subplot(f"Call Price Differences Sample {sid.ticker} {sid.date}") for sid in self.sample_ids ]
-                for axP in self.axsP:
-                    axP.set_xlabel("NMS")
-                    axP.set_ylabel("Price Difference")
-                    axP.title.set_size(TITLE_FONT_SIZE)
-                for axP in self.axsP:
-                    axP.axhline(0., color="gray", linestyle="--", linewidth=1)
-
-            for ip, (axV, axP) in enumerate(zip(self.axsV, self.axsP)):
-                ivld       = is_valid[ip,:]
-                ipure_k    = pure_strike[ip,:][ivld]
-                inms       = nms[ip,:][ivld]
-                isqrtT     = sqrtT[ip,:][ivld]
-                ifit       = fit_price[ip,:][ivld]
-                ibid       = pure_bid[ip,:][ivld]
-                iask       = pure_ask[ip,:][ivld]
-                ibid_vols  = bid_vols[ip,:][ivld]
-                iask_vols  = ask_vols[ip,:][ivld]
-                ifit_vols  = fit_vols[ip,:][ivld]
-
-                ixs        = nnp.argsort(iask_vols)
-                ibid_vols_ = ibid_vols[ixs]
-                iask_vols_ = iask_vols[ixs]
-                ifit_vols_ = ifit_vols[ixs]
-
-                self.store += axV.plot( iask_vols_, ifit_vols_, ".-", color="orange", label=f"Fit {ip}" )
-                self.store += axV.plot( iask_vols_, ibid_vols_, "^:", color="green")
-                self.store += axV.plot( iask_vols_, iask_vols_, "v:", color="red")
-
-                ixs        = nnp.argsort(inms)
-                inms_      = inms[ixs]
-                ifit_      = ifit[ixs]
-                ibid_      = ibid[ixs]
-                iask_      = iask[ixs]
-                self.store += axP.plot( iask_vols_, ibid_ - ifit_, "^:", color="green", label=f"Bid-Fit {ip}")
-                self.store += axP.plot( iask_vols_, iask_ - ifit_, "v:", color="red", label=f"Ask-Fit {ip}")
-                if is_first:
-                    ispread_ = iask_ - ibid_
-                    assert nnp.min(ispread_) > 0., f"Negative spread found in sample {ip}: min spread is {nnp.min(ispread_):.4g}"
-                    axP.fill_between( iask_vols_, -ispread_, +ispread_, color="blue", alpha=0.2, label="Spread" )
-
-                axV.set_ylim( *m_o_m(ifit_vols, ibid_vols, iask_vols ))
-                axP.set_ylim( *m_o_m(ibid - ifit, iask - ifit) )
+            def progress():
+                trn_lr_tracker = trn_tracker.get("lr", None)
+                if trn_lr_tracker is not None:
+                    trn_epochs = nnp.array(trn_lr_tracker['epochs'], dtype=nnp.float32)
+                    trn_lr = nnp.array(trn_lr_tracker['values'], dtype=nnp.float32)
 
                 if is_first:
-                    axV.legend(loc="upper left")
-                    axP.legend(loc="upper left")
-            self.figV.suptitle( f"Model vs Market Vols Epoch {epoch}" )
-            self.figP.suptitle( f"Model vs Market Prices Epoch {epoch}" )
-            self.figV.render()
-            self.figP.render()
-        per_sample()
+                    self.figStat = figure( title="Training Statistics", col_size=4, row_size=4, columns=None )
+                    for metric in self.metrics:
+                        ax = self.figStat.add_subplot(metric)
+                        ax.set_yscale("log")
+                        ax.set_xlabel("Epoch")
+                        self.axsF[metric] = ax
+                        if not trn_lr_tracker is None and metric == "loss":
+                            ax2 = ax.twinx()
+                            ax2.set_ylabel("Learning Rate")
+                            self.axsF2[metric] = ax2
 
-        # details
-        # -------
 
-        def details():
-            if not self.config.details:
-                return
-            
-            if is_first:
-                def create_detail_fig(sid):
-                    r = PrettyObject()
-                    r.fig = figure( title=f"Model Details {sid.ticker} {sid.date}", col_size=3, row_size=3, columns=None )
-                    r.axs = []
-                    for i in range(self.config.num_tte):
-                        ax = r.fig.add_subplot(f"TTE #{i}")
-                        ax.set_xlabel("NMS")
-                        ax.set_ylabel("Vol")
-                        ax.title.set_size(TITLE_FONT_SIZE)
-                        r.axs.append(ax)
-                    return r
-                self.details = [ create_detail_fig(sid) for sid in self.sample_ids ]
+                def add_trn_vld_metric(ax, tracker, metric : str, label:str, color:int):
+                    if tracker is None:
+                        return None
+                    epochs = nnp.array(tracker['epochs'], dtype=nnp.float32)
+                    values = nnp.array(tracker['values'], dtype=nnp.float32)
+                    stds   = nnp.array(tracker['stds'], dtype=nnp.float32) if tracker['stds'] is not None else None
+                    assert epochs.shape == values.shape, f"'{metric}' '{label}': epochs and values to have the same shape, but found {epochs.shape} and {values.shape}"
+                    if len(values) == 0:
+                        return None
+                    self.store += ax.plot( epochs, values, ".-", label=label, color=color)
+                    if stds is not None:
+                        rx = nnp.exp( -stds/values )  # ~ 1-stds
+                        self.store += ax.fill_between(epochs, values * rx, values / rx, color=color, alpha=0.1)
+                    return values 
 
-            for ip, siddata in enumerate(self.details):
-                sid = self.sample_ids[ip]
+                def add_metric(metric):
+                    ax = self.axsF[metric]
+                    trn_v = add_trn_vld_metric( ax, trn_tracker.get(metric, None), metric, "Training", color="orange" )
+                    vld_v = add_trn_vld_metric( ax, vld_tracker.get(metric, None), metric, "Validation", color="lightblue" )
+                    if is_first:
+                        ax.legend(loc="upper right")
+                    if not trn_v is None and not vld_v is None:
+                        ax.set_ylim( quantile_m_o_m(trn_v, vld_v, hi=0.9, lo=0., pos_floor=0.1, buf=0.01) )
+                        ax.set_title( f"{metric}\n{nnp.mean(trn_v[-10:]):.2g}/{nnp.mean(vld_v[-10:]):.2g}" )
+                    
+                    if not trn_lr_tracker is None and metric == "loss":
+                        ax2 = self.axsF2.get(metric, None)
+                        self.store += ax2.plot( trn_epochs, trn_lr, "--", color="green")
 
-                xis_valid = is_valid[ip,:]
-                xnms     = nms[ip,:][xis_valid]
-                ixs      = nnp.argsort(xnms)
-                xnms     = xnms[ixs]
-                xtte_y   = tte_y[ip,:][xis_valid][ixs]
-                xask_vols = ask_vols[ip,:][xis_valid][ixs]
-                xbid_vols = bid_vols[ip,:][xis_valid][ixs]
-                xfit_vols = fit_vols[ip,:][xis_valid][ixs]
+                # loss
+                # others                
 
-                uttes = nnp.unique(xtte_y).tolist()
-                uttes = uttes if len(uttes) <= self.config.num_tte else ( uttes[:self.config.num_tte-2] + uttes[-2:] ) # limit number of TTEs visualized in deta
+                for metric in self.metrics:
+                    add_metric(metric)
 
-                for tte, ax in zip(uttes, siddata.axs[:len(uttes)]):
-                    mask = xtte_y == tte
+                self.figStat.suptitle( f"Progress {epoch}" )
+                self.figStat.render()
+            progress()  
 
-                    xav = xask_vols[mask]
-                    xbv = xbid_vols[mask]
-                    xfv = xfit_vols[mask]
-                    xnm = xnms[mask]
+            # model evaluation
+            # ----------------
 
-                    self.store += ax.plot( xnm, xav, ".:", color="red", label="Ask Vol" )
-                    self.store += ax.plot( xnm, xbv, ".:", color="green", label="Bid Vol" )
-                    self.store += ax.plot( xnm, xfv, ".-", color="orange", label="Fit Vol" )
+            model.eval()
+            with torch.no_grad():
+                batch         = self.sampler.generate_batch( self.sample_ids, device = model._env.device )
+                pathwise      = model( batch, training=False, return_what=model.ReturnWhat.PATHWISE )
 
-                    ax.set_ylim( m_o_m(xav,xbv,xfv) )
-                    ax.set_title( f"TTE {tte*DAYS_PER_YEAR:.2f}d" )
-                    ax.title.set_size(TITLE_FONT_SIZE)
+            is_valid      = batch['is_valid'].detach().cpu().numpy()
+            is_valid      = is_valid[:,-1,:]
+            assert is_valid.shape[0] == self.config.num_viz, f"Expected number of valid samples to match number of visualizations {self.config.num_viz}, but found {is_valid.shape[0]}"
 
-                siddata.fig.render()
-        details()
+            pure_ask      = batch['ask_pure_price'][:,-1,:].detach().cpu().numpy()
+            pure_bid      = batch['bid_pure_price'][:,-1,:].detach().cpu().numpy()
+            bid_vols      = batch['bid_vol'][:,-1,:].detach().cpu().numpy()
+            ask_vols      = batch['ask_vol'][:,-1,:].detach().cpu().numpy()
+            nms           = batch['nms'][:,-1,:].detach().cpu().numpy()
+            tte_y         = batch['tte_y'][:,-1,:].detach().cpu().numpy()
+            pure_strike   = batch['pure_strike'][:,-1,:].detach().cpu().numpy()
+            sqrtT         = nnp.sqrt(tte_y)
+
+            fit_price     = pathwise['fit_price'][:,-1,:].detach().cpu().numpy()
+            fit_vols      = pathwise['fit_vol'][:,-1,:].detach().cpu().numpy() if pathwise['fit_vol'] is not None else None
+            fit_vols      = bs.implied( pure_strike, fit_price, sqrtT=sqrtT, mask=is_valid, on_exceed_bounds="quiet" ) if fit_vols is None else fit_vols
+            del batch, pathwise
+
+            # per sample, aggregate price and vol error
+            # ------------------------------------------
+
+            def per_sample():
+                if is_first:
+                    self.figV = figure( title="Model vs Market Vols", col_size=6, row_size=4, columns=None )
+                    self.axsV = [ self.figV.add_subplot(f"Implied Vols Sample {sid.ticker} {sid.date}") for sid in self.sample_ids ]
+                    for axV in self.axsV:
+                        axV.set_xlabel("Ask Vol")
+                        axV.set_ylabel("Implied Volatility")
+
+                    self.figP = figure( title="Model vs Market Prices", col_size=6, row_size=4, columns=None )
+                    self.axsP = [ self.figP.add_subplot(f"Call Price Differences Sample {sid.ticker} {sid.date}") for sid in self.sample_ids ]
+                    for axP in self.axsP:
+                        axP.set_xlabel("NMS")
+                        axP.set_ylabel("Price Difference")
+                    for axP in self.axsP:
+                        axP.axhline(0., color="gray", linestyle="--", linewidth=1)
+
+                for ip, (axV, axP) in enumerate(zip(self.axsV, self.axsP)):
+                    ivld       = is_valid[ip,:]
+                    ipure_k    = pure_strike[ip,:][ivld]
+                    inms       = nms[ip,:][ivld]
+                    isqrtT     = sqrtT[ip,:][ivld]
+                    ifit       = fit_price[ip,:][ivld]
+                    ibid       = pure_bid[ip,:][ivld]
+                    iask       = pure_ask[ip,:][ivld]
+                    ibid_vols  = bid_vols[ip,:][ivld]
+                    iask_vols  = ask_vols[ip,:][ivld]
+                    ifit_vols  = fit_vols[ip,:][ivld]
+
+                    ixs        = nnp.argsort(iask_vols)
+                    ibid_vols_ = ibid_vols[ixs]
+                    iask_vols_ = iask_vols[ixs]
+                    ifit_vols_ = ifit_vols[ixs]
+
+                    self.store += axV.plot( iask_vols_, ifit_vols_, ".-", color="orange", label=f"Fit {ip}" )
+                    self.store += axV.plot( iask_vols_, ibid_vols_, "^:", color="green")
+                    self.store += axV.plot( iask_vols_, iask_vols_, "v:", color="red")
+
+                    ixs        = nnp.argsort(inms)
+                    inms_      = inms[ixs]
+                    ifit_      = ifit[ixs]
+                    ibid_      = ibid[ixs]
+                    iask_      = iask[ixs]
+                    self.store += axP.plot( iask_vols_, ibid_ - ifit_, "^:", color="green", label=f"Bid-Fit {ip}")
+                    self.store += axP.plot( iask_vols_, iask_ - ifit_, "v:", color="red", label=f"Ask-Fit {ip}")
+                    if is_first:
+                        ispread_ = iask_ - ibid_
+                        assert nnp.min(ispread_) > 0., f"Negative spread found in sample {ip}: min spread is {nnp.min(ispread_):.4g}"
+                        axP.fill_between( iask_vols_, -ispread_, +ispread_, color="blue", alpha=0.2, label="Spread" )
+
+                    axV.set_ylim( *m_o_m(ifit_vols, ibid_vols, iask_vols ))
+                    axP.set_ylim( *m_o_m(ibid - ifit, iask - ifit) )
+
+                    if is_first:
+                        axV.legend(loc="upper left")
+                        axP.legend(loc="upper left")
+                self.figV.suptitle( f"Model vs Market Vols Epoch {epoch}" )
+                self.figP.suptitle( f"Model vs Market Prices Epoch {epoch}" )
+                self.figV.render()
+                self.figP.render()
+            per_sample()
+
+            # details
+            # -------
+
+            def details():
+                if not self.config.details:
+                    return
+                
+                if is_first:
+                    def create_detail_fig(sid):
+                        r = PrettyObject()
+                        r.fig = figure( title=f"Model Details {sid.ticker} {sid.date}", col_size=3, row_size=3, columns=None )
+                        r.axs = []
+                        for i in range(self.config.num_tte):
+                            ax = r.fig.add_subplot(f"TTE #{i}")
+                            ax.set_xlabel("NMS")
+                            ax.set_ylabel("Vol")
+                            r.axs.append(ax)
+                        return r
+                    self.details = [ create_detail_fig(sid) for sid in self.sample_ids ]
+
+                for ip, siddata in enumerate(self.details):
+                    sid = self.sample_ids[ip]
+
+                    xis_valid = is_valid[ip,:]
+                    xnms     = nms[ip,:][xis_valid]
+                    ixs      = nnp.argsort(xnms)
+                    xnms     = xnms[ixs]
+                    xtte_y   = tte_y[ip,:][xis_valid][ixs]
+                    xask_vols = ask_vols[ip,:][xis_valid][ixs]
+                    xbid_vols = bid_vols[ip,:][xis_valid][ixs]
+                    xfit_vols = fit_vols[ip,:][xis_valid][ixs]
+
+                    uttes = nnp.unique(xtte_y).tolist()
+                    uttes = uttes if len(uttes) <= self.config.num_tte else ( uttes[:self.config.num_tte-2] + uttes[-2:] ) # limit number of TTEs visualized in deta
+
+                    for tte, ax in zip(uttes, siddata.axs[:len(uttes)]):
+                        mask = xtte_y == tte
+
+                        xav = xask_vols[mask]
+                        xbv = xbid_vols[mask]
+                        xfv = xfit_vols[mask]
+                        xnm = xnms[mask]
+
+                        self.store += ax.plot( xnm, xav, ".:", color="red", label="Ask Vol" )
+                        self.store += ax.plot( xnm, xbv, ".:", color="green", label="Bid Vol" )
+                        self.store += ax.plot( xnm, xfv, ".-", color="orange", label="Fit Vol" )
+
+                        ax.set_ylim( m_o_m(xav,xbv,xfv) )
+                        ax.set_title( f"TTE {tte*DAYS_PER_YEAR:.2f}d" )
+
+                    siddata.fig.render()
+            details()
 
                 
 

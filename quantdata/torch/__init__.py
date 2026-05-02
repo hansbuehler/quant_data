@@ -323,22 +323,31 @@ class MetricTacker(object):
     def __init__( self ):
         self.metrics = {}
 
-    def record( self, epoch : int, loss : float, metrics : Mapping[str, float] ):
+    def record( self, epoch : int, metrics : Mapping[str, tuple[float,float|None]] ):
         """ Update the metric tracker with new metrics and their corresponding weights """
-        assert not 'loss' in metrics, f"'loss' should not be included in the metrics dictionary, but should be passed as a separate argument to the record method."
-        self.record_metric( epoch, "loss", loss )
+        assert 'loss' in metrics, f"'loss' should be included in the metrics dictiory"
         for k,v in metrics.items():
-            self.record_metric( epoch, k, v )
+            if isinstance(v, tuple):
+                assert len(v) == 2, f"Expected metric '{k}' to be a tuple of (mean, std) or (value, None), but got {v} with length {len(v)}."
+                self.record_metric( epoch, k, mean=v[0], std=v[1] )
+            else:
+                self.record_metric( epoch, k, mean=v, std=None )
 
-    def record_metric( self, epoch : int, name : str, value : float ):
+    def record_metric( self, epoch : int, name : str, mean : float, std : float | None = None ):
         """ Add a single metric """
-        tm = self.metrics.get(name, None)
+        tm = self.metrics.get(name)
         if tm is None:
-            self.metrics[name] = dict(epochs=[epoch], values=[value])
+            tm = dict(epochs=[epoch], values=[mean], stds=[std] if not std is None else None)
+            self.metrics[name] = tm
         else:
             assert tm['epochs'][-1] < epoch, f"Epoch {epoch} is not greater than last epoch {tm['epochs'][-1]} for metric {name}"
             tm['epochs'].append(epoch)
-            tm['values'].append(value)
+            tm['values'].append(mean)
+            if std is None:
+                assert tm['stds'] is None, f"Metric {name} was previously recorded with stds, but now std is None"
+            else:
+                assert tm['stds'] is not None, f"Metric {name} was previously recorded without stds, but now std is provided"
+                tm['stds'].append(std)
 
     def items(self):
         """ Get all metrics as an iterable of (name, epochs, values) tuples """
@@ -354,12 +363,14 @@ class MetricTacker(object):
 
     def state_dict(self):
         """ Get a serializable copy of the tracked metrics as numpy arrays """
-        return { k: { 'epochs': nnp.asarray(v['epochs'], dtype=nnp.int32), 'values': nnp.asarray(v['values'], dtype=nnp.float32) } for k,v in self.metrics.items() }
+        return { k: { 'epochs': nnp.asarray(v['epochs'], dtype=nnp.int32),
+                      'values': nnp.asarray(v['values'], dtype=nnp.float32), 
+                      'stds': nnp.asarray(v['stds'], dtype=nnp.float32) if v['stds'] is not None else None } for k,v in self.metrics.items() }
 
     @staticmethod
     def load_state_dict(state):
         """ Load tracked metrics from a serializable state """
         assert isinstance(state, dict), f"Expected tracker state to be a dict, but got {type(state)}"
         tracker = MetricTacker()
-        tracker.metrics = { k: { 'epochs': x['epochs'].tolist(), 'values': x['values'].tolist() } for k,x in state.items() }
+        tracker.metrics = { k: { 'epochs': x['epochs'].tolist(), 'values': x['values'].tolist(), 'stds': x['stds'].tolist() if not x['stds'] is None else None } for k,x in state.items() }
         return tracker

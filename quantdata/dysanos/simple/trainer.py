@@ -4,6 +4,7 @@ Dysanos trainer
 
 from __future__ import annotations
 from copyreg import pickle
+import math
 import warnings
 
 from quantdata.dysanos.simple import locations_simple
@@ -228,6 +229,7 @@ class Trainer(object):
             r = PrettyObject()
             r.label          = state.pop("label")
             assert not r.label is None, f"Internal error: checkpoint '{ffn}' is missing the 'label' field."
+            r.version        = state.pop("version")
             r.epoch          = int(state.pop("epoch"))
             r.best_epoch     = state.pop("best_epoch", None)
             r.best_val_loss  = state.pop("best_val_loss", None)
@@ -240,12 +242,14 @@ class Trainer(object):
                 r.env.device = device
             r.sampler        = r.sampler_config.instantiate_from_cache(verbose=verbose(1))
             r.model          = r.model_config.instantiate_from_cache(env=r.env, sampler=r.sampler, verbose=verbose(1))
+            r.model.load_state_dict(state.pop("model_state_dict"))
+            r.optimizer.load_state_dict(state.pop("optimizer_state_dict"))
         except Exception as e:
             raise type(e)(f"Failed to instantiate model and sampler from checkpoint '{ffn}': {str(e)}") from e
         verbose.write(lambda : f"Model '{r.model.info_label}' instantiated from checkpoint '{ffn}' for epoch {r.epoch} with best validation loss {r.best_val_loss} at epoch {r.best_epoch} on device {r.env.device}.")
         return r
 
-    def __call__( self, epochs : int, *, total : bool = False ) -> BaseModel:
+    def __call__( self, epochs : int, *, total : bool = True ) -> BaseModel:
         """ Run model """
         verbose = self._verbose
         model   = self._model
@@ -253,7 +257,7 @@ class Trainer(object):
         config  = self._config
         sampler = self._sampler
 
-        epochs = epochs if not total else ( epochs - self._current_epoch )
+        epochs = epochs if total else  ( self._current_epoch + epochs )
         if self._current_epoch >= epochs:
             verbose.write(lambda : f"Model '{self.info_label}' was already trained for {self._current_epoch} epochs.")
             if self._visualizer is not None:
@@ -329,45 +333,70 @@ class Trainer(object):
             with torch.no_grad():
                 def value( trn ):
                     loss    = 0.
+                    loss_sq = 0.
                     weight  = 0.
                     metrics = {}
 
                     for batch in sampler.all( trn=trn, batch_size=config.val_batch_size, device=self.device ):
-                        ls, wg, lm = model( batch, training=False, return_what=model.ReturnWhat.VALUATION )
+                        ls, lsq, wg, lm = model( batch, training=False, return_what=model.ReturnWhat.VALUATION )
+                        verify( not 'loss' in lm, lambda : f"Setup error '{self.info_label}': model returned 'loss' as a metric, but 'loss' should be returned as a separate value from the forward method, not as a metric." )
                         ls      = ls.detach().item()
+                        lsq     = lsq.detach().item()
                         wg      = wg.detach().item()
-                        assert nnp.isfinite(ls) and nnp.isfinite(wg) and wg > 0, f"Internal error: {ls} {wg}"
-                        verify( not 'loss' in lm, f"'loss' should not be returned as a separate metric, but should be included in the loss value returned by the model.")
+                        assert nnp.isfinite(ls+lsq+wg) and lsq >=0. and wg > 0, f"Internal error: {ls} {lsq} {wg}"
                         loss    += ls
+                        loss_sq += lsq
                         weight  += wg
 
                         # each metric contains a nominator and denominator, to be aggregated accross all samples
                         for metric, mvalues in lm.items():
-                            assert len(mvalues) == 2, f"Internal error: metric '{metric}' has {len(xvalues)} values so far, but the current batch returned {len(mvalues)} values."
-                            xvalues = metrics.setdefault( metric, [0.,0.] )
-                            v       = mvalues[0].detach().item()
-                            w       = mvalues[1].detach().item()
-                            assert nnp.isfinite(v) and nnp.isfinite(w) and w >= 0, f"Internal error: metric '{metric}' has non-finite or negative values: {v} and {w}"
-                            xvalues[0] += v
-                            xvalues[1] += w
+                            verify( len(mvalues) in [2,3], lambda : f"Setup error '{self.info_label}': metric '{metric}' has returned {len(mvalues)}, but two or three are required: E[w x], E[w x^2] and E[w]" )
+                            mvalues = [ m.detach().item() for m in mvalues ]
+                            assert all(nnp.isfinite(x) for x in mvalues), f"Internal error: metric '{metric}' has non-finite or negative values: {mvalues}"
+                            assert mvalues[-1] > 0, f"Internal error: metric '{metric}' must have posititive weight, found {mvalues[-1]}"
+                            assert len(mvalues) == 2 or mvalues[1] >= 0, f"Internal error: metric '{metric}' must have non-negative 'square' value; found {mvalues[1]}"
 
+                            xvalues = metrics.get( metric, None )
+                            xvalues = [ x + m for x,m in zip(xvalues, mvalues) ] if not xvalues is None else mvalues
+                            assert xvalues[-1] > 0., f"Internal error: metric '{metric}' has non-positive total weight {xvalues[-1]} after aggregation"
+                            metrics[metric] = xvalues
+                        del metric, mvalues, xvalues
+    
                     # take averages
-                    metrics = { metric: (mvalues[0] / mvalues[1]) for metric, mvalues in metrics.items() }
-                    return loss / weight, metrics
+                    loss = loss / weight
+                    loss_std = math.sqrt( max(0., loss_sq / weight - loss*loss) )
+                    del weight, loss_sq
+
+                    agg_metrics = dict(loss=(loss, loss_std))
+                    for metric, mvalues in metrics.items():
+                        if len(mvalues) == 3:
+                            Ex   = mvalues[0]
+                            Exsq = mvalues[1]
+                            w    = mvalues[2]
+                            assert w > 0., f"Internal error: metric '{metric}' has non-positive total weight {w} after aggregation"
+                            mean = Ex / w
+                            std  = math.sqrt( max(0., Exsq / w - mean*mean) )
+                            agg_metrics[metric] = ( mean, std )
+                        else:
+                            assert len(mvalues) == 2
+                            assert mvalues[1] > 0., f"Internal error: metric '{metric}' has non-positive total weight {mvalues[1]} after aggregation"
+                            agg_metrics[metric] = ( mvalues[0] / mvalues[1], None )
+
+                    return loss, agg_metrics
                 
                 with tracker("val_trn"):
                     trn_val_loss, trn_metrics = value(trn=True)
-                    self._track_val_trn.record( epoch, trn_val_loss, trn_metrics )
+                    self._track_val_trn.record( epoch, trn_metrics )
                     self._track_val_trn.record_metric( epoch, "lr", lr )
                 with tracker("val_vld"):
                     vld_val_loss, vld_metrics = value(trn=False)    
-                    self._track_val_vld.record( epoch, vld_val_loss, vld_metrics )
+                    self._track_val_vld.record( epoch, vld_metrics )
                     self._track_val_vld.record_metric( epoch, "lr", lr )
 
             assert not trn_val_loss is None and not vld_val_loss is None, "Internal error: valuation failed to produce a validation loss"
 
-            # print & visualize
-            # -----------------
+            # print
+            # -----
 
             if verbose.shall_report():
                 str_tme_val_trn = f"{tracker['val_trn'].fmt_average_lap_seconds()}"
@@ -376,15 +405,13 @@ class Trainer(object):
 
                 str_metrics = f"LR: {lr:.2e}, GN {grad_norm:.4g}, "
                 for k in trn_metrics:
-                    trn_v = trn_metrics[k]
-                    vld_v = vld_metrics[k]
-                    str_metrics += f"{k}: {trn_v:.4g}/{vld_v:.4g}, "
+                    if k!="loss":
+                        trn_v = trn_metrics[k][0]
+                        vld_v = vld_metrics[k][0]
+                        str_metrics += f"{k}: {trn_v:.4g}/{vld_v:.4g}, "
                 str_metrics = str_metrics[:-2] + "."
                 verbose.write(f"\rTraining '{self.label}' epoch {epoch}/{epochs} error avg trn {trn_loss:.4g}; val {trn_val_loss:.4g}/{vld_val_loss:.4g} "+\
                               f"[{str_tme_trn} {str_tme_val_trn} {str_tme_val_vld}]. {str_metrics} ETA: {str_estimated}.")
-
-            if self._visualizer is not None:
-                self._visualizer.update(model,epoch=epoch, trn_tracker=self._track_val_trn, vld_tracker=self._track_val_vld) 
 
             # checkpointing
             # -------------
@@ -416,5 +443,11 @@ class Trainer(object):
                     verbose1.write(f"done; this took {tme}.", head=False)
 
                 last_checkpoint_time = time.time()
+
+            # visualize
+            # ---------
+
+            if self._visualizer is not None:
+                self._visualizer.update(model,epoch=epoch, trn_tracker=self._track_val_trn, vld_tracker=self._track_val_vld) 
 
         return model

@@ -99,6 +99,6 @@ def run( label, *,
 
     verbose = Context("all")
     trainer = Trainer( label=label, model=model, sampler=sampler, config=train_config, verbose=verbose )
-    _ = trainer(epochs=epochs)
+    _ = trainer(epochs=epochs, total=True)
 
 

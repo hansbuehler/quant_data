@@ -240,6 +240,8 @@ class SampleID:
     def __lt__(self, other: SampleID) -> bool:
         if self.index < other.index:
             return True
+        if self.index > other.index:
+            return False
         return self.ticker < other.ticker
     
     def __eq__(self, other: SampleID) -> bool:
@@ -355,9 +357,9 @@ class SimpleSampler(BaseSampler):
                 del trn_dates, vld_dates, ttrn_indices, tvld_indices, tnum_trn_samples, tnum_vld_samples
 
             if len(trn_samples_ids) == 0:
-                raise ValueError(f"Not enough samples to create even one training sample for {self.all_dates[0]} to {self.all_dates[-1]} with {num_dates} using {simple_config.sampling_config.num_steps} steps and sliding by {simple_config.sampling_config.num_slide}.")
+                raise ValueError(f"Not enough samples to create even one training sample for {num_dates} dates using {simple_config.sampling_config.num_steps} steps and sliding by {simple_config.sampling_config.num_slide}.")
             if len(vld_samples_ids) == 0:
-                raise ValueError(f"Not enough samples to create even one validation sample for {self.all_dates[0]} to {self.all_dates[-1]} with {num_dates} using {simple_config.sampling_config.num_steps} steps and sliding by {simple_config.sampling_config.num_slide}.")
+                raise ValueError(f"Not enough samples to create even one validation sample for {num_dates} dates using {simple_config.sampling_config.num_steps} steps and sliding by {simple_config.sampling_config.num_slide}.")
 
             trn_samples_ids = list(trn_samples_ids)
             vld_samples_ids = list(vld_samples_ids)            
