@@ -121,12 +121,13 @@ class FeedForward(BaseModel):
 
         use_bias = config.use_bias if config.num_depth > 0 else use_final_bias
 
-        self.I0 = tnn.ModuleList( [ tnn.Linear( in_features=1, out_features=num_width, bias=use_bias, device=env.device, dtype=env.fdtype) for i in range(num_input) ] )
+        self.I0 = tnn.Linear( in_features=num_input, out_features=num_width, bias=use_bias, device=env.device, dtype=env.fdtype) 
+        ##OLD        self.I0 = tnn.ModuleList( [ tnn.Linear( in_features=1, out_features=num_width, bias=use_bias, device=env.device, dtype=env.fdtype) for i in range(num_input) ] )
         if config.num_depth > 0:
             In = [ tnn.Linear( in_features=num_width, out_features=num_width, bias=use_bias, device=env.device, dtype=env.fdtype ) for d in range(config.num_depth-1) ]
             In.append( tnn.Linear( in_features=num_width, out_features=output_dim if output_dim > 0 else 1, bias=use_final_bias, device=env.device, dtype=env.fdtype ) )
             self.In = tnn.ModuleList( In )
-            del In
+            #del In
         else:
             self.In = []
 
@@ -146,30 +147,43 @@ class FeedForward(BaseModel):
             If provided, the mask is applied to each input element as ``input = torch.where(mask[...,None], input, 0)``.
             This can be used to zero out certain inputs without changing the shape of the output. 
         """
-        input = [ input[...,i] for i in range(input.shape[-1]) ] if isinstance(input, torch.Tensor ) else input
-        verify_inp( len(input) == self.num_input, lambda : f"Input length error: expected {self.num_input}, got {len(input)}" )
-        self.verify( lambda : torch.any(mask), lambda : f"{FeedForward}: Mask is all False, no valid input to process" ) if not mask is None else None
-
         def lin_has_finite_weights( lin : tnn.Linear ) -> bool:
             if lin.bias is None:
                 return torch.isfinite(lin.weight).all()
             return torch.isfinite(lin.weight).all() & torch.isfinite(lin.bias).all()
+
+
+        if isinstance(input, torch.Tensor ):
+            assert input.shape[-1] == self.num_input, f"Input shape mismatch: expected last dimension to be {self.num_input}, but found {input.shape}"
+            x    = torch.where( mask[...,None], input, 0.) if not mask is None else input
+        else:
+            assert len(input) == self.num_input, f"Input length mismatch: expected {self.num_input} elements in the input list, but found {len(input)}"
+            shape = torch.broadcast_shapes( *[x.shape for x in input] )
+            x     = torch.stack([ torch.where(mask, x, 0.).expand(shape) for x in input], dim=-1) if not mask is None else\
+                    torch.stack([ x.expand(shape) for x in input], dim=-1)
+
+        self.verify( lambda : torch.isfinite(x), lambda : f"{FeedForward}: not finite input 'x' after masking and stacking" )
+        x = self.I0(x)
+
+        """
+        OLD
+        input = [ input[...,i] for i in range(input.shape[-1]) ] if isinstance(input, torch.Tensor ) else input
+        verify_inp( len(input) == self.num_input, lambda : f"Input length error: expected {self.num_input}, got {len(input)}" )
+        self.verify( lambda : torch.any(mask), lambda : f"{FeedForward}: Mask is all False, no valid input to process" ) if not mask is None else None
 
         x = None
         for iinp, (inp, I0) in enumerate(zip(input, self.I0)):
             inp  = inp if mask is None else torch.where( mask, inp, 0. )
             self.verify( lambda : torch.isfinite(inp), lambda :  f"{FeedForward}: Input #{iinp} is not finite" )
             self.verify( lambda : lin_has_finite_weights(I0), lambda : f"{FeedForward}: Input #{iinp} weights or bias are not finite"    )
-            inp_ = inp
             inp = I0( inp[...,None] )
             self.verify( lambda :torch.isfinite(inp).all(), lambda : f"{FeedForward}: Iteration #{iinp} activation 'inp' is not finite" )
             x = inp if x is None else (x+inp)
-            del inp
-        del input
+            #del inp
+        #del input
         self.verify( lambda : torch.isfinite(x), lambda : f"{FeedForward}: Composed input 'x' is not finite" )  
-
+        """
         for iI, I in enumerate(self.In):
-            x_ = x
             x = self.activation(x)
             self.verify( lambda : torch.isfinite(x), lambda : f"{FeedForward}: Iteration #{iI} activation 'x' is not finite" )
             self.verify( lambda : lin_has_finite_weights(I), lambda : f"{FeedForward}: Input #{iI} weights or bias are not finite"    )

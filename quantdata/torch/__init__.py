@@ -3,6 +3,7 @@ Torch base
 """
 
 from __future__ import annotations
+from pyexpat import model
 
 import torch as torch
 import torch.nn as tnn
@@ -153,6 +154,57 @@ class BaseModel(tnn.Module):
             if not condition.item():
                 raise exception( message() if callable(message) else message )
 
+    def debug_detect_grad_issues( self ):
+        """
+        Detect common gradient issues such as missing gradients or non-finite values. This is a helper function to perform checks during model execution.
+        If any issues are detected, an AssertionError will be raised with a message describing the problems.
+
+        If ``debug`` is not enabled, this function is a NOOP.
+        """
+        if not self.debug:
+            return
+        grad_problems = []
+        for name, parameter in self.named_parameters():
+            if parameter.grad is None:
+                grad_problems.append(f"{name}: missing grad")
+            elif not torch.isfinite(parameter.grad).all():
+                grad_problems.append(f"{name}: non-finite grad")
+        if len(grad_problems) > 0:
+            raise RuntimeError(f"{self.__class__.__name__}: gradient diagnostics failed: " + "; ".join(grad_problems[:5]))
+        
+    def debug_finite_parameters( self ):
+        """
+        Verify that all parameters in the model are finite. This is a helper function to perform checks during model execution.
+        If any non-finite parameters are detected, an AssertionError will be raised with a message describing the problems
+
+        If ``debug`` is not enabled, this function is a NOOP.
+        """
+        if not self.debug:
+            return
+
+        for p in self.parameters():
+            if not torch.isfinite(p).all():
+                raise RuntimeError(f"{self.__class__.__name__}: parameter contains non-finite values, which can lead to training instability. Check the model and the data.")
+
+    @torch.compile
+    def compute_grad_norm( self ):
+        """
+        Compute the average L2 norm of the gradients across all parameters in the model. This is a helper function to perform checks during model execution.
+        If there are no gradients, this function will return None.
+        """
+        with torch.no_grad():
+            total_grad_sq = None
+            num_grad_tensors = 0
+            for parameter in self.parameters():
+                if parameter.grad is not None:
+                    grad = parameter.grad.detach()
+                    total_grad_sq = total_grad_sq + torch.sum(grad * grad) if total_grad_sq is not None else torch.sum(grad * grad)
+                    num_grad_tensors += 1
+            if num_grad_tensors == 0:
+                return None
+            grad_norm = torch.sqrt(total_grad_sq/num_grad_tensors)
+            return grad_norm
+
 class BaseVisualizer(object):
     """ Base visualizer class to visualize model performance during training and validation. """
     def update( self, model : BaseModel, epoch : int ):
@@ -212,13 +264,19 @@ def check( tensor : torch.Tensor, item : str, shape : tuple|int|None = None, dty
                 raise ValueError(f"Expected item '{item}' to have shape {shape}, but got {tensor.shape}.")
 
     if dtype is not None:
-        if dtype == float:
+        if dtype is float:
             if not torch.is_floating_point(tensor):
                 raise TypeError(f"Expected item '{item}' to have a floating point dtype, but got {tensor.dtype}.")
-        elif dtype == int:
-            if not torch.is_integral(tensor):
+        elif dtype is int:
+            if tensor.dtype not in {
+                torch.int8,
+                torch.int16,
+                torch.int32,
+                torch.int64,
+                torch.uint8,
+            }:
                 raise TypeError(f"Expected item '{item}' to have an integer dtype, but got {tensor.dtype}.")
-        elif dtype == bool:
+        elif dtype is bool:
             if tensor.dtype != torch.bool:
                 raise TypeError(f"Expected item '{item}' to have a boolean dtype, but got {tensor.dtype}.")
         else:
@@ -283,37 +341,28 @@ def are_broadcastable(shape1, shape2) -> bool:
 # Debugging
 # ---------------------------------------
 
-def detect_grad_issues(model : torch.nn.Module):
+def lazy_verify( debug : bool, condition: callable, message: str | callable, exception : Exception = RuntimeError )-> None:    
     """
-    Detect common gradient issues such as missing gradients or non-finite values. This is a helper function to perform checks during model execution.
-    If any issues are detected, an AssertionError will be raised with a message describing the problems
+    Verify condition and print message if ``debug`` is enabled
+    via :class:`BaseEnvironment`. This is a helper function to perform checks during model execution.
+    If ``debug`` is not enabled, this function is a NOOP.
+    
+    Parameters
+    ----------
+    condition : callable
+        A function that returns a boolean tensor. This function will be called only if ``debug`` is True.   
+    message : str or callable
+        A string or a function that returns a string. This will be called only if ``debug`` is True and the condition is not satisfied.
+    exception : Exception, default :class:`RuntimeError`
+        The type of exception to raise if the condition is not satisfied.
     """
-    grad_problems = []
-    for name, parameter in model.named_parameters():
-        if parameter.grad is None:
-            grad_problems.append(f"{name}: missing grad")
-        elif not torch.isfinite(parameter.grad).all():
-            grad_problems.append(f"{name}: non-finite grad")
-    assert not grad_problems, "Gradient diagnostics failed before optimizer step: " + "; ".join(grad_problems[:5])
-
-def compute_grad_norm(model : torch.nn.Module):
-    """
-    Compute the average L2 norm of the gradients across all parameters in the model. This is a helper function to perform checks during model execution.
-    If there are no gradients, this function will return None.
-    """
-    total_grad_sq = None
-    num_grad_tensors = 0
-
-    for parameter in model.parameters():
-        if parameter.grad is not None:
-            grad = parameter.grad.detach()
-            total_grad_sq = total_grad_sq + torch.sum(grad * grad) if total_grad_sq is not None else torch.sum(grad * grad)
-            num_grad_tensors += 1
-    if num_grad_tensors == 0:
-        return None
-    grad_norm = torch.sqrt(total_grad_sq/num_grad_tensors)
-    return grad_norm.item()
-
+    if not self.debug:
+        return
+    
+    with torch.no_grad():
+        condition = torch.all( condition() if callable(condition) else condition )
+        if not condition.item():
+            raise exception( message() if callable(message) else message )
 
 class MetricTacker(object):
     """

@@ -4,13 +4,14 @@ Dysanos trainer
 
 from __future__ import annotations
 from copyreg import pickle
+import logging
 import math
 import warnings
 
 from quantdata.dysanos.simple import locations_simple
-from quantdata.torch import get, pop, compute_grad_norm, detect_grad_issues, MetricTacker, BaseEnvironment, BaseModel, BaseSampler
+from quantdata.torch import MetricTacker, BaseModel, BaseSampler, lazy_verify
 from dataclasses import dataclass, asdict
-from cdxcore.err import verify_inp, verify
+from cdxcore.err import verify_inp, verify 
 from cdxcore.util import TrackTime, fmt_filename, fmt_seconds, fmt_list
 from cdxcore.verbose import Context
 from cdxcore.subdir import SubDir, version
@@ -104,6 +105,12 @@ class Trainer(object):
         """
         Main training loop
         """
+        torch.set_float32_matmul_precision("high")
+        torch._logging.set_logs(
+            recompiles=True,
+            graph_breaks=True,
+            dynamo=logging.WARNING,
+        )
         label = None if label == "" else label
 
         self._info_label = model.info_qualified_label(label) # this is for printing user information
@@ -135,7 +142,7 @@ class Trainer(object):
         self._tracker       = TrackTime()
 
         if verbose.shall_report():
-            s = f"Trainer for '{self.info_label}' on data {sampler.unique_data_id}"
+            s = f"Trainer for '{self.info_label}'"
             verbose.write(s+'\n'+("="*len(s)))
             del s
         if model.debug:
@@ -180,8 +187,10 @@ class Trainer(object):
                     self._rndg.set_state(rndg_state)
                     verbose.write(f"done; this took {tme}.", head=False)
             restore(verbose(1))
-        verbose.report(1,lambda : f"Model is ready. Current epoch to train is {self._current_epoch}.")
-        verbose.report(1,lambda : f"Experiment path is {self._path.path}.") 
+
+        verbose1 = verbose(1)
+        verbose1.write(lambda : f"Model is ready. Current epoch to train is {self._current_epoch}.")        
+        verbose1.write(lambda : f"Experiment path is {self._path.path}.") 
 
     @property
     def info_label(self) -> str:
@@ -197,6 +206,15 @@ class Trainer(object):
     def device(self):
         return self._model.device
     
+    @property
+    def debug(self):
+        return self._model.debug
+    
+    def verify(self, condition: callable, message: str | callable, exception : Exception = RuntimeError )-> None:    
+        """ Verify condition and raise exception with message if not satisfied. Outside debug mode, this will be a no-op to avoid performance issues. """
+        if self.debug:
+            lazy_verify(condition, lambda : f"{self.info_label}: {message()}" if callable(message) else f"{self.info_label}: {message}", exception=exception)
+
     def get_state(self) -> dict:
         """ Return current state as dictionary """
         return {
@@ -251,11 +269,11 @@ class Trainer(object):
 
     def __call__( self, epochs : int, *, total : bool = True ) -> BaseModel:
         """ Run model """
-        verbose = self._verbose
-        model   = self._model
-        tracker = self._tracker
-        config  = self._config
-        sampler = self._sampler
+        verbose        = self._verbose
+        model          = self._model
+        tracker        = self._tracker
+        config         = self._config
+        sampler        = self._sampler
 
         epochs = epochs if total else  ( self._current_epoch + epochs )
         if self._current_epoch >= epochs:
@@ -265,9 +283,9 @@ class Trainer(object):
             return model
 
         verbose.write(lambda : f"Launching '{self.info_label}' training for {epochs} epochs over {self._sampler.num_trn_samples} training and {self._sampler.num_vld_samples} validation samples, using a mini bastch size of "+\
-                               f"{config.trn_batch_size} for {config.batch_per_epoch} batches per epoch, and a batch size of {config.val_batch_size} for valuation. "+\
-                               f"The model has {sum(p.numel() for p in model.parameters())} parameters." +\
-                               (f" Resuming from epoch {self._current_epoch}." if self._current_epoch>0 else ""))
+                               f"{config.trn_batch_size} for {config.batch_per_epoch} batches per epoch, and a batch size of {config.val_batch_size} for valuation.")
+        verbose.report(1,lambda : f"This model has {sum(p.numel() for p in model.parameters())} parameters." +\
+                                 (f"\nResuming from epoch {self._current_epoch}." if self._current_epoch>0 else "\nStarting afresh."))
 
         # training
         # --------
@@ -278,8 +296,28 @@ class Trainer(object):
             for group in self._optimizer.param_groups:
                 group["lr"] = lr
 
+        @torch.compile( mode="reduce-overhead",
+                        dynamic=False,
+                        fullgraph=True,
+                        disable=self.debug,
+                    )
+        def gradient_step( batch ):
+            ls, wg = model( batch, training=True ) 
+            mini_loss = ls / wg
+            self.verify( lambda : torch.isfinite(mini_loss).all(), "Internal error: mini_loss infinite" )
+            return ls, wg, mini_loss
+
+        @torch.compile( mode="reduce-overhead",
+                        dynamic=False,
+                        fullgraph=True,
+                        disable=self.debug,
+                    )
+        def valuation( batch ):
+            with torch.no_grad():
+                ls, lsq, wg, lm = model( batch, training=False, return_what=model.ReturnWhat.VALUATION )
+                return ls, lsq, wg, lm
+
         for epoch in range(self._current_epoch+1, epochs+1):
-            assert all(torch.isfinite(p).all().item() for p in model.parameters()), "Model parameters contain non-finite values before training step"
             grad_norm = 0.
             lr = config.learning_rate(epoch)
             set_lr(lr)
@@ -294,32 +332,34 @@ class Trainer(object):
                         verbose.write(lambda : f"\rTraining epoch {epoch}/{epochs} mini batch {imini+1}/{config.batch_per_epoch} with learning rate {lr:.2e}: so far this took {tme}...", end='')
 
                         batch = sampler( self._rndg, trn=True, batch_size=config.trn_batch_size, device=self.device, return_batch_indices=False )
-                        assert batch['is_valid'].any().item(), "Sampled batch contains no valid samples. Check the sampler and the data."
+                        self.verify( lambda : torch.any( batch['is_valid'], dim=-1 ), "Sampled batch contains no valid samples. Check the sampler and the data.")
 
                         self._optimizer.zero_grad(set_to_none=True)
-
-                        assert all(torch.isfinite(p).all().item() for p in model.parameters()), f"Model parameters contain non-finite values before model call {epoch} {imini}"
-                        ls, wg = model( batch, training=True )
-                        mini_loss = ls / wg
-                        assert torch.isfinite(mini_loss).all(), f"Internal error: mini_loss infinite"
+                        ls, wg, mini_loss = gradient_step(batch)
 
                         mini_loss.backward()
-
-                        detect_grad_issues(model)
+                        model.debug_detect_grad_issues()
 
                         if config.max_grad_norm is not None:
                             torch.nn.utils.clip_grad_norm_(model.parameters(), config.max_grad_norm)
-                        grad_norm = compute_grad_norm(model)
 
                         self._optimizer.step()
-                        assert all(torch.isfinite(p).all().item() for p in model.parameters()), f"Model parameters contain non-finite values after optimizer step {epoch} {imini}"
 
-                        loss    += ls.detach().item()
-                        weight  += wg.detach().item()
-                    return loss / weight, grad_norm
+                        with torch.no_grad():
+                            ls      = ls.detach().clone()
+                            wg      = wg.detach().clone()
+                            loss    += ls if loss is None else loss + ls
+                            weight  += wg if weight is None else weight + wg
+                        del batch
+
+                    with torch.no_grad():
+                        loss = ( loss / weight ).detach().cpu().item()
+                        grad_norm = model.compute_grad_norm().detach().cpu().item()
+                    return loss, grad_norm
 
                 trn_loss, grad_norm = train()
-                
+
+            model.debug_finite_parameters()                
             if verbose.shall_report():
                 str_tme_trn = f"{tracker['training'].fmt_average_lap_seconds()}"
                 verbose.write(f"\rTraining epoch {epoch}/{epochs} error avg trn {trn_loss:.4g} [{str_tme_trn}] learning rate {lr:.2e} grad norm {grad_norm:.4g}... running valuation... ", end='')
@@ -332,47 +372,52 @@ class Trainer(object):
 
             with torch.no_grad():
                 def value( trn ):
-                    loss    = 0.
-                    loss_sq = 0.
-                    weight  = 0.
+                    loss    = None
+                    loss_sq = None
+                    weight  = None
                     metrics = {}
 
                     for batch in sampler.all( trn=trn, batch_size=config.val_batch_size, device=self.device ):
-                        ls, lsq, wg, lm = model( batch, training=False, return_what=model.ReturnWhat.VALUATION )
+                        ls, lsq, wg, lm = valuation( batch )
                         verify( not 'loss' in lm, lambda : f"Setup error '{self.info_label}': model returned 'loss' as a metric, but 'loss' should be returned as a separate value from the forward method, not as a metric." )
-                        ls      = ls.detach().item()
-                        lsq     = lsq.detach().item()
-                        wg      = wg.detach().item()
-                        assert nnp.isfinite(ls+lsq+wg) and lsq >=0. and wg > 0, f"Internal error: {ls} {lsq} {wg}"
-                        loss    += ls
-                        loss_sq += lsq
-                        weight  += wg
+                        self.verify( lambda : torch.isfinite(ls+lsq+wg), "Valuation returned non-finite values. Check the model and the data." )
+                        self.verify( lambda : torch.min(lsq) >= 0., "Valuation returned negative squared loss values. Check the model and the data." )
+                        self.verify( lambda : torch.min(wg) > 0., "Valuation returned negative weights. Check the model and the data." )
+                        del batch
+                        
+                        ls      = ls.detach().clone()
+                        lsq     = lsq.detach().clone()
+                        wg      = wg.detach().clone()
+                        loss    = ls if loss is None else loss + ls
+                        loss_sq = lsq if loss_sq is None else loss_sq + lsq
+                        weight  = wg if weight is None else weight + wg
 
                         # each metric contains a nominator and denominator, to be aggregated accross all samples
                         for metric, mvalues in lm.items():
                             verify( len(mvalues) in [2,3], lambda : f"Setup error '{self.info_label}': metric '{metric}' has returned {len(mvalues)}, but two or three are required: E[w x], E[w x^2] and E[w]" )
-                            mvalues = [ m.detach().item() for m in mvalues ]
-                            assert all(nnp.isfinite(x) for x in mvalues), f"Internal error: metric '{metric}' has non-finite or negative values: {mvalues}"
-                            assert mvalues[-1] > 0, f"Internal error: metric '{metric}' must have posititive weight, found {mvalues[-1]}"
-                            assert len(mvalues) == 2 or mvalues[1] >= 0, f"Internal error: metric '{metric}' must have non-negative 'square' value; found {mvalues[1]}"
+                            if self.debug:
+                                assert all(nnp.isfinite(x) for x in mvalues), f"Internal error: metric '{metric}' has non-finite or negative values: {mvalues}"
+                                assert mvalues[-1] > 0, f"Internal error: metric '{metric}' must have posititive weight, found {mvalues[-1]}"
+                                assert len(mvalues) == 2 or mvalues[1] >= 0, f"Internal error: metric '{metric}' must have non-negative 'square' value; found {mvalues[1]}"
 
                             xvalues = metrics.get( metric, None )
-                            xvalues = [ x + m for x,m in zip(xvalues, mvalues) ] if not xvalues is None else mvalues
-                            assert xvalues[-1] > 0., f"Internal error: metric '{metric}' has non-positive total weight {xvalues[-1]} after aggregation"
+                            xvalues = [ x + m.detach().clone() for x,m in zip(xvalues, mvalues) ] if not xvalues is None else\
+                                      [ m.detach().clone() for m in mvalues ]   
+                            self.verify(lambda : xvalues[-1] > 0., f"Internal error: metric '{metric}' has non-positive total weight {xvalues[-1]} after aggregation" )
                             metrics[metric] = xvalues
                         del metric, mvalues, xvalues
     
-                    # take averages
-                    loss = loss / weight
-                    loss_std = math.sqrt( max(0., loss_sq / weight - loss*loss) )
+                    # take averages                    
+                    loss = ( loss / weight ).detach().cpu().item()
+                    loss_std = math.sqrt( max(0., loss_sq / weight - loss*loss).detach().cpu().item() )
                     del weight, loss_sq
 
                     agg_metrics = dict(loss=(loss, loss_std))
                     for metric, mvalues in metrics.items():
                         if len(mvalues) == 3:
-                            Ex   = mvalues[0]
-                            Exsq = mvalues[1]
-                            w    = mvalues[2]
+                            Ex   = mvalues[0].detach().cpu().item()
+                            Exsq = mvalues[1].detach().cpu().item()
+                            w    = mvalues[2].detach().cpu().item()
                             assert w > 0., f"Internal error: metric '{metric}' has non-positive total weight {w} after aggregation"
                             mean = Ex / w
                             std  = math.sqrt( max(0., Exsq / w - mean*mean) )
@@ -381,7 +426,7 @@ class Trainer(object):
                             assert len(mvalues) == 2
                             assert mvalues[1] > 0., f"Internal error: metric '{metric}' has non-positive total weight {mvalues[1]} after aggregation"
                             agg_metrics[metric] = ( mvalues[0] / mvalues[1], None )
-
+                    del metrics
                     return loss, agg_metrics
                 
                 with tracker("val_trn"):

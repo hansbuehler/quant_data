@@ -87,10 +87,10 @@ class DeepSetEncoderFactory(EncoderFactory):
         return Functional()
 
 @dataclass(frozen=True)
-class AttentionEncoderFactory(EncoderFactory):
+class AttentionPoolingEncoderFactory(EncoderFactory):
     r"""
-    AttentionEncoderFactory
-    ^^^^^^^^^^^^^^^^^^^^^^^
+    AttentionPoolingEncoderFactory
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     Let $f$ be a list of $n_f$ features for $m$ options and $c$ be a list of $n_c$  a list of characteristics, which are 
     non-market data features such as strike, time to expiry. The objective is to encode-decode the one of "price", "vol"
@@ -154,29 +154,19 @@ class AttentionEncoderFactory(EncoderFactory):
                 self.verify( lambda: torch.isfinite(eV).all(), "V is infinite")
                 eQ  = eQK[...,0] # (B,S,O,H,C)
                 eK  = eQK[...,1] # (B,S,O,H,C)
-                del eQK
+                #del eQK
 
                 # unoptimized 
-                weight  = - torch.einsum( "bsohc,bsohc->bsoh", eQ, eK ) / math.sqrt( C )
-                assert weight.shape == (B, S, O, H), f"Expected attention weight representation to have shape {(B, S, O, H)}, but found {weight.shape}"
-                with torch.no_grad():
-                    max_    = torch.max( weight ) # numerical constant - will cancel because of the softmax weighting
+                scores = -(eQ * eK).sum(dim=-1) * (1.0 / math.sqrt(C))  # (B,S,O,H)
 
-                weight  = torch.where( mask[...,None], torch.exp( weight - max_ ), 0. ) # (B,S,O,H) - exponentiate and zero out non-existing options
-                self.verify( ( torch.sum(weight,dim=2) > 0).all(), "All samples must have at least one valid option for attention to work" )
-                weight  = weight / torch.sum( weight, dim=2, keepdims=True) # (B,S,O,H) - normalize over options
-                weight  = torch.where( mask[...,None], weight, 0. ) # (B,S,O,H) - zero out non-existing options
-                self.verify( lambda: torch.isfinite(weight).all(), "Weights are infinite")
-                del max_
+                neg_large = torch.finfo(scores.dtype).min
+                scores = scores.masked_fill(~mask[..., None], neg_large)
 
-                """
-                weight  = torch.softmax( weight.masked_fill( mask[...,None], float("-inf") ), dim=2 ) 
-                assert weight.shape == (B, S, O, H), f"Expected attention weight representation to have shape {(B, S, O, H)}, but found {weight.shape}"
-                weight  = torch.where( mask[...,None], weight, 0. ) # (B,S,O,H) - zero out non-existing options
-                self.verify( lambda: torch.isfinite(weight).all(), "Weights are infinite")
-                """
+                weight = torch.softmax(scores, dim=2)                   # normalize over O
+                weight = weight.masked_fill(~mask[..., None], 0.0)
 
-                encoded = torch.einsum( "bsoh,bsoh->bsh", weight, eV ) # (B,S,H) - weighted average of values
+                encoded = (weight * eV).sum(dim=2)                      # (B,S,H)
+
                 encoded = self.head( encoded, mask = None ) # (B,S,X) - head projection
                 assert encoded.shape == (B, S, X), f"Expected encoded representation to have shape {(B, S, X)}, but found {encoded.shape}"
                 self.verify( lambda: torch.isfinite(encoded).all(), "Encoded state is infinite")
@@ -184,6 +174,162 @@ class AttentionEncoderFactory(EncoderFactory):
 
         return Functional()
 
+import math
+import torch
+import torch.nn.functional as F
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class LatentAttentionEncoderFactory(EncoderFactory):
+    """
+    Latent cross-attention encoder.
+
+    For each (batch, step), a small set of learned latent queries attends to
+    the option set. This gives a compressed representation directly:
+
+        features: list[(B,S,O)]
+        mask:     (B,S,O)
+        output:   (B,S,num_state)
+
+    Shapes inside attention:
+
+        K,V:       (B*S,H,O,C)
+        Q:         (B*S,H,M,C)
+        attn_mask: (B*S,1,1,O), True means valid/participates
+        output:    (B*S,H,M,C)
+
+    where:
+        H = num_head
+        C = num_QK
+        M = num_latent
+    """
+
+    num_head    : int = 8
+    num_QK      : int = 16
+    num_latent  : int = 8
+
+    KV_config   : FeedForward.Config = FeedForward.Config.linear_config()
+    head_config : FeedForward.Config = FeedForward.Config()
+
+    dropout     : float = 0.0
+
+    def __post_init__(self):
+        verify_inp(self.num_head > 0, lambda: f"'num_head' must be positive, found {self.num_head}")
+        verify_inp(self.num_QK > 0, lambda: f"'num_QK' must be positive, found {self.num_QK}")
+        verify_inp(self.num_latent > 0, lambda: f"'num_latent' must be positive, found {self.num_latent}")
+        verify_inp(0.0 <= self.dropout < 1.0, lambda: f"'dropout' must be in [0,1), found {self.dropout}")
+
+    def __call__(
+        config,
+        env          : BaseEnvironment,
+        num_features : int,
+        num_state    : int,
+    ) -> callable:
+
+        class Functional(BaseModel):
+
+            def __init__(self):
+                super().__init__(env)
+
+                H = config.num_head
+                C = config.num_QK
+                M = config.num_latent
+
+                # Output shape: (B,S,O,2,H,C)
+                # 2 = key/value.
+                self.KV = FeedForward(
+                    env,
+                    num_input=num_features,
+                    num_output=(2, H, C),
+                    config=config.KV_config,
+                    use_final_activation=False,
+                    use_final_bias=True,
+                )
+
+                # Learned latent queries: (H,M,C)
+                q = torch.empty(
+                    H,
+                    M,
+                    C,
+                    device=env.device,
+                    dtype=env.fdtype,
+                )
+                torch.nn.init.normal_(q, mean=0.0, std=1.0 / math.sqrt(C))
+                self.query = torch.nn.Parameter(q)
+
+                # Flatten H*M*C latent-attention output to final state.
+                self.head = FeedForward(
+                    env,
+                    num_input=H * M * C,
+                    num_output=num_state,
+                    config=config.head_config,
+                    use_final_activation=False,
+                    use_final_bias=True,
+                )
+
+            def forward(self, features: list[torch.Tensor], mask: torch.Tensor) -> torch.Tensor:
+                assert len(features) == num_features, (
+                    f"Expected {num_features} features, but found {len(features)}"
+                )
+
+                B, S, O = mask.shape
+                H = config.num_head
+                C = config.num_QK
+                M = config.num_latent
+                X = num_state
+
+                has_opt = torch.any(mask, dim=2)  # (B,S)
+
+                # Protect SDPA against rows where all keys are masked out.
+                # For empty rows, allow option 0 to participate; KV is already zeroed
+                # by FeedForward(..., mask=mask), and we zero the output afterwards.
+                first_option = torch.arange(O, device=mask.device) == 0
+                safe_mask = mask | ((~has_opt)[..., None] & first_option[None, None, :])
+
+                kv = self.KV(features, mask=mask)
+                assert kv.shape == (B, S, O, 2, H, C), (
+                    f"Expected KV shape {(B, S, O, 2, H, C)}, found {kv.shape}"
+                )
+
+                k = kv[..., 0, :, :]  # (B,S,O,H,C)
+                v = kv[..., 1, :, :]  # (B,S,O,H,C)
+
+                self.verify(lambda: torch.isfinite(k).all(), "K is non-finite")
+                self.verify(lambda: torch.isfinite(v).all(), "V is non-finite")
+
+                # SDPA shape convention: (N,H,L,C) for query, (N,H,S,C) for key/value.
+                k = k.reshape(B * S, O, H, C).transpose(1, 2)  # (B*S,H,O,C)
+                v = v.reshape(B * S, O, H, C).transpose(1, 2)  # (B*S,H,O,C)
+
+                q = self.query[None, :, :, :].expand(B * S, H, M, C)  # (B*S,H,M,C)
+
+                # Boolean SDPA mask: True means key participates in attention.
+                attn_mask = safe_mask.reshape(B * S, 1, 1, O)  # (B*S,1,1,O)
+
+                y = torch.nn.functional.scaled_dot_product_attention(
+                    q,
+                    k,
+                    v,
+                    attn_mask=attn_mask,
+                    dropout_p=(config.dropout if self.training else 0.0),
+                    is_causal=False,
+                )  # (B*S,H,M,C)
+
+                y = y.transpose(1, 2).reshape(B, S, M * H * C)  # (B,S,M*H*C)
+
+                # Remove outputs for empty rows, if any.
+                y = torch.where(has_opt[..., None], y, 0.0)
+
+                encoded = self.head(y, mask=None)
+                assert encoded.shape == (B, S, X), (
+                    f"Expected encoded shape {(B, S, X)}, found {encoded.shape}"
+                )
+
+                self.verify(lambda: torch.isfinite(encoded).all(), "Encoded state is non-finite")
+                return encoded
+
+        return Functional()
 # ------------------------------------------------------------
 # Decoders
 # ------------------------------------------------------------
@@ -274,7 +420,7 @@ class GatingDecoderFactory(DecoderFactory):
 
                 if self.QK is None:
                     if self.head is None:
-                        decoded = torch.mean( dV, axis=3 ) # (B,S,O) - average over options
+                        decoded = torch.mean( dV, dim=3 ) # (B,S,O) - average over options
                         decoded = torch.where( mask, decoded, 0. ) # (B,S,O) - zero out non-existing options
 
                     else:
@@ -289,18 +435,14 @@ class GatingDecoderFactory(DecoderFactory):
                     dK  = dQK[...,1] # (B,S,O,H,C)
 
                     # unoptimized 
-                    weight  = - torch.einsum( "bsohc,bsohc->bsoh", dQ, dK ) / math.sqrt( C )
-                    assert weight.shape == (B, S, O, H), f"Expected attention weight representation to have shape {(B, S, O, H)}, but found {weight.shape}"
-                    weight  = torch.softmax( weight, dim=3 )  # dim 3 !!!!
-                    assert weight.shape == (B, S, O, H), f"Expected attention weight representation to have shape {(B, S, O, H)}, but found {weight.shape}"
+                    scores = -(dQ * dK).sum(dim=-1) * (1.0 / math.sqrt(C))  # (B,S,O,H)
+                    weight = torch.softmax(scores, dim=-1)
 
                     if self.head is None:
-                        decoded = torch.einsum( "bsoh,bsoh->bso", weight, dV ) # (B,S,O) - weighted average candidates
-                        decoded = torch.where( mask, decoded, 0. ) # (B,S,O) - zero out non-existing options
-                
+                        decoded = (weight * dV).sum(dim=-1)
+                        decoded = decoded.masked_fill(~mask, 0.0)
                     else:
-                        dV      = dV*weight
-                        decoded = self.head( dV, mask = mask ) # (B,S,O) - head projection
+                        decoded = self.head(dV * weight, mask=mask)
 
                 assert decoded.shape == (B, S, O), f"Expected decoded representation to have shape {(B, S, O)}, found {decoded.shape}"
                 self.verify( lambda: torch.isfinite(decoded).all(), lambda: f"Decoded representation contains non-finite values; found {torch.min(decoded[mask]).item():.4f}" )
@@ -321,7 +463,6 @@ class AECConfig:
     encoder             : EncoderFactory = DeepSetEncoderFactory() #: encoder factory to use
     decoder             : DecoderFactory = SimpleDecoderFactory()  #: decoder factory to use
 
-    weight_by_spread    : bool = True    #: whether to weight the loss by the bid-ask spread, which puts more weight on liquid options and is a common practice in the literature; if False, all options are weighted equally
     vol_floor           : float = 0.01   #: floor for predicted volatility when using 'vol' or 'sqrtVar' 
     fit_average         : bool = False   #: fit average per sample, rather than average accross all samples
     min_mean_spread_frac: float = 0.05   #: spread must be at least this fraction of average spread
@@ -512,13 +653,13 @@ class AEC(BaseModel):
 
         encoded = self.encoder( features, mask=mask ) # (B,S,X)
         assert encoded.shape == (B, S, X), f"Expected encoded representation to have shape {(B, S, X)}, found {encoded.shape}"
-        self.verify( lambda: torch.isfinite(encoded).all(), lambda: f"Encoded representation contains non-finite values; found {torch.min(encoded[mask]).item():.4f}" ) 
+        self.verify( lambda: torch.isfinite(encoded).all(), lambda: f"Encoded representation contains non-finite values")
         encoded = torch.tanh( encoded )
 
         decoded = self.decoder( characteristics, encoded, mask=mask ) # (B,S,O)
         assert decoded.shape == (B, S, O), f"Expected decoded representation to have shape {(B, S, O)}, found {decoded.shape}"
-        self.verify( lambda: torch.isfinite(decoded).all(), lambda: f"Decoded representation contains non-finite values; found {torch.min(decoded[mask]).item():.4f}" )
-        del encoded
+        self.verify( lambda: torch.isfinite(decoded).all(), lambda: f"Decoded representation contains non-finite values")
+        #del encoded
 
         # Compute price
         # -------------
@@ -545,7 +686,7 @@ class AEC(BaseModel):
             fit_price   = self.softplus(decoded) # keep positivity
             fit_vol     = None
             fit_sqrtVar = None
-        del decoded
+        #del decoded
 
         self.verify( lambda: torch.isfinite(fit_price).all(), "Infinite mid price")
 
@@ -565,8 +706,9 @@ class AEC(BaseModel):
             average spread. 
             """
             half_spread  = torch.where( mask, torch.clip( ask - bid, min=self.config.min_mean_spread_frac * mean_spread ), 1. ) / 2.
-            x            = torch.where( mask, ( fit - bid )/half_spread, 0. )
-            excess       = torch.relu( x-1.) + torch.relu( 1.-x ) # excess is 0 between bid and ask, and grows linearly outside of the bid-ask
+            mid          = (bid + ask) / 2.
+            x            = torch.where(mask, (fit - mid) / half_spread, 0.0)
+            excess       = torch.relu(x.abs() - 1.0)  # excess is 0 between bid and ask, and grows linearly outside of the bid-ask
             xsq          = torch.clip( x**2, max=1.) if self.config.clip_huber_square else (x**2) # huber loss for better stability at the beginning of training; quadratic loss with flat minimum between bid and ask; value is 0 at the mid, 1 at the bid and ask, and grows quadratically outside of the bid-ask
             loss         = xsq + excess # quadratic loss with flat minimum between bid and ask; value is 0 at the mid, 1 at the bid and ask, and grows quadratically outside of the bid-ask
 
@@ -604,10 +746,10 @@ class AEC(BaseModel):
         assert return_what == self.ReturnWhat.VALUATION, f"Invalid value for 'return_what': {return_what}"
         with torch.no_grad():
             # to get an understandable excess in relation to the spread
-            excess           = torch.where( mask, torch.relu( fit_price - pure_ask ) + torch.relu( pure_bid - fit_price ), 0. )
-            half_spread      = torch.where( mask, torch.clip( pure_ask - pure_bid, min=self.config.min_mean_spread_frac * self.stats.mean_pure_spread ), 1. )
-            inv_spread       = torch.where( mask, 1./half_spread, 0. )
-            rel_excess       = excess*inv_spread
+            excess           = torch.where( mask, torch.clip(fit_price - pure_ask, min=0.) + torch.clip(pure_bid - fit_price, min=0.), 0. ) # how much we are outside bid/ask in $
+            half_spread      = torch.where( mask, 0.5* torch.clip( pure_ask - pure_bid, min=self.config.min_mean_spread_frac * self.stats.mean_pure_spread ), 1. )
+            inv_hspread      = torch.where( mask, 1./half_spread, 0. )
+            rel_excess       = excess*inv_hspread # how much are we outside the bid/ask relative to half spreadf
             rel_excess_sq    = rel_excess**2
             excess_sq        = excess**2
             sum_dim_mask     = torch.sum( mask, dim=2 )
@@ -617,11 +759,11 @@ class AEC(BaseModel):
 
             metrics = dict(
                 # excess, weighted by spread, then normalized.
-                excess_weighted =     ( torch.sum(inv_spread*excess) / torch.sum(inv_spread),
-                                        torch.sum(inv_spread*excess_sq) / torch.sum(inv_spread),
-                                        torch.sum(inv_spread) ),
-                excess_weighted_avg = ( torch.sum( torch.sum(inv_spread*excess, dim=2 ) / torch.sum(inv_spread, dim=2) ),
-                                        torch.sum( torch.sum(inv_spread*excess_sq, dim=2 ) / torch.sum(inv_spread, dim=2) ),
+                excess_weighted =     ( torch.sum(inv_hspread*excess),
+                                        torch.sum(inv_hspread*excess_sq),
+                                        torch.sum(inv_hspread) ),
+                excess_weighted_avg = ( torch.sum( torch.sum(inv_hspread*excess, dim=2 ) / torch.sum(inv_hspread, dim=2) ),
+                                        torch.sum( torch.sum(inv_hspread*excess_sq, dim=2 ) / torch.sum(inv_hspread, dim=2) ),
                                         sum_any_mask ),
                 # excess weighted by spread
                 excess_spread   =     ( torch.sum(rel_excess),
@@ -780,7 +922,7 @@ class Visualizer(BaseVisualizer):
             fit_price     = pathwise['fit_price'][:,-1,:].detach().cpu().numpy()
             fit_vols      = pathwise['fit_vol'][:,-1,:].detach().cpu().numpy() if pathwise['fit_vol'] is not None else None
             fit_vols      = bs.implied( pure_strike, fit_price, sqrtT=sqrtT, mask=is_valid, on_exceed_bounds="quiet" ) if fit_vols is None else fit_vols
-            del batch, pathwise
+            #del batch, pathwise
 
             # per sample, aggregate price and vol error
             # ------------------------------------------

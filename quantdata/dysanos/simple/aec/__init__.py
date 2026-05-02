@@ -75,8 +75,10 @@ def run( label, *,
 
     print("Cleaning up memory... ", end='', flush=True)
     gc.collect()
+    torch._dynamo.reset()
     torch.cuda.empty_cache()
     torch.cuda.ipc_collect()
+    torch.cuda.reset_peak_memory_stats()    
     print("done.")
 
     env   = BaseEnvironment(device="cuda", debug=debug)
@@ -90,7 +92,7 @@ def run( label, *,
     train_config = TrainConfig(
         lr_init = 1E-3,
         lr_final = 1E-6,
-        lr_init_steps = 25,
+        lr_init_steps = 50,
         trn_batch_size = trn_batch_size,
         val_batch_size = val_batch_size,
         batch_per_epoch = batch_per_epoch,
