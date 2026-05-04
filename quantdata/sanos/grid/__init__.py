@@ -172,13 +172,7 @@ class GridGeometry:
         xstrikes[:,:num_xnms*2+1] = np.linspace(lower_scale, 1., 2*num_xnms+2)[None,:-1] * inner_strikes[:,0][:,None] 
         xstrikes[:,-num_xnms-1:] = np.linspace(1., upper_scale, num_xnms+2)[None,1:] * inner_strikes[:,-1][:,None] 
         xstrikes[:,2*num_xnms+1:-num_xnms-1] = inner_strikes
-        xstrikes[:,0]  *= math.sqrt( lower_scale )
         xstrikes[:,-1] *= math.sqrt( upper_scale )
-
-        print(xstrikes[0,:num_xnms*2+1])
-        print(xstrikes[0,2*num_xnms+1:-num_xnms-1])
-        print(xstrikes[0,-num_xnms-1:])
-
 
         strike_diff = np.diff( xstrikes, axis=1 )
         assert np.min( strike_diff ) > 0., f"Per time step: strikes must increase. Found {np.min(strike_diff):.4g}"
@@ -203,34 +197,34 @@ class GridGeometry:
         Computes option time interpolation weights for variance and densities.
         These do not depend on market data and should be computed ahead of time.
 
-        * ``lix``: per option the lower index into ``self.xtimes`` such that such that ``self.xtimes[opt_lix-1] < opt_tte <= self.expiries[opt_lix]``. Note that ``0<opt_lix<len(self.xtimes)``.
+        * ``lix``: per option the lower index into ``self.xexpiries`` such that such that ``self.xexpiries[opt_lix-1] < opt_tte <= self.expiries[opt_lix]``. Note that ``0<opt_lix<len(self.xexpiries)``.
         * ``dweight``: per option the lower interpolation weight for density interpolation.
         * ``vweight``: per option the lower interpolation weight for variance interpolation (can be linear in variance or in sqrt time).
         * ``vextra``: per option extrapolation with final volatility (linear or sqrt)
 
         Call price BS sqrt-variance is computed as follows in ``sqrt_lin_vol`` interpolation mode:
 
-            * if ``t_i < xtimes[0]`` then ``lix_i = 0`` and 
+            * if ``t_i < xexpiries[0]`` then ``lix_i = 0`` and 
                 ``sqrtVar_i = (1-vweight_i) * sqrtVars[lix_i]``.
 
-            * if ``xtimes[0] <= t_i <= xtimes[-1]`` then ``0 < lix_i <= T-1`` and
+            * if ``xexpiries[0] <= t_i <= xexpiries[-1]`` then ``0 < lix_i <= T-1`` and
                 ``sqrtVar_i = vweight_i * sqrtVars[lix_i-1] + (1-vweight_i) * sqrtVars[lix_i]``.
 
-            * if ``t_i > xtimes[-1]`` then we set ``lix_i == T-1`` and
+            * if ``t_i > xexpiries[-1]`` then we set ``lix_i == T-1`` and
                 ``sqrtVar_i = (1 - vweight_i) * sqrtVars[T-1] + vextra_i * vol_extra`` where ``vweight_i = 0``.
 
         Once set, we also interpolate in model densities.
 
-            * if ``t_i < xtimes[0]`` then ``opt_lix_i = 0`` and
+            * if ``t_i < xexpiries[0]`` then ``opt_lix_i = 0`` and
                 ``call_i = (1-dweight_i) * call[opt_lix_i]`` with ``dweight_i = 0``.
 
-            * if ``xtimes[0] <= t_i <= xtimes[-1]`` then ``0 < opt_lix_i <= T-1`` and
+            * if ``xexpiries[0] <= t_i <= xexpiries[-1]`` then ``0 < opt_lix_i <= T-1`` and
                 ``call_i = dweight_i * call[lix_i-1] + (1-dweight_i) * call[lix_i]``.
 
-            * if ``t_i > xtimes[-1]`` then we set ``lix_i == T-1`` and
+            * if ``t_i > xexpiries[-1]`` then we set ``lix_i == T-1`` and
                 ``call_i = (1 - dweight_i) * call[T-1]`` with ``dweight_i = 0``.
 
-        Note that ``0<lix<len(self.xtimes)``.
+        Note that ``0<lix<len(self.xexpiries)``.
         """
         T        = self.T
         shape    = opt_tte.shape
@@ -244,7 +238,7 @@ class GridGeometry:
         opt_tte  = np.reshape( opt_tte, (-1,)) # no-copy operatiob
         M        = len(opt_tte)
 
-        # find indices ixtte such that xtimes[ixtte-1] < opt_tte <= xtimes[ixtte+1]
+        # find indices ixtte such that xexpiries[ixtte-1] < opt_tte <= xexpiries[ixtte+1]
         ttes     = np.unique( opt_tte )
         sqrtTtes = np.sqrt( ttes )
         times    = np.asarray(self.expiries, dtype=np.float64)
@@ -354,14 +348,40 @@ class GridGeometry:
         L  = np.asarray(L, dtype=dtype) 
         return dict(wn=wn, wp=wp, L=L)
     
+
+@dataclass
+class Eps:
+    prices    : float = 1E-6     #: Tolerance for option price errors.
+    theta     : float = 1E-6     #: Tolerance for theta errors during DLV computation.
+    gamma     : float = 1E-6     #: Tolerance for gamma errors during DLV computation.
+    densities : float = 1E-6     #: Tolerance for density errors.
+    dlvsq     : float = 1E-6     #: Tolerance for DLV squared errors being positive.
+
+    def __post_init__(self):
+        verify_inp( self.prices >= 0., f"Tolerance for prices must be non-negative, found {self.prices}" )
+        verify_inp( self.theta >= 0., f"Tolerance for theta must be non-negative, found {self.theta}" )
+        verify_inp( self.gamma >= 0., f"Tolerance for gamma must be non-negative, found {self.gamma}" )
+        verify_inp( self.densities >= 0., f"Tolerance for densities must be non-negative, found {self.densities}" )
+        verify_inp( self.dlvsq >= 0., f"Tolerance for dlvsq must be non-negative, found {self.dlvsq}" )
+
+    def set_all(self, eps : float ):
+        verify_inp( eps >= 0., f"Tolerance must be non-negative, found {eps}" )
+        self.prices = eps
+        self.theta = eps
+        self.gamma = eps
+        self.densities = eps
+        self.dlvsq = eps
+
 class GridSanos(object):
 
     def __init__(self, geometry : GridGeometry,
                        bb       : Backbone = BackboneNumpy(),
+                       eps      : Eps = Eps(),
                        debug    : bool = False ):
 
         self.geometry  = geometry
         self.bb        = bb
+        self.eps       = eps
         self.debug     = debug
 
         self.xstrikes  = bb.to_array( self.geometry.xstrikes )  # this is a noop for numpy
@@ -370,6 +390,7 @@ class GridSanos(object):
 
         assert self.xstrikes.shape == (self.T+1,self.N+2), f"Expected xstrikes to have shape {(self.T+1,self.N+2)}, got {self.xstrikes.shape}"
         assert self.xexpiries.shape == (self.T+1,), f"Expected xexpiries to have shape {(self.T+1,)}, got {self.xexpiries.shape}"
+        assert self.density0.shape == (self.N,), f"Expected density0 to have shape {(self.N,)}, got {self.density0.shape}"
 
         self.transp    = self.geometry.transition_operators() # this is a numpy array, but we will convert it to the backbone array when needed in computations
         self.transp    = { k: bb.to_array(v) for k,v in self.transp.items() }
@@ -537,6 +558,7 @@ class GridSanos(object):
         mstrikes     = self.strikes # is bb array
         assert densities.shape[-2:] == mstrikes.shape[-2:], f"Expected densities to have the same last two dimensions as geometry.strikes, found {densities.shape} and {mstrikes.shape}"
         mstrikes     = bb.reshape( mstrikes, hext + mstrikes.shape[-2:] ) # add leading dims for broadcasting with opt_strikes
+        hdensities   = bb.reshape( densities, hext + densities.shape[-2:] ) # add leading dims for broadcasting with opt_strikes
 
         def call_price( spots, strikes, sqrtVars, mask ):
             if sqrtVars is None:
@@ -552,34 +574,39 @@ class GridSanos(object):
         opt_lix      = opt_interp['lix']
         opt_dweight  = opt_interp['dweight']
         eff_lix      = bb.clip(opt_lix-1, min=0)
-        assert len(eff_lix.shape) == len(mstrikes)+1, f"Internal error: eff_lix must have one more dimension than mstrikes, found {eff_lix.shape} and {mstrikes.shape}"
-        spots        = bb.take_along_axis( mstrikes, eff_lix, axis=-2 )
+        spots        = bb.take_along_axis( mstrikes, eff_lix[...,None], axis=-2 )#
+        assert spots.shape == head+(M,N), f"Expected spots to have shape {head+(M,N)}, got {spots.shape}"
         calls_prev   = call_price(  spots=spots,
                                     strikes=opt_strikes[...,:,None], 
                                     sqrtVars=opt_sqrtVars[...,:,None],
                                     mask=opt_mask[...,:,None] if not opt_mask is None else None
                                 ) * opt_dweight[...,:,None]
-        assert calls_prev.shape[-2:] == (M,N), f"Expected calls_prev shape to end with {(M,N)}, got {calls_prev.shape}"
-        calls_prev = calls_prev @ densities[...,eff_lix,:,None]
-        assert calls_prev.shape[-2:] == (M,1), f"Expected calls_prev to have shape {(M,1)}, got {calls_prev.shape}"
-        calls_prev = calls_prev[...,0] # remove last dim
+        assert calls_prev.shape == head+(M,N), f"Expected calls_prev shape {head+(M,N)}, got {calls_prev.shape}"
+        dens       = bb.take_along_axis( hdensities, eff_lix[...,None], axis=-2 )
+        assert dens.shape == head+(M,N), f"Expected dens to have shape {head+(M,N)}, got {dens.shape}"
+        calls_prev = bb.sum( calls_prev * dens, axis=-1 ) # todo: make more efficient
+        assert calls_prev.shape == head+(M,), f"Expected calls_prev to have shape {head+(M,)}, got {calls_prev.shape}"
         eff_lix = None
         spots   = None
 
-        spots        = bb.take_along_axis( mstrikes, opt_lix, axis=-2 )
+        spots        = bb.take_along_axis( mstrikes, opt_lix[...,None], axis=-2 )
+        assert spots.shape == head+(M,N), f"Expected spots to have shape {head+(M,N)}, got {spots.shape}"
         calls_next   = call_price(  spots=spots,
                                     strikes=opt_strikes[...,:,None], 
                                     sqrtVars=opt_sqrtVars[...,:,None],
                                     mask=opt_mask[...,:,None] if not opt_mask is None else None
                                 ) * ( 1.- opt_dweight[...,:,None] )
-        calls_next    = calls_next @ densities[..., opt_lix,:,None]
-        assert calls_next.shape[-2:] == (M,1), f"Expected calls_next to have shape {(M,1)}, got {calls_next.shape}"
-        calls_next = calls_next[...,0] # remove last dim
+        assert calls_next.shape == head+(M,N), f"Expected calls_next shape {head+(M,N)}, got {calls_next.shape}"
+        dens          = bb.take_along_axis( hdensities, opt_lix[...,None], axis=-2 )
+        assert dens.shape == head+(M,N), f"Expected dens to have shape {head+(M,N)}, got {dens.shape}"
+        calls_next    = bb.sum( calls_next * dens, axis=-1 ) # todo: make more efficient
+        assert calls_next.shape == head+(M,), f"Expected calls_next to have shape {head+(M,)}, got {calls_next.shape}"
 
         calls      = calls_prev + calls_next 
         self.verify( lambda : bb.all( np.isfinite(calls) ), lambda : "fit_calls not finite")
         prices     = calls if opt_is_call is None else bb.where( opt_is_call | ~opt_mask, calls, calls + opt_strikes - 1. )
         prices     = prices * opt_mask if opt_mask is not None else prices
+        assert prices.shape == head+(M,), f"Expected prices to have shape {head+(M,)}, got {prices.shape}"
         return prices 
 
     def densities( self, dlvsqs : Backbone.Array ) -> Backbone.Array:
@@ -591,28 +618,27 @@ class GridSanos(object):
         ----------
         dlvsqs : array of shape ``(...,T,N-2)``.
             The DLVs squared, i.e. the local variance divided by the time step, at each model time and strike.
-            This function will add `geometry.dlv_floor**2` to the input DLVs squared to ensure numerical stability.
+            This function will add `geometry.dlv_min**2` to the input DLVs squared to ensure numerical stability.
         
         Returns
         -------
         Densites : Backbone.Array
-            Array of shape ``(...,T,N)``, representing the densities at each model time, not including the initial density at time 0 (which can be accessed via ``bb_density0``). 
+            Array of shape ``(...,T,N)``, representing the densities at each model time, not including the initial density at time 0 (which can be accessed via ``self.density0``). 
         """
+        T,N         = self.TN
         assert dlvsqs.shape[-2:] == (T,N-2), f"Expected dlvsqs to have shape ending in {(T,N-2)}, found {dlvsqs.shape}"
 
         bb          = self.bb
         head        = dlvsqs.shape[:-2]
         hext        = (1,)*len(head)     
-        T,N         = self.TN
         _text       = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         assert len(head) <= len(_text), f"Too many batch dimensions: expected at most {len(_text)}, got {len(head)}"
         einhext     = _text[:len(head)] 
 
+        self.verify( lambda : bb.all((self.density0 >= -self.eps.densities) & (self.density0 - 1. <= self.eps.densities)), lambda : f"Density 0 must be between 0 and 1; found min {bb.min(self.density0)} and max {bb.max(self.density0)} [tolerance 'densities' {self.eps.densities}]" )
+        self.verify( lambda : bb.all(bb.abs( bb.sum( self.density0, axis=-1 ) - 1. ) < self.eps.densities), lambda : f"Density 0 must have positive mass, found sum {bb.max(bb.abs( bb.sum( self.density0, axis=-1 ) - 1. ))} [tolerance 'densities' {self.eps.densities}]" )
 
-        self.verify( lambda : (self.bb_density0 >= -self.eps.weights) & (self.bb_density0 - 1. <= self.eps.weights), lambda : f"Density 0 must be between 0 and 1; found min {bb.min(self.bb_density0)} and max {bb.max(self.bb_density0)} [tolerance 'weights' {self.eps.weights}]" )
-        self.verify( lambda : bb.abs( bb.sum( self.bb_density0, axis=-1 ) - 1. ) < self.eps.densities, lambda : f"Density 0 must have positive mass, found sum {bb.max(bb.abs( bb.sum( self.bb_density0, axis=-1 ) - 1. ))} [tolerance 'densities' {self.eps.densities}]" )
-
-        dts          = bb.diff(self.xtimes) # in bb array
+        dts          = bb.diff(self.xexpiries) # in bb array
         mstrikes     = self.strikes # in bb array
         wn           = bb.reshape( self.transp['wn'], hext+self.transp['wn'].shape )
         wp           = bb.reshape( self.transp['wp'], hext+self.transp['wp'].shape )
@@ -622,29 +648,32 @@ class GridSanos(object):
         assert L.shape[-3:] == (T,N,N), f"Expected L to have shape ending in {(T,N,N)}, found {L.shape}"
     
         densities = []
-        min_dlvsq = self.geometry.dlv_floor**2
+        min_dlvsq = self.geometry.dlv_min**2
+
+        density0 = bb.reshape(self.density0, hext + (N,))
+        density0 = density0 + bb.zeros(head + (N,), dtype=dlvsqs.dtype)
 
         for t in range(T):
             # interpolate up
-            mdensity_tm1 = densities[-1] if t > 0 else self.bb_density0 # this is the only place where we need to keep the previous density in memory, so we can free it right after    
+            mdensity_tm1 = densities[-1] if t > 0 else density0 
             assert mdensity_tm1.shape[-1] == N, f"Expected mdensity_tm1 to have shape ending in {N}, found {mdensity_tm1.shape}"
-            mdensity_t   = bb.einsum( f"{einhext}mn, {einhext}n -> {einhext}m", L[...,t,:], mdensity_tm1 )  # interpolate density to time t 
+            L_t          = L[...,t,:,:]
+            mdensity_t   = bb.einsum( f"{einhext}mn, {einhext}n -> {einhext}m", L_t, mdensity_tm1 )  # interpolate density to time t 
+            assert mdensity_t.shape[-1] == N, f"Expected mdensity_t after L to have shape ending in {N}, found {mdensity_t.shape}"
 
             # solve
-            mstrikes_t   = mstrikes[t,...]
             dlvsqs_t     = dlvsqs[...,t,:]
             dlvar_t      = (dlvsqs_t+min_dlvsq) * dts[t]  # local variance at time t, shape (...,N-2)
             assert dlvar_t.shape[-1] == N-2, f"Expected dlvar_t shape to end in {N-2}, found {dlvar_t.shape}"
 
             w_minus      = dlvar_t * wn[...,t,:]
             w_plus       = dlvar_t * wp[...,t,:]
-
             mdensity_t    = solve_sanos_tridiagonal(bb, w_minus=w_minus, w_plus=w_plus, rhs=mdensity_t ) # keep
             assert mdensity_t.shape[-1] == N, f"Expected mdensity_t to have shape ending in {N}, found {mdensity_t.shape}"
             """
-            self.verify( lambda : (mdensity_t >= -self.eps.densities) & (mdensity_t - 1. <= self.eps.densities), lambda : f"Interpolated density at {t} must be between 0 and 1; found min {bb.min(mdensity_t)} and max {bb.max(mdensity_t)} [tolerance 'densities' {self.eps.densities }]" )
-            self.verify( lambda : bb.abs( bb.sum( mdensity_t, axis=-1 ) - 1. ) <= self.eps.densities, lambda : f"Interpolated density at {t} must have positive mass, found sum {bb.max(bb.abs( bb.sum( mdensity_t, axis=-1 ) - 1. ))} [tolerance 'densities' {self.eps.densities}]" )
-            self.verify( lambda : bb.abs( bb.sum( mdensity_t*mstrikes_t, axis=-1 ) - 1. ) <= self.eps.densities, lambda : f"Interpolated density at {t} must have positive mass, found sum {bb.max(bb.abs( bb.sum( mdensity_t*mstrikes_t, axis=-1 ) - 1. ))} [tolerance 'densities' {self.eps.densities}]" )
+            self.verify( lambda : bb.all((mdensity_t >= -self.eps.densities) & (mdensity_t - 1. <= self.eps.densities)), lambda : f"Interpolated density at {t} must be between 0 and 1; found min {bb.min(mdensity_t)} and max {bb.max(mdensity_t)} [tolerance 'densities' {self.eps.densities }]" )
+            self.verify( lambda : bb.all(bb.abs( bb.sum( mdensity_t, axis=-1 ) - 1. ) <= self.eps.densities), lambda : f"Interpolated density at {t} must have positive mass, found sum {bb.max(bb.abs( bb.sum( mdensity_t, axis=-1 ) - 1. ))} [tolerance 'densities' {self.eps.densities}]" )
+            self.verify( lambda : bb.all(bb.abs( bb.sum( mdensity_t*mstrikes_t, axis=-1 ) - 1. ) <= self.eps.densities), lambda : f"Interpolated density at {t} must have positive mass, found sum {bb.max(bb.abs( bb.sum( mdensity_t*mstrikes_t, axis=-1 ) - 1. ))} [tolerance 'densities' {self.eps.densities}]" )
             """
             densities.append( mdensity_t )
 

@@ -18,33 +18,10 @@ from cdxcore.verbose import Context
 from cdxcore.err import verify_inp
 import warnings as warnings
 
-from quantdata.sanos.grid import GridGeometry, GridSanos
+from quantdata.sanos.grid import GridGeometry, GridSanos, Eps
 from quantdata.utils.backbone import BackboneNumpy
 
 bbnp = BackboneNumpy()
-
-@dataclass
-class Eps:
-    prices    : float = 1E-6     #: Tolerance for option price errors.
-    theta     : float = 1E-6     #: Tolerance for theta errors during DLV computation.
-    gamma     : float = 1E-6     #: Tolerance for gamma errors during DLV computation.
-    densities : float = 1E-6     #: Tolerance for density errors.
-    dlvsq     : float = 1E-6     #: Tolerance for DLV squared errors being positive.
-
-    def __post_init__(self):
-        verify_inp( self.prices >= 0., f"Tolerance for prices must be non-negative, found {self.prices}" )
-        verify_inp( self.theta >= 0., f"Tolerance for theta must be non-negative, found {self.theta}" )
-        verify_inp( self.gamma >= 0., f"Tolerance for gamma must be non-negative, found {self.gamma}" )
-        verify_inp( self.densities >= 0., f"Tolerance for densities must be non-negative, found {self.densities}" )
-        verify_inp( self.dlvsq >= 0., f"Tolerance for dlvsq must be non-negative, found {self.dlvsq}" )
-
-    def set_all(self, eps : float ):
-        verify_inp( eps >= 0., f"Tolerance must be non-negative, found {eps}" )
-        self.prices = eps
-        self.theta = eps
-        self.gamma = eps
-        self.densities = eps
-        self.dlvsq = eps
 
 @dataclass(frozen=True)
 class Fitter:
@@ -461,9 +438,17 @@ class Fitter:
             dCs     = [ dC_t.value for dC_t in dCs ]
             boxs    = [ box_t.value for box_t in boxs ]
             dlvsqs  = np.zeros( (T,N-2), dtype=fit_calls.dtype )
+
+            box_     = self.geometry.strikes[:,1:-1]**2 / ( self.geometry.strikes[:,2:] - self.geometry.strikes[:,:-2] ) * dts[:,None]
+            boxs_    = [ box_[t,:] * densities[t,1:-1] for t in range(T) ] # we recompute the box here to ensure consistency with the fitted densities, which can be slightly off from the optimization constraints due to solver tolerances. This ensures that the DLVs are computed consistently with the fitted densities.
+
+            for a, b in zip(boxs, boxs_):
+                assert np.max( np.abs( a[1:-1]-b ) )<1E-6, f"Box error difference {np.max( np.abs( a-b ) ):.4g}"
+
+
             for t in range(T):
                 dC_t         = dCs[t][1:-1]
-                density_box  = boxs[t][1:-1]
+                density_box  = boxs[t][1:-1]  # supoosed to be density*box
     
                 assert np.all( np.isfinite(dC_t) ), f"Expected dC_t to be finite, found min {np.min(dC_t)} and max {np.max(dC_t)}"
                 assert np.all( np.isfinite(density_box) ), f"Expected density_box to be finite, found min {np.min(density_box)} and max {np.max(density_box)}"
@@ -481,14 +466,20 @@ class Fitter:
                     print( dC_t[ick] )
                     print( density_box[ick] )
                 """
-                divisor      = np.where( too_small|dC_zero, _1, np.maximum( density_box, dC_t/min_dlvsq ) )  # dC_t can be positive while p_t is zero ... in this case we cannot determine a correct DLV - any will do.
-                dlvsqs[t,:]  = np.select( [dC_zero, too_small, too_big ], [min_dlvsq, min_dlvsq, max_dlvsq], default=np.clip( dC_t / divisor, min=min_dlvsq, max=max_dlvsq ) )
+                divisor      = np.where( too_small|dC_zero|too_big, _1, density_box )  # dC_t can be positive while p_t is zero ... in this case we cannot determine a correct DLV - any will do.
+                dlvsqs[t,:]  = np.select( [dC_zero, too_small, too_big ], [min_dlvsq, min_dlvsq, max_dlvsq], default=dC_t / divisor )
+            dlvsqs = np.where( np.isfinite(dlvsqs), dlvsqs, min_dlvsq ) # if density_box is zero and dC_t is zero, we set DLV to minimum; if density_box is zero and dC_t is positive, we set DLV to minimum as well, since any DLV would be consistent with the fit in this case due to the zero density.
             verbose.write(lambda : f"done; this tool {tme}.", head=False)
 
         # note that the ``GridSanos.density`` function adds min_dlvsq
         # to the input dlvsqs to ensure that the derivatives do not
         # die in zero. We subtract this here
         dlvsqs = np.clip( dlvsqs - min_dlvsq, min=0. )
+
+        if __debug__ and self.debug:
+            _grid_sanos    = GridSanos( geometry=self.geometry, bb=bbnp, debug=self.debug )
+            test_densities = _grid_sanos.densities( dlvsqs )
+#            assert np.max( np.abs( test_densities - densities ) ) < self.eps.densities, f"DLV fit error: max absolute difference between densities computed from fitted *and clipped* DLVs and optimized densities is {np.max( np.abs( test_densities - densities ) ):.4e}."
 
         if return_only_dlvsqs:
             return dlvsqs
