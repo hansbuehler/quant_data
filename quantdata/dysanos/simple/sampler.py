@@ -457,15 +457,61 @@ class SimpleSampler(BaseSampler):
             return self._shapes
         return { k : (batch_size, v[0], v[1]) for k,v in self._shapes.items() }
 
-    def generate_batch( self, batch_ids : list[SampleID], device = None ) -> dict:
-        """ Generate batch for a list of ``SampleID``s on the provided ``device``. """
+    def generate_batch( self, batch_ids : list[SampleID], device = None, *, pad_to_size : int|None = None ) -> dict:
+        """
+        Generate batch for a list of ``SampleID``s on the provided ``device``.
+        
+        If ``pad_to_size`` is not ``None`` the function will add a boolean ``pad_mask`` tensor of shape ``(batch_size, 1, 1)`` to the return batch, 
+        which indicates which sample in the batch are valid samples (True) and which are padding samples (False) that should be ignored.
+
+        Parameters
+        ----------
+        batch_ids : list[SampleID]
+            List of ``SampleID``s for which to generate the batch. The batch will be generated in the order of the provided list.
+        device : torch.device, default ``None``
+            Device on which to place the tensors. If None, defaults to the current device.
+        pad_to_size : int|None, default ``None``
+            If not None, forces the batch to have exactly this many samples.
+
+            * If the provided list of ``SampleID``s is shorter than ``pad_to_size``, the last sample will be repeated to pad the batch
+              (this ensures that padded samples retain consistency with the original data scheme).
+            * If the provided list of ``SampleID``s is longer than ``pad_to_size``, it will be truncated. This is useful for ensuring a consistent batch size, for example when using batch normalization layers in a model.
+
+            If ``pad_to_size`` is set, then the returned batch will contain a boolean tensor ``pad_mask`` of shape ``(batch_size, 1, 1)``,
+            which indicates which samples in the batch are valid (True) and which are padding (False). This will happen even if 
+            the provided list of ``SampleID``s is already of length ``pad_to_size`` (in which case the mask will be all-True).
+
+            If ``pad_to_size`` is None, all samples are valid and the mask not be present.
+
+        Returns
+        -------
+        batch : dict[str, torch.Tensor]
+            Dictionary containing the batch data, with keys corresponding to the data fields and values being
+            tensors of shape ``(batch_size, num_steps|1, num_options|1)``.
+
+            If ``pad_to_size`` is not ``None``, the batch will also contain a boolean tensor ``pad_mask`` of shape ``(batch_size, 1, 1)``,
+            which indicates which samples in the batch are valid (True) and which are padding (False).
+            If ``pad_to_size`` is None, the mask will not be present.            
+        """
+
         # assemble
         import torch as torch # local import to avoid loading torch unless used
+
+        cnt_pad_samples = None
+
+        if not pad_to_size is None:
+            cnt_pad_samples = 0
+            if len(batch_ids) > pad_to_size:
+                batch_ids = batch_ids[:pad_to_size]
+            elif len(batch_ids) < pad_to_size:
+                cnt_pad_samples = pad_to_size - len(batch_ids)
+                batch_ids = batch_ids + [ batch_ids[-1] ]*cnt_pad_samples
 
         def assemble( tar, src, *, isample, ixsrc, num_tdates ):
             for k,v in src.items():
                 if k in ['dates', 'ticker']:
                     continue
+                assert k != 'pad_mask', f"Internal error: 'pad_mask' is a reserved field name and should not be present in the data for ticker {btid.ticker} {btid.date}."
 
                 assert isinstance(v, np.ndarray), f"{k}: expected np.ndarray, got {type(v)}"
                 assert len(v.shape) == 2, f"{k}: expected 2D array, got shape {v.shape}"
@@ -502,13 +548,21 @@ class SimpleSampler(BaseSampler):
             num_tdates = len(self.data[btid.ticker].dates)
             assert btid.index+self.num_steps <= num_tdates, f"Internal error: sample index {btid.index} vs length {num_tdates} for ticker {btid.ticker} with sample length {self.num_steps}"            
             assemble( tbatch, irets, isample=isample, ixsrc=btid.index, num_tdates=num_tdates )
+
+        # padding information
+        if not cnt_pad_samples is None:
+            pad_mask = np.ones( (len(batch_ids), 1, 1), dtype=bool )
+            pad_mask[-cnt_pad_samples:,0,0] = False
+            tbatch['pad_mask'] = torch.tensor( pad_mask, dtype=torch.bool, device=device )
         return tbatch
     
     def __call__( self, g, *, trn : bool, batch_size : int, device = None, return_batch_indices : bool = False ) -> dict:
         """
-        Generate a pytorch batch of a given size, for either the training or validation set.
+        Generate a pytorch training batch of a given size, for either the training or validation set.
         Generated batches are dictionaries with elements of shape ``(batch_size, num_steps|1, num_options|1)``.
 
+        Samples generated by this function do not pad, and therefore do not contain a ``pad_mask`` field.
+         
         Parameters
         ----------
         g : :class:`torch.Generator`
@@ -516,7 +570,8 @@ class SimpleSampler(BaseSampler):
         trn : bool
             If True, generate a training batch; otherwise, generate a validation batch.
         batch_size : int
-            Number of samples in the batch. Must be less than or equal to the number of available samples in the respective set.
+            Number of samples in the batch.
+            Must be less than or equal to the number of available samples in the respective set.
         device : :class:`torch.device`, default ``None``
             Device on which to place the tensors. If None, defaults to the current device.
         return_batch_indices : bool, default ``False``
@@ -536,8 +591,10 @@ class SimpleSampler(BaseSampler):
         -------
         Results: dict
             If ``return_batch_indices`` is ``False``, a dictionary containing the batch data, with keys corresponding to the data fields and values being tensors of shape ``(batch_size, num_steps|1, num_options|1)``.
+            The batch will always contain exactly ``batch_size`` sample. No padding will be applied.
         BatchIDs, Results: list, dict
             If ``return_batch_indices`` is ``True``, a tuple containing the list of :class:`SampleID`s and a dictionary containing the batch data, with keys corresponding to the data fields and values being tensors of shape ``(batch_size, num_steps|1, num_options|1)``.
+            The batch will always contain exactly ``batch_size`` sample. No padding will be applied.
         """
         import torch as torch # local import to avoid loading torch unless used
     
@@ -553,15 +610,23 @@ class SimpleSampler(BaseSampler):
         else:
             batch_ids  = sample_ids
 
+        batch = self.generate_batch( batch_ids=batch_ids, device=device, pad_to_size=None )
+        assert not 'pad_mask' in batch, f"Internal error: batch should not contain 'pad_mask' when pad_to_size is None."
         if return_batch_indices:
-            return batch_ids, self.generate_batch( batch_ids=batch_ids, device=device )
-        return self.generate_batch( batch_ids=batch_ids, device=device )
+            return batch_ids, batch
+        return batch
 
-    def all( self, trn : bool, batch_size : int, device = None, yield_size_and_batch : bool = False ):
+    def all( self, trn : bool, batch_size : int, device = None, *, yield_size_and_batch : bool = False, pad : bool = True ) -> dict:
         """
         Batch iterator iterating the full training or validation set.
         Generated batches are dictionaries with elements of shape ``(batch_size, num_steps|1, num_max_options|1)``.
         
+        If ``pad`` is True (the default), this function will add a boolean ``pad_mask`` tensor of shape ``(batch_size, 1, 1)``
+        to the return batch, 
+        which indicates which samples in the batch are valid (True) and which are padding (False) and should be ignored.
+
+        This array will not be present if ``pad_to_size`` is False.
+
         Usage::
 
             for batch_size, batch in sampler.all(trn=True, batch_size=32, device=device, yield_size_and_batch=True):
@@ -578,29 +643,41 @@ class SimpleSampler(BaseSampler):
             Device on which to place the tensors. If None, defaults to the current device.
         yield_size_and_batch : bool, default ``False``
             If True, yield a tuple of (actual_batch_size, batch) for each batch.
+        pad : bool, default ``True``
+            If True, forces each batch to have exactly ``batch_size`` samples by padding with repeats of the last sample if necessary.
+            In this case the batch will contain an additional boolean field ``pad_mask`` of shape ``(batch_size, 1, 1)``,
+            indicating which samples in the batch are valid (True) and which can be ignored (False).
+
+            This function will repeat the last sample for padding, ensuring that sample
+            consistency conditions are maintained.
             
         Yields
         ------
-        batch: dict
-            A dictionary containing the batch data, with keys corresponding to the data fields and values being tensors of shape (actual_batch_size, num_steps|1, num_options|1).                    
-        batch_size, batch: tuple[int, dict]
-            If `yield_size_and_batch` is True, yields a tuple of (actual_batch_size, batch) for each batch, where `actual_batch_size` is the number of samples in the batch
-            (which may be less than `batch_size` for the last batch if the total number of samples is not divisible by `batch_size`).   
+        batch: dict[str, torch.Tensor]
+            A dictionary containing the batch data, with keys corresponding to the data fields and values being tensors
+            of shape ``(actual_batch_size, num_steps|1, num_options|1)``.
+                    
+        batch_size, batch: tuple[int, dict[str, torch.Tensor]]
+            If `yield_size_and_batch` is True, yields a tuple of the actual batch size and the batch.
+            If ``pad``` is True, then, this will always be equal to the provided `batch_size`.
         """
 
         sample_ids  = self.trn_samples_ids if trn else self.vld_samples_ids
         num_samples = len(sample_ids)
 
+        pad_to_size = None if not pad else batch_size
         batch_size  = min(batch_size, num_samples)
         num_batches = (num_samples + batch_size - 1) // batch_size
         for ib in range(num_batches):
             start     = ib * batch_size
             end       = min(start + batch_size, num_samples)
             batch_ids = sample_ids[start:end]
+            act_size  = (end - start) if pad_to_size is None else pad_to_size
+
             if yield_size_and_batch:
-                yield end-start, self.generate_batch( batch_ids=batch_ids, device=device )
+                yield act_size, self.generate_batch( batch_ids=batch_ids, device=device, pad_to_size=pad_to_size )
             else:
-                yield self.generate_batch( batch_ids=batch_ids, device=device )
+                yield self.generate_batch( batch_ids=batch_ids, device=device, pad_to_size=pad_to_size )
 
 # ================================================================
 # Command-line interface

@@ -30,7 +30,10 @@ class BackboneTorch(Backbone):
         return torch.tensor( data, dtype=dtype, device=self.device ).item()
 
     def to_array( self, data, dtype : type | None = None ) -> Backbone.Array:
-        """ Create an array; do not copy if data is already an array of the correct dtype. Stops gradient calculation if data is a tensor. """
+        """
+        Create an array; do not copy if data is already an array of the correct dtype and on the correct device.
+        Stops gradient calculation if data is a tensor
+        """
         if isinstance( data, nnp.ndarray ):
             return torch.from_numpy( data ).to( dtype=dtype, device=self.device )
         return torch.tensor( data, dtype=dtype, device=self.device )
@@ -38,10 +41,10 @@ class BackboneTorch(Backbone):
     def to_numpy( self, arr : Backbone.Array ) -> nnp.ndarray:
         assert isinstance( arr, torch.Tensor ), f"Expected a torch tensor, got type {type(arr)}"
         return arr.detach().cpu().numpy()
-
-    def astype( self, data, dtype : type | None = None ) -> Backbone.Array:
-        """ Type conversion. This function also places the tensor on the correct device. Keeps the gradient. """
-        return data.to( dtype=dtype, device=self.device )
+    
+    def stop_gradient( self , arr : Backbone.Array ) -> Backbone.Array:
+        """ Stop gradient calculation. Does NOT make a copy """
+        return arr.detach()
 
     def zeros( self, shape : tuple, dtype : type ) -> Backbone.Array:
         return torch.zeros( shape, dtype=dtype, device=self.device )
@@ -54,6 +57,12 @@ class BackboneTorch(Backbone):
 
     def empty_like( self, arr, dtype : type | None = None ) -> Backbone.Array:
         return torch.empty_like( arr, dtype=dtype, device=self.device )
+    
+    def unique( self, arr : Backbone.Array, axis : int = -1 ) -> Backbone.Array:
+        return torch.unique( arr, dim=axis )
+    
+    def take_along_axis( self, arr : Backbone.Array, indices : Backbone.Array, axis : int ) -> Backbone.Array:
+        return torch.gather( arr, dim=axis, index=indices )
 
     def __getattr__(self, name):
         if hasattr(torch, name):

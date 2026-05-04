@@ -72,9 +72,9 @@ class Backbone(object):
         """
         out_dtype = strikes.dtype
         if high_precision:
-            strikes = self.astype(strikes, dtype=self.float64)
-            spot    = self.astype(spot, dtype=self.float64) if not spot is None else None
-            sqrtVars= self.astype(sqrtVars, dtype=self.float64)
+            strikes = self.to_array(strikes, dtype=self.float64)
+            spot    = self.to_array(spot, dtype=self.float64) if not spot is None else None
+            sqrtVars= self.to_array(sqrtVars, dtype=self.float64)
         spot = spot if spot is not None else (strikes*0.+1.) # TODO: provide better "1"
         k    = strikes/spot if spot is not None else strikes
         intr = (k<self.BS_EPS) | (sqrtVars<self.EPS_VOL)
@@ -101,7 +101,7 @@ class Backbone(object):
                  
         price = self.clip( price, min=inc, max=spot )  # enforce price >= intrinsic to avoid numerical issues in sanos. In ``debug`` these get caught above.
         price = self.minimum( price, spot ) # enforce price <= spot to avoid numerical issues in sanos. In ``debug`` these get caught above.
-        return self.astype( price, dtype=out_dtype ) if high_precision else price
+        return self.to_array( price, dtype=out_dtype ) if high_precision else price
 
     def geometry_sqrtVar_interpolation( self, *,
                                      fwd_vols : Array, 
@@ -185,6 +185,10 @@ class BackboneNumpy(Backbone):
         assert isinstance( arr, nnp.ndarray ), f"Expected a numpy array, got type {type(arr)}"
         return arr
 
+    def stop_gradient( self , arr : Backbone.Array ) -> Backbone.Array:
+        """ Stop gradient calculation. Does NOT make a copy (NOOP for numpy)"""
+        return arr
+
     def __getattr__(self, name):
         if hasattr(nnp, name):
             return getattr(nnp, name)
@@ -195,10 +199,6 @@ class BackboneNumpy(Backbone):
         from scipy.special import ndtr  # fast N(0,1) CDF
         return ndtr( arr )
 
-    def astype( self, data : Backbone.Array, dtype : type | None = None ) -> Backbone.Array: 
-        """ Change type """
-        return nnp.asarray( data, dtype=dtype )
-    
     def verify( self, condition: bool|Backbone.Array,  message : str|callable, exception : Exception = RuntimeError  ):
         """ Verify a condition, raise an error with message if not satisfied. """
         condition = nnp.all(condition)

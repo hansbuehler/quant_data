@@ -360,9 +360,6 @@ class Trainer(object):
                 trn_loss, grad_norm = train()
 
             model.debug_finite_parameters()                
-            if verbose.shall_report():
-                str_tme_trn = f"{tracker['training'].fmt_average_lap_seconds()}"
-                verbose.write(f"\rTraining epoch {epoch}/{epochs} error avg trn {trn_loss:.4g} [{str_tme_trn}] learning rate {lr:.2e} grad norm {grad_norm:.4g}... running valuation... ", end='')
 
             # valuation
             # ---------
@@ -372,12 +369,14 @@ class Trainer(object):
 
             with torch.no_grad():
                 def value( trn ):
+                    verbose.write(f"\rTraining epoch {epoch}/{epochs} error avg trn {trn_loss:.4g} learning rate {lr:.2e} grad norm {grad_norm:.4g}... running evalulation on the {'training' if trn else 'validation'} set... ", end='')
                     loss    = None
                     loss_sq = None
                     weight  = None
                     metrics = {}
 
-                    for batch in sampler.all( trn=trn, batch_size=config.val_batch_size, device=self.device ):
+                    for batch in sampler.all( trn=trn, batch_size=config.val_batch_size, device=self.device, pad=True ):
+                        assert 'pad_mask' in batch, "Internal error: valuation batches must contain the 'pad_mask' field when 'pad' is True."
                         ls, lsq, wg, lm = valuation( batch )
                         verify( not 'loss' in lm, lambda : f"Setup error '{self.info_label}': model returned 'loss' as a metric, but 'loss' should be returned as a separate value from the forward method, not as a metric." )
                         self.verify( lambda : torch.isfinite(ls+lsq+wg), "Valuation returned non-finite values. Check the model and the data." )
@@ -402,14 +401,16 @@ class Trainer(object):
 
                             xvalues = metrics.get( metric, None )
                             xvalues = [ x + m.detach().clone() for x,m in zip(xvalues, mvalues) ] if not xvalues is None else\
-                                      [ m.detach().clone() for m in mvalues ]   
-                            self.verify(lambda : xvalues[-1] > 0., f"Internal error: metric '{metric}' has non-positive total weight {xvalues[-1]} after aggregation" )
+                                      [ m.detach().clone() for m in mvalues ]
                             metrics[metric] = xvalues
                         del metric, mvalues, xvalues
     
-                    # take averages                    
-                    loss = ( loss / weight ).detach().cpu().item()
-                    loss_std = math.sqrt( max(0., loss_sq / weight - loss*loss).detach().cpu().item() )
+                    # take averages
+                    weight = weight.detach().cpu().item()
+                    assert weight > 0., f"Internal error: total loss weight is non-positive after aggregation: {weight}"
+                    loss     = loss.detach().cpu().item() / weight
+                    loss_sq  = loss_sq.detach().cpu().item() / weight
+                    loss_std = math.sqrt( max(0., loss_sq - loss*loss) )
                     del weight, loss_sq
 
                     agg_metrics = dict(loss=(loss, loss_std))
@@ -444,6 +445,7 @@ class Trainer(object):
             # -----
 
             if verbose.shall_report():
+                str_tme_trn     = f"{tracker['training'].fmt_lap_seconds()}"
                 str_tme_val_trn = f"{tracker['val_trn'].fmt_average_lap_seconds()}"
                 str_tme_val_vld = f"{tracker['val_vld'].fmt_average_lap_seconds()}"   
                 str_estimated   = fmt_seconds( tracker.current_lap_seconds * (epochs - epoch) )

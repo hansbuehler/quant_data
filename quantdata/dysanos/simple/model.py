@@ -154,7 +154,7 @@ class AttentionPoolingEncoderFactory(EncoderFactory):
                 self.verify( lambda: torch.isfinite(eV).all(), "V is infinite")
                 eQ  = eQK[...,0] # (B,S,O,H,C)
                 eK  = eQK[...,1] # (B,S,O,H,C)
-                #del eQK
+                eQK = None
 
                 # unoptimized 
                 scores = -(eQ * eK).sum(dim=-1) * (1.0 / math.sqrt(C))  # (B,S,O,H)
@@ -497,6 +497,27 @@ class AECConfig:
 class AEC(BaseModel):
     """
     Basic AutoEncoder for Call options (AEC) model for the Dysanos simple benchmark.
+
+    Parameters
+    ----------
+    env : :class:`BaseEnvironment`
+        The environment to run the model on.
+    sampler : :class:`SimpleSampler` | :class:`SimpleSampler.Config`
+        The sampler to use for generating training and validation data.
+        The model will not sample itself from the sampler, but it extracts
+        the data shapes, training data statistics, and number of steps from the sampler to initialize itself.
+        The sampler configuration is also stored in the model for future reference and caching purposes.
+    config : :class:`AECConfig`, default ``AECConfig()``
+        The configuration for the AEC model, including encoder and decoder configurations and other model parameters.        
+    version : str, default 0.1
+        The version of the model. Changing the version will invalidate any stored checkpoints
+        and effectively trigger a re-generation of an experiment.
+    visualizer_config : :class:`VisualizerConfig` | None, default ``None``
+        Configuration for the visualizer. If set to ``None``, no visualizer will be used.
+        pool_config : :class:`PoolConfig`, default ``PoolConfig.off()``
+    Configuration for the data pool. This is used when the sampler is not directly instantiated with a
+        sampler configuration, but rather with a sampler instance. In that case, the model needs to know how to
+        configure the pool for the sampler to be able to extract the necessary data shapes and statistics from the sampler.
     """
 
     VisualizerConfig = VisualizerConfig
@@ -628,22 +649,28 @@ class AEC(BaseModel):
             Input data dictionary containing tensors for the model. The expected keys and tensor shapes depend on the specific model implementation.
         training : bool, default ``False``
             Whether the model is in training mode.
+        might_pad : bool, default ``True``
+            Whether the input data might contain padding samples. In this case, handle the boolean
+            ``pad_mask`` tensor of shape ``(batch_size, 1,1)``.
         return_what : :class:`BaseModel.ReturnWhat`, default ``ReturnWhat.LOSS_WEIGHT``
             Specifies what the model should return. Options are:
             - ``ReturnWhat.LOSS_WEIGHT``: return float ``loss`` (with gradient) and float ``weight`` (without gradient) for training.
             - ``ReturnWhat.VALUATION``: return ``loss``, ``weight`` and a dictionary of additional float metrics.
             - ``ReturnWhat.PATHWISE``: return pathwise metrics as dictionary.
         """
+        data     = dict(data)
+        pad_mask = data.pop('pad_mask',None)
         assert set(data) == set(SimpleSampler.FEATURES), f"Data fields wrong: superflous: {sorted(set(data) - set(SimpleSampler.FEATURES))}, missing: {sorted(set(SimpleSampler.FEATURES) - set(data))}"
         assert not training or return_what == self.ReturnWhat.LOSS_WEIGHT, f"During training, 'return_what' must be ReturnWhat.LOSS_WEIGHT not {return_what}"
 
-        data     = dict(data)
         mask     = pop(data,"is_valid", shape=3, dtype=torch.bool) # (B,S,O)
         B, S, O  = mask.shape
         X        = self.config.num_state
         assert S == self.num_steps, f"Expected mask to have {self.num_steps} steps as the second dimension, found {S}"
         assert O == self.max_options, f"Expected mask to have {self.max_options} options as the third dimension, found {O}"
         self.verify( lambda : torch.any(mask), "Batch contains no valid masked samples.")
+        assert not training or (pad_mask is None), f"'pad_mask' must not be provided during training"
+        assert pad_mask is None or (pad_mask.shape == (B, 1, 1) and pad_mask.dtype == torch.bool), f"'pad_mask' must have shape {(B, 1, 1)} and dtype torch.bool, but found {pad_mask.shape} and {pad_mask.dtype}"
 
         # encode
         # ------
@@ -651,15 +678,15 @@ class AEC(BaseModel):
         features = [ data[f] for f in self.X_FEATURES ] # list of (B,S,O) tensors
         characteristics = [ data[f] for f in self.CHARACTERISTICS ]
 
-        encoded = self.encoder( features, mask=mask ) # (B,S,X)
+        encoded = self.encoder( features, mask=mask if pad_mask is None else (mask&pad_mask ) ) # (B,S,X)
         assert encoded.shape == (B, S, X), f"Expected encoded representation to have shape {(B, S, X)}, found {encoded.shape}"
         self.verify( lambda: torch.isfinite(encoded).all(), lambda: f"Encoded representation contains non-finite values")
         encoded = torch.tanh( encoded )
 
-        decoded = self.decoder( characteristics, encoded, mask=mask ) # (B,S,O)
+        decoded = self.decoder( characteristics, encoded, mask=mask if pad_mask is None else (mask&pad_mask )  ) # (B,S,O)
         assert decoded.shape == (B, S, O), f"Expected decoded representation to have shape {(B, S, O)}, found {decoded.shape}"
         self.verify( lambda: torch.isfinite(decoded).all(), lambda: f"Decoded representation contains non-finite values")
-        #del encoded
+        encoded = None
 
         # Compute price
         # -------------
@@ -686,11 +713,13 @@ class AEC(BaseModel):
             fit_price   = self.softplus(decoded) # keep positivity
             fit_vol     = None
             fit_sqrtVar = None
-        #del decoded
+        decoded = None
 
         self.verify( lambda: torch.isfinite(fit_price).all(), "Infinite mid price")
 
         if return_what == self.ReturnWhat.PATHWISE:
+            if not pad_mask is None:
+                mask = mask & pad_mask
             return dict(fit_price=torch.where( mask, fit_price, 0.),
                         fit_vol=torch.where( mask, fit_vol, 0.) if fit_vol is not None else None
                     )
@@ -698,12 +727,16 @@ class AEC(BaseModel):
         # loss function
         # -------------
 
-        def loss_f( fit, bid, ask, mean_spread, mask ):
+        def loss_f( fit, bid, ask, mean_spread ):
             """
             Computes a weighted loss.
             In theory we want to express the loss per option in relation to bid/ask.
             However, this is too large for initial values hence we scale it back to
             average spread. 
+
+            'pad_mask' will be None when training but a valid mask otherwise.
+            Note that padded samples are guaranteed to be valid, including
+            having at least one valid option.
             """
             half_spread  = torch.where( mask, torch.clip( ask - bid, min=self.config.min_mean_spread_frac * mean_spread ), 1. ) / 2.
             mid          = (bid + ask) / 2.
@@ -714,28 +747,36 @@ class AEC(BaseModel):
 
             if not self.config.fit_average:
                 with torch.no_grad():
-                    loss_sq  = torch.sum(loss**2)
-                    weights  = torch.sum(mask)
-                loss     = torch.sum(loss)
+                    loss_sq = loss**2
+                    loss_sq = loss_sq if pad_mask is None else (loss_sq*pad_mask)
+                    loss_sq  = torch.sum(loss_sq)
+                    weights  = torch.sum(mask if pad_mask is None else (mask & pad_mask) )
+                loss     = torch.sum(loss if pad_mask is None else (loss*pad_mask))
 
             else:
                 mask2 =  torch.sum(mask, dim=2)
                 self.verify( lambda :mask2.min() > 0, "Internal error - all samples must have some options")
                 with torch.no_grad():
-                    loss_sq = torch.sum( torch.sum( loss**2, dim=2 ) / mask2 )  # we cannot
-                    weights = torch.sum( torch.any(mask, dim=2) )
-                loss    = torch.sum( torch.sum( loss, dim=2 ) / mask2 )  # we cannot
+                    loss_sq = torch.sum( loss**2, dim=2 ) / mask2 
+                    loss_sq = loss_sq if pad_mask is None else (loss_sq*pad_mask[...,0])
+                    loss_sq = torch.sum( loss_sq )  # we cannot
+                    wgts_2  = torch.any(mask, dim=2)
+                    wfts_2  = wgts_2 if pad_mask is None else (wgts_2 & pad_mask[...,0])
+                    weights = torch.sum( wfts_2 )
+                loss    = torch.sum( loss, dim=2 ) / mask2
+                loss    = loss if pad_mask is None else (loss*pad_mask[...,0])
+                loss    = torch.sum( loss )  # we cannot
             return loss, loss_sq, weights
         
         if self.config.fit_what == "price":
-            loss, loss_sq, weights = loss_f( fit_price, pure_bid, pure_ask, self.stats.mean_pure_spread, mask )
+            loss, loss_sq, weights = loss_f( fit_price, pure_bid, pure_ask, self.stats.mean_pure_spread )
 
         elif self.config.fit_what == "vol":
-            loss, loss_sq, weights = loss_f( fit_vol, bid_vol, ask_vol, self.stats.mean_vol_spread, mask )
+            loss, loss_sq, weights = loss_f( fit_vol, bid_vol, ask_vol, self.stats.mean_vol_spread )
     
         else:
             assert self.config.fit_what == "sqrtVar", f"Invalid value for 'fit_what': {self.config.fit_what}"
-            loss, loss_sq, weights = loss_f( fit_sqrtVar, bid_vol*sqrtT, ask_vol*sqrtT, self.stats.mean_sqrtVar_spread, mask )
+            loss, loss_sq, weights = loss_f( fit_sqrtVar, bid_vol*sqrtT, ask_vol*sqrtT, self.stats.mean_sqrtVar_spread )
 
         if training or return_what == self.ReturnWhat.LOSS_WEIGHT:
             return loss, weights
@@ -743,41 +784,52 @@ class AEC(BaseModel):
         # return metrics
         # --------------
 
+        assert not pad_mask is None, "Internal error - pad_mask must be provided to return metrics"
         assert return_what == self.ReturnWhat.VALUATION, f"Invalid value for 'return_what': {return_what}"
+        mask     = mask & pad_mask # (B,S,O) - valid options that are not padded out
+        pad_mask = None
+
         with torch.no_grad():
             # to get an understandable excess in relation to the spread
-            excess           = torch.where( mask, torch.clip(fit_price - pure_ask, min=0.) + torch.clip(pure_bid - fit_price, min=0.), 0. ) # how much we are outside bid/ask in $
-            half_spread      = torch.where( mask, 0.5* torch.clip( pure_ask - pure_bid, min=self.config.min_mean_spread_frac * self.stats.mean_pure_spread ), 1. )
-            inv_hspread      = torch.where( mask, 1./half_spread, 0. )
-            rel_excess       = excess*inv_hspread # how much are we outside the bid/ask relative to half spreadf
-            rel_excess_sq    = rel_excess**2
-            excess_sq        = excess**2
-            sum_dim_mask     = torch.sum( mask, dim=2 )
-            sum_any_mask     = torch.sum( torch.any(mask, dim=2) )
-            sum_mask         = torch.sum(mask)
-            self.verify( lambda : torch.all(sum_dim_mask > 0), "Some samples have no valid options, which would lead to division by zero when computing average excess. Consider setting 'fit_average' to False or ensuring that all samples have at least one valid option." )
+            # note that 'mask' is now padded, hence some samples may not
+            # have any valid option.
+            excess            = torch.where( mask, torch.clip(fit_price - pure_ask, min=0.) + torch.clip(pure_bid - fit_price, min=0.), 0. ) # how much we are outside bid/ask in $
+            half_spread       = torch.where( mask, 0.5* torch.clip( pure_ask - pure_bid, min=self.config.min_mean_spread_frac * self.stats.mean_pure_spread ), 1. )
+            inv_hspread       = torch.where( mask, 1./half_spread, 0. )
+            rel_excess        = excess*inv_hspread # how much are we outside the bid/ask relative to half spreadf
+            rel_excess_sq     = rel_excess**2
+            excess_sq         = excess**2
+            sum_dim_mask2     = torch.sum( mask, dim=2 ) # will be zero for padded samples
+            has_dim2          = sum_dim_mask2 > 0
+            inv_sum_dim_mask2 = torch.where( has_dim2, 1./torch.where( has_dim2, sum_dim_mask2, 1.), 0. )
+            inv_ispread_mask2 = torch.where( has_dim2, 1./torch.where( has_dim2, torch.sum(inv_hspread, dim=2), 1.), 0. )
+            sum_any_mask      = torch.sum( torch.any(mask, dim=2) ) # cannot be zero since at least some samples are not padded out
+            sum_mask          = torch.sum( mask ) # cannot be zero since at least some samples are not padded out
+            self.verify( lambda : torch.all(sum_any_mask > 0), "Found non-padded samples with zero options")
+            has_dim2 = None
+            half_spread = None
 
             metrics = dict(
                 # excess, weighted by spread, then normalized.
                 excess_weighted =     ( torch.sum(inv_hspread*excess),
                                         torch.sum(inv_hspread*excess_sq),
                                         torch.sum(inv_hspread) ),
-                excess_weighted_avg = ( torch.sum( torch.sum(inv_hspread*excess, dim=2 ) / torch.sum(inv_hspread, dim=2) ),
-                                        torch.sum( torch.sum(inv_hspread*excess_sq, dim=2 ) / torch.sum(inv_hspread, dim=2) ),
+                excess_weighted_avg = ( torch.sum( torch.sum(inv_hspread*excess, dim=2 ) * inv_ispread_mask2 ),
+                                        torch.sum( torch.sum(inv_hspread*excess_sq, dim=2 ) * inv_ispread_mask2 ),
                                         sum_any_mask ),
                 # excess weighted by spread
                 excess_spread   =     ( torch.sum(rel_excess),
                                         torch.sum(rel_excess_sq),
-                                        sum_mask ),
-                excess_spread_avg =   ( torch.sum( torch.sum(rel_excess, dim=2 ) / sum_dim_mask  ),
-                                        torch.sum( torch.sum(rel_excess_sq, dim=2 ) / sum_dim_mask  ),
+                                        sum_mask ),         
+                excess_spread_avg =   ( torch.sum( torch.sum(rel_excess, dim=2 ) * inv_sum_dim_mask2 ),
+                                        torch.sum( torch.sum(rel_excess_sq, dim=2 ) * inv_sum_dim_mask2 ),
                                         sum_any_mask ),
                 # raw violation in $
-                excess =              ( torch.sum( torch.where(mask, excess, 0.) ), 
-                                        torch.sum( torch.where(mask, excess_sq, 0.) ), 
-                                        torch.sum(mask) ),
-                excess_avg =          ( torch.sum( torch.sum( torch.where(mask, excess, 0.), dim=2 ) / sum_dim_mask ),
-                                        torch.sum( torch.sum( torch.where(mask, excess_sq, 0.), dim=2 ) / sum_dim_mask ),
+                excess =              ( torch.sum( excess ), 
+                                        torch.sum( excess_sq ), 
+                                        sum_mask ),
+                excess_avg =          ( torch.sum( torch.sum( excess, dim=2 ) * inv_sum_dim_mask2 ),
+                                        torch.sum( torch.sum( excess_sq, dim=2 ) * inv_sum_dim_mask2 ),
                                         sum_any_mask )
             )
 
@@ -922,7 +974,8 @@ class Visualizer(BaseVisualizer):
             fit_price     = pathwise['fit_price'][:,-1,:].detach().cpu().numpy()
             fit_vols      = pathwise['fit_vol'][:,-1,:].detach().cpu().numpy() if pathwise['fit_vol'] is not None else None
             fit_vols      = bs.implied( pure_strike, fit_price, sqrtT=sqrtT, mask=is_valid, on_exceed_bounds="quiet" ) if fit_vols is None else fit_vols
-            #del batch, pathwise
+            batch = None
+            pathwise = None 
 
             # per sample, aggregate price and vol error
             # ------------------------------------------
