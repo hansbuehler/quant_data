@@ -163,7 +163,7 @@ class Fitter:
 
         if not fwd_vols is None:
             if hasattr(fwd_vols, "shape"):
-                verify_inp( fwd_vols.shape == (T,), lambda: f"Expected fwd_vols to have shape {(T,)}, found {fwd_vols.shape}" )
+                verify_inp( fwd_vols.shape[-1] ==T, lambda: f"Expected fwd_vols shape to end in {T}, found {fwd_vols.shape}" )
                 verify_inp( np.min( fwd_vols ) >= 0., lambda: f"Forward volatilities must not be negative, found min {np.min(fwd_vols)}" )
             elif fwd_vols == 0.:
                 fwd_vols = None
@@ -172,7 +172,7 @@ class Fitter:
                 fwd_vols = np.full( (T,), fwd_vols, dtype=self.geometry.xexpiries.dtype )
 
         verify_inp( len(opt_tte.shape) == 1, f"Expected opt_tte to be a 1D array, found shape {opt_tte.shape} (this function does not support batch dimensions)" )
-        verify_inp( fwd_vols is None or fwd_vols.shape == (T,), lambda : f"Expected fwd_vols to have shape {(T,)}, found {fwd_vols.shape}" )            
+        verify_inp( fwd_vols is None or fwd_vols.shape[-1] == T, lambda : f"Expected fwd_vols shape to end in {T}, found {fwd_vols.shape}" )            
         verify_inp( opt_strikes.shape == opt_bid.shape == opt_ask.shape == opt_tte.shape, lambda : f"Expected 'opt_strikes', 'opt_bid', 'opt_ask' and 'opt_tte' to have the same shape; found {opt_strikes.shape}, {opt_bid.shape}, {opt_ask.shape}, {opt_tte.shape}" )
         verify_inp( opt_is_calls is None or opt_is_calls.shape == opt_tte.shape, lambda : f"Expected 'opt_is_calls' to have the same shape as 'opt_tte'; found {opt_is_calls.shape} and {opt_tte.shape}" )
         verify_inp( opt_mask is None or opt_mask.shape == opt_tte.shape, lambda : f"Expected 'opt_mask' to have the same shape as 'opt_tte'; found {opt_mask.shape} and {opt_tte.shape}" )
@@ -432,7 +432,7 @@ class Fitter:
         assert np.all( np.isfinite(densities) ), f"Expected fitted call prices to be finite, found min {np.min(fit_calls)} and max {np.max(fit_calls)}"
         assert np.min( densities ) > -self.eps.densities, f"Expected densities to be non-negative, found min {np.min(densities)} [tolerance 'densities' {self.eps.densities}]"
         assert np.max( np.abs( np.sum( densities, axis=1 ) - 1. ) ) <= self.eps.densities, f"Expected sum of densities to be 1, found {np.sum(densities, axis=1)} [tolerance 'densities' {self.eps.densities}]"
-        assert np.max( np.abs( np.sum( densities*mstrikes, axis=1 ) - 1. ) ) <= self.eps.densities, f"Expected sum of densities*strikes to be 1, found {np.sum(densities, axis=1)} [tolerance 'densities' {self.eps.densities}]"
+        assert np.max( np.abs( np.sum( densities*mstrikes, axis=1 ) - 1. ) ) <= self.eps.densities, f"Expected sum of densities*strikes to be 1, found {np.sum(densities*mstrikes, axis=1)} [tolerance 'densities' {self.eps.densities}]"
 
         with verbose.write_t(lambda : f"Computing DLV squared's... ", end='') as tme:
             dCs     = [ dC_t.value[1:-1] for dC_t in dCs ]

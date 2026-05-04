@@ -103,50 +103,6 @@ class Backbone(object):
         price = self.minimum( price, spot ) # enforce price <= spot to avoid numerical issues in sanos. In ``debug`` these get caught above.
         return self.to_array( price, dtype=out_dtype ) if high_precision else price
 
-    def geometry_sqrtVar_interpolation( self, *,
-                                     fwd_vols : Array, 
-                                     opt_lix : Array, 
-                                     opt_vweight : Array, 
-                                     opt_vextra : Array,
-                                     vol_interp : str,
-                                     dsqrtTs : Array,
-                                     dts : Array,
-                                     fwdvol_floor : float ) -> Array:
-        """
-        Compute interpolated sqrtVars for options based on forward volatilities and interpolation weights.
-        """
-        assert len(dsqrtTs.shape) == 1, f"Internal error: dsqrtTs must be 1D, found shape {dsqrtTs.shape}"
-        T    = dsqrtTs.shape[0]
-        assert fwd_vols.shape[-1] == T, f"Internal error: last dimension of fwd_vols must match length of dsqrtTs, found {fwd_vols.shape} and {dsqrtTs.shape}"
-        assert dts.shape == dsqrtTs.shape, f"Internal error: dts and dsqrtTs must have the same shape, found {dts.shape} and {dsqrtTs.shape}"
-
-        assert opt_lix.shape == opt_vweight.shape == opt_vextra.shape, f"Internal error: opt_lix, opt_vweight, and opt_vextra must have the same shape, found {opt_lix.shape}, {opt_vweight.shape}, and {opt_vextra.shape}"
-
-        head = opt_lix.shape[:-1]
-        M    = opt_lix.shape[-1]
-        hext = (1,)*len(head)
-
-        if len(fwd_vols.shape) == 1:
-            fwd_vols = fwd_vols.reshape( hext+fwd_vols.shape )
-
-        if vol_interp == "sqrt_lin_vol":
-            dsqrtTs = dsqrtTs.reshape( hext+dsqrtTs.shape )
-            totalSqrtVar = self.cumsum( (fwd_vols+fwdvol_floor) * dsqrtTs, axis=-1 )
-            assert totalSqrtVar.shape[-1] == (T,), f"Internal error: last dimension of totalSqrtVar must be {(T,)}, found {totalSqrtVar.shape}"
-
-            prev_sqrtVar = self.where( opt_lix == 0, 0., totalSqrtVar[self.clip(opt_lix-1,min=0)] )
-            opt_sqrtVars = opt_vweight * prev_sqrtVar + (1.-opt_vweight) * totalSqrtVar[opt_lix] + opt_vextra * (fwd_vols[...,-1:]+fwdvol_floor) 
-        else:
-            dts     = dts.reshape( hext+dts.shape )
-            assert vol_interp == "lin_var", f"Internal error: vol_interp must be 'sqrt_lin_vol' or 'lin_var', found '{vol_interp}'"
-            totalVar = self.cumsum( (fwd_vols+fwdvol_floor)**2 * dts, axis=-1 )
-            assert totalVar.shape == (T,), f"Internal error: totalVar must have shape {(T,)}, found {totalVar.shape}"
-
-            prev_var     = self.where( opt_lix == 0, 0., totalVar[self.clip(opt_lix-1,min=0)] )
-            opt_sqrtVars = self.sqrt( opt_vweight * prev_var + (1.-opt_vweight) * totalVar[opt_lix] + opt_vextra * ((fwd_vols[...,-1:]+fwdvol_floor)**2) )
-
-        return opt_sqrtVars
-
 # Numpy
 # -----
 

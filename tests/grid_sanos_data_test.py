@@ -1,6 +1,7 @@
 import datetime
 from numpy import *
 
+
 TEST_DATA = {'d': datetime.date(2025, 6, 3), 'is_valid': array([ True,  True,  True,  True,  True,  True,  True,  True,  True,
         True,  True,  True,  True,  True,  True,  True,  True,  True,
         True,  True,  True,  True,  True,  True,  True,  True,  True,

@@ -45,14 +45,14 @@ class GridGeometry:
     dlv_min    : float = 0.01          #: minimum discrete local volatility (dlv) value.
     dlv_max    : float = 5.0           #: maximum discrete local volatility (dlv) value.
     fwdvol_min : float = 0.0           #: minimum backbone forward volatility value.
-    vol_interp : str = "sqrt_lin_vol"  #: Term volatility interpolation method. Must be a 'sqrt_lin_vol' or 'lin_var'.
+    vol_interp : str = "lin_sqrt_time"  #: Term volatility interpolation method. Must be a 'lin_var' or 'lin_sqrt_time'
     backbone   : Backbone = field(default_factory=BackboneNumpy) #: Backbone for numerical computations. Default is numpy.
 
     def __post_init__(self):
         verify_inp( self.dlv_min > 0., lambda : f"'dlv_min' must be positive, but found {self.dlv_min:.4g}") 
         verify_inp( self.dlv_max > self.dlv_min, lambda : f"'dlv_max' must be greater than 'dlv_min'; found dlv_max {self.dlv_max:.4g} and dlv_min {self.dlv_min:.4g}" )
         verify_inp( self.fwdvol_min >= 0., lambda : f"'fwdvol_min' must be non-negative; found {self.fwdvol_min:.4g}" )
-        verify_inp( self.vol_interp in ["sqrt_lin_vol", "lin_var"], lambda : f"'vol_interp' must be either 'sqrt_lin_vol' or 'lin_var', but found {self.vol_interp}" )
+        verify_inp( self.vol_interp in {"lin_sqrt_time", "lin_var"}, lambda : f"'vol_interp' must be either 'lin_sqrt_time' or 'lin_var', but found {self.vol_interp}" )
 
         verify_inp( len(self.xexpiries.shape) == 1 and len(self.xexpiries) > 1, lambda : "'xexpiries' must be non-empty 1D array of at least two expiries, starting in 0" )
         verify_inp( self.xexpiries[0] == 0., lambda : f"First expiry must be zero; found {self.xexpiries[0]}" )
@@ -116,7 +116,7 @@ class GridGeometry:
                             dlv_min   : float = 0.01,
                             dlv_max   : float = 5.,
                             fwdvol_min  : float = 0.01,
-                            vol_interp: str = "sqrt_lin_vol",
+                            vol_interp: str = "lin_sqrt_time",
                             lower_scale : float = 0.5,
                             upper_scale : float = 1.5,
                             dtype : np.dtype = np.float64
@@ -136,8 +136,8 @@ class GridGeometry:
             Range of NMS for the strikes. If a single float is provided, the range will be symmetric around 0.
         num_nms : int, default ``11``
             Number of NMS points for the strikes. Default is 11.
-        vol_interp : str, default ``"sqrt_lin_vol"``
-            Volatility interpolation method. Must be 'sqrt_lin_vol' or 'lin_var'. Default is 'sqrt_lin_vol'.
+        vol_interp : str, default ``"lin_sqrt_time"``
+            Volatility interpolation method. Must be 'lin_sqrt_time' or 'lin_var'. Default is 'lin_sqrt_time'.
 
         Returns
         -------
@@ -202,7 +202,7 @@ class GridGeometry:
         * ``vweight``: per option the lower interpolation weight for variance interpolation (can be linear in variance or in sqrt time).
         * ``vextra``: per option extrapolation with final volatility (linear or sqrt)
 
-        Call price BS sqrt-variance is computed as follows in ``sqrt_lin_vol`` interpolation mode:
+        Call price BS sqrt-variance is computed as follows in ``lin_sqrt_time`` interpolation mode:
 
             * if ``t_i < xexpiries[0]`` then ``lix_i = 0`` and 
                 ``sqrtVar_i = (1-vweight_i) * sqrtVars[lix_i]``.
@@ -249,7 +249,7 @@ class GridGeometry:
         assert ixtte.shape == ttes.shape, f"Expected ixtte to have shape {ttes.shape}, got {ixtte.shape}"
 
         # compute linear and sqrt-linear weights
-        assert self.vol_interp in {"sqrt_lin_vol","lin_var"}, f"Internal error: vol_interp must be 'sqrt_lin_vol' or 'lin_var', found '{self.vol_interp}'"
+        assert self.vol_interp in {"lin_var","lin_sqrt_time"}, f"Internal error: vol_interp must be 'lin_var' or 'lin_sqrt_time', found '{self.vol_interp}'"
 
         # create weights for ixteel-1. 
         # note that in case of extrapolation ixteel=T-1, hence the weight for ixteel-1 will be 0.
@@ -259,11 +259,11 @@ class GridGeometry:
         prev_times  = np.where( ixtte == 0, 0., times[ixtte_m1] )
         divisor     = np.where( ixtte == T, 1., times[ixtte_cap] - prev_times )
         assert np.min( divisor) > 0., f"Internal error: divisor for time interpolation weights must be positive, found min {np.min(divisor)}. Please contact authors."
-        dweight     = np.select( [ixtte==0, ixtte==T],
+        dweight     = np.select( [ixtte==0, ixtte==T], # dweight is always linear
                                  [0.,       0.],
                                  ( times[ixtte_cap] - ttes ) / divisor )
         
-        if self.vol_interp == "sqrt_lin_vol":
+        if self.vol_interp == "lin_sqrt_time":
             prev_sqrtT  = np.where( ixtte == 0, 0., sqrtT[ixtte_m1] )
             divisor     = np.where( ixtte == T, 1., sqrtT[ixtte_cap] - prev_sqrtT )
             vweight     = np.where( ixtte == T, 0., ( sqrtT[ixtte_cap] - sqrtTtes ) / divisor )
@@ -441,6 +441,7 @@ class GridSanos(object):
             An array of forward volatilities of ``(..., 1|T)`` or a broadcastable shape. A float or similar is broadcasted accordingly. The function returns ``None`` if ``fwd_vols`` is ``None``.
         opt_interp : dict[str, Backbone.Array]
             The option interpolation weights as returned by :meth:`time_interpolation_weights`, with keys 'lix', 'dweight', 'vweight', 'vextra'.
+            Each entry has dimension ``(..., M)`` where M is the number of options.
         bb : Backbone, default ``BackboneNumpy()``
             The backbone to use for computations. Default is ``BackboneNumpy()``.
         debug : bool, default ``False``
@@ -460,6 +461,8 @@ class GridSanos(object):
         opt_vextra  = opt_interp['vextra']
         M           = opt_lix.shape[-1]
         bb          = self.bb
+        head        = opt_lix.shape[:-1]
+        hext        = (1,)*len(head)
 
         if isinstance(fwd_vols, (float, int, np.number)):
             heax     = (1,)*(len(opt_lix.shape)-1)
@@ -467,8 +470,10 @@ class GridSanos(object):
         elif len(fwd_vols.shape) == 0:
             fwd_vols = bb.reshape( fwd_vols, (1,)*len(opt_lix.shape) )
         else:           
-            verify_inp( len(fwd_vols.shape) == len(opt_lix.shape), f"fwd_vols and opt_lix must have the same number of dimensions, found {len(fwd_vols.shape)} and {len(opt_lix.shape)}" )
+            verify_inp( len(fwd_vols.shape) <= len(opt_lix.shape), f"fwd_vols must have at most as many dimensions as opt_lix, found {len(fwd_vols.shape)} and {len(opt_lix.shape)}" )
             verify_inp( fwd_vols.shape[-1] in [1,T], lambda : f"'fwd_vols' must have shape ending in 1 or {T}, found {fwd_vols.shape}")
+            if len(fwd_vols.shape) < len(opt_lix.shape):
+                fwd_vols = bb.reshape( fwd_vols, (1,)*(len(opt_lix.shape)-len(fwd_vols.shape)) + fwd_vols.shape )
 
         assert len(opt_lix.shape) == len(fwd_vols.shape), f"opt_lix and fwd_vols must have the same number of dimensions, found {len(opt_lix.shape)} and {len(fwd_vols.shape)}"
         assert opt_vweight.shape == opt_lix.shape, f"opt_vweight and fwd_vols must have the same shapes, found {opt_vweight.shape} and {fwd_vols.shape}"
@@ -477,34 +482,56 @@ class GridSanos(object):
         assert self.xexpiries.shape == (self.T+1,), f"Expected xexpiries to have shape {(self.T+1,)}, got {self.xexpiries.shape}"
         assert self.xstrikes.shape == (self.T+1,self.N+2), f"Expected xstrikes to have shape {(self.T+1,self.N+2)}, got {self.xstrikes.shape}"
 
-        dts = bb.diff( self.xexpiries )
-        dts = bb.reshape( dts, (1,)*(len(opt_lix.shape)-1)+(T,) )
+        target_shape = head + (T,)
+        assert bb.are_broadcastable(fwd_vols.shape, target_shape), f"Internal error: fwd_vols must broadcast to {target_shape}, found {fwd_vols.shape}"
+        if fwd_vols.shape != target_shape:
+            fwd_vols = bb.broadcast_to(fwd_vols, target_shape)
 
-        if self.geometry.vol_interp == "sqrt_lin_vol":
-            totalSqrtVar = bb.cumsum( (fwd_vols+self.geometry.fwdvol_min) * bb.sqrt(dts), axis=-1 )
-            assert totalSqrtVar.shape[-1] == T, f"Internal error: totalSqrtVar must have shape ending in {T}, found {totalSqrtVar.shape}"
-            self.verify( lambda: bb.all( np.isfinite(totalSqrtVar) ) & np.all( totalSqrtVar >= 0. ), "Negative or infinite sqrtVars")
+        dts = bb.diff(self.xexpiries)
 
-            prev_sqrtVar = np.where( opt_lix == 0, 0., totalSqrtVar[...,np.clip(opt_lix-1,min=0)] )
-            opt_sqrtVars = opt_vweight * prev_sqrtVar + (1.-opt_vweight) * totalSqrtVar[...,opt_lix] + opt_vextra * (fwd_vols[...,-1]+self.geometry.fwdvol_min) 
-            assert totalSqrtVar.shape[-1] == T, f"Internal error: totalSqrtVar must have shape ending in {T}, found {totalSqrtVar.shape}"
-        else:
-            assert self.geometry.vol_interp == "lin_var", f"Internal error: vol_interp must be 'sqrt_lin_vol' or 'lin_var', found '{self.geometry.vol_interp}'"
-            totalVar = bb.cumsum( (fwd_vols+self.geometry.fwdvol_min)**2 * dts, axis=-1 )
+        if self.geometry.vol_interp == "lin_var":
+            r"""
+            "sqrtVar" is computed by linear interpolation in variance, and taking the square rtoot: assuming that $t_j<t\leq t_{j+1}$ then:
+            $$
+                \mathrm{sqrt_var}(t) := \sqrt{ \mathrm{var}(t) } \ : \ \mathrm{var}(t) =  \sigma^2_j \left( t - t_j \right ) + \sum_{t_j<t} \sigma^2_j \left( t_j - t_{j-1} \right) +
+            $$
+            """
+            assert self.geometry.vol_interp == "lin_var", f"Internal error: vol_interp must be 'lin_sqrt_time' or 'lin_var', found '{self.geometry.vol_interp}'"
+            dts = bb.reshape(dts, hext + dts.shape)
+            totalVar = bb.cumsum((fwd_vols + self.geometry.fwdvol_min) ** 2 * dts, axis=-1)
             assert totalVar.shape[-1] == T, f"Internal error: totalVar must have shape ending in {T}, found {totalVar.shape}"
-            self.verify( lambda: bb.all( np.isfinite(totalVar) ) & np.all( totalVar >= 0. ), "Negative or infinite totalVar")
+            self.verify(lambda: bb.all(np.isfinite(totalVar)) & np.all(totalVar >= 0.), "Negative or infinite totalVar")
 
-            prev_var     = np.where( opt_lix == 0, 0., totalVar[...,np.clip(opt_lix-1,min=0)] )
-            opt_sqrtVars = np.sqrt( opt_vweight * prev_var + (1.-opt_vweight) * totalVar[...,opt_lix] + opt_vextra * ((fwd_vols[...,-1]+self.geometry.fwdvol_min)**2) )
+            prev_var = bb.where(opt_lix == 0, 0., bb.take_along_axis(totalVar, bb.clip(opt_lix-1, min=0), axis=-1))
+            opt_sqrtVars = bb.sqrt(opt_vweight * prev_var + (1. - opt_vweight) * bb.take_along_axis(totalVar, opt_lix, axis=-1) + opt_vextra * ((fwd_vols[..., -1:] + self.geometry.fwdvol_min) ** 2))
+
+        else:
+            r"""
+            Linear in square-root time: assumig that $t_j<t\leq t_{j+1}$ then:
+            $$
+                \mathrm{sqrt_var}(t) := \sqrt{ \mathrm{var}(t) } \ : \ \mathrm{var}(t) =  \sigma^2_j \left( t - t_j \right ) + \sum_{t_j<t} \sigma^2_j \left( t_j - t_{j-1} \right) 
+            $$
+            """
+            verify_inp( self.geometry.vol_interp == "lin_sqrt_time", f"Internal error: vol_interp must be 'lin_sqrt_time' or 'lin_var', found '{self.geometry.vol_interp}'" )
+            dsqrtTs = bb.diff(bb.sqrt(self.xexpiries))
+            dsqrtTs = bb.reshape(dsqrtTs, hext + dsqrtTs.shape)
+            totalSqrtVar = bb.cumsum((fwd_vols + self.geometry.fwdvol_min) * dsqrtTs, axis=-1)
+            assert totalSqrtVar.shape[-1] == T, f"Internal error: totalSqrtVar must have shape ending in {T}, found {totalSqrtVar.shape}"
+            self.verify(lambda: bb.all(np.isfinite(totalSqrtVar)) & np.all(totalSqrtVar >= 0.), "Negative or infinite sqrtVars")
+
+            prev_sqrtVar = bb.where(opt_lix == 0, 0., bb.take_along_axis(totalSqrtVar, bb.clip(opt_lix-1, min=0), axis=-1))
+            opt_sqrtVars = opt_vweight * prev_sqrtVar + (1. - opt_vweight) * bb.take_along_axis(totalSqrtVar, opt_lix, axis=-1) + opt_vextra * (fwd_vols[..., -1:] + self.geometry.fwdvol_min)
+
         assert opt_sqrtVars.shape[-1] == M, f"Internal error: opt_sqrtVars must have shape ending in {M}, found {opt_sqrtVars.shape}"
         self.verify( lambda: bb.all( np.isfinite(opt_sqrtVars) ) & np.all( opt_sqrtVars >= 0. ), "Negative or infinite opt_sqrtVars")
-        return opt_sqrtVars if opt_mask is None else bb.where( opt_mask, 0., opt_sqrtVars )
+        assert len(opt_sqrtVars.shape) == len(opt_lix.shape), f"opt_sqrtVars and opt_lix must have the same number of dimensions, found {len(opt_sqrtVars.shape)} and {len(opt_lix.shape)}"
+        return opt_sqrtVars if opt_mask is None else bb.where( opt_mask, opt_sqrtVars, 0. )
 
     def price(
             self, 
             # market data
             fwd_vols    : Backbone.Array | None,
-            densities   : Backbone.Array,
+            densities   : Backbone.Array, 
             #
             opt_strikes : Backbone.Array,
             opt_tte     : Backbone.Array,
@@ -557,8 +584,10 @@ class GridSanos(object):
 
         mstrikes     = self.strikes # is bb array
         assert densities.shape[-2:] == mstrikes.shape[-2:], f"Expected densities to have the same last two dimensions as geometry.strikes, found {densities.shape} and {mstrikes.shape}"
-        mstrikes     = bb.reshape( mstrikes, hext + mstrikes.shape[-2:] ) # add leading dims for broadcasting with opt_strikes
-        hdensities   = bb.reshape( densities, hext + densities.shape[-2:] ) # add leading dims for broadcasting with opt_strikes
+        mstrikes     = bb.reshape( mstrikes, hext + mstrikes.shape ) # add leading dims for broadcasting with opt_strikes
+
+        if len(densities.shape) != len(mstrikes.shape):
+            densities   = bb.reshape( densities, hext + densities.shape ) # add leading dims for broadcasting with opt_strikes
 
         def call_price( spots, strikes, sqrtVars, mask ):
             if sqrtVars is None:
@@ -576,13 +605,16 @@ class GridSanos(object):
         eff_lix      = bb.clip(opt_lix-1, min=0)
         spots        = bb.take_along_axis( mstrikes, eff_lix[...,None], axis=-2 )#
         assert spots.shape == head+(M,N), f"Expected spots to have shape {head+(M,N)}, got {spots.shape}"
+
+
         calls_prev   = call_price(  spots=spots,
                                     strikes=opt_strikes[...,:,None], 
-                                    sqrtVars=opt_sqrtVars[...,:,None],
+                                    sqrtVars=opt_sqrtVars[...,:,None] if not opt_sqrtVars is None else None,
                                     mask=opt_mask[...,:,None] if not opt_mask is None else None
                                 ) * opt_dweight[...,:,None]
+
         assert calls_prev.shape == head+(M,N), f"Expected calls_prev shape {head+(M,N)}, got {calls_prev.shape}"
-        dens       = bb.take_along_axis( hdensities, eff_lix[...,None], axis=-2 )
+        dens       = bb.take_along_axis( densities, eff_lix[...,None], axis=-2 )
         assert dens.shape == head+(M,N), f"Expected dens to have shape {head+(M,N)}, got {dens.shape}"
         calls_prev = bb.sum( calls_prev * dens, axis=-1 ) # todo: make more efficient
         assert calls_prev.shape == head+(M,), f"Expected calls_prev to have shape {head+(M,)}, got {calls_prev.shape}"
@@ -593,11 +625,11 @@ class GridSanos(object):
         assert spots.shape == head+(M,N), f"Expected spots to have shape {head+(M,N)}, got {spots.shape}"
         calls_next   = call_price(  spots=spots,
                                     strikes=opt_strikes[...,:,None], 
-                                    sqrtVars=opt_sqrtVars[...,:,None],
+                                    sqrtVars=opt_sqrtVars[...,:,None] if not opt_sqrtVars is None else None ,
                                     mask=opt_mask[...,:,None] if not opt_mask is None else None
                                 ) * ( 1.- opt_dweight[...,:,None] )
         assert calls_next.shape == head+(M,N), f"Expected calls_next shape {head+(M,N)}, got {calls_next.shape}"
-        dens          = bb.take_along_axis( hdensities, opt_lix[...,None], axis=-2 )
+        dens          = bb.take_along_axis( densities, opt_lix[...,None], axis=-2 )
         assert dens.shape == head+(M,N), f"Expected dens to have shape {head+(M,N)}, got {dens.shape}"
         calls_next    = bb.sum( calls_next * dens, axis=-1 ) # todo: make more efficient
         assert calls_next.shape == head+(M,), f"Expected calls_next to have shape {head+(M,)}, got {calls_next.shape}"

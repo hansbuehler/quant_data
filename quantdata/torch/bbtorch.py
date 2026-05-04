@@ -13,7 +13,10 @@ class BackboneTorch(Backbone):
     Torch compute backbone
     """
 
-    def __init__(self, env : BaseEnvironment ):
+    def __init__(self, env : BaseEnvironment|str = "cpu" ):
+        if isinstance(env, str):
+            env = BaseEnvironment(device=env)
+        
         self.float32 : type = torch.float32
         self.int32 : type = torch.int32
         self.bool_ : type = torch.bool
@@ -62,6 +65,29 @@ class BackboneTorch(Backbone):
         return torch.unique( arr, dim=axis )
     
     def take_along_axis( self, arr : Backbone.Array, indices : Backbone.Array, axis : int ) -> Backbone.Array:
+        axis = axis if axis >= 0 else arr.ndim + axis
+        assert arr.ndim == indices.ndim, f"Expected arr and indices to have the same rank, found {arr.ndim} and {indices.ndim}"
+
+        arr_shape = list(arr.shape)
+        index_shape = list(indices.shape)
+        arr_expand_shape = arr_shape.copy()
+        index_expand_shape = index_shape.copy()
+
+        for dim, (arr_dim, index_dim) in enumerate(zip(arr_shape, index_shape)):
+            if dim == axis:
+                continue
+            if arr_dim == index_dim:
+                continue
+            if arr_dim == 1:
+                arr_expand_shape[dim] = index_dim
+                continue
+            if index_dim == 1:
+                index_expand_shape[dim] = arr_dim
+                continue
+            raise AssertionError(f"Cannot broadcast shapes {tuple(arr_shape)} and {tuple(index_shape)} for axis {axis}")
+
+        arr = arr.expand(*arr_expand_shape)
+        indices = indices.to(dtype=torch.int64, device=arr.device).expand(*index_expand_shape)
         return torch.gather( arr, dim=axis, index=indices )
 
     def __getattr__(self, name):
