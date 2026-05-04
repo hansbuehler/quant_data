@@ -374,7 +374,7 @@ class MetricTacker(object):
 
     def record( self, epoch : int, metrics : Mapping[str, tuple[float,float|None]] ):
         """ Update the metric tracker with new metrics and their corresponding weights """
-        assert 'loss' in metrics, f"'loss' should be included in the metrics dictiory"
+        assert 'loss' in metrics, f"'loss' should be included in the metrics directory"
         for k,v in metrics.items():
             if isinstance(v, tuple):
                 assert len(v) == 2, f"Expected metric '{k}' to be a tuple of (mean, std) or (value, None), but got {v} with length {len(v)}."

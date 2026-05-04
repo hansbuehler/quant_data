@@ -11,7 +11,7 @@ from cdxcore.version import version
 from cdxcore.err import verify_inp, verify
 from quantdata.biz_calendar import DAYS_PER_YEAR, NMS
 from quantdata.utils.backbone import Backbone, BackboneNumpy
-from quantdata.sanos._geometry import Geometry
+from quantdata.sanos._old._geometry import Geometry
 from quantdata.sanos.tridiag import solve_sanos_tridiagonal
 
 class SanosBackbone(object):

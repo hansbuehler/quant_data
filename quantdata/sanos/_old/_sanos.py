@@ -14,9 +14,9 @@ from __future__ import annotations
 
 from wandb.util import np
 
-from quantdata.sanos._geometry import Geometry
+from quantdata.sanos._old._geometry import Geometry
 from quantdata.utils.backbone import Backbone, BackboneNumpy
-from quantdata.sanos._bbcalc import SanosBackbone
+from quantdata.sanos._old._bbcalc import SanosBackbone
 from cdxcore.verbose import Context
 from cdxcore.pretty import PrettyObject
 from cdxcore.err  import verify_inp

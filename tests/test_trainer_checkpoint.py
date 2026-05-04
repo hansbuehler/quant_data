@@ -8,8 +8,8 @@ from quantdata.torch import MetricTacker
 
 def test_metric_tracker_state_roundtrip() -> None:
     tracker = MetricTacker()
-    tracker.record(1, 0.5, {"count": 2.0, "mae": 0.1})
-    tracker.record(2, 0.25, {"count": 3.0, "mae": 0.05})
+    tracker.record(1, {"loss": 0.5, "count": 2.0, "mae": 0.1})
+    tracker.record(2, {"loss": 0.25, "count": 3.0, "mae": 0.05})
 
     restored = MetricTacker().load_state_dict(tracker.state_dict())
 

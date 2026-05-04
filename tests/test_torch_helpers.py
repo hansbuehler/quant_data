@@ -9,17 +9,18 @@ from quantdata.torch import (
     BaseModel,
     MetricTacker,
     check,
-    compute_grad_norm,
-    detect_grad_issues,
     get,
     pop,
 )
 from quantdata.torch.bbtorch import BackboneTorch
-from quantdata.torch.block_sampler import BlockSampler
 from quantdata.torch.ffw import FeedForward, FeedForwardConfig
 
 
 class _DummyModel(BaseModel):
+    def __init__(self, env: BaseEnvironment):
+        super().__init__(env)
+        self.linear = torch.nn.Linear(2, 1, bias=True)
+
     def forward(self, data, training: bool = False, return_what=BaseModel.ReturnWhat.LOSS_WEIGHT):
         return torch.tensor(1.0), torch.tensor(1.0)
 
@@ -50,19 +51,19 @@ def test_check_get_pop_and_broadcast_helpers() -> None:
 
 
 def test_grad_diagnostics_and_metric_tracker() -> None:
-    module = torch.nn.Linear(2, 1, bias=True)
-    for parameter in module.parameters():
+    model = _DummyModel(BaseEnvironment(precision=32, device="cpu", debug=True))
+    for parameter in model.parameters():
         parameter.grad = torch.ones_like(parameter)
 
-    assert compute_grad_norm(module) == pytest.approx((3.0 / 2.0) ** 0.5)
-    detect_grad_issues(module)
+    assert model.compute_grad_norm().item() == pytest.approx((3.0 / 2.0) ** 0.5)
+    model.debug_detect_grad_issues()
 
-    module.weight.grad = torch.full_like(module.weight, float("inf"))
-    with pytest.raises(AssertionError, match="non-finite grad"):
-        detect_grad_issues(module)
+    model.linear.weight.grad = torch.full_like(model.linear.weight, float("inf"))
+    with pytest.raises(RuntimeError, match="non-finite grad"):
+        model.debug_detect_grad_issues()
 
     tracker = MetricTacker()
-    tracker.record(1, 0.5, {"accuracy": 0.9})
+    tracker.record(1, {"loss": 0.5, "accuracy": 0.9})
     tracker.record_metric(2, "accuracy", 0.95)
 
     state = tracker.state_dict()
@@ -88,15 +89,11 @@ def test_torch_backbone_and_feedforward() -> None:
     assert backbone.stack([array, array], axis=0).shape == (2, 2)
     assert torch.equal(backbone.stop_gradient(array).detach(), array)
 
-    sampler = BlockSampler()
-    assert sampler.__class__.__name__ == "BlockSampler"
-
     config = FeedForwardConfig(num_depth=0)
     model = FeedForward(env, num_input=2, num_output=1, config=config)
     with torch.no_grad():
-        for linear in model.I0:
-            linear.weight.fill_(1.0)
-            linear.bias.zero_()
+        model.I0.weight.fill_(1.0)
+        model.I0.bias.zero_()
 
     output = model([torch.tensor(1.0), torch.tensor(2.0)])
     assert torch.isclose(output.squeeze(), torch.tensor(3.0))

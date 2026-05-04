@@ -21,9 +21,8 @@ def test_feedforward_forward_with_list_input() -> None:
     model = FeedForward(env, num_input=2, num_output=1, config=FeedForwardConfig(num_depth=0))
 
     with torch.no_grad():
-        for layer in model.I0:
-            layer.weight.fill_(1.0)
-            layer.bias.zero_()
+        model.I0.weight.fill_(1.0)
+        model.I0.bias.zero_()
 
     output = model([torch.tensor(1.0), torch.tensor(2.0)])
 
@@ -36,9 +35,8 @@ def test_feedforward_forward_with_tensor_input_and_mask() -> None:
     model = FeedForward(env, num_input=2, num_output=1, config=FeedForwardConfig(num_depth=0))
 
     with torch.no_grad():
-        for layer in model.I0:
-            layer.weight.fill_(1.0)
-            layer.bias.zero_()
+        model.I0.weight.fill_(1.0)
+        model.I0.bias.zero_()
 
     tensor_input = torch.tensor([1.0, 2.0])
     mask = torch.tensor(True)

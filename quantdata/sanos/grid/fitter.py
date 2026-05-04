@@ -435,27 +435,27 @@ class Fitter:
         assert np.max( np.abs( np.sum( densities*mstrikes, axis=1 ) - 1. ) ) <= self.eps.densities, f"Expected sum of densities*strikes to be 1, found {np.sum(densities, axis=1)} [tolerance 'densities' {self.eps.densities}]"
 
         with verbose.write_t(lambda : f"Computing DLV squared's... ", end='') as tme:
-            dCs     = [ dC_t.value for dC_t in dCs ]
-            boxs    = [ box_t.value for box_t in boxs ]
+            dCs     = [ dC_t.value[1:-1] for dC_t in dCs ]
+            boxs    = [ box_t.value[1:-1]  for box_t in boxs ]
             dlvsqs  = np.zeros( (T,N-2), dtype=fit_calls.dtype )
 
+            """
             box_     = self.geometry.strikes[:,1:-1]**2 / ( self.geometry.strikes[:,2:] - self.geometry.strikes[:,:-2] ) * dts[:,None]
-            boxs_    = [ box_[t,:] * densities[t,1:-1] for t in range(T) ] # we recompute the box here to ensure consistency with the fitted densities, which can be slightly off from the optimization constraints due to solver tolerances. This ensures that the DLVs are computed consistently with the fitted densities.
-
+            boxs     = [ box_[t,:] * densities[t,1:-1] for t in range(T) ] # we recompute the box here to ensure consistency with the fitted densities, which can be slightly off from the optimization constraints due to solver tolerances. This ensures that the DLVs are computed consistently with the fitted densities.
             for a, b in zip(boxs, boxs_):
                 assert np.max( np.abs( a[1:-1]-b ) )<1E-6, f"Box error difference {np.max( np.abs( a-b ) ):.4g}"
-
+            """
 
             for t in range(T):
-                dC_t         = dCs[t][1:-1]
-                density_box  = boxs[t][1:-1]  # supoosed to be density*box
+                dC_t         = dCs[t]
+                density_box  = boxs[t] # supoosed to be density*box
     
                 assert np.all( np.isfinite(dC_t) ), f"Expected dC_t to be finite, found min {np.min(dC_t)} and max {np.max(dC_t)}"
                 assert np.all( np.isfinite(density_box) ), f"Expected density_box to be finite, found min {np.min(density_box)} and max {np.max(density_box)}"
                 assert np.min( dC_t ) > -self.eps.prices, f"Expected dC_t to be non-negative, found min {np.min(dC_t)} [tolerance 'prices' {self.eps.prices}]"
                 assert np.min( density_box ) > -self.eps.densities, f"Expected density_box to be non-negative, found min {np.min(density_box)} [tolerance 'densities' {self.eps.densities}]"
 
-                dC_zero      = np.abs(dC_t) <= self.eps.dlvsq
+                dC_zero      = dC_t <= self.eps.dlvsq
                 too_small    = dC_t <= min_dlvsq * density_box
                 too_big      = dC_t >= max_dlvsq * density_box
 
@@ -469,17 +469,19 @@ class Fitter:
                 divisor      = np.where( too_small|dC_zero|too_big, _1, density_box )  # dC_t can be positive while p_t is zero ... in this case we cannot determine a correct DLV - any will do.
                 dlvsqs[t,:]  = np.select( [dC_zero, too_small, too_big ], [min_dlvsq, min_dlvsq, max_dlvsq], default=dC_t / divisor )
             dlvsqs = np.where( np.isfinite(dlvsqs), dlvsqs, min_dlvsq ) # if density_box is zero and dC_t is zero, we set DLV to minimum; if density_box is zero and dC_t is positive, we set DLV to minimum as well, since any DLV would be consistent with the fit in this case due to the zero density.
+            dlvsqs = np.clip( dlvsqs, min=min_dlvsq, max=max_dlvsq ) - min_dlvsq
             verbose.write(lambda : f"done; this tool {tme}.", head=False)
 
         # note that the ``GridSanos.density`` function adds min_dlvsq
         # to the input dlvsqs to ensure that the derivatives do not
         # die in zero. We subtract this here
-        dlvsqs = np.clip( dlvsqs - min_dlvsq, min=0. )
 
+        """
         if __debug__ and self.debug:
             _grid_sanos    = GridSanos( geometry=self.geometry, bb=bbnp, debug=self.debug )
             test_densities = _grid_sanos.densities( dlvsqs )
-#            assert np.max( np.abs( test_densities - densities ) ) < self.eps.densities, f"DLV fit error: max absolute difference between densities computed from fitted *and clipped* DLVs and optimized densities is {np.max( np.abs( test_densities - densities ) ):.4e}."
+            assert np.max( np.abs( test_densities - densities ) ) < self.eps.densities, f"DLV fit error: max absolute difference between densities computed from fitted *and clipped* DLVs and optimized densities is {np.max( np.abs( test_densities - densities ) ):.4e}."
+        """
 
         if return_only_dlvsqs:
             return dlvsqs

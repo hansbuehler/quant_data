@@ -20,7 +20,7 @@ import warnings as warnings
 
 from polars import Config
 
-from quantdata.sanos._geometry import Geometry
+from quantdata.sanos._old._geometry import Geometry
 from quantdata.utils.backbone import BackboneNumpy
 
 bbnp = BackboneNumpy()

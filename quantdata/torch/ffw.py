@@ -152,7 +152,6 @@ class FeedForward(BaseModel):
                 return torch.isfinite(lin.weight).all()
             return torch.isfinite(lin.weight).all() & torch.isfinite(lin.bias).all()
 
-
         if isinstance(input, torch.Tensor ):
             assert input.shape[-1] == self.num_input, f"Input shape mismatch: expected last dimension to be {self.num_input}, but found {input.shape}"
             x    = torch.where( mask[...,None], input, 0.) if not mask is None else input

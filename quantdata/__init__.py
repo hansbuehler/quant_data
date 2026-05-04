@@ -172,8 +172,8 @@ class Environment(object):
         if not self.test_mode:
             raw         = os.environ.get("QUANTDATA_RAW_DATA", None)
             processing  = os.environ.get("QUANTDATA_PROCESSING_DATA", None)
-            training    = os.environ.get("QUANTDATA_TRAINING_DATA", "~/quantdata/training")
-            experiments = os.environ.get("QUANTDATA_EXPERIMENTS", "~/quantdata/experiments")
+            training    = os.environ.get("QUANTDATA_TRAINING_DATA", None) 
+            experiments = os.environ.get("QUANTDATA_EXPERIMENTS", None)
             def_root    = os.environ.get("QUANTDATA_ROOT", None)
             temp        = os.environ.get("QUANTDATA_TEMP_DATA", "!/quantdata")
 
