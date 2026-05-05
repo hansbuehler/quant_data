@@ -43,8 +43,8 @@ class GeometryBase:
         raise NotImplementedError("density0 property must be implemented in subclass")
     
     def _make_density0(self):
-        """ Make dnsity at time 0 """
-        strikes0       = self.xstrikes[0] if not self.has_grid else self.strikes[0,:]
+        """Make the initial point-mass density on the interior time-0 strike grid."""
+        strikes0       = self.xstrikes[0][1:-1] if not self.has_grid else self.xstrikes[0,1:-1]
         N1             = len(strikes0)
         assert strikes0[0] < 1. < strikes0[-1], f"Internal error: strikes should include 1, but found {strikes0}."
         ix_1           = min(N1-1,max(0,np.abs(strikes0 - 1.).argmin()))
@@ -82,7 +82,7 @@ class Eps:
         verify_inp( eps >= 0., f"Tolerance must be non-negative, found {eps}" )
         return Eps( prices=eps, theta=eps, gamma=eps, densities=eps, dlvsq=eps )
 
-def vec_max_dx( strikes : np.ndarray, *, min_k : float, max_k : float, max_dx : float|None = None, min_dx : float = 0. ) -> tuple:
+def vec_max_dx( strikes : np.ndarray, *, min_k : float, max_k : float, max_dx : float|None = None, min_dx : float = 0., outer_fac : float = 10. ) -> np.ndarray:
     """
     Generate model strikes.
     
@@ -94,10 +94,6 @@ def vec_max_dx( strikes : np.ndarray, *, min_k : float, max_k : float, max_dx : 
     * Strikes in the original strike range are at most ``max_dx`` apart from each other. If None, do not add strikes except min_k or max_k. Outside the extreme strikes of ``strikes``` 
       the function adds strikes with ``10 max_dx``.
     
-    The function returns a tuple, the first element is the new strike vector.
-    The second element represents the index positions of the ``strikes`` in the new vector. An index is -1 if an element was dropped due to ``min_k``.
-    The function returns ``slice(1,-1)`` if
-    only min_k, max_k were added ie the returned strikes are [min_k, strike[0], ..., strike[-1], max_k].    
     """
     verify_inp( min_k > 0. and min_k < 1. and max_k > 1., "'min_k' must be in (0,1) and 'max_k' must be above 1" )
     verify_inp( min_k < strikes[0] and max_k > strikes[-1], "'min_k' and 'max_k' must be outside 'strikes'")
@@ -105,63 +101,56 @@ def vec_max_dx( strikes : np.ndarray, *, min_k : float, max_k : float, max_dx : 
     verify_inp( min_dx >= 0., "'min_dx' must be non-negative")
 
     if max_dx is None:
+        # no max_dx, and min_dx does not bind --> trivial
         if np.max( strikes[1:]-strikes[:-1] ) >= min_dx:
             out = np.empty( (len(strikes)+2,), dtype=strikes.dtype )
             out[1:-1] = strikes
             out[0]    = min_k
             out[-1]   = max_k
-            return out, slice(1,-1)
+            return out
         
+        # no max_dx, check min_dx
         out = [ min_k ]
-        six = []
         for x in strikes[1:]:
             dx = x - out[-1]
             if dx <= min_dx:
-                six.append(-1)
                 continue
             else:
-                six.append( len(out ))
                 out.append( x )
-        return np.asarray( out, dtype=strikes.dtype ), np.asarray( six, dtype=np.int32 )        
+        out.append( max_k )
+        return np.asarray( out, dtype=strikes.dtype )        
             
     # max_dx
     # ------
 
-    outer_max_dx = min(0.25,max_dx*10.) 
-    inner_max_dx = max_dx
-
-    left    = strikes[0]-inner_max_dx
-    out     = np.linspace( min_k, left, max(2,1+math.floor( (left - min_k)/outer_max_dx )),dtype=strikes.dtype).tolist()\
-              if left > min_k else\
-              [ min_k ]    
-    six     = [ len(out) ]
-    out.append( strikes[0] )
+    outer_max_dx = max_dx*outer_fac
+    left  = np.arange( 0, math.ceil( (strikes[0]-min_k)/outer_max_dx )+1 ) * outer_max_dx + min_k
+    right = max_k - np.arange( math.ceil( (max_k-strikes[-1])/outer_max_dx ), -1, -1 ) * outer_max_dx 
+    assert right[-1] == max_k
+    assert left[-1] >= strikes[0], f"Internal error: last left strike {left[-1]} should be above first strike {strikes[0]}"
+    assert right[0] <= strikes[-1], f"Internal error: last right strike {right[0]} should be below last strike {strikes[-1]}"
+    out  = left[:-1].tolist()
+    assert np.min( np.diff(left)) >= outer_max_dx-1E-8, f"Internal error: left strikes should be at least {outer_max_dx} apart, found min {np.min(np.diff(left))}"
+    assert np.min( np.diff(right)) >= outer_max_dx-1E-8, f"Internal error: right strikes should be at least {outer_max_dx} apart, found min {np.min(np.diff(right))}"
     
     for x in strikes[1:]:
         dx = x - out[-1]
+        assert dx > 0., f"Internal error: strikes should be strictly increasing, found {dx} between {x} and {out[-1]}"
         if dx <= min_dx:
-            six.append(-1)
             continue
-        if dx > inner_max_dx:
-            n = max(1,int(dx/inner_max_dx))+2
+        if dx > max_dx:
+            n = max(1,int(dx/max_dx))+2       # how many to add
             r = np.linspace( out[-1], x, n )
             for x in r[1:]:
                 out.append(x)
-            six.append( len(out)-1 )
         else:
-            six.append( len(out ))
             out.append( x )
 
-    right = strikes[-1]+inner_max_dx
-    rout  = np.linspace( right, max_k, max(2,1+math.floor( (max_k-right)/outer_max_dx )),dtype=strikes.dtype).tolist()\
-            if right < max_k else\
-            [ max_k ]
-   
-    out += rout
-    out  = np.array( out, dtype=strikes.dtype )
-    six  = np.asarray( six, dtype=np.int32 ) if len(out) > len(strikes)+2 else slice(1,-1)
-    assert np.all( out[six] == strikes ), ("Internal error", out[six][:20], strikes[:20] )
-    return np.asarray( out, dtype=strikes.dtype ), six     
+    assert out[-1] < right[1], f"Internal error: last strike {out[-1]} should be below second right strike {right[1]}"
+    out += right[1:].tolist()
+    out = np.asanyarray( out, dtype=strikes.dtype )
+    assert np.min(np.diff(out)) > min_dx*0.999-1E-8, f"Internal error: strikes should be strictly increasing, found {np.min(np.diff(out))}"
+    return out
 
 # --------------------------------------------------------------------------------------------
 # Shared utilities for Grid and Open SANOS. No real external use, hence made protected

@@ -288,8 +288,8 @@ class Fitter:
             assert mcalls_t.shape == (Nt,), f"Expected mcalls_t to have shape {(Nt,)}, found {mcalls_t.shape}"
 
             density_tm1 = densities[t-1] if t > 0 else density0
-            mcalls_tm1  = np.maximum( mx_tm1[None,:] - mx_t[:,None], 0. )  # (N,N)
-            assert mcalls_tm1.shape == (Ntm1,Nt), f"Expected shape {(Ntm1,Nt)}, found {mcalls_tm1.shape}"
+            mcalls_tm1  = np.maximum( mx_tm1[None,:] - mx_t[:,None], 0. )  # (Nt,Ntm1)
+            assert mcalls_tm1.shape == (Nt,Ntm1), f"Expected shape {(Nt,Ntm1)}, found {mcalls_tm1.shape}"
             mcalls_tm1  = mcalls_tm1 @ density_tm1
             assert mcalls_tm1.shape == (Nt,), f"Expected mcalls_tm1 to have shape {(Nt,)}, found {mcalls_tm1.shape}"
 
@@ -354,6 +354,9 @@ class Fitter:
                     prob.solve( solver=self.cvxpy_solver, **self.cvxpy_solver_options )
                 except cp.SolverError as e:
                     raise e
+                
+            if prob.status == "infeasible":
+                raise RuntimeError( f"Optimization problem is 'infeasible'.")
             
             densities  = [ d.value for d in densities ]
             assert all( np.all( np.isfinite(d) ) for d in densities ), "Infintite fitted densities found"

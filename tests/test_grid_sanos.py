@@ -7,7 +7,7 @@ import math as math
 import pytest
 
 from grid_sanos_data_test import TEST_DATA
-from quantdata.sanos import GridGeometry, GridSanos
+from quantdata.sanos import GridGeometry, GridSanos, OpenGeometry, OpenSanos
 from quantdata.sanos.fitter import Fitter
 from quantdata.sanos.utils import Eps
 from quantdata.utils.backbone import Backbone, BackboneNumpy
@@ -71,10 +71,91 @@ class TestGridSanos:
         return dlvsqs
 
     @staticmethod
+    def _open_from_grid(grid: GridGeometry) -> OpenGeometry:
+        return OpenGeometry(
+            xexpiries=np.asarray(grid.xexpiries, dtype=np.float64),
+            xstrikes=[np.asarray(strikes_t, dtype=np.float64).copy() for strikes_t in grid.xstrikes],
+            dlv_min=grid.dlv_min,
+            dlv_max=grid.dlv_max,
+            fwdvol_min=grid.fwdvol_min,
+            vol_interp=grid.vol_interp,
+        )
+
+    @staticmethod
     def _assert_numpy_torch_close(np_value, tr_value, *, atol: float = 1e-9, label: str = "values"):
         tr_value = tr_value.cpu().numpy()
         assert np_value.shape == tr_value.shape, f"Expected matching shapes for {label}, found {np_value.shape} and {tr_value.shape}"
         assert np.allclose(np_value, tr_value, atol=atol), f"Expected numpy and torch {label} to match, max abs diff {np.max(np.abs(np_value - tr_value))}"
+
+    @pytest.mark.parametrize("vol_interp", ["lin_var", "lin_sqrt_time"])
+    @pytest.mark.parametrize("fwd_vols", [0.0, 0.05])
+    def test_open_matches_grid_for_single_sample_fit_and_price(self, vol_interp: str, fwd_vols: float):
+
+        grid = self._make_grid(vol_interp)
+        open_geometry = self._open_from_grid(grid)
+
+        market = PrettyObject(
+            strikes=np.asarray(TEST_DATA["strikes"], dtype=np.float64),
+            bid=np.asarray(TEST_DATA["bid"], dtype=np.float64),
+            ask=np.asarray(TEST_DATA["ask"], dtype=np.float64),
+            tte_y=np.asarray(TEST_DATA["tte_y"], dtype=np.float64),
+        )
+
+        eps = Eps()
+        grid_fitter = Fitter(geometry=grid, eps=eps, debug=True, max_error=None, mid_fit_weight=0.1)
+        open_fitter = Fitter(geometry=open_geometry, eps=eps, debug=True, max_error=None, mid_fit_weight=0.1)
+        grid_sanos = GridSanos(geometry=grid, bb=BackboneNumpy())
+        open_sanos = OpenSanos(geometry=open_geometry, eps=eps, debug=True)
+
+        grid_dlvsqs, grid_fit_prices, grid_densities = grid_fitter(
+            fwd_vols=fwd_vols,
+            opt_strikes=market.strikes,
+            opt_bid=market.bid,
+            opt_ask=market.ask,
+            opt_tte=market.tte_y,
+            opt_is_calls=None,
+            opt_mask=None,
+            return_only_dlvsqs=False,
+            verbose=Context.quiet,
+        )
+        open_dlvsqs, open_fit_prices, open_densities = open_fitter(
+            fwd_vols=fwd_vols,
+            opt_strikes=market.strikes,
+            opt_bid=market.bid,
+            opt_ask=market.ask,
+            opt_tte=market.tte_y,
+            opt_is_calls=None,
+            opt_mask=None,
+            return_only_dlvsqs=False,
+            verbose=Context.quiet,
+        )
+
+        open_dlvsqs = np.stack(open_dlvsqs, axis=0)
+        open_densities = np.stack(open_densities, axis=0)
+
+        assert np.allclose(open_dlvsqs, grid_dlvsqs, atol=1e-8), f"Expected open and grid DLV^2 fits to match, max abs diff {np.max(np.abs(open_dlvsqs - grid_dlvsqs))}"
+        assert np.allclose(open_fit_prices, grid_fit_prices, atol=1e-8), f"Expected open and grid fitted prices to match, max abs diff {np.max(np.abs(open_fit_prices - grid_fit_prices))}"
+        assert np.allclose(open_densities, grid_densities, atol=1e-8), f"Expected open and grid fitted densities to match, max abs diff {np.max(np.abs(open_densities - grid_densities))}"
+
+        price_fwd_vols = None if fwd_vols == 0.0 else fwd_vols
+        grid_re_prices = grid_sanos.price(
+            fwd_vols=price_fwd_vols,
+            densities=grid_densities,
+            opt_strikes=market.strikes,
+            opt_tte=market.tte_y,
+        )
+        open_re_prices = open_sanos.price(
+            fwd_vols=price_fwd_vols,
+            densities=[open_densities[t] for t in range(open_geometry.T)],
+            opt_strikes=market.strikes,
+            opt_tte=market.tte_y,
+        )
+
+        assert np.allclose(open_re_prices, grid_re_prices, atol=1e-8), f"Expected open and grid reprices to match, max abs diff {np.max(np.abs(open_re_prices - grid_re_prices))}"
+
+        grid_densities_from_dlv = grid_sanos.densities(grid_dlvsqs)
+        open_densities_from_dlv = np.stack(open_sanos.densities([open_dlvsqs[t] for t in range(open_geometry.T)]), axis=0)
+        assert np.allclose(open_densities_from_dlv, grid_densities_from_dlv, atol=1e-8), f"Expected open and grid densities reconstructed from DLV^2 to match, max abs diff {np.max(np.abs(open_densities_from_dlv - grid_densities_from_dlv))}"
 
     def test_roundtrip(self):
 

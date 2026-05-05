@@ -46,7 +46,7 @@ class GridGeometry(GeometryBase):
     dlv_min    : float = 0.01          #: minimum discrete local volatility (dlv) value.
     dlv_max    : float = 5.0           #: maximum discrete local volatility (dlv) value.
     fwdvol_min : float = 0.0           #: minimum backbone forward volatility value.
-    vol_interp : str = "lin_sqrt_time"  #: Term volatility interpolation method. Must be a 'lin_var' or 'lin_sqrt_time'
+    vol_interp : str = "lin_var"  #: Term volatility interpolation method. Must be a 'lin_var' or 'lin_sqrt_time'
 
     def __post_init__(self):
         verify_inp( self.dlv_min > 0., lambda : f"'dlv_min' must be positive, but found {self.dlv_min:.4g}") 
@@ -66,17 +66,8 @@ class GridGeometry(GeometryBase):
         verify_inp( np.all( np.diff( self.xstrikes[:,0] ) <= 0.), lambda: f"The lowest 'strikes' must not increase in time, {self.xstrikes[:,0]:.4g}, {np.diff( self.xstrikes[:,0] ):.4g}")
         verify_inp( np.all( np.diff( self.xstrikes[:,-1] ) >= 0.), lambda: f"The highest 'strikes' must not decrease in time, {self.xstrikes[:,-1]:.4g}, {np.diff( self.xstrikes[:,-1] ):.4g}")
 
-        # strikes and density at time 0
-        # we insert a "1" here.
-        # we compute the density dynamically.
-        strikes0       = self.xstrikes[0,1:-1]
-        N1             = len(strikes0)
-        assert strikes0[0] < 1. < strikes0[-1], f"Internal error: strikes should include 1, but found {strikes0}."
-        ix_1           = min(N1-1,max(0,np.abs(strikes0 - 1.).argmin()))
-        strikes0[ix_1] = 1.
-        density0       = np.zeros_like( strikes0 )
-        density0[ix_1] = 1.
-        self.__dict__['_density0'] = density0
+        # Reuse the base-class helper so density0 is defined consistently with other geometries.
+        GeometryBase._make_density0(self)
 
     @property
     def has_grid(self) -> bool:
