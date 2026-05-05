@@ -7,8 +7,10 @@ import math as math
 import pytest
 
 from grid_sanos_data_test import TEST_DATA
-from quantdata.sanos.grid import GridGeometry, GridSanos, Eps, BackboneNumpy
-from quantdata.sanos.grid.fitter import Fitter
+from quantdata.sanos import GridGeometry, GridSanos
+from quantdata.sanos.fitter import Fitter
+from quantdata.sanos.utils import Eps
+from quantdata.utils.backbone import Backbone, BackboneNumpy
 from quantdata.torch.bbtorch import BackboneTorch
 from cdxcore.pretty import PrettyObject
 from cdxcore.verbose import Context

@@ -17,11 +17,14 @@ import math as math
 from cdxcore.verbose import Context
 from cdxcore.err import verify_inp
 import warnings as warnings
+from quantdata.sanos.open import OpenGeometry
+from quantdata.sanos.utils import _interpolate_sqrtVars, _iterative_model_price
 
-from quantdata.sanos.grid import GridGeometry, GridSanos, Eps
+from quantdata.sanos.grid import GridGeometry, Eps
+from quantdata.sanos.open import OpenGeometry, Eps
 from quantdata.utils.backbone import BackboneNumpy
 
-bbnp = BackboneNumpy()
+_npbb = BackboneNumpy()
 
 @dataclass(frozen=True)
 class Fitter:
@@ -34,7 +37,7 @@ class Fitter:
     The method uses convex optimization to fit the model prices to the market prices while ensuring no-arbitrage conditions are satisfied, and then computes the DLVs from the fitted option prices.
     """
 
-    geometry             : GridGeometry  #: GridGeometry of the SANOS problem
+    geometry             : GridGeometry|OpenGeometry  #: GridGeometry of the SANOS problem
     eps                  : Eps = field(default_factory=Eps) #: Tolerances for various error checks during fitting and DLV computation.
     cvxpy_solver         : str = "CLARABEL" #:  Solver to use for the convex optimization problem in :meth:`fit_dlvsqs`, c.f. `list of cvxpy solvers <https://www.cvxpy.org/tutorial/solvers/index.html#choosing-a-solver>`_.
     cvxpy_solver_options : dict = field(default_factory=dict) #: Options to pass to the CVXPY solver.
@@ -53,10 +56,13 @@ class Fitter:
         return self.geometry.T
     @property
     def N(self) -> int|None:
-        return self.geometry.N
+        return self.geometry.N if self.geometry.has_grid else None
     @property
     def TN(self) -> tuple[int, int|None]:
-        return self.geometry.TN
+        return (self.T, self.N)
+    @property
+    def grid_mode(self) -> bool:
+        return self.geometry.has_grid
 
     def __call__(self,  fwd_vols     : np.array|float|None,
                         opt_strikes  : np.array,
@@ -163,7 +169,7 @@ class Fitter:
 
         if not fwd_vols is None:
             if hasattr(fwd_vols, "shape"):
-                verify_inp( fwd_vols.shape[-1] ==T, lambda: f"Expected fwd_vols shape to end in {T}, found {fwd_vols.shape}" )
+                verify_inp( fwd_vols.shape == (T,), lambda: f"Expected fwd_vols shape to be {(T,)}, found {fwd_vols.shape}" )
                 verify_inp( np.min( fwd_vols ) >= 0., lambda: f"Forward volatilities must not be negative, found min {np.min(fwd_vols)}" )
             elif fwd_vols == 0.:
                 fwd_vols = None
@@ -172,7 +178,6 @@ class Fitter:
                 fwd_vols = np.full( (T,), fwd_vols, dtype=self.geometry.xexpiries.dtype )
 
         verify_inp( len(opt_tte.shape) == 1, f"Expected opt_tte to be a 1D array, found shape {opt_tte.shape} (this function does not support batch dimensions)" )
-        verify_inp( fwd_vols is None or fwd_vols.shape[-1] == T, lambda : f"Expected fwd_vols shape to end in {T}, found {fwd_vols.shape}" )            
         verify_inp( opt_strikes.shape == opt_bid.shape == opt_ask.shape == opt_tte.shape, lambda : f"Expected 'opt_strikes', 'opt_bid', 'opt_ask' and 'opt_tte' to have the same shape; found {opt_strikes.shape}, {opt_bid.shape}, {opt_ask.shape}, {opt_tte.shape}" )
         verify_inp( opt_is_calls is None or opt_is_calls.shape == opt_tte.shape, lambda : f"Expected 'opt_is_calls' to have the same shape as 'opt_tte'; found {opt_is_calls.shape} and {opt_tte.shape}" )
         verify_inp( opt_mask is None or opt_mask.shape == opt_tte.shape, lambda : f"Expected 'opt_mask' to have the same shape as 'opt_tte'; found {opt_mask.shape} and {opt_tte.shape}" )
@@ -181,7 +186,7 @@ class Fitter:
         # ------------------------
 
         if not opt_mask is None:
-            opt_strikes = opt_strikes[opt_mask]
+            opt_strikes     = opt_strikes[opt_mask]
             opt_bid         = opt_bid[opt_mask]
             opt_ask         = opt_ask[opt_mask]
             opt_tte         = opt_tte[opt_mask]
@@ -192,15 +197,23 @@ class Fitter:
             warnings.warn(f"Found option with expiry {np.max( opt_tte ):.4g} beyond the last model expiry {self.geometry.xexpiries[-1]:.4g}. "+\
                            "While functionaly feasible, this is likely to cause fitting issues. Expand expiry range.")
 
-        opt_interpolate = opt_interpolate if not opt_interpolate is None else self.geometry.time_interpolation_weights( opt_tte, None )
+        opt_interpolate = opt_interpolate if not opt_interpolate is None else self.geometry.time_interpolation_weights( opt_tte, None )  
         M = len(opt_strikes)
 
         # compute sqrt var per option
         # ---------------------------
 
         if fwd_vols is not None:
-            sanos           = GridSanos(geometry=self.geometry, bb=bbnp, debug=self.debug)
-            opt_sqrtVars    = sanos.interpolate_sqrtVars( fwd_vols, opt_interpolate ) 
+            opt_sqrtVars = _interpolate_sqrtVars( 
+                bb = _npbb,
+                xexpiries  = self.geometry.xexpiries,
+                vol_interp = self.geometry.vol_interp,
+                fwdvol_min = self.geometry.fwdvol_min,
+                fwd_vols   = fwd_vols,
+                opt_interp = opt_interpolate,
+                opt_mask   = opt_mask,
+                debug      = self.debug
+            )
             verify_inp( opt_sqrtVars is None or (opt_sqrtVars.shape == (M,) and np.all( np.isfinite(opt_sqrtVars) ) and np.all( opt_sqrtVars >= 0. )), f"Internal error: opt_sqrtVars must have shape {(M,)} and be non-negative and finite, found shape {opt_sqrtVars.shape} and min {np.min(opt_sqrtVars)} and max {np.max(opt_sqrtVars)}" )
         else:
             opt_sqrtVars = None
@@ -223,12 +236,14 @@ class Fitter:
 
         xexpiries   = np.asarray( self.geometry.xexpiries, dtype=np.float64 )
         dts         = np.diff( xexpiries )
-        xstrikes    = np.asarray( self.geometry.xstrikes, dtype=np.float64 )
-        mxstrikes   = xstrikes[:,1:-1]
+        xstrikes    = [ np.asarray( self.geometry.xstrikes[t,:], dtype=np.float64 ) for t in range(T+1) ] if self.grid_mode else [ np.asarray( x_t, dtype=np.float64 ) for x_t in self.geometry.xstrikes ]
+        mxstrikes   = [ x_t[1:-1] for x_t in xstrikes ] 
         density0    = np.asarray( self.geometry.density0, dtype=np.float64 )
+        Ns          = [ len(x_t) for x_t in mxstrikes[1:] ]
  
-        densities   = cp.Variable( (T,N), nonneg=True )
-        conditions  = [ cp.sum(densities, axis=1) == 1., cp.sum( cp.multiply(  mxstrikes[1:,:], densities ), axis=1 ) == 1. ] # density conditions
+        densities   = [ cp.Variable( (Nt,), nonneg=True ) for Nt in Ns ]
+        conditions  = [ cp.sum(d_t) == 1. for d_t in densities ] +\
+                      [ cp.sum( cp.multiply( s_t, d_t ) ) == 1. for s_t, d_t in zip(mxstrikes[1:], densities) ] # density conditions
 
         # martingale property for X
         # -------------------------
@@ -244,13 +259,13 @@ class Fitter:
         # We precompute
         #    dlvbox = K^2/( k[2:] - K[:-2]) dt
 
-        dlvbox       = xstrikes[1:,1:-1]**2 / ( xstrikes[1:,2:] - xstrikes[1:,:-2]) * dts[:,None]
-        assert dlvbox.shape == (T,N), f"Expected dlvbox to have shape {(T,N)}, found {dlvbox.shape}"
-        dlvbox[:,0]  = 0. # no DLV at the boundary points
-        dlvbox[:,-1] = 0. # this generates sufficient freedom for sum(d)=1 and E[d]=1
         assert self.geometry.dlv_max > self.geometry.dlv_min, f"'dlv_max' must exceed 'dlv_min', found {self.geometry.dlv_max} vs {self.geometry.dlv_min}"
         min_dlvsq    = np.float64( self.geometry.dlv_min**2 )
         max_dlvsq    = np.float64( self.geometry.dlv_max**2 )
+        dlvbox       = [ x_t[1:-1]**2 / ( x_t[2:] - x_t[:-2]) * dt for x_t, dt in zip(xstrikes[1:], dts) ]
+        for dlv in dlvbox:
+            dlv[0]  = 0. # no DLV at the boundary points
+            dlv[-1] = 0. # this generates sufficient freedom for sum(d)=1 and E[d]=1
 
         # Call_t(k) = \sum_i p_t^i ( k^i_t - k )^+
         # We are computinh
@@ -262,25 +277,29 @@ class Fitter:
         boxs = []
 
         for t in range(T):
-            mcalls_t    = np.maximum( mxstrikes[t+1,None,:] - mxstrikes[t+1,:,None], _0 )  # -> (N,N)
-            assert mcalls_t.shape == (N,N), f"Expected shape {(N,N)}, found {mcalls_t.shape}"
-            density_t   = densities[t,:] 
+            mx_t        = mxstrikes[t+1]
+            mx_tm1      = mxstrikes[t] 
+            Nt          = len(mx_t)
+            Ntm1        = len(mx_tm1)   
+            mcalls_t    = np.maximum( mx_t[None,:] - mx_t[:,None], _0 )  # -> (N,N)
+            assert mcalls_t.shape == (Nt,Nt), f"Expected shape {(Nt,Nt)}, found {mcalls_t.shape}"
+            density_t   = densities[t] 
             mcalls_t    = mcalls_t @ density_t
-            assert mcalls_t.shape == (N,), f"Expected mcalls_t to have shape {(N,)}, found {mcalls_t.shape}"
+            assert mcalls_t.shape == (Nt,), f"Expected mcalls_t to have shape {(Nt,)}, found {mcalls_t.shape}"
 
-            density_tm1 = densities[t-1,:] if t > 0 else density0
-            mcalls_tm1  = np.maximum( mxstrikes[t,None,:] - mxstrikes[t+1,:,None], 0. )  # (N,N)
-            assert mcalls_tm1.shape == (N,N), f"Expected shape {(N,N)}, found {mcalls_tm1.shape}"
+            density_tm1 = densities[t-1] if t > 0 else density0
+            mcalls_tm1  = np.maximum( mx_tm1[None,:] - mx_t[:,None], 0. )  # (N,N)
+            assert mcalls_tm1.shape == (Ntm1,Nt), f"Expected shape {(Ntm1,Nt)}, found {mcalls_tm1.shape}"
             mcalls_tm1  = mcalls_tm1 @ density_tm1
-            assert mcalls_tm1.shape == (N,), f"Expected mcalls_tm1 to have shape {(N,)}, found {mcalls_tm1.shape}"
+            assert mcalls_tm1.shape == (Nt,), f"Expected mcalls_tm1 to have shape {(Nt,)}, found {mcalls_tm1.shape}"
 
             dC_t         = mcalls_t - mcalls_tm1    
-            box_t        = cp.multiply( dlvbox[t,:], density_t ) 
+            box_t        = cp.multiply( dlvbox[t], density_t ) 
             lower_t      = min_dlvsq * box_t
             upper_t      = max_dlvsq * box_t
-            assert lower_t.shape == (N,), f"Expected lower_t to have shape {(N,)}, found {lower_t.shape}"
-            assert upper_t.shape == (N,), f"Expected upper_t to have shape {(N,)}, found {upper_t.shape}"
-            conditions  += [ dC_t >= 0. ] #[ dC_t >= lower_t, dC_t <= upper_t ] # call price must be increasing in time to expiry for fixed strike, with an upper bound given by the maximum DLV squared.
+            assert lower_t.shape == (Nt,), f"Expected lower_t to have shape {(Nt,)}, found {lower_t.shape}"
+            assert upper_t.shape == (Nt,), f"Expected upper_t to have shape {(Nt,)}, found {upper_t.shape}"
+            conditions  += [ dC_t >= lower_t, dC_t <= upper_t ] # call price must be increasing in time to expiry for fixed strike, with an upper bound given by the maximum DLV squared.
 
             dCs.append( dC_t )
             boxs.append( box_t )
@@ -288,76 +307,29 @@ class Fitter:
 
         # computing model prices
         # ----------------------
-        # 'opt_lix' is an index in T+1 xexpiries; mstrikes has T expiries.
 
-        def call_prices( *, spots, strikes, sqrtVars ):
-            if sqrtVars is None:
-                return np.maximum( spots - strikes, strikes.dtype.type(0.) )
-            else:
-                return bbnp.bs_price(spot=spots,
-                                     strikes=strikes,
-                                     sqrtVars=sqrtVars,
-                                     high_precision = True,
-                                     debug_verify_bounds = self.debug
-                                )
+        fitted       = _iterative_model_price(
+            opt_tte     = opt_tte,
+            opt_strikes = opt_strikes,
+            opt_sqrtVars= opt_sqrtVars,
+            opt_lix     = opt_interpolate['lix'],
+            opt_dweight = opt_interpolate['dweight'],
+            strikes     = [ xstrikes[t+1][1:-1] for t in range(T) ],
+            densities   = [ densities[t] for t in range(T) ],
+            no_warnings = self.no_warnings,
+            debug       = self.debug,
+            return_array= False,
+            check_finite= False
+        )
 
-        opt_lix      = opt_interpolate['lix']
-        opt_dweight  = opt_interpolate['dweight']
-        ulixs        = np.unique(opt_lix)
-        mstrikes     = xstrikes[1:,1:-1]
+        # build objective
+        # ---------------
+
         half_spread  = np.maximum( 0.5*(opt_call_ask - opt_call_bid), opt_call_ask.dtype.type(self.min_half_spread) )
         inv_hspread  = 1./half_spread
-        fitted       = {}
-
         objective    = 0.      
 
-        for uix in ulixs:
-            uix          = int(uix)
-            umask        = opt_lix == uix
-            uM           = np.sum(umask)
-            tty          = opt_tte[umask][0]
-            
-            # compute call prices
-            eff_lix     = max(uix-1, 0)
-            prev_mstrk  = mstrikes[eff_lix,:]
-            next_mstrk  = mstrikes[uix,:]
-            upot_strks  = opt_strikes[umask]
-
-            if not self.no_warnings:
-                min_k = np.min( upot_strks )
-                max_k = np.max( upot_strks )
-                if uix > 1 and min_k <= prev_mstrk[1]:
-                    warnings.warn(f"Found option with expiry {tty:.4g} (in years) whose strike {min_k:.4g} is at or below the second-lowest model strike {prev_mstrk[1]:.4g} for the previous expiry used "+\
-                                "to compute the model option price. This is likely causing errors. Widen strike range.")
-                if uix > 1 and max_k >= prev_mstrk[-2]:
-                    warnings.warn(f"Found option with expiry {tty:.4g} (in years) whose strike {max_k:.4g} is at or above the second-highest model strike {prev_mstrk[-2]:.4g} for the previous expiry used "+\
-                                "to compute the model option price. This is likely causing errors. Widen strike range.")
-                if min_k <= next_mstrk[1]:
-                    warnings.warn(f"Found option with expiry {tty:.4g} (in years) whose strike {min_k:.4g} is at or below the second-lowest model strike {next_mstrk[1]:.4g} for the next expiry used "+\
-                                "to compute the model option price. This is likely causing errors. Widen strike range.")
-                if max_k >= next_mstrk[-2]:
-                    warnings.warn(f"Found option with expiry {tty:.4g} (in years) whose strike {max_k:.4g} is at or above the second-highest model strike {next_mstrk[-2]:.4g} for the next expiry used "+\
-                                "to compute the model option price. This is likely causing errors. Widen strike range.")
-
-            calls_prev  = call_prices( spots=prev_mstrk[None,:],
-                                       strikes=upot_strks[:,None], 
-                                       sqrtVars=opt_sqrtVars[umask,None] if opt_sqrtVars is not None else None
-                                    ) * opt_dweight[umask,None]
-            assert calls_prev.shape == (uM,N), f"Expected calls_prev to have shape {(uM,N)}, got {calls_prev.shape}"
-            call_prev   = calls_prev @ densities[eff_lix,:]
-            assert call_prev.shape == (uM,), f"Expected call_prev to have shape {(uM,)}, got {call_prev.shape}"
-
-            calls_next   = call_prices( spots=next_mstrk[None,:],
-                                        strikes=upot_strks[:,None], 
-                                        sqrtVars=opt_sqrtVars[umask,None] if opt_sqrtVars is not None else None
-                                    ) * ( 1.- opt_dweight[umask,None] )
-            assert calls_next.shape == (uM,N), f"Expected calls_next to have shape {(uM,N)}, got {calls_next.shape}"
-            calls_next    = calls_next @ densities[uix]
-            assert calls_next.shape == (uM,), f"Expected calls_next to have shape {(uM,)}, got {calls_next.shape}"
-            fit_calls = call_prev + calls_next
-
-            fitted[uix] = ( fit_calls, umask )
-
+        for fit_calls, umask in fitted:
             # add up to objective
             err_sqr       = cp.sum( cp.multiply( inv_hspread[umask], fit_calls - opt_call_mid[umask] )**2 ) if self.mid_fit_weight > 0. else None
             excess        = cp.sum( cp.multiply( inv_hspread[umask], cp.pos( fit_calls - opt_call_ask[umask] ) + cp.pos( opt_call_bid[umask] - fit_calls ) ) ) if self.mid_fit_weight < 1. else None
@@ -368,8 +340,7 @@ class Fitter:
                 objective = objective + err_sqr
             else:
                 objective = objective + self.mid_fit_weight * err_sqr + (1.- self.mid_fit_weight) * excess
-            del calls_prev, calls_next, eff_lix, uM, umask
-
+        del umask, fit_calls, err_sqr, excess
         assert len(objective.shape) == 0, f"Expected objective to be a scalar, found shape {objective.shape}"
 
         # optimize
@@ -384,15 +355,14 @@ class Fitter:
                 except cp.SolverError as e:
                     raise e
             
-            densities  = densities.value
-            assert np.all( np.isfinite(densities) ), f"Expected fitted call prices to be finite, found min {np.min(fit_calls)} and max {np.max(fit_calls)}"
+            densities  = [ d.value for d in densities ]
+            assert all( np.all( np.isfinite(d) ) for d in densities ), "Infintite fitted densities found"
 
             fit_calls    = np.zeros_like( opt_strikes )
-            for fc, um in fitted.values():
+            for fc, um in fitted:
                 fit_calls[um] = fc.value
-            assert np.all( np.isfinite(fit_calls) ), f"Expected fitted call prices to be finite, found min {np.min(fit_calls)} and max {np.max(fit_calls)}"
+            assert np.all( np.isfinite(fit_calls) ), "Infinte fitted calls found"
 
-            err_sqr    = err_sqr.value if self.mid_fit_weight > 0. else 0.
             objective  = objective.value
             excess     = inv_hspread * ( np.clip( fit_calls - opt_call_ask, min=0. ) + np.clip( opt_call_bid - fit_calls, min=0. ) ) 
 
@@ -419,7 +389,7 @@ class Fitter:
             else:
                 verbose.write(lambda : f"done with {bad_str}. This took {tme}.", head=False)
 
-            del prob, objective, excess, inv_hspread, half_spread, err_sqr, bad_str, max_
+            del prob, objective, excess, inv_hspread, half_spread, bad_str, max_
 
         # computing DLVS
         # we use the call prices computed earlier
@@ -429,15 +399,19 @@ class Fitter:
         # hence
         # dC_t = DLV^2 K^2/( k[2:] - K[:-2]) dt p(K)
 
-        assert np.all( np.isfinite(densities) ), f"Expected fitted call prices to be finite, found min {np.min(fit_calls)} and max {np.max(fit_calls)}"
-        assert np.min( densities ) > -self.eps.densities, f"Expected densities to be non-negative, found min {np.min(densities)} [tolerance 'densities' {self.eps.densities}]"
-        assert np.max( np.abs( np.sum( densities, axis=1 ) - 1. ) ) <= self.eps.densities, f"Expected sum of densities to be 1, found {np.sum(densities, axis=1)} [tolerance 'densities' {self.eps.densities}]"
-        assert np.max( np.abs( np.sum( densities*mstrikes, axis=1 ) - 1. ) ) <= self.eps.densities, f"Expected sum of densities*strikes to be 1, found {np.sum(densities*mstrikes, axis=1)} [tolerance 'densities' {self.eps.densities}]"
+        min_d        = [ np.min( d ) for d in densities ]
+        max_dff_sum1 = [ np.max( np.abs( np.sum( d ) - 1. ) ) for d in densities ]
+        max_dff_sum2 = [ np.max( np.abs( np.sum( densities[t]*mxstrikes[t+1] ) - 1. ) ) for t in range(T) ]
 
+        assert np.all( np.isfinite(fit_calls) ), f"Expected fitted call prices to be finite, found min {np.min(fit_calls)} and max {np.max(fit_calls)}"
+        assert min( min_d ) > -self.eps.densities, f"Expected densities to be non-negative, found min {min( min_d ):.4g} [tolerance 'densities' {self.eps.densities}]"
+        assert max( max_dff_sum1 ) <= self.eps.densities, f"Expected sum of densities to be 1, found {max( max_dff_sum1 ):.4g} [tolerance 'densities' {self.eps.densities}]"
+        assert max( max_dff_sum2 ) <= self.eps.densities, f"Expected sum of densities*strikes to be 1, found {max( max_dff_sum2 ):.4g} [tolerance 'densities' {self.eps.densities}]"
+    
         with verbose.write_t(lambda : f"Computing DLV squared's... ", end='') as tme:
             dCs     = [ dC_t.value[1:-1] for dC_t in dCs ]
             boxs    = [ box_t.value[1:-1]  for box_t in boxs ]
-            dlvsqs  = np.zeros( (T,N-2), dtype=fit_calls.dtype )
+            dlvsqs  = []
 
             """
             box_     = self.geometry.strikes[:,1:-1]**2 / ( self.geometry.strikes[:,2:] - self.geometry.strikes[:,:-2] ) * dts[:,None]
@@ -467,9 +441,14 @@ class Fitter:
                     print( density_box[ick] )
                 """
                 divisor      = np.where( too_small|dC_zero|too_big, _1, density_box )  # dC_t can be positive while p_t is zero ... in this case we cannot determine a correct DLV - any will do.
-                dlvsqs[t,:]  = np.select( [dC_zero, too_small, too_big ], [min_dlvsq, min_dlvsq, max_dlvsq], default=dC_t / divisor )
-            dlvsqs = np.where( np.isfinite(dlvsqs), dlvsqs, min_dlvsq ) # if density_box is zero and dC_t is zero, we set DLV to minimum; if density_box is zero and dC_t is positive, we set DLV to minimum as well, since any DLV would be consistent with the fit in this case due to the zero density.
-            dlvsqs = np.clip( dlvsqs, min=min_dlvsq, max=max_dlvsq ) - min_dlvsq
+                dlvsqs_t     = np.select( [dC_zero, too_small, too_big ], [min_dlvsq, min_dlvsq, max_dlvsq], default=dC_t / divisor )
+                dlvsqs_t     = np.where( np.isfinite(dlvsqs_t), dlvsqs_t, min_dlvsq ) # cover infintie
+                dlvsqs_t     = np.clip( dlvsqs_t, min=min_dlvsq, max=max_dlvsq ) - min_dlvsq
+                dlvsqs.append( dlvsqs_t )
+
+            if self.grid_mode:
+                dlvsqs = np.stack( dlvsqs, axis=0 )
+                assert dlvsqs.shape == (T,self.N-2), f"Expected dlvsqs to have shape {(T,self.N-2)}, found {dlvsqs.shape}"
             verbose.write(lambda : f"done; this tool {tme}.", head=False)
 
         # note that the ``GridSanos.density`` function adds min_dlvsq
@@ -478,7 +457,7 @@ class Fitter:
 
         """
         if __debug__ and self.debug:
-            _grid_sanos    = GridSanos( geometry=self.geometry, bb=bbnp, debug=self.debug )
+            _grid_sanos    = GridSanos( geometry=self.geometry, bb=_npbb, debug=self.debug )
             test_densities = _grid_sanos.densities( dlvsqs )
             assert np.max( np.abs( test_densities - densities ) ) < self.eps.densities, f"DLV fit error: max absolute difference between densities computed from fitted *and clipped* DLVs and optimized densities is {np.max( np.abs( test_densities - densities ) ):.4e}."
         """
@@ -495,6 +474,8 @@ class Fitter:
             fit_prices = fit_prices_
             del fit_prices_
 
-        assert densities.shape == (T,N), f"Expected final densities to have shape {(T,N)}, got {densities.shape}"
+        if self.grid_mode:
+            densities = np.stack( densities, axis=0 )
+            assert densities.shape == (T,self.N), f"Expected final densities to have shape {(T,self.N)}, got {densities.shape}"
         return dlvsqs, fit_prices, densities
 
