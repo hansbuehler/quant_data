@@ -9,6 +9,7 @@ import pytest
 from grid_sanos_data_test import TEST_DATA
 from quantdata.sanos import GridGeometry, GridSanos, OpenGeometry, OpenSanos
 from quantdata.sanos.fitter import Fitter
+from quantdata.sanos.grid import GridGeometryGenerator
 from quantdata.sanos.utils import Eps
 from quantdata.utils.backbone import Backbone, BackboneNumpy
 from quantdata.torch.bbtorch import BackboneTorch
@@ -20,7 +21,7 @@ class TestGridSanos:
 
     @staticmethod
     def _make_grid(vol_interp: str = "lin_sqrt_time") -> GridGeometry:
-        return GridGeometry.create_grid_nms(
+        return GridGeometryGenerator(
             horizon_t=1.,
             num_times=8,
             nms_range=(-4,4),
@@ -30,9 +31,8 @@ class TestGridSanos:
             fwdvol_min=0.01,
             vol_interp=vol_interp,
             lower_scale=0.2,
-            upper_scale=1.5,
-            dtype=np.float64,
-        )
+            upper_scale=1.5
+        ).create(dtype=np.float64)
 
     @staticmethod
     def _market_examples(num_examples: int = 7) -> PrettyObject:
@@ -164,7 +164,7 @@ class TestGridSanos:
         def run_data( r, FWD_VOLS  ):
             assert isinstance(r, dict)
             r           = PrettyObject(r)
-            grid        = GridGeometry.create_grid_nms(
+            grid        = GridGeometryGenerator(
                                     horizon_t  = 1., 
                                     num_times  = 8,
                                     nms_range  = (-4,4),
@@ -174,9 +174,8 @@ class TestGridSanos:
                                     fwdvol_min = 0.0,
                                     vol_interp = "lin_var",
                                     lower_scale = 0.2,
-                                    upper_scale = 1.5,
-                                    dtype = np.float64
-                )
+                                    upper_scale = 1.5
+                ).create(dtype=np.float64)
 
             eps         = Eps()
             fitter      = Fitter( geometry = grid, eps = eps, debug=True, max_error = None, mid_fit_weight = 0.1 )
@@ -373,7 +372,7 @@ class TestGridSanos:
     def test_torch_samples(self):
 
             
-        grid        = GridGeometry.create_grid_nms(
+        grid        = GridGeometryGenerator(
                                 horizon_t = 1., 
                                 num_times = 20,
                                 nms_range = (-4,4),
@@ -383,9 +382,8 @@ class TestGridSanos:
                                 fwdvol_min       = 0.01,
                                 vol_interp = "lin_sqrt_time",
                                 lower_scale = 0.2,
-                                upper_scale = 1.5,
-                                dtype = np.float64
-                )
+                                upper_scale = 1.5
+                ).create(dtype=np.float64)
 
         eps         = Eps()
         eps.set_all( 1E-3 )

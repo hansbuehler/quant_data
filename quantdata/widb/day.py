@@ -1,5 +1,9 @@
 """
-Generating one clean day of data
+Generating one day of data.
+
+This function uses ``client.py`` to provide:
+
+* :func:`collect_raw_day` 
 """
 from __future__ import annotations
 
@@ -86,6 +90,17 @@ def collect_raw_day( ticker : str,
                      verbose : Context, secid : int|None = None ) -> pd.DataFrame:
     """
     Collect raw data with minimal analytics for a given ticker and date.
+
+    The function returns a panda data frame with columns :attr:`SCHEMA_RAW_DAY`.
+
+    The function:
+    * Downloads spot, forward, discount and option data.
+    * Removes and bad days/tickers/options using :attr:`quantdata.widb.bad.BAD`.
+    * Removes options with same-day expiry, NA or zero bid prices, and bad settlement (ss_flag != '0').
+    * Computes the implied discount factor from the zero curve and the refernece forward price from the forward table (which is off as the forward table is 15min delayed).
+    * Computes business days to expiry and a unique expiry ID (which includes AM/PM).
+
+    Typically the result of this function is processed with :func:`enrich_day`.
 
     Parameters
     ----------
@@ -528,13 +543,16 @@ def enrich_day( ticker : str, d : dt.date, data : pd.DataFrame|None = None, *,
                 expiry_filter : ExpiryFilter = ExpiryFilter(), 
                 override_cache_mode : CacheMode|None = None,
                 raise_if_bad : bool = True,
-                verbose : Context = Context.quiet ):
+                verbose : Context = Context.quiet ) -> pd.DataFrame:
     """
-    Enrich a day's data by:
+    Enrich a day's data.
 
     * Compute synthetic minimal spread call options.
     * Compute an implied forward from inverse-spread weighted bid/ask call prices.
     * Compute implied volatilities and (pure) greeks.
+
+    The retunred daya data frame has the schema :attr:`SCHEMA_ENRICHED_DAY`, which includes all columns from :attr:`SCHEMA_RAW_DAY`.
+
 
     Parameters
     ----------

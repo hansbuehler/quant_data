@@ -1,5 +1,5 @@
 """
-Generating one clean day of data
+Sampling daily data into a time series.
 """
 from __future__ import annotations
 
@@ -30,6 +30,9 @@ import warnings as warnings
 @version("0.61")
 @dataclass(frozen=True)
 class SampleDaysConfig:
+    """
+    Define how to sample data.
+    """
     max_num_options: int = 1000                 #: Maximum number of options. Options are sorted by NMS, expiry and call/put, and only the top max_num_options are kept. This is applied after all other filters.#
     max_business_days_to_expiry: int = 252*3    #: Maximum business days to expiry. 
     max_nms: float = 4.                         #: Maximum |NMS|. 
@@ -37,7 +40,7 @@ class SampleDaysConfig:
     min_log_volume: float = 1.0                 #: Minimum log volume. 
     min_log_open_interest: float = 1.0          #: Minimum log open interest. 
     remove_am: bool = False                     #: Whether to remove options that settled at the AM price. 
-    min_opt_per_expiry: int = 6                 #: Minimum number of options per expiry. This is applied *before* the max_num_options filter, and can lead to fewer than max_num_options being returned if there are many expiries with few options.
+    min_opt_per_expiry: int = 10                #: Minimum number of options per expiry. This is applied *before* the max_num_options filter, and can lead to fewer than max_num_options being returned if there are many expiries with few options.
 
     def __post_init__(self):
         verify_inp(self.max_num_options >= 10, lambda : f"'max_num_options' must be at least 10, found {self.max_num_options}")
@@ -159,10 +162,11 @@ def sample_days(  ticker : str,
                   sample_days_config : SampleDaysConfig,
                   pool_config : PoolConfig = PoolConfig.off(),
                   override_cache_mode : CacheMode|None = None,
-                  verbose : Context = Context.all ):
+                  verbose : Context = Context.all ) -> dict[str:np.array|str|type]:
     """
     Collect enriched data for a list of tickers and a date range.
-    This function is to be called from a particular target benchmark environment, defining the fields it expects.
+
+    This function collects daily data according to its ``raw_day_filter`` for the specified fields (which are usually defined by the target model).
 
     Parameters
     ----------
@@ -373,7 +377,12 @@ def sample_days(  ticker : str,
     return r
 
 def table_of_sample_days( r : dict[str:np.array|str|type] ) -> PrettyTable:
-    """ Prints out the result from sample_days() as a nice table """
+    """
+    Summarizes the sampled data from :func:`sample_days` in a :class:`prettytable.PrettyTable`
+    which can be displayed in a Jupyter notebook or printed in the console.
+
+    The table includes the shape, dtype, size in bytes, mean, std, min and max for each field in the sampled data.
+    """
     nsize = 0
     tbl = PrettyTable()
     tbl.field_names = ["Field", "Shape", "Dtype", "Size", "Mean", "Std", "Min", "Max" ]

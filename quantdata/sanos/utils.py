@@ -223,14 +223,39 @@ def vec_max_dx( strikes : np.ndarray, *, min_k : float, max_k : float, max_dx : 
     out = np.asarray( out, dtype=strikes.dtype )
     assert np.min( np.diff(out)) > 0., f"Internal error: strikes should be strictly increasing, found {np.min(np.diff(out))}"
     return out
+
 def extract_atm_fwd_vols(
     expiries   : np.ndarray,
     strikes    : list[np.ndarray]|np.ndarray,
     vols       : list[np.ndarray]|np.ndarray,
     fwdvol_min : float = 0.01
-    ):
+    ) -> np.ndarray:
     """
     Computes fwd ATM vols using linear interpolation in volatilities, with a floor of ``fwdvol_min``.
+
+    The returned volatility vector will be floored by ``fwdvol_min``. Note that 
+    SANOS will *add* the floor to the provided ``fwdvols`` because a clip would impede
+    gradient calculations for values below the floor.
+
+    Parameters
+    ----------
+    expiries : :class:`numpy.ndarray`
+        1D array of expiries of length ``T``.
+    strikes : list[:class:`numpy.ndarray`]|:class:`numpy.ndarray`
+        List of ``T`` 1D arrays of strikes or a 2D array of strikes with shape ``(T,N)``.
+    vols : list[:class:`numpy.ndarray`]|:class:`numpy.ndarray`
+        List of ``T`` 1D arrays of volatilities or a 2D array of volatilities with shape ``(T,N)``.
+        For SANOS it is recommended to use ask volatilities.
+    fwdvol_min : float
+        Minimum forward volatility.
+        The returned volatility vector will be floored by this number. Note that 
+        SANOS will *add* the floor to the provided ``fwdvols`` because a clip would impede
+        gradient calculations for values below the floor.
+
+    Returns
+    -------
+    Forward vols:
+        1D array of ``T`` forward volatilities for each expiry, floored by ``fwdvol_min``.
     """
 
     verify_inp( len(expiries.shape) == 1, lambda: f"'expiries' must be a 1D array, found shape {expiries.shape}" )
@@ -242,32 +267,34 @@ def extract_atm_fwd_vols(
         verify_inp( len(strikes.shape) == 2, lambda: f"'strikes' must be a 2D array if it has a shape, found shape {strikes.shape}" )
         verify_inp( strikes.shape[0] == T, lambda: f"First dimension of 'strikes' must match length of 'expiries', found {strikes.shape[0]} and {T}" )
         strikes = [ strikes[t] for t in range(T) ]  
+    verify_inp( len(strikes) == T, lambda: f"Expected {T} strike slices, found {len(strikes)}" )
     if hasattr(vols,"shape"):
         verify_inp( len(vols.shape) == 2, lambda: f"'vols' must be a 2D array if it has a shape, found shape {vols.shape}" )
         verify_inp( vols.shape[0] == T, lambda:  f"First dimension of 'vols' must match length of 'expiries', found {vols.shape[0]} and {T}" )
         vols = [ vols[t] for t in range(T) ]  
+    verify_inp( len(vols) == T, lambda: f"Expected {T} volatility slices, found {len(vols)}" )
 
-    vars = []
-    vols = []
+    total_vars = []
+    fwd_vols = []
     for t in range(T):
-        strikes_t = strikes[t]
-        vols_t    = vols[t]
+        strikes_t = strikes[t] 
+        vols_t    = vols[t] 
         if np.min( np.diff(strikes_t) ) < 0.:
             ixs = np.argsort(strikes_t)
             strikes_t = strikes_t[ixs]
             vols_t    = vols_t[ixs]
 
-        vol   = np.interp( 1., strikes_t, vols_t )
-        var   = max( vol, fwdvol_min )**2 * expiries[t]
+        vol   = max( np.interp( 1., strikes_t, vols_t ), fwdvol_min )
+        var   = vol**2 * expiries[t]
 
         if t>0:
-            var = max( var, vars[-1] + fwdvol_min**2 * (expiries[t]-expiries[t-1]) )
-            vol = math.sqrt( ( var - vars[-1] ) / ( expiries[t]-expiries[t-1] ) )
+            var = max( var, total_vars[-1] + fwdvol_min**2 * (expiries[t]-expiries[t-1]) )
+            vol = math.sqrt( ( var - total_vars[-1] ) / ( expiries[t]-expiries[t-1] ) )
 
-        vols.append( vol )
-        vars.append( var )
+        fwd_vols.append( vol )
+        total_vars.append( var )
 
-    return np.asanyarray( vols, dtype=np.float64 )
+    return np.asanyarray( fwd_vols, dtype=vols_t.dtype )
 
 # --------------------------------------------------------------------------------------------
 # Shared utilities for Grid and Open SANOS. No real external use, hence made protected

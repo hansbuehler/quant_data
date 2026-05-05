@@ -95,84 +95,6 @@ class GridGeometry(GeometryBase):
         """ Returns the initial density """
         return self._density0   
 
-    @staticmethod
-    def create_grid_nms( *, initial_t : float = 1./DAYS_PER_YEAR,
-                            horizon_t : float = 5., 
-                            num_times : int = 11,
-                            nms_range : float | tuple[float,float] = 1.,
-                            num_nms   : int = 11,
-                            dlv_min   : float = 0.01,
-                            dlv_max   : float = 5.,
-                            fwdvol_min  : float = 0.01,
-                            vol_interp: str = "lin_sqrt_time",
-                            lower_scale : float = 0.5,
-                            upper_scale : float = 1.5,
-                            dtype : np.dtype = np.float64
-            ):
-        """
-        Creates a GridGeometry with reduced parameters
-
-        Parameters
-        ----------
-        initial_t : float, default ``1./DAYS_PER_YEAR``
-            Initial time of the grid, in years. Default is 1 day.
-        horizon_t : float, default ``5.``
-            Horizon time of the grid, in years. Default is 5 years.
-        num_times : int, default ``11``
-            Number of time points in the grid.
-        nms_range : float or tuple of two floats, default ``1.``
-            Range of NMS for the strikes. If a single float is provided, the range will be symmetric around 0.
-        num_nms : int, default ``11``
-            Number of NMS points for the strikes. Default is 11.
-        vol_interp : str, default ``"lin_sqrt_time"``
-            Volatility interpolation method. Must be 'lin_sqrt_time' or 'lin_var'. Default is 'lin_sqrt_time'.
-
-        Returns
-        -------
-        geometry : :class:`dys.grid_sanos.GridGeometry`
-            The created geometry.
-        """
-
-        verify_inp( initial_t > 0., f"initial_t must be positive, found {initial_t:.4g}" )
-        verify_inp( horizon_t > initial_t, f"horizon_t must be greater than initial_t, found {horizon_t:.4g} <= {initial_t:.4g}" )
-        verify_inp( num_times >= 2, f"num_times must be at least 2, found {num_times}" )
-        verify_inp( isinstance(nms_range, (float, tuple)), f"nms_range must be a float or a tuple of two floats, found {type(nms_range)}" )
-        if isinstance(nms_range, tuple):    
-            verify_inp( len(nms_range) == 2, f"nms_range tuple must have length 2, found {len(nms_range)}" )
-            verify_inp( nms_range[0] < 0. and nms_range[1] > 0., f"nms_range must include negative and positive values, found {nms_range}" )
-        else:
-            verify_inp( nms_range > 0., f"nms_range must be positive, found {nms_range:.4g}" )
-        verify_inp( num_nms >= 3, f"num_nms must be at least 3, found {num_nms}" )
-
-        nms_lo           = float(-nms_range if isinstance(nms_range, float) else nms_range[0])
-        nms_hi           = float(+nms_range if isinstance(nms_range, float) else nms_range[1])
-        verify_inp( nms_lo < 0. and nms_hi > 0., f"'nms_lo' must be negative and 'nms_hi' must be positive, found nms_lo {nms_lo:.4g} and nms_hi {nms_hi:.4g}" )    
-
-        xexpiries        = np.zeros( (num_times+1,), dtype=dtype )  
-        xexpiries[1:]    = np.exp( np.linspace(math.log(initial_t), math.log(horizon_t), num_times) )
-        num_xnms         = num_nms//6
-        num_inms         = num_nms - 3*num_xnms
-
-        nms              = np.linspace( nms_lo, nms_hi, num_inms )
-        inner_strikes    = NMS.from_nms( nms[None,:], t=xexpiries[:,None] )
-
-        xstrikes         = np.zeros((num_times+1,num_nms+2), dtype=dtype )
-        xstrikes[:,:num_xnms*2+1] = np.linspace(lower_scale, 1., 2*num_xnms+2)[None,:-1] * inner_strikes[:,0][:,None] 
-        xstrikes[:,-num_xnms-1:] = np.linspace(1., upper_scale, num_xnms+2)[None,1:] * inner_strikes[:,-1][:,None] 
-        xstrikes[:,2*num_xnms+1:-num_xnms-1] = inner_strikes
-        xstrikes[:,-1] *= math.sqrt( upper_scale )
-
-        strike_diff = np.diff( xstrikes, axis=1 )
-        assert np.min( strike_diff ) > 0., f"Per time step: strikes must increase. Found {np.min(strike_diff):.4g}"
-        return GridGeometry(
-            xexpiries  = xexpiries,
-            xstrikes   = xstrikes,
-            dlv_min    = dlv_min,
-            dlv_max    = dlv_max,
-            fwdvol_min = fwdvol_min ,
-            vol_interp = vol_interp,
-        )
-
     # -------------------------------------------
     # Numerical utilities
     # -------------------------------------------
@@ -267,6 +189,112 @@ class GridGeometry(GeometryBase):
         L  = np.asarray(L, dtype=dtype) 
         return dict(wn=wn, wp=wp, L=L)
     
+@dataclass(frozen=True)
+class GridGeometryGenerator:
+    r"""
+    Standardized generator for grid generation.
+
+    * Expiries will be generated with exponential growth from :attr:`initial_t` to :attr:`horizon_t`, with a total of :attr:`num_times`
+    * Strikes will be generated from normalized strikes. These can be specified as a float for a symmetric range, or tuple for a asymmetric range.#
+      The number of normalized strikes is given by :attr:`num_nms`. The normalized stikes are converted to strikes per expiry using :meth:`quantdata.NMS.from_nms`, essentially:
+      $$
+         x_t = \exp\left( \log(1.1) z \frac{\sqrt{\epsilon+t}}{\sqrt{\epsilon+1}} \right)
+      $$ 
+    * Once the strikes are generted with above, external strikes will be added up to ``lower_scale`` of the lowest NMS strike, and up to ``upper_scale`` of the highest NMS strike.
+    """
+    initial_t   : float = 1./DAYS_PER_YEAR             #: Initial model expiry, in years. Default is 1 day.
+    horizon_t   : float = 2.                           #: Terminal model expiry, in years. Default is 2 years.
+    num_times   : int = 11                             #: Number of time points.
+    nms_range   : float | tuple[float,float] = 2.      #: Either a symmetric range, or a tuple indicating a lower and upper NMS. The lower NMS must be negative while the upper NMS must be positive. Default is 2, which corresponds to a symmetric range of (-2,2).
+    num_nms     : int = 11                             #: Number of strikes per expiry.
+    dlv_min     : float = 0.01                         #: Minimum discrete local volatility (dlv) value. Default is 0.01.
+    dlv_max     : float = 5.                           #: Maximum discrete local volatility (dlv) value. Default is 5.0.
+    fwdvol_min  : float = 0.01                         #: Minimum forward volatility value. Default is 0.01.
+    vol_interp  : str = "lin_var"                      #: Term volatility interpolation method. Must be 'lin_var' or 'lin_sqrt_time'. Default is 'lin_var'.
+    lower_scale : float = 0.5                          #: Scaling of the lowest strike compared to the lowest NMS strike. Default is 0.5, which means the lowest strike will be half of the lowest NMS strike.
+    upper_scale : float = 1.5                          #: Scaling of the highest strike compared to the highest NMS strike. Default is 1.5, which means the highest strike will be 1.5 times the highest NMS strike.
+
+    def __post_init__(self):
+        verify_inp( self.initial_t > 0., f"initial_t must be positive, found {self.initial_t:.4g}" )
+        verify_inp( self.horizon_t > self.initial_t, f"horizon_t must be greater than initial_t, found {self.horizon_t:.4g} <= {self.initial_t:.4g}" )
+        verify_inp( self.num_times >= 2, f"num_times must be at least 2, found {self.num_times}" )
+        verify_inp( isinstance(self.nms_range, (float, tuple)), f"nms_range must be a float or a tuple of two floats, found {type(self.nms_range)}" )
+        if isinstance(self.nms_range, tuple):    
+            verify_inp( len(self.nms_range) == 2, f"nms_range tuple must have length 2, found {len(self.nms_range)}" )
+            verify_inp( self.nms_range[0] < 0. and self.nms_range[1] > 0., f"nms_range must include negative and positive values, found {self.nms_range}" )
+        else:
+            verify_inp( self.nms_range > 0., f"nms_range must be positive, found {self.nms_range:.4g}" )
+        verify_inp( self.num_nms >= 3, f"num_nms must be at least 3, found {self.num_nms}" )
+
+        verify_inp( self.upper_scale > 1., f"upper_scale must be greater than 1, found {self.upper_scale:.4g}" )
+        verify_inp( self.dlv_min >= 0., f"dlv_min must be non-negative, found {self.dlv_min:.4g}" )
+        verify_inp( self.dlv_max > self.dlv_min, f"dlv_max must be greater than dlv_min, found dlv_max {self.dlv_max:.4g} and dlv_min {self.dlv_min:.4g}" )
+        verify_inp( self.fwdvol_min >= 0., f"fwdvol_min must be non-negative, found {self.fwdvol_min:.4g}" )  
+        verify_inp( 1. > self.lower_scale > 0., f"lower_scale must be between 0 and 1, found {self.lower_scale:.4g}" ) 
+        verify_inp( self.vol_interp in {"lin_sqrt_time", "lin_var"}, f"vol_interp must be either 'lin_sqrt_time' or 'lin_var', found {self.vol_interp}" )   
+
+    def create(self, *, return_inner : bool = False, dtype = np.float64 ) -> GridGeometry|tuple[GridGeometry, np.ndarray]:
+        """
+        Creates a GridGeometry with reduced parameters
+
+        Parameters
+        ----------
+        initial_t : float, default ``1./DAYS_PER_YEAR``
+            Initial time of the grid, in years. Default is 1 day.
+        horizon_t : float, default ``5.``
+            Horizon time of the grid, in years. Default is 5 years.
+        num_times : int, default ``11``
+            Number of time points in the grid.
+        nms_range : float or tuple of two floats, default ``1.``
+            Range of NMS for the strikes. If a single float is provided, the range will be symmetric around 0.
+        num_nms : int, default ``11``
+            Number of NMS points for the strikes. Default is 11.
+        vol_interp : str, default ``"lin_sqrt_time"``
+            Volatility interpolation method. Must be 'lin_sqrt_time' or 'lin_var'. Default is 'lin_sqrt_time'.
+
+        Returns
+        -------
+        geometry : :class:`dys.grid_sanos.GridGeometry`
+            The created geometry.
+        """
+        nms_lo           = float(-self.nms_range if isinstance(self.nms_range, float) else self.nms_range[0])
+        nms_hi           = float(+self.nms_range if isinstance(self.nms_range, float) else self.nms_range[1])
+
+        verify_inp( nms_lo < 0. and nms_hi > 0., f"'nms_lo' must be negative and 'nms_hi' must be positive, found nms_lo {nms_lo:.4g} and nms_hi {nms_hi:.4g}" )    
+
+
+
+        xexpiries        = np.zeros( (self.num_times+1,), dtype=dtype )  
+        xexpiries[1:]    = np.exp( np.linspace(math.log(self.initial_t), math.log(self.horizon_t), self.num_times) )
+        num_xnms         = self.num_nms//6
+        num_inms         = self.num_nms - 3*num_xnms
+
+        nms              = np.linspace( nms_lo, nms_hi, num_inms )
+        inner_strikes    = NMS.from_nms( nms[None,:], t=xexpiries[:,None] )
+
+        xstrikes         = np.zeros((self.num_times+1,self.num_nms+2), dtype=dtype )
+        xstrikes[:,:num_xnms*2+1] = np.linspace(self.lower_scale, 1., 2*num_xnms+2)[None,:-1] * inner_strikes[:,0][:,None] 
+        xstrikes[:,-num_xnms-1:] = np.linspace(1., self.upper_scale, num_xnms+2)[None,1:] * inner_strikes[:,-1][:,None] 
+        xstrikes[:,2*num_xnms+1:-num_xnms-1] = inner_strikes
+        xstrikes[:,-1] *= math.sqrt( self.upper_scale )
+
+        strike_diff = np.diff( xstrikes, axis=1 )
+        assert np.min( strike_diff ) > 0., f"Per time step: strikes must increase. Found {np.min(strike_diff):.4g}"
+        geometry = GridGeometry(
+                xexpiries  = xexpiries,
+                xstrikes   = xstrikes,
+                dlv_min    = self.dlv_min,
+                dlv_max    = self.dlv_max,
+                fwdvol_min = self.fwdvol_min ,
+                vol_interp = self.vol_interp,
+            )
+        if return_inner:
+            return geometry, inner_strikes
+        return geometry
+
+# -------------------------------------------
+# Main SANOS class
+# -------------------------------------------
 
 class GridSanos(object):
 
@@ -274,7 +302,8 @@ class GridSanos(object):
                        bb       : Backbone = BackboneNumpy(),
                        eps      : Eps = Eps(),
                        debug    : bool = False ):
-
+        """ Run it """
+        verify_inp( isinstance( geometry, GridGeometry ), lambda: f"geometry must be an instance of GridGeometry, found {type(geometry)}" )
         self.geometry  = geometry
         self.bb        = bb
         self.eps       = eps
@@ -362,7 +391,7 @@ class GridSanos(object):
             self, 
             # market data
             fwd_vols    : Backbone.Array | None,
-            densities   : Backbone.Array, 
+            densities   : Backbone.Array, *,
             #
             opt_strikes : Backbone.Array,
             opt_tte     : Backbone.Array,

@@ -167,7 +167,7 @@ class OpenGeometryGenerator:
     def create_geometry( 
         self,
         expiries     : np.ndarray,
-        pure_strikes : list[np.ndarray], *,
+        pure_strikes : list[np.ndarray],
         dtype : np.dtype = np.float64            
     ):
         """
@@ -183,7 +183,7 @@ class OpenGeometryGenerator:
         verify_inp(len(expiries) == 1 or np.min(np.diff(expiries)) > 0.0, lambda: "'expiries' must be strictly increasing")
         verify_inp(len(pure_strikes) == len(expiries), lambda: f"Expected one pure strike vector per expiry, found {len(pure_strikes)} strike vectors and {len(expiries)} expiries")
 
-        T = len(expiries)
+        T            = len(expiries)
         pure_strikes = [np.asarray(strikes_t, dtype=dtype) for strikes_t in pure_strikes]
 
         min_k = dtype(1.0)
@@ -275,6 +275,7 @@ class OpenSanos(object):
         debug: bool = False,
         no_warnings: bool = False,
     ):
+        verify_inp( isinstance( geometry, OpenGeometry ), lambda: f"geometry must be an instance of OpenGeometry, found {type(geometry)}" )
         self.geometry = geometry
         self.eps = eps
         self.debug = debug
@@ -337,7 +338,7 @@ class OpenSanos(object):
             self, 
             # market data
             fwd_vols    : np.ndarray | None,
-            densities   : list[np.ndarray],
+            densities   : list[np.ndarray], *,
             #
             opt_strikes : np.ndarray,
             opt_tte     : np.ndarray,
