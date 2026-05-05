@@ -38,7 +38,7 @@ class OpenGeometry(GeometryBase):
         xexpiries = np.asarray(self.xexpiries)
         xstrikes = tuple(np.asarray(strikes_t, dtype=xexpiries.dtype) for strikes_t in self.xstrikes)
 
-        verify_inp( self.dlv_min > 0., lambda : f"'dlv_min' must be positive, but found {self.dlv_min:.4g}") 
+        verify_inp( self.dlv_min >= 0., lambda : f"'dlv_min' must be non-negative, but found {self.dlv_min:.4g}") 
         verify_inp( self.dlv_max > self.dlv_min, lambda : f"'dlv_max' must be greater than 'dlv_min'; found dlv_max {self.dlv_max:.4g} and dlv_min {self.dlv_min:.4g}" )
         verify_inp( self.fwdvol_min >= 0., lambda : f"'fwdvol_min' must be non-negative; found {self.fwdvol_min:.4g}" )
         verify_inp( self.vol_interp in {"lin_sqrt_time", "lin_var"}, lambda : f"'vol_interp' must be either 'lin_sqrt_time' or 'lin_var', but found {self.vol_interp}" )
@@ -153,7 +153,7 @@ class OpenGeometryGenerator:
     handle_errors : str = "warn"
 
     def __post_init__(self):
-        verify_inp(self.dlv_min > 0.0, lambda: f"'dlv_min' must be positive, but found {self.dlv_min:.4g}")
+        verify_inp(self.dlv_min >= 0.0, lambda: f"'dlv_min' must be non-negative, but found {self.dlv_min:.4g}")
         verify_inp(self.dlv_max > self.dlv_min, lambda: f"'dlv_max' must be greater than 'dlv_min'; found dlv_max {self.dlv_max:.4g} and dlv_min {self.dlv_min:.4g}")
         verify_inp(self.fwdvol_min >= 0.0, lambda: f"'fwdvol_min' must be non-negative; found {self.fwdvol_min:.4g}")
         verify_inp(self.vol_interp in {"lin_sqrt_time", "lin_var"}, lambda: f"'vol_interp' must be either 'lin_sqrt_time' or 'lin_var', but found {self.vol_interp}")

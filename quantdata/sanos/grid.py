@@ -49,7 +49,7 @@ class GridGeometry(GeometryBase):
     vol_interp : str = "lin_var"  #: Term volatility interpolation method. Must be a 'lin_var' or 'lin_sqrt_time'
 
     def __post_init__(self):
-        verify_inp( self.dlv_min > 0., lambda : f"'dlv_min' must be positive, but found {self.dlv_min:.4g}") 
+        verify_inp( self.dlv_min >= 0., lambda : f"'dlv_min' must be non-negative, but found {self.dlv_min:.4g}") 
         verify_inp( self.dlv_max > self.dlv_min, lambda : f"'dlv_max' must be greater than 'dlv_min'; found dlv_max {self.dlv_max:.4g} and dlv_min {self.dlv_min:.4g}" )
         verify_inp( self.fwdvol_min >= 0., lambda : f"'fwdvol_min' must be non-negative; found {self.fwdvol_min:.4g}" )
         verify_inp( self.vol_interp in {"lin_sqrt_time", "lin_var"}, lambda : f"'vol_interp' must be either 'lin_sqrt_time' or 'lin_var', but found {self.vol_interp}" )
