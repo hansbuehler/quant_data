@@ -27,7 +27,7 @@ import warnings as warnings
 # Sample days for a given ticker
 # ======================================================================
 
-@version("0.5")
+@version("0.61")
 @dataclass(frozen=True)
 class SampleDaysConfig:
     max_num_options: int = 1000                 #: Maximum number of options. Options are sorted by NMS, expiry and call/put, and only the top max_num_options are kept. This is applied after all other filters.#
@@ -77,12 +77,70 @@ class SampleDaysConfig:
                     warnings.warn(f"{ticker} {d}: after filtering no expiry had {self.min_opt_per_expiry} options left. This means this sample is not eligible. Here are the options per filtered expiry: {fmt_dict(expiry_counts)}.")
                     return df
 
-            # remove excess options
+            # remove excess options while keeping min_opt_per_expiry per expiry, and the closes to ATM
             if not df.empty and len(df) > self.max_num_options:
-                df['abs_nms'] = np.abs(df['nms'])
-                df = df.sort_values(by=["abs_nms", "tte_y"], ascending=[True, True])
-                df = df.head(self.max_num_options)
-                df.drop(columns=["abs_nms"], inplace=True)
+                nms = df['nms'].to_numpy()
+                abs_nms = np.abs(nms)
+
+                # Reuse per-expiry positional indices instead of repeatedly filtering the full frame.
+                reserved_positions = []
+                remaining_positions = []
+
+                for expiry_id, expiry_positions in df.groupby('expiry_id', sort=False).indices.items():
+                    expiry_positions = np.asarray(expiry_positions, dtype=np.intp)
+
+                    assert len(expiry_positions) >= self.min_opt_per_expiry, f"Internal error: expiry_id {expiry_id} has fewer options than 'min_opt_per_expiry' after filtering. This should not happen, as we already filtered out expiries with too few options. Please contact the authors with an example."
+                    if len(expiry_positions) == self.min_opt_per_expiry:
+                        reserved_positions.append(expiry_positions)
+                        continue
+
+                    expiry_nms = nms[expiry_positions]
+                    selected_mask = np.zeros((len(expiry_positions),), dtype=bool)
+                    selected_positions = []
+
+                    # Add smallest positive NMS.
+                    pos_local = np.flatnonzero(expiry_nms > 0.)
+                    if len(pos_local) > 0:
+                        best_pos_local = pos_local[np.argmin(expiry_nms[pos_local])]
+                        selected_mask[best_pos_local] = True
+                        selected_positions.append(expiry_positions[best_pos_local:best_pos_local+1])
+
+                    # Add highest negative NMS.
+                    neg_local = np.flatnonzero(expiry_nms < 0.)
+                    if len(neg_local) > 0:
+                        best_neg_local = neg_local[np.argmax(expiry_nms[neg_local])]
+                        if not selected_mask[best_neg_local]:
+                            selected_mask[best_neg_local] = True
+                            selected_positions.append(expiry_positions[best_neg_local:best_neg_local+1])
+
+                    # Add (min_opt_per_expiry - 2) remaining options with smallest abs(NMS).
+                    remaining_count = self.min_opt_per_expiry - np.sum(selected_mask)
+                    if remaining_count > 0:
+                        remaining_local = np.flatnonzero(~selected_mask)
+                        if len(remaining_local) > 0:
+                            remaining_order = remaining_local[np.argsort(abs_nms[expiry_positions[remaining_local]], kind='stable')]
+                            extra_local = remaining_order[:remaining_count]
+                            selected_mask[extra_local] = True
+                            selected_positions.append(expiry_positions[extra_local])
+
+                    reserved_positions.append(np.concatenate(selected_positions) if selected_positions else np.empty((0,), dtype=np.intp))
+
+                    expiry_remaining = expiry_positions[~selected_mask]
+                    if len(expiry_remaining) > 0:
+                        remaining_positions.append(expiry_remaining)
+
+                reserved_positions = np.concatenate(reserved_positions) if reserved_positions else np.empty((0,), dtype=np.intp)
+                remaining_positions = np.concatenate(remaining_positions) if remaining_positions else np.empty((0,), dtype=np.intp)
+
+                # Sort remaining by abs_nms and limit.
+                remaining_slots = max(0, self.max_num_options - len(reserved_positions))
+                if remaining_slots > 0 and len(remaining_positions) > 0:
+                    remaining_positions = remaining_positions[np.argsort(abs_nms[remaining_positions], kind='stable')[:remaining_slots]]
+                else:
+                    remaining_positions = np.empty((0,), dtype=np.intp)
+
+                # Combine reserved and remaining.
+                df = df.iloc[np.concatenate([reserved_positions, remaining_positions])]
                 assert len(df) <= self.max_num_options, f"Internal error {ticker} {d}: after filtering by max_num_options, the number of options exceeds max_num_options. Please contact the authors with an example."
 
             if df.empty:

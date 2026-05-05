@@ -161,7 +161,16 @@ def sample_simple_days(  ticker : str,
                          override_cache_mode : CacheMode|None = None,
                          verbose : Context = Context.all ) -> dict:
     """
-    Cached version of sample_days
+    Cached version of sample_days which also normalizes the data:
+
+    * ``pure_strike`` is the pure strike.
+    * ``strike`` is divided by ``spot_ref``.
+    * ``fwd`` is divided by ``spot_ref``.
+    * ``call_ask`` and ``call_bid`` are divided by ``spot_ref``.
+    * ``spot_ref`` is the original spot price, kept for reference.
+    * ``spot_ret`` is the spot return, defined as spot(t) / spot(t-1) - 1.
+
+    The result is a dict cached with HDF5 which contains ``SIMPLE_FEATURES`` and ``dates`` (the dater per time index).
     """
     r = sample_days( 
                   ticker=ticker, 

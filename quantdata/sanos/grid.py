@@ -46,7 +46,8 @@ class GridGeometry(GeometryBase):
     dlv_min    : float = 0.01          #: minimum discrete local volatility (dlv) value.
     dlv_max    : float = 5.0           #: maximum discrete local volatility (dlv) value.
     fwdvol_min : float = 0.0           #: minimum backbone forward volatility value.
-    vol_interp : str = "lin_var"  #: Term volatility interpolation method. Must be a 'lin_var' or 'lin_sqrt_time'
+    vol_interp : str = "lin_var"       #: Term volatility interpolation method. Must be a 'lin_var' or 'lin_sqrt_time'
+    unique_id  : str | None = None     #: optional unique identifier for the geometry, used for caching. If None, a unique identifier will be generated based on the geometry parameters.
 
     def __post_init__(self):
         verify_inp( self.dlv_min >= 0., lambda : f"'dlv_min' must be non-negative, but found {self.dlv_min:.4g}") 

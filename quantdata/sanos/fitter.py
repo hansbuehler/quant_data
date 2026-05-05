@@ -309,7 +309,6 @@ class Fitter:
         # ----------------------
 
         fitted       = _iterative_model_price(
-            opt_tte     = opt_tte,
             opt_strikes = opt_strikes,
             opt_sqrtVars= opt_sqrtVars,
             opt_lix     = opt_interpolate['lix'],

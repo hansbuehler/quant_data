@@ -8,7 +8,7 @@ from quantdata.utils.backbone import Backbone, BackboneNumpy
 from dataclasses import dataclass
 import math
 import warnings
-
+import cvxpy as cp
 
 @dataclass(frozen=True)
 class GeometryBase:
@@ -82,7 +82,7 @@ class Eps:
         verify_inp( eps >= 0., f"Tolerance must be non-negative, found {eps}" )
         return Eps( prices=eps, theta=eps, gamma=eps, densities=eps, dlvsq=eps )
 
-def vec_max_dx( strikes : np.ndarray, *, min_k : float, max_k : float, max_dx : float|None = None, min_dx : float = 0., outer_fac : float = 10. ) -> np.ndarray:
+def _old_vec_max_dx( strikes : np.ndarray, *, min_k : float, max_k : float, max_dx : float|None = None, min_dx : float = 0., outer_fac : float = 10. ) -> np.ndarray:
     """
     Generate model strikes.
     
@@ -149,18 +149,135 @@ def vec_max_dx( strikes : np.ndarray, *, min_k : float, max_k : float, max_dx : 
     assert out[-1] < right[1], f"Internal error: last strike {out[-1]} should be below second right strike {right[1]}"
     out += right[1:].tolist()
     out = np.asanyarray( out, dtype=strikes.dtype )
-    assert np.min(np.diff(out)) > min_dx*0.999-1E-8, f"Internal error: strikes should be strictly increasing, found {np.min(np.diff(out))}"
+    assert np.min(np.diff(out)) > 0., f"Internal error: strikes should be strictly increasing, found {np.min(np.diff(out))}"
     return out
+
+def vec_max_dx( strikes : np.ndarray, *, min_k : float, max_k : float, max_dx : float|None = None, min_dx : float = 0., outer_fac : float = 10. ) -> np.ndarray:
+    """
+    Generate model strikes.
+    
+    This function returns a vector of strikes such that:
+        
+    * Lowest strike is ``min_k``
+    * Highest strike is ``max_k``
+    * Strikes are at least ``min_dx`` apart from each other. Strikes which violate this are dropped iteratively from the front.
+    * Strikes in the original strike range are at most ``max_dx`` apart from each other. If None, do not add strikes except min_k or max_k. Outside the extreme strikes of ``strikes``` 
+      the function adds strikes with ``10 max_dx``.
+    
+    """
+    verify_inp( min_k > 0. and min_k < 1. and max_k > 1., "'min_k' must be in (0,1) and 'max_k' must be above 1" )
+    verify_inp( min_k < strikes[0] and max_k > strikes[-1], "'min_k' and 'max_k' must be outside 'strikes'")
+    verify_inp( max_dx is None or max_dx >= 0., "'max_dx' must be None or non-negative")
+    verify_inp( min_dx >= 0., "'min_dx' must be non-negative")
+
+    if max_dx is None:
+        # no max_dx, and min_dx does not bind --> trivial
+        if np.max( strikes[1:]-strikes[:-1] ) >= min_dx:
+            out = np.empty( (len(strikes)+2,), dtype=strikes.dtype )
+            out[1:-1] = strikes
+            out[0]    = min_k
+            out[-1]   = max_k
+            return out
+        
+        # no max_dx, check min_dx
+        out = [ min_k ]
+        for x in strikes[1:]:
+            dx = x - out[-1]
+            if dx <= min_dx:
+                continue
+            else:
+                out.append( x )
+        out.append( max_k )
+        return np.asarray( out, dtype=strikes.dtype )        
+            
+    # max_dx
+    # ------
+
+    outer_max_dx = max_dx*outer_fac
+    left  = np.arange( 0, math.ceil( (strikes[0]-min_k)/outer_max_dx )+1 ) * outer_max_dx + min_k
+    assert left[-1] >= strikes[0], f"Internal error: last left strike {left[-1]} should be above first strike {strikes[0]}"
+    out  = left[:-1].tolist()
+    assert np.min( np.diff(left)) >= outer_max_dx-1E-8, f"Internal error: left strikes should be at least {outer_max_dx} apart, found min {np.min(np.diff(left))}"
+    
+    for x in strikes[1:]:
+        dx = x - out[-1]
+        assert dx > 0., f"Internal error: strikes should be strictly increasing, found {dx} between {x} and {out[-1]}"
+        if dx <= min_dx:
+            continue
+        if dx > max_dx:
+            n = math.floor( dx/max_dx ) 
+            assert n>0
+            r = np.linspace( out[-1], x, n+1 )
+            for x in r[1:]:
+                out.append(x)
+        else:
+            out.append( x )
+
+    assert out[-1] <= strikes[-1]+1E-8, f"Internal error: last strike {out[-1]} should be below second right strike {strikes[1]}"
+
+    right = max_k - np.arange( math.ceil( (max_k-out[-1])/outer_max_dx ), -1, -1 ) * outer_max_dx 
+    assert right[-1] == max_k
+    assert right[0] <= out[-1], f"Internal error: last right strike {right[0]} should be below last strike {out[-1]}"
+    assert np.min( np.diff(right)) >= outer_max_dx-1E-8, f"Internal error: right strikes should be at least {outer_max_dx} apart, found min {np.min(np.diff(right))}"
+    out += right[1:].tolist()
+    out = np.asarray( out, dtype=strikes.dtype )
+    assert np.min( np.diff(out)) > 0., f"Internal error: strikes should be strictly increasing, found {np.min(np.diff(out))}"
+    return out
+def extract_atm_fwd_vols(
+    expiries   : np.ndarray,
+    strikes    : list[np.ndarray]|np.ndarray,
+    vols       : list[np.ndarray]|np.ndarray,
+    fwdvol_min : float = 0.01
+    ):
+    """
+    Computes fwd ATM vols using linear interpolation in volatilities, with a floor of ``fwdvol_min``.
+    """
+
+    verify_inp( len(expiries.shape) == 1, lambda: f"'expiries' must be a 1D array, found shape {expiries.shape}" )
+    verify_inp( expiries[0] > 0., lambda: f"First expiry must be positive, found {expiries[0]}" )
+    verify_inp( np.min( np.diff(expiries)) > 0., lambda: "Expiries must be increasing")
+    T = expiries.shape[0]
+
+    if hasattr(strikes,"shape"):
+        verify_inp( len(strikes.shape) == 2, lambda: f"'strikes' must be a 2D array if it has a shape, found shape {strikes.shape}" )
+        verify_inp( strikes.shape[0] == T, lambda: f"First dimension of 'strikes' must match length of 'expiries', found {strikes.shape[0]} and {T}" )
+        strikes = [ strikes[t] for t in range(T) ]  
+    if hasattr(vols,"shape"):
+        verify_inp( len(vols.shape) == 2, lambda: f"'vols' must be a 2D array if it has a shape, found shape {vols.shape}" )
+        verify_inp( vols.shape[0] == T, lambda:  f"First dimension of 'vols' must match length of 'expiries', found {vols.shape[0]} and {T}" )
+        vols = [ vols[t] for t in range(T) ]  
+
+    vars = []
+    vols = []
+    for t in range(T):
+        strikes_t = strikes[t]
+        vols_t    = vols[t]
+        if np.min( np.diff(strikes_t) ) < 0.:
+            ixs = np.argsort(strikes_t)
+            strikes_t = strikes_t[ixs]
+            vols_t    = vols_t[ixs]
+
+        vol   = np.interp( 1., strikes_t, vols_t )
+        var   = max( vol, fwdvol_min )**2 * expiries[t]
+
+        if t>0:
+            var = max( var, vars[-1] + fwdvol_min**2 * (expiries[t]-expiries[t-1]) )
+            vol = math.sqrt( ( var - vars[-1] ) / ( expiries[t]-expiries[t-1] ) )
+
+        vols.append( vol )
+        vars.append( var )
+
+    return np.asanyarray( vols, dtype=np.float64 )
 
 # --------------------------------------------------------------------------------------------
 # Shared utilities for Grid and Open SANOS. No real external use, hence made protected
 # --------------------------------------------------------------------------------------------
 
 def _time_interpolation_weights(*, vol_interp : str, 
-                                expiries   : np.ndarray,
-                                opt_tte    : np.ndarray, 
-                                opt_mask   : np.ndarray|None = None,
-                                dtype      : np.dtype|None = None ) -> dict[str, np.ndarray]:
+                                   expiries   : np.ndarray,
+                                   opt_tte    : np.ndarray, 
+                                   opt_mask   : np.ndarray|None = None,
+                                   dtype      : np.dtype|None = None ) -> dict[str, np.ndarray]:
     """
     Computes option time interpolation weights for variance and densities.
     These do not depend on market data and should be computed ahead of time.
@@ -364,21 +481,23 @@ def _interpolate_sqrtVars(*,bb         : Backbone,
 
 
 def _iterative_model_price(*,
-        opt_tte     : np.ndarray,
         opt_strikes : np.ndarray,
         opt_sqrtVars: np.ndarray|None,
         opt_lix     : np.ndarray,
         opt_dweight : np.ndarray,
         strikes     : list[np.ndarray],
-        densities   : list[np.ndarray],
+        densities   : list[np.ndarray]|list[cp.Variable],
         no_warnings : bool,
         debug       : bool,
         return_array: bool,
-        check_finite: bool
+        check_finite: bool,
+        _debug_force_vector : bool = False
     ):
     """
     Prices SANOS option prices by iterating over the unique option expiries and performing the interpolation in strikes and time as described in the documentation of :meth:`time_interpolation_weights`.
     For the torch/batch a more efficient version is implemented in :meth:`grid.GridSanos.price`.
+
+    This function supports providing "densities" as a list of cvxpy variables.
     """
 
     bbnp = BackboneNumpy()
@@ -401,13 +520,14 @@ def _iterative_model_price(*,
         uix          = int(uix)
         umask        = opt_lix == uix
         uM           = np.sum(umask)
-        tty          = opt_tte[umask][0]
         
         # compute call prices
         eff_lix     = max(uix-1, 0)
         prev_mstrk  = strikes[eff_lix]
         next_mstrk  = strikes[uix]
-        upot_strks  = opt_strikes[umask]
+        upt_strks   = opt_strikes[umask]
+        upt_sqrtVs  = opt_sqrtVars[umask] if opt_sqrtVars is not None else None
+        upt_weights = opt_dweight[umask]
         Nt          = len(next_mstrk)  
         Ntm1        = len(prev_mstrk)
         dens_t      = densities[uix]
@@ -417,37 +537,63 @@ def _iterative_model_price(*,
         assert dens_tm1.shape == (Ntm1,), f"Expected densities[eff_lix] to have shape {(Ntm1,)}, got {dens_tm1.shape}"
  
         if not no_warnings:
-            min_k = np.min( upot_strks )
-            max_k = np.max( upot_strks )
+            min_k = np.min( upt_strks )
+            max_k = np.max( upt_strks )
             if uix > 1 and min_k <= prev_mstrk[1]:
-                warnings.warn(f"Found option with expiry {tty:.4g} (in years) whose strike {min_k:.4g} is at or below the second-lowest model strike {prev_mstrk[1]:.4g} for the previous expiry used "+\
+                warnings.warn(f"Found option with whose strike {min_k:.4g} is at or below the second-lowest model strike {prev_mstrk[1]:.4g} for the previous expiry used "+\
                             "to compute the model option price. This is likely causing errors. Widen strike range.")
             if uix > 1 and max_k >= prev_mstrk[-2]:
-                warnings.warn(f"Found option with expiry {tty:.4g} (in years) whose strike {max_k:.4g} is at or above the second-highest model strike {prev_mstrk[-2]:.4g} for the previous expiry used "+\
+                warnings.warn(f"Found option with whose strike {max_k:.4g} is at or above the second-highest model strike {prev_mstrk[-2]:.4g} for the previous expiry used "+\
                             "to compute the model option price. This is likely causing errors. Widen strike range.")
             if min_k <= next_mstrk[1]:
-                warnings.warn(f"Found option with expiry {tty:.4g} (in years) whose strike {min_k:.4g} is at or below the second-lowest model strike {next_mstrk[1]:.4g} for the next expiry used "+\
+                warnings.warn(f"Found option with whose strike {min_k:.4g} is at or below the second-lowest model strike {next_mstrk[1]:.4g} for the next expiry used "+\
                             "to compute the model option price. This is likely causing errors. Widen strike range.")
             if max_k >= next_mstrk[-2]:
-                warnings.warn(f"Found option with expiry {tty:.4g} (in years) whose strike {max_k:.4g} is at or above the second-highest model strike {next_mstrk[-2]:.4g} for the next expiry used "+\
+                warnings.warn(f"Found option with whose strike {max_k:.4g} is at or above the second-highest model strike {next_mstrk[-2]:.4g} for the next expiry used "+\
                             "to compute the model option price. This is likely causing errors. Widen strike range.")
 
-        calls_prev  = call_prices( spots=prev_mstrk[None,:],
-                                    strikes=upot_strks[:,None], 
-                                    sqrtVars=opt_sqrtVars[umask,None] if opt_sqrtVars is not None else None
-                                ) * opt_dweight[umask,None]
-        assert calls_prev.shape == (uM,Ntm1), f"Expected calls_prev to have shape {(uM,Ntm1)}, got {calls_prev.shape}"
-        call_prev   = calls_prev @ dens_tm1
-        assert call_prev.shape == (uM,), f"Expected call_prev to have shape {(uM,)}, got {call_prev.shape}"
+        where_nonzero = _debug_force_vector | (np.abs(upt_weights) > 1E-8)
+        if np.any( where_nonzero ):
+            uMnz        = np.sum( where_nonzero )
+            calls_prev  = call_prices(  spots=prev_mstrk[None,:],
+                                        strikes=upt_strks[where_nonzero,None], 
+                                        sqrtVars=upt_sqrtVs[where_nonzero,None] if upt_sqrtVs is not None else None
+                                    ) * upt_weights[where_nonzero,None]
+            assert calls_prev.shape == (uMnz,Ntm1), f"Expected calls_prev to have shape {(uMnz,Ntm1)}, got {calls_prev.shape}"
+            call_prev   = calls_prev @ dens_tm1
+            assert call_prev.shape == (uMnz,), f"Expected call_prev to have shape {(uMnz,)}, got {call_prev.shape}"
+            if uMnz < uM:
+                idx = np.flatnonzero(where_nonzero)
+                P = np.zeros((len(where_nonzero), len(idx)))
+                P[idx, np.arange(len(idx))] = 1.0
+                call_prev = P @ call_prev # map cvxpy-conformant      
+            assert call_prev.shape == (uM,), f"Expected call_prev to have shape {(uM,)}, got {call_prev.shape}"
+        else:
+            call_prev   = 0.
 
-        calls_next  = call_prices( spots=next_mstrk[None,:],
-                                    strikes=upot_strks[:,None], 
-                                    sqrtVars=opt_sqrtVars[umask,None] if opt_sqrtVars is not None else None
-                                ) * ( 1.- opt_dweight[umask,None] )
-        assert calls_next.shape == (uM,Nt), f"Expected calls_next to have shape {(uM,Nt)}, got {calls_next.shape}"
-        calls_next  = calls_next @ dens_t
-        assert calls_next.shape == (uM,), f"Expected calls_next to have shape {(uM,)}, got {calls_next.shape}"
+        where_notone = _debug_force_vector | (np.abs(upt_weights-1.) > 1E-8)
+        if np.any( where_notone ):
+            uMno        = np.sum( where_notone )
+            calls_next  = call_prices(  spots=next_mstrk[None,:],
+                                        strikes=upt_strks[where_notone,None], 
+                                        sqrtVars=upt_sqrtVs[where_notone,None] if upt_sqrtVs is not None else None
+                                    ) * ( 1.- upt_weights[where_notone,None] )
+            assert calls_next.shape == (uMno,Nt), f"Expected calls_next to have shape {(uMno,Nt)}, got {calls_next.shape}"
+            calls_next  = calls_next @ dens_t
+            assert calls_next.shape == (uMno,), f"Expected calls_next to have shape {(uMno,)}, got {calls_next.shape}"
+
+            if uMno < uM:
+                idx = np.flatnonzero(where_notone)
+                P = np.zeros((len(where_notone), len(idx)))
+                P[idx, np.arange(len(idx))] = 1.0
+                calls_next = P @ calls_next # map cvxpy-conformant      
+            assert calls_next.shape == (uM,), f"Expected calls_next to have shape {(uM,)}, got {calls_next.shape}"
+        else:
+            calls_next = 0.
+
         fit_calls   = call_prev + calls_next
+        assert fit_calls.shape == (uM,), f"Expected call_prev to have shape {(uM,)}, got {fit_calls.shape}"
+
         if check_finite:
             assert np.all( np.isfinite(fit_calls) ), f"Expected fitted call prices to be finite, found min {np.min(fit_calls)} and max {np.max(fit_calls)}"
         fitted.append( ( fit_calls, umask ) )

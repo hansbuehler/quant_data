@@ -245,7 +245,7 @@ class OpenGeometryGenerator:
 
             if strikes_t[0] <= xstrikes_t[1]:
                 xstrikes_t = np.insert( xstrikes_t, 1, np.mean(xstrikes_t[:2]))
-            if strikes_t[-1] >= xstrikes_t[-1]:
+            if strikes_t[-1] >= xstrikes_t[-2]:
                 xstrikes_t = np.insert( xstrikes_t, -1, np.mean(xstrikes_t[-2:]))
 
             xstrikes.append(np.asarray(xstrikes_t, dtype=dtype))
@@ -391,7 +391,6 @@ class OpenSanos(object):
 
         mstrikes      = self.strikes
         fit_calls     = _iterative_model_price(
-            opt_tte     = opt_tte,
             opt_strikes = opt_strikes,
             opt_sqrtVars= opt_sqrtVars,
             opt_lix     = opt_interp['lix'],

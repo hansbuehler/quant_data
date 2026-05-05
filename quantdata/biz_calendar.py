@@ -25,7 +25,7 @@ TZ_NY = ZoneInfo("America/New_York")
 DAYS_PER_YEAR = 252
 """ Standardized business days per year """
 
-AM_EXIRY_SUBTRACT = 0.2
+AM_EXIRY_SUBTRACT = 0.8
 """ How much to subtract from 'days' to expiry to account for AM settlement """
 
 NYSE_CALENDAR = mcal.get_calendar("NYSE")

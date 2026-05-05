@@ -75,7 +75,7 @@ class RawDayFilter:
         return f"bid={self.min_bid:.3f}"
 
 @_processing(fmt=SubDir.PANDAS_PARQUET).cache(
-            "0.6",
+            "0.7",
             dependencies=[interpolate_zero_curve, WIDBClient],
             uid=lambda ticker, d, raw_day_filter : f"{named_unique_filename48_8(f'raw {str(raw_day_filter)}',raw_day_filter)}/{ticker}/{fmt_date(d)}",
             exclude_args=['verbose','raise_if_bad'])
@@ -451,7 +451,7 @@ def collect_raw_day( ticker : str,
                 assert be.weekday() == 5, f"Internal error: expected bad expiry {be} to be a Saturday, found weekday {be.weekday()}. Please contact the authors with an example."
                 assert bam == True, f"Internal error: expected bad expiry {be} to be an AM settlement, found is_am={bam}. Please contact the authors with an example."
 
-        r.bdte = np.clip( r.bdte.astype(np.float32) - np.where(r.is_am, AM_EXIRY_SUBTRACT / DAYS_PER_YEAR, 0.0), min=0. ).astype(np.float32)
+        r.bdte = np.clip( r.bdte.astype(np.float32) - np.where(r.is_am, AM_EXIRY_SUBTRACT, 0.0), min=0. ).astype(np.float32)
         r.tte_y = r.bdte / DAYS_PER_YEAR
         return pd.DataFrame(dict(r))
 
