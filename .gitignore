@@ -210,6 +210,9 @@ __marimo__/
 # macOS
 .DS_Store
 
+# Claude Code
+.claude/
+
 # ignore python
 .vdys*
 /.vqdata

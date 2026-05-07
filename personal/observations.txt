@@ -1,0 +1,3 @@
+OBSERVATIONS:
+
+Same expiry different strikes, A LOT of volume around the spot, much less when going further.

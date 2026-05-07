@@ -1,0 +1,29 @@
+Text file with the assumptions made, choices made in modelling.
+
+
+
+
+About Kalman_filter_first_clean.ipynb :
+FOR ONE OPTION:
+Get trades + quotes.
+Both get assigned an uncertainty.
+Quotes: proportional to bid ask spread
+Trades: proportional to last bid-ask spread, with a smaller constant.
+
+Observed price of quotes: microprice
+Observed price of trade: trade price. (can be refined to see if it was over mid-price or under, to determine maybe a fairer observation)
+Both in the kalman filter
+Do Kalman filter on prices.
+
+Implied vol:
+Take spot data for trades, and filter for valid ones.
+Use last price traded as an estimate of the spot. (Improvement possible?)
+Then use this spot to compute implied vol.
+DO Kalman filter on implied vol. uncertainty now proportional to bid-ask spread of IV space.
+
+
+fixed_forward_window_last:
+for a trade that happens at t, we take the window between t and t+250ms and we take the last quote available.
+So if we have one at t, one at t+50ms and one at t+200ms we will tkae the one at t+200.
+
+
