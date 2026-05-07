@@ -435,7 +435,7 @@ class MassiveClient(object):
             f"bars/{timespan}/{'adj' if adjusted else 'raw'}/{ticker}/{fmt_date(start)}_{fmt_date(end)}_{timespan}"
         ),
         exclude_args=["self"],
-    )  # excluding 'self' is not necessary; should be excluded automatically
+    )  # 'self' is excluded fromm the arguments as it does not affect the output.
     def fetch_bars(
         self, ticker: str, start: date, end: date, adjusted: bool, timespan: str
     ) -> pl.DataFrame:
@@ -608,7 +608,7 @@ class MassiveClient(object):
             f"all_contracts/max_dte={max_dte if not max_dte is None else 'all'}/{underlying}/{fmt_date(d)}"
         ),
         exclude_args=["self"],
-    )  # excluding 'self' is not necessary; should be excluded automatically
+    )  # 'self' is excluded fromm the arguments as it does not affect the output.
     def list_all_contracts_expiring_after_day(
         self, underlying: str, d: date, max_dte: int = None
     ) -> list[dict]:
@@ -652,7 +652,7 @@ class MassiveClient(object):
         "0.1",
         uid=lambda ticker, start, end: f"adjfactors/{ticker}/{fmt_date(start)}_{fmt_date(end)}",
         exclude_args=["self"],
-    )  # excluding 'self' is not necessary; should be excluded automatically
+    )  # 'self' is excluded fromm the arguments as it does not affect the output.
     def adjustment_factors(self, ticker: str, start: date, end: date) -> pl.DataFrame:
         """
         Download daily bars adjusted + unadjusted and compute per-day close scaling factor.
@@ -716,7 +716,7 @@ class MassiveClient(object):
 
     @_cache(fmt=SubDir.PICKLE).cache(
         "0.1", uid=lambda ticker: f"reference/{ticker}", exclude_args=["self"]
-    )  # excluding 'self' is not necessary; should be excluded automatically
+    )  # 'self' is excluded fromm the arguments as it does not affect the output.
     def ticker_reference_data(self, ticker: str) -> dict:
         """
         Return reference data for a given ticker.
@@ -842,7 +842,7 @@ class MassiveClient(object):
         "0.1",
         uid=lambda ticker, start, end: f"dividends/{ticker}/{fmt_date(start)}_{fmt_date(end)}",
         exclude_args=["self"],
-    )  # excluding 'self' is not necessary; should be excluded automatically
+    )  # 'self' is excluded fromm the arguments as it does not affect the output.
     def get_dividends(self, ticker: str, start: date, end: date) -> pl.DataFrame:
         """
         Retrieve dividends which go ex div between two dates from /stocks/v1/dividends.
@@ -902,7 +902,7 @@ class MassiveClient(object):
         "0.1",
         uid=lambda ticker, start, end: f"splits/{ticker}/{fmt_date(start)}_{fmt_date(end)}",
         exclude_args=["self"],
-    )  # excluding 'self' is not necessary; should be excluded automatically
+    )  # 'self' is excluded fromm the arguments as it does not affect the output.
     def get_splits(self, ticker: str, start: date, end: date) -> pl.DataFrame:
         """Retrieve stock splits between two dates from /stocks/v1/splits (fast)."""
         url = f"{self.BASE_URL}/stocks/v1/splits"
@@ -932,7 +932,7 @@ class MassiveClient(object):
         "0.1",
         uid=lambda ticker, start, end: f"ticker_changes/{ticker}/{fmt_date(start)}_{fmt_date(end)}",
         exclude_args=["self"],
-    )  # excluding 'self' is not necessary; should be excluded automatically
+    )  # 'self' is excluded fromm the arguments as it does not affect the output.
     def has_ticker_changes(self, ticker: str, start: date, end: date) -> pl.DataFrame:
         """
         Find dates at which an underlying had ticker changes.
