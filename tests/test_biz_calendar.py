@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pytest
 
 from quantdata.biz_calendar import (
     DateRange,
+    session_open_close,
     add_business_days,
     count_business_days_between,
     get_business_days,
@@ -15,6 +17,9 @@ from quantdata.biz_calendar import (
     prev_business_day,
     to_date,
 )
+
+
+TZ_NY = ZoneInfo("America/New_York")
 
 
 def test_get_business_days_includes_christmas_eve_and_new_year_boundary() -> None:
@@ -93,6 +98,24 @@ def test_date_range_requires_at_least_one_business_day() -> None:
         DateRange(date(2024, 12, 25), date(2024, 12, 25))
 
     assert get_business_days(date(2024, 12, 25), date(2024, 12, 25)) == []
+
+
+def test_session_open_close_covers_regular_half_and_closed_days() -> None:
+    regular_open, regular_close, regular_half_day = session_open_close(date(2024, 12, 23))
+    half_open, half_close, half_day = session_open_close(date(2024, 12, 24))
+    closed_open, closed_close, closed_half_day = session_open_close(date(2024, 12, 25))
+
+    assert (regular_open, regular_close, regular_half_day) == (
+        datetime(2024, 12, 23, 9, 30, tzinfo=TZ_NY),
+        datetime(2024, 12, 23, 16, 0, tzinfo=TZ_NY),
+        False,
+    )
+    assert (half_open, half_close, half_day) == (
+        datetime(2024, 12, 24, 9, 30, tzinfo=TZ_NY),
+        datetime(2024, 12, 24, 13, 0, tzinfo=TZ_NY),
+        True,
+    )
+    assert (closed_open, closed_close, closed_half_day) == (None, None, False)
 
 
 def test_to_date_handles_common_inputs() -> None:

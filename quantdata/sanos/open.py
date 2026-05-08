@@ -290,7 +290,7 @@ class OpenGeometryGenerator:
             min_k = min(min_k, lower_k)
             max_k = max(max_k, upper_k)
 
-
+            def test():
                 r.expiries = np.array(r.expiries, dtype=np.float32)
                 T      = len(r.expiries)
 

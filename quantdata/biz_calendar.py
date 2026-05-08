@@ -11,13 +11,12 @@ import datetime as dt
 import math as math
 from dataclasses import dataclass
 from zoneinfo import ZoneInfo
-
 import numpy as np
 import pandas_market_calendars as mcal
 from cdxcore.err import verify_inp
 from cdxcore.version import version
-
 import quantdata as quantdata  # NOQA
+import warnings
 
 TZ_NY = ZoneInfo("America/New_York")
 """ New York time zone """
@@ -405,3 +404,32 @@ class DateRange:
     def get_half_days(self) -> list[dt.date]:
         """Get half days (early closes) in this date range."""
         return get_half_days(self.start, self.end) if not self.exclude_half_days else []
+
+@version("0.1")
+def session_open_close( date: dt.date ) -> tuple[dt.datetime, dt.datetime, bool]:
+    """
+    Returns the session open and close for a given ``date`` as :class:`datetime.datetime` objects in New York time zone,
+    and a boolean indicating whether it is a half day (early close) or not.
+
+    This function will return ``(None, None, False)`` if the given date is not a trading day.    
+    """
+
+    date          = to_date(date)
+    schedule      = NYSE_CALENDAR.schedule(start_date=date, end_date=date)
+
+    if len(schedule) == 0:
+        return None, None, False
+
+    early         = NYSE_CALENDAR.early_closes(schedule)
+
+    with warnings.catch_warnings(action="ignore"):
+        schedule['market_open']  = schedule['market_open'].apply(lambda ts: ts.to_pydatetime())
+        schedule['market_close'] = schedule['market_close'].apply(lambda ts: ts.to_pydatetime())
+    schedule['market_open']  = schedule['market_open'].dt.tz_convert('America/New_York')
+    schedule['market_close'] = schedule['market_close'].dt.tz_convert('America/New_York')
+
+    assert len(schedule['market_open']) <= 1, "Internal error"
+    assert len(schedule['market_close']) <= 1, "Internal error"
+
+    return schedule['market_open'].iloc[0], schedule['market_close'].iloc[0], len(early)>0
+
