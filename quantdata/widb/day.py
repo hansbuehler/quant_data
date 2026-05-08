@@ -1,5 +1,9 @@
 """
-Generating one clean day of data
+Generating one day of data.
+
+This function uses ``client.py`` to provide:
+
+* :func:`collect_raw_day` 
 """
 from __future__ import annotations
 
@@ -75,7 +79,7 @@ class RawDayFilter:
         return f"bid={self.min_bid:.3f}"
 
 @_processing(fmt=SubDir.PANDAS_PARQUET).cache(
-            "0.6",
+            "0.7",
             dependencies=[interpolate_zero_curve, WIDBClient],
             uid=lambda ticker, d, raw_day_filter : f"{named_unique_filename48_8(f'raw {str(raw_day_filter)}',raw_day_filter)}/{ticker}/{fmt_date(d)}",
             exclude_args=['verbose','raise_if_bad'])
@@ -86,6 +90,17 @@ def collect_raw_day( ticker : str,
                      verbose : Context, secid : int|None = None ) -> pd.DataFrame:
     """
     Collect raw data with minimal analytics for a given ticker and date.
+
+    The function returns a panda data frame with columns :attr:`SCHEMA_RAW_DAY`.
+
+    The function:
+    * Downloads spot, forward, discount and option data.
+    * Removes and bad days/tickers/options using :attr:`quantdata.widb.bad.BAD`.
+    * Removes options with same-day expiry, NA or zero bid prices, and bad settlement (ss_flag != '0').
+    * Computes the implied discount factor from the zero curve and the refernece forward price from the forward table (which is off as the forward table is 15min delayed).
+    * Computes business days to expiry and a unique expiry ID (which includes AM/PM).
+
+    Typically the result of this function is processed with :func:`enrich_day`.
 
     Parameters
     ----------
@@ -451,7 +466,7 @@ def collect_raw_day( ticker : str,
                 assert be.weekday() == 5, f"Internal error: expected bad expiry {be} to be a Saturday, found weekday {be.weekday()}. Please contact the authors with an example."
                 assert bam == True, f"Internal error: expected bad expiry {be} to be an AM settlement, found is_am={bam}. Please contact the authors with an example."
 
-        r.bdte = np.clip( r.bdte.astype(np.float32) - np.where(r.is_am, AM_EXIRY_SUBTRACT / DAYS_PER_YEAR, 0.0), min=0. ).astype(np.float32)
+        r.bdte = np.clip( r.bdte.astype(np.float32) - np.where(r.is_am, AM_EXIRY_SUBTRACT, 0.0), min=0. ).astype(np.float32)
         r.tte_y = r.bdte / DAYS_PER_YEAR
         return pd.DataFrame(dict(r))
 
@@ -528,13 +543,16 @@ def enrich_day( ticker : str, d : dt.date, data : pd.DataFrame|None = None, *,
                 expiry_filter : ExpiryFilter = ExpiryFilter(), 
                 override_cache_mode : CacheMode|None = None,
                 raise_if_bad : bool = True,
-                verbose : Context = Context.quiet ):
+                verbose : Context = Context.quiet ) -> pd.DataFrame:
     """
-    Enrich a day's data by:
+    Enrich a day's data.
 
     * Compute synthetic minimal spread call options.
     * Compute an implied forward from inverse-spread weighted bid/ask call prices.
     * Compute implied volatilities and (pure) greeks.
+
+    The retunred daya data frame has the schema :attr:`SCHEMA_ENRICHED_DAY`, which includes all columns from :attr:`SCHEMA_RAW_DAY`.
+
 
     Parameters
     ----------

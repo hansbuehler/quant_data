@@ -25,7 +25,7 @@ TZ_NY = ZoneInfo("America/New_York")
 DAYS_PER_YEAR = 252
 """ Standardized business days per year """
 
-AM_EXIRY_SUBTRACT = 0.2
+AM_EXIRY_SUBTRACT = 0.8
 """ How much to subtract from 'days' to expiry to account for AM settlement """
 
 NYSE_CALENDAR = mcal.get_calendar("NYSE")
@@ -37,9 +37,11 @@ _EARLY_DAYS_CACHE = {}
 
 class NMS:
     r"""
-    NMS(z,t) := exp( scale * z * sqrt((eps+t)/(eps+1))
-
-    Scale is standardized to z=1. being +10% at 1 year at log(1.1) ~ 10% volatility
+    NMS generates relative strikes by:
+    $$
+        \mathrm{NMS}(z,t) := \exp\left( \log(1.1)\ z \cdot \sqrt{\frac{\epsilon+t}{\epsilon+1}} \right)
+    $$
+    where $\epsilon$ is roughly on trading hour.
     """
 
     EPS = 1.0 / 255.0 / 8.0  #: Small epsilon for NMS computation.
@@ -53,9 +55,16 @@ class NMS:
     def to_nms(k: float, t: float, backbone=np) -> float:
         return (backbone.log(k) / NMS.SCALE) / backbone.sqrt((NMS.EPS + t) / (NMS.EPS + 1.0))
 
-
 def to_date(d: str | dt.datetime | dt.date | np.datetime64 | None) -> dt.date | None:
-    """Convert ``d`` to a :class:`datetime.date`, or ``None`` if ``d`` is ``None``."""
+    """
+    Convert ``d`` to a :class:`datetime.date`, or ``None`` if ``d`` is ``None``.
+    This function converts:
+
+    * ``np.datetime64``
+    * :class:`datetime.datetime`
+    * :class:`datetime.date`
+    * ``str`` assuming it is in isoformat e.g. "2024-01-31"    
+    """
     if d is None:
         return d
     if isinstance(d, np.datetime64):

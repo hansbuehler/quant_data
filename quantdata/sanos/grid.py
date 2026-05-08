@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from quantdata.biz_calendar import DAYS_PER_YEAR, NMS
 from quantdata.sanos.tridiag import solve_sanos_tridiagonal
+from quantdata.sanos.utils import GeometryBase, _time_interpolation_weights, _interpolate_sqrtVars, Eps
 from quantdata.utils.backbone import Backbone, BackboneNumpy
 from dataclasses import dataclass, field
 import numpy as np
@@ -39,17 +40,17 @@ import warnings as warnings
 from collections.abc import Sequence
 
 @dataclass(frozen=True)
-class GridGeometry:
+class GridGeometry(GeometryBase):
     xexpiries  : np.ndarray            #: model expiries in years, starting from 0, of size (T+1,) where T is the number of non-zero expiries. The first ``xexpiry`` must be zero.
     xstrikes   : np.ndarray            #: internal model strikes
     dlv_min    : float = 0.01          #: minimum discrete local volatility (dlv) value.
     dlv_max    : float = 5.0           #: maximum discrete local volatility (dlv) value.
     fwdvol_min : float = 0.0           #: minimum backbone forward volatility value.
-    vol_interp : str = "lin_sqrt_time"  #: Term volatility interpolation method. Must be a 'lin_var' or 'lin_sqrt_time'
-    backbone   : Backbone = field(default_factory=BackboneNumpy) #: Backbone for numerical computations. Default is numpy.
+    vol_interp : str = "lin_var"       #: Term volatility interpolation method. Must be a 'lin_var' or 'lin_sqrt_time'
+    unique_id  : str | None = None     #: optional unique identifier for the geometry, used for caching. If None, a unique identifier will be generated based on the geometry parameters.
 
     def __post_init__(self):
-        verify_inp( self.dlv_min > 0., lambda : f"'dlv_min' must be positive, but found {self.dlv_min:.4g}") 
+        verify_inp( self.dlv_min >= 0., lambda : f"'dlv_min' must be non-negative, but found {self.dlv_min:.4g}") 
         verify_inp( self.dlv_max > self.dlv_min, lambda : f"'dlv_max' must be greater than 'dlv_min'; found dlv_max {self.dlv_max:.4g} and dlv_min {self.dlv_min:.4g}" )
         verify_inp( self.fwdvol_min >= 0., lambda : f"'fwdvol_min' must be non-negative; found {self.fwdvol_min:.4g}" )
         verify_inp( self.vol_interp in {"lin_sqrt_time", "lin_var"}, lambda : f"'vol_interp' must be either 'lin_sqrt_time' or 'lin_var', but found {self.vol_interp}" )
@@ -61,26 +62,18 @@ class GridGeometry:
         verify_inp( len(self.xstrikes.shape) == 2 and self.xstrikes.shape[0] == len(self.xexpiries), "'strikes' must be a list of 1D arrays or a 2D array with the same number of rows as 'expiries'")
         verify_inp( self.xstrikes.shape[1] >= 5, lambda: f"'strikes' must have at least 5 elements in its second dimension, found shape {self.xstrikes.shape}" )
         verify_inp( np.all( np.diff(self.xstrikes,axis=1) > 0), lambda: f"'strikes' must be strictly increasing in its second dimension, found {np.min(np.diff(self.xstrikes,axis=1)):.4g}")
-        verify_inp( np.all( self.xstrikes[:,1] < 1.) and np.all( self.xstrikes[:,-2] > 1.), lambda: f"'strikes' in its second dimension must include positive values below and above 1, found boundary values {self.xstrikes[:,1]} and {self.xstrikes[:,-2]}" )
+        verify_inp( np.all( self.xstrikes[:,0] > 0. ), lambda: f"'strikes' must be positive, found {self.xstrikes[:,0]}")
+        verify_inp( np.all( self.xstrikes[:,1] < 1.) and np.all( self.xstrikes[:,-2] > 1.), lambda: f"'strikes' in its second dimension must include positive values below and above 1, found boundary values {self.xstrikes[:,:2]} and {self.xstrikes[:,-2:]}" )
         verify_inp( np.all( np.diff( self.xstrikes[:,0] ) <= 0.), lambda: f"The lowest 'strikes' must not increase in time, {self.xstrikes[:,0]:.4g}, {np.diff( self.xstrikes[:,0] ):.4g}")
         verify_inp( np.all( np.diff( self.xstrikes[:,-1] ) >= 0.), lambda: f"The highest 'strikes' must not decrease in time, {self.xstrikes[:,-1]:.4g}, {np.diff( self.xstrikes[:,-1] ):.4g}")
 
-        # strikes and density at time 0
-        # we insert a "1" here.
-        # we compute the density dynamically.
-        strikes0       = self.xstrikes[0,1:-1]
-        N1             = len(strikes0)
-        assert strikes0[0] < 1. < strikes0[-1], f"Internal error: strikes should include 1, but found {strikes0}."
-        ix_1           = min(N1-1,max(0,np.abs(strikes0 - 1.).argmin()))
-        strikes0[ix_1] = 1.
-        density0       = np.zeros_like( strikes0 )
-        density0[ix_1] = 1.
-        self.__dict__['_density0'] = density0
+        # Reuse the base-class helper so density0 is defined consistently with other geometries.
+        GeometryBase._make_density0(self)
 
     @property
-    def T(self) -> int:
-        """ Returns the number if non-zero expiries"""
-        return self.xexpiries.shape[0]-1
+    def has_grid(self) -> bool:
+        """ Returns True if the geometry has a grid, i.e. if the strikes are given as a 2D array with the same number of rows as expiries. Returns False if the strikes are given as a list of 1D arrays. """
+        return True
 
     @property
     def N(self) -> int:
@@ -98,92 +91,9 @@ class GridGeometry:
         return self.xstrikes[1:,1:-1]
 
     @property
-    def expiries(self) -> np.ndarray:
-        """ Returns the model expiries excluding the zero expiry """
-        return self.xexpiries[1:]
-
-    @property
     def density0(self) -> np.ndarray:
         """ Returns the initial density """
         return self._density0   
-
-    @staticmethod
-    def create_grid_nms( *, initial_t : float = 1./DAYS_PER_YEAR,
-                            horizon_t : float = 5., 
-                            num_times : int = 11,
-                            nms_range : float | tuple[float,float] = 1.,
-                            num_nms   : int = 11,
-                            dlv_min   : float = 0.01,
-                            dlv_max   : float = 5.,
-                            fwdvol_min  : float = 0.01,
-                            vol_interp: str = "lin_sqrt_time",
-                            lower_scale : float = 0.5,
-                            upper_scale : float = 1.5,
-                            dtype : np.dtype = np.float64
-            ):
-        """
-        Creates a GridGeometry with reduced parameters
-
-        Parameters
-        ----------
-        initial_t : float, default ``1./DAYS_PER_YEAR``
-            Initial time of the grid, in years. Default is 1 day.
-        horizon_t : float, default ``5.``
-            Horizon time of the grid, in years. Default is 5 years.
-        num_times : int, default ``11``
-            Number of time points in the grid.
-        nms_range : float or tuple of two floats, default ``1.``
-            Range of NMS for the strikes. If a single float is provided, the range will be symmetric around 0.
-        num_nms : int, default ``11``
-            Number of NMS points for the strikes. Default is 11.
-        vol_interp : str, default ``"lin_sqrt_time"``
-            Volatility interpolation method. Must be 'lin_sqrt_time' or 'lin_var'. Default is 'lin_sqrt_time'.
-
-        Returns
-        -------
-        geometry : :class:`dys.grid_sanos.GridGeometry`
-            The created geometry.
-        """
-
-        verify_inp( initial_t > 0., f"initial_t must be positive, found {initial_t:.4g}" )
-        verify_inp( horizon_t > initial_t, f"horizon_t must be greater than initial_t, found {horizon_t:.4g} <= {initial_t:.4g}" )
-        verify_inp( num_times >= 2, f"num_times must be at least 2, found {num_times}" )
-        verify_inp( isinstance(nms_range, (float, tuple)), f"nms_range must be a float or a tuple of two floats, found {type(nms_range)}" )
-        if isinstance(nms_range, tuple):    
-            verify_inp( len(nms_range) == 2, f"nms_range tuple must have length 2, found {len(nms_range)}" )
-            verify_inp( nms_range[0] < 0. and nms_range[1] > 0., f"nms_range must include negative and positive values, found {nms_range}" )
-        else:
-            verify_inp( nms_range > 0., f"nms_range must be positive, found {nms_range:.4g}" )
-        verify_inp( num_nms >= 3, f"num_nms must be at least 3, found {num_nms}" )
-
-        nms_lo           = float(-nms_range if isinstance(nms_range, float) else nms_range[0])
-        nms_hi           = float(+nms_range if isinstance(nms_range, float) else nms_range[1])
-        verify_inp( nms_lo < 0. and nms_hi > 0., f"'nms_lo' must be negative and 'nms_hi' must be positive, found nms_lo {nms_lo:.4g} and nms_hi {nms_hi:.4g}" )    
-
-        xexpiries        = np.zeros( (num_times+1,), dtype=dtype )  
-        xexpiries[1:]    = np.exp( np.linspace(math.log(initial_t), math.log(horizon_t), num_times) )
-        num_xnms         = num_nms//6
-        num_inms         = num_nms - 3*num_xnms
-
-        nms              = np.linspace( nms_lo, nms_hi, num_inms )
-        inner_strikes    = NMS.from_nms( nms[None,:], t=xexpiries[:,None] )
-
-        xstrikes         = np.zeros((num_times+1,num_nms+2), dtype=dtype )
-        xstrikes[:,:num_xnms*2+1] = np.linspace(lower_scale, 1., 2*num_xnms+2)[None,:-1] * inner_strikes[:,0][:,None] 
-        xstrikes[:,-num_xnms-1:] = np.linspace(1., upper_scale, num_xnms+2)[None,1:] * inner_strikes[:,-1][:,None] 
-        xstrikes[:,2*num_xnms+1:-num_xnms-1] = inner_strikes
-        xstrikes[:,-1] *= math.sqrt( upper_scale )
-
-        strike_diff = np.diff( xstrikes, axis=1 )
-        assert np.min( strike_diff ) > 0., f"Per time step: strikes must increase. Found {np.min(strike_diff):.4g}"
-        return GridGeometry(
-            xexpiries  = xexpiries,
-            xstrikes   = xstrikes,
-            dlv_min    = dlv_min,
-            dlv_max    = dlv_max,
-            fwdvol_min = fwdvol_min ,
-            vol_interp = vol_interp,
-        )
 
     # -------------------------------------------
     # Numerical utilities
@@ -226,71 +136,7 @@ class GridGeometry:
 
         Note that ``0<lix<len(self.xexpiries)``.
         """
-        T        = self.T
-        shape    = opt_tte.shape
-        dtype    = dtype if not dtype is None else opt_tte.dtype
-
-        # we use the mask to set opt_tte to 1; from thereon proceed as usual
-        opt_mask = opt_mask if ( not opt_mask is None and not np.all(opt_mask) ) else None
-        opt_tte  = np.where( opt_mask, opt_tte, 1. ) if opt_mask is not None else opt_tte 
-        opt_tte  = np.asarray( opt_tte, dtype=np.float64 )
-        assert np.min( opt_tte ) > 0., f"Time to expiry must be positive, found min {np.min(opt_tte)}"
-        opt_tte  = np.reshape( opt_tte, (-1,)) # no-copy operatiob
-        M        = len(opt_tte)
-
-        # find indices ixtte such that xexpiries[ixtte-1] < opt_tte <= xexpiries[ixtte+1]
-        ttes     = np.unique( opt_tte )
-        sqrtTtes = np.sqrt( ttes )
-        times    = np.asarray(self.expiries, dtype=np.float64)
-        sqrtT    = np.sqrt( times )
-        ixtte    = np.searchsorted( times, ttes, side='left' )
-        assert np.min(ixtte) >= 0, f"Internal error - times[0]>0, so searchsorted must return indices of at least 0, found min {np.min(ixtte)}. Please contact authors."
-        assert np.max(ixtte) <= T, f"Internal error - searchsorted must return indices of at most len(times), found max {np.max(ixtte)}. Please contact authors."
-        assert ixtte.shape == ttes.shape, f"Expected ixtte to have shape {ttes.shape}, got {ixtte.shape}"
-
-        # compute linear and sqrt-linear weights
-        assert self.vol_interp in {"lin_var","lin_sqrt_time"}, f"Internal error: vol_interp must be 'lin_var' or 'lin_sqrt_time', found '{self.vol_interp}'"
-
-        # create weights for ixteel-1. 
-        # note that in case of extrapolation ixteel=T-1, hence the weight for ixteel-1 will be 0.
-        # dweight is the weight for the previous density call price.
-        ixtte_cap   = np.minimum( ixtte, T-1 )
-        ixtte_m1    = np.maximum( ixtte-1, 0 )
-        prev_times  = np.where( ixtte == 0, 0., times[ixtte_m1] )
-        divisor     = np.where( ixtte == T, 1., times[ixtte_cap] - prev_times )
-        assert np.min( divisor) > 0., f"Internal error: divisor for time interpolation weights must be positive, found min {np.min(divisor)}. Please contact authors."
-        dweight     = np.select( [ixtte==0, ixtte==T], # dweight is always linear
-                                 [0.,       0.],
-                                 ( times[ixtte_cap] - ttes ) / divisor )
-        
-        if self.vol_interp == "lin_sqrt_time":
-            prev_sqrtT  = np.where( ixtte == 0, 0., sqrtT[ixtte_m1] )
-            divisor     = np.where( ixtte == T, 1., sqrtT[ixtte_cap] - prev_sqrtT )
-            vweight     = np.where( ixtte == T, 0., ( sqrtT[ixtte_cap] - sqrtTtes ) / divisor )
-            vextra      = np.where( ixtte < T, 0., sqrtTtes - prev_sqrtT )
-            ixtte       = np.clip( ixtte, max=T-1 )
-        else:
-            vweight     = np.where( ixtte == T, 0., ( times[ixtte_cap] - ttes ) / divisor ) 
-            vextra      = np.where( ixtte < T, 0., ttes - prev_times )
-            ixtte       = np.clip( ixtte, max=T-1 )
-
-        opt_lix     = np.zeros((M,), dtype=np.int32 )
-        opt_dweight = np.zeros((M,), dtype=dtype )
-        opt_vweight = np.zeros((M,), dtype=dtype )
-        opt_vextra  = np.zeros((M,), dtype=dtype )
-
-        for ixtte, tte, dw, vw, vx in zip(ixtte, ttes, dweight, vweight, vextra):
-            where               = opt_tte == tte
-            opt_lix[where]      = ixtte
-            opt_dweight[where]  = dw
-            opt_vweight[where]  = vw
-            opt_vextra[where]   = vx
-
-        opt_lix     = opt_lix.reshape(shape) 
-        opt_dweight = opt_dweight.reshape(shape)
-        opt_vweight = opt_vweight.reshape(shape)
-        opt_vextra  = opt_vextra.reshape(shape)
-        return dict(lix=opt_lix, dweight=opt_dweight, vweight=opt_vweight, vextra=opt_vextra)
+        return _time_interpolation_weights(  vol_interp=self.vol_interp, expiries=self.expiries, opt_tte=opt_tte, opt_mask=opt_mask, dtype=dtype )
 
     # -------------------------------------
     # Numerical utilities
@@ -328,11 +174,6 @@ class GridGeometry:
         xstrikes_t  = xstrikes[1:,:]
         strikes_tm1 = xstrikes[:-1,1:-1]
 
-        divup = np.asarray( xstrikes_t[:,2:,None] - xstrikes_t[:,1:-1,None] ,dtype=np.float64 )
-        divdn = np.asarray( xstrikes_t[:,1:-1,None] - xstrikes_t[:, :-2,None] ,dtype=np.float64 )
-        assert np.all( divup > 0. ), f"Internal error: divup must be positive, found min {np.min(divup)}"
-        assert np.all( divdn > 0. ), f"Internal error: divdn must be positive, found min {np.min(divdn)}"
-
         LUp = ( np.maximum( 0., strikes_tm1[:,None,:] - xstrikes_t[:,2:,None] ) - 
                 np.maximum( 0., strikes_tm1[:,None,:] - xstrikes_t[:,1:-1,None] ) ) /\
             ( xstrikes_t[:,2:,None] - xstrikes_t[:,1:-1,None] )
@@ -348,29 +189,112 @@ class GridGeometry:
         L  = np.asarray(L, dtype=dtype) 
         return dict(wn=wn, wp=wp, L=L)
     
+@dataclass(frozen=True)
+class GridGeometryGenerator:
+    r"""
+    Standardized generator for grid generation.
 
-@dataclass
-class Eps:
-    prices    : float = 1E-6     #: Tolerance for option price errors.
-    theta     : float = 1E-6     #: Tolerance for theta errors during DLV computation.
-    gamma     : float = 1E-6     #: Tolerance for gamma errors during DLV computation.
-    densities : float = 1E-6     #: Tolerance for density errors.
-    dlvsq     : float = 1E-6     #: Tolerance for DLV squared errors being positive.
+    * Expiries will be generated with exponential growth from :attr:`initial_t` to :attr:`horizon_t`, with a total of :attr:`num_times`
+    * Strikes will be generated from normalized strikes. These can be specified as a float for a symmetric range, or tuple for a asymmetric range.#
+      The number of normalized strikes is given by :attr:`num_nms`. The normalized stikes are converted to strikes per expiry using :meth:`quantdata.NMS.from_nms`, essentially:
+      $$
+         x_t = \exp\left( \log(1.1) z \frac{\sqrt{\epsilon+t}}{\sqrt{\epsilon+1}} \right)
+      $$ 
+    * Once the strikes are generted with above, external strikes will be added up to ``lower_scale`` of the lowest NMS strike, and up to ``upper_scale`` of the highest NMS strike.
+    """
+    initial_t   : float = 1./DAYS_PER_YEAR             #: Initial model expiry, in years. Default is 1 day.
+    horizon_t   : float = 2.                           #: Terminal model expiry, in years. Default is 2 years.
+    num_times   : int = 11                             #: Number of time points.
+    nms_range   : float | tuple[float,float] = 2.      #: Either a symmetric range, or a tuple indicating a lower and upper NMS. The lower NMS must be negative while the upper NMS must be positive. Default is 2, which corresponds to a symmetric range of (-2,2).
+    num_nms     : int = 11                             #: Number of strikes per expiry.
+    dlv_min     : float = 0.01                         #: Minimum discrete local volatility (dlv) value. Default is 0.01.
+    dlv_max     : float = 5.                           #: Maximum discrete local volatility (dlv) value. Default is 5.0.
+    fwdvol_min  : float = 0.01                         #: Minimum forward volatility value. Default is 0.01.
+    vol_interp  : str = "lin_var"                      #: Term volatility interpolation method. Must be 'lin_var' or 'lin_sqrt_time'. Default is 'lin_var'.
+    lower_scale : float = 0.5                          #: Scaling of the lowest strike compared to the lowest NMS strike. Default is 0.5, which means the lowest strike will be half of the lowest NMS strike.
+    upper_scale : float = 1.5                          #: Scaling of the highest strike compared to the highest NMS strike. Default is 1.5, which means the highest strike will be 1.5 times the highest NMS strike.
 
     def __post_init__(self):
-        verify_inp( self.prices >= 0., f"Tolerance for prices must be non-negative, found {self.prices}" )
-        verify_inp( self.theta >= 0., f"Tolerance for theta must be non-negative, found {self.theta}" )
-        verify_inp( self.gamma >= 0., f"Tolerance for gamma must be non-negative, found {self.gamma}" )
-        verify_inp( self.densities >= 0., f"Tolerance for densities must be non-negative, found {self.densities}" )
-        verify_inp( self.dlvsq >= 0., f"Tolerance for dlvsq must be non-negative, found {self.dlvsq}" )
+        verify_inp( self.initial_t > 0., f"initial_t must be positive, found {self.initial_t:.4g}" )
+        verify_inp( self.horizon_t > self.initial_t, f"horizon_t must be greater than initial_t, found {self.horizon_t:.4g} <= {self.initial_t:.4g}" )
+        verify_inp( self.num_times >= 2, f"num_times must be at least 2, found {self.num_times}" )
+        verify_inp( isinstance(self.nms_range, (float, tuple)), f"nms_range must be a float or a tuple of two floats, found {type(self.nms_range)}" )
+        if isinstance(self.nms_range, tuple):    
+            verify_inp( len(self.nms_range) == 2, f"nms_range tuple must have length 2, found {len(self.nms_range)}" )
+            verify_inp( self.nms_range[0] < 0. and self.nms_range[1] > 0., f"nms_range must include negative and positive values, found {self.nms_range}" )
+        else:
+            verify_inp( self.nms_range > 0., f"nms_range must be positive, found {self.nms_range:.4g}" )
+        verify_inp( self.num_nms >= 3, f"num_nms must be at least 3, found {self.num_nms}" )
 
-    def set_all(self, eps : float ):
-        verify_inp( eps >= 0., f"Tolerance must be non-negative, found {eps}" )
-        self.prices = eps
-        self.theta = eps
-        self.gamma = eps
-        self.densities = eps
-        self.dlvsq = eps
+        verify_inp( self.upper_scale > 1., f"upper_scale must be greater than 1, found {self.upper_scale:.4g}" )
+        verify_inp( self.dlv_min >= 0., f"dlv_min must be non-negative, found {self.dlv_min:.4g}" )
+        verify_inp( self.dlv_max > self.dlv_min, f"dlv_max must be greater than dlv_min, found dlv_max {self.dlv_max:.4g} and dlv_min {self.dlv_min:.4g}" )
+        verify_inp( self.fwdvol_min >= 0., f"fwdvol_min must be non-negative, found {self.fwdvol_min:.4g}" )  
+        verify_inp( 1. > self.lower_scale > 0., f"lower_scale must be between 0 and 1, found {self.lower_scale:.4g}" ) 
+        verify_inp( self.vol_interp in {"lin_sqrt_time", "lin_var"}, f"vol_interp must be either 'lin_sqrt_time' or 'lin_var', found {self.vol_interp}" )   
+
+    def create(self, *, return_inner : bool = False, dtype = np.float64 ) -> GridGeometry|tuple[GridGeometry, np.ndarray]:
+        """
+        Creates a GridGeometry with reduced parameters
+
+        Parameters
+        ----------
+        initial_t : float, default ``1./DAYS_PER_YEAR``
+            Initial time of the grid, in years. Default is 1 day.
+        horizon_t : float, default ``5.``
+            Horizon time of the grid, in years. Default is 5 years.
+        num_times : int, default ``11``
+            Number of time points in the grid.
+        nms_range : float or tuple of two floats, default ``1.``
+            Range of NMS for the strikes. If a single float is provided, the range will be symmetric around 0.
+        num_nms : int, default ``11``
+            Number of NMS points for the strikes. Default is 11.
+        vol_interp : str, default ``"lin_sqrt_time"``
+            Volatility interpolation method. Must be 'lin_sqrt_time' or 'lin_var'. Default is 'lin_sqrt_time'.
+
+        Returns
+        -------
+        geometry : :class:`dys.grid_sanos.GridGeometry`
+            The created geometry.
+        """
+        nms_lo           = float(-self.nms_range if isinstance(self.nms_range, float) else self.nms_range[0])
+        nms_hi           = float(+self.nms_range if isinstance(self.nms_range, float) else self.nms_range[1])
+
+        verify_inp( nms_lo < 0. and nms_hi > 0., f"'nms_lo' must be negative and 'nms_hi' must be positive, found nms_lo {nms_lo:.4g} and nms_hi {nms_hi:.4g}" )    
+
+
+
+        xexpiries        = np.zeros( (self.num_times+1,), dtype=dtype )  
+        xexpiries[1:]    = np.exp( np.linspace(math.log(self.initial_t), math.log(self.horizon_t), self.num_times) )
+        num_xnms         = self.num_nms//6
+        num_inms         = self.num_nms - 3*num_xnms
+
+        nms              = np.linspace( nms_lo, nms_hi, num_inms )
+        inner_strikes    = NMS.from_nms( nms[None,:], t=xexpiries[:,None] )
+
+        xstrikes         = np.zeros((self.num_times+1,self.num_nms+2), dtype=dtype )
+        xstrikes[:,:num_xnms*2+1] = np.linspace(self.lower_scale, 1., 2*num_xnms+2)[None,:-1] * inner_strikes[:,0][:,None] 
+        xstrikes[:,-num_xnms-1:] = np.linspace(1., self.upper_scale, num_xnms+2)[None,1:] * inner_strikes[:,-1][:,None] 
+        xstrikes[:,2*num_xnms+1:-num_xnms-1] = inner_strikes
+        xstrikes[:,-1] *= math.sqrt( self.upper_scale )
+
+        strike_diff = np.diff( xstrikes, axis=1 )
+        assert np.min( strike_diff ) > 0., f"Per time step: strikes must increase. Found {np.min(strike_diff):.4g}"
+        geometry = GridGeometry(
+                xexpiries  = xexpiries,
+                xstrikes   = xstrikes,
+                dlv_min    = self.dlv_min,
+                dlv_max    = self.dlv_max,
+                fwdvol_min = self.fwdvol_min ,
+                vol_interp = self.vol_interp,
+            )
+        if return_inner:
+            return geometry, inner_strikes
+        return geometry
+
+# -------------------------------------------
+# Main SANOS class
+# -------------------------------------------
 
 class GridSanos(object):
 
@@ -378,7 +302,8 @@ class GridSanos(object):
                        bb       : Backbone = BackboneNumpy(),
                        eps      : Eps = Eps(),
                        debug    : bool = False ):
-
+        """ Run it """
+        verify_inp( isinstance( geometry, GridGeometry ), lambda: f"geometry must be an instance of GridGeometry, found {type(geometry)}" )
         self.geometry  = geometry
         self.bb        = bb
         self.eps       = eps
@@ -416,12 +341,12 @@ class GridSanos(object):
         return self.geometry.N
     
     @property
-    def strikes(self) -> np.ndarray:
+    def strikes(self) -> Backbone.Array:
         """ Returns the real model strikes excluding the zero expiry and the boundary strikes. """
         return self.xstrikes[1:,1:-1]
 
     @property
-    def expiries(self) -> np.ndarray:
+    def expiries(self) -> Backbone.Array:
         """ Returns the model expiries excluding the zero expiry """
         return self.xexpiries[1:]
     
@@ -452,86 +377,21 @@ class GridSanos(object):
         opt_sqrtVars : Backbone.Array or None
             The interpolated square-root variances for the options, of shape matching ``opt_interp['lix']``. If fwd_vols is None, returns None. 
         """
-        if fwd_vols is None:
-            return None
-
-        T            = self.T
-        opt_lix     = opt_interp['lix']
-        opt_vweight = opt_interp['vweight']
-        opt_vextra  = opt_interp['vextra']
-        M           = opt_lix.shape[-1]
-        bb          = self.bb
-        head        = opt_lix.shape[:-1]
-        hext        = (1,)*len(head)
-
-        if isinstance(fwd_vols, (float, int, np.number)):
-            heax     = (1,)*(len(opt_lix.shape)-1)
-            fwd_vols = bb.full(heax+(T,), float(fwd_vols), dtype=bb.float64)
-        elif len(fwd_vols.shape) == 0:
-            fwd_vols = bb.reshape( fwd_vols, (1,)*len(opt_lix.shape) )
-        else:           
-            verify_inp( len(fwd_vols.shape) <= len(opt_lix.shape), f"fwd_vols must have at most as many dimensions as opt_lix, found {len(fwd_vols.shape)} and {len(opt_lix.shape)}" )
-            verify_inp( fwd_vols.shape[-1] in [1,T], lambda : f"'fwd_vols' must have shape ending in 1 or {T}, found {fwd_vols.shape}")
-            if len(fwd_vols.shape) < len(opt_lix.shape):
-                fwd_vols = bb.reshape( fwd_vols, (1,)*(len(opt_lix.shape)-len(fwd_vols.shape)) + fwd_vols.shape )
-
-        assert len(opt_lix.shape) == len(fwd_vols.shape), f"opt_lix and fwd_vols must have the same number of dimensions, found {len(opt_lix.shape)} and {len(fwd_vols.shape)}"
-        assert opt_vweight.shape == opt_lix.shape, f"opt_vweight and fwd_vols must have the same shapes, found {opt_vweight.shape} and {fwd_vols.shape}"
-        assert opt_vextra.shape == opt_lix.shape, f"opt_vextra and fwd_vols must have the same shapes, found {opt_vextra.shape} and {fwd_vols.shape}"
-
-        assert self.xexpiries.shape == (self.T+1,), f"Expected xexpiries to have shape {(self.T+1,)}, got {self.xexpiries.shape}"
-        assert self.xstrikes.shape == (self.T+1,self.N+2), f"Expected xstrikes to have shape {(self.T+1,self.N+2)}, got {self.xstrikes.shape}"
-
-        target_shape = head + (T,)
-        assert bb.are_broadcastable(fwd_vols.shape, target_shape), f"Internal error: fwd_vols must broadcast to {target_shape}, found {fwd_vols.shape}"
-        if fwd_vols.shape != target_shape:
-            fwd_vols = bb.broadcast_to(fwd_vols, target_shape)
-
-        dts = bb.diff(self.xexpiries)
-
-        if self.geometry.vol_interp == "lin_var":
-            r"""
-            "sqrtVar" is computed by linear interpolation in variance, and taking the square rtoot: assuming that $t_j<t\leq t_{j+1}$ then:
-            $$
-                \mathrm{sqrt_var}(t) := \sqrt{ \mathrm{var}(t) } \ : \ \mathrm{var}(t) =  \sigma^2_j \left( t - t_j \right ) + \sum_{t_j<t} \sigma^2_j \left( t_j - t_{j-1} \right) +
-            $$
-            """
-            assert self.geometry.vol_interp == "lin_var", f"Internal error: vol_interp must be 'lin_sqrt_time' or 'lin_var', found '{self.geometry.vol_interp}'"
-            dts = bb.reshape(dts, hext + dts.shape)
-            totalVar = bb.cumsum((fwd_vols + self.geometry.fwdvol_min) ** 2 * dts, axis=-1)
-            assert totalVar.shape[-1] == T, f"Internal error: totalVar must have shape ending in {T}, found {totalVar.shape}"
-            self.verify(lambda: bb.all(np.isfinite(totalVar)) & np.all(totalVar >= 0.), "Negative or infinite totalVar")
-
-            prev_var = bb.where(opt_lix == 0, 0., bb.take_along_axis(totalVar, bb.clip(opt_lix-1, min=0), axis=-1))
-            opt_sqrtVars = bb.sqrt(opt_vweight * prev_var + (1. - opt_vweight) * bb.take_along_axis(totalVar, opt_lix, axis=-1) + opt_vextra * ((fwd_vols[..., -1:] + self.geometry.fwdvol_min) ** 2))
-
-        else:
-            r"""
-            Linear in square-root time: assumig that $t_j<t\leq t_{j+1}$ then:
-            $$
-                \mathrm{sqrt_var}(t) := \sqrt{ \mathrm{var}(t) } \ : \ \mathrm{var}(t) =  \sigma^2_j \left( t - t_j \right ) + \sum_{t_j<t} \sigma^2_j \left( t_j - t_{j-1} \right) 
-            $$
-            """
-            verify_inp( self.geometry.vol_interp == "lin_sqrt_time", f"Internal error: vol_interp must be 'lin_sqrt_time' or 'lin_var', found '{self.geometry.vol_interp}'" )
-            dsqrtTs = bb.diff(bb.sqrt(self.xexpiries))
-            dsqrtTs = bb.reshape(dsqrtTs, hext + dsqrtTs.shape)
-            totalSqrtVar = bb.cumsum((fwd_vols + self.geometry.fwdvol_min) * dsqrtTs, axis=-1)
-            assert totalSqrtVar.shape[-1] == T, f"Internal error: totalSqrtVar must have shape ending in {T}, found {totalSqrtVar.shape}"
-            self.verify(lambda: bb.all(np.isfinite(totalSqrtVar)) & np.all(totalSqrtVar >= 0.), "Negative or infinite sqrtVars")
-
-            prev_sqrtVar = bb.where(opt_lix == 0, 0., bb.take_along_axis(totalSqrtVar, bb.clip(opt_lix-1, min=0), axis=-1))
-            opt_sqrtVars = opt_vweight * prev_sqrtVar + (1. - opt_vweight) * bb.take_along_axis(totalSqrtVar, opt_lix, axis=-1) + opt_vextra * (fwd_vols[..., -1:] + self.geometry.fwdvol_min)
-
-        assert opt_sqrtVars.shape[-1] == M, f"Internal error: opt_sqrtVars must have shape ending in {M}, found {opt_sqrtVars.shape}"
-        self.verify( lambda: bb.all( np.isfinite(opt_sqrtVars) ) & np.all( opt_sqrtVars >= 0. ), "Negative or infinite opt_sqrtVars")
-        assert len(opt_sqrtVars.shape) == len(opt_lix.shape), f"opt_sqrtVars and opt_lix must have the same number of dimensions, found {len(opt_sqrtVars.shape)} and {len(opt_lix.shape)}"
-        return opt_sqrtVars if opt_mask is None else bb.where( opt_mask, opt_sqrtVars, 0. )
+        return _interpolate_sqrtVars( 
+                            bb         = self.bb,
+                            xexpiries  = self.xexpiries,
+                            vol_interp = self.geometry.vol_interp,
+                            fwdvol_min = self.geometry.fwdvol_min,
+                            fwd_vols   = fwd_vols,
+                            opt_interp = opt_interp, 
+                            opt_mask   = opt_mask,
+                            debug      = self.debug )
 
     def price(
             self, 
             # market data
             fwd_vols    : Backbone.Array | None,
-            densities   : Backbone.Array, 
+            densities   : Backbone.Array, *,
             #
             opt_strikes : Backbone.Array,
             opt_tte     : Backbone.Array,
@@ -549,7 +409,7 @@ class GridSanos(object):
             Use ``None`` for non-smooth linear interpolation.
         densities : Backbone.Array
             The model densities for the grid expiries and strikes, of shape ``(..., T, N)``, where ``T`` is the number of non-zero expiries and ``N`` is the number of strikes.
-            Densities can be computed from discrete local vol squared using :meth:`densities`.
+            Densities can be computed from discrete local vols squared using :meth:`densities`.
         opt_strikes : Backbone.Array
             The option strikes, of shape ``(..., M)``, where M is the number of options to price.
         opt_tte : Backbone.Array
@@ -559,7 +419,7 @@ class GridSanos(object):
         opt_is_call : Backbone.Array | None, default ``None``
             A boolean array of shape ``(..., M)`` indicating which options are calls (True) and which are puts (False). If None, all options are treated as calls.
         opt_interp : dict[str|Backbone.Array]|None, default ``None``
-            The option interpolation weights as returned by :meth:`time_interpolation_weights`, each of which has shape  ``(..., M)``.
+            The option interpolation weights as returned by :meth:`GridGeometry.time_interpolation_weights`, each of which has shape  ``(..., M)``.
             If ``None``, these are computed on the fly. However, this is a numpy operation and will be *very costly* torch or jax usage.
             It is strongly advised to calculate these ahead of time.
 

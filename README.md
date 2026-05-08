@@ -53,11 +53,18 @@ create the environment:
 
 ```cmd
 py -3.12 -m venv .vqdata     
+```
+or, if you have only one python installed,
+```cmd
+python -m venv .vqdata     
+```
+Then follow up with
+```cmd
 .vqdata\Scripts\Activate     
 python --version
 
 python -m pip install --upgrade pip pip-review  
-python -m pip install -e .[dev]                 
+python -m pip install -U -e .[dev]                 
 ```
 Use `.[dev]` for the full local development toolchain. It includes testing and documentation tools.
 

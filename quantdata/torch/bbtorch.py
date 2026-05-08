@@ -37,8 +37,13 @@ class BackboneTorch(Backbone):
         Create an array; do not copy if data is already an array of the correct dtype and on the correct device.
         Stops gradient calculation if data is a tensor
         """
-        if isinstance( data, nnp.ndarray ):
+        if not hasattr( data, "shape" ) :
+            data = nnp.asarray( data )
+        if isinstance( data, nnp.ndarray):
             return torch.from_numpy( data ).to( dtype=dtype, device=self.device )
+        assert isinstance( data, torch.Tensor ), f"Expected data to be a torch tensor or numpy array, found type {type(data)}"
+        if data.device == self.device and data.dtype == dtype:
+            return data.detach()
         return torch.tensor( data, dtype=dtype, device=self.device )
     
     def to_numpy( self, arr : Backbone.Array ) -> nnp.ndarray:
