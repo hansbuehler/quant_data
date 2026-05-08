@@ -2,9 +2,13 @@
 
 This directory contains Ivy DB data processing in the following files:
 
-* ``client.py`` provides raw, cached access to IvyDB with functions like :meth:`WRDSClient.options`.
-* ``day.py`` is used to download data, remove bad days or stale data, and enrich the data set with business days to expiry, implied vols and (pure) greeeks. 
-* ``sampler.py`` creates a time series for a period of days for a given ticker, filtering by expiry, moneyness and other variables.
+* [client.py](client.py) provides raw, cached access to IvyDB with functions like `options`, `lookup_ticker` etc. Please see the file documentation.
+* [day.py](day.py) provides ``collect_raw_day`` to collect all relevant data for a day of options for a given ticker; ``enrich_day`` in addition:
+    * Computes synthetic minimal spread call options.
+    * Computes an implied forward from inverse-spread weighted bid/ask call prices.
+    * Computes implied volatilities and (pure) greeks.
+
+* [sampler.py](sampler.py) provides ``sample_days`` which creates a time series of sample data.
 
 ## Data Access
 
