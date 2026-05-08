@@ -4,9 +4,9 @@ Python environment for systematically processing financial data and building pip
 The aim of the project is to joinly develop robust data pipelines which lead to standadized benchmarks in quantitative finance.
 
 Principles:
-* [Data Handling](DATA.md)
+* [Data Handling Pricinple & Guidelines](DATA.md) [not written yet]
+* [Conding Guidelines](CODE.MD) [not written yet]
 * [Model Benchmarking](BENCHMARKING.md) [not written yet]
-
 
 # Setup
 
