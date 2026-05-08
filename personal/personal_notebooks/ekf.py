@@ -1,4 +1,3 @@
-import ekf
 import events
 import jax
 import jax.numpy as jnp
@@ -51,9 +50,7 @@ def run_ekf(prices, Rs):
 def estimate_true_price(df_events: pl.DataFrame) -> pl.DataFrame:
     prices = jnp.array(df_events["observed_price"].to_numpy(), dtype=jnp.float32)
     Rs = jnp.array(df_events["R"].to_numpy(), dtype=jnp.float32)
-
     estimates = run_ekf(prices, Rs)
-
     return df_events.with_columns(
         pl.Series(name="kalman_price", values=jax.device_get(estimates).tolist())
     )
@@ -62,99 +59,62 @@ def estimate_true_price(df_events: pl.DataFrame) -> pl.DataFrame:
 def estimate_true_iv(df_events: pl.DataFrame) -> pl.DataFrame:
     prices = jnp.array(df_events["observed_iv"].to_numpy(), dtype=jnp.float32)
     Rs = jnp.array(df_events["R_iv"].to_numpy(), dtype=jnp.float32)
-
     estimates = run_ekf(prices, Rs)
-
     return df_events.with_columns(
         pl.Series(name="kalman_iv", values=jax.device_get(estimates).tolist())
     )
 
 
-# Usage
-# df_result = estimate_true_price(df_events)
-
-
-def kalman_filters_price_from_events(df_events, trade_on_quotes=True):
-    """
-    trades on quotes false to be implemented
-    """
+def kalman_filters_price_from_events(df_events):
     df_quotes_only = df_events.filter(pl.col("event_type") == "quote")
 
     prices_train = jnp.array(df_quotes_only["observed_price"].to_numpy(), dtype=jnp.float32)
     Rs_train = jnp.array(df_quotes_only["R"].to_numpy(), dtype=jnp.float32)
-
-    estimates_train = ekf.run_ekf(prices_train, Rs_train)
+    estimates_train = run_ekf(prices_train, Rs_train)
 
     df_quotes_result = df_quotes_only.with_columns(
         pl.Series("kalman_price", jax.device_get(estimates_train).tolist())
     )
 
-    # ── STEP 2: Test on trades ────────────────────────────────────────────────────
-    # For each trade, get the Kalman estimate from the most recent preceding quote.
-    # This is a pure out-of-sample evaluation: the filter never saw trades.
-
     df_trades_only = df_events.filter(pl.col("event_type") == "trade")
-
     df_trades_result = df_trades_only.join_asof(
         df_quotes_result.select(["ts_ns", "kalman_price"]).rename({"kalman_price": "kalman_prior"}),
         on="ts_ns",
         strategy="backward",
-    )
-
-    # Residual: how far is the trade price from the filter's quote-derived estimate?
-    df_trades_result = df_trades_result.with_columns(
-        (pl.col("observed_price") - pl.col("kalman_prior")).alias("trade_residual")
-    )
+    ).with_columns((pl.col("observed_price") - pl.col("kalman_prior")).alias("trade_residual"))
 
     return df_trades_result, df_quotes_result
 
 
-def kalman_filters_iv_from_events(df_events, trade_on_quotes=True):
-    """
-    trades on quotes false to be implemented
-    """
-    # ── STEP 1: Train the Kalman filter on quotes only ───────────────────────────
+def kalman_filters_iv_from_events(df_events):
     df_iv_quotes_only = df_events.filter(pl.col("event_type") == "quote")
 
-    # NaN R_iv (from null bid/ask on one-sided quotes) poisons the entire JAX
-    # scan — once the state goes NaN it never recovers. Drop those rows before
-    # running the EKF, then re-join kalman_iv back onto the full quote set.
     df_valid = df_iv_quotes_only.filter(
         pl.col("observed_iv").is_not_nan() & pl.col("R_iv").is_not_nan()
     )
 
     prices_train = jnp.array(df_valid["observed_iv"].to_numpy(), dtype=jnp.float32)
     Rs_train = jnp.array(df_valid["R_iv"].to_numpy(), dtype=jnp.float32)
-
-    estimates_train = ekf.run_ekf(prices_train, Rs_train)
+    estimates_train = run_ekf(prices_train, Rs_train)
 
     df_valid = df_valid.with_columns(
         pl.Series("kalman_iv", jax.device_get(estimates_train).tolist())
     )
 
-    # Re-join onto full quote set so rows with NaN inputs get null kalman_iv
-    # (not a propagated NaN), then forward-fill from the last valid estimate.
     df_iv_quotes_result = df_iv_quotes_only.join(
         df_valid.select(["ts_ns", "kalman_iv"]), on="ts_ns", how="left"
     ).with_columns(pl.col("kalman_iv").fill_null(strategy="forward"))
 
-    TRADE_LAG_NS = 250_000_000  # 250ms in nanoseconds
-
-    df_iv_trades_only = df_events.filter(pl.col("event_type") == "trade")
-
-    # Add window-end timestamp as join key
-    df_iv_trades_only = df_iv_trades_only.with_columns(
+    df_iv_trades_only = df_events.filter(pl.col("event_type") == "trade").with_columns(
         (pl.col("ts_ns") + pl.duration(nanoseconds=events.TRADE_LAG_NS)).alias("ts_ns_window_end")
     )
 
-    # Keep quote ts as a data column so we can filter post-join
     df_quotes_for_join = (
         df_iv_quotes_result.select(["ts_ns", "kalman_iv"])
         .with_columns(pl.col("ts_ns").alias("quote_ts"))
         .rename({"kalman_iv": "kalman_matched"})
     )
 
-    # join_asof backward on window_end → last quote with ts_ns <= trade_ts + 250ms
     df_iv_trades_result = (
         df_iv_trades_only.join_asof(
             df_quotes_for_join,
@@ -162,13 +122,110 @@ def kalman_filters_iv_from_events(df_events, trade_on_quotes=True):
             right_on="ts_ns",
             strategy="backward",
         )
-        # Keep only quotes that fall *after* the trade (not before it)
-        # .filter(pl.col("quote_ts").is_not_null() & (pl.col("quote_ts") >= pl.col("ts_ns")))
         .drop("ts_ns_window_end")
+        .with_columns((pl.col("observed_iv") - pl.col("kalman_matched")).alias("trade_residual"))
     )
 
-    df_iv_trades_result = df_iv_trades_result.with_columns(
-        (pl.col("observed_iv") - pl.col("kalman_matched")).alias("trade_residual")
+    return df_iv_trades_result, df_iv_quotes_result
+
+
+def kalman_filters_price(
+    df_quotes: pl.DataFrame,
+    df_matched: pl.DataFrame,
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """
+    Train EKF on quote prices; test on matched trades.
+
+    Parameters
+    ----------
+    df_quotes : pl.DataFrame
+        Raw quotes (MassiveClient.SCHEMA_QUOTES).
+    df_matched : pl.DataFrame
+        Output of match_taq (SCHEMA_TAQ). Rows with null quote_ts_ns are skipped.
+
+    Returns
+    -------
+    (df_trades_result, df_quotes_result)
+        df_quotes_result : processed quotes with kalman_price added.
+        df_trades_result : matched trades (non-null quote_ts_ns) with
+                           kalman_prior and trade_residual added.
+    """
+    df_q = events.process_quotes(df_quotes)
+
+    prices_train = jnp.array(df_q["observed_price"].to_numpy(), dtype=jnp.float32)
+    Rs_train = jnp.array(df_q["R"].to_numpy(), dtype=jnp.float32)
+    estimates = run_ekf(prices_train, Rs_train)
+
+    df_quotes_result = df_q.with_columns(
+        pl.Series("kalman_price", jax.device_get(estimates).tolist())
+    )
+
+    # For each trade, look up the Kalman state at its matched quote's timestamp.
+    # This is a pure out-of-sample evaluation: the filter never saw any trade.
+    df_trades_result = (
+        df_matched.filter(pl.col("quote_ts_ns").is_not_null())
+        .sort("quote_ts_ns")
+        .join_asof(
+            df_quotes_result.select(["ts_ns", "kalman_price"]).rename(
+                {"kalman_price": "kalman_prior"}
+            ),
+            left_on="quote_ts_ns",
+            right_on="ts_ns",
+            strategy="backward",
+        )
+        .drop("ts_ns_right", strict=False)
+        .with_columns((pl.col("price") - pl.col("kalman_prior")).alias("trade_residual"))
+    )
+
+    return df_trades_result, df_quotes_result
+
+
+def kalman_filters_iv(
+    df_quotes_with_iv: pl.DataFrame,
+    df_matched_with_iv: pl.DataFrame,
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """
+    Train EKF on quote implied vols; test on matched trade IVs.
+
+    Parameters
+    ----------
+    df_quotes_with_iv : pl.DataFrame
+        Processed quotes with observed_iv and R_iv columns added.
+    df_matched_with_iv : pl.DataFrame
+        Matched trades (non-null quote_ts_ns) with observed_iv column added.
+
+    Returns
+    -------
+    (df_iv_trades_result, df_iv_quotes_result)
+    """
+    # NaN IV/R poisons the JAX scan — drop then re-join to preserve all quote rows
+    df_valid = df_quotes_with_iv.filter(
+        pl.col("observed_iv").is_not_nan() & pl.col("R_iv").is_not_nan()
+    )
+
+    prices_train = jnp.array(df_valid["observed_iv"].to_numpy(), dtype=jnp.float32)
+    Rs_train = jnp.array(df_valid["R_iv"].to_numpy(), dtype=jnp.float32)
+    estimates = run_ekf(prices_train, Rs_train)
+
+    df_valid = df_valid.with_columns(pl.Series("kalman_iv", jax.device_get(estimates).tolist()))
+
+    # Forward-fill over gaps where IV/R was NaN so every quote row has a kalman_iv
+    df_iv_quotes_result = df_quotes_with_iv.join(
+        df_valid.select(["ts_ns", "kalman_iv"]), on="ts_ns", how="left"
+    ).with_columns(pl.col("kalman_iv").fill_null(strategy="forward"))
+
+    # For each trade, look up the Kalman IV at its matched quote's timestamp
+    df_iv_trades_result = (
+        df_matched_with_iv.sort("quote_ts_ns")
+        .join_asof(
+            df_iv_quotes_result.select(["ts_ns", "kalman_iv"]).rename(
+                {"kalman_iv": "kalman_matched"}
+            ),
+            left_on="quote_ts_ns",
+            right_on="ts_ns",
+            strategy="backward",
+        )
+        .with_columns((pl.col("observed_iv") - pl.col("kalman_matched")).alias("trade_residual"))
     )
 
     return df_iv_trades_result, df_iv_quotes_result

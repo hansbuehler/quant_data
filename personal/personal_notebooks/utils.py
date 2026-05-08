@@ -31,27 +31,48 @@ def parse_option_ticker(ticker: str) -> tuple:
 
 def synchronize_iv_surface(df_long: pl.DataFrame) -> pl.DataFrame:
     """
-    Convert long IV DataFrame (ts_ns, strike, bid_iv, ask_iv, kalman_iv) to wide format,
-    forward-filling each strike's IV across the merged timestamp spine via join_asof.
-    """
-    strikes = sorted(df_long["strike"].unique().to_list())
-    spine = df_long.select("ts_ns").unique().sort("ts_ns")
+    Convert long IV DataFrame to wide format, forward-filling each series via join_asof.
 
+    When df_long has an 'is_call' column, column names are suffixed with _C / _P
+    (e.g. bid_iv_479_C, kalman_iv_479_P). Without it, the old _<strike> naming is used.
+    """
+    has_type = "is_call" in df_long.columns
+    spine = df_long.select("ts_ns").unique().sort("ts_ns")
     result = spine
-    for strike in strikes:
-        K_int = int(strike)
-        df_k = (
-            df_long.filter(pl.col("strike") == strike)
-            .sort("ts_ns")
-            .select(
-                [
-                    "ts_ns",
-                    pl.col("bid_iv").alias(f"bid_iv_{K_int}"),
-                    pl.col("ask_iv").alias(f"ask_iv_{K_int}"),
-                    pl.col("kalman_iv").alias(f"kalman_iv_{K_int}"),
-                ]
+
+    if has_type:
+        keys = df_long.select(["strike", "is_call"]).unique().sort(["strike", "is_call"]).rows()
+        for strike, is_call in keys:
+            K_int = int(strike)
+            suffix = f"_{K_int}_{'C' if is_call else 'P'}"
+            df_k = (
+                df_long.filter((pl.col("strike") == strike) & (pl.col("is_call") == is_call))
+                .sort("ts_ns")
+                .select(
+                    [
+                        "ts_ns",
+                        pl.col("bid_iv").alias(f"bid_iv{suffix}"),
+                        pl.col("ask_iv").alias(f"ask_iv{suffix}"),
+                        pl.col("kalman_iv").alias(f"kalman_iv{suffix}"),
+                    ]
+                )
             )
-        )
-        result = result.join_asof(df_k, on="ts_ns", strategy="backward")
+            result = result.join_asof(df_k, on="ts_ns", strategy="backward")
+    else:
+        for strike in sorted(df_long["strike"].unique().to_list()):
+            K_int = int(strike)
+            df_k = (
+                df_long.filter(pl.col("strike") == strike)
+                .sort("ts_ns")
+                .select(
+                    [
+                        "ts_ns",
+                        pl.col("bid_iv").alias(f"bid_iv_{K_int}"),
+                        pl.col("ask_iv").alias(f"ask_iv_{K_int}"),
+                        pl.col("kalman_iv").alias(f"kalman_iv_{K_int}"),
+                    ]
+                )
+            )
+            result = result.join_asof(df_k, on="ts_ns", strategy="backward")
 
     return result

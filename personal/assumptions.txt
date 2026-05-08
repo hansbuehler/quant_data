@@ -27,3 +27,22 @@ for a trade that happens at t, we take the window between t and t+250ms and we t
 So if we have one at t, one at t+50ms and one at t+200ms we will tkae the one at t+200.
 
 
+
+
+About matching trades and quotes:
+We do it in a dataclass to cache the matching. 
+We can configure paramters for forward looking and backward looking. Default is 250ms each.
+If we find none, we fill with null (then we can post-process it how we want).
+
+
+
+About implied forward:
+cdxcore uses normalized price (by implied forward) so we computethe implied forward
+instead of the spot. (it led to errors, mainly because of the conversion between put anc calls)
+SO we do everything with the forward.
+Also, this takes out the need to use the spot datset, which in itself may be inaccurate because
+it also has trades and quotes and maybe shoudl do KF on it to estimate true etc...
+
+
+
+
