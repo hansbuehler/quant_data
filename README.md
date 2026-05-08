@@ -175,15 +175,15 @@ export QUANTDATA_ROOT=~/quantdata_data/
 
 Each data source support by our project will require you to register the respective login data, also as environment variables. At this point the following two sources are supported:
 
-* **[Massive.com](massive/README.md)**.
+* **[Massive.com](quantdata/massive/README.md)**.
   1. Ensure you have an account and test it.
   2. Set the ``MASSIVE_TOKEN`` environment variable to your API token.
-* **[WRDS Option Metrics](widb/README.md)** including **Option Metrics**
+* **[WRDS Option Metrics](quantdata/widb/README.md)** including **Option Metrics**
   1. [Create an account](https://wrds-www.wharton.upenn.edu/pages/support/getting-started/) and [enable MFA](https://wrds-www.wharton.upenn.edu/pages/about/log-in-to-wrds-using-two-factor-authentication/).
   2. [Follow the WRDS instructions](https://wrds-www.wharton.upenn.edu/pages/support/programming-wrds/programming-python/python-from-your-computer/) to ensure you have 
     the ``pgpass`` pass file. *This is important.*
   3. Set the ``WRDS_USERNAME`` variable to your username.   
-* **[Yahoo Finance](yahoo/README.md)**.
+* **[Yahoo Finance](quantdata/yahoo/README.md)**.
   1. Ensure you have an account and test it.
   2. Set the ``MASSIVE_TOKEN`` environment variable to your API token.
 
