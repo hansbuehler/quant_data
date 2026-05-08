@@ -345,7 +345,7 @@ class Fitter:
         # optimize
         # --------
 
-        with verbose.write_t(lambda : f"Solving for implied DLVs (squared) for {len(opt_strikes)} options. Mean half spread is {np.mean(half_spread):.4e}... ", end='') as tme:
+        with verbose.write_t(lambda : f"Solving for a consistent margingale density for {len(opt_strikes)} options. Mean half spread is {np.mean(half_spread):.4e}... ", end='') as tme:
             prob        = cp.Problem( cp.Minimize( objective ), conditions )
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", message="Solution may be inaccurate.", category=UserWarning)

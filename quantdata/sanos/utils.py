@@ -152,6 +152,43 @@ def _old_vec_max_dx( strikes : np.ndarray, *, min_k : float, max_k : float, max_
     assert np.min(np.diff(out)) > 0., f"Internal error: strikes should be strictly increasing, found {np.min(np.diff(out))}"
     return out
 
+def vec_fill( strikes : np.ndarray, *, max_dx : float, min_dx : float = 0. ) -> np.ndarray:
+    """
+    Generate model strikes.
+    
+    This function returns a vector of strikes such that:
+        
+    * Lowest strike is ``min_k``
+    * Highest strike is ``max_k``
+    * Strikes are at least ``min_dx`` apart from each other. Strikes which violate this are dropped iteratively from the front.
+    * Strikes in the original strike range are at most ``max_dx`` apart from each other. If None, do not add strikes except min_k or max_k. Outside the extreme strikes of ``strikes``` 
+      the function adds strikes with ``10 max_dx``.
+    
+    """
+    verify_inp( max_dx is None or max_dx >= 0., "'max_dx' must be None or non-negative")
+    verify_inp( min_dx >= 0., "'min_dx' must be non-negative")
+
+    diffs = np.diff( strikes )
+    if np.min(diffs) >= min_dx and np.max(diffs) <= max_dx:
+        return strikes
+    
+    out = [ strikes[0] ]
+    for x in strikes[1:]:
+        dx = x - out[-1]
+        assert dx > 0., f"Internal error: strikes should be strictly increasing, found {dx} between {x} and {out[-1]}"
+        if dx <= min_dx:
+            continue
+        if dx > max_dx:
+            n = math.ceil( dx/max_dx )+1
+            if n>2:
+                r = np.linspace( out[-1], x, n )
+                out += r[1:-1].tolist()
+        out.append( x )
+    assert out[-1] == strikes[-1], f"Internal error: last strike {out[-1]} should be equal to last input strike {strikes[-1]}"
+    return np.asarray( out, dtype=strikes.dtype )
+
+
+
 def vec_max_dx( strikes : np.ndarray, *, min_k : float, max_k : float, max_dx : float|None = None, min_dx : float = 0., outer_fac : float = 10. ) -> np.ndarray:
     """
     Generate model strikes.
@@ -165,8 +202,9 @@ def vec_max_dx( strikes : np.ndarray, *, min_k : float, max_k : float, max_dx : 
       the function adds strikes with ``10 max_dx``.
     
     """
-    verify_inp( min_k > 0. and min_k < 1. and max_k > 1., "'min_k' must be in (0,1) and 'max_k' must be above 1" )
-    verify_inp( min_k < strikes[0] and max_k > strikes[-1], "'min_k' and 'max_k' must be outside 'strikes'")
+    if not min_k is None and not max_k is None:
+        verify_inp( min_k > 0. and min_k < 1. and max_k > 1., "'min_k' must be in (0,1) and 'max_k' must be above 1" )
+        verify_inp( min_k <= strikes[0] and max_k >= strikes[-1], "'min_k' and 'max_k' must be outside 'strikes'")
     verify_inp( max_dx is None or max_dx >= 0., "'max_dx' must be None or non-negative")
     verify_inp( min_dx >= 0., "'min_dx' must be non-negative")
 
@@ -192,34 +230,50 @@ def vec_max_dx( strikes : np.ndarray, *, min_k : float, max_k : float, max_dx : 
             
     # max_dx
     # ------
-
     outer_max_dx = max_dx*outer_fac
-    left  = np.arange( 0, math.ceil( (strikes[0]-min_k)/outer_max_dx )+1 ) * outer_max_dx + min_k
-    assert left[-1] >= strikes[0], f"Internal error: last left strike {left[-1]} should be above first strike {strikes[0]}"
-    out  = left[:-1].tolist()
-    assert np.min( np.diff(left)) >= outer_max_dx-1E-8, f"Internal error: left strikes should be at least {outer_max_dx} apart, found min {np.min(np.diff(left))}"
-    
+    assert not outer_max_dx is None
+    assert not strikes[0] is None
+
+    if min_k == strikes[0]:
+        out = [ strikes[0] ]
+    elif min_k >= strikes[0]-outer_max_dx:
+        out = [ min_k, strikes[0] ]
+    else:
+        out = [ min_k ]
+        while out[-1] < strikes[0]-outer_max_dx:
+            out.append( out[-1] + outer_max_dx )
+        if out[-1] >= strikes[0]-1E-6:
+            out[-1] = strikes[0]
+        else:
+            out.append( strikes[0] )
+
     for x in strikes[1:]:
         dx = x - out[-1]
-        assert dx > 0., f"Internal error: strikes should be strictly increasing, found {dx} between {x} and {out[-1]}"
+        assert dx > 0., f"Internal error: strikes should be strictly increasing, found diff {dx} between {x} and {out[-1]}"
         if dx <= min_dx:
             continue
         if dx > max_dx:
-            n = math.floor( dx/max_dx ) 
+            n = math.ceil( dx/max_dx ) 
             assert n>0
-            r = np.linspace( out[-1], x, n+1 )
-            for x in r[1:]:
-                out.append(x)
+            r = np.linspace( out[-1], x, n+2 )
+            if len(r) > 2:
+                out += r[1:-1].tolist()
+        out.append( x )
+
+    assert out[-1] == strikes[-1], f"Internal error: last strike {out[-1]} should be right hand input strike {strikes[1]}"
+
+    if max_k > strikes[-1]:
+        if max_k - strikes[1] <= outer_max_dx:
+            out.append( max_k )
         else:
-            out.append( x )
-
-    assert out[-1] <= strikes[-1]+1E-8, f"Internal error: last strike {out[-1]} should be below second right strike {strikes[1]}"
-
-    right = max_k - np.arange( math.ceil( (max_k-out[-1])/outer_max_dx ), -1, -1 ) * outer_max_dx 
-    assert right[-1] == max_k
-    assert right[0] <= out[-1], f"Internal error: last right strike {right[0]} should be below last strike {out[-1]}"
-    assert np.min( np.diff(right)) >= outer_max_dx-1E-8, f"Internal error: right strikes should be at least {outer_max_dx} apart, found min {np.min(np.diff(right))}"
-    out += right[1:].tolist()
+            end = [ max_k ]
+            while end[-1] > strikes[-1]+outer_max_dx:
+                end.append( end[-1] - outer_max_dx )
+            if end[-1] <= strikes[-1]+1E-6:
+                end = end[:-1]
+            
+            end.reverse()
+            out += end
     out = np.asarray( out, dtype=strikes.dtype )
     assert np.min( np.diff(out)) > 0., f"Internal error: strikes should be strictly increasing, found {np.min(np.diff(out))}"
     return out
