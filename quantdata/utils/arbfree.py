@@ -84,35 +84,65 @@ class MkArbFree:
         1) The function may drop some expiries. The resulting expiries are returned as:
 
             * ``expiries``: array of expiries. This may be fewer expiries than provided as input.
+
             * ``input_index``: for each returned expiry, the index of the input expiry which it corresponds to. In other words ``output_expiries == [ input_expiries[i] for i in input_index ]``.
 
         2) The function may also drop some strikes. This is reflected as follows:    
 
-            * ``strikes``: the list of remaining input strikes. 
-            * ``sixs``: the indices of the input strikes used, e.g. ``output_strikes[t][i] == input_strikes[t][sixs[t][i]]``. This field is None is no strikes were dropped.
-            * ``bids``: list of (original) bid prices for ``strikes``.
-            * ``asks``: list of (original) ask prices for ``strikes``.
-            * ``fit1``: list of per-expiry fitted arbitrage-free prices for ``strikes`` within bid/ask, from the per-expiry sweep.
+            * ``masks``: a list of boolean masks by expiry, indicating which strikes have been included in the no-arbitrage calculation (True) and which have been dropped (False).              
+
+            * ``fits1``: list of per-expiry fitted arbitrage-free prices for the input ``strikes``. This will be within bid/ask wherever ``mask`` is True.
               (This means this mid is not necessarily arbitrage-free across expiries.)
 
               This field is None if ``no_arb_mode`` is "off".
-            * ``fitX``: list of surface fitted arbitrage-free prices for ``strikes``.
-              These prices are globally arbitrage-free across the surface, but they are not necessarily within bid/ask spread; they are the closest fit. Up to machine precision existence
+
+            * ``fitsX``: list of surface fitted arbitrage-free prices for the input ``strikes``. 
+              These prices are globally arbitrage-free across the surface, but they are not necessarily within bid/ask spread; they are the closest fit
+              among strikes with ``mask`` True.
+
+              Up to machine precision existence
               of ``fitsX`` within bid/ask spread is equivalent to absence of arbitrage.
-              
+
               This field is None if ``no_arb_mode`` is "off".
+
             * ``xstrikes``: an extended strike list with two boundary strikes add. Boundary strikes are widening in time; c.f. https://arxiv.org/pdf/2601.11209 remark 2.7.
 
-        3) If ``no_arb_mode`` is "surface" then the function will generate an internal strike grid to fit the surface, which is a superset of the output strikes.
+            * ``xdensities``: list of densities for ``xstrikes``, per expiry. Up to machine precision, each density is positive, sums to one, intergates to one 
+              in the sense that `` xstrikes[t]@xdensities[t] == 1``
+              and reprices ``fits``.
+
+              This field is None if ``no_arb_mode`` is "off".
+
+        3) If ``no_arb_mode`` is "surface" then the function will generate an internal ``mstrike`` grid to fit the surface, which is a superset of the extended ``xstrike`` grid.
            This is constructed by adding strikes from the next expiry if they are not too close to existing strikes.
            This is typically a much denser set than the input strikes. Each expiry is guaranteed to have their ``xstrikes`` among the respective model strikes.
 
             * ``mstrikes``: the list of internal model strikes per expiry used. This field is None if ``no_arb_mode`` is not "surface".
 
+            * ``mdensities```: the list of densities for ``mstrikes``. Up to machine precision, each density is positive, sums to one, intergates to one 
+              in the sense that `` mstrikes[t]@mdensities[t] == 1``
+              and reprices ``fits``. Moreover, the family of ``mdensities`` is martingale density, each later density evaluaes a convex function 
+              higher than the a previous density.
+            
+              This field is None if ``no_arb_mode`` is not "surface".
+
             * ``xix_to_mix``: a list of arrays which gives for every ``xstrike[t]`` the position in ``mstrikes[t]``, i.e. ``mstrikes[t][xix_to_mix[t]] == xstrikes[t]``.
               The element ``xix_to_mix[t]`` is ``None`` if no additional strikes were added to expiry ``t``, i.e. the strikes coincide.
                           
               This field is None if ``no_arb_mode`` is not "surface".
+
+        **Comment on arbitrage-free prices**
+
+        If ``C`` are call prices for strikes ``K`` including boundary strikes, i.e. ``C[0]=1-K[0]`` and ``C[-1]=0``, then ``p`` computed as follows is a density which reprices
+        all options if and only ``C`` is arbitrage-free::
+        
+            dCdK_t         = np.diff(C,prepend=1.)/np.diff(K,prepend=0.)
+            p              = np.diff(dCdK_t,append=0.)
+            assert np.all( p >= -eps )          # positive
+            assert abs( np.sum( p )-1. ) <= eps # sums to one
+            assert abs( p@K - 1. ) <= floor     # expectation one
+            assert abs( C - np.maximum( 0., K[None,:] - K[:,None] ) @ p ) <= eps # reprices all options
+
 
         Parameters
         ----------
@@ -147,39 +177,43 @@ class MkArbFree:
         # ---------------------
         # Add strikes to the left and right which are consistent with the no-arb condition.
 
-        issues     = []
-        r          = PrettyObject()
-        r.xstrikes = []
-        r.strikes  = []
-        r.expiries = []
-        r.strikes  = []
-        r.bids     = []
-        r.asks     = []
-        r.sixs     = []
-        r.fits1    = None if self.no_arb_mode == "off" else []
-        r.fitsX    = None
-        r.mstrikes = None
-        r.xix_to_mix = None
-        r.iix_to_xix = None
+        issues        = []
+        r             = PrettyObject()
+        r.xstrikes    = []
+        r.strikes     = [] # TODO: remove
+        r.bids        = [] # TODO: remove
+        r.asks        = [] # TODO: remove
+        r.expiries    = []
+        r.masks       = []
+        r.fits1       = None if self.no_arb_mode == "off" else []
+        r.fitsX       = None
+        r.mstrikes    = None
+        r.xix_to_mix  = None
+        r.iix_to_xix  = None
+        r.xdensities  = None if self.no_arb_mode == "off" else []
+        r.mdensities  = None
         r.input_index = []
         tme        = verbose.timer()
 
         for t, expiry in enumerate(expiries):
             verbose.write(lambda : f"\rExpiry #{t} {expiry*DAYS_PER_YEAR:.3f}d: generating extended strikes... ", end='')
 
-            strikes_t  = strikes[t]
-            bid_t      = bids[t]
-            ask_t      = asks[t]
-            six_t      = np.arange(strikes_t.shape[0])
-            six_needed = False
+            input_strikes_t = strikes[t]
+            input_bid_t     = bids[t]
+            input_ask_t     = asks[t]
 
-            if len(strikes_t) <= self.min_strikes_per_expiry:
-                verbose.write(lambda :f"only {len(strikes_t)} strikes found. Skipping this expiry.", head=False)
+            xstrikes_t = input_strikes_t
+            bid_t      = input_bid_t
+            ask_t      = input_ask_t
+            mask_t     = np.ones(input_strikes_t.shape[0], dtype=bool)
+
+            if len(xstrikes_t) <= self.min_strikes_per_expiry:
+                verbose.write(lambda :f"only {len(xstrikes_t)} strikes found. Skipping this expiry.", head=False)
                 continue
 
-            verify_inp( strikes_t.shape == bid_t.shape == ask_t.shape, lambda : f"#{t} {expiry*DAYS_PER_YEAR:.3f}d: Expected strikes, bids and asks to have the same shape for expiry, found {strikes_t.shape}, {bid_t.shape}, {ask_t.shape}")
-            verify_inp( np.all( np.diff(strikes_t) > 0 ), lambda : f"#{t} {expiry*DAYS_PER_YEAR:.3f}d: Strikes must be strictly increasing; found minimal difference {np.diff(strikes_t).min():.3f}" )
-            verify_inp( strikes_t[0] > 0., lambda : f"#{t} {expiry*DAYS_PER_YEAR:.3f}d: Lowest strike must be positive; found {strikes_t[0]:.3f}" )
+            verify_inp( xstrikes_t.shape == bid_t.shape == ask_t.shape, lambda : f"#{t} {expiry*DAYS_PER_YEAR:.3f}d: Expected strikes, bids and asks to have the same shape for expiry, found {xstrikes_t.shape}, {bid_t.shape}, {ask_t.shape}")
+            verify_inp( np.all( np.diff(xstrikes_t) > 0 ), lambda : f"#{t} {expiry*DAYS_PER_YEAR:.3f}d: Strikes must be strictly increasing; found minimal difference {np.diff(xstrikes_t).min():.3f}" )
+            verify_inp( xstrikes_t[0] > 0., lambda : f"#{t} {expiry*DAYS_PER_YEAR:.3f}d: Lowest strike must be positive; found {xstrikes_t[0]:.3f}" )
             verify_inp( np.all( ask_t - bid_t >0. ), lambda : f"#{t} {expiry*DAYS_PER_YEAR:.3f}d: All ask prices must be greater than bid prices.")
 
             # extend strike range with boundary strikes
@@ -192,13 +226,13 @@ class MkArbFree:
             # K_0 <= (1 - C_1 + K_1 dC_1)/(1 + dC_1)
 
             assert self.min_dC_eps > 0., f"Internal error: min_dC_eps {self.min_dC_eps} must be positive."
-            N = strikes_t.shape[0]
+            N  = xstrikes_t.shape[0]
             ok = False
             for i in range(max(0,(N-1)//2)+1):
                 C_1   = ask_t[i]
-                K_1   = strikes_t[i]
+                K_1   = xstrikes_t[i]
 
-                dC_1 = (C_1 - bid_t[i+1])/(K_1 - strikes_t[i+1]) # this must be bigger than -1 (using ask-bid is the steepest inside bid/ask slope)
+                dC_1 = (C_1 - bid_t[i+1])/(K_1 - xstrikes_t[i+1]) # this must be bigger than -1 (using ask-bid is the steepest inside bid/ask slope)
                 if dC_1+1. > self.min_dC_eps:
                     lower_k = (1 - C_1 + K_1 * dC_1)/(1 + dC_1)
                     if lower_k <= 0. or lower_k >= K_1:
@@ -214,11 +248,12 @@ class MkArbFree:
                 continue
 
             if i>0:
-                strikes_t = strikes_t[i:]
-                six_t     = six_t[i:]
-                ask_t     = ask_t[i:]
-                bid_t     = bid_t[i:]
-                N         = strikes_t.shape[0]
+                mask_t[:i] = False
+                xstrikes_t = xstrikes_t[i:]
+                bid_t      = bid_t[i:]
+                ask_t      = ask_t[i:]
+                N          = xstrikes_t.shape[0]
+                assert np.all( xstrikes_t == input_strikes_t[mask_t] ), "Mask error...?"
 
             # K_N
             # dC_{N-2} <= { C_{N-1} - C_N }/{ K_{N-1} - K_N } <= 0
@@ -228,8 +263,8 @@ class MkArbFree:
 
             for i in range(N-1,2,-1):
                 C_Nm1 = ask_t[i]
-                K_Nm1 = strikes_t[i]
-                dC_Nm2 = (C_Nm1 - ask_t[i-1])/(K_Nm1 - strikes_t[i-1]) # this must be smaller than 0 (using bid-ask is the steepest inside bid/ask slope)
+                K_Nm1 = xstrikes_t[i]
+                dC_Nm2 = (C_Nm1 - ask_t[i-1])/(K_Nm1 - xstrikes_t[i-1]) # this must be smaller than 0 (using bid-ask is the steepest inside bid/ask slope)
                 if dC_Nm2 < -self.min_dC_eps:
                     upper_k = K_Nm1 - C_Nm1/dC_Nm2
                     if upper_k <= K_Nm1:
@@ -245,10 +280,13 @@ class MkArbFree:
                 continue
 
             if i<N-1:
-                strikes_t = strikes_t[:i+1]
-                six_t     = six_t[:i+1]
-                ask_t     = ask_t[:i+1]
-                bid_t     = bid_t[:i+1]
+                off        = N-1-i
+                mask_t[-off:] = False
+                xstrikes_t = xstrikes_t[:i+1]
+                bid_t      = bid_t[:i+1]
+                ask_t      = ask_t[:i+1]
+
+                assert np.all( xstrikes_t == input_strikes_t[mask_t] ), "Mask error...?"
 
             dK0        = K_1 - lower_k
             lower_k    = max( lower_k/2., K_1 - dK0*2. )
@@ -256,21 +294,22 @@ class MkArbFree:
             upper_k    = K_Nm1 + dkN*2.
 
             if lower_k >= 1.:
-                lower_k = 1.-(strikes_t[1]-strikes_t[0])
+                lower_k = 1.-(xstrikes_t[1]-xstrikes_t[0])
             if upper_k <= 1.:
-                upper_k = 1.+(strikes_t[1]-strikes_t[0])
+                upper_k = 1.+(xstrikes_t[1]-xstrikes_t[0])
 
             # previous step?
             if t>0:
                 lower_k = min(lower_k, r.xstrikes[-1][0])
                 upper_k = max(upper_k, r.xstrikes[-1][-1])
 
-            xstrikes_t =  np.concatenate(([lower_k], strikes_t, [upper_k]))
+            xstrikes_t =  np.concatenate(([lower_k], xstrikes_t, [upper_k]))
 
             # arb-free force fit
             # ------------------
 
-            fit_t      = None
+            assert np.all( bid_t == input_bid_t[mask_t] ), "Mask error...?"
+            assert np.all( ask_t == input_ask_t[mask_t] ), "Mask error...?"
 
             if self.no_arb_mode != "off":
                 verbose.write(lambda : f"\rExpiry #{t} {expiry*DAYS_PER_YEAR:.3f}d: finding linear no-arbitrage mid... ", end='')
@@ -303,30 +342,49 @@ class MkArbFree:
                 # eliminate calls whose density is zero (e.g. the mid is linear) by flagging them as inactive.
                 C          = C.value
                 p          = p.value
-                C          = C[1:-1]
                 floor      = self.min_density / float(Nt)
                 verify( np.all(p >= -floor), lambda : f"Internal error: negative density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.3f}d after optimization." )
+                assert abs( np.sum( p )-1. ) <= floor, f"Internal error: density does not sum to one after removing zero-density strikes, sum is {p.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
+                assert abs( p@xstrikes_t - 1. ) <= floor, f"Internal error: density does not integrate to one after removing zero-density strikes, integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
                 active     = p > floor
                 active[0]  = True
                 active[-1] = True
-                if not np.all(active):
-                    xstrikes_t = xstrikes_t[active]
-                    bid_t     = bid_t[active[1:-1]]
-                    ask_t     = ask_t[active[1:-1]]
-                    six_t     = six_t[active[1:-1]]
-                    fit_t     = C[active[1:-1]]
-                else:
-                    fit_t     = C
 
+                # compute true fit values from the density
+                fit_t      = np.maximum( 0., xstrikes_t[None,:] - input_strikes_t[:,None] ) @ p
+                assert np.allclose( fit_t[mask_t], C[1:-1], rtol=0., atol=1E-6), f"Internal error: fit values computed from density do not match optimization output for expiry {expiry*DAYS_PER_YEAR:.3f}d. Worst fit {np.max(np.abs(fit_t[mask_t] - C)):.3e}"
+
+                dCdK_t         = np.diff(C,prepend=1.)/np.diff(xstrikes_t,prepend=0.)
+                p              = np.diff(dCdK_t,append=0. )
+                assert np.all( p >= -floor ), f"Internal error: negative density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.3f}d after removing zero-density strikes."
+                assert abs( np.sum( p )-1. ) <= floor, f"Internal error: density does not sum to one after removing zero-density strikes, sum is {p.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
+                assert abs( p@xstrikes_t - 1. ) <= floor, f"Internal error: density does not integrate to one after removing zero-density strikes, integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
+
+                if not np.all(active):
+                    # remove strikes; recompute density (which should be valid)
+                    xstrikes_t     = xstrikes_t[active]
+                    mask_t[mask_t] = active[1:-1]
+                    assert np.all( xstrikes_t[1:-1] == input_strikes_t[mask_t] ), "Mask error...?"
+
+                    C              = C[active]
+                    dCdK_t         = np.diff(C,prepend=1.)/np.diff(xstrikes_t,prepend=0.)
+                    p              = np.diff(dCdK_t,append=0.)
+                    assert np.all( p >= -floor ), f"Internal error: negative density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.3f}d after removing zero-density strikes."
+                    assert abs( np.sum( p )-1. ) <= floor, f"Internal error: density does not sum to one after removing zero-density strikes, sum is {p.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
+                    assert abs( p@xstrikes_t - 1. ) <= floor, f"Internal error: density does not integrate to one after removing zero-density strikes, integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
+
+                r.xdensities.append( p )
+                r.fits1.append( fit_t )   # fit is computed for all strikes, also those unmasked
+
+            assert np.all( xstrikes_t[1:-1] == input_strikes_t[mask_t] ), "Mask error...?"
             r.xstrikes.append( xstrikes_t )
-            r.strikes.append( xstrikes_t[1:-1] )
-            r.bids.append( bid_t )
-            r.asks.append( ask_t )
-            r.sixs.append( six_t if len(six_t) != len(strikes[t]) else None )
+            r.strikes.append( input_strikes_t )
+            r.bids.append( input_bid_t )
+            r.asks.append( input_ask_t )
             r.expiries.append( expiry )
             r.input_index.append( t )
-            if r.fits1 is not None:
-                r.fits1.append( fit_t )
+            r.masks.append( mask_t )
+
         r.expiries = np.array(r.expiries, dtype=np.float32)
         verbose.write(lambda : f"\rGenerated {len(r.expiries)} {'arbitrage-free ' if self.no_arb_mode != 'off' else ''}expiries with extended strikes from {T} market expiries. This took {tme}.")
 
@@ -337,11 +395,11 @@ class MkArbFree:
         # -------------------
         # Carry grid forward as long as the strike range isn't too tight.
 
-        T          = len(r.expiries)
-        r.mstrikes = [None]*T
+        T            = len(r.expiries)
+        r.mstrikes   = [None]*T
         r.xix_to_mix = [None]*T
-        r.fitsX    = []
-        min_dx     = None
+        r.fitsX      = []
+        min_dx       = None
 
         for t in range(T-1,-1,-1):
             # fix strikes
@@ -393,33 +451,37 @@ class MkArbFree:
             r.mstrikes[t] = mstrikes_t
             r.xix_to_mix[t] = project
 
-        densities   = []
-        fit_mids    = []
-        constraints = []
-        objective   = 0.
+        # solve surface no-arb
+        # --------------------
 
-        min_dx_text = "n/a" if min_dx is None else f"{min_dx:.3g}"
-        with verbose.write_t(f"Finding arbitrage-free mid prices accross the entire surface of {sum( len(xt) for xt in r.xstrikes )} strikes with a minimum strike distance of {min_dx_text}... ", end='') as tme:
+        r.mdensities = []
+        fit_mids     = []
+        constraints  = []
+        objective    = 0.
+
+        min_dx_text = "" if min_dx is None else f" with a minimum strike distance of {min_dx:.3g}"
+        with verbose.write_t(f"Finding arbitrage-free mid prices accross the entire surface of {sum( len(xt) for xt in r.xstrikes )} strikes{min_dx_text}... ", end='') as tme:
             for t in range(T):
                 mstrikes_t  = r.mstrikes[t]
                 xstrikes_t  = r.xstrikes[t]
-                ask_t       = r.asks[t]
-                bid_t       = r.bids[t]
+                mask_t      = r.masks[t]
+                ask_t       = r.asks[t][mask_t]
+                bid_t       = r.bids[t][mask_t]
                 assert len(bid_t) == len(ask_t) == xstrikes_t.shape[0]-2, f"Internal error: bid and ask length {len(bid_t)} does not match number of market strikes {xstrikes_t.shape[0]-2}"
 
                 q_t         = cp.Variable(len(mstrikes_t), nonneg=True)
-                fit_mid     = cp.maximum( 0., mstrikes_t[None,:] - xstrikes_t[1:-1,None] ) @ q_t     # market strikes
+                fit_mid     = cp.maximum( 0., mstrikes_t[None,:] - xstrikes_t[1:-1,None] ) @ q_t    # market strikes
                 Cm          = cp.maximum( 0., mstrikes_t[None,:] - mstrikes_t[1:-1,None] ) @ q_t    # model strikes
 
                 if t>0:
-                    assert r.mstrikes[t-1].shape == densities[t-1].shape, f"Internal error: shape mismatch between previous and current mstrikes, {r.mstrikes[t-1].shape} vs {densities[t-1].shape}"
-                    Cm1     = cp.maximum( 0., r.mstrikes[t-1][None,:] - mstrikes_t[1:-1,None] ) @ densities[t-1]
+                    assert r.mstrikes[t-1].shape == r.mdensities[t-1].shape, f"Internal error: shape mismatch between previous and current mstrikes, {r.mstrikes[t-1].shape} vs {r.mdensities[t-1].shape}"
+                    Cm1     = cp.maximum( 0., r.mstrikes[t-1][None,:] - mstrikes_t[1:-1,None] ) @ r.mdensities[t-1]
                 else:
                     Cm1     = np.maximum( 0., 1 - mstrikes_t[1:-1] )
 
                 constraints += [ cp.sum( q_t ) == 1.,
-                                q_t @ mstrikes_t == 1., # martingale condition
-                                Cm >= Cm1 ]
+                                 q_t @ mstrikes_t == 1., # martingale condition
+                                 Cm >= Cm1 ]
 
                 half_spread = np.maximum( (ask_t - bid_t)/2., self.min_half_spread )
                 mid         = (bid_t + ask_t)/2.
@@ -427,7 +489,7 @@ class MkArbFree:
                 objective   = objective + cp.sum( self.mid_fit_weight*cp.multiply( 1./half_spread, fit_mid - mid )**2 + (1.-self.mid_fit_weight) * excess )
 
                 fit_mids.append(fit_mid)
-                densities.append(q_t)
+                r.mdensities.append(q_t)
 
             prob        = cp.Problem( cp.Minimize( objective ), constraints )
             prob.solve( solver=self.cvxpy_solver, **self.cvxpy_solver_options )
@@ -437,7 +499,23 @@ class MkArbFree:
                     raise RuntimeError(f"Cannot find no-arbitrage surface mids: problem infeasible??")
                 verbose.write(lambda : f"solver returned '{prob.status}' -- proceeding anyway... ", head=False, end='' )
 
-            r.fitsX = [ fit_mid.value for fit_mid in fit_mids ]
+            # compute call prices for the original strikes
+            r.fitsX = []
+            r.mdensities = [ q.value for q in r.mdensities ]
+            for t in range(T):
+                strikes_t  = r.strikes[t]
+                mstrikes_t = r.mstrikes[t]
+                q_t        = r.mdensities[t]
+
+                assert np.min(q_t) >= -floor, f"Internal error: negative density {q_t[q_t<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.3f}d after optimization."
+                assert abs( np.sum( q_t )-1. ) <= floor, f"Internal error: density does not sum to one after removing zero-density strikes, sum is {q_t.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
+                assert abs( q_t@mstrikes_t - 1. ) <= floor, f"Internal error: density does not integrate to one after removing zero-density strikes, integral is {q_t@mstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
+
+                xfit_mids  = fit_mids[t].value
+                mask_t     = r.masks[t]
+                fit_t      = np.maximum( 0., mstrikes_t[None,:] - strikes_t[:,None] ) @ q_t
+                assert np.allclose( fit_t[mask_t], xfit_mids, rtol=0., atol=1E-6), f"Internal error: fit values computed from density do not match optimization output for expiry {expiry*DAYS_PER_YEAR:.3f}d. Worst fit {np.max(np.abs(fit_t[mask_t] - xfit_mids)):.3e}"
+                r.fitsX.append( fit_t )
             verbose.write(lambda : f"done. This took {tme}.", head=False )
 
         return r
