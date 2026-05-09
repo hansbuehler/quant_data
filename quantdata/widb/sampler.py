@@ -11,6 +11,8 @@ from cdxcore.version import version
 from cdxcore.verbose import Context
 from cdxcore.subdir import CacheMode, CacheMustExistError
 from cdxcore.util import fmt_date, fmt_list, fmt_big_byte_number, fmt_dict
+from cdxcore.util.arbfree import MkArbFree:
+
 from cdxcore.err import verify_inp, verify
 from cdxcore.pretty import PrettyObject
 from cdxcore.jcpool import JCPool
@@ -375,6 +377,23 @@ def sample_days(  ticker : str,
         if verbose.shall_report(2):
             verbose.report(2, str(table_of_sample_days(r)))
     return r
+
+
+@version("0.1",dependencies=[sample_days, MkArbFree] )
+def sample_days(  ticker : str,
+                  date_range : DateRange, *,
+                  include_fields : set[str]|None,
+                  exclude_fields : set[str]|None, 
+                  raw_day_filter : RawDayFilter, 
+                  expiry_filter : ExpiryFilter, 
+                  sample_days_config : SampleDaysConfig,
+                  pool_config : PoolConfig = PoolConfig.off(),
+                  override_cache_mode : CacheMode|None = None,
+                  verbose : Context = Context.all ) -> dict[str:np.array|str|type]:
+    """
+    Make the market arbitrage-free.
+    """"
+    TODO
 
 def table_of_sample_days( r : dict[str:np.array|str|type] ) -> PrettyTable:
     """

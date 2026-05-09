@@ -1,6 +1,9 @@
 
 """
-Make arbfree markets.
+Make arbfree markets
+^^^^^^^^^^^^^^^^^^^^
+
+This module contains :class:`MkArbFree`, a utility class which generates a "closest" arbitrage free market using https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2642630.
 """
 
 from __future__ import annotations
@@ -15,6 +18,7 @@ from cdxcore.err import verify, verify_inp
 from cdxcore.verbose import Context
 from cdxcore.version import version
 from cdxcore.pretty import PrettyObject
+from pyparsing import col
 from quantdata.biz_calendar import DAYS_PER_YEAR
 from quantdata.utils.backbone import BackboneNumpy
 
@@ -22,25 +26,27 @@ from quantdata.utils.backbone import BackboneNumpy
 @dataclass(frozen=True)
 class MkArbFree:
     """
-    A utility class which generates a "closest" arbitrage free market.
+    A utility class which generates a "closest" arbitrage free market using the ideas from the paper https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2642630.
 
     Given a market with expiries, strikes, bid and asks this functional:
     1) Expands the strike range following https://arxiv.org/pdf/2601.11209 remark 2.7, and drops expiries with too few strikes or with too steep bid-ask slopes at the boundaries.
-    2) Fits per expiry a linear no-arbitrage mid price within the bid-ask spread. It drops any expiries for which this is not possible as it implies actionable arbitrage.
+    2) Fits per expiry a linear no-arbitrage mid price within the bid-ask spread. It drops any expiries for which this is not possible as it implies actionable arbitrage. The function 
+       then drops all strikes which have an implied probability density of zero (which means the fitted mid is linear at those strikes).
     3) The function then fits a fully arbitrage free surface, on a strike grid which theoretically means that a mid-price fit exists if and only if the
         resulting fit is within bid/ask spread. The strike grid used is returned as ``mstrikes``.
+
+    See :meth:`MkArbFree.__call__` for more details on the input and output of this functional.
     """
 
     min_strikes_per_expiry: int = 5      #: Minimum strikes per expiry. Expiries with fewer strikes will be dropped.
-    min_dC_eps           : float = 1E-4 #: Minimum dC/dK slope at the boundaries. Expiries with steeper slopes will be dropped.
+    min_dC_eps            : float = 1E-3 #: Minimum dC/dK slope at the boundaries. Expiries with steeper slopes will be dropped.
 
-    no_arb_mode          : str = "surface"  # Whether to enforce no-arbirage: "off", "expriy", "surface".
-    min_half_spread      : float = 1E-5 #: Minimum bid/ask spread. The optimization is weighted by inverse half spread.
-    cvxpy_solver         : str = "CLARABEL" #:  Solver to use for the convex optimization problem, c.f. `list of cvxpy solvers <https://www.cvxpy.org/tutorial/solvers/index.html#choosing-a-solver>`_.
-    cvxpy_solver_options : dict = field(default_factory=dict) #: Options to pass to the CVXPY solver.
-    mid_fit_weight       : float = 0.1  #: Weight for fitting to the mid prices of options, where 1 means mid-price fit only is active, while 0 means to fit only a linear penalty for exceeding bid-ask.
-    min_density          : float = 1E-4 #: Minimum density value to consider in the optimization. Strikes with lower values will be dropped.
-    min_dx               : float = 0.00001 #: Minimum distance between strikes in "surface" mode. When adding strikes from the next expiry, only strikes which are at least this far away from existing strikes will be added.
+    no_arb_mode           : str = "surface"  # Whether to enforce no-arbirage: "off", "expriy", "surface".
+    min_half_spread       : float = 1E-4 #: Minimum bid/ask spread. The optimization is weighted by inverse half spread.
+    cvxpy_solver          : str = "CLARABEL" #:  Solver to use for the convex optimization problem, c.f. `list of cvxpy solvers <https://www.cvxpy.org/tutorial/solvers/index.html#choosing-a-solver>`_.
+    cvxpy_solver_options  : dict = field(default_factory=dict) #: Options to pass to the CVXPY solver.
+    mid_fit_weight        : float = 0.1  #: Weight for fitting to the mid prices of options, where 1 means mid-price fit only is active, while 0 means to fit only a linear penalty for exceeding bid-ask.
+    min_density           : float = 1E-4 #: Minimum density value to consider in the optimization. Strikes with lower values will be dropped.
     
     def __post_init__(self):
         verify_inp( self.no_arb_mode in ["off", "expiry", "surface"], lambda : f"no_arb_mode must be one of 'off', 'expiry' or 'surface', but found '{self.no_arb_mode}'" ) 
@@ -48,7 +54,10 @@ class MkArbFree:
         verify_inp( self.min_dC_eps > 0., lambda : f"min_dC_eps must be positive, but found {self.min_dC_eps}" )
         verify_inp( self.min_half_spread > 0., lambda : f"min_half_spread must be positive, but found {self.min_half_spread}" )
         verify_inp( self.min_density > 0., lambda : f"min_density must be positive, but found {self.min_density}" )
-        verify_inp( self.min_dx > 0., lambda : f"min_dx must be positive, but found {self.min_dx}" )   
+
+    def __str__(self) -> str:
+        """ Very compact but still readable summary """
+        return f"md={self.no_arb_mode[0]},mink={self.min_strikes_per_expiry},dC={self.min_dC_eps:.3g},mhs={self.min_half_spread:.3g},mdn={self.min_density:.3g},mw={self.mid_fit_weight:.2f},solver={self.cvxpy_solver}"
 
     def __call__(self,
                 expiries       : np.ndarray, 
@@ -56,15 +65,54 @@ class MkArbFree:
                 bids           : list[np.ndarray],
                 asks           : list[np.ndarray], *,
                 handle_arb     : str = "warn", # how to handle arbitrage situations: "warn", "raise" or "ignore"
-                verbose        : Context = Context.all ) -> tuple[np.ndarray, list[np.ndarray], list[np.ndarray], list[np.ndarray]]:
+                verbose        : Context = Context.all ) -> dict:
         """
-        Make market data arbitrage-free.
+        Make market data arbitrage-free using ideas from the paper https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2642630.
 
-        Given a market with expiries, strikes, bid and asks this function
+        Given a market with expiries, strikes, bid and asks this functional:
         1) Expands the strike range following https://arxiv.org/pdf/2601.11209 remark 2.7, and drops expiries with too few strikes or with too steep bid-ask slopes at the boundaries.
-        2) Fits per expiry a linear no-arbitrage mid price within the bid-ask spread. It drops any expiries for which this is not possible as it implies actionable arbitrage.
+        2) Fits per expiry a linear no-arbitrage mid price within the bid-ask spread. It drops any expiries for which this is not possible as it implies actionable arbitrage. The function 
+           then drops all strikes which have an implied probability density of zero (which means the fitted mid is linear at those strikes).
         3) The function then fits a fully arbitrage free surface, on a strike grid which theoretically means that a mid-price fit exists if and only if the
            resulting fit is within bid/ask spread. The strike grid used is returned as ``mstrikes``.
+
+        This function is usually very fast, but it can get stuck when the overall surface is close to arbitrage in areas which have very little
+        room to adjust. 
+
+        This function returns a dictionary with the following data:
+
+        1) The function may drop some expiries. The resulting expiries are returned as:
+
+            * ``expiries``: array of expiries. This may be fewer expiries than provided as input.
+            * ``input_index``: for each returned expiry, the index of the input expiry which it corresponds to. In other words ``output_expiries == [ input_expiries[i] for i in input_index ]``.
+
+        2) The function may also drop some strikes. This is reflected as follows:    
+
+            * ``strikes``: the list of remaining input strikes. 
+            * ``sixs``: the indices of the input strikes used, e.g. ``output_strikes[t][i] == input_strikes[t][sixs[t][i]]``. This field is None is no strikes were dropped.
+            * ``bids``: list of (original) bid prices for ``strikes``.
+            * ``asks``: list of (original) ask prices for ``strikes``.
+            * ``fit1``: list of per-expiry fitted arbitrage-free prices for ``strikes`` within bid/ask, from the per-expiry sweep.
+              (This means this mid is not necessarily arbitrage-free across expiries.)
+
+              This field is None if ``no_arb_mode`` is "off".
+            * ``fitX``: list of surface fitted arbitrage-free prices for ``strikes``.
+              These prices are globally arbitrage-free across the surface, but they are not necessarily within bid/ask spread; they are the closest fit. Up to machine precision existence
+              of ``fitsX`` within bid/ask spread is equivalent to absence of arbitrage.
+              
+              This field is None if ``no_arb_mode`` is "off".
+            * ``xstrikes``: an extended strike list with two boundary strikes add. Boundary strikes are widening in time; c.f. https://arxiv.org/pdf/2601.11209 remark 2.7.
+
+        3) If ``no_arb_mode`` is "surface" then the function will generate an internal strike grid to fit the surface, which is a superset of the output strikes.
+           This is constructed by adding strikes from the next expiry if they are not too close to existing strikes.
+           This is typically a much denser set than the input strikes. Each expiry is guaranteed to have their ``xstrikes`` among the respective model strikes.
+
+            * ``mstrikes``: the list of internal model strikes per expiry used. This field is None if ``no_arb_mode`` is not "surface".
+
+            * ``xix_to_mix``: a list of arrays which gives for every ``xstrike[t]`` the position in ``mstrikes[t]``, i.e. ``mstrikes[t][xix_to_mix[t]] == xstrikes[t]``.
+              The element ``xix_to_mix[t]`` is ``None`` if no additional strikes were added to expiry ``t``, i.e. the strikes coincide.
+                          
+              This field is None if ``no_arb_mode`` is not "surface".
 
         Parameters
         ----------
@@ -76,24 +124,18 @@ class MkArbFree:
             List of bid price arrays, one per expiry. 
         asks : list[:class:``numpy.ndarray`]
             List of ask price arrays, one per expiry. 
-        config : :class:`StrikeGeneratorConfig`, default ``StrikeGeneratorConfig()``
-            Configuration for the strike generation, including minimum number of strikes per expiry and minimum dC/dK slope at the boundaries.
+        handle_arb : str, default ``"warn"``
+            What to do if the function cannot fit an arbitrage-free mid for a given single expiry.
+            The options are to ``"ignore"`` it, ``"warn"`` about it, or ``"raise"`` an error.
+            If it is ignored or merely warned, then the offending expiry will be dropped from the output.
+
         verbose : :class:`Context`, default ``Context.all``
             Verbose context for logging.
         
         Returns
         -------
-        Exteneded market: dict
-            A dictionary with
-            * ``expiries``: array of expiries. This may be fewer expiries than provided as input.
-            * ``xstrikes``: list of extended strikes.
-            * ``bids``: list of bid prices for the extended strikes. There are two less bids than ``xstrikes`` since the model prices boundary strikes at intrinsic.
-            * ``asks``: list of ask prices for the extended strikes. There are two less asks than ``xstrikes`` since the model prices boundary strikes at intrinsic.
-            * ``mids``: list of mid prices for the extended strikes, from the per-expiry sweep. This is None if ``no_arb_mode`` is "off".
-            * ``fit``: list of mid prices for the extended strikes, from the surface fit. This is None if ``no_arb_mode`` is not "surface". The ``fit`` is not
-              guaranteed to be witin bid/ask spread.
-            * ``mstrikes``: list of strikes for the surface fit. This is None if ``no_arb_mode`` is not "surface".
-               The ``mstrikes`` are a superset of the ``xstrikes`` and are constructed by adding strikes from the next expiry if they are not too close to existing strikes.
+        Extended market: ``dict``
+           See above.
         """
         T = len(expiries)
 
@@ -103,16 +145,23 @@ class MkArbFree:
 
         # generate strike range
         # ---------------------
+        # Add strikes to the left and right which are consistent with the no-arb condition.
 
         issues     = []
         r          = PrettyObject()
         r.xstrikes = []
+        r.strikes  = []
         r.expiries = []
+        r.strikes  = []
         r.bids     = []
         r.asks     = []
-        r.mids     = None if self.no_arb_mode == "off" else []
-        r.fits     = None
+        r.sixs     = []
+        r.fits1    = None if self.no_arb_mode == "off" else []
+        r.fitsX    = None
         r.mstrikes = None
+        r.xix_to_mix = None
+        r.iix_to_xix = None
+        r.input_index = []
         tme        = verbose.timer()
 
         for t, expiry in enumerate(expiries):
@@ -121,6 +170,8 @@ class MkArbFree:
             strikes_t  = strikes[t]
             bid_t      = bids[t]
             ask_t      = asks[t]
+            six_t      = np.arange(strikes_t.shape[0])
+            six_needed = False
 
             if len(strikes_t) <= self.min_strikes_per_expiry:
                 verbose.write(lambda :f"only {len(strikes_t)} strikes found. Skipping this expiry.", head=False)
@@ -164,6 +215,7 @@ class MkArbFree:
 
             if i>0:
                 strikes_t = strikes_t[i:]
+                six_t     = six_t[i:]
                 ask_t     = ask_t[i:]
                 bid_t     = bid_t[i:]
                 N         = strikes_t.shape[0]
@@ -194,9 +246,9 @@ class MkArbFree:
 
             if i<N-1:
                 strikes_t = strikes_t[:i+1]
+                six_t     = six_t[:i+1]
                 ask_t     = ask_t[:i+1]
                 bid_t     = bid_t[:i+1]
-
 
             dK0        = K_1 - lower_k
             lower_k    = max( lower_k/2., K_1 - dK0*2. )
@@ -218,27 +270,17 @@ class MkArbFree:
             # arb-free force fit
             # ------------------
 
-            _use_calls = False
+            fit_t      = None
 
             if self.no_arb_mode != "off":
                 verbose.write(lambda : f"\rExpiry #{t} {expiry*DAYS_PER_YEAR:.3f}d: finding linear no-arbitrage mid... ", end='')
 
                 Nt          = len(xstrikes_t)
-                if _use_calls:
-                    assert False
-                    C           = cp.Variable(Nt, nonneg=True)
-                    dC          = cp.multiply( C[1:] - C[:-1], 1./( xstrikes_t[1:] - xstrikes_t[:-1] ) )
-                    constraints = [ -1 <= dC[0],
-                                    dC[:-1] <= dC[1:],
-                                    dC[-1] <= 0 ,
-                                    C[1:-1] <= ask_t,
-                                    C[1:-1] >= bid_t ]
-                else:
-                    p           = cp.Variable(Nt, nonneg=True)
-                    C           = np.maximum( 0., xstrikes_t[None,:] - xstrikes_t[:,None] ) @ p
-                    constraints = [ cp.sum(p) == 1., xstrikes_t @ p == 1., # martingale condition
-                                    C[1:-1] <= ask_t,
-                                    C[1:-1] >= bid_t ]
+                p           = cp.Variable(Nt, nonneg=True)
+                C           = np.maximum( 0., xstrikes_t[None,:] - xstrikes_t[:,None] ) @ p
+                constraints = [ cp.sum(p) == 1., xstrikes_t @ p == 1., # martingale condition
+                                C[1:-1] <= ask_t,
+                                C[1:-1] >= bid_t ]
 
                 half_spread = np.maximum( (ask_t - bid_t)/2., self.min_half_spread )
                 mid         = (bid_t + ask_t)/2.
@@ -259,33 +301,32 @@ class MkArbFree:
                     verbose.write(lambda :f"optimized returned status '{prob.status}' -- proceeding anyway... ", end='', head=False)
 
                 # eliminate calls whose density is zero (e.g. the mid is linear) by flagging them as inactive.
-                if _use_calls:
-                    C     = C.value
-                    dC    = np.diff( C, prepend=1. ) / np.diff(xstrikes_t, prepend=0.)
-                    p     = np.diff( dC, prepend=-1. ) / np.diff(xstrikes_t, prepend=0.)
-                    C     = C[1:-1]
-                else:
-                    C     = C.value
-                    p     = p.value
-                    C     = C[1:-1]
-                floor     = self.min_density / float(Nt)
+                C          = C.value
+                p          = p.value
+                C          = C[1:-1]
+                floor      = self.min_density / float(Nt)
                 verify( np.all(p >= -floor), lambda : f"Internal error: negative density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.3f}d after optimization." )
-                active    = p > floor
-                active[0] = True
+                active     = p > floor
+                active[0]  = True
                 active[-1] = True
                 if not np.all(active):
                     xstrikes_t = xstrikes_t[active]
                     bid_t     = bid_t[active[1:-1]]
                     ask_t     = ask_t[active[1:-1]]
+                    six_t     = six_t[active[1:-1]]
                     fit_t     = C[active[1:-1]]
                 else:
                     fit_t     = C
 
             r.xstrikes.append( xstrikes_t )
+            r.strikes.append( xstrikes_t[1:-1] )
             r.bids.append( bid_t )
             r.asks.append( ask_t )
-            r.mids.append( fit_t )
+            r.sixs.append( six_t if len(six_t) != len(strikes[t]) else None )
             r.expiries.append( expiry )
+            r.input_index.append( t )
+            if r.fits1 is not None:
+                r.fits1.append( fit_t )
         r.expiries = np.array(r.expiries, dtype=np.float32)
         verbose.write(lambda : f"\rGenerated {len(r.expiries)} {'arbitrage-free ' if self.no_arb_mode != 'off' else ''}expiries with extended strikes from {T} market expiries. This took {tme}.")
 
@@ -294,10 +335,13 @@ class MkArbFree:
         
         # backward-dense grid
         # -------------------
+        # Carry grid forward as long as the strike range isn't too tight.
 
-        T          = len(expiries)
+        T          = len(r.expiries)
         r.mstrikes = [None]*T
-        r.fit      = []
+        r.xix_to_mix = [None]*T
+        r.fitsX    = []
+        min_dx     = None
 
         for t in range(T-1,-1,-1):
             # fix strikes
@@ -305,12 +349,14 @@ class MkArbFree:
             # 2) Add strikes of next expiry if not too close to existing strikes. Always keep current strikes
             xstrikes_t = r.xstrikes[t]
             mstrikes_t = xstrikes_t
+            project = None
             if t<T-1:
                 next_mstrikes = r.mstrikes[t+1]
                 assert next_mstrikes[0] <= xstrikes_t[0] and next_mstrikes[-1] >= xstrikes_t[-1], f"Internal error: next_mstrikes[0] {next_mstrikes[0]:.3f} > xstrikes_t[0] {xstrikes_t[0]:.3f} or next_mstrikes[-1] {next_mstrikes[-1]:.3f} < xstrikes_t[-1] {xstrikes_t[-1]:.3f}"
 
                 min_dx   = min( np.diff(mstrikes_t).min(), np.diff(next_mstrikes).min() )
                 collect  = []
+                project  = []
                 inext    = 0
                 add_any  = False
 
@@ -318,6 +364,7 @@ class MkArbFree:
                 while next_mstrikes[inext] <= xstrikes_t[0]+min_dx:
                     inext += 1
 
+                project.append( len(collect) )
                 collect = [ xstrikes_t[0] ]
 
                 for ithis in range(1, xstrikes_t.shape[0]):
@@ -327,6 +374,7 @@ class MkArbFree:
                         collect.append( next_mstrikes[inext] )
                         add_any = True
                         inext += 1
+                    project.append( len(collect) )
                     collect.append( k )
                     # skip next_mstrikes which are too close to k
                     while next_mstrikes[inext] <= k+min_dx:
@@ -336,17 +384,22 @@ class MkArbFree:
 
                 if add_any:
                     mstrikes_t = np.array(collect, dtype=xstrikes_t.dtype)
-                    assert np.min( np.diff( mstrikes_t ) ) >= self.min_dx, f"Internal error: min dx {np.diff(mstrikes_t).min():.3f} < min_dx {self.min_dx:.3f}"
+                    assert np.min( np.diff( mstrikes_t ) ) >= min_dx, f"Internal error: min dx {np.diff(mstrikes_t).min():.3f} < min_dx {min_dx:.3f}"
                     assert mstrikes_t[0] == xstrikes_t[0] and mstrikes_t[-1] == xstrikes_t[-1], f"Internal error: mstrikes_t[0] {mstrikes_t[0]:.3f} != xstrikes_t[0] {xstrikes_t[0]:.3f} or mstrikes_t[-1] {mstrikes_t[-1]:.3f} != xstrikes_t[-1] {xstrikes_t[-1]:.3f}"
+                    project = np.array( project, dtype=np.int32 )
+                else:
+                    project = None
 
             r.mstrikes[t] = mstrikes_t
+            r.xix_to_mix[t] = project
 
         densities   = []
         fit_mids    = []
         constraints = []
         objective   = 0.
 
-        with verbose.write_t("Finding arbitrage-free mid prices within bid/ask accross the entire surface... ", end='') as tme:
+        min_dx_text = "n/a" if min_dx is None else f"{min_dx:.3g}"
+        with verbose.write_t(f"Finding arbitrage-free mid prices accross the entire surface of {sum( len(xt) for xt in r.xstrikes )} strikes with a minimum strike distance of {min_dx_text}... ", end='') as tme:
             for t in range(T):
                 mstrikes_t  = r.mstrikes[t]
                 xstrikes_t  = r.xstrikes[t]
@@ -384,8 +437,8 @@ class MkArbFree:
                     raise RuntimeError(f"Cannot find no-arbitrage surface mids: problem infeasible??")
                 verbose.write(lambda : f"solver returned '{prob.status}' -- proceeding anyway... ", head=False, end='' )
 
-            r.fits = [ fit_mid.value for fit_mid in fit_mids ]
-            verbose.write(lambda : f"done. This took {tme}.")
+            r.fitsX = [ fit_mid.value for fit_mid in fit_mids ]
+            verbose.write(lambda : f"done. This took {tme}.", head=False )
 
         return r
 
