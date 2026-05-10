@@ -6,6 +6,8 @@ Library for handling quantitative financial data.
 
 from __future__ import annotations
 
+from sympy import root
+
 __version__ = "0.1.0"
 
 import warnings
@@ -19,6 +21,8 @@ from cdxcore.verbose import Context#NOQA
 from cdxcore.pretty import PrettyObject#NOQA
 from cdxcore.err import verify_inp
 
+globals()['QUANTDATA_ENVIRONMENT_LIVE'] = 1
+
 # --------------------------------------------------------------
 # system wide settings; import file ahead of anything else
 # --------------------------------------------------------------
@@ -31,6 +35,10 @@ warnings.formatwarning = _one_line_warning
 
 # turn on multiprocessing logging to stderr (for debugging; remove in production version)
 mp_util.log_to_stderr(level=mp_util.INFO)  # TODO: remove in production version                      
+
+# fix empty allocation from cvxpy
+from quantdata.utils.cvxpy import patch_cvxpy_sum_shape_from_args#NOQA
+patch_cvxpy_sum_shape_from_args()
 
 # --------------------------------------------------------------
 # Library environment
@@ -59,7 +67,6 @@ class Locations:
     training: SubDir #: for final training input data
     experiments : SubDir #: for experiment storage
     temp: SubDir #: for temporary caching of data, e.g. from API calls. This is typically a local directory with fast read/write access, and is used for caching API calls for speed. This directory is not meant for long-term storage of data, and may be cleared at any time. Use the other locations for long-term storage of data.
-
 
     def __post_init__(self):
         verify_inp( isinstance( self.raw, SubDir), f"Expected 'raw' to be of type SubDir, found {type(self.raw)}")
@@ -110,6 +117,26 @@ class Locations:
             experiments = self.experiments(name, fmt=default_fmt if fmt_experiments is None else fmt_experiments),
             temp = self.temp(name, fmt=default_fmt if fmt_temp is None else fmt_temp)
         )
+    
+    @staticmethod
+    def create_from_root( root : SubDir|str ) -> Locations:
+        """
+        Create locations from a root directory.
+        The root directory will contain the subdirectories "raw", "processing", "training", "experiments", and "temp".
+
+        Parameters
+        ----------
+        root : SubDir | str
+            The root directory for the data. This directory should contain the subdirectories "raw", "processing", "training", "experiments", and "temp".
+        """
+        root = SubDir(root)
+        return Locations(
+            raw = root("raw"),
+            processing = root("processing"),
+            training = root("training"),
+            experiments = root("experiments"),
+            temp = root("temp")
+        )
 
 class Environment(object):
     """
@@ -146,10 +173,10 @@ class Environment(object):
     def __init__(self):
         # identify directories
         # ---------------------
-        self.test_mode  : bool = os.environ.get("QUANTDATA_TEST_MODE", "0") == "1"  # turn off any connections
-
+        test_mode  = os.environ.get("QUANTDATA_TEST_MODE", "0")  # QUANTDATA_TEST_MODE can be "0", "1" or "generate_tests"
         cache_mode = os.environ.get("QUANTDATA_CACHE_MODE", None)
-        cc = CacheController(exclude_arg_types=self.CACHE_EXCLUDE_ARGS, cache_mode=cache_mode)
+        self.test_mode  : bool = test_mode == "1"                            # turn off any connections
+        self.generate_test_data_mode : bool = test_mode == "generate_tests"  # used to generate data locally
 
         # where tests are stored.   
         # in non-test mode, use these for generation
@@ -164,12 +191,12 @@ class Environment(object):
                 experiments = root("experiments", create_directory=False),
                 temp = root("!/quantdata", create_directory=False)
             )
-        self._test_data_locations = generate_test_location() #: Locations for test data. Used for developers only.
+        self._test_data_locations : Locations = generate_test_location()
 
         # generate environment
         # test or not
 
-        if not self.test_mode:
+        if not self.test_mode and not self.generate_test_data_mode:
             raw         = os.environ.get("QUANTDATA_RAW_DATA", None)
             processing  = os.environ.get("QUANTDATA_PROCESSING_DATA", None)
             training    = os.environ.get("QUANTDATA_TRAINING_DATA", None) 
@@ -190,7 +217,7 @@ class Environment(object):
             experiments = SubDir(experiments) if not experiments is None else None
             temp       = SubDir(temp) if not temp is None else None
 
-            if raw is None or processing is None or training is None:
+            if raw is None or processing is None or training is None or experiments is None:
                 if def_root is None:
                     raise RuntimeError(
                                     f"Could not identify all working directories: you can use QUANTDATA_ROOT to set an overall root directory; the following were found/missing: "+\
@@ -207,25 +234,35 @@ class Environment(object):
                 experiments = def_root("experiments") if experiments is None else experiments
                 temp = def_root("temp") if temp is None else temp
 
+            cc = CacheController(exclude_arg_types=self.CACHE_EXCLUDE_ARGS, cache_mode=cache_mode)
             raw = SubDir(raw, cache_controller=cc)
             processing = SubDir(processing, cache_controller=cc)
             training = SubDir(training, cache_controller=cc)
             experiments = SubDir(experiments, cache_controller=cc)
             temp = SubDir(temp, cache_controller=cc)
 
+            """
+            warnings.warn("Welcome to quantdata. Caching directories are set as follows:\n"
+                          f" raw: {raw.path}\n"+\
+                          f" processing: {processing.path}\n"+\
+                          f" training: {training.path}\n"+\
+                          f" experiments: {experiments.path}\n"+\
+                          f" temp: {temp.path}\n"+\
+                          f"Default cache mode is set to '{cache_mode}'.")
+            """
         else:
             # test mode
             # ---------
             # In test mode, we use locally stored data.
             # We also do not write to the cache (which is now pointing to a local data store)
-            test_cc    = CacheController(exclude_arg_types=self.CACHE_EXCLUDE_ARGS, cache_mode="cacheonly")
-
-            raw        = self._test_data_locations.raw(cache_controller=test_cc)
-            training   = self._test_data_locations.training(cache_controller=test_cc)
-            processing = self._test_data_locations.processing(cache_controller=test_cc)
-            experiments = self._test_data_locations.experiments(cache_controller=test_cc)
+            cc          = CacheController(exclude_arg_types=self.CACHE_EXCLUDE_ARGS, cache_mode="cacheonly" if self.test_mode else "on")
+            raw         = self._test_data_locations.raw(cache_controller=cc)
+            training    = self._test_data_locations.training(cache_controller=cc)
+            processing = self._test_data_locations.processing(cache_controller=cc)
+            experiments = self._test_data_locations.experiments(cache_controller=cc)
             # temp is different: will create a directory which self-deletes upon deletion of the object.
-            temp       = SubDir("?/quantdata_test_temp", cache_controller=test_cc, create_directory=True) # this can always read/write. 
+            temp_cc    = CacheController(exclude_arg_types=self.CACHE_EXCLUDE_ARGS, cache_mode=cache_mode)
+            temp       = SubDir("?/quantdata_test_temp", cache_controller=temp_cc, create_directory=True) # this can always read/write. 
 
             if not raw.path_exists():
                 raise FileNotFoundError(f"Could not find stored raw data for testing at: {raw.path}")
@@ -235,7 +272,16 @@ class Environment(object):
                 raise FileNotFoundError(f"Could not find stored processing data for testing at: {processing.path}")
             if not experiments.path_exists():
                 raise FileNotFoundError(f"Could not find stored experiments data for testing at: {experiments.path}")
-            
+
+            warnings.warn(f"Initializing quantdata. **WARNING: quantdata is in {'test mode' if self.test_mode else 'test data generation'} mode **.\n"
+                          "Caching directories are set as follows:\n"
+                          f" raw: {raw.path}\n"+\
+                          f" processing: {processing.path}\n"+\
+                          f" training: {training.path}\n"+\
+                          f" experiments: {experiments.path}\n"+\
+                          f" temp: {temp.path}\n"+\
+                          f"Default cache mode is set to '{cc.cache_mode}'.")
+
         self.locations = Locations(
             raw = raw,
             processing = processing,
@@ -243,9 +289,6 @@ class Environment(object):
             experiments = experiments,
             temp = temp
         )
-
-    def generate_raw_test_targe():
-        pass
 
 env = Environment()
 """ One global instande of the :class:`quantdata.Environment` class, which defines the operating environment. """

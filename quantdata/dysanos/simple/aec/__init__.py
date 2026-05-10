@@ -30,19 +30,20 @@ with verbose.write_t("Importing torch...", end='') as tme:
     import torch
     verbose.write(f"done; this took {tme}.", head=False)
 
-from quantdata.dysanos.simple.sampler import SimpleSampler, SimpleConfig, SamplingConfig, ExpiryFilter, RawDayFilter, SampleDaysConfig, DateRange, PoolConfig
+from quantdata.dysanos.simple.sampler import SimpleSampler, SimpleConfig, SamplingConfig, ExpiryFilter, RawDayFilter, TimeseriesConfig, DateRange, PoolConfig, MkArbFree
 from datetime import date
 
-def load_data(tickers : list[str] = ['SPX','NDX','RUT']):
+def load_data(tickers : list[str] = ['SPX','NDX','RUT'], reduced : bool = False ):
     
     def test():
         simple_config = SimpleConfig(
                 tickers = tickers,
-                date_range = DateRange(start=date(2015, 1, 1), end=date(2025, 7, 1)),
+                date_range = DateRange(start=date(2015, 1, 1) if not reduced else date(2025, 4, 1), end=date(2025, 7, 1)),
                 raw_day_filter = RawDayFilter(),
                 expiry_filter = ExpiryFilter(),
-                sample_days_config = SampleDaysConfig(),
-                sampling_config = SamplingConfig(num_samples=20)
+                mk_arb_free = MkArbFree("expiry"),
+                timeseries_config = TimeseriesConfig(),
+                sampling_config = SamplingConfig()
         )
         pool_config = PoolConfig(num_workers=4, threading=False) # no parallel processing for testing
         verbose = Context.all

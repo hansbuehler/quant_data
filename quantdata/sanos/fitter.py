@@ -243,6 +243,7 @@ class Fitter:
  
         densities   = [ cp.Variable( (Nt,), nonneg=True ) for Nt in Ns ]
         conditions  = [ cp.sum(d_t) == 1. for d_t in densities ] +\
+                      [ d_t <= 1. for d_t in densities ] +\
                       [ cp.sum( cp.multiply( s_t, d_t ) ) == 1. for s_t, d_t in zip(mxstrikes[1:], densities) ] # density conditions
 
         # martingale property for X
@@ -347,12 +348,23 @@ class Fitter:
 
         with verbose.write_t(lambda : f"Solving for a consistent margingale density for {len(opt_strikes)} options. Mean half spread is {np.mean(half_spread):.4e}... ", end='') as tme:
             prob        = cp.Problem( cp.Minimize( objective ), conditions )
+
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"Solution may be inaccurate.*",
+                category=UserWarning
+            )
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", message="Solution may be inaccurate.", category=UserWarning)
+                warnings.filterwarnings("error",message=r"overflow encountered in power",  category=RuntimeWarning )
                 try:
                     prob.solve( solver=self.cvxpy_solver, **self.cvxpy_solver_options )
                 except cp.SolverError as e:
                     raise e
+                except RuntimeWarning as e:
+                    raise OverflowError( f"Solver {self.cvxpy_solver} failed to find a solution: {str(e)}" ) from e
                 
             if prob.status == "infeasible":
                 raise RuntimeError( f"Optimization problem is 'infeasible'.")

@@ -3,7 +3,8 @@
 from quantdata import version
 import quantdata
 from quantdata.biz_calendar import session_open_close
-from quantdata.massive.client import MassiveClient, NORMAL_TRADE_EXCLUDE_FLAGS
+from quantdata.massive.client import MassiveClient
+from quantdata.massive.trade_conds import NORMAL_TRADE_EXCLUDE_FLAGS
 import polars as pl
 from datetime import date
 

@@ -1,9 +1,44 @@
 """
-Generating one day of data.
+Generating one day of WRDS Option Metrics data for one ticker.
 
-This function uses ``client.py`` to provide:
+Key functions:
 
-* :func:`collect_raw_day` 
+* :func:`collect_raw_day` - Collect raw option data with minimal analytics for a ticker and date
+* :func:`enrich_day` - Enrich raw data with implied volatilities, greeks, and synthetic call options
+
+Summary
+-------
+This module provides tools to process daily option data from WRDS Option Metrics (IvyDB):
+
+1. **collect_raw_day**: Downloads spot, forward, discount factor, and option data. Cleans bad options 
+   and computes business days to expiry and implied discount factors. Returns a raw DataFrame.
+
+2. **enrich_day**: Builds on raw data by computing implied forwards from put-call parity, synthetic 
+   minimal-spread call options, implied volatilities, and option greeks (delta, gamma, vega, theta).
+
+Both functions use filtering configurations to control data quality and processing parameters.
+
+Usage Example
+-------------
+    >>> from quantdata.widb.day import collect_raw_day, enrich_day, RawDayFilter, ExpiryFilter
+    >>> from quantdata.biz_calendar import to_date
+    >>> from cdxcore.verbose import Context
+    >>> import datetime as dt
+    >>>
+    >>> # Define date and filters
+    >>> d = to_date("2022-01-03")
+    >>> ticker = "SPX"
+    >>> raw_filter = RawDayFilter(min_bid=0.015)
+    >>> enriched_filter = ExpiryFilter(num_min_both_traded=5)
+    >>>
+    >>> # Collect and enrich data
+    >>> raw_data = collect_raw_day(ticker, d, raw_filter, verbose=Context())
+    >>> enriched_data = enrich_day(ticker, d, raw_data, raw_day_filter=raw_filter, 
+    ...                             expiry_filter=enriched_filter, verbose=Context())
+    >>>
+    >>> # Access results
+    >>> print(enriched_data[['strike', 'fwd', 'ask_vol', 'bid_vol', 'pure_ask_delta']].head())
+
 """
 from __future__ import annotations
 
@@ -12,6 +47,7 @@ from quantdata.biz_calendar import count_business_days_between, DAYS_PER_YEAR, A
 from quantdata.widb.client import WIDBClient
 from quantdata.widb.bad import BAD
 from quantdata.pool import PoolConfig
+from quantdata.utils.pd import create_empty_df, verify_schema
 
 from cdxcore.version import version
 from cdxcore.verbose import Context
@@ -30,9 +66,10 @@ import warnings
 from dataclasses import dataclass, field    
 
 _processing = WIDBClient.locations.processing("day",fmt=SubDir.PANDAS_PARQUET)
-
-def _create_empty_df( schema ):
-    return pd.DataFrame({c: pd.Series(dtype=dtype) for c,dtype in schema.items()})
+_IMPLIED_VOL_CALC_EPS = 1E-8
+_GREEK_CALC_EPS = 1E-8
+_MIN_IMPLIED_VOL = 0.01
+_MAX_IMPLIED_VOL = 5.
 
 # ---------------------------------------------------------------------------
 # Raw data, day
@@ -41,7 +78,7 @@ def _create_empty_df( schema ):
 
 SCHEMA_RAW_DAY = {
     'ticker' : np.dtype('O'),
-    'date' : np.dtype("datetime64[s]"),  # [D] not supported in storage
+    'date' : np.dtype("datetime64[ms]"),  # [D] not supported in storage
     'spot' : np.float32,
     'spot_prev' : np.float32,
     'call_symbol' : np.dtype("O"),
@@ -54,7 +91,7 @@ SCHEMA_RAW_DAY = {
     'strike' : np.float32,
     'fwd_ref' : np.float32,
     'df' : np.float32,
-    'expiry' : np.dtype("datetime64[s]"),  # [D] not supported in storage``
+    'expiry' : np.dtype("datetime64[ms]"),  # [D] not supported in storage``
     'bdte' : np.float32, # this is a float because of AM options.
     'tte_y' : np.float32, 
     'mkt_call_ask' : np.float32, 
@@ -66,6 +103,9 @@ SCHEMA_RAW_DAY = {
     'mkt_put_log_volume' : np.float32,
     'mkt_put_log_open_interest' : np.float32, 
 }
+
+RAW_PER_DAY_FIELDS = {'ticker','date','spot','spot_prev'}
+RAW_PER_EXPIRY_FIELDS = {'expiry_id','expiry','bdte','tte_y','is_am','fwd_ref','df'}
 
 @version("0.4")
 @dataclass(frozen=True)
@@ -94,6 +134,7 @@ def collect_raw_day( ticker : str,
     The function returns a panda data frame with columns :attr:`SCHEMA_RAW_DAY`.
 
     The function:
+
     * Downloads spot, forward, discount and option data.
     * Removes and bad days/tickers/options using :attr:`quantdata.widb.bad.BAD`.
     * Removes options with same-day expiry, NA or zero bid prices, and bad settlement (ss_flag != '0').
@@ -141,11 +182,11 @@ def collect_raw_day( ticker : str,
 
     if d in BAD.DAYS_ALL:
         if not raise_if_bad:
-            return _create_empty_df(SCHEMA_RAW_DAY)
+            return create_empty_df(SCHEMA_RAW_DAY)
         raise IndexError(f"{d} is in the BAD.DAYS_ALL set. No data will be downloaded for this date. Please check the date range and calendar settings. BAD.DAYS_ALL={BAD.DAYS_ALL}")
     if d in  BAD.DAYS_TICKER.get(ticker, set()):
         if not raise_if_bad:
-            return _create_empty_df(SCHEMA_RAW_DAY)
+            return create_empty_df(SCHEMA_RAW_DAY)
         raise IndexError(f"{d} is in the BAD.DAYS_TICKER set for {ticker}. No data will be downloaded for this date. Please check the date range and calendar settings. BAD.DAYS_TICKER[{ticker}]={BAD.DAYS_TICKER.get(ticker, set())}")
 
     conn        = WIDBClient()
@@ -420,7 +461,7 @@ def collect_raw_day( ticker : str,
         r = PrettyObject()
         r.spot = np.float32(spot)
         r.spot_prev = np.float32(spot_d)
-        r.date = np.array(d, dtype="datetime64[s]")
+        r.date = np.array(d, dtype="datetime64[ms]")
         r.ticker = ticker
         r.call_symbol = opts_pd["call_symbol"].astype(str).values.tolist()
         r.put_symbol = opts_pd["put_symbol"].astype(str).values.tolist()
@@ -428,7 +469,7 @@ def collect_raw_day( ticker : str,
         r.put_opt_id = opts_pd["put_opt_id"].to_numpy(dtype=np.int32)
         r.is_american = opts_pd["is_american"].to_numpy(dtype=bool)
         r.is_am = opts_pd["is_am"].to_numpy(dtype=bool)
-        r.expiry = np.array(opts_pd["exdate"], dtype="datetime64[s]")
+        r.expiry = np.array(opts_pd["exdate"], dtype="datetime64[ms]")
         r.strike = opts_pd["strike"].values.astype(np.float32)
         r.fwd_ref = opts_pd["forward_ref"].values.astype(np.float32)
         r.df = opts_pd["discount_factor_ref"].values.astype(np.float32)
@@ -471,15 +512,20 @@ def collect_raw_day( ticker : str,
         return pd.DataFrame(dict(r))
 
     result = enrich(opts_pd)
-    if set(result.columns) != set(SCHEMA_RAW_DAY):
-        too_much = set(result.columns) - set(SCHEMA_RAW_DAY)
-        too_little = set(SCHEMA_RAW_DAY) - set(result.columns)
-        raise RuntimeError(f"Internal error: {ticker} {d}: enriched DataFrame has unexpected columns. Superflous: {fmt_list(too_much)}. Missing: {fmt_list(too_little)}. Please contact the authors with an example. ")
+    verify_schema(result, SCHEMA_RAW_DAY, lambda : f"{ticker} {d}")
 
-    for c,expected_dtype in SCHEMA_RAW_DAY.items():
-        actual_dtype = result[c].dtype
-        if actual_dtype != expected_dtype:
-            raise RuntimeError(f"Internal error: {ticker} {d}: enriched DataFrame column '{c}' has unexpected dtype. Expected {expected_dtype}, found {actual_dtype}. Please contact the authors with an example.")
+    # check that common fields are so.    
+    for c in RAW_PER_DAY_FIELDS:
+        column_data = result[c]
+        if not (column_data.nunique() == 1):
+            raise RuntimeError(f"Internal error: {ticker} {d}: enriched DataFrame column '{c}' is expected to have exactly one unique value, found {column_data.nunique()}. Please contact the authors with an example.")
+
+    num_expiries   = result["expiry_id"].nunique()
+    for c in RAW_PER_EXPIRY_FIELDS:
+        grouped_unique = result.groupby("expiry_id", sort=False)[c].nunique(dropna=False)
+        if not (grouped_unique == 1).all():
+            bad_expiry_ids = grouped_unique[grouped_unique != 1].index.tolist()[:10]
+            raise RuntimeError(f"Internal error: {ticker} {d}: enriched DataFrame column '{c}' is expected to have a single value within each expiry_id, but this failed for expiry_id values {bad_expiry_ids}. Please contact the authors with an example.")
 
     verbose.write(f"{ticker} {d}: collected {len(result)}/{n_total} options. Removed: {fmt_list(status_removed) if len(status_removed) > 0 else 'none'}.")
     return result
@@ -493,52 +539,60 @@ def collect_raw_day( ticker : str,
 SCHEMA_ENRICHED_DAY = SCHEMA_RAW_DAY | {
     'fwd' : np.dtype("float32"),          # implied forward from put-call parity
     'nms' : np.dtype("float32"),          # normalized moneyness = strike / forward
-    'call_ask_ref' : np.dtype("float32"), # actual synthetic call ask
-    'call_bid_ref' : np.dtype("float32"), # actual synthetic call bid
     'call_ask' : np.dtype("float32"),     # implied from pure call after implied vol fitting
     'call_bid' : np.dtype("float32"),     # implied from pure call after implied vol fitting
     'ask_vol' : np.dtype("float32"),
     'bid_vol' : np.dtype("float32"),
     'log_volume' : np.dtype("float32"),
     'log_open_interest' : np.dtype("float32"),
-    'ask_pure_price' : np.dtype("float32"),
-    'bid_pure_price' : np.dtype("float32"),
-    'ask_pure_delta' : np.dtype("float32"),
-    'bid_pure_delta' : np.dtype("float32"),
-    'ask_pure_gamma' : np.dtype("float32"),
-    'bid_pure_gamma' : np.dtype("float32"),
-    'bid_pure_vega' : np.dtype("float32"),
-    'ask_pure_vega' : np.dtype("float32"),
-    'bid_pure_theta' : np.dtype("float32"),
-    'ask_pure_theta' : np.dtype("float32"),
-    'ask_pure_dk' : np.dtype("float32"),
-    'bid_pure_dk' : np.dtype("float32")
+    'pure_strike' : np.dtype("float32"),
+    'pure_ask_price' : np.dtype("float32"),
+    'pure_bid_price' : np.dtype("float32"),
+    'pure_ask_delta' : np.dtype("float32"),
+    'pure_bid_delta' : np.dtype("float32"),
+    'pure_ask_gamma' : np.dtype("float32"),
+    'pure_bid_gamma' : np.dtype("float32"),
+    'pure_bid_vega' : np.dtype("float32"),
+    'pure_ask_vega' : np.dtype("float32"),
+    'pure_bid_theta' : np.dtype("float32"),
+    'pure_ask_theta' : np.dtype("float32"),
+    'pure_ask_dk' : np.dtype("float32"),
+    'pure_bid_dk' : np.dtype("float32")
 }
 
-@version("0.2")
+ENRICHED_PER_DAY_FIELDS = RAW_PER_DAY_FIELDS
+ENRICHED_PER_EXPIRY_FIELDS = RAW_PER_EXPIRY_FIELDS|{'fwd'}
+
+@version("0.4")
 @dataclass(frozen=True)
 class ExpiryFilter:
     """ How to filter expiries to be able to compute implied forwards """
     num_min_either_traded : int = 10
-    num_min_both_traded : int = 4
+    num_min_both_traded   : int = 4
+    min_pure_spread       : float = 1E-6
+    min_implied_vol       : float = 0.01
+    max_implied_vol       : float = 5.0
 
     def __post_init__(self):
         verify_inp(self.num_min_either_traded >= 0, lambda : f"'num_min_either_traded' must be non-negative, found {self.num_min_either_traded}")
         verify_inp(self.num_min_both_traded >= 0, lambda : f"'num_min_both_traded' must be non-negative, found {self.num_min_both_traded}")
+        verify_inp(self.min_pure_spread > 0, lambda : f"'min_pure_spread' must be positive, found {self.min_pure_spread}")
+        verify_inp(self.min_implied_vol > 0, lambda : f"'min_implied_vol' must be positive, found {self.min_implied_vol}")
+        verify_inp(self.max_implied_vol > self.min_implied_vol, lambda : f"'max_implied_vol' must be greater than 'min_implied_vol', found max_implied_vol={self.max_implied_vol} and min_implied_vol={self.min_implied_vol}")
 
     def __str__(self):#by convention use a some what readable string with comma separated key=value pairs
-        return f"eth={self.num_min_either_traded},bth={self.num_min_both_traded}"
+        return f"eth={self.num_min_either_traded},bth={self.num_min_both_traded},mps={self.min_pure_spread},miv={self.min_implied_vol},xiv={self.max_implied_vol}"
 
 def _uid(ticker, d, raw_day_filter, expiry_filter) -> str:
     return f"{named_unique_filename48_8(f'enrich {str(expiry_filter)},{str(raw_day_filter)}',expiry_filter,raw_day_filter)}"+\
            f"/{ticker}/{fmt_date(d)}"
 
 @_processing(fmt=SubDir.PANDAS_PARQUET).cache(
-            "0.3",
+            "0.7",
             dependencies=[collect_raw_day, ExpiryFilter],
             uid=_uid,
-            exclude_args=['verbose','data','raise_if_bad','refresh_cache'])
-def enrich_day( ticker : str, d : dt.date, data : pd.DataFrame|None = None, *, 
+            exclude_args=['verbose','raw_data','raise_if_bad','refresh_cache'])
+def enrich_day( ticker : str, d : dt.date, raw_data : pd.DataFrame|None = None, *, 
                 raw_day_filter : RawDayFilter = RawDayFilter(), 
                 expiry_filter : ExpiryFilter = ExpiryFilter(), 
                 override_cache_mode : CacheMode|None = None,
@@ -551,8 +605,7 @@ def enrich_day( ticker : str, d : dt.date, data : pd.DataFrame|None = None, *,
     * Compute an implied forward from inverse-spread weighted bid/ask call prices.
     * Compute implied volatilities and (pure) greeks.
 
-    The retunred daya data frame has the schema :attr:`SCHEMA_ENRICHED_DAY`, which includes all columns from :attr:`SCHEMA_RAW_DAY`.
-
+    The returned daya data frame has the schema :attr:`SCHEMA_ENRICHED_DAY`, which includes all columns from :attr:`SCHEMA_RAW_DAY`.
 
     Parameters
     ----------
@@ -594,11 +647,12 @@ def enrich_day( ticker : str, d : dt.date, data : pd.DataFrame|None = None, *,
         This can happen for example if the forward price is highly suspicious, or if all options had zero or NA bid prices. Please check the date range and calendar settings,
         and consider adding the date/ticker to the BAD data sets if the issue is confirmed.
     """
-
-    data         = data if data is not None else collect_raw_day(ticker, d, raw_day_filter, verbose=verbose, override_cache_mode=override_cache_mode, raise_if_bad = raise_if_bad)
+    data         = raw_data if raw_data is not None else collect_raw_day(ticker, d, raw_day_filter, verbose=verbose, override_cache_mode=override_cache_mode, raise_if_bad = raise_if_bad)
+    del raw_data
 
     if data.empty:
-        return _create_empty_df(SCHEMA_ENRICHED_DAY)
+        return create_empty_df(SCHEMA_ENRICHED_DAY)
+    verify_schema( data , SCHEMA_RAW_DAY, lambda : f"{ticker} {d}")
 
     expiry_ids   = data["expiry_id"].to_numpy()
     unq_ids      = np.unique(expiry_ids)
@@ -635,53 +689,65 @@ def enrich_day( ticker : str, d : dt.date, data : pd.DataFrame|None = None, *,
     arrays.is_valid        = np.zeros_like( arrays.fwd, dtype=bool )
     arrays.call_ask        = np.zeros_like( arrays.fwd, dtype=np.float32 )
     arrays.call_bid        = np.zeros_like( arrays.fwd, dtype=np.float32 )
-    arrays.call_ask_ref    = np.zeros_like( arrays.fwd, dtype=np.float32 )
-    arrays.call_bid_ref    = np.zeros_like( arrays.fwd, dtype=np.float32 )
     arrays.ask_vol         = np.zeros_like( arrays.fwd, dtype=np.float32 )
     arrays.bid_vol         = np.zeros_like( arrays.fwd, dtype=np.float32 )
     arrays.log_volume      = np.log10( np.pow(10.,call_log_vol.astype(np.float64))+np.pow(10.,put_log_vol.astype(np.float64))-1 ).astype(np.float32)
     arrays.log_open_interest = np.log10( np.pow(10.,call_log_oi.astype(np.float64))+np.pow(10.,put_log_oi.astype(np.float64))-1 ).astype(np.float32)
-    arrays.ask_pure_price  = np.zeros_like( arrays.fwd, dtype=np.float32 )
-    arrays.bid_pure_price  = np.zeros_like( arrays.fwd, dtype=np.float32 )
-    arrays.ask_pure_delta  = np.zeros_like( arrays.fwd, dtype=np.float32 )
-    arrays.bid_pure_delta  = np.zeros_like( arrays.fwd, dtype=np.float32 )
-    arrays.ask_pure_gamma  = np.zeros_like( arrays.fwd, dtype=np.float32 )
-    arrays.bid_pure_gamma  = np.zeros_like( arrays.fwd, dtype=np.float32 )
-    arrays.bid_pure_vega   = np.zeros_like( arrays.fwd, dtype=np.float32 )
-    arrays.ask_pure_vega   = np.zeros_like( arrays.fwd, dtype=np.float32 )
-    arrays.bid_pure_theta  = np.zeros_like( arrays.fwd, dtype=np.float32 )
-    arrays.ask_pure_theta  = np.zeros_like( arrays.fwd, dtype=np.float32 )
-    arrays.ask_pure_dk     = np.zeros_like( arrays.fwd, dtype=np.float32 )
-    arrays.bid_pure_dk     = np.zeros_like( arrays.fwd, dtype=np.float32 )
-
+    arrays.pure_strike     = np.zeros_like( arrays.fwd, dtype=np.float32 )
+    arrays.pure_ask_price  = np.zeros_like( arrays.fwd, dtype=np.float32 )
+    arrays.pure_bid_price  = np.zeros_like( arrays.fwd, dtype=np.float32 )
+    arrays.pure_ask_delta  = np.zeros_like( arrays.fwd, dtype=np.float32 )
+    arrays.pure_bid_delta  = np.zeros_like( arrays.fwd, dtype=np.float32 )
+    arrays.pure_ask_gamma  = np.zeros_like( arrays.fwd, dtype=np.float32 )
+    arrays.pure_bid_gamma  = np.zeros_like( arrays.fwd, dtype=np.float32 )
+    arrays.pure_bid_vega   = np.zeros_like( arrays.fwd, dtype=np.float32 )
+    arrays.pure_ask_vega   = np.zeros_like( arrays.fwd, dtype=np.float32 )
+    arrays.pure_bid_theta  = np.zeros_like( arrays.fwd, dtype=np.float32 )
+    arrays.pure_ask_theta  = np.zeros_like( arrays.fwd, dtype=np.float32 )
+    arrays.pure_ask_dk     = np.zeros_like( arrays.fwd, dtype=np.float32 )
+    arrays.pure_bid_dk     = np.zeros_like( arrays.fwd, dtype=np.float32 )
+    
     # project
-    dropped_expiries = []
+    dropped_expiries    = []
+    dropped_strikes     = []
+    num_dropped_strikes = 0
 
     for expiry_id in unq_ids:
-        mask = expiry_ids == expiry_id
+        mask            = expiry_ids == expiry_id
+        iexpory         = expiries[mask][0]
+        iiam            = is_am[mask][0]
+        strid           = f"{fmt_date(to_date(iexpory))}{'am' if iiam else 'pm'}"
+        is_valid        = arrays.is_valid[mask] # starts False
+
         if np.sum( both_cp[mask] ) < expiry_filter.num_min_both_traded:
-            arrays.fwd[mask] = fwd_ref[mask]
-            iexpory = expiries[mask][0]
-            iiam    = is_am[mask][0]
-            dropped_expiries.append(f"{fmt_date(to_date(iexpory))}{'am' if iiam else 'pm'}")
+            dropped_expiries.append(f"{strid} (insufficient traded strikes)")
             continue
         if np.sum(either_cp[mask]) < expiry_filter.num_min_either_traded:
-            arrays.fwd[mask] = fwd_ref[mask]
-            iexpory = expiries[mask][0]
-            iiam    = is_am[mask][0]
-            dropped_expiries.append(f"{fmt_date(to_date(iexpory))}{'am' if iiam else 'pm'}")
+            dropped_expiries.append(f"{strid} (insufficient traded options)")
             continue
-        dffwd_t      = np.sum(dffwd_mid[mask] * dffwd_wght[mask]) / np.sum(dffwd_wght[mask]) # weighted forward for this expiry_id
-        df_t         = df_ref[mask][0] # same for all rows 
-        fwd_t        = dffwd_t / df_t
-        tte_yt       = data['tte_y'].to_numpy()[mask][0]
-        sqrtT_t      = math.sqrt(tte_yt)
-        arrays.fwd[mask]      = fwd_t
-        arrays.is_valid[mask] = True
+        dffwd_t          = np.sum(dffwd_mid[mask] * dffwd_wght[mask]) / np.sum(dffwd_wght[mask]) # weighted forward for this expiry_id
+        if np.min(dffwd_t) < 1E-6:
+            dropped_expiries.append(f"{strid} (cannot compute implied forward)")
+            continue
+
+        df_t             = df_ref[mask][0] # same for all rows 
+        fwd_t            = dffwd_t / df_t
+        tte_yt           = data['tte_y'].to_numpy()[mask][0]
+        sqrtT_t          = math.sqrt(tte_yt)
+        arrays.fwd[mask] = fwd_t
+        is_valid[:]      = True
 
         # synthetic call price from put-call parity using the projected forward, for comparison with the market call price. 
-        sy_call_ask        = mkt_put_ask[mask] + dffwd_t - df_t * strike[mask] 
-        sy_call_bid        = mkt_put_bid[mask] + dffwd_t - df_t * strike[mask]
+        sy_call_ask      = mkt_put_ask[mask] + dffwd_t - df_t * strike[mask] 
+        sy_call_bid      = mkt_put_bid[mask] + dffwd_t - df_t * strike[mask]
+
+        sy_call_spread   = sy_call_ask - sy_call_bid
+        bad_options      = (sy_call_ask <= 0.) | (sy_call_bid <= 0.) | (sy_call_spread < expiry_filter.min_pure_spread*dffwd_t)
+        issues           = ""
+        if np.any(bad_options):
+            issues              = f"{np.sum(bad_options)} strikes with p/c issues; "
+            num_dropped_strikes += np.sum(bad_options)
+            is_valid[:]         &= ~bad_options
 
         call_mid           = 0.5 * ( np.minimum( sy_call_ask, mkt_call_ask[mask]) + np.maximum( sy_call_bid, mkt_call_bid[mask]) )
         call_spread        = np.minimum( mkt_call_ask[mask] - mkt_call_bid[mask], sy_call_ask - sy_call_bid )
@@ -690,26 +756,100 @@ def enrich_day( ticker : str, d : dt.date, data : pd.DataFrame|None = None, *,
         pure_strike        = strike[mask] / fwd_t
         pure_call_ask      = new_call_ask / dffwd_t
         pure_call_bid      = new_call_bid / dffwd_t
-        ask_vols           = bs.implied( pure_strike, pure_call_ask, sqrtT = sqrtT_t, eps=1E-4 )
-        bid_vols           = bs.implied( pure_strike, pure_call_bid, sqrtT = sqrtT_t, eps=1E-4 )
+        bad_options        = (pure_call_ask - pure_call_bid) < expiry_filter.min_pure_spread
+        if np.any(bad_options):
+            issues              = issues + f"{np.sum(bad_options)} strikes with invalid spread; "
+            num_dropped_strikes += np.sum(bad_options)
+            is_valid[:]         &= ~bad_options
 
-        arrays.call_ask_ref[mask]   = new_call_ask
-        arrays.call_bid_ref[mask]   = new_call_bid
-        arrays.ask_vol[mask]        = ask_vols
-        arrays.bid_vol[mask]        = bid_vols
+        if not np.any(is_valid):
+            dropped_expiries.append(f"{strid} (too many serious forward/prices issues to recover)")
+            is_valid[:] = False
+            continue
+        if np.sum( both_cp[mask][is_valid] ) < expiry_filter.num_min_both_traded:
+            dropped_expiries.append(f"{strid} (insufficient traded strikes post filtering)")
+            is_valid[:] = False
+            continue
+        if np.sum(either_cp[mask][is_valid]) < expiry_filter.num_min_either_traded:
+            dropped_expiries.append(f"{strid} (insufficient traded options post filtering)")
+            is_valid[:] = False
+            continue
 
-        bid_greeks               = bs( k=pure_strike, vol=bid_vols, sqrtT = sqrtT_t, eps=1E-4, what=bs.PRICE|bs.DELTA|bs.GAMMA|bs.VEGA|bs.THETA|bs.DK )
-        ask_greeks               = bs( k=pure_strike, vol=ask_vols, sqrtT = sqrtT_t, eps=1E-4, what=bs.PRICE|bs.DELTA|bs.GAMMA|bs.VEGA|bs.THETA|bs.DK )
+        # implied vol calculation will be within 10% of spread
+        # which means that bid should remain below ask.
+        # However, for extreme options the implied vol calculation
+        # may reach a boundary. In this case bid/ask spreads
+        # are not guranteed to be preserved.
+
+        spread                   = pure_call_ask - pure_call_bid
+        price_tol                = np.minimum( spread*0.1, 1E-6)
+        ask_vols                 = bs.implied( pure_strike, pure_call_ask, sqrtT = sqrtT_t, 
+                                               price_tol=price_tol,
+                                               mask=is_valid, 
+                                               eps=_IMPLIED_VOL_CALC_EPS, 
+                                               vol_min=expiry_filter.min_implied_vol, 
+                                               vol_max=expiry_filter.max_implied_vol )
+        bid_vols                 = bs.implied( pure_strike, pure_call_bid, sqrtT = sqrtT_t, 
+                                               price_tol=price_tol, 
+                                               mask=is_valid, 
+                                               eps=_IMPLIED_VOL_CALC_EPS, 
+                                               vol_min=expiry_filter.min_implied_vol, 
+                                               vol_max=expiry_filter.max_implied_vol )
+        ask_vols[~is_valid]      = expiry_filter.min_implied_vol*1.1
+        bid_vols[~is_valid]      = expiry_filter.min_implied_vol
+
+        arrays.pure_strike[mask] = pure_strike
+        arrays.ask_vol[mask]     = ask_vols
+        arrays.bid_vol[mask]     = bid_vols
+
+        bid_greeks               = bs( k=pure_strike, vol=bid_vols, sqrtT = sqrtT_t, eps=_GREEK_CALC_EPS, what=bs.PRICE|bs.DELTA|bs.GAMMA|bs.VEGA|bs.THETA|bs.DK )
+        ask_greeks               = bs( k=pure_strike, vol=ask_vols, sqrtT = sqrtT_t, eps=_GREEK_CALC_EPS, what=bs.PRICE|bs.DELTA|bs.GAMMA|bs.VEGA|bs.THETA|bs.DK )
+
+        diff_del = 0
+        ask_diff = ask_greeks.price - pure_call_ask
+        diff_err =( np.abs(ask_diff) > price_tol*1.1 ) & is_valid
+        if np.any(diff_err):
+            ask_vol_at_err = ask_vols[diff_err]
+            bnd_vol        = ( ask_vol_at_err == expiry_filter.min_implied_vol ) | ( ask_vol_at_err == expiry_filter.max_implied_vol )
+            assert np.all(bnd_vol), f"Internal error: {ticker} {d}: found {np.sum(diff_err)} options with implied vol calculation errors above tolerance, but not at the boundaries. Please contact the authors with an example."
+            diff_del       = np.sum(diff_err)
+            is_valid       &= ~diff_err
+
+        bid_diff = bid_greeks.price - pure_call_bid
+        diff_err = (np.abs(bid_diff) > price_tol*1.1) & is_valid
+        if np.any(diff_err):    
+            bid_vol_at_err = bid_vols[diff_err]
+            bnd_vol        = ( bid_vol_at_err == expiry_filter.min_implied_vol ) | ( bid_vol_at_err == expiry_filter.max_implied_vol )
+            assert np.all(bnd_vol), f"Internal error: {ticker} {d}: found {np.sum(diff_err)} options with implied vol calculation errors above tolerance, but not at the boundaries. Please contact the authors with an example."
+            diff_del       += np.sum(diff_err)
+            is_valid       &= ~diff_err
+
+        if diff_del>0:
+            issues         = issues + f"{diff_del} strikes at implied vol boundaries; "
+            num_dropped_strikes += diff_del
+
+        # copy residual over
 
         def copy(which, src):
             for k,v in src.items():
-                arrays[f"{which}_pure_{k}"][mask] = v
+                v[~is_valid] = 0.0
+                arrays[f"pure_{which}_{k}"][mask] = v
         copy("bid", bid_greeks) 
         copy("ask", ask_greeks)
 
         arrays.call_ask[mask]   = ask_greeks.price * dffwd_t
         arrays.call_bid[mask]   = bid_greeks.price * dffwd_t
         arrays.nms[mask]        = NMS.to_nms( pure_strike, tte_yt )
+
+        assert np.all(arrays.call_bid[mask][is_valid] > 0.), f"Internal error: {ticker} {d}: found non-positive call bid price after enrichment for expiry {strid}. Please contact the authors with an example."
+        assert np.all(arrays.call_ask[mask][is_valid] > arrays.call_bid[mask][is_valid]), f"Internal error: {ticker} {d}: found non-positive bid-ask spread {strid}. Please contact the authors with an example."
+
+        assert np.any( is_valid ), "Internal error: no valid options found after enrichment."
+        arrays.is_valid[mask] = is_valid ##??? why do I need to do that???
+        assert np.all( is_valid == arrays.is_valid[mask] ), "Internal error: mismatch between is_valid and arrays.is_valid"
+
+        if len(issues) > 0:
+            dropped_strikes.append(f"{fmt_date(to_date(iexpory))}{'am' if iiam else 'pm'} (Dropped {issues[:-2]}: {np.sum(is_valid)}/{len(is_valid)} strikes left)")
 
     data = data.copy(deep=False)
 
@@ -721,26 +861,53 @@ def enrich_day( ticker : str, d : dt.date, data : pd.DataFrame|None = None, *,
     # copy over
     for r, v in arrays.items():
         data[r] = v
-    data = data.loc[data["is_valid"]].drop(columns="is_valid")
-    data['date'] = data['date'].astype("datetime64[s]")     # seems we need this for windows
-    data['expiry'] = data['expiry'].astype("datetime64[s]") # seems we need this for windows
+    # remove all rows where is_valid is False
+    if not np.all(arrays.is_valid):
+        data = data.loc[data["is_valid"]].drop(columns="is_valid")
 
-    if set(data.columns) != set(SCHEMA_ENRICHED_DAY):
-        too_much = set(data.columns) - set(SCHEMA_ENRICHED_DAY)
-        too_little = set(SCHEMA_ENRICHED_DAY) - set(data.columns)
-        raise RuntimeError(f"Internal error: {ticker} {d}: enriched DataFrame has unexpected columns. Superflous: {fmt_list(too_much)}. Missing: {fmt_list(too_little)}. Please contact the authors with an example. ")
+    df_bad = data[data['pure_ask_price']<=data['pure_bid_price']]
+    if not df_bad.empty:
+        print(df_bad[['expiry_id', 'strike', 'pure_ask_price', 'pure_bid_price']])
+        assert df_bad.empty, f"Internal error: {ticker} {d}: found {len(df_bad)} options with pure ask price below pure bid price -- this should not happen here!"
 
-    for c,expected_dtype in SCHEMA_ENRICHED_DAY.items():
-        actual_dtype = data[c].dtype
-        if actual_dtype != expected_dtype:
-            raise RuntimeError(f"Internal error: {ticker} {d}: enriched DataFrame column '{c}' has unexpected dtype. Expected {expected_dtype}, found {actual_dtype}. Please contact the authors with an example.")
-
+    num_expires_left = data["expiry_id"].nunique()
     if len(dropped_expiries) > 0:
-        verbose.write(lambda : f"{ticker} {d}: Enriched {len(data)} of {num_total} raw options across {num_expiries} expiries, of which the following {len(dropped_expiries)} were dropped: {fmt_list(dropped_expiries)}.")
-    else:
-        assert len(data) == num_total, f"Internal error: {ticker} {d}: no expiries were dropped but the number of rows changed from {num_total} to {len(data)}. Please contact the authors with an example."
-        verbose.write(lambda : f"{ticker} {d}: Enriched {len(data)} raw options across {num_expiries} expiries. No expiries were dropped.")
+        dropped_expiries = f"Dropped the following {len(dropped_expiries)} of {num_expiries} input expiries: {fmt_list(dropped_expiries)}. "
+    if len(dropped_strikes) > 0:
+        dropped_strikes = f"Dropped {num_dropped_strikes} strikes among the remaining {num_expires_left} expiries: {fmt_list(dropped_strikes)}. "
 
+    verify_schema(data, SCHEMA_ENRICHED_DAY, lambda : f"{ticker} {d}")
+
+    if data.empty:
+        verbose.write(lambda : f"{ticker} {d}: no valid options found after enrichment:")
+        for de in dropped_expiries:
+            verbose.report(2,de)
+        for ds in dropped_strikes:
+            verbose.report(2,ds)
+        if raise_if_bad:
+            assert len(dropped_expiries) > 0 or len(dropped_strikes) > 0, "Internal error -- No info??"
+            raise RuntimeError(f"Internal error: {ticker} {d}: no valid options found after enrichment.")
+        warnings.warn(f"{ticker} {d}: no valid options found after enrichment:{dropped_expiries}{dropped_strikes}")
+        return data
+
+    # check that common fields are so.    
+    for c in ENRICHED_PER_DAY_FIELDS:
+        column_data = data[c]
+        if not (column_data.nunique() == 1):
+            raise RuntimeError(f"Internal error: {ticker} {d}: enriched DataFrame column '{c}' is expected to have exactly one unique value, found {column_data.nunique()}. Please contact the authors with an example.")
+
+    num_expiries   = data["expiry_id"].nunique()
+    for c in ENRICHED_PER_EXPIRY_FIELDS:
+        grouped_unique = data.groupby("expiry_id", sort=False)[c].nunique(dropna=False)
+        if not (grouped_unique == 1).all():
+            bad_expiry_ids = grouped_unique[grouped_unique != 1].index.tolist()[:10]
+            raise RuntimeError(f"Internal error: {ticker} {d}: enriched DataFrame column '{c}' is expected to have a single value within each expiry_id, but this failed for expiry_id values {bad_expiry_ids}. Please contact the authors with an example.")
+
+    verbose.write(lambda : f"{ticker} {d}: Enriched {len(data)} of {num_total} raw options across {num_expires_left} of {num_expiries} input expiries.")
+    if len(dropped_expiries) > 0:
+        verbose.report(1,dropped_expiries)
+    if len(dropped_strikes) > 0:
+        verbose.report(1,dropped_strikes)
     return data
 
 # ================================================================
@@ -757,41 +924,39 @@ from quantdata.widb import cli_defaults
 @click.option('--workers', default=cli_defaults.workers, help='Number of workers', type=int)
 @click.option('--threading', is_flag=True, help="Use only threading, no multiprocessing")
 @click.option('--refresh', is_flag=True, help="Refresh data (this will only refresh the top level files)")
-@click.option('--debug', is_flag=True, help="Enable debug mode with more verbose output and checks")
 
 def main(tickers : list[str],
         period : list[dt.datetime], 
         halfdays : bool, 
         workers : int, 
         threading : bool, 
-        refresh : bool,
-        debug : bool):
+        refresh : bool):
 
     verify_inp( len(tickers) > 0, "At least one ticker must be specified")
     verify_inp( period is not None and len(period) == 2, "A start and end date must be specified")
 
-    from quantdata.widb.sampler import sample_days, SampleDaysConfig
+    from quantdata.widb.timeseries import build_time_series, TimeseriesConfig
 
     start, end         = period
     date_range         = DateRange(start=to_date(start), end=to_date(end), exclude_half_days=not halfdays)
     pool_config        = PoolConfig(num_workers=workers, threading=threading)
     raw_day_filter     = RawDayFilter()   
     expiry_filter      = ExpiryFilter()
-    sample_days_config = SampleDaysConfig()
+    timeseries_config  = TimeseriesConfig()
 
     dates              = date_range.get_business_days()
 
     verbose = Context.all
     verbose.write(lambda: f"Enriching data for tickers {fmt_list(tickers)} from {fmt_date(start)} to {fmt_date(end)} {'excluding' if date_range.exclude_half_days else 'including'} half days. Total business days: {len(dates)}.")
-    verbose.report(1,lambda: f"Sample Days Config: {sample_days_config}")
+    verbose.report(1,lambda: f"Timeseries Config: {timeseries_config}")
     verbose.report(1,lambda: f"Raw Day Filter: {raw_day_filter}")
     verbose.report(1,lambda: f"Expiry filter: {expiry_filter}")
     verbose.report(1,lambda: f"Pool config: {pool_config}")
 
     for it, ticker in enumerate(tickers):  
         verbose.report(1,lambda: f"\rProcessing ticker {it+1}/{len(tickers)} {ticker} from {fmt_date(date_range.start)} to {fmt_date(date_range.end)}.")
-        sample_days(ticker, date_range, include_fields=None, exclude_fields=None, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter,
-                     sample_days_config=sample_days_config, pool_config=pool_config, override_cache_mode="update" if refresh else None, verbose=verbose(2) )
+        build_time_series(ticker, date_range, include_fields=None, exclude_fields=None, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, mk_arb_free=None,
+                     timeseries_config=timeseries_config, pool_config=pool_config, override_cache_mode="update" if refresh else None, verbose=verbose(2) )
     verbose.write(f"All {len(tickers)} tickers processed.")
 
 if __name__ == "__main__":

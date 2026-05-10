@@ -6,7 +6,8 @@ from __future__ import annotations
 
 from quantdata import env#NOQA
 from quantdata.dysanos.simple import locations_simple
-from quantdata.widb.sampler import sample_days, SampleDaysConfig, RawDayFilter, ExpiryFilter, SCHEMA_ENRICHED_DAY, table_of_sample_days#NOQA
+from quantdata.widb.arbfree import SCHEMA_ARB_FREE_DAY_EXPIRY, SCHEMA_ARB_FREE_DAY_SURFACE
+from quantdata.widb.timeseries import MkArbFree, build_time_series, TimeseriesConfig, RawDayFilter, ExpiryFilter, SCHEMA_ENRICHED_DAY#NOQA
 from quantdata.biz_calendar import DateRange
 from quantdata.pool import PoolConfig
 from quantdata.torch import BaseSamplerConfig, BaseSampler
@@ -31,41 +32,80 @@ from collections.abc import Sequence
 @version("0.1")
 @dataclass(frozen=True)
 class SamplingConfig:
-    """ Chose the sampling parameters """
-    num_samples : int|None = None    #: Number of samples used or ``None`` for all available samples.
+    """
+    Sampling configuration for :class:`SimpleSampler`.
+    
+    This configuration drives the number of (time) steps per sample, the slide applied (e.g. how man days ahead the next sample is), and the validation split.
+    """
+
     num_steps: int = 25              #: Steps per sample, including terminal 'y'
     num_slide: int = 5               #: Number of steps to slide for the next sample. If num_slide < num_steps, samples will overlap.
     pct_validation: float = 0.2      #: Percentage of samples to use for validation.
     seed : int = 42                  #: Random seed for reproducibility.
 
     def __post_init__(self):
-        verify_inp( self.num_samples is None or self.num_samples >= 2, "'num_samples' must be at least 2, or None" )
         verify_inp( 0.0 < self.pct_validation < 1.0, "'pct_validation' must be in (0,1)" )   
         verify_inp( self.num_steps >= 2, "'num_steps' must be at least 2, as the last step is the prediction target" )
         verify_inp( self.num_slide > 0, "'num_slide' must be positive" )
 
     def __str__(self):#by convention use a some what readable string with comma separated key=value pairs
-        return f"ns={self.num_samples if not self.num_samples is None else 'all'},stp={self.num_steps},sld={self.num_slide},vld={self.pct_validation:.2f},seed={self.seed}"
+        return f"stp={self.num_steps},sld={self.num_slide},vld={self.pct_validation:.2f},seed={self.seed}"
 
-@version("0.", dependencies=[RawDayFilter,ExpiryFilter,SampleDaysConfig,SamplingConfig])
+@version("0.", dependencies=[RawDayFilter,ExpiryFilter,TimeseriesConfig,SamplingConfig])
 @dataclass(frozen=True)
 class SimpleConfig(BaseSamplerConfig):
-    """ BlockSampler configuration """
-    tickers : list[str] = field(default_factory=lambda: ["SPY"])  #: Tickers to include in the sampler. Can be a single ticker as a string, or a list of tickers.
-    date_range : DateRange = field(default_factory=lambda: DateRange(start=dt.date(2025, 1, 1), end=dt.date(2025, 2, 1), exclude_half_days=True))  # which dates
-    raw_day_filter : RawDayFilter = field(default_factory=lambda: RawDayFilter())  #: Filter for raw days, applied before sampling.
-    expiry_filter : ExpiryFilter = field(default_factory=lambda: ExpiryFilter())  #: Filter for option expiries, applied before sampling.
-    sample_days_config : SampleDaysConfig = field(default_factory=lambda: SampleDaysConfig())  #: Configuration for sampling days, applied before sampling.
-    sampling_config : SamplingConfig = field(default_factory=lambda: SamplingConfig())  #: Configuration for sampling, applied after the above filters.   
+    """
+    Master Configuration
+
+    All-in-one configuration for the simple sampler, which includes all the necessary information to generate the samples,
+    including the filters and configurations for the time series generation, as well as the sampling configuration.
+    This is used both for generating the samples and for caching, ensuring that any change in the configuration will
+    lead to a different cache key and thus a different set of samples.
+    """
+    tickers           : list[str] = field(default_factory=lambda: ["SPY"])  #: Tickers to include in the sampler. Can be a single ticker as a string, or a list of tickers.
+    date_range        : DateRange = field(default_factory=lambda: DateRange(start=dt.date(2025, 1, 1), end=dt.date(2025, 2, 1), exclude_half_days=True))  # which dates
+    raw_day_filter    : RawDayFilter = field(default_factory=lambda: RawDayFilter())  #: Filter for raw days, applied before sampling.
+    expiry_filter     : ExpiryFilter = field(default_factory=lambda: ExpiryFilter())  #: Filter for option expiries, applied before sampling.
+    mk_arb_free       : MkArbFree = MkArbFree(no_arb_mode="expiry") #: Whether to use the arbitrage-free version of the data, and if so which version (expiry or surface).
+    timeseries_config : TimeseriesConfig = field(default_factory=lambda: TimeseriesConfig())  #: Configuration for sampling days, applied before sampling.
+    sampling_config   : SamplingConfig = field(default_factory=lambda: SamplingConfig())  #: Configuration for sampling, applied after the above filters.   
 
     def __post_init__(self):
         verify_inp( isinstance(self.tickers, Sequence) and len(self.tickers) > 0, "'tickers' must be a list of strings" )
         verify_inp( len(set(self.tickers)) == len(self.tickers), "'tickers' must not contain duplicates" )
 
+    @property
+    def no_arb_mode(self) -> str|None:
+        """ Returns ``None`` if no arbitrage pre-processing is applied, or the mode of arbitrage pre-processing (e.g. ``"expiry"`` or ``"surface"``) if it is applied. """
+        return self.mk_arb_free.no_arb_mode if self.mk_arb_free is not None else None
+    
+    def timeseries_fields(self) -> set:
+        """ Returs the fields to be requested from the time series (depends on the arbitrage pre-processing mode). """
+        if self.no_arb_mode == "expiry":
+            return SIMPLE_INCLUDE_FIELDS_NOARB_EXPIRY
+        if self.no_arb_mode == "surface":
+            return SIMPLE_INCLUDE_FIELDS_NOARB_SURFACE
+        return SIMPLE_INCLUDE_FIELDS
+    
+    def fields_to_features(self) -> dict[str, str|None]:
+        """
+        Returns the map from the fields of the time series and the modified fileds in :func:`sample_simple_days`
+        to the features included in the sample, depending on the arbitrage pre-processing mode.
+        """
+        if self.no_arb_mode == "expiry":
+            return SIMPLE_FEATURES_NOARB_EXPIRY
+        if self.no_arb_mode == "surface":
+            return SIMPLE_FEATURES_NOARB_SURFACE
+        return SIMPLE_FEATURES
+    
+    def features(self) -> set[str]:
+        """ Returns the features to be included in the final sample, depending on the arbitrage pre-processing mode. """
+        return set( (f if n is None else n) for f, n in self.fields_to_features().items() )
+
     def base_cache_dir_uid(self) -> str:
         """ Base directory UID up to ticker """
-        x1   = named_unique_filename48_8( f"{self.raw_day_filter},{self.expiry_filter}", self.raw_day_filter, self.expiry_filter )
-        x2   = named_unique_filename48_8( f"{self.sample_days_config}", self.sample_days_config )
+        x1   = named_unique_filename48_8(f'arbfree {str(self.expiry_filter)},{str(self.raw_day_filter)},{str(self.mk_arb_free)}', self.expiry_filter, self.raw_day_filter, self.mk_arb_free)
+        x2   = named_unique_filename48_8( f"{self.timeseries_config}", self.timeseries_config )
         x3   = named_unique_filename48_8( f"{self.sampling_config}", self.sampling_config )
         return f"{x1}/{x2}/{x3}/{str(self.date_range)}"
     
@@ -101,57 +141,104 @@ SIMPLE_INCLUDE_FIELDS = {
     'bid_vol',
     'log_volume',
     'log_open_interest',
-    'ask_pure_price',
-    'bid_pure_price',
-    'ask_pure_delta',
-    'bid_pure_delta',
-    'ask_pure_gamma',
-    'bid_pure_gamma',
-    'bid_pure_vega',
-    'ask_pure_vega',
-    'bid_pure_theta',
-    'ask_pure_theta',
-    'ask_pure_dk',
-    'bid_pure_dk'
+    'pure_strike',
+    'pure_ask_price',
+    'pure_ask_delta',
+    'pure_ask_gamma',
+    'pure_ask_vega',
+    'pure_ask_theta',
+    'pure_ask_dk',
+    'pure_bid_price',
+    'pure_bid_delta',
+    'pure_bid_gamma',
+    'pure_bid_vega',
+    'pure_bid_theta',
+    'pure_bid_dk'}
+""" Fields the function requests from the time series if no arbitrage pre-pprocessing is applied. """
+SIMPLE_INCLUDE_FIELDS_NOARB_EXPIRY=SIMPLE_INCLUDE_FIELDS|{
+    'mask_arb_free',
+    'fit1_vol',
+    'pure_fit1_price',
+    'pure_fit1_delta',
+    'pure_fit1_gamma',
+    'pure_fit1_vega',
+    'pure_fit1_theta',
+    'pure_fit1_dk'
 }
-""" Fields the function requests from the data source """
-assert SIMPLE_INCLUDE_FIELDS <= set(SCHEMA_ENRICHED_DAY)|{'is_valid'}, f"SIMPLE_INCLUDE_FIELDS must be a subset of the available fields in SCHEMA_ENRICHED_DAY. Unknown fields: {sorted(SIMPLE_INCLUDE_FIELDS - set(SCHEMA_ENRICHED_DAY))}"
+""" Fields the function requests from the time series if ``"expiry"`` arbitrage pre-pprocessing is applied. """
+SIMPLE_INCLUDE_FIELDS_NOARB_SURFACE=SIMPLE_INCLUDE_FIELDS_NOARB_EXPIRY|{
+    'mask_arb_free',
+    'fitX_vol',
+    'pure_fitX_price',
+    'pure_fitX_delta',
+    'pure_fitX_gamma',
+    'pure_fitX_vega',
+    'pure_fitX_theta',
+    'pure_fitX_dk'
+}
+""" Fields the function requests from the time series if ``"surface"`` arbitrage pre-pprocessing is applied. """
 
-SIMPLE_FEATURES = {
-    'spot_ref',  # actual $
-    'spot_ret',  # spot(t) / spot(t-1) - 1
-    'is_valid',
-    'is_american',
-    'is_am',
-    'strike',   # divided by spot_ref
-    'pure_strike', # strike/fwd, in dollars
-    'df',
-    'tte_y',
-    'fwd',       # divided by spot_ref
-    'nms',
-    'call_ask',  # divided by spot_ref
-    'call_bid',  # divided by spot_ref
-    'ask_vol',
-    'bid_vol',
-    'log_volume',
-    'log_open_interest',
-    'ask_pure_price',
-    'bid_pure_price',
-    'ask_pure_delta',
-    'bid_pure_delta',
-    'ask_pure_gamma',
-    'bid_pure_gamma',
-    'bid_pure_vega',
-    'ask_pure_vega',
-    'bid_pure_theta',
-    'ask_pure_theta',
-    'ask_pure_dk',
-    'bid_pure_dk'
+assert SIMPLE_INCLUDE_FIELDS <= set(SCHEMA_ENRICHED_DAY)|{'is_valid'}, f"SIMPLE_INCLUDE_FIELDS must be a subset of the available fields in SCHEMA_ENRICHED_DAY. Unknown fields: {sorted(SIMPLE_INCLUDE_FIELDS - set(SCHEMA_ENRICHED_DAY))}"
+assert SIMPLE_INCLUDE_FIELDS_NOARB_EXPIRY <= set(SCHEMA_ARB_FREE_DAY_EXPIRY)|{'is_valid'}, f"SIMPLE_INCLUDE_FIELDS_NOARB_EXPIRY must be a subset of the available fields in SCHEMA_ARB_FREE_DAY_EXPIRY. Unknown fields: {sorted(SIMPLE_INCLUDE_FIELDS_NOARB_EXPIRY - set(SCHEMA_ARB_FREE_DAY_EXPIRY))}"
+assert SIMPLE_INCLUDE_FIELDS_NOARB_SURFACE <= set(SCHEMA_ARB_FREE_DAY_SURFACE)|{'is_valid'}, f"SIMPLE_INCLUDE_FIELDS_NOARB_SURFACE must be a subset of the available fields in SCHEMA_ARB_FREE_DAY_SURFACE. Unknown fields: {sorted(SIMPLE_INCLUDE_FIELDS_NOARB_SURFACE - set(SCHEMA_ARB_FREE_DAY_SURFACE))}"
+
+_SIMPLE_FEATURES_ALWAYS = {
+    'spot_ref':None,  # actual $
+    'spot_ret':None,  # spot(t) / spot(t-1) - 1
+    'is_valid':None,
+    'is_american':None,
+    'is_am':None,
+    'df':None,
+    'tte_y':None,
+    'fwd':None,       # divided by spot_ref
+    'nms':None,
+    'ask_vol':None,
+    'bid_vol':None,
+    'log_volume':None,
+    'log_open_interest':None,
+    'pure_strike':None, # strike/fwd, in dollars
+    'pure_ask_price':None,
+    'pure_bid_price':None
 }
+""" Features we always extract """
+SIMPLE_FEATURES = _SIMPLE_FEATURES_ALWAYS|{
+    'pure_ask_delta':None,
+    'pure_bid_delta':None,
+    'pure_ask_gamma':None,
+    'pure_bid_gamma':None,
+    'pure_bid_vega':None,
+    'pure_ask_vega':None,
+    'pure_bid_theta':None,
+    'pure_ask_theta':None,
+    'pure_ask_dk':None,
+    'pure_bid_dk':None
+}
+""" Features we extract if no arbitrage pre-processing is applied, and how they are translated """
+SIMPLE_FEATURES_NOARB_EXPIRY = _SIMPLE_FEATURES_ALWAYS|{
+    'mask_arb_free':None,
+    'fit1_vol':'fit_vol',
+    'pure_fit1_price':'pure_fit_price',
+    'pure_fit1_delta':'pure_fit_delta',
+    'pure_fit1_gamma':'pure_fit_gamma',
+    'pure_fit1_vega':'pure_fit_vega',
+    'pure_fit1_theta':'pure_fit_theta',
+    'pure_fit1_dk':'pure_fit_dk'
+}    
+""" Features we extract if ``"expiry"`` arbitrage pre-processing is applied, and how they are translated """
+SIMPLE_FEATURES_NOARB_SURFACE = _SIMPLE_FEATURES_ALWAYS|{
+    'mask_arb_free':None,
+    'fitX_vol':'fitX_vol',
+    'pure_fitX_price':'pure_fit_price',
+    'pure_fitX_delta':'pure_fit_delta',
+    'pure_fitX_gamma':'pure_fit_gamma',
+    'pure_fitX_vega':'pure_fit_vega',
+    'pure_fitX_theta':'pure_fit_theta',
+    'pure_fitX_dk':'pure_fit_dk'
+}    
 
 @training_root_simple(fmt=SubDir.PYTREE_HDF5).cache(
-    "0.2",
-    dependencies=[SimpleConfig, sample_days],
+    "0.5",
+    dependencies=[SimpleConfig, build_time_series],
     uid = lambda ticker, simple_config: f"{simple_config.base_cache_dir_uid()}/{ticker}",
     exclude_args=['pool_config', 'refresh_cache', 'verbose']
 )
@@ -161,7 +248,7 @@ def sample_simple_days(  ticker : str,
                          override_cache_mode : CacheMode|None = None,
                          verbose : Context = Context.all ) -> dict:
     """
-    Cached version of sample_days which also normalizes the data:
+    Cached version of build_time_series which also normalizes the data:
 
     * ``pure_strike`` is the pure strike.
     * ``strike`` is divided by ``spot_ref``.
@@ -170,22 +257,34 @@ def sample_simple_days(  ticker : str,
     * ``spot_ref`` is the original spot price, kept for reference.
     * ``spot_ret`` is the spot return, defined as spot(t) / spot(t-1) - 1.
 
-    The result is a dict cached with HDF5 which contains ``SIMPLE_FEATURES`` and ``dates`` (the dater per time index).
+    The result is a dict cached with HDF5 which contains ``dates`` (the dater per time index) and
+    the features ``SIMPLE_FEATURES``,
+     ``SIMPLE_FEATURES_NOARB_EXPIRY`` or ``SIMPLE_FEATURES_NOARB_SURFACE``, depending on 
+      whether any and if so which no-arbitrage pre-processing is applied
     """
-    r = sample_days( 
+
+    timeseries_fields  = simple_config.timeseries_fields()  # fields to be read from time series
+    fields_to_features = simple_config.fields_to_features() # translation map from time series + fiddling to features
+    if not 'is_valid' in fields_to_features:
+        raise ValueError(f"'is_valid' must be included in the fields to features mapping, as it is used for masking invalid options. Please include 'is_valid' in the mapping with a value of None or a feature name.")
+    if 'dates' in fields_to_features:
+        raise ValueError(f"'dates' cannot be included in the fields to features mapping, as it is used as a separate field in the output. Please remove 'dates' from the mapping.")
+
+    r = build_time_series( 
                   ticker=ticker, 
                   date_range = simple_config.date_range,
-                  include_fields = SIMPLE_INCLUDE_FIELDS,
+                  include_fields = set(simple_config.timeseries_fields()), # which time series fields to use
                   exclude_fields = set(),
                   raw_day_filter = simple_config.raw_day_filter,
                   expiry_filter = simple_config.expiry_filter,
-                  sample_days_config = simple_config.sample_days_config,
+                  mk_arb_free = simple_config.mk_arb_free,
+                  timeseries_config = simple_config.timeseries_config,
                   pool_config = pool_config,
                   override_cache_mode = override_cache_mode,
                   verbose = verbose )
     
-    expected = set(SIMPLE_INCLUDE_FIELDS) | {"dates", "ticker"}
-    assert set(r) == expected, f"Expected sample_days to return fields {sorted(expected)}, got {sorted(r)}."
+    expected = set(timeseries_fields) | {"dates", "ticker"}
+    assert set(r) == expected, f"Expected build_time_series to return fields {sorted(expected)}, got {sorted(r)}."
 
     # scale all cash quantities by initial spot.
     # In order not to lose sight of the cash relation to the previous spot, keep the return as well.
@@ -193,10 +292,10 @@ def sample_simple_days(  ticker : str,
 
     S, O = r.spot.shape
 
-    if np.min(r.spot[r.is_valid]) <= 0.:
-        raise ValueError(f"Expected positive spot, got {np.min(r.spot[r.is_valid]):.4g} for ticker {ticker}.")
-    if np.min(r.spot_prev[r.is_valid]) <= 0.:
-        raise ValueError(f"Expected positive spot_prev, got {np.min(r.spot_prev[r.is_valid]):.4g} for ticker {ticker}.")
+    if np.min(r.spot) <= 0.:
+        raise ValueError(f"Expected positive spot, got {np.min(r.spot):.4g} for ticker {ticker}.")
+    if np.min(r.spot_prev) <= 0.:
+        raise ValueError(f"Expected positive spot_prev, got {np.min(r.spot_prev):.4g} for ticker {ticker}.")
 
     r.spot_ref = r.spot
     r.spot_ret = np.where( r.is_valid, r.spot / np.where( r.is_valid, r.spot_prev, 1. ) - 1.0, 0. )
@@ -215,25 +314,25 @@ def sample_simple_days(  ticker : str,
     date_diffs = [ d.total_seconds() for d in date_diffs ]
     assert min(date_diffs) > 0., "Internal error: date_ids should be strictly increasing with a step of at least 0.5 to ensure proper ordering and separation of samples. Please contact the authors with an example if you encounter this error."
 
-    if set(r) != SIMPLE_FEATURES|{"dates"}:
-        extra = set(r) - SIMPLE_FEATURES - {"dates"}
-        missing = SIMPLE_FEATURES - set(r)
-        msg = f"Internal error: unexpected fields returned by sample_days for ticker {ticker}:"
-        if extra:
-            msg += f" extra fields: {sorted(extra)}."
-        if missing:
-            msg += f" missing fields: {sorted(missing)}."
-        raise RuntimeError(msg)
+    if set(r) < set(fields_to_features)|{"dates"}:
+        missing = set(fields_to_features)|{"dates"} - set(r)
+        raise RuntimeError(f"{ticker}: internal error - missing the following fields: {fmt_list(sorted(missing))}.")
 
-    for k,v in r.items():
-        if not isinstance(v, np.ndarray):
-            continue
-        try:
-            v = v.astype(np.float32)
-        except:
-            continue
-        assert np.all( np.isfinite(v) ), f"Expected all finite values for field '{k}', got non-finite values for ticker {ticker}."
-    return dict(r) # for HDF5
+    # convert to target output
+    # ------------------------
+
+    out = dict(dates=r.dates)
+    for src, tar in fields_to_features.items():
+        v = r.pop(src)
+        tar = tar if tar is not None else src
+        assert isinstance(v, np.ndarray), f"Expected numpy array for field '{src}', got {type(v)} for ticker {ticker}."
+        if v.dtype == np.bool_:
+            out[tar] = v
+        else:
+            out[tar] = v.astype(np.float32, copy=False)
+        assert np.all( np.isfinite(v) ), f"Expected all finite values for field '{src}', got non-finite values for ticker {ticker}."
+
+    return dict(out) # for HDF5
 
 # --------------------------------------------------------------
 # Sampler
@@ -242,9 +341,10 @@ def sample_simple_days(  ticker : str,
 @version("0.1")
 @dataclass(frozen=True)
 class SampleID:
+    """ Identifies a sample """
     date: dt.date   #: the end date
     ticker: str     #: ticker
-    index: int      #: the index into the time axis of this ticker (e.g. it can be used to look up the date associated with sample)
+    index: int      #: the index into the time axis of this ticker
 
     def __lt__(self, other: SampleID) -> bool:
         if self.index < other.index:
@@ -262,8 +362,21 @@ class SampleID:
     
 @version("0.1", dependencies=[SimpleConfig, sample_simple_days, SampleID])
 class SimpleSampler(BaseSampler):
+    """
+    Samper for Dynamic SANOS.
+    
+    This sampler generates torch samples according to ``SimpleConfig``.   
 
-    FEATURES = SIMPLE_FEATURES
+    Key functions are::
+
+    * :meth:`__call__` generates a random barch of a given size.
+
+    * :meth:`all` is a generator that yields all samples in order for valuation runs. Samples towards the ends are padded.
+      This is done using existing samples, so padded sample data will adhere to the same consistency conditions as valid samples).
+
+    * :meth:`generate_batch` which generates a batch of samples given a list of :class:`SampleID`s, which identify the ticker, date and index of the sample. 
+    """
+
     Config = SamplingConfig
 
     def __init__( self, simple_config : SimpleConfig, *, 
@@ -274,16 +387,18 @@ class SimpleSampler(BaseSampler):
         Create full sampler.
         """
         rng = np.random.default_rng(simple_config.sampling_config.seed)
-        self.tickers = sorted( set(simple_config.tickers) ) #: sorted list of tickers
-        self.data : dict[str, dict] = None #: data per ticker
-        self.max_options : int = 0 #: max number of options across the tickers and dates, used for padding
-        self.config : SimpleConfig = simple_config #: :class:`SimpleConfig` configuration for the sampler.
+        self.tickers : str[list]              = sorted( set(simple_config.tickers) ) #: sorted list of tickers
+        self.features                         = set(simple_config.features()) #: set of features included in the sample, depending on the arbitrage pre-processing mode.
+        self.data : dict[str, dict]           = None #: data per ticker
+        self.max_options : int                = 0 #: max number of options across the tickers and dates, used for padding
+        self.config : SimpleConfig            = simple_config #: :class:`SimpleConfig` configuration for the sampler.
         self.trn_samples_ids : list[SampleID] = None #: List of :class:`SampleID`s for the training samples, sorted by date and ticker.
         self.vld_samples_ids : list[SampleID] = None #: List of :class:`SampleID`s for the validation samples, sorted by date and ticker.   
-        self._shapes : dict[str, tuple] = None
-        self._stats : PrettyObject = None #: training set based stats.
+        self._shapes : dict[str, tuple]       = None 
+        self._stats : PrettyObject            = None #: training set based stats.
 
         tme_all = verbose.timer()
+        ft_with_dates = self.features|{'dates'}
 
         def collate():
             # Cannot thread on top of multipricessing
@@ -303,6 +418,10 @@ class SimpleSampler(BaseSampler):
                         tdata = sample_simple_days( ticker=ticker, simple_config=simple_config, pool_config=pool_config, override_cache_mode=cache_mode, verbose=verbose(1) )
                         results[ticker] = PrettyObject(tdata)
                     verbose.write(lambda : f"done; this took {tme}.", head=False )
+
+            for ticker, tdata in results.items():
+                assert set(tdata) == ft_with_dates, f"Internal error: for ticker {ticker} missing features: {fmt_list(sorted(ft_with_dates - set(tdata)))} / superfluous features: {fmt_list(sorted(set(tdata) - ft_with_dates))}."
+
             return results
         
         self.data = collate()
@@ -315,7 +434,8 @@ class SimpleSampler(BaseSampler):
         def setup():
             all_dates  = set()
             max_options = 0
-            for tdata in self.data.values():
+            for ticker, tdata in self.data.items():
+                assert set(tdata) == ft_with_dates, f"Internal error: for ticker {ticker} missing features: {fmt_list(sorted(ft_with_dates - set(tdata)))} / superfluous features: {fmt_list(sorted(set(tdata) - ft_with_dates))}."
                 all_dates.update(tdata['dates'])
                 max_options = max(max_options, tdata['is_valid'].shape[1])
             all_dates = sorted(all_dates)
@@ -410,8 +530,8 @@ class SimpleSampler(BaseSampler):
                 num_tdates = len(tdata.dates)
                 assert slc.stop <= num_tdates, f"Internal error: {sid.ticker} sample index {slc.start} + num_steps {self.config.sampling_config.num_steps} exceeds number of dates {num_tdates} for ticker {sid.ticker} with sample length {self.config.sampling_config.num_steps}"
                 is_valid = tdata.is_valid[slc,:]
-                pure_call_ask  = tdata.ask_pure_price[slc,:][is_valid]
-                pure_call_bid  = tdata.bid_pure_price[slc,:][is_valid]
+                pure_call_ask  = tdata.pure_ask_price[slc,:][is_valid]
+                pure_call_bid  = tdata.pure_bid_price[slc,:][is_valid]
                 pure_spread    = pure_call_ask - pure_call_bid
                 ask_vol        = tdata.ask_vol[slc,:][is_valid] 
                 bid_vol        = tdata.bid_vol[slc,:][is_valid]
@@ -457,7 +577,15 @@ class SimpleSampler(BaseSampler):
         return len(self.vld_samples_ids)
 
     def stats(self) -> PrettyObject:
-        """ Training stats for data scaling """
+        """
+        Training stats for data scaling:
+
+        * ``mean_pure_spread``: mean of the pure call spread ``pure_ask_price - pure_bid_price`` across all valid options in the training samples.
+
+        * ``mean_vol_spread``: mean of the volatility spread ``ask_vol - bid_vol`` across all valid options in the training samples.
+
+        * ``mean_sqrtVar_spread``: mean of the square root of the variance spread ``vol_spread * sqrtT`` across all valid options in the training samples.
+        """
         return self._stats
     
     def shapes( self, batch_size : int|None = None ) -> dict:
@@ -565,7 +693,7 @@ class SimpleSampler(BaseSampler):
             tbatch['pad_mask'] = torch.tensor( pad_mask, dtype=torch.bool, device=device )
         return tbatch
     
-    def __call__( self, g, *, trn : bool, batch_size : int, device = None, return_batch_indices : bool = False ) -> dict:
+    def __call__( self, g, *, batch_size : int, device = None, return_batch_indices : bool = False, trn : bool = True  ) -> dict:
         """
         Generate a pytorch training batch of a given size, for either the training or validation set.
         Generated batches are dictionaries with elements of shape ``(batch_size, num_steps|1, num_options|1)``.
@@ -576,8 +704,6 @@ class SimpleSampler(BaseSampler):
         ----------
         g : :class:`torch.Generator`
             Random generator for reproducibility.
-        trn : bool
-            If True, generate a training batch; otherwise, generate a validation batch.
         batch_size : int
             Number of samples in the batch.
             Must be less than or equal to the number of available samples in the respective set.
@@ -595,6 +721,8 @@ class SimpleSampler(BaseSampler):
                     print(f"Ticker: {bid.ticker}, start Date: {bid.date}, index: {bid.index}")
 
             This is useful for identifying bad data.
+        trn : bool, default ``True``
+            If True, generate a training batch; otherwise, generate a validation batch.
 
         Returns
         -------
@@ -718,7 +846,7 @@ def main(tickers : list[str],
             date_range = DateRange(start=to_date(period[0]), end=to_date(period[1]), exclude_half_days=not halfdays),
             raw_day_filter = RawDayFilter(),
             expiry_filter = ExpiryFilter(),
-            sample_days_config = SampleDaysConfig(),
+            timeseries_config = TimeseriesConfig(),
             sampling_config = SamplingConfig(num_samples=None)
     )
     pool_config = PoolConfig(num_workers=workers, threading=threading)

@@ -529,11 +529,14 @@ class AEC(BaseModel):
     ]
     X_FEATURES = CHARACTERISTICS + [
         # first element must have full dimension (B,S,O) to determine the number of options O
-        'ask_pure_price',
-        'bid_pure_price',
+        'mask_arb_free',
+        'pure_ask_price',
+        'pure_bid_price',
+        'pure_fit_price',
         'ask_vol',
         'bid_vol',
-    ]
+        'fit_vol',
+     ]
     __MAY_USE = [
         #'is_american',
         #'is_am',
@@ -545,20 +548,25 @@ class AEC(BaseModel):
         'spot_ret',
         'log_volume',
         'log_open_interest',
-        'ask_pure_price',
-        'bid_pure_price',
-        'ask_pure_delta',
-        'bid_pure_delta',
-        'ask_pure_gamma',
-        'bid_pure_gamma',
-        'bid_pure_vega',
-        'ask_pure_vega',
-        'bid_pure_theta',
-        'ask_pure_theta',
-        'ask_pure_dk',
-        'bid_pure_dk'
+        'pure_ask_price',
+        'pure_bid_price',
+        'pure_fit_price',
+        'pure_ask_delta',
+        'pure_bid_delta',
+        'pure_fit_delta',
+        'pure_ask_gamma',
+        'pure_bid_gamma',
+        'pure_fit_gamma',
+        'pure_bid_vega',
+        'pure_ask_vega',
+        'pure_fit_vega',
+        'pure_bid_theta',
+        'pure_ask_theta',
+        'pure_fit_theta',
+        'pure_ask_dk',
+        'pure_bid_dk'
+        'pure_fit_dk',
     ]
-
 
     Config = AECConfig
 
@@ -580,16 +588,14 @@ class AEC(BaseModel):
         num_steps   = sampler.num_steps
         max_options = sampler.max_options
         
-        set_f = set(SimpleSampler.FEATURES)
+        set_f       = set(sampler.features)
         if set(shapes) != set_f:
             superfluous = set(shapes) - set_f
-            missing = set_f - set(shapes)
-            msg = "Data Input mismatch:"
-            if superfluous:
-                msg += f" Superfluous fields: {superfluous}."
+            missing     = set_f - set(shapes)
             if missing:
-                msg += f" Missing fields: {missing}."   
-            raise ValueError(msg)
+                msg = f" [Superfluous fields: {sorted(superfluous)}]" if superfluous else ""
+                raise ValueError(f"Missing fields in source data: {sorted(missing)}{msg}")
+            warnings.warn(f"Data set contains more data than required: {sorted(superfluous)}.")
 
         set_x = set(self.X_FEATURES)
         set_c = set(self.CHARACTERISTICS)
@@ -610,6 +616,7 @@ class AEC(BaseModel):
         self.max_options       = max_options
         self.bb                = BackboneTorch(env) # for black scholes pricer
         self.stats             = stats
+        self.sampler_features  = sampler.features
 
         self.encoder           = config.encoder( env=env, num_features=self.num_features, num_state=config.num_state )
         self.decoder           = config.decoder( env=env, num_characteristics=self.num_characteristics, num_state=config.num_state )
@@ -660,7 +667,7 @@ class AEC(BaseModel):
         """
         data     = dict(data)
         pad_mask = data.pop('pad_mask',None)
-        assert set(data) == set(SimpleSampler.FEATURES), f"Data fields wrong: superflous: {sorted(set(data) - set(SimpleSampler.FEATURES))}, missing: {sorted(set(SimpleSampler.FEATURES) - set(data))}"
+        assert set(data) <= set(self.sampler_features), f"Missing data fields: {sorted(set(data) - set(self.sampler_features))}"
         assert not training or return_what == self.ReturnWhat.LOSS_WEIGHT, f"During training, 'return_what' must be ReturnWhat.LOSS_WEIGHT not {return_what}"
 
         mask     = pop(data,"is_valid", shape=3, dtype=torch.bool) # (B,S,O)
@@ -691,12 +698,13 @@ class AEC(BaseModel):
         # Compute price
         # -------------
 
-        pure_strike = data['pure_strike']
-        sqrtT       = data['tte_y'].sqrt() 
-        pure_ask    = data['ask_pure_price']
-        pure_bid    = data['bid_pure_price']
-        ask_vol     = data['ask_vol']
-        bid_vol     = data['bid_vol']
+        pure_strike   = data['pure_strike']
+        sqrtT         = data['tte_y'].sqrt() 
+        pure_ask      = data['pure_ask_price']
+        pure_bid      = data['pure_bid_price']
+        ask_vol       = data['ask_vol']
+        bid_vol       = data['bid_vol']
+        mask_arb_free = data['mask_arb_free']
 
         if self.config.encode_what == "vol":
             fit_vol      = self.softplus(decoded)+self.config.vol_floor # ensure positive output for volatility prediction
@@ -962,8 +970,8 @@ class Visualizer(BaseVisualizer):
             is_valid      = is_valid[:,-1,:]
             assert is_valid.shape[0] == self.config.num_viz, f"Expected number of valid samples to match number of visualizations {self.config.num_viz}, but found {is_valid.shape[0]}"
 
-            pure_ask      = batch['ask_pure_price'][:,-1,:].detach().cpu().numpy()
-            pure_bid      = batch['bid_pure_price'][:,-1,:].detach().cpu().numpy()
+            pure_ask      = batch['pure_ask_price'][:,-1,:].detach().cpu().numpy()
+            pure_bid      = batch['pure_bid_price'][:,-1,:].detach().cpu().numpy()
             bid_vols      = batch['bid_vol'][:,-1,:].detach().cpu().numpy()
             ask_vols      = batch['ask_vol'][:,-1,:].detach().cpu().numpy()
             nms           = batch['nms'][:,-1,:].detach().cpu().numpy()

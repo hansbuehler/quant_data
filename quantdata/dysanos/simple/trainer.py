@@ -331,7 +331,7 @@ class Trainer(object):
                     for imini in range(config.batch_per_epoch):
                         verbose.write(lambda : f"\rTraining epoch {epoch}/{epochs} mini batch {imini+1}/{config.batch_per_epoch} with learning rate {lr:.2e}: so far this took {tme}...", end='')
 
-                        batch = sampler( self._rndg, trn=True, batch_size=config.trn_batch_size, device=self.device, return_batch_indices=False )
+                        batch = sampler( self._rndg, batch_size=config.trn_batch_size, device=self.device, return_batch_indices=False )
                         self.verify( lambda : torch.any( batch['is_valid'], dim=-1 ), "Sampled batch contains no valid samples. Check the sampler and the data.")
 
                         self._optimizer.zero_grad(set_to_none=True)

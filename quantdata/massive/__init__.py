@@ -1,6 +1,5 @@
 """
-Massive handling
-massive.com
+Data pipeline for `massive.com <https://massive.com/>`_ market data.
 """
 
 from quantdata import env, SubDir, Context, version#NOQA
