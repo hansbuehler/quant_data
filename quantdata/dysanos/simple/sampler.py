@@ -80,20 +80,27 @@ class SimpleConfig(BaseSamplerConfig):
         return self.mk_arb_free.no_arb_mode if self.mk_arb_free is not None else None
     
     def timeseries_fields(self) -> set:
-        """ Returs the fields to be requested from the data source for the time series, depending on the arbitrage pre-processing mode. """
+        """ Returs the fields to be requested from the time series (depends on the arbitrage pre-processing mode). """
         if self.no_arb_mode == "expiry":
             return SIMPLE_INCLUDE_FIELDS_NOARB_EXPIRY
         if self.no_arb_mode == "surface":
             return SIMPLE_INCLUDE_FIELDS_NOARB_SURFACE
         return SIMPLE_INCLUDE_FIELDS
     
-    def feature_fields(self) -> dict[str, str|None]:
-        """ Returns the fields to be included in the final sample, and how they are translated, depending on the arbitrage pre-processing mode. """
+    def fields_to_features(self) -> dict[str, str|None]:
+        """
+        Returns the map from the fields of the time series and the modified fileds in :func:`sample_simple_days`
+        to the features included in the sample, depending on the arbitrage pre-processing mode.
+        """
         if self.no_arb_mode == "expiry":
             return SIMPLE_FEATURES_NOARB_EXPIRY
         if self.no_arb_mode == "surface":
             return SIMPLE_FEATURES_NOARB_SURFACE
         return SIMPLE_FEATURES
+    
+    def features(self) -> set[str]:
+        """ Returns the features to be included in the final sample, depending on the arbitrage pre-processing mode. """
+        return set( (f if n is None else n) for f, n in self.fields_to_features().items() )
 
     def base_cache_dir_uid(self) -> str:
         """ Base directory UID up to ticker """
@@ -230,7 +237,7 @@ SIMPLE_FEATURES_NOARB_SURFACE = _SIMPLE_FEATURES_ALWAYS|{
 }    
 
 @training_root_simple(fmt=SubDir.PYTREE_HDF5).cache(
-    "0.3",
+    "0.5",
     dependencies=[SimpleConfig, build_time_series],
     uid = lambda ticker, simple_config: f"{simple_config.base_cache_dir_uid()}/{ticker}",
     exclude_args=['pool_config', 'refresh_cache', 'verbose']
@@ -256,12 +263,17 @@ def sample_simple_days(  ticker : str,
       whether any and if so which no-arbitrage pre-processing is applied
     """
 
-    timeseries_fields = simple_config.timeseries_fields()
+    timeseries_fields  = simple_config.timeseries_fields()  # fields to be read from time series
+    fields_to_features = simple_config.fields_to_features() # translation map from time series + fiddling to features
+    if not 'is_valid' in fields_to_features:
+        raise ValueError(f"'is_valid' must be included in the fields to features mapping, as it is used for masking invalid options. Please include 'is_valid' in the mapping with a value of None or a feature name.")
+    if 'dates' in fields_to_features:
+        raise ValueError(f"'dates' cannot be included in the fields to features mapping, as it is used as a separate field in the output. Please remove 'dates' from the mapping.")
 
     r = build_time_series( 
                   ticker=ticker, 
                   date_range = simple_config.date_range,
-                  include_fields = set(timeseries_fields),
+                  include_fields = set(simple_config.timeseries_fields()), # which time series fields to use
                   exclude_fields = set(),
                   raw_day_filter = simple_config.raw_day_filter,
                   expiry_filter = simple_config.expiry_filter,
@@ -302,26 +314,25 @@ def sample_simple_days(  ticker : str,
     date_diffs = [ d.total_seconds() for d in date_diffs ]
     assert min(date_diffs) > 0., "Internal error: date_ids should be strictly increasing with a step of at least 0.5 to ensure proper ordering and separation of samples. Please contact the authors with an example if you encounter this error."
 
-    features = simple_config.feature_fields()
-
-    if set(r) < set(features)|{"dates"}:
-        missing = set(features)|{"dates"} - set(r)
+    if set(r) < set(fields_to_features)|{"dates"}:
+        missing = set(fields_to_features)|{"dates"} - set(r)
         raise RuntimeError(f"{ticker}: internal error - missing the following fields: {fmt_list(sorted(missing))}.")
 
     # convert to target output
     # ------------------------
 
-    for src, tar in features.items():
+    out = dict(dates=r.dates)
+    for src, tar in fields_to_features.items():
         v = r.pop(src)
-        if not isinstance(v, np.ndarray):
-            continue
         tar = tar if tar is not None else src
+        assert isinstance(v, np.ndarray), f"Expected numpy array for field '{src}', got {type(v)} for ticker {ticker}."
         if v.dtype == np.bool_:
-            r[tar] = v
+            out[tar] = v
         else:
-            r[tar] = v.astype(np.float32, copy=False)
-        assert np.all( np.isfinite(v) ), f"Expected all finite values for field '{k}', got non-finite values for ticker {ticker}."
-    return dict(r) # for HDF5
+            out[tar] = v.astype(np.float32, copy=False)
+        assert np.all( np.isfinite(v) ), f"Expected all finite values for field '{src}', got non-finite values for ticker {ticker}."
+
+    return dict(out) # for HDF5
 
 # --------------------------------------------------------------
 # Sampler
@@ -376,8 +387,8 @@ class SimpleSampler(BaseSampler):
         Create full sampler.
         """
         rng = np.random.default_rng(simple_config.sampling_config.seed)
-        self.tickers : str[list]             = sorted( set(simple_config.tickers) ) #: sorted list of tickers
-        self.features                         = set(simple_config.feature_fields()) #: the features provided by this sampler
+        self.tickers : str[list]              = sorted( set(simple_config.tickers) ) #: sorted list of tickers
+        self.features                         = set(simple_config.features()) #: set of features included in the sample, depending on the arbitrage pre-processing mode.
         self.data : dict[str, dict]           = None #: data per ticker
         self.max_options : int                = 0 #: max number of options across the tickers and dates, used for padding
         self.config : SimpleConfig            = simple_config #: :class:`SimpleConfig` configuration for the sampler.
@@ -387,6 +398,7 @@ class SimpleSampler(BaseSampler):
         self._stats : PrettyObject            = None #: training set based stats.
 
         tme_all = verbose.timer()
+        ft_with_dates = self.features|{'dates'}
 
         def collate():
             # Cannot thread on top of multipricessing
@@ -406,6 +418,10 @@ class SimpleSampler(BaseSampler):
                         tdata = sample_simple_days( ticker=ticker, simple_config=simple_config, pool_config=pool_config, override_cache_mode=cache_mode, verbose=verbose(1) )
                         results[ticker] = PrettyObject(tdata)
                     verbose.write(lambda : f"done; this took {tme}.", head=False )
+
+            for ticker, tdata in results.items():
+                assert set(tdata) == ft_with_dates, f"Internal error: for ticker {ticker} missing features: {fmt_list(sorted(ft_with_dates - set(tdata)))} / superfluous features: {fmt_list(sorted(set(tdata) - ft_with_dates))}."
+
             return results
         
         self.data = collate()
@@ -419,9 +435,7 @@ class SimpleSampler(BaseSampler):
             all_dates  = set()
             max_options = 0
             for ticker, tdata in self.data.items():
-                if self.features > set(tdata):
-                    missing = sorted(self.features - set(tdata))
-                    assert self.features <= set(tdata), f"{ticker}: internal error - features missing: {fmt_list(missing)}. Please contact the authors with an example if you encounter this error."
+                assert set(tdata) == ft_with_dates, f"Internal error: for ticker {ticker} missing features: {fmt_list(sorted(ft_with_dates - set(tdata)))} / superfluous features: {fmt_list(sorted(set(tdata) - ft_with_dates))}."
                 all_dates.update(tdata['dates'])
                 max_options = max(max_options, tdata['is_valid'].shape[1])
             all_dates = sorted(all_dates)

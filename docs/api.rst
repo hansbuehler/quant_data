@@ -1,20 +1,11 @@
 API reference
 =============
 
-This reference is generated recursively from the public modules and subpackages in
-``quantdata``.
+This reference is generated from the local ``quantdata`` package tree.
+Each package directory gets its own page, and modules that fail to import are
+skipped so documentation generation stays stable.
 
-.. autosummary::
-   :toctree: api_generated
-   :recursive:
+.. toctree::
+   :maxdepth: 1
 
-   quantdata.biz_calendar
-   quantdata.dysanos
-   quantdata.massive
-   quantdata.pool
-   quantdata.sanos
-   quantdata.tickers
-   quantdata.torch
-   quantdata.utils
-   quantdata.widb
-   quantdata.yahoo
+   api_generated/quantdata

@@ -1,5 +1,10 @@
 """
-Get contracts for underylings
+quantdata.massive.options.contracts
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Get option contracts for a given underlying and date.
+
+
 """
 
 from __future__ import annotations
@@ -39,6 +44,7 @@ _cache = MassiveClient.locations.processing("contracts", fmt=SubDir.POLARS_PARQU
 
 
 class REJECTED:
+    """ Reasons why a contract was rejected from the final list """
     USED = 0  # contract is used (not rejected)
     EXPIRY = 1  # contract expires too far in the future (days_to_exp > contracts_filter.max_dte)
     MONEYNESS = 2  # contract is too far out of the money (scaled_mns > contracts_filter.max_mns)
@@ -77,6 +83,7 @@ SCHEMA = {
     "has_today_quotes": pl.Boolean,
     "has_today_trades": pl.Boolean,
 }
+""" Schema of the :class:`polars.DataFrame` returned by :func:`filter_contracts` and :func:`filter_contracts_between`. """
 
 # -----------------------------
 # Config
@@ -95,11 +102,9 @@ class ContractsFilter:
             f"max_dte={self.max_dte},max_mns={self.max_mns:.3g},min_volu_k={self.min_opt_vol_k:.3g}"
         )
 
-
 # -----------------------------
 # Core filtering logic
 # -----------------------------
-
 
 @_cache(fmt=SubDir.POLARS_PARQUET).cache(
     "0.2",
@@ -123,18 +128,44 @@ def filter_contracts(
     verbose: Context = Context.quiet,
 ) -> pl.DataFrame:
     """
-    Returns:
-      - eligible_contracts: list of contract dicts (subset)
-      - all_contracts: full list with added fields:
-            reject_code (int),
-            spot_prev_close (float),
-            scaled_mns (float),
-            approx_cash_vol_prev_m (float),
-            approx_cash_vol_today_m (float)
-    Rules:
-      1) expiry filter: days_to_exp in [0, contracts_filter.max_dte]
-      2) moneyness filter: |log(K/S_prev)|/sqrt(T)/0.1 <= contracts_filter.max_mns, T = days_to_exp / DAYS_PER_YEAR
-      3) volume filter on PREVIOUS day: approx_cash_vol_prev_k >= contracts_filter.min_opt_vol_k
+    Filters and processes option contracts for a given underlying on a given date.
+
+    Applies filtering rules based on expiry, moneyness, and trading volume, and returns
+    a data frame with enriched contract information including reject codes and calculated metrics.
+
+    Filtering Rules:
+    1. Expiry filter: days_to_exp in [0, contracts_filter.max_dte]
+    2. Moneyness filter: |log(K/S_prev)|/sqrt(T)/0.1 <= contracts_filter.max_mns, T = days_to_exp / DAYS_PER_YEAR
+    3. Volume filter (previous day): approx_cash_vol_prev_k >= contracts_filter.min_opt_vol_k
+
+    Parameters
+    ----------
+    underlying : str
+        The underlying ticker symbol.
+    d : date
+        The date for which to retrieve contracts.
+    contracts_filter : ContractsFilter
+        Filter configuration specifying max_dte, max_mns, and min_opt_vol_k thresholds.
+    exclude_half_days : bool
+        If True, exclude half trading days when calculating business days to expiry.
+    pool_config : PoolConfig, optional
+        Configuration for thread pool processing. Defaults to PoolConfig().
+    verbose : Context, optional
+        Verbosity context for logging. Defaults to Context.quiet.
+
+    Returns
+    -------
+    Result: :class:`polars.DataFrame`
+        Data frame with schmea :data:`SCHEMA` of filtered contracts with added fields:
+
+        - reject_code (int): Rejection reason code
+        - spot_prev_close (float): Previous close adjusted spot price
+        - scaled_mns (float): Scaled moneyness metric
+        - approx_cash_vol_prev_m (float): Previous day approx cash volume (USD millions)
+        - approx_cash_vol_today_m (float): Today approx cash volume (USD millions)
+        - days_to_exp (int): Business days to expiration
+        - spot_ref_prev_close (float): Previous close adjusted to match today's spot
+
     """
     client = MassiveClient()
 
@@ -142,10 +173,10 @@ def filter_contracts(
     Handle stock splits:
         Assume stock of 1000 was split 10:1 into 100.
         Strike today 99 is now 9.9, but the previous close was 100, so the moneyness is 0.1/0.1 = 1.0 instead of 0.01/0.1 = 0.1.
-        We therefore scale yesterdays adjusted close with today's adjusted factor.
+        We therefore scale yesterday's adjusted close with today's adjustment factor.
 
         F_today = unadjusted / adjusted
-        prev_close = adjustted_prev_close * F_today
+        prev_close = adjusted_prev_close * F_today
     """
 
     context = PrettyObject()
@@ -321,6 +352,10 @@ def filter_contracts(
     df = pl.from_dicts(df, infer_schema_length=None)
 
     # convert to scheme
+    
+    assert set(df.columns) >= set(SCHEMA.keys()), (
+        f"DataFrame is missing columns from SCHEMA: {sorted(set(SCHEMA.keys()) - set(df.columns))}"
+    )
 
     df = df.drop(["expiration_date"])
     if not "correction" in df.columns:
@@ -388,7 +423,6 @@ def filter_contracts_between(
     -------
     pl.DataFrame
         DataFrame with filtered contracts for each date in the date range. The DataFrame has the same schema as the output of :func:`filter_contracts`, with an additional column "date" indicating the date for which the contracts were filtered.
-
     """
 
     dfs = []

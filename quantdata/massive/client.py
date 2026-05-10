@@ -2,7 +2,7 @@
 quantdata.massive.client
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-Simpler client wrapper for the `www.massive.com <https://www.massive.com>`_ API.
+A simple client wrapper for the `www.massive.com <https://www.massive.com>`_ API.
 
 Access
 ^^^^^^
@@ -60,21 +60,29 @@ _cache = _massive_locations.raw
 class MassiveClient(object):
     """
     Wrapper around massive.com connectivity.
-    Objects of this class also temporary cache URL get() requests.
 
-    Usage for function calls which do not require caching::
+    Standard usage::
 
-        handle = MassiveClient()
+        from quantdata.massive import MassiveClient
+        client = MassiveClient()
 
-    To enable temporart caching in a, say, ``"work"`` context::
+        trades = client.fetch_trades("AAPL230616C00150000", date(2023,6,16))
+        quotes = client.fetch_quotes("AAPL230616C00150000", date(2023,6,16))
+
+    **Temporary Caching**
+
+    This client supports in-session caching. Unlike the overall caching framework for :mod:`quantdata`, this caching
+    scheme is temporary and is not guaranteed to persist between machine reboots (e.g. in Linux the root temporary directory is ``/tmp/massive``).
+    This can be useful for speeding up repeated requests during an active session
+    but should not be relied upon for long-term storage of data.
+
+    To enable temporary caching in a, say, ``"work"`` context::
 
         handle = MassiveClient("work")
-
-    Note that caching is temporary, and should be assumed not to persist between
-    machine reboots (e.g. in Linux the root temporary directory is ``/tmp/massive``)
     """
 
-    locations = _massive_locations  #: :class:`quantdata.Locations` for massive data.
+    locations = _massive_locations
+    """ :class:`quantdata.Locations` for massive data. """
 
     _MASSIVE_TOKEN = None
     _HTTP_SESSION = None
@@ -82,7 +90,9 @@ class MassiveClient(object):
     BASE_URL = "https://api.massive.com"  #: Base URL for requests.
     START_DATE = date(
         2022, 3, 7
-    )  #: Start date for quote and trade requests for options. `See massive.com <https://massive.com/docs/rest/options/trades-quotes/quotes>`_
+    )
+    """ Start date for quote and trade requests for options. `See massive.com <https://massive.com/docs/rest/options/trades-quotes/quotes>`_ """
+
     TIME_SPANS = {
         "second",
         "minute",

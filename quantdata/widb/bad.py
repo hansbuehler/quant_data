@@ -28,7 +28,7 @@ class BAD:
         dt.date(2004, 11, 11), # no zero curve
         dt.date(2007, 11, 12), # no zero curve
         dt.date(2018, 12, 4), # expiries with zero business days?
-        dt.date(2025, 1,8) # expiriues with zero business days?
+        dt.date(2025, 1,8) # expiries with zero business days?
         } 
     """ Days where some core information is missing, e.g. zero curves. """
 

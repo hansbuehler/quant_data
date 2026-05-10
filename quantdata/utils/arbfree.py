@@ -565,7 +565,7 @@ class MkArbFree:
                         C <= intr + (ask_t-intr)*10. ]
 
         half_spread = np.maximum( (ask_t - bid_t)/2., self.min_half_spread )
-        objective   = cp.sum( cp.multiply( 1./half_spread, ( cp.maximum( 0., C - ask_t ) + cp.maximum( 0., bid_t - C ) ) )
+        objective   = cp.sum( cp.multiply( 1./half_spread, ( cp.maximum( 0., C - ask_t ) + cp.maximum( 0., bid_t - C ) ) ) )
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore",message=r"Solution may be inaccurate.*",category=UserWarning)
@@ -596,10 +596,7 @@ class MkArbFree:
         mask   = (C >= bid_t-1E-6) | (C <= ask_t+1E-6)
 
         if np.all(mask):
-            assert np.all( p >= -floor ), f"Internal error: {msg_header()}negative density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.1f}d after removing zero-density strikes."
-            assert abs( np.sum( p )-1. ) <= self.eps_dens_1, f"Internal error: {msg_header()}density does not sum to one; sum is {p.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.1f}d [tolerance {self.eps_dens_1:.3g}]."
-            assert abs( p@xstrikes_t - 1. ) <= self.eps_dens_1, f"Internal error: {msg_header()}density does not integrate to one; integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.1f}d [tolerance {self.eps_dens_1:.3g}] ."
-            return p
+            return _warn_and_fix_density( p=p, x=xstrikes_t, floor=floor, message=lambda : f"{msg_header()} expiry {expiry*DAYS_PER_YEAR:.2f}d: market density", verbose=verbose )
 
         if np.sum(mask) < 3:
             msg = f"Cannot find arbitrage-free fit within bid/ask even in soft mode for expiry {expiry*DAYS_PER_YEAR:.2f}d."
@@ -633,13 +630,7 @@ class MkArbFree:
                 prob.status = "overflow error"
 
         if not prob.status in ["infeasible", "infeasible_inaccurate","user_limit","overflow error"]:
-            p = p.value
-            C = C.value
-            verify( np.all(p >= -floor), lambda : f"Internal error: {msg_header()}negative density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.1f}d after optimization." )
-            assert abs( np.sum( p )-1. ) <= self.eps_dens_1, f"Internal error: {msg_header()}density does not sum to one; sum is {p.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.1f}d. Solver status: {prob.status} [tolerance {self.eps_dens_1:.3g}]."
-            assert abs( p@xstrikes_t - 1. ) <= self.eps_dens_1, f"Internal error: {msg_header()}density does not integrate to one; integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.1f}d. Solver status: {prob.status} [tolerance {self.eps_dens_1:.3g}]."
-            assert np.all( C >= bid_t-1E-6 ) and np.all( C <= ask_t+1E-6 ), f"Internal error: {msg_header()}hard fit succeeded but constraints violated for expiry {expiry*DAYS_PER_YEAR:.2f}d. Please contact the authors with an example."
-            return p
+            return _warn_and_fix_density( p=p.value, x=xstrikes_t, floor=floor, message=lambda : f"{msg_header()} expiry {expiry*DAYS_PER_YEAR:.2f}d: no-arb density", verbose=verbose )
 
         # attempt hard fit on all strikes
         # -------------------------------
@@ -683,10 +674,185 @@ class MkArbFree:
         p       = np.zeros_like(xstrikes_t)
         p[mask] = mp.value
         C       = np.maximum( 0., xstrikes_t[None,:] - xstrikes_t[1:-1,None] ) @ p
+        assert np.all( C[mask] >= bid_t[mask]-1E-6 ) and np.all( C[mask] <= ask_t[mask]+1E-6 ), f"Internal error: {msg_header()}hard fit succeeded but constraints violated for expiry {expiry*DAYS_PER_YEAR:.2f}d. Please contact the authors with an example."
                 
         # Check that that density is reasonable
-        verify( np.all(p >= -floor), lambda : f"Internal error: {msg_header()}negative density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.1f}d after optimization." )
-        assert abs( np.sum( p )-1. ) <= self.eps_dens_1, f"Internal error: {msg_header()}density does not sum to one; sum is {p.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.1f}d. Solver status: {prob.status}."
-        assert abs( p@xstrikes_t - 1. ) <= self.eps_dens_1, f"Internal error: {msg_header()}density does not integrate to one; integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.1f}d. Solver status: {prob.status}"
-        assert np.all( C[mask] >= bid_t[mask]-1E-6 ) and np.all( C[mask] <= ask_t[mask]+1E-6 ), f"Internal error: {msg_header()}hard fit succeeded but constraints violated for expiry {expiry*DAYS_PER_YEAR:.2f}d. Please contact the authors with an example."
-        return p
+        return _warn_and_fix_density( p=p, x=xstrikes_t, floor=floor, message=lambda : f"{msg_header()} expiry {expiry*DAYS_PER_YEAR:.2f}d: soft no-arb density", verbose=verbose )
+
+import numpy as np
+from cdxcore.err import verify_inp
+
+
+def _project_simplex(v: np.ndarray, total: float) -> np.ndarray:
+    """
+    Euclidean projection of v onto { y >= 0, sum(y) = total }.
+    """
+    verify_inp(total > 0.0, "total must be positive; got %s", total)
+
+    u = np.sort(v)[::-1]
+    cssv = np.cumsum(u, dtype=np.float64) - total
+    js = np.arange(1, v.size + 1, dtype=np.float64)
+
+    ok = u - cssv / js > 0.0
+    verify_inp(np.any(ok), "simplex projection failed")
+
+    rho = np.flatnonzero(ok)[-1]
+    theta = cssv[rho] / float(rho + 1)
+
+    return np.maximum(v - theta, 0.0)
+
+
+def repair_density_nonnegative(
+    p: np.ndarray,
+    x: np.ndarray,
+    *,
+    target_sum: float = 1.0,
+    target_xmoment: float = 1.0,
+    floor: float = 0.0,
+    tol: float | None = None,
+    max_iter: int = 64,
+) -> np.ndarray:
+    """
+    Project p onto:
+
+        y >= floor
+        sum(y) = target_sum
+        x @ y = target_xmoment
+
+    For floor=0 this gives a nonnegative density.
+
+    This is the L2-closest feasible y to p.
+    """
+
+    p = np.asarray(p, dtype=np.float64)
+    x = np.asarray(x, dtype=np.float64)
+
+    verify_inp(p.ndim == 1, "p must be 1D; got shape %s", p.shape)
+    verify_inp(x.ndim == 1, "x must be 1D; got shape %s", x.shape)
+    verify_inp(p.shape == x.shape, "p and x must have same shape; got %s and %s", p.shape, x.shape)
+    verify_inp(np.all(np.isfinite(p)), "p must be finite")
+    verify_inp(np.all(np.isfinite(x)), "x must be finite")
+    verify_inp(target_sum > 0.0, "target_sum must be positive; got %s", target_sum)
+    verify_inp(floor >= 0.0, "floor must be nonnegative; got %s", floor)
+
+    n = p.size
+
+    # Transform y >= floor into r >= 0 with y = floor + r.
+    residual_sum = target_sum - n * floor
+    residual_xmoment = target_xmoment - floor * float(np.sum(x, dtype=np.float64))
+
+    verify_inp( residual_sum > 0.0, lambda : f"floor too large: target_sum - n*floor = {residual_sum}" )
+
+    q = p - floor
+    target_mean = residual_xmoment / residual_sum
+
+    xmin = float(np.min(x))
+    xmax = float(np.max(x))
+
+    verify( xmin <= target_mean <= xmax, lambda : f"no nonnegative solution: target mean {target_mean} is outside [{xmin}, {xmax}]" )
+
+    if tol is None:
+        tol = (
+            256.0
+            * np.finfo(np.float64).eps
+            * max(1.0, residual_sum)
+            * max(1.0, float(np.max(np.abs(x))))
+            * max(1.0, np.sqrt(float(n)))
+        )
+
+    z = x - target_mean
+
+    def eval_beta(beta: float):
+        # For fixed beta, project q - beta*z onto the simplex.
+        r = _project_simplex(q - beta * z, residual_sum)
+
+        # Need z @ r == 0, equivalent to x @ r == residual_xmoment.
+        h = float(z @ r)
+
+        active = r > 0.0
+        za = z[active]
+
+        # derivative dh/dbeta on the current active set
+        if za.size >= 2:
+            dz = za - za.mean(dtype=np.float64)
+            dh = -float(dz @ dz)
+        else:
+            dh = 0.0
+
+        return r, h, dh
+
+    # Initial point.
+    r, h, dh = eval_beta(0.0)
+
+    if abs(h) <= tol:
+        return floor + r
+
+    # h(beta) is monotone decreasing.
+    if h > 0.0:
+        lo = 0.0
+        hi = 1.0
+
+        _, h_hi, _ = eval_beta(hi)
+        while h_hi > 0.0:
+            hi *= 2.0
+            verify(hi < 1e16, lambda : f"failed to bracket beta: hi = {hi}")
+            _, h_hi, _ = eval_beta(hi)
+
+    else:
+        hi = 0.0
+        lo = -1.0
+
+        _, h_lo, _ = eval_beta(lo)
+        while h_lo < 0.0:
+            lo *= 2.0
+            verify(abs(lo) < 1e16, lambda : f"failed to bracket beta: lo = {lo}")
+            _, h_lo, _ = eval_beta(lo)
+
+    beta = 0.5 * (lo + hi)
+
+    for _ in range(max_iter):
+        r, h, dh = eval_beta(beta)
+
+        if abs(h) <= tol:
+            y = floor + r
+            return y
+
+        if h > 0.0:
+            lo = beta
+        else:
+            hi = beta
+
+        # Bracketed Newton step.
+        if dh < 0.0:
+            beta_new = beta - h / dh
+        else:
+            beta_new = 0.5 * (lo + hi)
+
+        if not (lo < beta_new < hi):
+            beta_new = 0.5 * (lo + hi)
+
+        beta = beta_new
+
+    r, h, _ = eval_beta(beta)
+
+    verify( abs(h) <= 10.0 * tol, lambda : f"projection did not converge; residual moment error is {h}" )
+    return floor + r
+
+def _warn_and_fix_density( x, p, floor, message : callable, verbose : Context = Context.all  ):
+    """ Wrapper around fixing and warning """
+
+    eps = 1E-7
+    p   = np.asarray(p, dtype=np.float64)
+    x   = np.asarray(x, dtype=np.float64)
+
+    assert np.min(p) > -1E-3, f"{message()}: density has minimum {np.min(p):.6g} < -1E-3, which is too negative to be repaired."
+    assert abs(np.sum(p)-1.) < 1E-4, f"{message()}: density sums to {np.sum(p):.6g}, which is too close to zero to be repaired."
+    assert abs(p@x-1.) < 1E-4, f"{message()}: density integrates to {p@x:.6g}, which is too close to zero to be repaired."
+
+    if not np.all( p >= -eps ) or abs(np.sum(p)-1.) > eps or abs(p@x-1.) > eps:
+        p = repair_density_nonnegative(p=p, x=x)
+
+    assert np.all( p >= -eps ), f"{message()}: negative density {np.min(p):.6g} found after repair."
+    assert abs(np.sum(p)-1.) <= eps, f"{message()}: density sums to {np.sum(p):.6g} after repair."
+    assert abs(p@x-1.) <= eps, f"{message()}: density sums to {p@x:.6g} after repair."
+    return p

@@ -19,16 +19,16 @@ import quantdata as quantdata  # NOQA
 import warnings
 
 TZ_NY = ZoneInfo("America/New_York")
-""" New York time zone """
+""" New York time zone. """
 
 DAYS_PER_YEAR = 252
-""" Standardized business days per year """
+""" Standardized business days per year. """
 
 AM_EXIRY_SUBTRACT = 0.8
-""" How much to subtract from 'days' to expiry to account for AM settlement """
+""" How much to subtract from an expiry (in days) to account for AM settlement. """
 
 NYSE_CALENDAR = mcal.get_calendar("NYSE")
-""" NYSE calendar provided by `pandas market calendars <https://pandas-market-calendars.readthedocs.io/en/latest/usage.html>`__ """
+""" NYSE calendar provided by `pandas market calendars <https://pandas-market-calendars.readthedocs.io/en/latest/usage.html>`_. """
 
 _BUSINESS_DAYS_CACHE = {}
 _EARLY_DAYS_CACHE = {}
@@ -48,10 +48,12 @@ class NMS:
 
     @staticmethod
     def from_nms(z: float, t: float, backbone=np) -> float:
+        """ Converts an NMS strike to a relative strike. """
         return backbone.exp(NMS.SCALE * z * backbone.sqrt((NMS.EPS + t) / (NMS.EPS + 1.0)))
 
     @staticmethod
     def to_nms(k: float, t: float, backbone=np) -> float:
+        """ Converts a relative strike to an NMS strike. """
         return (backbone.log(k) / NMS.SCALE) / backbone.sqrt((NMS.EPS + t) / (NMS.EPS + 1.0))
 
 def to_date(d: str | dt.datetime | dt.date | np.datetime64 | None) -> dt.date | None:
@@ -62,7 +64,7 @@ def to_date(d: str | dt.datetime | dt.date | np.datetime64 | None) -> dt.date | 
     * ``np.datetime64``
     * :class:`datetime.datetime`
     * :class:`datetime.date`
-    * ``str`` assuming it is in isoformat e.g. "2024-01-31"    
+    * ``str`` assuming it is in iso format e.g. "2024-01-31"    
     """
     if d is None:
         return d
@@ -99,10 +101,6 @@ def get_business_days(
     Returns
     -------
     list[:class:`datetime.date`]
-        Sorted trading dates (timezone-naive, date-only precision).
-
-    -------
-    pd.DatetimeIndex
         Sorted trading dates (timezone-naive, date-only precision).
     """
     global _BUSINESS_DAYS_CACHE
@@ -192,6 +190,10 @@ def add_business_days(
     """
     Add a number of business days to a date.
 
+    Note that if ``start`` is a business day then use ``count_start`` to include it in counting:
+    if ``start`` is a business day, and if ``count_start`` is ``True``, then
+    if ``num_days=1`` or ``num_days=-1`` then the function will the return ``start``.
+
     Parameters
     ----------
     start : ``datetime.date``
@@ -202,13 +204,11 @@ def add_business_days(
     exclude_half_days : bool, default ``False``
         If ``True``, remove early-close trading sessions from the calendar before counting.
     count_start : bool, default ``False``
-        Whether to count ``start`` if it is a business day. If ``False``, then the counts starts from the first business day after start.
-        This flag has no effect if ``start`` is a business day.
+        Whether to count ``start`` if it is a business day. In that case ``start`` is counted in either
+        direction as the first day.
+        If ``False``, then the counts starts from the first business day after start.
 
-        If ``start`` is not a business day, and if ``count_start`` is ``True``, then:
-
-        * If ``num_days=1`` then the function will the return the first business day following the non-business day ``start``.
-        * If ``num_days=-1`` then the function will return the first business day preceding the non-business day ``start``.
+        This flag has no effect if ``start`` is not a business day.
 
     Returns
     -------
@@ -218,27 +218,20 @@ def add_business_days(
     if isinstance(start, np.ndarray):
         start = np.asarray(start, dtype="datetime64[D]")
         if isinstance(num_days, np.ndarray):
-            verify_inp(
-                start.shape == num_days.shape,
-                f"start and num_days must have the same shape, but got {start.shape} and {num_days.shape}",
-            )
-            return np.asarray(
-                [
+            verify_inp( start.shape == num_days.shape,
+                        f"start and num_days must have the same shape, but got {start.shape} and {num_days.shape}" )
+            return np.asarray( [
                     add_business_days(s, n, exclude_half_days=exclude_half_days)
                     for s, n in zip(start, num_days)
-                ],
-                dtype="datetime64[D]",
-            )
+                ], dtype="datetime64[D]" )
         return np.asarray(
             [add_business_days(s, num_days, exclude_half_days=exclude_half_days) for s in start],
-            dtype="datetime64[D]",
-        )
+            dtype="datetime64[D]")
 
     if isinstance(num_days, np.ndarray):
         return np.asarray(
             [add_business_days(start, n, exclude_half_days=exclude_half_days) for n in num_days],
-            dtype="datetime64[D]",
-        )
+            dtype="datetime64[D]" )
 
     # scalar version
     start = to_date(start)
@@ -282,7 +275,7 @@ def prev_business_day(
     date: dt.date, exclude_half_days: bool = False, *, count_start: bool = False
 ) -> dt.date:
     """
-    Get the strictly previous business day before the given date.
+    Get the previous business day before the given date.
 
     Parameters
     ----------
@@ -310,7 +303,7 @@ def next_business_day(
     date: dt.date, exclude_half_days: bool = False, *, count_start: bool = False
 ) -> dt.date:
     """
-    Get the strictly next business day after the given date.
+    Get the next business day after the given date.
 
     Parameters
     ----------
