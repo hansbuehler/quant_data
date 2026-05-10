@@ -4,22 +4,40 @@ Python environment for systematically processing financial data and building pip
 The aim of the project is to joinly develop robust data pipelines which lead to standadized benchmarks in quantitative finance.
 
 Principles:
-* [Data Handling](DATA.md)
+* [Data Handling Pricinple & Guidelines](DATA.md) [not written yet]
+* [Conding Guidelines](CODE.MD) [not written yet]
 * [Model Benchmarking](BENCHMARKING.md) [not written yet]
 
+# Setup
 
-## Python requirements
+You will need to
+1) Install the environment
+2) Use environment variables to set your caching directories.
+3) Register your license for each data source.
 
-Clone the directory ``quant_data``. Change into that directory.
+As a first step, clone the directory ``quant_data`` and change into that directory in your shell.
 
-### Create a Python 3.12 environment
+## TL;DR
 
-This project targets Python 3.12. The repository includes `.python-version` and the package metadata enforces `>=3.12,<3.13`. 
-*TODO: make it work an test under 3.13*
+Once cloned, enter into the ``quant_data`` directory and install the environment:
+
+```bash
+python -m pip install -U pip pip-review 
+python -m pip install -U -e ".[dev]"              
+
+export QUANTDATA_ROOT=~/quantdata_data/
+export WRDS_USERNAME=<wrds_username>
+export MASSIVE_TOKEN=<massive_token>
+```
+
+Run e.g. ``quantdata/widb/viz_day.ipynb`` to test WRDS Option Metrics or ``quantdata/massive/viz_bars.ipynb`` for a Massive example.
+
+## Creating a Python Environment
+
+This project targets Python 3.12 but should run under 3.13.
 
 #### Linux/venv
 
-You will need python 3.12. Future versions will support 3.13 or higher.
 Under Linux, if your default Python is not 3.12, you can install a different version with
 
 ```bash
@@ -107,6 +125,7 @@ The project is organized around proactive caching of:
 * **raw data**: downloaded from a data source. Such data can be stored in slower drives. The point of the cache is to reduce download overhead and intensity.
 * **processed data**: enriched data. Can also be stored in a slower drive location. This data is cached because processing itself is slow.
 * **training data**: data stored in a format optimized for training a particular model class. This should be stored at a location which allows for fast access during training, i.e. the local SSD drive.
+* **experiment data** generated during experiments, e.g. losses, metric, weights and biases. For example, place WandB data under this root directory.
 
 *Please delete all data whose license expires.*
 
@@ -133,7 +152,8 @@ To optimize access speed, you can split each area by device:
 * ``QUANTDATA_RAW_DATA``: root directory for storing raw cached data. Usually does not need to be fast, e.g. a network drive. Defaults to ``QUANTDATA_ROOT/raw``.
 * ``QUANTDATA_PROCESSING_DATA``: intermediate processing: good for multi-process CPU access, but does not need to deliver to GPU. Defaults to ``QUANTDATA_ROOT/processing``.
 * ``QUANTDATA_TRAINING_DATA``: training data with the most effective disk to GPU location.
-  Defaults to ``QUANTDATA_ROOT/training``.
+  Defaults to ``QUANTDATA_ROOT/training``. 
+* ``QUANTDATA_EXPERIMENTS``: where to store data for experiments, e.g. losses, metrics, weights and biases locally.  Defaults to ``QUANTDATA_ROOT/experiments``.
 
 * ``QUANTDATA_TEMP_DATA``: local ephermal caching. Very useful for exceedingly slow processes. Not used at the moment. Defaults to ``!/quantdata``.
 
@@ -144,6 +164,7 @@ In Linux, setting the environment variables can be achieved by adding the follow
 export QUANTDATA_RAW_DATA=/path/to/data/raw
 export QUANTDATA_PROCESSING_DATA=/path/to/data/processing
 export QUANTDATA_TRAINING_DATA=/fast_path/to/data/training
+export QUANTDATA_EXPERIMENTS=/fast_path/to/data/training
 ```
 Alternatively, you can set a global directory. Example here to make it relative to ``$HOME``:
 ```bash
@@ -154,14 +175,17 @@ export QUANTDATA_ROOT=~/quantdata_data/
 
 Each data source support by our project will require you to register the respective login data, also as environment variables. At this point the following two sources are supported:
 
-* **[Massive.com](DATA_MASSIVE.md)**.
+* **[Massive.com](quantdata/massive/README.md)**.
   1. Ensure you have an account and test it.
   2. Set the ``MASSIVE_TOKEN`` environment variable to your API token.
-* **[WRDS](WRDS.md)** including **Option Metrics**
+* **[WRDS Option Metrics](quantdata/widb/README.md)** including **Option Metrics**
   1. [Create an account](https://wrds-www.wharton.upenn.edu/pages/support/getting-started/) and [enable MFA](https://wrds-www.wharton.upenn.edu/pages/about/log-in-to-wrds-using-two-factor-authentication/).
   2. [Follow the WRDS instructions](https://wrds-www.wharton.upenn.edu/pages/support/programming-wrds/programming-python/python-from-your-computer/) to ensure you have 
     the ``pgpass`` pass file. *This is important.*
   3. Set the ``WRDS_USERNAME`` variable to your username.   
+* **[Yahoo Finance](quantdata/yahoo/README.md)**.
+  1. Ensure you have an account and test it.
+  2. Set the ``MASSIVE_TOKEN`` environment variable to your API token.
 
 ### Other Useful Environment Variables
 

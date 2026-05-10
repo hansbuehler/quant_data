@@ -9,7 +9,6 @@ The main modules are:
 * ``arbfree.py`` for fitting an arbitrage-free surface for one day.
 * ``timeseries.py`` for collecting many business days into a model-ready time series.
 
-
 ## Data Access
 
 To access this data:
