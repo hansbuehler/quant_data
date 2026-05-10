@@ -164,6 +164,7 @@ def _enrich_or_mk_arb_free( *,
     raise_if_bad: bool,
     cache_generate_only : bool,
     return_time_taken : bool,
+    warn_if_arb : bool,
     verbose: Context ):
     """ wrapper """
 
@@ -185,6 +186,7 @@ def _enrich_or_mk_arb_free( *,
                         mk_arb_free=mk_arb_free,
                         raise_if_bad=raise_if_bad, 
                         verbose=verbose, 
+                        warn_if_arb=warn_if_arb,
                         override_cache_mode=override_cache_mode, 
                         cache_generate_only=cache_generate_only )
             
@@ -203,6 +205,7 @@ def build_time_series(
                   mk_arb_free : MkArbFree|None,
                   timeseries_config : TimeseriesConfig,
                   pool_config : PoolConfig = PoolConfig.off(),
+                  warn_if_arb : bool = True,
                   override_cache_mode : CacheMode|None = None,
                   verbose : Context = Context.all ) -> dict[str:np.array|str|type]:
     """
@@ -230,6 +233,9 @@ def build_time_series(
         Configuration for filtering and sampling the enriched day data.
     pool_config : :class:`PoolConfig`, default ``PoolConfig.off()``
         Configuration for parallel processing. By default, no parallel processing is used.
+    warn_if_arb : bool, default ``True``
+        If ``True``, warnings about detected arbitrage opportunities in the data are shown. This only has an effect if ``mk_arb_free`` is not ``None``.
+        Set to ``False`` to turn off reporting.
     override_cache_mode : :class:`cdxcore.subdir.CacheMode` | None, default ``None``
         If not ``None``, overrides the cache mode for the enriched day data. Set to ``"update"`` to refresh the underlying raw cache.
     verbose : :class:`cdxcore.verbose.Context`, default ``Context.all``
@@ -304,6 +310,7 @@ def build_time_series(
                                         raise_if_bad=False, 
                                         override_cache_mode="cacheonly",
                                         return_time_taken=False,
+                                        warn_if_arb=warn_if_arb,
                                         cache_generate_only=False )
                     except CacheMustExistError:
                         return None
@@ -329,7 +336,7 @@ def build_time_series(
             # generate missing data with parallel processing
             pool = JCPool(num_workers=pool_config.num_workers, threading=False)
 
-            def process( ticker, d, raw_day_filter, expiry_filter, override_cache_mode ):
+            def process( ticker, d, raw_day_filter, expiry_filter, override_cache_mode, warn_if_arb ):
                 r, t = _enrich_or_mk_arb_free(
                                        ticker=ticker, d=d,
                                        raw_day_filter=raw_day_filter, 
@@ -338,13 +345,14 @@ def build_time_series(
                                        raise_if_bad=False, 
                                        verbose=Context.quiet, 
                                        return_time_taken=True,
+                                        warn_if_arb=warn_if_arb,
                                        override_cache_mode=override_cache_mode, 
                                        cache_generate_only=True )
                 return d, t
 
             tme = verbose.timer()
             cnt = 0
-            for d, seconds in pool.parallel( pool.delayed(process)( ticker, d, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, override_cache_mode=override_cache_mode ) for d in missing ):
+            for d, seconds in pool.parallel( pool.delayed(process)( ticker, d, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, override_cache_mode=override_cache_mode, warn_if_arb=warn_if_arb ) for d in missing ):
                 cnt += 1
                 if tme.interval_test(1.):
                     verbose.write(lambda: f"\r{ticker}: generating enriched data for {cnt}/{len(missing)} missing business days using {pool_config.num_workers} processes. Processed {d} which took {seconds:.2f}s. Total run time so far: {tme}... ", end='')
@@ -362,6 +370,7 @@ def build_time_series(
                                         override_cache_mode="cacheonly", 
                                         raise_if_bad=False,
                                         cache_generate_only=False,
+                                        warn_if_arb=warn_if_arb,
                                         return_time_taken=False,
                                         verbose=Context.quiet )
                     except CacheMustExistError as e:

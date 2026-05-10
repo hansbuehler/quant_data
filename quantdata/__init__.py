@@ -36,6 +36,10 @@ warnings.formatwarning = _one_line_warning
 # turn on multiprocessing logging to stderr (for debugging; remove in production version)
 mp_util.log_to_stderr(level=mp_util.INFO)  # TODO: remove in production version                      
 
+# fix empty allocation from cvxpy
+from quantdata.utils.cvxpy import patch_cvxpy_sum_shape_from_args#NOQA
+patch_cvxpy_sum_shape_from_args()
+
 # --------------------------------------------------------------
 # Library environment
 # --------------------------------------------------------------

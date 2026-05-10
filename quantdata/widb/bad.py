@@ -35,6 +35,7 @@ class BAD:
     DAYS_TICKER = {'SPX': {
                         dt.date(2006, 11, 17),  # no forward for 1
                         dt.date(2012, 11, 17),  # no forward for 1
+                        dt.date(2015, 8, 21)    # cannot find arb-free surface
                         },
                    'RUT': {
                         dt.date(2009, 2, 20),   # no forward for 1

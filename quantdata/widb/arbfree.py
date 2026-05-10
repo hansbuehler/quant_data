@@ -70,6 +70,7 @@ def mk_arb_free_day(
     override_cache_mode: CacheMode | None = None,
     raise_if_bad: bool = True,
     return_arb_free_densities : bool = False,
+    warn_if_arb : bool = True,
     verbose: Context = Context.quiet,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict]:
     """
@@ -141,7 +142,7 @@ def mk_arb_free_day(
         strikes=strikes,
         bids=bids,
         asks=asks,
-        handle_arb="warn",
+        handle_arb="warn" if warn_if_arb else "ignore",
         message_context=lambda: f"{ticker} {d}",
         verbose=verbose(1),
     )
@@ -242,7 +243,7 @@ from quantdata.widb import cli_defaults
 @click.option('--workers', default=cli_defaults.workers, help='Number of workers', type=int)
 @click.option('--threading', is_flag=True, help="Use only threading, no multiprocessing")
 @click.option('--refresh', is_flag=True, help="Refresh data (this will only refresh the top level files)")
-@click.option('--debug', is_flag=True, help="Enable debug mode with more verbose output and checks")
+@click.option('--arbwarningsoff', is_flag=True, help="Turn off warnings about detected arbitrage opportunities in the data.")
 
 def main(tickers : list[str],
         period : list[dt.datetime], 
@@ -250,7 +251,7 @@ def main(tickers : list[str],
         workers : int, 
         threading : bool, 
         refresh : bool,
-        debug : bool):
+        arbwarningsoff : bool):
 
     verify_inp( len(tickers) > 0, "At least one ticker must be specified")
     verify_inp( period is not None and len(period) == 2, "A start and end date must be specified")
@@ -280,6 +281,7 @@ def main(tickers : list[str],
     for it, ticker in enumerate(tickers):  
         verbose.report(1,lambda: f"\rProcessing ticker {it+1}/{len(tickers)} {ticker} from {fmt_date(date_range.start)} to {fmt_date(date_range.end)}.")
         build_time_series(ticker, date_range, include_fields=None, exclude_fields=None, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, mk_arb_free=mk_arb_free,
+                    warn_if_arb=not arbwarningsoff,
                      timeseries_config=timeseries_config, pool_config=pool_config, override_cache_mode="update" if refresh else None, verbose=verbose(2) )
     verbose.write(f"All {len(tickers)} tickers processed.")
 

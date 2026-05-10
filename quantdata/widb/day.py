@@ -611,7 +611,6 @@ def enrich_day( ticker : str, d : dt.date, raw_data : pd.DataFrame|None = None, 
         This can happen for example if the forward price is highly suspicious, or if all options had zero or NA bid prices. Please check the date range and calendar settings,
         and consider adding the date/ticker to the BAD data sets if the issue is confirmed.
     """
-
     data         = raw_data if raw_data is not None else collect_raw_day(ticker, d, raw_day_filter, verbose=verbose, override_cache_mode=override_cache_mode, raise_if_bad = raise_if_bad)
     del raw_data
 
