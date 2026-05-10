@@ -44,8 +44,8 @@ def get_standard_expiries( date_range : DateRange ) -> pl.DataFrame:
 
     * ``QUAD_WITCHING``: third friday of March, June, September, December
     * ``MONTHLY``: third friday of other months
-    * ``EOM``: last business day of the month, if not quad witching or monthly
-    * ``QUARTERLY``: quarterly expiry, i.e. third friday of March, June, September, December (same as quad witching, but we keep it separate for now in case we want to add more codes later)
+    * ``EOM``: last business day of the month
+    * ``QUARTERLY``: quarterly expiry, i.e. last business day of the month of March, June, September, December
 
     Parameters
     ----------
@@ -86,7 +86,7 @@ def get_standard_expiries( date_range : DateRange ) -> pl.DataFrame:
                 if dates[ix-1] in business_days:
                     assert not dates[ix-1] in expiries, f"Internal error: duplicate expiry date {dates[ix-1]}"
                     expiries.append( dates[ix-1] )
-                        codes.append( int( EXPIRY.EOM ) )
+                    codes.append( int( EXPIRY.EOM if last_prev_month.month not in {3, 6, 9, 12} else EXPIRY.QUARTERLY ) )
 
             # get third friday of this month
             first_friday_offset = (4 - first_day.weekday()) % 7
