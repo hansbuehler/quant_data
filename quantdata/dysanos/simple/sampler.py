@@ -397,7 +397,7 @@ class SimpleSampler(BaseSampler):
         self._shapes : dict[str, tuple]       = None 
         self._stats : PrettyObject            = None #: training set based stats.
 
-        tme_all = verbose.timer()
+        tme_all       = verbose.timer()
         ft_with_dates = self.features|{'dates'}
 
         def collate():
