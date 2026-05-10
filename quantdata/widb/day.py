@@ -1,9 +1,44 @@
 """
-Generating one day of data.
+Generating one day of WRDS Option Metrics data for one ticker.
 
-This function uses ``client.py`` to provide:
+Key functions:
 
-* :func:`collect_raw_day` 
+* :func:`collect_raw_day` - Collect raw option data with minimal analytics for a ticker and date
+* :func:`enrich_day` - Enrich raw data with implied volatilities, greeks, and synthetic call options
+
+Summary
+-------
+This module provides tools to process daily option data from WRDS Option Metrics (IvyDB):
+
+1. **collect_raw_day**: Downloads spot, forward, discount factor, and option data. Cleans bad options 
+   and computes business days to expiry and implied discount factors. Returns a raw DataFrame.
+
+2. **enrich_day**: Builds on raw data by computing implied forwards from put-call parity, synthetic 
+   minimal-spread call options, implied volatilities, and option greeks (delta, gamma, vega, theta).
+
+Both functions use filtering configurations to control data quality and processing parameters.
+
+Usage Example
+-------------
+    >>> from quantdata.widb.day import collect_raw_day, enrich_day, RawDayFilter, ExpiryFilter
+    >>> from quantdata.biz_calendar import to_date
+    >>> from cdxcore.verbose import Context
+    >>> import datetime as dt
+    >>>
+    >>> # Define date and filters
+    >>> d = to_date("2022-01-03")
+    >>> ticker = "SPX"
+    >>> raw_filter = RawDayFilter(min_bid=0.015)
+    >>> enriched_filter = ExpiryFilter(num_min_both_traded=5)
+    >>>
+    >>> # Collect and enrich data
+    >>> raw_data = collect_raw_day(ticker, d, raw_filter, verbose=Context())
+    >>> enriched_data = enrich_day(ticker, d, raw_data, raw_day_filter=raw_filter, 
+    ...                             expiry_filter=enriched_filter, verbose=Context())
+    >>>
+    >>> # Access results
+    >>> print(enriched_data[['strike', 'fwd', 'ask_vol', 'bid_vol', 'pure_ask_delta']].head())
+
 """
 from __future__ import annotations
 
@@ -99,6 +134,7 @@ def collect_raw_day( ticker : str,
     The function returns a panda data frame with columns :attr:`SCHEMA_RAW_DAY`.
 
     The function:
+
     * Downloads spot, forward, discount and option data.
     * Removes and bad days/tickers/options using :attr:`quantdata.widb.bad.BAD`.
     * Removes options with same-day expiry, NA or zero bid prices, and bad settlement (ss_flag != '0').
@@ -888,15 +924,13 @@ from quantdata.widb import cli_defaults
 @click.option('--workers', default=cli_defaults.workers, help='Number of workers', type=int)
 @click.option('--threading', is_flag=True, help="Use only threading, no multiprocessing")
 @click.option('--refresh', is_flag=True, help="Refresh data (this will only refresh the top level files)")
-@click.option('--debug', is_flag=True, help="Enable debug mode with more verbose output and checks")
 
 def main(tickers : list[str],
         period : list[dt.datetime], 
         halfdays : bool, 
         workers : int, 
         threading : bool, 
-        refresh : bool,
-        debug : bool):
+        refresh : bool):
 
     verify_inp( len(tickers) > 0, "At least one ticker must be specified")
     verify_inp( period is not None and len(period) == 2, "A start and end date must be specified")
@@ -921,7 +955,7 @@ def main(tickers : list[str],
 
     for it, ticker in enumerate(tickers):  
         verbose.report(1,lambda: f"\rProcessing ticker {it+1}/{len(tickers)} {ticker} from {fmt_date(date_range.start)} to {fmt_date(date_range.end)}.")
-        build_time_series(ticker, date_range, include_fields=None, exclude_fields=None, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter,
+        build_time_series(ticker, date_range, include_fields=None, exclude_fields=None, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, mk_arb_free=None,
                      timeseries_config=timeseries_config, pool_config=pool_config, override_cache_mode="update" if refresh else None, verbose=verbose(2) )
     verbose.write(f"All {len(tickers)} tickers processed.")
 

@@ -1,32 +1,20 @@
 API reference
 =============
 
-.. automodule:: quantdata
-   :members:
-   :undoc-members:
-   :show-inheritance:
+This reference is generated recursively from the public modules and subpackages in
+``quantdata``.
 
-.. automodule:: quantdata.massive
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autosummary::
+   :toctree: api_generated
+   :recursive:
 
-.. automodule:: quantdata.widb
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule:: quantdata.yahoo
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule:: quantdata.tickers
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. automodule:: quantdata.utils
-   :members:
-   :undoc-members:
-   :show-inheritance:
+   quantdata.biz_calendar
+   quantdata.dysanos
+   quantdata.massive
+   quantdata.pool
+   quantdata.sanos
+   quantdata.tickers
+   quantdata.torch
+   quantdata.utils
+   quantdata.widb
+   quantdata.yahoo

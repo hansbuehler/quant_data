@@ -1,5 +1,8 @@
 """
-Compute defaults
+Pool configuration
+
+TODO: the library should have a fixed pool of processes which are shared in subsequent function calls. At the moment, each function re-constructs
+its own pool with the associated launch overhead.
 """
 
 from __future__ import annotations

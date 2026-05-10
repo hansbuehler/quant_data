@@ -6,7 +6,7 @@ from __future__ import annotations
 from quantdata.biz_calendar import DateRange
 from quantdata.pool import PoolConfig
 from quantdata.widb.day import enrich_day, SCHEMA_ENRICHED_DAY, RawDayFilter, ExpiryFilter
-from quantdata.widb.arbfree import MkArbFree, mk_arb_free_day, SCHEMA_ARB_FREE_DAY
+from quantdata.widb.arbfree import MkArbFree, mk_arb_free_day, SCHEMA_ARB_FREE_DAY_EXPIRY, SCHEMA_ARB_FREE_DAY_SURFACE, ENRICHED_PER_DAY_FIELDS
 
 from cdxcore.version import version
 from cdxcore.verbose import Context
@@ -153,7 +153,22 @@ class TimeseriesConfig:
 
         assert not df.isna().any().any(), f"Internal error {ticker} {d}: filter resulted in NaN values. Please contact the authors with an example."
         return df
-    
+
+def SCHEMA_TIME_SERIES( mk_arb_free: MkArbFree|None ) -> list[str]:  
+    """
+    Returns the schema for the time series object depending on the :class:`MkArbFree` configuration.
+    """
+    if mk_arb_free is None:
+        source_schema = SCHEMA_ENRICHED_DAY
+    elif mk_arb_free.no_arb_mode == "expiry":
+        source_schema = SCHEMA_ARB_FREE_DAY_EXPIRY
+    elif mk_arb_free.no_arb_mode == "surface":
+        source_schema = SCHEMA_ARB_FREE_DAY_SURFACE
+    else:
+        raise ValueError(f"Unknown no_arb_mode: {mk_arb_free.no_arb_mode}")
+    return source_schema
+
+
 def _enrich_or_mk_arb_free( *,
     ticker: str,
     d: dt.date,
@@ -165,30 +180,42 @@ def _enrich_or_mk_arb_free( *,
     cache_generate_only : bool,
     return_time_taken : bool,
     warn_if_arb : bool,
+    proceed_upon_bad_data : bool,
     verbose: Context ):
     """ wrapper """
 
     tme = verbose.timer()
 
-    if mk_arb_free is None:
-        r = enrich_day( ticker=ticker, d=d,
-                        raw_day_filter=raw_day_filter, 
-                        expiry_filter=expiry_filter, 
-                        raise_if_bad=raise_if_bad, 
-                        verbose=verbose, 
-                        override_cache_mode=override_cache_mode, 
-                        cache_generate_only=cache_generate_only )
+    if proceed_upon_bad_data:
+        try:
+            return _enrich_or_mk_arb_free(
+                ticker=ticker, d=d,
+                raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, mk_arb_free=mk_arb_free,
+                override_cache_mode=override_cache_mode, raise_if_bad=raise_if_bad, cache_generate_only=cache_generate_only,
+                return_time_taken=return_time_taken, warn_if_arb=warn_if_arb, proceed_upon_bad_data=False, verbose=verbose )
+        except Exception as exc:
+            warnings.warn(f"{ticker} {d}: encountered an error while generating data for this day [will proceed] -- {str(exc)}.")
+            r = None
     else:
-        r = mk_arb_free_day(
-                        ticker=ticker, d=d,
-                        raw_day_filter=raw_day_filter, 
-                        expiry_filter=expiry_filter, 
-                        mk_arb_free=mk_arb_free,
-                        raise_if_bad=raise_if_bad, 
-                        verbose=verbose, 
-                        warn_if_arb=warn_if_arb,
-                        override_cache_mode=override_cache_mode, 
-                        cache_generate_only=cache_generate_only )
+        if mk_arb_free is None:
+            r = enrich_day( ticker=ticker, d=d,
+                            raw_day_filter=raw_day_filter, 
+                            expiry_filter=expiry_filter, 
+                            raise_if_bad=raise_if_bad, 
+                            verbose=verbose, 
+                            override_cache_mode=override_cache_mode, 
+                            cache_generate_only=cache_generate_only )
+        else:
+            r = mk_arb_free_day(
+                            ticker=ticker, d=d,
+                            raw_day_filter=raw_day_filter, 
+                            expiry_filter=expiry_filter, 
+                            mk_arb_free=mk_arb_free,
+                            raise_if_bad=raise_if_bad, 
+                            verbose=verbose, 
+                            warn_if_arb=warn_if_arb,
+                            override_cache_mode=override_cache_mode, 
+                            cache_generate_only=cache_generate_only )
             
     if return_time_taken:
         return r, tme.seconds
@@ -205,6 +232,7 @@ def build_time_series(
                   mk_arb_free : MkArbFree|None,
                   timeseries_config : TimeseriesConfig,
                   pool_config : PoolConfig = PoolConfig.off(),
+                  proceed_upon_bad_data : bool = False,
                   warn_if_arb : bool = True,
                   override_cache_mode : CacheMode|None = None,
                   verbose : Context = Context.all ) -> dict[str:np.array|str|type]:
@@ -233,6 +261,9 @@ def build_time_series(
         Configuration for filtering and sampling the enriched day data.
     pool_config : :class:`PoolConfig`, default ``PoolConfig.off()``
         Configuration for parallel processing. By default, no parallel processing is used.
+    proceed_upon_bad_data : bool, default ``False``
+        If ``False``, processing stops upon encountering an exception when creating the data for a given day. If ``True``, processing continues but
+        building the time series will fail because of the missing date.
     warn_if_arb : bool, default ``True``
         If ``True``, warnings about detected arbitrage opportunities in the data are shown. This only has an effect if ``mk_arb_free`` is not ``None``.
         Set to ``False`` to turn off reporting.
@@ -251,24 +282,25 @@ def build_time_series(
 
     dates = date_range.get_business_days()
 
-    verbose.write(lambda: f"Collecting enriched data for ticker {ticker} for {len(dates)} business days from {fmt_date(dates[0])} to {fmt_date(dates[-1])} {'excluding' if date_range.exclude_half_days else 'including'} half days.")
-    verbose.report(2,lambda: f"Timeseries Config: {timeseries_config}")
+    verbose.write(lambda: f"Collecting {'' if mk_arb_free is None else 'arbitrage-free '}data for ticker {ticker} for {len(dates)} business days from {fmt_date(dates[0])} to {fmt_date(dates[-1])} {'excluding' if date_range.exclude_half_days else 'including'} half days.")
+    verbose.report(2,lambda: f"Timeseries config: {timeseries_config}")
     if not mk_arb_free is None:
         verbose.report(2,lambda: f"MkArbFree config: {mk_arb_free}")
     verbose.report(2,lambda: f"Raw Day filter: {raw_day_filter}")
     verbose.report(2,lambda: f"Expiry filter: {expiry_filter}")
     verbose.report(2,lambda: f"Pool config: {pool_config}")
 
-    source_schmea = set(SCHEMA_ARB_FREE_DAY if mk_arb_free is not None else SCHEMA_ENRICHED_DAY)
+    source_schema = SCHEMA_TIME_SERIES(mk_arb_free)
+    source_fields = set(source_schema)
 
     def get_fields():
-        available_fields = source_schmea|{'is_valid'}
+        available_fields = source_fields|{'is_valid'}
         if not exclude_fields is None:
             verify_inp( set(exclude_fields) <= available_fields, lambda : f"'exclude_fields' must be a subset of {sorted(available_fields)}; unknown fields found: {sorted(set(exclude_fields) - available_fields)}")
         if not include_fields is None:
             verify_inp( set(include_fields) <= available_fields, lambda : f"'include_fields' must be a subset of {sorted(available_fields)}; unknown fields found: {sorted(set(include_fields) - available_fields)}")
 
-        flds = {f for f in source_schmea if f in include_fields} if include_fields is not None else set(source_schmea)
+        flds = {f for f in source_fields if f in include_fields} if include_fields is not None else set(source_fields)
         if exclude_fields is not None:
             flds = flds - set(exclude_fields)
         verify_inp( len(flds) > 0, lambda :  "No fields left after applying include/exclude filters. "+\
@@ -297,10 +329,10 @@ def build_time_series(
             if override_cache_mode.write:
                 verbose.write("Regenerating all files.")
             else:
-                verbose.write("Regenerting all files without writing them to cache.")
+                verbose.write("Regenerating all files without writing them to cache.")
             missing = dates
         else:
-            with verbose.write_t(lambda: f"Checking which enriched daily data files for ticker {ticker} and the {len(dates)} business days from {fmt_date(dates[0])} to {fmt_date(dates[-1])} {'excluding' if date_range.exclude_half_days else 'including'} half days exist in the cache... ", end='') as tme:
+            with verbose.write_t(lambda: f"Checking which {'' if mk_arb_free is None else 'arbitrage-free '}enriched daily data files for ticker {ticker} and the {len(dates)} business days from {fmt_date(dates[0])} to {fmt_date(dates[-1])} {'excluding' if date_range.exclude_half_days else 'including'} half days exist in the cache... ", end='') as tme:
                 def process(d):
                     try:
                         df = _enrich_or_mk_arb_free(
@@ -311,6 +343,7 @@ def build_time_series(
                                         override_cache_mode="cacheonly",
                                         return_time_taken=False,
                                         warn_if_arb=warn_if_arb,
+                                        proceed_upon_bad_data=False,
                                         cache_generate_only=False )
                     except CacheMustExistError:
                         return None
@@ -336,7 +369,7 @@ def build_time_series(
             # generate missing data with parallel processing
             pool = JCPool(num_workers=pool_config.num_workers, threading=False)
 
-            def process( ticker, d, raw_day_filter, expiry_filter, override_cache_mode, warn_if_arb ):
+            def process( ticker, d, raw_day_filter, expiry_filter, override_cache_mode, warn_if_arb, proceed_upon_bad_data ):
                 r, t = _enrich_or_mk_arb_free(
                                        ticker=ticker, d=d,
                                        raw_day_filter=raw_day_filter, 
@@ -345,22 +378,28 @@ def build_time_series(
                                        raise_if_bad=False, 
                                        verbose=Context.quiet, 
                                        return_time_taken=True,
-                                        warn_if_arb=warn_if_arb,
+                                       warn_if_arb=warn_if_arb,
+                                       proceed_upon_bad_data=proceed_upon_bad_data,
                                        override_cache_mode=override_cache_mode, 
                                        cache_generate_only=True )
                 return d, t
 
             tme = verbose.timer()
             cnt = 0
-            for d, seconds in pool.parallel( pool.delayed(process)( ticker, d, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, override_cache_mode=override_cache_mode, warn_if_arb=warn_if_arb ) for d in missing ):
+            for d, seconds in pool.parallel( pool.delayed(process)( ticker, d, 
+                                                                   raw_day_filter=raw_day_filter, 
+                                                                   expiry_filter=expiry_filter, 
+                                                                   override_cache_mode=override_cache_mode,
+                                                                   warn_if_arb=warn_if_arb,
+                                                                   proceed_upon_bad_data=proceed_upon_bad_data ) for d in missing ):
                 cnt += 1
                 if tme.interval_test(1.):
-                    verbose.write(lambda: f"\r{ticker}: generating enriched data for {cnt}/{len(missing)} missing business days using {pool_config.num_workers} processes. Processed {d} which took {seconds:.2f}s. Total run time so far: {tme}... ", end='')
+                    verbose.write(lambda: f"\r{ticker}: generating {'' if mk_arb_free is None else 'arbitrage-free '}enriched data for {cnt}/{len(missing)} missing business days using {pool_config.num_workers} processes. Processed {d} which took {seconds:.2f}s. Total run time so far: {tme}... ", end='')
             verbose.write(lambda: f"\rGenerated all {len(missing)} missing business days for {ticker} using {pool_config.num_workers} processes. This took {tme}.")
 
             pool.terminate()
 
-            with verbose.write_t(lambda: f"Reading the generated enriched data for the {len(missing)} missing business days for {ticker} in the main process... ", end='') as tme:
+            with verbose.write_t(lambda: f"Reading the generated {'' if mk_arb_free is None else 'arbitrage-free '}enriched data for the {len(missing)} missing business days for {ticker} in the main process... ", end='') as tme:
                 # read them back
                 def process(d):
                     try:
@@ -371,11 +410,12 @@ def build_time_series(
                                         raise_if_bad=False,
                                         cache_generate_only=False,
                                         warn_if_arb=warn_if_arb,
+                                        proceed_upon_bad_data=False,
                                         return_time_taken=False,
                                         verbose=Context.quiet )
                     except CacheMustExistError as e:
-                        raise RuntimeError(f"Internal error: {ticker} {d}: expected enriched data to be available in the cache after generation, but it was not found. Please contact the authors with an example. Original error message: {str(e)}")
-                    assert not df is None, f"Internal error: {ticker} {d}: enrich_day returned None after generation. Please contact the authors with an example."
+                        raise RuntimeError(f"Internal error: {ticker} {d}: expected {'' if mk_arb_free is None else 'arbitrage-free '}enriched data to be available in the cache after generation, but it was not found. Please contact the authors with an example. Original error message: {str(e)}")
+                    assert not df is None, f"Internal error: {ticker} {d}: {'' if mk_arb_free is None else 'arbitrage-free '}enrich_day returned None after generation. Please contact the authors with an example."
                     df = timeseries_config._filter(ticker, d, df)
                     df = filter_fields(d, df)
                     return df
@@ -418,11 +458,15 @@ def build_time_series(
             r.is_valid = np.zeros((num_steps,max_num_options), dtype=bool )
             r.ticker = ticker
             r.dates  = dates
+            per_day_fields = set(ENRICHED_PER_DAY_FIELDS)
 
             for c in df0.columns:
                 v = df0[c].to_numpy()
-                assert len(v.shape) == 1, f"Internal error: {ticker} {d}: enriched DataFrame column '{c}' has unexpected shape. Expected 1D array, found shape {v.shape}. Please contact the authors with an example."
-                r[c] = np.zeros((num_steps, max_num_options), dtype=v.dtype) if len(v) > 0 else np.zeros((num_steps, 1), dtype=v.dtype)
+                assert len(v.shape) == 1, f"Internal error: {ticker}: {'' if mk_arb_free is None else 'arbitrage-free '}enriched DataFrame column '{c}' has unexpected shape. Expected 1D array, found shape {v.shape}. Please contact the authors with an example."
+
+                if len(v) == 0 and not c in per_day_fields:
+                    per_day_fields.add(c)
+                r[c] = np.zeros((num_steps, 1 if c in per_day_fields else max_num_options), dtype=v.dtype)
 
             for i, d in enumerate(dates):
                 df = results.pop(d)
@@ -430,7 +474,11 @@ def build_time_series(
                 r.is_valid[i,:ln] = True
                 for c in df.columns:
                     v = df[c].to_numpy()
-                    r[c][i,:len(v)] = v
+                    if c in per_day_fields:
+                        assert np.all( v[0] == v ), f"Internal error: {ticker} {d}: {'' if mk_arb_free is None else 'arbitrage-free '}enriched DataFrame column '{c}' must have a unique value. Found {v} vs {v[v[0] != v][:5]}."
+                        r[c][i,0] = v[0]
+                    else:
+                        r[c][i,:len(v)] = v
 
             for k,v in r.items():
                 if k in ["ticker", "dates"]:

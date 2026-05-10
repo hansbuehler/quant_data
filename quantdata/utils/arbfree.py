@@ -24,7 +24,7 @@ from pyparsing import col
 from quantdata.biz_calendar import DAYS_PER_YEAR
 from quantdata.utils.backbone import BackboneNumpy
 
-@version("0.1")
+@version("0.2")
 @dataclass(frozen=True)
 class MkArbFree:
     """
@@ -39,44 +39,49 @@ class MkArbFree:
 
     See :meth:`MkArbFree.__call__` for more details on the input and output of this functional.
     """
+    no_arb_mode           : str = "surface"  # Whether to enforce no-arbirage: "off", "expriy", "surface".
 
     min_strikes_per_expiry: int = 5      #: Minimum strikes per expiry. Expiries with fewer strikes will be dropped.
     min_dC_eps            : float = 1E-3 #: Minimum dC/dK slope at the boundaries. Expiries with steeper slopes will be dropped.
 
-    no_arb_mode           : str = "surface"  # Whether to enforce no-arbirage: "off", "expriy", "surface".
     min_half_spread       : float = 1E-4 #: Minimum bid/ask spread. The optimization is weighted by inverse half spread.
     cvxpy_solver          : str = "CLARABEL" #:  Solver to use for the convex optimization problem, c.f. `list of cvxpy solvers <https://www.cvxpy.org/tutorial/solvers/index.html#choosing-a-solver>`_.
     cvxpy_solver_options  : dict = field(default_factory=dict) #: Options to pass to the CVXPY solver.
-    timeout_seconds       : float|None = 10.   #: Time limit for the optimization solver, in seconds. This is passed to the CVXPY solver options as "time_limit". 
+    timeout_seconds_expiry: float|None = 20.     #: Time limit for the optimization solver, in seconds. This is passed to the CVXPY solver options as "time_limit". 
+    timeout_seconds_surface: float|None = 60.*5. #: Time limit for the optimization solver, in seconds. This is passed to the CVXPY solver options as "time_limit".
     mid_fit_weight        : float = 0.1  #: Weight for fitting to the mid prices of options, where 1 means mid-price fit only is active, while 0 means to fit only a linear penalty for exceeding bid-ask.
     min_density           : float = 1E-4 #: Minimum density value to consider in the optimization. Strikes with lower values will be dropped.
-    
+    eps_dens_1            : float = 1E-4 #: What passes as ``sum(p)==1`` and ``p@K==1`` for the fitted density.
+
     def __post_init__(self):
         verify_inp( self.no_arb_mode in ["off", "expiry", "surface"], lambda : f"'no_arb_mode' must be one of 'off', 'expiry' or 'surface', but found '{self.no_arb_mode}'" ) 
         verify_inp( self.min_strikes_per_expiry >= 3, lambda : f"'min_strikes_per_expiry' must be at least 3, but found {self.min_strikes_per_expiry}" )
         verify_inp( self.min_dC_eps > 0., lambda : f"'min_dC_eps' must be positive, but found {self.min_dC_eps}" )
         verify_inp( self.min_half_spread > 0., lambda : f"'min_half_spread' must be positive, but found {self.min_half_spread}" )
         verify_inp( self.min_density > 0., lambda : f"'min_density' must be positive, but found {self.min_density}" )
-        verify_inp( self.timeout_seconds is None or self.timeout_seconds >= 0., lambda : f"'timeout_seconds' must be positive or None, but found {self.timeout_seconds}" )
+        verify_inp( self.timeout_seconds_expiry is None or self.timeout_seconds_expiry >= 0., lambda : f"'timeout_seconds_expiry' must be positive or None, but found {self.timeout_seconds_expiry}" )
+        verify_inp( self.timeout_seconds_surface is None or self.timeout_seconds_surface >= 0., lambda : f"'timeout_seconds_surface' must be positive or None, but found {self.timeout_seconds_surface}" )
 
     def __str__(self) -> str:
         """ Very compact but still readable summary """
         return f"md={self.no_arb_mode[0]},mink={self.min_strikes_per_expiry},dC={self.min_dC_eps:.3g},mhs={self.min_half_spread:.3g},mdn={self.min_density:.3g},"+\
-               f"mw={self.mid_fit_weight:.2f},solver={self.cvxpy_solver},to={self.timeout_seconds if not self.timeout_seconds is None else '0'}"
+               f"mw={self.mid_fit_weight:.2f},solver={self.cvxpy_solver},toe={self.timeout_seconds_expiry if not self.timeout_seconds_expiry is None else '0'},"+\
+               f"tos={self.timeout_seconds_surface if not self.timeout_seconds_surface is None else '0'},eps={self.eps_dens_1:.1g}"
 
-    def get_solver_options(self) -> dict:
+    def get_solver_options(self, for_expiry : bool) -> dict:
         """ Get the CVXPY solver options, including the time limit if set. """
         options     = dict(self.cvxpy_solver_options)
-        if not self.timeout_seconds is None:
+        timeout_seconds = self.timeout_seconds_expiry if for_expiry else self.timeout_seconds_surface
+        if timeout_seconds is not None:
             # https://www.cvxpy.org/tutorial/solvers/index.html
             if self.cvxpy_solver in ["GLOP", "PDLP"]:
-                options["time_limit_sec"] = self.timeout_seconds 
+                options["time_limit_sec"] = timeout_seconds
             elif self.cvxpy_solver == "CBC":
-                options["maximumSeconds"] = self.timeout_seconds
+                options["maximumSeconds"] = timeout_seconds
             elif self.cvxpy_solver == "CLARABEL":
-                options["time_limit"] = self.timeout_seconds
+                options["time_limit"] = timeout_seconds
             elif self.cvxpy_solver == "EXPRESS":
-                options["maxtime"] = self.timeout_seconds
+                options["maxtime"] = timeout_seconds
             else:
                 raise ValueError(f"Solver '{self.cvxpy_solver}' do not know how to set time limit for this solver. Supported solvers are 'GLOP', 'PDLP', 'CBC', 'CLARABEL' and 'EXPRESS'.")
         return options
@@ -209,7 +214,6 @@ class MkArbFree:
         # ---------------------
         # Add strikes to the left and right which are consistent with the no-arb condition.
 
-        issues        = []
         r             = PrettyObject()
         r.xstrikes    = []
         r.strikes     = [] # TODO: remove
@@ -228,7 +232,7 @@ class MkArbFree:
         tme        = verbose.timer()
 
         for t, expiry in enumerate(expiries):
-            verbose.write(lambda : f"\r{msg_header()}Expiry #{t} {expiry*DAYS_PER_YEAR:.3f}d: generating extended strikes... ", end='')
+            verbose.write(lambda : f"\r{msg_header()}Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: generating extended strikes... ", end='')
 
             input_strikes_t = strikes[t]
             input_bid_t     = bids[t]
@@ -244,10 +248,10 @@ class MkArbFree:
                 verbose.write(lambda :f"only {len(xstrikes_t)} strikes found. Skipping this expiry.", head=False)
                 continue
 
-            verify_inp( xstrikes_t.shape == bid_t.shape == ask_t.shape, lambda : f"{msg_header()}#{t} {expiry*DAYS_PER_YEAR:.3f}d: Expected strikes, bids and asks to have the same shape for expiry, found {xstrikes_t.shape}, {bid_t.shape}, {ask_t.shape}")
-            verify_inp( np.all( np.diff(xstrikes_t) > 0 ), lambda : f"{msg_header()}#{t} {expiry*DAYS_PER_YEAR:.3f}d: Strikes must be strictly increasing; found minimal difference {np.diff(xstrikes_t).min():.3f}" )
-            verify_inp( xstrikes_t[0] > 0., lambda : f"{msg_header()}#{t} {expiry*DAYS_PER_YEAR:.3f}d: Lowest strike must be positive; found {xstrikes_t[0]:.3f}" )
-            verify_inp( np.all( ask_t - bid_t >0. ), lambda : f"{msg_header()}#{t} {expiry*DAYS_PER_YEAR:.3f}d: All ask prices must be greater than bid prices.")
+            verify_inp( xstrikes_t.shape == bid_t.shape == ask_t.shape, lambda : f"{msg_header()}#{t} {expiry*DAYS_PER_YEAR:.1f}d: Expected strikes, bids and asks to have the same shape for expiry, found {xstrikes_t.shape}, {bid_t.shape}, {ask_t.shape}")
+            verify_inp( np.all( np.diff(xstrikes_t) > 0 ), lambda : f"{msg_header()}#{t} {expiry*DAYS_PER_YEAR:.1f}d: Strikes must be strictly increasing; found minimal difference {np.diff(xstrikes_t).min():.3f}" )
+            verify_inp( xstrikes_t[0] > 0., lambda : f"{msg_header()}#{t} {expiry*DAYS_PER_YEAR:.1f}d: Lowest strike must be positive; found {xstrikes_t[0]:.3f}" )
+            verify_inp( np.all( ask_t - bid_t >0. ), lambda : f"{msg_header()}#{t} {expiry*DAYS_PER_YEAR:.1f}d: All ask prices must be greater than bid prices.")
 
             # extend strike range with boundary strikes
             # -----------------------------------------
@@ -257,6 +261,10 @@ class MkArbFree:
             # { 1 - K_0 - C_1) >= dC_1 (K_0 - K_1) =>
             # 1 - C_1 + K_1 dC_1 >= K_0 (1 + dC_1) =>
             # K_0 <= (1 - C_1 + K_1 dC_1)/(1 + dC_1)
+            #
+            # Assume that this is violated:
+            # Buy the 0 strike for C_0 (the ask)
+
 
             assert self.min_dC_eps > 0., f"Internal error: min_dC_eps {self.min_dC_eps} must be positive."
             total_input = len(xstrikes_t)
@@ -275,7 +283,7 @@ class MkArbFree:
                         break
                     lower_k = None
             if ileft == N-2 or lower_k is None:
-                raise RuntimeError(f"{msg_header()}Expiry #{t} {expiry*DAYS_PER_YEAR:.3f}d: could not find consistent initial strike for this expiry.")
+                raise RuntimeError(f"{msg_header()}Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: could not find consistent initial strike for this expiry.")
             upper_k = None
             for iright in range(N-2,ileft-1,-1):
                 C_Nm1  = mid_t[iright]
@@ -289,7 +297,7 @@ class MkArbFree:
                         break
                     upper_k = None  
             if iright <= ileft or upper_k is None:
-                raise RuntimeError(f"{msg_header()}Expiry #{t} {expiry*DAYS_PER_YEAR:.3f}d: could not find consistent terminal strike for this expiry.")
+                raise RuntimeError(f"{msg_header()}Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: could not find consistent terminal strike for this expiry.")
 
             if ileft > 0 or iright < N-2:
                 slc         = slice( ileft, iright+1 )
@@ -325,83 +333,55 @@ class MkArbFree:
 
             assert np.all( bid_t == input_bid_t[mask_t] ), "Mask error...?"
             assert np.all( ask_t == input_ask_t[mask_t] ), "Mask error...?"
+            assert np.all( xstrikes_t[1:-1] == input_strikes_t[mask_t] ), "Mask error...?"
 
             if self.no_arb_mode != "off":
-                verbose.write(lambda : f"\r{msg_header()}Expiry #{t} {expiry*DAYS_PER_YEAR:.2f}d: finding linear no-arbitrage mid... ", end='')
-
+                # is it already fine?
                 Nt          = len(xstrikes_t)
-                p           = cp.Variable(Nt, nonneg=True)
-                C           = np.maximum( 0., xstrikes_t[None,:] - xstrikes_t[:,None] ) @ p
-                constraints = [ cp.sum(p) == 1., xstrikes_t @ p == 1., # martingale condition
-                                p <= 1.,
-                                C[1:-1] <= ask_t,
-                                C[1:-1] >= bid_t ]
+                floor       = max( self.min_density / float(Nt), 1E-6 )
 
-                half_spread = np.maximum( (ask_t - bid_t)/2., self.min_half_spread )
-                mid         = (bid_t + ask_t)/2.
-                objective   = cp.sum( cp.multiply( 1./half_spread, C[1:-1] - mid )**2 )
+                def market_p():
+                    Cx          = np.zeros_like(xstrikes_t, dtype=np.float64)
+                    Cx[1:-1]    = ((bid_t + ask_t)/2.).astype(np.float64, copy=False)
+                    Cx[0]       = 1. - xstrikes_t[0].astype(np.float64, copy=False)
+                    dCdK        = np.diff(Cx,prepend=1.)/np.diff(xstrikes_t,prepend=0.)
+                    p           = np.diff(dCdK,append=0.)
+                    return p
+                p = market_p()
 
-                with warnings.catch_warnings():
-                    warnings.filterwarnings(
-                        "ignore",
-                        message=r"Solution may be inaccurate.*",
-                        category=UserWarning
-                    )
-                    prob        = cp.Problem( cp.Minimize( objective ), constraints )
-                    prob.solve( solver=self.cvxpy_solver, **self.get_solver_options() )
+                if np.all(p >= -floor) and abs( np.sum( p )-1. ) <= self.eps_dens_1 and abs( p@xstrikes_t - 1. ) <= self.eps_dens_1:
+                    verbose.write(lambda : f"\r{msg_header()}Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: mid is already arbitrage-free... ", end='')
+                else:
+                    verbose.write(lambda : f"\r{msg_header()}Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: finding linear no-arbitrage mid... ", end='')
+                    p = self._expiry_no_arb(xstrikes_t, bid_t, ask_t, expiry, handle_arb=handle_arb, retry=True, message_context=msg_header, verbose=verbose)
+                if p is None:
+                    continue
 
-                if prob.status != "optimal":
-                    if prob.status in ["infeasible", "infeasible_inaccurate"]:
-                        msg = f"{msg_header()}Cannot find no-arbitrage mid for expiry {expiry*DAYS_PER_YEAR:.2f}d ({prob.status} problem). This indicates actionable arbitrage in the input data."
-                        verbose.write(lambda :f"cannot find no-arbitrage mid ({prob.status} problem). This indicates actionable arbitrage in the input data -- removing expiry.", head=False)
-                        if handle_arb == "raise":
-                            raise RuntimeError(msg)
-                        if handle_arb == "warn":
-                            warnings.warn(msg[:-1]+ " -- removing expiry.") # -> maybe we need a proper error here.
-                        continue
-                    if prob.status in ["user_limit"]:
-                        msg = f"{msg_header()}Cannot find no-arbitrage mid for expiry {expiry*DAYS_PER_YEAR:.2f}d: solver hit and/or iteration limit."
-                        verbose.write(lambda :f"cannot find no-arbitrage mid: solver hit and/or iteration limit -- removing expiry.", head=False)
-                        if handle_arb == "raise":
-                            raise RuntimeError(msg)
-                        if handle_arb == "warn":
-                            warnings.warn(msg[:-1]+ " -- removing expiry.") # -> maybe we need a proper error here.
-                        continue
-                    verbose.write(lambda :f"optimized returned status '{prob.status}' -- proceeding anyway... ", end='', head=False)
+                assert p.shape == xstrikes_t.shape, f"Internal error: density shape {p.shape} does not match strike shape {xstrikes_t.shape} for expiry {expiry*DAYS_PER_YEAR:.1f}d."
+                assert np.all( p >= -floor ), f"Internal error: {msg_header()}negative density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.1f}d after removing zero-density strikes."
+                assert abs( np.sum( p )-1. ) <= self.eps_dens_1, f"Internal error: {msg_header()}density does not sum to one; sum is {p.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.1f}d [tolerance {self.eps_dens_1:.3g}]."
+                assert abs( p@xstrikes_t - 1. ) <= self.eps_dens_1, f"Internal error: {msg_header()}density does not integrate to one; integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.1f}d [tolerance {self.eps_dens_1:.3g}] ."
 
-                # eliminate calls whose density is zero (e.g. the mid is linear) by flagging them as inactive.
-                C          = C.value
-                p          = p.value
-                floor      = self.min_density / float(Nt)
-                verify( np.all(p >= -floor), lambda : f"Internal error: {msg_header()}negative density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.3f}d after optimization." )
-                assert abs( np.sum( p )-1. ) <= floor, f"Internal error: {msg_header()}density does not sum to one; sum is {p.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d. Solver status: {prob.status}."
-                assert abs( p@xstrikes_t - 1. ) <= floor, f"Internal error: {msg_header()}density does not integrate to one; integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d. Solver status: {prob.status}"
+                Cx         = ( np.maximum( 0., xstrikes_t[None,:] - xstrikes_t[:,None] ) @ p ).astype(np.float64, copy=False)
+                Cx[0]      = 1. - xstrikes_t[0]
+                Cx[-1]     = 0.
                 active     = p > floor
                 active[0]  = True
                 active[-1] = True
 
+                if not np.all(active):
+                    mask_t[mask_t] = active[1:-1]
+                    xstrikes_t      = xstrikes_t[active].astype(np.float64, copy=False)
+                    assert np.all( xstrikes_t[1:-1] == input_strikes_t[mask_t] ), "Mask error...?"
+                    Cx             = Cx[active]
+                    dCdK           = np.diff(Cx,prepend=1.)/np.diff(xstrikes_t,prepend=0.)
+                    p              = np.diff(dCdK,append=0. )
+                    assert np.all( p >= -floor ), f"Internal error: {msg_header()}negative re-computed density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.1f}d after removing zero-density strikes."
+                    assert abs( np.sum( p )-1. ) <= self.eps_dens_1, f"Internal error: {msg_header()}re-computed density does not sum to one; sum is {p.sum():.6g} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.1f}d [tolerance {self.eps_dens_1:.3g}]."
+                    assert abs( p@xstrikes_t - 1. ) <= self.eps_dens_1, f"Internal error: {msg_header()}re-computed density does not integrate to one; integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.1f}d [tolerance {self.eps_dens_1:.3g}]."
+
                 # compute true fit values from the density
                 fit_t      = np.maximum( 0., xstrikes_t[None,:] - input_strikes_t[:,None] ) @ p
-                assert np.allclose( fit_t[mask_t], C[1:-1], rtol=0., atol=1E-6), f"Internal error: {msg_header()}fit values computed from density do not match optimization output for expiry {expiry*DAYS_PER_YEAR:.3f}d. Worst fit {np.max(np.abs(fit_t[mask_t] - C)):.3e}"
-
-                dCdK_t         = np.diff(C,prepend=1.)/np.diff(xstrikes_t,prepend=0.)
-                p              = np.diff(dCdK_t,append=0. )
-                assert np.all( p >= -floor ), f"Internal error: {msg_header()}negative re-computed density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.3f}d after removing zero-density strikes."
-                assert abs( np.sum( p )-1. ) <= floor, f"Internal error: {msg_header()}re-computed density does not sum to one; sum is {p.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
-                assert abs( p@xstrikes_t - 1. ) <= floor, f"Internal error: {msg_header()}re-computed density does not integrate to one; integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
-
-                if not np.all(active):
-                    # remove strikes; recompute density (which should be valid)
-                    xstrikes_t     = xstrikes_t[active]
-                    mask_t[mask_t] = active[1:-1]
-                    assert np.all( xstrikes_t[1:-1] == input_strikes_t[mask_t] ), "Mask error...?"
-
-                    C              = C[active]
-                    dCdK_t         = np.diff(C,prepend=1.)/np.diff(xstrikes_t,prepend=0.)
-                    p              = np.diff(dCdK_t,append=0.)
-                    assert np.all( p >= -floor ), f"Internal error: {msg_header()}negative re-computed density after removing zero probability strikes {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.3f}d after removing zero-density strikes."
-                    assert abs( np.sum( p )-1. ) <= floor, f"Internal error: {msg_header()}re-computed density after removing zero probability strikes does not sum to one; sum is {p.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
-                    assert abs( p@xstrikes_t - 1. ) <= floor, f"Internal error: {msg_header()}re-computed density after removing zero probability strikes does not integrate to one; integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
 
                 r.xdensities.append( p )
                 r.fits1.append( fit_t )   # fit is computed for all strikes, also those unmasked
@@ -523,19 +503,19 @@ class MkArbFree:
                 r.mdensities.append(q_t)
 
             with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    "ignore",
-                    message=r"Solution may be inaccurate.*",
-                    category=UserWarning
-                )
-                prob        = cp.Problem( cp.Minimize( objective ), constraints )
-                prob.solve( solver=self.cvxpy_solver, **self.get_solver_options() )
+                warnings.filterwarnings("ignore",message=r"Solution may be inaccurate.*",category=UserWarning)
+                warnings.filterwarnings("error",message=r"overflow encountered in power",category=RuntimeWarning)
+                try:
+                    prob        = cp.Problem( cp.Minimize( objective ), constraints )
+                    prob.solve( solver=self.cvxpy_solver, **self.get_solver_options(for_expiry=False) )
+                except RuntimeWarning as e:
+                    warnings.warn(f"{msg_header()}Solver warning: {str(e)}.", category=RuntimeWarning)
 
             if prob.status != "optimal":
                 if prob.status == "infeasible":
                     raise RuntimeError(f"{msg_header()}Cannot find no-arbitrage surface mids: problem infeasible??")
                 if prob.status == "user_limit":
-                    raise RuntimeError(f"{msg_header()}Cannot find no-arbitrage surface mids: reached timeout {self.timeout_seconds} and/or iteration limit.")
+                    raise RuntimeError(f"{msg_header()}Cannot find no-arbitrage surface mids: reached timeout {self.timeout_seconds_surface} and/or iteration limit.")
                 verbose.write(lambda : f"solver returned '{prob.status}' -- proceeding anyway... ", head=False, end='' )
 
             # compute call prices for the original strikes
@@ -546,16 +526,167 @@ class MkArbFree:
                 mstrikes_t = r.mstrikes[t]
                 q_t        = r.mdensities[t]
 
-                assert np.min(q_t) >= -floor, f"Internal error: {msg_header()}negative density {q_t[q_t<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.3f}d after optimization."
-                assert abs( np.sum( q_t )-1. ) <= floor, f"Internal error: {msg_header()}density does not sum to one after removing zero-density strikes, sum is {q_t.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
-                assert abs( q_t@mstrikes_t - 1. ) <= floor, f"Internal error: {msg_header()}density does not integrate to one after removing zero-density strikes, integral is {q_t@mstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
+                assert np.min(q_t) >= -floor, f"Internal error: {msg_header()}negative density {q_t[q_t<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.1f}d after optimization."
+                assert abs( np.sum( q_t )-1. ) <= self.eps_dens_1, f"Internal error: {msg_header()}density does not sum to one after removing zero-density strikes, sum is {q_t.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.1f}d [tolerance {self.eps_dens_1:.3g}]."
+                assert abs( q_t@mstrikes_t - 1. ) <= self.eps_dens_1, f"Internal error: {msg_header()}density does not integrate to one after removing zero-density strikes, integral is {q_t@mstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.1f}d [tolerance {self.eps_dens_1:.3g}]."
 
                 xfit_mids  = fit_mids[t].value
                 mask_t     = r.masks[t]
                 fit_t      = np.maximum( 0., mstrikes_t[None,:] - strikes_t[:,None] ) @ q_t
-                assert np.allclose( fit_t[mask_t], xfit_mids, rtol=0., atol=1E-6), f"Internal error: {msg_header()}fit values computed from density do not match optimization output for expiry {expiry*DAYS_PER_YEAR:.3f}d. Worst fit {np.max(np.abs(fit_t[mask_t] - xfit_mids)):.3e}"
+                assert np.allclose( fit_t[mask_t], xfit_mids, rtol=0., atol=1E-6), f"Internal error: {msg_header()}fit values computed from density do not match optimization output for expiry {expiry*DAYS_PER_YEAR:.1f}d. Worst fit {np.max(np.abs(fit_t[mask_t] - xfit_mids)):.3e}"
                 r.fitsX.append( fit_t )
             verbose.write(lambda : f"done. This took {tme}.", head=False )
 
         return r
 
+    def _expiry_no_arb(self, xstrikes_t, bid_t, ask_t, expiry : float, handle_arb : str, retry : bool, *, message_context : str|callable|None = None, verbose : Context = Context.all):
+        """
+        Iterative way to get some arb-free fit going
+        """
+        def msg_header():
+            if message_context is None:
+                return ""
+            if callable(message_context):
+                return f"{message_context()}: "
+            return f"{message_context}: "
+
+        # find fit between bid/ask without hard constraints first
+        # -------------------------------------------------------
+
+        Nt          = len(xstrikes_t)
+        floor       = max( self.min_density / float(Nt), 1E-6 )
+        p           = cp.Variable(Nt, nonneg=True)
+        C           = np.maximum( 0., xstrikes_t[None,:] - xstrikes_t[1:-1,None] ) @ p
+        intr        = np.maximum(0., 1.-xstrikes_t[1:-1]) 
+        assert np.min( ask_t - intr ) > 0., f"Internal error: {msg_header()} 'ask' values must be strictly above intrinsic values for expiry {expiry*DAYS_PER_YEAR:.1f}d, but found minimum difference {np.min(ask_t - intr):.3e}."
+        constraints = [ cp.sum(p) == 1., xstrikes_t @ p == 1., # martingale condition
+                        p <= 1.,
+                        C >= intr, 
+                        C <= intr + (ask_t-intr)*10. ]
+
+        half_spread = np.maximum( (ask_t - bid_t)/2., self.min_half_spread )
+        objective   = cp.sum( cp.multiply( 1./half_spread, ( cp.maximum( 0., C - ask_t ) + cp.maximum( 0., bid_t - C ) ) )
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore",message=r"Solution may be inaccurate.*",category=UserWarning)
+            warnings.filterwarnings("error",message=r"overflow encountered in power",category=RuntimeWarning)
+            try:
+                prob        = cp.Problem( cp.Minimize( objective ), constraints )
+                prob.solve( solver=self.cvxpy_solver, **self.get_solver_options(for_expiry=True) )
+            except RuntimeWarning as e:
+                raise RuntimeError(f"{msg_header()}Solver overflow for expiry {expiry*DAYS_PER_YEAR:.2f}d in soft fit mode: {str(e)}.")
+
+        if prob.status in ["infeasible", "infeasible_inaccurate"]:
+            raise RuntimeError(f"{msg_header()}Cannot find no-arbitrage mid for expiry {expiry*DAYS_PER_YEAR:.2f}d in soft fit mode: problem reported as infeasible. Please contact the authors with an example.")
+
+        if prob.status in ["user_limit"]:
+            msg = f"Cannot find soft no-arbitrage mid for expiry {expiry*DAYS_PER_YEAR:.2f}d: solver hit a timeout after {self.timeout_seconds_expiry:.2f}s."
+            if handle_arb == "raise":
+                raise RuntimeError(msg_header() + msg)
+            verbose.write(f"{msg.lower()} -- removing expiry.", head=False)
+            if handle_arb == "warn":
+                warnings.warn(msg_header() + msg[:-1] + " -- removing expiry.") # -> maybe we need a proper error here.
+            return None
+
+        # check whether we succeeded in fitting within bid/ask;
+        # if yes -> done
+
+        C      = C.value
+        p      = p.value
+        mask   = (C >= bid_t-1E-6) | (C <= ask_t+1E-6)
+
+        if np.all(mask):
+            assert np.all( p >= -floor ), f"Internal error: {msg_header()}negative density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.1f}d after removing zero-density strikes."
+            assert abs( np.sum( p )-1. ) <= self.eps_dens_1, f"Internal error: {msg_header()}density does not sum to one; sum is {p.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.1f}d [tolerance {self.eps_dens_1:.3g}]."
+            assert abs( p@xstrikes_t - 1. ) <= self.eps_dens_1, f"Internal error: {msg_header()}density does not integrate to one; integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.1f}d [tolerance {self.eps_dens_1:.3g}] ."
+            return p
+
+        if np.sum(mask) < 3:
+            msg = f"Cannot find arbitrage-free fit within bid/ask even in soft mode for expiry {expiry*DAYS_PER_YEAR:.2f}d."
+            if handle_arb == "raise":
+                raise RuntimeError(msg_header() + msg)
+            verbose.write(f"{msg.lower()} -- removing expiry.", head=False)
+            if handle_arb == "warn":
+                warnings.warn(msg_header() + msg[:-1] + " -- removing expiry.") # -> maybe we need a proper error here.
+            return None
+        
+        # attempt hard fit on all strikes
+        # -------------------------------
+
+        p           = cp.Variable(Nt, nonneg=True)
+        C           = np.maximum( 0., xstrikes_t[None,:] - xstrikes_t[1:-1,None] ) @ p
+        constraints = [ cp.sum(p) == 1., xstrikes_t @ p == 1., # martingale condition
+                        p <= 1.,
+                        C <= ask_t,
+                        C >= bid_t ]
+
+        half_spread = np.maximum( (ask_t - bid_t)/2., self.min_half_spread )
+        objective   = cp.sum( cp.multiply( 1./half_spread, C - (bid_t + ask_t)/2. )**2 )
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore",message=r"Solution may be inaccurate.*",category=UserWarning)
+            warnings.filterwarnings("error",message=r"overflow encountered in power",category=RuntimeWarning)
+            try:
+                prob        = cp.Problem( cp.Minimize( objective ), constraints )
+                prob.solve( solver=self.cvxpy_solver, **self.get_solver_options(for_expiry=True) )
+            except RuntimeWarning as e:
+                prob.status = "overflow error"
+
+        if not prob.status in ["infeasible", "infeasible_inaccurate","user_limit","overflow error"]:
+            p = p.value
+            C = C.value
+            verify( np.all(p >= -floor), lambda : f"Internal error: {msg_header()}negative density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.1f}d after optimization." )
+            assert abs( np.sum( p )-1. ) <= self.eps_dens_1, f"Internal error: {msg_header()}density does not sum to one; sum is {p.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.1f}d. Solver status: {prob.status} [tolerance {self.eps_dens_1:.3g}]."
+            assert abs( p@xstrikes_t - 1. ) <= self.eps_dens_1, f"Internal error: {msg_header()}density does not integrate to one; integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.1f}d. Solver status: {prob.status} [tolerance {self.eps_dens_1:.3g}]."
+            assert np.all( C >= bid_t-1E-6 ) and np.all( C <= ask_t+1E-6 ), f"Internal error: {msg_header()}hard fit succeeded but constraints violated for expiry {expiry*DAYS_PER_YEAR:.2f}d. Please contact the authors with an example."
+            return p
+
+        # attempt hard fit on all strikes
+        # -------------------------------
+
+        verbose.write(lambda : f"hard fit failed with status '{prob.status}' -- trying to fit a subset of strikes... ", head=False, end='')
+
+        mask[0]     = True
+        mask[-1]    = True
+        mstrikess_t = xstrikes_t[mask]
+        mask_t      = ask_t[mask[1:-1]]
+        mbid_t      = bid_t[mask[1:-1]]
+        mNt         = len(mstrikess_t)
+        mp          = cp.Variable(mNt, nonneg=True)
+        mC          = np.maximum( 0., mstrikess_t[None,:] - mstrikess_t[1:-1,None] ) @ mp
+        constraints = [ cp.sum(mp) == 1., mstrikess_t @ mp == 1., # martingale condition
+                        mp <= 1.,
+                        mC <= mask_t,
+                        mC >= mbid_t ]
+
+        half_spread = np.maximum( (mask_t - mbid_t)/2., self.min_half_spread )
+        objective   = cp.sum( cp.multiply( 1./half_spread, mC - (mbid_t + mask_t)/2. )**2 )
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore",message=r"Solution may be inaccurate.*",category=UserWarning)
+            warnings.filterwarnings("error",message=r"overflow encountered in power",category=RuntimeWarning)
+            try:
+                prob        = cp.Problem( cp.Minimize( objective ), constraints )
+                prob.solve( solver=self.cvxpy_solver, **self.get_solver_options(for_expiry=True) )
+            except RuntimeWarning as e:
+                prob.status = "overflow error"
+
+        if prob.status in ["infeasible", "infeasible_inaccurate","user_limit","overflow error"]:
+            msg = f"Cannot find no-arbitrage mid for expiry {expiry*DAYS_PER_YEAR:.2f}d, even after removing some offending strikes. Solver returned status '{prob.status}'."
+            if handle_arb == "raise":
+                raise RuntimeError(msg_header() + msg)
+            verbose.write(f"{msg.lower()} -- removing expiry.", head=False)
+            if handle_arb == "warn":
+                warnings.warn(msg_header() + msg[:-1] + " -- removing expiry.") # -> maybe we need a proper error here.
+            return None
+        
+        p       = np.zeros_like(xstrikes_t)
+        p[mask] = mp.value
+        C       = np.maximum( 0., xstrikes_t[None,:] - xstrikes_t[1:-1,None] ) @ p
+                
+        # Check that that density is reasonable
+        verify( np.all(p >= -floor), lambda : f"Internal error: {msg_header()}negative density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.1f}d after optimization." )
+        assert abs( np.sum( p )-1. ) <= self.eps_dens_1, f"Internal error: {msg_header()}density does not sum to one; sum is {p.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.1f}d. Solver status: {prob.status}."
+        assert abs( p@xstrikes_t - 1. ) <= self.eps_dens_1, f"Internal error: {msg_header()}density does not integrate to one; integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.1f}d. Solver status: {prob.status}"
+        assert np.all( C[mask] >= bid_t[mask]-1E-6 ) and np.all( C[mask] <= ask_t[mask]+1E-6 ), f"Internal error: {msg_header()}hard fit succeeded but constraints violated for expiry {expiry*DAYS_PER_YEAR:.2f}d. Please contact the authors with an example."
+        return p

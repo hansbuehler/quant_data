@@ -93,8 +93,6 @@ def get_standard_expiries( date_range : DateRange ) -> pl.DataFrame:
             if ix > 0:
                 assert lpm_code >= datecodes[ix-1], f"Internal error: lpm_code {lpm_code} should be >= datecodes[{ix-1}]={datecodes[ix-1]}"
                 if dates[ix-1] in business_days:
-                    print(f"Adding last month {last_prev_month} expiry for {dates[ix-1]} with code {EXPIRY.EOM if last_prev_month.month not in {3, 6, 9, 12} else EXPIRY.QUARTERLY}")
-                    print(dates)
                     assert not dates[ix-1] in expiries, f"Internal error: duplicate expiry date {dates[ix-1]}"
                     expiries.append( dates[ix-1] )
                     codes.append( int( EXPIRY.EOM if last_prev_month.month not in {3, 6, 9, 12} else EXPIRY.QUARTERLY ) )
@@ -107,8 +105,6 @@ def get_standard_expiries( date_range : DateRange ) -> pl.DataFrame:
             if ix > 0:
                 assert tf_code >= datecodes[ix-1], f"Internal error: tf_code {tf_code} should be >= datecodes[{ix-1}]={datecodes[ix-1]}"
                 if dates[ix-1] in business_days:
-                    print(f"Adding third friday {third_friday} expiry for {dates[ix-1]} with code {EXPIRY.QUAD_WITCHING if month in {3, 6, 9, 12} else EXPIRY.MONTHLY}")
-                    print(dates)
                     assert not dates[ix-1] in expiries, f"Internal error: duplicate expiry date {dates[ix-1]}"
                     expiries.append( dates[ix-1] )
                     codes.append( int( EXPIRY.QUAD_WITCHING if month in {3, 6, 9, 12} else EXPIRY.MONTHLY ) )

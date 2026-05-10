@@ -39,3 +39,4 @@ def patch_cvxpy_sum_shape_from_args() -> bool:
     setattr(safe_shape_from_args, "_quantdata_original", current)
     cvxpy_sum.Sum.shape_from_args = safe_shape_from_args
     return True
+

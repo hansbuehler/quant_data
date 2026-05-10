@@ -10,10 +10,21 @@ release = "0.1.0"
 
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
 ]
 
+autosummary_generate = True
+
+autodoc_default_options = {
+    "members": True,
+    "undoc-members": True,
+    "show-inheritance": True,
+}
+
+autodoc_typehints = "none"
+
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", "generated", "Thumbs.db", ".DS_Store"]
 
 html_theme = "alabaster"

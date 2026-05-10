@@ -1,7 +1,24 @@
 """
-Generate arbitrage-free option prices.
+Generate arbitrage-free option prices for a ticker on a given day using :class:`MkArbFree` and the enriched day data from :func:`enrich_day`.
 
-The main function in this function is 
+The main function in this module is :func:`mk_arb_free_day`. This function takes a ticker and a date, along with optional filters and configuration
+for the arbitrage-free fitting, and returns a DataFrame containing the enriched day data along with additional columns indicating which strike
+were retained as arbitrage-free and the corresponding fitted prices and Greeks.
+
+Example
+-------
+    >>> import datetime as dt
+    >>> from quantdata.widb.arbfree import mk_arb_free_day
+    >>> from quantdata.utils.arbfree import MkArbFree
+    >>>
+    >>> # Generate arbitrage-free prices for SPX on a specific date
+    >>> df = mk_arb_free_day("SPX", dt.date(2023, 1, 15))
+    >>>
+    >>> # With custom arbitrage-free fitting configuration
+    >>> mk_arb_free_config = MkArbFree(no_arb_mode="surface")
+    >>> df = mk_arb_free_day("SPX", dt.date(2023, 1, 15), mk_arb_free=mk_arb_free_config)
+    >>> print(df[["pure_strike", "mask_arb_free", "pure_fit1_price", "pure_fit1_delta"]])
+
 """
 from __future__ import annotations
 
@@ -31,14 +48,20 @@ from cdxcore.uniquehash import named_unique_filename48_8
 from cdxcore.util import fmt_date, fmt_list, verify_inp
 from cdxcore.verbose import Context
 
-SCHEMA_ARB_FREE_DAY = SCHEMA_ENRICHED_DAY | {
+SCHEMA_ARB_FREE_DAY_EXPIRY = SCHEMA_ENRICHED_DAY | {
     "mask_arb_free": np.dtype("bool"),
+    "fit1_vol": np.dtype("float32"),
     "pure_fit1_price": np.dtype("float32"),
     "pure_fit1_delta": np.dtype("float32"),
     "pure_fit1_gamma": np.dtype("float32"),
     "pure_fit1_vega": np.dtype("float32"),
     "pure_fit1_theta": np.dtype("float32"),
     "pure_fit1_dk": np.dtype("float32"),
+}
+""" Fields and their types when arbitrage mode is ``"expiry"``. """
+
+SCHEMA_ARB_FREE_DAY_SURFACE = SCHEMA_ARB_FREE_DAY_EXPIRY | {
+    "fitX_vol": np.dtype("float32"),
     "pure_fitX_price": np.dtype("float32"),
     "pure_fitX_delta": np.dtype("float32"),
     "pure_fitX_gamma": np.dtype("float32"),
@@ -46,6 +69,7 @@ SCHEMA_ARB_FREE_DAY = SCHEMA_ENRICHED_DAY | {
     "pure_fitX_theta": np.dtype("float32"),
     "pure_fitX_dk": np.dtype("float32"),
 }
+""" Fields and their types when arbitrage mode is ``"surface"``. """
 
 def _uid(ticker, d, raw_day_filter, expiry_filter, mk_arb_free) -> str:
     return (
@@ -54,7 +78,7 @@ def _uid(ticker, d, raw_day_filter, expiry_filter, mk_arb_free) -> str:
     )
 
 @_processing(fmt=SubDir.PANDAS_PARQUET).cache(
-    "0.4",
+    "0.6",
     dependencies=[enrich_day, MkArbFree],
     uid=_uid,
     exclude_args=["verbose", "enriched_data", "raise_if_bad", "refresh_cache"],
@@ -78,25 +102,27 @@ def mk_arb_free_day(
 
     The returned DataFrame keeps the full input-strike rows for retained expiries
     and adds mask/fitted-price/Greek columns aligned to those input strikes.
-    Expiries dropped by MkArbFree are removed from the returned frame.
+    Expiries and strikes dropped by MkArbFree are removed from the returned frame.
+    The underlying mechanism is described in detail in :class:`MkArbFree`.
 
-    The returne data frame has schema defined by :data:`SCHEMA_ARB_FREE_DAY`, which includes all columns from the enriched day DataFrame (see :data:`SCHEMA_ENRICHED_DAY`) plus the following additional columns:
-    - ``mask_arb_free``: boolean mask indicating which strikes were retained as arbitrage-free (True) vs dropped (False).
-    - ``pure_fit1_price``: fitted arbitrage-free price within bid/ask where ``mask_arb_free`` is True.
-    - ``pure_fitX_price``: surface arbitrage-free closest price to ``fit1`` prices. Up to machine precision, existence of a ``fitX`` within bid/ask is equivalent to the market being free of arbitrage.
-    - ``pure_fit1_delta``, ``pure_fit1_gamma``, ``pure_fit1_vega``, ``pure_fit1_theta``, ``pure_fit1_dk``: Greeks corresponding to ``pure_fit1_price``.
-    - ``pure_fitX_delta``, ``pure_fitX_gamma``, ``pure_fitX_vega``, ``pure_fitX_theta``, ``pure_fitX_dk``: Greeks corresponding to ``pure_fitX_price``.
+    The schema of the data frame returned depend on the settings in ``mk_arb_free.no_arb_mode``.
+    
+    * ``expriy``: the dataframe has schema :data:`SCHEMA_ARB_FREE_DAY_EXPIRY`. which includes all columns :data:`SCHEMA_ENRICHED_DAY` plus the following additional columns:
+
+      - ``mask_arb_free``: boolean mask indicating which strikes were retained as arbitrage-free (True) vs dropped (False).
+      - ``pure_fit1_price``: fitted arbitrage-free price within bid/ask where ``mask_arb_free`` is True.
+      - ``pure_fit1_delta``, ``pure_fit1_gamma``, ``pure_fit1_vega``, ``pure_fit1_theta``, ``pure_fit1_dk``: Greeks corresponding to ``pure_fit1_price``.
+    
+    * ``surface``: the dataframe has schema :data:`SCHEMA_ARB_FREE_DAY_SURFACE`, which includes all columns from ``SCHEMA_ARB_FREE_DAY_EXPIRY`` plus:
+      
+      - ``pure_fitX_price``: surface arbitrage-free closest price to ``fit1`` prices. Up to machine precision, existence of a ``fitX`` within bid/ask is equivalent to the market being free of arbitrage.
+      - ``pure_fitX_delta``, ``pure_fitX_gamma``, ``pure_fitX_vega``, ``pure_fitX_theta``, ``pure_fitX_dk``: Greeks corresponding to ``pure_fitX_price``.
+
     
     Returns
     -------
     Result: :class:`pandas.DataFrame` or (:class:`pandas.DataFrame`, dict|None) if ``return_arb_free`` is True.
-        DataFrame with the following columns (see :data:`SCHEMA_ARB_FREE_DAY` for dtypes):
-        - All columns from the enriched day DataFrame (see :data:`SCHEMA_ENRICHED_DAY`).
-        - ``mask_arb_free``: boolean mask indicating which strikes were retained as arbitrage-free.
-        - ``pure_fit1_price``: fitted price for each strike using the first fit from MkArbFree.
-        - ``pure_fit1_delta``, ``pure_fit1_gamma``, ``pure_fit1_vega``, ``pure_fit1_theta``, ``pure_fit1_dk``: Greeks corresponding to ``pure_fit1_price``.
-        - ``pure_fitX_price``: fitted price for each strike using the second fit from MkArbFree (or same as fit1 if only one fit is returned).
-        - ``pure_fitX_delta``, ``pure_fitX_gamma``, ``pure_fitX_vega``, ``pure_fitX_theta``, ``pure_fitX_dk``: Greeks corresponding to ``pure_fitX_price``.
+        See above.
     """
 
     data = enriched_data  if enriched_data is not None else enrich_day(
@@ -109,11 +135,15 @@ def mk_arb_free_day(
                             verbose=verbose,
                         )
 
-    verify_inp( mk_arb_free.no_arb_mode == "surface", lambda: f"{ticker} {d}: arb_free_day requires mk_arb_free.no_arb_mode='surface' for full fit outputs; found no_arb_mode '{mk_arb_free.no_arb_mode}'." )
+    verify_inp( mk_arb_free.no_arb_mode in ['expiry', 'surface'], lambda: f"{ticker} {d}: arb_free_day requires mk_arb_free.no_arb_mode='surface' for full fit outputs; found no_arb_mode '{mk_arb_free.no_arb_mode}'." )
+
+    mode_surface = mk_arb_free.no_arb_mode == 'surface'
+    expected_schema = SCHEMA_ARB_FREE_DAY_SURFACE if mode_surface else SCHEMA_ARB_FREE_DAY_EXPIRY
+
     if data.empty:
         if not return_arb_free_densities:
-            return create_empty_df(SCHEMA_ARB_FREE_DAY)
-        return create_empty_df(SCHEMA_ARB_FREE_DAY), None
+            return create_empty_df(expected_schema)
+        return create_empty_df(expected_schema), None
     verify_schema(data, SCHEMA_ENRICHED_DAY, lambda: f"{ticker} {d}")
 
     tme = verbose.timer()
@@ -150,12 +180,17 @@ def mk_arb_free_day(
     if len(arb_result.expiries) == 0:
         verbose.write(lambda: f"{ticker} {d}: MkArbFree dropped all expiries. This took {tme}.")
         if not return_arb_free_densities:
-            return create_empty_df(SCHEMA_ARB_FREE_DAY)
-        return create_empty_df(SCHEMA_ARB_FREE_DAY), None
+            return create_empty_df(expected_schema)
+        return create_empty_df(expected_schema), None
 
     fit1_all = arb_result.fits1
-    fitx_all = arb_result.fitsX
-    assert not fit1_all is None and not fitx_all is None, f"Internal error: {ticker} {d}: MkArbFree returned None for fits; expected arrays of shape (num_expiries, num_strikes_per_expiry)."
+    assert not fit1_all is None, f"Internal error: {ticker} {d}: MkArbFree returned None for fits; expected arrays of shape (num_expiries, num_strikes_per_expiry)."
+
+    if mode_surface:
+        fitx_all = arb_result.fitsX
+        assert not fitx_all is None, f"Internal error: {ticker} {d}: MkArbFree returned None for fitsX; expected arrays of shape (num_expiries, num_strikes_per_expiry)."
+    else:
+        fitx_all = None
 
     result_frames: list[pd.DataFrame] = []
     dropped_strikes = 0
@@ -166,15 +201,16 @@ def mk_arb_free_day(
         pure_strike = group["pure_strike"].to_numpy(dtype=np.float64)
         mask_t = np.asarray(arb_result.masks[output_index], dtype=bool)
         fit1_t = np.asarray(fit1_all[output_index], dtype=np.float64)
-        fitx_t = np.asarray(fitx_all[output_index], dtype=np.float64)
+        fitx_t = np.asarray(fitx_all[output_index], dtype=np.float64) if mode_surface else None
 
         assert mask_t.shape == pure_strike.shape,  f"Internal error: {ticker} {d}: arb mask shape {mask_t.shape} does not match strike shape {pure_strike.shape}."
         assert fit1_t.shape == pure_strike.shape, f"Internal error: {ticker} {d}: fit1 shape {fit1_t.shape} does not match strike shape {pure_strike.shape}."
-        assert fitx_t.shape == pure_strike.shape, f"Internal error: {ticker} {d}: fitX shape {fitx_t.shape} does not match strike shape {pure_strike.shape}."
+        if mode_surface:
+            assert fitx_t.shape == pure_strike.shape, f"Internal error: {ticker} {d}: fitX shape {fitx_t.shape} does not match strike shape {pure_strike.shape}."
 
         sqrt_t    = math.sqrt(float(arb_result.expiries[output_index]))
         fit1_vols = bs.implied(pure_strike, fit1_t, sqrtT=sqrt_t, eps=_IMPLIED_VOL_CALC_EPS)
-        fitx_vols = bs.implied(pure_strike, fitx_t, sqrtT=sqrt_t, eps=_IMPLIED_VOL_CALC_EPS)
+        fitx_vols = bs.implied(pure_strike, fitx_t, sqrtT=sqrt_t, eps=_IMPLIED_VOL_CALC_EPS) if mode_surface else None
         fit1_greeks = bs(
             k=pure_strike,
             vol=fit1_vols,
@@ -188,16 +224,19 @@ def mk_arb_free_day(
             sqrtT=sqrt_t,
             eps=_GREEK_CALC_EPS,
             what=bs.PRICE | bs.DELTA | bs.GAMMA | bs.VEGA | bs.THETA | bs.DK,
-        )
+        ) if mode_surface else None
 
         group["mask_arb_free"] = mask_t
+        group["fit1_vol"] = fit1_vols.astype(np.float32)
         group["pure_fit1_price"] = fit1_t.astype(np.float32)
-        group["pure_fitX_price"] = fitx_t.astype(np.float32)
-
         for greek_name, values in fit1_greeks.items():
             group[f"pure_fit1_{greek_name}"] = np.asarray(values, dtype=np.float32)
-        for greek_name, values in fitx_greeks.items():
-            group[f"pure_fitX_{greek_name}"] = np.asarray(values, dtype=np.float32)
+
+        if mode_surface:
+            group["fitX_vol"] = fitx_vols.astype(np.float32)
+            group["pure_fitX_price"] = fitx_t.astype(np.float32)
+            for greek_name, values in fitx_greeks.items():
+                group[f"pure_fitX_{greek_name}"] = np.asarray(values, dtype=np.float32)
 
         dropped_strikes += int((~mask_t).sum())
         result_frames.append(group)
@@ -205,11 +244,11 @@ def mk_arb_free_day(
     result = pd.concat(result_frames, axis=0, ignore_index=True)
     result = result.sort_values(["expiry_id", "pure_strike"], kind="stable", ignore_index=True)
 
-    for column, dtype in SCHEMA_ARB_FREE_DAY.items():
+    for column, dtype in expected_schema.items():
         if result[column].dtype != dtype:
             result[column] = result[column].astype(dtype, copy=False)
 
-    verify_schema(result, SCHEMA_ARB_FREE_DAY, lambda: f"{ticker} {d}")
+    verify_schema(result, expected_schema, lambda: f"{ticker} {d}")
 
     for column in ENRICHED_PER_DAY_FIELDS:
         if result[column].nunique() != 1:
@@ -243,15 +282,25 @@ from quantdata.widb import cli_defaults
 @click.option('--workers', default=cli_defaults.workers, help='Number of workers', type=int)
 @click.option('--threading', is_flag=True, help="Use only threading, no multiprocessing")
 @click.option('--refresh', is_flag=True, help="Refresh data (this will only refresh the top level files)")
-@click.option('--arbwarningsoff', is_flag=True, help="Turn off warnings about detected arbitrage opportunities in the data.")
-
+@click.option('--arb-warnings-off', is_flag=True, help="Turn off warnings about detected arbitrage opportunities in the data.")
+@click.option('--proceed', is_flag=True, help="Proceed upon encountering bad data.")
+@click.option(
+    "--no-arb-mode",
+    "arb_mode",
+    type=click.Choice(["surface", "expiry"], case_sensitive=False),
+    default="expiry",
+    show_default=True,
+)
 def main(tickers : list[str],
         period : list[dt.datetime], 
         halfdays : bool, 
         workers : int, 
         threading : bool, 
         refresh : bool,
-        arbwarningsoff : bool):
+        arb_warnings_off : bool,
+        proceed : bool,
+        arb_mode : str
+        ):
 
     verify_inp( len(tickers) > 0, "At least one ticker must be specified")
     verify_inp( period is not None and len(period) == 2, "A start and end date must be specified")
@@ -265,7 +314,7 @@ def main(tickers : list[str],
     pool_config        = PoolConfig(num_workers=workers, threading=threading)
     raw_day_filter     = RawDayFilter()   
     expiry_filter      = ExpiryFilter()
-    mk_arb_free        = MkArbFree(no_arb_mode="surface")
+    mk_arb_free        = MkArbFree(no_arb_mode=arb_mode)
     timeseries_config  = TimeseriesConfig()
 
     dates              = date_range.get_business_days()
@@ -277,11 +326,14 @@ def main(tickers : list[str],
     verbose.report(1,lambda: f"Raw Day Filter: {raw_day_filter}")
     verbose.report(1,lambda: f"Expiry filter: {expiry_filter}")
     verbose.report(1,lambda: f"Pool config: {pool_config}")
+    
+    if arb_mode=="surface":
+        verbose.report(1, "*** Warning: Arb-Mode 'surface' is very slow. ***")
 
     for it, ticker in enumerate(tickers):  
         verbose.report(1,lambda: f"\rProcessing ticker {it+1}/{len(tickers)} {ticker} from {fmt_date(date_range.start)} to {fmt_date(date_range.end)}.")
         build_time_series(ticker, date_range, include_fields=None, exclude_fields=None, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, mk_arb_free=mk_arb_free,
-                    warn_if_arb=not arbwarningsoff,
+                     warn_if_arb=not arb_warnings_off,proceed_upon_bad_data=proceed,
                      timeseries_config=timeseries_config, pool_config=pool_config, override_cache_mode="update" if refresh else None, verbose=verbose(2) )
     verbose.write(f"All {len(tickers)} tickers processed.")
 
