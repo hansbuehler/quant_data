@@ -4,6 +4,8 @@ Make arbfree markets
 ^^^^^^^^^^^^^^^^^^^^
 
 This module contains :class:`MkArbFree`, a utility class which generates a "closest" arbitrage free market using https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2642630.
+
+Developer note: a really diffult day for testing (likely very wrong data) is ``SPX 2005-11-21``.
 """
 
 from __future__ import annotations
@@ -65,6 +67,7 @@ class MkArbFree:
                 bids           : list[np.ndarray],
                 asks           : list[np.ndarray], *,
                 handle_arb     : str = "warn", # how to handle arbitrage situations: "warn", "raise" or "ignore"
+                message_context: str|callable[[], str] | None = None,
                 verbose        : Context = Context.all ) -> dict:
         """
         Make market data arbitrage-free using ideas from the paper https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2642630.
@@ -167,11 +170,18 @@ class MkArbFree:
         Extended market: ``dict``
            See above.
         """
+        def msg_header():
+            if message_context is None:
+                return ""
+            if callable(message_context):
+                return f"{message_context()}: "
+            return f"{message_context}: "
+
         T = len(expiries)
 
-        verify_inp( len(strikes) == T, lambda : f"Expected number of strike arrays {T} to match number of expiries {len(expiries)}" )
-        verify_inp( len(bids) == T, lambda : f"Expected number of bid arrays {T} to match number of expiries {len(expiries)}" )
-        verify_inp( handle_arb in ["warn", "raise", "ignore"], lambda : f"handle_arb must be one of 'warn', 'raise' or 'ignore', but found '{handle_arb}'" )
+        verify_inp( len(strikes) == T, lambda : f"{msg_header()}Expected number of strike arrays {T} to match number of expiries {len(expiries)}" )
+        verify_inp( len(bids) == T, lambda : f"{msg_header()}Expected number of bid arrays {T} to match number of expiries {len(expiries)}" )
+        verify_inp( handle_arb in ["warn", "raise", "ignore"], lambda : f"{msg_header()}handle_arb must be one of 'warn', 'raise' or 'ignore', but found '{handle_arb}'" )
 
         # generate strike range
         # ---------------------
@@ -196,7 +206,7 @@ class MkArbFree:
         tme        = verbose.timer()
 
         for t, expiry in enumerate(expiries):
-            verbose.write(lambda : f"\rExpiry #{t} {expiry*DAYS_PER_YEAR:.3f}d: generating extended strikes... ", end='')
+            verbose.write(lambda : f"\r{msg_header()}Expiry #{t} {expiry*DAYS_PER_YEAR:.3f}d: generating extended strikes... ", end='')
 
             input_strikes_t = strikes[t]
             input_bid_t     = bids[t]
@@ -205,88 +215,71 @@ class MkArbFree:
             xstrikes_t = input_strikes_t
             bid_t      = input_bid_t
             ask_t      = input_ask_t
+            mid_t      = (input_bid_t + input_ask_t)/2.
             mask_t     = np.ones(input_strikes_t.shape[0], dtype=bool)
 
             if len(xstrikes_t) <= self.min_strikes_per_expiry:
                 verbose.write(lambda :f"only {len(xstrikes_t)} strikes found. Skipping this expiry.", head=False)
                 continue
 
-            verify_inp( xstrikes_t.shape == bid_t.shape == ask_t.shape, lambda : f"#{t} {expiry*DAYS_PER_YEAR:.3f}d: Expected strikes, bids and asks to have the same shape for expiry, found {xstrikes_t.shape}, {bid_t.shape}, {ask_t.shape}")
-            verify_inp( np.all( np.diff(xstrikes_t) > 0 ), lambda : f"#{t} {expiry*DAYS_PER_YEAR:.3f}d: Strikes must be strictly increasing; found minimal difference {np.diff(xstrikes_t).min():.3f}" )
-            verify_inp( xstrikes_t[0] > 0., lambda : f"#{t} {expiry*DAYS_PER_YEAR:.3f}d: Lowest strike must be positive; found {xstrikes_t[0]:.3f}" )
-            verify_inp( np.all( ask_t - bid_t >0. ), lambda : f"#{t} {expiry*DAYS_PER_YEAR:.3f}d: All ask prices must be greater than bid prices.")
+            verify_inp( xstrikes_t.shape == bid_t.shape == ask_t.shape, lambda : f"{msg_header()}#{t} {expiry*DAYS_PER_YEAR:.3f}d: Expected strikes, bids and asks to have the same shape for expiry, found {xstrikes_t.shape}, {bid_t.shape}, {ask_t.shape}")
+            verify_inp( np.all( np.diff(xstrikes_t) > 0 ), lambda : f"{msg_header()}#{t} {expiry*DAYS_PER_YEAR:.3f}d: Strikes must be strictly increasing; found minimal difference {np.diff(xstrikes_t).min():.3f}" )
+            verify_inp( xstrikes_t[0] > 0., lambda : f"{msg_header()}#{t} {expiry*DAYS_PER_YEAR:.3f}d: Lowest strike must be positive; found {xstrikes_t[0]:.3f}" )
+            verify_inp( np.all( ask_t - bid_t >0. ), lambda : f"{msg_header()}#{t} {expiry*DAYS_PER_YEAR:.3f}d: All ask prices must be greater than bid prices.")
 
             # extend strike range with boundary strikes
             # -----------------------------------------
             # At K_0 and K_n call prices are intrinsic
-            # -1 <= { C_0 - C_1 }/{ K_0 - K_1 } <= dC_1
+            # -1 <= { C_1 - C_0 }/{ K_1 - K_0 } <= dC_1
             # Assuming -1 < dC_1 and noting that K_0 < K_1
             # { 1 - K_0 - C_1) >= dC_1 (K_0 - K_1) =>
             # 1 - C_1 + K_1 dC_1 >= K_0 (1 + dC_1) =>
             # K_0 <= (1 - C_1 + K_1 dC_1)/(1 + dC_1)
 
             assert self.min_dC_eps > 0., f"Internal error: min_dC_eps {self.min_dC_eps} must be positive."
+            total_input = len(xstrikes_t)
             N  = xstrikes_t.shape[0]
-            ok = False
-            for i in range(max(0,(N-1)//2)+1):
-                C_1   = ask_t[i]
-                K_1   = xstrikes_t[i]
 
-                dC_1 = (C_1 - bid_t[i+1])/(K_1 - xstrikes_t[i+1]) # this must be bigger than -1 (using ask-bid is the steepest inside bid/ask slope)
-                if dC_1+1. > self.min_dC_eps:
-                    lower_k = (1 - C_1 + K_1 * dC_1)/(1 + dC_1)
-                    if lower_k <= 0. or lower_k >= K_1:
-                        verbose.write(lambda :f"downside dC/dK is {dC_1:.3g}, which is above -1, but the resulting lower_k {lower_k:.3g} is not between 0 and K_1 {K_1:.3g}. Skipping this strike... ", head=False, end='')
-                    else:
-                        ok = True
+            lower_k = None
+            for ileft in range(N-2):
+                C_0   = mid_t[ileft]
+                C_1   = mid_t[ileft+1]
+                K_0   = xstrikes_t[ileft]
+                K_1   = xstrikes_t[ileft+1]
+                dC_0  = ( C_1 - C_0 )/( K_1 - K_0 )
+                if dC_0+1. > self.min_dC_eps:
+                    lower_k = (1 - C_1 + K_1 * dC_0)/(1 + dC_0)
+                    if lower_k > 0. and lower_k < K_1:
                         break
-                else:
-                    verbose.write(lambda :f"downside dC/dK is {dC_1:.3g}, which must strictly be above -1. Skipping this strike.. ", head=False, end='')
-
-            if not ok:
-                verbose.write(lambda : "could not fix it -- skipping this expiry.", head=False)
-                continue
-
-            if i>0:
-                mask_t[:i] = False
-                xstrikes_t = xstrikes_t[i:]
-                bid_t      = bid_t[i:]
-                ask_t      = ask_t[i:]
-                N          = xstrikes_t.shape[0]
-                assert np.all( xstrikes_t == input_strikes_t[mask_t] ), "Mask error...?"
-
-            # K_N
-            # dC_{N-2} <= { C_{N-1} - C_N }/{ K_{N-1} - K_N } <= 0
-            # Assuming dC_N-1 >= 0 and noting C_N = 0, K_{N-1} < K_N
-            # dC_{N-2} ( K_{N-1} - K_N ) >= C_{N-1} =>
-            # K_N >= K_{N-1} - C_{N-1}/dC_{N-2}
-
-            for i in range(N-1,2,-1):
-                C_Nm1 = ask_t[i]
-                K_Nm1 = xstrikes_t[i]
-                dC_Nm2 = (C_Nm1 - ask_t[i-1])/(K_Nm1 - xstrikes_t[i-1]) # this must be smaller than 0 (using bid-ask is the steepest inside bid/ask slope)
-                if dC_Nm2 < -self.min_dC_eps:
-                    upper_k = K_Nm1 - C_Nm1/dC_Nm2
-                    if upper_k <= K_Nm1:
-                        verbose.write(lambda :f"upside dC/dK is {dC_Nm2:.3g}, which is below 0, but the resulting upper_k {upper_k:.3g} is not bigger than K_Nm1 {K_Nm1:.3g}. Skipping this strike... ", head=False, end='')
-                    else:
-                        ok = True
+                    lower_k = None
+            if ileft == N-2 or lower_k is None:
+                raise RuntimeError(f"{msg_header()}Expiry #{t} {expiry*DAYS_PER_YEAR:.3f}d: could not find consistent initial strike for this expiry.")
+            upper_k = None
+            for iright in range(N-2,ileft-1,-1):
+                C_Nm1  = mid_t[iright]
+                C_N    = mid_t[iright+1]
+                K_Nm1  = xstrikes_t[iright]
+                K_N    = xstrikes_t[iright+1]
+                dC_Nm1 = ( C_Nm1 - C_N )/( K_Nm1 - K_N )
+                if dC_Nm1 < -self.min_dC_eps:
+                    upper_k = K_Nm1 - C_Nm1/dC_Nm1
+                    if upper_k > K_Nm1:
                         break
-                else:
-                    verbose.write(lambda :f"upside dC/dK is {dC_Nm2:.3g}, but must be strictly negative. Skipping this strike.. ", head=False, end='')
+                    upper_k = None  
+            if iright <= ileft or upper_k is None:
+                raise RuntimeError(f"{msg_header()}Expiry #{t} {expiry*DAYS_PER_YEAR:.3f}d: could not find consistent terminal strike for this expiry.")
 
-            if not ok:
-                verbose.write(lambda : "could not fix it -- skipping this expiry.", head=False)
-                continue
+            if ileft > 0 or iright < N-2:
+                slc         = slice( ileft, iright+1 )
+                xstrikes_t  = xstrikes_t[slc]
+                bid_t       = bid_t[slc]
+                ask_t       = ask_t[slc]
+                mask_t[:]   = False
+                mask_t[slc] = True
+            assert np.all( xstrikes_t == input_strikes_t[mask_t] ), "Mask error...(2) ?"
 
-            if i<N-1:
-                off        = N-1-i
-                mask_t[-off:] = False
-                xstrikes_t = xstrikes_t[:i+1]
-                bid_t      = bid_t[:i+1]
-                ask_t      = ask_t[:i+1]
-
-                assert np.all( xstrikes_t == input_strikes_t[mask_t] ), "Mask error...?"
+            if len(xstrikes_t) < total_input:
+                verbose.write(lambda : f"removed {total_input-len(xstrikes_t)} out of {total_input} strikes to ensure -1 < dC/dK[0] and dC/dK[-1] < 0.", head=False)
 
             dK0        = K_1 - lower_k
             lower_k    = max( lower_k/2., K_1 - dK0*2. )
@@ -299,7 +292,7 @@ class MkArbFree:
                 upper_k = 1.+(xstrikes_t[1]-xstrikes_t[0])
 
             # previous step?
-            if t>0:
+            if len(r.xstrikes) > 0:
                 lower_k = min(lower_k, r.xstrikes[-1][0])
                 upper_k = max(upper_k, r.xstrikes[-1][-1])
 
@@ -312,12 +305,13 @@ class MkArbFree:
             assert np.all( ask_t == input_ask_t[mask_t] ), "Mask error...?"
 
             if self.no_arb_mode != "off":
-                verbose.write(lambda : f"\rExpiry #{t} {expiry*DAYS_PER_YEAR:.3f}d: finding linear no-arbitrage mid... ", end='')
+                verbose.write(lambda : f"\r{msg_header()}Expiry #{t} {expiry*DAYS_PER_YEAR:.2f}d: finding linear no-arbitrage mid... ", end='')
 
                 Nt          = len(xstrikes_t)
                 p           = cp.Variable(Nt, nonneg=True)
                 C           = np.maximum( 0., xstrikes_t[None,:] - xstrikes_t[:,None] ) @ p
                 constraints = [ cp.sum(p) == 1., xstrikes_t @ p == 1., # martingale condition
+                                p <= 1.,
                                 C[1:-1] <= ask_t,
                                 C[1:-1] >= bid_t ]
 
@@ -329,13 +323,13 @@ class MkArbFree:
                 prob.solve( solver=self.cvxpy_solver, **self.cvxpy_solver_options )
 
                 if prob.status != "optimal":
-                    if prob.status == "infeasible":
-                        msg = f"Cannot find linear no-arbitrage mid for expory {expiry*DAYS_PER_YEAR:4f}d (infeasible problem) -- removing expiry."
-                        verbose.write(lambda :f"cannot find linear no-arbitrage mid (infeasible problem) -- removing expiry.", head=False)
+                    if prob.status in ["infeasible", "infeasible_inaccurate"]:
+                        msg = f"{msg_header()}Cannot find no-arbitrage mid for expiry {expiry*DAYS_PER_YEAR:.2f}d ({prob.status} problem). This indicates actionable arbitrage in the input data."
+                        verbose.write(lambda :f"cannot find no-arbitrage mid ({prob.status} problem). This indicates actionable arbitrage in the input data -- removing expiry.", head=False)
                         if handle_arb == "raise":
                             raise RuntimeError(msg)
                         if handle_arb == "warn":
-                            warnings.warn(msg) # -> maybe we need a proper error here.
+                            warnings.warn(msg[:-1]+ " -- removing expiry.") # -> maybe we need a proper error here.
                         continue
                     verbose.write(lambda :f"optimized returned status '{prob.status}' -- proceeding anyway... ", end='', head=False)
 
@@ -343,22 +337,22 @@ class MkArbFree:
                 C          = C.value
                 p          = p.value
                 floor      = self.min_density / float(Nt)
-                verify( np.all(p >= -floor), lambda : f"Internal error: negative density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.3f}d after optimization." )
-                assert abs( np.sum( p )-1. ) <= floor, f"Internal error: density does not sum to one after removing zero-density strikes, sum is {p.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
-                assert abs( p@xstrikes_t - 1. ) <= floor, f"Internal error: density does not integrate to one after removing zero-density strikes, integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
+                verify( np.all(p >= -floor), lambda : f"Internal error: {msg_header()}negative density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.3f}d after optimization." )
+                assert abs( np.sum( p )-1. ) <= floor, f"Internal error: {msg_header()}density does not sum to one after removing zero-density strikes, sum is {p.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
+                assert abs( p@xstrikes_t - 1. ) <= floor, f"Internal error: {msg_header()}density does not integrate to one after removing zero-density strikes, integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
                 active     = p > floor
                 active[0]  = True
                 active[-1] = True
 
                 # compute true fit values from the density
                 fit_t      = np.maximum( 0., xstrikes_t[None,:] - input_strikes_t[:,None] ) @ p
-                assert np.allclose( fit_t[mask_t], C[1:-1], rtol=0., atol=1E-6), f"Internal error: fit values computed from density do not match optimization output for expiry {expiry*DAYS_PER_YEAR:.3f}d. Worst fit {np.max(np.abs(fit_t[mask_t] - C)):.3e}"
+                assert np.allclose( fit_t[mask_t], C[1:-1], rtol=0., atol=1E-6), f"Internal error: {msg_header()}fit values computed from density do not match optimization output for expiry {expiry*DAYS_PER_YEAR:.3f}d. Worst fit {np.max(np.abs(fit_t[mask_t] - C)):.3e}"
 
                 dCdK_t         = np.diff(C,prepend=1.)/np.diff(xstrikes_t,prepend=0.)
                 p              = np.diff(dCdK_t,append=0. )
-                assert np.all( p >= -floor ), f"Internal error: negative density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.3f}d after removing zero-density strikes."
-                assert abs( np.sum( p )-1. ) <= floor, f"Internal error: density does not sum to one after removing zero-density strikes, sum is {p.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
-                assert abs( p@xstrikes_t - 1. ) <= floor, f"Internal error: density does not integrate to one after removing zero-density strikes, integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
+                assert np.all( p >= -floor ), f"Internal error: {msg_header()}negative density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.3f}d after removing zero-density strikes."
+                assert abs( np.sum( p )-1. ) <= floor, f"Internal error: {msg_header()}density does not sum to one after removing zero-density strikes, sum is {p.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
+                assert abs( p@xstrikes_t - 1. ) <= floor, f"Internal error: {msg_header()}density does not integrate to one after removing zero-density strikes, integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
 
                 if not np.all(active):
                     # remove strikes; recompute density (which should be valid)
@@ -369,9 +363,9 @@ class MkArbFree:
                     C              = C[active]
                     dCdK_t         = np.diff(C,prepend=1.)/np.diff(xstrikes_t,prepend=0.)
                     p              = np.diff(dCdK_t,append=0.)
-                    assert np.all( p >= -floor ), f"Internal error: negative density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.3f}d after removing zero-density strikes."
-                    assert abs( np.sum( p )-1. ) <= floor, f"Internal error: density does not sum to one after removing zero-density strikes, sum is {p.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
-                    assert abs( p@xstrikes_t - 1. ) <= floor, f"Internal error: density does not integrate to one after removing zero-density strikes, integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
+                    assert np.all( p >= -floor ), f"Internal error: {msg_header()}negative density {p[p<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.3f}d after removing zero-density strikes."
+                    assert abs( np.sum( p )-1. ) <= floor, f"Internal error: {msg_header()}density does not sum to one after removing zero-density strikes, sum is {p.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
+                    assert abs( p@xstrikes_t - 1. ) <= floor, f"Internal error: {msg_header()}density does not integrate to one after removing zero-density strikes, integral is {p@xstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
 
                 r.xdensities.append( p )
                 r.fits1.append( fit_t )   # fit is computed for all strikes, also those unmasked
@@ -386,7 +380,7 @@ class MkArbFree:
             r.masks.append( mask_t )
 
         r.expiries = np.array(r.expiries, dtype=np.float32)
-        verbose.write(lambda : f"\rGenerated {len(r.expiries)} {'arbitrage-free ' if self.no_arb_mode != 'off' else ''}expiries with extended strikes from {T} market expiries. This took {tme}.")
+        verbose.write(lambda : f"\r{msg_header()}Generated {len(r.expiries)} {'arbitrage-free ' if self.no_arb_mode != 'off' else ''}expiries with extended strikes from {T} market expiries. This took {tme}.")
 
         if self.no_arb_mode != "surface":
             return r
@@ -410,7 +404,7 @@ class MkArbFree:
             project = None
             if t<T-1:
                 next_mstrikes = r.mstrikes[t+1]
-                assert next_mstrikes[0] <= xstrikes_t[0] and next_mstrikes[-1] >= xstrikes_t[-1], f"Internal error: next_mstrikes[0] {next_mstrikes[0]:.3f} > xstrikes_t[0] {xstrikes_t[0]:.3f} or next_mstrikes[-1] {next_mstrikes[-1]:.3f} < xstrikes_t[-1] {xstrikes_t[-1]:.3f}"
+                assert next_mstrikes[0] <= xstrikes_t[0] and next_mstrikes[-1] >= xstrikes_t[-1], f"Internal error: {msg_header()}next_mstrikes[0] {next_mstrikes[0]:.3f} > xstrikes_t[0] {xstrikes_t[0]:.3f} or next_mstrikes[-1] {next_mstrikes[-1]:.3f} < xstrikes_t[-1] {xstrikes_t[-1]:.3f}"
 
                 min_dx   = min( np.diff(mstrikes_t).min(), np.diff(next_mstrikes).min() )
                 collect  = []
@@ -442,7 +436,7 @@ class MkArbFree:
 
                 if add_any:
                     mstrikes_t = np.array(collect, dtype=xstrikes_t.dtype)
-                    assert np.min( np.diff( mstrikes_t ) ) >= min_dx, f"Internal error: min dx {np.diff(mstrikes_t).min():.3f} < min_dx {min_dx:.3f}"
+                    assert np.min( np.diff( mstrikes_t ) ) >= min_dx, f"Internal error: {msg_header()}min dx {np.diff(mstrikes_t).min():.3f} < min_dx {min_dx:.3f}"
                     assert mstrikes_t[0] == xstrikes_t[0] and mstrikes_t[-1] == xstrikes_t[-1], f"Internal error: mstrikes_t[0] {mstrikes_t[0]:.3f} != xstrikes_t[0] {xstrikes_t[0]:.3f} or mstrikes_t[-1] {mstrikes_t[-1]:.3f} != xstrikes_t[-1] {xstrikes_t[-1]:.3f}"
                     project = np.array( project, dtype=np.int32 )
                 else:
@@ -460,27 +454,28 @@ class MkArbFree:
         objective    = 0.
 
         min_dx_text = "" if min_dx is None else f" with a minimum strike distance of {min_dx:.3g}"
-        with verbose.write_t(f"Finding arbitrage-free mid prices accross the entire surface of {sum( len(xt) for xt in r.xstrikes )} strikes{min_dx_text}... ", end='') as tme:
+        with verbose.write_t(f"{msg_header()}Finding arbitrage-free mid prices accross the entire surface of {sum( len(xt) for xt in r.xstrikes )} strikes{min_dx_text}... ", end='') as tme:
             for t in range(T):
                 mstrikes_t  = r.mstrikes[t]
                 xstrikes_t  = r.xstrikes[t]
                 mask_t      = r.masks[t]
                 ask_t       = r.asks[t][mask_t]
                 bid_t       = r.bids[t][mask_t]
-                assert len(bid_t) == len(ask_t) == xstrikes_t.shape[0]-2, f"Internal error: bid and ask length {len(bid_t)} does not match number of market strikes {xstrikes_t.shape[0]-2}"
+                assert len(bid_t) == len(ask_t) == xstrikes_t.shape[0]-2, f"Internal error: {msg_header()}bid and ask length {len(bid_t)} does not match number of market strikes {xstrikes_t.shape[0]-2}"
 
                 q_t         = cp.Variable(len(mstrikes_t), nonneg=True)
                 fit_mid     = cp.maximum( 0., mstrikes_t[None,:] - xstrikes_t[1:-1,None] ) @ q_t    # market strikes
                 Cm          = cp.maximum( 0., mstrikes_t[None,:] - mstrikes_t[1:-1,None] ) @ q_t    # model strikes
 
                 if t>0:
-                    assert r.mstrikes[t-1].shape == r.mdensities[t-1].shape, f"Internal error: shape mismatch between previous and current mstrikes, {r.mstrikes[t-1].shape} vs {r.mdensities[t-1].shape}"
+                    assert r.mstrikes[t-1].shape == r.mdensities[t-1].shape, f"Internal error: {msg_header()}shape mismatch between previous and current mstrikes, {r.mstrikes[t-1].shape} vs {r.mdensities[t-1].shape}"
                     Cm1     = cp.maximum( 0., r.mstrikes[t-1][None,:] - mstrikes_t[1:-1,None] ) @ r.mdensities[t-1]
                 else:
                     Cm1     = np.maximum( 0., 1 - mstrikes_t[1:-1] )
 
                 constraints += [ cp.sum( q_t ) == 1.,
                                  q_t @ mstrikes_t == 1., # martingale condition
+                                 q_t <= 1.,
                                  Cm >= Cm1 ]
 
                 half_spread = np.maximum( (ask_t - bid_t)/2., self.min_half_spread )
@@ -496,7 +491,7 @@ class MkArbFree:
 
             if prob.status != "optimal":
                 if prob.status == "infeasible":
-                    raise RuntimeError(f"Cannot find no-arbitrage surface mids: problem infeasible??")
+                    raise RuntimeError(f"{msg_header()}Cannot find no-arbitrage surface mids: problem infeasible??")
                 verbose.write(lambda : f"solver returned '{prob.status}' -- proceeding anyway... ", head=False, end='' )
 
             # compute call prices for the original strikes
@@ -507,14 +502,14 @@ class MkArbFree:
                 mstrikes_t = r.mstrikes[t]
                 q_t        = r.mdensities[t]
 
-                assert np.min(q_t) >= -floor, f"Internal error: negative density {q_t[q_t<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.3f}d after optimization."
-                assert abs( np.sum( q_t )-1. ) <= floor, f"Internal error: density does not sum to one after removing zero-density strikes, sum is {q_t.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
-                assert abs( q_t@mstrikes_t - 1. ) <= floor, f"Internal error: density does not integrate to one after removing zero-density strikes, integral is {q_t@mstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
+                assert np.min(q_t) >= -floor, f"Internal error: {msg_header()}negative density {q_t[q_t<-floor]} below floor {floor:.3e} found for expiry {expiry*DAYS_PER_YEAR:.3f}d after optimization."
+                assert abs( np.sum( q_t )-1. ) <= floor, f"Internal error: {msg_header()}density does not sum to one after removing zero-density strikes, sum is {q_t.sum():.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
+                assert abs( q_t@mstrikes_t - 1. ) <= floor, f"Internal error: {msg_header()}density does not integrate to one after removing zero-density strikes, integral is {q_t@mstrikes_t:.6f} instead of 1 for expiry {expiry*DAYS_PER_YEAR:.3f}d."
 
                 xfit_mids  = fit_mids[t].value
                 mask_t     = r.masks[t]
                 fit_t      = np.maximum( 0., mstrikes_t[None,:] - strikes_t[:,None] ) @ q_t
-                assert np.allclose( fit_t[mask_t], xfit_mids, rtol=0., atol=1E-6), f"Internal error: fit values computed from density do not match optimization output for expiry {expiry*DAYS_PER_YEAR:.3f}d. Worst fit {np.max(np.abs(fit_t[mask_t] - xfit_mids)):.3e}"
+                assert np.allclose( fit_t[mask_t], xfit_mids, rtol=0., atol=1E-6), f"Internal error: {msg_header()}fit values computed from density do not match optimization output for expiry {expiry*DAYS_PER_YEAR:.3f}d. Worst fit {np.max(np.abs(fit_t[mask_t] - xfit_mids)):.3e}"
                 r.fitsX.append( fit_t )
             verbose.write(lambda : f"done. This took {tme}.", head=False )
 

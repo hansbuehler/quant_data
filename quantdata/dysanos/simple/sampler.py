@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from quantdata import env#NOQA
 from quantdata.dysanos.simple import locations_simple
-from quantdata.widb.sampler import sample_days, SampleDaysConfig, RawDayFilter, ExpiryFilter, SCHEMA_ENRICHED_DAY, table_of_sample_days#NOQA
+from quantdata.widb.timeseries import sample_days, SampleDaysConfig, RawDayFilter, ExpiryFilter, SCHEMA_ENRICHED_DAY, table_of_sample_days#NOQA
 from quantdata.biz_calendar import DateRange
 from quantdata.pool import PoolConfig
 from quantdata.torch import BaseSamplerConfig, BaseSampler

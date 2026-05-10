@@ -1,161 +1,287 @@
 """
-Generate arbitrage-free option prices
+Generate arbitrage-free option prices.
+
+The main function in this function is 
 """
 from __future__ import annotations
 
-from quantdata.utils.arbfree import MkArbFree
-from quantdata.widb import WIDBClient, interpolate_zero_curve
-from quantdata.biz_calendar import count_business_days_between, DAYS_PER_YEAR, AM_EXIRY_SUBTRACT, to_date, NMS, prev_business_day, DateRange
-from quantdata.widb.client import WIDBClient
-from quantdata.widb.bad import BAD
-from quantdata.pool import PoolConfig
-from quantdata.utils.pd import create_empty_df, verify_schema
-from quantdata.widb.day import SCHEMA_ENRICHED_DAY, _processing, RawDayFilter, ExpiryFilter, enrich_day, ENRICHED_PER_DAY_FIELDS, ENRICHED_PER_EXPIRY_FIELDS, _IMPLIED_VOL_CALC_EPS, _GREEK_CALC_EPS
-
-
-from cdxcore.version import version
-from cdxcore.verbose import Context
-from cdxcore.util import fmt_date, fmt_list
-from cdxcore.bs import bs
-from cdxcore.err import verify_inp
-from cdxcore.pretty import PrettyObject
-from cdxcore.subdir import SubDir, CacheMode
-from cdxcore.uniquehash import named_unique_filename48_8
-
 import datetime as dt
+import math
+
 import numpy as np
 import pandas as pd
-import math as math
-import warnings
-from dataclasses import dataclass, field    
 
-# ---------------------------------------------------------------------------
-# Enriched data, day
-# Optimal forward computation, implied volatilities, (pure) greeks.
-# Also translates everything in calls.
-# ---------------------------------------------------------------------------
+from quantdata.utils.arbfree import MkArbFree
+from quantdata.utils.pd import create_empty_df, verify_schema
+from quantdata.widb.day import (
+    ENRICHED_PER_DAY_FIELDS,
+    ENRICHED_PER_EXPIRY_FIELDS,
+    ExpiryFilter,
+    RawDayFilter,
+    SCHEMA_ENRICHED_DAY,
+    _GREEK_CALC_EPS,
+    _IMPLIED_VOL_CALC_EPS,
+    _processing,
+    enrich_day,
+)
 
-SCHEMA_ARB_FREE = SCHEMA_ENRICHED_DAY|{
-    "pure_fit1_price" : np.dtype("float32"),   # the fitted price on the input strikes using the first step of the algorithm (linear fit within bid-ask)
-    "pure_fit1_delta" : np.dtype("float32"),   # the fitted price on the input strikes using the second step of the algorithm (fully no-arb fit)
-    "pure_fit1_gamma" : np.dtype("float32"),   # the fitted price on the input strikes using the second step of the algorithm (fully no-arb fit)
-    "pure_fit1_vega" : np.dtype("float32"),   # the fitted price on the input strikes using the second step of the algorithm (fully no-arb fit)
-    "pure_fit1_theta" : np.dtype("float32"),   # the fitted price on the input strikes using the second step of the algorithm (fully no-arb fit)
-    "pure_fit1_dk" : np.dtype("float32"),   # the fitted price on the input strikes using the second step of the algorithm (fully no-arb fit)
-    "pure_fitX_price" : np.dtype("float32"),   # the fitted price on the input strikes using the first step of the algorithm (linear fit within bid-ask)
-    "pure_fitX_delta" : np.dtype("float32"),   # the fitted price on the input strikes using the first step of the algorithm (linear fit within bid-ask)
-    "pure_fitX_gamma" : np.dtype("float32"),   # the fitted price on the input strikes using the first step of the algorithm (linear fit within bid-ask)
-    "pure_fitX_vega" : np.dtype("float32"),   # the fitted price on the input strikes using the first step of the algorithm (linear fit within bid-ask)
-    "pure_fitX_theta" : np.dtype("float32"),   # the fitted price on the input strikes using the first step of the algorithm (linear fit within bid-ask)
-    "pure_fitX_dk" : np.dtype("float32"),   # the fitted price on the input strikes using the first step of the algorithm (linear fit within bid-ask)
+from cdxcore.bs import bs
+from cdxcore.subdir import CacheMode, SubDir
+from cdxcore.uniquehash import named_unique_filename48_8
+from cdxcore.util import fmt_date, fmt_list, verify_inp
+from cdxcore.verbose import Context
+
+SCHEMA_ARB_FREE_DAY = SCHEMA_ENRICHED_DAY | {
+    "mask_arb_free": np.dtype("bool"),
+    "pure_fit1_price": np.dtype("float32"),
+    "pure_fit1_delta": np.dtype("float32"),
+    "pure_fit1_gamma": np.dtype("float32"),
+    "pure_fit1_vega": np.dtype("float32"),
+    "pure_fit1_theta": np.dtype("float32"),
+    "pure_fit1_dk": np.dtype("float32"),
+    "pure_fitX_price": np.dtype("float32"),
+    "pure_fitX_delta": np.dtype("float32"),
+    "pure_fitX_gamma": np.dtype("float32"),
+    "pure_fitX_vega": np.dtype("float32"),
+    "pure_fitX_theta": np.dtype("float32"),
+    "pure_fitX_dk": np.dtype("float32"),
 }
 
 def _uid(ticker, d, raw_day_filter, expiry_filter, mk_arb_free) -> str:
-    return f"{named_unique_filename48_8(f'arbfree {str(expiry_filter)},{str(raw_day_filter)},{str(mk_arb_free)}',expiry_filter,raw_day_filter,mk_arb_free)}"+\
-           f"/{ticker}/{fmt_date(d)}"
+    return (
+        f"{named_unique_filename48_8(f'arbfree {str(expiry_filter)},{str(raw_day_filter)},{str(mk_arb_free)}', expiry_filter, raw_day_filter, mk_arb_free)}"
+        f"/{ticker}/{fmt_date(d)}"
+    )
 
 @_processing(fmt=SubDir.PANDAS_PARQUET).cache(
-            "0.3",
-            dependencies=[enrich_day, MkArbFree],
-            uid=_uid,
-            exclude_args=['verbose','data','raise_if_bad','refresh_cache'])
-def arb_free_day( ticker : str, d : dt.date, enriched_data : pd.DataFrame|None = None, *, 
-                  raw_day_filter : RawDayFilter = RawDayFilter(), 
-                  expiry_filter : ExpiryFilter = ExpiryFilter(), 
-                  mk_arb_free : MkArbFree = MkArbFree(),
-                  override_cache_mode : CacheMode|None = None,
-                  raise_if_bad : bool = True,
-                  verbose : Context = Context.quiet ) -> pd.DataFrame:
+    "0.4",
+    dependencies=[enrich_day, MkArbFree],
+    uid=_uid,
+    exclude_args=["verbose", "enriched_data", "raise_if_bad", "refresh_cache"],
+)
+def mk_arb_free_day(
+    ticker: str,
+    d: dt.date,
+    enriched_data: pd.DataFrame | None = None,
+    *,
+    raw_day_filter: RawDayFilter = RawDayFilter(),
+    expiry_filter: ExpiryFilter = ExpiryFilter(),
+    mk_arb_free: MkArbFree = MkArbFree(),
+    override_cache_mode: CacheMode | None = None,
+    raise_if_bad: bool = True,
+    return_arb_free_densities : bool = False,
+    verbose: Context = Context.quiet,
+) -> pd.DataFrame | tuple[pd.DataFrame, dict]:
     """
-    """
+    Generate an arbitrage-free fit for a single enriched WIDB day.
 
-    data         = enriched_data if enriched_data is not None else enrich_day(ticker, d, raw_day_filter, verbose=verbose, override_cache_mode=override_cache_mode, raise_if_bad = raise_if_bad)
+    The returned DataFrame keeps the full input-strike rows for retained expiries
+    and adds mask/fitted-price/Greek columns aligned to those input strikes.
+    Expiries dropped by MkArbFree are removed from the returned frame.
 
-    if data.empty:
-        return create_empty_df(SCHEMA_ENRICHED_DAY)
-    verify_schema( data , SCHEMA_ENRICHED_DAY, lambda : f"{ticker} {d}")
-
-    per_expiry    = PrettyObject({k: [] for k in sorted( set(SCHEMA_ENRICHED_DAY)-ENRICHED_PER_DAY_FIELDS) })
-
-    expiry_ids    = data["expiry_id"].to_numpy()
-    unq_ids       = np.unique(expiry_ids)
-    expiry_fields = sorted( ENRICHED_PER_EXPIRY_FIELDS )
-
-    for uid in unq_ids:
-        mask = expiry_ids == uid
-        for c in per_expiry:
-            assert not c in ENRICHED_PER_DAY_FIELDS
-            v = data[c][mask].values
-            if c in expiry_fields:
-                assert v.all( v[0] == v ), f"Internal error: {ticker} {d}: enriched DataFrame column '{c}' has different values for the same expiry."
-                per_expiry[c].append(v[0])
-            else:
-                per_expiry[c].append(v)
-
-    T = len(unq_ids)
-
-    bystrike_fields = sorted( set(SCHEMA_ENRICHED_DAY)-ENRICHED_PER_DAY_FIELDS-ENRICHED_PER_EXPIRY_FIELDS )
-    for t in range(T):
-        # sort all data by strike
-        pure_strike = per_expiry.pure_strike[t]
-        ixs         = np.argsort( pure_strike )
-        for c in bystrike_fields:
-            per_expiry[c][t] = per_expiry[c][t][ixs]
-    del t
-
-    af = mk_arb_free.fit( expiries=np.asarray( per_expiry.tty ),
-                          strikes=per_expiry.pure_strike,
-                          bids=per_expiry.pure_bid_price,
-                          asks=per_expiry.pure_ask_price,
-                          handle_arb="warn",
-                          verbose=verbose )
+    The returne data frame has schema defined by :data:`SCHEMA_ARB_FREE_DAY`, which includes all columns from the enriched day DataFrame (see :data:`SCHEMA_ENRICHED_DAY`) plus the following additional columns:
+    - ``mask_arb_free``: boolean mask indicating which strikes were retained as arbitrage-free (True) vs dropped (False).
+    - ``pure_fit1_price``: fitted arbitrage-free price within bid/ask where ``mask_arb_free`` is True.
+    - ``pure_fitX_price``: surface arbitrage-free closest price to ``fit1`` prices. Up to machine precision, existence of a ``fitX`` within bid/ask is equivalent to the market being free of arbitrage.
+    - ``pure_fit1_delta``, ``pure_fit1_gamma``, ``pure_fit1_vega``, ``pure_fit1_theta``, ``pure_fit1_dk``: Greeks corresponding to ``pure_fit1_price``.
+    - ``pure_fitX_delta``, ``pure_fitX_gamma``, ``pure_fitX_vega``, ``pure_fitX_theta``, ``pure_fitX_dk``: Greeks corresponding to ``pure_fitX_price``.
     
-    af_results = PrettyObject({k : [] for k in sorted(set(SCHEMA_ARB_FREE)-ENRICHED_PER_DAY_FIELDS) })
+    Returns
+    -------
+    Result: :class:`pandas.DataFrame` or (:class:`pandas.DataFrame`, dict|None) if ``return_arb_free`` is True.
+        DataFrame with the following columns (see :data:`SCHEMA_ARB_FREE_DAY` for dtypes):
+        - All columns from the enriched day DataFrame (see :data:`SCHEMA_ENRICHED_DAY`).
+        - ``mask_arb_free``: boolean mask indicating which strikes were retained as arbitrage-free.
+        - ``pure_fit1_price``: fitted price for each strike using the first fit from MkArbFree.
+        - ``pure_fit1_delta``, ``pure_fit1_gamma``, ``pure_fit1_vega``, ``pure_fit1_theta``, ``pure_fit1_dk``: Greeks corresponding to ``pure_fit1_price``.
+        - ``pure_fitX_price``: fitted price for each strike using the second fit from MkArbFree (or same as fit1 if only one fit is returned).
+        - ``pure_fitX_delta``, ``pure_fitX_gamma``, ``pure_fitX_vega``, ``pure_fitX_theta``, ``pure_fitX_dk``: Greeks corresponding to ``pure_fitX_price``.
+    """
 
-    cnt_all_strikes = 0
+    data = enriched_data  if enriched_data is not None else enrich_day(
+                            ticker,
+                            d,
+                            raw_day_filter=raw_day_filter,
+                            expiry_filter=expiry_filter,
+                            override_cache_mode=override_cache_mode,
+                            raise_if_bad=raise_if_bad,
+                            verbose=verbose,
+                        )
 
-    for aft in range(len(af.expiries)):
-        srct      = aft.input_index[aft]
-        expiry    = af_results['expiries'][aft]
-        tte_y     = per_expiry.tte_y[srct]
-        assert np.isclose(expiry, tte_y, rtol=0.0, atol=1e-12), f"Internal error: {ticker} {d}: expiry mismatch between input and fitted surface. Please contact the authors with an example."
-        del tte_y
+    verify_inp( mk_arb_free.no_arb_mode == "surface", lambda: f"{ticker} {d}: arb_free_day requires mk_arb_free.no_arb_mode='surface' for full fit outputs; found no_arb_mode '{mk_arb_free.no_arb_mode}'." )
+    if data.empty:
+        if not return_arb_free_densities:
+            return create_empty_df(SCHEMA_ARB_FREE_DAY)
+        return create_empty_df(SCHEMA_ARB_FREE_DAY), None
+    verify_schema(data, SCHEMA_ENRICHED_DAY, lambda: f"{ticker} {d}")
 
-        # expiry only fields
-        for c in expiry_fields:
-            af_results[c].append(per_expiry[c][srct])
+    tme = verbose.timer()
+    verbose.write(lambda: f"{ticker} {d}: Generating arb-free price surface.")
 
-        # copy by field
-        sixs      = aft.sixs[aft]
-        for c in bystrike_fields:
-            src = per_expiry[c][srct]
-            src = src if sixs is None else src[sixs]
-            af_results[c].append(src)
+    expiry_ids        = data["expiry_id"].to_numpy()
+    unique_expiry_ids = np.unique(expiry_ids)
+    grouped_frames: list[pd.DataFrame] = []
+    expiries: list[float] = []
+    strikes: list[np.ndarray] = []
+    bids: list[np.ndarray] = []
+    asks: list[np.ndarray] = []
 
-        # copy new vales
-        pure_strike = af_results['strike'][aft]
-        pure_fit1   = af_results['fit1'][aft]
-        pure_fitX   = af_results['fitX'][aft]
+    assert data[data['pure_ask_price']<=data['pure_bid_price']].empty, f"{ticker} {d}: found {len(data[data['pure_ask_price']<=data['pure_bid_price']])} options with ask price below or equal to bid price. These options should have been filtered out by the expiry filter. Please check the enriched day data for details."
 
-        sqrtT_t     = math.sqrt(expiry)
-        fit1_vols   = bs.implied( pure_strike, pure_fit1, sqrtT=sqrtT_t, eps=_IMPLIED_VOL_CALC_EPS )
-        fitX_vols   = bs.implied( pure_strike, pure_fitX, sqrtT=sqrtT_t, eps=_IMPLIED_VOL_CALC_EPS )
+    for expiry_id in unique_expiry_ids:
+        group = data.loc[expiry_ids == expiry_id].sort_values("pure_strike", kind="stable").reset_index(drop=True)
+        grouped_frames.append(group)
+        expiries.append(float(group["tte_y"].iloc[0]))
+        strikes.append(group["pure_strike"].to_numpy(dtype=np.float64))
+        bids.append(group["pure_bid_price"].to_numpy(dtype=np.float64))
+        asks.append(group["pure_ask_price"].to_numpy(dtype=np.float64))
 
-        fit1_greeks = bs( k=pure_strike, vol=fit1_vols, sqrtT = sqrtT_t, eps=_GREEK_CALC_EPS, what=bs.PRICE|bs.DELTA|bs.GAMMA|bs.VEGA|bs.THETA|bs.DK )
-        fitX_greeks = bs( k=pure_strike, vol=fitX_vols, sqrtT = sqrtT_t, eps=_GREEK_CALC_EPS, what=bs.PRICE|bs.DELTA|bs.GAMMA|bs.VEGA|bs.THETA|bs.DK )
+    arb_result = mk_arb_free(
+        expiries=np.asarray(expiries, dtype=np.float64),
+        strikes=strikes,
+        bids=bids,
+        asks=asks,
+        handle_arb="warn",
+        message_context=lambda: f"{ticker} {d}",
+        verbose=verbose(1),
+    )
 
-        af_results["fit1_vol"].append(fit1_vols)
-        af_results["fitX_vol"].append(fitX_vols)
+    if len(arb_result.expiries) == 0:
+        verbose.write(lambda: f"{ticker} {d}: MkArbFree dropped all expiries. This took {tme}.")
+        if not return_arb_free_densities:
+            return create_empty_df(SCHEMA_ARB_FREE_DAY)
+        return create_empty_df(SCHEMA_ARB_FREE_DAY), None
 
-        def copy(which, src):
-            for k,v in src.items():
-                af_results[f"pure_{which}_{k}"].append(v)
-        copy("fit1", fit1_greeks)
-        copy("fitX", fitX_greeks)
+    fit1_all = arb_result.fits1
+    fitx_all = arb_result.fitsX
+    assert not fit1_all is None and not fitx_all is None, f"Internal error: {ticker} {d}: MkArbFree returned None for fits; expected arrays of shape (num_expiries, num_strikes_per_expiry)."
 
-        cnt_all_strikes += pure_strike.shape[0]
+    result_frames: list[pd.DataFrame] = []
+    dropped_strikes = 0
+    output_indices = list(arb_result.input_index) if arb_result.input_index is not None else slice(None)
 
+    for output_index, source_index in enumerate(output_indices):
+        group = grouped_frames[source_index].copy()
+        pure_strike = group["pure_strike"].to_numpy(dtype=np.float64)
+        mask_t = np.asarray(arb_result.masks[output_index], dtype=bool)
+        fit1_t = np.asarray(fit1_all[output_index], dtype=np.float64)
+        fitx_t = np.asarray(fitx_all[output_index], dtype=np.float64)
 
+        assert mask_t.shape == pure_strike.shape,  f"Internal error: {ticker} {d}: arb mask shape {mask_t.shape} does not match strike shape {pure_strike.shape}."
+        assert fit1_t.shape == pure_strike.shape, f"Internal error: {ticker} {d}: fit1 shape {fit1_t.shape} does not match strike shape {pure_strike.shape}."
+        assert fitx_t.shape == pure_strike.shape, f"Internal error: {ticker} {d}: fitX shape {fitx_t.shape} does not match strike shape {pure_strike.shape}."
 
+        sqrt_t    = math.sqrt(float(arb_result.expiries[output_index]))
+        fit1_vols = bs.implied(pure_strike, fit1_t, sqrtT=sqrt_t, eps=_IMPLIED_VOL_CALC_EPS)
+        fitx_vols = bs.implied(pure_strike, fitx_t, sqrtT=sqrt_t, eps=_IMPLIED_VOL_CALC_EPS)
+        fit1_greeks = bs(
+            k=pure_strike,
+            vol=fit1_vols,
+            sqrtT=sqrt_t,
+            eps=_GREEK_CALC_EPS,
+            what=bs.PRICE | bs.DELTA | bs.GAMMA | bs.VEGA | bs.THETA | bs.DK,
+        )
+        fitx_greeks = bs(
+            k=pure_strike,
+            vol=fitx_vols,
+            sqrtT=sqrt_t,
+            eps=_GREEK_CALC_EPS,
+            what=bs.PRICE | bs.DELTA | bs.GAMMA | bs.VEGA | bs.THETA | bs.DK,
+        )
 
+        group["mask_arb_free"] = mask_t
+        group["pure_fit1_price"] = fit1_t.astype(np.float32)
+        group["pure_fitX_price"] = fitx_t.astype(np.float32)
 
+        for greek_name, values in fit1_greeks.items():
+            group[f"pure_fit1_{greek_name}"] = np.asarray(values, dtype=np.float32)
+        for greek_name, values in fitx_greeks.items():
+            group[f"pure_fitX_{greek_name}"] = np.asarray(values, dtype=np.float32)
+
+        dropped_strikes += int((~mask_t).sum())
+        result_frames.append(group)
+
+    result = pd.concat(result_frames, axis=0, ignore_index=True)
+    result = result.sort_values(["expiry_id", "pure_strike"], kind="stable", ignore_index=True)
+
+    for column, dtype in SCHEMA_ARB_FREE_DAY.items():
+        if result[column].dtype != dtype:
+            result[column] = result[column].astype(dtype, copy=False)
+
+    verify_schema(result, SCHEMA_ARB_FREE_DAY, lambda: f"{ticker} {d}")
+
+    for column in ENRICHED_PER_DAY_FIELDS:
+        if result[column].nunique() != 1:
+            raise RuntimeError(
+                f"Internal error: {ticker} {d}: arb-free DataFrame column '{column}' is expected to have exactly one unique value. Found values: {fmt_list(result[column].unique())}."
+            )
+
+    for column in ENRICHED_PER_EXPIRY_FIELDS:
+        values_per_expiry = result.groupby("expiry_id")[column].nunique()
+        if (values_per_expiry != 1).any():
+            raise RuntimeError(
+                f"Internal error: {ticker} {d}: arb-free DataFrame column '{column}' is expected to have exactly one unique value per expiry. Found expiries with multiple values: {fmt_list(values_per_expiry[values_per_expiry != 1].index.tolist())}."
+            )
+
+    dropped_expiries = len(unique_expiry_ids) - len(output_indices)
+    verbose.write( lambda: f"{ticker} {d}: generated arbitrage-free price surface. Dropped {dropped_expiries} expiries and {dropped_strikes} strikes of the remaining expiries. This took {tme}.")
+    result.attrs['arb_free_timing'] = tme.seconds
+    return result
+
+# ================================================================
+# Command-line interface
+# ================================================================
+
+import click
+from quantdata.widb import cli_defaults
+
+@click.command()
+@click.argument("tickers", nargs=-1, required=True)
+@click.option("--period",nargs=2, type=click.DateTime(formats=["%Y-%m-%d"]), default=cli_defaults.period, metavar="START END", help="Period YYYY-MM-DD YYYY-MM-DD")
+@click.option('--halfdays', is_flag=True, help="Include half days")
+@click.option('--workers', default=cli_defaults.workers, help='Number of workers', type=int)
+@click.option('--threading', is_flag=True, help="Use only threading, no multiprocessing")
+@click.option('--refresh', is_flag=True, help="Refresh data (this will only refresh the top level files)")
+@click.option('--debug', is_flag=True, help="Enable debug mode with more verbose output and checks")
+
+def main(tickers : list[str],
+        period : list[dt.datetime], 
+        halfdays : bool, 
+        workers : int, 
+        threading : bool, 
+        refresh : bool,
+        debug : bool):
+
+    verify_inp( len(tickers) > 0, "At least one ticker must be specified")
+    verify_inp( period is not None and len(period) == 2, "A start and end date must be specified")
+
+    from quantdata.widb.timeseries import build_time_series, TimeseriesConfig
+    from quantdata.biz_calendar import DateRange, to_date
+    from quantdata.pool import PoolConfig
+
+    start, end         = period
+    date_range         = DateRange(start=to_date(start), end=to_date(end), exclude_half_days=not halfdays)
+    pool_config        = PoolConfig(num_workers=workers, threading=threading)
+    raw_day_filter     = RawDayFilter()   
+    expiry_filter      = ExpiryFilter()
+    mk_arb_free        = MkArbFree(no_arb_mode="surface")
+    timeseries_config  = TimeseriesConfig()
+
+    dates              = date_range.get_business_days()
+
+    verbose = Context.all
+    verbose.write(lambda: f"Enriching data for tickers {fmt_list(tickers)} from {fmt_date(start)} to {fmt_date(end)} {'excluding' if date_range.exclude_half_days else 'including'} half days. Total business days: {len(dates)}.")
+    verbose.report(1,lambda: f"Timeseries Config: {timeseries_config}")
+    verbose.report(1,lambda: f"Arb-free config: {mk_arb_free}")
+    verbose.report(1,lambda: f"Raw Day Filter: {raw_day_filter}")
+    verbose.report(1,lambda: f"Expiry filter: {expiry_filter}")
+    verbose.report(1,lambda: f"Pool config: {pool_config}")
+
+    for it, ticker in enumerate(tickers):  
+        verbose.report(1,lambda: f"\rProcessing ticker {it+1}/{len(tickers)} {ticker} from {fmt_date(date_range.start)} to {fmt_date(date_range.end)}.")
+        build_time_series(ticker, date_range, include_fields=None, exclude_fields=None, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, mk_arb_free=mk_arb_free,
+                     timeseries_config=timeseries_config, pool_config=pool_config, override_cache_mode="update" if refresh else None, verbose=verbose(2) )
+    verbose.write(f"All {len(tickers)} tickers processed.")
+
+if __name__ == "__main__":
+    main()

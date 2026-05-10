@@ -173,6 +173,8 @@ class WIDBClient(object):
             verify( not credentials.wrds_off, "Attempted to connect to WRDS IvyDB while WRDS IvyDB access is disabled. Set QUANTDATA_WRDS_OFF=0 to enable connections." )
             try:
                WIDBClient._conn  = wrds.Connection(wrds_username=credentials.username) 
+            except EOFError as e:
+                raise RuntimeError(f"Failed to connect to WRDS with username '{credentials.username}' with EOFError. This is likely caused by too many connections from this account. Error: {e}") from e
             except Exception as e:
                 raise RuntimeError(f"Failed to connect to WRDS with username '{credentials.username}': {str(e)}") from e
         return WIDBClient._conn

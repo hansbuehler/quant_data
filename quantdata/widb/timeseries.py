@@ -6,12 +6,12 @@ from __future__ import annotations
 from quantdata.biz_calendar import DateRange
 from quantdata.pool import PoolConfig
 from quantdata.widb.day import enrich_day, SCHEMA_ENRICHED_DAY, RawDayFilter, ExpiryFilter
+from quantdata.widb.arbfree import MkArbFree, mk_arb_free_day, SCHEMA_ARB_FREE_DAY
 
 from cdxcore.version import version
 from cdxcore.verbose import Context
 from cdxcore.subdir import CacheMode, CacheMustExistError
 from cdxcore.util import fmt_date, fmt_list, fmt_big_byte_number, fmt_dict
-from cdxcore.util.arbfree import MkArbFree:
 
 from cdxcore.err import verify_inp, verify
 from cdxcore.pretty import PrettyObject
@@ -31,9 +31,9 @@ import warnings as warnings
 
 @version("0.61")
 @dataclass(frozen=True)
-class SampleDaysConfig:
+class TimeseriesConfig:
     """
-    Define how to sample data.
+    Create a time series with a maximum number of valid options per time step.
     """
     max_num_options: int = 1000                 #: Maximum number of options. Options are sorted by NMS, expiry and call/put, and only the top max_num_options are kept. This is applied after all other filters.#
     max_business_days_to_expiry: int = 252*3    #: Maximum business days to expiry. 
@@ -154,14 +154,54 @@ class SampleDaysConfig:
         assert not df.isna().any().any(), f"Internal error {ticker} {d}: filter resulted in NaN values. Please contact the authors with an example."
         return df
     
-@version("0.1",dependencies=[enrich_day, SampleDaysConfig] )
-def sample_days(  ticker : str,
+def _enrich_or_mk_arb_free( *,
+    ticker: str,
+    d: dt.date,
+    raw_day_filter: RawDayFilter,
+    expiry_filter: ExpiryFilter,
+    mk_arb_free: MkArbFree,
+    override_cache_mode: CacheMode | None,
+    raise_if_bad: bool,
+    cache_generate_only : bool,
+    return_time_taken : bool,
+    verbose: Context ):
+    """ wrapper """
+
+    tme = verbose.timer()
+
+    if mk_arb_free is None:
+        r = enrich_day( ticker=ticker, d=d,
+                        raw_day_filter=raw_day_filter, 
+                        expiry_filter=expiry_filter, 
+                        raise_if_bad=raise_if_bad, 
+                        verbose=verbose, 
+                        override_cache_mode=override_cache_mode, 
+                        cache_generate_only=cache_generate_only )
+    else:
+        r = mk_arb_free_day(
+                        ticker=ticker, d=d,
+                        raw_day_filter=raw_day_filter, 
+                        expiry_filter=expiry_filter, 
+                        mk_arb_free=mk_arb_free,
+                        raise_if_bad=raise_if_bad, 
+                        verbose=verbose, 
+                        override_cache_mode=override_cache_mode, 
+                        cache_generate_only=cache_generate_only )
+            
+    if return_time_taken:
+        return r, tme.seconds
+    return r
+
+@version("0.1",dependencies=[enrich_day, mk_arb_free_day, TimeseriesConfig] )
+def build_time_series(   
+                  ticker : str,
                   date_range : DateRange, *,
                   include_fields : set[str]|None,
                   exclude_fields : set[str]|None, 
                   raw_day_filter : RawDayFilter, 
                   expiry_filter : ExpiryFilter, 
-                  sample_days_config : SampleDaysConfig,
+                  mk_arb_free : MkArbFree|None,
+                  timeseries_config : TimeseriesConfig,
                   pool_config : PoolConfig = PoolConfig.off(),
                   override_cache_mode : CacheMode|None = None,
                   verbose : Context = Context.all ) -> dict[str:np.array|str|type]:
@@ -184,7 +224,9 @@ def sample_days(  ticker : str,
         Configuration for data collection for the raw day data. This will be passed to :func:`enrich_day` for each day.
     expiry_filter : :class:`ExpiryFilter`
         Filter for expiries to be able to compute implied forwards. This will be passed to :func:`enrich_day` for each day.
-    sample_days_config : :class:`SampleDaysConfig`
+    mk_arb_free : :class:`MkArbFree` | None
+        If not ``None``, the generated time series will be made arbitrage-free in the sense of :func:`mk_arb_free_day`.
+    timeseries_config : :class:`TimeseriesConfig`
         Configuration for filtering and sampling the enriched day data.
     pool_config : :class:`PoolConfig`, default ``PoolConfig.off()``
         Configuration for parallel processing. By default, no parallel processing is used.
@@ -196,7 +238,7 @@ def sample_days(  ticker : str,
     Returns
     -------
     Time series: dict[str:np.array|str|type]
-        A dictionary with the requested fields, up to the maximum number of options specified in ``sample_days_config``, for each business day in the date range.
+        A dictionary with the requested fields, up to the maximum number of options specified in ``timeseries_config``, for each business day in the date range.
         The fields are returned as numpy arrays, and the date field is returned as a string in "YYYY-MM-DD" format
         The data is filtered and sampled according to the specified configurations.
     """
@@ -204,25 +246,29 @@ def sample_days(  ticker : str,
     dates = date_range.get_business_days()
 
     verbose.write(lambda: f"Collecting enriched data for ticker {ticker} for {len(dates)} business days from {fmt_date(dates[0])} to {fmt_date(dates[-1])} {'excluding' if date_range.exclude_half_days else 'including'} half days.")
-    verbose.report(2,lambda: f"Sample Days Config: {sample_days_config}")
-    verbose.report(2,lambda: f"Raw Day Filter: {raw_day_filter}")
+    verbose.report(2,lambda: f"Timeseries Config: {timeseries_config}")
+    if not mk_arb_free is None:
+        verbose.report(2,lambda: f"MkArbFree config: {mk_arb_free}")
+    verbose.report(2,lambda: f"Raw Day filter: {raw_day_filter}")
     verbose.report(2,lambda: f"Expiry filter: {expiry_filter}")
     verbose.report(2,lambda: f"Pool config: {pool_config}")
 
+    source_schmea = set(SCHEMA_ARB_FREE_DAY if mk_arb_free is not None else SCHEMA_ENRICHED_DAY)
+
     def get_fields():
-        available_fields = set(SCHEMA_ENRICHED_DAY)|{'is_valid'}
+        available_fields = source_schmea|{'is_valid'}
         if not exclude_fields is None:
             verify_inp( set(exclude_fields) <= available_fields, lambda : f"'exclude_fields' must be a subset of {sorted(available_fields)}; unknown fields found: {sorted(set(exclude_fields) - available_fields)}")
         if not include_fields is None:
             verify_inp( set(include_fields) <= available_fields, lambda : f"'include_fields' must be a subset of {sorted(available_fields)}; unknown fields found: {sorted(set(include_fields) - available_fields)}")
 
-        flds = {f for f in SCHEMA_ENRICHED_DAY if f in include_fields} if include_fields is not None else set(SCHEMA_ENRICHED_DAY)
+        flds = {f for f in source_schmea if f in include_fields} if include_fields is not None else set(source_schmea)
         if exclude_fields is not None:
             flds = flds - set(exclude_fields)
         verify_inp( len(flds) > 0, lambda :  "No fields left after applying include/exclude filters. "+\
                                             f"Included fields: {sorted(include_fields) if include_fields is not None else 'all'}; "+\
                                             f"excluded fields: {sorted(exclude_fields) if exclude_fields is not None else 'none'}; "+
-                                            f"available fields: {sorted(SCHEMA_ENRICHED_DAY)}")
+                                            f"available fields: {sorted(available_fields)}")
         
         return sorted(flds)
 
@@ -251,12 +297,17 @@ def sample_days(  ticker : str,
             with verbose.write_t(lambda: f"Checking which enriched daily data files for ticker {ticker} and the {len(dates)} business days from {fmt_date(dates[0])} to {fmt_date(dates[-1])} {'excluding' if date_range.exclude_half_days else 'including'} half days exist in the cache... ", end='') as tme:
                 def process(d):
                     try:
-                        df = enrich_day( ticker, d, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, verbose=Context.quiet, 
-                                         raise_if_bad=False, 
-                                         override_cache_mode="cacheonly" )
+                        df = _enrich_or_mk_arb_free(
+                                        ticker=ticker, d=d, 
+                                        raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, mk_arb_free=mk_arb_free,
+                                        verbose=Context.quiet, 
+                                        raise_if_bad=False, 
+                                        override_cache_mode="cacheonly",
+                                        return_time_taken=False,
+                                        cache_generate_only=False )
                     except CacheMustExistError:
                         return None
-                    df = sample_days_config._filter(ticker,d,df)
+                    df = timeseries_config._filter(ticker,d,df)
                     df = filter_fields(d, df)
                     return df
 
@@ -279,20 +330,24 @@ def sample_days(  ticker : str,
             pool = JCPool(num_workers=pool_config.num_workers, threading=False)
 
             def process( ticker, d, raw_day_filter, expiry_filter, override_cache_mode ):
-                r = enrich_day( ticker, d, raw_day_filter=raw_day_filter, 
-                                       expiry_filter=expiry_filter, 
+                r, t = _enrich_or_mk_arb_free(
+                                       ticker=ticker, d=d,
+                                       raw_day_filter=raw_day_filter, 
+                                       expiry_filter=expiry_filter,
+                                       mk_arb_free=mk_arb_free,
                                        raise_if_bad=False, 
                                        verbose=Context.quiet, 
+                                       return_time_taken=True,
                                        override_cache_mode=override_cache_mode, 
                                        cache_generate_only=True )
-                return d, r
+                return d, t
 
             tme = verbose.timer()
             cnt = 0
-            for d, status in pool.parallel( pool.delayed(process)( ticker, d, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, override_cache_mode=override_cache_mode ) for d in missing ):
+            for d, seconds in pool.parallel( pool.delayed(process)( ticker, d, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, override_cache_mode=override_cache_mode ) for d in missing ):
                 cnt += 1
                 if tme.interval_test(1.):
-                    verbose.write(lambda: f"\r{ticker}: generating enriched data for {cnt}/{len(missing)} missing business days using {pool_config.num_workers} processes, now {d}. So far this took {tme}... ", end='')
+                    verbose.write(lambda: f"\r{ticker}: generating enriched data for {cnt}/{len(missing)} missing business days using {pool_config.num_workers} processes. Processed {d} which took {seconds:.2f}s. Total run time so far: {tme}... ", end='')
             verbose.write(lambda: f"\rGenerated all {len(missing)} missing business days for {ticker} using {pool_config.num_workers} processes. This took {tme}.")
 
             pool.terminate()
@@ -301,11 +356,18 @@ def sample_days(  ticker : str,
                 # read them back
                 def process(d):
                     try:
-                        df = enrich_day( ticker, d, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, override_cache_mode="cacheonly", raise_if_bad=False, verbose=Context.quiet )
+                        df = _enrich_or_mk_arb_free(
+                                        ticker=ticker, d=d,
+                                        raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, mk_arb_free=mk_arb_free, 
+                                        override_cache_mode="cacheonly", 
+                                        raise_if_bad=False,
+                                        cache_generate_only=False,
+                                        return_time_taken=False,
+                                        verbose=Context.quiet )
                     except CacheMustExistError as e:
                         raise RuntimeError(f"Internal error: {ticker} {d}: expected enriched data to be available in the cache after generation, but it was not found. Please contact the authors with an example. Original error message: {str(e)}")
                     assert not df is None, f"Internal error: {ticker} {d}: enrich_day returned None after generation. Please contact the authors with an example."
-                    df = sample_days_config._filter(ticker, d, df)
+                    df = timeseries_config._filter(ticker, d, df)
                     df = filter_fields(d, df)
                     return df
 
@@ -375,29 +437,12 @@ def sample_days(  ticker : str,
 
         verbose.write(lambda: f"done; this took {tme}.", head=False)
         if verbose.shall_report(2):
-            verbose.report(2, str(table_of_sample_days(r)))
+            verbose.report(2, str(table_of_time_series(r)))
     return r
 
-
-@version("0.1",dependencies=[sample_days, MkArbFree] )
-def sample_days(  ticker : str,
-                  date_range : DateRange, *,
-                  include_fields : set[str]|None,
-                  exclude_fields : set[str]|None, 
-                  raw_day_filter : RawDayFilter, 
-                  expiry_filter : ExpiryFilter, 
-                  sample_days_config : SampleDaysConfig,
-                  pool_config : PoolConfig = PoolConfig.off(),
-                  override_cache_mode : CacheMode|None = None,
-                  verbose : Context = Context.all ) -> dict[str:np.array|str|type]:
+def table_of_time_series( r : dict[str:np.array|str|type] ) -> PrettyTable:
     """
-    Make the market arbitrage-free.
-    """"
-    TODO
-
-def table_of_sample_days( r : dict[str:np.array|str|type] ) -> PrettyTable:
-    """
-    Summarizes the sampled data from :func:`sample_days` in a :class:`prettytable.PrettyTable`
+    Summarizes the sampled data from :func:`build_time_series` in a :class:`prettytable.PrettyTable`
     which can be displayed in a Jupyter notebook or printed in the console.
 
     The table includes the shape, dtype, size in bytes, mean, std, min and max for each field in the sampled data.
