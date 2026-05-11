@@ -76,3 +76,34 @@ def synchronize_iv_surface(df_long: pl.DataFrame) -> pl.DataFrame:
             result = result.join_asof(df_k, on="ts_ns", strategy="backward")
 
     return result
+
+
+def synchronize_price_surface(df_long: pl.DataFrame) -> pl.DataFrame:
+    """
+    Convert long price DataFrame to wide format, forward-filling each series via join_asof.
+
+    Expects columns: ts_ns, strike, is_call, bid_price, ask_price, observed_price.
+    Column names are suffixed with _C / _P (e.g. bid_price_479_C, observed_price_479_P).
+    """
+    spine = df_long.select("ts_ns").unique().sort("ts_ns")
+    result = spine
+
+    keys = df_long.select(["strike", "is_call"]).unique().sort(["strike", "is_call"]).rows()
+    for strike, is_call in keys:
+        K_int = int(strike)
+        suffix = f"_{K_int}_{'C' if is_call else 'P'}"
+        df_k = (
+            df_long.filter((pl.col("strike") == strike) & (pl.col("is_call") == is_call))
+            .sort("ts_ns")
+            .select(
+                [
+                    "ts_ns",
+                    pl.col("bid_price").alias(f"bid_price{suffix}"),
+                    pl.col("ask_price").alias(f"ask_price{suffix}"),
+                    pl.col("observed_price").alias(f"observed_price{suffix}"),
+                ]
+            )
+        )
+        result = result.join_asof(df_k, on="ts_ns", strategy="backward")
+
+    return result

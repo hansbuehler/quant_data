@@ -327,17 +327,22 @@ def build_iv_surface(
     df_spy=None,
     min_trades: int = 1,
     max_iv: float = 5.0,
-) -> pl.DataFrame:
+) -> tuple[pl.DataFrame, pl.DataFrame]:
     """
-    Run IV Kalman filter for all options in df_tickers using matched trades.
-    Processes calls and puts together in the same batched IV computation.
+    Run IV Kalman filter for all options in df_tickers, operating directly on
+    implied vols (no price Kalman step).
 
     Structured in three phases:
-      1. Per-ticker: fetch data + price Kalman → collect processed frames.
+      1. Per-ticker: fetch quotes + matched trades, process quotes.
       2. Batch: concat all frames, compute all implied vols in one cdxcore.bs call.
-      3. Per-ticker: IV Kalman on each option's IV-enriched frame.
+      3. Per-ticker: IV Kalman trained on quotes (in-sample), tested on matched trades (out-of-sample).
 
-    Returns a long DataFrame: ts_ns, strike, is_call, bid_iv, ask_iv, kalman_iv.
+    Returns
+    -------
+    (df_quotes_iv, df_trades_iv)
+        Both are long DataFrames keyed by (ts_ns, strike, is_call).
+        df_quotes_iv  — train: observed_iv, bid_iv, ask_iv, kalman_iv
+        df_trades_iv  — test:  observed_iv, kalman_matched, trade_residual
     """
     from quantdata.massive.client import MassiveClient
 
@@ -349,11 +354,10 @@ def build_iv_surface(
     spy_ts = events.filter_df(df_spy).select(["ts_ns", "price"]).rename({"price": "spot"})
     candidates = df_tickers.filter(pl.col("trade_count") >= min_trades)
 
-    # ── Phase 1: fetch + price Kalman ────────────────────────────────────────
-    # spot/T/forward tagging happens after the forward is estimated (see below)
+    # ── Phase 1: fetch + process quotes ──────────────────────────────────────
     ticker_meta = []  # (strike, is_call, expiry) in insertion order
-    quote_frames = []  # price-Kalman results, not yet tagged with spot/T/forward
-    trade_frames = []
+    quote_frames = []  # processed quotes, not yet tagged with spot/T/forward
+    trade_frames = []  # matched trades (quote_ts_ns not null)
     raw_calls_q = {}  # (expiry, strike) → raw df_quotes, for forward estimation
     raw_puts_q = {}
 
@@ -403,14 +407,13 @@ def build_iv_surface(
                 print(f"{ticker}: dropping {_bad_quotes.height} bad quotes ({', '.join(_labels)})")
                 df_quotes = df_quotes.filter(~_bad_expr)
 
-            if df_matched.filter(pl.col("quote_ts_ns").is_not_null()).is_empty():
+            df_matched_valid = df_matched.filter(pl.col("quote_ts_ns").is_not_null())
+            if df_matched_valid.is_empty():
                 print(f"Skipping {ticker}: no matched trades")
                 continue
 
-            df_trades_r, df_quotes_r = ekf.kalman_filters_price(df_quotes, df_matched)
-
-            quote_frames.append(df_quotes_r)
-            trade_frames.append(df_trades_r)
+            quote_frames.append(events.process_quotes(df_quotes))
+            trade_frames.append(df_matched_valid)
             ticker_meta.append((strike, is_call, expiry))
 
             if is_call:
@@ -467,8 +470,9 @@ def build_iv_surface(
     all_trades_iv = _compute_iv_batch(pl.concat(tagged_trade_frames), price_col="price")
 
     # ── Phase 3: per-ticker IV Kalman ─────────────────────────────────────────
-    iv_cols = ["bid_iv", "ask_iv", "kalman_iv"]
-    frames = []
+    iv_cols = ["observed_iv", "bid_iv", "ask_iv", "kalman_iv"]
+    quote_result_frames = []
+    trade_result_frames = []
 
     for strike, is_call, expiry in ticker_meta:
         try:
@@ -476,10 +480,12 @@ def build_iv_surface(
             df_q_iv = all_quotes_iv.filter(mask)
             df_t_iv = all_trades_iv.filter(mask)
 
-            _, df_iv_q = ekf.kalman_filters_iv(df_q_iv, df_t_iv)
+            df_iv_trades_r, df_iv_quotes_r = ekf.kalman_filters_iv(df_q_iv, df_t_iv)
 
-            frames.append(
-                df_iv_q.select(["ts_ns"] + iv_cols)
+            meta_cols = [pl.lit(strike).alias("strike"), pl.lit(is_call).alias("is_call")]
+
+            quote_result_frames.append(
+                df_iv_quotes_r.select(["ts_ns"] + iv_cols)
                 .with_columns(
                     [
                         pl.when((pl.col(c) > max_iv) | (pl.col(c) < 0))
@@ -489,17 +495,30 @@ def build_iv_surface(
                         for c in iv_cols
                     ]
                 )
-                .with_columns(
-                    [
-                        pl.lit(strike).alias("strike"),
-                        pl.lit(is_call).alias("is_call"),
-                    ]
-                )
+                .with_columns(meta_cols)
             )
+
+            trade_result_frames.append(
+                df_iv_trades_r.select(
+                    ["ts_ns", "observed_iv", "bid_iv", "ask_iv", "kalman_matched", "trade_residual"]
+                )
+                .with_columns(
+                    pl.when((pl.col("observed_iv") > max_iv) | (pl.col("observed_iv") < 0))
+                    .then(None)
+                    .otherwise(pl.col("observed_iv"))
+                    .alias("observed_iv")
+                )
+                .with_columns(meta_cols)
+            )
+
         except Exception as e:
             print(f"Skipping strike {strike} ({'C' if is_call else 'P'}): {e}")
 
-    if not frames:
+    if not quote_result_frames:
         raise RuntimeError("No options produced valid IV data")
 
-    return pl.concat(frames).sort("ts_ns")
+    df_quotes_iv = pl.concat(quote_result_frames).sort("ts_ns")
+    df_trades_iv = (
+        pl.concat(trade_result_frames).sort("ts_ns") if trade_result_frames else pl.DataFrame()
+    )
+    return df_quotes_iv, df_trades_iv
