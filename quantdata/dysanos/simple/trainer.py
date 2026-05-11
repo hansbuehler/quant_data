@@ -74,18 +74,39 @@ class TrainConfig:
     def unique_id(self) -> str:
         return unique_hash8(self)
 
-    def get_experiment_directory( self, unique_data_id : str, model_label : str|None = None, *, ext : str|None = None, fmt : SubDir.Format|str|None = None ) -> SubDir:
+    def get_experiment_directory( self,
+                                  unique_data_id : str,
+                                  model_label : str|None = None ) -> SubDir:
         """
         Get the experiment directory for this training configuration, model label and unique data id.
-        
-        * The unique data id should uniquely identify the data that is being trained on, and can be obtained from the sampler or its config.
-        * The model label should be a human-readable label for the model, which can be generated from the model class name and the training configuration.
-          If omitted, this will return the root of the experiment group.
-        * The ``fmt`` and ``ext`` arguments are passed to :class:`cdxcore.subdir.SubDir`.
+
+        This function will return a :class:`cdxcore.subdir.SubDir` object 
+        which points to ``[experiment_root]/experiments/dysanos/simple/[unique_data_id]/[experiment_group]/[model_label]/``.
+        If ``model_label`` is omitted, it will return the root of the experiment group.
+
+        The format for the directory is :attr:`SubDir.PICKLE` and the extension is ``.pt``.
+
+        Parameters
+        ---------
+        unique_data_id : str
+          This ID should uniquely identify the data that is being trained on, and can be obtained from the
+          sampler or its config, e.g. :meth:`quantdata.dysanos.simple.sampler.SimpleSampler.unique_data_id`.
+
+          This is important to ensure that different datasets are stored in different directories, and to avoid confusion when training on multiple datasets.
+
+        model_label : str|None          
+          A human-readable label for the model. Losses, metrics and weights are stored under this
+          label. If provided, the label is used as-is. Changes to model configurations while
+          keeping the label the same may cause incompatibilities. Make sure you have a label
+          per logical model.
+
+        Returns
+        -------
+        Directory: :class:`cdxcore.subdir.SubDir`
+            Directory object for file i/o.
         """
         experiment = SubDir(locations_simple.experiments if self.experiment_root is None else self.experiment_root,
-                                  ext=ext, 
-                                  fmt=fmt) 
+                                  ext="pt", fmt=SubDir.PICKLE)
         experiment = experiment(unique_data_id)
         experiment = experiment(self.experiment_group) if self.experiment_group != "" else experiment
         experiment = experiment(named_unique_filename48_8(model_label)) if not model_label is None else experiment
@@ -127,7 +148,7 @@ class Trainer(object):
         # * The ``experiment_group`` in the training configuration;
         # * The user's ``label`` which defaults to the 
         #   models' qualified name (e.g. keyed by its configuration)
-        self._path       = config.get_experiment_directory( sampler.unique_data_id, self._label, ext="pt", fmt=SubDir.PICKLE )
+        self._path       = config.get_experiment_directory( sampler.unique_data_id, self._label)
 
         self._rndg       = torch.Generator(device="cpu")
         self._visualizer = model.visualizer(sampler) # might be None
@@ -224,6 +245,21 @@ class Trainer(object):
             "model_state_dict": self._model.state_dict(),
             "optimizer_state_dict": self._optimizer.state_dict(),
             "rndg_state_dict": self._rndg.get_state(),
+            "track_val_trn": self._track_val_trn.state_dict(),
+            "track_val_vld": self._track_val_vld.state_dict(),
+            "best_epoch": self._best_epoch,
+            "best_val_loss": self._best_val_loss,
+            "sampler_config": pickle.dumps(self._sampler.config),
+            "model_config": pickle.dumps(self._model.config),
+            "model_env": pickle.dumps(self._model.environment)
+        }
+    
+    def get_summary(self) -> dict:
+        """ State information without torch weights """
+        return {
+            "label": self._label, # user-specififed label
+            "epoch": int(self._current_epoch),
+            "version": self._model.version,
             "track_val_trn": self._track_val_trn.state_dict(),
             "track_val_vld": self._track_val_vld.state_dict(),
             "best_epoch": self._best_epoch,
@@ -481,12 +517,14 @@ class Trainer(object):
                         self._path.create_directory()
                         state = self.get_state()
                         torch.save(state, ffn)
+                        self._path.write("best_summary", self.get_summary())
                         verbose1.write(f"done; this took {tme}.", head=False)
 
                 ffn = self._path.full_file_name("last")
                 with verbose1.write_t(f"Saving checkpoint to {ffn}... ", end='') as tme:
                     self._path.create_directory()
                     torch.save(self.get_state() if state is None else state, ffn)
+                    self._path.write("last_summary", self.get_summary())
                     verbose1.write(f"done; this took {tme}.", head=False)
 
                 last_checkpoint_time = time.time()

@@ -113,8 +113,8 @@ class SimpleConfig(BaseSamplerConfig):
         """ UID including directory informaton """
         return f"{self.base_cache_dir_uid()}/{named_unique_filename48_8( fmt_list(sorted(self.tickers)), sorted(self.tickers))}"
     
-    def unique_id(self) -> str:
-        """ Unique ID for the configuration, including tickers. """
+    def unique_data_id(self) -> str:
+        """ Unique ID for the data configuration, including tickers. """
         return unique_hash16(self.cache_dir_uid())
 
     def instantiate_from_cache( self, *, verbose : Context = Context.quiet ) -> BaseSampler:
@@ -555,7 +555,7 @@ class SimpleSampler(BaseSampler):
     @property
     def unique_data_id(self) -> str:
         """ Unique ID for the data, based on the configuration. """
-        return self.config.unique_id()
+        return self.config.unique_data_id()
     
     @property
     def unique_data_dir_uid(self) -> str:

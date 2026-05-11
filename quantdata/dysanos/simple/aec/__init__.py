@@ -63,6 +63,8 @@ visualizer_config = AEC.VisualizerConfig(
     details=True,
 )  # set to None to turn off visualization
 
+experiment_group = "v1"
+
 def run( label, *,
          version,
          aec_config, 
@@ -97,7 +99,7 @@ def run( label, *,
         trn_batch_size = trn_batch_size,
         val_batch_size = val_batch_size,
         batch_per_epoch = batch_per_epoch,
-        experiment_group="v1"
+        experiment_group=experiment_group
     )
 
     verbose = Context("all")
