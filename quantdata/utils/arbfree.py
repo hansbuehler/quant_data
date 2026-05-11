@@ -39,7 +39,7 @@ class MkArbFree:
 
     See :meth:`MkArbFree.__call__` for more details on the input and output of this functional.
     """
-    no_arb_mode           : str = "surface"  # Whether to enforce no-arbirage: "off", "expriy", "surface".
+    no_arb_mode           : str = "expiry"  # Whether to enforce no-arbirage: "off", "expriy", "surface".
 
     min_strikes_per_expiry: int = 5      #: Minimum strikes per expiry. Expiries with fewer strikes will be dropped.
     min_dC_eps            : float = 1E-3 #: Minimum dC/dK slope at the boundaries. Expiries with steeper slopes will be dropped.
