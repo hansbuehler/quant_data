@@ -467,6 +467,7 @@ class AECConfig:
     fit_average         : bool = False   #: fit average per sample, rather than average accross all samples
     min_mean_spread_frac: float = 0.05   #: spread must be at least this fraction of average spread
     clip_huber_square   : bool = True    #: whether to clip the squared term in the Huber loss
+    cheat               : bool = False   #: whether to cheat by giving the true volatility as input to the decoder. This is useful to isolate encoder performance from decoder performance, and should not be used in a realistic setting.
 
     def __post_init__(self):
         verify_inp( self.num_state > 0, lambda : f"'num_state' must be positive, but found {self.num_state}" )
@@ -488,11 +489,11 @@ class AECConfig:
         return unique_hash8(self)
 
     def instantiate_from_cache( self, env : BaseEnvironment, sampler : BaseSampler, *, verbose : Context = Context.quiet ) -> BaseModel:
-            """ 
-            Creates the model corresponding to this configuration, loading any necessary data from cache. This function will be called by the trainer when instantiating the model for training or evaluation. The 'verbose' argument can be used to control the verbosity of the loading process. Note that
-            This function will fail if not all data are available.
-            """
-            return AEC( env=env, sampler=sampler, config=self, pool_config=PoolConfig.off(), override_cache_mode="cacheonly", verbose=verbose )
+        """ 
+        Creates the model corresponding to this configuration, loading any necessary data from cache. This function will be called by the trainer when instantiating the model for training or evaluation. The 'verbose' argument can be used to control the verbosity of the loading process. Note that
+        This function will fail if not all data are available.
+        """
+        return AEC( env=env, sampler=sampler, config=self, pool_config=PoolConfig.off(), override_cache_mode="cacheonly", verbose=verbose )
 
 class AEC(BaseModel):
     """
@@ -619,7 +620,7 @@ class AEC(BaseModel):
         self.sampler_features  = sampler.features
 
         self.encoder           = config.encoder( env=env, num_features=self.num_features, num_state=config.num_state )
-        self.decoder           = config.decoder( env=env, num_characteristics=self.num_characteristics, num_state=config.num_state )
+        self.decoder           = config.decoder( env=env, num_characteristics=(self.num_characteristics+1) if config.cheat else self.num_characteristics, num_state=config.num_state )
         self.softplus          = torch.nn.Softplus()
 
     def visualizer(self, sampler : SimpleSampler):
@@ -684,6 +685,9 @@ class AEC(BaseModel):
     
         features = [ data[f] for f in self.X_FEATURES ] # list of (B,S,O) tensors
         characteristics = [ data[f] for f in self.CHARACTERISTICS ]
+
+        if self.config.cheat:
+            characteristics = characteristics + [ data['fit_vol'] ]
 
         encoded = self.encoder( features, mask=mask if pad_mask is None else (mask&pad_mask ) ) # (B,S,X)
         assert encoded.shape == (B, S, X), f"Expected encoded representation to have shape {(B, S, X)}, found {encoded.shape}"
