@@ -178,6 +178,7 @@ Each data source support by our project will require you to register the respect
 * **[Massive.com](quantdata/massive/README.md)**.
   1. Ensure you have an account and test it.
   2. Set the ``MASSIVE_TOKEN`` environment variable to your API token.
+  
 * **[WRDS Option Metrics](quantdata/widb/README.md)** including **Option Metrics**
   1. [Create an account](https://wrds-www.wharton.upenn.edu/pages/support/getting-started/) and [enable MFA](https://wrds-www.wharton.upenn.edu/pages/about/log-in-to-wrds-using-two-factor-authentication/).
   2. [Follow the WRDS instructions](https://wrds-www.wharton.upenn.edu/pages/support/programming-wrds/programming-python/python-from-your-computer/) to ensure you have 

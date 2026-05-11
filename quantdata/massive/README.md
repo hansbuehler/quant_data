@@ -16,11 +16,53 @@ This directory contains Ivy DB data processing in the following files:
 
 To access this data:
 
-  1. [Create an account](https://wrds-www.wharton.upenn.edu/pages/support/getting-started/) and [enable MFA](https://wrds-www.wharton.upenn.edu/pages/about/log-in-to-wrds-using-two-factor-authentication/).
-  2. [Follow the WRDS instructions](https://wrds-www.wharton.upenn.edu/pages/support/programming-wrds/programming-python/python-from-your-computer/) to ensure you have 
-    the ``pgpass`` pass file. *This is important.*
-  3. Set the ``WRDS_USERNAME`` variable to your username.   
-  4. Run the ``viz_client.ipynb`` notebook.
+  1. Ensure you have an account and test it. The [Massive quickstart](https://massive.com/docs/rest/quickstart) contains some helpful information.
+  2. Set the ``MASSIVE_TOKEN`` environment variable to your API token.
+  3. Try:
+
+     ```python
+      from quantdata.massive import client
+      client = MassiveClient()
+      adj_bars = client.fetch_bars("AAPL", date(2020,1,1), date(2020,1,15), adjusted=False, timespan="second")
+      print(adj_bars)
+
+### Option Contracts
+
+Options are just tickers for Massive. 
+In order to retrieve the option tickers for listed options of a given underlying ticker on a given date, use ``quantdata/massive/options/contracts.py``. 
 
 
+
+```python
+  from datetime import date
+  from quantdata.massive.options.contracts import (
+    Context,
+    ContractsFilter,
+    DateRange,
+    PoolConfig,
+    filter_contracts_between,
+   )
+
+  date_range = DateRange(start=date(2024, 1, 1), end=date(2024, 1, 15), exclude_half_days=True)
+    pool_config = PoolConfig(num_workers=8, threading=False)
+    contracts_filter = ContractsFilter(max_dte=25, max_mns=3.0, min_opt_vol_k=1)
+
+  contracts = filter_contracts_between(
+        "SPY",
+        date_range,
+        contracts_filter=contracts_filter,
+        refresh=False,
+        pool_config=pool_config,
+        verbose=Context.all,
+    )
+```
+
+The ``ContractsFilter`` filter offers the following filters:
+
+* ``max_dte``: maximum days to expiry in business days.
+* ``max_mns``: maximum normalized strike, i.e. 
+   $$
+   \left| 10\, \log\left(\frac{K}{S_{prev}}\right)   \sqrt{\frac{1+e}{T+e}} \right| \approx \left| \log\left(\frac{K}{S_{prev}}\right) \frac1{ 0.1\sqrt{T}} \right|
+   $$, where $S_prev$ is the previous close adjusted for stock splits and dividends to match todays unadjusted price, and T is time to expiry in years. This is a measure of moneyness that accounts for both distance to the money and time to expiry.
+* ``min_opt_vol_k``: Minimum volume trades the previous day, in 1000 USD.
 

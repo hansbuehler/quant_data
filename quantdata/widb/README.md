@@ -90,7 +90,11 @@ The file ``day.py`` has a commandline interface which allows generating days on 
 
 ### arbfree.py
 
-``arbfree.py`` adds an optional surface-fitting stage on top of ``enrich_day()``.
+``arbfree.py`` adds optional handling of arbitrage on top of ``enrich_day()``.
+It will attempt to fit a (linear) arbitrage-free ``fit`` between observed bids and asks, per expiry. If that is not possible it will attempt to remove a few strikes; if this fails it will drop the respective expiry from the data set.
+
+The purpose of this process is to ensure that it is possible, per expiry, to fit an arbitrage-free model between bids
+and asks. This acts as an input into arbitrage-free models who otherwise will not be able to fit the market by construction.
 
 Run the ``viz_arb_free.ipynb`` notebook to test this functionality.
 
@@ -131,6 +135,32 @@ The file ``arbfree.py`` has a commandline interface which allows generating days
 
 * ``table_of_time_series(...)`` produces a compact tabular summary of the sampled arrays, including shape, dtype, size and simple descriptive statistics.
 Here is an example output for 62 days "SPX" using arb-free mode ``expiry`` (that is where there are ``fit1`` but no ``fitX`` prices and greeks):
+
+```python
+
+from datetime import date
+from quantdata.widb.timeseries import build_time_series, ExpiryFilter, RawDayFilter, TimeseriesConfig, DateRange, PoolConfig, table_of_time_series, MkArbFree
+from cdxcore.verbose import Context
+
+def test():
+    ticker = "SPX"
+    date_range = DateRange(start=date(2025, 1, 1), end=date(2025, 3, 1))
+    raw_day_filter = RawDayFilter()
+    expiry_filter = ExpiryFilter()
+    mk_arb_free = MkArbFree()
+    timeseries_config = TimeseriesConfig()
+    pool_config = PoolConfig(num_workers=0, threading=True) # no parallel processing for testing
+    verbose = Context.all
+
+    samples = build_time_series(ticker, date_range, include_fields=None, exclude_fields=None, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, mk_arb_free=mk_arb_free, timeseries_config=timeseries_config, pool_config=pool_config, verbose=verbose )
+    return samples
+
+samples = test()
+verbose = Context.all
+verbose.write(str(table_of_time_series(samples)))
+
+```
+This returns a table of this form:
 
   | Field | Shape | Dtype | Size | Mean | Std | Min | Max |
   | --- | --- | --- | --- | --- | --- | --- | --- |
