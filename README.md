@@ -15,7 +15,7 @@ You will need to
 2) Use environment variables to set your caching directories.
 3) Register your license for each data source.
 
-As a first step, clone the directory ``quant_data`` and change into that directory in your shell.
+
 
 ## TL;DR
 
@@ -142,7 +142,7 @@ Please also check the documentation for [``@version``](https://quantitative-rese
 #### Defining Data Directories
 
 You will need to set your directory and data access variables.
-All directory definitions follow the [``cdxcore.subdir``](https://quantitative-research.de/docs/cdxcore/api/generated/cdxcore.subdir.html) notation, i.e. you can refer to the temporary directory by ``"!"`` and to your home directory by ``"~"``. Note that under Linux data stored in ``/tmp/`` are deleted upon reboot. On Windows, 
+All directory definitions follow the [``cdxcore.subdir``](https://quantitative-research.de/docs/cdxcore/api/generated/cdxcore.subdir.html) notation, i.e. you can refer to the temporary directory by ``"!"`` and to your home directory by ``"~"``. Note that under Linux data stored in ``/tmp/`` are deleted upon reboot. 
 If you do not need to/can/want to split data across storage locations, you can just set:
 
 * ``QUANTDATA_ROOT``: if you have everything in one place anyway, use this to set all of the above in one step.
