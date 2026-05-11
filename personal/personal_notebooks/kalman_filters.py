@@ -197,42 +197,52 @@ def kalman_filter_from_matched(
 def build_implied_forward(
     raw_calls: dict[float, pl.DataFrame],
     raw_puts: dict[float, pl.DataFrame],
+    spy_ts: pl.DataFrame,
     max_leg_staleness_s: float = 60.0,
 ) -> pl.DataFrame:
     """
-    Estimate implied forward F(t) = K + C_mid(t) - P_mid(t) from put-call parity.
+    Estimate the true implied forward F from put-call parity, with dynamic ATM selection.
 
-    For each overlapping strike, the spine is the union of call and put timestamps.
-    At each spine tick, the most recent midpoint of each leg is used (via join_asof).
-    Ticks where either leg is older than max_leg_staleness_s seconds are dropped,
-    preventing stale-leg contamination of the forward estimate.
+    For each overlapping strike K, builds a Δ(K, t) = C_mid(t) - P_mid(t) series
+    (staleness-filtered). All series plus the SPY spot are joined onto a common spine.
+    At each spine tick, the two strikes nearest to the current spot that have valid Δ
+    are selected, and the 2×2 system is solved:
 
-    The per-strike series are concatenated. At exact-nanosecond collisions across
-    strikes, the median is taken; otherwise the most recent per-strike estimate is
-    used downstream (via join_asof in _add_spot_T).
+        Δi = C(Ki) - P(Ki) = e^{-rT} * (F - Ki)
+        e^{-rT} = (Δ1 - Δ2) / (K2 - K1)
+        F       = K1 + Δ1 / e^{-rT}
 
-    Both dicts map strike → raw quote DataFrame (must have bid_price, ask_price, ts_ns).
-    Returns a DataFrame with columns [ts_ns, forward].
+    This recovers the true (undiscounted) forward F = S*e^{(r-q)T} without any rate
+    or dividend data, and re-selects the ATM pair as spot moves intraday.
+
+    Falls back to the single-strike undiscounted formula when only one valid Δ is
+    available at a given tick.
+
+    `spy_ts` must have columns [ts_ns, spot].
     """
     max_stale_ns = int(max_leg_staleness_s * 1e9)
-    frames = []
-    for strike in set(raw_calls) & set(raw_puts):
-        df_c = (
-            raw_calls[strike]
+    overlapping = sorted(set(raw_calls) & set(raw_puts))
+
+    if not overlapping:
+        raise RuntimeError("No overlapping call/put strikes to estimate implied forward")
+
+    def _build_delta(k: float) -> pl.DataFrame:
+        c = (
+            raw_calls[k]
             .sort("ts_ns")
             .select(
                 [
-                    pl.col("ts_ns").alias("call_ts"),
+                    pl.col("ts_ns").alias("c_ts"),
                     ((pl.col("bid_price") + pl.col("ask_price")) / 2).alias("c_mid"),
                 ]
             )
         )
-        df_p = (
-            raw_puts[strike]
+        p = (
+            raw_puts[k]
             .sort("ts_ns")
             .select(
                 [
-                    pl.col("ts_ns").alias("put_ts"),
+                    pl.col("ts_ns").alias("p_ts"),
                     ((pl.col("bid_price") + pl.col("ask_price")) / 2).alias("p_mid"),
                 ]
             )
@@ -240,31 +250,74 @@ def build_implied_forward(
         spine = (
             pl.concat(
                 [
-                    df_c.select(pl.col("call_ts").alias("ts_ns")),
-                    df_p.select(pl.col("put_ts").alias("ts_ns")),
+                    c.select(pl.col("c_ts").alias("ts_ns")),
+                    p.select(pl.col("p_ts").alias("ts_ns")),
                 ]
             )
             .unique()
             .sort("ts_ns")
         )
-        joined = (
-            spine.join_asof(df_c, left_on="ts_ns", right_on="call_ts", strategy="backward")
-            .join_asof(df_p, left_on="ts_ns", right_on="put_ts", strategy="backward")
+        col = f"delta_{int(k)}"
+        return (
+            spine.join_asof(c, left_on="ts_ns", right_on="c_ts", strategy="backward")
+            .join_asof(p, left_on="ts_ns", right_on="p_ts", strategy="backward")
             .filter(
                 pl.col("c_mid").is_not_null()
                 & pl.col("p_mid").is_not_null()
-                & ((pl.col("ts_ns") - pl.col("call_ts")).dt.total_nanoseconds() <= max_stale_ns)
-                & ((pl.col("ts_ns") - pl.col("put_ts")).dt.total_nanoseconds() <= max_stale_ns)
+                & ((pl.col("ts_ns") - pl.col("c_ts")).dt.total_nanoseconds() <= max_stale_ns)
+                & ((pl.col("ts_ns") - pl.col("p_ts")).dt.total_nanoseconds() <= max_stale_ns)
             )
-            .with_columns((pl.lit(strike) + pl.col("c_mid") - pl.col("p_mid")).alias("forward"))
-            .select(["ts_ns", "forward"])
+            .with_columns((pl.col("c_mid") - pl.col("p_mid")).alias(col))
+            .select(["ts_ns", col])
         )
-        frames.append(joined)
 
-    if not frames:
-        raise RuntimeError("No overlapping call/put strikes to estimate implied forward")
+    # Build per-strike Δ series and join onto a common spine with SPY spot
+    delta_dfs = {k: _build_delta(k) for k in overlapping}
+    delta_cols = [f"delta_{int(k)}" for k in overlapping]
 
-    return pl.concat(frames).group_by("ts_ns").agg(pl.col("forward").median()).sort("ts_ns")
+    spine = (
+        pl.concat([df.select("ts_ns") for df in delta_dfs.values()] + [spy_ts.select("ts_ns")])
+        .unique()
+        .sort("ts_ns")
+    )
+
+    wide = spine.join_asof(spy_ts.sort("ts_ns"), on="ts_ns", strategy="backward")
+    for k, df in delta_dfs.items():
+        wide = wide.join_asof(df, on="ts_ns", strategy="backward")
+
+    # At each tick: pick the two nearest-ATM valid strikes and solve for F
+    def _pick_forward(row: dict) -> float | None:
+        spot = row["spot"]
+        if spot is None:
+            return None
+        valid = [
+            (k, row[f"delta_{int(k)}"]) for k in overlapping if row[f"delta_{int(k)}"] is not None
+        ]
+        if not valid:
+            return None
+        if len(valid) == 1:
+            k, d = valid[0]
+            f = k + d  # undiscounted single-strike fallback
+            return f if f > 0 else None
+        valid.sort(key=lambda x: abs(x[0] - spot))
+        (ka, da), (kb, db) = valid[0], valid[1]
+        k1, d1, k2, d2 = (ka, da, kb, db) if ka < kb else (kb, db, ka, da)
+        e_rT = (d1 - d2) / (k2 - k1)
+        if e_rT <= 0:
+            return None
+        f = k1 + d1 / e_rT
+        return f if f > 0 else None
+
+    return (
+        wide.filter(pl.col("spot").is_not_null())
+        .with_columns(
+            pl.struct(["spot"] + delta_cols)
+            .map_elements(_pick_forward, return_dtype=pl.Float64)
+            .alias("forward")
+        )
+        .filter(pl.col("forward").is_not_null())
+        .select(["ts_ns", "forward"])
+    )
 
 
 def build_iv_surface(
@@ -380,9 +433,9 @@ def build_iv_surface(
         overlapping = set(calls_at) & set(puts_at)
         if overlapping:
             try:
-                df_fwd = build_implied_forward(calls_at, puts_at)
+                df_fwd = build_implied_forward(calls_at, puts_at, spy_ts=spy_ts)
                 print(
-                    f"Expiry {exp.date()}: implied forward from {len(overlapping)} overlapping strikes"
+                    f"Expiry {exp.date()}: implied forward from {len(overlapping)} overlapping strike(s), dynamic ATM selection"
                 )
                 forward_by_expiry[exp] = df_fwd
             except Exception as e:
