@@ -37,6 +37,8 @@ class YFClient(object):
     Yahoo Finance Client
     """
 
+    locations = _yfinance_locations
+
     def __init__(self):
         pass
 
@@ -44,7 +46,7 @@ class YFClient(object):
         """ Check that I am not in test mode """
         verify( not env.test_mode, "Attempted to connect to Yahoo Finance in test mode. Set QUANTDATA_TEST_MODE=0 to enable connections." )
 
-    NO_EARNINGS_QUOTE_TYPES = {
+    NO_EARNINGS_TYPES = {
         "ETF",
         "MUTUALFUND",
         "INDEX",
@@ -53,11 +55,13 @@ class YFClient(object):
         "FUTURE",
         "OPTION",
     }
+    """ Instrument types which do not have earnings """
 
-    SCHEMA_EARNINGS = {
+    SCHEMA_HAS_EARNINGS = {
         "date": pl.Date,
         "is_earnings": pl.Boolean,
     }
+    """ Schema for the :class:`pandas.DataFrame` returned by :func:`has_earnings` """
 
     @_cache(fmt=SubDir.PANDAS_PARQUET).cache(
         "0.1",
@@ -76,12 +80,12 @@ class YFClient(object):
             qt = (t.info or {}).get("quoteType", None)
         qt = str(qt).upper() if qt is not None else None
 
-        if qt in self.NO_EARNINGS_QUOTE_TYPES:
-            return pl.DataFrame(schema=self.SCHEMA_EARNINGS)
+        if qt in self.NO_EARNINGS_TYPES:
+            return pl.DataFrame(schema=self.SCHEMA_HAS_EARNINGS)
 
         earnings_dates = t.earnings_dates
         if earnings_dates is None or earnings_dates.empty:
-            return pl.DataFrame(schema=self.SCHEMA_EARNINGS)
+            return pl.DataFrame(schema=self.SCHEMA_HAS_EARNINGS)
         earnings_dates = [dt.date() for dt in earnings_dates.index]
         earnings_dates = [dt for dt in earnings_dates if start <= dt <= end]
         earnings_dates = sorted(earnings_dates)
@@ -92,11 +96,11 @@ class YFClient(object):
             )
         )
         df = df.sort("date")
-        assert set(df.columns) == set(self.SCHEMA_EARNINGS), f"Internal error retrieving earnings for {ticker} between {fmt_date(start)} and {fmt_date(end)}: expected columns {set(self.SCHEMA_EARNINGS)} but got {set(df.columns)}. Please update code. Ref: https://massive.com/docs/rest/stocks/corporate-actions/earnings"
+        assert set(df.columns) == set(self.SCHEMA_HAS_EARNINGS), f"Internal error retrieving earnings for {ticker} between {fmt_date(start)} and {fmt_date(end)}: expected columns {set(self.SCHEMA_HAS_EARNINGS)} but got {set(df.columns)}. Please update code. Ref: https://massive.com/docs/rest/stocks/corporate-actions/earnings"
         return df
 
     PRICE_FIELDS = {'Close', 'High', 'Low', 'Open', 'Volume', 'Dividends', 'Stock Splits'}
-
+    """ Fields returned by :func:`prices` and expected to be present in the data frame returned by yahoo. """
 
     @_cache(fmt=SubDir.PANDAS_PARQUET).cache(
         "0.1",

@@ -1,6 +1,6 @@
 # Data Principles
 
-Here are proposed principles for data handling in ***quantdata**.
+Here are proposed principles for data handling in **quantdata**.
 
 When speaking about data we face the following challenges:
 
@@ -89,3 +89,247 @@ When speaking about data we face the following challenges:
 
    Data stored by experiments. [TBD]
 
+# Data Guidelines
+
+## Data Connectivity - New Data Sources
+
+To onboard a new data source, follow the pattern for ``quantdata/massive.py``:
+
+Create a ``client.py`` file which
+* reads required credentials from environment variables
+
+* estasblishes, maintains and manages connectivity (including standard timeout and dropped connection management),
+
+* sets the root paths for caching by creating a ``locations``
+  of type ``quantdata.Locations``:
+  ```python
+  from quantdata import env, version
+
+  @version("0.1")
+  class MyNewData:
+
+     locations = env.locations("my_new_data")
+     _cache = locations.raw
+  ```
+  
+  Then use the "raw" location
+  to cache raw data access by the client. Caching
+  is implemented using [``SubDir.cache()``](https://quantitative-research.de/docs/cdxcore/api/generated/cdxcore.subdir.html#cdxcore.subdir.SubDir.cache). 
+  
+  That means 
+  a cached function has a version, and each function
+  call creates a unique ID. The unique ID is created
+  based on functional paramters, which do not alter
+  the output of the function. Let us asume function 
+  ``retrieve()`` takes ``ticker`` and ``d`` in addition
+  to ``self``. In that case the unique ID of a function
+  call only depends on the former two. The unique
+  ID is passed via ``uid=``.
+
+  The default caching format is ``SubDir.PICKLE`` but
+  that is very inefficient for data management. Other formats are;
+  
+   * ``SubDir.POLARS_PARQUET`` if your function returns polars Dataframes.
+  * ``SubDir.PANDAS_PARQUET`` if your function returns pandas Dataframes.
+  * ``SubDir.PYTREE_HDF5`` uses [HDF5](https://www.hdfgroup.org/), a restricted file format for reading and writing dictionaries of numpy arrays. It has the fastest i/o but is
+  restricted in its functionality.
+
+  This is how our example now looks like:
+  ```python
+  @version("0.1")
+  class MyNewData:
+
+     locations = env.locations("my_new_data")
+     _cache = locations.raw
+     ...
+
+     @_cache(fmt.PANDAS_PARQUET)(
+        "0.1", uid=lambda ticker, d : f"retrieve/{ticker}/{d}")
+     def retrieve(self, ticker : str, d : date) -> pd.DataFrame:
+         ....
+         return df
+  ```     
+  Note that the fully qualified version of a member function
+  depends on the version of the class.
+  You can obtain version information for a versioned function
+  via its [``version`` attribute](https://quantitative-research.de/docs/cdxcore/api/generated/cdxcore.version.html#decorated-function-information).
+
+## Creating processed data
+
+To create a file which further processes raw or other processed data:
+
+* If you are planning to cache your data, find a intuive location.
+
+  * If processing "raw" data e.g. from the example above,
+    ensure you are in the ``processing`` location of 
+    the data source, for example:
+    ```python
+      from quantdata.mynewdata import MyNewData
+      _cache = MyNewData.locations("processing")(__file__)
+    ```
+
+  * If processing data from another processed data source, 
+    locate your data relative to it.
+
+* Create a ``@dataclass`` which is used to parameterize your
+  processed data stream:
+  ```python
+  from dataclasses import dataclass
+  from cdxcore.subdir import version, SubDir
+
+  @version("0.1")
+  @dataclass
+  class MyConfig:
+      some_flag : bool = False
+      some_min  : int = 10
+  ```
+
+* (Optional) Write a ``__str___`` function which gives a very compressed summary with abbreviated field names followed by ``"="``, separated by commata:
+  ```python
+      def __str__(self) -> str:
+          return f"sf={self.some_flag},sm={self.some_min}}
+  ```
+  This will help printing out context information further down
+  the processing chain. It is also helpful in creating names
+  for cached data.
+
+* Write the actual processing function.
+  Let us assume our function calls another data function
+  ``clean_data`` which is paramterized with a ``CleanDataConfig``
+  dataclass. 
+
+  Without caching we still need to set a correct version
+  depending on ``make_clean_data`` and ``MyConfig``:
+  ```python
+  @version("0.1", dependencies=[clean_data, MyConfig])
+  def process_further( ticker : str, d : date,
+                       clean_data : pl.DataFrame|None, 
+                       my_config : MyConfig,
+                       clean_data_config : CleanDataConfig, *,
+                       verbose : Context = Context.all
+                       ) -> pl.DataFrame:
+      clean_data = clean_data if not clean_data is None else\
+                   make_clean_data( ticker, d, 
+                                    clean_data_config,
+                                    verbose=verbose )   
+
+      verbose.write(lambda : f"{ticker} {d} processing further:")
+      ...
+      ...
+      ...
+      verbose.write(lambda : f"{ticker} {d} further processing done.")
+      return df
+  ```
+  If the function should be cached, decorate 
+  with the ``_cache`` we defined before. Use ``cdxcore.subdir.SubDir`` format codes to set the cache format. ``SubDir.PICKLE``
+  will "always" work but it is very ineffcient for numerical data.
+  Other formats are:
+
+  * ``SubDir.POLARS_PARQUET`` if your function returns polars Dataframes.
+  * ``SubDir.PANDAS_PARQUET`` if your function returns pandas Dataframes.
+  * ``SubDir.PYTREE_HDF5`` uses [HDF5](https://www.hdfgroup.org/), a restricted file format for reading and writing dictionaries of numpy arrays. It has the fastest i/o but is
+  restricted in its functionality.
+
+  Make sure the function version is made dependent on all
+  data functions and otherwise it uses. We also need to create
+  a unique name for the data set depending on the functional
+  parameters to the function. For example ``verbose``
+  does not alter the outcome of the function, hence it is not
+  included. Similarly, ``clean_data`` is entirely defined
+  by ``clean_data_config`` so it does not enter the unique
+  function name.
+
+  In below exampkle we make use of [``named_unique_filename48_8()``](https://quantitative-research.de/docs/cdxcore/api/generated/cdxcore.uniquehash.html#cdxcore.uniquehash.named_unique_filename48_8) to generate a humam readable name followed by a unique eight digit hash:
+  ```python
+  from cdxcore.uniquehash import named_unique_filename48_8
+
+  def _uid( ticker, d, my_config, clean_data_config):
+    return named_unique_filename48_8(f"procfrth {my_config},{clean_data_config}/{ticker}/{d}",\
+      my_config,clean_data_config,ticker,d)
+
+  @_cache(fmt=SubDir.POLARS_PARQUET)(
+    "0.1", dependencies=[clean_data, MyConfig],
+    uid=_uid )
+  def process_further( ticker : str, d : date,
+                       clean_data : pl.DataFrame|None, 
+                       my_config : MyConfig,
+                       clean_data_config : CleanDataConfig, *,
+                       verbose : Context = Context.all
+                       ) -> pl.DataFrame:
+    ...
+    ```
+
+    To debug cached functions it is worth reading the
+    documentation for [``SubDir.cache()``](https://quantitative-research.de/docs/cdxcore/api/generated/cdxcore.subdir.html#cdxcore.subdir.SubDir.cache). Key points are
+
+    * Every cached functions supports ``override_cache_mode`` which
+      can be used to change the cache mode for this top level functiion call. For example  ``override_cache_mode=off``
+      will turn off caching.
+
+    * A cached function has a ``cache_info`` property
+      which provides information on whether the last
+      result was read from cache, the cache file
+      and other details. See [``CacheInfo`` documentation](https://quantitative-research.de/docs/cdxcore/api/generated/cdxcore.subdir.html#cdxcore.subdir.CacheInfo).
+
+## Access to Cached Files
+
+When above guidelines are followed then cached functions
+can retrieve previously computed files. You can also read
+such files directly from disk. For ``PARQUET`` or ``HDF5``
+formats this can be done natively. For ``PICKLE`` a version
+is stored in binary format ahead of the actual pickled data.
+That means you will need to use:
+``SubDir.read(.., version="*")``
+
+
+
+# Restrictions of the Current Framework
+
+The framework is designed assuming that most cached data is not
+shared. It should be safe to share ``raw`` data under the assumption
+that their interface does not change much.
+
+Key points:
+
+
+While making live mostly very simple as it helps us only re-computing data we do not yet have, this comes with a few
+disadvantages:
+
+**Auto-Updates**
+
+If a version of any function or its dependencies changes, the cache is invalidated and re-computed the next time the function is called.
+
+1. We might not notice if someone else changes the version of a function or any of dependencies. If we then pull that code 
+into our local working directory it might trigger a costly re-computation.
+
+   There is currently no warning mechanism which informs
+   us of such situation.
+
+2. If data is stored on a shared drive, working on data can impact others using the same data in parallel. They will have their version of the code.
+
+   Our local code base can currently not
+   know if shared data files should be updated upon reasonable local changes or not. A good method would be to leverage the
+   local git branch to localize data for example.
+
+   An alternative is to have a "read only" fall back source for
+   data which is used if no local data is available.
+
+
+**Paramterized cache IDs**: If a paramter input changes, a new cache file is created. Any old parametrizations are maintained.
+
+3. Each time we change the value of parameter which feeds into a unique data ID, new data files are created (with the pattern above
+the directory names change). That can lead to your local disk 
+being filled with cache files you no longer need. 
+
+   There is currently no automated clean up. It is unclear whether
+   there is clever solution, but a tool to scan the local data
+   environment and deletes data which was not accessed since
+   some data seems useful.
+
+3. If we add a field to an object which is input into a unique ID,
+then this will generate a new cache file even if the field has no
+material impact vs the previous version (e.g. if we make a hard-coded value a parameter with the same default value).
+
+   Probably something which can be fixed with a helper function
+   and by providing an appropriate [``__unique_hash___()``](https://quantitative-research.de/docs/cdxcore/api/generated/cdxcore.uniquehash.html#cdxcore.uniquehash.UniqueHash)
+   function for configs affected by this.
