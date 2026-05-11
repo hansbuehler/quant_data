@@ -245,8 +245,9 @@ Please make an effort to document any files you commit. The project uses [reStru
 which is tedious but the standard. Here is a [comprehensive introduction](https://www.sphinx-doc.org/en/master/).
 
 You build the documentation with
-```
-python -m sphinx -b html docs docs\_build\html
+```bash
+cd docs
+make html
 ```
 
 The reStructuredText entry point is `docs/index.rst`.
