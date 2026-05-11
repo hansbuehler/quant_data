@@ -11,7 +11,6 @@ from sympy import root
 __version__ = "0.1.0"
 
 import warnings
-import multiprocessing.util as mp_util
 from dataclasses import dataclass
 import os as os
 from pathlib import Path    
@@ -33,8 +32,10 @@ def _one_line_warning(message, category, filename, lineno, line=None):
     return f"{filename}:{lineno}: {category.__name__}: {message}\n"
 warnings.formatwarning = _one_line_warning
 
+# removed this: re-enable in case of issues with multiprocessing
 # turn on multiprocessing logging to stderr (for debugging; remove in production version)
-mp_util.log_to_stderr(level=mp_util.INFO)  # TODO: remove in production version                      
+# import multiprocessing.util as mp_util
+# mp_util.log_to_stderr(level=mp_util.INFO)  # TODO: remove in production version                      
 
 # fix empty allocation from cvxpy
 from quantdata.utils.cvxpy import patch_cvxpy_sum_shape_from_args#NOQA

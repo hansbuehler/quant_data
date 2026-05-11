@@ -25,7 +25,6 @@ requires_cached_contracts = pytest.mark.skipif(
     reason="stored contract cache file not present",
 )
 
-
 @requires_key
 @requires_cached_contracts
 def test_filter_contracts_value_ranges() -> None:
