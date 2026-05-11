@@ -1,0 +1,8 @@
+code.xref.py.py-dec::before {
+  content: "@";
+  margin-right: .1em;
+}
+
+code.xref.py.py-dec {
+  font-weight: 600;
+}

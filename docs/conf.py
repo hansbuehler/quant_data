@@ -3,6 +3,7 @@ from pathlib import Path
 import re
 import sys
 
+from sphinx.domains.python import PyXRefRole
 from sphinx.util import logging as sphinx_logging
 
 DOCS_ROOT = Path(__file__).resolve().parent
@@ -20,21 +21,68 @@ release = "0.1.0"
 
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.intersphinx",
     "sphinx.ext.napoleon",
+    "sphinx.ext.viewcode",
+    "sphinx_autodoc_typehints",
+    "numpydoc",
+    "sphinx_automodapi.automodapi",
+    "sphinx_copybutton",
+    "sphinx_design",
+    "myst_parser",
 ]
+
+autosummary_generate = True
 
 autodoc_default_options = {
     "members": True,
-    "show-inheritance": True,
+    "inherited-members": False,
+    "undoc-members": False,
+    "show-inheritance": False,
+    "special-members": "__call__",
 }
 
-autodoc_typehints = "none"
+autodoc_typehints = "signature"
 autodoc_member_order = "bysource"
+typehints_document_rtype = False
+numpydoc_show_class_members = False
+numpydoc_class_members_toctree = False
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "generated", "Thumbs.db", ".DS_Store"]
+source_suffix = {
+    ".rst": "restructuredtext",
+    ".md": "markdown",
+}
 
-html_theme = "alabaster"
+html_theme = "pydata_sphinx_theme"
+html_theme_options = {
+    "navigation_depth": 2,
+    "show_prev_next": False,
+    "github_url": "https://github.com/hansbuehler/quant_data",
+    "show_toc_level": 3,
+    "secondary_sidebar_items": ["page-toc", "sourcelink"],
+}
+html_static_path = ["_static"]
+html_css_files = ["custom.css"]
+
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
+    "scipy": ("https://docs.scipy.org/doc/scipy/", None),
+    "pandas": ("https://pandas.pydata.org/docs/", None),
+    "matplotlib": ("https://matplotlib.org/stable/", None),
+    "ipython": ("https://ipython.readthedocs.io/en/stable/", None),
+}
+
+myst_enable_extensions = [
+    "colon_fence",
+    "deflist",
+    "dollarmath",
+    "amsmath",
+    "linkify",
+]
 
 _LITERAL_DOCSTRING_NAMES = {
     "quantdata.biz_calendar.NMS",
@@ -249,3 +297,5 @@ def setup(app):
     app.connect("builder-inited", _generate_api_pages)
     app.connect("autodoc-process-docstring", _normalize_problem_docstrings)
     app.connect("autodoc-skip-member", _skip_problem_members)
+    app.add_role_to_domain("py", "dec", PyXRefRole("func"))
+    return {"parallel_read_safe": True}
