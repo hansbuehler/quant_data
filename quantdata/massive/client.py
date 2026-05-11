@@ -164,8 +164,7 @@ class MassiveClient(object):
 
     def __init__(self, temp_caching_topic: str | None = None, fmt: SubDir.Format = SubDir.PICKLE):
         """Create client with temporary caching topic"""
-        self._client = MassiveClient.get_rest_client()
-        self._session = MassiveClient.get_session()
+        self._session = None
         self._temp_dir = (
             MassiveClient.locations.temp("massive_api")(temp_caching_topic, fmt=fmt)
             if not temp_caching_topic is None
@@ -193,7 +192,7 @@ class MassiveClient(object):
         while True:
             e_ = None
             try:
-                r = self._session.get(url, params=params, timeout=60 * cnt)
+                r = self.session.get(url, params=params, timeout=60 * cnt)
                 r.raise_for_status()
                 return r.json()
             except requests.exceptions.RetryError as e:
@@ -258,6 +257,8 @@ class MassiveClient(object):
     @property
     def session(self):
         """Return the HTTP session for this MassiveClient. Note that a session is shared within a process"""
+        if self._session is None:
+            self._session = MassiveClient.get_session()
         return self._session
 
     def clear_temp(self):

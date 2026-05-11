@@ -112,7 +112,7 @@ def test_mk_arbfree_surface_on_training_samples(isample: int, expect_drop: bool)
     data = _load_training_data()
     expiries, strikes, bids, asks = _build_market(data, isample)
 
-    result = MkArbFree()(expiries, strikes, bids, asks, verbose=Context.quiet)
+    result = MkArbFree("surface")(expiries, strikes, bids, asks, verbose=Context.quiet)
 
     if expect_drop:
         assert len(result.expiries) < len(expiries)
