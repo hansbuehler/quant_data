@@ -1,9 +1,12 @@
 """
-WRDS IvyDB handling
+WRDS Option Metric Ivy DB Data Module
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 """
 
 from quantdata import env, SubDir, Context, version#NOQA
 from quantdata.widb.client import WIDBClient, interpolate_zero_curve
+
+_locations_widb = WIDBClient.locations
 
 class _cli_defaults:
     period = ("2005-01-01", "2025-09-01") #: Default start and end date for CLI commands.

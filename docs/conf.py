@@ -162,6 +162,20 @@ def _iter_package_children(package_name: str, package_path: Path):
     return packages, modules
 
 
+def _write_module_page(module_name: str, output_dir: Path) -> None:
+    lines = [
+        module_name,
+        "=" * len(module_name),
+        "",
+        f".. automodule:: {module_name}",
+        "   :members:",
+        "   :show-inheritance:",
+        "",
+    ]
+
+    (output_dir / f"{module_name}.rst").write_text("\n".join(lines), encoding="utf-8")
+
+
 def _write_package_page(package_name: str, package_path: Path, output_dir: Path) -> None:
     child_packages, child_modules = _iter_package_children(package_name, package_path)
 
@@ -184,21 +198,18 @@ def _write_package_page(package_name: str, package_path: Path, output_dir: Path)
         lines.append("")
 
     if child_modules:
-        lines.extend(["Modules", "-------", ""])
+        lines.extend(["Modules", "-------", "", ".. toctree::", "   :maxdepth: 1", ""])
         for child_module_name in child_modules:
-            lines.extend(
-                [
-                    f".. automodule:: {child_module_name}",
-                    "   :members:",
-                    "   :show-inheritance:",
-                    "",
-                ]
-            )
+            lines.append(f"   {child_module_name}")
+        lines.append("")
 
     (output_dir / f"{package_name}.rst").write_text("\n".join(lines), encoding="utf-8")
 
     for child_package_name, child_package_path in child_packages:
         _write_package_page(child_package_name, child_package_path, output_dir)
+
+    for child_module_name in child_modules:
+        _write_module_page(child_module_name, output_dir)
 
 
 def _generate_api_pages(app) -> None:
