@@ -21,7 +21,8 @@ import pytest
 
 _test_mode = os.environ.get("QUANTDATA_TEST_MODE", "0") == "1"
 _stored_massive = Path(__file__).parent / "stored_data" / "raw" / "massive"
-_has_massive_data = _stored_massive.exists() and any(_stored_massive.iterdir())
+_stored_tickers = Path(__file__).parent / "stored_data" / "processing" / "tickers"
+_has_massive_data = (_stored_massive / "reference").exists() and (_stored_tickers).exists()
 
 requires_massive = pytest.mark.skipif(
     "MASSIVE_TOKEN" not in os.environ or (_test_mode and not _has_massive_data),
