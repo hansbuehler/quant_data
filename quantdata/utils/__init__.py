@@ -1,3 +1,7 @@
+"""
+Basic shared Utilities
+======================
+"""
 
 from dataclasses import dataclass
 from cdxcore.err import verify_inp

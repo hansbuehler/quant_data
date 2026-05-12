@@ -1,5 +1,6 @@
 """
-Generating one day of WRDS Option Metrics data for one ticker.
+Generating one day of WRDS Option Metrics data for one ticker
+=============================================================
 
 Key functions:
 

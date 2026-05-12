@@ -1,4 +1,5 @@
 import importlib
+import os
 from pathlib import Path
 import re
 import sys
@@ -10,9 +11,15 @@ DOCS_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = DOCS_ROOT.parent
 PACKAGE_ROOT = REPO_ROOT / "quantdata"
 GENERATED_API_DIR = DOCS_ROOT / "api_generated"
+DOCS_BUILD_ROOT = DOCS_ROOT / "_build" / "quantdata-root"
 LOGGER = sphinx_logging.getLogger(__name__)
 
 sys.path.insert(0, str(REPO_ROOT))
+
+# Make docs generation reproducible in CI and on fresh machines where the
+# quantdata cache roots are not configured.
+DOCS_BUILD_ROOT.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("QUANTDATA_ROOT", str(DOCS_BUILD_ROOT))
 
 project = "quantdata"
 copyright = "2026, Hans Buehler"

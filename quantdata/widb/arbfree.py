@@ -1,9 +1,13 @@
 """
-Generate arbitrage-free option prices for a ticker on a given day using :class:`MkArbFree` and the enriched day data from :func:`enrich_day`.
+Arbitrage-Free Market Data Filter
+=================================
 
-The main function in this module is :func:`mk_arb_free_day`. This function takes a ticker and a date, along with optional filters and configuration
-for the arbitrage-free fitting, and returns a DataFrame containing the enriched day data along with additional columns indicating which strike
-were retained as arbitrage-free and the corresponding fitted prices and Greeks.
+The function :func:`mk_arb_free_day` in this module takes 
+attempts to fit an arbitrage-free fit through the bid/ask prices of the options in a given day.
+It removes strikes and even expiries whenever necessary to achieve this goal.
+
+Massaging data this way is a pre-requisite for any attempts to fit a strictly arbitrage-free model
+to WIDB data.
 
 Example
 -------

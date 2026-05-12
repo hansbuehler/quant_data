@@ -1,7 +1,7 @@
 """
-quantdata
-
 Library for handling quantitative financial data.
+
+See [``https://hansbuehler.github.io/quant_data/``](https://hansbuehler.github.io/quant_data/) for documentation and API reference.
 """
 
 from __future__ import annotations

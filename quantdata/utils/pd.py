@@ -1,5 +1,7 @@
 """
-Panda utilities
+Panda Utilities
+===============
+
 """
 
 from __future__ import annotations

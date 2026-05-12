@@ -1,5 +1,10 @@
 """
-Sampling daily data into a time series.
+Timeseries of daily data per ticker
+===================================
+
+Sampling daily data into a time series using :func:`build_time_series`.
+This includes filtering and sampling the enriched day data for each day according to
+the specified configuration, and optionally making the data arbitrage-free using :func:`mk_arb_free_day`.
 """
 from __future__ import annotations
 

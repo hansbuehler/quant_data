@@ -48,6 +48,13 @@ dev = [
   "sphinx>=7.4",
   "jupyterlab",
   "ipykernel",
+  "pydata-sphinx-theme",
+  "sphinx-autodoc-typehints",
+  "numpydoc",
+  "sphinx-automodapi",
+  "sphinx-copybutton",
+  "sphinx-design",
+  "myst-parser[linkify]",
 ]
 docs = [
   "sphinx>=7.4",

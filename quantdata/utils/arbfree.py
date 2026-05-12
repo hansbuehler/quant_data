@@ -1,11 +1,24 @@
-
 """
 Make arbfree markets
-^^^^^^^^^^^^^^^^^^^^
+=====================
 
-This module contains :class:`MkArbFree`, a utility class which generates a "closest" arbitrage free market using https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2642630.
+This module contains :class:`MkArbFree`, a utility class 
+has two main modes:
 
-Developer note: a really diffult day for testing (likely very wrong data) is ``SPX 2005-11-21``.
+* ``expiry``: fits per expiry an arbitrage-free mid price within the bid-ask spread,
+  and drops any expiries for which this is not possible as it implies actionable arbitrage.
+
+  This is a pre-processor for any benchmark which attempts to fit arbitrage-free models
+  to otherwise arbitrageable data. It is also a useful tool to detect and handle arbitrage in the data, which is a common issue
+  in WIDB data.
+
+* ``surface``: fits a fully arbitrage free surface, on a strike grid which theoretically means
+  that a mid-price fit exists if and only if the
+  resulting fit is within bid/ask spread. 
+
+  This function can become very slow.
+
+*Developer note: a really diffult day for testing (likely very wrong data) is ``SPX 2005-11-21``.*
 """
 
 from __future__ import annotations
