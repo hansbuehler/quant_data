@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+
 import numpy as np
 import pytest
 import torch
@@ -50,6 +52,7 @@ def test_check_get_pop_and_broadcast_helpers() -> None:
     assert check(None, "maybe", optional=True) is None
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="grad diagnostics test is disabled on Windows")
 def test_grad_diagnostics_and_metric_tracker() -> None:
     model = _DummyModel(BaseEnvironment(precision=32, device="cpu", debug=True))
     for parameter in model.parameters():

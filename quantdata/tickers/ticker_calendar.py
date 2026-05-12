@@ -1,11 +1,30 @@
 """
-Build special calendar for a given ticker
+quantdata.tickers.ticker_calendar
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Build a calendar for a given ticker:
+
+* Option Expiries (standard mechanical ones, i.e. monthly, quarterly, EOM)
+* Dividends
+* Stock splits
+* Ticker changes (e.g. name changes, ticker changes, etc.)
+* Earnings (from Yahoo Finance, as these are not easily available from other sources)
+
+
+
 """
 
-from quantdata.tickers import tickers_cache, SubDir, version
-from quantdata.massive import MassiveClient
+from quantdata.tickers import _locations_tickers, SubDir, version
 from quantdata.yahoo import YFClient
-from quantdata.biz_calendar import DateRange, next_business_day, get_business_days
+from quantdata.biz_calendar import (
+    DateRange,
+    get_business_days,
+    next_business_day,
+    prev_business_day,
+)
+from quantdata.massive import MassiveClient
+from quantdata.tickers import Context, SubDir, version
+from quantdata.yahoo import YFClient
 
 from cdxcore.util import fmt_date
 from cdxcore.pretty import PrettyObject
@@ -26,17 +45,6 @@ from cdxcore.err import verify
 from cdxcore.pretty import PrettyObject
 from cdxcore.util import fmt_date
 
-from quantdata.biz_calendar import (
-    DateRange,
-    get_business_days,
-    next_business_day,
-    prev_business_day,
-)
-from quantdata.massive import MassiveClient
-from quantdata.tickers import Context, SubDir, tickers_cache, version
-from quantdata.yahoo import YFClient
-
-
 class EXPIRY(IntEnum):
     """Expory codes"""
 
@@ -53,6 +61,20 @@ class EXPIRY(IntEnum):
 def _date_code(d: date) -> int:
     return d.year * 10000 + d.month * 100 + d.day
 
+
+SCHEMA_TICKER_CALENDAR = {
+    "date": pl.Date,
+    "expiry_code": pl.Int8,
+    "is_ex_div": pl.Boolean,
+    "is_split": pl.Boolean,
+    "has_ticker_change": pl.Boolean,
+    "is_earnings": pl.Boolean,
+    "is_half_day": pl.Boolean,
+}
+"""Schema of the :class:`polars.DataFrame` returned by :func:`build_ticker_calendar`."""
+
+def _date_code( d : date ) -> int:
+    return d.year*10000 + d.month*100 + d.day
 
 @version("0.1")
 def get_standard_expiries(date_range: DateRange) -> pl.DataFrame:
@@ -134,7 +156,7 @@ def get_standard_expiries(date_range: DateRange) -> pl.DataFrame:
 @version("0.1", dependencies=[MassiveClient.get_dividends])
 def has_dividends(ticker: str, start: date, end: date) -> pl.DataFrame:
     """
-    Retrieve dividends between two dates from /stocks/v1/dividends.
+    Retrieve dividends between two dates from [``/stocks/v1/dividends``](https://massive.com/docs/api/stocks/v1/dividends/).
     """
     client = MassiveClient()
     df = client.get_dividends(ticker, start, end)
@@ -146,7 +168,7 @@ def has_dividends(ticker: str, start: date, end: date) -> pl.DataFrame:
 
 @version("0.1", dependencies=[MassiveClient.get_splits])
 def has_splits(ticker: str, start: date, end: date) -> pl.DataFrame:
-    """Retrieve stock splits between two dates from /stocks/v1/splits."""
+    """Retrieve stock splits between two dates from [``/stocks/v1/splits``](https://massive.com/docs/api/stocks/v1/splits/)."""
     client = MassiveClient()
     df = client.get_splits(ticker, start, end)
     df = df.rename({"execution_date": "date"})
@@ -155,7 +177,8 @@ def has_splits(ticker: str, start: date, end: date) -> pl.DataFrame:
     return df
 
 
-@tickers_cache(fmt=SubDir.POLARS_PARQUET).cache(
+
+@_locations_tickers(fmt=SubDir.PANDAS_PARQUET).cache(
     "0.1",
     dependencies=[
         MassiveClient.get_dividends,
@@ -169,13 +192,33 @@ def has_splits(ticker: str, start: date, end: date) -> pl.DataFrame:
 )
 def build_ticker_calendar(
     ticker: str,
-    date_range: DateRange,
-    *,
-    verbose: Context = Context("all"),
+    date_range: DateRange, *,
+    verbose: Context = Context.all,
 ) -> pl.DataFrame:
     """
-    Build a per-day 'specialness' frame for a given equity ticker.
-    'trading_days' you already have from nyse.business_days.
+    Build a per-day ticker-specific calendar for a given equity ticker.
+
+    Parameters
+    ----------
+    ticker : str
+        Equity ticker for which to build the calendar.  
+    date_range : :class:`DateRange`
+        Date range for which to build the calendar.
+    verbose : :class:`cdxcore.verbose.Context`, default ``Context.all``
+        Verbose context for logging progress and timing. Default is ``Context.all``.
+
+    Returns
+    -------
+    Calendar : :class:`polars.DataFrame`
+        DataFrame with the schema :data:`SCHEMA_TICKER_CALENDAR` with columns:
+
+        * ``date``: date of the calendar entry
+        * ``expiry_code``: expiry code, one of the values of the :class:`EXPIRY` enum, indicating the type of expiry on that date (if any).
+        * ``is_ex_div``: boolean indicating whether this date is an ex-dividend date for the ticker.
+        * ``is_split``: boolean indicating whether this date is a stock split date for the ticker.
+        * ``has_ticker_change``: boolean indicating whether this date has a ticker change event for the ticker.
+        * ``is_earnings``: boolean indicating whether this date is an earnings date for the ticker.
+        * ``is_half_day``: boolean indicating whether this date is a half trading day (e.g. day before a holiday).
     """
     half_days = date_range.get_half_days()
 
@@ -299,12 +342,9 @@ def build_ticker_calendar(
 
             df = fdata if df is None else df.join(fdata, on="date", how="full", coalesce=True)
 
-        bool_cols = ["is_ex_div", "is_split", "has_ticker_change", "is_earnings", "is_half_day"]
-        columns = ["date", "expiry_code"] + bool_cols
-        assert set(columns) >= set(df.columns), (
-            "Internal error: unknonw columns",
-            set(df.columns) - set(columns),
-        )
+        bool_cols = [col for col, dtype in SCHEMA_TICKER_CALENDAR.items() if dtype == pl.Boolean]
+        assert "date" in df.columns, f"Internal error: expected a 'date' column while building the calendar for {ticker}."
+        assert set(df.columns) <= set(SCHEMA_TICKER_CALENDAR), ("Internal error: unknonw columns", set(df.columns) - set(SCHEMA_TICKER_CALENDAR) )
 
         for col in bool_cols:
             if col not in df.columns:
@@ -324,10 +364,8 @@ def build_ticker_calendar(
             warnings.warn(str(dupes.head()))
             raise RuntimeError("Date duplicates found!")
 
-        verbose.write(
-            lambda: (
-                f"Built calendar for {ticker} between {fmt_date(start)} and {fmt_date(end)}. This took {tmx}."
-            )
-        )
+        df = df.select([pl.col(col).cast(dtype) for col, dtype in SCHEMA_TICKER_CALENDAR.items()])
+
+        verbose.write(lambda: f"Built calendar for {ticker} between {fmt_date(start)} and {fmt_date(end)}. This took {tmx}.")
 
     return df.sort("date")
