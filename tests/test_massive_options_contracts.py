@@ -13,9 +13,15 @@ from quantdata.massive.options.contracts import (
     filter_contracts,
 )
 
+_test_mode = os.environ.get("QUANTDATA_TEST_MODE", "0") == "1"
+_stored_massive = Path(__file__).parent / "stored_data" / "raw" / "massive"
+_has_massive_data = _stored_massive.exists() and any(_stored_massive.iterdir())
+
 requires_key = pytest.mark.skipif(
-    "MASSIVE_TOKEN" not in os.environ,
-    reason="MASSIVE_TOKEN not set",
+    "MASSIVE_TOKEN" not in os.environ or (_test_mode and not _has_massive_data),
+    reason="MASSIVE_TOKEN not set"
+    if "MASSIVE_TOKEN" not in os.environ
+    else "no stored test data in tests/stored_data/",
 )
 
 _CACHE_FILE = Path(__file__).resolve().parent / "stored_data" / "processing" / "massive" / "contracts" / "max_dte=25,max_mns=3,min_volu_k=1 9cbf6f04" / "SPY" / "contracts" / "2024-01-02.prq"
