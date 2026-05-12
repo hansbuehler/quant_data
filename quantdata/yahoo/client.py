@@ -14,8 +14,15 @@ from dataclasses import dataclass
 import numpy as np
 import time as time
 
-_yfinance_locations = env.locations("yfinance", fmt_raw=SubDir.PICKLE, fmt_processing=SubDir.PANDAS_PARQUET, fmt_training=SubDir.PYTREE_HDF5)
+_yfinance_locations = env.locations(
+    "yfinance",
+    fmt_raw=SubDir.PICKLE,
+    fmt_processing=SubDir.PANDAS_PARQUET,
+    fmt_training=SubDir.PYTREE_HDF5,
+)
 _cache = _yfinance_locations.raw("fetch", fmt=SubDir.PANDAS_PARQUET)
+_cache_polars = _yfinance_locations.raw("fetch", fmt=SubDir.POLARS_PARQUET)
+
 
 @dataclass(frozen=True)
 class YFConnectionConfig:
@@ -63,7 +70,7 @@ class YFClient(object):
     }
     """ Schema for the :class:`pandas.DataFrame` returned by :func:`has_earnings` """
 
-    @_cache(fmt=SubDir.PANDAS_PARQUET).cache(
+    @_cache_polars.cache(
         "0.1",
         uid=lambda ticker, start, end : f"has_earnings/{ticker}/{fmt_date(start)}_{fmt_date(end)}",
         exclude_args=['self']) # 'self' is excluded fromm the arguments as it does not affect the output.

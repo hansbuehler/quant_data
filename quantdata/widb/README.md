@@ -13,11 +13,19 @@ The main modules are:
 
 To access this data:
 
-  1. [Create an account](https://wrds-www.wharton.upenn.edu/pages/support/getting-started/) and [enable MFA](https://wrds-www.wharton.upenn.edu/pages/about/log-in-to-wrds-using-two-factor-authentication/).
-  2. [Follow the WRDS instructions](https://wrds-www.wharton.upenn.edu/pages/support/programming-wrds/programming-python/python-from-your-computer/) to ensure you have 
+  1. Make sure you configure the python environment for **quantdata** following [the introduction](../../README.md) which means to set at 
+  least the ``QUANTDATA_ROOT`` environment variable. 
+  [See the discussion in data locations and how to set them](../../README.md#data-locations).
+
+
+  2. [Create an account](https://wrds-www.wharton.upenn.edu/pages/support/getting-started/) and [enable MFA](https://wrds-www.wharton.upenn.edu/pages/about/log-in-to-wrds-using-two-factor-authentication/).
+
+  3. [Follow the WRDS instructions](https://wrds-www.wharton.upenn.edu/pages/support/programming-wrds/programming-python/python-from-your-computer/) to ensure you have 
     the ``pgpass`` pass file. *This is important.*
-  3. Set the ``WRDS_USERNAME`` variable to your username.   
-  4. Run the ``viz_client.ipynb`` notebook.
+
+  4. Set the ``WRDS_USERNAME`` variable to your username.   
+
+  5. Run the [``notebooks/viz_client.ipynb``](notebooks/viz_client.ipynb) notebook to test that everything works.
 
 This is the process to generate the ``pgpass`` file:
 

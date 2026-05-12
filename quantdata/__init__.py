@@ -13,12 +13,14 @@ __version__ = "0.1.0"
 import warnings
 from dataclasses import dataclass
 import os as os
-from pathlib import Path    
+import warnings
+from dataclasses import dataclass
+from pathlib import Path
 
-from cdxcore.subdir import SubDir, version, CacheController, CacheMode#NOQA
-from cdxcore.verbose import Context#NOQA
-from cdxcore.pretty import PrettyObject#NOQA
 from cdxcore.err import verify_inp
+from cdxcore.pretty import PrettyObject  # NOQA
+from cdxcore.subdir import CacheController, CacheMode, SubDir, version  # NOQA
+from cdxcore.verbose import Context  # NOQA
 
 globals()['QUANTDATA_ENVIRONMENT_LIVE'] = 1
 
@@ -26,10 +28,13 @@ globals()['QUANTDATA_ENVIRONMENT_LIVE'] = 1
 # system wide settings; import file ahead of anything else
 # --------------------------------------------------------------
 
+
 # remove ugly warning format
 def _one_line_warning(message, category, filename, lineno, line=None):
-    """ Remove ugly default warning format """
+    """Remove ugly default warning format"""
     return f"{filename}:{lineno}: {category.__name__}: {message}\n"
+
+
 warnings.formatwarning = _one_line_warning
 
 # removed this: re-enable in case of issues with multiprocessing
@@ -44,6 +49,7 @@ patch_cvxpy_sum_shape_from_args()
 # --------------------------------------------------------------
 # Library environment
 # --------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class Locations:
@@ -60,7 +66,7 @@ class Locations:
     Under these, further structure is typically imposed by cached files and their parameters.
 
     Note that all directories are reset if the environment variable ``QUANTDATA_TEST_MODE`` is set to ``1``,
-    in which case they point to a local data store in ``tests/stored_data/raw``, ``tests/stored_data/processing``, and ``tests/stored_data/training`` respectively. 
+    in which case they point to a local data store in ``tests/stored_data/raw``, ``tests/stored_data/processing``, and ``tests/stored_data/training`` respectively.
     This is used for testing.
     """
     raw: SubDir #: for raw data downloads, e.g. from WRDS (the actual WRDS locations defined in :attr:`quantdata.wrds`)
@@ -88,7 +94,7 @@ class Locations:
 
         The default inherits the format of the parent. The root format is ``PICKLE``
         which always works but is not efficient.
-            
+
         * If the function you are caching returns a pandas DataFrame, use ``SubDir.PANDAS_PARQUET`` for better performance.
         * For polars DataFrames, consider setting the default format to ``SubDir.POLARS_PARQUET``.
         * The format ``SubDir.PYTREE_HDF5`` is also supported, and is the fastest for read i/o, but `the format has limitations
@@ -139,6 +145,7 @@ class Locations:
             temp = root("temp")
         )
 
+
 class Environment(object):
     """
     Defines the operating environment.
@@ -152,7 +159,7 @@ class Environment(object):
       * :attr:`locations.training`: for final training input data
       * :attr:`locations.experiments`: for experiment management
       * :attr:`locations.temp`: for temporary caching of data, e.g. from API calls. This is typically a local directory with fast read/write access, and is used for caching API calls for speed. This directory is not meant for long-term storage of data, and may be cleared at any time. Use the other locations for long-term storage of data.
-   
+
     * :attr:`quantdata.Environment.test_mode` is a boolean which indicates whether the code is running in test mode.
       In test mode, any attempt to connect to WRDS will raise an error, and the code should rely on cached data in ``tests/stored_data/raw/`` instead.
       To enable test mode, set the environment variable ``QUANTDATA_TEST_MODE`` to ``1``.
@@ -169,7 +176,7 @@ class Environment(object):
     To generate tests in for this directory, you can use the protected member ``_test_data_locations``.
     """
 
-    CACHE_EXCLUDE_ARGS = ["self", Context, "WRDSClient", "MassiveClient"]
+    CACHE_EXCLUDE_ARGS = ["self", "Context", "WRDSClient", "MassiveClient"]
 
     def __init__(self):
         # identify directories
@@ -209,10 +216,14 @@ class Environment(object):
                 try:
                     cache_mode = CacheMode(cache_mode)
                 except ValueError as e:
-                    raise ValueError(f"Invalid cache mode specified in environment variable QUANTDATA_CACHE_MODE: '{cache_mode}': {e}.") from e
-                warnings.warn(f"Using cache mode '{cache_mode}' as specified in environment variable QUANTDATA_CACHE_MODE.")
+                    raise ValueError(
+                        f"Invalid cache mode specified in environment variable QUANTDATA_CACHE_MODE: '{cache_mode}': {e}."
+                    ) from e
+                warnings.warn(
+                    f"Using cache mode '{cache_mode}' as specified in environment variable QUANTDATA_CACHE_MODE."
+                )
 
-            raw        = SubDir(raw) if not raw is None else None
+            raw = SubDir(raw) if not raw is None else None
             processing = SubDir(processing) if not processing is None else None
             training   = SubDir(training) if not training is None else None
             experiments = SubDir(experiments) if not experiments is None else None
@@ -266,9 +277,13 @@ class Environment(object):
             temp       = SubDir("?/quantdata_test_temp", cache_controller=temp_cc, create_directory=True) # this can always read/write. 
 
             if not raw.path_exists():
-                raise FileNotFoundError(f"Could not find stored raw data for testing at: {raw.path}")
+                raise FileNotFoundError(
+                    f"Could not find stored raw data for testing at: {raw.path}"
+                )
             if not training.path_exists():
-                raise FileNotFoundError(f"Could not find stored training data for testing at: {training.path}")
+                raise FileNotFoundError(
+                    f"Could not find stored training data for testing at: {training.path}"
+                )
             if not processing.path_exists():
                 raise FileNotFoundError(f"Could not find stored processing data for testing at: {processing.path}")
             if not experiments.path_exists():
@@ -293,4 +308,3 @@ class Environment(object):
 
 env = Environment()
 """ One global instande of the :class:`quantdata.Environment` class, which defines the operating environment. """
-
