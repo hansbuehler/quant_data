@@ -13,7 +13,7 @@ from quantdata.massive.trade_conds import NORMAL_TRADE_EXCLUDE_FLAGS
 import numpy as np
 import polars as pl
 from datetime import date
-from cdxcore.err import verify_inp
+from cdxcore.err import verify_inp, verify
 from dataclasses import dataclass, field
 
 @version("0.1", dependencies=[quantdata.biz_calendar.session_open_close, quantdata.massive.client.MassiveClient.fetch_trades])
@@ -118,29 +118,6 @@ def filter_valid_quotes(
     return quotes.filter(valid_quotes).sort("ts_ns")
 
 
-SHEMA_ALIGN_QUOTES_TO_TRADES = {
-    "ts_ns": np.dtype("datetime64[ns]"),
-    "price": np.float64,
-    "size": np.float64,
-    "trade_code": np.uint32,
-    "quote_ts_ns": np.dtype("datetime64[ns]"),
-    "bid_price": np.float64,
-    "bid_size": np.float64,
-    "ask_price": np.float64,
-    "ask_size": np.float64,
-}
-
-SHEMA_ALIGN_TRADES_TO_QUOTES = {
-    "ts_ns": np.dtype("datetime64[ns]"),
-    "bid_price": np.float64,
-    "bid_size": np.float64,
-    "ask_price": np.float64,
-    "ask_size": np.float64,
-    "trade_ts_ns": np.dtype("datetime64[ns]"),
-    "price": np.float64,
-    "size": np.float64,
-    "trade_code": np.uint32,
-}
 
 @version("0.1")
 @dataclass(frozen=True)
@@ -193,6 +170,18 @@ def _find_trade(
         return -1
     return left + (valid[-1] if prefer_last else valid[0])
 
+
+SCHEMA_ALIGN_QUOTES_TO_TRADES = {
+    "ts_ns": np.dtype("datetime64[ns]"),
+    "price": np.float64,
+    "size": np.float64,
+    "trade_code": np.uint32,
+    "quote_ts_ns": np.dtype("datetime64[ns]"),
+    "bid_price": np.float64,
+    "bid_size": np.float64,
+    "ask_price": np.float64,
+    "ask_size": np.float64,
+}
 
 @version("0.1", dependencies=[filter_valid_quotes, filter_valid_trades, TradeQuoteAlignmentConfig])
 def align_quotes_to_trades(
@@ -264,8 +253,21 @@ def align_quotes_to_trades(
     if config.drop_unmatched:
         out = out.filter(pl.col("quote_ts_ns").is_not_null())
 
+    verify(set(out.columns) == set(SCHEMA_ALIGN_QUOTES_TO_TRADES), f"Output is missing expected columns: {sorted(set(SCHEMA_ALIGN_QUOTES_TO_TRADES) - set(out.columns))} and has superfluous columns: {sorted(set(out.columns) - set(SCHEMA_ALIGN_QUOTES_TO_TRADES))}")
     return out
 
+
+SCHEMA_ALIGN_TRADES_TO_QUOTES = {
+    "ts_ns": np.dtype("datetime64[ns]"),
+    "bid_price": np.float64,
+    "bid_size": np.float64,
+    "ask_price": np.float64,
+    "ask_size": np.float64,
+    "trade_ts_ns": np.dtype("datetime64[ns]"),
+    "price": np.float64,
+    "size": np.float64,
+    "trade_code": np.uint32,
+}
 
 @version("0.1", dependencies=[filter_valid_quotes, filter_valid_trades])
 def align_trades_to_quotes(
@@ -335,5 +337,5 @@ def align_trades_to_quotes(
 
     if config.drop_unmatched:
         out = out.filter(pl.col("trade_ts_ns").is_not_null())
-
+    verify(set(out.columns) == set(SCHEMA_ALIGN_TRADES_TO_QUOTES), f"Output is missing expected columns: {sorted(set(SCHEMA_ALIGN_TRADES_TO_QUOTES) - set(out.columns))} and has superfluous columns: {sorted(set(out.columns) - set(SCHEMA_ALIGN_TRADES_TO_QUOTES))}")
     return out
