@@ -1,5 +1,6 @@
 """
 quantdata.massive.tickers.data
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Build underlying tick-level data from Massive: unadjusted trades, weighted mid-price
 tape, and 1-second trade bars.
@@ -17,9 +18,9 @@ from cdxcore.version import version
 
 from quantdata.biz_calendar import TZ_NY, full_second_grid_ns, session_open_close
 from quantdata.massive import MassiveClient
-from quantdata.tickers import SubDir, tickers_cache
+from quantdata.tickers import SubDir, _locations_tickers
 
-_data_cache = tickers_cache
+_data_cache = _locations_tickers
 
 
 # ---------------------------------------------------------------------------

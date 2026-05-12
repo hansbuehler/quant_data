@@ -1,5 +1,6 @@
 """
 quantdata.massive.tickers.basics
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Listing date and basic reference data for tickers via MassiveClient.
 """

@@ -24,10 +24,10 @@ from cdxcore.verbose import Context
 from cdxcore.version import version
 
 from quantdata.massive import MassiveClient
-from quantdata.tickers import SubDir, tickers_cache
+from quantdata.tickers import SubDir, _locations_tickers
 from quantdata.tickers.ticker_calendar import EXPIRY
 
-_expiries_cache = tickers_cache
+_expiries_cache = _locations_tickers
 
 # ---------------------------------------------------------------------------
 # Calendar classification (pure Polars, no API)
