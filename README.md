@@ -15,7 +15,9 @@ You will need to
 2) Use environment variables to set your caching directories.
 3) Register your license for each data source.
 
+# Documentation
 
+Code generated docuemntation is still in progress; it can be found here [https://hansbuehler.github.io/quant_data](https://hansbuehler.github.io/quant_data/).
 
 ## TL;DR
 
@@ -241,6 +243,8 @@ python -m pre_commit install
 GitHub Actions also runs the test suite on pushes to `main` and on pull requests.
 
 ## Documentation
+
+Code generated docuemntation is still in progress; it can be found here [https://hansbuehler.github.io/quant_data](https://hansbuehler.github.io/quant_data/).
 
 Please make an effort to document any files you commit. The project uses [reStructuredText](https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html)
 which is tedious but the standard. Here is a [comprehensive introduction](https://www.sphinx-doc.org/en/master/).
