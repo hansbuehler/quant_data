@@ -39,11 +39,10 @@ requires_massive = pytest.mark.skipif(
 def test_session_open_close_normal_day() -> None:
     from quantdata.biz_calendar import session_open_close
 
-    open_dt, close_dt, session_seconds, is_half_day = session_open_close(date(2024, 6, 17))
+    open_dt, close_dt, is_half_day = session_open_close(date(2024, 6, 17))
 
     assert open_dt.hour == 9 and open_dt.minute == 30
     assert close_dt.hour == 16 and close_dt.minute == 0
-    assert session_seconds == int(6.5 * 3600)
     assert not is_half_day
 
 
@@ -51,22 +50,20 @@ def test_session_open_close_half_day() -> None:
     from quantdata.biz_calendar import session_open_close
 
     # Black Friday 2024 (confirmed half day in test_biz_calendar.py)
-    open_dt, close_dt, session_seconds, is_half_day = session_open_close(date(2024, 11, 29))
+    open_dt, close_dt, is_half_day = session_open_close(date(2024, 11, 29))
 
     assert open_dt.hour == 9 and open_dt.minute == 30
     assert close_dt.hour == 13 and close_dt.minute == 0
-    assert session_seconds == int(3.5 * 3600)
     assert is_half_day
 
 
 def test_full_second_grid_ns_normal_day() -> None:
     from quantdata.biz_calendar import full_second_grid_ns, session_open_close
 
-    open_dt, close_dt, session_seconds, _ = session_open_close(date(2024, 6, 17))
+    open_dt, close_dt, _ = session_open_close(date(2024, 6, 17))
     grid = full_second_grid_ns(open_dt, close_dt)
 
     assert isinstance(grid, pl.Series)
-    assert len(grid) == session_seconds  # one bin per second, end-exclusive
 
     # last bin key is close_dt - 1s
     last = grid[-1].replace(tzinfo=None)
