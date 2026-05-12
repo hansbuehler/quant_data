@@ -146,20 +146,35 @@ class WIDBClient(object):
 
     @staticmethod   
     def credentials() -> WRDSCredentials:
-        """ Returns WIDB credentials read from environment variables. """
+        """
+        Returns WIDB credentials read from environment variables. 
+
+        At the moment this is just the ``username``.
+        """
         if WIDBClient._credentials is None:
             WIDBClient._credentials = WRDSCredentials.create()
         return WIDBClient._credentials
     
     @staticmethod
     def connect() -> wrds.Connection:
-        """ Establish a WIDB connection if not already connected. Returns a :class:`wrds.Connection` object. """
+        """
+        Establish a WIDB connection if not already connected.
+        Returns a :class:`wrds.Connection` object.
+        
+        Users usually do not have to call this function directly when using any of the
+        prepared cached functions below as those will obtain a connection
+        lazily themselves.
+
+        This function is provided for native WRDS access.
+        """
         if WIDBClient._conn is None:
             verify( not env.test_mode, "Attempted to connect to WRDS IvyDB in test mode. Set QUANTDATA_TEST_MODE=0 to enable connections." )
             credentials = WIDBClient.credentials()
             verify( not credentials.wrds_off, "Attempted to connect to WRDS IvyDB while WRDS IvyDB access is disabled. Set QUANTDATA_WRDS_OFF=0 to enable connections." )
             try:
                WIDBClient._conn  = wrds.Connection(wrds_username=credentials.username) 
+            except EOFError as e:
+                raise RuntimeError(f"Failed to connect to WRDS with username '{credentials.username}' (EOFError). This is likely caused by too many connections from this account.") from e
             except Exception as e:
                 raise RuntimeError(f"Failed to connect to WRDS with username '{credentials.username}': {str(e)}") from e
         return WIDBClient._conn

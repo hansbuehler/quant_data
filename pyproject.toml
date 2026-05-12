@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "quantdata"
 version = "0.1.0"
 description = "Quantitative data utilities."
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [
   { name = "Hans Buehler" },
@@ -34,7 +34,8 @@ dependencies = [
     "cvxpy",
     "cdxcore",
     "pyarrow",
-    "scikit-learn"
+    "scikit-learn",
+    "ipynbname",
 ]
 
 [project.optional-dependencies]
@@ -50,6 +51,13 @@ dev = [
 ]
 docs = [
   "sphinx>=7.4",
+  "pydata-sphinx-theme",
+  "sphinx-autodoc-typehints",
+  "numpydoc",
+  "sphinx-automodapi",
+  "sphinx-copybutton",
+  "sphinx-design",
+  "myst-parser[linkify]",
 ]
 test = [
   "pytest>=8.2",

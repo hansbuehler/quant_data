@@ -11,26 +11,25 @@ import datetime as dt
 import math as math
 from dataclasses import dataclass
 from zoneinfo import ZoneInfo
-
 import numpy as np
 import pandas_market_calendars as mcal
 import polars as pl
 from cdxcore.err import verify_inp
 from cdxcore.version import version
-
 import quantdata as quantdata  # NOQA
+import warnings
 
 TZ_NY = ZoneInfo("America/New_York")
-""" New York time zone """
+""" New York time zone. """
 
 DAYS_PER_YEAR = 252
-""" Standardized business days per year """
+""" Standardized business days per year. """
 
-AM_EXIRY_SUBTRACT = 0.2
-""" How much to subtract from 'days' to expiry to account for AM settlement """
+AM_EXIRY_SUBTRACT = 0.8
+""" How much to subtract from an expiry (in days) to account for AM settlement. """
 
 NYSE_CALENDAR = mcal.get_calendar("NYSE")
-""" NYSE calendar provided by `pandas market calendars <https://pandas-market-calendars.readthedocs.io/en/latest/usage.html>`__ """
+""" NYSE calendar provided by `pandas market calendars <https://pandas-market-calendars.readthedocs.io/en/latest/usage.html>`_. """
 
 _BUSINESS_DAYS_CACHE = {}
 _EARLY_DAYS_CACHE = {}
@@ -38,9 +37,11 @@ _EARLY_DAYS_CACHE = {}
 
 class NMS:
     r"""
-    NMS(z,t) := exp( scale * z * sqrt((eps+t)/(eps+1))
-
-    Scale is standardized to z=1. being +10% at 1 year at log(1.1) ~ 10% volatility
+    NMS generates relative strikes by:
+    $$
+        \mathrm{NMS}(z,t) := \exp\left( \log(1.1)\ z \cdot \sqrt{\frac{\epsilon+t}{\epsilon+1}} \right)
+    $$
+    where $\epsilon$ is roughly on trading hour.
     """
 
     EPS = 1.0 / 255.0 / 8.0  #: Small epsilon for NMS computation.
@@ -48,15 +49,24 @@ class NMS:
 
     @staticmethod
     def from_nms(z: float, t: float, backbone=np) -> float:
+        """ Converts an NMS strike to a relative strike. """
         return backbone.exp(NMS.SCALE * z * backbone.sqrt((NMS.EPS + t) / (NMS.EPS + 1.0)))
 
     @staticmethod
     def to_nms(k: float, t: float, backbone=np) -> float:
+        """ Converts a relative strike to an NMS strike. """
         return (backbone.log(k) / NMS.SCALE) / backbone.sqrt((NMS.EPS + t) / (NMS.EPS + 1.0))
 
-
 def to_date(d: str | dt.datetime | dt.date | np.datetime64 | None) -> dt.date | None:
-    """Convert ``d`` to a :class:`datetime.date`, or ``None`` if ``d`` is ``None``."""
+    """
+    Convert ``d`` to a :class:`datetime.date`, or ``None`` if ``d`` is ``None``.
+    This function converts:
+
+    * ``np.datetime64``
+    * :class:`datetime.datetime`
+    * :class:`datetime.date`
+    * ``str`` assuming it is in iso format e.g. "2024-01-31"    
+    """
     if d is None:
         return d
     if isinstance(d, np.datetime64):
@@ -92,10 +102,6 @@ def get_business_days(
     Returns
     -------
     list[:class:`datetime.date`]
-        Sorted trading dates (timezone-naive, date-only precision).
-
-    -------
-    pd.DatetimeIndex
         Sorted trading dates (timezone-naive, date-only precision).
     """
     global _BUSINESS_DAYS_CACHE
@@ -185,6 +191,10 @@ def add_business_days(
     """
     Add a number of business days to a date.
 
+    Note that if ``start`` is a business day then use ``count_start`` to include it in counting:
+    if ``start`` is a business day, and if ``count_start`` is ``True``, then
+    if ``num_days=1`` or ``num_days=-1`` then the function will the return ``start``.
+
     Parameters
     ----------
     start : ``datetime.date``
@@ -195,13 +205,11 @@ def add_business_days(
     exclude_half_days : bool, default ``False``
         If ``True``, remove early-close trading sessions from the calendar before counting.
     count_start : bool, default ``False``
-        Whether to count ``start`` if it is a business day. If ``False``, then the counts starts from the first business day after start.
-        This flag has no effect if ``start`` is a business day.
+        Whether to count ``start`` if it is a business day. In that case ``start`` is counted in either
+        direction as the first day.
+        If ``False``, then the counts starts from the first business day after start.
 
-        If ``start`` is not a business day, and if ``count_start`` is ``True``, then:
-
-        * If ``num_days=1`` then the function will the return the first business day following the non-business day ``start``.
-        * If ``num_days=-1`` then the function will return the first business day preceding the non-business day ``start``.
+        This flag has no effect if ``start`` is not a business day.
 
     Returns
     -------
@@ -211,27 +219,20 @@ def add_business_days(
     if isinstance(start, np.ndarray):
         start = np.asarray(start, dtype="datetime64[D]")
         if isinstance(num_days, np.ndarray):
-            verify_inp(
-                start.shape == num_days.shape,
-                f"start and num_days must have the same shape, but got {start.shape} and {num_days.shape}",
-            )
-            return np.asarray(
-                [
+            verify_inp( start.shape == num_days.shape,
+                        f"start and num_days must have the same shape, but got {start.shape} and {num_days.shape}" )
+            return np.asarray( [
                     add_business_days(s, n, exclude_half_days=exclude_half_days)
                     for s, n in zip(start, num_days)
-                ],
-                dtype="datetime64[D]",
-            )
+                ], dtype="datetime64[D]" )
         return np.asarray(
             [add_business_days(s, num_days, exclude_half_days=exclude_half_days) for s in start],
-            dtype="datetime64[D]",
-        )
+            dtype="datetime64[D]")
 
     if isinstance(num_days, np.ndarray):
         return np.asarray(
             [add_business_days(start, n, exclude_half_days=exclude_half_days) for n in num_days],
-            dtype="datetime64[D]",
-        )
+            dtype="datetime64[D]" )
 
     # scalar version
     start = to_date(start)
@@ -275,7 +276,7 @@ def prev_business_day(
     date: dt.date, exclude_half_days: bool = False, *, count_start: bool = False
 ) -> dt.date:
     """
-    Get the strictly previous business day before the given date.
+    Get the previous business day before the given date.
 
     Parameters
     ----------
@@ -303,7 +304,7 @@ def next_business_day(
     date: dt.date, exclude_half_days: bool = False, *, count_start: bool = False
 ) -> dt.date:
     """
-    Get the strictly next business day after the given date.
+    Get the next business day after the given date.
 
     Parameters
     ----------
@@ -398,30 +399,33 @@ class DateRange:
         """Get half days (early closes) in this date range."""
         return get_half_days(self.start, self.end) if not self.exclude_half_days else []
 
-
-@version("0.1", dependencies=[get_half_days])
-def session_open_close(d: dt.date) -> tuple[dt.datetime, dt.datetime, int, bool]:
+@version("0.1")
+def session_open_close( date: dt.date ) -> tuple[dt.datetime, dt.datetime, bool]:
     """
-    NYSE RTH session open and close for date ``d``.
+    Returns the session open and close for a given ``date`` as :class:`datetime.datetime` objects in New York time zone,
+    and a boolean indicating whether it is a half day (early close) or not.
 
-    Returns
-    -------
-    (open_dt, close_dt, session_seconds, is_half_day)
-        * open_dt: 09:30 NY
-        * close_dt: 13:00 NY on half-days, 16:00 NY otherwise
-        * session_seconds: total session length in seconds
-        * is_half_day: whether this is an early-close day
+    This function will return ``(None, None, False)`` if the given date is not a trading day.    
     """
-    is_hd = bool(get_half_days(d, d))
-    open_dt = dt.datetime(d.year, d.month, d.day, 9, 30, tzinfo=TZ_NY)
-    close_dt = (
-        dt.datetime(d.year, d.month, d.day, 13, 0, tzinfo=TZ_NY)
-        if is_hd
-        else dt.datetime(d.year, d.month, d.day, 16, 0, tzinfo=TZ_NY)
-    )
-    session_seconds = int((close_dt - open_dt).total_seconds())
-    return open_dt, close_dt, session_seconds, is_hd
 
+    date          = to_date(date)
+    schedule      = NYSE_CALENDAR.schedule(start_date=date, end_date=date)
+
+    if len(schedule) == 0:
+        return None, None, False
+
+    early         = NYSE_CALENDAR.early_closes(schedule)
+
+    with warnings.catch_warnings(action="ignore"):
+        schedule['market_open']  = schedule['market_open'].apply(lambda ts: ts.to_pydatetime())
+        schedule['market_close'] = schedule['market_close'].apply(lambda ts: ts.to_pydatetime())
+    schedule['market_open']  = schedule['market_open'].dt.tz_convert('America/New_York')
+    schedule['market_close'] = schedule['market_close'].dt.tz_convert('America/New_York')
+
+    assert len(schedule['market_open']) <= 1, "Internal error"
+    assert len(schedule['market_close']) <= 1, "Internal error"
+
+    return schedule['market_open'].iloc[0], schedule['market_close'].iloc[0], len(early)>0
 
 @version("0.1")
 def full_second_grid_ns(open_dt: dt.datetime, close_dt: dt.datetime) -> pl.Series:

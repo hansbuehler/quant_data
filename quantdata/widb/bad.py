@@ -28,13 +28,14 @@ class BAD:
         dt.date(2004, 11, 11), # no zero curve
         dt.date(2007, 11, 12), # no zero curve
         dt.date(2018, 12, 4), # expiries with zero business days?
-        dt.date(2025, 1,8) # expiriues with zero business days?
+        dt.date(2025, 1,8) # expiries with zero business days?
         } 
     """ Days where some core information is missing, e.g. zero curves. """
 
     DAYS_TICKER = {'SPX': {
                         dt.date(2006, 11, 17),  # no forward for 1
                         dt.date(2012, 11, 17),  # no forward for 1
+                        dt.date(2015, 8, 21)    # cannot find arb-free surface
                         },
                    'RUT': {
                         dt.date(2009, 2, 20),   # no forward for 1

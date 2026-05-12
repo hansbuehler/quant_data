@@ -2,6 +2,20 @@
 Build special calendar for a given ticker
 """
 
+from quantdata.tickers import tickers_cache, SubDir, version
+from quantdata.massive import MassiveClient
+from quantdata.yahoo import YFClient
+from quantdata.biz_calendar import DateRange, next_business_day, get_business_days
+
+from cdxcore.util import fmt_date
+from cdxcore.pretty import PrettyObject
+from cdxcore.jcpool import SubDir
+from cdxcore.subdir import version, Context, SubDir
+from cdxcore.util import fmt_date
+from cdxcore.pretty import PrettyObject
+import os as os
+import polars as pl
+from datetime import date, timedelta
 import warnings as warnings
 from datetime import date, timedelta
 from enum import IntEnum
@@ -48,8 +62,8 @@ def get_standard_expiries(date_range: DateRange) -> pl.DataFrame:
 
     * ``QUAD_WITCHING``: third friday of March, June, September, December
     * ``MONTHLY``: third friday of other months
-    * ``EOM``: last business day of the month, if not quad witching or monthly
-    * ``QUARTERLY``: quarterly expiry, i.e. third friday of March, June, September, December (same as quad witching, but we keep it separate for now in case we want to add more codes later)
+    * ``EOM``: last business day of the month
+    * ``QUARTERLY``: quarterly expiry, i.e. last business day of the month of March, June, September, December
 
     Parameters
     ----------
@@ -90,25 +104,11 @@ def get_standard_expiries(date_range: DateRange) -> pl.DataFrame:
             lpm_code = _date_code(last_prev_month)
             ix = np.searchsorted(datecodes, lpm_code, side="right")
             if ix > 0:
-                assert lpm_code >= datecodes[ix - 1], (
-                    f"Internal error: lpm_code {lpm_code} should be >= datecodes[{ix - 1}]={datecodes[ix - 1]}"
-                )
-                if dates[ix - 1] in business_days:
-                    print(
-                        f"Adding last month {last_prev_month} expiry for {dates[ix - 1]} with code {EXPIRY.EOM if last_prev_month.month not in {3, 6, 9, 12} else EXPIRY.QUARTERLY}"
-                    )
-                    print(dates)
-                    assert not dates[ix - 1] in expiries, (
-                        f"Internal error: duplicate expiry date {dates[ix - 1]}"
-                    )
-                    expiries.append(dates[ix - 1])
-                    codes.append(
-                        int(
-                            EXPIRY.EOM
-                            if last_prev_month.month not in {3, 6, 9, 12}
-                            else EXPIRY.QUARTERLY
-                        )
-                    )
+                assert lpm_code >= datecodes[ix-1], f"Internal error: lpm_code {lpm_code} should be >= datecodes[{ix-1}]={datecodes[ix-1]}"
+                if dates[ix-1] in business_days:
+                    assert not dates[ix-1] in expiries, f"Internal error: duplicate expiry date {dates[ix-1]}"
+                    expiries.append( dates[ix-1] )
+                    codes.append( int( EXPIRY.EOM if last_prev_month.month not in {3, 6, 9, 12} else EXPIRY.QUARTERLY ) )
 
             # get third friday of this month
             first_friday_offset = (4 - first_day.weekday()) % 7
@@ -116,23 +116,13 @@ def get_standard_expiries(date_range: DateRange) -> pl.DataFrame:
             tf_code = _date_code(third_friday)
             ix = np.searchsorted(datecodes, tf_code, side="right")
             if ix > 0:
-                assert tf_code >= datecodes[ix - 1], (
-                    f"Internal error: tf_code {tf_code} should be >= datecodes[{ix - 1}]={datecodes[ix - 1]}"
-                )
-                if dates[ix - 1] in business_days:
-                    print(
-                        f"Adding third friday {third_friday} expiry for {dates[ix - 1]} with code {EXPIRY.QUAD_WITCHING if month in {3, 6, 9, 12} else EXPIRY.MONTHLY}"
-                    )
-                    print(dates)
-                    assert not dates[ix - 1] in expiries, (
-                        f"Internal error: duplicate expiry date {dates[ix - 1]}"
-                    )
-                    expiries.append(dates[ix - 1])
-                    codes.append(
-                        int(EXPIRY.QUAD_WITCHING if month in {3, 6, 9, 12} else EXPIRY.MONTHLY)
-                    )
+                assert tf_code >= datecodes[ix-1], f"Internal error: tf_code {tf_code} should be >= datecodes[{ix-1}]={datecodes[ix-1]}"
+                if dates[ix-1] in business_days:
+                    assert not dates[ix-1] in expiries, f"Internal error: duplicate expiry date {dates[ix-1]}"
+                    expiries.append( dates[ix-1] )
+                    codes.append( int( EXPIRY.QUAD_WITCHING if month in {3, 6, 9, 12} else EXPIRY.MONTHLY ) )
 
-            if year == end_year + 1:
+            if year==end_year+1:
                 # we only had to handle the first month of the next year
                 break
 

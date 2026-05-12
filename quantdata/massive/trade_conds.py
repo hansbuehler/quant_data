@@ -8,7 +8,7 @@ Sources:
 Design:
 - Keep the vendor condition IDs as IntEnum values (as returned in `conditions`).
 - Provide IntFlag bitmasks for fast filtering/joins (int32).
-- pack_conditions ignores unknown codes (robust to vendor additions).
+- pack_conditions raises on unknown codes so vendor schema changes are explicit.
 """
 
 from __future__ import annotations
@@ -283,10 +283,13 @@ NORMAL_TRADE_EXCLUDE_FLAGS = (
 def pack_conditions(codes: Iterable[int]) -> int:
     """
     Pack Massive/Polygon `conditions` (iterable of ints) into an int32 semantic mask.
-    Unknown codes are ignored (robust to vendor additions).
+    Unknown codes raise ValueError.
     """
     flags = ConditionFlag.NONE
     for c in codes:
-        cc = ConditionCode(int(c))
+        try:
+            cc = ConditionCode(int(c))
+        except ValueError:
+            raise ValueError(f"Unknown trade condition code: {c}") from None
         flags |= CODE_TO_FLAG.get(cc, ConditionFlag.NONE)
     return int(flags)

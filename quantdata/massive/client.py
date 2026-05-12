@@ -1,7 +1,27 @@
 """
 quantdata.massive.client
+^^^^^^^^^^^^^^^^^^^^^^^^
 
-Simple client wrapper for the [www.massive.com](https://www.massive.com) API.
+A simple client wrapper for the `www.massive.com <https://www.massive.com>`_ API.
+
+Access
+^^^^^^
+
+You will require a `massive.com token <https://www.massive.com/docs/rest/authentication>`_ to access the data.
+Set the token in the ``MASSIVE_TOKEN`` environment variable, e.g. by adding the following line to your ``~/.bashrc`` or ``~/.zshrc`` file:
+
+.. code-block:: bash
+
+    export MASSIVE_TOKEN="your_token"
+
+Once installed, use is straightforward, e.g. to fetch trades and quotes for Apple 150 call expiring on 2023-06-16::
+
+    from quantdata.massive import MassiveClient
+    client = MassiveClient()
+
+    trades = client.fetch_trades("AAPL230616C00150000", date(2023,6,16))
+    quotes = client.fetch_quotes("AAPL230616C00150000", date(2023,6,16))
+    ...
 """
 
 from __future__ import annotations
@@ -15,14 +35,12 @@ import polars as pl
 import requests as requests
 from cdxcore.err import verify
 from cdxcore.subdir import SubDir, version
-from cdxcore.uniquehash import named_unique_filename48_8
 from cdxcore.util import fmt_date, verify_inp
 from massive import RESTClient
-from numpy.testing import verbose
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from quantdata import env
+from quantdata import env, Locations
 from quantdata.biz_calendar import TZ_NY, add_business_days
 from quantdata.massive.trade_conds import pack_conditions
 
@@ -38,26 +56,33 @@ _cache = _massive_locations.raw
 # Low-level HTTP helpers
 # --------------------------------------------------------------------
 
-
 @version("0.1")
 class MassiveClient(object):
     """
-    Wrapper around a massive token from an environment variable MASSIVE_TOKEN.
-    Objects of this class also temporary cache URL get() requests.
+    Wrapper around massive.com connectivity.
 
-    Usage for function calls which do not require caching::
+    Standard usage::
 
-        handle = MassiveClient()
+        from quantdata.massive import MassiveClient
+        client = MassiveClient()
 
-    Caching usage, e.g. in a function ``work``::
+        trades = client.fetch_trades("AAPL230616C00150000", date(2023,6,16))
+        quotes = client.fetch_quotes("AAPL230616C00150000", date(2023,6,16))
+
+    **Temporary Caching**
+
+    This client supports in-session caching. Unlike the overall caching framework for :mod:`quantdata`, this caching
+    scheme is temporary and is not guaranteed to persist between machine reboots (e.g. in Linux the root temporary directory is ``/tmp/massive``).
+    This can be useful for speeding up repeated requests during an active session
+    but should not be relied upon for long-term storage of data.
+
+    To enable temporary caching in a, say, ``"work"`` context::
 
         handle = MassiveClient("work")
-
-    Note that caching is temporary, and should be assumed not to persist between
-    machine reboots (e.g. in Linux the root temporary directory is ``/tmp/massive``)
     """
 
-    locations = _massive_locations  #: :class:`quantdata.Locations` for massive data.
+    locations = _massive_locations
+    """ :class:`quantdata.Locations` for massive data. """
 
     _MASSIVE_TOKEN = None
     _HTTP_SESSION = None
@@ -65,7 +90,9 @@ class MassiveClient(object):
     BASE_URL = "https://api.massive.com"  #: Base URL for requests.
     START_DATE = date(
         2022, 3, 7
-    )  #: Start date for quote and trade requests for options, https://massive.com/docs/rest/options/trades-quotes/quotes
+    )
+    """ Start date for quote and trade requests for options. `See massive.com <https://massive.com/docs/rest/options/trades-quotes/quotes>`_ """
+
     TIME_SPANS = {
         "second",
         "minute",
@@ -75,7 +102,8 @@ class MassiveClient(object):
         "month",
         "quarter",
         "year",
-    }  #: standard time spans, e.g. for https://massive.com/docs/rest/stocks/aggregates/custom-bars
+    }
+    """ Standard `massive time spans <https://massive.com/docs/rest/stocks/aggregates/custom-bars>`_ """
 
     """
     Static members
@@ -85,10 +113,11 @@ class MassiveClient(object):
     def get_token():
         """Reads massive token from the ``MASSIVE_TOKEN`` environment variable"""
         if MassiveClient._MASSIVE_TOKEN is None:
+            verify( not env.test_mode, "Attempted to connect to massive.com in test mode. Set QUANTDATA_TEST_MODE=0 to enable connections." )
             MassiveClient._MASSIVE_TOKEN = os.environ.get("MASSIVE_TOKEN", None)
             verify(
                 not MassiveClient._MASSIVE_TOKEN is None,
-                "Must specify environment variable 'MASSIVE_TOKEN' to access http://www.massive.com data",
+                "Must specify environment variable 'MASSIVE_TOKEN' to access `massive.com <https://www.massive.com>`_ data",
                 exception=RuntimeError,
             )
         return MassiveClient._MASSIVE_TOKEN
@@ -135,8 +164,7 @@ class MassiveClient(object):
 
     def __init__(self, temp_caching_topic: str | None = None, fmt: SubDir.Format = SubDir.PICKLE):
         """Create client with temporary caching topic"""
-        self._client = MassiveClient.get_rest_client()
-        self._session = MassiveClient.get_session()
+        self._session = None
         self._temp_dir = (
             MassiveClient.locations.temp("massive_api")(temp_caching_topic, fmt=fmt)
             if not temp_caching_topic is None
@@ -164,7 +192,7 @@ class MassiveClient(object):
         while True:
             e_ = None
             try:
-                r = self._session.get(url, params=params, timeout=60 * cnt)
+                r = self.session.get(url, params=params, timeout=60 * cnt)
                 r.raise_for_status()
                 return r.json()
             except requests.exceptions.RetryError as e:
@@ -229,6 +257,8 @@ class MassiveClient(object):
     @property
     def session(self):
         """Return the HTTP session for this MassiveClient. Note that a session is shared within a process"""
+        if self._session is None:
+            self._session = MassiveClient.get_session()
         return self._session
 
     def clear_temp(self):
@@ -287,6 +317,7 @@ class MassiveClient(object):
         "size": pl.Float64,
         "trade_code": pl.UInt32,
     }
+    """ Schema of the :class:`polars.DataFrame` returned by :meth:`fetch_trades`. """
 
     @_cache(fmt=SubDir.POLARS_PARQUET).cache(
         "0.1", label=lambda ticker, d: f"trades/{ticker}/{fmt_date(d)}", exclude_args=["self"]
@@ -297,6 +328,7 @@ class MassiveClient(object):
         Used both for options and underlyings.
 
         The returned :class:`polars.DataFrame` has the following columns:
+
         * ts_ns: Datetime[ns, tz]: time zone information with nanonsecond resolutuin.
         * price: Float64
         * size: Float64
@@ -363,13 +395,14 @@ class MassiveClient(object):
         "ask_price": pl.Float64,
         "ask_size": pl.Float64,
     }
+    """ Schema of the :class:`polars.DataFrame` returned by :meth:`fetch_quotes`. """
 
     @_cache(fmt=SubDir.POLARS_PARQUET).cache(
         "0.1", label=lambda ticker, d: f"quotes/{ticker}/{fmt_date(d)}", exclude_args=["self"]
     )
     def fetch_quotes(self, ticker: str, d: date) -> pl.DataFrame:
         """
-        Fetches quotes from /v3/quotes/{ticker} sorted by sip_timestamp asc.
+        Fetches quotes from "/v3/quotes/{ticker}" sorted by sip_timestamp asc.
         Used both for options and underlyings.
 
         Parameters
@@ -427,20 +460,21 @@ class MassiveClient(object):
         "vwap": pl.Float64,
         "num_trades": pl.Int64,
     }
+    """ Schema of the :class:`polars.DataFrame` returned by :meth:`fetch_bars`. """
 
-    @_cache(fmt=SubDir.PANDAS_PARQUET).cache(
+    @_cache(fmt=SubDir.POLARS_PARQUET).cache(
         "0.1",
         uid=lambda ticker, start, end, adjusted, timespan: (
             f"bars/{timespan}/{'adj' if adjusted else 'raw'}/{ticker}/{fmt_date(start)}_{fmt_date(end)}_{timespan}"
         ),
         exclude_args=["self"],
-    )  # excluding 'self' is not necessary; should be excluded automatically
+    )  # 'self' is excluded fromm the arguments as it does not affect the output.
     def fetch_bars(
         self, ticker: str, start: date, end: date, adjusted: bool, timespan: str
     ) -> pl.DataFrame:
         """
         Download daily bars for a ticker accross a number of dates; convert timestamp to datetime in NY/ns.
-        See https://massive.com/docs/rest/stocks/aggregates/custom-bars
+        See `custom bars documentation<https://massive.com/docs/rest/stocks/aggregates/custom-bars>`_
 
         Parameters
         ----------
@@ -521,7 +555,7 @@ class MassiveClient(object):
         Fetch open/close/volume/high/low for ``ticker`` on date ``d``.
         Returns dict with keys: open, close, low, high, volume, adjusted and optionally afterHours and preMarket if available.
 
-        See https://massive.com/docs/rest/options/aggregates/daily-ticker-summary
+        See `daily ticker summary documentation <https://massive.com/docs/rest/options/aggregates/daily-ticker-summary>`_.
 
         If no trade was recorded raise an exception except of ``can_be_none`` is True,
         in which case return ``None``.
@@ -607,12 +641,12 @@ class MassiveClient(object):
             f"all_contracts/max_dte={max_dte if not max_dte is None else 'all'}/{underlying}/{fmt_date(d)}"
         ),
         exclude_args=["self"],
-    )  # excluding 'self' is not necessary; should be excluded automatically
+    )  # 'self' is excluded fromm the arguments as it does not affect the output.
     def list_all_contracts_expiring_after_day(
         self, underlying: str, d: date, max_dte: int = None
     ) -> list[dict]:
         """
-        Download ALL option contracts with expiration_date >= d, with an optional upper bound.
+        Download ALL option contracts with expiration_date at or past ``d``, with an optional upper bound.
 
         Parameters
         ----------
@@ -627,7 +661,7 @@ class MassiveClient(object):
         Returns:
         -------
         Result : dict
-            See v3/reference/options/contracts in massive.com
+            See `v3/reference/options/contracts documentation <https://massive.com/docs/rest/options/contracts>`_.
         """
         url = f"{self.BASE_URL}/v3/reference/options/contracts"
         params = {
@@ -647,27 +681,29 @@ class MassiveClient(object):
             params["expiration_date.lte"] = max_expiry.strftime("%Y-%m-%d")
         return self.paginate(url, params)
 
-    @_cache(fmt=SubDir.PANDAS_PARQUET).cache(
+    @_cache(fmt=SubDir.POLARS_PARQUET).cache(
         "0.1",
         uid=lambda ticker, start, end: f"adjfactors/{ticker}/{fmt_date(start)}_{fmt_date(end)}",
         exclude_args=["self"],
-    )  # excluding 'self' is not necessary; should be excluded automatically
+    )  # 'self' is excluded fromm the arguments as it does not affect the output.
     def adjustment_factors(self, ticker: str, start: date, end: date) -> pl.DataFrame:
         """
-        Download daily bars adjusted + unadjusted and compute per-day close scaling factor.
+        Downloads daily adjusted and unadjusted close, and computes the adjustment factor as ``adj_close / unadj_close``.
 
-        See https://massive.com/docs/rest/stocks/aggregates/custom-bars
+        See `custom bars documentation <https://massive.com/docs/rest/stocks/aggregates/custom-bars>`_
 
         Returns a Polars frame with:
-        - date
-        - close_unadj
-        - close_adj
-        - factor_close = close_adj / close_unadj
+
+        * date
+        * close_unadj
+        * close_adj
+        * factor_close = close_adj / close_unadj
 
         Notes:
-        - Uses NY timezone to derive the trading date from 't'.
-        - Uses only 'close' as requested.
-        - If you later want volume/cash-vol invariance checks, also download 'v' and compute factors similarly.
+
+        * Uses NY timezone to derive the trading date from 't'.
+        * Uses only 'close' as requested.
+        * If you later want volume/cash-vol invariance checks, also download 'v' and compute factors similarly.
         """
         verify_inp(
             start <= end,
@@ -715,12 +751,12 @@ class MassiveClient(object):
 
     @_cache(fmt=SubDir.PICKLE).cache(
         "0.1", uid=lambda ticker: f"reference/{ticker}", exclude_args=["self"]
-    )  # excluding 'self' is not necessary; should be excluded automatically
+    )  # 'self' is excluded fromm the arguments as it does not affect the output.
     def ticker_reference_data(self, ticker: str) -> dict:
         """
         Return reference data for a given ticker.
-        See https://massive.com/docs/rest/stocks/tickers/ticker-overview for details.
 
+        See `ticker overview documentation <https://massive.com/docs/rest/stocks/tickers/ticker-overview>`_ for details.
         This function converts boolean, integer, floats and dates.
 
         Parameters
@@ -731,7 +767,7 @@ class MassiveClient(object):
         Returns
         -------
         Result : dict
-            Dict with reference data for the ticker. See https://massive.com/docs/rest/stocks/tickers/ticker-overview.
+            Dict with reference data for the ticker. See `ticker overview documentation <https://massive.com/docs/rest/stocks/tickers/ticker-overview>`_ for details.
             The following conversions will be performed:
 
             * active [bool|None]
@@ -746,7 +782,7 @@ class MassiveClient(object):
         Raises
         ------
         Ticker not found: :class:`FileNotFoundError`
-            If the request for reference data from massive did not yield and results.
+            If the request for reference data from massive did not yield any results.
         """
 
         url = f"{self.BASE_URL}/v3/reference/tickers/{ticker}"
@@ -836,16 +872,16 @@ class MassiveClient(object):
         "record_date": pl.Date,
         "split_adjusted_cash_amount": pl.Float64,
     }
+    """ Schema of the :class:`polars.DataFrame` returned by :meth:`get_dividends`. """
 
     @_cache(fmt=SubDir.POLARS_PARQUET).cache(
         "0.1",
         uid=lambda ticker, start, end: f"dividends/{ticker}/{fmt_date(start)}_{fmt_date(end)}",
         exclude_args=["self"],
-    )  # excluding 'self' is not necessary; should be excluded automatically
+    )  # 'self' is excluded fromm the arguments as it does not affect the output.
     def get_dividends(self, ticker: str, start: date, end: date) -> pl.DataFrame:
         """
-        Retrieve dividends which go ex div between two dates from /stocks/v1/dividends.
-        See https://massive.com/docs/rest/stocks/corporate-actions/dividends
+        Retrieve dividends which go ex div between two dates from `/stocks/v1/dividends < https://massive.com/docs/rest/stocks/corporate-actions/dividends>`_.
 
         Parameters
         ----------
@@ -896,14 +932,15 @@ class MassiveClient(object):
         "split_from": pl.Int32,
         "split_to": pl.Int32,
     }
+    """ Schema of the :class:`polars.DataFrame` returned by :meth:`get_splits`. """
 
     @_cache(fmt=SubDir.POLARS_PARQUET).cache(
         "0.1",
         uid=lambda ticker, start, end: f"splits/{ticker}/{fmt_date(start)}_{fmt_date(end)}",
         exclude_args=["self"],
-    )  # excluding 'self' is not necessary; should be excluded automatically
+    )  # 'self' is excluded fromm the arguments as it does not affect the output.
     def get_splits(self, ticker: str, start: date, end: date) -> pl.DataFrame:
-        """Retrieve stock splits between two dates from /stocks/v1/splits (fast)."""
+        """Retrieve stock splits between two dates from `/stocks/v1/splits <https://massive.com/docs/rest/stocks/corporate-actions/splits>`_."""
         url = f"{self.BASE_URL}/stocks/v1/splits"
         params = {
             "ticker": ticker,
@@ -926,17 +963,19 @@ class MassiveClient(object):
         "date": pl.Date,
         "has_ticker_change": pl.Boolean,
     }
+    """ Schema of the :class:`polars.DataFrame` returned by :meth:`has_ticker_changes`. """
 
     @_cache(fmt=SubDir.POLARS_PARQUET).cache(
         "0.1",
         uid=lambda ticker, start, end: f"ticker_changes/{ticker}/{fmt_date(start)}_{fmt_date(end)}",
         exclude_args=["self"],
-    )  # excluding 'self' is not necessary; should be excluded automatically
+    )  # 'self' is excluded fromm the arguments as it does not affect the output.
     def has_ticker_changes(self, ticker: str, start: date, end: date) -> pl.DataFrame:
         """
         Find dates at which an underlying had ticker changes.
+
         If the endpoint is not available return an empty frame.
-        At the moment ticker changes are the only events massive supports.
+        At the moment ticker changes are `the only events massive.com supports .
         """
 
         client = self.get_rest_client()

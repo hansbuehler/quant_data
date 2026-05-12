@@ -42,6 +42,7 @@ class Backbone(object):
                         sqrtVars : Array, *, 
                         mask : Array | None = None, 
                         spot : Array | None = None,
+                        logK : Array | None = None,
                         high_precision : bool = False, 
                         debug_verify_bounds : bool = False,
                         eps : float = 1E-6 ) -> Array:
@@ -71,14 +72,14 @@ class Backbone(object):
         """
         out_dtype = strikes.dtype
         if high_precision:
-            strikes = self.astype(strikes, dtype=self.float64)
-            spot    = self.astype(spot, dtype=self.float64) if not spot is None else None
-            sqrtVars= self.astype(sqrtVars, dtype=self.float64)
+            strikes = self.to_array(strikes, dtype=self.float64)
+            spot    = self.to_array(spot, dtype=self.float64) if not spot is None else None
+            sqrtVars= self.to_array(sqrtVars, dtype=self.float64)
         spot = spot if spot is not None else (strikes*0.+1.) # TODO: provide better "1"
         k    = strikes/spot if spot is not None else strikes
         intr = (k<self.BS_EPS) | (sqrtVars<self.EPS_VOL)
         intr = intr if mask is None else (intr|~mask)
-        logK = self.log( self.where( intr, 1., k ) )
+        logK = self.log( self.where( intr, 1., k ) ) if logK is None else logK
         vf_  = self.where( intr, 1., sqrtVars )
         d1    = (-logK / vf_) + 0.5 * vf_
         d2    = d1 - vf_
@@ -100,51 +101,7 @@ class Backbone(object):
                  
         price = self.clip( price, min=inc, max=spot )  # enforce price >= intrinsic to avoid numerical issues in sanos. In ``debug`` these get caught above.
         price = self.minimum( price, spot ) # enforce price <= spot to avoid numerical issues in sanos. In ``debug`` these get caught above.
-        return self.astype( price, dtype=out_dtype ) if high_precision else price
-
-    def geometry_sqrtVar_interpolation( self, *,
-                                     fwd_vols : Array, 
-                                     opt_lix : Array, 
-                                     opt_vweight : Array, 
-                                     opt_vextra : Array,
-                                     vol_interp : str,
-                                     dsqrtTs : Array,
-                                     dts : Array,
-                                     fwdvol_floor : float ) -> Array:
-        """
-        Compute interpolated sqrtVars for options based on forward volatilities and interpolation weights.
-        """
-        assert len(dsqrtTs.shape) == 1, f"Internal error: dsqrtTs must be 1D, found shape {dsqrtTs.shape}"
-        T    = dsqrtTs.shape[0]
-        assert fwd_vols.shape[-1] == T, f"Internal error: last dimension of fwd_vols must match length of dsqrtTs, found {fwd_vols.shape} and {dsqrtTs.shape}"
-        assert dts.shape == dsqrtTs.shape, f"Internal error: dts and dsqrtTs must have the same shape, found {dts.shape} and {dsqrtTs.shape}"
-
-        assert opt_lix.shape == opt_vweight.shape == opt_vextra.shape, f"Internal error: opt_lix, opt_vweight, and opt_vextra must have the same shape, found {opt_lix.shape}, {opt_vweight.shape}, and {opt_vextra.shape}"
-
-        head = opt_lix.shape[:-1]
-        M    = opt_lix.shape[-1]
-        hext = (1,)*len(head)
-
-        if len(fwd_vols.shape) == 1:
-            fwd_vols = fwd_vols.reshape( hext+fwd_vols.shape )
-
-        if vol_interp == "sqrt_lin_vol":
-            dsqrtTs = dsqrtTs.reshape( hext+dsqrtTs.shape )
-            totalSqrtVar = self.cumsum( (fwd_vols+fwdvol_floor) * dsqrtTs, axis=-1 )
-            assert totalSqrtVar.shape[-1] == (T,), f"Internal error: last dimension of totalSqrtVar must be {(T,)}, found {totalSqrtVar.shape}"
-
-            prev_sqrtVar = self.where( opt_lix == 0, 0., totalSqrtVar[self.clip(opt_lix-1,min=0)] )
-            opt_sqrtVars = opt_vweight * prev_sqrtVar + (1.-opt_vweight) * totalSqrtVar[opt_lix] + opt_vextra * (fwd_vols[...,-1:]+fwdvol_floor) 
-        else:
-            dts     = dts.reshape( hext+dts.shape )
-            assert vol_interp == "lin_var", f"Internal error: vol_interp must be 'sqrt_lin_vol' or 'lin_var', found '{vol_interp}'"
-            totalVar = self.cumsum( (fwd_vols+fwdvol_floor)**2 * dts, axis=-1 )
-            assert totalVar.shape == (T,), f"Internal error: totalVar must have shape {(T,)}, found {totalVar.shape}"
-
-            prev_var     = self.where( opt_lix == 0, 0., totalVar[self.clip(opt_lix-1,min=0)] )
-            opt_sqrtVars = self.sqrt( opt_vweight * prev_var + (1.-opt_vweight) * totalVar[opt_lix] + opt_vextra * ((fwd_vols[...,-1:]+fwdvol_floor)**2) )
-
-        return opt_sqrtVars
+        return self.to_array( price, dtype=out_dtype ) if high_precision else price
 
 # Numpy
 # -----
@@ -178,10 +135,14 @@ class BackboneNumpy(Backbone):
         
     def to_array( self, data, dtype : type | None = None ) -> Backbone.Array:
         """ Create an array; do not copy if data is already an array of the correct dtype """
-        return data.astype( dtype=dtype, copy=False ) if dtype is not None else data
+        return nnp.asarray(data, dtype=dtype) if dtype is not None else nnp.asarray(data)
     
     def to_numpy( self, arr : Backbone.Array ) -> nnp.ndarray:
         assert isinstance( arr, nnp.ndarray ), f"Expected a numpy array, got type {type(arr)}"
+        return arr
+
+    def stop_gradient( self , arr : Backbone.Array ) -> Backbone.Array:
+        """ Stop gradient calculation. Does NOT make a copy (NOOP for numpy)"""
         return arr
 
     def __getattr__(self, name):
@@ -194,10 +155,6 @@ class BackboneNumpy(Backbone):
         from scipy.special import ndtr  # fast N(0,1) CDF
         return ndtr( arr )
 
-    def astype( self, data : Backbone.Array, dtype : type | None = None ) -> Backbone.Array: 
-        """ Change type """
-        return nnp.asarray( data, dtype=dtype )
-    
     def verify( self, condition: bool|Backbone.Array,  message : str|callable, exception : Exception = RuntimeError  ):
         """ Verify a condition, raise an error with message if not satisfied. """
         condition = nnp.all(condition)

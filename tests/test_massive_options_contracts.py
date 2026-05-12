@@ -24,8 +24,15 @@ requires_key = pytest.mark.skipif(
     else "no stored test data in tests/stored_data/",
 )
 
+_CACHE_FILE = Path(__file__).resolve().parent / "stored_data" / "processing" / "massive" / "contracts" / "max_dte=25,max_mns=3,min_volu_k=1 9cbf6f04" / "SPY" / "contracts" / "2024-01-02.prq"
+
+requires_cached_contracts = pytest.mark.skipif(
+    not _CACHE_FILE.exists(),
+    reason="stored contract cache file not present",
+)
 
 @requires_key
+@requires_cached_contracts
 def test_filter_contracts_value_ranges() -> None:
     contracts_filter = ContractsFilter(max_dte=25, max_mns=3.0, min_opt_vol_k=1)
     df = filter_contracts("SPY", date(2024, 1, 2), contracts_filter, exclude_half_days=True)
