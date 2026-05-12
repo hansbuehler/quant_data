@@ -16,15 +16,24 @@ This directory contains Ivy DB data processing in the following files:
 
 To access this data:
 
-  1. Ensure you have an account and test it. The [Massive quickstart](https://massive.com/docs/rest/quickstart) contains some helpful information.
-  2. Set the ``MASSIVE_TOKEN`` environment variable to your API token.
-  3. Try:
+  1. Make sure you configure the python environment for **quantdata** following [the introduction](../../README.md) which means to set at 
+  least the ``QUANTDATA_ROOT`` environment variable. 
+  [See the discussion in data locations and how to set them](../../README.md#data-locations).
 
-     ```python
-      from quantdata.massive import client
+  2. Ensure you have an account and test it. The [Massive quickstart](https://massive.com/docs/rest/quickstart) contains some helpful information.
+
+  3. Set the ``MASSIVE_TOKEN`` environment variable to your API token.
+
+  4. Try the code:
+
+      ```python
+      from datetime import date
+      from quantdata.massive import MassiveClient
       client = MassiveClient()
       adj_bars = client.fetch_bars("AAPL", date(2020,1,1), date(2020,1,15), adjusted=False, timespan="second")
       print(adj_bars)
+      ```
+  5. The notebook [``notebooks/viz_trades_quotes.ipynb``](notebooks/viz_trades_quotes.ipynb) shows how to download trades and quotes by tick.
 
 ### Option Contracts
 

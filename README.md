@@ -4,7 +4,7 @@ Python environment for systematically processing financial data and building pip
 The aim of the project is to joinly develop robust data pipelines which lead to standadized benchmarks in quantitative finance.
 
 Principles:
-* [Data Handling Pricinple & Guidelines](DATA.md)
+* [Data Handling Pricinple & Guidelines](DATA-MANAGEMENT.md)
 * [Conding Guidelines](CODE.MD) [not written yet]
 * [Model Benchmarking](BENCHMARKING.md) [not written yet]
 
@@ -26,13 +26,19 @@ Once cloned, enter into the ``quant_data`` directory and install the environment
 ```bash
 python -m pip install -U pip pip-review 
 python -m pip install -U -e ".[dev]"              
+```
 
+For no-frills functionality set
+
+```bash
 export QUANTDATA_ROOT=~/quantdata_data/
 export WRDS_USERNAME=<wrds_username>
 export MASSIVE_TOKEN=<massive_token>
 ```
 
 Run e.g. ``quantdata/widb/viz_day.ipynb`` to test WRDS Option Metrics or ``quantdata/massive/viz_bars.ipynb`` for a Massive example.
+
+You can set more granular data directories, [see below](#data-locations).
 
 ## Creating a Python Environment
 
