@@ -1,4 +1,7 @@
 """
+quantdata.massive.trade_conds
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 OPRA (options) and spot (stocks) trade condition codes and bitmask flags.
 
 Sources:
@@ -9,6 +12,9 @@ Design:
 - Keep the vendor condition IDs as IntEnum values (as returned in `conditions`).
 - Provide IntFlag bitmasks for fast filtering/joins (int32).
 - pack_conditions raises on unknown codes so vendor schema changes are explicit.
+
+Use the function :func:`filter_valid_trades` in :mod:`quantdata.massive.processing` to filter out bad trades based 
+:data:`NORMAL_TRADE_EXCLUDE_FLAGS`.
 """
 
 from __future__ import annotations
@@ -16,9 +22,12 @@ from __future__ import annotations
 from enum import IntEnum, IntFlag
 from typing import Iterable
 
-
 class ConditionCode(IntEnum):
-    """Massive condition IDs (stocks 0..60-ish, options 201..248)."""
+    """
+    Massive condition IDs (stocks 0..60-ish, options 201..248).
+
+    See https://massive.com/glossary/trade-conditions and https://massive.com/glossary/conditions-indicators
+    """
 
     # ---------------------------------------------------------------------
     # Stocks trade conditions (per Massive Conditions & Indicators)
@@ -166,7 +175,6 @@ class ConditionFlag(IntFlag):
     TRADE_THRU_EXEMPT = 1 << 23
     SSR = 1 << 24
 
-
 CODE_TO_FLAG: dict[ConditionCode, ConditionFlag] = {
     # ---------------- options: cancel/late/sequence ----------------
     ConditionCode.CANCEL: ConditionFlag.CANCELLED,
@@ -249,22 +257,29 @@ CODE_TO_FLAG: dict[ConditionCode, ConditionFlag] = {
     ConditionCode.TRADE_THRU_EXEMPT: ConditionFlag.TRADE_THRU_EXEMPT,
     ConditionCode.SSR_IN_EFFECT: ConditionFlag.SSR,
 }
-
+""" Map from detailed condition codes to unified flags """
 
 BAD_TRADE_CONDITIONS = (
     ConditionFlag.CANCELLED
     | ConditionFlag.LATE
     | ConditionFlag.OUT_OF_SEQUENCE
 )
+""" Bad trade conditions: cancelled, late reporting, or out-of-sequence. These are the most common data quality issues and are often filtered out in analyses. """
 
 MICROSTRUCTURE_HARD_EXCLUDE = (
     BAD_TRADE_CONDITIONS
-    | ConditionFlag.EXTENDED_HOURS
     | ConditionFlag.COMPRESSION
     | ConditionFlag.CORRECTION
     | ConditionFlag.AS_OF
     | ConditionFlag.ERRORED
 )
+""" 
+Microstructure conditions to exclude for clean trade/quote analysis.
+These include bad trade conditions compression, corrections, as-of trades, and errored trades.
+
+We do *not* exclude  ``ConditionFlag.EXTENDED_HOURS`` here as extended hours trades can be exluded
+easily later based on their time stamp, see :func:`filter_valid_trades` in :mod:`quantdata.massive.processing`.
+"""
 
 NORMAL_TRADE_EXCLUDE_FLAGS = (
     MICROSTRUCTURE_HARD_EXCLUDE  # data quality issues (late, cancelled, corrections, etc.)
@@ -273,12 +288,15 @@ NORMAL_TRADE_EXCLUDE_FLAGS = (
     | ConditionFlag.CLOSING_PRINT  # closing prints are special print conditions, not regular trades
     | ConditionFlag.OFFICIAL_OPEN  # official open prices are reference/index, not actual trades
     | ConditionFlag.OFFICIAL_CLOSE  # official close prices are reference/index, not actual trades
-    | ConditionFlag.ODD_LOT  # odd lots are non-standard size trades
     | ConditionFlag.CONTINGENT  # contingent trades are conditional, not unconditional normal trades
     | ConditionFlag.QCT  # qualified contingent trades are special conditions
     | ConditionFlag.TRADE_THRU_EXEMPT  # exemptions indicate special trade handling
 )
+"""
+Flags for normal trade filtering: these conditions are commonly excluded when filtering for regular market trades. This includes all microstructure hard excludes plus cross trades, opening/closing prints, official open/closes, and contingent trades. 
 
+We do not exclude ``ConditionFlag.ODD_LOT`` here.
+"""
 
 def pack_conditions(codes: Iterable[int]) -> int:
     """
