@@ -643,7 +643,7 @@ class AEC(BaseModel):
         Do not store information with this label as this label is often too harsh.
         Instead, rely on the user to alter "label".
         """
-        return f"{self.__class__.__name__} {label} {self.version} [{self.config.unique_id()}|{self.sampler_config.unique_id()}]"
+        return f"{self.__class__.__name__} {label} {self.version} [{self.config.unique_id()}|{self.sampler_config.unique_data_id()}]"
 
     def forward(self, data          : dict, 
                       training      : bool = False,

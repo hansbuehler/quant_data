@@ -821,14 +821,14 @@ class SimpleSampler(BaseSampler):
 # ================================================================
 
 import click
-from quantdata.widb import cli_defaults
+from quantdata.widb import _cli_defaults
 from quantdata.biz_calendar import to_date
 
 @click.command()
 @click.argument("tickers", nargs=-1, required=True)
-@click.option("--period",nargs=2, type=click.DateTime(formats=["%Y-%m-%d"]), default=cli_defaults.period, metavar="START END", help="Period YYYY-MM-DD YYYY-MM-DD")
+@click.option("--period",nargs=2, type=click.DateTime(formats=["%Y-%m-%d"]), default=_cli_defaults.period, metavar="START END", help="Period YYYY-MM-DD YYYY-MM-DD")
 @click.option('--halfdays', is_flag=True, help="Include half days")
-@click.option('--workers', default=cli_defaults.workers, help='Number of workers', type=int)
+@click.option('--workers', default=_cli_defaults.workers, help='Number of workers', type=int)
 @click.option('--threading', is_flag=True, help="Use only threading, no multiprocessing")
 @click.option('--refresh', is_flag=True, help="Refresh data (this will only refresh the top level files)")
 @click.option('--debug', is_flag=True, help="Enable debug mode with more verbose output and checks")
