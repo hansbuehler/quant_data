@@ -2,7 +2,7 @@
 quantdata.massive.tickers.basics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Listing date and basic reference data for tickers via MassiveClient.
+Listing date and basic reference data for tickers via :class:`MassiveClient`.
 """
 
 from __future__ import annotations
@@ -24,25 +24,25 @@ data start date (e.g. a re-listed product).
 
 
 @version("0.1", dependencies=[MassiveClient.ticker_reference_data])
-def get_listing_date(ticker: str, client: MassiveClient | None = None) -> date:
+def get_listing_date(ticker: str) -> date:
     """
     Return the listing date for ``ticker``.
 
     Applies :attr:`MANUAL_LISTING_DATES` overrides and raises if the ticker is not active.
 
+    TODO: make a member of :class:`MassiveClient`.
+
     Parameters
     ----------
     ticker : str
         Ticker symbol, e.g. "AAPL".
-    client : MassiveClient | None
-        Optional pre-constructed client; a new one is created if ``None``.
 
     Returns
     -------
     date
         The later of the Massive-reported list_date and any manual override.
     """
-    client = MassiveClient() if client is None else client
+    client = MassiveClient()
     data = client.ticker_reference_data(ticker)
 
     verify(
