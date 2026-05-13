@@ -12,7 +12,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import polars as pl
-from cdxcore.subdir import SubDir, version
+from cdxcore.subdir import SubDir, version, CacheMode
 from cdxcore.uniquehash import named_unique_filename48_8
 from cdxcore.util import fmt_list
 from cdxcore.verbose import Context
@@ -208,6 +208,7 @@ def _generate_experiment_sample_set(
     experiment_scope: ExperimentScope,
     *,
     pool_config: PoolConfig = PoolConfig(),
+    override_cache_mode : CacheMode|str|None = None,
     verbose: Context = Context.all,
 ) -> dict[str, Any]:
     """
@@ -215,6 +216,23 @@ def _generate_experiment_sample_set(
 
     This main purpose of this function is to parallelize the generation across tickers and dates, and to cache the entire generated data set for fast i/o in the experiments.
     The dummy return value by this function is cached; its version control ensures that the underlying data is re-computed if necessary.
+
+    Parameters
+    ----------
+    experiment_scope : :class:`ExperimentScope`
+        Defines the experiment settings.
+    pool_config : :class:`PoolConfig
+        Configuration for the parallel pool used to generate the data. Set ``num_workers=0`` to disable all parallelism (e.g. to debug).
+    override_cache_mode : CacheMode | str | None, default ``None``
+        Allows forcing a caching mode. Useful settings:
+
+        * ``update``: forces re-generation if the immediate cache (i.e. :func:`generate_ticker_day`). Does not trigger an update of the cached raw data from Massive.
+        * ``cacheonly``: forces loading from cache, and raises an error if the cache is not available. Useful to verify that the data can be loaded from cache without triggering a re-generation.
+
+        You can trigger a global update of all data by setting the ``QUANTDATA_CACHE_MODE`` environment variable; c.f. :class:`quantdata.Environment`.
+    verbose : :class:`Context`, default ``Context.all``
+        Verbose context for logging and timing. The total time taken to generate the data is logged at the end of the generation process.
+        Set to ``Context.quiet`` to turn off all messaging.        
     """
 
     dates = experiment_scope.date_range.get_business_days()
@@ -226,15 +244,15 @@ def _generate_experiment_sample_set(
     with verbose.timer() as tme:
         pool = JCPool( pool_config.num_workers, threading=False )
 
-        def process( ticker, date, forecast_horizon_min):
-            r   = generate_ticker_day( ticker, date, forecast_horizon_min )
+        def process( ticker, date, forecast_horizon_min, override_cache_mode):
+            r   = generate_ticker_day( ticker, date, forecast_horizon_min, override_cache_mode=override_cache_mode )
             cnt = {c: len(d['time_of_day_ms']) for c, d in r.items()}
             return ticker, date, cnt
 
         total = len(tickers) * len(dates)
         cnt   = 0
         verbose.write(lambda: f"\rGenerating {total} samples for {len(tickers)} tickers and {len(dates)} days from {dates[0]} to {dates[-1]}{' excluding half days' if experiment_scope.date_range.exclude_half_days else ''}... ", end='')
-        for ticker, date, td_cnt in pool.parallel( pool.delayed(process)(ticker, date, forecast_horizon_min) for ticker in tickers for date in dates ):
+        for ticker, date, td_cnt in pool.parallel( pool.delayed(process)(ticker, date, forecast_horizon_min, override_cache_mode) for ticker in tickers for date in dates ):
             counter[ticker][date] = td_cnt
             cnt +=1 
             verbose.write(lambda: f"\rGenerated data for {ticker} for {date}. Done {cnt}/{total} ({cnt/total*100:.2f}%). So far this took {tme}... ", end='')        
@@ -269,14 +287,34 @@ class SampleID:
 class ExperimentLoader(object):
     """
     Utility class to load experiment data.
+
+    You can generate a specific sample by using :func:`get_sample` or ``[]``.
+
+    Parameters
+    ----------
+    experiment_scope : :class:`ExperimentScope`
+        Defines the experiment settings.
+    pool_config : :class:`PoolConfig
+        Configuration for the parallel pool used to generate the data. Set ``num_workers=0`` to disable all parallelism (e.g. to debug).
+    override_cache_mode : CacheMode | str | None, default ``None``
+        Allows forcing a caching mode. Useful settings:
+
+        * ``update``: forces re-generation if the immediate cache (i.e. :func:`generate_ticker_day`). Does not trigger an update of the cached raw data from Massive.
+        * ``cacheonly``: forces loading from cache, and raises an error if the cache is not available. Useful to verify that the data can be loaded from cache without triggering a re-generation.
+
+        You can trigger a global update of all data by setting the ``QUANTDATA_CACHE_MODE`` environment variable; c.f. :class:`quantdata.Environment`.
+    verbose : :class:`Context`, default ``Context.all``
+        Verbose context for logging and timing. The total time taken to generate the data is logged at the end of the generation process.
+        Set to ``Context.quiet`` to turn off all messaging.
     """
 
     def __init__(self,  experiment_scope: ExperimentScope, *,
                         pool_config: PoolConfig = PoolConfig(),
+                        override_cache_mode : CacheMode|str|None = None,
                         verbose: Context = Context.all):
         """ init """
         self.experiment_scope = experiment_scope
-        counters = _generate_experiment_sample_set(experiment_scope, pool_config=pool_config, verbose=verbose)
+        counters = _generate_experiment_sample_set(experiment_scope, pool_config=pool_config, override_cache_mode=override_cache_mode, verbose=verbose)
 
         self._samples : dict[SampleID, dict[str, int]]= {} # 
         for ticker in sorted(experiment_scope.tickers):
