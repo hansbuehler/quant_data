@@ -7,10 +7,41 @@ import jax.numpy as jnp
 import numpy as np
 import polars as pl
 import pytz
-import utils
 from cdxcore.bs import bs as _cdx_bs
+from scipy.stats import norm as _norm
 
+import personal.shared_functions.utils as utils
 from quantdata.massive.taq import TAQMatchConfig, match_taq
+
+
+def _bs_price_from_iv(
+    F: np.ndarray,
+    K: np.ndarray,
+    T: np.ndarray,
+    sigma: np.ndarray,
+    is_call: np.ndarray,
+) -> np.ndarray:
+    """Undiscounted Black-Scholes price: C = F·N(d1) - K·N(d2)."""
+    sqrtT = np.sqrt(np.maximum(T, 0.0))
+    valid = (
+        np.isfinite(sigma)
+        & (sigma > 0)
+        & np.isfinite(F)
+        & (F > 0)
+        & np.isfinite(K)
+        & (K > 0)
+        & (sqrtT > 0)
+    )
+    price = np.full(len(F), np.nan)
+    if valid.any():
+        sv = sigma[valid]
+        sv_sqrtT = sv * sqrtT[valid]
+        d1 = (np.log(F[valid] / K[valid]) + 0.5 * sv**2 * T[valid]) / sv_sqrtT
+        d2 = d1 - sv_sqrtT
+        call_p = F[valid] * _norm.cdf(d1) - K[valid] * _norm.cdf(d2)
+        put_p = K[valid] * _norm.cdf(-d2) - F[valid] * _norm.cdf(-d1)
+        price[valid] = np.where(is_call[valid], call_p, put_p)
+    return price
 
 
 def _add_spot_T(
@@ -32,9 +63,13 @@ def _add_spot_T(
         )
     )
     if forward_ts is not None:
-        result = result.join_asof(
-            forward_ts.sort("ts_ns"), on="ts_ns", strategy="backward"
-        ).with_columns(pl.col("forward").fill_null(strategy="forward"))
+        result = (
+            result.join_asof(forward_ts.sort("ts_ns"), on="ts_ns", strategy="backward")
+            .with_columns(pl.col("forward").fill_null(strategy="forward"))
+            .with_columns(pl.col("forward").fill_null(pl.col("spot")))
+        )
+        if "discount_factor" in forward_ts.columns:
+            result = result.with_columns(pl.col("discount_factor").fill_null(strategy="forward"))
     return result
 
 
@@ -199,9 +234,14 @@ def build_implied_forward(
     raw_puts: dict[float, pl.DataFrame],
     spy_ts: pl.DataFrame,
     max_leg_staleness_s: float = 60.0,
+    simple: bool = True,
 ) -> pl.DataFrame:
     """
     Estimate the true implied forward F from put-call parity, with dynamic ATM selection.
+
+    When simple=True, skips the put-call parity estimation entirely and returns
+    forward = spot with discount_factor = 1.0.  This is more robust when the
+    estimation noise dominates the true carry signal (e.g. same-day SPY options).
 
     For each overlapping strike K, builds a Δ(K, t) = C_mid(t) - P_mid(t) series
     (staleness-filtered). All series plus the SPY spot are joined onto a common spine.
@@ -220,6 +260,13 @@ def build_implied_forward(
 
     `spy_ts` must have columns [ts_ns, spot].
     """
+    if simple:
+        return (
+            spy_ts.select(["ts_ns", "spot"])
+            .rename({"spot": "forward"})
+            .with_columns(pl.lit(1.0).alias("discount_factor"))
+        )
+
     max_stale_ns = int(max_leg_staleness_s * 1e9)
     overlapping = sorted(set(raw_calls) & set(raw_puts))
 
@@ -257,7 +304,7 @@ def build_implied_forward(
             .unique()
             .sort("ts_ns")
         )
-        col = f"delta_{int(k)}"
+        col = f"delta_{round(k * 100)}"
         return (
             spine.join_asof(c, left_on="ts_ns", right_on="c_ts", strategy="backward")
             .join_asof(p, left_on="ts_ns", right_on="p_ts", strategy="backward")
@@ -273,7 +320,7 @@ def build_implied_forward(
 
     # Build per-strike Δ series and join onto a common spine with SPY spot
     delta_dfs = {k: _build_delta(k) for k in overlapping}
-    delta_cols = [f"delta_{int(k)}" for k in overlapping]
+    delta_cols = [f"delta_{round(k * 100)}" for k in overlapping]
 
     spine = (
         pl.concat([df.select("ts_ns") for df in delta_dfs.values()] + [spy_ts.select("ts_ns")])
@@ -285,38 +332,93 @@ def build_implied_forward(
     for k, df in delta_dfs.items():
         wide = wide.join_asof(df, on="ts_ns", strategy="backward")
 
-    # At each tick: pick the two nearest-ATM valid strikes and solve for F
-    def _pick_forward(row: dict) -> float | None:
-        spot = row["spot"]
-        if spot is None:
-            return None
-        valid = [
-            (k, row[f"delta_{int(k)}"]) for k in overlapping if row[f"delta_{int(k)}"] is not None
-        ]
-        if not valid:
-            return None
-        if len(valid) == 1:
-            k, d = valid[0]
-            f = k + d  # undiscounted single-strike fallback
-            return f if f > 0 else None
-        valid.sort(key=lambda x: abs(x[0] - spot))
-        (ka, da), (kb, db) = valid[0], valid[1]
-        k1, d1, k2, d2 = (ka, da, kb, db) if ka < kb else (kb, db, ka, da)
-        e_rT = (d1 - d2) / (k2 - k1)
-        if e_rT <= 0:
-            return None
-        f = k1 + d1 / e_rT
-        return f if f > 0 else None
+    # Vectorized 2-strike solver:
+    # 1. find the 2 valid strikes nearest to spot
+    # 2. solve  e^{-rT} = (Δ1 - Δ2) / (K2 - K1),  F = K1 + Δ1 / e^{-rT}
+    ks = list(overlapping)
+    col_k = lambda k: f"delta_{round(k * 100)}"
+    is_valid = lambda k: pl.col(col_k(k)).is_not_null()
+    abs_dist = lambda k: (pl.lit(float(k)) - pl.col("spot")).abs()
 
     return (
         wide.filter(pl.col("spot").is_not_null())
+        # nearest valid strike to spot
         .with_columns(
-            pl.struct(["spot"] + delta_cols)
-            .map_elements(_pick_forward, return_dtype=pl.Float64)
-            .alias("forward")
+            pl.min_horizontal(
+                [pl.when(is_valid(k)).then(abs_dist(k)).otherwise(None) for k in ks]
+            ).alias("_dist1"),
+        )
+        .with_columns(
+            pl.max_horizontal(
+                [
+                    pl.when(is_valid(k) & (abs_dist(k) == pl.col("_dist1")))
+                    .then(pl.lit(float(k)))
+                    .otherwise(None)
+                    for k in ks
+                ]
+            ).alias("_ka"),
+        )
+        # second nearest valid strike (excluding _ka)
+        .with_columns(
+            pl.min_horizontal(
+                [
+                    pl.when(is_valid(k) & (pl.lit(float(k)) != pl.col("_ka")))
+                    .then(abs_dist(k))
+                    .otherwise(None)
+                    for k in ks
+                ]
+            ).alias("_dist2"),
+        )
+        .with_columns(
+            pl.max_horizontal(
+                [
+                    pl.when(
+                        is_valid(k)
+                        & (pl.lit(float(k)) != pl.col("_ka"))
+                        & (abs_dist(k) == pl.col("_dist2"))
+                    )
+                    .then(pl.lit(float(k)))
+                    .otherwise(None)
+                    for k in ks
+                ]
+            ).alias("_kb"),
+        )
+        # order as k1 < k2
+        .with_columns(
+            pl.min_horizontal(["_ka", "_kb"]).alias("_k1"),
+            pl.max_horizontal(["_ka", "_kb"]).alias("_k2"),
+        )
+        # look up deltas for k1 and k2
+        .with_columns(
+            pl.coalesce(
+                [pl.when(pl.col("_k1") == float(k)).then(pl.col(col_k(k))) for k in ks]
+            ).alias("_d1"),
+            pl.coalesce(
+                [pl.when(pl.col("_k2") == float(k)).then(pl.col(col_k(k))) for k in ks]
+            ).alias("_d2"),
+        )
+        # solve 2×2 system
+        .with_columns(
+            pl.when(pl.col("_k2") > pl.col("_k1"))
+            .then((pl.col("_d1") - pl.col("_d2")) / (pl.col("_k2") - pl.col("_k1")))
+            .otherwise(None)
+            .alias("_e_rT"),
+        )
+        .with_columns(
+            pl.when(pl.col("_e_rT") > 0)
+            .then(pl.col("_k1") + pl.col("_d1") / pl.col("_e_rT"))
+            .otherwise(None)
+            .alias("_fwd"),
+            pl.when(pl.col("_e_rT") > 0)
+            .then(pl.col("_e_rT"))
+            .otherwise(None)
+            .alias("discount_factor"),
+        )
+        .with_columns(
+            pl.when(pl.col("_fwd") > 0).then(pl.col("_fwd")).otherwise(None).alias("forward"),
         )
         .filter(pl.col("forward").is_not_null())
-        .select(["ts_ns", "forward"])
+        .select(["ts_ns", "forward", "discount_factor"])
     )
 
 
@@ -390,15 +492,16 @@ def build_iv_surface(
                 continue
 
             _bad_quotes = df_quotes.filter(_bad_expr)
-            if _bad_quotes.height >= 10:
-                _labels = [
-                    f"{lbl}×{_bad_quotes.filter(expr).height}"
-                    for lbl, expr in _bad_checks
-                    if _bad_quotes.filter(expr).height > 0
-                ]
-                print(f"Skipping {ticker}: {_bad_quotes.height} bad quotes ({', '.join(_labels)})")
-                continue
-            elif _bad_quotes.height > 0:
+            # if _bad_quotes.height >= 10:
+            #     _labels = [
+            #         f"{lbl}×{_bad_quotes.filter(expr).height}"
+            #         for lbl, expr in _bad_checks
+            #         if _bad_quotes.filter(expr).height > 0
+            #     ]
+            #     print(f"Skipping {ticker}: {_bad_quotes.height} bad quotes ({', '.join(_labels)})")
+            #     continue
+            # elif _bad_quotes.height > 0:
+            if _bad_quotes.height > 0:
                 _labels = [
                     f"{lbl}×{len(ts)} (first={ts[0]})"
                     for lbl, expr in _bad_checks
@@ -437,18 +540,24 @@ def build_iv_surface(
         if overlapping:
             try:
                 df_fwd = build_implied_forward(calls_at, puts_at, spy_ts=spy_ts)
+                nn_df = df_fwd["discount_factor"].is_not_null().sum()
                 print(
-                    f"Expiry {exp.date()}: implied forward from {len(overlapping)} overlapping strike(s), dynamic ATM selection"
+                    f"Expiry {exp.date()}: implied forward from {len(overlapping)} overlapping "
+                    f"strike(s), {nn_df}/{df_fwd.shape[0]} rows with non-null discount_factor"
                 )
                 forward_by_expiry[exp] = df_fwd
             except Exception as e:
                 print(
                     f"Expiry {exp.date()}: forward estimation failed ({e}), falling back to SPY spot"
                 )
-                forward_by_expiry[exp] = spy_ts.rename({"spot": "forward"})
+                forward_by_expiry[exp] = spy_ts.rename({"spot": "forward"}).with_columns(
+                    pl.lit(None, dtype=pl.Float64).alias("discount_factor")
+                )
         else:
             print(f"Expiry {exp.date()}: no overlapping strikes, using SPY spot as forward")
-            forward_by_expiry[exp] = spy_ts.rename({"spot": "forward"})
+            forward_by_expiry[exp] = spy_ts.rename({"spot": "forward"}).with_columns(
+                pl.lit(None, dtype=pl.Float64).alias("discount_factor")
+            )
 
     # ── Tag frames with spot, T, and forward ─────────────────────────────────
     tagged_quote_frames = []
@@ -484,8 +593,20 @@ def build_iv_surface(
 
             meta_cols = [pl.lit(strike).alias("strike"), pl.lit(is_call).alias("is_call")]
 
+            fwd_col = "forward" if "forward" in df_iv_quotes_r.columns else "spot"
+            K_sc = np.full(len(df_iv_quotes_r), strike)
+            ic_sc = np.full(len(df_iv_quotes_r), is_call, dtype=bool)
+            kalman_prices_q = _bs_price_from_iv(
+                df_iv_quotes_r[fwd_col].to_numpy().astype(float),
+                K_sc,
+                df_iv_quotes_r["T"].to_numpy().astype(float),
+                df_iv_quotes_r["kalman_iv"].to_numpy().astype(float),
+                ic_sc,
+            )
+
+            extra_cols = [c for c in ["forward", "discount_factor"] if c in df_iv_quotes_r.columns]
             quote_result_frames.append(
-                df_iv_quotes_r.select(["ts_ns"] + iv_cols)
+                df_iv_quotes_r.select(["ts_ns"] + iv_cols + ["bid_price", "ask_price"] + extra_cols)
                 .with_columns(
                     [
                         pl.when((pl.col(c) > max_iv) | (pl.col(c) < 0))
@@ -495,12 +616,33 @@ def build_iv_surface(
                         for c in iv_cols
                     ]
                 )
+                .with_columns(pl.Series("kalman_price", kalman_prices_q.tolist()))
                 .with_columns(meta_cols)
+            )
+
+            fwd_col_t = "forward" if "forward" in df_iv_trades_r.columns else "spot"
+            K_t = np.full(len(df_iv_trades_r), strike)
+            ic_t = np.full(len(df_iv_trades_r), is_call, dtype=bool)
+            kalman_prices_t = _bs_price_from_iv(
+                df_iv_trades_r[fwd_col_t].to_numpy().astype(float),
+                K_t,
+                df_iv_trades_r["T"].to_numpy().astype(float),
+                df_iv_trades_r["kalman_matched"].to_numpy().astype(float),
+                ic_t,
             )
 
             trade_result_frames.append(
                 df_iv_trades_r.select(
-                    ["ts_ns", "observed_iv", "bid_iv", "ask_iv", "kalman_matched", "trade_residual"]
+                    [
+                        "ts_ns",
+                        "observed_iv",
+                        "bid_iv",
+                        "ask_iv",
+                        "bid_price",
+                        "ask_price",
+                        "kalman_matched",
+                        "trade_residual",
+                    ]
                 )
                 .with_columns(
                     pl.when((pl.col("observed_iv") > max_iv) | (pl.col("observed_iv") < 0))
@@ -508,6 +650,7 @@ def build_iv_surface(
                     .otherwise(pl.col("observed_iv"))
                     .alias("observed_iv")
                 )
+                .with_columns(pl.Series("kalman_price", kalman_prices_t.tolist()))
                 .with_columns(meta_cols)
             )
 
