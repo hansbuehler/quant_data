@@ -1,25 +1,6 @@
 """
-Default experiment setup
-"""
-"""
-%load_ext autoreload
-%autoreload 1
-
-%aimport quantdata
-%aimport quantdata.biz_calendar
-%aimport quantdata.widb
-%aimport quantdata.widb.client
-%aimport quantdata.widb.day
-%aimport quantdata.widb.sampler
-%aimport quantdata.dysanos
-%aimport quantdata.utils.backbone
-%aimport quantdata.torch
-%aimport quantdata.torch.bbtorch
-%aimport quantdata.torch.ffw
-%aimport quantdata.dysanos.simple
-%aimport quantdata.dysanos.simple.sampler
-%aimport quantdata.dysanos.simple.model
-%aimport quantdata.dysanos.simple.trainer
+Dysanos Simple AutoEncoder Benchmark
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 """
 
 import gc
@@ -41,9 +22,9 @@ def load_data(tickers : list[str] = ['SPX','NDX','RUT'], reduced : bool = False 
                 date_range = DateRange(start=date(2015, 1, 1) if not reduced else date(2025, 4, 1), end=date(2025, 7, 1)),
                 raw_day_filter = RawDayFilter(),
                 expiry_filter = ExpiryFilter(),
-                mk_arb_free = MkArbFree("expiry"),
+                mk_arb_free = MkArbFree("surface"),
                 timeseries_config = TimeseriesConfig(),
-                sampling_config = SamplingConfig()
+                sampling_config = SamplingConfig(num_steps = 25 if not reduced else 10)
         )
         pool_config = PoolConfig(num_workers=4, threading=False) # no parallel processing for testing
         verbose = Context.all

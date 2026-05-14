@@ -110,6 +110,7 @@ class TestGridSanos:
             eps         = Eps()
             fitter      = Fitter( geometry = grid, eps = eps, debug=True, max_error = None, mid_fit_weight = 0.1 )
             sanos       = GridSanos( geometry = grid, bb = BackboneNumpy() )
+            fit_mask    = r.tte_y <= grid.xexpiries[-1] + fitter.max_expiry_ext
 
             # fit to market data
             dlvsqs, fit_prices, densities = \
@@ -123,26 +124,29 @@ class TestGridSanos:
                         return_only_dlvsqs = False,
                         verbose      = Context.all ) 
             assert fit_prices.shape == r.strikes.shape, f"Expected fit_prices to have shape {r.strikes.shape}, got {fit_prices.shape}"
+            assert np.all(fit_prices[~fit_mask] == 0.0), "Expected ignored out-of-horizon options to keep zero fitted prices"
             fit_vols  = bs.implied(r.strikes, fit_prices, sqrtT = np.sqrt(r.tte_y) )
 
             # reprice with fitted density -> price
             re_prices = sanos.price(  fwd_vols=FWD_VOLS, 
                                       densities=densities,
                                       opt_strikes  = r.strikes,
-                                      opt_tte      = r.tte_y
+                                      opt_tte      = r.tte_y,
+                                      opt_mask     = fit_mask,
                                 )
             re_vols  = bs.implied(r.strikes, re_prices, sqrtT = np.sqrt(r.tte_y) )
-            assert np.max( np.abs( re_vols - fit_vols ) ) < 1e-4, f"Repriced vols should match fit vols, max abs diff {np.max( np.abs( re_vols - fit_vols ) )}"
+            assert np.max( np.abs( re_vols[fit_mask] - fit_vols[fit_mask] ) ) < 1e-4, f"Repriced vols should match fit vols on fitted options, max abs diff {np.max( np.abs( re_vols[fit_mask] - fit_vols[fit_mask] ) )}"
 
             # rerprice with fitted dlvsq -> densitity -> price
             test_dens_from_dlv  = sanos.densities( dlvsqs )
             dlv_prices = sanos.price( fwd_vols=FWD_VOLS, 
                                     densities=test_dens_from_dlv,
                                     opt_strikes  = r.strikes,
-                                    opt_tte      = r.tte_y
+                                    opt_tte      = r.tte_y,
+                                    opt_mask     = fit_mask,
                                 )
             dlv_vols  = bs.implied(r.strikes, dlv_prices, sqrtT = np.sqrt(r.tte_y) )
-            assert np.max( np.abs( dlv_vols - fit_vols ) ) < 0.01, f"DLV vols should match fit vols, max abs diff {np.max( np.abs( dlv_vols - fit_vols ) )}"
+            assert np.max( np.abs( dlv_vols[fit_mask] - fit_vols[fit_mask] ) ) < 0.01, f"DLV vols should match fit vols on fitted options, max abs diff {np.max( np.abs( dlv_vols[fit_mask] - fit_vols[fit_mask] ) )}"
 
             # DLVs, manual
             # ------------
@@ -203,7 +207,8 @@ class TestGridSanos:
                                       fwd_vols=FWD_VOLS,
                                       densities=test_dens_from_manual_dlv,
                                       opt_strikes  = r.strikes,
-                                      opt_tte      = r.tte_y
+                              opt_tte      = r.tte_y,
+                              opt_mask     = fit_mask,
                                 )
             assert np.max( np.abs( prices_man_dlv - dlv_prices ) ) < 1e-8, f"Manual DLV prices should match prices from fitted DLV^2, max abs diff {np.max( np.abs( prices_man_dlv - dlv_prices ) )}"
 

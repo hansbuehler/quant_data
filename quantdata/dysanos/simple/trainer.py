@@ -8,7 +8,7 @@ import logging
 import math
 import warnings
 
-from quantdata.dysanos.simple import locations_simple
+from quantdata.dysanos.simple import _locations_simple
 from quantdata.torch import MetricTacker, BaseModel, BaseSampler, lazy_verify
 from dataclasses import dataclass, asdict
 from cdxcore.err import verify_inp, verify 
@@ -47,7 +47,7 @@ class TrainConfig:
     chkpnt_epochs   : int = 10      #: After how many epochs to write a checkpoint
     chkpnt_minutes  : float = 1.    #: After how many minutes to write a checkpoint
     experiment_group: str = ""      #: Subdirectory for check points
-    experiment_root : str|SubDir|None = None #: The root training directory, overwriting the system default ``locations_simple.experiments``.
+    experiment_root : str|SubDir|None = None #: The root training directory, overwriting the system default ``_locations_simple.experiments``.
 
     def __post_init__(self):
         verify_inp(self.trn_batch_size > 0, lambda : f"'trn_batch_size' must be a positive integer; found {self.trn_batch_size}")
@@ -105,7 +105,7 @@ class TrainConfig:
         Directory: :class:`cdxcore.subdir.SubDir`
             Directory object for file i/o.
         """
-        experiment = SubDir(locations_simple.experiments if self.experiment_root is None else self.experiment_root,
+        experiment = SubDir(_locations_simple.experiments if self.experiment_root is None else self.experiment_root,
                                   ext="pt", fmt=SubDir.PICKLE)
         experiment = experiment(unique_data_id)
         experiment = experiment(self.experiment_group) if self.experiment_group != "" else experiment

@@ -74,6 +74,10 @@ class OpenGeometry(GeometryBase):
         return False
 
     @property
+    def size(self) -> int:
+        return sum([ len(strikes_t) for strikes_t in self.xstrikes ])
+
+    @property
     def strikes(self) -> list[np.ndarray]:
         """Return interior strikes for non-zero expiries."""
         return [strikes_t[1:-1] for strikes_t in self.xstrikes[1:]]

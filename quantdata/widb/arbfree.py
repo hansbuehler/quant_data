@@ -23,6 +23,13 @@ Example
     >>> df = mk_arb_free_day("SPX", dt.date(2023, 1, 15), mk_arb_free=mk_arb_free_config)
     >>> print(df[["pure_strike", "mask_arb_free", "pure_fit1_price", "pure_fit1_delta"]])
 
+This file's ``main`` can also be used to generate data manually:
+
+```bash
+
+    python -m arbfree SPX RUT NDX --period 2020-05-01 2022-01-31
+```
+
 """
 from __future__ import annotations
 
@@ -128,6 +135,9 @@ def mk_arb_free_day(
     Result: :class:`pandas.DataFrame` or (:class:`pandas.DataFrame`, dict|None) if ``return_arb_free`` is True.
         See above.
     """
+    verify_inp( mk_arb_free.no_arb_mode in ['expiry', 'surface'], lambda: f"{ticker} {d}: arb_free_day requires mk_arb_free.no_arb_mode='surface' for full fit outputs; found no_arb_mode '{mk_arb_free.no_arb_mode}'." )
+    mode_surface = mk_arb_free.no_arb_mode == 'surface'
+    expected_schema = SCHEMA_ARB_FREE_DAY_SURFACE if mode_surface else SCHEMA_ARB_FREE_DAY_EXPIRY
 
     data = enriched_data  if enriched_data is not None else enrich_day(
                             ticker,
@@ -138,11 +148,6 @@ def mk_arb_free_day(
                             raise_if_bad=raise_if_bad,
                             verbose=verbose,
                         )
-
-    verify_inp( mk_arb_free.no_arb_mode in ['expiry', 'surface'], lambda: f"{ticker} {d}: arb_free_day requires mk_arb_free.no_arb_mode='surface' for full fit outputs; found no_arb_mode '{mk_arb_free.no_arb_mode}'." )
-
-    mode_surface = mk_arb_free.no_arb_mode == 'surface'
-    expected_schema = SCHEMA_ARB_FREE_DAY_SURFACE if mode_surface else SCHEMA_ARB_FREE_DAY_EXPIRY
 
     if data.empty:
         if not return_arb_free_densities:

@@ -40,6 +40,13 @@ Usage Example
     >>> # Access results
     >>> print(enriched_data[['strike', 'fwd', 'ask_vol', 'bid_vol', 'pure_ask_delta']].head())
 
+This file's ``main`` can also be used to generate data manually:
+
+```bash
+
+    python -m day SPX RUT NDX --period 2020-05-01 2022-01-31
+```
+
 """
 from __future__ import annotations
 
