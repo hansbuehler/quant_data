@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import datetime as dt
 import math
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -84,7 +85,7 @@ SCHEMA_ARB_FREE_DAY_SURFACE = SCHEMA_ARB_FREE_DAY_EXPIRY | {
 
 def _uid(ticker, d, raw_day_filter, expiry_filter, mk_arb_free) -> str:
     return (
-        f"{named_unique_filename48_8(f'arbfree {str(expiry_filter)},{str(raw_day_filter)},{str(mk_arb_free)}', expiry_filter, raw_day_filter, mk_arb_free)}"
+        f"arbfree/{named_unique_filename48_8(f'{str(expiry_filter)},{str(raw_day_filter)},{str(mk_arb_free)}', expiry_filter, raw_day_filter, mk_arb_free)}"
         f"/{ticker}/{fmt_date(d)}"
     )
 
@@ -92,7 +93,7 @@ def _uid(ticker, d, raw_day_filter, expiry_filter, mk_arb_free) -> str:
     "0.6",
     dependencies=[enrich_day, MkArbFree],
     uid=_uid,
-    exclude_args=["verbose", "enriched_data", "raise_if_bad", "refresh_cache"],
+    exclude_args=["verbose", "enriched_data", "raise_if_bad_day", "refresh_cache"],
 )
 def mk_arb_free_day(
     ticker: str,
@@ -101,12 +102,12 @@ def mk_arb_free_day(
     *,
     raw_day_filter: RawDayFilter = RawDayFilter(),
     expiry_filter: ExpiryFilter = ExpiryFilter(),
-    mk_arb_free: MkArbFree = MkArbFree(),
+    mk_arb_free: MkArbFree|None = MkArbFree(),
     override_cache_mode: CacheMode | None = None,
-    raise_if_bad: bool = True,
+    raise_if_bad_day: bool = True,
     return_arb_free_densities : bool = False,
     warn_if_arb : bool = True,
-    verbose: Context = Context.quiet,
+    verbose: Context = Context.all,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict]:
     """
     Generate an arbitrage-free fit for a single enriched WIDB day.
@@ -128,26 +129,40 @@ def mk_arb_free_day(
       
       - ``pure_fitX_price``: surface arbitrage-free closest price to ``fit1`` prices. Up to machine precision, existence of a ``fitX`` within bid/ask is equivalent to the market being free of arbitrage.
       - ``pure_fitX_delta``, ``pure_fitX_gamma``, ``pure_fitX_vega``, ``pure_fitX_theta``, ``pure_fitX_dk``: Greeks corresponding to ``pure_fitX_price``.
-
     
     Returns
     -------
-    Result: :class:`pandas.DataFrame` or (:class:`pandas.DataFrame`, dict|None) if ``return_arb_free`` is True.
-        See above.
+    Result: :class:`pandas.DataFrame`|None or (:class:`pandas.DataFrame`|None, dict|None) if ``return_arb_free`` is True.`
+        This function may return None if ``raise_if_bad_day`` is False and the day is deemed bad as defined by :data:`bad.BAD.DAYS_ALL`.
     """
     verify_inp( mk_arb_free.no_arb_mode in ['expiry', 'surface'], lambda: f"{ticker} {d}: arb_free_day requires mk_arb_free.no_arb_mode='surface' for full fit outputs; found no_arb_mode '{mk_arb_free.no_arb_mode}'." )
     mode_surface = mk_arb_free.no_arb_mode == 'surface'
     expected_schema = SCHEMA_ARB_FREE_DAY_SURFACE if mode_surface else SCHEMA_ARB_FREE_DAY_EXPIRY
 
-    data = enriched_data  if enriched_data is not None else enrich_day(
-                            ticker,
-                            d,
-                            raw_day_filter=raw_day_filter,
-                            expiry_filter=expiry_filter,
-                            override_cache_mode=override_cache_mode,
-                            raise_if_bad=raise_if_bad,
-                            verbose=verbose,
-                        )
+    if not enriched_data is None:
+        verify_inp( isinstance(enriched_data, pd.DataFrame), f"{ticker} {d}: expected 'enriched_data' to be a pandas DataFrame or None, got {type(enriched_data)}.")
+        data = enriched_data
+    else:
+        data = enrich_day(
+                    ticker,
+                    d,
+                    raw_day_filter=raw_day_filter,
+                    expiry_filter=expiry_filter,
+                    override_cache_mode=override_cache_mode,
+                    raise_if_bad_day=raise_if_bad_day,
+                    verbose=verbose,
+                )
+        if data is None:
+            assert raise_if_bad_day, "Internal error: empty data should only be returned when 'raise_if_bad_day' is False. Please check the enriched day data for details."
+            if not return_arb_free_densities:
+                return None
+            return None, None
+        del enriched_data
+
+    if mk_arb_free is None:
+        if not return_arb_free_densities:
+            return data
+        return data, None
 
     if data.empty:
         if not return_arb_free_densities:
@@ -161,6 +176,8 @@ def mk_arb_free_day(
     expiry_ids        = data["expiry_id"].to_numpy()
     unique_expiry_ids = np.unique(expiry_ids)
     grouped_frames: list[pd.DataFrame] = []
+    expiries_d : list[dt.date] = []
+    is_ams : list[bool] = []
     expiries: list[float] = []
     strikes: list[np.ndarray] = []
     bids: list[np.ndarray] = []
@@ -172,9 +189,19 @@ def mk_arb_free_day(
         group = data.loc[expiry_ids == expiry_id].sort_values("pure_strike", kind="stable").reset_index(drop=True)
         grouped_frames.append(group)
         expiries.append(float(group["tte_y"].iloc[0]))
+        expiries_d.append(group["expiry"].iloc[0])
+        is_ams.append(group["is_am"].iloc[0])
         strikes.append(group["pure_strike"].to_numpy(dtype=np.float64))
         bids.append(group["pure_bid_price"].to_numpy(dtype=np.float64))
         asks.append(group["pure_ask_price"].to_numpy(dtype=np.float64))
+
+    assert np.min( np.diff(unique_expiry_ids) ) > 0, f"{ticker} {d}: expiry ids are expected to be strictly increasing. Found non-increasing expiry ids: {fmt_list(unique_expiry_ids)}."
+    if np.min( np.diff(expiries) ) <= 0:
+        text = ""
+        for xid, expiry, date, is_am, ks in zip(unique_expiry_ids, expiries, expiries_d, is_ams, strikes):
+            text += f"Expiry ID {xid} has expiry {expiry} on date {date} (AM: {is_am}) with {len(ks)} strikes\n"
+        warnings.warn("*** Error:\n"+text)
+        assert np.min( np.diff(expiries) ) > 0, f"{ticker} {d}: expiries are expected to be strictly increasing."
 
     arb_result = mk_arb_free(
         expiries=np.asarray(expiries, dtype=np.float64),
@@ -297,7 +324,7 @@ from quantdata.widb import _cli_defaults
     "--no-arb-mode",
     "arb_mode",
     type=click.Choice(["surface", "expiry"], case_sensitive=False),
-    default="expiry",
+    default="surface",
     show_default=True,
 )
 def main(tickers : list[str],
@@ -314,9 +341,10 @@ def main(tickers : list[str],
     verify_inp( len(tickers) > 0, "At least one ticker must be specified")
     verify_inp( period is not None and len(period) == 2, "A start and end date must be specified")
 
-    from quantdata.widb.timeseries import build_time_series, TimeseriesConfig
+    from quantdata.widb.timeseries import build_time_series, OptionsFilter
     from quantdata.biz_calendar import DateRange, to_date
     from quantdata.pool import PoolConfig
+    from cdxcore.jcpool import JCPool
 
     start, end         = period
     date_range         = DateRange(start=to_date(start), end=to_date(end), exclude_half_days=not halfdays)
@@ -324,26 +352,31 @@ def main(tickers : list[str],
     raw_day_filter     = RawDayFilter()   
     expiry_filter      = ExpiryFilter()
     mk_arb_free        = MkArbFree(no_arb_mode=arb_mode)
-    timeseries_config  = TimeseriesConfig()
 
     dates              = date_range.get_business_days()
 
     verbose = Context.all
-    verbose.write(lambda: f"Enriching data for tickers {fmt_list(tickers)} from {fmt_date(start)} to {fmt_date(end)} {'excluding' if date_range.exclude_half_days else 'including'} half days. Total business days: {len(dates)}.")
-    verbose.report(1,lambda: f"Timeseries Config: {timeseries_config}")
+    verbose.write(lambda: f"Computing Arb-Free fits for tickers {fmt_list(tickers)} from {fmt_date(start)} to {fmt_date(end)} {'excluding' if date_range.exclude_half_days else 'including'} half days. Total business days: {len(dates)}.")
     verbose.report(1,lambda: f"Arb-free config: {mk_arb_free}")
     verbose.report(1,lambda: f"Raw Day Filter: {raw_day_filter}")
     verbose.report(1,lambda: f"Expiry filter: {expiry_filter}")
     verbose.report(1,lambda: f"Pool config: {pool_config}")
     
-    if arb_mode=="surface":
-        verbose.report(1, "*** Warning: Arb-Mode 'surface' is very slow. ***")
+    pool = JCPool(num_workers=pool_config.num_workers, threading=pool_config.threading)
 
     for it, ticker in enumerate(tickers):  
-        verbose.report(1,lambda: f"\rProcessing ticker {it+1}/{len(tickers)} {ticker} from {fmt_date(date_range.start)} to {fmt_date(date_range.end)}.")
-        build_time_series(ticker, date_range, include_fields=None, exclude_fields=None, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, mk_arb_free=mk_arb_free,
-                     warn_if_arb=not arb_warnings_off,proceed_upon_bad_data=proceed,
-                     timeseries_config=timeseries_config, pool_config=pool_config, override_cache_mode="update" if refresh else None, verbose=verbose(2) )
+        def processing( *, ticker, d, mk_arb_free, raw_day_filter, expiry_filter, refresh ):
+            mk_arb_free_day( ticker=ticker, d=d, mk_arb_free=mk_arb_free, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, override_cache_mode="update" if refresh else "on", raise_if_bad_day=False, verbose=Context.quiet, cache_generate_only=True )
+            return 0
+
+        with verbose.write_t(lambda: f"\rProcessing ticker {it+1}/{len(tickers)} {ticker} from {fmt_date(date_range.start)} to {fmt_date(date_range.end)}:", end='') as tme:
+            cnt = 0
+            for d, _ in pool.parallel( { d: pool.delayed(processing)(ticker=ticker, d=d, mk_arb_free=mk_arb_free, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, refresh=refresh) for d in dates } ):
+                cnt += 1
+                if tme.interval_test(1.):
+                    verbose.write(f"\rProcessing ticker {it+1}/{len(tickers)} '{ticker}' date {cnt}/{len(dates)} {fmt_date(d)}. So far this took {tme}...", end='')
+            verbose.write(f"\rProcessed ticker {it+1}/{len(tickers)} '{ticker}' for all {len(dates)} dates. This took {tme}.")
+
     verbose.write(f"All {len(tickers)} tickers processed.")
 
 if __name__ == "__main__":

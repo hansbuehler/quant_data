@@ -87,10 +87,10 @@ def verify_schema(
 
     if len(missing) > 0:
         if len(extra) > 0:
-            raise ValueError( f"{real_header()} is missing columns {fmt_list(missing)} and has extra columns {fmt_list(extra)}.")
-        raise ValueError( f"{real_header()} is missing columns {fmt_list(missing)}.")
+            raise ValueError( f"{real_header()}is missing columns: {fmt_list(missing)} and has extra columns: {fmt_list(extra)}.")
+        raise ValueError( f"{real_header()}is missing columns {fmt_list(missing)}.")
     if len(extra) > 0 and not allow_extra_columns:
-        raise ValueError( f"{real_header()} has extra columns {fmt_list(extra)}.")
+        raise ValueError( f"{real_header()}has extra columns {fmt_list(extra)}.")
         
     dtype_errors: list[str] = []
     for col, expected_dtype_raw in schema.items():

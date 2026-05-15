@@ -115,10 +115,15 @@ SCHEMA_RAW_DAY = {
 RAW_PER_DAY_FIELDS = {'ticker','date','spot','spot_prev'}
 RAW_PER_EXPIRY_FIELDS = {'expiry_id','expiry','bdte','tte_y','is_am','fwd_ref','df'}
 
-@version("0.4")
+IRREGULAR_EXPIRES = {
+    dt.date(2025,1,9)    # SPX 2025-01-10 expiry was announced on 2025-01-09, which is the same day as the 2025-01-10 expiry, leading to data issues. We consider this an irregular expiry and drop it by default. If you want to keep it, please set RawDayFilter.drop_irregular_expiries to False and add the date to the BAD data sets if you confirm the data quality is sufficient.    
+}
+
+@version("0.5")
 @dataclass(frozen=True)
 class RawDayFilter:
-    min_bid : float = 0.011  # minimum bid value, typically above one tick.
+    min_bid         : float = 0.011  # minimum bid value, typically above one tick.
+    drop_irregular_expiries : bool = True    # drop irregular expiries, ie holidays which were announced shortly 
 
     def __post_init__(self):
         verify_inp(self.min_bid >= 0., lambda : f"'min_bid' must be non-negative, found {self.min_bid:.3f}")
@@ -129,13 +134,13 @@ class RawDayFilter:
 @_processing(fmt=SubDir.PANDAS_PARQUET).cache(
             "0.7",
             dependencies=[interpolate_zero_curve, WIDBClient],
-            uid=lambda ticker, d, raw_day_filter : f"{named_unique_filename48_8(f'raw {str(raw_day_filter)}',raw_day_filter)}/{ticker}/{fmt_date(d)}",
-            exclude_args=['verbose','raise_if_bad'])
+            uid=lambda ticker, d, raw_day_filter : f"raw/{named_unique_filename48_8(str(raw_day_filter),raw_day_filter)}/{ticker}/{fmt_date(d)}",
+            exclude_args=['verbose','raise_if_bad_day'])
 def collect_raw_day( ticker : str, 
                      d : dt.date, 
                      raw_day_filter : RawDayFilter, *, 
-                     raise_if_bad : bool = True,
-                     verbose : Context, secid : int|None = None ) -> pd.DataFrame:
+                     raise_if_bad_day : bool = True,
+                     verbose : Context = Context.all, secid : int|None = None ) -> pd.DataFrame:
     """
     Collect raw data with minimal analytics for a given ticker and date.
 
@@ -146,6 +151,7 @@ def collect_raw_day( ticker : str,
     * Downloads spot, forward, discount and option data.
     * Removes and bad days/tickers/options using :attr:`quantdata.widb.bad.BAD`.
     * Removes options with same-day expiry, NA or zero bid prices, and bad settlement (ss_flag != '0').
+      By default the function also removed irregular expiries, which are holidays that were announced shortly before the expiry date, leading to data issues.
     * Computes the implied discount factor from the zero curve and the refernece forward price from the forward table (which is off as the forward table is 15min delayed).
     * Computes business days to expiry and a unique expiry ID (which includes AM/PM).
 
@@ -159,7 +165,7 @@ def collect_raw_day( ticker : str,
         Date for which to collect data
     config : :class:`RawDayFilter`
         Configuration for data collection
-    raise_if_bad : bool, default ``True``
+    raise_if_bad_day : bool, default ``True``
         If ``True``, raises an error if the date is in the BAD data sets. If ``False``, returns an empty data set instead. (In no other condition will an empty data set returned)
     verbose : :class:`cdxcore.verbose.Context`
         Verbose context for logging
@@ -168,7 +174,7 @@ def collect_raw_day( ticker : str,
     -------
     Daily data: :class:`pandas.DataFrame`
         Cleaned DataFrame with all relevant data for the given ticker and date, with the schema :attr:`SCHEMA_RAW_DAY`.
-        This data set is not empty unless ``raise_if_bad`` is True and the date/ticker is in the BAD data sets.
+        This data set is not empty unless ``raise_if_bad_day`` is True and the date/ticker is in the BAD data sets.
 
     Raises
     ------
@@ -183,17 +189,18 @@ def collect_raw_day( ticker : str,
         This can happen for example if the forward price is highly suspicious, or if all options had zero or NA bid prices. Please check the date range and calendar settings,
         and consider adding the date/ticker to the BAD data sets if the issue is confirmed.
     """
+    verify_inp(isinstance(raw_day_filter, RawDayFilter), lambda : f"'raw_day_filter' must be an instance of RawDayFilter, found {type(raw_day_filter)}")
 
     if d >= BAD.LAST_LIKELY_VALID_DATE:
         raise ValueError(f"{d} is on or after the BAD.LAST_LIKELY_VALID_DATE ({BAD.LAST_LIKELY_VALID_DATE}). Data for this date is likely to be missing from Option Metrics. "+\
                           "If you are sure this is not the case, please update widb/bad.py.")
 
     if d in BAD.DAYS_ALL:
-        if not raise_if_bad:
+        if not raise_if_bad_day:
             return create_empty_df(SCHEMA_RAW_DAY)
         raise IndexError(f"{d} is in the BAD.DAYS_ALL set. No data will be downloaded for this date. Please check the date range and calendar settings. BAD.DAYS_ALL={BAD.DAYS_ALL}")
     if d in  BAD.DAYS_TICKER.get(ticker, set()):
-        if not raise_if_bad:
+        if not raise_if_bad_day:
             return create_empty_df(SCHEMA_RAW_DAY)
         raise IndexError(f"{d} is in the BAD.DAYS_TICKER set for {ticker}. No data will be downloaded for this date. Please check the date range and calendar settings. BAD.DAYS_TICKER[{ticker}]={BAD.DAYS_TICKER.get(ticker, set())}")
 
@@ -264,6 +271,22 @@ def collect_raw_day( ticker : str,
                 status_removed.append(f"{n_removed}/{n_before} options with same-day expiry") 
         return status_removed, opts_pd
     status_removed, opts_pd = remove_same_day_expiry(status_removed, opts_pd)   
+
+    def remove_irregular_expiries( status_removed, opts_pd ):
+        if raw_day_filter.drop_irregular_expiries:
+            opts_pd['exdate']    = pd.to_datetime(opts_pd['exdate']).dt.date
+            irregular_expiry_mask = opts_pd['exdate'].isin(IRREGULAR_EXPIRES)
+            if irregular_expiry_mask.any():
+                n_before = len(opts_pd)
+                opts_pd = opts_pd.loc[~irregular_expiry_mask].copy()
+                n_removed = n_before - len(opts_pd)
+                if opts_pd.empty:
+                    raise EOFError(f"{ticker} {d}: all option rows had irregular expiries and were dropped.")
+                if n_removed > 0:   
+                    status_removed.append(f"{n_removed}/{n_before} options with irregular expiries") 
+        return status_removed, opts_pd
+    
+    status_removed, opts_pd = remove_irregular_expiries(status_removed, opts_pd)
         
     # remove NA quotes
     # ----------------
@@ -580,6 +603,7 @@ class ExpiryFilter:
     min_pure_spread       : float = 1E-6
     min_implied_vol       : float = 0.01
     max_implied_vol       : float = 5.0
+    normalize             : bool = False
 
     def __post_init__(self):
         verify_inp(self.num_min_either_traded >= 0, lambda : f"'num_min_either_traded' must be non-negative, found {self.num_min_either_traded}")
@@ -589,23 +613,23 @@ class ExpiryFilter:
         verify_inp(self.max_implied_vol > self.min_implied_vol, lambda : f"'max_implied_vol' must be greater than 'min_implied_vol', found max_implied_vol={self.max_implied_vol} and min_implied_vol={self.min_implied_vol}")
 
     def __str__(self):#by convention use a some what readable string with comma separated key=value pairs
-        return f"eth={self.num_min_either_traded},bth={self.num_min_both_traded},mps={self.min_pure_spread},miv={self.min_implied_vol},xiv={self.max_implied_vol}"
+        return f"{'nrm,' if self.normalize else 'nat,'}eth={self.num_min_either_traded},bth={self.num_min_both_traded},mps={self.min_pure_spread},miv={self.min_implied_vol},xiv={self.max_implied_vol}"
 
 def _uid(ticker, d, raw_day_filter, expiry_filter) -> str:
-    return f"{named_unique_filename48_8(f'enrich {str(expiry_filter)},{str(raw_day_filter)}',expiry_filter,raw_day_filter)}"+\
+    return f"enrich/{named_unique_filename48_8(f'{str(expiry_filter)},{str(raw_day_filter)}',expiry_filter,raw_day_filter)}"+\
            f"/{ticker}/{fmt_date(d)}"
 
 @_processing(fmt=SubDir.PANDAS_PARQUET).cache(
             "0.7",
             dependencies=[collect_raw_day, ExpiryFilter],
             uid=_uid,
-            exclude_args=['verbose','raw_data','raise_if_bad','refresh_cache'])
+            exclude_args=['verbose','raw_data','raise_if_bad_day','refresh_cache'])
 def enrich_day( ticker : str, d : dt.date, raw_data : pd.DataFrame|None = None, *, 
                 raw_day_filter : RawDayFilter = RawDayFilter(), 
                 expiry_filter : ExpiryFilter = ExpiryFilter(), 
                 override_cache_mode : CacheMode|None = None,
-                raise_if_bad : bool = True,
-                verbose : Context = Context.quiet ) -> pd.DataFrame:
+                raise_if_bad_day : bool = True,
+                verbose : Context = Context.all ) -> pd.DataFrame:
     """
     Enrich a day's data.
 
@@ -631,9 +655,9 @@ def enrich_day( ticker : str, d : dt.date, raw_data : pd.DataFrame|None = None, 
     override_cache_mode : :class:`CacheMode` | None, default ``None``
         If not ``None``, overrides the cache mode for the raw day data. Set to ``"update"`` to
         refresh the underlying raw cache.
-    raise_if_bad : bool, default ``True``
+    raise_if_bad_day : bool, default ``True``
         If ``True``, raises an error if the date is in the BAD data sets.
-        If ``False``, returns an empty data set instead. (In no other condition will an empty data set returned)
+        If ``False``, returns an empty data set instead. (In no other condition will an empty data set be returned)
     verbose : :class:`cdxcore.verbose.Context`
         Verbose context for logging
 
@@ -655,12 +679,16 @@ def enrich_day( ticker : str, d : dt.date, raw_data : pd.DataFrame|None = None, 
         This can happen for example if the forward price is highly suspicious, or if all options had zero or NA bid prices. Please check the date range and calendar settings,
         and consider adding the date/ticker to the BAD data sets if the issue is confirmed.
     """
-    data         = raw_data if raw_data is not None else collect_raw_day(ticker, d, raw_day_filter, verbose=verbose, override_cache_mode=override_cache_mode, raise_if_bad = raise_if_bad)
+    if not raw_data is None:
+        verify_inp( isinstance(raw_data, pd.DataFrame), lambda : f"Expected raw_data to be a pandas DataFrame or None, found {type(raw_data)}")
+        data = raw_data
+    else:
+        data = collect_raw_day(ticker, d, raw_day_filter, verbose=verbose, override_cache_mode=override_cache_mode, raise_if_bad_day = raise_if_bad_day)
     del raw_data
 
     if data.empty:
         return create_empty_df(SCHEMA_ENRICHED_DAY)
-    verify_schema( data , SCHEMA_RAW_DAY, lambda : f"{ticker} {d}")
+        verify_schema( data , SCHEMA_RAW_DAY, lambda : f"{ticker} {d}")
 
     expiry_ids   = data["expiry_id"].to_numpy()
     unq_ids      = np.unique(expiry_ids)
@@ -892,7 +920,7 @@ def enrich_day( ticker : str, d : dt.date, raw_data : pd.DataFrame|None = None, 
             verbose.report(2,de)
         for ds in dropped_strikes:
             verbose.report(2,ds)
-        if raise_if_bad:
+        if raise_if_bad_day:
             assert len(dropped_expiries) > 0 or len(dropped_strikes) > 0, "Internal error -- No info??"
             raise RuntimeError(f"Internal error: {ticker} {d}: no valid options found after enrichment.")
         warnings.warn(f"{ticker} {d}: no valid options found after enrichment:{dropped_expiries}{dropped_strikes}")
@@ -943,28 +971,37 @@ def main(tickers : list[str],
     verify_inp( len(tickers) > 0, "At least one ticker must be specified")
     verify_inp( period is not None and len(period) == 2, "A start and end date must be specified")
 
-    from quantdata.widb.timeseries import build_time_series, TimeseriesConfig
+    from cdxcore.jcpool import JCPool
 
     start, end         = period
     date_range         = DateRange(start=to_date(start), end=to_date(end), exclude_half_days=not halfdays)
     pool_config        = PoolConfig(num_workers=workers, threading=threading)
     raw_day_filter     = RawDayFilter()   
     expiry_filter      = ExpiryFilter()
-    timeseries_config  = TimeseriesConfig()
-
-    dates              = date_range.get_business_days()
+    dates              = sorted( set(date_range.get_business_days())-set(BAD.DAYS_ALL) )
 
     verbose = Context.all
     verbose.write(lambda: f"Enriching data for tickers {fmt_list(tickers)} from {fmt_date(start)} to {fmt_date(end)} {'excluding' if date_range.exclude_half_days else 'including'} half days. Total business days: {len(dates)}.")
-    verbose.report(1,lambda: f"Timeseries Config: {timeseries_config}")
     verbose.report(1,lambda: f"Raw Day Filter: {raw_day_filter}")
     verbose.report(1,lambda: f"Expiry filter: {expiry_filter}")
     verbose.report(1,lambda: f"Pool config: {pool_config}")
 
+    pool = JCPool(num_workers=pool_config.num_workers, threading=pool_config.threading)
+
     for it, ticker in enumerate(tickers):  
-        verbose.report(1,lambda: f"\rProcessing ticker {it+1}/{len(tickers)} {ticker} from {fmt_date(date_range.start)} to {fmt_date(date_range.end)}.")
-        build_time_series(ticker, date_range, include_fields=None, exclude_fields=None, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, mk_arb_free=None,
-                     timeseries_config=timeseries_config, pool_config=pool_config, override_cache_mode="update" if refresh else None, verbose=verbose(2) )
+
+        def processing( ticker, d, raw_day_filter, expiry_filter, refresh ):
+            enrich_day( ticker=ticker, d=d, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, override_cache_mode="update" if refresh else "on", raise_if_bad_day=False, verbose=Context.quiet, cache_generate_only=True )
+            return 0
+
+        with verbose.write_t(lambda: f"\rProcessing ticker {it+1}/{len(tickers)} {ticker} from {fmt_date(date_range.start)} to {fmt_date(date_range.end)}:", end='') as tme:
+            cnt = 0
+            for d, _ in pool.parallel( { d: pool.delayed(processing)(ticker, d, raw_day_filter, expiry_filter, refresh) for d in dates } ):
+                cnt += 1
+                if tme.interval_test(1.):
+                    verbose.write(f"\rProcessing ticker {it+1}/{len(tickers)} '{ticker}' date {cnt}/{len(dates)} {fmt_date(d)}. So far this took {tme}...", end='')
+            verbose.write(f"\rProcessed ticker {it+1}/{len(tickers)} '{ticker}' for all {len(dates)} dates. This took {tme}.")
+
     verbose.write(f"All {len(tickers)} tickers processed.")
 
 if __name__ == "__main__":

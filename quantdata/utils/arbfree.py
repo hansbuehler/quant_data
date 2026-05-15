@@ -32,6 +32,7 @@ import warnings as warnings
 
 import numpy as np
 import cvxpy as cp
+from cvxpy.error import SolverError
 from dataclasses import dataclass, field
 from cdxcore.err import verify, verify_inp
 from cdxcore.verbose import Context
@@ -47,7 +48,7 @@ import math
 _EPS_PRICE = 1E-6
 _EPS_DENSITY = 1E-7
 
-@version("0.2")
+@version("0.6")
 class ArbFreePricer(PrettyObject):
     """
     Arbitrage-Free Option pricer based on DLV/SANOS.
@@ -210,7 +211,7 @@ class ArbFreePricer(PrettyObject):
         self.mdensities  = [ np.asarray(x) for x in self.mdensities ] if not self.mdensities is None else None
         self.variances   = np.asarray(self.variances) if not self.variances is None else None
 
-@version("0.2", dependencies=[ArbFreePricer])
+@version("0.4", dependencies=[ArbFreePricer])
 @dataclass(frozen=True)
 class MkArbFree:
     """
@@ -240,6 +241,11 @@ class MkArbFree:
     min_density           : float = 1E-4 #: Minimum density value to consider in the optimization. Strikes with lower values will be dropped.
     eps_dens_1            : float = 1E-4 #: What passes as ``sum(p)==1`` and ``p@K==1`` for the fitted density.
 
+    # protected variables do not alter the ID of this field (because they start with '_')
+    _debug_verbose_cvxpy  : set[str]|None = None
+    _debug_use_nonslack   : bool = False
+    _debug_sfc_highs_mode : str = "simplex"
+
     def __post_init__(self):
         verify_inp( self.no_arb_mode in ["off", "expiry", "surface"], lambda : f"'no_arb_mode' must be one of 'off', 'expiry' or 'surface', but found '{self.no_arb_mode}'" ) 
         verify_inp( self.min_strikes_per_expiry >= 3, lambda : f"'min_strikes_per_expiry' must be at least 3, but found {self.min_strikes_per_expiry}" )
@@ -252,18 +258,8 @@ class MkArbFree:
 
         if self.cvxpy_solver is None:
             verify_inp( self.cvxpy_solver_options is None, lambda : f"If 'cvxpy_solver' is None, then 'cvxpy_solver_options' must also be None" )
-            self.__dict__["cvxpy_solver"] = "HIGHS"
 
-            highs_options = {
-                "solver": "simplex",
-                "presolve": "on",
-                "primal_feasibility_tolerance": 1e-6,
-                "dual_feasibility_tolerance": 1e-6,
-                }
-            
-            self.__dict__["cvxpy_solver_options"] = { "highs_options":  highs_options, "warm_start": True }
-            assert self.cvxpy_solver == "HIGHS"
-
+        else:
             supported_solvers = ["HIGHS", "GLOP", "PDLP", "CBC", "CLARABEL", "EXPRESS"]
             if not self.timeout_seconds_expiry is None or not self.timeout_seconds_surface is None:
                 verify_inp( self.cvxpy_solver in supported_solvers, lambda : f"'cvxpy_solver' must be one of {supported_solvers} or None, but found '{self.cvxpy_solver}'" )
@@ -292,27 +288,32 @@ class MkArbFree:
             solver  = "HIGHS"
             options = dict( warm_start=True,
                             highs_options={
-                            "solver": "simplex",
+                            "solver": "simplex" if for_expiry else self._debug_sfc_highs_mode, # simplex is faster for the per-expiry fit, while ipm is more robust for the surface fit
                             "presolve": "on",
-                            "parallel": "on",
                             "threads": 0,
                             "simplex_strategy": 1,   # dual simplex, serial; HiGHS default
                             "kkt_tolerance": 1e-7})
         else:
             options = dict(self.cvxpy_solver_options)        
 
+        if not self._debug_verbose_cvxpy is None:
+            if for_expiry and "expiry" in self._debug_verbose_cvxpy:
+                options["verbose"] = True
+            if not for_expiry and "surface" in self._debug_verbose_cvxpy:
+                options["verbose"] = True
+        
         timeout_seconds = self.timeout_seconds_expiry if for_expiry else self.timeout_seconds_surface
         if timeout_seconds is not None:
             # https://www.cvxpy.org/tutorial/solvers/index.html
-            if self.cvxpy_solver in ["GLOP", "PDLP"]:
+            if solver in ["GLOP", "PDLP"]:
                 options["time_limit_sec"] = timeout_seconds
-            elif self.cvxpy_solver == "CBC":
+            elif solver == "CBC":
                 options["maximumSeconds"] = timeout_seconds
-            elif self.cvxpy_solver == "HIGHS":
+            elif solver == "HIGHS":
                 options["time_limit"] = timeout_seconds
-            elif self.cvxpy_solver == "CLARABEL":
+            elif solver == "CLARABEL":
                 options["time_limit"] = timeout_seconds
-            elif self.cvxpy_solver == "EXPRESS":
+            elif solver == "EXPRESS":
                 options["maxtime"] = timeout_seconds
             else:
                 raise ValueError(f"Solver '{self.cvxpy_solver}' do not know how to set time limit for this solver. Supported solvers are 'HIGHS', 'GLOP', 'PDLP', 'CBC', 'CLARABEL' and 'EXPRESS'.")
@@ -323,7 +324,7 @@ class MkArbFree:
                 strikes        : list[np.ndarray],
                 bids           : list[np.ndarray],
                 asks           : list[np.ndarray], *,
-                vols           : np.ndarray|float = 0.1, # forward volatilities per expiry, used for the strike expansion step. If a float is provided, it is used for all expiries. If None, it is estimated from the data as the median of the implied vols.
+                vols           : np.ndarray|float|None = None, # forward volatilities per expiry, used for the strike expansion step. If a float is provided, it is used for all expiries. If None, it is estimated from the data as the median of the implied vols.
                 handle_arb     : str = "warn", # how to handle arbitrage situations: "warn", "raise" or "ignore"
                 message_context: str|callable[[], str] | None = None,
                 verbose        : Context = Context.all ) -> ArbFreePricer:
@@ -399,7 +400,7 @@ class MkArbFree:
         
             dCdK_t         = np.diff(C,prepend=1.)/np.diff(K,prepend=0.)
             p              = np.diff(dCdK_t,append=0.)
-            assert np.all( p >= -eps )          # positive
+            assert np.all( p >= -eps )          # psitive
             assert abs( np.sum( p )-1. ) <= eps # sums to one
             assert abs( p@K - 1. ) <= floor     # expectation one
             assert abs( C - np.maximum( 0., K[None,:] - K[:,None] ) @ p ) <= eps # reprices all options
@@ -416,7 +417,8 @@ class MkArbFree:
         asks : list[:class:``numpy.ndarray`]
             List of ask price arrays, one per expiry. 
         vols : :class:``numpy.ndarray`` | float | None, default ``None``
-            Forward volatilities per expiry, used for the strike expansion step. If a float is provided, it is used for all expiries. If None, it is estimated from the data as the median of the implied vols.
+            Volatilities per expiry used when ``smoothness`` is not None.
+            If left to ``None``, the function will compute an approximate mid-atm volatility per expiry.
         handle_arb : str, default ``"warn"``
             What to do if the function cannot fit an arbitrage-free mid for a given single expiry.
             The options are to ``"ignore"`` it, ``"warn"`` about it, or ``"raise"`` an error.
@@ -449,7 +451,19 @@ class MkArbFree:
 
         variances = None
         if self.smoothness is not None:
-            if isinstance( vols, np.ndarray ):
+            if vols is None:
+                atm_calls = []
+                for t in range(T):
+                    ixs = np.argsort( strikes[t] )
+                    atm_calls.append( np.interp( 1., strikes[t][ixs], (bids[t][ixs]+asks[t][ixs])/2. ) )
+                atm_calls = np.asarray(atm_calls)
+                atm_vols  = bs.implied( k=np.ones_like(atm_calls), prices=atm_calls, sqrtT=np.sqrt(expiries), eps=_EPS_PRICE )
+                variances = expiries * (atm_vols**2)
+                dts       = np.diff(expiries, prepend=0.)
+                fwd_vars  = np.maximum(0.001**2, np.diff(variances, prepend=0.) / dts ) * dts
+                variances = np.cumsum(fwd_vars)
+                del atm_calls, atm_vols, dts, fwd_vars
+            elif isinstance( vols, np.ndarray ):
                 verify_inp( vols.shape == expiries.shape, lambda : f"{msg_header()}If 'vols' is a numpy array, it must have the same shape as 'expiries', but found {vols.shape} and {expiries.shape}" )
                 verify_inp( np.all(vols > 0.), lambda : f"{msg_header()}All volatilities must be positive, but found {vols}" )
                 variances = expiries * (vols**2) 
@@ -575,7 +589,7 @@ class MkArbFree:
             used_bids.append( input_bid_t )
             used_asks.append( input_ask_t )
 
-        r.expiries = np.array(r.expiries, dtype=np.float32)
+        r.expiries = np.array(r.expiries, dtype=np.float64)
         verbose.write(lambda : f"\r{msg_header()}Generated {len(r.expiries)} {'linear' if self.smoothness is None else f'{self.smoothness:.2f}-smooth'} {'arbitrage-free ' if self.no_arb_mode != 'off' else ''}expiries with extended strikes from {T} market expiries. This took {tme}.")
 
         if self.no_arb_mode != "surface":
@@ -591,6 +605,8 @@ class MkArbFree:
         r.fitsX      = []
         min_dx       = None
         mguess_p     = [None]*T
+        whfl_sum     = 0.
+        whfl_count   = 0
 
         for t in range(T-1,-1,-1):
             # fix strikes
@@ -651,6 +667,15 @@ class MkArbFree:
             r.xix_to_mix[t] = project
             mguess_p[t]     = mp_t
 
+            # compute average spread
+            mask_t      = r.masks[t]
+            ask_t       = used_asks[t][mask_t]
+            bid_t       = used_bids[t][mask_t]
+            whfl_sum    += np.sum( np.maximum((ask_t - bid_t)/2., self.min_half_spread) )
+            whfl_count  += len(bid_t)
+
+        average_spread = whfl_sum / whfl_count if whfl_count > 0 else 0.
+
         # solve surface no-arb
         # --------------------
 
@@ -697,12 +722,42 @@ class MkArbFree:
                                  Cm >= Cm1
                                   ]
 
-                half_spread = np.maximum( (ask_t - bid_t)/2., self.min_half_spread )
-                mid         = (bid_t + ask_t)/2.
-                excess      = cp.multiply( 1./half_spread, ( cp.maximum( 0., fit_mid - ask_t ) + cp.maximum( 0., bid_t - fit_mid ) ) )
-                obj_exc     = cp.sum( (1.-self.mid_fit_weight) * excess ) if self.mid_fit_weight < 1. else 0.
-                obj_sqr     = cp.sum( self.mid_fit_weight*cp.max( cp.multiply( 1./half_spread, fit_mid - mid ) ) ) if self.mid_fit_weight > 0. else 0.
-                objective   = objective + obj_sqr + obj_exc
+                whalf_spread = np.maximum( (ask_t - bid_t)/2., self.min_half_spread ) / average_spread
+                mid          = (bid_t + ask_t)/2.
+
+                if self._debug_use_nonslack:
+                    # direct
+                    excess      = cp.multiply( 1./whalf_spread, ( cp.maximum( 0., fit_mid - ask_t ) + cp.maximum( 0., bid_t - fit_mid ) ) )
+                    obj_exc     = cp.sum( (1.-self.mid_fit_weight) * excess ) if self.mid_fit_weight < 1. else 0.
+                    obj_abs     = cp.sum( self.mid_fit_weight*cp.max( cp.multiply( 1./whalf_spread, cp.abs(fit_mid - mid ) ) ) ) if self.mid_fit_weight > 0. else 0.
+                    objective   = objective + obj_abs + obj_exc
+                    del whalf_spread
+                    del obj_abs
+                    del obj_exc
+
+                else:
+                    # slack variable version  *should* be better..?
+                    if self.mid_fit_weight < 1.:
+                        e_box = cp.Variable(len(bid_t), nonneg=True)
+
+                        constraints += [
+                            fit_mid <= ask_t + cp.multiply(whalf_spread, e_box),
+                            fit_mid >= bid_t - cp.multiply(whalf_spread, e_box),
+                        ]
+
+                        objective += (1. - self.mid_fit_weight) * cp.sum(e_box)
+                        del e_box
+
+                    if self.mid_fit_weight > 0.:
+                        z_mid = cp.Variable(nonneg=True)
+
+                        constraints += [
+                            fit_mid - mid <= cp.multiply(whalf_spread, z_mid),
+                            mid - fit_mid <= cp.multiply(whalf_spread, z_mid),
+                        ]
+
+                        objective += self.mid_fit_weight * z_mid
+                        del z_mid
 
                 fit_mids.append(fit_mid)
                 r.mdensities.append(q_t)
@@ -714,6 +769,8 @@ class MkArbFree:
                     prob        = cp.Problem( cp.Minimize( objective ), constraints )
                     slv, opt    = self.get_solver_and_solver_options(for_expiry=False)
                     prob.solve( solver=slv, **opt )
+                except SolverError as e:
+                    raise type(e)(f"{msg_header()}Solver error: {str(e)}.") from e
                 except RuntimeWarning as e:
                     warnings.warn(f"{msg_header()}Solver warning: {str(e)}.", category=RuntimeWarning)
 
@@ -734,7 +791,7 @@ class MkArbFree:
                 q_t        = r.mdensities[t]
                 expiry     = r.expiries[t]
                 mask_t     = r.masks[t]
-                project_t  = r.xix_to_mix[t]
+                floor      = max( self.min_density / float(len(q_t)), 1E-6 )
 
                 if self.smoothness is None:
                     def call( spots, strikes ):
@@ -800,7 +857,7 @@ class MkArbFree:
         Nt          = len(xstrikes_t)
         floor       = max( self.min_density / float(Nt), 1E-6 )
         p           = cp.Variable(Nt, nonneg=True)
-        p.values    = guess_p
+        p.value     = np.clip( guess_p, 0., None )
         C           = call( spots=xstrikes_t[None,:], strikes=xstrikes_t[1:-1,None] ) @ p
         intr        = np.maximum(0., 1.-xstrikes_t[1:-1]) 
         assert np.min( ask_t - intr ) > 0., f"Internal error: {msg_header()} 'ask' values must be strictly above intrinsic values for expiry {expiry*DAYS_PER_YEAR:.1f}d, but found minimum difference {np.min(ask_t - intr):.3e}."
@@ -809,10 +866,14 @@ class MkArbFree:
                         C >= intr, 
                         C <= intr + (ask_t-intr)*10. ]
 
-        half_spread = np.maximum( (ask_t - bid_t)/2., self.min_half_spread )
-        error       = cp.abs( cp.multiply( 1./half_spread, (C - (bid_t + ask_t)/2.) ) ) if self.mid_fit_weight > 0. else 0.
-        excess      = cp.multiply( 1./half_spread, ( cp.maximum( 0., C - ask_t ) + cp.maximum( 0., bid_t - C ) ) ) if self.mid_fit_weight < 1. else 0.
+        whalf_spread = np.maximum( (ask_t - bid_t)/2., self.min_half_spread )
+        whalf_spread /= np.sum(whalf_spread)
+        error       = cp.abs( cp.multiply( 1./whalf_spread, (C - (bid_t + ask_t)/2.) ) ) if self.mid_fit_weight > 0. else 0.
+        excess      = cp.multiply( 1./whalf_spread, ( cp.maximum( 0., C - ask_t ) + cp.maximum( 0., bid_t - C ) ) ) if self.mid_fit_weight < 1. else 0.
         objective   = cp.sum( self.mid_fit_weight * error + (1.-self.mid_fit_weight) * excess )
+        del whalf_spread
+        del error
+        del excess
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore",message=r"Solution may be inaccurate.*",category=UserWarning)
@@ -821,6 +882,8 @@ class MkArbFree:
                 prob        = cp.Problem( cp.Minimize( objective ), constraints )
                 slv, opt    = self.get_solver_and_solver_options(for_expiry=True)
                 prob.solve( solver=slv, **opt )
+            except SolverError as e:
+                raise type(e)(f"{msg_header()}Solver error for expiry {expiry*DAYS_PER_YEAR:.2f}d in soft fit mode: {str(e)}.") from e
             except RuntimeWarning as e:
                 raise RuntimeError(f"{msg_header()}Solver overflow for expiry {expiry*DAYS_PER_YEAR:.2f}d in soft fit mode: {str(e)}.")
 
@@ -841,7 +904,7 @@ class MkArbFree:
 
         C      = C.value
         p      = p.value
-        mask   = (C >= bid_t-1E-6) | (C <= ask_t+1E-6)
+        mask   = (C >= bid_t-1E-6) & (C <= ask_t+1E-6)
 
         if np.all(mask):
             return None, _warn_and_fix_density( p=p, x=xstrikes_t, floor=floor, message=lambda : f"{msg_header()} expiry {expiry*DAYS_PER_YEAR:.2f}d: market density", verbose=verbose )
@@ -857,8 +920,8 @@ class MkArbFree:
 
         soft_p      = p
         
-        # attempt hard fit on all strikes
-        # -------------------------------
+        # attempt quadratic hard fit on all strikes
+        # -----------------------------------------
 
         p           = cp.Variable(Nt, nonneg=True)
         p.value     = soft_p
@@ -868,8 +931,10 @@ class MkArbFree:
                         C <= ask_t,
                         C >= bid_t ]
 
-        half_spread = np.maximum( (ask_t - bid_t)/2., self.min_half_spread )
-        objective   = cp.sum( cp.multiply( 1./half_spread, C - (bid_t + ask_t)/2. )**2 )
+        whalf_spread = np.maximum( (ask_t - bid_t)/2., self.min_half_spread )
+        whalf_spread /= np.sum(whalf_spread)
+        objective    = cp.sum( cp.multiply( 1./whalf_spread, cp.abs( C - (bid_t + ask_t)/2. ) ) )
+        del whalf_spread
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore",message=r"Solution may be inaccurate.*",category=UserWarning)
@@ -878,6 +943,8 @@ class MkArbFree:
                 prob        = cp.Problem( cp.Minimize( objective ), constraints )
                 slv, opt    = self.get_solver_and_solver_options(for_expiry=True)
                 prob.solve( solver=slv, **opt )
+            except SolverError as e:
+                raise type(e)(f"{msg_header()}Solver error for expiry {expiry*DAYS_PER_YEAR:.2f}d in hard fit mode: {str(e)}.") from e
             except RuntimeWarning as e:
                 prob.status = "overflow error"
 
@@ -887,69 +954,30 @@ class MkArbFree:
         # Return soft-fit density, masked for the strikes it worked
         # ---------------------------------------------------------
 
-        # shoud actually work out of the box
-        mask[0]     = True
-        mask[-1]    = True
+        mask_       = np.zeros_like(xstrikes_t, dtype=bool)
+        mask_[1:-1] = mask
+        mask_[0]     = True
+        mask_[-1]    = True
+        mask         = mask_
+        del mask_
 
-        if __debug__:
-            mstrikes_t  = xstrikes_t[mask]
-            mask_t      = ask_t[mask[1:-1]]
-            mbid_t      = bid_t[mask[1:-1]]
-            mp          = soft_p[mask]
-            C           = call( spots=mstrikes_t[None,:], strikes=mstrikes_t[1:-1,None] ) @ mp
-            assert np.all( C >= mbid_t-1E-5 ) and np.all( C <= mask_t+1E-5 ), f"Internal error: {msg_header()}soft fit succeeded but constraints violated for expiry {expiry*DAYS_PER_YEAR:.2f}d. Please contact the authors with an example."
-
-        verbose.write(lambda : f"hard fit failed with status '{prob.status}' -- using masked soft fit instead... ", head=False, end='')
-        return mask, _warn_and_fix_density( p=p, x=xstrikes_t, floor=floor, message=lambda : f"{msg_header()} expiry {expiry*DAYS_PER_YEAR:.2f}d: soft no-arb density", verbose=verbose )
-
-        """
-        verbose.write(lambda : f"hard fit failed with status '{prob.status}' -- trying to fit a subset of strikes... ", head=False, end='')
-
-        mask[0]     = True
-        mask[-1]    = True
+        C           = np.maximum( 0., xstrikes_t[None,:] - xstrikes_t[:,None] ) @ soft_p
+        mC          = C[mask]
         mstrikes_t  = xstrikes_t[mask]
+        mdCdK       = np.diff(mC,prepend=1.)/np.diff(mstrikes_t,prepend=0.)
+        mp          = np.diff(mdCdK,append=0.)
+        
+        p           = np.zeros_like(soft_p)
+        p[mask]     = mp
+
         mask_t      = ask_t[mask[1:-1]]
         mbid_t      = bid_t[mask[1:-1]]
-        mNt         = len(mstrikes_t)
-        mp          = cp.Variable(mNt, nonneg=True)
-        mp.value    = soft_p[mask]
-        mC          = call(spots=mstrikes_t[None,:], strikes=mstrikes_t[1:-1,None] ) @ mp
-        constraints = [ cp.sum(mp) == 1., mstrikes_t @ mp == 1., # martingale condition
-                        mp <= 1.,
-                        mC <= mask_t,
-                        mC >= mbid_t ]
+        C           = call( spots=mstrikes_t[None,:], strikes=mstrikes_t[1:-1,None] ) @ mp
+        assert np.all( C >= mbid_t-1E-5 ) and np.all( C <= mask_t+1E-5 ), f"Internal error: {msg_header()}soft fit succeeded but constraints violated for expiry {expiry*DAYS_PER_YEAR:.2f}d. Please contact the authors with an example."
 
-        half_spread = np.maximum( (mask_t - mbid_t)/2., self.min_half_spread )
-        objective   = cp.sum( cp.multiply( 1./half_spread, mC - (mbid_t + mask_t)/2. )**2 )
-
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore",message=r"Solution may be inaccurate.*",category=UserWarning)
-            warnings.filterwarnings("error",message=r"overflow encountered in power",category=RuntimeWarning)
-            try:
-                prob        = cp.Problem( cp.Minimize( objective ), constraints )
-                slv, opt    = self.get_solver_and_solver_options(for_expiry=True)
-                prob.solve( solver=slv, **opt )
-            except RuntimeWarning as e:
-                prob.status = "overflow error"
-
-        if prob.status in ["infeasible", "infeasible_inaccurate","user_limit","overflow error"]:
-            msg = f"Cannot find no-arbitrage mid for expiry {expiry*DAYS_PER_YEAR:.2f}d, even after removing some offending strikes. Solver returned status '{prob.status}'."
-            if handle_arb == "raise":
-                raise RuntimeError(msg_header() + msg)
-            verbose.write(f"{msg.lower()} -- removing expiry.", head=False)
-            if handle_arb == "warn":
-                warnings.warn(msg_header() + msg[:-1] + " -- removing expiry.") # -> maybe we need a proper error here.
-            return None
-        
-        p       = np.zeros_like(xstrikes_t)
-        p[mask] = mp.value
-        C       = call( spots=xstrikes_t[None,:], strikes=xstrikes_t[1:-1,None] ) @ p
-        assert np.all( C[mask] >= bid_t[mask]-1E-6 ) and np.all( C[mask] <= ask_t[mask]+1E-6 ), f"Internal error: {msg_header()}hard fit succeeded but constraints violated for expiry {expiry*DAYS_PER_YEAR:.2f}d. Please contact the authors with an example."
-                
-        # Check that that density is reasonable
-        p[mask] = mp.value
+        verbose.write(lambda : f"hard fit failed with status '{prob.status}' -- using masked soft fit instead. Dropped {np.sum(~mask)} of {len(xstrikes_t)-2} strikes.", head=False)
         return mask, _warn_and_fix_density( p=p, x=xstrikes_t, floor=floor, message=lambda : f"{msg_header()} expiry {expiry*DAYS_PER_YEAR:.2f}d: soft no-arb density", verbose=verbose )
-        """
+
     def make_extended_strikes( self, 
                               strikes: np.ndarray, 
                               bids: np.ndarray, 

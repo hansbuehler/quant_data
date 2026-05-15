@@ -107,7 +107,7 @@ _LITERAL_DOCSTRING_PREFIXES = (
     "quantdata.massive.options.contracts",
     "quantdata.sanos.grid",
     "quantdata.utils.arbfree.MkArbFree",
-    "quantdata.widb.timeseries.TimeseriesConfig",
+    "quantdata.widb.options_filter.OptionsFilter",
 )
 
 _DOCSTRING_ROLE_RE = re.compile(r":[a-zA-Z]+:`([^`]+)`")

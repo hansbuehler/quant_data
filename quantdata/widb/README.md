@@ -133,13 +133,18 @@ The file ``arbfree.py`` has a commandline interface which allows generating days
   python -m arbfree SPX --period 2025-06-01 2025-09-01
 ```
 
+### options_filter.py
+
+[TODO]
+
+The  ``OptionsFilter`` defines the time-series sampling rules, including limits on moneyness, days to expiry, liquidity, AM settlement handling, minimum options per expiry and the maximum number of options per day.
+
 ### timeseries.py
 
 ``timeseries.py`` turns a sequence of daily frames into one dictionary. Such a dictionary can be efficiently streamed to and from disk using [HDF5](https://support.hdfgroup.org/documentation/hdf5/latest/_h5_d_m__u_g.html) which has superiour throughput for blocks of numpy data.
 
-* ``build_time_series(ticker, date_range, include_fields, exclude_fields, raw_day_filter, expiry_filter, mk_arb_free, timeseries_config, ...)`` loops over the business days in the requested range, loads or generates each day through ``enrich_day()`` or ``mk_arb_free_day()``, applies the time-series filter, and packs the selected fields into fixed-size numpy arrays together with an ``is_valid`` mask.
+* ``build_time_series(ticker, date_range, include_fields, exclude_fields, raw_day_filter, expiry_filter, mk_arb_free, OptionsFilter, ...)`` loops over the business days in the requested range, loads or generates each day through ``enrich_day()`` or ``mk_arb_free_day()``, applies the time-series filter, and packs the selected fields into fixed-size numpy arrays together with an ``is_valid`` mask.
 
-  The  ``TimeseriesConfig`` defines the time-series sampling rules, including limits on moneyness, days to expiry, liquidity, AM settlement handling, minimum options per expiry and the maximum number of options per day.
 
 * ``table_of_time_series(...)`` produces a compact tabular summary of the sampled arrays, including shape, dtype, size and simple descriptive statistics.
 Here is an example output for 62 days "SPX" using arb-free mode ``expiry`` (that is where there are ``fit1`` but no ``fitX`` prices and greeks):
@@ -147,7 +152,7 @@ Here is an example output for 62 days "SPX" using arb-free mode ``expiry`` (that
 ```python
 
 from datetime import date
-from quantdata.widb.timeseries import build_time_series, ExpiryFilter, RawDayFilter, TimeseriesConfig, DateRange, PoolConfig, table_of_time_series, MkArbFree
+from quantdata.widb.options_filter import build_time_series, ExpiryFilter, RawDayFilter, OptionsFilter, DateRange, PoolConfig, table_of_time_series, MkArbFree
 from cdxcore.verbose import Context
 
 def test():
@@ -156,11 +161,11 @@ def test():
     raw_day_filter = RawDayFilter()
     expiry_filter = ExpiryFilter()
     mk_arb_free = MkArbFree()
-    timeseries_config = TimeseriesConfig()
+    options_filter = OptionsFilter()
     pool_config = PoolConfig(num_workers=0, threading=True) # no parallel processing for testing
     verbose = Context.all
 
-    samples = build_time_series(ticker, date_range, include_fields=None, exclude_fields=None, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, mk_arb_free=mk_arb_free, timeseries_config=timeseries_config, pool_config=pool_config, verbose=verbose )
+    samples = build_time_series(ticker, date_range, include_fields=None, exclude_fields=None, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, mk_arb_free=mk_arb_free, options_filter=OptionsFilter, pool_config=pool_config, verbose=verbose )
     return samples
 
 samples = test()
