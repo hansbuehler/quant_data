@@ -44,7 +44,7 @@ class GeometryBase:
     
     def _make_density0(self):
         """Make the initial point-mass density on the interior time-0 strike grid."""
-        strikes0       = self.xstrikes[0][1:-1] if not self.has_grid else self.xstrikes[0,1:-1]
+        strikes0       = np.asarray(self.xstrikes[0][1:-1]) if not self.has_grid else np.asarray(self.xstrikes[0,1:-1])
         N1             = len(strikes0)
         assert strikes0[0] < 1. < strikes0[-1], f"Internal error: strikes should include 1, but found {strikes0}."
         ix_1           = min(N1-1,max(0,np.abs(strikes0 - 1.).argmin()))
@@ -315,6 +315,7 @@ def extract_atm_fwd_vols(
     verify_inp( len(expiries.shape) == 1, lambda: f"'expiries' must be a 1D array, found shape {expiries.shape}" )
     verify_inp( expiries[0] > 0., lambda: f"First expiry must be positive, found {expiries[0]}" )
     verify_inp( np.min( np.diff(expiries)) > 0., lambda: "Expiries must be increasing")
+    verify_inp( isinstance( fwdvol_min, (int,float) ) and fwdvol_min >= 0., lambda: f"'fwdvol_min' must be a non-negative number, found {fwdvol_min}" )
     T = expiries.shape[0]
 
     if hasattr(strikes,"shape"):

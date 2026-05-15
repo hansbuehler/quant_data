@@ -19,7 +19,6 @@ from cdxcore.err import verify_inp
 import warnings as warnings
 from quantdata.sanos.open import OpenGeometry
 from quantdata.sanos.utils import _interpolate_sqrtVars, _iterative_model_price
-
 from quantdata.sanos.grid import GridGeometry, Eps
 from quantdata.sanos.open import OpenGeometry, Eps
 from quantdata.utils.backbone import BackboneNumpy
@@ -46,10 +45,12 @@ class Fitter:
     debug                : bool = False #: Whether to enable debug mode, which performs additional checks and logs more information during fitting. This can be useful for development and debugging, but may slow down the computation.
     max_error            : float|None = 1E-3 #: max{ (fit-ask)^+ + (bid-fit)^+} / half_spread > max_error, raise a :class:`RuntimeError`. Set to None to disable this check.
     no_warnings          : bool = False #: turn off warnings
+    max_expiry_ext       : float = 0.1 #: Fit options up to model expiries plus this number.
 
     def __post_init__(self):
-        verify_inp( self.min_half_spread > 0., f"min_half_spread must be positive, found {self.min_half_spread}" )
-        verify_inp( 0. <= self.mid_fit_weight <= 1., f"mid_fit_weight must be between 0 and 1, found {self.mid_fit_weight}" )
+        verify_inp( self.min_half_spread > 0., f"min_half_spread must be positive, found {self.min_half_spread:.4g}" )
+        verify_inp( 0. <= self.mid_fit_weight <= 1., f"mid_fit_weight must be between 0 and 1, found {self.mid_fit_weight:.4g}" )
+        verify_inp( self.max_expiry_ext >= 0., f"max_expiry_ext must be non-negative, found {self.max_expiry_ext:.4g}" )
 
     @property
     def T(self) -> int:
@@ -185,6 +186,13 @@ class Fitter:
         # mask by removing options
         # ------------------------
 
+        too_far = opt_tte > self.geometry.xexpiries[-1] + self.max_expiry_ext
+        if np.any(too_far):
+            if not self.no_warnings:
+                warnings.warn(f"Found {np.sum(too_far)} options with expiry {np.max( opt_tte[too_far] ):.4g} beyond the last model expiry {self.geometry.xexpiries[-1]:.4g} plus {self.max_expiry_ext:.4g}. Those options will be ignored during fitting.")
+            opt_mask = ~too_far if opt_mask is None else (opt_mask & ~too_far)  
+        del too_far
+
         if not opt_mask is None:
             opt_strikes     = opt_strikes[opt_mask]
             opt_bid         = opt_bid[opt_mask]
@@ -192,10 +200,6 @@ class Fitter:
             opt_tte         = opt_tte[opt_mask]
             opt_is_calls    = opt_is_calls[opt_mask] if opt_is_calls is not None else None
             opt_interpolate = { k: v[opt_mask] for k,v in opt_interpolate.items() } if opt_interpolate is not None else None
-
-        if not self.no_warnings and np.max( opt_tte ) > self.geometry.xexpiries[-1]:
-            warnings.warn(f"Found option with expiry {np.max( opt_tte ):.4g} beyond the last model expiry {self.geometry.xexpiries[-1]:.4g}. "+\
-                           "While functionaly feasible, this is likely to cause fitting issues. Expand expiry range.")
 
         opt_interpolate = opt_interpolate if not opt_interpolate is None else self.geometry.time_interpolation_weights( opt_tte, None )  
         M = len(opt_strikes)
@@ -211,7 +215,7 @@ class Fitter:
                 fwdvol_min = self.geometry.fwdvol_min,
                 fwd_vols   = fwd_vols,
                 opt_interp = opt_interpolate,
-                opt_mask   = opt_mask,
+                opt_mask   = None,
                 debug      = self.debug
             )
             verify_inp( opt_sqrtVars is None or (opt_sqrtVars.shape == (M,) and np.all( np.isfinite(opt_sqrtVars) ) and np.all( opt_sqrtVars >= 0. )), f"Internal error: opt_sqrtVars must have shape {(M,)} and be non-negative and finite, found shape {opt_sqrtVars.shape} and min {np.min(opt_sqrtVars)} and max {np.max(opt_sqrtVars)}" )
@@ -346,7 +350,7 @@ class Fitter:
         # optimize
         # --------
 
-        with verbose.write_t(lambda : f"Solving for a consistent margingale density for {len(opt_strikes)} options. Mean half spread is {np.mean(half_spread):.4e}... ", end='') as tme:
+        with verbose.write_t(lambda : f"Solving for a consistent margingale density for {len(opt_strikes)} options for a geometry with {self.geometry.size} points. Mean half spread is {np.mean(half_spread):.4e}... ", end='') as tme:
             prob        = cp.Problem( cp.Minimize( objective ), conditions )
 
 

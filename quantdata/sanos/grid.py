@@ -86,6 +86,10 @@ class GridGeometry(GeometryBase):
         return self.T, self.N
 
     @property
+    def size(self) -> int:
+        return self.T*self.N
+
+    @property
     def strikes(self) -> np.ndarray:
         """ Returns the real model strikes excluding the zero expiry and the boundary strikes. """
         return self.xstrikes[1:,1:-1]

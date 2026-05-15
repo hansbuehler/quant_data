@@ -1,9 +1,13 @@
 """
-Generate arbitrage-free option prices for a ticker on a given day using :class:`MkArbFree` and the enriched day data from :func:`enrich_day`.
+Arbitrage-Free Market Data Filter
+=================================
 
-The main function in this module is :func:`mk_arb_free_day`. This function takes a ticker and a date, along with optional filters and configuration
-for the arbitrage-free fitting, and returns a DataFrame containing the enriched day data along with additional columns indicating which strike
-were retained as arbitrage-free and the corresponding fitted prices and Greeks.
+The function :func:`mk_arb_free_day` in this module takes 
+attempts to fit an arbitrage-free fit through the bid/ask prices of the options in a given day.
+It removes strikes and even expiries whenever necessary to achieve this goal.
+
+Massaging data this way is a pre-requisite for any attempts to fit a strictly arbitrage-free model
+to WIDB data.
 
 Example
 -------
@@ -18,6 +22,13 @@ Example
     >>> mk_arb_free_config = MkArbFree(no_arb_mode="surface")
     >>> df = mk_arb_free_day("SPX", dt.date(2023, 1, 15), mk_arb_free=mk_arb_free_config)
     >>> print(df[["pure_strike", "mask_arb_free", "pure_fit1_price", "pure_fit1_delta"]])
+
+This file's ``main`` can also be used to generate data manually:
+
+```bash
+
+    python -m arbfree SPX RUT NDX --period 2020-05-01 2022-01-31
+```
 
 """
 from __future__ import annotations
@@ -124,6 +135,9 @@ def mk_arb_free_day(
     Result: :class:`pandas.DataFrame` or (:class:`pandas.DataFrame`, dict|None) if ``return_arb_free`` is True.
         See above.
     """
+    verify_inp( mk_arb_free.no_arb_mode in ['expiry', 'surface'], lambda: f"{ticker} {d}: arb_free_day requires mk_arb_free.no_arb_mode='surface' for full fit outputs; found no_arb_mode '{mk_arb_free.no_arb_mode}'." )
+    mode_surface = mk_arb_free.no_arb_mode == 'surface'
+    expected_schema = SCHEMA_ARB_FREE_DAY_SURFACE if mode_surface else SCHEMA_ARB_FREE_DAY_EXPIRY
 
     data = enriched_data  if enriched_data is not None else enrich_day(
                             ticker,
@@ -134,11 +148,6 @@ def mk_arb_free_day(
                             raise_if_bad=raise_if_bad,
                             verbose=verbose,
                         )
-
-    verify_inp( mk_arb_free.no_arb_mode in ['expiry', 'surface'], lambda: f"{ticker} {d}: arb_free_day requires mk_arb_free.no_arb_mode='surface' for full fit outputs; found no_arb_mode '{mk_arb_free.no_arb_mode}'." )
-
-    mode_surface = mk_arb_free.no_arb_mode == 'surface'
-    expected_schema = SCHEMA_ARB_FREE_DAY_SURFACE if mode_surface else SCHEMA_ARB_FREE_DAY_EXPIRY
 
     if data.empty:
         if not return_arb_free_densities:

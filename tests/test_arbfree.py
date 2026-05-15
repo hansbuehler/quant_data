@@ -47,9 +47,6 @@ def _assert_surface_result_invariants(
     count = len(result.expiries)
     assert count > 0
     assert len(result.xstrikes) == count
-    assert len(result.strikes) == count
-    assert len(result.bids) == count
-    assert len(result.asks) == count
     assert len(result.masks) == count
     assert len(result.fits1) == count
     assert len(result.fitsX) == count
@@ -64,11 +61,8 @@ def _assert_surface_result_invariants(
     assert np.all(input_index < len(input_expiries))
     np.testing.assert_allclose(result.expiries.astype(np.float64), input_expiries[input_index], rtol=0.0, atol=0.0)
 
-    for output_index, (xstrikes_t, strikes_t, bids_t, asks_t, mask_t, fit1_t, fitx_t, mstrikes_t, xix_to_mix_t) in enumerate(zip(
+    for output_index, (xstrikes_t, mask_t, fit1_t, fitx_t, mstrikes_t, xix_to_mix_t) in enumerate(zip(
         result.xstrikes,
-        result.strikes,
-        result.bids,
-        result.asks,
         result.masks,
         result.fits1,
         result.fitsX,
@@ -82,18 +76,15 @@ def _assert_surface_result_invariants(
         mask_t = np.asarray(mask_t, dtype=bool)
 
         assert np.all(np.diff(xstrikes_t) > 0.0)
-        assert np.array_equal(strikes_t, source_strikes_t)
-        assert np.array_equal(bids_t, source_bids_t)
-        assert np.array_equal(asks_t, source_asks_t)
-        assert mask_t.shape == strikes_t.shape
-        assert np.array_equal(strikes_t[mask_t], xstrikes_t[1:-1])
+        assert mask_t.shape == source_strikes_t.shape
+        assert np.array_equal(source_strikes_t[mask_t], xstrikes_t[1:-1])
         assert np.all(np.diff(mstrikes_t) > 0.0)
-        assert fit1_t.shape == fitx_t.shape == strikes_t.shape
-        assert bids_t[mask_t].shape == asks_t[mask_t].shape == fit1_t[mask_t].shape == fitx_t[mask_t].shape == xstrikes_t[1:-1].shape
+        assert fit1_t.shape == fitx_t.shape == source_strikes_t.shape
+        assert source_bids_t[mask_t].shape == source_asks_t[mask_t].shape == fit1_t[mask_t].shape == fitx_t[mask_t].shape == xstrikes_t[1:-1].shape
         assert np.all(np.isfinite(fit1_t))
         assert np.all(np.isfinite(fitx_t))
-        assert np.all(fit1_t[mask_t] >= bids_t[mask_t] - 1e-7)
-        assert np.all(fit1_t[mask_t] <= asks_t[mask_t] + 1e-7)
+        assert np.all(fit1_t[mask_t] >= source_bids_t[mask_t] - 1e-7)
+        assert np.all(fit1_t[mask_t] <= source_asks_t[mask_t] + 1e-7)
 
         if xix_to_mix_t is None:
             assert np.array_equal(mstrikes_t, xstrikes_t)
@@ -132,23 +123,58 @@ def test_mk_arbfree_off_mode_returns_extended_market_only() -> None:
     assert result.fitsX is None
     assert result.mstrikes is None
     assert result.xix_to_mix is None
-    assert len(result.expiries) == len(result.xstrikes) == len(result.bids) == len(result.asks)
-    assert len(result.strikes) == len(result.masks) == len(result.expiries)
+    assert len(result.expiries) == len(result.xstrikes)
+    assert len(strikes) == len(result.masks) == len(result.expiries)
 
     input_index = np.asarray(result.input_index, dtype=np.int32)
     assert len(input_index) == len(result.expiries)
     assert np.all(np.diff(input_index) > 0)
     np.testing.assert_allclose(result.expiries.astype(np.float64), expiries[input_index], rtol=0.0, atol=0.0)
 
-    for output_index, (xstrikes_t, strikes_t, bids_t, asks_t, mask_t) in enumerate(zip(result.xstrikes, result.strikes, result.bids, result.asks, result.masks, strict=True)):
+    for output_index, (xstrikes_t, mask_t) in enumerate(zip(result.xstrikes, result.masks, strict=True)):
         source_strikes_t = strikes[input_index[output_index]]
         source_bids_t = bids[input_index[output_index]]
         source_asks_t = asks[input_index[output_index]]
         mask_t = np.asarray(mask_t, dtype=bool)
 
         assert np.all(np.diff(xstrikes_t) > 0.0)
-        assert np.array_equal(strikes_t, source_strikes_t)
-        assert np.array_equal(bids_t, source_bids_t)
-        assert np.array_equal(asks_t, source_asks_t)
-        assert mask_t.shape == strikes_t.shape
-        assert np.array_equal(strikes_t[mask_t], xstrikes_t[1:-1])
+        assert mask_t.shape == source_strikes_t.shape
+        assert np.array_equal(source_strikes_t[mask_t], xstrikes_t[1:-1])
+
+
+def test_make_extended_strikes_trims_invalid_boundary_slopes() -> None:
+    arbfree = MkArbFree(no_arb_mode="off")
+    strikes = np.array([0.60, 0.75, 0.90, 1.00, 1.10, 1.20, 1.30, 1.45], dtype=np.float64)
+    mids = np.array([0.50, 0.32, 0.20, 0.13, 0.08, 0.04, 0.03995, 0.03990], dtype=np.float64)
+    bids = mids - 0.01
+    asks = mids + 0.01
+
+    xstrikes, mask, notice = arbfree.make_extended_strikes(strikes, bids, asks)
+
+    expected_mask = np.array([False, True, True, True, True, False, False, False])
+    np.testing.assert_array_equal(mask, expected_mask)
+    np.testing.assert_allclose(xstrikes[1:-1], strikes[mask], rtol=0.0, atol=0.0)
+    np.testing.assert_allclose(xstrikes[[0, -1]], np.array([0.2, 1.5]), rtol=0.0, atol=1e-12)
+    assert notice is not None
+    assert notice() == "removed 4 out of 8 strikes to ensure -1 < dC/dK[0] and dC/dK[-1] < 0."
+
+
+def test_make_extended_strikes_respects_previous_boundaries() -> None:
+    arbfree = MkArbFree(no_arb_mode="off", min_strikes_per_expiry=3)
+    strikes = np.array([0.80, 0.90, 1.00, 1.10, 1.20], dtype=np.float64)
+    mids = np.array([0.22, 0.13, 0.06, 0.02, 0.005], dtype=np.float64)
+    bids = mids - 0.002
+    asks = mids + 0.002
+
+    xstrikes, mask, notice = arbfree.make_extended_strikes(
+        strikes,
+        bids,
+        asks,
+        prev_lower=0.25,
+        prev_upper=1.5,
+    )
+
+    np.testing.assert_array_equal(mask, np.ones_like(strikes, dtype=bool))
+    np.testing.assert_allclose(xstrikes[1:-1], strikes, rtol=0.0, atol=0.0)
+    np.testing.assert_allclose(xstrikes[[0, -1]], np.array([0.25, 1.5]), rtol=0.0, atol=1e-12)
+    assert notice is None

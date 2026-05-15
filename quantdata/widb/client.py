@@ -1,5 +1,6 @@
 """
-WIDB connection and OptionMetrics query helpers.
+WIDB connection and OptionMetrics query helpers
+===============================================
 
 Wraps the ``wrds`` Python library to execute SQL queries against
 the OptionMetrics (IvyDB) dataset into a :class:`quantdata.widb.WIDBClient` class

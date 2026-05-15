@@ -1,16 +1,17 @@
 """
 SANOS Smooth Arbitrage-free Non-parametruc Option Surfaces
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-SANOS itself is a rather generic framework which can accomodate any number of model strikes and expires, potentially depending on market data for example when used in "interpolatnion mode" as in https://arxiv.org/pdf/2601.11209.
-Grid SANOS, on the other hand, specifies SANOS on a fixed strike and expiry grid for a machine learned representation of an option surface. 
+[SANOS](https://arxiv.org/abs/2601.11209) is a rather generic no-arbitrage framework which can accomodate any number of model strikes and expires,
+potentially depending on market data for example when used in "interpolation mode" as in https://arxiv.org/pdf/2601.11209.
 
-The framework here represents a fixed grid approach. The core class is :class:`dys.grid_sanos.GridGeometry`, which represents the geometry of the grid.
+Covered here are:
 
-**Main components**
+* :mod:`open`: SANOS adaptively applied to the market strikes. This mode fits well, but the number of model parameters is not constant.
+* :mod:`grid`: SANOS applied to a fixed grid of strikes and expires. By definition this migtht fit less well, but it has a fixed number of model parameters
+  which is more useful for machine learning applications.
 
-* :class:`GridGeometry`: represents the expiries and strikes of the grid, but no market data.
-* :class:`GridSanos`: represents the SANOS framework on the grid, including market data and transition operators.
-* :class:`Fitter`: fits the SANOS model to market data.
+Example:
 
 ```python
 
@@ -19,7 +20,6 @@ The framework here represents a fixed grid approach. The core class is :class:`d
     fitter   = Fitter( geometry, ... )
     sanos    = fitter( market_data )
     prices   = sanos.price( strikes, expiries )
-
 
 ````
 """

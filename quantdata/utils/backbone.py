@@ -1,7 +1,9 @@
 """
-Numerical backbone
+Abstract Numerical Backbone
+===========================
 
-Consistent wrapper around ``numpy`` and ``torch``, and in the future ``jax`` for being able to write unified model code where
+Consistent wrapper around ``numpy`` and ``torch``, and in the future ``jax`` for being able to write
+unified model code where
 sensible (e.g. outside ``jax.scan`` loops).
 
 The backbone also has a black scholes function and a ``verify`` function.
