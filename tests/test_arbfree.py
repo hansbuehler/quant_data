@@ -114,7 +114,7 @@ def test_mk_arbfree_surface_on_training_samples(isample: int, expect_drop: bool)
 
 
 def test_make_extended_strikes_trims_invalid_boundary_slopes() -> None:
-    arbfree = MkArbFree(no_arb_mode="off")
+    arbfree = MkArbFree(no_arb_mode="expiry")
     strikes = np.array([0.60, 0.75, 0.90, 1.00, 1.10, 1.20, 1.30, 1.45], dtype=np.float64)
     mids = np.array([0.50, 0.32, 0.20, 0.13, 0.08, 0.04, 0.03995, 0.03990], dtype=np.float64)
     bids = mids - 0.01
@@ -127,11 +127,11 @@ def test_make_extended_strikes_trims_invalid_boundary_slopes() -> None:
     np.testing.assert_allclose(xstrikes[1:-1], strikes[mask], rtol=0.0, atol=0.0)
     np.testing.assert_allclose(xstrikes[[0, -1]], np.array([0.2, 1.5]), rtol=0.0, atol=1e-12)
     assert notice is not None
-    assert notice() == "removed 4 out of 8 strikes to ensure -1 < dC/dK[0] and dC/dK[-1] < 0."
+    assert notice() == "removed 4 out of 8 strikes to ensure -1 < dC/dK[0] and dC/dK[-1] < 0"
 
 
 def test_make_extended_strikes_respects_previous_boundaries() -> None:
-    arbfree = MkArbFree(no_arb_mode="off", min_strikes_per_expiry=3)
+    arbfree = MkArbFree(no_arb_mode="expiry", min_strikes_per_expiry=3)
     strikes = np.array([0.80, 0.90, 1.00, 1.10, 1.20], dtype=np.float64)
     mids = np.array([0.22, 0.13, 0.06, 0.02, 0.005], dtype=np.float64)
     bids = mids - 0.002
