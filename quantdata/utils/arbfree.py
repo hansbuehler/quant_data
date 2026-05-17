@@ -475,7 +475,7 @@ class MkArbFree:
                                                                      prev_upper = r.xstrikes[-1][-1] if len(r.xstrikes) > 0 else None,
                                                                      message_context = local_message)
             if not notice is None:
-                verbose.write(notice, head=False, end='')
+                verbose.write(lambda : notice() + ": ", head=False, end='')
             if xstrikes_t is None:
                 continue
             assert np.all( xstrikes_t[1:-1] == strikes_t[mask_t] ), "Mask error...?"
@@ -487,6 +487,7 @@ class MkArbFree:
             strikes_t  = strikes[t]
             bid_t      = bids[t]
             ask_t      = asks[t]
+            verify_inp( np.min( ask_t - bid_t ) > 0., lambda : f"{local_message()}: All options must have positive bid/ask spread, but found minimum spread {np.min(ask_t - bid_t):.4g}" )
             p_t, fit_t = self.expiry_density( 
                                 expiry = expiry,
                                 variance = variances[t],
@@ -1187,7 +1188,7 @@ class MkArbFree:
 
         if len(xstrikes_t) < total_input:
            removed_count = total_input - len(xstrikes_t)
-           notice = lambda removed_count=removed_count, total_input=total_input: f"removed {removed_count} out of {total_input} strikes to ensure -1 < dC/dK[0] and dC/dK[-1] < 0."
+           notice = lambda removed_count=removed_count, total_input=total_input: f"removed {removed_count} out of {total_input} strikes to ensure -1 < dC/dK[0] and dC/dK[-1] < 0"
 
         dK0        = K_1 - lower_k
         lower_k    = max( lower_k/2., K_1 - dK0*2. )

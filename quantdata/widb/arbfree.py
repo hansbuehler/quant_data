@@ -105,10 +105,8 @@ def mk_arb_free_day(
     mk_arb_free: MkArbFree|None = MkArbFree(),
     override_cache_mode: CacheMode | None = None,
     raise_if_bad_day: bool = True,
-    return_arb_free_densities : bool = False,
-    warn_if_arb : bool = True,
     verbose: Context = Context.all,
-) -> pd.DataFrame | tuple[pd.DataFrame, dict]:
+) -> pd.DataFrame:
     """
     Generate an arbitrage-free fit for a single enriched WIDB day.
 
@@ -132,7 +130,7 @@ def mk_arb_free_day(
     
     Returns
     -------
-    Result: :class:`pandas.DataFrame`|None or (:class:`pandas.DataFrame`|None, dict|None) if ``return_arb_free`` is True.`
+    Result: :class:`pandas.DataFrame`|None
         This function may return None if ``raise_if_bad_day`` is False and the day is deemed bad as defined by :data:`bad.BAD.DAYS_ALL`.
     """
     if not enriched_data is None:
@@ -150,24 +148,18 @@ def mk_arb_free_day(
                 )
         if data is None:
             assert raise_if_bad_day, "Internal error: empty data should only be returned when 'raise_if_bad_day' is False. Please check the enriched day data for details."
-            if not return_arb_free_densities:
-                return None
-            return None, None
+            return None
         del enriched_data
 
     if mk_arb_free is None:
-        if not return_arb_free_densities:
-            return data
-        return data, None
+        return data
 
     verify_inp( mk_arb_free.no_arb_mode in ['expiry', 'surface'], lambda: f"{ticker} {d}: arb_free_day requires mk_arb_free.no_arb_mode='surface' for full fit outputs; found no_arb_mode '{mk_arb_free.no_arb_mode}'." )
     mode_surface = mk_arb_free.no_arb_mode == 'surface'
     expected_schema = SCHEMA_ARB_FREE_DAY_SURFACE if mode_surface else SCHEMA_ARB_FREE_DAY_EXPIRY
 
     if data.empty:
-        if not return_arb_free_densities:
-            return create_empty_df(expected_schema)
-        return create_empty_df(expected_schema), None
+        return create_empty_df(expected_schema)
     verify_schema(data, SCHEMA_ENRICHED_DAY, lambda: f"{ticker} {d}")
 
     tme = verbose.timer()
@@ -214,9 +206,7 @@ def mk_arb_free_day(
 
     if len(arb_result.expiries) == 0:
         verbose.write(lambda: f"{ticker} {d}: MkArbFree dropped all expiries. This took {tme}.")
-        if not return_arb_free_densities:
-            return create_empty_df(expected_schema)
-        return create_empty_df(expected_schema), None
+        return create_empty_df(expected_schema)
 
     fit1_all = arb_result.fits1
     assert not fit1_all is None, f"Internal error: {ticker} {d}: MkArbFree returned None for fits; expected arrays of shape (num_expiries, num_strikes_per_expiry)."

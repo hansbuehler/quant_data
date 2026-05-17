@@ -229,8 +229,6 @@ def filter_options_day(
     options_filter : OptionsFilter = OptionsFilter(),
     # operational
     raise_if_bad_day: bool = True,
-    return_arb_free_densities : bool = False,
-    warn_if_arb : bool = True,
     # pass on caching parameters
     override_cache_mode: CacheMode | None = None,
     cache_generate_only : bool = False,
@@ -260,16 +258,17 @@ def filter_options_day(
                         expiry_filter=expiry_filter, 
                         mk_arb_free=mk_arb_free,
                         raise_if_bad_day=raise_if_bad_day, 
-                        verbose=verbose, 
-                        warn_if_arb=warn_if_arb,
-                        return_arb_free_densities=False,
+                        verbose=verbose,
                         # pass on caching parameters
                         override_cache_mode=override_cache_mode, 
                         cache_generate_only=cache_generate_only )
 
+        if data is None:
+            assert raise_if_bad_day, "Internal error: empty data should only be returned when 'raise_if_bad_day' is False. Please check the enriched day data for details."
+            return None
+        
     if data.empty:
-        assert raise_if_bad_day, "Internal error: empty data should only be returned when 'raise_if_bad_day' is False. Please check the enriched day data for details."
-        return data
+        return create_empty_df(schema)
 
     data = options_filter._filter(ticker, d, data)
     verify_schema(data, schema, lambda : f"{ticker} {d}")
@@ -291,8 +290,6 @@ def _filter_options_day_num_options( *,
     options_filter : OptionsFilter = OptionsFilter(),
     # operational
     raise_if_bad_day: bool = True,
-    return_arb_free_densities : bool = False,
-    warn_if_arb : bool = True,
     # pass on caching parameters
     override_cache_mode: CacheMode | None = None,
     cache_generate_only : bool = False,
@@ -305,7 +302,7 @@ def _filter_options_day_num_options( *,
     r = filter_options_day(
         ticker=ticker, d=d, 
         raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, mk_arb_free=mk_arb_free, options_filter=options_filter,
-        raise_if_bad_day=raise_if_bad_day, return_arb_free_densities=return_arb_free_densities, warn_if_arb=warn_if_arb,
+        raise_if_bad_day=raise_if_bad_day, 
         override_cache_mode=override_cache_mode, cache_generate_only=cache_generate_only,
         verbose=verbose if not verbose is None else Context.quiet
     )

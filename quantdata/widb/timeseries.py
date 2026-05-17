@@ -93,7 +93,6 @@ def _assemble_time_series(*,
                                         mk_arb_free=time_series_def.mk_arb_free,
                                         options_filter=time_series_def.options_filter,
                                         raise_if_bad_day=not skip_bad_days,
-                                        return_arb_free_densities=False,
                                         warn_if_arb=warn_if_arb,
                                         override_cache_mode=override_cache_mode,
                                         verbose=None
@@ -103,11 +102,12 @@ def _assemble_time_series(*,
             fails.append(d)
         else:
             max_options = max(max_options, cnt_options)
-        verbose.write(lambda: f"\rGenerating daily data for {ticker} date {cnt}/{len(dates)} {fmt_date(d)} @ {math.ceil(100 * cnt / len(dates))}%. Total run time so far: {tme}{'' if not fails else f', so far {len(fails)} failures'}... ", end='')
+        if tme.interval_test(1.):
+            verbose.write(lambda: f"\rGenerating daily filtered options data for {ticker} date {cnt}/{len(dates)} {fmt_date(d)} @ {math.ceil(100 * cnt / len(dates))}%. Total run time so far: {tme}{'' if not fails else f', so far {len(fails)} failures'}... ", end='')
 
-    verbose.write(lambda: f"\rGenerated daily data {len(dates)} dates for {ticker} from {dates[0]} to {dates[-1]} {'excluding' if date_range.exclude_half_days else 'including'} half days. Maximum number of options is {max_options}{'' if not fails else f', with {len(fails)} failures'}. This took {tme}.")
+    verbose.write(lambda: f"\rGenerated daily filtered options data {len(dates)} dates for {ticker} from {dates[0]} to {dates[-1]} {'excluding' if date_range.exclude_half_days else 'including'} half days. Maximum number of options is {int(max_options)}{'' if not fails else f', with {len(fails)} failures'}. This took {tme}.")
     if fails:
-        raise RuntimeError(f"Failed to generate daily data for {ticker} for the following dates: {fmt_list(sorted(fails))}.")
+        raise RuntimeError(f"Failed to generate daily filtered options data for {ticker} for the following dates: {fmt_list(sorted(fails))}.")
     return max_options
 
 def _bt_uid(ticker, date_range, include_fields, exclude_fields, time_series_def ) -> str:
@@ -129,7 +129,6 @@ def build_time_series(
                   time_series_def : TimeSeriesDefinition,
                   pool_config : PoolConfig = PoolConfig.off(),
                   skip_bad_days : bool = False,
-                  warn_if_arb : bool = True,
                   override_cache_mode : CacheMode|None = None,
                   verbose : Context = Context.all ) -> dict[str:np.array|str|type]:
     """
@@ -167,9 +166,6 @@ def build_time_series(
     skip_bad_days : bool, default ``False``
         If ``False``, processing stops upon encountering an exception when creating the data for a given day. If ``True``, processing continues but
         building the time series will fail because of the missing date.
-    warn_if_arb : bool, default ``True``
-        If ``True``, warnings about detected arbitrage opportunities in the data are shown. This only has an effect if ``mk_arb_free`` is not ``None``.
-        Set to ``False`` to turn off reporting.
     override_cache_mode : :class:`cdxcore.subdir.CacheMode` | None, default ``None``
         If not ``None``, overrides the cache mode for the enriched day data. Set to ``"update"`` to refresh the underlying raw cache.
     verbose : :class:`cdxcore.verbose.Context`, default ``Context.all``
@@ -216,7 +212,6 @@ def build_time_series(
                         time_series_def=time_series_def,
                         pool_config=pool_config,
                         skip_bad_days=skip_bad_days,
-                        warn_if_arb=warn_if_arb,
                         override_cache_mode=override_cache_mode,
                         verbose=verbose(1)
                     )
@@ -253,7 +248,6 @@ def build_time_series(
                                     override_cache_mode="cacheonly", 
                                     raise_if_bad_day=False,
                                     cache_generate_only=False,
-                                    warn_if_arb=warn_if_arb,
                                     verbose=Context.quiet )
                 except CacheMustExistError as e:
                     raise RuntimeError(f"Internal error: {ticker} {d}: expected {'' if time_series_def.mk_arb_free is None else 'arbitrage-free '}enriched data to be available in the cache after generation, but it was not found. Please contact the authors with an example. Original error message: {str(e)}")
@@ -264,8 +258,9 @@ def build_time_series(
                 return df
 
             for d, df in thread_pool.parallel( { d: thread_pool.delayed(process)(d) for d in dates } ):
-                verbose.write(lambda: f"\rReading data for {ticker} date {fmt_date(d)}. Total run time so far: {tme}... ", end='')
                 results[d] = df
+                if tme.interval_test(1.):
+                    verbose.write(lambda: f"\rReading data for {ticker} date {fmt_date(d)} {len(results)}/{len(dates)}. Total run time so far: {tme}... ", end='')
                 max_options = max(max_options, len(df))
 
             max_options = int(max_options)
