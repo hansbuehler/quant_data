@@ -1,52 +1,79 @@
 """
-Dysanos Non-ML Benchmark
+Sanos Non-ML Benchmark
 ^^^^^^^^^^^^^^^^^^^^^^^^
-
 """
+from __future__ import annotations
 
-import math
+from quantdata.widb.timeseries import TimeSeriesDefinition, filter_options_day, build_time_series, DateRange, PoolConfig
+from quantdata.utils.arbfree import MkArbFree
+from quantdata.biz_calendar import DAYS_PER_YEAR, NMS5
+from quantdata.dysanos.simple import _locations_simple
 
-from cdxcore import bs
-
-from quantdata.sanos.open import OpenSanos
-from quantdata.sanos.grid import GridGeometryGenerator, GridSanos
-from quantdata.sanos.fitter import Fitter
-from quantdata.dysanos.simple.sampler import SimpleSampler, SimpleConfig, SamplingConfig, ExpiryFilter, RawDayFilter, SampleDaysConfig, DateRange, PoolConfig, sample_simple_days
-from datetime import date
-
-
+from cdxcore.bs import bs
+from cdxcore.uniquehash import named_unique_filename48_8
 from cdxcore.verbose import Context
 from cdxcore.subdir import SubDir, CacheMode, version
 from cdxcore.pretty import PrettyObject, verify_inp
 from cdxcore.jcpool import JCPool
-from dataclasses import dataclass
 
-from quantdata.sanos.open import OpenGeometryGenerator
-from quantdata.sanos.utils import Eps, extract_atm_fwd_vols
-from quantdata.biz_calendar import DAYS_PER_YEAR, NMS
+from datetime import date
+from dataclasses import dataclass, field
 import numpy as np
+import warnings
+
+
+DEFAULT_EXPIRIES = np.array([1./255., 2./255., 5./255., 10./255., 20./255., 40./255.,0.5,1.], dtype=np.float64)
+DEFAULT_NUMS     = (-4,2)
+_EPS_PRICE       = 1E-6
+
+_cache = _locations_simple.experiments("sanos_benchmark")
 
 @version("0.1")
 @dataclass(frozen=True)
 class SanosBenchmarkConfig:
-    label          : str   #: Unique label
-    open_generator : OpenGeometryGenerator = OpenGeometryGenerator()  # how to generate open geometries
-    grid_generator : GridGeometryGenerator = GridGeometryGenerator()  # how to generate grid geometries
-    fwdvol_frac    : float = 0.25
-    eps            : Eps = Eps(1E-3)
-    debug          : bool = False
-    no_warnings    : bool = False
-    
-FIELDS_SANOS_BENCHMARK = {
+    smoothness     : float = 0.1
+    grid_expiries  : np.array = field( default_factory=lambda: DEFAULT_EXPIRIES )
+    grid_nms       : tuple = (-4,2)
+    grid_num_nms   : int = 40
+    vol_spread_fac : float = 1.01
 
-}
+    def __post_init__(self):
+        verify_inp( self.smoothness is None or (isinstance(self.smoothness, (float,int,np.number)) and self.smoothness>=0), lambda : f"Expected 'smoothness' to be a non-negative number or None, but found {str(self.smoothness)}" )
+        verify_inp( isinstance(self.grid_expiries, np.ndarray) and self.grid_expiries.ndim==1 and self.grid_expiries[0]>0. and np.all(np.diff(self.grid_expiries)>0), lambda : f"Expected 'grid_expiries' to be a 1D numpy array of positive increasing numbers, but found {str(self.grid_expiries)[:100]}" )
+        verify_inp( isinstance(self.grid_nms, tuple) and len(self.grid_nms)==2 and self.grid_nms[0] < 0. and self.grid_nms[1] > 0., lambda : f"Expected 'grid_nms' to be a tuple with two elements (nm_min, nm_max) where nm_min<0 and nm_max>0, but found {self.grid_nms}" )
+        verify_inp( self.grid_num_nms>=5, lambda : f"Expected 'grid_num_nms' to be an integer greater than or equal to 5, but found {self.grid_num_nms}" )
+        verify_inp( self.vol_spread_fac>0., lambda : f"Expected 'vol_spread_fac' to be a positive number, but found {self.vol_spread_fac}" )
 
-@version("0.1", dependencies=[SanosBenchmarkConfig, sample_simple_days])
+    def __str__(self):
+        return f"{f'{self.smoothness:.3g}' if self.smoothness is not None else 'lin'},xp={self.grid_expiries[0]:.2g}-{self.grid_expiries[-1]:.2g},nms=({self.grid_nms[0]:.1f},{self.grid_nms[1]:.1f}),num={self.grid_num_nms},vsopr{self.vol_spread_fac:.4g}"
+
+    def _generate_grid_nms(self):
+        dist = float(self.grid_nms[1] - self.grid_nms[0])
+        Nlo  = min(max(2, float(self.grid_num_nms*abs(self.grid_nms[0]))//dist),self.grid_num_nms-3)
+        Nhi = self.grid_num_nms - Nlo - 1
+
+        assert Nlo>=2 and Nhi>=2, f"Internal error: error {Nlo} {Nhi} for grid_nms {self.grid_nms} and grid_num_nms {self.grid_num_nms}."
+        grid_nms = np.concatenate( ( np.linspace(self.grid_nms[0], 0., int(Nlo), endpoint=False), np.linspace(0., self.grid_nms[1], int(Nhi)+1) ) )
+        assert len(grid_nms)==self.grid_num_nms, f"Internal error: generated number of moneyness levels {len(grid_nms)} does not match expected {self.grid_num_nms} for grid_nms {self.grid_nms} and grid_num_nms {self.grid_num_nms}."
+        return grid_nms
+
+def _bd_uid(ticker, d, time_series_def : TimeSeriesDefinition, benchmark_config : SanosBenchmarkConfig, ) -> str:
+    """ Returns a relative UID for a time series based on its definition and the requested fields. """
+    assert isinstance(time_series_def, TimeSeriesDefinition), f"Internal error: expected 'time_series_def' to be an instance of TimeSeriesDefinition, but got {type(time_series_def)}. Please contact the authors with an example."
+    assert isinstance(benchmark_config, SanosBenchmarkConfig), f"Internal error: expected 'benchmark_config' to be an instance of SanosBenchmarkConfig, but got {type(benchmark_config)}. Please contact the authors with an example."
+    ts_id  = named_unique_filename48_8(str(time_series_def), time_series_def)
+    bm_id  = named_unique_filename48_8(str(benchmark_config), benchmark_config)
+    return f"{ts_id}/{bm_id}/{ticker}/{d}"
+
+#@_cache(fmt=SubDir.PYTREE_HDF5).cache(
+#            "0.1", dependencies=[SanosBenchmarkConfig, build_time_series, TimeSeriesDefinition],
+#            uid=_bd_uid)
+@version("0.1") 
 def sanos_benchmark_day( 
                  ticker : str,
                  d: date,
-                 isample : int,
                  data : PrettyObject,
+                 time_series_def : TimeSeriesDefinition,
                  benchmark_config : SanosBenchmarkConfig,
                  verbose : Context = Context.all ) -> dict[str, np.ndarray]:        
     """
@@ -56,218 +83,214 @@ def sanos_benchmark_day(
     2) Fit "grid" SANOS to the same market data and strikes, but with the grid geometry. This is the benchmark to beat for any ML SANOS fit based on the same grid geometry.
     """
 
-    with verbose.write_t(lambda : f"Processing {ticker} date {d} ({isample+1}/{len(data.dates)})") as tme:
-        verbose1 = verbose(1)
+    str_smth = 'linear' if benchmark_config.smoothness is None else f'{benchmark_config.smoothness:.3g}-smooth'
+    grid_nms = benchmark_config._generate_grid_nms()
 
-        # market data & geometry
-        # ----------------------
+    # market data & geometry
+    # ----------------------
 
-        market               = PrettyObject()
-        is_valid             = data.is_valid[isample,:]
-        arb_free_mask        = data.arb_free_mask[isample,is_valid]
-        arb_free_mask        = arb_free_mask if np.any(~arb_free_mask) else None    
-        M                    = len(is_valid)
-        Mx                   = sum(is_valid)
-        d                    = data.dates[isample]
-        market.strikes       = data.pure_strike[isample,is_valid]
-        market.tte_y         = data.tte_y[isample,is_valid]
-        market.bid_vol       = data.bid_vol[isample,is_valid]
-        market.ask_vol       = data.ask_vol[isample,is_valid]
-        market.bid           = data.bid_pure_price[isample,is_valid]
-        market.ask           = data.ask_pure_price[isample,is_valid]
+    is_valid               = data['is_valid']
+    mask_arb_free          = data['mask_arb_free'][is_valid]
+    mask_arb_free          = mask_arb_free if np.any(~mask_arb_free) else None    
+    mask_arb_free = None
 
-        market.target_strikes = market.strikes[arb_free_mask] if arb_free_mask is not None else market.strikes
-        market.target_bid     = market.bid[arb_free_mask] if arb_free_mask is not None else market.bid
-        market.target_ask     = market.ask[arb_free_mask] if arb_free_mask is not None else market.ask
-        market.target_tte_y   = market.tte_y[arb_free_mask] if arb_free_mask is not None else market.tte_y
+    market                 = PrettyObject()
+    market.mask_arb_free   = mask_arb_free
+    market.strikes         = data['pure_strike'][is_valid]
+    market.expiries        = data['tte_y'][is_valid]
+    market.bid             = data['pure_bid_price'][is_valid]
+    market.ask             = data['pure_ask_price'][is_valid]
 
-        # limit maximum expiry
-        max_expiry      = benchmark_config.grid_generator.horizon_t
-        verify_inp( max_expiry > market.tte_y[0], lambda: f"{ticker} {d}: Maximum expiry of the grid geometry must be greater than the first market expiry, found max_expiry {max_expiry:.4g} and first market expiry {market.tte_y[0]:.4g}" )
-        if max_expiry < market.tte_y[-1]:
-            is_valid_expiry = market.tte_y <= max_expiry
-            n_drop          = np.sum(~is_valid_expiry)
-            verbose1.write(lambda : f"Limiting market data to a maximum expiry of {max_expiry*DAYS_PER_YEAR:.4f}d years. Dropping {n_drop}/{len(market.tte_y)} options.")
-            for k,v in market.items():
-                market[k] = v[is_valid_expiry]
+    # we only train our smooth model
+    # to the strikes the linear model
+    # managed to fit to.
+    market.target_strikes  = market.strikes[mask_arb_free] if mask_arb_free is not None else market.strikes
+    market.target_bid      = market.bid[mask_arb_free] if mask_arb_free is not None else market.bid
+    market.target_ask      = market.ask[mask_arb_free] if mask_arb_free is not None else market.ask
+    market.target_expiries = market.expiries[mask_arb_free] if mask_arb_free is not None else market.expiries
 
-        # open first
-        # ----------
-        # the output are benchmark fits: this is the benchmark to beat for anything (arb-free, TBF)
+    # transform into grids
+    # --------------------
 
-        def open_sanos():
-            result        = PrettyObject()
-            open_geometry = benchmark_config.open_generator.create(
-                                expiries=market.tte_y,
-                                pure_strikes=market.strikes,
-                                dtype=np.float64)
-            open_fwd_vols = extract_atm_fwd_vols( market.strikes, market.tte_y, market.ask_vol, fwdvol_min=open_geometry.fwdvol_min )
-            open_fitter   = Fitter( geometry = open_geometry,
-                                    eps = benchmark_config.eps, 
-                                    debug=benchmark_config.debug, 
-                                    max_error = None, 
-                                    mid_fit_weight = 0.0001, 
-                                    no_warnings=benchmark_config.no_warnings )
+    af_target = PrettyObject()
+    af_target.strikes  = []
+    af_target.expiries = []
+    af_target.asks     = []
+    af_target.bids     = []
 
-            arb_free_mask = market.arb_free_mask if np.any(~market.arb_free_mask) else None
+    uttys = np.unique(market.target_expiries)
+    for tty in uttys:
+        """
+        if tty > benchmark_config.grid_expiries[-1] and\
+           len(af_target.expiries) > 0 and\
+           af_target.expiries[-1] >= benchmark_config.grid_expiries[-1]:
+            continue
+        """
+        mask = market.target_expiries == tty
+        strikes_t = market.target_strikes[mask]
+        if len(strikes_t)<=3:
+            continue
+        ixs = np.argsort(strikes_t)
 
-            open_dlvsqs,\
-            result.open_target_fit,\
-            open_densities = \
-                open_fitter(fwd_vols     = open_fwd_vols*benchmark_config.fwdvol_frac,
-                            opt_strikes  = market.target_strikes,
-                            opt_bid      = market.target_bid,
-                            opt_ask      = market.target_ask,
-                            opt_tte      = market.target_tte_y,
-                            opt_is_calls = None,
-                            opt_mask     = None,
-                            return_only_dlvsqs = False,
-                            verbose      = Context.all ) 
-            result.open_target_fit_vols = bs.implied(market.target_strikes, result.open_target_fit, sqrtT = np.sqrt(market.target_tte_y) )
+        af_target.expiries.append( tty )
+        af_target.strikes.append( strikes_t[ixs] )
+        af_target.bids.append( market.target_bid[mask][ixs] )
+        af_target.asks.append( market.target_ask[mask][ixs] )
 
-            if arb_free_mask is None:
-                result.open_fit = result.open_target_fit
-                result.open_fit_vols = result.open_target_fit_vols
-            else:
-                open_sanos = OpenSanos( geometry = open_geometry, eps=benchmark_config.eps, no_warnings=benchmark_config.no_warnings )
-                result.open_fit = open_sanos.price(
-                                        fwd_vols    = open_fwd_vols,
-                                        densities   = open_densities,
-                                        #
-                                        opt_strikes = market.strikes,
-                                        opt_tte     = market.tte_y,
-                                        opt_mask    = None,
-                                        opt_is_call = None
-                                    )
-                result.open_fit_vols = bs.implied(market.strikes, result.open_fit, sqrtT = np.sqrt(market.tte_y) )
-            del open_dlvsqs, open_densities
-            return result
+    af_target.expiries = np.array(af_target.expiries)
 
-        result = open_sanos()
+    # fit a smooth SANOS model to the market
+    # --------------------------------------
 
-        # grid next
-        # ---------
-        # output is the lower bound for any ML SANOS fit based on the same grid geometry
-        # we also compute the required interpolation data here.
+    with verbose.write_t(lambda : f"\rFitting {str_smth} SANOS for {ticker} {d}... ", end="") as tme:
+        mk_arb_free     = MkArbFree(smoothness=benchmark_config.smoothness, surface_expiry_linear=True )
+        af_output       = mk_arb_free( strikes = af_target.strikes, expiries = af_target.expiries, bids = af_target.bids, asks = af_target.asks, verbose=verbose.quiet )
 
-        def grid_sanos():
-            result             = PrettyObject()
-            grid_geometry      = benchmark_config.grid_generator.create(return_inner=False, dtype=np.float64) 
-            grid_fwd_vols      = extract_atm_fwd_vols( market.strikes, market.tte_y, market.ask_vol, fwdvol_min=grid_geometry.fwdvol_min )
-            grid_fitter        = Fitter( geometry = grid_geometry,
-                                        eps = benchmark_config.eps, 
-                                        debug=benchmark_config.debug, 
-                                        max_error = None, 
-                                        mid_fit_weight = 0.0001, 
-                                        no_warnings=benchmark_config.no_warnings )
+        # price full market
+        market.fit      = af_output.price( expiries = market.expiries, strikes = market.strikes, and_vols=False, mode="surface" )
+        half_spread     = np.maximum( 0.5*(market.ask -market.bid), mk_arb_free.min_half_spread )
+        market.fit_err  = (np.maximum( 0., market.fit - market.ask ) + np.maximum(0., market.bid - market.fit) ) / half_spread
 
-            grid_dlvsqs,\
-            result.grid_target_fit,\
-            grid_densities = \
-                grid_fitter(fwd_vols     = grid_fwd_vols*benchmark_config.fwdvol_frac,
-                            opt_strikes  = market.target_strikes,
-                            opt_bid      = market.target_bid,
-                            opt_ask      = market.target_ask,
-                            opt_tte      = market.target_tte_y,
-                            opt_is_calls = None,
-                            opt_mask     = None,
-                            return_only_dlvsqs = False,
-                            verbose      = Context.all ) 
-            result.grid_target_fit_vols = bs.implied(market.target_strikes, result.grid_target_fit, sqrtT = np.sqrt(market.target_tte_y) )
-            del grid_dlvsqs, grid_densities
+        # compute & report fit
+        fit_err         = market.fit_err[mask_arb_free] if not mask_arb_free is None else market.fit_err 
+        pcnt_fit        = float(np.sum(fit_err > 0.)) / float(len(fit_err))
+        median_fit_err  = np.median(fit_err[fit_err>0.] ) if np.any(fit_err>0.) else 0.
+        verbose.write(f"done; median error is {median_fit_err:.2f} half-spreads for the {pcnt_fit*100:.1f}% of options which were not fitted within the bid-ask spread. This took {tme}.", head=False )
 
-            if arb_free_mask is None:
-                result.grid_fit = result.grid_target_fit
-                result.grid_fit_vols = result.grid_target_fit_vols
-            else:
-                grid_sanos = GridSanos( geometry = grid_geometry, eps=benchmark_config.eps, no_warnings=benchmark_config.no_warnings )
-                result.grid_fit = grid_sanos.price(
-                                        fwd_vols    = grid_fwd_vols,
-                                        densities   = grid_densities,
-                                        #
-                                        opt_strikes = market.strikes,
-                                        opt_tte     = market.tte_y,
-                                        opt_mask    = None,
-                                        opt_is_call = None
-                                    )
-                result.grid_fit_vols = bs.implied(market.strikes, result.grid_fit, sqrtT = np.sqrt(market.tte_y) )
-                return result
+    # use the smooth SANOS model to generate prices
+    # for a grid of options - then fit another
+    # SANOS model to that grid.
 
-        result.update( grid_sanos() )
-        result.is_valid = is_valid
-        verbose.write(lambda : f"done; this took {tme}.", head=False)
+    with verbose.write_t(lambda : f"\rTraining {str_smth} SANOS grid... ", end="") as tme:
+        if benchmark_config.grid_expiries[-1] > af_target.expiries[-1]:
+            warnings.warn(f"Warning {str_smth} SANOS {ticker} {d}: the maximum grid expiry {benchmark_config.grid_expiries[-1]:.4g} is greater than the maximum market expiry {af_target.expiries[-1]:.4g}.")
+        
+        M    = len(benchmark_config.grid_expiries )
+        grid = PrettyObject()
+        grid.expiries   = np.asarray( benchmark_config.grid_expiries )
+        grid.atms       = af_output.interpolate_atm_vols( grid.expiries )
+        assert np.all(np.isfinite(grid.atms)), f"Internal error: generated non-finite ATM vols {grid.atms} for grid expiries {grid.expiries} from input expiries {af_output.expiries} and variances {af_output.variances}."
+        grid.strikes    = NMS5.from_nms( z=grid_nms[None,:], t=grid.expiries[:,None], vol=grid.atms[:,None] )
+        grid.mids,\
+        grid.vols       = af_output.price( expiries=grid.expiries[:,None], strikes=grid.strikes, and_vols=True, mode="surface" )
+        grid.bids       = bs.price( k=grid.strikes, sqrtT=np.sqrt(grid.expiries[:,None]), vol=grid.vols/benchmark_config.vol_spread_fac, eps=_EPS_PRICE )
+        grid.asks       = bs.price( k=grid.strikes, sqrtT=np.sqrt(grid.expiries[:,None]), vol=grid.vols*benchmark_config.vol_spread_fac, eps=_EPS_PRICE )
+        grid.bids       = np.minimum( grid.bids, grid.mids -  mk_arb_free.min_half_spread )
+        grid.asks       = np.maximum( grid.asks, grid.mids +  mk_arb_free.min_half_spread )
 
-    return result
+        grid.strikes    = [ grid.strikes[t,:] for t in range(M) ]
+        grid.vols       = [ grid.vols[t,:] for t in range(M) ]
+        grid.mids       = [ grid.mids[t,:] for t in range(M) ]
+        grid.bids       = [ grid.bids[t,:] for t in range(M) ]
+        grid.asks       = [ grid.asks[t,:] for t in range(M) ]
 
-def create_sanos_benchmark( ticker : str,
-                            data : dict[str, np.ndarray],
-                            benchmark_config : SanosBenchmarkConfig,
-                            simple_config : SimpleConfig, *,
-                            pool_config : PoolConfig = PoolConfig.off(),
-                            override_cache_mode : CacheMode|None = None,
-                            verbose : Context = Context.all ):
-    """
-    Create SANOS Fitting Benchmark
-    """
-    assert set(data) == simple_config.config.features()|{'dates'}, f"Internal error: data mismatch: expected features {sorted(simple_config.config.features())} and 'dates', found {sorted(set(data))}"
-    num_samples = len(data['dates'])
+        # fit and price market
+        af_grid         = mk_arb_free( strikes = grid.strikes, expiries = grid.expiries, bids = grid.bids, asks = grid.asks, verbose=verbose.quiet )
+        grid.fits       = [ af_grid.price( expiries=grid.expiries[t], strikes=grid.strikes[t], and_vols=False, mode="surface" ) for t in range(M) ]
 
-    with verbose.write_t(lambda : f"Creating SANOS Benchmark for {ticker} with label {benchmark_config.label}: loading data.") as tme:
+        market.grid_fit = af_grid.price( expiries=market.expiries, strikes=market.strikes, and_vols=False, mode="surface" )
+        half_spread     = np.maximum( 0.5*(market.ask -market.bid), mk_arb_free.min_half_spread )
+        market.grid_err = (np.maximum( 0, market.grid_fit - market.ask ) + np.maximum(0., market.bid - market.grid_fit) ) / half_spread
+
+        # compute & report fit
+
+        target_grid     = market.grid_err[mask_arb_free] if not mask_arb_free is None else market.grid_err
+        grid.pcnt_err   = np.sum( target_grid > 0.) / len(target_grid)
+        grid.median_err = np.median( target_grid[target_grid>0.] ) if np.any(target_grid>0.) else 0.
+        verbose.write(f"done; median error is {grid.median_err:.2f} half-spreads for the {grid.pcnt_err*100:.1f}% of options which were not within the bid-ask spread. This took {tme}.", head=False )
+
+    # convert back
+    # ------------
+
+    full_market = PrettyObject()
+    full_market.fit      = np.zeros( is_valid.shape, dtype=market.fit.dtype )
+    full_market.fit_err  = np.zeros( is_valid.shape, dtype=market.fit.dtype )
+    full_market.grid_fit = np.zeros( is_valid.shape, dtype=market.fit.dtype )
+    full_market.grid_err = np.zeros( is_valid.shape, dtype=market.fit.dtype )
+    full_market.fit[is_valid] = market.fit
+    full_market.fit_err[is_valid] = market.fit_err
+    full_market.grid_fit[is_valid] = market.grid_fit
+    full_market.grid_err[is_valid] = market.grid_err
+
+    full_market.pcnt_err = pcnt_fit
+    full_market.median_err = median_fit_err
+    assert set(grid) == {'expiries','atms', 'strikes', 'mids', 'vols', 'bids', 'asks', 'fits', 'pcnt_err', 'median_err'}, f"Internal error: expected grid to have keys 'expiries','atms', 'strikes', 'mids', 'vols', 'bids', 'asks', 'fits', 'pcnt_err', 'median_err', but found {sorted(set(grid))}"
+
+    return dict( market=dict(full_market), grid=dict(grid) )
+
+
+def _b_uid(ticker, date_range, time_series_def : TimeSeriesDefinition, benchmark_config : SanosBenchmarkConfig, ) -> str:
+    """ Returns a relative UID for a time series based on its definition and the requested fields. """
+    assert isinstance(time_series_def, TimeSeriesDefinition), f"Internal error: expected 'time_series_def' to be an instance of TimeSeriesDefinition, but got {type(time_series_def)}. Please contact the authors with an example."
+    assert isinstance(benchmark_config, SanosBenchmarkConfig), f"Internal error: expected 'benchmark_config' to be an instance of SanosBenchmarkConfig, but got {type(benchmark_config)}. Please contact the authors with an example."
+    ts_id  = named_unique_filename48_8(str(time_series_def), time_series_def)
+    bm_id  = named_unique_filename48_8(str(benchmark_config), benchmark_config)
+    return f"{ts_id}/sanos bm {bm_id}/{ticker}/{date_range}"
+
+@_cache(fmt=SubDir.PYTREE_HDF5).cache(
+            "0.1", dependencies=[SanosBenchmarkConfig, sanos_benchmark_day, TimeSeriesDefinition],
+            uid=_b_uid)
+def sanos_benchmark( 
+                 ticker : str,
+                 date_range : DateRange,
+                 time_series : dict,
+                 time_series_def : TimeSeriesDefinition,
+                 benchmark_config : SanosBenchmarkConfig,
+                 pool_config : PoolConfig = PoolConfig.off(),
+                 override_cache_mode : CacheMode | None = None,
+                 verbose : Context = Context.all ) -> dict[str, np.ndarray]:      
+
+    num_dates = len(time_series['dates'])
+    pool      = JCPool(num_workers=pool_config.num_workers, threading=pool_config.threading)
+    quietprc  = pool_config.num_workers > 0 and not pool_config.threading
+
+    slice_fields = ['is_valid', 'mask_arb_free', 'pure_strike', 'tte_y', 'pure_bid_price', 'pure_ask_price']
+
+
+    def slice_data( isample ):
+        r = { k: time_series[k][isample,:] for k in slice_fields }
+        return r
+
+
+    def process( ticker, d, ddata, time_series_def, benchmark_config : SanosBenchmarkConfig ):
+        return sanos_benchmark_day( ticker=ticker,
+                                    d=d,
+                                    data=PrettyObject(ddata),
+                                    time_series_def=time_series_def,
+                                    benchmark_config=benchmark_config,
+                                    verbose=Context.quiet if quietprc else Context.all )
+
+    results = {}
     
-        pool = JCPool(num_workers=pool_config.workers, threading=pool_config.threading)
+    with verbose.write_t(lambda : f"Creating SANOS Benchmark for {ticker} from {time_series['dates'][0]} to {time_series['dates'][-1]} with {num_dates} samples:") as tme:
+        for d, dresults in pool.parallel( { d : pool.delayed( process )( ticker=ticker, d=d, ddata=slice_data(isample), time_series_def=time_series_def, benchmark_config=benchmark_config ) for isample, d in enumerate(time_series['dates']) } ):
+            results[d] = dresults           
+            if tme.interval_test(2.) and quietprc:
+                verbose.write(lambda : f"\rProcessed date {len(results)}/{num_dates} {d} for {ticker}. Market % error {results['market']['pcnt_err']:.2f} median {results['market']['median_err']:.3g}, Grid % error {results['grid']['pcnt_err']:.2f} median {results['grid']['median_err']:.3g}. So far this took {tme}...", end='')
 
-        def process( *, ticker, d, isample, sample_data, benchmark_config, override_cache_mode ):
-            r = process_day( ticker = ticker,
-                                d = sample_data["date"],
-                                sample_data = sample_data,
-                                benchmark_config = benchmark_config,
-                                override_cache_mode = override_cache_mode,
-                                verbose = Context.quiet )
-            return ticker, d, isample, r
-        def mk_sample_data( isample ):
-            r = dict()
-            for k, vi in data.items():
-                if k!="dates":
-                    r[k] = vi[isample,:]
-            return r
-        
-        results = [None]*num_samples
-        for ticker, d, isample, sample_ret in pool.parallel( pool.delayed( process )( ticker=ticker,
-                                                                                      d=d,
-                                                                                      isample=isample,
-                                                                                      sample_data=mk_sample_data(isample),
-                                                                                      benchmark_config=benchmark_config, 
-                                                                                      override_cache_mode=override_cache_mode )
-                                                                                      for isample, d in enumerate(data['dates']) ):
-            verbose.report(1,lambda : f"\Generated SANOS benchmark for {ticker} {d} ({isample+1}/{num_samples}) done {math.ceil((isample+1)/num_samples*100)}%. So far this took {tme}... ", end="")
-            results[isample] = sample_ret
-        assert np.all( [r is not None for r in results] ), "Internal error: some samples were not processed successfully, this should never happen. Please report this to the developers."
+    verbose.write(lambda : f"\rProcessed all {num_dates} for {ticker} from {time_series['dates'][0]} to {time_series['dates'][-1]}. This took {tme}.")
 
-        verbose.write(f"\rGenerated SANOS benchmark for {num_samples} samples for ticker {ticker}. This took {tme}.", end="")
+    # allocate one big frame
+    # ----------------------
 
+    ignore_fields = {'pcnt_err', 'median_err'}
 
-    
+    result0 = results[time_series['dates'][0]]
+    grid    = PrettyObject()
+    for k, v in result0['grid'].items():
+        if not k in ignore_fields:
+            grid[k] = np.zeros( (num_dates,) + v.shape, dtype=v.dtype )
+    for k, v in result0['market'].items():
+        if not k in ignore_fields:
+            assert k not in time_series, f"Internal error: expected market result key {k} to not be in input data keys {sorted(time_series)}, but found it. Please contact the authors with an example."
+            time_series[k] = np.zeros( (num_dates,) + v.shape, dtype=v.dtype )
 
+    for isample, d in enumerate(time_series['dates']):
+        for k, v in results[d]['grid'].items():
+            if k not in ignore_fields:
+                grid[k][isample,...] = v
+        for k, v in results[d]['market'].items():
+            if k not in ignore_fields:
+                time_series[k][isample,...] = v
 
-
-    data = PrettyObject(
-            sample_simple_days( 
-                ticker = ticker,
-                simple_config = simple_config,
-                pool_config = pool_config,
-                override_cache_mode = override_cache_mode,
-                verbose = verbose(1)
-            )
-        )
-        
-    S = len(data.dates)
-
-    for t, d in enumerate(data.dates):
-        with verbose.write(lambda : f"\nProcessing {ticker} date {d} ({t+1}/{S})... ", end=""):
-        
-            
-
-            d.open_geometry = benchmark_config.open_generator.create_geometry(d)
-
-    verbose.write(lambda : f"Creating SANOS Benchmark for {ticker} with label {benchmark_config.label}: loading data."
-
+    return dict( time_series=time_series, grid=dict(grid) )

@@ -146,9 +146,9 @@ class ArbFreePricer(PrettyObject):
 
     _ONE_MINUTE = _ONE_MINUTE
 
-    def price( self, expiry : float, strikes : np.ndarray, *, and_vols: bool = False, mode : str|None = None ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
+    def price( self, expiries : float|np.ndarray, strikes : float|np.ndarray, *, and_vols: bool = False, mode : str|None = None ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
         """
-        Price options at ``strikes`` with expiry ``expiry``.
+        Price options at ``strikes`` with expiries ``expiries``.
 
         Use ``mode`` to chose which pricing kernel to use: "expiry" uses the per-expiry fit
         which may not be free of arbitrage in time; "surface" uses the full surface
@@ -157,65 +157,139 @@ class ArbFreePricer(PrettyObject):
 
         If ``and_vols`` is ``True`` this function returns call prices and their implied volatilities;
         if ``False``, it will return only call prices.
+
+        Parameters
+        ----------
+        expiries : float | :class:`np.ndarray`
+            The expiry or expiries to price at.
+            
+            * If ``expiries`` is a float, all strikes are evaluated at that expiry.
+            * If ``expiries`` is a 1D array of shape ``(N,)``, then ``strikes`` must also be a 1D array of shape ``(N,)``, and the function will price each strike at their respective expiry.
+            * If ``expiries`` is a 2D array of shape ``(M,1)``, then ``strikes`` must be a 2D array of shape ``(1,N)``, and the function will price each strike at each expiry, returning an array of shape ``(M,N)``.
+
+        strikes : float | :class:`np.ndarray`
+            The strikes to price at. The shape of this array must be compatible with the shape of ``expiries`` as described above.
+
+        and_vols : bool, default ``False``
+            Whether to return implied volatilities in addition to call prices. If ``True``, the function returns a tuple of (call prices, implied volatilities).
+            If ``False``, it returns only call prices.
+
+        mode : str | None, default ``None``
+            Which pricing kernel to use: "expiry" uses the per-expiry fit which may not be free of arbitrage in time; "surface" uses the full surface fit which is free of arbitrage in time. ``None`` will chose the latter if available, otherwise the former.
         """
-        verify_inp( isinstance( expiry, (float, int, np.number)) and expiry>=0, lambda : f"Expected 'expiry' to be a non-negative number, but found {str(expiry)}")
+
+        assert isinstance(self.expiries, np.ndarray), "Internal error - forgot to make my 'expiries' a numpy array"
         verify_inp( mode is None or mode in ["surface","expiry"], lambda : f"Expected 'mode' to be one of 'surface', 'expiry' or None, but found {str(mode)}"   )
-        assert isinstance(self.expiries, np.ndarray), "Internal error - forgot to make 'expiries' a numpy array"
- 
         per_expiry = mode=="expiry" if not mode is None else ( self.fitsX is None )
         verify_inp( per_expiry or not self.fitsX is None, f"Cannot use 'mode' \"surface\" since no surface fit is available")
+        
+        strikes = np.asarray(strikes) if not isinstance(strikes, (int,float,np.number)) else np.array([float(strikes)])
 
-        if self.smoothness is None or expiry<self._ONE_MINUTE or (self.expiry_linear and per_expiry):
-            def call( spots, strikes ):
-                return np.maximum( 0., spots - strikes )
-        else:
-            assert not self.variances is None, "Internal error - variances are missing"
-            vol = math.sqrt( self.smoothness * np.interp( expiry, self.expiries, self.variances ) / expiry )
-            assert np.isfinite(vol), "Internal error: infinite vol"
-            def call( spots, strikes ):
-                return bs.price( k=strikes/spots, vol=vol, sqrtT=math.sqrt(expiry), eps=_EPS_PRICE )*spots
+        def x_price( expiry, strikes, and_vols ):
+            verify_inp( isinstance( expiry, (float, int, np.number)) and expiry>=0, lambda : f"Expected 'expiry' to be a non-negative number, but found {str(expiry)}")
 
-        def prices():
-            if expiry<self._ONE_MINUTE:
-                return np.maximum( 0., 1 - strikes )
+            if self.smoothness is None or expiry<self._ONE_MINUTE or (self.expiry_linear and per_expiry):
+                def call( spots, strikes ):
+                    return np.maximum( 0., spots - strikes )
+            else:
+                vol = self.interpolate_atm_vols( expiries=expiry )
+                def call( spots, strikes ):
+                    return bs.price( k=strikes/spots, vol=vol, sqrtT=math.sqrt(expiry), eps=_EPS_PRICE )*spots
 
-            ix = np.searchsorted( self.expiries, expiry )
-            if ix==0:
-                strikes_0 = self.xstrikes[0] if per_expiry else self.mstrikes[0]
-                p_0       = self.xdensities[0] if per_expiry else self.mdensities[0]
-                return call( spots=strikes_0[None,:], strikes=strikes[:,None] ) @ p_0
+            def prices():
+                if expiry<self._ONE_MINUTE:
+                    return np.maximum( 0., 1 - strikes )
 
-            if ix==len(self.expiries):
-                strikes_T = self.xstrikes[-1] if per_expiry else self.mstrikes[-1]
-                p_T       = self.xdensities[-1]  if per_expiry else self.mdensities[-1]
-                return call( spots=strikes_T[None,:], strikes=strikes[:,None] ) @ p_T
+                ix = np.searchsorted( self.expiries, expiry )
+                if ix==0:
+                    strikes_0 = self.xstrikes[0] if per_expiry else self.mstrikes[0]
+                    p_0       = self.xdensities[0] if per_expiry else self.mdensities[0]
+                    return call( spots=strikes_0[None,:], strikes=strikes[:,None] ) @ p_0
 
-            diff_ixm1 = abs( expiry - self.expiries[ix-1] )
-            diff_ix   = abs( expiry - self.expiries[ix] )
-            diff      = diff_ix if diff_ix < diff_ixm1 else diff_ixm1
+                if ix==len(self.expiries):
+                    strikes_T = self.xstrikes[-1] if per_expiry else self.mstrikes[-1]
+                    p_T       = self.xdensities[-1]  if per_expiry else self.mdensities[-1]
+                    return call( spots=strikes_T[None,:], strikes=strikes[:,None] ) @ p_T
 
-            if diff<self._ONE_MINUTE:
-                ix_mind    = ix if diff_ix < diff_ixm1 else ix-1
-                strikes_ix = self.xstrikes[ix_mind] if per_expiry else self.mstrikes[ix_mind]
-                p_ix       = self.xdensities[ix_mind]  if per_expiry else self.mdensities[ix_mind]
-                return call( spots=strikes_ix[None,:], strikes=strikes[:,None] ) @ p_ix
+                diff_ixm1 = abs( expiry - self.expiries[ix-1] )
+                diff_ix   = abs( expiry - self.expiries[ix] )
+                diff      = diff_ix if diff_ix < diff_ixm1 else diff_ixm1
 
-            strikes_ixm1 = self.xstrikes[ix-1] if per_expiry else self.mstrikes[ix-1]
-            p_ixm1       = self.xdensities[ix-1]  if per_expiry else self.mdensities[ix-1]
-            c_ixm1       = call( spots=strikes_ixm1[None,:], strikes=strikes[:,None] ) @ p_ixm1
+                if diff<self._ONE_MINUTE:
+                    ix_mind    = ix if diff_ix < diff_ixm1 else ix-1
+                    strikes_ix = self.xstrikes[ix_mind] if per_expiry else self.mstrikes[ix_mind]
+                    p_ix       = self.xdensities[ix_mind]  if per_expiry else self.mdensities[ix_mind]
+                    return call( spots=strikes_ix[None,:], strikes=strikes[:,None] ) @ p_ix
 
-            strikes_ix   = self.xstrikes[ix] if per_expiry else self.mstrikes[ix]
-            p_ix         = self.xdensities[ix]  if per_expiry else self.mdensities[ix]
-            c_ix         = call( spots=strikes_ix[None,:], strikes=strikes[:,None] ) @ p_ix
+                strikes_ixm1 = self.xstrikes[ix-1] if per_expiry else self.mstrikes[ix-1]
+                p_ixm1       = self.xdensities[ix-1]  if per_expiry else self.mdensities[ix-1]
+                c_ixm1       = call( spots=strikes_ixm1[None,:], strikes=strikes[:,None] ) @ p_ixm1
 
-            return ((expiry - self.expiries[ix-1])*c_ix + (self.expiries[ix]-expiry)*c_ixm1)/(self.expiries[ix]-self.expiries[ix-1])
+                strikes_ix   = self.xstrikes[ix] if per_expiry else self.mstrikes[ix]
+                p_ix         = self.xdensities[ix]  if per_expiry else self.mdensities[ix]
+                c_ix         = call( spots=strikes_ix[None,:], strikes=strikes[:,None] ) @ p_ix
 
-        c = prices()
+                return ((expiry - self.expiries[ix-1])*c_ix + (self.expiries[ix]-expiry)*c_ixm1)/(self.expiries[ix]-self.expiries[ix-1])
+            c = prices()
+            if not and_vols:
+                return c
+
+            v = bs.implied( k=strikes, prices=c, sqrtT=math.sqrt(expiry), eps=_EPS_PRICE )
+            return c,v 
+
+        if hasattr(expiries,"shape"):
+            if len(expiries.shape)==0:
+                expiries = float( expiries.item() )
+            elif expiries.shape == (1,):
+                expiries = float( expiries[0] )
+
+        if isinstance(expiries, (float, int, np.number)):
+            return x_price( expiry=expiries, strikes=strikes, and_vols=and_vols )
+
+        expiries = np.asarray(expiries)
+ 
+        if len(expiries.shape) == 1:
+            verify_inp( expiries.shape == strikes.shape, lambda : f"If 'expiries' is a 1D vector, then 'strikes' must have the same shape, but found {expiries.shape} and {strikes.shape}" )
+
+            uttys   = np.unique(expiries)
+            results = np.zeros_like(strikes)
+            vols    = np.zeros_like(strikes) if and_vols else None
+            for utty in uttys:
+                mask = expiries==utty
+                if not and_vols:
+                    results[mask] = x_price( expiry=utty, strikes=strikes[mask], and_vols=False )
+                else:
+                    results[mask], vols[mask] = x_price( expiry=utty, strikes=strikes[mask], and_vols=True )
+            if not and_vols:
+                return results
+            return results, vols
+        
+        if strikes.shape == (1,):
+            strikes = strikes.reshape(1,1)
+        verify_inp( len(expiries.shape) == 2 and expiries.shape[1] == 1, lambda : f"'expiries' can be a vector or a matrix if size '(M,1)'. Found shape {expiries.shape}" )
+        M = expiries.shape[0]
+        verify_inp( len(strikes.shape) == 2 and strikes.shape[0] in (M,1), lambda : f"If 'expiries' is a matrix of shape '(M,1), then 'strikes' must be a matrix of shape '(M|1,N)'. Found shape {strikes.shape}" )
+        N = strikes.shape[1]
+        results = np.zeros((M,N),dtype=strikes.dtype)
+        vols    = np.zeros((M,N),dtype=strikes.dtype) if and_vols else None
+        for ix, tty in enumerate(expiries[:,0]):
+            if not and_vols:
+                results[ix,:] = x_price( expiry=tty, strikes=strikes[0 if strikes.shape[0] == 1 else ix,:], and_vols=False )
+            else:
+                results[ix,:], vols[ix,:] = x_price( expiry=tty, strikes=strikes[0 if strikes.shape[0] == 1 else ix,:], and_vols=True )
         if not and_vols:
-            return c
+            return results
+        return results, vols
 
-        v = bs.implied( k=strikes, prices=c, sqrtT=math.sqrt(expiry), eps=_EPS_PRICE )
-        return c,v 
+    def interpolate_atm_vols( self, expiries: float|np.ndarray ) -> float|np.ndarray:
+        """ Interpolates the (ATM) variances """
+        assert not self.variances is None, "Internal error - variances are missing"
+        is_float = not hasattr(expiries,"shape")
+        expiries = np.asarray([float(expiries)]) if is_float else np.asarray(expiries)
+        expiries = np.clip( expiries, self.expiries[0], self.expiries[-1] )
+        vols     = np.sqrt( self.smoothness * np.interp( expiries, self.expiries, self.variances ) / expiries )
+        assert np.all(np.isfinite(vols)), "Internal error: infinite vol"
+        return vols if not is_float else vols[0]
 
     @property
     def T(self) -> int:
@@ -471,8 +545,8 @@ class MkArbFree:
                 continue
 
             xstrikes_t, mask_t, notice = self.make_extended_strikes( strikes_t,
-                                                                     bids[t], 
-                                                                     asks[t], 
+                                                                     bids=bids[t], 
+                                                                     asks=asks[t], 
                                                                      prev_lower = r.xstrikes[-1][0] if len(r.xstrikes) > 0 else None,
                                                                      prev_upper = r.xstrikes[-1][-1] if len(r.xstrikes) > 0 else None,
                                                                      message_context = local_message)
@@ -651,7 +725,7 @@ class MkArbFree:
                 else:
                     project = None
 
-            assert np.allclose( xstrikes_t, mstrikes_t[project] ), f"Internal error: {message()}projection error, xstrikes_t {xstrikes_t} should be equal to mstrikes_t[project] {mstrikes_t[project]}"
+            assert project is None or np.allclose( xstrikes_t, mstrikes_t[project] ), f"Internal error: {message()}projection error, xstrikes_t {xstrikes_t} should be equal to mstrikes_t[project] {mstrikes_t[project]}"
             r.mstrikes[t]   = mstrikes_t
             r.xix_to_mix[t] = project
             mguess_p[t]     = mp_t
@@ -731,8 +805,16 @@ class MkArbFree:
             objective   = 0.
             xdensities  = []
             CXs         = []
-            average_hspread    = sum( np.sum( asks[t][masks[t]] - bids[t][masks[t]] )/2. for t in range(T) ) / max(1,sum( len(asks[t][masks[t]]) for t in range(T) ))
+
+            avhs_sum = 0.
+            avhs_count = 0
+            for t in range(T):
+                mask_t   = masks[t] if not masks[t] is None else slice(None,None)
+                avhs_sum = np.sum( asks[t][mask_t] - bids[t][mask_t] )/2.
+                avhs_count += len(asks[t][mask_t])    
+            average_hspread    = avhs_sum / max(1, avhs_count)
             eff_mid_fit_weight = self.mid_fit_weight if not hard_fit else 1.
+            del avhs_sum, avhs_count
 
             for t in range(T):
                 expiry     = expiries[t]
@@ -766,7 +848,8 @@ class MkArbFree:
                 def call( spots, strikes ):
                     if force_linear or self.smoothness is None or self.smoothness == 0. or expiry < _ONE_MINUTE:
                         return np.maximum( 0., spots - strikes )
-                    vol = math.sqrt( self.smoothness * np.interp( expiry, expiries, variances ) / expiry )
+                    expiry_ = np.clip( expiry, expiries[0], expiries[-1] )
+                    vol     = math.sqrt( self.smoothness * np.interp( expiry_, expiries, variances ) / expiry_ )
                     assert np.isfinite(vol), f"Internal error: {message()}infinite vol"
                     if vol == 0.:
                         return np.maximum( 0., spots - strikes )
@@ -1027,7 +1110,7 @@ class MkArbFree:
 
         verbose.write(lambda : f"\r{message()}Could not hard fit with {'linear' if smoothness is None else f'{smoothness:.2f}-smooth'} per-expiry no-arbitrage -- using masked soft fit instead which is outside bid/ask for {np.sum(~does_fit_msk)} of {len(does_fit_msk)} options. This took {tme}.")
         return xdensity, fit
-
+    
     def make_extended_strikes( self, 
                               strikes: np.ndarray, 
                               bids: np.ndarray, 
@@ -1553,5 +1636,52 @@ def _warn_and_fix_density( x, p, eps, message : callable ):
 
 
 
+def _compute_dlvs( self : ArbFreePricer, *, all_strikes : bool = False, min_dlv : float = 0.01, max_dlv : float = 0.5 ):
+    """
+    Compute discrete local volatilities.
+    """
 
+    verify_inp( 0.<  min_dlv < max_dlv, lambda : f"'min_dlv' must be positive and less than 'max_dlv', found {min_dlv:.4g} and {max_dlv:.4g}" )
+    min_dlvsq = float(min_dlv**2)
+    max_dlvsq = float(max_dlv**2)
 
+    # dlvs
+    # We note that dC_t = 1/2 DLV^2 K^2 dT C''(K) where C''(K) = 1/2 ( k[2:] - K[:-2]) p(k)
+    # hence
+    #    dC_t = DLV^2 { K^2/( k[2:] - K[:-2]) dt} p(K)
+    # We precompute
+    #    dlvbox = K^2/( k[2:] - K[:-2]) dt
+
+    T      = len(self.expiries)
+    dts    = np.diff( self.expiries, prepend=0. ).astype(np.float64,copy=False)
+    dlvsqs = []
+    _1     = np.float64(1.)
+    _0     = np.float64(0.)
+    for t in range(T):
+        mstrikes_t   = self.mstrikes[t].astype(np.float64,copy=False)
+        mstrikes_tm1 = self.mstrikes[t-1].astype(np.float64,copy=False) if t>0 else None
+        p_t          = self.mdensities[t].astype(np.float64,copy=False)
+        p_tm1        = self.mdensities[t-1].astype(np.float64,copy=False) if t>0 else None
+        p_box        = mstrikes_t[1:-1]**2 / ( mstrikes_t[2:] - mstrikes_t[:-2]) * dts[t] * p_t[1:-1]
+
+        C_t        = np.maximum( _0, mstrikes_t[None,:] - mstrikes_t[1:-1,None] ) @ p_t
+        C_tm1      = np.maximum( _0, mstrikes_tm1[None,:] - mstrikes_tm1[1:-1,None] ) @ p_tm1 if t>0 else np.maximum( _0, 1. - mstrikes_t ) 
+        dC_t       = C_t - C_tm1
+
+        assert np.all( np.isfinite(dC_t) ), f"Expected dC_t to be finite, found min {np.min(dC_t)} and max {np.max(dC_t)}"
+        assert np.all( np.isfinite(p_box) ), f"Expected p_box to be finite, found min {np.min(p_box)} and max {np.max(p_box)}"
+        assert np.min( dC_t ) > -self.eps.prices, f"Expected dC_t to be non-negative, found min {np.min(dC_t)} [tolerance 'prices' {self.eps.prices}]"
+        assert np.min( p_box ) > -self.eps.densities, f"Expected p_box to be non-negative, found min {np.min(p_box)} [tolerance 'densities' {self.eps.densities}]"
+
+        dC_zero      = dC_t <= self.eps.dlvsq
+        too_small    = dC_t <= min_dlvsq * p_box
+        too_big      = dC_t >= max_dlvsq * p_box
+
+        divisor      = np.where( too_small|dC_zero|too_big, _1, p_box )  # dC_t can be positive while p_t is zero ... in this case we cannot determine a correct DLV - any will do.
+        dlvsqs_t     = np.select( [dC_zero, too_small, too_big ], [min_dlvsq, min_dlvsq, max_dlvsq], default=dC_t / divisor )
+        dlvsqs_t     = np.where( np.isfinite(dlvsqs_t), dlvsqs_t, min_dlvsq ) # cover infintie
+        dlvsqs_t     = np.clip( dlvsqs_t, min=min_dlvsq, max=max_dlvsq )
+        if all_strikes:
+            dlvsqs_t = np.concatenate( ([0.], dlvsqs_t, [0.]) )
+        dlvsqs.append( dlvsqs_t )
+    return dlvsqs

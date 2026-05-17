@@ -108,7 +108,9 @@ def _assemble_time_series(*,
         raise RuntimeError(f"Failed to generate daily filtered options data for {ticker} for the following dates: {fmt_list(sorted(fails))}.")
     return max_options
 
-def _bt_uid(ticker, date_range, include_fields, exclude_fields, time_series_def ) -> str:
+@version("1.0", dependencies=[TimeSeriesDefinition])
+def build_time_series_uid(ticker, date_range, include_fields, exclude_fields, time_series_def ) -> str:
+    """ Returns a relative UID for a time series based on its definition and the requested fields. """
     assert isinstance(time_series_def, TimeSeriesDefinition), f"Internal error: expected 'time_series_def' to be an instance of TimeSeriesDefinition, but got {type(time_series_def)}. Please contact the authors with an example."
     ts_id  = named_unique_filename48_8(str(time_series_def), time_series_def)
     fl_id  = f"incl_{fmt_list(sorted(include_fields))}," if not include_fields is None else "incl_all,"
@@ -118,7 +120,7 @@ def _bt_uid(ticker, date_range, include_fields, exclude_fields, time_series_def 
 
 _PER_DAY_FIELDS = {'ticker','date','spot','spot_prev','spot_ref','spot_ret','time_y'} # not all fields are present, depending on settings
 
-@_processing_timeseries(fmt=SubDir.PYTREE_HDF5).cache( "0.1", dependencies=[filter_options_day, TimeSeriesDefinition],uid=_bt_uid )
+@_processing_timeseries(fmt=SubDir.PYTREE_HDF5).cache( "0.1", dependencies=[filter_options_day, build_time_series_uid],uid=build_time_series_uid )
 def build_time_series(   
                   ticker : str,
                   date_range : DateRange, *,
@@ -256,9 +258,12 @@ def build_time_series(
                 return df
 
             for d, df in thread_pool.parallel( { d: thread_pool.delayed(process)(d) for d in dates } ):
+                if df is None or df.empty:
+                    warnings.warn(f"Warning: {ticker} {d}: no data after filtering for this day. This date will be skipped in the time series.")
+                    continue
                 results[d] = df
                 if tme.interval_test(1.):
-                    verbose.write(lambda: f"\rReading data for {ticker} date {fmt_date(d)} {len(results)}/{len(dates)}. Total run time so far: {tme}... ", end='')
+                    verbose.write(lambda: f"\rReading market data {len(results)}/{len(dates)} date {fmt_date(d)} for {ticker}. Total run time so far: {tme}... ", end='')
                 max_options = max(max_options, len(df))
 
             max_options = int(max_options)
@@ -299,7 +304,7 @@ def build_time_series(
                 for c in src_request:
                     v = df[c].to_numpy()
                     if c in _PER_DAY_FIELDS:
-                        assert np.all( v[0] == v ), f"Internal error: {ticker} {d}: DataFrame column '{c}' must have a unique value. Found {v} vs {v[v[0] != v][:5]}."
+                        assert np.all( v[0] == v ), f"Internal error: {ticker} {d}: {'' if time_series_def.mk_arb_free is None else 'arbitrage-free '}enriched DataFrame column '{c}' has different values for different options, but it is expected to be a per-day field with the same value for all options. Please contact the authors with an example."
                         r[c][i,0] = v[0]
                     else:
                         r[c][i,:len(v)] = v
