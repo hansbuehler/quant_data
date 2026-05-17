@@ -36,6 +36,7 @@ dependencies = [
     "pyarrow",
     "scikit-learn",
     "ipynbname",
+    "highspy"
 ]
 
 [project.optional-dependencies]

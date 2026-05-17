@@ -234,6 +234,8 @@ class SimpleSampler(BaseSampler):
 
     Config = SamplingConfig
 
+    INVALID_FIELDS = {'date','expiry','call_symbol','put_symbol'}
+
     def __init__( self, simple_config      : SimpleConfig, *, 
                         fields_requested   : set[str]|None = None,
                         pool_config        : PoolConfig = PoolConfig.off(), 
@@ -261,10 +263,12 @@ class SimpleSampler(BaseSampler):
             if not 'is_valid' in fields_requested:
                 raise ValueError(f"'is_valid' must be included in the fields to features mapping, as it is used for masking invalid options. Please include 'is_valid' in the mapping with a value of None or a feature name.")
             if 'dates' in fields_requested:
-                raise ValueError(f"'dates' cannot be included in the fields to features mapping, as it is used as a separate field in the output. Please remove 'dates' from the mapping.")
+                raise ValueError(f"'dates' cannot be included in the fields to features mapping, as it is used as a separate field in the output. Use 'time_y' instead")
+            if len(self.INVALID_FIELDS ^ fields_requested) > 0:
+                raise ValueError(f"Cannot use object fields: {fmt_list(self.INVALID_FIELDS & fields_requested)}.")            
             verify_inp( fields_requested <= timeseries_fields, lambda : f"'fields_requested' must be a subset of the available time series fields {sorted(timeseries_fields)}; unknown fields found: {sorted(fields_requested - timeseries_fields)}" )
         else:
-            fields_requested = timeseries_fields
+            fields_requested = (timeseries_fields|{'is_valid'}|{'time_y'}) - self.INVALID_FIELDS # by default include all available fields, except 'date' and 'expiry' which are not used as features but are included in the time series data for reference. We always include 'is_valid' for masking, and 'time_y' for time information.
 
         self.features = fields_requested
 
@@ -273,7 +277,7 @@ class SimpleSampler(BaseSampler):
 
         self.data = PrettyObject()
         for ticker in self.tickers:
-            self.data[ticker] = build_time_series( 
+            self.data[ticker] = PrettyObject( build_time_series( 
                     ticker=ticker, 
                     date_range = simple_config.date_range,
                     include_fields = fields_requested, # which time series fields to use
@@ -287,7 +291,7 @@ class SimpleSampler(BaseSampler):
                     pool_config = pool_config,
                     skip_bad_days = True,
                     override_cache_mode = cache_mode,
-                    verbose = verbose )
+                    verbose = verbose ) )
             assert 'is_valid' in self.data[ticker], f"Internal error: 'is_valid' must be included in the time series fields for masking invalid options, but it is missing for ticker {ticker}."
         
         verbose.write(lambda : f"Found the following number of samples per ticker: {fmt_dict({ticker: len(tdata.dates) for ticker,tdata in self.data.items()})}.")
@@ -299,7 +303,10 @@ class SimpleSampler(BaseSampler):
             all_dates     = set()
             max_options   = 0
             for ticker, tdata in self.data.items():
-                assert set(tdata) == fields_requested|{'dates','ticker'}, f"Internal error: time series data for ticker {ticker} contains fields {set(tdata)}, but expected {fields_requested}|{{'dates'}}"
+                if set(tdata) != fields_requested|{'dates','ticker'}:
+                    missing = sorted(fields_requested - set(tdata))
+                    superflous = sorted(set(tdata) - fields_requested - {'dates','ticker'})
+                    raise ValueError(f"Internal error: time series data for ticker {ticker} is missing fields: {fmt_list(missing)}; superfluous fields: {fmt_list(superflous)}")
                 all_dates.update(tdata['dates'])
                 max_options = max(max_options, tdata['is_valid'].shape[1])
             all_dates = sorted(all_dates)
@@ -373,6 +380,8 @@ class SimpleSampler(BaseSampler):
             for k,v in tdata.items():
                 if k in ['dates', 'ticker']:
                     continue
+                if v.dtype == np.dtype('O'):
+                    raise ValueError(f"Cannnot use field '{k}' of dtype object as a feature for machine learning.")
                 shapes[k] = ( simple_config.sampling_config.num_steps if v.shape[0] > 1 else 1,
                                 self.max_options if v.shape[1] > 1 else 1 ) 
             return shapes

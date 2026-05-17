@@ -135,10 +135,6 @@ def mk_arb_free_day(
     Result: :class:`pandas.DataFrame`|None or (:class:`pandas.DataFrame`|None, dict|None) if ``return_arb_free`` is True.`
         This function may return None if ``raise_if_bad_day`` is False and the day is deemed bad as defined by :data:`bad.BAD.DAYS_ALL`.
     """
-    verify_inp( mk_arb_free.no_arb_mode in ['expiry', 'surface'], lambda: f"{ticker} {d}: arb_free_day requires mk_arb_free.no_arb_mode='surface' for full fit outputs; found no_arb_mode '{mk_arb_free.no_arb_mode}'." )
-    mode_surface = mk_arb_free.no_arb_mode == 'surface'
-    expected_schema = SCHEMA_ARB_FREE_DAY_SURFACE if mode_surface else SCHEMA_ARB_FREE_DAY_EXPIRY
-
     if not enriched_data is None:
         verify_inp( isinstance(enriched_data, pd.DataFrame), f"{ticker} {d}: expected 'enriched_data' to be a pandas DataFrame or None, got {type(enriched_data)}.")
         data = enriched_data
@@ -163,6 +159,10 @@ def mk_arb_free_day(
         if not return_arb_free_densities:
             return data
         return data, None
+
+    verify_inp( mk_arb_free.no_arb_mode in ['expiry', 'surface'], lambda: f"{ticker} {d}: arb_free_day requires mk_arb_free.no_arb_mode='surface' for full fit outputs; found no_arb_mode '{mk_arb_free.no_arb_mode}'." )
+    mode_surface = mk_arb_free.no_arb_mode == 'surface'
+    expected_schema = SCHEMA_ARB_FREE_DAY_SURFACE if mode_surface else SCHEMA_ARB_FREE_DAY_EXPIRY
 
     if data.empty:
         if not return_arb_free_densities:
@@ -208,7 +208,6 @@ def mk_arb_free_day(
         strikes=strikes,
         bids=bids,
         asks=asks,
-        handle_arb="warn" if warn_if_arb else "ignore",
         message_context=lambda: f"{ticker} {d}",
         verbose=verbose(1),
     )
@@ -248,7 +247,7 @@ def mk_arb_free_day(
         fit1_vols = bs.implied(pure_strike, fit1_t, sqrtT=sqrt_t, eps=_IMPLIED_VOL_CALC_EPS)
         fitx_vols = bs.implied(pure_strike, fitx_t, sqrtT=sqrt_t, eps=_IMPLIED_VOL_CALC_EPS) if mode_surface else None
         fit1_greeks = bs(
-            k=pure_strike,
+            k=pure_strike   ,
             vol=fit1_vols,
             sqrtT=sqrt_t,
             eps=_GREEK_CALC_EPS,
@@ -262,15 +261,15 @@ def mk_arb_free_day(
             what=bs.PRICE | bs.DELTA | bs.GAMMA | bs.VEGA | bs.THETA | bs.DK,
         ) if mode_surface else None
 
-        group["mask_arb_free"] = mask_t
-        group["fit1_vol"] = fit1_vols.astype(np.float32)
-        group["pure_fit1_price"] = fit1_t.astype(np.float32)
+        group["mask_arb_free"] = mask_t.astype(bool)
+        group["fit1_vol"] = fit1_vols.astype(np.float32, copy=False)
+        group["pure_fit1_price"] = fit1_t.astype(np.float32, copy=False)
         for greek_name, values in fit1_greeks.items():
             group[f"pure_fit1_{greek_name}"] = np.asarray(values, dtype=np.float32)
 
         if mode_surface:
-            group["fitX_vol"] = fitx_vols.astype(np.float32)
-            group["pure_fitX_price"] = fitx_t.astype(np.float32)
+            group["fitX_vol"] = fitx_vols.astype(np.float32, copy=False)
+            group["pure_fitX_price"] = fitx_t.astype(np.float32, copy=False)
             for greek_name, values in fitx_greeks.items():
                 group[f"pure_fitX_{greek_name}"] = np.asarray(values, dtype=np.float32)
 

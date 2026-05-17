@@ -110,7 +110,6 @@ def _assemble_time_series(*,
         raise RuntimeError(f"Failed to generate daily data for {ticker} for the following dates: {fmt_list(sorted(fails))}.")
     return max_options
 
-
 def _bt_uid(ticker, date_range, include_fields, exclude_fields, time_series_def ) -> str:
     assert isinstance(time_series_def, TimeSeriesDefinition), f"Internal error: expected 'time_series_def' to be an instance of TimeSeriesDefinition, but got {type(time_series_def)}. Please contact the authors with an example."
     ts_id  = named_unique_filename48_8(str(time_series_def), time_series_def)
@@ -119,7 +118,7 @@ def _bt_uid(ticker, date_range, include_fields, exclude_fields, time_series_def 
     fl_id  = named_unique_filename48_8(fl_id, include_fields, exclude_fields)
     return f"{ts_id}/{ticker}/{str(date_range)}/{fl_id}"
 
-_PER_DAY_FIELDS = {'ticker','date','spot','spot_prev','spot_ref','spot_ret'} # not all fields are present, depending on settings
+_PER_DAY_FIELDS = {'ticker','date','spot','spot_prev','spot_ref','spot_ret','time_y'} # not all fields are present, depending on settings
 
 @_processing_timeseries(fmt=SubDir.PYTREE_HDF5).cache( "0.1", dependencies=[filter_options_day, TimeSeriesDefinition],uid=_bt_uid )
 def build_time_series(   
@@ -184,18 +183,20 @@ def build_time_series(
         The data is filtered and sampled according to the specified configurations.
     """
 
-    dates         = sorted( set(date_range.get_business_days())-set(BAD.DAYS_ALL) )
-    source_schema = SCHEMA_OPTION_DAY(time_series_def.mk_arb_free, time_series_def.options_filter.normalize)
-    source_fields = set(source_schema)
+    dates            = sorted( set(date_range.get_business_days())-set(BAD.DAYS_ALL) )
+    source_schema    = SCHEMA_OPTION_DAY(time_series_def.mk_arb_free, time_series_def.options_filter.normalize)
+    source_fields    = set(source_schema)                   # what the source offers
+    available_fields = source_fields|{'is_valid','time_y'}  # source + what we will generate
 
     def get_fields():
-        available_fields = ( source_fields|{'is_valid'} )
         if not exclude_fields is None:
-            verify_inp( set(exclude_fields) <= available_fields, lambda : f"'exclude_fields' must be a subset of {sorted(available_fields)}; unknown fields found: {sorted(set(exclude_fields) - available_fields)}")
+            verify_inp( not 'is_valid' in exclude_fields, lambda : f"'is_valid' cannot be excluded, as it is used for masking invalid options.")
+            verify_inp( set(exclude_fields) <= available_fields, lambda : f"'exclude_fields' unknown fields found: {sorted(set(exclude_fields) - available_fields)}. Available fields not yet selected: {sorted(available_fields - set(exclude_fields))}")
         if not include_fields is None:
-            verify_inp( set(include_fields) <= available_fields, lambda : f"'include_fields' must be a subset of {sorted(available_fields)}; unknown fields found: {sorted(set(include_fields) - available_fields)}")
+            verify_inp( 'is_valid' in include_fields, lambda : f"'is_valid' must be included in the fields to include, as it is used for masking invalid options.")
+            verify_inp( set(include_fields) <= available_fields, lambda : f"'include_fields' unknown fields found: {sorted(set(include_fields) - available_fields)}. Available fields not yet selected: {sorted(available_fields - set(include_fields))}")
 
-        flds = {f for f in source_fields if f in include_fields} if include_fields is not None else set(source_fields)
+        flds = {f for f in available_fields if f in include_fields} if include_fields is not None else available_fields
         if exclude_fields is not None:
             flds = flds - set(exclude_fields)
         verify_inp( len(flds) > 0, lambda :  "No fields left after applying include/exclude filters. "+\
@@ -203,8 +204,7 @@ def build_time_series(
                                             f"excluded fields: {sorted(exclude_fields) if exclude_fields is not None else 'none'}; "+
                                             f"available fields: {sorted(available_fields)}")
         return set(flds)
-
-    requested_fields = get_fields()
+    requested_fields = get_fields()  # what the caller wants. Must include 'is_valid' for masking.
     
     # make sure all data exists
     # this is in multi-processing mode
@@ -230,22 +230,14 @@ def build_time_series(
     verbose.report(1,lambda: f"Pool config: {pool_config}")
     verbose.report(1,lambda: f"Requested fields: {fmt_list(sorted(requested_fields))}")
 
-
     # load data into current process
     # All data must exist
     # --------------------------------
 
-    def ___filter_fields( d, df ):
-        if df is None or df.empty:
-            return df
-        df  = df.loc[:, requested_fields] 
-        assert set(df.columns) == set(requested_fields), f"Internal error {ticker} {d}: after filtering, the DataFrame columns do not match the expected fields. Expected: {sorted(requested_fields)}, found: {sorted(df.columns)}. Please contact the authors with an example."
-        return df
-    
     def load_data():
 
         thread_pool = JCPool(num_workers=pool_config.num_workers, threading=True)
-        frames = {}
+        results = {} # by date
         max_options = 0
 
         with verbose.write_t(lambda: f"Reading the generated {'' if time_series_def.mk_arb_free is None else 'arbitrage-free '}enriched data for {ticker} in the main process... ", end='') as tme:
@@ -266,18 +258,20 @@ def build_time_series(
                 except CacheMustExistError as e:
                     raise RuntimeError(f"Internal error: {ticker} {d}: expected {'' if time_series_def.mk_arb_free is None else 'arbitrage-free '}enriched data to be available in the cache after generation, but it was not found. Please contact the authors with an example. Original error message: {str(e)}")
                 assert not df is None, f"Internal error: {ticker} {d}: {'' if time_series_def.mk_arb_free is None else 'arbitrage-free '}enrich_day returned None after generation. Please contact the authors with an example."                
-                assert set(df.columns) == set(requested_fields), f"Internal error: {ticker} {d}: {sorted(requested_fields)}, but found {sorted(df.columns)}."
+                assert set(df.columns) == set(source_fields), f"Internal error: {ticker} {d}: {sorted(source_fields)}, but found {sorted(df.columns)}."
+                assert not 'is_valid' in df.columns, f"Internal error: {ticker} {d}: 'is_valid' should not be included in the enriched day data"
+                assert not 'time_y' in df.columns, f"Internal error: {ticker} {d}: 'time_y' should not be included in the enriched day data"
                 return df
 
             for d, df in thread_pool.parallel( { d: thread_pool.delayed(process)(d) for d in dates } ):
                 verbose.write(lambda: f"\rReading data for {ticker} date {fmt_date(d)}. Total run time so far: {tme}... ", end='')
-                frames[d] = df
+                results[d] = df
                 max_options = max(max_options, len(df))
 
             max_options = int(max_options)
             verbose.write(lambda: f"\rRead the generated {'' if time_series_def.mk_arb_free is None else 'arbitrage-free '}enriched data for {ticker} in the main process; this took {tme}. Maximum number of options is {max_options}.", end='')
 
-        return frames, max_options
+        return results, max_options
 
     results, max_num_options = load_data()
     num_steps = len(results)
@@ -285,20 +279,23 @@ def build_time_series(
     # allocate memory
     # ===============
 
-    with verbose.write_t(lambda: f"Generating sample for {num_steps} business days and at most {max_num_options} options per day for ticker {ticker}... ", end='') as tme:
+    with verbose.write_t(lambda: f"Generating time series for {num_steps} business days and at most {max_num_options} options per day for ticker {ticker}... ", end='') as tme:
 
         def allocate():
             df0        = results[list(results.keys())[0]] # touch one df to get the schema
             dates      = sorted(results)
             r          = PrettyObject()
-            r.is_valid = np.zeros((num_steps,max_num_options), dtype=bool )
             r.ticker   = ticker
             r.dates    = dates
+            r.is_valid = np.zeros((num_steps,max_num_options), dtype=np.bool_ )
 
-            for c in df0.columns:
+            if 'time_y' in requested_fields:
+                r.time_y = np.array( [ ( d - dates[0] ).total_seconds() / ( 24 * 3600 ) for d in dates ], dtype=np.float32 ).reshape((num_steps,1))
+
+            src_request = sorted(requested_fields-{'is_valid','time_y'})
+            for c in src_request:
                 v = df0[c].to_numpy()
                 assert len(v.shape) == 1, f"Internal error: {ticker}: {'' if time_series_def.mk_arb_free is None else 'arbitrage-free '}enriched DataFrame column '{c}' has unexpected shape. Expected 1D array, found shape {v.shape}. Please contact the authors with an example."
-
                 assert len(v) > 0 or c in _PER_DAY_FIELDS, f"Internal error: {ticker}: {'' if time_series_def.mk_arb_free is None else 'arbitrage-free '}enriched DataFrame column '{c}' has no values. If this is a per-option field, it should have at least one value. If this is a per-day field, it should be present but can be empty. Please contact the authors with an example."
                 r[c] = np.zeros((num_steps, 1 if c in _PER_DAY_FIELDS else max_num_options), dtype=v.dtype)
 
@@ -306,7 +303,7 @@ def build_time_series(
                 df = results.pop(d)
                 ln = len(df)
                 r.is_valid[i,:ln] = True
-                for c in df.columns:
+                for c in src_request:
                     v = df[c].to_numpy()
                     if c in _PER_DAY_FIELDS:
                         assert np.all( v[0] == v ), f"Internal error: {ticker} {d}: DataFrame column '{c}' must have a unique value. Found {v} vs {v[v[0] != v][:5]}."
@@ -316,6 +313,8 @@ def build_time_series(
 
             for k,v in r.items():
                 if k in ["ticker", "dates"]:
+                    continue
+                if v.dtype == np.bool_:
                     continue
                 if v.dtype != np.dtype("O"):
                     try:
