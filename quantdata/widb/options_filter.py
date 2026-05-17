@@ -29,7 +29,7 @@ import warnings as warnings
 # Sample days for a given ticker
 # ======================================================================
 
-@version("0.61")
+@version("0.62")
 @dataclass(frozen=True)
 class OptionsFilter:
     """
@@ -39,10 +39,11 @@ class OptionsFilter:
                                                 # * Drop ``spot``
                                                 # * Add ``spot_ret``: the return of the spot price compared to the previous day, i.e. ``spot / spot_prev - 1``.
                                                 # * Divide the following fields by spot: ``spot_prev``, ``call_ask``, ``call_bid``, ``fwd``, ``strike``, ``mkt_call_bid``, ``mkt_put_bid``, ``mkt_call_ask``, ``mkt_put_ask``.
-    max_num_options: int = 1000                 #: Maximum number of options. Options are sorted by NMS, expiry and call/put, and only the top max_num_options are kept. This is applied after all other filters.#
-    max_business_days_to_expiry: int = 252*3    #: Maximum business days to expiry. 
-    max_nms: float = 4.                         #: Maximum |NMS|. 
-    min_vegaSqrtVar: float = 0.001              #: Minimum vega * sqrt(tte), i.e. the derivative in sqrtVar: BSsq(K,sqrtVar) = BSvol(K,sqrtVar/sqrt(t),t). This is a measure of how much the option price moves with volatility, normalized by time to expiry. It is used to filter out options that are too close to expiry or too far OTM, which can have very low vega and lead to noisy implied volatilities.
+    max_num_options: int = 1000                 #: Maximum number of options. Options are sorted by NMS5, expiry and call/put, and only the top max_num_options are kept. This is applied after all other filters.#
+    max_business_days_to_expiry: int = 252*3    #: Maximum business days to expiry.
+    max_nms: float|tuple[float,float] = (-5.,2.) #: Maximum |NMS5| or a tuple with NMS5_lower<0<NMS5_upper.
+    nms_use_atm : bool = True                   #: Whether to use NMS5 with the ATM volatility instead of the actual NMS5. 
+    min_vegaSqrtVar: float = 0.001              #: Minimum vega * sqrt(tte), i.e. the derivative in sqrtVar: BSsq(K,sqrtVar) = BSvol(K,sqrtVar/sqrt(t),t). This is a measure of how much the option price moves with volatility, normalized by time to expiry.
     min_log_volume: float = 1.0                 #: Minimum log volume. 
     min_log_open_interest: float = 1.0          #: Minimum log open interest. 
     remove_am: bool = False                     #: Whether to remove options that settled at the AM price. 
@@ -51,14 +52,18 @@ class OptionsFilter:
     def __post_init__(self):
         verify_inp(self.max_num_options >= 10, lambda : f"'max_num_options' must be at least 10, found {self.max_num_options}")
         verify_inp(self.max_business_days_to_expiry > 0, lambda : f"'max_business_days_to_expiry' must be positive, found {self.max_business_days_to_expiry}")
-        verify_inp(self.max_nms > 0, lambda : f"'max_nms' must be positive, found {self.max_nms}")
+        if isinstance(self.max_nms, tuple):
+            verify_inp(len(self.max_nms) == 2, lambda : f"'max_nms' tuple must have length 2, found {len(self.max_nms)}")
+            verify_inp(self.max_nms[0] < 0 < self.max_nms[1], lambda : f"'max_nms' tuple must have negative first element and positive second element, found {self.max_nms}")       
+        else:
+            verify_inp(self.max_nms > 0, lambda : f"'max_nms' must be positive, found {self.max_nms}")
         verify_inp(self.min_vegaSqrtVar >= 0, lambda : f"'min_vegaSqrtVar' must be non-negative, found {self.min_vegaSqrtVar}")
         verify_inp(self.min_log_volume >= 0, lambda : f"'min_log_volume' must be non-negative, found {self.min_log_volume}")
         verify_inp(self.min_log_open_interest >= 0, lambda : f"'min_log_open_interest' must be non-negative, found {self.min_log_open_interest}")
         verify_inp(self.min_opt_per_expiry > 0, lambda : f"'min_opt_per_expiry' must be positive, found {self.min_opt_per_expiry}")
 
     def __str__(self):#by convention use a some what readable string with comma separated key=value pairs
-        return f"nopt={self.max_num_options},bdte={self.max_business_days_to_expiry},nms={self.max_nms},lvolu={self.min_log_volume},loi={self.min_log_open_interest},rmam={self.remove_am},vegaSV={self.min_vegaSqrtVar},mxpp={self.min_opt_per_expiry}"
+        return f"nopt={self.max_num_options},bdte={self.max_business_days_to_expiry},nms{'at' if self.nms_use_atm else ''}={self.max_nms},lvolu={self.min_log_volume},loi={self.min_log_open_interest},rmam={self.remove_am},vegaSV={self.min_vegaSqrtVar},mxpp={self.min_opt_per_expiry}"
     
     def _filter(self, ticker : str, d : dt.date, df : pd.DataFrame) -> pd.DataFrame:
         """
@@ -69,11 +74,19 @@ class OptionsFilter:
         assert not df.isna().any().any(), f"Internal error {ticker} {d}: filter resulted in NaN values. Please contact the authors with an example."
         n_init = len(df)
 
-        if df.empty:
-            return df
-
+        assert not df.empty, "Internal error - this should have been filtered earlier"
         df = df[df['bdte'] <= self.max_business_days_to_expiry]
-        df = df[np.abs(df['nms']) <= self.max_nms]
+
+        if self.normalize:
+            df = normalize_day(ticker, d, df)
+
+        min_nms = -self.max_nms if isinstance(self.max_nms, (int, float)) else self.max_nms[0]
+        max_nms = self.max_nms if isinstance(self.max_nms, (int, float)) else self.max_nms[1]
+
+        if self.nms_use_atm:
+            df = df[(df['nms_atm'] >= min_nms) & (df['nms_atm'] <= max_nms)]
+        else:
+            df = df[(df['nms'] >= min_nms) & (df['nms'] <= max_nms)]
         df = df[df['log_volume'] >= self.min_log_volume]  if self.min_log_volume > 0. else df
         df = df[df['log_open_interest'] >= self.min_log_open_interest] if self.min_log_open_interest > 0. else df
         if self.remove_am:
@@ -87,7 +100,7 @@ class OptionsFilter:
             if df.empty:
                 expiry_counts = expiry_counts.to_dict()
                 expiry_counts = { d: expiry_counts[d] for d in sorted(expiry_counts) }
-                warnings.warn(f"{ticker} {d}: after filtering no expiry had {self.min_opt_per_expiry} options left. This means this sample is not eligible. Here are the options per filtered expiry: {fmt_dict(expiry_counts)}.")
+                warnings.warn(f"{ticker} {d}: after filtering no expiry had the minimum of {self.min_opt_per_expiry} options per expiry left. This means this sample is not eligible. Here are the options per filtered expiry: {fmt_dict(expiry_counts)}.")
                 return df
 
         # remove excess options while keeping min_opt_per_expiry per expiry, and the closes to ATM
@@ -160,11 +173,9 @@ class OptionsFilter:
                 raise RuntimeError(f"Internal error {ticker} {d}: filter resulted in an empty data set. Please contact the authors with an example.")
         assert not df.isna().any().any(), f"Internal error {ticker} {d}: filter resulted in NaN values. Please contact the authors with an example."
 
-        if self.normalize:
-            df = normalize_day(ticker, d, df)
         return df
 
-@version("0.2", dependencies=[enrich_day] )
+@version("0.3", dependencies=[enrich_day] )
 def normalize_day(ticker : str, d : dt.date, df : pd.DataFrame) -> pd.DataFrame:
     """
     Create a normalized version of a day.
@@ -173,6 +184,7 @@ def normalize_day(ticker : str, d : dt.date, df : pd.DataFrame) -> pd.DataFrame:
     * Add ``spot_ret``: the return of the spot price compared to the previous day, i.e. ``spot / spot_prev - 1``.
     * Divide the following fields by spot: ``spot_prev``, ``call_ask``, ``call_bid``, ``fwd``, ``strike``, ``mkt_call_bid``, ``mkt_put_bid``, ``mkt_call_ask``, ``mkt_put_ask``.
     """
+    df = df.copy()
     spot      = df['spot'].to_numpy()
     spot_prev = df['spot_prev'].to_numpy()
 

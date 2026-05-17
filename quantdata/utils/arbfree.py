@@ -122,6 +122,7 @@ class ArbFreePricer(PrettyObject):
 
     def __init__(self, smoothness : float|None = None):
         self.smoothness  : float|None = smoothness
+        self.expiry_linear: bool = False
         self.expiries    : np.ndarray = []
         self.variances   : np.ndarray = []
         self.input_index : np.ndarray = []
@@ -164,7 +165,7 @@ class ArbFreePricer(PrettyObject):
         per_expiry = mode=="expiry" if not mode is None else ( self.fitsX is None )
         verify_inp( per_expiry or not self.fitsX is None, f"Cannot use 'mode' \"surface\" since no surface fit is available")
 
-        if self.smoothness is None or expiry<self._ONE_MINUTE:
+        if self.smoothness is None or expiry<self._ONE_MINUTE or (self.expiry_linear and per_expiry):
             def call( spots, strikes ):
                 return np.maximum( 0., spots - strikes )
         else:
@@ -314,6 +315,7 @@ class MkArbFree:
     _debug_verbose_cvxpy  : set[str]|None = None
     _debug_use_nonslack   : bool = False
     _remove_no_arb_strikes: bool = True
+    _debug_super_dense    : bool = False
 
     def __post_init__(self):
         verify_inp( self.no_arb_mode in ["expiry", "surface"], lambda : f"'no_arb_mode' must be one of 'expiry' or 'surface', but found '{self.no_arb_mode}'" ) 
@@ -446,7 +448,7 @@ class MkArbFree:
         r.bids        = []
         r.fits1       = []
         tme           = verbose.timer()
-        expiry_linear = self.surface_expiry_linear and self.no_arb_mode=="surface" and not self.smoothness is None
+        r.expiry_linear = self.surface_expiry_linear and self.no_arb_mode=="surface" and not self.smoothness is None
 
         for t, expiry in enumerate(expiries):
             def local_message():
@@ -496,7 +498,7 @@ class MkArbFree:
                                 ask_t = ask_t, 
                                 mask_t = mask_t, 
                                 xstrikes_t = xstrikes_t,
-                                force_linear = expiry_linear,
+                                force_linear = r.expiry_linear,
                                 message_context = local_message,
                                 verbose = verbose)
             assert xstrikes_t.shape == p_t.shape, f"Internal error: {local_message()}Shape of xstrikes {xstrikes_t.shape} does not match shape of density {p_t.shape}"
@@ -522,7 +524,7 @@ class MkArbFree:
                         ask_t=ask_t,
                         mask_t=fit_mask,
                         xstrikes_t=xstrikes_R_t,
-                        force_linear = expiry_linear,
+                        force_linear = r.expiry_linear,
                         message_context=local_message,
                         verbose=verbose,
                     )
@@ -606,7 +608,7 @@ class MkArbFree:
                 next_mstrikes = r.mstrikes[t+1]
                 assert next_mstrikes[0] <= xstrikes_t[0] and next_mstrikes[-1] >= xstrikes_t[-1], f"Internal error: {message()}next_mstrikes[0] {next_mstrikes[0]:.3f} > xstrikes_t[0] {xstrikes_t[0]:.3f} or next_mstrikes[-1] {next_mstrikes[-1]:.3f} < xstrikes_t[-1] {xstrikes_t[-1]:.3f}"
 
-                min_dx   = min( np.diff(mstrikes_t).min(), np.diff(next_mstrikes).min() )
+                min_dx   = np.diff(mstrikes_t).min() if not self._debug_super_dense else min( np.diff(mstrikes_t).min(), np.diff(next_mstrikes).min() )
                 collect  = []
                 project  = []
                 mgpcl    = []
@@ -625,9 +627,10 @@ class MkArbFree:
                     k = xstrikes_t[ithis]
                     # add next strikes up to 'k'
                     while next_mstrikes[inext] <= k-min_dx:
-                        collect.append( next_mstrikes[inext] )
-                        mgpcl.append( 0. )
-                        add_any = True
+                        if next_mstrikes[inext] - collect[-1] >= min_dx:
+                            collect.append( next_mstrikes[inext] )
+                            mgpcl.append( 0. )
+                            add_any = True
                         inext += 1
                     project.append( len(collect) )
                     collect.append( k )

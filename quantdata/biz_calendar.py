@@ -34,7 +34,6 @@ NYSE_CALENDAR = mcal.get_calendar("NYSE")
 _BUSINESS_DAYS_CACHE = {}
 _EARLY_DAYS_CACHE = {}
 
-
 class NMS:
     r"""
     NMS generates relative strikes by:
@@ -44,18 +43,42 @@ class NMS:
     where $\epsilon$ is roughly on trading hour.
     """
 
-    EPS = 1.0 / 255.0 / 8.0  #: Small epsilon for NMS computation.
-    SCALE = math.log(1.1)  # 10% vol
+    EPS = 1.0 / DAYS_PER_YEAR / 8.0  #: Small epsilon for NMS computation ~ 1 hour
+    SCALE = math.log(1.1)            # 10% vol
 
     @staticmethod
-    def from_nms(z: float, t: float, backbone=np) -> float:
+    def from_nms(z: float|np.ndarray, t: float|np.ndarray, *, vol : float|np.ndarray = SCALE, backbone=np) -> float|np.ndarray:
         """ Converts an NMS strike to a relative strike. """
-        return backbone.exp(NMS.SCALE * z * backbone.sqrt((NMS.EPS + t) / (NMS.EPS + 1.0)))
+        return backbone.exp(vol * z * backbone.sqrt((NMS.EPS + t) / (NMS.EPS + 1.0)))
 
     @staticmethod
-    def to_nms(k: float, t: float, backbone=np) -> float:
+    def to_nms(k: float|np.ndarray, t: float|np.ndarray, *, vol: float|np.ndarray = SCALE, backbone=np) -> float|np.ndarray:
         """ Converts a relative strike to an NMS strike. """
-        return (backbone.log(k) / NMS.SCALE) / backbone.sqrt((NMS.EPS + t) / (NMS.EPS + 1.0))
+        return (backbone.log(k) / vol) / backbone.sqrt((NMS.EPS + t) / (NMS.EPS + 1.0))
+
+class NMS5:
+    r"""
+    NMS generates relative strikes by:
+    $$
+        \mathrm{NMS}(z,t) := \exp\left( \log(1.1)\ z \cdot \sqrt{\frac{\epsilon+t}{\epsilon+1}} \right)
+    $$
+    where $\epsilon$ is five days.
+
+    This seems statistically the correct NMS measure for SPX, c.f. notebook ``viz_sanos_mass``.
+    """
+
+    EPS = 5.0 / DAYS_PER_YEAR #: 5 days
+    SCALE = math.log(1.1)     # 10% vol
+
+    @staticmethod
+    def from_nms(z: float|np.ndarray, t: float|np.ndarray, *, vol : float|np.ndarray = SCALE, backbone=np) -> float|np.ndarray:
+        """ Converts an NMS strike to a relative strike. """
+        return backbone.exp(vol * z * backbone.sqrt((NMS5.EPS + t) / (NMS5.EPS + 1.0)))
+
+    @staticmethod
+    def to_nms(k: float|np.ndarray, t: float|np.ndarray, *, vol: float|np.ndarray = SCALE, backbone=np) -> float|np.ndarray:
+        """ Converts a relative strike to an NMS strike. """
+        return (backbone.log(k) / vol) / backbone.sqrt((NMS5.EPS + t) / (NMS5.EPS + 1.0))
 
 def to_date(d: str | dt.datetime | dt.date | np.datetime64 | None) -> dt.date | None:
     """

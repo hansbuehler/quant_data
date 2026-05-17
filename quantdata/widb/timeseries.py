@@ -62,7 +62,6 @@ def _assemble_time_series(*,
     time_series_def : TimeSeriesDefinition,
     pool_config : PoolConfig = PoolConfig.off(),
     skip_bad_days : bool = False,
-    warn_if_arb : bool = True,
     override_cache_mode : CacheMode|None = None,
     verbose : Context = Context.all ) -> PrettyObject:
     """
@@ -93,7 +92,6 @@ def _assemble_time_series(*,
                                         mk_arb_free=time_series_def.mk_arb_free,
                                         options_filter=time_series_def.options_filter,
                                         raise_if_bad_day=not skip_bad_days,
-                                        warn_if_arb=warn_if_arb,
                                         override_cache_mode=override_cache_mode,
                                         verbose=None
                                          )  for d in dates } ):
@@ -213,7 +211,7 @@ def build_time_series(
                         pool_config=pool_config,
                         skip_bad_days=skip_bad_days,
                         override_cache_mode=override_cache_mode,
-                        verbose=verbose(1)
+                        verbose=verbose
                     )
 
     verbose.write(lambda: f"Aggregating {'' if time_series_def.mk_arb_free is None else 'arbitrage-free '}data for ticker {ticker} for {len(dates)} business days from {fmt_date(dates[0])} to {fmt_date(dates[-1])} {'excluding' if date_range.exclude_half_days else 'including'} half days:")

@@ -51,7 +51,7 @@ This file's ``main`` can also be used to generate data manually:
 from __future__ import annotations
 
 from quantdata.widb import WIDBClient, interpolate_zero_curve
-from quantdata.biz_calendar import count_business_days_between, DAYS_PER_YEAR, AM_EXIRY_SUBTRACT, to_date, NMS, prev_business_day, DateRange
+from quantdata.biz_calendar import NMS5, count_business_days_between, DAYS_PER_YEAR, AM_EXIRY_SUBTRACT, to_date, NMS, prev_business_day, DateRange
 from quantdata.widb.client import WIDBClient
 from quantdata.widb.bad import BAD
 from quantdata.pool import PoolConfig
@@ -569,7 +569,8 @@ def collect_raw_day( ticker : str,
 
 SCHEMA_ENRICHED_DAY = SCHEMA_RAW_DAY | {
     'fwd' : np.dtype("float32"),          # implied forward from put-call parity
-    'nms' : np.dtype("float32"),          # normalized moneyness = strike / forward
+    'nms' : np.dtype("float32"),          # normalized log-moneyness using :class:`NMS5` 
+    'nms_atm' : np.dtype("float32"),      # normalized log-moneyness using :class:`NMS5` with the ATM volatility
     'call_ask' : np.dtype("float32"),     # implied from pure call after implied vol fitting
     'call_bid' : np.dtype("float32"),     # implied from pure call after implied vol fitting
     'ask_vol' : np.dtype("float32"),
@@ -594,7 +595,7 @@ SCHEMA_ENRICHED_DAY = SCHEMA_RAW_DAY | {
 ENRICHED_PER_DAY_FIELDS = RAW_PER_DAY_FIELDS
 ENRICHED_PER_EXPIRY_FIELDS = RAW_PER_EXPIRY_FIELDS|{'fwd'}
 
-@version("0.4")
+@version("0.5")
 @dataclass(frozen=True)
 class ExpiryFilter:
     """ How to filter expiries to be able to compute implied forwards """
@@ -620,7 +621,7 @@ def _uid(ticker, d, raw_day_filter, expiry_filter) -> str:
            f"/{ticker}/{fmt_date(d)}"
 
 @_processing(fmt=SubDir.PANDAS_PARQUET).cache(
-            "0.7",
+            "0.8",
             dependencies=[collect_raw_day, ExpiryFilter],
             uid=_uid,
             exclude_args=['verbose','raw_data','raise_if_bad_day','refresh_cache'])
@@ -722,6 +723,7 @@ def enrich_day( ticker : str, d : dt.date, raw_data : pd.DataFrame|None = None, 
     arrays                 = PrettyObject()    
     arrays.fwd             = np.zeros_like( dffwd_ask, dtype=np.float32 )
     arrays.nms             = np.zeros_like( dffwd_ask, dtype=np.float32 )
+    arrays.nms_atm         = np.zeros_like( dffwd_ask, dtype=np.float32 )
     arrays.is_valid        = np.zeros_like( arrays.fwd, dtype=bool )
     arrays.call_ask        = np.zeros_like( arrays.fwd, dtype=np.float32 )
     arrays.call_bid        = np.zeros_like( arrays.fwd, dtype=np.float32 )
@@ -831,6 +833,7 @@ def enrich_day( ticker : str, d : dt.date, raw_data : pd.DataFrame|None = None, 
                                                eps=_IMPLIED_VOL_CALC_EPS, 
                                                vol_min=expiry_filter.min_implied_vol, 
                                                vol_max=expiry_filter.max_implied_vol )
+        atm_vol                  = np.interp( 1., pure_strike, (ask_vols+bid_vols)*0.5 )
         ask_vols[~is_valid]      = expiry_filter.min_implied_vol*1.1
         bid_vols[~is_valid]      = expiry_filter.min_implied_vol
 
@@ -875,7 +878,8 @@ def enrich_day( ticker : str, d : dt.date, raw_data : pd.DataFrame|None = None, 
 
         arrays.call_ask[mask]   = ask_greeks.price * dffwd_t
         arrays.call_bid[mask]   = bid_greeks.price * dffwd_t
-        arrays.nms[mask]        = NMS.to_nms( pure_strike, tte_yt )
+        arrays.nms[mask]        = NMS5.to_nms( pure_strike, tte_yt )
+        arrays.nms_atm[mask]    = NMS5.to_nms( pure_strike, tte_yt, vol=atm_vol )
 
         assert np.all(arrays.call_bid[mask][is_valid] > 0.), f"Internal error: {ticker} {d}: found non-positive call bid price after enrichment for expiry {strid}. Please contact the authors with an example."
         assert np.all(arrays.call_ask[mask][is_valid] > arrays.call_bid[mask][is_valid]), f"Internal error: {ticker} {d}: found non-positive bid-ask spread {strid}. Please contact the authors with an example."
