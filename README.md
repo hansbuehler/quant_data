@@ -114,6 +114,19 @@ If conda plugin warnings interfere with environment creation, retry with:
 conda create --no-plugins --prefix .\.vqdata python=3.12
 ```
 
+#### uv
+
+If you prefer `uv`, create the local environment with
+
+```bash
+uv sync --extra dev
+source .venv/bin/activate
+python --version
+```
+
+This will create a local `.venv` and install the project with the full development toolchain.
+If you do not want to activate the environment, you can run commands with `uv run`, e.g. `uv run pytest`.
+
 ### Verify the installation
 
 After installation, the package should be importable from the active environment:
