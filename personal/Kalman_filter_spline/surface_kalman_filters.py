@@ -68,6 +68,8 @@ def build_iv_observations(
     df_spy: pl.DataFrame,
     min_trades: int = 1,
     taq_config=None,
+    simple: bool = False,
+    discount_factor_clip: tuple[float, float] | None = (0.998, 1.002),
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
     """
     Run Phases 1+2 of the IV pipeline (no per-option Kalman step).
@@ -158,7 +160,13 @@ def build_iv_observations(
         puts_at = {k: df for (e, k), df in raw_puts_q.items() if e == exp}
         if set(calls_at) & set(puts_at):
             try:
-                forward_by_expiry[exp] = build_implied_forward(calls_at, puts_at, spy_ts=spy_ts)
+                forward_by_expiry[exp] = build_implied_forward(
+                    calls_at,
+                    puts_at,
+                    spy_ts=spy_ts,
+                    simple=simple,
+                    discount_factor_clip=discount_factor_clip,
+                )
                 print(
                     f"Expiry {exp.date()}: implied forward from {len(set(calls_at) & set(puts_at))} strike(s)"
                 )
@@ -187,7 +195,7 @@ def build_iv_observations(
     all_t = pl.concat(tagged_trades)
 
     quotes_iv = _compute_iv_batch(all_q, price_col="observed_price").with_columns(
-        (((pl.col("ask_iv") - pl.col("bid_iv")) * 100 / 2) ** 2).alias("R_iv")
+        (((pl.col("ask_iv") - pl.col("bid_iv")) / 2) ** 2).alias("R_iv")
     )
     trades_iv = _compute_iv_batch(all_t, price_col="price")
 

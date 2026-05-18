@@ -75,6 +75,10 @@ def synchronize_iv_surface(df_long: pl.DataFrame) -> pl.DataFrame:
             )
             result = result.join_asof(df_k, on="ts_ns", strategy="backward")
 
+    if "forward" in df_long.columns:
+        fwd_df = df_long.select(["ts_ns", "forward"]).group_by("ts_ns").first().sort("ts_ns")
+        result = result.join_asof(fwd_df, on="ts_ns", strategy="backward")
+
     return result
 
 

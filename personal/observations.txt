@@ -12,3 +12,7 @@ Absolute value is bigger the larger the gap is.
 Prices vs Spot:
 Moves accoridng to delta. Puts have negative correlation, ~-1 ATM
 Calls are postively correlated to spot, again correlation ~1 ATM.
+
+
+
+

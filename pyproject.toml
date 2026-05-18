@@ -49,6 +49,11 @@ dev = [
   "ipykernel",
   "ipynbname"
 ]
+personal = [
+  "jax[cpu]",
+  "plotly",
+  "statsmodels",
+]
 docs = [
   "sphinx>=7.4",
 ]

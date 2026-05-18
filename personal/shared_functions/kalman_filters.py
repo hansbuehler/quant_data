@@ -235,6 +235,7 @@ def build_implied_forward(
     spy_ts: pl.DataFrame,
     max_leg_staleness_s: float = 60.0,
     simple: bool = True,
+    discount_factor_clip: tuple[float, float] | None = (0.998, 1.002),
 ) -> pl.DataFrame:
     """
     Estimate the true implied forward F from put-call parity, with dynamic ATM selection.
@@ -406,13 +407,19 @@ def build_implied_forward(
         )
         .with_columns(
             pl.when(pl.col("_e_rT") > 0)
-            .then(pl.col("_k1") + pl.col("_d1") / pl.col("_e_rT"))
-            .otherwise(None)
-            .alias("_fwd"),
-            pl.when(pl.col("_e_rT") > 0)
-            .then(pl.col("_e_rT"))
+            .then(
+                pl.col("_e_rT").clip(*discount_factor_clip)
+                if discount_factor_clip is not None
+                else pl.col("_e_rT")
+            )
             .otherwise(None)
             .alias("discount_factor"),
+        )
+        .with_columns(
+            pl.when(pl.col("discount_factor").is_not_null())
+            .then(pl.col("_k1") + pl.col("_d1") / pl.col("discount_factor"))
+            .otherwise(None)
+            .alias("_fwd"),
         )
         .with_columns(
             pl.when(pl.col("_fwd") > 0).then(pl.col("_fwd")).otherwise(None).alias("forward"),
@@ -429,6 +436,8 @@ def build_iv_surface(
     df_spy=None,
     min_trades: int = 1,
     max_iv: float = 5.0,
+    simple=True,
+    discount_factor_clip: tuple[float, float] | None = (0.998, 1.002),
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
     """
     Run IV Kalman filter for all options in df_tickers, operating directly on
@@ -539,7 +548,13 @@ def build_iv_surface(
         overlapping = set(calls_at) & set(puts_at)
         if overlapping:
             try:
-                df_fwd = build_implied_forward(calls_at, puts_at, spy_ts=spy_ts)
+                df_fwd = build_implied_forward(
+                    calls_at,
+                    puts_at,
+                    spy_ts=spy_ts,
+                    simple=simple,
+                    discount_factor_clip=discount_factor_clip,
+                )
                 nn_df = df_fwd["discount_factor"].is_not_null().sum()
                 print(
                     f"Expiry {exp.date()}: implied forward from {len(overlapping)} overlapping "
@@ -575,7 +590,7 @@ def build_iv_surface(
     # ── Phase 2: batch IV computation across all options at once ──────────────
     all_quotes_iv = _compute_iv_batch(
         pl.concat(tagged_quote_frames), price_col="observed_price"
-    ).with_columns((((pl.col("ask_iv") - pl.col("bid_iv")) * 100 / 2) ** 2).alias("R_iv"))
+    ).with_columns((((pl.col("ask_iv") - pl.col("bid_iv")) / 2) ** 2).alias("R_iv"))
     all_trades_iv = _compute_iv_batch(pl.concat(tagged_trade_frames), price_col="price")
 
     # ── Phase 3: per-ticker IV Kalman ─────────────────────────────────────────

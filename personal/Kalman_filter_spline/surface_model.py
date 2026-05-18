@@ -10,10 +10,13 @@ Each model is a `Model` instance bundling:
                              (used when Q_structure="diagonal")
 
 Available models (swap in the notebook config cell):
-  QUAD_SLICE_MODEL — 3 params, a + b·k + c·k²            (linear KF, single expiry)
-  SVI_SLICE_MODEL  — 5 params, a + b·[ρ(k−m)+√((k−m)²+σ²)]  (EKF, single expiry)
-  SVI_MODEL        — 5 params, same × √T                 (EKF, multiple maturities)
-  TANH_MODEL       — 3 params, a·√T·(1+tanh(b·k+c·k²))  (EKF, multiple maturities)
+  QUAD_SLICE_MODEL   — 3 params, a + b·k + c·k²                       (linear KF, single expiry)
+  SVI_SLICE_MODEL    — 5 params, w=a+b·[ρ(k−m)+√((k−m)²+σ²)], IV=√(w/T)  (EKF, single expiry)
+  SVI_MODEL          — 5 params, same formula, shared state across T   (EKF, multiple maturities)
+  TANH_MODEL         — 3 params, a·√T·(1+tanh(b·k+c·k²))              (EKF, multiple maturities)
+  BSPLINE_SLICE_MODEL— 8 params, cubic B-splines on fixed k grid       (linear KF, single expiry)
+                       default knots: log-moneyness ∈ [−0.30, +0.15]
+                       use make_bspline_slice_model() to customise knots/degree/n_basis
 
 To add a new model: write _observe_xxx / _initial_theta_xxx, then define
 XXX_MODEL = Model(name=..., n_params=..., observe=..., initial_theta=..., q_diag_weights=...).
@@ -25,6 +28,7 @@ import dataclasses
 from typing import Callable
 
 import numpy as np
+from scipy.interpolate import BSpline
 
 # ---------------------------------------------------------------------------
 # Model container
@@ -46,47 +50,57 @@ class Model:
 
 
 # ---------------------------------------------------------------------------
-# Model 1 — SVI slice  (5 params, no √T)
-# IV(k) = a + b·[ρ(k−m) + √((k−m)²+σ²)]
-# Use for a single expiry.  H[0]=1 → same effective gain as per-option KF.
+# Model 1 — SVI slice  (5 params, textbook total-variance form)
+# w(k) = a + b·[ρ(k−m) + √((k−m)²+σ²)]   (total variance = IV²·T)
+# IV(k) = √(w(k) / T)
+# Use for a single expiry.
 # ---------------------------------------------------------------------------
 
 
 def _observe_svi_slice(theta: np.ndarray, k: float, T: float) -> tuple[float, np.ndarray]:
     """
-    Pure SVI raw parametrisation (no T scaling):
-        IV(k) = a + b·[ρ·(k−m) + √((k−m)²+σ²)]
+    Standard Gatheral SVI (total-variance form):
+        w(k) = a + b·[ρ·(k−m) + √((k−m)²+σ²)]   (total variance = IV²·T)
+        IV(k) = √(w(k) / T)
 
     θ = [a, b, ρ, m, σ]
-    ATM (k=m): IV = a + b·σ
+    ATM (k=m): w = a + b·σ,  IV = √((a + b·σ) / T)
 
-    No √T: for a single expiry H[0]=1, giving the same effective Kalman gain
-    as the individual per-option filter.  Adding √T shrinks H by √T and
-    suppresses the gain for short-dated options (see SVI_MODEL for multi-expiry).
+    Returns (nan, zeros) when w ≤ 0 so the KF skips the update rather than
+    taking a sqrt of a negative number.
     """
     a, b, rho, m, sigma = (float(theta[i]) for i in range(5))
     sigma = max(sigma, 1e-6)
+    T_safe = max(float(T), 1e-6)
 
     d = k - m
     sq = np.sqrt(d**2 + sigma**2)
     f = rho * d + sq
-    z_hat = a + b * f
+    w = a + b * f  # total variance
 
-    H = np.array(
+    if w <= 0:
+        return float("nan"), np.zeros(5)
+
+    z_hat = np.sqrt(w / T_safe)  # IV
+
+    # Jacobian: ∂IV/∂θ = (1 / (2·√(w·T))) · ∂w/∂θ
+    scale = 1.0 / (2.0 * np.sqrt(w * T_safe))
+    H = scale * np.array(
         [
-            1.0,  # ∂/∂a  — always 1, full gain on level
-            f,  # ∂/∂b
-            b * d,  # ∂/∂ρ
-            -b * (rho + d / sq),  # ∂/∂m
-            b * sigma / sq,  # ∂/∂σ
+            1.0,  # ∂w/∂a
+            f,  # ∂w/∂b
+            b * d,  # ∂w/∂ρ
+            -b * (rho + d / sq),  # ∂w/∂m
+            b * sigma / sq,  # ∂w/∂σ
         ]
     )
     return z_hat, H
 
 
 def _initial_theta_svi_slice(cfg: "SurfaceModelConfig") -> np.ndarray:
-    """a=0.15, b=0.4, ρ=−0.7, m=0, σ=0.2  →  ATM = 0.15 + 0.4·0.2 = 0.23"""
-    return np.array([0.15, 0.4, -0.7, 0.0, 0.2])
+    """a=5e-5, b=5e-4, ρ=−0.7, m=0, σ=0.2
+    ATM total variance w ≈ 1.5e-4; for T=0.008 (2-day SPY): ATM IV ≈ 0.137"""
+    return np.array([5e-5, 5e-4, -0.7, 0.0, 0.2])
 
 
 SVI_SLICE_MODEL = Model(
@@ -100,47 +114,32 @@ SVI_SLICE_MODEL = Model(
 
 
 # ---------------------------------------------------------------------------
-# Model 2 — SVI with √T scaling  (5 params)
-# IV(k,T) = [a + b·(ρ(k−m) + √((k−m)²+σ²))] · √T
-# Use when fitting multiple maturities jointly.
+# Model 2 — SVI multi-expiry  (5 params, textbook total-variance form)
+# w(k) = a + b·[ρ(k−m) + √((k−m)²+σ²)]   (total variance = IV²·T)
+# IV(k,T) = √(w(k) / T)
+# Same formula as SVI_SLICE_MODEL; distinguished by initial_theta (tuned for
+# a shared state across maturities) and name.
 # ---------------------------------------------------------------------------
 
 
 def _observe_svi(theta: np.ndarray, k: float, T: float) -> tuple[float, np.ndarray]:
     """
-    SVI raw parametrisation × √T:
-        IV(k,T) = [a + b·(ρ·(k−m) + √((k−m)²+σ²))] · √T
+    Standard Gatheral SVI (total-variance form), same as SVI_SLICE_MODEL:
+        w(k) = a + b·[ρ·(k−m) + √((k−m)²+σ²)]   (total variance)
+        IV(k, T) = √(w(k) / T)
 
     θ = [a, b, ρ, m, σ]
-    ATM (k=m): IV = (a + b·σ) · √T
+    ATM (k=m): IV = √((a + b·σ) / T), naturally decreasing with T for fixed w.
 
-    For short-dated options √T is small, suppressing H and the Kalman gain.
-    Prefer SVI_SLICE_MODEL when working on a single expiry.
+    Returns (nan, zeros) when w ≤ 0 so the KF skips the update.
     """
-    a, b, rho, m, sigma = (float(theta[i]) for i in range(5))
-    sigma = max(sigma, 1e-6)
-
-    sqrtT = np.sqrt(max(T, 1e-6))
-    d = k - m
-    sq = np.sqrt(d**2 + sigma**2)
-    f = rho * d + sq
-    z_hat = (a + b * f) * sqrtT
-
-    H = sqrtT * np.array(
-        [
-            1.0,
-            f,
-            b * d,
-            -b * (rho + d / sq),
-            b * sigma / sq,
-        ]
-    )
-    return z_hat, H
+    return _observe_svi_slice(theta, k, T)
 
 
 def _initial_theta_svi(cfg: "SurfaceModelConfig") -> np.ndarray:
-    """a=0.023, b=0.5, ρ=−0.7, m=0, σ=0.3  →  ATM·√T=0.006 ≈ 0.023"""
-    return np.array([0.023, 0.5, -0.7, 0.0, 0.3])
+    """a=0.001, b=0.005, ρ=−0.7, m=0, σ=0.2
+    ATM total variance w ≈ 0.002; for T=0.083 (1-month): ATM IV ≈ 0.155"""
+    return np.array([0.001, 0.005, -0.7, 0.0, 0.2])
 
 
 SVI_MODEL = Model(
@@ -267,3 +266,68 @@ def build_Q(cfg: SurfaceModelConfig) -> np.ndarray:
 def build_P0(cfg: SurfaceModelConfig) -> np.ndarray:
     """Initial state covariance P0 ∈ ℝ^{n_params × n_params}."""
     return cfg.P0_scale * np.eye(cfg.n_params)
+
+
+# ---------------------------------------------------------------------------
+# Model 5 — B-spline smile  (linear KF, no EKF)
+# IV(k) = Σᵢ θᵢ · Bᵢ(k)
+# H = [B₀(k), …, Bₙ(k)]   — exact, no linearisation error.
+# k outside the knot domain is clamped; B-splines form a partition of unity
+# so the ATM level is the weighted average of the coefficients over the ATM
+# basis functions.
+# ---------------------------------------------------------------------------
+
+
+def make_bspline_slice_model(
+    k_min: float = -0.30,
+    k_max: float = 0.15,
+    n_basis: int = 8,
+    degree: int = 3,
+    atm_iv: float = 0.20,
+) -> Model:
+    """
+    Cubic B-spline smile: IV(k) = Σᵢ θᵢ · Bᵢ(k).
+
+    Knots are fixed and evenly spaced in log-moneyness. The model is linear in
+    θ so the Kalman update is exact (no EKF).  Points outside [k_min, k_max]
+    are clamped — the boundary basis function absorbs any extrapolation.
+
+    Parameters
+    ----------
+    k_min, k_max : log-moneyness domain (default: −0.30 to +0.15 for SPX)
+    n_basis      : number of B-spline basis functions (controls flexibility)
+    degree       : spline degree; 3 (cubic) is the default
+    atm_iv       : flat-smile initialisation for all coefficients
+    """
+    # Clamped (open) knot vector: (degree+1) repeated at each boundary,
+    # with (n_basis − degree − 1) uniformly spaced interior knots.
+    n_interior = n_basis - degree - 1
+    if n_interior < 0:
+        raise ValueError(f"n_basis={n_basis} too small for degree={degree}; need n_basis > degree")
+    interior = np.linspace(k_min, k_max, n_interior + 2)[1:-1]
+    t = np.r_[
+        np.repeat(k_min, degree + 1),
+        interior,
+        np.repeat(k_max, degree + 1),
+    ]
+    # Valid evaluation domain (same as knot span for clamped splines)
+    k_lo = float(t[degree])
+    k_hi = float(t[-(degree + 1)])
+
+    def _observe(theta: np.ndarray, k: float, T: float) -> tuple[float, np.ndarray]:
+        k_c = float(np.clip(k, k_lo, k_hi))
+        H = BSpline.design_matrix([k_c], t, degree).toarray()[0]
+        z_hat = float(H @ theta)
+        return z_hat, H
+
+    return Model(
+        name=f"bspline_slice_n{n_basis}_d{degree}",
+        n_params=n_basis,
+        observe=_observe,
+        initial_theta=lambda cfg: np.full(cfg.n_params, atm_iv),
+        q_diag_weights=np.ones(n_basis),
+    )
+
+
+# Default: 8 cubic B-splines, log-moneyness ∈ [−0.30, +0.15]  (4 interior knots)
+BSPLINE_SLICE_MODEL = make_bspline_slice_model(k_min=-0.30, k_max=0.15, n_basis=8, degree=3)

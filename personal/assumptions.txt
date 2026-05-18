@@ -44,5 +44,17 @@ Also, this takes out the need to use the spot datset, which in itself may be ina
 it also has trades and quotes and maybe shoudl do KF on it to estimate true etc...
 
 
+To estimate the forward:
+Noisy on the wings, so we focused ATM to take 2 overlapping strikes and solve 2x2 system to get Forward and spot.
+Problem: gave forward sometime very bad measures , min = 0.67, max = 1.37 . 
+
+First idea: use 1.0 as a discount factor because theoretically it should be very close to the spot.
+
+Problem: introduces a wide error between call and puts IV.
+
+
+
+
+
 
 
