@@ -25,6 +25,9 @@ TZ_NY = ZoneInfo("America/New_York")
 DAYS_PER_YEAR = 252
 """ Standardized business days per year. """
 
+ONE_MINUTE = 1.0 / (60.0 * 6.5 * DAYS_PER_YEAR)
+""" One minute in year fraction, assuming 6.5 trading hours per day and ``DAYS_PER_YEAR`` trading days per year. """
+
 AM_EXIRY_SUBTRACT = 0.8
 """ How much to subtract from an expiry (in days) to account for AM settlement. """
 
@@ -49,11 +52,14 @@ class NMS:
     @staticmethod
     def from_nms(z: float|np.ndarray, t: float|np.ndarray, *, vol : float|np.ndarray = SCALE, backbone=np) -> float|np.ndarray:
         """ Converts an NMS strike to a relative strike. """
+        assert np.min(vol) > 0., "Volatility must be positive"
         return backbone.exp(vol * z * backbone.sqrt((NMS.EPS + t) / (NMS.EPS + 1.0)))
 
     @staticmethod
     def to_nms(k: float|np.ndarray, t: float|np.ndarray, *, vol: float|np.ndarray = SCALE, backbone=np) -> float|np.ndarray:
         """ Converts a relative strike to an NMS strike. """
+        assert np.min(vol) > 0., "Volatility must be positive"
+        assert np.min(k) > 0., "Relative strike must be positive"
         return (backbone.log(k) / vol) / backbone.sqrt((NMS.EPS + t) / (NMS.EPS + 1.0))
 
 class NMS5:

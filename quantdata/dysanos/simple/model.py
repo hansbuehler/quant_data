@@ -533,41 +533,11 @@ class AEC(BaseModel):
         'mask_arb_free',
         'pure_ask_price',
         'pure_bid_price',
-        'pure_fit_price',
+        'pure_fit1_price',
         'ask_vol',
         'bid_vol',
-        'fit_vol',
+        'fit1_vol',
      ]
-    __MAY_USE = [
-        #'is_american',
-        #'is_am',
-        'strike',  # strike/spot_ref
-        'fwd',     # fwd/spot_ref
-        'df',
-        'call_ask',   
-        'call_bid',
-        'spot_ret',
-        'log_volume',
-        'log_open_interest',
-        'pure_ask_price',
-        'pure_bid_price',
-        'pure_fit_price',
-        'pure_ask_delta',
-        'pure_bid_delta',
-        'pure_fit_delta',
-        'pure_ask_gamma',
-        'pure_bid_gamma',
-        'pure_fit_gamma',
-        'pure_bid_vega',
-        'pure_ask_vega',
-        'pure_fit_vega',
-        'pure_bid_theta',
-        'pure_ask_theta',
-        'pure_fit_theta',
-        'pure_ask_dk',
-        'pure_bid_dk'
-        'pure_fit_dk',
-    ]
 
     Config = AECConfig
 
@@ -590,6 +560,9 @@ class AEC(BaseModel):
         max_options = sampler.max_options
         
         set_f       = set(sampler.features)
+
+        print( sorted(shapes) )
+        print( sorted(set_f) )
         if set(shapes) != set_f:
             superfluous = set(shapes) - set_f
             missing     = set_f - set(shapes)
@@ -687,7 +660,7 @@ class AEC(BaseModel):
         characteristics = [ data[f] for f in self.CHARACTERISTICS ]
 
         if self.config.cheat:
-            characteristics = characteristics + [ data['fit_vol'] ]
+            characteristics = characteristics + [ data['fit1_vol'] ]
 
         encoded = self.encoder( features, mask=mask if pad_mask is None else (mask&pad_mask ) ) # (B,S,X)
         assert encoded.shape == (B, S, X), f"Expected encoded representation to have shape {(B, S, X)}, found {encoded.shape}"
@@ -709,21 +682,22 @@ class AEC(BaseModel):
         ask_vol       = data['ask_vol']
         bid_vol       = data['bid_vol']
         mask_arb_free = data['mask_arb_free']
+        mask          = mask & mask_arb_free  # ARB FREE ONLY
 
         if self.config.encode_what == "vol":
-            fit_vol      = self.softplus(decoded)+self.config.vol_floor # ensure positive output for volatility prediction
-            fit_sqrtVar  = fit_vol*sqrtT
+            fit1_vol      = self.softplus(decoded)+self.config.vol_floor # ensure positive output for volatility prediction
+            fit_sqrtVar  = fit1_vol*sqrtT
             fit_price    = self.bb.bs_price( strikes=pure_strike, sqrtVars=fit_sqrtVar, mask=mask, high_precision=False, debug_verify_bounds=False )
     
         elif self.config.encode_what == "sqrtVar":
             fit_sqrtVar = self.softplus(decoded)+self.config.vol_floor*sqrtT # ensure positive output for sqrt variance prediction  
             fit_price   = self.bb.bs_price( strikes=pure_strike, sqrtVars=fit_sqrtVar, mask=mask, high_precision=False, debug_verify_bounds=False )
-            fit_vol     = fit_sqrtVar / torch.where( mask, sqrtT, 1. )
+            fit1_vol     = fit_sqrtVar / torch.where( mask, sqrtT, 1. )
 
         else:
             assert self.config.encode_what == "price", f"Invalid value for 'encode_what': {self.config.encode_what}"
             fit_price   = self.softplus(decoded) # keep positivity
-            fit_vol     = None
+            fit1_vol     = None
             fit_sqrtVar = None
         decoded = None
 
@@ -733,7 +707,7 @@ class AEC(BaseModel):
             if not pad_mask is None:
                 mask = mask & pad_mask
             return dict(fit_price=torch.where( mask, fit_price, 0.),
-                        fit_vol=torch.where( mask, fit_vol, 0.) if fit_vol is not None else None
+                        fit1_vol=torch.where( mask, fit1_vol, 0.) if fit1_vol is not None else None
                     )
 
         # loss function
@@ -784,7 +758,7 @@ class AEC(BaseModel):
             loss, loss_sq, weights = loss_f( fit_price, pure_bid, pure_ask, self.stats.mean_pure_spread )
 
         elif self.config.fit_what == "vol":
-            loss, loss_sq, weights = loss_f( fit_vol, bid_vol, ask_vol, self.stats.mean_vol_spread )
+            loss, loss_sq, weights = loss_f( fit1_vol, bid_vol, ask_vol, self.stats.mean_vol_spread )
     
         else:
             assert self.config.fit_what == "sqrtVar", f"Invalid value for 'fit_what': {self.config.fit_what}"
@@ -984,8 +958,8 @@ class Visualizer(BaseVisualizer):
             sqrtT         = nnp.sqrt(tte_y)
 
             fit_price     = pathwise['fit_price'][:,-1,:].detach().cpu().numpy()
-            fit_vols      = pathwise['fit_vol'][:,-1,:].detach().cpu().numpy() if pathwise['fit_vol'] is not None else None
-            fit_vols      = bs.implied( pure_strike, fit_price, sqrtT=sqrtT, mask=is_valid, on_exceed_bounds="quiet" ) if fit_vols is None else fit_vols
+            fit1_vols      = pathwise['fit1_vol'][:,-1,:].detach().cpu().numpy() if pathwise['fit1_vol'] is not None else None
+            fit1_vols      = bs.implied( pure_strike, fit_price, sqrtT=sqrtT, mask=is_valid, on_exceed_bounds="quiet" ) if fit1_vols is None else fit1_vols
             batch = None
             pathwise = None 
 
@@ -1018,14 +992,14 @@ class Visualizer(BaseVisualizer):
                     iask       = pure_ask[ip,:][ivld]
                     ibid_vols  = bid_vols[ip,:][ivld]
                     iask_vols  = ask_vols[ip,:][ivld]
-                    ifit_vols  = fit_vols[ip,:][ivld]
+                    ifit1_vols  = fit1_vols[ip,:][ivld]
 
                     ixs        = nnp.argsort(iask_vols)
                     ibid_vols_ = ibid_vols[ixs]
                     iask_vols_ = iask_vols[ixs]
-                    ifit_vols_ = ifit_vols[ixs]
+                    ifit1_vols_ = ifit1_vols[ixs]
 
-                    self.store += axV.plot( iask_vols_, ifit_vols_, ".-", color="orange", label=f"Fit {ip}" )
+                    self.store += axV.plot( iask_vols_, ifit1_vols_, ".-", color="orange", label=f"Fit {ip}" )
                     self.store += axV.plot( iask_vols_, ibid_vols_, "^:", color="green")
                     self.store += axV.plot( iask_vols_, iask_vols_, "v:", color="red")
 
@@ -1041,7 +1015,7 @@ class Visualizer(BaseVisualizer):
                         assert nnp.min(ispread_) > 0., f"Negative spread found in sample {ip}: min spread is {nnp.min(ispread_):.4g}"
                         axP.fill_between( iask_vols_, -ispread_, +ispread_, color="blue", alpha=0.2, label="Spread" )
 
-                    axV.set_ylim( *m_o_m(ifit_vols, ibid_vols, iask_vols ))
+                    axV.set_ylim( *m_o_m(ifit1_vols, ibid_vols, iask_vols ))
                     axP.set_ylim( *m_o_m(ibid - ifit, iask - ifit) )
 
                     if is_first:
@@ -1083,7 +1057,7 @@ class Visualizer(BaseVisualizer):
                     xtte_y   = tte_y[ip,:][xis_valid][ixs]
                     xask_vols = ask_vols[ip,:][xis_valid][ixs]
                     xbid_vols = bid_vols[ip,:][xis_valid][ixs]
-                    xfit_vols = fit_vols[ip,:][xis_valid][ixs]
+                    xfit1_vols = fit1_vols[ip,:][xis_valid][ixs]
 
                     uttes = nnp.unique(xtte_y).tolist()
                     uttes = uttes if len(uttes) <= self.config.num_tte else ( uttes[:self.config.num_tte-2] + uttes[-2:] ) # limit number of TTEs visualized in deta
@@ -1093,7 +1067,7 @@ class Visualizer(BaseVisualizer):
 
                         xav = xask_vols[mask]
                         xbv = xbid_vols[mask]
-                        xfv = xfit_vols[mask]
+                        xfv = xfit1_vols[mask]
                         xnm = xnms[mask]
 
                         self.store += ax.plot( xnm, xav, ".:", color="red", label="Ask Vol" )

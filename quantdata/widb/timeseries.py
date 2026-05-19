@@ -182,7 +182,8 @@ def build_time_series(
     dates            = sorted( set(date_range.get_business_days())-set(BAD.DAYS_ALL) )
     source_schema    = SCHEMA_OPTION_DAY(time_series_def.mk_arb_free, time_series_def.options_filter.normalize)
     source_fields    = set(source_schema)                   # what the source offers
-    available_fields = source_fields|{'is_valid','time_y'}  # source + what we will generate
+    applicable_fields= source_fields - {'call_symbol','put_symbol'}
+    available_fields = applicable_fields|{'is_valid','time_y'}  # source + what we will generate
 
     def get_fields():
         if not exclude_fields is None:

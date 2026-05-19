@@ -23,6 +23,13 @@ To access this data:
   3. [Follow the WRDS instructions](https://wrds-www.wharton.upenn.edu/pages/support/programming-wrds/programming-python/python-from-your-computer/) to ensure you have 
     the ``pgpass`` pass file. *This is important.*
 
+  Run ``python`` in your environment and then:
+  ```python
+  import wrds
+  db = wrds.Connection()
+  ```
+  Follow the instructions and create a ``pgpass`` file.
+
   4. Set the ``WRDS_USERNAME`` variable to your username.   
 
   5. Run the [``notebooks/viz_client.ipynb``](notebooks/viz_client.ipynb) notebook to test that everything works.

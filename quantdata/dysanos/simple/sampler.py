@@ -234,7 +234,7 @@ class SimpleSampler(BaseSampler):
 
     Config = SamplingConfig
 
-    INVALID_FIELDS = {'date','expiry','call_symbol','put_symbol'}
+    INVALID_FIELDS = {'date','ticker','expiry','call_symbol','put_symbol'}
 
     def __init__( self, simple_config      : SimpleConfig, *, 
                         fields_requested   : set[str]|None = None,
@@ -264,6 +264,8 @@ class SimpleSampler(BaseSampler):
                 raise ValueError(f"'is_valid' must be included in the fields to features mapping, as it is used for masking invalid options. Please include 'is_valid' in the mapping with a value of None or a feature name.")
             if 'dates' in fields_requested:
                 raise ValueError(f"'dates' cannot be included in the fields to features mapping, as it is used as a separate field in the output. Use 'time_y' instead")
+            if 'ticker' in fields_requested:
+                raise ValueError(f"'ticker' cannot be included in the fields to features mapping")
             if len(self.INVALID_FIELDS ^ fields_requested) > 0:
                 raise ValueError(f"Cannot use object fields: {fmt_list(self.INVALID_FIELDS & fields_requested)}.")            
             verify_inp( fields_requested <= timeseries_fields, lambda : f"'fields_requested' must be a subset of the available time series fields {sorted(timeseries_fields)}; unknown fields found: {sorted(fields_requested - timeseries_fields)}" )
@@ -304,7 +306,7 @@ class SimpleSampler(BaseSampler):
             max_options   = 0
             for ticker, tdata in self.data.items():
                 if set(tdata) != fields_requested|{'dates','ticker'}:
-                    missing = sorted(fields_requested - set(tdata))
+                    missing = sorted(fields_requested|{'dates','ticker'} - set(tdata))
                     superflous = sorted(set(tdata) - fields_requested - {'dates','ticker'})
                     raise ValueError(f"Internal error: time series data for ticker {ticker} is missing fields: {fmt_list(missing)}; superfluous fields: {fmt_list(superflous)}")
                 all_dates.update(tdata['dates'])

@@ -5,7 +5,7 @@ Sanos Non-ML Benchmark
 from __future__ import annotations
 
 from quantdata.widb.timeseries import TimeSeriesDefinition, filter_options_day, build_time_series, DateRange, PoolConfig
-from quantdata.utils.arbfree import MkArbFree
+from quantdata.utils.arbfree import MkArbFree, _compute_dlvs
 from quantdata.biz_calendar import DAYS_PER_YEAR, NMS5
 from quantdata.dysanos.simple import _locations_simple
 
@@ -20,9 +20,10 @@ from datetime import date
 from dataclasses import dataclass, field
 import numpy as np
 import warnings
+import scipy as scipy
 
 
-DEFAULT_EXPIRIES = np.array([1./255., 2./255., 5./255., 10./255., 20./255., 40./255.,0.5,1.], dtype=np.float64)
+DEFAULT_EXPIRIES = np.array([1./255., 3./255., 5./255., 10./255., 20./255., 40./255.,0.5,1.], dtype=np.float64)
 DEFAULT_NUMS     = (-4,2)
 _EPS_PRICE       = 1E-6
 
@@ -36,6 +37,8 @@ class SanosBenchmarkConfig:
     grid_nms       : tuple = (-4,2)
     grid_num_nms   : int = 40
     vol_spread_fac : float = 1.01
+    quantile_range : float = 0.01
+    num_qnt_strikes: int = 200
 
     def __post_init__(self):
         verify_inp( self.smoothness is None or (isinstance(self.smoothness, (float,int,np.number)) and self.smoothness>=0), lambda : f"Expected 'smoothness' to be a non-negative number or None, but found {str(self.smoothness)}" )
@@ -66,7 +69,7 @@ def _bd_uid(ticker, d, time_series_def : TimeSeriesDefinition, benchmark_config 
     return f"{ts_id}/{bm_id}/{ticker}/{d}"
 
 #@_cache(fmt=SubDir.PYTREE_HDF5).cache(
-#            "0.1", dependencies=[SanosBenchmarkConfig, build_time_series, TimeSeriesDefinition],
+#            "0.32", dependencies=[SanosBenchmarkConfig, build_time_series, TimeSeriesDefinition],
 #            uid=_bd_uid)
 @version("0.1") 
 def sanos_benchmark_day( 
@@ -161,11 +164,17 @@ def sanos_benchmark_day(
     # for a grid of options - then fit another
     # SANOS model to that grid.
 
-    with verbose.write_t(lambda : f"\rTraining {str_smth} SANOS grid... ", end="") as tme:
+    # C(1,K) = \sum q_i C(S_i,K)
+    # P(1,k) = \sum q_i P[S_i,k]
+
+    # NMS grod
+    # --------
+
+    with verbose.write_t(lambda : f"\rTraining {str_smth} SANOS defined NMS grid... ", end="") as tme:
         if benchmark_config.grid_expiries[-1] > af_target.expiries[-1]:
             warnings.warn(f"Warning {str_smth} SANOS {ticker} {d}: the maximum grid expiry {benchmark_config.grid_expiries[-1]:.4g} is greater than the maximum market expiry {af_target.expiries[-1]:.4g}.")
-        
-        M    = len(benchmark_config.grid_expiries )
+
+        M    = len( benchmark_config.grid_expiries )
         grid = PrettyObject()
         grid.expiries   = np.asarray( benchmark_config.grid_expiries )
         grid.atms       = af_output.interpolate_atm_vols( grid.expiries )
@@ -173,21 +182,18 @@ def sanos_benchmark_day(
         grid.strikes    = NMS5.from_nms( z=grid_nms[None,:], t=grid.expiries[:,None], vol=grid.atms[:,None] )
         grid.mids,\
         grid.vols       = af_output.price( expiries=grid.expiries[:,None], strikes=grid.strikes, and_vols=True, mode="surface" )
-        grid.bids       = bs.price( k=grid.strikes, sqrtT=np.sqrt(grid.expiries[:,None]), vol=grid.vols/benchmark_config.vol_spread_fac, eps=_EPS_PRICE )
-        grid.asks       = bs.price( k=grid.strikes, sqrtT=np.sqrt(grid.expiries[:,None]), vol=grid.vols*benchmark_config.vol_spread_fac, eps=_EPS_PRICE )
-        grid.bids       = np.minimum( grid.bids, grid.mids -  mk_arb_free.min_half_spread )
-        grid.asks       = np.maximum( grid.asks, grid.mids +  mk_arb_free.min_half_spread )
-
-        grid.strikes    = [ grid.strikes[t,:] for t in range(M) ]
-        grid.vols       = [ grid.vols[t,:] for t in range(M) ]
-        grid.mids       = [ grid.mids[t,:] for t in range(M) ]
-        grid.bids       = [ grid.bids[t,:] for t in range(M) ]
-        grid.asks       = [ grid.asks[t,:] for t in range(M) ]
 
         # fit and price market
-        af_grid         = mk_arb_free( strikes = grid.strikes, expiries = grid.expiries, bids = grid.bids, asks = grid.asks, verbose=verbose.quiet )
-        grid.fits       = [ af_grid.price( expiries=grid.expiries[t], strikes=grid.strikes[t], and_vols=False, mode="surface" ) for t in range(M) ]
-
+        af_grid         = mk_arb_free( expiries = grid.expiries, 
+                                       strikes =  [ grid.strikes[t,:] for t in range(M) ],
+                                       mids = [ grid.mids[t,:] for t in range(M) ], 
+                                       xstrikes = [ grid.xstrikes[t,:] for t in range(M) ],
+                                       vols = grid.atms,
+                                       verbose=verbose.quiet )
+        grid.fits       = [ af_grid.price( expiries=grid.expiries[t], strikes=grid.strikes[t,:], and_vols=False, mode="surface" ) for t in range(M) ]
+        grid.fits       = np.stack( grid.fits, axis=0 )
+        assert grid.fits.shape == grid.mids.shape, f"Internal error: expected grid.fits to have shape {grid.mids.shape} but found {grid.fits.shape} for grid expiries {grid.expiries} and strikes {grid.strikes}."
+        assert grid.dlvs.shape == grid.mids.shape, f"Internal error: expected grid.dlvs to have shape {grid.mids.shape} but found {grid.dlvs.shape} for grid expiries {grid.expiries} and strikes {grid.strikes}."
         market.grid_fit = af_grid.price( expiries=market.expiries, strikes=market.strikes, and_vols=False, mode="surface" )
         half_spread     = np.maximum( 0.5*(market.ask -market.bid), mk_arb_free.min_half_spread )
         market.grid_err = (np.maximum( 0, market.grid_fit - market.ask ) + np.maximum(0., market.bid - market.grid_fit) ) / half_spread
@@ -197,7 +203,38 @@ def sanos_benchmark_day(
         target_grid     = market.grid_err[mask_arb_free] if not mask_arb_free is None else market.grid_err
         grid.pcnt_err   = np.sum( target_grid > 0.) / len(target_grid)
         grid.median_err = np.median( target_grid[target_grid>0.] ) if np.any(target_grid>0.) else 0.
-        verbose.write(f"done; median error is {grid.median_err:.2f} half-spreads for the {grid.pcnt_err*100:.1f}% of options which were not within the bid-ask spread. This took {tme}.", head=False )
+        verbose.write(f"done; median error to market is {grid.median_err:.2f} half-spreads for the {grid.pcnt_err*100:.1f}% of options which were not within the bid-ask spread. (This model was not fitted to all options.) This took {tme}.", head=False )
+
+
+    with verbose.write_t(lambda : f"\rComputing {str_smth} quantiles... ", end="") as tme:
+        if benchmark_config.grid_expiries[-1] > af_target.expiries[-1]:
+            warnings.warn(f"Warning {str_smth} SANOS {ticker} {d}: the maximum grid expiry {benchmark_config.grid_expiries[-1]:.4g} is greater than the maximum market expiry {af_target.expiries[-1]:.4g}.")
+
+        grid.quantile_values  = np.linspace(benchmark_config.quantile_range, 1.-benchmark_config.quantile_range, 
+                                      benchmark_config.grid_num_nms )
+        grid.quantiles  = np.zeros((M,benchmark_config.grid_num_nms), dtype=grid.strikes.dtype)
+
+        for t, expiry in enumerate(grid.expiries):
+            lower_k       = grid.strikes[t,0]/2.
+            upper_k       = grid.strikes[t,-1]*1.5
+            quant_strikes = np.exp( np.linspace( np.log(lower_k), np.log(upper_k), benchmark_config.num_qnt_strikes ) )
+            assert quant_strikes[-1]*2 < 10, f"Internal error: expected maximum quantile strike {quant_strikes[-1]:.4g} to be less than 10 for expiry {expiry}"
+
+            range_calls   = af_output.price( expiries=expiry, strikes=quant_strikes, and_vols=False, mode="surface" )
+            P             = 1.+np.diff(range_calls,prepend=1.)/np.diff(quant_strikes, prepend=0.)
+            assert P.shape==(benchmark_config.num_qnt_strikes, ), f"Internal error: expected call price differences to have shape {(benchmark_config.num_qnt_strikes,)} but found {P.shape} for expiry {expiry}."
+            if benchmark_config.quantile_range < P[0]:
+                warnings.warn(f"Warning {str_smth} SANOS {ticker} {d} expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d the minimum quantile {benchmark_config.quantile_range:.4g} is smaller than the minimum call price {P[0]:.4g} for the generated grid quantile strikes fron {quant_strikes[0]:.4g} to {quant_strikes[-1]:.4g}.")
+            if 1.-benchmark_config.quantile_range > P[-1]:
+                warnings.warn(f"Warning {str_smth} SANOS {ticker} {d} expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d the maximum quantile {1.-benchmark_config.quantile_range:.4g} is greater than the maximum call price {P[-1]:.4g} for the generated grid quantile strikes fron {quant_strikes[0]:.4g} to {quant_strikes[-1]:.4g}.")
+            P             = np.concatenate( ([0.], P, [1.]) )
+            X             = np.concatenate( ([0.], quant_strikes, [10.]) )
+            grid.quantiles[t,:] \
+                          = scipy.interpolate.PchipInterpolator(X,P)( grid.quantile_values )
+
+        grid.mids,\
+        grid.vols       = af_output.price( expiries=grid.expiries[:,None], strikes=grid.strikes, and_vols=True, mode="surface" )
+
 
     # convert back
     # ------------
@@ -214,7 +251,7 @@ def sanos_benchmark_day(
 
     full_market.pcnt_err = pcnt_fit
     full_market.median_err = median_fit_err
-    assert set(grid) == {'expiries','atms', 'strikes', 'mids', 'vols', 'bids', 'asks', 'fits', 'pcnt_err', 'median_err'}, f"Internal error: expected grid to have keys 'expiries','atms', 'strikes', 'mids', 'vols', 'bids', 'asks', 'fits', 'pcnt_err', 'median_err', but found {sorted(set(grid))}"
+    assert set(grid) == {'expiries','atms', 'strikes', 'mids', 'quantiles', 'vols', 'bids', 'asks', 'fits', 'pcnt_err', 'median_err'}, f"Internal error: expected grid to have keys 'expiries','atms', 'strikes', 'mids', 'vols', 'bids', 'asks', 'fits', 'pcnt_err', 'median_err', but found {sorted(set(grid))}"
 
     return dict( market=dict(full_market), grid=dict(grid) )
 
@@ -266,7 +303,7 @@ def sanos_benchmark(
         for d, dresults in pool.parallel( { d : pool.delayed( process )( ticker=ticker, d=d, ddata=slice_data(isample), time_series_def=time_series_def, benchmark_config=benchmark_config ) for isample, d in enumerate(time_series['dates']) } ):
             results[d] = dresults           
             if tme.interval_test(2.) and quietprc:
-                verbose.write(lambda : f"\rProcessed date {len(results)}/{num_dates} {d} for {ticker}. Market % error {results['market']['pcnt_err']:.2f} median {results['market']['median_err']:.3g}, Grid % error {results['grid']['pcnt_err']:.2f} median {results['grid']['median_err']:.3g}. So far this took {tme}...", end='')
+                verbose.write(lambda : f"\rProcessed date {len(results)}/{num_dates} {d} for {ticker}. Market % error {dresults['market']['pcnt_err']:.2f} median {dresults['market']['median_err']:.3g}, Grid % error {dresults['grid']['pcnt_err']:.2f} median {dresults['grid']['median_err']:.3g}. So far this took {tme}...", end='')
 
     verbose.write(lambda : f"\rProcessed all {num_dates} for {ticker} from {time_series['dates'][0]} to {time_series['dates'][-1]}. This took {tme}.")
 
