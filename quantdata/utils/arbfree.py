@@ -478,6 +478,7 @@ class MkArbFree:
 
         T = len(expiries)
 
+        verify_inp( T > 0, lambda : f"{message()}Expected at least one expiry, but found {T}" )
         verify_inp( len(strikes) == T, lambda : f"{message()}Expected number of strike arrays {T} to match number of expiries {len(expiries)}" )
         verify_inp( len(bids) == T, lambda : f"{message()}Expected number of bid arrays {T} to match number of expiries {len(expiries)}" )
         verify_inp( len(asks) == T, lambda : f"{message()}Expected number of ask arrays {T} to match number of expiries {len(expiries)}" )   
