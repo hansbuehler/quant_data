@@ -18,13 +18,13 @@ def generate_day(ticker, d):
     mk_arb_free = MkArbFree()
     verbose = Context.all
 
-    raw_day = collect_raw_day(ticker, d, raw_day_filter=raw_day_filter, verbose=verbose, raise_if_bad=False)
+    raw_day = collect_raw_day(ticker, d, raw_day_filter=raw_day_filter, verbose=verbose, raise_if_bad_day=False)
     print(raw_day)
 
-    enr_day = enrich_day(ticker, d, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, verbose=verbose, raise_if_bad=False)
+    enr_day = enrich_day(ticker, d, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, verbose=verbose, raise_if_bad_day=False)
     print(enr_day)
 
-    af_day = mk_arb_free_day(ticker, d, mk_arb_free=mk_arb_free, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, verbose=verbose, raise_if_bad=False)
+    af_day = mk_arb_free_day(ticker, d, mk_arb_free=mk_arb_free, raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, verbose=verbose, raise_if_bad_day=False)
     print(af_day)
 
 def main():
