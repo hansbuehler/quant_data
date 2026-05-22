@@ -40,7 +40,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from quantdata.utils.arbfree import MkArbFree
+from quantdata.sanos.arbfree import MkArbFree
 from quantdata.utils.pd import create_empty_df, verify_schema
 from quantdata.widb.day import (
     ENRICHED_PER_DAY_FIELDS,

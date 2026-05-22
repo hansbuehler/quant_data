@@ -17,10 +17,10 @@ import math as math
 from cdxcore.verbose import Context
 from cdxcore.err import verify_inp
 import warnings as warnings
-from quantdata.sanos.open import OpenGeometry
-from quantdata.sanos.utils import _interpolate_sqrtVars, _iterative_model_price
-from quantdata.sanos.grid import GridGeometry, Eps
-from quantdata.sanos.open import OpenGeometry, Eps
+from quantdata.sanos.old.open import OpenGeometry
+from quantdata.sanos.old.utils import _interpolate_sqrtVars, _iterative_model_price
+from quantdata.sanos.old.grid import GridGeometry, Eps
+from quantdata.sanos.old.open import OpenGeometry, Eps
 from quantdata.utils.backbone import BackboneNumpy
 
 _npbb = BackboneNumpy()

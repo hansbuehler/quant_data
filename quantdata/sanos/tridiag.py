@@ -3,13 +3,13 @@ Grid Sanos tridiagonal solver for SANOS-type transition operators, c.f. http://a
 """
 
 from __future__ import annotations
-from quantdata.utils.backbone import Backbone
+from quantdata.utils.backbone import Backbone, BackboneNumpy
 from cdxcore.err import verify_inp
 
-def solve_sanos_tridiagonal(backbone : Backbone,
-                            w_minus: Backbone.Array,
+def solve_sanos_tridiagonal(*, w_minus: Backbone.Array,
                             w_plus: Backbone.Array,
-                            rhs: Backbone.Array
+                            rhs: Backbone.Array,
+                            backbone : Backbone = BackboneNumpy(),
                             ) -> Backbone.Array:
     """Solve SANOS tridiagonal system with boundary structure from w_minus/w_plus.
 

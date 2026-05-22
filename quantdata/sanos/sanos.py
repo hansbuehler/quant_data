@@ -21,7 +21,7 @@ from quantdata.biz_calendar import DAYS_PER_YEAR, ONE_MINUTE
 from quantdata.utils.backbone import BackboneNumpy
 import math
 
-from quantdata.utils.sanos_tools import SanosPricer, SanosLPSolver, warn_and_fix_density
+from quantdata.sanos.sanos_tools import SanosPricer, SanosLPSolver, warn_and_fix_density
 
 @version("0.4", dependencies=[SanosPricer])
 @dataclass(frozen=True)
@@ -30,8 +30,11 @@ class SanosFitter:
     A utility class which generates a "closest" arbitrage-free market using
     the ideas from the paper https://arxiv.org/pdf/2601.11209.
     """
-    smoothness           : float|None = None # Whether to impose SANOS smoothness.
+    smoothness           : float|None = None   # Whether to impose SANOS smoothness.
     timeout_seconds      : float|None = 60.*5. #: Time limit for the optimization solver, in seconds. This is passed to the CVXPY solver options as "time_limit".
+
+    min_dlv              : float = 0.01   #: Minimum local volatility to impose in the fit, in absolute terms. This is a soft constraint which is implemented as a penalty term in the optimization problem, so it may not be perfectly respected. If None, no minimum local volatility is imposed.
+    max_dlv              : float = 5.     #: Maximum local volatility to impose in the fit, in absolute terms. This is a soft constraint which is implemented as a penalty term in the optimization problem, so it may not be perfectly respected. If None, no maximum local volatility is imposed.
 
     # protected variables do not alter the ID of this field (because they start with '_')
     _debug_verbose_cvxpy  : set[str]|None = None
@@ -46,12 +49,12 @@ class SanosFitter:
     def __str__(self) -> str:
         """ Very compact but still readable summary """
         return (
-            f"sanos,{f'std={self.smoothness:.2g},' if self.smoothness is not None else ''}"
-            f"tmo={self.timeout_seconds:.1f},eps={self._eps_price:.0e}/{self._eps_density:.0e}"
+            f"sanos,{f'sth={self.smoothness:.2g},' if self.smoothness is not None else ''}"
+            f"{',midv='+str(self.min_dlv) if self.min_dlv is not None else ''}{',mxdv='+str(self.max_dlv) if self.max_dlv is not None else ''}"
         )
 
     def __unique_hash__( self, unique_hash, debug_trace ) -> str:
-        """ Overwrite hash function to ignore non-functional parameters """
+        """ Overwrite hash function to ignore non-functional parameters. Note that unique_hash already ignored protected variables """
         r = asdict(self)
         r.pop("timeout_seconds", None)
         return unique_hash(r, debug_trace=debug_trace)
@@ -181,8 +184,8 @@ class SanosFitter:
 
             q_t         = cp.Variable(len(xstrikes_t), nonneg=True)
             constraints += [ cp.sum( q_t ) == 1.,
-                                q_t @ xstrikes_t == 1., # martingale condition
-                                q_t <= 1.
+                             q_t @ xstrikes_t == 1., # martingale condition
+                             q_t <= 1.
                             ]
 
             # martingale
@@ -191,7 +194,15 @@ class SanosFitter:
                 assert xstrikes[t-1].shape == xdensities[t-1].shape, f"Internal error {message()}: shape mismatch between previous and current mstrikes, {xstrikes[t-1].shape} vs {xdensities[t-1].shape}"
                 Cm1         = np.maximum( 0., xstrikes[t-1][None,:] - xstrikes_t[1:-1,None] ) @ xdensities[t-1]
                 constraints += [ Cm >= Cm1 ]
-                del Cm1
+            else:
+                Cm1   = np.maximum( 0., 1. - xstrikes_t[1:-1] )    # model strikes, previous density is dirac at 1
+
+            # dlv constaints
+            # dC = 1/2 * dlvsq * x^2 * dt * K^2 / (1/2 (k^+ - k^-)) q
+            box         = xstrikes_t[1:-1]**2 * ( expiries[t] - ( expiries[t-1] if t>0 else 0. ) ) / ( xstrikes_t[2:] - xstrikes_t[:-2])
+            constraints += [ Cm - Cm1 >= cp.multiply( box * (self.min_dlv**2), q_t[1:-1] ) ]
+            constraints += [ Cm - Cm1 <= cp.multiply( box * (self.max_dlv**2), q_t[1:-1] ) ]
+            del box, Cm1
 
             # fit
             def call( spots, strikes ):
@@ -263,6 +274,8 @@ class SanosFitter:
                             expiries=expiries, 
                             variances=variances, 
                             xstrikes=xstrikes, 
-                            xdensities=xdensities )
+                            xdensities=xdensities,
+                            min_dlv=self.min_dlv,
+                            max_dlv=self.max_dlv,)
 
 

@@ -17,8 +17,10 @@ from cdxcore.verbose import Context
 from cdxcore.version import version
 from cdxcore.bs import bs
 from cdxcore.pretty import PrettyObject
+from quantdata.sanos.tridiag import solve_sanos_tridiagonal
 from quantdata.biz_calendar import DAYS_PER_YEAR, ONE_MINUTE
 import math
+
 
 @version("0.8")
 @dataclass(frozen=True)
@@ -27,15 +29,27 @@ class SanosPricer:
     Arbitrage-Free Option pricer based on `DLV/SANOS <http://arxiv.org/abs/2211.13227>`_.
     """
 
-    smoothness   : float|None        # SANOS smoothness or None for linear model.
-    expiries     : np.ndarray        # Model expiries. Must be increasing and positive.
-    variances    : np.ndarray        # Model variances. Must be increasing and positive.
-    xstrikes     : list[np.ndarray]  # Extended strike range. Each element must be increasing and positive.
-    xdensities   : list[np.ndarray]  # Densities for each ``xstrike``.
+    smoothness      : float|None        # SANOS smoothness or None for linear model.
+    expiries        : np.ndarray        # Model expiries. Must be increasing and positive.
+    variances       : np.ndarray        # Model variances. Must be increasing and positive.
+    xstrikes        : list[np.ndarray]  # Extended strike range. Each element must be increasing and positive.
+    xdensities      : list[np.ndarray]  # Densities for each ``xstrike``.
+    min_half_spread : float = 1E-4   # Minimum half spread for error calculations
+    min_dlv         : float = 0.01   # Minimum local volatility to impose in the fit, in absolute terms. This is a soft constraint which is implemented as a penalty term in the optimization problem, so it may not be perfectly respected. If None, no minimum local volatility is imposed.
+    max_dlv         : float = 0.5    # Maximum discrete local volatility.
 
     _eps_price   : float = 1E-6
+    _eps_density : float = 1E-7
+
+    # for DLV
+    _eps_dlv_dens_pos : float = 1E-4
+    _eps_dlv_dens_sum1 : float = 1E-4   
+    _eps_dlv_dens_int1 : float = 1E-4
+    _eps_dlv_diff : float = 1E-3
 
     def __post_init__(self):
+        verify_inp( self.smoothness is None or self.smoothness > 0., lambda : f"'smoothness' must be positive or None, but found {self.smoothness:.4g}")
+        verify_inp( self.min_half_spread > 0., lambda : f"'min_half_spread' must be positive, but found {self.min_half_spread:.4g}" )
         verify_inp( self.expiries[0] > 0., lambda : f"'expiries' must be positive, but found {self.expiries[0]:.4g}" )
         verify_inp( self.variances[0] > 0., lambda : f"'variances' must be positive, but found {self.variances[0]:.4g}" )
         verify_inp( len(self.expiries) == 1 or np.min(np.diff(self.expiries)) > 0., lambda : f"'expiries' must be positive and strictly increasing, but found differences {np.diff(self.expiries).min():.4g}" )
@@ -190,9 +204,41 @@ class SanosPricer:
         assert np.all(np.isfinite(vols)), "Internal error: infinite vol"
         return vols if not is_float else vols[0]
 
-    def dlvs( self, *, all_strikes : bool = False, min_dlv : float = 0.01, max_dlv : float = 0.5 ):
+    def compute_market_fit( self,
+                            expiries : np.ndarray,
+                            strikes : list[np.ndarray]|np.ndarray, 
+                            bids : list[np.ndarray]|np.ndarray, 
+                            asks : list[np.ndarray]|np.ndarray, *,
+                            masks : list[np.ndarray]|np.ndarray|None = None,
+                            and_vols : bool = True ) -> PrettyObject:
         """
-        Compute discrete local volatilities.
+        Compute standardized fitting error stats for the given market data.
+
+        Returns
+        -------
+        Errors : :class:`PrettyObject`
+            A dictionary-lik object with the following fields:
+            * ``fits``: list of fitted prices for the input strikes, per expiry.
+            * ``fit_errs``: list of fitting errors for the input strikes, per expiry, in price, where the error is defined as the distance to the bid/ask spread in units of half-spread, i.e. ``max( 0, fit - ask ) + max( 0, bid - fit) / max( 0.5*(ask-bid), min_half_spread )``.
+            * ``fit_vols``: list of fitted vols for the input strikes, per expiry, if ``and_vols`` is ``True``.
+            * ``pcnt_fit``: the percentage of strikes for which the fit is outside the bid/ask spread, i.e. ``sum( fit_errs > 0 ) / len(fit_errs)``.
+            * ``median_fit_err``: the median fitting error among strikes for which the fit is outside the bid/ask spread, i.e. ``median( fit_errs[fit_errs>0.] )``.
+            * ``mean_fit_err``: the mean fitting error among strikes for which the fit is outside the bid/ask spread, i.e. ``mean( fit_errs[fit_errs>0.] )``.
+        """
+        return _compute_market_fit( pricer=self, min_half_spread=self.min_half_spread, expiries=expiries, strikes=strikes, bids=bids, asks=asks, masks=masks, and_vols=and_vols )
+    
+    def dlvsqs( self, *, min_dlv : float = 0.01, max_dlv : float = 0.5, on_all_strikes : bool = False ):
+        """
+        Compute squared discrete local volatilities.
+
+        Parameters
+        ----------
+        min_dlv : float, default 0.01
+            Minimum discrete local volatility. If the computed DLV is below this threshold, it will be set to this value. Must be positive and less than ``max_dlv``.
+        max_dlv : float, default 0.5
+            Maximum discrete local volatility. If the computed DLV is above this threshold, it will be set to this value. Must be positive and greater than ``min_dlv``.
+        on_all_strikes : bool, default False
+            If True, the function will return DLV^2 values for all strikes in ``strikes``, not just ``xstrikes[:,1:-1]``. The DLVs at the boundaries will be set to zero.
         """
 
         verify_inp( 0.<  min_dlv < max_dlv, lambda : f"'min_dlv' must be positive and less than 'max_dlv', found {min_dlv:.4g} and {max_dlv:.4g}" )
@@ -211,21 +257,21 @@ class SanosPricer:
         dlvsqs = []
         _1     = np.float64(1.)
         _0     = np.float64(0.)
-        for t in range(T):
+        for t, expiry in enumerate(self.expiries):
             xstrikes_t   = self.xstrikes[t].astype(np.float64,copy=False)
             xstrikes_tm1 = self.xstrikes[t-1].astype(np.float64,copy=False) if t>0 else None
             p_t          = self.xdensities[t].astype(np.float64,copy=False)
             p_tm1        = self.xdensities[t-1].astype(np.float64,copy=False) if t>0 else None
-            p_box        = xstrikes_t[1:-1]**2 / ( xstrikes_t[2:] - xstrikes_t[:-2]) * dts[t] * p_t[1:-1]
+            p_box        = xstrikes_t[1:-1]**2 * dts[t] * p_t[1:-1] / ( xstrikes_t[2:] - xstrikes_t[:-2]) 
 
-            C_t        = np.maximum( _0, xstrikes_t[None,:] - xstrikes_t[1:-1,None] ) @ p_t
-            C_tm1      = np.maximum( _0, xstrikes_tm1[None,:] - xstrikes_t[1:-1,None] ) @ p_tm1 if t>0 else np.maximum( _0, 1. - xstrikes_t[1:-1] ) 
-            dC_t       = C_t - C_tm1
+            C_t          = np.maximum( _0, xstrikes_t[None,:] - xstrikes_t[1:-1,None] ) @ p_t
+            C_tm1        = np.maximum( _0, xstrikes_tm1[None,:] - xstrikes_t[:,None] ) @ p_tm1 if t>0 else np.maximum( _0, 1. - xstrikes_t ) 
+            dC_t         = C_t - C_tm1[1:-1]
 
-            assert np.all( np.isfinite(dC_t) ), f"Expected dC_t to be finite, found min {np.min(dC_t)} and max {np.max(dC_t)}"
-            assert np.all( np.isfinite(p_box) ), f"Expected p_box to be finite, found min {np.min(p_box)} and max {np.max(p_box)}"
-            assert np.min( dC_t ) > -self._eps_price*100., f"Expected dC_t to be non-negative, found min {np.min(dC_t)} [tolerance 'prices' {self._eps_price*100.}]"
-            assert np.min( p_box ) > -self._eps_density*100., f"Expected p_box to be non-negative, found min {np.min(p_box)} [tolerance 'densities' {self._eps_density*100.}]"
+            assert np.all( np.isfinite(dC_t) ), f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: Expected dC_t to be finite, found min {np.min(dC_t)} and max {np.max(dC_t)}"
+            assert np.all( np.isfinite(p_box) ), f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: Expected p_box to be finite, found min {np.min(p_box)} and max {np.max(p_box)}"
+            assert np.min( dC_t ) > -self._eps_price*100., f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: Expected dC_t to be non-negative, found min {np.min(dC_t)} [tolerance 'prices' {self._eps_price*100.}]"
+            assert np.min( p_box ) > -self._eps_density*100., f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: Expected p_box to be non-negative, found min {np.min(p_box)} [tolerance 'densities' {self._eps_density*100.}]"
 
             dC_zero      = dC_t <= self._eps_price
             too_small    = dC_t <= min_dlvsq * p_box
@@ -235,10 +281,82 @@ class SanosPricer:
             dlvsqs_t     = np.select( [dC_zero, too_small, too_big ], [min_dlvsq, min_dlvsq, max_dlvsq], default=dC_t / divisor )
             dlvsqs_t     = np.where( np.isfinite(dlvsqs_t), dlvsqs_t, min_dlvsq ) # cover infintie
             dlvsqs_t     = np.clip( dlvsqs_t, min=min_dlvsq, max=max_dlvsq )
-            if all_strikes: # makes dlvsq_t the same size as xstrikes_t
+
+            if __debug__:
+                # check validity of the DLVsq calculation by reconstructing the density.
+                w       = dlvsqs_t * xstrikes_t[1:-1]**2 * dts[t] / ( xstrikes_t[2:] - xstrikes_t[:-2])
+                w_plus  = w / ( xstrikes_t[2:] - xstrikes_t[1:-1]) 
+                w_minus = w / ( xstrikes_t[1:-1] - xstrikes_t[:-2]) 
+                assert np.min( w_plus ) >= -1E-5, f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: computed 'w_plus' must be non-negative, but found min {np.min(w_plus)}"
+                assert np.min( w_minus ) >= -1E-5, f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: computed 'w_minus' must be non-negative, but found min {np.min(w_minus)}"
+
+                assert C_tm1.shape == xstrikes_t.shape, f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: expected C_tm1 and xstrikes_t to have the same shape, but found {C_tm1.shape} and {xstrikes_t.shape}"
+                C_tm1[0]  = 1.-xstrikes_t[0]
+                C_tm1[-1] = 0.
+                q_tm1 = np.diff( np.diff( C_tm1, prepend=1. ) / np.diff( xstrikes_t, prepend=0. ), append=0. ) 
+                assert w_plus.dtype == np.float64 and w_minus.dtype == np.float64 and q_tm1.dtype == np.float64, f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: expected 'w_plus', 'w_minus' and 'q_tm1' to have dtype 'float64', but found {w_plus.dtype}, {w_minus.dtype} and {q_tm1.dtype}"
+                q_t = solve_sanos_tridiagonal( w_minus=w_minus, w_plus=w_plus, rhs=q_tm1 )
+
+                assert np.all( q_t >= -self._eps_dlv_dens_pos ), f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: computed q_t must be non-negative, but found min {np.min(q_t)} [tolerance {self._eps_dlv_dens_pos:.4g}]"
+                assert np.abs( q_t.sum() - 1. ) < self._eps_dlv_dens_sum1, f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: computed q_t must sum to 1, but found sum {q_t.sum():.6f} [tolerance {self._eps_dlv_dens_sum1:.4g}]"
+                assert np.abs( xstrikes_t@q_t - 1. ) < self._eps_dlv_dens_int1, f"Expiry#{t} {expiry*DAYS_PER_YEAR:.1f}d: computed q_t must have expectation, but found xstrikes_t@q_t={xstrikes_t@q_t:.6f} instead of 1 [wh tolerance {self._eps_dlv_dens_int1:.4g}]"  
+                assert np.max( np.abs( q_t - p_t ) ) < self._eps_dlv_diff, f"Expiry#{t} {expiry*DAYS_PER_YEAR:.1f}d: computed q_t must match p_t, but found max difference {np.max(np.abs(q_t - p_t))} [tolerance {self._eps_dlv_diff:.4g}]"
+
+            if on_all_strikes: # makes dlvsq_t the same size as xstrikes_t
                 dlvsqs_t = np.concatenate( ([0.], dlvsqs_t, [0.]) )
             dlvsqs.append( dlvsqs_t )
+
         return dlvsqs
+
+    def densities_from_dlvsqs( self, dlvsqs: list[np.ndarray] ) -> list[np.ndarray]:
+        """
+        Compute densities from discrete local volatilities.
+
+        This is the inverse operation to :func:`dlvsqs`, and will return the original densities if the input ``dlvsqs`` are the same as those computed by :func:`dlvsqs` (up to numerical precision).
+        """
+        T = len(self.expiries)
+        assert len(dlvsqs) == T, f"Expected 'dlvsqs' to have length {T}, but found {len(dlvsqs)}"
+        xdensities   = []
+        xcalls       = []
+        q_t          = np.ones((1,), dtype=np.float64 )
+        xstrikes_tm1 = np.ones((1,), dtype=np.float64 )
+        for t, expiry in enumerate(self.expiries):
+            xstrikes_t   = self.xstrikes[t].astype(np.float64,copy=False)
+            dlvsq_t      = dlvsqs[t].astype(np.float64,copy=False)
+            Nx            = len(xstrikes_t)
+
+            if dlvsq_t.shape == (Nx,):
+                verify_inp( dlvsq_t[0] == 0. and dlvsq_t[-1] == 0., lambda : f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: if 'dlvsqs[{t}]' has full length {Nx} matching ``xstrikes`` it must have zeros at the boundaries. Found boundary values {dlvsq_t[0]:.4g} and {dlvsq_t[-1]:.4g}" )
+                dlvsq_t = dlvsq_t[1:-1]
+            else:
+                verify_inp( dlvsq_t.shape == (Nx-2,), lambda : f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: if 'dlvsqs[{t}]' has length {Nx-2} it must match the inner strikes of 'xstrikes[{t}]'. Found shape {dlvsq_t.shape} instead of {(Nx-2,)}" )
+            verify_inp( np.all(dlvsq_t >= 0.), lambda : f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: 'dlvsqs[{t}]' must be non-negative, but found min {np.min(dlvsq_t)}" )
+
+            C_prev     = np.maximum( 0., xstrikes_tm1[None,:] - xstrikes_t[:,None] ) @ q_t
+            C_prev[0]  = 1.-xstrikes_t[0]
+            C_prev[-1] = 0.
+            q_t        = np.diff( np.diff( C_prev, prepend=1. ) / np.diff( xstrikes_t, prepend=0. ), append=0. )
+            del C_prev
+
+            assert np.all( q_t >= -1E-5 ), f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: computed q_t must be non-negative, but found min {np.min(q_t)}"
+            assert np.abs( q_t.sum() - 1. ) < 1E-5, f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: computed q_t must sum to 1, but found sum {q_t.sum():.6f}"
+            assert np.abs( xstrikes_t@q_t - 1. ) < 1E-5, f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: computed q_t must have expectation, but found xstrikes_t@q_t={xstrikes_t@q_t:.6f} instead of 1"
+
+            dt  = ( self.expiries[t] - ( self.expiries[t-1] if t>0 else 0. ) ).astype(np.float64,copy=False)
+            wup = dlvsq_t * xstrikes_t[1:-1]**2 * dt / ( ( xstrikes_t[2:] - xstrikes_t[1:-1]) * ( xstrikes_t[2:] - xstrikes_t[:-2]) ) 
+            wdn = dlvsq_t * xstrikes_t[1:-1]**2 * dt / ( ( xstrikes_t[1:-1] - xstrikes_t[:-2]) * ( xstrikes_t[2:] - xstrikes_t[:-2]) ) 
+            assert np.min( wup ) >= -1E-5, f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: computed 'wup' must be non-negative, but found min {np.min(wup)}"
+            assert np.min( wdn ) >= -1E-5, f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: computed 'wdn' must be non-negative, but found min {np.min(wdn)}"
+
+            q_t = solve_sanos_tridiagonal( w_minus=wup, w_plus=wdn, rhs=q_t )
+            assert np.all( q_t >= -self._eps_dlv_dens_pos ), f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: computed q_t must be non-negative, but found min {np.min(q_t)} [tolerance 'dlv_dens_pos' {self._eps_dlv_dens_pos:.4g}]"    
+            assert np.abs( q_t.sum() - 1. ) < self._eps_dlv_dens_sum1, f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: computed q_t must sum to 1, but found sum {q_t.sum():.6f} [tolerance 'dlv_dens_sum1' {self._eps_dlv_dens_sum1:.4g}]"
+            assert np.abs( xstrikes_t@q_t - 1. ) < self._eps_dlv_dens_int1, f"Expiry#{t} {expiry*DAYS_PER_YEAR:.1f}d: computed q_t must have expectation, but found xstrikes_t@q_t={xstrikes_t@q_t:.6f} instead of 1 [tolerance 'dlv_dens_int1' {self._eps_dlv_dens_int1:.4g}]"  
+
+            xdensities.append( q_t )
+            xstrikes_tm1 = xstrikes_t
+        return xdensities
+
 
 @dataclass(frozen=True)
 class SanosLPSolver:
@@ -521,3 +639,129 @@ def warn_and_fix_density( x, p, eps, message : callable ):
     assert abs(np.sum(p)-1.) <= eps, f"{message()}: density sums to {np.sum(p):.6g} after repair."
     assert abs(p@x-1.) <= eps, f"{message()}: density sums to {p@x:.6g} after repair."
     return p
+
+def _compute_market_fit( pricer : callable, min_half_spread : float,
+                        expiries : np.ndarray,
+                        strikes : list[np.ndarray]|np.ndarray, 
+                        bids : list[np.ndarray]|np.ndarray, 
+                        asks : list[np.ndarray]|np.ndarray, *,
+                        masks : list[np.ndarray]|np.ndarray|None = None,
+                        and_vols : bool = True ) -> PrettyObject:
+    """
+    Compute standardized fitting error stats
+
+    Returns
+    -------
+    Errors : :class:`PrettyObject`
+        A dictionary-lik object with the following fields:
+        * ``fits``: list of fitted prices for the input strikes, per expiry.
+        * ``fit_errs``: list of fitting errors for the input strikes, per expiry, in price, where the error is defined as the distance to the bid/ask spread in units of half-spread, i.e. ``max( 0, fit - ask ) + max( 0, bid - fit) / max( 0.5*(ask-bid), min_half_spread )``.
+        * ``fit_vols``: list of fitted vols for the input strikes, per expiry, if ``and_vols`` is ``True``.
+        * ``pcnt_fit``: the percentage of strikes for which the fit is outside the bid/ask spread, i.e. ``sum( fit_errs > 0 ) / len(fit_errs)``.
+        * ``median_err``: the median fitting error among strikes for which the fit is outside the bid/ask spread, i.e. ``median( fit_errs[fit_errs>0.] )``.
+        * ``mean_err``: the mean fitting error among strikes for which the fit is outside the bid/ask spread, i.e. ``mean( fit_errs[fit_errs>0.] )``.
+        * ``median_total_err``: the median fitting error among all strikes, i.e. ``median( fit_errs )``.
+        * ``mean_total_err``: the mean fitting error among all strikes, i.e. ``mean( fit_errs )``.
+    """
+    r = PrettyObject()
+
+    if isinstance( strikes, np.ndarray ):
+        # vector version
+
+        verify_inp( isinstance( bids, np.ndarray ) and isinstance( asks, np.ndarray ), lambda : f"If 'strikes' is a numpy array, then 'bids' and 'asks' must also be numpy arrays. Found types {type(strikes)}, {type(bids)} and {type(asks)}" )
+        verify_inp( isinstance( masks, np.ndarray ) or masks is None, lambda : f"If 'strikes' is a numpy array, then 'masks' must also be a numpy array or None. Found type {type(masks)}" )
+        verify_inp( expiries.shape == strikes.shape == bids.shape == asks.shape, lambda : f"If 'strikes', 'bids' and 'asks' are numpy arrays, then they must have the same shape as 'expiries'. Found expiries shape {expiries.shape} and strikes, bids and asks shapes {strikes.shape}, {bids.shape} and {asks.shape}" )
+        verify_inp( masks is None or masks.shape == strikes.shape, lambda : f"If 'masks' is a numpy array, then it must have the same shape as 'strikes'. Found masks shape {masks.shape} and strikes shape {strikes.shape}" )
+
+        if and_vols:
+            r.fits,\
+            r.fit_vols = pricer( expiries[masks] if not masks is None else expiries, strikes[masks] if not masks is None else strikes, and_vols=True )
+        else:
+            r.fits = pricer( expiries[masks] if not masks is None else expiries, strikes[masks] if not masks is None else strikes, and_vols=False )
+
+        if not masks is None:
+            x = np.zeros_like(strikes)
+            x[masks] = r.fits
+            r.fits = x
+            x = np.zeros_like(strikes)
+            x[masks] = r.fit_vols
+            r.fit_vols = x
+            del x
+
+            asks = asks[masks]
+            bids = bids[masks]
+
+        half_spread      = 0.5*(asks - bids)
+        verify_inp( np.min( half_spread ) > 0, lambda : f"Expected all bid/ask spreads to be positive, but found minimum half spread {half_spread.min():.4g}" )
+        half_spread      = np.maximum( half_spread, min_half_spread )
+        r.fit_err        = (np.maximum( 0., f - asks_t ) + np.maximum(0., bids_t - f) ) / half_spread
+        r.pcnt_fit       = float(np.sum(r.fit_err > 0.)) / float(len(r.fit_err))
+        r.median_err = np.median(r.fit_err[r.fit_err>0.] ) if np.any(r.fit_err>0.) else 0.
+        r.mean_err   = np.mean(r.fit_err[r.fit_err>0.] ) if np.any(r.fit_err>0.) else 0.
+        r.median_total_err = np.median(r.fit_err) 
+        r.mean_total_err   = np.mean(r.fit_err)
+
+        if not masks is None:
+            x = np.zeros_like(strikes)
+            x[masks] = r.fit_err
+            r.fit_err = x
+            del x
+
+        return r
+
+    # block version
+    # -------------
+
+    verify_inp( len(expiries) == len(strikes) == len(bids) == len(asks), lambda : f"Expected 'expiries', 'strikes', 'bids' and 'asks' to have the same length, but found {len(expiries)}, {len(strikes)}, {len(bids)} and {len(asks)}" )
+
+    r.fits = []
+    r.fit_errs = []
+
+    if and_vols:
+        r.fit_vols = []
+
+    masked_fit_errors = []
+
+    for t, expiry in enumerate(expiries):
+        masks_t = masks[t] if not masks is None else None
+        strikes_t = strikes[t][masks_t if not masks is None else slice(None)]
+        bids_t = bids[t][masks_t if not masks is None else slice(None)]
+        asks_t = asks[t][masks_t if not masks is None else slice(None)]
+
+        verify_inp( strikes_t.shape == bids_t.shape == asks_t.shape, lambda : f"Expected 'strikes[{t}]', 'bids[{t}]' and 'asks[{t}]' to have the same shapefor expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d, but found {strikes_t.shape}, {bids_t.shape} and {asks_t.shape}" )
+
+        if and_vols:
+            f,v = pricer( expiry, strikes_t, and_vols=True )
+        else:
+            f = pricer( expiry, strikes_t, and_vols=False )
+            v = None
+
+        half_spreads = 0.5*(asks_t - bids_t)
+        verify_inp( np.min( half_spreads ) > 0, lambda : f"Expected all bid/ask spreads to be positive for expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d but found minimum half spread {half_spreads.min():.4g} for expiry {expiry:.4g}" )
+        half_spreads = np.maximum( half_spreads, min_half_spread )
+        fit_err      = (np.maximum( 0., f - asks_t ) + np.maximum(0., bids_t - f) ) / half_spreads
+        masked_fit_errors.append(fit_err)
+
+        if not masks_t is None:
+            x = np.zeros_like(strikes[t])
+            x[masks_t] = fit_err
+            fit_err = x
+            x = np.zeros_like(strikes[t])
+            x[masks_t] = f
+            f = x
+            if not v is None:                
+                x = np.zeros_like(strikes[t])
+                x[masks_t] = v
+                v = x
+        r.fits.append(f)
+        r.fit_errs.append(fit_err)
+        if not v is None:
+            r.fit_vols.append(v)
+
+    masked_fit_errors  = np.concatenate(masked_fit_errors)
+    r.pcnt_fit         = float(np.sum(masked_fit_errors > 0.)) / float(len(masked_fit_errors))
+    r.median_err       = np.median(masked_fit_errors[masked_fit_errors>0.] ) if np.any(masked_fit_errors>0.) else 0.
+    r.mean_err         = np.mean(masked_fit_errors[masked_fit_errors>0.] ) if np.any(masked_fit_errors>0.) else 0.
+    r.median_total_err = np.median(masked_fit_errors) 
+    r.mean_total_err   = np.mean(masked_fit_errors)
+    return r

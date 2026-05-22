@@ -19,3 +19,5 @@ _locations_widb = WIDBClient.locations
 class _cli_defaults:
     period = ("2005-01-01", "2025-09-01") #: Default start and end date for CLI commands.
     workers = 4 #: Default number of workers for CLI commands.
+
+
