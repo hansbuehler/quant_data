@@ -13,8 +13,8 @@ import numpy as np
 
 from cdxcore.err import verify, verify_inp
 from quantdata.biz_calendar import DAYS_PER_YEAR, NMS
-from quantdata.sanos.tridiag import solve_sanos_tridiagonal
-from quantdata.sanos.utils import Eps, _interpolate_sqrtVars, _iterative_model_price, _time_interpolation_weights, vec_fill, vec_max_dx, GeometryBase
+from quantdata.sanos.old.tridiag import solve_sanos_tridiagonal
+from quantdata.sanos.old.utils import Eps, _interpolate_sqrtVars, _iterative_model_price, _time_interpolation_weights, vec_fill, vec_max_dx, GeometryBase
 from quantdata.utils.backbone import BackboneNumpy
 
 _npbb = BackboneNumpy()

@@ -27,8 +27,8 @@ The framework here represents a fixed grid approach. The core class is :class:`d
 from __future__ import annotations
 
 from quantdata.biz_calendar import DAYS_PER_YEAR, NMS
-from quantdata.sanos.tridiag import solve_sanos_tridiagonal
-from quantdata.sanos.utils import GeometryBase, _time_interpolation_weights, _interpolate_sqrtVars, Eps
+from quantdata.sanos.old.tridiag import solve_sanos_tridiagonal
+from quantdata.sanos.old.utils import GeometryBase, _time_interpolation_weights, _interpolate_sqrtVars, Eps
 from quantdata.utils.backbone import Backbone, BackboneNumpy
 from dataclasses import dataclass, field
 import numpy as np

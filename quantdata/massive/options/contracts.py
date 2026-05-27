@@ -31,6 +31,7 @@ from prettytable import PrettyTable
 from quantdata.biz_calendar import (
     DAYS_PER_YEAR,
     NMS,
+    NMS5,
     TZ_NY,
     DateRange,
     add_business_days,
@@ -51,63 +52,73 @@ class REJECTED:
     """ Reasons why a contract was rejected from the final list """
     USED = 0  # contract is used (not rejected)
     EXPIRY = 1  # contract expires too far in the future (days_to_exp > contracts_filter.max_dte)
-    MONEYNESS = 2  # contract is too far out of the money (scaled_mns > contracts_filter.max_mns)
+    MONEYNESS = 2  # contract is too far out of the money (nms > contracts_filter.max_mns)
     VOLUME = 3  # contract had insufficient volume traded the previous day (this is cash volume)
     PREV_VOLUME_MISSING = -1  # prev day volume data (for filtering) is missing.
     PREV_NO_QUOTES_OR_TRADES = -2  # no trades and no quote data on the previous day (assuming we won't trade tickers if neither quotes nor trades are available)
     NO_TODAY_QUOTES = -3  # no quotes today (assuming we won't trade until we saw a quote)
-
+    NO_TODAY_TRADES = -4 # no trades today (if contracts_filter.drop_no_trades_today is True)
 
 SCHEMA = {
-    "approx_cash_vol_prev_k": pl.Float32,
-    "approx_cash_vol_today_k": pl.Float32,
-    "cfi": pl.String,
-    "contract_type": pl.String,
-    "correction": pl.Int32,
-    "days_to_exp": pl.Int16,
-    "exercise_style": pl.String,
-    "exp_date": pl.Date,
-    "date": pl.Date,
-    "prev_bus_date": pl.Date,
-    "primary_exchange": pl.String,
-    "reject_code": pl.Int8,
-    "scaled_mns": pl.Float32,
-    "shares_per_contract": pl.Int32,
-    "spot_adj_prev_close": pl.Float32,
-    "spot_prev_close": pl.Float32,
-    "spot_close": pl.Float32,
-    "spot_open": pl.Float32,
-    "spot_adj_close": pl.Float32,
-    "spot_ref_prev_close": pl.Float32,
-    "strike_price": pl.Float32,
-    "ticker": pl.String,
-    "underlying_ticker": pl.String,
-    "has_prev_quotes": pl.Boolean,
-    "has_prev_trades": pl.Boolean,
-    "has_today_quotes": pl.Boolean,
-    "has_today_trades": pl.Boolean,
+    "approx_cash_vol_prev_k": pl.Float32,     # previous day cash volume in thousands of USD (volume * mid price / 1000)
+    "approx_cash_vol_today_k": pl.Float32,    # today cash volume in thousands of USD (volume * mid price / 1000)  
+    "cfi": pl.String,                         # cfi indetifier, e.g. "OC" for option contract
+    "contract_type": pl.String,               # contract type, e.g. "call" or "put" 
+    "correction": pl.Int32,                   # https://massive.com/docs/rest/options/contracts/contract-overview
+    "days_to_exp": pl.Int16,                  # full business days to expiry (that means 0DTE have 0 here)
+    "exercise_style": pl.String,              # exercise style, e.g. "AMERICAN" or "EUROPEAN"
+    "exp_date": pl.Date,                      # expiration date of the contract
+    "date": pl.Date,                          # today
+    "prev_bus_date": pl.Date,                 # previous business day (used for volume filtering, previous spot etc)
+    "primary_exchange": pl.String,            # https://massive.com/docs/rest/options/contracts/contract-overview
+    "reject_code": pl.Int8,                   # Why this option was flagged as rejected; c.f. :class:`REJECTED` for possible values and their meaning
+    "nms": pl.Float32,                        # :class:`NMS`-computed normalized strike
+    "nms5": pl.Float32,                       # :class:`NMS5`-computed normalized strike
+    "shares_per_contract": pl.Int32,          # How many shared per contract, usually 100. All prices are normalized to 1, hence this is for reference only.
+    "spot_adj_prev_close": pl.Float32,        # Previous close adjusted spot price (i.e. previous close adjusted for stock splits and dividends to match today's unadjusted price, which is the relevant price for moneyness and volume filtering)
+    "spot_prev_close": pl.Float32,            # Previous close unadjusted spot price 
+    "spot_close": pl.Float32,                 # Today's close unadjusted spot price
+    "spot_open": pl.Float32,                  # Today's open unadjusted spot price
+    "spot_adj_close": pl.Float32,             # Today's close adjusted spot price (i.e. today's close adjusted for stock splits and dividends to match previous close)
+    "spot_ref_prev_close": pl.Float32,        # Reference previous close spot price, adjusted to today's spot. This can be used to scale today's prices without look-ahead bias.
+    "strike_price": pl.Float32,               # Strike price of the option
+    "ticker": pl.String,                      # Option ticker symbol
+    "underlying_ticker": pl.String,           # Underlying asset ticker symbol
+    "has_prev_quotes": pl.Boolean,            # Whether previous day quotes are available
+    "has_prev_trades": pl.Boolean,            # Whether previous day trades are available
+    "has_today_quotes": pl.Boolean,           # Whether today's quotes are available
+    "has_today_trades": pl.Boolean,           # Whether today's trades are available
+    "opt_open": pl.Float32,                   # Unadjusted option open price today if available
+    "opt_close": pl.Float32,                  # Unadjusted option close price today if available
+    "opt_prev_open": pl.Float32,              # Unadjusted option open price previous day if available
+    "opt_prev_close": pl.Float32,             # Unadjusted option close price previous day if available
 }
-""" Schema of the :class:`polars.DataFrame` returned by :func:`filter_contracts` and :func:`filter_contracts_between`. """
+""" Schema of the :class:`polars.DataFrame` returned by :func:`filter_contracts` and :func:`filter_contracts_between`. 
+See also `massive documentation <https://massive.com/docs/rest/options/contracts/contract-overview>`_ for the original field definitions.
+"""
 
 # -----------------------------
 # Config
 # -----------------------------
 
 
-@version("0.1")
+@version("0.11")
 @dataclass(frozen=True)
 class ContractsFilter:
     """
     Configuration on to filter the options retrieved via :func:`filter_contracts` and :func:`filter_contracts_between`.
     """
-
-    max_dte: int = 7  #: In business days
-    max_mns: float = 2.0  #: Maximum normalized strike, i.e. | log(K/S_prev)*sqrt((1+e)/(T+e)/0.1 | ~ | log(K/S_prev)/(0.1*sqrt(T)) |, where S_prev is the previous close adjusted for stock splits and dividends to match today's unadjusted price, and T is time to expiry in years. This is a measure of moneyness that accounts for both distance to the money and time to expiry.
-    min_opt_vol_k: float = 0.0  #: Previous-day approx cash vol threshold (USD 1000's)
+    max_dte: int = 7              #: In business days
+    max_mns: float|None = 2.0     #: Maximum absolute normalized strike, i.e. $| log(K/S_\mathrm{prev})*sqrt((1+e)/(T+e)/0.1 | ~ | log(K/S_\mathrm{prev})/(0.1*sqrt(T)) |$, where $S_\mathrm{prev}$ is the previous close adjusted for stock splits and dividends to match today's unadjusted price, and T is time to expiry in years. Here $e$ is one hour. This is a measure of moneyness that accounts for both distance to the money and time to expiry.
+    max_mns5 : float|None = None  #: Maximum normalized strike, i.e. $| log(K/S_\mathrm{prev})*sqrt((1+g)/(T+g)/0.1 |$, where $S_\mathrm{prev}$ is the previous close adjusted for stock splits and dividends to match today's unadjusted price, and T is time to expiry in years. Here $g$ is five days which tends to make this measure more robust than NMS alone. This is a measure of moneyness that accounts for both distance to the money and time to expiry.
+    min_opt_vol_k: float = 0.0    #: Previous-day approx cash vol threshold (USD 1000's)
 
     def __str__(self):
         return (
-            f"max_dte={self.max_dte},max_mns={self.max_mns:.3g},min_volu_k={self.min_opt_vol_k:.3g}"
+            f"max_dte={self.max_dte}"+\
+            ('' if self.max_mns is None else f',max_mns={self.max_mns:.3g}')+
+            ('' if self.max_mns5 is None else f',max_mns5={self.max_mns5:.3g}')+
+            f',min_opt_vol_k={self.min_opt_vol_k:.3g}'
         )
 
 # -----------------------------
@@ -115,14 +126,14 @@ class ContractsFilter:
 # -----------------------------
 
 @_cache(fmt=SubDir.POLARS_PARQUET).cache(
-    "0.2",
+    "0.22",
     dependencies=[
         MassiveClient.list_all_contracts_expiring_after_day,
         MassiveClient.fetch_day_summary,
         ContractsFilter,
     ],
-    uid=lambda underlying, d, contracts_filter, exclude_half_days: (
-        f"{named_unique_filename48_8(str(contracts_filter), contracts_filter, exclude_half_days)}/{underlying}/contracts/{d}"
+    uid=lambda underlying, d, contracts_filter, exclude_half_days, drop_no_trades_today: (
+        f"{named_unique_filename48_8(f"{contracts_filter} {'xch' if exclude_half_days else ''} {'dnt' if drop_no_trades_today else ''}", contracts_filter, exclude_half_days, drop_no_trades_today)}/{underlying}/contracts/{d}"
     ),
     exclude_args=["pool_config", "client", "verbose"],
 )
@@ -132,6 +143,7 @@ def filter_contracts(
     contracts_filter: ContractsFilter,
     exclude_half_days: bool,
     *,
+    drop_no_trades_today: bool = False,
     pool_config: PoolConfig = PoolConfig(),
     verbose: Context = Context.quiet,
 ) -> pl.DataFrame:
@@ -147,16 +159,30 @@ def filter_contracts(
     2. Moneyness filter: $|\log(K/S_{prev})|/\sqrt{T}/0.1$ <= contracts_filter.max_mns where ``T = days_to_exp / DAYS_PER_YEAR``.
     3. Volume filter (previous day): ``approx_cash_vol_prev_k >= contracts_filter.min_opt_vol_k`` (in 1000$).
 
+    The returned :class:`polars.DataFrame` includes all contracts, with a "reject_code" column indicating the reason for rejection based on the above rules.
+    To obtain the filtered options, use::
+
+        from quantdata.massive.options.contracts import filter_contracts, ContractsFilter, REJECTED
+        df = filter_contracts(...).filter(pl.col("reject_code") == REJECTED.USED)
+
     Parameters
     ----------
     underlying : str
         The underlying ticker symbol.
     d : date
         The date for which to retrieve contracts.
-    contracts_filter : ContractsFilter
+    contracts_filter : :class:`ContractsFilter`
         Filter configuration specifying max_dte, max_mns, and min_opt_vol_k thresholds.
     exclude_half_days : bool
         If True, exclude half trading days when calculating business days to expiry.
+        This parameter is not contained in :class:`ContractsFilter` because it is
+        structural to the model development.
+    drop_no_trades_today : bool, default ``False``
+        If True, drop options which do not trade 'today'.
+        This parameter is not contained in :class:`ContractsFilter` because it is
+        structural to the model development. In particular, the model logic must
+        be such this feature is not forward-looking (for example by ensuring any
+        model analytics only start once the first trade was observed).
     pool_config : PoolConfig, optional
         Configuration for thread pool processing. Defaults to PoolConfig().
     verbose : Context, optional
@@ -165,11 +191,12 @@ def filter_contracts(
     Returns
     -------
     Result: :class:`polars.DataFrame`
-        Data frame with schmea :data:`SCHEMA` of filtered contracts with added fields:
+        Data frame with schema :data:`SCHEMA` of filtered contracts with added fields:
 
         - reject_code (int): Rejection reason code
         - spot_prev_close (float): Previous close adjusted spot price
-        - scaled_mns (float): Scaled moneyness metric
+        - nms (float): Scaled moneyness metric using :class:`NMS`
+        - nms5 (float): Scaled moneyness metric using :class:`NMS5`
         - approx_cash_vol_prev_m (float): Previous day approx cash volume (USD millions)
         - approx_cash_vol_today_m (float): Today approx cash volume (USD millions)
         - days_to_exp (int): Business days to expiration
@@ -233,6 +260,9 @@ def filter_contracts(
             "underlying_ticker",
         ]
         c = {k: contract.get(k, None) for k in copy_fields}
+        other = set(SCHEMA) - set(copy_fields)
+        for k in other:
+            c[k] = None
 
         opt_ticker = contract["ticker"]
         exp_date = datetime.strptime(contract["expiration_date"], "%Y-%m-%d").date()
@@ -248,7 +278,6 @@ def filter_contracts(
         c["spot_ref_prev_close"] = (
             context.ref_prev_close
         )  # this is the previous close, adjusted to match today's unadjusted spot
-
         # ---- expiry / DTE
         c["days_to_exp"] = count_business_days_between(
             d, exp_date, exclude_half_days=exclude_half_days
@@ -261,12 +290,18 @@ def filter_contracts(
         K = float(c["strike_price"])
         T = float(c["days_to_exp"] + 1) / float(DAYS_PER_YEAR)
 
-        c["scaled_mns"] = abs(NMS.to_nms(K / context.ref_prev_close, T))
+        c["nms"] = NMS.to_nms(K / context.ref_prev_close, T)
+        c["nms5"] = NMS5.to_nms(K / context.ref_prev_close, T)
+
         if c["days_to_exp"] > contracts_filter.max_dte:
             c["reject_code"] = REJECTED.EXPIRY
             return c, timing
 
-        if c["scaled_mns"] > contracts_filter.max_mns:
+        if not contracts_filter.max_mns is None and abs(c["nms"]) > contracts_filter.max_mns:
+            c["reject_code"] = REJECTED.MONEYNESS
+            return c, timing
+
+        if not contracts_filter.max_mns5 is None and abs(c["nms5"]) > contracts_filter.max_mns5:
             c["reject_code"] = REJECTED.MONEYNESS
             return c, timing
 
@@ -287,35 +322,20 @@ def filter_contracts(
         c["approx_cash_vol_prev_k"] = approx_cash_vol_k(oc_prev)
 
         if oc_prev is None:
-            c["approx_cash_vol_today_k"] = None
-            c["has_prev_quotes"] = None
-            c["has_prev_trades"] = None
-            c["has_today_quotes"] = None
-            c["has_today_trades"] = None
             c["reject_code"] = REJECTED.PREV_VOLUME_MISSING
             return c, timing
 
         if c["approx_cash_vol_prev_k"] < contracts_filter.min_opt_vol_k:
-            c["approx_cash_vol_today_k"] = None
-            c["has_prev_quotes"] = None
-            c["has_prev_trades"] = None
-            c["has_today_quotes"] = None
-            c["has_today_trades"] = None
             c["reject_code"] = REJECTED.VOLUME
             return c, timing
 
         # ---- prev quotes/trades check
         with timing("Fetch quotes & trades"):
-            has_prev_quotes, has_prev_trades = client.has_any_quotes_or_trades(
-                opt_ticker, context.prev_d
-            )
+            has_prev_quotes, has_prev_trades = client.has_any_quotes_or_trades(  opt_ticker, context.prev_d )
             c["has_prev_quotes"] = has_prev_quotes
             c["has_prev_trades"] = has_prev_trades
 
         if not has_prev_quotes and not has_prev_trades:
-            c["approx_cash_vol_today_k"] = None
-            c["has_today_quotes"] = None
-            c["has_today_trades"] = None
             c["reject_code"] = REJECTED.PREV_NO_QUOTES_OR_TRADES
             return c, timing
 
@@ -330,11 +350,27 @@ def filter_contracts(
             c["reject_code"] = REJECTED.NO_TODAY_QUOTES
             return c, timing
 
+        if not has_today_trades and drop_no_trades_today:
+            c["approx_cash_vol_today_k"] = None
+            c["reject_code"] = REJECTED.NO_TODAY_TRADES
+            return c, timing
+
         # ---- today volume (diagnostic only, not used for rejection)
+        # should always exist
         with timing("Fetch open close volume today"):
             oc_today = client.fetch_day_summary(opt_ticker, d, adjusted=False, can_be_none=True)
+            assert not oc_today is None or not has_today_trades, f"If there are trades today, there should be a day summary with volume data. This is unexpected, please investigate: opt_ticker={opt_ticker}, d={d}, has_today_trades={has_today_trades}"
+        with timing("Fetch open close volume yesterday"):
+            try:
+                oc_yesterday = client.fetch_day_summary(opt_ticker, context.prev_d, adjusted=False, can_be_none=False)
+            except Exception as e:
+                raise type(e)(f"Failed to fetch 'yesterday's open/close/volume for {opt_ticker} on {context.prev_d}: {e} despite has_prev_quotes={has_prev_quotes}, has_prev_trades={has_prev_trades}]") from e
 
         c["approx_cash_vol_today_k"] = approx_cash_vol_k(oc_today)
+        c['opt_open'] = oc_today['open'] if not oc_today is None else None
+        c['opt_close'] = oc_today['close'] if not oc_today is None else None
+        c['opt_prev_open'] = oc_yesterday['open']
+        c['opt_prev_close'] = oc_yesterday['close']
 
         return c, timing
 

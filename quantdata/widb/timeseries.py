@@ -7,12 +7,13 @@ This includes filtering and sampling the enriched day data for each day accordin
 the specified configuration, and optionally making the data arbitrage-free using :func:`mk_arb_free_day`.
 """
 from __future__ import annotations
+from typing import Mapping
 
 from quantdata.biz_calendar import DateRange
 from quantdata.pool import PoolConfig
 from quantdata.widb.bad import BAD
 from quantdata.widb.bad import BAD
-from quantdata.widb.day import enrich_day, RawDayFilter, ExpiryFilter, WIDBClient, SubDir
+from quantdata.widb.day import enrich_day, RawDayFilter, ExpiryFilter, WIDBClient, SubDir, RAW_PER_DAY_FIELDS, RAW_PER_EXPIRY_FIELDS
 from quantdata.widb.options_filter import MkArbFree, mk_arb_free_day, OptionsFilter, filter_options_day, _filter_options_day_num_options, SCHEMA_OPTION_DAY
 
 from cdxcore.version import version
@@ -363,3 +364,46 @@ def table_of_time_series( r : dict[str:np.array|str|type] ) -> PrettyTable:
             tbl.add_row([k, str(v)[:10], "", "", "", "", "", ""])
     tbl.add_row(["TOTAL", "", "", fmt_big_byte_number(nsize), "", "", "", ""])
     return tbl
+
+def extract_day_block( time_series : Mapping, isample : int, *fields, **rename_fields ) -> PrettyObject:
+    """
+    Extracts the data for a given sample (day) from the enriched day DataFrame, and organizes it in a PrettyObject with lists of strikes, bids, asks, expiries, etc. per expiry.
+    """
+
+    fields     = sorted(set(fields)|set(rename_fields))
+    is_valid_t = time_series['is_valid'][isample,:].astype(bool, copy=False)
+    ttey_t     = time_series['tte_y'][isample,:]
+    slices     = { k: time_series[k][isample,:][is_valid_t] for k in fields }
+
+    r = PrettyObject({ k: list() if not k in RAW_PER_DAY_FIELDS else None for k in fields })
+
+    uttys = np.unique(ttey_t)
+    for utty in uttys:
+        mask = ttey_t == utty
+        if np.sum(mask) == 0:
+            continue
+        for k in fields:
+            v = np.asarray(slices[k][mask])
+            if k in RAW_PER_DAY_FIELDS:
+                assert np.all( v[0] == v ), f"Internal error: expected all values for field '{k}' to be the same for the same day, but found different values: {v}. Please contact the authors with an example."
+                if r[k] is None:
+                    r[k] = v[0]
+                assert np.all( r[k] == v ), f"Internal error: expected all values for field '{k}' to be the same for the same day, but found different values: {v}. Please contact the authors with an example."
+            elif k in RAW_PER_EXPIRY_FIELDS:
+                assert np.all( v[0] == v ), f"Internal error: expected all values for field '{k}' to be the same for the same day, but found different values: {v}. Please contact the authors with an example."
+                r[k].append(v[0])
+            else:
+                r[k].append(v)
+ 
+    for k in fields:
+        if k in RAW_PER_DAY_FIELDS:
+            assert not r[k] is None
+        elif k in RAW_PER_EXPIRY_FIELDS:
+            r[k] = np.array(r[k])
+        
+        if k in rename_fields:
+            new_name = rename_fields[k]
+            r[new_name] = r.pop(k)
+
+    return r
+

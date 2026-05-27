@@ -113,7 +113,7 @@ and asks. This acts as an input into arbitrage-free models who otherwise will no
 
 Run the ``viz_arb_free.ipynb`` notebook to test this functionality.
 
-* ``mk_arb_free_day(ticker, d, enriched_data=None, raw_day_filter=..., expiry_filter=..., mk_arb_free=..., ...)`` runs ``quantdata.utils.arbfree.MkArbFree`` on the enriched per-expiry pure prices.
+* ``mk_arb_free_day(ticker, d, enriched_data=None, raw_day_filter=..., expiry_filter=..., mk_arb_free=..., ...)`` runs ``quantdata.sanos.arbfree.MkArbFree`` on the enriched per-expiry pure prices.
 * The function keeps the retained expiries and original strike rows, adds ``mask_arb_free`` to indicate which strikes survived the fit, and writes fitted arbitrage-free prices and Greeks into the ``pure_fit1_*`` and ``pure_fitX_*`` columns. The latter is the result of a "surface"
 fit, if requested.
 

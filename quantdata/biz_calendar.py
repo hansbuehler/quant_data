@@ -156,6 +156,7 @@ def get_business_days(
         None
     )  # index is a DatetimeIndex of trading days in the range
     schedule = [dt.date(d.year, d.month, d.day) for d in schedule]
+    assert len(schedule) == 0 or schedule[0] <= schedule[-1], f"Internal error: schedule is not sorted: {schedule}"
 
     _BUSINESS_DAYS_CACHE[key] = schedule
     return schedule

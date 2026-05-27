@@ -43,7 +43,7 @@ from quantdata.biz_calendar import DAYS_PER_YEAR, ONE_MINUTE
 from quantdata.utils.backbone import BackboneNumpy
 import math
 
-from quantdata.utils.sanos_tools import SanosLPSolver, repair_density_nonnegative, warn_and_fix_density
+from quantdata.sanos.sanos_tools import SanosLPSolver, repair_density_nonnegative, warn_and_fix_density, _compute_market_fit
 
 @version("0.8")
 class ArbFreePricer(PrettyObject):
@@ -121,6 +121,7 @@ class ArbFreePricer(PrettyObject):
     def __init__(self, smoothness : float|None = None):
         self.smoothness  : float|None = smoothness
         self.expiry_linear: bool = False
+        self.min_half_spread : float = 1E-4 
         self.expiries    : np.ndarray = []
         self.variances   : np.ndarray = []
         self.input_index : np.ndarray = []
@@ -191,7 +192,7 @@ class ArbFreePricer(PrettyObject):
                 def call( spots, strikes ):
                     return np.maximum( 0., spots - strikes )
             else:
-                vol = self.interpolate_atm_vols( expiries=expiry )
+                vol = self.interpolate_atm_vols( expiries=expiry ) * math.sqrt(self.smoothness)
                 def call( spots, strikes ):
                     return bs.price( k=strikes/spots, vol=vol, sqrtT=math.sqrt(expiry), eps=self._eps_price )*spots
 
@@ -281,14 +282,33 @@ class ArbFreePricer(PrettyObject):
         return results, vols
 
     def interpolate_atm_vols( self, expiries: float|np.ndarray ) -> float|np.ndarray:
-        """ Interpolates the (ATM) variances """
+        """ Interpolates the (ATM) variances (not smoothed) """
         assert not self.variances is None, "Internal error - variances are missing"
         is_float = not hasattr(expiries,"shape")
         expiries = np.asarray([float(expiries)]) if is_float else np.asarray(expiries)
         expiries = np.clip( expiries, self.expiries[0], self.expiries[-1] )
-        vols     = np.sqrt( self.smoothness * np.interp( expiries, self.expiries, self.variances ) / expiries )
+        vols     = np.sqrt( np.interp( expiries, self.expiries, self.variances ) / expiries )
         assert np.all(np.isfinite(vols)), "Internal error: infinite vol"
         return vols if not is_float else vols[0]
+
+    def compute_market_fit( self, expiries : np.ndarray, strikes : list[np.ndarray], bids : list[np.ndarray], asks : list[np.ndarray], masks : list[np.ndarray]|None = None, *, and_vols : bool = True ) -> PrettyObject:
+        """
+        Compute standardized fitting error stats
+
+        Returns
+        -------
+        Errors : :class:`PrettyObject`
+            A dictionary-lik object with the following fields:
+            * ``fits``: list of fitted prices for the input strikes, per expiry.
+            * ``fit_vols``: list of fitted vols for the input strikes, per expiry.
+            * ``fit_errs``: list of fitting errors for the input strikes, per expiry, where the error is defined as the distance to the bid/ask spread in units of half-spread, i.e. ``max( 0, fit - ask ) + max( 0, bid - fit) / max( 0.5*(ask-bid), self.min_half_spread )``.
+            * ``pcnt_fit``: the percentage of strikes for which the fit is outside the bid/ask spread, i.e. ``sum( fit_errs > 0 ) / len(fit_errs)``.
+            * ``median_fit_err``: the median fitting error among strikes for which the fit is outside the bid/ask spread, i.e. ``median( fit_errs[fit_errs>0.] )``.
+            * ``mean_fit_err``: the mean fitting error among strikes for which the fit is outside the bid/ask spread, i.e. ``mean( fit_errs[fit_errs>0.] )``.
+
+        """
+        return _compute_market_fit( lambda expires, strikes, and_vols : self.price( expiries=expires, strikes=strikes, and_vols=and_vols ),
+                                    self.min_half_spread, expiries=expiries, strikes=strikes, bids=bids, asks=asks, masks=masks, and_vols=and_vols )
 
     @property
     def T(self) -> int:
@@ -355,7 +375,7 @@ class ArbFreePricer(PrettyObject):
                 mdensities_t = self.mdensities[t]
                 assert mstrikes_t.shape == mdensities_t.shape, f"Internal error: 'mstrikes[{t}]' and 'mdensities[{t}]' must have the same shape, but found {mstrikes_t.shape} and {mdensities_t.shape}"
 
-@version("0.4", dependencies=[ArbFreePricer])
+@version("0.51", dependencies=[ArbFreePricer])
 @dataclass(frozen=True)
 class MkArbFree:
     """
@@ -374,23 +394,29 @@ class MkArbFree:
     smoothness              : float|None = None # Whether to impose SANOS smoothness.
     surface_expiry_linear   : bool = True  # In 'surface' mode, whether to run 'expiry' in linear mode.
 
+    # control over process parameters
     min_half_spread         : float = 1E-4 #: Minimum bid/ask spread. The optimization is weighted by inverse half spread.
     mid_fit_weight          : float = 0.1  #: Weight for fitting to the mid prices of options, where 1 means mid-price fit only is active, while 0 means to fit only a linear penalty for exceeding bid-ask.
+    min_atm_vol             : float = 0.05 #: Minimum ATM vol.
+    min_dlv                 : float|None = None #: Minimum DLV (difference of log-volatilities between consecutive expiries) to consider an expiry as non-degenerate.
+    max_dlv                 : float|None = None  #: Maximum DLV (difference of log-volatilities between consecutive expiries) to consider an expiry as non-degenerate.
 
+    # timeout
     timeout_seconds         : float|None = 60.*5. #: Time limit for the optimization solver, in seconds. This is passed to the CVXPY solver options as "time_limit".
 
-    min_strikes_per_expiry  : int = 5      #: Minimum strikes per expiry. Expiries with fewer strikes will be dropped.
-    min_density             : float = 1E-4 #: Minimum density value to consider in the optimization. Strikes with lower values will be dropped.
-    min_dC_eps              : float = 1E-3 #: Minimum dC/dK slope at the boundaries. Expiries with steeper slopes will be dropped.
-    eps_dens_1              : float = 1E-4 #: What passes as ``sum(p)==1`` and ``p@K==1`` for the fitted density.
+    # micro paramters
+    min_strikes_per_expiry  : int = 5      #: (expert use only) Minimum strikes per expiry. Expiries with fewer strikes will be dropped.
+    min_density             : float = 1E-4 #: (expert use only) Minimum density value to consider in the optimization. Strikes with lower values will be dropped.
+    min_dC_eps              : float = 1E-3 #: (expert use only) Minimum dC/dK slope at the boundaries. Expiries with steeper slopes will be dropped.
 
     # protected variables do not alter the ID of this field (because they start with '_')
-    _debug_verbose_cvxpy  : set[str]|None = None
-    _debug_use_nonslack   : bool = False
+    _debug_verbose_cvxpy  : set[str]|None = None 
     _remove_no_arb_strikes: bool = True
     _debug_super_dense    : bool = False
     _eps_price            : float = 1E-6
     _eps_density          : float = 1E-7
+    _eps_dens_1           : float = 1E-4 #: (expert use only) What passes as ``sum(p)==1`` and ``p@K==1`` for the fitted density.
+    _eps_no_arb           : float = 0.01 #: % half spread to tighten fit.
 
     def __post_init__(self):
         verify_inp( self.no_arb_mode in ["expiry", "surface"], lambda : f"'no_arb_mode' must be one of 'expiry' or 'surface', but found '{self.no_arb_mode}'" ) 
@@ -400,12 +426,16 @@ class MkArbFree:
         verify_inp( self.min_density > 0., lambda : f"'min_density' must be positive, but found {self.min_density}" )
         verify_inp( self.timeout_seconds is None or self.timeout_seconds >= 0., lambda : f"'timeout_seconds' must be positive or None, but found {self.timeout_seconds}" )
         verify_inp( self.smoothness is None or self.smoothness >= 0., lambda : f"'smoothness' must be positive or None, but found {self.smoothness:.4g}")
+        verify_inp( self.mid_fit_weight >= 0. and self.mid_fit_weight <= 1., lambda : f"'mid_fit_weight' must be between 0 and 1, but found {self.mid_fit_weight:.4g}" )
+        verify_inp( self.min_atm_vol >= 0., lambda : f"'min_atm_vol' must be non-negative, but found {self.min_atm_vol:.4g}" )
 
     def __str__(self) -> str:
         """ Very compact but still readable summary """
         surface_expiry_linear = self.surface_expiry_linear and self.no_arb_mode=="surface" and not self.smoothness is None
-        return f"{self.no_arb_mode},{f'std={self.smoothness:.2g},' if self.smoothness is not None else ''}{'elin' if surface_expiry_linear else ''}mhs={self.min_half_spread:.3g},mw={self.mid_fit_weight:.2f},"+\
-               f"mik={self.min_strikes_per_expiry},mdn={self.min_density:.3g},dC={self.min_dC_eps:.3g},dps={self.eps_dens_1:.1g}"
+        return f"{self.no_arb_mode},{f'std={self.smoothness:.2g},' if self.smoothness is not None else ''}{'elin' if surface_expiry_linear else ''}mhs={self.min_half_spread:.3g},"+\
+               f"mw={self.mid_fit_weight:.2f},mav={self.min_atm_vol:.2g},"+\
+               ( f"midl={self.min_dlv:.3g}," if not self.min_dlv is None else "" ) + ( f"mxdv={self.max_dlv:.3g}," if not self.max_dlv is None else "" ) +\
+               f"mik={self.min_strikes_per_expiry},mdn={self.min_density:.3g},dC={self.min_dC_eps:.3g},dps={self._eps_dens_1:.1g}"
 
     def __unique_hash__( self, unique_hash, debug_trace ) -> str:
         """ Overwrite hash function to ignore non-functional parameters """
@@ -478,6 +508,7 @@ class MkArbFree:
 
         T = len(expiries)
 
+        verify_inp( T > 0, lambda : f"{message()}Expected at least one expiry, but found {T}" )
         verify_inp( len(strikes) == T, lambda : f"{message()}Expected number of strike arrays {T} to match number of expiries {len(expiries)}" )
         verify_inp( len(bids) == T, lambda : f"{message()}Expected number of bid arrays {T} to match number of expiries {len(expiries)}" )
         verify_inp( len(asks) == T, lambda : f"{message()}Expected number of ask arrays {T} to match number of expiries {len(expiries)}" )   
@@ -491,7 +522,7 @@ class MkArbFree:
                     atm_calls.append( np.interp( 1., strikes[t][ixs], (bids[t][ixs]+asks[t][ixs])/2. ) )
                 atm_calls = np.asarray(atm_calls)
                 atm_vols  = bs.implied( k=np.ones_like(atm_calls), prices=atm_calls, sqrtT=np.sqrt(expiries), eps=self._eps_price )
-                variances = expiries * (atm_vols**2)
+                variances = expiries * (np.maximum(atm_vols, self.min_atm_vol)**2)
                 dts       = np.diff(expiries, prepend=0.)
                 fwd_vars  = np.maximum(0.001**2, np.diff(variances, prepend=0.) / dts ) * dts
                 variances = np.cumsum(fwd_vars)
@@ -513,6 +544,7 @@ class MkArbFree:
         # Add strikes to the left and right which are consistent with the no-arb condition.
 
         r             = ArbFreePricer(self.smoothness)
+        r.min_half_spread = self.min_half_spread
         r.expiries    = []
         r.variances   = [] 
         r.xstrikes    = []
@@ -541,8 +573,8 @@ class MkArbFree:
 
             strikes_t = strikes[t]
 
-            if len(strikes_t) < 3:
-                verbose.write(lambda : f"\r{local_message()}: Skipping expiry since it has fewer than 3 strikes.")
+            if len(strikes_t) < self.min_strikes_per_expiry:
+                verbose.write(lambda : f"\r{local_message()}: Skipping expiry since it has fewer than {self.min_strikes_per_expiry} strikes.")
                 continue
 
             xstrikes_t, mask_t, notice = self.make_extended_strikes( strikes_t,
@@ -551,10 +583,9 @@ class MkArbFree:
                                                                      prev_lower = r.xstrikes[-1][0] if len(r.xstrikes) > 0 else None,
                                                                      prev_upper = r.xstrikes[-1][-1] if len(r.xstrikes) > 0 else None,
                                                                      message_context = local_message)
+            assert not xstrikes_t is None, "Internal error: xstrikes_t is None."
             if not notice is None:
                 verbose.write(lambda : notice() + ": ", head=False, end='')
-            if xstrikes_t is None:
-                continue
             assert np.all( xstrikes_t[1:-1] == strikes_t[mask_t] ), "Mask error...?"
             verbose.write(lambda : f"using {len(xstrikes_t)} extended strikes based on {len(strikes_t)} market strikes.", head=False)
 
@@ -845,7 +876,17 @@ class MkArbFree:
                     assert xstrikes[t-1].shape == xdensities[t-1].shape, f"Internal error {message()}: shape mismatch between previous and current mstrikes, {xstrikes[t-1].shape} vs {xdensities[t-1].shape}"
                     Cm1         = np.maximum( 0., xstrikes[t-1][None,:] - xstrikes_t[1:-1,None] ) @ xdensities[t-1]
                     constraints += [ Cm >= Cm1 ]
-                    del Cm1
+                else:
+                    Cm1   = np.maximum( 0., 1. - xstrikes_t[1:-1] )    # model strikes, previous density is dirac at 1
+
+                # dlv constaints
+                # dC = 1/2 * dlvsq * x^2 * dt * K^2 / (1/2 (k^+ - k^-)) q
+                box         = xstrikes_t[1:-1]**2 * ( expiries[t] - ( expiries[t-1] if t>0 else 0. ) ) / ( xstrikes_t[2:] - xstrikes_t[:-2])
+                if not self.min_dlv is None:
+                    constraints += [ Cm - Cm1 >= cp.multiply( box * (self.min_dlv**2), q_t[1:-1] ) ]
+                if not self.max_dlv is None:
+                    constraints += [ Cm - Cm1 <= cp.multiply( box * (self.max_dlv**2), q_t[1:-1] ) ]
+                del box, Cm1
 
                 # fit
                 def call( spots, strikes ):
@@ -860,52 +901,43 @@ class MkArbFree:
 
                 CX           = call( spots=xstrikes_t[None,:], strikes=strikes_t[:,None] )
                 fit_mid      = CX[mask_t,:] @ q_t    # market strikes
-                whalf_spread = np.maximum( (ask_t - bid_t)/2., self.min_half_spread ) / average_hspread
-                mid_t       = (bid_t + ask_t)/2.
+                half_spread  = (ask_t - bid_t)/2.
+                mid_t        = (bid_t + ask_t)/2.
+                whalf_spread = np.maximum( half_spread, self.min_half_spread ) / average_hspread
 
                 if hard_fit:
-                    constraints += [ fit_mid <= ask_t, fit_mid >= bid_t ]
+                    constraints += [ fit_mid <= ask_t - half_spread * (1.-self._eps_no_arb),
+                                     fit_mid >= bid_t + half_spread * (1.-self._eps_no_arb) ]
 
-                if self._debug_use_nonslack:
-                    # direct
-                    excess      = cp.multiply( 1./whalf_spread, ( cp.maximum( 0., fit_mid - ask_t ) + cp.maximum( 0., bid_t - fit_mid ) ) )
-                    obj_exc     = cp.sum( (1.-eff_mid_fit_weight) * excess ) if eff_mid_fit_weight < 1. else 0.
-                    obj_abs     = cp.sum( eff_mid_fit_weight*cp.max( cp.multiply( 1./whalf_spread, cp.abs(fit_mid - mid_t ) ) ) ) if eff_mid_fit_weight > 0. else 0.
-                    objective   = objective + obj_abs + obj_exc
-                    del whalf_spread
-                    del obj_abs
-                    del obj_exc
+                # slack variable version  *should* be better..?
+                guess_fit    = CX[mask_t,:] @ xguess_t if not xguess_t is None else None
+                if eff_mid_fit_weight < 1.:
+                    e_init = np.clip( np.maximum( guess_fit - ask_t, bid_t - guess_fit ) / whalf_spread, 0., None) if guess_fit is not None else None
+                    e_box  = cp.Variable(len(bid_t), nonneg=True)
+                    assert e_init is None or e_box.shape == e_init.shape, f"Internal error: shape of e_box {e_box.shape} must be the same as shape of e_init {e_init.shape}."
+                    variables += [ (e_box, None) ]
 
-                else:
-                    # slack variable version  *should* be better..?
-                    guess_fit    = CX[mask_t,:] @ xguess_t if not xguess_t is None else None
-                    if eff_mid_fit_weight < 1.:
-                        e_init = np.clip( np.maximum( guess_fit - ask_t, bid_t - guess_fit ) / whalf_spread, 0., None) if guess_fit is not None else None
-                        e_box  = cp.Variable(len(bid_t), nonneg=True)
-                        assert e_init is None or e_box.shape == e_init.shape, f"Internal error: shape of e_box {e_box.shape} must be the same as shape of e_init {e_init.shape}."
-                        variables += [ (e_box, None) ]
+                    constraints += [
+                        fit_mid <= ask_t - half_spread * (1.-self._eps_no_arb) + cp.multiply(whalf_spread, e_box),
+                        fit_mid >= bid_t + half_spread * (1.-self._eps_no_arb) - cp.multiply(whalf_spread, e_box)
+                    ]
 
-                        constraints += [
-                            fit_mid <= ask_t + cp.multiply(whalf_spread, e_box),
-                            fit_mid >= bid_t - cp.multiply(whalf_spread, e_box),
-                        ]
+                    objective += (1. - eff_mid_fit_weight) * cp.sum(e_box)
+                    del e_box
 
-                        objective += (1. - eff_mid_fit_weight) * cp.sum(e_box)
-                        del e_box
+                if eff_mid_fit_weight > 0.:
+                    z_init = np.clip( np.max( np.abs( guess_fit - mid_t ) / whalf_spread ), 0., None) if guess_fit is not None else None
+                    z_mid  = cp.Variable(nonneg=True)
+                    assert z_init is None or z_mid.shape == z_init.shape, f"Internal error: shape of z_mid {z_mid.shape} must be the same as shape of z_init {z_init.shape}."
+                    variables += [ (z_mid, None) ]
 
-                    if eff_mid_fit_weight > 0.:
-                        z_init = np.clip( np.max( np.abs( guess_fit - mid_t ) / whalf_spread ), 0., None) if guess_fit is not None else None
-                        z_mid  = cp.Variable(nonneg=True)
-                        assert z_init is None or z_mid.shape == z_init.shape, f"Internal error: shape of z_mid {z_mid.shape} must be the same as shape of z_init {z_init.shape}."
-                        variables += [ (z_mid, None) ]
+                    constraints += [
+                        fit_mid - mid_t <= cp.multiply(whalf_spread, z_mid),
+                        mid_t - fit_mid <= cp.multiply(whalf_spread, z_mid),
+                    ]
 
-                        constraints += [
-                            fit_mid - mid_t <= cp.multiply(whalf_spread, z_mid),
-                            mid_t - fit_mid <= cp.multiply(whalf_spread, z_mid),
-                        ]
-
-                        objective += eff_mid_fit_weight * z_mid
-                        del z_mid
+                    objective += eff_mid_fit_weight * z_mid
+                    del z_mid
 
                 xdensities.append(q_t)
                 CXs.append(CX)
@@ -943,7 +975,7 @@ class MkArbFree:
                 xstrikes_t = xstrikes[t]
                 CX         = CXs[t]
                 q_t        = xdensities[t]
-                if np.min(q_t) < -self._eps_density or abs( np.sum( q_t )-1. ) > self.eps_dens_1 or abs( q_t@xstrikes_t - 1. ) > self.eps_dens_1:
+                if np.min(q_t) < -self._eps_density or abs( np.sum( q_t )-1. ) > self._eps_dens_1 or abs( q_t@xstrikes_t - 1. ) > self._eps_dens_1:
                     warnings.warn(f"{message()}Warning: no-arbitrage density does not satisfy basic properties after optimization: min {q_t.min():.3e}, sum {q_t.sum():.6f}, integral {q_t@xstrikes_t:.6f} -- attempting fix.")
                     q_t = warn_and_fix_density( xstrikes_t, q_t, eps=self._eps_density, message = lambda : f"{message()}expiry {expiry*DAYS_PER_YEAR:.2f}d: surface density after optimization" )
 
@@ -1055,7 +1087,7 @@ class MkArbFree:
         xguess_p = market_p()
         floor    = max( self.min_density / float(len(xguess_p)), self._eps_density )
 
-        if np.all(xguess_p >= -floor) and abs( np.sum( xguess_p )-1. ) <= self.eps_dens_1 and abs( xguess_p@xstrikes_t - 1. ) <= self.eps_dens_1 and self.smoothness is None:
+        if np.all(xguess_p >= -floor) and abs( np.sum( xguess_p )-1. ) <= self._eps_dens_1 and abs( xguess_p@xstrikes_t - 1. ) <= self._eps_dens_1 and self.smoothness is None:
             verbose.write(lambda : f"\r{message()}Mid is already arbitrage-free. This took {tme}.", end=end)
             return xguess_p, (bid_t + ask_t)/2.
         """
@@ -1219,9 +1251,7 @@ class MkArbFree:
         mid_t           = (input_bid_t + input_ask_t)/2.
         mask_t          = np.ones(input_strikes_t.shape[0], dtype=bool)
 
-        if len(xstrikes_t) <= self.min_strikes_per_expiry:
-            return None, None, lambda :f"only {len(xstrikes_t)} strikes found. Skipping this expiry."
-
+        verify_inp( len(xstrikes_t) >= self.min_strikes_per_expiry, f"{message()}At least {self.min_strikes_per_expiry} strikes are required for this expiry, but found {len(xstrikes_t)}.")
         verify_inp( xstrikes_t.shape == bid_t.shape == ask_t.shape, lambda : f"{message()}Expected strikes, bids and asks to have the same shape for expiry, found {xstrikes_t.shape}, {bid_t.shape}, {ask_t.shape}")
         verify_inp( np.all( np.diff(xstrikes_t) > 0 ), lambda : f"{message()}Strikes must be strictly increasing; found minimal difference {np.diff(xstrikes_t).min():.3f}" )
         verify_inp( xstrikes_t[0] > 0., lambda : f"{message()}Lowest strike must be positive; found {xstrikes_t[0]:.3f}" )

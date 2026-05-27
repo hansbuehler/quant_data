@@ -5,7 +5,7 @@ Sanos Non-ML Benchmark
 from __future__ import annotations
 
 from quantdata.widb.timeseries import TimeSeriesDefinition, filter_options_day, build_time_series, DateRange, PoolConfig
-from quantdata.utils.arbfree import MkArbFree, _compute_dlvs
+from quantdata.sanos.arbfree import MkArbFree, _compute_dlvs
 from quantdata.biz_calendar import DAYS_PER_YEAR, NMS5
 from quantdata.dysanos.simple import _locations_simple
 

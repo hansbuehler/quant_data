@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from cdxcore.verbose import Context
 
-from quantdata.utils.arbfree import MkArbFree
+from quantdata.sanos.arbfree import MkArbFree
 
 
 DATA_FILE = Path(__file__).resolve().parent / "stored_data" / "training" / "grid_sanos_four_samples.h5"

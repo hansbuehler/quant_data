@@ -13,7 +13,7 @@ Example
 -------
     >>> import datetime as dt
     >>> from quantdata.widb.arbfree import mk_arb_free_day
-    >>> from quantdata.utils.arbfree import MkArbFree
+    >>> from quantdata.sanos.arbfree import MkArbFree
     >>>
     >>> # Generate arbitrage-free prices for SPX on a specific date
     >>> df = mk_arb_free_day("SPX", dt.date(2023, 1, 15))
@@ -40,7 +40,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from quantdata.utils.arbfree import MkArbFree
+from quantdata.sanos.arbfree import MkArbFree
 from quantdata.utils.pd import create_empty_df, verify_schema
 from quantdata.widb.day import (
     ENRICHED_PER_DAY_FIELDS,

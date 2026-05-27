@@ -3,7 +3,7 @@ from __future__ import annotations
 import cvxpy as cp
 import numpy as np
 
-from quantdata.utils.arbfree import repair_density_nonnegative
+from quantdata.sanos.arbfree import repair_density_nonnegative
 
 
 def _solve_projection_with_cvxpy(

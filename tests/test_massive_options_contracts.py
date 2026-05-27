@@ -55,7 +55,7 @@ def test_filter_contracts_value_ranges() -> None:
 
     assert active.height > 0
     assert active.filter(pl.col("days_to_exp") > contracts_filter.max_dte).height == 0
-    assert active.filter(pl.col("scaled_mns") > contracts_filter.max_mns).height == 0
+    assert active.filter(pl.col("nms") > contracts_filter.max_mns).height == 0
     assert (
         active.filter(pl.col("approx_cash_vol_prev_k") < contracts_filter.min_opt_vol_k).height == 0
     )
