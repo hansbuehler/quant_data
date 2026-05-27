@@ -646,7 +646,8 @@ def _compute_market_fit( pricer : callable, min_half_spread : float,
                         bids : list[np.ndarray]|np.ndarray, 
                         asks : list[np.ndarray]|np.ndarray, *,
                         masks : list[np.ndarray]|np.ndarray|None = None,
-                        and_vols : bool = True ) -> PrettyObject:
+                        and_vols : bool = True,
+                        eps_half_spread : float = 0.01 ) -> PrettyObject:
     """
     Compute standardized fitting error stats
 
@@ -693,13 +694,18 @@ def _compute_market_fit( pricer : callable, min_half_spread : float,
 
         half_spread      = 0.5*(asks - bids)
         verify_inp( np.min( half_spread ) > 0, lambda : f"Expected all bid/ask spreads to be positive, but found minimum half spread {half_spread.min():.4g}" )
-        half_spread      = np.maximum( half_spread, min_half_spread )
-        r.fit_err        = (np.maximum( 0., f - asks_t ) + np.maximum(0., bids_t - f) ) / half_spread
-        r.pcnt_fit       = float(np.sum(r.fit_err > 0.)) / float(len(r.fit_err))
-        r.median_err = np.median(r.fit_err[r.fit_err>0.] ) if np.any(r.fit_err>0.) else 0.
-        r.mean_err   = np.mean(r.fit_err[r.fit_err>0.] ) if np.any(r.fit_err>0.) else 0.
+        half_spread        = np.maximum( half_spread, min_half_spread )
+        r.fit_err          = (np.maximum( 0., f - asks_t ) + np.maximum(0., bids_t - f) ) / half_spread
+        bad_fit_mask       = r.fit_err > eps_half_spread
+        r.pcnt_fit         = float(np.sum(bad_fit_mask)) / float(len(bad_fit_mask))
+        r.mean_err         = np.mean(r.fit_err[bad_fit_mask] ) if np.any(bad_fit_mask) else 0.
         r.median_total_err = np.median(r.fit_err) 
         r.mean_total_err   = np.mean(r.fit_err)
+        yxquantiles        = np.quantile(r.fit_err[bad_fit_mask], [0.01, 0.05, 0.1,0.5]) if np.any(bad_fit_mask) else [0., 0., 0., 0.]
+        r.q01_err          = yxquantiles[0]
+        r.q05_err          = yxquantiles[1]
+        r.q10_err          = yxquantiles[2]
+        r.median_err       = yxquantiles[3]
 
         if not masks is None:
             x = np.zeros_like(strikes)

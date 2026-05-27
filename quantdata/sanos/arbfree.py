@@ -375,7 +375,7 @@ class ArbFreePricer(PrettyObject):
                 mdensities_t = self.mdensities[t]
                 assert mstrikes_t.shape == mdensities_t.shape, f"Internal error: 'mstrikes[{t}]' and 'mdensities[{t}]' must have the same shape, but found {mstrikes_t.shape} and {mdensities_t.shape}"
 
-@version("0.5", dependencies=[ArbFreePricer])
+@version("0.51", dependencies=[ArbFreePricer])
 @dataclass(frozen=True)
 class MkArbFree:
     """
@@ -416,6 +416,7 @@ class MkArbFree:
     _eps_price            : float = 1E-6
     _eps_density          : float = 1E-7
     _eps_dens_1           : float = 1E-4 #: (expert use only) What passes as ``sum(p)==1`` and ``p@K==1`` for the fitted density.
+    _eps_no_arb           : float = 0.01 #: % half spread to tighten fit.
 
     def __post_init__(self):
         verify_inp( self.no_arb_mode in ["expiry", "surface"], lambda : f"'no_arb_mode' must be one of 'expiry' or 'surface', but found '{self.no_arb_mode}'" ) 
@@ -900,11 +901,13 @@ class MkArbFree:
 
                 CX           = call( spots=xstrikes_t[None,:], strikes=strikes_t[:,None] )
                 fit_mid      = CX[mask_t,:] @ q_t    # market strikes
-                whalf_spread = np.maximum( (ask_t - bid_t)/2., self.min_half_spread ) / average_hspread
-                mid_t       = (bid_t + ask_t)/2.
+                half_spread  = (ask_t - bid_t)/2.
+                mid_t        = (bid_t + ask_t)/2.
+                whalf_spread = np.maximum( half_spread, self.min_half_spread ) / average_hspread
 
                 if hard_fit:
-                    constraints += [ fit_mid <= ask_t, fit_mid >= bid_t ]
+                    constraints += [ fit_mid <= ask_t - half_spread * (1.-self._eps_no_arb),
+                                     fit_mid >= bid_t + half_spread * (1.-self._eps_no_arb) ]
 
                 # slack variable version  *should* be better..?
                 guess_fit    = CX[mask_t,:] @ xguess_t if not xguess_t is None else None
@@ -915,8 +918,8 @@ class MkArbFree:
                     variables += [ (e_box, None) ]
 
                     constraints += [
-                        fit_mid <= ask_t + cp.multiply(whalf_spread, e_box),
-                        fit_mid >= bid_t - cp.multiply(whalf_spread, e_box),
+                        fit_mid <= ask_t - half_spread * (1.-self._eps_no_arb) + cp.multiply(whalf_spread, e_box),
+                        fit_mid >= bid_t + half_spread * (1.-self._eps_no_arb) - cp.multiply(whalf_spread, e_box)
                     ]
 
                     objective += (1. - eff_mid_fit_weight) * cp.sum(e_box)

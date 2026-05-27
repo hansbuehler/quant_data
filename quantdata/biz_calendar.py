@@ -156,6 +156,7 @@ def get_business_days(
         None
     )  # index is a DatetimeIndex of trading days in the range
     schedule = [dt.date(d.year, d.month, d.day) for d in schedule]
+    assert len(schedule) == 0 or schedule[0] <= schedule[-1], f"Internal error: schedule is not sorted: {schedule}"
 
     _BUSINESS_DAYS_CACHE[key] = schedule
     return schedule
@@ -292,6 +293,7 @@ def add_business_days(
         assert schedule[-1] <= start, (
             f"Schedule should end on or before {start}, but ends at {schedule[-1]}"
         )
+        schedule = list(schedule)  # convert to list to allow reverse() in-place    
         schedule.reverse()  # reverse to count backwards
         num_days = -num_days
         if start == schedule[0] and count_start:

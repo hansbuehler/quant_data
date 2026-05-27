@@ -106,7 +106,7 @@ _LITERAL_DOCSTRING_PREFIXES = (
     "quantdata.massive.client.MassiveClient",
     "quantdata.massive.options.contracts",
     "quantdata.sanos.grid",
-    "quantdata.utils.arbfree.MkArbFree",
+    "quantdata.utils.sanos.MkArbFree",
     "quantdata.widb.options_filter.OptionsFilter",
 )
 
