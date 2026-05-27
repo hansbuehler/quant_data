@@ -292,6 +292,7 @@ def add_business_days(
         assert schedule[-1] <= start, (
             f"Schedule should end on or before {start}, but ends at {schedule[-1]}"
         )
+        schedule = list(schedule)
         schedule.reverse()  # reverse to count backwards
         num_days = -num_days
         if start == schedule[0] and count_start:
