@@ -1,8 +1,16 @@
 """
-Quote and Trade processing
+quantdata.massive.processing
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Some simple tools to make life easier when working with Massive data.
 These are not meant to be comprehensive utilities, but rather simple examples of how to filter and align trades and quotes.
+
+Function in this file:
+
+* :func:`filter_valid_trades` removes trades with invalid timestamps, prices, sizes, or trade codes.
+* :func:`filter_valid_quotes` removes quotes with invalid timestamps, prices, sizes, or crossed/locked markets.
+* :func:`align_quotes_to_trades` matches each trade to a nearby valid quote based on price and timestamp criteria.
+* :func:`align_trades_to_quotes` matches each quote to a nearby valid trade based on price and timestamp criteria.
 """
 
 from quantdata import version

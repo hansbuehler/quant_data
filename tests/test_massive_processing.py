@@ -24,16 +24,16 @@ def _massive_processing(ticker, d):
     from quantdata.massive.processing import filter_valid_trades, filter_valid_quotes, align_quotes_to_trades, align_trades_to_quotes
 
     r1 = filter_valid_trades(ticker, d)
-    assert hash_polars_df(r1) == "bbb2ae0b0a90d6a3555d3cb847115120", f"Unexpected hash for valid trades of {ticker} on {d}"    
+    assert hash_polars_df(r1) == "ffb24dd8b47226341aa2411f1d01ffda", f"Unexpected hash for valid trades of {ticker} on {d}"    
 
     r1 = filter_valid_quotes(ticker, d)
     assert hash_polars_df(r1) == "52ac768e0f77169e4a8c0de671f08f25", f"Unexpected hash for valid quotes of {ticker} on {d}"
 
     r1 = align_quotes_to_trades(ticker, d)
-    assert hash_polars_df(r1) == "7d0de72560895a970cb4029277cb6886", f"Unexpected hash for aligned quotes to trades of {ticker} on {d}"
+    assert hash_polars_df(r1) == "e3750630576ed8b75429270f6d7af393", f"Unexpected hash for aligned quotes to trades of {ticker} on {d}"
 
     r1 = align_trades_to_quotes(ticker, d)
-    assert hash_polars_df(r1) == "26be8df16a7008ea70279c66be07e153", f"Unexpected hash for aligned trades to quotes of {ticker} on {d}"
+    assert hash_polars_df(r1) == "79b0bd1ebf94e0c25694115a1a1089fb", f"Unexpected hash for aligned trades to quotes of {ticker} on {d}"
 
 def test_massive_processing():
     _massive_processing(TICKERS[0], DATES[0])

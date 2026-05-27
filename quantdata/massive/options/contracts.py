@@ -2,9 +2,13 @@
 quantdata.massive.options.contracts
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Get option contracts for a given underlying and date.
+Managing contract information per underyling.
+The main functions in this module are:
 
+* :func:`filter_contracts`
+* :func:`filter_contracts_between`
 
+Each retrieves, filters, and caches contrats for a given underlying.
 """
 
 from __future__ import annotations
@@ -101,6 +105,9 @@ See also `massive documentation <https://massive.com/docs/rest/options/contracts
 @version("0.11")
 @dataclass(frozen=True)
 class ContractsFilter:
+    """
+    Configuration on to filter the options retrieved via :func:`filter_contracts` and :func:`filter_contracts_between`.
+    """
     max_dte: int = 7              #: In business days
     max_mns: float|None = 2.0     #: Maximum absolute normalized strike, i.e. $| log(K/S_\mathrm{prev})*sqrt((1+e)/(T+e)/0.1 | ~ | log(K/S_\mathrm{prev})/(0.1*sqrt(T)) |$, where $S_\mathrm{prev}$ is the previous close adjusted for stock splits and dividends to match today's unadjusted price, and T is time to expiry in years. Here $e$ is one hour. This is a measure of moneyness that accounts for both distance to the money and time to expiry.
     max_mns5 : float|None = None  #: Maximum normalized strike, i.e. $| log(K/S_\mathrm{prev})*sqrt((1+g)/(T+g)/0.1 |$, where $S_\mathrm{prev}$ is the previous close adjusted for stock splits and dividends to match today's unadjusted price, and T is time to expiry in years. Here $g$ is five days which tends to make this measure more robust than NMS alone. This is a measure of moneyness that accounts for both distance to the money and time to expiry.
@@ -140,16 +147,17 @@ def filter_contracts(
     pool_config: PoolConfig = PoolConfig(),
     verbose: Context = Context.quiet,
 ) -> pl.DataFrame:
-    """
+    r"""
     Filters and processes option contracts for a given underlying on a given date.
 
     Applies filtering rules based on expiry, moneyness, and trading volume, and returns
     a data frame with enriched contract information including reject codes and calculated metrics.
 
-    Filtering Rules:
-    1. Expiry filter: days_to_exp in [0, contracts_filter.max_dte]
-    2. Moneyness filter: |log(K/S_prev)|/sqrt(T)/0.1 <= contracts_filter.max_mns, T = days_to_exp / DAYS_PER_YEAR
-    3. Volume filter (previous day): approx_cash_vol_prev_k >= contracts_filter.min_opt_vol_k
+    Filtering Rules implemented in :class:`ContractsFilter`:
+
+    1. Expiry filter: business days to expiry in ``[0, contracts_filter.max_dte]``.
+    2. Moneyness filter: $|\log(K/S_{prev})|/\sqrt{T}/0.1$ <= contracts_filter.max_mns where ``T = days_to_exp / DAYS_PER_YEAR``.
+    3. Volume filter (previous day): ``approx_cash_vol_prev_k >= contracts_filter.min_opt_vol_k`` (in 1000$).
 
     The returned :class:`polars.DataFrame` includes all contracts, with a "reject_code" column indicating the reason for rejection based on the above rules.
     To obtain the filtered options, use::
