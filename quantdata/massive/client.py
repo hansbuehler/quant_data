@@ -5,7 +5,7 @@ quantdata.massive.client
 A simple client wrapper for the `www.massive.com <https://www.massive.com>`_ API.
 
 Access
-^^^^^^
+======
 
 You will require a `massive.com token <https://www.massive.com/docs/rest/authentication>`_ to access the data.
 Set the token in the ``MASSIVE_TOKEN`` environment variable, e.g. by adding the following line to your ``~/.bashrc`` or ``~/.zshrc`` file:

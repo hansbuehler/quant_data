@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from datetime import date
 
+import polars as pl
+
 from quantdata.biz_calendar import DateRange
-from quantdata.tickers.ticker_calendar import EXPIRY, get_standard_expiries
+from quantdata.tickers.ticker_calendar import EXPIRY, SCHEMA_TICKER_CALENDAR, get_standard_expiries
 
 
 def _expiry_codes_by_date(date_range: DateRange) -> dict[date, int]:
@@ -23,3 +25,15 @@ def test_get_standard_expiries_keeps_non_quarter_month_end_as_eom() -> None:
 
     assert codes_by_date[date(2024, 1, 19)] == int(EXPIRY.MONTHLY)
     assert codes_by_date[date(2024, 1, 31)] == int(EXPIRY.EOM)
+
+
+def test_build_ticker_calendar_schema_constant_matches_output_contract() -> None:
+    assert SCHEMA_TICKER_CALENDAR == {
+        "date": pl.Date,
+        "expiry_code": pl.Int8,
+        "is_ex_div": pl.Boolean,
+        "is_split": pl.Boolean,
+        "has_ticker_change": pl.Boolean,
+        "is_earnings": pl.Boolean,
+        "is_half_day": pl.Boolean,
+    }

@@ -1,5 +1,6 @@
 """
 quantdata.massive.tickers.filtered_history
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Adjusted daily bars for a ticker over a date range, handling ticker-change events
 and filtering by minimum liquidity thresholds.
@@ -21,12 +22,12 @@ from quantdata import env
 from quantdata.biz_calendar import TZ_NY, prev_business_day
 from quantdata.massive import MassiveClient
 from quantdata.massive.tickers.basics import get_listing_date
-from quantdata.tickers import SubDir, tickers_cache
+from quantdata.tickers import SubDir, _locations_tickers
 
 MIN_CASH_VOLUME_M = 10
 MIN_NUM_TRADES = 1000
 
-_history_cache = tickers_cache
+_history_cache = _locations_tickers
 
 
 @_history_cache(fmt=SubDir.POLARS_PARQUET).cache(
