@@ -8,9 +8,10 @@ This file generates sample data sets of selected options quote time series for a
 from datetime import date
 from cdxcore.jcpool import JCPool
 from cdxcore.pretty import PrettyObject
-from cdxcore.subdir import SubDir
+from cdxcore.subdir import CacheMode, SubDir
 from cdxcore.util import fmt_list
 from cdxcore.uniquehash import named_unique_filename48_8
+from cdxcore.bs import bs
 import polars as pl
 
 from quantdata.biz_calendar import NMS5, DateRange, prev_business_day, session_open_close, DAYS_PER_YEAR, count_business_days_between, to_date
@@ -31,6 +32,8 @@ import warnings
 from quantdata.ncde.implied import _locations_ncde_implied
 from quantdata.widb.bad import BAD
 _cache = _locations_ncde_implied.processing(fmt=SubDir.POLARS_PARQUET)
+
+OPT_TICK_SIZE = 0.01 # not quite true - this is the tick size for small priced options
 
 @version("0.2", dependencies=[ContractsFilter])
 @dataclass(frozen=True)
@@ -60,40 +63,36 @@ def _ticker_trade_series( ticker : str, d : date, alignment_config : TradeQuoteA
         verbose.write(lambda : f"done; found {len(df)} quotes; this took {tme}.", head=False)
     return df.sort("ts_ns")
     
-OPT_QUOTE_SCHEMA = {
-            "ts_ns": np.dtype("datetime64[ns]"),
-            "bid_price": np.float64,
-            "bid_size": np.float64,
-            "ask_price": np.float64,
-            "ask_size": np.float64,
-            "trade_ts_ns": np.dtype("datetime64[ns]"),
-            "price": np.float64,
-            "size": np.float64,
-            "trade_code": np.uint32,
-            # spot
-            "spot_ts_ns": np.dtype("datetime64[ns]"),
-            "spot_price": np.float64,
-            "spot_size": np.float64,
-            "spot_trade_code": np.uint32,
-            "spot_quote_ts_ns": np.dtype("datetime64[ns]"),
-            "spot_bid_price": np.float64,
-            "spot_bid_size": np.float64,
-            "spot_ask_price": np.float64,
-            "spot_ask_size": np.float64,
-}
-
 OPT_QUOTE_BY_EXPIRY_SCHEMA = {
             # option quotes
             # option quotes may not have trades
             "t_d": pl.Float64,           # time since open in days
             "mid_price": pl.Float64,     # mid price (divded by prev_spot_close)
             "half_spread": pl.Float64,   # half spread (divided by prev_spot_close)
+            "opt_tick_size": pl.Float64, # option tick size (divided by prev_spot_close)
             "size": pl.Float64,          # total size
             "bid_size_pcnt": pl.Float64, # bid size as percentage of total size
             "mid_ret": pl.Float64,       # pcnt return in mid
+            "dt_d": pl.Float64,            # time diff in days since last quote
             "dte": pl.Float64,           # dte in days computed for each option quote, adjusted for time of day: ref_dte - (t_ms / (6.5 * 3600 * 1000)) * (1 - overnight_fraction)
-            "dt_d": pl.Float64,          # time diff in days since last quote (e.g. 1 means a full day)
             "nms5": pl.Float64,          # normalized strike
+            "intrinsic": pl.Float64,      # intrinsic value (divided by prev_spot_close)
+            "is_intrinsic": bool,          # whether the option is near the money, defined as having intrinsic value at least 10% of the mid price
+            "bid_vol": pl.Float64,       # bid vol
+            "ask_vol": pl.Float64,       # ask vol
+            "mid_vol": pl.Float64,       # mid vol
+            "bid_delta": pl.Float64,      # bid delta
+            "ask_delta": pl.Float64,      # ask delta
+            "mid_delta": pl.Float64,     # mid delta
+            "bid_gamma": pl.Float64,      # bid gamma
+            "ask_gamma": pl.Float64,      # ask gamma
+            "mid_gamma": pl.Float64,     # mid gamma
+            "bid_vega": pl.Float64,       # bid vega
+            "ask_vega": pl.Float64,       # ask vega
+            "mid_vega": pl.Float64,       # mid vega
+            "bid_theta": pl.Float64,       # bid theta
+            "ask_theta": pl.Float64,       # ask theta
+            "mid_theta": pl.Float64,       # mid theta
             # option trades
             "trade_t_d": pl.Float64,  # time diff in days since last trade
             "trade_price": pl.Float64,  # trade price (divided by prev_spot_close)
@@ -130,7 +129,7 @@ OPT_QUOTE_BY_EXPIRY_SCHEMA = {
 """ Schema returned by _opt_expiry_quote_time_series """
 
 @_cache(fmt=SubDir.POLARS_PARQUET).cache(
-    "0.18",
+    "0.32",
     dependencies=[align_trades_to_quotes,_ticker_trade_series],
     uid=lambda ticker, opt_ticker, d, overnight_fraction, dte_exclude_half_days, alignment_config:\
         "opt_quotes/"+\
@@ -217,7 +216,7 @@ def _opt_quote_time_series( ticker : str, opt_ticker : str, d : date,
     diff_oc_us   = (close - open).total_seconds() * 1_000_000
     dte          = float( count_business_days_between( d, expiry, exclude_half_days=dte_exclude_half_days ) )
 
-    result   = (result.
+    result   = ( result.
             rename(dict(price="trade_price", size="trade_size", spot_price="spot_trade_price", spot_size="spot_trade_size", spot_ts_ns="spot_trade_ts_ns")).
             with_columns(
                 ( pl.col("ask_price") / prev_close ).alias("ask_price"),
@@ -226,7 +225,7 @@ def _opt_quote_time_series( ticker : str, opt_ticker : str, d : date,
                 ( pl.col("spot_ask_price") / prev_close ).alias("spot_ask_price"),
                 ( pl.col("spot_bid_price") / prev_close ).alias("spot_bid_price"),
                 ( pl.col("spot_trade_price") / prev_close ).alias("spot_trade_price"),
-           ).
+            ).
             with_columns(
                 ( pl.col("ts_ns").sub(open).dt.total_microseconds() / diff_oc_us ).alias("t_d"),
                 ( pl.col("trade_ts_ns").sub(open).dt.total_microseconds() / diff_oc_us ).alias("trade_t_d"),
@@ -239,8 +238,8 @@ def _opt_quote_time_series( ticker : str, opt_ticker : str, d : date,
                 ( pl.col("bid_size") + pl.col("ask_size") ).alias("size"),
                 ( pl.col("bid_size") / (pl.col("bid_size") + pl.col("ask_size")).clip(lower_bound=1) ).alias("bid_size_pcnt"),
                 ( pl.col("spot_bid_size") + pl.col("spot_ask_size") ).alias("spot_size"),
-                ( pl.col("spot_bid_size") / (pl.col("spot_bid_size") + pl.col("spot_ask_size")).clip(lower_bound=1) ).alias("spot_bid_size_pcnt"),                        
-            ).
+                ( pl.col("spot_bid_size") / (pl.col("spot_bid_size") + pl.col("spot_ask_size")).clip(lower_bound=1) ).alias("spot_bid_size_pcnt"),     
+           ).
             with_columns(
                 ( (pl.col("trade_price") - pl.col("mid_price")) / pl.col("half_spread") ).alias("trade_direction"),
                 ( (pl.col("spot_trade_price") - pl.col("spot_mid_price")) / pl.col("spot_half_spread") ).alias("spot_trade_direction"),
@@ -266,12 +265,48 @@ def _opt_quote_time_series( ticker : str, opt_ticker : str, d : date,
                 pl.lit(is_american).alias("is_american"),
                 pl.lit(is_call).alias("is_call"),
                 pl.lit(prev_close).alias("prev_spot_close"),
+                pl.lit(OPT_TICK_SIZE/prev_close).alias("opt_tick_size"),
             ).
             drop("bid_price", "ask_price", "spot_ask_price", "spot_bid_price",
                 "ts_ns", "trade_ts_ns", "spot_trade_ts_ns", "spot_quote_ts_ns", 
                 "bid_size", "ask_size", "spot_bid_size", "spot_ask_size",
                 "trade_code", "spot_trade_code")
     )
+
+    opt_mid         = result["mid_price"].to_numpy()
+    opt_half_spread = result["half_spread"].to_numpy()
+    opt_tick_size   = result["opt_tick_size"].to_numpy()
+    tte_y           = result["dte"].to_numpy() / DAYS_PER_YEAR
+    spot            = result["spot_mid_price"].to_numpy()
+    strike          = result["strike"].to_numpy() 
+    is_call         = result["is_call"].to_numpy()
+
+    assert np.all( np.isfinite(opt_mid) ), f"{ticker} {d} option {opt_ticker}: Found non-finite values in mid_price after conversion...?"
+    assert np.all( np.isfinite(opt_half_spread) ), f"{ticker} {d} option {opt_ticker}: Found non-finite values in half_spread after conversion...?"
+    assert np.all( np.isfinite(tte_y) ), f"{ticker} {d} option {opt_ticker}: Found non-finite values in tte_y after conversion...?"
+    assert np.all( np.isfinite(spot) ), f"{ticker} {d} option {opt_ticker}: Found non-finite values in spot after conversion...?"
+    assert np.all( np.isfinite(strike) ), f"{ticker} {d} option {opt_ticker}: Found non-finite values in strike after conversion...?"
+    assert np.all( opt_half_spread >= opt_tick_size/2.-1E-8 ), f"{ticker} {d} option {opt_ticker}: half spread should not be below half tick size, but found half_spread {np.min(np.abs(opt_half_spread-opt_tick_size/2.)):.4g}"
+    opt_ask = opt_mid + opt_half_spread
+    opt_bid = opt_mid - opt_half_spread
+    assert np.all( opt_bid >= opt_tick_size/2.-1E-8 ), f"{ticker} {d} option {opt_ticker}: half spread should not be below half tick size, but found half_spread {np.min(opt_bid-opt_tick_size/2.):.4g}"
+
+    intrinsic    = np.where( is_call, np.maximum(0., spot - strike), np.maximum(0., strike - spot) )
+    is_intrinsic = intrinsic + opt_tick_size*1.1 >= opt_bid 
+    result = result.with_columns( 
+        pl.Series("intrinsic", intrinsic),
+        pl.Series("is_intrinsic", is_intrinsic) )
+
+    sqrtT    = np.sqrt(tte_y)
+    what     = dict(bid=opt_bid, ask=opt_ask, mid=opt_mid)
+    rel_k    = strike / spot
+
+    for w, price in what.items():
+        vols   = bs.implied( k=rel_k, prices=price, is_call=is_call, sqrtT=sqrtT, on_exceed_bounds="warn" )
+        r      = bs(k=rel_k, vol=vols, sqrtT=sqrtT, is_call=is_call, what=bs.VEGA|bs.DELTA|bs.GAMMA|bs.THETA)
+        r.vol  = vols
+        result = result.with_columns(  [ pl.Series(f"{w}_{k}", v) for k, v in r.items() ] )
+            
     verify_schema( result, OPT_QUOTE_BY_EXPIRY_SCHEMA, header=lambda : f"{ticker} {d} expiry {expiry} {opt_ticker}: Schema validation failed for enriched option quote time series" )
     return result
 
@@ -325,13 +360,13 @@ def _opt_expiry_quote_time_series( ticker : str,
                 if cnt==1 or tme.interval_test(1.):
                     verbose.write(lambda : f"\r{ticker} {d} expiry {expiry}: Computing enriched time series for {len(opt_tickers)} options: processed {opt_ticker} {cnt}/{len(opt_tickers)} ... {math.ceil(float(cnt)/float(len(opt_tickers))*100)}% done; so far this took {tme}...", end='')
 
-                r   = r.with_columns( pl.lit(opt_ticker).alias("opt_ticker") )
+                assert r['opt_ticker'].n_unique() == 1 and r['opt_ticker'].unique()[0] == opt_ticker, f"{ticker} {d} expiry {expiry} {opt_ticker}: Expected all rows to have the same opt_ticker {opt_ticker}, but found multiple opt_tickers in the result...?"
                 verify_schema( r, OPT_QUOTE_BY_EXPIRY_SCHEMA, header=lambda : f"{ticker} {d} expiry {expiry} {opt_ticker}: Schema validation failed for enriched option quote time series" )
                 results.append(r)
             del r
 
     results      = pl.concat(results).sort("t_d", "opt_ticker")
-    verbose.write(lambda : f"\r{ticker} {d}: Computed enriched time series for {len(opt_tickers)-len(excluded)} out of {len(opt_tickers)} options; this took {tme}.")
+    verbose.write(lambda : f"\r{ticker} {d}: Computed enriched time series at expiry {expiry} for {len(opt_tickers)-len(excluded)} out of {len(opt_tickers)} options; this took {tme}.")
     return results
 
 @version("0.1", dependencies=[_opt_quote_time_series, filter_contracts])
@@ -339,6 +374,7 @@ def generate_day( ticker : str, d : date,
                   option_quotes_day_config : OptionQuotesDayConfig, *,
                   pool_config : PoolConfig = PoolConfig.off(),
                   cache_generate_only : bool = False,
+                  override_cache_mode : CacheMode|str|None = None,
                   verbose     : Context = Context.quiet
                   ):
     """
@@ -381,8 +417,15 @@ def generate_day( ticker : str, d : date,
     if option_quotes_day_config.max_num_options_per_expiry is not None:
         verbose.write(lambda : f"{ticker} {d}: Limiting to at most {option_quotes_day_config.max_num_options_per_expiry} options per expiry, selected by smallest absolute nms5:")
         for expiry, ref_df in ref_data.items():
-            n_cnt = len(ref_df)
-            ref_df   = ref_df.with_columns(abs_nms5=pl.col("ref_nms5").abs()).sort("abs_nms5").head(option_quotes_day_config.max_num_options_per_expiry).drop("abs_nms5")
+            n_cnt  = len(ref_df)
+            ref_df = (
+                ref_df
+                .with_columns(abs_nms5=pl.col("ref_nms5").abs())
+                .sort("abs_nms5")
+                .head(option_quotes_day_config.max_num_options_per_expiry)
+                .drop("abs_nms5")
+            )
+            ref_data[expiry] = ref_df
             min_nms5 = ref_df["ref_nms5"].min()
             max_nms5 = ref_df["ref_nms5"].max()
             verbose.report(1,lambda : f"{ticker} {d} expiry {expiry}: Selected {len(ref_df)}/{n_cnt} options, sorted by smallest absolute nms5. Resulting options range from nms5 {min_nms5:.3f} to {max_nms5:.3f}.")
@@ -394,7 +437,9 @@ def generate_day( ticker : str, d : date,
         results = {}
         for expiry in expiries:
             opt_ticker_data = ref_data[expiry]
-            r = _opt_expiry_quote_time_series( ticker, d, expiry, opt_ticker_data, option_quotes_day_config, pool_config=pool_config, verbose=verbose, cache_generate_only=cache_generate_only )
+            r = _opt_expiry_quote_time_series( ticker, d, expiry, opt_ticker_data, option_quotes_day_config, pool_config=pool_config,
+                                            verbose=verbose, cache_generate_only=cache_generate_only,
+                                            override_cache_mode=override_cache_mode )
             results[expiry] = r
         verbose.write(lambda : f"{ticker} {d}: Completed time series generation for expiries {fmt_list(expiries)}; this took {tme}.")
     return results
