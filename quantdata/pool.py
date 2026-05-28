@@ -29,5 +29,5 @@ In this project we turned on the rather aggressive memory leak detection of :mod
 which is described `here <https://joblib.readthedocs.io/en/latest/generated/joblib.Parallel.html>`__.
 """
 
-from packages.cdxcore.cdxcore.jcpool import JCPool, JCPoolConfig as PoolConfig
+from cdxcore.jcpool import JCPool, JCPoolConfig as PoolConfig
 JCPool.DEFAULT_MEM_LEAK_ENFORCE = False
