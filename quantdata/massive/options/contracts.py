@@ -137,7 +137,7 @@ def filter_contracts(
     exclude_half_days: bool,
     *,
     drop_no_trades_today: bool = False,
-    pool_config: PoolConfig = PoolConfig(),
+    pool_config: PoolConfig|JCPool = PoolConfig(),
     verbose: Context = Context.quiet,
 ) -> pl.DataFrame:
     """
@@ -208,18 +208,10 @@ def filter_contracts(
     """
 
     context = PrettyObject()
-    context.prev_d = add_business_days(
-        d, -1, exclude_half_days=exclude_half_days
-    )  # previous business day (NB: if d is a Monday then this is the previous Friday, so we correctly skip the weekend)
-    context.close_adj_prev = client.fetch_day_summary(
-        underlying, context.prev_d, adjusted=True, can_be_none=False
-    )["close"]
-    context.close_unadj_prev = client.fetch_day_summary(
-        underlying, context.prev_d, adjusted=True, can_be_none=False
-    )["close"]
-    context.close_adj = client.fetch_day_summary(underlying, d, adjusted=True, can_be_none=False)[
-        "close"
-    ]
+    context.prev_d = add_business_days( d, -1, exclude_half_days=exclude_half_days )  # previous business day (NB: if d is a Monday then this is the previous Friday, so we correctly skip the weekend)
+    context.close_adj_prev = client.fetch_day_summary( underlying, context.prev_d, adjusted=True, can_be_none=False )["close"]
+    context.close_unadj_prev = client.fetch_day_summary( underlying, context.prev_d, adjusted=True, can_be_none=False )["close"]
+    context.close_adj = client.fetch_day_summary(underlying, d, adjusted=True, can_be_none=False)[ "close" ]
     ocv_today_unadj = client.fetch_day_summary(underlying, d, adjusted=False, can_be_none=False)
     context.close_unadj = ocv_today_unadj["close"]
     context.open_unadj = ocv_today_unadj["open"]
@@ -366,7 +358,7 @@ def filter_contracts(
 
         return c, timing
 
-    jcpool = JCPool(num_workers=pool_config.num_workers, threading=pool_config.threading)
+    jcpool = pool_config.pool()
     df = []
     tme = verbose.timer()
     timing = None

@@ -68,6 +68,10 @@ class NMS5:
     $$
         \mathrm{NMS}(z,t) := \exp\left( \log(1.1)\ z \cdot \sqrt{\frac{\epsilon+t}{\epsilon+1}} \right)
     $$
+    and in reverse:
+    $$
+        z = \frac{\log(K/F)}{\log(1.1)} \cdot \sqrt{\frac{\epsilon+T}{\epsilon+1}}
+    $$
     where $\epsilon$ is five days.
 
     This seems statistically the correct NMS measure for SPX, c.f. notebook ``viz_sanos_mass``.

@@ -124,14 +124,15 @@ class TradeQuoteAlignmentConfig:
     Configuration for matching trades to nearby valid quotes.
     Times are in milliseconds.
     """
-    lookback_ms: int = 250
-    lookfwd_ms: int = 250
-    drop_unmatched: bool = True  # TOOD: make this a function parameter instead of a config parameter?
-    within_session: bool = True  # TODO: make this a function parameter instead of a config parameter?
+    lookback_ms: int = 250   # how many milliseconds to look back
+    lookfwd_ms: int = 250    # how many milliseconds to look forward
 
     def __post_init__(self):
         verify_inp(self.lookback_ms >= 0, f"lookback_ms must be non-negative, found {self.lookback_ms}")
         verify_inp(self.lookfwd_ms >= 0, f"lookfwd_ms must be non-negative, found {self.lookfwd_ms}")
+
+    def __str__(self):
+        return f"bck={self.lookback_ms},fwd={self.lookfwd_ms})"
 
 def _ts_ns(df: pl.DataFrame) -> np.ndarray:
     return df.select(pl.col("ts_ns").cast(pl.Int64)).to_series().to_numpy()
@@ -184,9 +185,9 @@ SCHEMA_ALIGN_QUOTES_TO_TRADES = {
 def align_quotes_to_trades(
     ticker: str,
     d: date,
+    drop_unmatched: bool,
     config: TradeQuoteAlignmentConfig = TradeQuoteAlignmentConfig(), *,
-    drop_unmatched: bool|None = None,
-    within_session: bool|None = None,
+    within_session: bool = True,
 ) -> pl.DataFrame:
     """
     Fetch valid trades and quotes for ``ticker`` on ``d`` and align them on a common timeline.
@@ -195,11 +196,25 @@ def align_quotes_to_trades(
     and the trade timestamp where ``bid_price <= price <= ask_price``. If no such
     quote exists, it finds the first matching quote up to ``config.lookfwd_ms`` after
     the trade.
+
     The output keeps all trade columns and adds the matched quote columns. If
-    ``config.drop_unmatched`` is False, unmatched trades have null quote fields.
+    ``drop_unmatched`` is False, unmatched trades have null quote fields.
+
+    Parameters
+    ----------
+    ticker : str
+        The underlying ticker to fetch trades and quotes for.
+    d : :class:`datetime.date`
+        The date to fetch trades and quotes for.
+    drop_unmatched : bool
+        If True, only keep trades with a matched quote. If False, keep all trades and have null quote fields for unmatched trades.
+    config : :class:`TradeQuoteAlignmentConfig`, default ``TradeQuoteAlignmentConfig()``
+        Configuration for matching trades to nearby valid quotes.
+    within_session : bool, default True
+        Whether to only consider trades and quotes within session hours when aligning.
     """
-    trades = filter_valid_trades(ticker, d, within_session=config.within_session if within_session is None else within_session).sort("ts_ns")
-    quotes = filter_valid_quotes(ticker, d, within_session=config.within_session if within_session is None else within_session).sort("ts_ns")
+    trades = filter_valid_trades(ticker, d, within_session=within_session).sort("ts_ns")
+    quotes = filter_valid_quotes(ticker, d, within_session=within_session).sort("ts_ns")
 
     trade_ts = _ts_ns(trades)
     quote_ts = _ts_ns(quotes)
@@ -249,7 +264,7 @@ def align_quotes_to_trades(
         .drop("_trade_row", "_quote_row")
     )
 
-    if drop_unmatched if drop_unmatched is not None else config.drop_unmatched:
+    if drop_unmatched:
         out = out.filter(pl.col("quote_ts_ns").is_not_null())
 
     verify(set(out.columns) == set(SCHEMA_ALIGN_QUOTES_TO_TRADES), f"Output is missing expected columns: {sorted(set(SCHEMA_ALIGN_QUOTES_TO_TRADES) - set(out.columns))} and has superfluous columns: {sorted(set(out.columns) - set(SCHEMA_ALIGN_QUOTES_TO_TRADES))}")
@@ -272,10 +287,10 @@ SCHEMA_ALIGN_TRADES_TO_QUOTES = {
 def align_trades_to_quotes(
     ticker: str,
     d: date,
+    drop_unmatched: bool,
     config: TradeQuoteAlignmentConfig = TradeQuoteAlignmentConfig(),
     *,
-    drop_unmatched: bool|None = None,
-    within_session: bool|None = None,       
+    within_session: bool = True       
 ) -> pl.DataFrame:
     """
     Fetch valid trades and quotes for ``ticker`` on ``d`` and align trades onto quotes.
@@ -284,10 +299,23 @@ def align_trades_to_quotes(
     and the quote timestamp where ``bid_price <= price <= ask_price``. If no such
     trade exists, it finds the first matching trade up to ``config.lookfwd_ms`` after
     the quote. The output keeps all quote columns and adds matched trade columns. If
-    ``config.drop_unmatched`` is False, unmatched quotes have null trade fields.
+    ``drop_unmatched`` is False, unmatched quotes have null trade fields.
+
+        Parameters
+    ----------
+    ticker : str
+        The underlying ticker to fetch trades and quotes for.
+    d : :class:`datetime.date`
+        The date to fetch trades and quotes for.
+    drop_unmatched : bool
+        If True, only keep quotes with a matched trade. If False, keep all quotes and have null trade fields for unmatched quotes.
+    config : :class:`TradeQuoteAlignmentConfig`, default ``TradeQuoteAlignmentConfig()``
+        Configuration for matching trades to nearby valid quotes.
+    within_session : bool, default True
+        Whether to only consider trades and quotes within session hours when aligning.
     """
-    trades = filter_valid_trades(ticker, d, within_session=config.within_session if within_session is None else within_session).sort("ts_ns")
-    quotes = filter_valid_quotes(ticker, d, within_session=config.within_session if within_session is None else within_session).sort("ts_ns")
+    trades = filter_valid_trades(ticker, d, within_session=within_session).sort("ts_ns")
+    quotes = filter_valid_quotes(ticker, d, within_session=within_session).sort("ts_ns")
 
     trade_ts = _ts_ns(trades)
     quote_ts = _ts_ns(quotes)
@@ -337,7 +365,7 @@ def align_trades_to_quotes(
         .drop("_quote_row", "_trade_row")
     )
 
-    if drop_unmatched if drop_unmatched is not None else config.drop_unmatched:
+    if drop_unmatched:
         out = out.filter(pl.col("trade_ts_ns").is_not_null())
     verify(set(out.columns) == set(SCHEMA_ALIGN_TRADES_TO_QUOTES), f"Output is missing expected columns: {sorted(set(SCHEMA_ALIGN_TRADES_TO_QUOTES) - set(out.columns))} and has superfluous columns: {sorted(set(out.columns) - set(SCHEMA_ALIGN_TRADES_TO_QUOTES))}")
     return out
