@@ -77,9 +77,7 @@ def build_iv_observations(
     Identical to kalman_filters.build_iv_surface up to Phase 2, then stops.
     Adds log_moneyness = log(K/F) before returning.
     """
-    # lazy imports so sys.path is already set when this function is called
-    import events
-
+    import personal.shared_functions.events as events
     from personal.shared_functions.kalman_filters import (
         _add_spot_T,
         _compute_iv_batch,

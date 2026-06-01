@@ -1,7 +1,8 @@
-import events
 import jax
 import jax.numpy as jnp
 import polars as pl
+
+import personal.shared_functions.events as events
 
 
 def f(x):

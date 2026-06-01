@@ -1,8 +1,5 @@
 import datetime
 
-import black_scholes
-import ekf
-import events
 import jax.numpy as jnp
 import numpy as np
 import polars as pl
@@ -10,6 +7,9 @@ import pytz
 from cdxcore.bs import bs as _cdx_bs
 from scipy.stats import norm as _norm
 
+import personal.shared_functions.black_scholes as black_scholes
+import personal.shared_functions.ekf as ekf
+import personal.shared_functions.events as events
 import personal.shared_functions.utils as utils
 from quantdata.massive.taq import TAQMatchConfig, match_taq
 

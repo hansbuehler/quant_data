@@ -15,4 +15,15 @@ Calls are postively correlated to spot, again correlation ~1 ATM.
 
 
 
+SANOS:
+
+SPY:
+Batch-level ΔP std: 2.89 bps
+Lag-1 autocorr of ΔP: -0.036
+
+Forward estimation: (using last because median/mean made on weirdly normalized stuff)
+Batch-level ΔF̂ std: 2.94 bps
+Lag-1 autocorr of ΔF̂: -0.027
+
+
 
