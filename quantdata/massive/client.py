@@ -36,6 +36,7 @@ import requests as requests
 from cdxcore.err import verify
 from cdxcore.subdir import SubDir, version
 from cdxcore.util import fmt_date, verify_inp
+from cdxcore.uniquehash import named_unique_filename48_8
 from massive import RESTClient
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -104,6 +105,8 @@ class MassiveClient(object):
         "year",
     }
     """ Standard `massive time spans <https://massive.com/docs/rest/stocks/aggregates/custom-bars>`_ """
+
+    _PREV_CLOSE_CACHE = {}
 
     """
     Static members
@@ -681,6 +684,67 @@ class MassiveClient(object):
             params["expiration_date.lte"] = max_expiry.strftime("%Y-%m-%d")
         return self.paginate(url, params)
 
+    @_cache(fmt=SubDir.PICKLE).cache(
+        "0.1",
+        uid=lambda opt_ticker, as_of: f"opt_ref_date/{named_unique_filename48_8(str(opt_ticker) if as_of is None else f'{opt_ticker} {as_of}')}",
+    )
+    def option_contract_overview( self, opt_ticker: str, as_of : date | None = None ) -> dict:
+        """
+        Download option `contract overview data <https://massive.com/docs/rest/options/contracts/contract-overview>`_ 
+        for a given options ticker.
+
+        Parameters
+        ----------
+        opt_ticker : str
+            Option ticker symbol, e.g. "AAPL230616C00150000" for Apple 150 call expiring on 2023-06-16.
+        as_of : :class:`datetime.date` | None, default None
+            If not None, fetch the contract overview as of this date. Otherwise, fetch the latest.
+
+        Returns
+        -------
+        Result : dict
+            See `v3/reference/options/contract overview documentation <https://massive.com/docs/rest/options/contracts/contract-overview>`_.
+        """
+        url = f"{self.BASE_URL}/v3/reference/options/contracts/{opt_ticker}{'' if as_of is None else f'?as_of={as_of.isoformat()}'}"
+        r   = self.get(url)
+        return r['results']
+
+    @_cache(fmt=SubDir.PICKLE).cache(
+        "0.1",
+        uid=lambda underlying, d, expiry: f"expiry_contracts/{underlying}/{fmt_date(d)}/{expiry}"
+    )
+    def list_all_contracts_for_expiry(
+        self, underlying: str, d: date, expiry: date
+    ) -> list[dict]:
+        """
+        Download ALL option contracts with expiration_date at or past ``d``, with an optional upper bound.
+
+        Parameters
+        ----------
+        underlying : str
+            Underlying ticker symbol, e.g. "AAPL" for Apple.
+        d : date
+            Date for which to fetch contracts. Only contracts with expiration_date >= d are returned.
+        expiry : date
+            Expiration date for which to fetch contracts. Only contracts with expiration_date equal to expiry are returned.
+
+        Returns:
+        -------
+        Result : dict
+            See `v3/reference/options/contracts documentation <https://massive.com/docs/rest/options/contracts>`_.
+        """
+        url = f"{self.BASE_URL}/v3/reference/options/contracts"
+        params = {
+            "underlying_ticker": underlying,
+            "as_of": d.strftime("%Y-%m-%d"),
+            "expiration_date.gte": expiry.strftime("%Y-%m-%d"), 
+            "expiration_date.lte": expiry.strftime("%Y-%m-%d"), 
+            "limit": 1000,
+            "order": "asc",
+            "sort": "expiration_date",
+        }
+        return self.paginate(url, params)
+
     @_cache(fmt=SubDir.POLARS_PARQUET).cache(
         "0.1",
         uid=lambda ticker, start, end: f"adjfactors/{ticker}/{fmt_date(start)}_{fmt_date(end)}",
@@ -1009,3 +1073,42 @@ class MassiveClient(object):
             f"Internal error retrieving ticker changes for {ticker} between {fmt_date(start)} and {fmt_date(end)}: expected columns {set(MassiveClient.SCHEMA_HAS_TICKER_CHANGES)} but got {set(df.columns)}. Please update code. Ref: https://massive.com/docs/rest/stocks/corporate-actions/ticker-events"
         )
         return df
+
+    @version("0.1")
+    def consistent_prev_close( self, ticker : str, d : date, *, prev_d : date|None = None, exclude_half_days: bool = True ) -> float:
+        r"""
+        Computes the previous day close consistent with today's unadjusted prices.
+
+        It computes
+        $$
+            S_{\mathrm{t-1}} := S^{\mathrm{adjusted}}_{\mathrm{t-1}} \cdot \frac{S^{\mathrm{unadjusted}}_{\mathrm{t}}}{S^{\mathrm{adjusted}}_{\mathrm{t}}}
+        $$
+
+        Parameters
+        ----------
+        ticker : str
+            Ticker symbol, e.g. "AAPL".
+        d : :class:`datetime.date`
+            Date for which to compute the previous close.
+        prev_d : :class:`datetime.date` | None, default None
+            If not None, use this date as the previous day instead of computing it as the previous business day. 
+        exclude_half_days : bool, default ``True``
+            Whether to exclude half days when computing the previous business day. 
+            This is used if ``prev_d`` is ``None``.
+
+        Returns
+        -------
+        Close : ``float``
+            The previous day's close, consistent with today's unadjusted prices.
+        """
+        prev_d = prev_d if not prev_d is None else add_business_days( d, -1, exclude_half_days=exclude_half_days )  # previous business day (NB: if d is a Monday then this is the previous Friday, so we correctly skip the weekend)
+        r = self._PREV_CLOSE_CACHE.get((ticker, d, prev_d), None)
+        if r is not None:
+            return r
+
+        close_adj_prev = self.fetch_day_summary( ticker, prev_d, adjusted=True, can_be_none=False )["close"]
+        close_unadj = self.fetch_day_summary( ticker, d, adjusted=False, can_be_none=False )["close"]
+        close_adj = self.fetch_day_summary(ticker, d, adjusted=True, can_be_none=False)[ "close" ]
+        prev_adj_close = close_adj_prev / close_adj * close_unadj
+        self._PREV_CLOSE_CACHE[(ticker, d, prev_d)] = prev_adj_close
+        return prev_adj_close

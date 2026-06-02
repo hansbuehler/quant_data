@@ -1,26 +1,33 @@
+from __future__ import annotations
+
 """
 Pool configuration
+^^^^^^^^^^^^^^^^^^
 
-TODO: the library should have a fixed pool of processes which are shared in subsequent function calls. At the moment, each function re-constructs
-its own pool with the associated launch overhead.
+Simple utilities to manage multi-processing workflows. Uses :class:`cdxcore.jcpool.JCPool` under the hood.
+Use the ``PoolConfig`` class to allow users to configure their pools. The ``pool()`` member function generates
+a unique pool per process.
+
+The main purpose is to support functions which may use pools as different levels::
+
+    def f( ..., pool_config : PoolConfig = PoolConfig.off(), ...):
+        ...        
+        pool = pool_config.pool()
+        ...
+
+    def g( ..., pool_config : PoolConfig = PoolConfig.off(), ...):
+        ...
+        results = f( ..., pool_config=pool_config, ... )
+        ...
+
+        pool = pool_config.pool()
+        ..
+
+** :mod:joblib: memory leak detection **
+
+In this project we turned on the rather aggressive memory leak detection of :mod:joblib: 
+which is described `here <https://joblib.readthedocs.io/en/latest/generated/joblib.Parallel.html>`__.
 """
 
-from __future__ import annotations
-from dataclasses import dataclass
-
-@dataclass(frozen=True)
-class PoolConfig:
-    """ Default pool configuration for parallel processing. """
-    num_workers: int = 4
-    threading: bool = False
-
-    def __str__(self):
-        return f"workers {self.num_workers}{'t' if self.threading else 'p'}"
-    
-    @staticmethod
-    def off():
-        """ Pool configuration for no parallel processing. """
-        return PoolConfig(num_workers=0, threading=True)
-
-
-
+from cdxcore.jcpool import JCPool, JCPoolConfig as PoolConfig
+JCPool.DEFAULT_MEM_LEAK_ENFORCE = False
