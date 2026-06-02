@@ -222,6 +222,7 @@ def build_iv_observations(
         "bid_price",
         "ask_price",
         "forward",
+        "discount_factor",
     ]
     t_cols = [
         "ts_ns",
@@ -236,6 +237,7 @@ def build_iv_observations(
         "bid_price",
         "ask_price",
         "forward",
+        "discount_factor",
     ]
 
     quotes_iv = quotes_iv.select([c for c in q_cols if c in quotes_iv.columns]).sort("ts_ns")
