@@ -64,7 +64,6 @@ SCHEMA = {
     "approx_cash_vol_today_k": pl.Float32,    # today cash volume in thousands of USD (volume * mid price / 1000)  
     "cfi": pl.String,                         # cfi indetifier, e.g. "OC" for option contract
     "contract_type": pl.String,               # contract type, e.g. "call" or "put" 
-    "correction": pl.Int32,                   # https://massive.com/docs/rest/options/contracts/contract-overview
     "days_to_exp": pl.Int16,                  # full business days to expiry (that means 0DTE have 0 here)
     "exercise_style": pl.String,              # exercise style, e.g. "AMERICAN" or "EUROPEAN"
     "exp_date": pl.Date,                      # expiration date of the contract
@@ -126,7 +125,7 @@ class ContractsFilter:
 # -----------------------------
 
 @_cache(fmt=SubDir.POLARS_PARQUET).cache(
-    "0.22",
+    "0.23",
     dependencies=[
         MassiveClient.list_all_contracts_expiring_after_day,
         MassiveClient.fetch_day_summary,
@@ -151,7 +150,9 @@ def filter_contracts(
     Filters and processes option contracts for a given underlying on a given date.
 
     Applies filtering rules based on expiry, moneyness, and trading volume, and returns
-    a data frame with enriched contract information including reject codes and calculated metrics.
+    a data frame with enriched contract information including reject codes and calculated metrics. This function also computes
+    a correctly cash-valued adjused ``spot_ref_prev_close`` which can be used as non-forward looking normalizer
+    for all cash values "today".
 
     Filtering Rules implemented in :class:`ContractsFilter`:
 
@@ -164,6 +165,11 @@ def filter_contracts(
 
         from quantdata.massive.options.contracts import filter_contracts, ContractsFilter, REJECTED
         df = filter_contracts(...).filter(pl.col("reject_code") == REJECTED.USED)
+
+    **Performance Warning**
+
+    This function downloads the adjusted and unadjusted daily data, and trade and quote activity for each option.
+    That is much slower than just obtaining the list of contracts.
 
     Parameters
     ----------
@@ -226,110 +232,89 @@ def filter_contracts(
     F_today = context.close_unadj / context.close_adj
     context.ref_prev_close = context.close_adj_prev * F_today
 
-    with verbose.write_t(
-        lambda: f"\rFetching all contracts for {underlying} expiring on or after {d}... ", end=""
-    ) as tme:
-        all_contracts = client.list_all_contracts_expiring_after_day(
-            underlying, d, max_dte=contracts_filter.max_dte
-        )
-        verbose.write(lambda: f"found {len(all_contracts)} contracts. This took {tme}.", head=False)
+    with verbose.write_t(lambda: f"\rFetching all contracts for {underlying} expiring on or after {d}... ", end="" ) as tme:
+        all_contracts = client.list_all_contracts_expiring_after_day( underlying, d, max_dte=contracts_filter.max_dte )
+        all_contracts = pl.DataFrame(all_contracts)
+        expected_columns = {'cfi',
+                            'contract_type',                        'exercise_style',
+                            'expiration_date',
+                            'primary_exchange',
+                            'shares_per_contract',
+                            'strike_price',
+                            'ticker',
+                            'underlying_ticker'}
+        assert set(all_contracts.columns) >= expected_columns, f"{underlying} {d}: Missing expected columns in contracts data: {expected_columns - set(all_contracts.columns)}. This is unexpected, please investigate."
+        if len(all_contracts) == 0:
+            raise RuntimeError(f"{underlying} {d}: No contracts found with expiries on or after {d}.")  
+        verbose.write(lambda: f"found {len(all_contracts)} contracts with expories form  This took {tme}.", head=False)
 
-    def process(contract, d, exclude_half_days, context):
+    all_contracts = all_contracts.with_columns(
+            pl.col("expiration_date").str.strptime(pl.Date, "%Y-%m-%d", strict=True).alias("exp_date"),
+            pl.lit(d).alias("date"),
+            pl.lit(context.prev_d).alias("prev_bus_date"),
+            pl.lit(REJECTED.USED).alias("reject_code").cast(pl.Int8),  # assume used unless rejected
+            pl.lit(context.close_adj_prev).alias("spot_adj_prev_close"),
+            pl.lit(context.close_unadj_prev).alias("spot_prev_close"),
+            pl.lit(context.close_unadj).alias("spot_close"),
+            pl.lit(context.open_unadj).alias("spot_open"),
+            pl.lit(context.close_adj).alias("spot_adj_close"),
+            pl.lit(context.ref_prev_close).alias("spot_ref_prev_close")  # this is the previous close, adjusted to match today's unadjusted spot     
+        ).with_columns(
+            pl.col("exp_date").map_batches(
+                lambda exp_dates: pl.Series([
+                    count_business_days_between(d, exp_date, exclude_half_days=exclude_half_days)
+                    for exp_date in exp_dates
+                ])
+            ).alias("days_to_exp")
+        ).drop("expiration_date", "underlying_ticker")
+
+    neg_dte = all_contracts.filter(pl.col("days_to_exp") < 0)
+    if len(neg_dte) > 0:
+        raise RuntimeError(f"{underlying} {d}: found negative business days to expiry for dates {sorted(fmt_list(neg_dte['exp_date'].unique().to_list()))}. This should have been excluded by the Massive request filter.")
+
+    days_to_exp = all_contracts["days_to_exp"].cast(pl.Float32).to_numpy()
+    K = all_contracts["strike_price"].cast(pl.Float32).to_numpy()
+    T = (days_to_exp + 1) / DAYS_PER_YEAR
+    nms = NMS.to_nms(K / context.ref_prev_close, T)
+    nms5 = NMS5.to_nms(K / context.ref_prev_close, T)
+    rejected = all_contracts['reject_code'].to_numpy()
+
+    import numpy as np
+    rejected = np.where( days_to_exp > contracts_filter.max_dte, REJECTED.EXPIRY, rejected )
+    if not contracts_filter.max_mns is None:
+        rejected = np.where( (np.abs(nms) > contracts_filter.max_mns) & ~np.isnan(nms) & (rejected == REJECTED.USED), REJECTED.MONEYNESS, rejected )
+    if not contracts_filter.max_mns5 is None:
+        rejected = np.where( (np.abs(nms5) > contracts_filter.max_mns5) & ~np.isnan(nms5) & (rejected == REJECTED.USED), REJECTED.MONEYNESS, rejected )
+
+    all_contracts = all_contracts.with_columns(
+        pl.Series(rejected).alias("reject_code"),
+        pl.Series(nms).cast(pl.Float32).alias("nms"),
+        pl.Series(nms5).cast(pl.Float32).alias("nms5"),
+    )
+
+    # per-option data
+    # ---------------
+
+    def fetch_option_data( opt_ticker, d, prev_d, drop_no_trades_today ):
+
         timing = TrackTime("Process")
-        """ multi-threaded processing of a single contract, returning the contract dict with added fields and reject_code """
+        c      = dict(opt_ticker=opt_ticker, reject_code=REJECTED.USED)  # start with used and change to rejected if any check fails
         client = MassiveClient()
 
-        copy_fields = [
-            "cfi",
-            "contract_type",
-            "correction",
-            "exercise_style",
-            "expiration_date",
-            "primary_exchange",
-            "shares_per_contract",
-            "strike_price",
-            "ticker",
-            "underlying_ticker",
-        ]
-        c = {k: contract.get(k, None) for k in copy_fields}
-        other = set(SCHEMA) - set(copy_fields)
-        for k in other:
-            c[k] = None
-
-        opt_ticker = contract["ticker"]
-        exp_date = datetime.strptime(contract["expiration_date"], "%Y-%m-%d").date()
-        c["exp_date"] = exp_date
-        c["date"] = d
-        c["prev_bus_date"] = context.prev_d
-        c["reject_code"] = REJECTED.USED  # assume used unless rejected
-        c["spot_adj_prev_close"] = context.close_adj_prev
-        c["spot_prev_close"] = context.close_unadj_prev
-        c["spot_close"] = context.close_unadj
-        c["spot_open"] = context.open_unadj
-        c["spot_adj_close"] = context.close_adj
-        c["spot_ref_prev_close"] = (
-            context.ref_prev_close
-        )  # this is the previous close, adjusted to match today's unadjusted spot
-        # ---- expiry / DTE
-        c["days_to_exp"] = count_business_days_between(
-            d, exp_date, exclude_half_days=exclude_half_days
-        )  # NB: if d==exp_date then this function returns 0
-        if c["days_to_exp"] < 0:
-            raise RuntimeError(
-                f"Cannot compute days to expiry: no days between {d} and {exp_date} ?"
-            )
-
-        K = float(c["strike_price"])
-        T = float(c["days_to_exp"] + 1) / float(DAYS_PER_YEAR)
-
-        c["nms"] = NMS.to_nms(K / context.ref_prev_close, T)
-        c["nms5"] = NMS5.to_nms(K / context.ref_prev_close, T)
-
-        if c["days_to_exp"] > contracts_filter.max_dte:
-            c["reject_code"] = REJECTED.EXPIRY
-            return c, timing
-
-        if not contracts_filter.max_mns is None and abs(c["nms"]) > contracts_filter.max_mns:
-            c["reject_code"] = REJECTED.MONEYNESS
-            return c, timing
-
-        if not contracts_filter.max_mns5 is None and abs(c["nms5"]) > contracts_filter.max_mns5:
-            c["reject_code"] = REJECTED.MONEYNESS
-            return c, timing
-
-        timing.lap_time("Prep")
-
         def approx_cash_vol_k(oc: dict | None) -> float | None:
-            if oc is None:
-                return None
             opx, cpx, vol = oc["open"], oc["close"], oc["volume"]
             return float(vol) * 0.5 * (float(opx) + float(cpx)) / 1000.0
 
         # ---- volume filter first: cheapest check that rejects the most contracts
         with timing("Fetch open close volume prev"):
-            oc_prev = client.fetch_day_summary(
-                opt_ticker, context.prev_d, adjusted=False, can_be_none=True
-            )
-
-        c["approx_cash_vol_prev_k"] = approx_cash_vol_k(oc_prev)
-
-        if oc_prev is None:
-            c["reject_code"] = REJECTED.PREV_VOLUME_MISSING
-            return c, timing
-
-        if c["approx_cash_vol_prev_k"] < contracts_filter.min_opt_vol_k:
-            c["reject_code"] = REJECTED.VOLUME
-            return c, timing
+            oc_prev = client.fetch_day_summary( opt_ticker, prev_d, adjusted=False, can_be_none=True )
+            c["approx_cash_vol_prev_k"] = approx_cash_vol_k(oc_prev) if not oc_prev is None else None
 
         # ---- prev quotes/trades check
         with timing("Fetch quotes & trades"):
-            has_prev_quotes, has_prev_trades = client.has_any_quotes_or_trades(  opt_ticker, context.prev_d )
+            has_prev_quotes, has_prev_trades = client.has_any_quotes_or_trades(  opt_ticker, prev_d )
             c["has_prev_quotes"] = has_prev_quotes
             c["has_prev_trades"] = has_prev_trades
-
-        if not has_prev_quotes and not has_prev_trades:
-            c["reject_code"] = REJECTED.PREV_NO_QUOTES_OR_TRADES
-            return c, timing
 
         # ---- today quotes check
         with timing("Fetch quotes & trades"):
@@ -337,89 +322,102 @@ def filter_contracts(
             c["has_today_quotes"] = has_today_quotes
             c["has_today_trades"] = has_today_trades
 
-        if not has_today_quotes:
-            c["approx_cash_vol_today_k"] = None
-            c["reject_code"] = REJECTED.NO_TODAY_QUOTES
-            return c, timing
-
-        if not has_today_trades and drop_no_trades_today:
-            c["approx_cash_vol_today_k"] = None
-            c["reject_code"] = REJECTED.NO_TODAY_TRADES
-            return c, timing
-
         # ---- today volume (diagnostic only, not used for rejection)
-        # should always exist
         with timing("Fetch open close volume today"):
             oc_today = client.fetch_day_summary(opt_ticker, d, adjusted=False, can_be_none=True)
             assert not oc_today is None or not has_today_trades, f"If there are trades today, there should be a day summary with volume data. This is unexpected, please investigate: opt_ticker={opt_ticker}, d={d}, has_today_trades={has_today_trades}"
         with timing("Fetch open close volume yesterday"):
+            oc_yesterday = None
             try:
-                oc_yesterday = client.fetch_day_summary(opt_ticker, context.prev_d, adjusted=False, can_be_none=False)
+                oc_yesterday = client.fetch_day_summary(opt_ticker, prev_d, adjusted=False, can_be_none=False) if has_prev_trades else None
             except Exception as e:
-                raise type(e)(f"Failed to fetch 'yesterday's open/close/volume for {opt_ticker} on {context.prev_d}: {e} despite has_prev_quotes={has_prev_quotes}, has_prev_trades={has_prev_trades}]") from e
+                if has_prev_trades:
+                    raise type(e)(f"Failed to fetch yesterday's open/close/volume for {opt_ticker} on {prev_d}: {e} despite has_prev_trades={has_prev_trades}") from e
 
-        c["approx_cash_vol_today_k"] = approx_cash_vol_k(oc_today)
+        c["approx_cash_vol_today_k"] = approx_cash_vol_k(oc_today) if not oc_today is None else None
         c['opt_open'] = oc_today['open'] if not oc_today is None else None
         c['opt_close'] = oc_today['close'] if not oc_today is None else None
-        c['opt_prev_open'] = oc_yesterday['open']
-        c['opt_prev_close'] = oc_yesterday['close']
+        c['opt_prev_open'] = oc_yesterday['open'] if oc_yesterday is not None else None
+        c['opt_prev_close'] = oc_yesterday['close'] if oc_yesterday is not None else None
 
-        return c, timing
+        if not has_prev_quotes or not has_prev_trades:
+            c["reject_code"] = REJECTED.PREV_NO_QUOTES_OR_TRADES
+
+        elif oc_prev is None:
+            c["reject_code"] = REJECTED.PREV_VOLUME_MISSING
+
+        elif c["approx_cash_vol_prev_k"] < contracts_filter.min_opt_vol_k:
+            c["reject_code"] = REJECTED.VOLUME
+
+        elif not has_today_quotes:
+            c["reject_code"] = REJECTED.NO_TODAY_QUOTES
+
+        elif not has_today_trades and drop_no_trades_today:
+            c["reject_code"] = REJECTED.NO_TODAY_TRADES
+
+        elif not has_today_quotes:
+            c["reject_code"] = REJECTED.NO_TODAY_QUOTES
+
+        elif not has_today_trades and drop_no_trades_today:
+            c["reject_code"] = REJECTED.NO_TODAY_TRADES
+
+        return opt_ticker, c, timing
+
+    opt_tickers = all_contracts.filter(pl.col("reject_code") == REJECTED.USED)["ticker"].to_list()
 
     jcpool = pool_config.pool()
-    df = []
+    used_ticker_data = []
     tme = verbose.timer()
     timing = None
-    for c, ctiming in jcpool.parallel(
-        jcpool.delayed(process)(ct, d, exclude_half_days, context) for ct in all_contracts
-    ):
+    for opt_ticker, opt_data, ctiming in jcpool.parallel( jcpool.delayed(fetch_option_data)(opt_ticker, d, prev_d=context.prev_d, drop_no_trades_today=drop_no_trades_today ) for opt_ticker in opt_tickers ):
         timing = ctiming if timing is None else (timing.add(ctiming))
         if tme.interval_test(1):
-            verbose.report(
-                1,
-                lambda: (
-                    f"\rFiltering {len(df) + 1}/{len(all_contracts)} contracts: {int((len(df) + 1) * 100 // len(all_contracts))}%: {c['ticker']}..."
-                ),
-                end="",
-            )
-        df.append(c)
-    if len(df) == 0:
+            verbose.report( 1, lambda: f"\rFiltering {len(used_ticker_data) + 1}/{len(all_contracts)} contracts: {int((len(used_ticker_data) + 1) * 100 // len(all_contracts))}%: {opt_ticker}...", end="" )
+        used_ticker_data.append(opt_data)
+    if len(used_ticker_data) == 0:
         return None
 
-    df = pl.from_dicts(df, infer_schema_length=None)
+    used_ticker_data = pl.DataFrame(used_ticker_data)
+    expted_columns = {'opt_ticker','reject_code','approx_cash_vol_prev_k','approx_cash_vol_today_k','has_prev_quotes','has_prev_trades','has_today_quotes','has_today_trades', 'opt_open', 'opt_close', 'opt_prev_open', 'opt_prev_close'}
+    assert set(used_ticker_data.columns) == expted_columns, f"{underlying} {d}: Missing expected columns in used ticker data: {expted_columns - set(used_ticker_data.columns)}. This is unexpected, please investigate."
 
-    # convert to scheme
+    all_contracts = all_contracts.join( used_ticker_data, left_on="ticker", right_on="opt_ticker", how="left" )
+    assert "reject_code_right" in all_contracts.columns, f"{underlying} {d}: Missing 'reject_code_right' column in all_contracts after join. This is unexpected, please investigate."
+    assert not "opt_ticker" in all_contracts.columns, f"{underlying} {d}: 'opt_ticker' column should not be in all_contracts after join. This is unexpected, please investigate."
+
+    all_contracts = all_contracts.with_columns(
+        pl.when(pl.col("reject_code_right").is_not_null())
+        .then(pl.col("reject_code_right"))
+        .otherwise(pl.col("reject_code"))
+        .alias("reject_code"),
+        pl.lit(underlying).alias("underlying_ticker")
+    ).drop("reject_code_right")
+
+    assert set(all_contracts.columns) >= set(SCHEMA.keys()), f"DataFrame is missing columns from SCHEMA: {sorted(set(SCHEMA.keys()) - set(all_contracts.columns))}"
+    assert set(SCHEMA.keys()) >= set(all_contracts.columns) >= set(SCHEMA.keys()), f"DataFrame has superfluous columns: {sorted(set(all_contracts.columns) - set(SCHEMA.keys()))}"
+    all_contracts = all_contracts.with_columns([pl.col(col).cast(dtype) for col, dtype in SCHEMA.items()])
+
+    all_contracts = all_contracts.sort("exp_date","strike_price","contract_type")
+    active = all_contracts.filter(pl.col("reject_code") == REJECTED.USED)
     
-    assert set(df.columns) >= set(SCHEMA.keys()), (
-        f"DataFrame is missing columns from SCHEMA: {sorted(set(SCHEMA.keys()) - set(df.columns))}"
-    )
-
-    df = df.drop(["expiration_date"])
-    if not "correction" in df.columns:
-        df = df.with_columns(pl.lit(None).alias("correction"))
-    assert set(df.columns) == set(SCHEMA.keys()), (
-        f"Contract schema mismatch for {underlying} on {fmt_date(d)}: {sorted(set(df.columns))} != {sorted(set(SCHEMA.keys()))}"
-    )
-    df = df.with_columns([pl.col(col).cast(dtype) for col, dtype in SCHEMA.items()])
-
-    active = df.filter(pl.col("reject_code") == REJECTED.USED)
 
     timestr = ""
     for topic, tinfo in timing.items():
         timestr += f"{topic}: {tinfo.average_lap_seconds:.2f}s, "
     timestr = timestr[:-2]
 
+    all_expiries = all_contracts["exp_date"].unique().to_list()
+
     verbose.write(
         lambda: (
-            f"\rFiltered {fmt_digits(len(df))} contacts for {underlying} on {fmt_date(d)}, "
+            f"\rFiltered {fmt_digits(len(all_contracts))} contacts for {underlying} on {fmt_date(d)}, "
             + f"yielding {fmt_digits(active.height)} active contracts. This took {tme}. "
+            + (f"Found {len(all_expiries)} expiries ranging from {all_expiries[0]} to {all_expiries[-1]}. " if len(all_expiries) > 0 else f"Found one expiry, {all_expiries[0]}. ")
             + f"Timing: {timestr}."
         ),
         head=False,
     )
-
-    return df
-
+    return all_contracts
 
 @_cache(fmt=SubDir.POLARS_PARQUET).cache(
     "0.2",

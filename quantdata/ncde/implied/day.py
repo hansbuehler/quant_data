@@ -19,7 +19,7 @@ from quantdata.massive.client import MassiveClient
 from quantdata.pool import PoolConfig
 from quantdata.massive.options.contracts import ContractsFilter, filter_contracts, REJECTED
 from quantdata.massive.processing import align_trades_to_quotes, align_quotes_to_trades, filter_valid_quotes, filter_valid_trades, TradeQuoteAlignmentConfig
-from quantdata.utils.pl import verify_schema
+from quantdata.utils.pl import verify_schema, create_empty_df
 
 from cdxcore.version import version
 from cdxcore.verbose import Context
@@ -35,7 +35,7 @@ _cache = _locations_ncde_implied.processing(fmt=SubDir.POLARS_PARQUET)
 
 OPT_TICK_SIZE = 0.01 # not quite true - this is the tick size for small priced options
 
-@version("0.2", dependencies=[ContractsFilter])
+@version("0.21", dependencies=[ContractsFilter])
 @dataclass(frozen=True)
 class OptionQuotesDayConfig:
     """
@@ -47,6 +47,8 @@ class OptionQuotesDayConfig:
     alignment_config : TradeQuoteAlignmentConfig = TradeQuoteAlignmentConfig()
     overnight_fraction : float = 0.2
     dte_exclude_half_days : bool = False
+    min_vol = 0.01
+    max_vol = 5.
 
     def __str__(self):
         return f"mxn={self.max_num_options_per_expiry}{',exchl' if self.dte_exclude_half_days else ''},{self.contract_filter},{self.alignment_config}"
@@ -100,6 +102,7 @@ OPT_QUOTE_BY_EXPIRY_SCHEMA = {
             "trade_direction": pl.Float64, # trade direction: (trade_price - mid_price) / half_spread
             "trade_ret": pl.Float64,      # trade return: (trade_price - prev_trade_price) / prev_trade_price
             "trade_dt_d": pl.Float64,    # time diff in days since last trade
+            "trade_dte": pl.Float64,       # dte in days computed for each option trade, adjusted for time of day: ref_dte - (trade_t_ms / (6.5 * 3600 * 1000)) * (1 - overnight_fraction)
             # spot quotes
             # all spot quotes have trades
             "spot_quote_t_d": pl.Float64,   # time diff in days since last spot quote
@@ -128,9 +131,13 @@ OPT_QUOTE_BY_EXPIRY_SCHEMA = {
 }
 """ Schema returned by _opt_expiry_quote_time_series """
 
+TRADE_COLUMNS = {'trade_t_d', 'trade_price', 'trade_size', 'trade_direction', 'trade_ret', 'trade_dt_d', 'trade_dte'}
+""" Columns which are null if there was no trade """
+
+
 @_cache(fmt=SubDir.POLARS_PARQUET).cache(
-    "0.32",
-    dependencies=[align_trades_to_quotes,_ticker_trade_series],
+    "0.38",
+    dependencies=[align_trades_to_quotes,_ticker_trade_series, OptionQuotesDayConfig],
     uid=lambda ticker, opt_ticker, d, overnight_fraction, dte_exclude_half_days, alignment_config:\
         "opt_quotes/"+\
         f"{named_unique_filename48_8(f'onf={overnight_fraction}{',xclhlf' if dte_exclude_half_days else ''},{alignment_config}',dte_exclude_half_days,overnight_fraction,alignment_config)}/"+\
@@ -145,6 +152,11 @@ def _opt_quote_time_series( ticker : str, opt_ticker : str, d : date,
     """
     verbose     = verbose if verbose is not None else Context.quiet
     spot_trades = _ticker_trade_series( ticker, d, alignment_config=alignment_config, verbose=verbose )
+
+    if len(spot_trades) == 0:
+        warnings.warn(f"{ticker} {d} option {opt_ticker}: No valid spot trades found for {ticker} on {d} -- skipping this option.")
+        return create_empty_df( OPT_QUOTE_BY_EXPIRY_SCHEMA )
+    assert spot_trades["price"].is_not_null().all(), f"{ticker} {d} option {opt_ticker}: Found null values 'price' after joining quotes with spot trades...?"    
 
     """
     spot_trades schema:
@@ -171,7 +183,15 @@ def _opt_quote_time_series( ticker : str, opt_ticker : str, d : date,
             num_valid_trades = len( filter_valid_trades( opt_ticker, d))
 
             warnings.warn(f"{ticker} {d} option {opt_ticker}: No valid quotes were aligned with valid trades. Number of quotes: {num_quotes}, valid quotes: {num_valid_quotes}, number of trades: {num_trades}, valid trades: {num_valid_trades} -- skipping this option.")
-            return opt_quotes
+            return create_empty_df( OPT_QUOTE_BY_EXPIRY_SCHEMA )
+
+        min_spot_ts = spot_trades["ts_ns"].min()
+        opt_quotes = opt_quotes.filter(pl.col("ts_ns") >= min_spot_ts)
+
+        if len(opt_quotes) <= 1:
+            warnings.warn(f"{ticker} {d} option {opt_ticker}: {'no quotes' if len(opt_quotes) == 0 else 'just one quote'} past the first spot trade (first spot trade ts: {min_spot_ts}) -- skipping this option.")
+            return create_empty_df( OPT_QUOTE_BY_EXPIRY_SCHEMA )
+
         verbose.write(lambda : f"done; found {len(opt_quotes)} quotes; this took {tme}.", head=False)
 
     """
@@ -192,14 +212,18 @@ def _opt_quote_time_series( ticker : str, opt_ticker : str, d : date,
     spot_cols   = set(spot_trades.columns)
     spot_trades = spot_trades.rename({k: "spot_" + k for k in spot_cols})
 
+    assert len(spot_trades) > 0 and spot_trades["spot_price"].is_not_null().all(), f"{ticker} {d} option {opt_ticker}: Found null values in 'spot_price'...?"    
+    assert not 'spot_price' in opt_quotes.columns, f"{ticker} {d} option {opt_ticker}: 'spot_price' should not be in opt_quotes columns...?"
     result = opt_quotes.join_asof(
             spot_trades,
             left_on="ts_ns",
             right_on="spot_ts_ns",
             strategy="backward" )
+    
     result       = result.with_columns( *[ pl.col("spot_" + c).forward_fill().backward_fill() for c in spot_cols ] )
     result       = result.filter(pl.col("bid_price").is_not_null())
-    assert len(result) > 0, f"{ticker} {d} option {opt_ticker}: No aligned quotes found for option {opt_ticker} on {d} after joining {len(opt_quotes)} quites with {len(spot_trades)} spot trades...?"
+    assert len(result) > 1, f"{ticker} {d} option {opt_ticker}: Nor just one aligned quotes found for option {opt_ticker} on {d} after joining {len(opt_quotes)} quotes with {len(spot_trades)} spot trades...?"
+    assert result["spot_price"].is_not_null().all(), f"{ticker} {d} option {opt_ticker}: Found null values in 'spot_price' after joining quotes with spot trades...?"    
 
     # convert
     # -------
@@ -252,11 +276,12 @@ def _opt_quote_time_series( ticker : str, opt_ticker : str, d : date,
                 ( dte + ( 1. - pl.col("t_d") ) * (1. - overnight_fraction)).alias("dte"),
                 pl.col("t_d").diff().alias("dt_d"),
                 pl.col("trade_t_d").diff().alias("trade_dt_d"),
+                ( dte + ( 1. - pl.col("trade_t_d") ) * (1. - overnight_fraction)).alias("trade_dte"),
                 pl.col("spot_trade_t_d").diff().alias("spot_trade_dt_d"),
                 pl.col("spot_quote_t_d").diff().alias("spot_quote_dt_d"),
             ).
             with_columns(
-                ( ( strike / pl.col("spot_mid_price") ).log() * (( 1.+NMS5.EPS )/( pl.col("dte")/DAYS_PER_YEAR + NMS5.EPS )).sqrt() / NMS5.SCALE ).alias("nms5"),
+                ( ( strike/prev_close / pl.col("spot_mid_price") ).log() * (( 1.+NMS5.EPS )/( pl.col("dte")/DAYS_PER_YEAR + NMS5.EPS )).sqrt() / NMS5.SCALE ).alias("nms5"),
                 pl.lit(expiry).alias("exp_date"),
                 pl.lit(d).alias("date"),
                 pl.lit(strike/prev_close).alias("strike"),
@@ -273,6 +298,11 @@ def _opt_quote_time_series( ticker : str, opt_ticker : str, d : date,
                 "trade_code", "spot_trade_code")
     )
 
+    df_free         = result.filter( pl.col("mid_ret").is_finite() )
+    assert len(df_free) == len(result)-1, f"{ticker} {d} option {opt_ticker}: Expected only one non-finite mid_ret, found {len(result)-len(df_free)} non-finite mid_ret values...?"
+    result          = df_free
+    del df_free
+
     opt_mid         = result["mid_price"].to_numpy()
     opt_half_spread = result["half_spread"].to_numpy()
     opt_tick_size   = result["opt_tick_size"].to_numpy()
@@ -281,6 +311,7 @@ def _opt_quote_time_series( ticker : str, opt_ticker : str, d : date,
     strike          = result["strike"].to_numpy() 
     is_call         = result["is_call"].to_numpy()
 
+    assert len(spot) > 0, f"{ticker} {d} option {opt_ticker}: Found no valid spot prices after conversion...?"
     assert np.all( np.isfinite(opt_mid) ), f"{ticker} {d} option {opt_ticker}: Found non-finite values in mid_price after conversion...?"
     assert np.all( np.isfinite(opt_half_spread) ), f"{ticker} {d} option {opt_ticker}: Found non-finite values in half_spread after conversion...?"
     assert np.all( np.isfinite(tte_y) ), f"{ticker} {d} option {opt_ticker}: Found non-finite values in tte_y after conversion...?"
@@ -302,11 +333,24 @@ def _opt_quote_time_series( ticker : str, opt_ticker : str, d : date,
     rel_k    = strike / spot
 
     for w, price in what.items():
-        vols   = bs.implied( k=rel_k, prices=price, is_call=is_call, sqrtT=sqrtT, on_exceed_bounds="warn" )
+        vols   = bs.implied( k=rel_k, prices=price, is_call=is_call, sqrtT=sqrtT, on_exceed_bounds="warn", vol_min=OptionQuotesDayConfig.min_vol, vol_max=OptionQuotesDayConfig.max_vol )
         r      = bs(k=rel_k, vol=vols, sqrtT=sqrtT, is_call=is_call, what=bs.VEGA|bs.DELTA|bs.GAMMA|bs.THETA)
         r.vol  = vols
         result = result.with_columns(  [ pl.Series(f"{w}_{k}", v) for k, v in r.items() ] )
             
+    # Assert all trade_columns fields are non-null at the same time
+    trade_not_null = result['trade_t_d'].is_not_null() & result['trade_price'].is_not_null() & result['trade_size'].is_not_null() & result['trade_direction'].is_not_null() & result['trade_dte'].is_not_null()
+    trade_all_null = result['trade_t_d'].is_null() & result['trade_price'].is_null() & result['trade_size'].is_null() & result['trade_direction'].is_null() & result['trade_dte'].is_null()
+    assert (trade_not_null | trade_all_null).all(), f"{ticker} {d} option {opt_ticker}: trade_columns fields must all be null or all non-null together"
+
+    trade_ret_not_null = result['trade_ret'].is_not_null() & result['trade_dt_d'].is_not_null()
+    trade_ret_all_null = result['trade_ret'].is_null() & result['trade_dt_d'].is_null()
+    assert (trade_ret_not_null | trade_ret_all_null).all(), f"{ticker} {d} option {opt_ticker}: trade_ret fields must all be null or all non-null together"
+
+    for c in result.columns:
+        if not c in TRADE_COLUMNS:
+            assert result[c].is_not_null().all(), f"{ticker} {d} option {opt_ticker}: Found null values in {c} after conversion...?"
+
     verify_schema( result, OPT_QUOTE_BY_EXPIRY_SCHEMA, header=lambda : f"{ticker} {d} expiry {expiry} {opt_ticker}: Schema validation failed for enriched option quote time series" )
     return result
 
@@ -444,8 +488,6 @@ def generate_day( ticker : str, d : date,
         verbose.write(lambda : f"{ticker} {d}: Completed time series generation for expiries {fmt_list(expiries)}; this took {tme}.")
     return results
 
-
-
 # ================================================================
 # Command-line interface
 # ================================================================
@@ -471,7 +513,7 @@ def main(ticker : str,
     verify_inp( period is not None and len(period) == 2, "A start and end date must be specified")
 
     start, end         = period
-    date_range         = DateRange(start=to_date(start), end=to_date(end), exclude_half_days=False )
+    date_range         = DateRange(start=to_date(start), end=to_date(end), exclude_half_days=True )
     dates              = sorted( set(date_range.get_business_days())-set(BAD.DAYS_ALL) )
     pool_config        = PoolConfig(num_workers=workers, threading=threading)
 

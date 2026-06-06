@@ -1,5 +1,8 @@
 """
 Testing massive
+
+To generate tests run python -m generate from massive/testing
+
 """
 
 from __future__ import annotations
@@ -24,37 +27,34 @@ def _massive_processing(ticker, d):
     from quantdata.massive.processing import filter_valid_trades, filter_valid_quotes, align_quotes_to_trades, align_trades_to_quotes
 
     r1 = filter_valid_trades(ticker, d)
-    assert hash_polars_df(r1) == "ffb24dd8b47226341aa2411f1d01ffda", f"Unexpected hash for valid trades of {ticker} on {d}"    
+    assert hash_polars_df(r1) == "027a67e7d81937acb5ba0cb51763d115", f"Unexpected hash for valid trades of {ticker} on {d}"    
 
     r1 = filter_valid_quotes(ticker, d)
-    assert hash_polars_df(r1) == "52ac768e0f77169e4a8c0de671f08f25", f"Unexpected hash for valid quotes of {ticker} on {d}"
+    assert hash_polars_df(r1) == "1d610ae6ad9aeecd4179e987799f43a2", f"Unexpected hash for valid quotes of {ticker} on {d}"
 
     r1 = align_quotes_to_trades(ticker, d, drop_unmatched=True)
-    assert hash_polars_df(r1) == "e3750630576ed8b75429270f6d7af393", f"Unexpected hash for aligned quotes to trades of {ticker} on {d} drop_unmatched=True"
+    assert hash_polars_df(r1) == "d7e68c05131392b26fef7e0b8c382ecd", f"Unexpected hash for aligned quotes to trades of {ticker} on {d} drop_unmatched=True"
 
     r1 = align_trades_to_quotes(ticker, d, drop_unmatched=True)
-    assert hash_polars_df(r1) == "79b0bd1ebf94e0c25694115a1a1089fb", f"Unexpected hash for aligned trades to quotes of {ticker} on {d} drop_unmatched=True"
+    assert hash_polars_df(r1) == "22a2376285c8e4454bb7aa25a0f75791", f"Unexpected hash for aligned trades to quotes of {ticker} on {d} drop_unmatched=True"
 
     r1 = align_quotes_to_trades(ticker, d, drop_unmatched=False)
-    assert hash_polars_df(r1) == "6419e1ff51a1786a0fe34f87d4ceac7c", f"Unexpected hash for aligned quotes to trades of {ticker} on {d} drop_unmatched=False"
+    assert hash_polars_df(r1) == "a1f2e887e38f006237a8aa1825739712", f"Unexpected hash for aligned quotes to trades of {ticker} on {d} drop_unmatched=False"
 
     r1 = align_trades_to_quotes(ticker, d, drop_unmatched=False)
-    assert hash_polars_df(r1) == "c38b3cff42ebb62b30004450b5e1b468", f"Unexpected hash for aligned trades to quotes of {ticker} on {d} drop_unmatched=False"
+    assert hash_polars_df(r1) == "de964b4642b8dd8a350757e507a5eae0", f"Unexpected hash for aligned trades to quotes of {ticker} on {d} drop_unmatched=False"
 
-    """
-    No out of session trades
     r1 = align_quotes_to_trades(ticker, d, drop_unmatched=True, within_session=False)
-    assert hash_polars_df(r1) == "7d0de72560895a970cb4029277cb6886", f"Unexpected hash for aligned quotes to trades of {ticker} on {d} drop_unmatched=True within_session=False"
+    assert hash_polars_df(r1) == "eb9101bf50b31146b372bd587d06815a", f"Unexpected hash for aligned quotes to trades of {ticker} on {d} drop_unmatched=True within_session=False"
 
     r1 = align_trades_to_quotes(ticker, d, drop_unmatched=True, within_session=False)
-    assert hash_polars_df(r1) == "26be8df16a7008ea70279c66be07e153", f"Unexpected hash for aligned trades to quotes of {ticker} on {d} drop_unmatched=True within_session=False"
+    assert hash_polars_df(r1) == "cd44bc9dc01e98e46a7deed8b8e639fd", f"Unexpected hash for aligned trades to quotes of {ticker} on {d} drop_unmatched=True within_session=False"
 
     r1 = align_quotes_to_trades(ticker, d, drop_unmatched=False, within_session=False)
-    assert hash_polars_df(r1) == "8570010830d4daba791b2ece72c7cb66", f"Unexpected hash for aligned quotes to trades of {ticker} on {d} drop_unmatched=False within_session=False"
-    """
+    assert hash_polars_df(r1) == "40e430d4deb90cb6213ba38b90fde133", f"Unexpected hash for aligned quotes to trades of {ticker} on {d} drop_unmatched=False within_session=False"
 
     r1 = align_trades_to_quotes(ticker, d, drop_unmatched=False, within_session=False)
-    assert hash_polars_df(r1) == "b93a1b20a9948f08140fed4b53e846ee", f"Unexpected hash for aligned trades to quotes of {ticker} on {d} drop_unmatched=False within_session=False"
+    assert hash_polars_df(r1) == "a0ce73a1219e12643284a62e84867fc7", f"Unexpected hash for aligned trades to quotes of {ticker} on {d} drop_unmatched=False within_session=False"
 
 def test_massive_processing():
     _massive_processing(TICKERS[0], DATES[0])

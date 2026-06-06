@@ -1,5 +1,6 @@
 """
 Generate massive test data
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 python -m generate
 
@@ -28,9 +29,21 @@ def generate_day(ticker, d):
     print(v)
     v = filter_valid_quotes(ticker, d, False)
     print(v)
-    v = align_quotes_to_trades(ticker, d)
+    v = align_quotes_to_trades(ticker, d, drop_unmatched = True)
     print(v)
-    v = align_trades_to_quotes(ticker, d)
+    v = align_quotes_to_trades(ticker, d, drop_unmatched = False)
+    print(v)
+    v = align_trades_to_quotes(ticker, d, drop_unmatched = True)
+    print(v)
+    v = align_trades_to_quotes(ticker, d, drop_unmatched = False)
+    print(v)
+    v = align_quotes_to_trades(ticker, d, drop_unmatched = True, within_session = False)
+    print(v)
+    v = align_quotes_to_trades(ticker, d, drop_unmatched = False, within_session = False)
+    print(v)
+    v = align_trades_to_quotes(ticker, d, drop_unmatched = True, within_session = False)
+    print(v)
+    v = align_trades_to_quotes(ticker, d, drop_unmatched = False, within_session = False)
     print(v)
     
 def main():

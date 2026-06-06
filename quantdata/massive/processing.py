@@ -33,17 +33,19 @@ def filter_valid_trades(
     """
     Returns trades for a given underlying and date within session hours (optionally).
     Removes trades with NORMAL_TRADE_EXCLUDE_FLAGS and price or size zero or negative.
+    For trades at the sime sip time stamp, computes aggregate trade size.
 
     Returns a polars data frame with :attr:`MassiveClient.SCHEMA_TRADES` schema with the following columns:
       ts_ns       Datetime[ns,tz]
       price       Float64
       size        Float64
       trade_code  UInt32 (semantic mask)
+      sequence_number UInt64. Sequence number of the trade for a given timestamp, useful for ordering trades with the same timestamp.
     """
     client = MassiveClient()
     trades = client.fetch_trades(ticker, d)
-    assert set(trades.columns) >= {"ts_ns", "price", "size", "trade_code"}, (
-        "trades must have ts_ns, price, size, trade_code",
+    assert set(trades.columns) >= {"ts_ns", "price", "size", "trade_code", "sequence_number"}, (
+        "trades must have ts_ns, price, size, trade_code, sequence_number",
         trades.columns,
     )
 
@@ -71,6 +73,17 @@ def filter_valid_trades(
             & (pl.col("price") > 0)
             & (pl.col("size") > 0)
         )
+
+    # Aggregate trades at same ts_ns: sum sizes and compute weighted average price
+    trades = trades.group_by("ts_ns", maintain_order=True).agg(
+        price=pl.when(pl.col("size").sum() > 0)
+            .then((pl.col("price") * pl.col("size")).sum() / pl.col("size").sum())
+            .otherwise(pl.col("price").first()),
+        size=pl.col("size").sum(),
+        trade_code=pl.col("trade_code").last(),
+        sequence_number=pl.col("sequence_number").last(),
+    ).sort("ts_ns")
+    
     return trades
 
 @version("0.1", dependencies=[quantdata.biz_calendar.session_open_close, quantdata.massive.client.MassiveClient.fetch_quotes])
@@ -123,7 +136,14 @@ def filter_valid_quotes(
             & valid_quotes
         )
 
-    return quotes.filter(valid_quotes).sort("ts_ns")
+    # Aggregate quotes at same ts_ns: keep only the last one by sequence_number
+    quotes = (
+        quotes.filter(valid_quotes)
+        .group_by("ts_ns", maintain_order=True)
+        .last()
+    )
+
+    return quotes
 
 @version("0.1")
 @dataclass(frozen=True)
@@ -221,8 +241,9 @@ def align_quotes_to_trades(
     within_session : bool, default True
         Whether to only consider trades and quotes within session hours when aligning.
     """
-    trades = filter_valid_trades(ticker, d, within_session=within_session).sort("ts_ns")
-    quotes = filter_valid_quotes(ticker, d, within_session=within_session).sort("ts_ns")
+    trades = filter_valid_trades(ticker, d, within_session=within_session).sort("ts_ns").drop("sequence_number")
+    quotes = filter_valid_quotes(ticker, d, within_session=within_session).sort("ts_ns").drop("sequence_number")
+
 
     trade_ts = _ts_ns(trades)
     quote_ts = _ts_ns(quotes)
@@ -272,8 +293,19 @@ def align_quotes_to_trades(
         .drop("_trade_row", "_quote_row")
     )
 
+    assert out["ts_ns"].is_not_null().all(), "Found null values in 'ts_ns' after filtering unmatched quotes."
+    assert out["price"].is_not_null().all(), "Found null values in 'price' after filtering unmatched quotes."
+    assert out["size"].is_not_null().all(), "Found null values in 'size' after filtering unmatched quotes."
+    assert out["trade_code"].is_not_null().all(), "Found null values in 'trade_code' after filtering unmatched quotes."
+
     if drop_unmatched:
         out = out.filter(pl.col("quote_ts_ns").is_not_null())
+        assert out["quote_ts_ns"].is_not_null().all(), "Found null values in 'ts_ns' after filtering unmatched quotes."
+        assert out["bid_price"].is_not_null().all(), "Found null values in 'bid_price' after filtering unmatched quotes."
+        assert out["ask_price"].is_not_null().all(), "Found null values in 'ask_price' after filtering unmatched quotes."
+        assert out["bid_size"].is_not_null().all(), "Found null values in 'bid_size' after filtering unmatched quotes."
+        assert out["ask_size"].is_not_null().all(), "Found null values in 'ask_size' after filtering unmatched quotes."
+    
 
     verify(set(out.columns) == set(SCHEMA_ALIGN_QUOTES_TO_TRADES), f"Output is missing expected columns: {sorted(set(SCHEMA_ALIGN_QUOTES_TO_TRADES) - set(out.columns))} and has superfluous columns: {sorted(set(out.columns) - set(SCHEMA_ALIGN_QUOTES_TO_TRADES))}")
     return out
@@ -322,8 +354,8 @@ def align_trades_to_quotes(
     within_session : bool, default True
         Whether to only consider trades and quotes within session hours when aligning.
     """
-    trades = filter_valid_trades(ticker, d, within_session=within_session).sort("ts_ns")
-    quotes = filter_valid_quotes(ticker, d, within_session=within_session).sort("ts_ns")
+    trades = filter_valid_trades(ticker, d, within_session=within_session).sort("ts_ns").drop("sequence_number")
+    quotes = filter_valid_quotes(ticker, d, within_session=within_session).sort("ts_ns").drop("sequence_number")
 
     trade_ts = _ts_ns(trades)
     quote_ts = _ts_ns(quotes)
