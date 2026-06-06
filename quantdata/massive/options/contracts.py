@@ -125,7 +125,7 @@ class ContractsFilter:
 # -----------------------------
 
 @_cache(fmt=SubDir.POLARS_PARQUET).cache(
-    "0.23",
+    "0.24",
     dependencies=[
         MassiveClient.list_all_contracts_expiring_after_day,
         MassiveClient.fetch_day_summary,
@@ -234,7 +234,17 @@ def filter_contracts(
 
     with verbose.write_t(lambda: f"\rFetching all contracts for {underlying} expiring on or after {d}... ", end="" ) as tme:
         all_contracts = client.list_all_contracts_expiring_after_day( underlying, d, max_dte=contracts_filter.max_dte )
-        all_contracts = pl.DataFrame(all_contracts)
+        all_contracts = pl.DataFrame(all_contracts, schema={
+            'cfi': pl.String,
+            'contract_type': pl.String,
+            'exercise_style': pl.String,
+            'expiration_date': pl.String,  # will be parsed to date later
+            'primary_exchange': pl.String,
+            'shares_per_contract': pl.Int32,
+            'strike_price': pl.Float32,
+            'ticker': pl.String,
+            'underlying_ticker': pl.String,
+        })
         expected_columns = {'cfi',
                             'contract_type',                        'exercise_style',
                             'expiration_date',
