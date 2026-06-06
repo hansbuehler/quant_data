@@ -174,10 +174,13 @@ def count_business_days_between(
 ) -> int | np.ndarray:
     """
     Count the number of trading days in ``(start, end]``, i.e. from ``start`` (exclusive) to ``end`` (inclusive).
-    If ``end`` < ``start``, then count the number of trading days in ``[end, start)`` and return the negative of that count.
+    If ``end < start``, then count the number of trading days in ``[end, start)`` and return the negative of that count.
 
     The count *includes* ``end`` if it is a trading day, but *excludes* ``start``, assuming, essentially, an end-of-day convention.
     Half days are counted as full trading days unless ``exclude_half_days`` is ``True``.
+
+    If ``start == end``, and if that day is a business day, then this function returns 0.
+    If ``start`` and ``end`` are non-business days bracketing no business days, this function raises a :class:`ValueError`.
 
     Parameters
     ----------
@@ -203,12 +206,16 @@ def count_business_days_between(
     mend = max(np.max(start), np.max(end))
     trading_days = get_business_days(mstart, mend, exclude_half_days=exclude_half_days)
 
+    if len(trading_days) == 0:
+        raise ValueError(f"No trading days between {mstart} and {mend} with half days {'excluded' if exclude_half_days else 'included'}")
+
     if not is_vec:
         # Scalar case: count how many trading days are in (start, end]
         if start <= end:
             count = np.sum((trading_days > start) & (trading_days <= end))
         else:
             count = -np.sum((trading_days >= end) & (trading_days < start))
+
         return int(count)
 
     # Vectorised case: for each pair of start[i], end[i], count trading days in (start[i], end[i]]

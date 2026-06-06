@@ -319,11 +319,12 @@ class MassiveClient(object):
         "price": pl.Float64,
         "size": pl.Float64,
         "trade_code": pl.UInt32,
+        "sequence_number": pl.UInt64,
     }
     """ Schema of the :class:`polars.DataFrame` returned by :meth:`fetch_trades`. """
 
     @_cache(fmt=SubDir.POLARS_PARQUET).cache(
-        "0.1", label=lambda ticker, d: f"trades/{ticker}/{fmt_date(d)}", exclude_args=["self"]
+        "0.11", label=lambda ticker, d: f"trades/{ticker}/{fmt_date(d)}", exclude_args=["self"]
     )
     def fetch_trades(self, ticker: str, d: date) -> pl.DataFrame:
         """
@@ -337,6 +338,7 @@ class MassiveClient(object):
         * size: Float64
         * trade_code: UInt32. Compressed & Packed trade conditions, see :func:`quantdata.massive.trade_conds.pack_conditions`.
           It is recommended to remove trades with uncommon conditions, see :attr:`quantdata.massive.trade_conds.NORMAL_TRADE_EXCLUDE_FLAGS`.
+        * sequence_number: UInt64. Sequence number of the trade for a given timestamp, useful for ordering trades with the same timestamp.
 
         Parameters
         ----------
@@ -355,6 +357,7 @@ class MassiveClient(object):
             * price: Float64
             * size: Float64
             * trade_code: UInt32. Compressed & Packed trade conditions, see :func:`quantdata.massive.trade_conds.pack_conditions`.
+            * sequence_number: UInt64. Sequence number of the trade for a given timestamp. Trades will be sorted by (ts_ns, sequence_number) asc.
         """
         url = f"{self.BASE_URL}/v3/trades/{ticker}"
         params = {
@@ -370,6 +373,7 @@ class MassiveClient(object):
                 size=r["size"],
                 sip_timestamp=r["sip_timestamp"],
                 trade_code=pack_conditions(r.get("conditions", [])),
+                sequence_number=r["sequence_number"],
             )
             for r in rows
         ]
@@ -385,7 +389,8 @@ class MassiveClient(object):
             pl.col("price").cast(pl.Float64),
             pl.col("size").cast(pl.Float64),
             pl.col("trade_code").cast(pl.UInt32),
-        ).sort("ts_ns")
+            pl.col("sequence_number").cast(pl.UInt64)
+        ).sort("ts_ns", "sequence_number")
         assert set(out.columns) == set(MassiveClient.SCHEMA_TRADES), (
             f"Internal error: expected columns {set(MassiveClient.SCHEMA_TRADES)} but got {set(out.columns)}. Sanity check the request and contact the authors if you need help."
         )
@@ -397,15 +402,16 @@ class MassiveClient(object):
         "bid_size": pl.Float64,
         "ask_price": pl.Float64,
         "ask_size": pl.Float64,
+        "sequence_number": pl.UInt64,
     }
     """ Schema of the :class:`polars.DataFrame` returned by :meth:`fetch_quotes`. """
 
     @_cache(fmt=SubDir.POLARS_PARQUET).cache(
-        "0.1", label=lambda ticker, d: f"quotes/{ticker}/{fmt_date(d)}", exclude_args=["self"]
+        "0.11", label=lambda ticker, d: f"quotes/{ticker}/{fmt_date(d)}", exclude_args=["self"]
     )
     def fetch_quotes(self, ticker: str, d: date) -> pl.DataFrame:
         """
-        Fetches quotes from "/v3/quotes/{ticker}" sorted by sip_timestamp asc.
+        Fetches quotes from "/v3/quotes/{ticker}" sorted by sip_timestamp (and sequence_number) asc.
         Used both for options and underlyings.
 
         Parameters
@@ -426,6 +432,7 @@ class MassiveClient(object):
             * bid_size: Float64
             * ask_price: Float64
             * ask_size: Float64
+            * sequence_number: UInt64. Sequence number of the quote for a given timestamp. Quotes will be sorted by (ts_ns, sequence_number) asc.
         """
         url = f"{self.BASE_URL}/v3/quotes/{ticker}"
         params = {
@@ -446,8 +453,9 @@ class MassiveClient(object):
             pl.col("bid_price").cast(pl.Float64),
             pl.col("bid_size").cast(pl.Float64),
             pl.col("ask_price").cast(pl.Float64),
-            pl.col("ask_size").cast(pl.Float64),
-        ).sort("ts_ns")
+            pl.col("ask_size").cast(pl.Float64),#
+            pl.col("sequence_number").cast(pl.UInt64)
+        ).sort("ts_ns", "sequence_number")
         assert set(out.columns) == set(MassiveClient.SCHEMA_QUOTES), (
             f"Internal error: expected columns {set(MassiveClient.SCHEMA_QUOTES)} but got {set(out.columns)}. Sanity check the request and contact the authors if you need help."
         )
