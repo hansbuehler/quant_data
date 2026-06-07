@@ -45,8 +45,11 @@ class FitterRegularized(Fitter):
     Only :meth:`fit_prepared` is overridden to inject the regularizer term.
     """
 
-    regularizer_weight: float = 0.0  #: λ for the second-difference smoothness penalty
+    regularizer_weight: float = 0.0  #: λ for the regularization penalty
     bid_ask_penalty_weight: float = 0.0  #: huge quadratic penalty for prices outside bid-ask spread
+    log_dlv_space: bool = False  #: if True, log-barrier regularizer instead of second-diff
+    call_only: bool = False  #: if True, ignore puts in the fit (requires opt_is_calls)
+    put_only: bool = False  #: if True, ignore calls in the fit (requires opt_is_calls)
 
     def __post_init__(self):
         super().__post_init__()
@@ -57,6 +60,10 @@ class FitterRegularized(Fitter):
         verify_inp(
             self.bid_ask_penalty_weight >= 0.0,
             f"bid_ask_penalty_weight must be non-negative, found {self.bid_ask_penalty_weight}",
+        )
+        verify_inp(
+            not (self.call_only and self.put_only),
+            "call_only and put_only cannot both be True",
         )
 
     # ------------------------------------------------------------------
@@ -133,6 +140,24 @@ class FitterRegularized(Fitter):
                 if opt_interpolate is not None
                 else None
             )
+
+        # filter by option type (call_only / put_only)
+        if (self.call_only or self.put_only) and opt_is_calls is not None:
+            type_mask = opt_is_calls if self.call_only else ~opt_is_calls
+            # merge into opt_mask so the return-path expansion still works
+            if opt_mask is not None:
+                full_type_mask = np.zeros(opt_mask.shape, dtype=bool)
+                full_type_mask[opt_mask] = type_mask
+                opt_mask = full_type_mask
+            else:
+                opt_mask = type_mask
+            opt_strikes = opt_strikes[type_mask]
+            opt_bid = opt_bid[type_mask]
+            opt_ask = opt_ask[type_mask]
+            opt_tte = opt_tte[type_mask]
+            opt_is_calls = opt_is_calls[type_mask]
+            if opt_interpolate is not None:
+                opt_interpolate = {k: v[type_mask] for k, v in opt_interpolate.items()}
 
         if not self.no_warnings and np.max(opt_tte) > self.geometry.xexpiries[-1]:
             warnings.warn(
@@ -329,13 +354,24 @@ class FitterRegularized(Fitter):
                 objective = objective + self.bid_ask_penalty_weight * cp.sum_squares(outside)
         del umask, fit_calls, err_sqr, excess
 
-        # ── second-difference regularizer ───────────────────────────────────
-        # Fills the null space for anchors below K_lo_obs (the lowest observed
-        # call strike).  Applied globally with tiny λ so the data term still
-        # dominates on observed strikes (ratio ~1e-10 for typical SPY spreads).
+        # ── regularizer ─────────────────────────────────────────────────────
+        # log_dlv_space=False (legacy): second-difference smoothness on density.
+        #   Fills the null space for anchors below K_lo_obs.  Tiny λ keeps the
+        #   data term dominant on observed strikes (ratio ~1e-10 for SPY spreads).
+        #
+        # log_dlv_space=True: log-barrier  −λ·Σlog(dᵢ).
+        #   DCP-compliant (−log is convex).  Penalises small densities
+        #   proportionally in log-space: halving d from 0.002→0.001 costs the
+        #   same as 0.2→0.1.  Since DLV² ∝ 1/dᵢ this naturally suppresses
+        #   extreme DLV² values without distorting the data fit on observed
+        #   strikes.  Equivalent to maximum-entropy regularisation.
         if self.regularizer_weight > 0.0:
             for density_t in densities:
-                if density_t.shape[0] >= 3:
+                if self.log_dlv_space:
+                    objective = objective - self.regularizer_weight * cp.sum(
+                        cp.log(density_t + 1e-10)
+                    )
+                elif density_t.shape[0] >= 3:
                     second_diff = density_t[:-2] - 2 * density_t[1:-1] + density_t[2:]
                     objective = objective + self.regularizer_weight * cp.sum_squares(second_diff)
         # ────────────────────────────────────────────────────────────────────
