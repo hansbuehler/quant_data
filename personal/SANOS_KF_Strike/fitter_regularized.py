@@ -48,6 +48,12 @@ class FitterRegularized(Fitter):
     regularizer_weight: float = 0.0  #: λ for the regularization penalty
     bid_ask_penalty_weight: float = 0.0  #: huge quadratic penalty for prices outside bid-ask spread
     log_dlv_space: bool = False  #: if True, log-barrier regularizer instead of second-diff
+    temporal_regularizer_weight: float = (
+        0.0  #: λ_T · Σᵢ((dᵢ−d̂ᵢ)/d̂ᵢ)²; pass prev_densities to fit_prepared
+    )
+    temporal_weight_clip: float = (
+        20.0  #: caps weight ratio at C; floor = mean(d̂)/C to prevent ill-conditioning
+    )
     call_only: bool = False  #: if True, ignore puts in the fit (requires opt_is_calls)
     put_only: bool = False  #: if True, ignore calls in the fit (requires opt_is_calls)
 
@@ -60,6 +66,14 @@ class FitterRegularized(Fitter):
         verify_inp(
             self.bid_ask_penalty_weight >= 0.0,
             f"bid_ask_penalty_weight must be non-negative, found {self.bid_ask_penalty_weight}",
+        )
+        verify_inp(
+            self.temporal_regularizer_weight >= 0.0,
+            f"temporal_regularizer_weight must be non-negative, found {self.temporal_regularizer_weight}",
+        )
+        verify_inp(
+            self.temporal_weight_clip > 0.0,
+            f"temporal_weight_clip must be positive, found {self.temporal_weight_clip}",
         )
         verify_inp(
             not (self.call_only and self.put_only),
@@ -84,6 +98,7 @@ class FitterRegularized(Fitter):
         opt_interpolate: dict[str | np.ndarray] | None = None,
         return_only_dlvsqs: bool = True,
         verbose: Context = Context.quiet,
+        prev_densities: list | None = None,
     ):
         T, N = self.TN
 
@@ -374,6 +389,27 @@ class FitterRegularized(Fitter):
                 elif density_t.shape[0] >= 3:
                     second_diff = density_t[:-2] - 2 * density_t[1:-1] + density_t[2:]
                     objective = objective + self.regularizer_weight * cp.sum_squares(second_diff)
+
+        # ── temporal regularizer ─────────────────────────────────────────────
+        # λ_T · Σᵢ ((d_{t,i} − d̂ᵢ) / d̂ᵢ)²   where d̂ = prev_densities[t].
+        #
+        # Relative L2 (not absolute) so the penalty is uniform in log-density
+        # space.  Since DLV² ∝ 1/dᵢ, a small absolute change at a low-density
+        # cell would be invisible to absolute L2 but produces a large DLV² jump;
+        # the relative form catches it.  For small changes this approximates
+        # Σᵢ (log d_{t,i} − log d̂ᵢ)², i.e. log-DLV² continuity.
+        # d̂ is treated as a fixed constant → sum_squares of affine expression
+        # → DCP-compliant convex term.
+        if self.temporal_regularizer_weight > 0.0 and prev_densities is not None:
+            for t, density_t in enumerate(densities):
+                if t < len(prev_densities) and prev_densities[t] is not None:
+                    prev_d = np.asarray(prev_densities[t], dtype=np.float64)
+                    if prev_d.shape == density_t.shape:
+                        eps_floor = np.mean(prev_d) / self.temporal_weight_clip
+                        inv_prev_d = 1.0 / np.maximum(prev_d, eps_floor)
+                        objective = objective + self.temporal_regularizer_weight * cp.sum_squares(
+                            cp.multiply(inv_prev_d, density_t - prev_d)
+                        )
         # ────────────────────────────────────────────────────────────────────
 
         assert len(objective.shape) == 0, (
