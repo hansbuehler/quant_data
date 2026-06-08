@@ -56,6 +56,12 @@ class SanosKFStrikeConfig:
     trading_day_s: float = 23400.0  # trading day length in seconds (6.5 h)
     calls_only: bool = False  # if True, skip put quotes
     strike_round: float = 1.0  # rounding precision (in $ strike units) for deduplication
+    dlv_max: float = (
+        2.0  # DLV upper bound; if any DLV√(x[i]) hits this after update, row is ignored
+    )
+    ignore_at_dlv_max: bool = (
+        True  # if True, skip KF update when any post-update DLV reaches dlv_max
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -196,13 +202,12 @@ def _ekf_scan_step(carry: tuple, inputs: tuple) -> tuple:
     """
     Single EKF predict+update step for jax.lax.scan.
 
-    Carry: (x, P, ak_jax, q_bar_0, q_dlv_scalar)
-      ak_jax and q_bar_0 are carried as constants (unchanged each step);
-      this keeps the module-level JIT stable so XLA compiles once per shape.
+    Carry: (x, P, ak_jax, q_bar_0, q_dlv_scalar, dlv_max_sq, ignore_at_dlv_max_flag)
+      ak_jax, q_bar_0, dlv_max_sq, ignore_at_dlv_max_flag are carried as constants.
     Inputs: (K_i, T_i, z_i, R_i, q_scale_i, valid_i)
     Outputs: updated carry + (x_new, z_out) stacked over steps.
     """
-    x, P, ak_jax, q_bar_0, q_dlv_scalar = carry
+    x, P, ak_jax, q_bar_0, q_dlv_scalar, dlv_max_sq, ignore_at_dlv_max_flag = carry
     K_i, T_i, z_i, R_i, q_scale_i, valid_i = inputs
 
     n_state = x.shape[0]
@@ -226,13 +231,23 @@ def _ekf_scan_step(carry: tuple, inputs: tuple) -> tuple:
     z_post = _obs_fn_strike(x_upd, ak_jax, K_i, T_i, q_bar_0)
 
     all_finite = jnp.isfinite(z_hat) & jnp.all(jnp.isfinite(H)) & (jnp.abs(S) > 1e-14)
-    do_update = valid_i & all_finite
+
+    # DLV_MAX filter: if any post-update DLV² ≥ dlv_max², treat observation as bad.
+    # State is frozen (x unchanged) but process noise still accumulates (P = P_pred),
+    # so the next valid observation sees appropriately inflated uncertainty.
+    at_dlv_max = ignore_at_dlv_max_flag & jnp.any(x_upd >= dlv_max_sq)
+
+    do_update = valid_i & all_finite & ~at_dlv_max
 
     x_new = jnp.where(do_update, x_upd, x)
-    P_new = jnp.where(do_update, P_upd, P)
+    # Rows skipped due to DLV_MAX accumulate process noise; other invalid rows freeze P.
+    P_new = jnp.where(do_update, P_upd, jnp.where(at_dlv_max, P_pred, P))
     z_out = jnp.where(do_update, z_post, jnp.nan)
 
-    return (x_new, P_new, ak_jax, q_bar_0, q_dlv_scalar), (x_new, z_out)
+    return (x_new, P_new, ak_jax, q_bar_0, q_dlv_scalar, dlv_max_sq, ignore_at_dlv_max_flag), (
+        x_new,
+        z_out,
+    )
 
 
 # Compiled once per unique (n_state, N, n_q) shape combination.
@@ -481,11 +496,13 @@ def run_sanos_kf_strike(
             ak_jax,
             q_bar_0,
             jnp.float64(cfg.Q_scale_dlv_sq),
+            jnp.float64(cfg.dlv_max**2),
+            jnp.bool_(cfg.ignore_at_dlv_max),
         )
 
         # _run_ekf_scan_jit is a module-level JIT'd function — compiled once per
         # unique shape combination and reused across all calls.
-        (_x_final, _P_final, _, _, _), (x_hist_jax, z_hats_jax) = _run_ekf_scan_jit(
+        (_x_final, _P_final, _, _, _, _, _), (x_hist_jax, z_hats_jax) = _run_ekf_scan_jit(
             init, scan_inputs
         )
 
