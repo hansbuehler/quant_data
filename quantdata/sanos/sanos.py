@@ -43,6 +43,7 @@ class SanosFitter:
     _eps_price            : float = 1E-6
     _eps_density          : float = 1E-7
     _min_density          : float = 1E-5
+    _dlv_mode : bool = True
 
     def __post_init__(self):
         verify_inp( self.timeout_seconds is None or self.timeout_seconds >= 0., lambda : f"'timeout_seconds' must be positive or None, but found {self.timeout_seconds}" )
@@ -153,10 +154,6 @@ class SanosFitter:
         variances = make_variances() 
         del vols
 
-        # generate strike range, fit per-expiry
-        # -------------------------------------
-        # Add strikes to the left and right which are consistent with the no-arb condition.
-
         tme         = verbose.timer()
         variables   = []
         constraints = []
@@ -173,7 +170,6 @@ class SanosFitter:
                 else:
                     msg += " " + ext
                 return msg
-            verbose.write(lambda : f"\r{local_message()}: Generating extended strikes... ", end='')
 
             strikes_t  = strikes[t]
             mids_t     = mids[t]
@@ -187,8 +183,8 @@ class SanosFitter:
 
             q_t         = cp.Variable(len(xstrikes_t), nonneg=True)
             constraints += [ cp.sum( q_t ) == 1.,
-                             q_t @ xstrikes_t == 1., # martingale condition
-                             q_t <= 1.
+                            q_t @ xstrikes_t == 1., # martingale condition
+                            q_t <= 1.
                             ]
             if not self.min_density_vol is None:
                 bscalls     = bs.price( k=xstrikes_t, vol=self.min_density_vol, sqrtT=math.sqrt(expiry), eps=self._eps_price )
@@ -233,13 +229,14 @@ class SanosFitter:
             xdensities.append(q_t)
             CXs.append(CX)
 
-        success, status, fell_back = SanosLPSolver(timeout_seconds=self.timeout_seconds,
-                                                   _debug_verbose_cvxpy=self._debug_verbose_cvxpy)( 
-                                                     objective=objective,
-                                                     variables=variables, 
-                                                     constraints=constraints, 
-                                                     message_context=lambda : message(False),
-                                                     verbose=verbose )
+        with verbose.write_t(lambda : f"Fitting {'linear' if self.smoothness is None else f'{self.smoothness:.2f}-smooth'} SANOS surface... ", end=''):
+            success, status, fell_back = SanosLPSolver(timeout_seconds=self.timeout_seconds,
+                                                _debug_verbose_cvxpy=self._debug_verbose_cvxpy)( 
+                                                    objective=objective,
+                                                    variables=variables, 
+                                                    constraints=constraints, 
+                                                    message_context=lambda : message(False),
+                                                    verbose=verbose )
         if fell_back:
             verbose.write(lambda : f"had to fall back to a slower solver... ", head=False, end='' )
 

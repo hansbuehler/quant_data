@@ -227,7 +227,7 @@ class SanosPricer:
         """
         return _compute_market_fit( pricer=self, min_half_spread=self.min_half_spread, expiries=expiries, strikes=strikes, bids=bids, asks=asks, masks=masks, and_vols=and_vols )
     
-    def dlvsqs( self, *, min_dlv : float = 0.01, max_dlv : float = 0.5, on_all_strikes : bool = False ):
+    def dlvsqs( self, *, min_dlv : float = 0., max_dlv : float|None = None, on_all_strikes : bool = False ):
         """
         Compute squared discrete local volatilities.
 
@@ -241,9 +241,10 @@ class SanosPricer:
             If True, the function will return DLV^2 values for all strikes in ``strikes``, not just ``xstrikes[:,1:-1]``. The DLVs at the boundaries will be set to zero.
         """
 
-        verify_inp( 0.<  min_dlv < max_dlv, lambda : f"'min_dlv' must be positive and less than 'max_dlv', found {min_dlv:.4g} and {max_dlv:.4g}" )
+        verify_inp( 0.<=  min_dlv, lambda : f"'min_dlv' must not be negative, but found {min_dlv:.4g}" )
+        verify_inp( max_dlv is None or max_dlv > min_dlv, lambda : f"'min_dlv' must be positive and less than 'max_dlv', found {min_dlv:.4g} and {max_dlv:.4g}" )
         min_dlvsq = float(min_dlv**2)
-        max_dlvsq = float(max_dlv**2)
+        max_dlvsq = float(max_dlv**2) if max_dlv is not None else None
 
         # dlvs
         # We note that dC_t = 1/2 DLV^2 K^2 dT C''(K) where C''(K) = 1/2 ( k[2:] - K[:-2]) p(k)
@@ -287,13 +288,15 @@ class SanosPricer:
             #
             # dC should be zero if and only if p is zero.
             # If that happens, the DLV value is undefined.
+            # Even  though we have constrained the DLVs in the LP program we may end up with 
+            # numerically differnet values. We allow those here.
 
-            p_or_dC_zero = ( dC_t <= 0. ) | ( p_t[1:-1] <= 0.) 
-            too_small    = dC_t <= min_dlvsq * p_box * 0.5
-            too_big      = dC_t >= max_dlvsq * p_box * 2.
+            p_or_dC_zero = ( dC_t <= 0. ) | ( p_box <= 0.) 
+            too_small    = dC_t <= min_dlvsq * p_box 
+            too_big      = (dC_t >= max_dlvsq * p_box) if max_dlvsq is not None else (too_small&False)
 
             divisor      = np.where( p_or_dC_zero|too_small|too_big, _1, p_box )  # dC_t can be positive while p_t is zero ... in this case we cannot determine a correct DLV - any will do.
-            dlvsqs_t     = np.select( [p_or_dC_zero, too_small, too_big ], [0., min_dlvsq, max_dlvsq], default=(dC_t*1E6) / (divisor*1E6) )
+            dlvsqs_t     = np.select( [p_or_dC_zero, too_small, too_big ], [0., min_dlvsq, max_dlvsq if not max_dlvsq is None else np.nan], default=(dC_t*1E6) / (divisor*1E6) )
             if not np.all( np.isfinite(dlvsqs_t) ):
                 warnings.warn( f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: Expected dlvsqs_t to be finite, found min {np.min(dlvsqs_t)} and max {np.max(dlvsqs_t)} -- fixing it but it should not happen")
                 dlvsqs_t     = np.where( np.isfinite(dlvsqs_t), dlvsqs_t, min_dlvsq ) 
