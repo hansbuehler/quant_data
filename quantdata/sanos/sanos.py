@@ -33,8 +33,10 @@ class SanosFitter:
     smoothness           : float|None = None   # Whether to impose SANOS smoothness.
     timeout_seconds      : float|None = 60.*5. #: Time limit for the optimization solver, in seconds. This is passed to the CVXPY solver options as "time_limit".
 
-    min_dlv              : float = 0.01   #: Minimum local volatility to impose in the fit, in absolute terms. This is a soft constraint which is implemented as a penalty term in the optimization problem, so it may not be perfectly respected. If None, no minimum local volatility is imposed.
-    max_dlv              : float = 5.     #: Maximum local volatility to impose in the fit, in absolute terms. This is a soft constraint which is implemented as a penalty term in the optimization problem, so it may not be perfectly respected. If None, no maximum local volatility is imposed.
+    min_dlv              : float = 0.01      #: Minimum local volatility to impose in the fit.
+    max_dlv              : float = 50.        #: Maximum local volatility to impose in the fit.
+    min_density_vol      : float|None = 1E-4 # Minimum local volatility to impose in the fit.
+    min_density_cap      : float|None = 1E-5 # Maximum density floor.
 
     # protected variables do not alter the ID of this field (because they start with '_')
     _debug_verbose_cvxpy  : set[str]|None = None
@@ -48,10 +50,11 @@ class SanosFitter:
 
     def __str__(self) -> str:
         """ Very compact but still readable summary """
-        return (
-            f"sanos,{f'sth={self.smoothness:.2g},' if self.smoothness is not None else ''}"
-            f"{',midv='+str(self.min_dlv) if self.min_dlv is not None else ''}{',mxdv='+str(self.max_dlv) if self.max_dlv is not None else ''}"
-        )
+        return\
+            f"sanos,{f'sth={self.smoothness:.2g},' if self.smoothness is not None else ''}"+\
+            f"{',midv='+str(self.min_dlv) if self.min_dlv is not None else ''}{',mxdv='+str(self.max_dlv) if self.max_dlv is not None else ''}{',mindv='+str(self.min_density_vol) if self.min_density_vol is not None else ''}"+\
+            ("" if self.min_density_vol is None else f",mdv={self.min_density_vol:.4g}") +\
+            ("" if self.min_density_cap is None else f",mdc={self.min_density_cap:.4g}")      
 
     def __unique_hash__( self, unique_hash, debug_trace ) -> str:
         """ Overwrite hash function to ignore non-functional parameters. Note that unique_hash already ignored protected variables """
@@ -187,6 +190,12 @@ class SanosFitter:
                              q_t @ xstrikes_t == 1., # martingale condition
                              q_t <= 1.
                             ]
+            if not self.min_density_vol is None:
+                bscalls     = bs.price( k=xstrikes_t, vol=self.min_density_vol, sqrtT=math.sqrt(expiry), eps=self._eps_price )
+                bsdensity   = np.diff( np.diff( bscalls, prepend=1. ) / np.diff(xstrikes_t, prepend=0.), append=0. )
+                bsdensity   = np.clip( bsdensity, a_min=0., a_max=None if self.min_density_cap is None else self.min_density_cap / float(len(xstrikes_t)) )
+                constraints += [ q_t >= bsdensity ]
+                del bscalls, bsdensity
 
             # martingale
             Cm          = np.maximum( 0., xstrikes_t[None,:] - xstrikes_t[1:-1,None] ) @ q_t    # model strikes - do not use "call"
