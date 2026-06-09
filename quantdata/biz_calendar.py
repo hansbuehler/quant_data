@@ -81,14 +81,14 @@ class NMS5:
     SCALE = math.log(1.1)     # 10% vol
 
     @staticmethod
-    def from_nms(z: float|np.ndarray, t: float|np.ndarray, *, vol : float|np.ndarray = SCALE, backbone=np) -> float|np.ndarray:
+    def from_nms(z: float|np.ndarray, t: float|np.ndarray, *, vol : float|np.ndarray = SCALE, eps_vol : float|np.ndarray = 1., backbone=np) -> float|np.ndarray:
         """ Converts an NMS strike to a relative strike. """
-        return backbone.exp(vol * z * backbone.sqrt((NMS5.EPS + t) / (NMS5.EPS + 1.0)))
+        return backbone.exp(z * backbone.sqrt((eps_vol * eps_vol * NMS5.EPS + vol * vol * t) / (NMS5.EPS + 1.0)))
 
     @staticmethod
-    def to_nms(k: float|np.ndarray, t: float|np.ndarray, *, vol: float|np.ndarray = SCALE, backbone=np) -> float|np.ndarray:
+    def to_nms(k: float|np.ndarray, t: float|np.ndarray, *, vol: float|np.ndarray = SCALE, eps_vol : float|np.ndarray = 1., backbone=np) -> float|np.ndarray:
         """ Converts a relative strike to an NMS strike. """
-        return (backbone.log(k) / vol) / backbone.sqrt((NMS5.EPS + t) / (NMS5.EPS + 1.0))
+        return (backbone.log(k) ) * backbone.sqrt((NMS5.EPS + 1.0) / (eps_vol * eps_vol * NMS5.EPS + vol * vol * t))
 
 def to_date(d: str | dt.datetime | dt.date | np.datetime64 | None) -> dt.date | None:
     """

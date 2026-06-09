@@ -181,6 +181,10 @@ class SanosFitter:
             verify_inp( strikes_t.shape == mids_t.shape, f"{local_message()}: 'strikes' and 'mids' must have the same shape, found {strikes_t.shape} and {mids_t.shape}")
             if not weights_t is None: verify_inp( strikes_t.shape == weights_t.shape, f"{local_message()}: 'strikes' and 'weights' must have the same shape, found {strikes_t.shape} and {weights_t.shape}")
 
+            if t>0:
+                assert strikes_t[0] <= strikes[t-1][0], f"{local_message()}: 'strikes' must be increasing across expiries, but found {strikes[t-1][0]:.4g} and {strikes_t[0]:.4g} for current and previous expiry."
+                assert strikes_t[-1] >= strikes[t-1][-1], f"{local_message()}: 'strikes' must be increasing across expiries, but found {strikes[t-1][-1]:.4g} and {strikes_t[-1]:.4g} for current and previous expiry."  
+
             q_t         = cp.Variable(len(xstrikes_t), nonneg=True)
             constraints += [ cp.sum( q_t ) == 1.,
                             q_t @ xstrikes_t == 1., # martingale condition
@@ -283,5 +287,7 @@ class SanosFitter:
                             xdensities=xdensities,
                             min_dlv=self.min_dlv,
                             max_dlv=self.max_dlv,)
+
+
 
 

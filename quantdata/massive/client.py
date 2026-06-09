@@ -369,11 +369,11 @@ class MassiveClient(object):
         rows = self.paginate(url, params)
         rows = [
             dict(
-                price=r["price"],
-                size=r["size"],
+                price=float(r["price"]),
+                size=float(r["size"]),
                 sip_timestamp=r["sip_timestamp"],
                 trade_code=pack_conditions(r.get("conditions", [])),
-                sequence_number=r["sequence_number"],
+                sequence_number=int(r["sequence_number"]),
             )
             for r in rows
         ]
@@ -381,7 +381,13 @@ class MassiveClient(object):
         if not rows:
             return pl.DataFrame(schema=MassiveClient.SCHEMA_TRADES)
 
-        df = pl.DataFrame(rows, infer_schema_length=None)
+        df = pl.DataFrame(rows, schema={
+                    'price': pl.Float64,
+                    'size': pl.Float64,
+                    'sip_timestamp': pl.Int64,
+                    'trade_code': pl.UInt32,
+                    'sequence_number': pl.UInt64,
+        }, infer_schema_length=None)
         out = df.select(
             pl.from_epoch(pl.col("sip_timestamp").cast(pl.Int64), time_unit="ns")
             .dt.convert_time_zone(TZ_NY.key)
@@ -445,7 +451,15 @@ class MassiveClient(object):
         if not rows:
             return pl.DataFrame(schema=MassiveClient.SCHEMA_QUOTES)
 
-        df = pl.DataFrame(rows, infer_schema_length=None)
+        df = pl.DataFrame(rows, schema={
+            # https://massive.com/docs/rest/options/trades-quotes/quotes#
+            "bid_price": pl.Float64,
+            "bid_size": pl.Float64,
+            "ask_price": pl.Float64,
+            "ask_size": pl.Float64,
+            "sip_timestamp": pl.Int64,
+            "sequence_number": pl.UInt64
+        }, infer_schema_length=None)
         out = df.select(
             pl.from_epoch(pl.col("sip_timestamp").cast(pl.Int64), time_unit="ns")
             .dt.convert_time_zone(TZ_NY.key)
@@ -533,7 +547,17 @@ class MassiveClient(object):
         if not rows:
             return pl.DataFrame(schema=MassiveClient.SCHEMA_BARS)
 
-        df = pl.DataFrame(rows, infer_schema_length=None)
+        df = pl.DataFrame(rows, infer_schema_length=None, schema={
+            # https://massive.com/docs/rest/stocks/aggregates/custom-bars
+            'c': pl.Float64,
+            'h': pl.Float64,
+            'l': pl.Float64,
+            'n': pl.Int64,
+            'o': pl.Float64,
+            't': pl.Int64,
+            'v': pl.Float64,
+            'vw': pl.Float64,
+        })
         out = df.select(
             pl.from_epoch(pl.col("t").cast(pl.Int64), time_unit="ms")
             .dt.replace_time_zone("UTC")
@@ -904,6 +928,7 @@ class MassiveClient(object):
         what,
         rows: list[dict],
         schema: dict[str, pl.DataType],
+        massive_schema : dict[str, pl.DataType], # massive data schema; not necessarily the same as output schema
         sort_by: list[str] | str,
         drop_ticker: bool,
     ) -> pl.DataFrame:
@@ -913,7 +938,7 @@ class MassiveClient(object):
         if not rows:
             return pl.DataFrame(schema=schema)
 
-        df = pl.DataFrame(rows, infer_schema_length=None)
+        df = pl.DataFrame(rows, massive_schema, infer_schema_length=None)
         if drop_ticker:
             df = df.drop("ticker")
 
@@ -992,6 +1017,21 @@ class MassiveClient(object):
             what=lambda: f"dividends for {ticker} between {fmt_date(start)} and {fmt_date(end)}",
             rows=rows,
             schema=MassiveClient.SCHEMA_DIVIDENDS,
+            massive_schema={
+                # https://massive.com/docs/rest/stocks/corporate-actions/dividends
+                'cash_amount': pl.Float64,
+                'currency': pl.String,
+                'declaration_date': pl.String,
+                'distribution_type': pl.Int64,
+                'ex_dividend_date': pl.String,
+                'frequency': pl.Int16,
+                'historical_adjustment_factor': pl.Float64,
+                'id': pl.String,
+                'pay_date': pl.String,
+                'record_date': pl.String,
+                'split_adjusted_cash_amount': pl.Float64,
+                'ticker': pl.String,
+            },
             sort_by="ex_dividend_date",
             drop_ticker=True,
         )
@@ -1027,6 +1067,16 @@ class MassiveClient(object):
             what=lambda: f"splits for {ticker} between {fmt_date(start)} and {fmt_date(end)}",
             rows=rows,
             schema=MassiveClient.SCHEMA_SPLITS,
+            massive_schema={
+                # https://massive.com/docs/rest/stocks/corporate-actions/splits
+                'adjustment_type': pl.String,
+                'execution_date': pl.Date,
+                'historical_adjustment_factor': pl.Float64,
+                'id': pl.String,
+                'split_from': pl.Int32,
+                'split_to': pl.Int32,
+                'ticker': pl.String,
+            },
             sort_by="execution_date",
             drop_ticker=True,
         )
@@ -1047,7 +1097,7 @@ class MassiveClient(object):
         Find dates at which an underlying had ticker changes.
 
         If the endpoint is not available return an empty frame.
-        At the moment ticker changes are `the only events massive.com supports .
+        At the moment ticker changes are `the only events massive.com supports <https://massive.com/docs/rest/stocks/corporate-actions/ticker-events>`_.
         """
 
         client = self.get_rest_client()
@@ -1055,7 +1105,12 @@ class MassiveClient(object):
         events = events.events
         if len(events) == 0:
             return pl.DataFrame(schema=MassiveClient.SCHEMA_HAS_TICKER_CHANGES)
-        df = pl.DataFrame(events)
+        df = pl.DataFrame(events, schema={
+            #https://massive.com/docs/rest/stocks/corporate-actions/ticker-events
+            "date": pl.String,
+            "event_type": pl.String,
+            "ticker_change": pl.Object
+        })
         event_types = set(df.select(pl.col("type").unique()).get_column("type").to_list())
         assert event_types == {"ticker_change"}, (
             f"Internal error retrieving ticker changes for {ticker} between {fmt_date(start)} and {fmt_date(end)}: expected event type 'ticker_change' but got {sorted(event_types)}. Please update code. Ref: https://massive.com/docs/rest/stocks/corporate-actions/ticker-events"

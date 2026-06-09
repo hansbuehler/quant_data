@@ -75,34 +75,39 @@ OPT_QUOTE_BY_EXPIRY_SCHEMA = {
             "size": pl.Float64,          # total size
             "bid_size_pcnt": pl.Float64, # bid size as percentage of total size
             "mid_ret": pl.Float64,       # pcnt return in mid
-            "dt_d": pl.Float64,            # time diff in days since last quote
+            "dt_d": pl.Float64,          # time diff in days since last quote
             "dte": pl.Float64,           # dte in days computed for each option quote, adjusted for time of day: ref_dte - (t_ms / (6.5 * 3600 * 1000)) * (1 - overnight_fraction)
             "nms5": pl.Float64,          # normalized strike
-            "intrinsic": pl.Float64,      # intrinsic value (divided by prev_spot_close)
-            "is_intrinsic": bool,          # whether the option is near the money, defined as having intrinsic value at least 10% of the mid price
+            "intrinsic": pl.Float64,     # intrinsic value (divided by prev_spot_close)
+            "is_intrinsic": bool,        # whether the option is near the money, defined as having intrinsic value at least 10% of the mid price
             "bid_vol": pl.Float64,       # bid vol
             "ask_vol": pl.Float64,       # ask vol
             "mid_vol": pl.Float64,       # mid vol
-            "bid_delta": pl.Float64,      # bid delta
-            "ask_delta": pl.Float64,      # ask delta
+            "bid_delta": pl.Float64,     # bid delta
+            "ask_delta": pl.Float64,     # ask delta
             "mid_delta": pl.Float64,     # mid delta
-            "bid_gamma": pl.Float64,      # bid gamma
-            "ask_gamma": pl.Float64,      # ask gamma
+            "bid_gamma": pl.Float64,     # bid gamma
+            "ask_gamma": pl.Float64,     # ask gamma
             "mid_gamma": pl.Float64,     # mid gamma
-            "bid_vega": pl.Float64,       # bid vega
-            "ask_vega": pl.Float64,       # ask vega
-            "mid_vega": pl.Float64,       # mid vega
-            "bid_theta": pl.Float64,       # bid theta
-            "ask_theta": pl.Float64,       # ask theta
-            "mid_theta": pl.Float64,       # mid theta
+            "bid_vega": pl.Float64,      # bid vega
+            "ask_vega": pl.Float64,      # ask vega
+            "mid_vega": pl.Float64,      # mid vega
+            "bid_theta": pl.Float64,     # bid theta
+            "ask_theta": pl.Float64,     # ask theta
+            "mid_theta": pl.Float64,     # mid theta
             # option trades
-            "trade_t_d": pl.Float64,  # time diff in days since last trade
-            "trade_price": pl.Float64,  # trade price (divided by prev_spot_close)
-            "trade_size": pl.Float64,   # trade size 
+            "trade_t_d": pl.Float64,     # time diff in days since last trade
+            "trade_price": pl.Float64,   # trade price (divided by prev_spot_close)
+            "trade_size": pl.Float64,    # trade size 
             "trade_direction": pl.Float64, # trade direction: (trade_price - mid_price) / half_spread
-            "trade_ret": pl.Float64,      # trade return: (trade_price - prev_trade_price) / prev_trade_price
+            "trade_ret": pl.Float64,     # trade return: (trade_price - prev_trade_price) / prev_trade_price
             "trade_dt_d": pl.Float64,    # time diff in days since last trade
-            "trade_dte": pl.Float64,       # dte in days computed for each option trade, adjusted for time of day: ref_dte - (trade_t_ms / (6.5 * 3600 * 1000)) * (1 - overnight_fraction)
+            "trade_dte": pl.Float64,     # dte in days computed for each option trade, adjusted for time of day: ref_dte - (trade_t_ms / (6.5 * 3600 * 1000)) * (1 - overnight_fraction)
+            "trade_vol": pl.Float64,     # trade price (divided by prev_spot_close)
+            "trade_delta": pl.Float64,   # trade delta
+            "trade_gamma": pl.Float64,   # trade gamma
+            "trade_vega": pl.Float64,    # trade vega
+            "trade_theta": pl.Float64, # trade theta
             # spot quotes
             # all spot quotes have trades
             "spot_quote_t_d": pl.Float64,   # time diff in days since last spot quote
@@ -122,6 +127,7 @@ OPT_QUOTE_BY_EXPIRY_SCHEMA = {
             # ref data
             "ticker": str,
             "opt_ticker": str,
+            "paired_opt_ticker": str, # call for put and put for call ...
             "date": pl.Date,
             "exp_date": pl.Date,
             "is_call": bool,
@@ -136,7 +142,7 @@ TRADE_COLUMNS = {'trade_t_d', 'trade_price', 'trade_size', 'trade_direction', 't
 
 
 @_cache(fmt=SubDir.POLARS_PARQUET).cache(
-    "0.38",
+    "0.4",
     dependencies=[align_trades_to_quotes,_ticker_trade_series, OptionQuotesDayConfig],
     uid=lambda ticker, opt_ticker, d, overnight_fraction, dte_exclude_half_days, alignment_config:\
         "opt_quotes/"+\
@@ -335,9 +341,13 @@ def _opt_quote_time_series( ticker : str, opt_ticker : str, d : date,
     for w, price in what.items():
         vols   = bs.implied( k=rel_k, prices=price, is_call=is_call, sqrtT=sqrtT, on_exceed_bounds="warn", vol_min=OptionQuotesDayConfig.min_vol, vol_max=OptionQuotesDayConfig.max_vol )
         r      = bs(k=rel_k, vol=vols, sqrtT=sqrtT, is_call=is_call, what=bs.VEGA|bs.DELTA|bs.GAMMA|bs.THETA)
+        r.vega *= spot
+        r.theta *= spot
+        r.gamma /= spot
         r.vol  = vols
         result = result.with_columns(  [ pl.Series(f"{w}_{k}", v) for k, v in r.items() ] )
-            
+        del vols
+
     # Assert all trade_columns fields are non-null at the same time
     trade_not_null = result['trade_t_d'].is_not_null() & result['trade_price'].is_not_null() & result['trade_size'].is_not_null() & result['trade_direction'].is_not_null() & result['trade_dte'].is_not_null()
     trade_all_null = result['trade_t_d'].is_null() & result['trade_price'].is_null() & result['trade_size'].is_null() & result['trade_direction'].is_null() & result['trade_dte'].is_null()
@@ -347,15 +357,50 @@ def _opt_quote_time_series( ticker : str, opt_ticker : str, d : date,
     trade_ret_all_null = result['trade_ret'].is_null() & result['trade_dt_d'].is_null()
     assert (trade_ret_not_null | trade_ret_all_null).all(), f"{ticker} {d} option {opt_ticker}: trade_ret fields must all be null or all non-null together"
 
+    trade_not_null = trade_not_null.to_numpy()
+    trade_vol_full = np.full_like( trade_not_null, dtype=np.float64, fill_value=np.nan )
+    trade_delta    = np.full_like( trade_not_null, dtype=np.float64, fill_value=np.nan )
+    trade_gamma    = np.full_like( trade_not_null, dtype=np.float64, fill_value=np.nan )
+    trade_vega     = np.full_like( trade_not_null, dtype=np.float64, fill_value=np.nan )
+    trade_theta    = np.full_like( trade_not_null, dtype=np.float64, fill_value=np.nan )
+
+    if np.any(trade_not_null):
+        trade_prices = result['trade_price'].to_numpy()[trade_not_null]
+        trade_spot   = result['spot_trade_price'].to_numpy()[trade_not_null]
+        trade_rel_k  = strike[trade_not_null] / trade_spot
+        assert np.all( np.isfinite(trade_prices) ), f"{ticker} {d} option {opt_ticker}: Found non-finite values in trade_prices...?"
+        trade_vols   = bs.implied( k=trade_rel_k, prices=trade_prices, is_call=is_call[trade_not_null], sqrtT=sqrtT[trade_not_null], on_exceed_bounds="warn", vol_min=OptionQuotesDayConfig.min_vol, vol_max=OptionQuotesDayConfig.max_vol )
+        assert np.all( np.isfinite(trade_vols) ), f"{ticker} {d} option {opt_ticker}: Found non-finite values in trade_vols after conversion...?"
+        r            = bs(k=trade_rel_k, vol=trade_vols, sqrtT=sqrtT[trade_not_null], is_call=is_call[trade_not_null], what=bs.VEGA|bs.DELTA|bs.GAMMA|bs.THETA)
+        r.gamma      /= trade_spot
+        r.vega       *= trade_spot
+        r.theta      *= trade_spot
+
+        trade_vol_full[trade_not_null] = trade_vols
+        trade_delta[trade_not_null] = r.delta
+        trade_gamma[trade_not_null] = r.gamma
+        trade_vega[trade_not_null] = r.vega
+        trade_theta[trade_not_null] = r.theta
+
+    result = result.with_columns( [ 
+                                   pl.Series("trade_vol", trade_vol_full),
+                                   pl.Series("trade_delta", trade_delta),
+                                   pl.Series("trade_gamma", trade_gamma),
+                                   pl.Series("trade_vega", trade_vega),
+                                   pl.Series("trade_theta", trade_theta) ])
+
     for c in result.columns:
         if not c in TRADE_COLUMNS:
             assert result[c].is_not_null().all(), f"{ticker} {d} option {opt_ticker}: Found null values in {c} after conversion...?"
 
-    verify_schema( result, OPT_QUOTE_BY_EXPIRY_SCHEMA, header=lambda : f"{ticker} {d} expiry {expiry} {opt_ticker}: Schema validation failed for enriched option quote time series" )
+    my_schema = dict(OPT_QUOTE_BY_EXPIRY_SCHEMA)
+    my_schema.pop("paired_opt_ticker")
+
+    verify_schema( result, my_schema, header=lambda : f"{ticker} {d} expiry {expiry} {opt_ticker}: Schema validation failed for enriched option quote time series" )
     return result
 
 @_cache(fmt=SubDir.POLARS_PARQUET).cache(
-    "0.16",
+    "0.17",
     dependencies=[_opt_quote_time_series, filter_contracts],
     uid=lambda ticker, d, expiry, opt_ticker_data, option_quotes_day_config: \
     f"opt_expiry_quotes/{named_unique_filename48_8(str(option_quotes_day_config),option_quotes_day_config)}/{ticker}/{d}/{expiry}/tickers {unique_hash8(set(opt_ticker_data['opt_ticker'].to_list()))}"
@@ -405,6 +450,11 @@ def _opt_expiry_quote_time_series( ticker : str,
                     verbose.write(lambda : f"\r{ticker} {d} expiry {expiry}: Computing enriched time series for {len(opt_tickers)} options: processed {opt_ticker} {cnt}/{len(opt_tickers)} ... {math.ceil(float(cnt)/float(len(opt_tickers))*100)}% done; so far this took {tme}...", end='')
 
                 assert r['opt_ticker'].n_unique() == 1 and r['opt_ticker'].unique()[0] == opt_ticker, f"{ticker} {d} expiry {expiry} {opt_ticker}: Expected all rows to have the same opt_ticker {opt_ticker}, but found multiple opt_tickers in the result...?"
+
+                paired_opt_ticker = opt_ticker_data.filter( pl.col("opt_ticker") == opt_ticker )["paired_opt_ticker"].unique()
+                assert len(paired_opt_ticker) == 1, f"{ticker} {d} expiry {expiry} {opt_ticker}: Expected exactly one paired_opt_ticker, but found {len(paired_opt_ticker)}: {fmt_list(paired_opt_ticker.to_list())}"
+                r = r.with_columns( pl.lit(paired_opt_ticker[0]).alias("paired_opt_ticker") )
+
                 verify_schema( r, OPT_QUOTE_BY_EXPIRY_SCHEMA, header=lambda : f"{ticker} {d} expiry {expiry} {opt_ticker}: Schema validation failed for enriched option quote time series" )
                 results.append(r)
             del r
@@ -413,9 +463,10 @@ def _opt_expiry_quote_time_series( ticker : str,
     verbose.write(lambda : f"\r{ticker} {d}: Computed enriched time series at expiry {expiry} for {len(opt_tickers)-len(excluded)} out of {len(opt_tickers)} options; this took {tme}.")
     return results
 
-@version("0.1", dependencies=[_opt_quote_time_series, filter_contracts])
+@version("0.11", dependencies=[_opt_quote_time_series, filter_contracts])
 def generate_day( ticker : str, d : date, 
                   option_quotes_day_config : OptionQuotesDayConfig, *,
+                  pair_options : bool = False,
                   pool_config : PoolConfig = PoolConfig.off(),
                   cache_generate_only : bool = False,
                   override_cache_mode : CacheMode|str|None = None,
@@ -432,7 +483,75 @@ def generate_day( ticker : str, d : date,
 
     df = filter_contracts( ticker, d=d, exclude_half_days=True, drop_no_trades_today=True,
                            contracts_filter=option_quotes_day_config.contract_filter, pool_config=pool_config, verbose=verbose )
-    df = df.filter(pl.col("reject_code") == REJECTED.USED)
+
+    # add "paired_ticker"
+    df = (
+        df.with_columns(
+            pl.when(pl.col("contract_type") == "call")
+            .then(pl.lit("put"))
+            .when(pl.col("contract_type") == "put")
+            .then(pl.lit("call"))
+            .otherwise(pl.lit(None))
+            .alias("_paired_contract_type")
+        )
+        .join(
+            df.select(
+                "exp_date",
+                "strike_price",
+                pl.col("contract_type").alias("_paired_contract_type"),
+                pl.col("ticker").alias("paired_ticker"),
+            )
+            .unique(keep="any"),
+            on=["exp_date", "strike_price", "_paired_contract_type"],
+            how="left",
+        )
+        .sort("exp_date", "strike_price", "contract_type")
+        .drop("_paired_contract_type")
+    )
+
+    unpaired_df = df.filter(pl.col("paired_ticker").is_null())
+    if len(unpaired_df) > 0:
+        warnings.warn( f"{ticker} {d}: Removing {len(unpaired_df)} used options without matching call/put pair: {fmt_list(unpaired_df['ticker'].to_list())}. (Assuming these are not regular options - please amend code if assumption is not correct)" )
+        df = df.filter(pl.col("paired_ticker").is_not_null())
+
+    # defensive test to check we didn't double-match.
+    pair_validation = (
+        df.group_by("ticker")
+        .agg(
+            pl.col("paired_ticker").n_unique().alias("num_paired_tickers"),
+            pl.col("paired_ticker").unique().sort().alias("paired_tickers"),
+        )
+        .filter(pl.col("num_paired_tickers") != 1)
+    )
+    assert len(pair_validation) == 0, (
+        f"{ticker} {d}: Expected exactly one paired_ticker for each ticker, but found invalid mappings for "
+        f"{fmt_list(pair_validation['ticker'].to_list())}: {pair_validation.to_dicts()}"
+    )
+    del pair_validation
+
+    if pair_options:
+        used = df.filter(pl.col("reject_code") == REJECTED.USED)
+        selected_tickers = (
+            pl.concat(
+                [
+                    used.select(pl.col("ticker").alias("ticker")),
+                    used.select(pl.col("paired_ticker").alias("ticker")),
+                ],
+                how="vertical",
+            )
+            .unique(subset=["ticker"], keep="first")
+        )
+        df = (
+            df.join(selected_tickers, on="ticker", how="semi")
+            .sort("exp_date", "strike_price", "contract_type")
+        )
+        del used, unpaired_df, selected_tickers
+    else:
+        df = df.filter(pl.col("reject_code") == REJECTED.USED)
+
+    if len(df) == 0:
+        warnings.warn(f"{ticker} {d}: No eligible options remained after contract selection.")
+        return {}
 
     # reference data
     # --------------
@@ -440,21 +559,34 @@ def generate_day( ticker : str, d : date,
     expiries  = df["exp_date"].unique().sort().to_list()
     prev_spot = float( df["spot_ref_prev_close"].unique()[0] )
 
-    ref_data    = ( df.with_columns( pl.format("{} {} DTE {} {} {} @ {} ({}%)", pl.col("ticker"), pl.col("exp_date"), pl.col("days_to_exp"), pl.col("exercise_style"), pl.col("contract_type"), pl.col("strike_price").round(2), (100.0 * pl.col("strike_price")/prev_spot).round(2)).alias("opt_str") ).
-                    select( pl.col("ticker").alias("opt_ticker"), 
-                            pl.col("exp_date"), 
-                            pl.col("nms5").alias("ref_nms5"),
-                            pl.col("exercise_style")
-                                .str.to_lowercase()
-                                .str.starts_with("a")
-                                .alias("is_american"),
-                            pl.col("contract_type")
-                                .str.to_lowercase()
-                                .str.starts_with("c")
-                                .alias("is_call"),                                   
-                            ( pl.col("strike_price")/prev_spot ).alias("strike"),
-                                pl.col("days_to_exp").alias("ref_dte"), 
-                                pl.lit(prev_spot).alias("prev_spot") ).with_columns( pl.lit(ticker).alias("ticker") )
+    ref_data_cols = [
+        pl.col("ticker").alias("opt_ticker"),
+        pl.col("paired_ticker").alias("paired_opt_ticker"),
+        pl.col("exp_date"),
+        pl.col("nms5").alias("ref_nms5"),
+        pl.col("exercise_style")
+            .str.to_lowercase()
+            .str.starts_with("a")
+            .alias("is_american"),
+        pl.col("contract_type")
+            .str.to_lowercase()
+            .str.starts_with("c")
+            .alias("is_call"),
+        ( pl.col("strike_price")/prev_spot ).alias("strike"),
+        pl.col("days_to_exp").alias("ref_dte"),
+        pl.lit(prev_spot).alias("prev_spot"),
+    ]
+
+    ref_data    = ( df.with_columns(
+                        pl.format("{} {} DTE {} {} {} @ {} ({}%)",
+                        pl.col("ticker"), 
+                        pl.col("exp_date"), 
+                        pl.col("days_to_exp"), 
+                        pl.col("exercise_style"), 
+                        pl.col("contract_type"), 
+                        pl.col("strike_price").round(2), 
+                        (100.0 * pl.col("strike_price")/prev_spot).round(2)).alias("opt_str") ).
+                    select( *ref_data_cols ).with_columns( pl.lit(ticker).alias("ticker") )
             )
     ref_data      = { expiry: ref_data.filter(pl.col("exp_date") == expiry).drop("exp_date") for expiry in expiries }
 
@@ -485,7 +617,7 @@ def generate_day( ticker : str, d : date,
                                             verbose=verbose, cache_generate_only=cache_generate_only,
                                             override_cache_mode=override_cache_mode )
             results[expiry] = r
-        verbose.write(lambda : f"{ticker} {d}: Completed time series generation for expiries {fmt_list(expiries)}; this took {tme}.")
+        verbose.write(lambda : f"{ticker} {d}: Completed {'paired option ' if pair_options else ''}time series generation for expiries {fmt_list(expiries)}; this took {tme}.")
     return results
 
 # ================================================================

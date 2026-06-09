@@ -108,10 +108,6 @@ class BackboneTorch(Backbone):
             if not condition.item():
                 raise exception( message() if callable(message) else message )
 
-    def stop_gradient(self, x:Backbone.Array ) -> Backbone.Array:
-        """ Stop gradient calculation. Does NOT make a copy """
-        return x.detach()
-
     def are_broadcastable(self, *shapes) -> bool:
         """ Check if ``shapes`` are broadcastable according to torch/numpy broadcasting rules. """
         shapes = [ x.shape if isinstance(x, self.Array) else x for x in shapes ]
