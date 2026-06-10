@@ -187,7 +187,7 @@ class SanosFitter:
 
             q_t         = cp.Variable(len(xstrikes_t), nonneg=True)
             constraints += [ cp.sum( q_t ) == 1.,
-                            q_t @ xstrikes_t == 1., # martingale condition
+                            q_t @ xstrikes_t == 1., 
                             q_t <= 1.
                             ]
             if not self.min_density_vol is None:
@@ -198,15 +198,15 @@ class SanosFitter:
                 del bscalls, bsdensity
 
             # martingale
-            Cm          = np.maximum( 0., xstrikes_t[None,:] - xstrikes_t[1:-1,None] ) @ q_t    # model strikes - do not use "call"
+            Cm          = np.maximum( 0., xstrikes_t[None,:] - xstrikes_t[1:-1,None] ) @ q_t    # internal model prices
             if t>0:
                 assert xstrikes[t-1].shape == xdensities[t-1].shape, f"Internal error {message()}: shape mismatch between previous and current mstrikes, {xstrikes[t-1].shape} vs {xdensities[t-1].shape}"
                 Cm1         = np.maximum( 0., xstrikes[t-1][None,:] - xstrikes_t[1:-1,None] ) @ xdensities[t-1]
                 constraints += [ Cm >= Cm1 ]
             else:
-                Cm1   = np.maximum( 0., 1. - xstrikes_t[1:-1] )    # model strikes, previous density is dirac at 1
+                Cm1   = np.maximum( 0., 1. - xstrikes_t[1:-1] )    # internal model prices, previous density is dirac at 1
 
-            # dlv constaints
+            # dlv constraints
             # dC = 1/2 * dlvsq * x^2 * dt * K^2 / (1/2 (k^+ - k^-)) q
             box         = xstrikes_t[1:-1]**2 * ( expiries[t] - ( expiries[t-1] if t>0 else 0. ) ) / ( xstrikes_t[2:] - xstrikes_t[:-2])
             constraints += [ Cm - Cm1 >= cp.multiply( box * (self.min_dlv**2), q_t[1:-1] ) ]
@@ -217,15 +217,12 @@ class SanosFitter:
             def call( spots, strikes ):
                 if self.smoothness is None or self.smoothness == 0. or expiry < ONE_MINUTE:
                     return np.maximum( 0., spots - strikes )
-                expiry_ = np.clip( expiry, expiries[0], expiries[-1] )
-                vol     = math.sqrt( self.smoothness * np.interp( expiry_, expiries, variances ) / expiry_ )
+                vol     = math.sqrt( variances[t] / expiry ) * self.smoothness
                 assert np.isfinite(vol), f"Internal error: {message()}infinite vol"
-                if vol == 0.:
-                    return np.maximum( 0., spots - strikes )
                 return bs.price( k=strikes/spots, vol=vol, sqrtT=math.sqrt(expiry), eps=self._eps_price )*spots
 
             CX           = call( spots=xstrikes_t[None,:], strikes=strikes_t[:,None] )
-            fits_t       = CX @ q_t    # market strikes
+            fits_t       = CX @ q_t    # market prices according to the model (with smoothness)
             err_t        = cp.abs(fits_t-mids_t)
             err_t        = err_t if weights_t is None else cp.multiply( weights_t, err_t )
             objective    += cp.sum( err_t )

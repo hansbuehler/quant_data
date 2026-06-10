@@ -251,7 +251,8 @@ def filter_options_day(
     Filter options according to ``options_filter``.
     
     This includes filtering by moneyness, time to expiry, volume, open interest, and other criteria defined in :class:`OptionsFilter`.
-    This function is not cached.
+    This function itself is not cached, but it since it is basically a thin layer on top of :func:`mk_arb_free_day` and the filtering logic is fast,
+    caching is implicit.
     """
     verify_inp(isinstance(options_filter, OptionsFilter), lambda : f"'options_filter' must be an instance of OptionsFilter, found {type(options_filter)}")
     verify_inp(mk_arb_free is None or isinstance(mk_arb_free, MkArbFree), lambda : f"'mk_arb_free' must be None or an instance of MkArbFree, found {type(mk_arb_free)}")

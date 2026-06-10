@@ -814,3 +814,59 @@ def _compute_market_fit( pricer : callable, min_half_spread : float,
     r.median_total_err = np.median(masked_fit_errors) 
     r.mean_total_err   = np.mean(masked_fit_errors)
     return r
+
+
+
+
+def make_variances(expiries : np.ndarray,
+                   strikes : list[np.ndarray],
+                   prices  : list[np.ndarray],
+                   vols : float|np.ndarray|None=None,
+                   message_context : callable[[], str] | None = None ) -> np.ndarray:
+    """
+    Make variances for interpolation
+
+    If 'vols' is provided, this function checks that variances are increassing.
+    If 'vols' are not provided, this function computes ATM vols by interpolating the input 'prices' at strike 1, and then computes variances from the ATM vols, and finally makes sure that variances are increasing by flooring forward variances to a small positive value if needed.
+    
+    Returns an array of variances, for ``expiries``.
+    """
+
+    def message(with_cols : bool = True) -> str:
+        if message_context is None:
+            return ""
+        if callable(message_context):
+            msg = message_context()
+        else:
+            msg = str(message_context)
+        if msg == "":
+            return ""
+        msg = msg[0].upper() + msg[1:]
+        if not with_cols:
+            return msg
+        return msg + ": "
+
+    T = len(expiries)
+    assert len(strikes) == len(prices) == T, f"Expected 'strikes' and 'prices' to have the same length as 'expiries', but found {len(strikes)}, {len(prices)} and {len(expiries)}"
+
+    if vols is None:
+        atm_calls = []
+        for t in range(T):
+            ixs = np.argsort( strikes[t] )
+            atm_calls.append( np.interp( 1., strikes[t][ixs], prices[t][ixs] ) )
+        atm_calls = np.asarray(atm_calls)
+        atm_vols  = bs.implied( k=np.ones_like(atm_calls), prices=atm_calls, sqrtT=np.sqrt(expiries), eps=1E-6 )
+        variances = expiries * (atm_vols**2)
+        dts       = np.diff(expiries, prepend=0.)
+        fwd_vars  = np.maximum(0.001**2, np.diff(variances, prepend=0.) / dts ) * dts
+        variances = np.cumsum(fwd_vars)
+        del atm_calls, atm_vols, dts, fwd_vars
+    elif isinstance( vols, np.ndarray ):
+        verify_inp( vols.shape == expiries.shape, lambda : f"{message()}If 'vols' is a numpy array, it must have the same shape as 'expiries', but found {vols.shape} and {expiries.shape}" )
+        verify_inp( np.all(vols > 0.), lambda : f"{message()}All volatilities must be positive, but found {vols}" )
+        variances = expiries * (vols**2) 
+        verify_inp( variances[0] > 0. and (len(variances)==1 or np.min(np.diff(variances)) > 0.), lambda : f"{message()}Variances derived from 'vols' must be positive and strictly increasing, but found {variances}" )
+    else:
+        variances = expiries * (float(vols)**2) 
+        verify_inp(vols > 0., lambda : f"{message()}Volatility must be positive, but found {vols}" )
+    return variances

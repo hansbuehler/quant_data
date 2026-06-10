@@ -33,6 +33,7 @@ dependencies = [
     "jax",
     "flax",
     "optax",
+    "orbax",
     "wandb",
     "cvxpy",
     "cdxcore",
