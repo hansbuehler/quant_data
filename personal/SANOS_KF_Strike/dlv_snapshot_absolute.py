@@ -66,6 +66,7 @@ def run_intraday_loop(
     calls_only: bool = True,
     puts_only: bool = False,
     verbose: bool = False,
+    anchor_pure: np.ndarray | None = None,
 ) -> list[dict]:
     """
     Iterate over time snapshots and fit a SANOS density at each one.
@@ -78,9 +79,10 @@ def run_intraday_loop(
     where bid_norm/ask_norm are C/df (or P/df) and pure_K are absolute dollar strikes.
 
     Results format:
-      r["dlvsqs"]   : np.ndarray of shape (1, N-2)
-      r["densities"]: np.ndarray of shape (1, N)
-      r["fwd"]      : float forward for this snapshot
+      r["dlvsqs"]           : np.ndarray of shape (1, N-2)
+      r["densities"]        : np.ndarray of shape (1, N)
+      r["fwd"]              : float forward for this snapshot
+      r["fresh_anchor_mask"]: (N,) bool over anchor_pure, or None if anchor_pure not supplied
     """
     results = []
     prev_density = None
@@ -130,10 +132,19 @@ def run_intraday_loop(
         dlvsqs_out = densities_out = None
         failed = True
         K_lo_obs = K_hi_obs = float("nan")
+        fresh_anchor_mask = (
+            np.zeros(len(anchor_pure), dtype=bool) if anchor_pure is not None else None
+        )
 
         if parts:
             snap_obs = pl.concat(parts).sort("pure_strike")
             pure_K = snap_obs["pure_strike"].to_numpy().astype(float)
+
+            if anchor_pure is not None:
+                pure_K_int = set(np.round(pure_K).astype(int))
+                fresh_anchor_mask = np.array(
+                    [int(round(k)) in pure_K_int for k in anchor_pure], dtype=bool
+                )
             K_lo_obs = float(np.min(pure_K))
             K_hi_obs = float(np.max(pure_K))
             bid_n = snap_obs["bid_norm"].to_numpy().astype(float)
@@ -171,6 +182,7 @@ def run_intraday_loop(
                 K_lo_obs=K_lo_obs,
                 K_hi_obs=K_hi_obs,
                 failed=failed,
+                fresh_anchor_mask=fresh_anchor_mask,
             )
         )
 
