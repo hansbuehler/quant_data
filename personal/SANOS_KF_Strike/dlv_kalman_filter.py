@@ -5,9 +5,17 @@ Design:
 - State x ∈ ℝⁿ = latent DLV² at n interior anchors (always full length).
 - Dynamics: random walk x_{t+1} = x_t + w,  w ~ N(0, Q_t),
             Q_t = q_scale · Δt_days · C,  where C is an RBF correlation matrix.
-- Observation: selection-H retaining only the m_t fresh nodes each step.
-            z_t = H_t x_t + v_t,  v_t ~ N(0, r_diag · I_{m_t}).
+- Observation: H = I (all n nodes observed every step).
+            z_t = x_t + v_t,  v_t ~ N(0, R_t),
+            R_t = diag(r_vec),  r_vec[j] = r_diag if node j was fresh,
+                                            r_stale  otherwise  (r_stale ≥ r_diag).
 - Update: Joseph-form covariance, symmetrized each step.
+- Special case r_stale = ∞: stale nodes are not observed (equivalent to
+  the legacy selection-H design, handled via a numerically exact code path).
+
+Trust control: ratio r_stale / r_diag is the single knob that governs how much
+weight non-fresh SANOS interpolations receive.  At ratio=1 the filter copies
+SANOS per-snapshot; at ratio→∞ it ignores stale nodes entirely.
 
 The off-diagonal mass in Q (not just P₀) regenerates cross-strike coupling every
 step, so fresh ATM nodes continuously pull stale wing nodes even across long gaps.
@@ -29,7 +37,8 @@ import numpy as np
 class KFConfig:
     q_scale: float = 1e-6
     ell: float = 10.0
-    r_diag: float = 1e-4
+    r_diag: float = 1e-4  # observation noise for fresh nodes (r_fresh)
+    r_stale: float = float("inf")  # observation noise for stale nodes; ∞ = selection-H
     p0_scale: float = 1e-6
     p0_correlated: bool = True
     p0_matrix: Optional[np.ndarray] = None  # if set, overrides p0_scale/p0_correlated
@@ -134,7 +143,7 @@ def run_dlv_kalman_filter_v2(
     x0: Optional[np.ndarray] = None,
 ) -> tuple[np.ndarray, ...]:
     """
-    Stage 2 DLV² Kalman filter with correlated process noise and selection-H.
+    Stage 2 DLV² Kalman filter with correlated process noise and diagonal-R_t H=I.
 
     Parameters
     ----------
@@ -148,7 +157,10 @@ def run_dlv_kalman_filter_v2(
                      reproducing the legacy behaviour when no mask is tracked.)
     N_dlv         : int — state dimension n = N - 2.
     grid_K_nodes  : (n,) absolute strike coordinates of DLV² nodes (dlv_anchor_pure).
-    cfg           : KFConfig
+    cfg           : KFConfig.  Key fields:
+                      r_diag  = observation noise for fresh nodes (r_fresh).
+                      r_stale = observation noise for stale nodes.  When ∞ (default),
+                                stale nodes are not observed (selection-H path).
     x0            : (n,) optional initial state vector. If None, the first valid
                     snapshot's dlvsqs are used (original behaviour).
 
@@ -160,7 +172,7 @@ def run_dlv_kalman_filter_v2(
     innov_hist   : (T, n) innovations at fresh nodes, NaN elsewhere
     ts_hist      : (T,)   POSIX seconds
     failed_hist  : (T,)   bool — snapshot fit failed
-    n_fresh_hist : (T,)   int  — number of fresh nodes used each step
+    n_fresh_hist : (T,)   int  — number of fresh nodes this step
     """
     n = N_dlv
     T = len(results)
@@ -242,32 +254,58 @@ def run_dlv_kalman_filter_v2(
 
         # ── Update or predict-only ────────────────────────────────────────────
         if do_update:
-            z = z_full[fresh_node]  # (m,)
-            y = z - x_pred[fresh_node]  # innovation (m,)
+            if np.isinf(cfg.r_stale):
+                # r_stale = ∞: stale nodes contribute no information.
+                # Numerically equivalent to the selection-H design; avoids
+                # forming an ill-conditioned S with infinite diagonal entries.
+                z_sub = z_full[fresh_node]  # (m,)
+                y_sub = z_sub - x_pred[fresh_node]  # (m,)
+                P_sub = P_pred[np.ix_(fresh_node, fresh_node)]  # (m, m)
+                P_cols = P_pred[:, fresh_node]  # (n, m)
+                R_m = cfg.r_diag * np.eye(m)
+                S_m = P_sub + R_m
+                K_m = P_cols @ np.linalg.inv(S_m)  # (n, m)
+                x = x_pred + K_m @ y_sub
+                fresh_idx = np.where(fresh_node)[0]
+                KH = np.zeros((n, n))
+                KH[:, fresh_idx] = K_m
+                IKH = I_n - KH
+                P = IKH @ P_pred @ IKH.T + K_m @ R_m @ K_m.T
+                innov_hist[k][fresh_node] = y_sub
+            else:
+                # Full H=I with time-varying diagonal R_t.
+                # r_vec[j] = r_fresh (cfg.r_diag) for fresh nodes,
+                #            r_stale (cfg.r_stale) for stale nodes.
+                #
+                # NOTE (a): a diagonal R_t cannot represent the cross-node
+                # correlation of SANOS's joint-QP interpolation error; this is a
+                # pragmatic approximation.  If in-sample price fit stays poor at
+                # small r_stale, that correlation structure is the likely cause.
+                #
+                # NOTE (b): rank KF_R_STALE settings by the held-out price metric,
+                # NOT by DLV²-vs-SANOS error — near-zero DLV²-vs-SANOS is trivially
+                # achieved when r_stale ≈ r_fresh (filter copies SANOS) and reveals
+                # nothing about whether importing stale nodes improves market tracking.
+                r_vec = np.where(fresh_node, cfg.r_diag, cfg.r_stale)  # (n,)
+                R_t = np.diag(r_vec)
 
-            # Exploit selection-H structure via index slicing
-            P_sub = P_pred[np.ix_(fresh_node, fresh_node)]  # (m, m)
-            P_cols = P_pred[:, fresh_node]  # (n, m)
+                y = z_full - x_pred  # full-length innovation (n,)
+                S = P_pred + R_t  # H=I → S = P_pred + R_t
+                K = P_pred @ np.linalg.inv(S)  # (n, n)
+                x = x_pred + K @ y
 
-            R_m = cfg.r_diag * np.eye(m)
-            S = P_sub + R_m  # (m, m)
-            K = P_cols @ np.linalg.inv(S)  # (n, m)
+                # Joseph form with H=I: (I-K) P_pred (I-K)ᵀ + K R_t Kᵀ
+                IK = I_n - K
+                P = IK @ P_pred @ IK.T + K @ R_t @ K.T
 
-            x = x_pred + K @ y  # (n,)
+                # Store fresh-node innovations for backward-compatible NIS diagnostics.
+                # (Stale innovations are used in the update but not separately exposed.)
+                innov_hist[k][fresh_node] = y[fresh_node]
 
-            # Joseph form: (I - K H) P_pred (I - K H)ᵀ + K R Kᵀ
-            # H is the selection matrix: H[j, i] = 1 iff fresh_node[i] is the j-th True
-            fresh_idx = np.where(fresh_node)[0]  # (m,)
-            KH = np.zeros((n, n))
-            KH[:, fresh_idx] = K  # K @ H  (n, n)
-            IKH = I_n - KH
-            P = IKH @ P_pred @ IKH.T + K @ R_m @ K.T
             P = 0.5 * (P + P.T)
 
             if cfg.soft_floor is not None:
                 x = np.maximum(x, cfg.soft_floor)
-
-            innov_hist[k][fresh_node] = y
         else:
             x = x_pred
             P = P_pred
@@ -363,6 +401,7 @@ def _synthetic_selftest(seed: int = 42, verbose: bool = False) -> None:
             q_scale=q_scale,
             ell=ell,
             r_diag=r_diag,
+            r_stale=float("inf"),  # selection-H: stale wing not observed
             p0_scale=p0_scale,
             p0_correlated=True,
             stencil=1,
@@ -374,6 +413,7 @@ def _synthetic_selftest(seed: int = 42, verbose: bool = False) -> None:
             q_scale=q_scale,
             ell=1e-6,
             r_diag=r_diag,  # C ≈ I
+            r_stale=float("inf"),
             p0_scale=p0_scale,
             p0_correlated=False,
             stencil=1,
@@ -425,6 +465,7 @@ def _synthetic_selftest(seed: int = 42, verbose: bool = False) -> None:
             q_scale=q_scale,
             ell=ell,
             r_diag=r_diag,
+            r_stale=float("inf"),
             p0_scale=p0_scale,
             p0_correlated=True,
             stencil=1,
@@ -462,6 +503,7 @@ def _synthetic_selftest(seed: int = 42, verbose: bool = False) -> None:
             q_scale=q_scale,
             ell=1e-6,
             r_diag=r_diag,
+            r_stale=float("inf"),  # all-fresh → r_stale irrelevant; inf triggers selection-H path
             p0_scale=p0_scale,
             p0_correlated=False,
             stencil=1,
@@ -508,6 +550,50 @@ def _synthetic_selftest(seed: int = 42, verbose: bool = False) -> None:
             f"(max |ΔP|={np.abs(P_v2_id - P_diag_leg).max():.2e})"
         )
 
+        # ── assertion 4: with tiny r_fresh, x_post[fresh] ≈ z_full[fresh] ────
+        # Verifies H=I + diagonal-R_t units: z_full and x must live in the same
+        # space (both DLV²) so that K → I at fresh nodes as r_fresh → 0.
+        r_tiny = 1e-15
+        r_stale_4 = 1.0  # large relative to r_tiny; stale nodes weakly constrained
+        T4 = 5
+        fa_mixed = np.zeros(N, dtype=bool)
+        fa_mixed[4:10] = True  # some fresh, some stale
+
+        results_tiny = []
+        for t in range(T4):
+            z4 = x_truth[t] + 1e-8 * rng.standard_normal(n)
+            results_tiny.append(
+                {
+                    "ts": t * NS_PER_S,
+                    "failed": False,
+                    "dlvsqs": z4[np.newaxis, :],
+                    "fresh_anchor_mask": fa_mixed,
+                }
+            )
+
+        cfg_tiny = KFConfig(
+            q_scale=q_scale,
+            ell=ell,
+            r_diag=r_tiny,
+            r_stale=r_stale_4,
+            p0_scale=p0_scale,
+            p0_correlated=True,
+            stencil=1,
+            soft_floor=None,
+            trading_day_s=trading_day_s,
+            ignore_at_dlv_max=False,
+        )
+        x_tiny, _, _, _, _, _, _ = run_dlv_kalman_filter_v2(
+            results_tiny, N_dlv=n, grid_K_nodes=strikes, cfg=cfg_tiny
+        )
+        fn4 = make_fresh_node_mask(fa_mixed, stencil=1)
+        # At the last step (t=4), posterior at fresh nodes must match observation
+        # to within r_tiny ≪ 1 (the filter trusts fresh measurements essentially fully).
+        assert np.allclose(x_tiny[-1][fn4], results_tiny[-1]["dlvsqs"][0][fn4], atol=1e-6), (
+            "Assertion 4 FAILED: with r_fresh=1e-15 the posterior at fresh nodes does not "
+            f"reproduce z_full (max err={np.abs(x_tiny[-1][fn4] - results_tiny[-1]['dlvsqs'][0][fn4]).max():.2e})"
+        )
+
     finally:
         pass  # no cleanup needed; no patching was done
 
@@ -520,6 +606,8 @@ def _synthetic_selftest(seed: int = 42, verbose: bool = False) -> None:
             f"  Wing std bounded: max(std[500:])={std_max_late:.4e}  3×std[100]={3 * std_at_100:.4e}"
         )
         print(f"  C≈I vs legacy: max |Δx|={np.abs(x_v2_id - x_hist_leg).max():.2e}")
+        err4 = np.abs(x_tiny[-1][fn4] - results_tiny[-1]["dlvsqs"][0][fn4]).max()
+        print(f"  Tiny-r_fresh: max |x_post[fresh] - z_full[fresh]|={err4:.2e}")
 
 
 if __name__ == "__main__":
