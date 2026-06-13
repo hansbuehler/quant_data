@@ -35,7 +35,7 @@ from quantdata.massive.client import MassiveClient
 
 # ── Phase 1 config ────────────────────────────────────────────────────────
 TICKER = "SPY"
-TRADE_DATE = date(2024, 1, 3)
+TRADE_DATE = date(2024, 3, 5)
 BATCH_FREQ = "1s"
 MIN_TRADES = 100
 
@@ -55,7 +55,9 @@ BID_ASK_PENALTY_WEIGHT = 0.0
 
 
 def main(out_path: str) -> None:
-    df_tickers = pl.read_csv(os.path.join(project_root, "personal", "spy_options_tickers.csv"))
+    df_tickers = pl.read_csv(
+        os.path.join(project_root, "personal", f"spy_options_tickers_{TRADE_DATE}.csv")
+    )
     client = MassiveClient()
     df_spy = client.fetch_trades(TICKER, TRADE_DATE)
 
@@ -177,6 +179,6 @@ def main(out_path: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", default="phase1_cache.pkl")
+    parser.add_argument("--out", default=f"phase1_cache_{TRADE_DATE}.pkl")
     args = parser.parse_args()
     main(args.out)

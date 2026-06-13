@@ -22,6 +22,7 @@ import os
 import pickle
 import sys
 import warnings
+from datetime import date
 
 import numpy as np
 
@@ -43,7 +44,7 @@ PARAM_GRID = {
     "ell": [1.0, 5.0, 10.0],
     "stencil": [1, 3],
 }
-
+TRADE_DATE = date(2024, 3, 5)
 # Fixed KF parameters (not swept)
 FIXED_KF = dict(
     r_diag=1e-15,
@@ -297,8 +298,8 @@ def main(cache_path: str, out_path: str, n_workers: int) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cache", default="phase1_cache.pkl")
-    parser.add_argument("--out", default="results/kf_sweep_results.csv")
+    parser.add_argument("--cache", default=f"phase1_cache_{TRADE_DATE}.pkl")
+    parser.add_argument("--out", default=f"results/kf_sweep_results_{TRADE_DATE}.csv")
     parser.add_argument("--workers", type=int, default=max(1, mp.cpu_count() - 1))
     args = parser.parse_args()
     main(args.cache, args.out, args.workers)
