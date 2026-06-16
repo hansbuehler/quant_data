@@ -35,9 +35,7 @@ class BaseEnvironment(object):
 
     Tensor = torch.Tensor
 
-    def __init__(
-        self, *, precision: int = 32, device: torch.device | str | None = None, debug: bool = False
-    ):
+    def __init__( self, *, precision: int = 32, device: torch.device | str | None = None, debug: bool = False ):
         """Initialize environment"""
         self._precision = precision
         self.device = (
@@ -46,6 +44,9 @@ class BaseEnvironment(object):
             else device
         )
         self.debug = debug
+
+    def __str__(self):
+        return f"Env(prec={self._precision},device={self.device},debug={self.debug})"
 
     @property
     def fdtype(self) -> torch.dtype:

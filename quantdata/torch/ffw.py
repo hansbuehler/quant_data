@@ -22,6 +22,9 @@ class FeedForwardConfig:
     num_width : int = 16            # Inner width; use a negative number as multiplier of ``num_output`` (output dimension). If ``num_depth`` is zero, then this is ignored.
     use_bias : bool = True          # Whether to use bias in the inner layers. If ``num_depth`` is zero, then this is ignored.
 
+    def __str__(self) -> str:
+        return f"FF(d={self.num_depth},w={self.num_width},a={self.activation},b={self.use_bias})"
+
     def __post_init__(self):
         verify_inp( not isinstance(self.activation,str) or hasattr(torch.nn, self.activation), f"Unknown torchh activation function 'torch.nn.{self.activation}' see https://docs.pytorch.org/docs/stable/nn.html")
         verify_inp( self.num_depth >= 0, "'num_depth' must be non-negative" )

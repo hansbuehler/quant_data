@@ -48,7 +48,7 @@ class SanosPricer:
     _eps_dlv_diff : float = 1E-3
 
     def __post_init__(self):
-        verify_inp( self.smoothness is None or self.smoothness > 0., lambda : f"'smoothness' must be positive or None, but found {self.smoothness:.4g}")
+        verify_inp( self.smoothness is None or self.smoothness >= 0., lambda : f"'smoothness' must be positive or None, but found {self.smoothness:.4g}")
         verify_inp( self.min_half_spread > 0., lambda : f"'min_half_spread' must be positive, but found {self.min_half_spread:.4g}" )
         verify_inp( self.expiries[0] > 0., lambda : f"'expiries' must be positive, but found {self.expiries[0]:.4g}" )
         verify_inp( self.variances[0] > 0., lambda : f"'variances' must be positive, but found {self.variances[0]:.4g}" )
@@ -107,7 +107,7 @@ class SanosPricer:
                 def call(spots):
                     return np.maximum( _0, spots[None,:] - strikes[:,None] )
             else:
-                vol = self.model_vols( expiries=expiry )
+                vol = self.model_vols( expiries=expiry )#applies smoothness
                 def call(spots):
                     return bs.price( k=strikes[:,None]/spots[None,:], vol=vol, sqrtT=math.sqrt(expiry), eps=self._eps_price )*spots[None,:]
 
@@ -227,7 +227,7 @@ class SanosPricer:
         """
         return _compute_market_fit( pricer=self, min_half_spread=self.min_half_spread, expiries=expiries, strikes=strikes, bids=bids, asks=asks, masks=masks, and_vols=and_vols )
     
-    def dlvsqs( self, *, min_dlv : float = 0., max_dlv : float|None = None, on_all_strikes : bool = False ):
+    def dlvsqs( self, *, min_dlv : float = 0., max_dlv : float|None = None, on_all_strikes : bool = False ) -> list[np.ndarray]:
         """
         Compute squared discrete local volatilities.
 

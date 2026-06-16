@@ -217,7 +217,7 @@ class SanosFitter:
             def call( spots, strikes ):
                 if self.smoothness is None or self.smoothness == 0. or expiry < ONE_MINUTE:
                     return np.maximum( 0., spots - strikes )
-                vol     = math.sqrt( variances[t] / expiry ) * self.smoothness
+                vol     = math.sqrt( variances[t] / expiry * self.smoothness ) 
                 assert np.isfinite(vol), f"Internal error: {message()}infinite vol"
                 return bs.price( k=strikes/spots, vol=vol, sqrtT=math.sqrt(expiry), eps=self._eps_price )*spots
 

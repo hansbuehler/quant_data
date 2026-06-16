@@ -6,13 +6,13 @@ See [``https://hansbuehler.github.io/quant_data/``](https://hansbuehler.github.i
 
 from __future__ import annotations
 
-from sympy import root
+import os
+os.environ.setdefault("POLARS_SKIP_CPU_CHECK", "1")  # <-- for AMD processors
 
 __version__ = "0.1.0"
 
 import warnings
 from dataclasses import dataclass
-import os as os
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
