@@ -314,10 +314,12 @@ def run_spline_surface_kalman(
     ts_arr = df_q["ts_ns"].to_numpy(allow_copy=True)
 
     spline_ivs = np.full(n_q, np.nan)
+    prior_ivs = np.full(n_q, np.nan)  # pre-update prediction (held-out / one-step-ahead)
     thetas_hist = np.full((n_q, n_p), np.nan)  # state AFTER each step
 
     for i in range(n_q):
         z_hat, H = cfg.model.observe(theta, ks[i], Ts[i])
+        prior_ivs[i] = z_hat  # prediction before assimilating quote i
 
         if (
             np.isfinite(obs_ivs[i])
@@ -337,11 +339,14 @@ def run_spline_surface_kalman(
     K_q = df_q["strike"].to_numpy(allow_copy=True).astype(float)
     is_call_q = df_q["is_call"].to_numpy(allow_copy=True)
     kalman_prices_q = _bs_price_from_iv(F_q, K_q, Ts, spline_ivs, is_call_q)
+    kalman_prices_prior_q = _bs_price_from_iv(F_q, K_q, Ts, prior_ivs, is_call_q)
 
     df_quotes_result = df_q.with_columns(
         [
             pl.Series("spline_iv", spline_ivs.tolist()),
+            pl.Series("spline_prior_iv", prior_ivs.tolist()),
             pl.Series("kalman_price", kalman_prices_q.tolist()),
+            pl.Series("kalman_price_prior", kalman_prices_prior_q.tolist()),
         ]
     )
 

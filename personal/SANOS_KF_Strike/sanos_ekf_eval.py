@@ -26,16 +26,34 @@ needed and the whole day runs in numpy.
 
 from __future__ import annotations
 
+import os
 import pickle
 import sys
 import time
 
 import numpy as np
 
-sys.path.insert(0, ".")
+# Anchor sibling imports and cache lookups to this file's location, so the
+# module works regardless of the notebook / process working directory.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
 from dlv_pricing_absolute import option_prices
 
-TRADE_DATE = "2024-03-05"
+# Directories searched (in order) for phase1_cache_*.pkl.
+_CACHE_DIRS = [_HERE, os.path.dirname(_HERE), os.getcwd()]
+
+
+def _resolve_cache(trade_date) -> str:
+    name = f"phase1_cache_{trade_date}.pkl"
+    for d in _CACHE_DIRS:
+        path = os.path.join(d, name)
+        if os.path.exists(path):
+            return path
+    raise FileNotFoundError(f"{name} not found in {_CACHE_DIRS}")
+
+
+TRADE_DATE = "2024-01-03"
 
 
 # ── Load cache ────────────────────────────────────────────────────────────────
@@ -45,7 +63,8 @@ def load_cache(trade_date=TRADE_DATE):
     global TRADE_DATE, results, snap_lookup, grid_K, dlv_anchor, xstrikes_row
     global tte, dlv_min, is_call_flag, trading_day_s, N, n_state, box, pay_full, _I
     TRADE_DATE = str(trade_date)
-    _c = pickle.load(open(f"phase1_cache_{TRADE_DATE}.pkl", "rb"))
+    with open(_resolve_cache(TRADE_DATE), "rb") as _f:
+        _c = pickle.load(_f)
     results = _c["results"]
     snap_lookup = _c["snap_lookup"]
     grid_K = _c["grid_K"].astype(float)
@@ -233,6 +252,54 @@ def run(
     if verbose:
         print({k: v for k, v in out.items() if not isinstance(v, np.ndarray)})
     return out
+
+
+def eval_table(q_scale, ell, p0_scale=1e-2, warm=False, correlated=True, model_name="SANOS EKF"):
+    """Run the EKF and emit the unified-metrics standard evaluation table.
+
+    One row per (snapshot, strike) market quote, all in CALL price space (C/df):
+      prior_call = model call price from the prior state (held-out / one-step ahead)
+      post_call  = model call price from the posterior state (in-sample)
+      mid_call   = market mid converted to a call via put-call parity
+    Pass the returned DataFrame to unified_metrics.evaluate(...).
+    """
+    import pandas as pd
+    from dlv_pricing_absolute import call_prices
+
+    o = run(q_scale, ell, p0_scale=p0_scale, warm=warm, correlated=correlated, return_arrays=True)
+    x_prior, x_post = o["x_prior"], o["x_post"]
+    rows = []
+    for k in range(len(results)):
+        r = results[k]
+        snap = snap_lookup.get(r["ts"]) if not r["failed"] else None
+        if snap is None or len(snap[0]) == 0:
+            continue
+        sk, bk, ak = snap
+        fwd = r["fwd"]
+        mid = 0.5 * (bk + ak)
+        hs = np.maximum(0.5 * (ak - bk), 1e-8)
+        # market mid -> CALL price (PCP: C = P + F - K for puts)
+        mid_call = mid if is_call_flag else mid + (fwd - sk)
+        d_ho = _density_eval(x_prior[k], fwd)
+        d_is = _density_eval(x_post[k], fwd)
+        prior_call = call_prices(d_ho, grid_K, sk) if d_ho is not None else np.full(len(sk), np.nan)
+        post_call = call_prices(d_is, grid_K, sk) if d_is is not None else np.full(len(sk), np.nan)
+        for j in range(len(sk)):
+            rows.append(
+                (
+                    k,
+                    float(sk[j]),
+                    float(fwd),
+                    float(mid_call[j]),
+                    float(hs[j]),
+                    float(prior_call[j]),
+                    float(post_call[j]),
+                )
+            )
+    return pd.DataFrame(
+        rows,
+        columns=["ts", "strike", "forward", "mid_call", "half_spread", "prior_call", "post_call"],
+    )
 
 
 def persist_baseline(return_arrays=False):

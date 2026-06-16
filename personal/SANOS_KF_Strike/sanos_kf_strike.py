@@ -575,3 +575,93 @@ def run_sanos_kf_strike(
     state_cols.update({f"x_{j}": x_hist[:, j].tolist() for j in range(n_state)})
     df_state_out = pl.DataFrame(state_cols)
     return df_quotes_result, df_trades_result, df_state_out
+
+
+def gate_eval_table(
+    df_quotes_result: pl.DataFrame,
+    df_state: pl.DataFrame,
+    anchor_Ks: np.ndarray,
+    calls_only: bool = True,
+):
+    """Build the unified-metrics standard evaluation table for the SANOS gate.
+
+    Call ``run_sanos_kf_strike(..., return_state=True)`` first, then pass its
+    ``df_quotes_result`` and ``df_state`` here.  All prices are undiscounted CALL
+    prices C/df (puts converted via PCP), matching unified_metrics' price space:
+
+      prior_call = sanos_kf_price  (z_hat, the pre-update / held-out prediction)
+      post_call  = h(x_post, K, T) recomputed from the post-update state
+      neg_mass   = native SANOS density negative mass  Σ max(-q, 0)  per quote
+
+    Returns a pandas DataFrame with the standard columns plus ``neg_mass``; pass it
+    to ``unified_metrics.evaluate(df, neg_mass_values=df['neg_mass'])``.
+    """
+    import pandas as pd
+
+    anchor_Ks = np.asarray(anchor_Ks, dtype=float)
+    n_state = len(anchor_Ks) - 2
+    df_q = df_quotes_result.sort("ts_ns")
+    df_s = df_state.sort("ts_ns")
+
+    ks = df_q["log_moneyness"].to_numpy().astype(float)
+    Ts = df_q["T"].to_numpy().astype(float)
+    fwds = df_q["forward"].to_numpy().astype(float)
+    is_calls = df_q["is_call"].to_numpy().astype(bool)
+    bids = df_q["bid_price"].to_numpy().astype(float)
+    asks = df_q["ask_price"].to_numpy().astype(float)
+    dfs = (
+        df_q["discount_factor"].to_numpy().astype(float)
+        if "discount_factor" in df_q.columns
+        else np.ones(len(df_q))
+    )
+    prior_call = df_q["sanos_kf_price"].to_numpy().astype(float)
+    K_abs = fwds * np.exp(ks)
+
+    safe_dfs = np.where(dfs > 0, dfs, 1.0)
+    pcp = np.where(~is_calls, fwds - K_abs, 0.0)
+    bid_u = bids / safe_dfs + pcp
+    ask_u = asks / safe_dfs + pcp
+    mid_call = 0.5 * (bid_u + ask_u)
+    half_spread = np.maximum(0.5 * (ask_u - bid_u), 1e-10)
+
+    X = df_s.select([f"x_{j}" for j in range(n_state)]).to_numpy().astype(float)
+    ak_jax = jnp.array(anchor_Ks)
+    q_bar_0 = jnp.array(_q_bar_0_from_strikes(anchor_Ks, float(fwds[np.isfinite(fwds)][0])))
+
+    valid = (
+        np.isfinite(X).all(axis=1)
+        & np.isfinite(Ts)
+        & (Ts > 0)
+        & np.isfinite(K_abs)
+        & (K_abs >= anchor_Ks[0])
+        & (K_abs <= anchor_Ks[-1])
+        & (~calls_only | is_calls)
+    )
+    Xj = jnp.array(np.where(valid[:, None], X, 0.0))
+    Kj = jnp.array(np.where(valid, K_abs, anchor_Ks[0]))
+    Tj = jnp.array(np.where(valid, Ts, 1.0))
+
+    post_call = np.array(
+        jax.jit(jax.vmap(_obs_fn_strike, in_axes=(0, None, 0, 0, None)))(
+            Xj, ak_jax, Kj, Tj, q_bar_0
+        )
+    )
+    q_all = np.array(
+        jax.jit(jax.vmap(_density_from_state, in_axes=(0, None, 0, None)))(Xj, ak_jax, Tj, q_bar_0)
+    )
+    neg_mass = -np.maximum(-q_all, 0.0).sum(axis=1)  # signed (<=0), like negative_mass_bl
+    post_call = np.where(valid, post_call, np.nan)
+    neg_mass = np.where(valid, neg_mass, np.nan)
+
+    return pd.DataFrame(
+        {
+            "ts": df_q["ts_ns"].cast(pl.Int64).to_numpy(),
+            "strike": K_abs,
+            "forward": fwds,
+            "mid_call": mid_call,
+            "half_spread": half_spread,
+            "prior_call": np.where(valid, prior_call, np.nan),
+            "post_call": post_call,
+            "neg_mass": neg_mass,
+        }
+    )
