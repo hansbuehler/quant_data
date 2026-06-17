@@ -438,6 +438,8 @@ def build_iv_surface(
     max_iv: float = 5.0,
     simple=True,
     discount_factor_clip: tuple[float, float] | None = (0.998, 1.002),
+    batch_seconds: float | None = None,
+    q_scale: float = 0.001,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
     """
     Run IV Kalman filter for all options in df_tickers, operating directly on
@@ -447,6 +449,16 @@ def build_iv_surface(
       1. Per-ticker: fetch quotes + matched trades, process quotes.
       2. Batch: concat all frames, compute all implied vols in one cdxcore.bs call.
       3. Per-ticker: IV Kalman trained on quotes (in-sample), tested on matched trades (out-of-sample).
+
+    Parameters
+    ----------
+    batch_seconds : float | None
+        If set, the per-ticker IV Kalman groups quotes into windows of this many
+        seconds and assimilates each window with one batch update (removes
+        quote-burst ordering sensitivity). If None, the original per-quote
+        sequential filter is used.
+    q_scale : float
+        Time-proportional process-noise scale (per second) for the batch filter.
 
     Returns
     -------
@@ -604,7 +616,10 @@ def build_iv_surface(
             df_q_iv = all_quotes_iv.filter(mask)
             df_t_iv = all_trades_iv.filter(mask)
 
-            df_iv_trades_r, df_iv_quotes_r = ekf.kalman_filters_iv(df_q_iv, df_t_iv)
+            batch_ns = int(batch_seconds * 1e9) if batch_seconds is not None else None
+            df_iv_trades_r, df_iv_quotes_r = ekf.kalman_filters_iv(
+                df_q_iv, df_t_iv, batch_ns=batch_ns, q_scale=q_scale
+            )
 
             meta_cols = [pl.lit(strike).alias("strike"), pl.lit(is_call).alias("is_call")]
 
