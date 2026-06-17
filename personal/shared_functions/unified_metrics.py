@@ -261,25 +261,31 @@ def evaluate(
 
     def _agg(x):
         x = np.asarray(x, float)
-        return (float(np.nanmean(x)), float(np.nanmedian(x))) if len(x) else (np.nan, np.nan)
+        if not len(x):
+            return (np.nan, np.nan, np.nan)
+        return (float(np.nanmean(x)), float(np.nanmedian(x)), float(np.nanstd(x)))
 
-    ho_nse_mean, ho_nse_med = _agg(ho_nse)
-    is_nse_mean, is_nse_med = _agg(is_nse)
-    ho_rmse_mean, ho_rmse_med = _agg(ho_rmse)
-    is_rmse_mean, is_rmse_med = _agg(is_rmse)
-    nm_mean, nm_med = _agg(neg_mass)
+    ho_nse_mean, ho_nse_med, ho_nse_std = _agg(ho_nse)
+    is_nse_mean, is_nse_med, is_nse_std = _agg(is_nse)
+    ho_rmse_mean, ho_rmse_med, ho_rmse_std = _agg(ho_rmse)
+    is_rmse_mean, is_rmse_med, is_rmse_std = _agg(is_rmse)
+    nm_mean, nm_med, _ = _agg(neg_mass)
     arb_frac = float(np.mean(np.asarray(neg_mass) < arb_tol)) if neg_mass else np.nan
 
     return {
         "model": model_name,
         "ho_nse_mean": ho_nse_mean,
         "ho_nse_med": ho_nse_med,
+        "ho_nse_std": ho_nse_std,
         "is_nse_mean": is_nse_mean,
         "is_nse_med": is_nse_med,
+        "is_nse_std": is_nse_std,
         "ho_rmse_mean": ho_rmse_mean,
         "ho_rmse_med": ho_rmse_med,
+        "ho_rmse_std": ho_rmse_std,
         "is_rmse_mean": is_rmse_mean,
         "is_rmse_med": is_rmse_med,
+        "is_rmse_std": is_rmse_std,
         "neg_mass_mean": nm_mean,
         "neg_mass_med": nm_med,
         "arb_frac": arb_frac,
@@ -344,12 +350,16 @@ def comparison_table(metric_dicts: list[dict]) -> pd.DataFrame:
         "model",
         "ho_nse_mean",
         "ho_nse_med",
+        "ho_nse_std",
         "is_nse_mean",
         "is_nse_med",
+        "is_nse_std",
         "ho_rmse_mean",
         "ho_rmse_med",
+        "ho_rmse_std",
         "is_rmse_mean",
         "is_rmse_med",
+        "is_rmse_std",
         "neg_mass_mean",
         "neg_mass_med",
         "arb_frac",
