@@ -47,6 +47,11 @@ class Model:
     # Entry i multiplies Q_scale for parameter i.
     # Rule of thumb: fast-moving params (level) → 1.0, slow params (shape) → 0.05.
     q_diag_weights: np.ndarray = dataclasses.field(default=None)
+    # Optional projection applied to θ after every KF update, pulling the state
+    # back onto the model's valid parameter domain so the (unconstrained) EKF
+    # update cannot diverge into a region where observe() is undefined.
+    # None → no projection (state left exactly as the KF update produced it).
+    project: Callable[[np.ndarray], np.ndarray] = dataclasses.field(default=None)
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +102,35 @@ def _observe_svi_slice(theta: np.ndarray, k: float, T: float) -> tuple[float, np
     return z_hat, H
 
 
+def _project_svi(theta: np.ndarray) -> np.ndarray:
+    """Project θ = [a, b, ρ, m, σ] back onto the valid SVI domain.
+
+    The EKF update is unconstrained and, around a flat prior with large P0, can
+    take a single huge step that lands ρ outside (−1, 1) or drives the total
+    variance negative — after which observe() returns NaN, the filter can only
+    predict, and θ freezes (all later spline_iv / kalman_price become NaN).
+    This clamp keeps every parameter in range so the filter cannot leave the
+    SVI manifold:
+        b ≥ 0,  σ ≥ σ_min,  ρ ∈ [−0.999, 0.999]
+        a ≥ w_floor − b·σ·√(1−ρ²)   ⇒  min_k w(k) ≥ w_floor > 0
+    (min_k [ρ·d + √(d²+σ²)] = σ·√(1−ρ²), attained at d = −ρσ/√(1−ρ²).)
+
+    Note: only positivity / sign constraints are imposed. Hard-clamping the
+    weakly-identified centre m or width σ to a "sensible" box makes the fit far
+    worse, not better — the EKF covariance still treats them as free, so the
+    filter fights the clamp every step and drags a/b/ρ into bad values. Their
+    drift is controlled through process noise (small q_diag_weights), not here.
+    """
+    a, b, rho, m, sigma = (float(theta[i]) for i in range(5))
+    b = max(b, 0.0)
+    sigma = max(sigma, 1e-4)
+    rho = min(max(rho, -0.999), 0.999)
+    w_floor = 1e-8
+    a_min = w_floor - b * sigma * np.sqrt(1.0 - rho**2)
+    a = max(a, a_min)
+    return np.array([a, b, rho, m, sigma])
+
+
 def _initial_theta_svi_slice(cfg: "SurfaceModelConfig") -> np.ndarray:
     """a=5e-5, b=5e-4, ρ=−0.7, m=0, σ=0.2
     ATM total variance w ≈ 1.5e-4; for T=0.008 (2-day SPY): ATM IV ≈ 0.137"""
@@ -110,6 +144,7 @@ SVI_SLICE_MODEL = Model(
     initial_theta=_initial_theta_svi_slice,
     # level (a) moves constantly with spot; b/ρ move moderately; m/σ near-static
     q_diag_weights=np.array([1.0, 0.2, 0.1, 0.02, 0.02]),
+    project=_project_svi,
 )
 
 
@@ -148,6 +183,7 @@ SVI_MODEL = Model(
     observe=_observe_svi,
     initial_theta=_initial_theta_svi,
     q_diag_weights=np.array([1.0, 0.2, 0.1, 0.02, 0.02]),
+    project=_project_svi,
 )
 
 

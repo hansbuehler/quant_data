@@ -35,7 +35,7 @@ from quantdata.massive.client import MassiveClient
 
 # ── Phase 1 config ────────────────────────────────────────────────────────
 TICKER = "SPY"
-TRADE_DATE = date(2024, 3, 5)
+TRADE_DATE = date(2024, 1, 3)
 BATCH_FREQ = "1s"
 MIN_TRADES = 100
 

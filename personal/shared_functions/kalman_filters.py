@@ -429,43 +429,29 @@ def build_implied_forward(
     )
 
 
-def build_iv_surface(
+def build_iv_frames(
     df_tickers: pl.DataFrame,
     trade_date,
     taq_config: TAQMatchConfig = TAQMatchConfig(),
     df_spy=None,
     min_trades: int = 1,
-    max_iv: float = 5.0,
     simple=True,
     discount_factor_clip: tuple[float, float] | None = (0.998, 1.002),
-    batch_seconds: float | None = None,
-    q_scale: float = 0.001,
-) -> tuple[pl.DataFrame, pl.DataFrame]:
+):
     """
-    Run IV Kalman filter for all options in df_tickers, operating directly on
-    implied vols (no price Kalman step).
+    Phases 1-2 of the IV-surface pipeline (the expensive, Kalman-independent part).
 
-    Structured in three phases:
       1. Per-ticker: fetch quotes + matched trades, process quotes.
-      2. Batch: concat all frames, compute all implied vols in one cdxcore.bs call.
-      3. Per-ticker: IV Kalman trained on quotes (in-sample), tested on matched trades (out-of-sample).
-
-    Parameters
-    ----------
-    batch_seconds : float | None
-        If set, the per-ticker IV Kalman groups quotes into windows of this many
-        seconds and assimilates each window with one batch update (removes
-        quote-burst ordering sensitivity). If None, the original per-quote
-        sequential filter is used.
-    q_scale : float
-        Time-proportional process-noise scale (per second) for the batch filter.
+      2. Batch: concat all frames, compute all implied vols in one cdxcore.bs call,
+         after estimating the implied forward per expiry.
 
     Returns
     -------
-    (df_quotes_iv, df_trades_iv)
-        Both are long DataFrames keyed by (ts_ns, strike, is_call).
-        df_quotes_iv  — train: observed_iv, bid_iv, ask_iv, kalman_iv
-        df_trades_iv  — test:  observed_iv, kalman_matched, trade_residual
+    (all_quotes_iv, all_trades_iv, ticker_meta)
+        Long IV-tagged frames keyed by (_strike, is_call), plus the list of
+        (strike, is_call, expiry) contracts.  Independent of the Kalman
+        hyperparameters (q_scale, batch_seconds), so this can be cached once and
+        reused across a hyperparameter sweep (see Kalman_filter_individual/).
     """
     from quantdata.massive.client import MassiveClient
 
@@ -605,6 +591,44 @@ def build_iv_surface(
     ).with_columns((((pl.col("ask_iv") - pl.col("bid_iv")) / 2) ** 2).alias("R_iv"))
     all_trades_iv = _compute_iv_batch(pl.concat(tagged_trade_frames), price_col="price")
 
+    return all_quotes_iv, all_trades_iv, ticker_meta
+
+
+def iv_surface_from_frames(
+    all_quotes_iv: pl.DataFrame,
+    all_trades_iv: pl.DataFrame,
+    ticker_meta,
+    *,
+    max_iv: float = 5.0,
+    batch_seconds: float | None = None,
+    q_scale: float = 0.001,
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """
+    Phase 3 of the IV-surface pipeline: per-ticker IV Kalman (trained on quotes,
+    tested on matched trades) plus BS price reconstruction, given the cached
+    frames from build_iv_frames.
+
+    Depends only on the Kalman hyperparameters (batch_seconds, q_scale), so a
+    hyperparameter sweep can call this repeatedly over a single cached
+    (all_quotes_iv, all_trades_iv, ticker_meta) triple.
+
+    Parameters
+    ----------
+    batch_seconds : float | None
+        If set, the per-ticker IV Kalman groups quotes into windows of this many
+        seconds and assimilates each window with one batch update (removes
+        quote-burst ordering sensitivity). If None, the original per-quote
+        sequential filter is used.
+    q_scale : float
+        Time-proportional process-noise scale (per second) for the batch filter.
+
+    Returns
+    -------
+    (df_quotes_iv, df_trades_iv)
+        Both are long DataFrames keyed by (ts_ns, strike, is_call).
+        df_quotes_iv  — train: observed_iv, bid_iv, ask_iv, kalman_iv, kalman_price
+        df_trades_iv  — test:  observed_iv, kalman_matched, trade_residual
+    """
     # ── Phase 3: per-ticker IV Kalman ─────────────────────────────────────────
     iv_cols = ["observed_iv", "bid_iv", "ask_iv", "kalman_iv"]
     quote_result_frames = []
@@ -695,3 +719,59 @@ def build_iv_surface(
         pl.concat(trade_result_frames).sort("ts_ns") if trade_result_frames else pl.DataFrame()
     )
     return df_quotes_iv, df_trades_iv
+
+
+def build_iv_surface(
+    df_tickers: pl.DataFrame,
+    trade_date,
+    taq_config: TAQMatchConfig = TAQMatchConfig(),
+    df_spy=None,
+    min_trades: int = 1,
+    max_iv: float = 5.0,
+    simple=True,
+    discount_factor_clip: tuple[float, float] | None = (0.998, 1.002),
+    batch_seconds: float | None = None,
+    q_scale: float = 0.001,
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """
+    Run IV Kalman filter for all options in df_tickers, operating directly on
+    implied vols (no price Kalman step).
+
+    Composes build_iv_frames (phases 1-2: fetch + batched IV) with
+    iv_surface_from_frames (phase 3: per-ticker IV Kalman + BS price
+    reconstruction).
+
+    Parameters
+    ----------
+    batch_seconds : float | None
+        If set, the per-ticker IV Kalman groups quotes into windows of this many
+        seconds and assimilates each window with one batch update (removes
+        quote-burst ordering sensitivity). If None, the original per-quote
+        sequential filter is used.
+    q_scale : float
+        Time-proportional process-noise scale (per second) for the batch filter.
+
+    Returns
+    -------
+    (df_quotes_iv, df_trades_iv)
+        Both are long DataFrames keyed by (ts_ns, strike, is_call).
+        df_quotes_iv  — train: observed_iv, bid_iv, ask_iv, kalman_iv, kalman_price
+        df_trades_iv  — test:  observed_iv, kalman_matched, trade_residual
+    """
+    all_quotes_iv, all_trades_iv, ticker_meta = build_iv_frames(
+        df_tickers,
+        trade_date,
+        taq_config=taq_config,
+        df_spy=df_spy,
+        min_trades=min_trades,
+        simple=simple,
+        discount_factor_clip=discount_factor_clip,
+    )
+    return iv_surface_from_frames(
+        all_quotes_iv,
+        all_trades_iv,
+        ticker_meta,
+        max_iv=max_iv,
+        batch_seconds=batch_seconds,
+        q_scale=q_scale,
+    )

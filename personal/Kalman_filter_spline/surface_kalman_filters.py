@@ -275,6 +275,36 @@ def _kf_step(
     return theta_new, P_new
 
 
+def _kf_batch_update(
+    theta: np.ndarray,
+    P_pred: np.ndarray,
+    Hs: np.ndarray,
+    z_hats: np.ndarray,
+    zs: np.ndarray,
+    Rs: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """One EKF update assimilating a whole window of scalar observations at once.
+
+    All observations are linearised around the same prior θ (Jacobians ``Hs`` and
+    predictions ``z_hats`` evaluated at θ), then combined in information form so
+    the only matrix solve is n_params × n_params — independent of how many quotes
+    fell in the window.  This is the vector-state analogue of the closed-form
+    scalar batch update in ``ekf.run_ekf_batched``:
+        A = P_pred⁻¹ + Σ Hⱼᵀ Hⱼ / Rⱼ            (posterior information)
+        b = Σ Hⱼᵀ (zⱼ − ẑⱼ) / Rⱼ                 (information-weighted innovation)
+        P_new = A⁻¹,   θ_new = θ + P_new · b
+    """
+    A = np.linalg.inv(P_pred)
+    b = np.zeros_like(theta)
+    inv_R = 1.0 / Rs
+    A += (Hs.T * inv_R) @ Hs
+    b += Hs.T @ ((zs - z_hats) * inv_R)
+    P_new = np.linalg.inv(A)
+    P_new = (P_new + P_new.T) * 0.5  # enforce symmetry
+    theta_new = theta + P_new @ b
+    return theta_new, P_new
+
+
 # ---------------------------------------------------------------------------
 # Joint spline surface Kalman filter
 # ---------------------------------------------------------------------------
@@ -284,6 +314,7 @@ def run_spline_surface_kalman(
     df_quotes_iv: pl.DataFrame,
     df_trades_iv: pl.DataFrame,
     cfg,
+    batch_seconds: float | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
     """
     Run the spline-state Kalman filter on the merged IV observation stream.
@@ -291,6 +322,17 @@ def run_spline_surface_kalman(
     At each quote tick (in time order) the shared state θ ∈ ℝ^n_params is
     updated using H = basis_row(log_moneyness, T).  Trades are evaluated
     out-of-sample against the state recorded at their matched quote timestamp.
+
+    batch_seconds : float | None
+        If set, quotes are grouped into time windows of this width (seconds) and
+        assimilated with one batch update per window instead of one update per
+        tick.  All quotes in a window share the same prior θ (so the held-out
+        ``spline_prior_iv`` is the one-step-ahead, previous-window state) and a
+        single information-form update (``_kf_batch_update``) combines them.
+        Process noise is time-proportional within the window, P_pred = P + Q·Δt
+        (Δt in seconds), so quote-burst density no longer inflates uncertainty —
+        mirroring the single-strike batch filter (``ekf.run_ekf_batched``).
+        ``None`` (default) keeps the original per-tick behaviour.
 
     Returns
     -------
@@ -303,6 +345,7 @@ def run_spline_surface_kalman(
     P = sm.build_P0(cfg)
     theta = cfg.model.initial_theta(cfg)
     n_p = cfg.n_params
+    project = getattr(cfg.model, "project", None)
 
     df_q = df_quotes_iv.sort("ts_ns")
     n_q = len(df_q)
@@ -317,23 +360,73 @@ def run_spline_surface_kalman(
     prior_ivs = np.full(n_q, np.nan)  # pre-update prediction (held-out / one-step-ahead)
     thetas_hist = np.full((n_q, n_p), np.nan)  # state AFTER each step
 
-    for i in range(n_q):
-        z_hat, H = cfg.model.observe(theta, ks[i], Ts[i])
-        prior_ivs[i] = z_hat  # prediction before assimilating quote i
+    if batch_seconds is None:
+        # ── Per-tick filter: one predict+update per quote ─────────────────────
+        for i in range(n_q):
+            z_hat, H = cfg.model.observe(theta, ks[i], Ts[i])
+            prior_ivs[i] = z_hat  # prediction before assimilating quote i
 
-        if (
-            np.isfinite(obs_ivs[i])
-            and np.isfinite(Rs[i])
-            and Rs[i] > 0
-            and np.isfinite(H).all()
-            and np.isfinite(z_hat)
-        ):
-            theta, P = _kf_step(theta, P, H, z_hat, obs_ivs[i], Rs[i], Q)
-        else:
-            P = P + Q  # predict-only when observation is invalid
+            if (
+                np.isfinite(obs_ivs[i])
+                and np.isfinite(Rs[i])
+                and Rs[i] > 0
+                and np.isfinite(H).all()
+                and np.isfinite(z_hat)
+            ):
+                theta, P = _kf_step(theta, P, H, z_hat, obs_ivs[i], Rs[i], Q)
+                if project is not None:
+                    theta = project(theta)  # keep θ on the model's valid domain
+            else:
+                P = P + Q  # predict-only when observation is invalid
 
-        spline_ivs[i] = cfg.model.observe(theta, ks[i], Ts[i])[0]  # post-update prediction
-        thetas_hist[i] = theta
+            spline_ivs[i] = cfg.model.observe(theta, ks[i], Ts[i])[0]  # post-update prediction
+            thetas_hist[i] = theta
+    else:
+        # ── Batched filter: one time-proportional predict + batch update per window ──
+        batch_ns = int(batch_seconds * 1e9)
+        ts_int = ts_arr.astype(np.int64)
+        t0 = int(ts_int.min())
+        bins = (ts_int - t0) // batch_ns
+        t_prev_ns = t0
+
+        for b in np.unique(bins):
+            idx = np.flatnonzero(bins == b)
+            t_b = int(ts_int[idx[0]])
+            dt_s = max((t_b - t_prev_ns) / 1e9, 0.0)
+            t_prev_ns = t_b
+
+            P_pred = P + Q * dt_s
+
+            # Held-out prediction (pre-update) for every quote in the window, and
+            # the Jacobians linearising the batch update around the shared prior θ.
+            z_hats = np.empty(idx.size)
+            Hs = np.empty((idx.size, n_p))
+            for r, i in enumerate(idx):
+                z_hat, H = cfg.model.observe(theta, ks[i], Ts[i])
+                prior_ivs[i] = z_hat
+                z_hats[r] = z_hat
+                Hs[r] = H
+
+            valid = (
+                np.isfinite(obs_ivs[idx])
+                & np.isfinite(Rs[idx])
+                & (Rs[idx] > 0)
+                & np.isfinite(z_hats)
+                & np.isfinite(Hs).all(axis=1)
+            )
+            if valid.any():
+                theta, P = _kf_batch_update(
+                    theta, P_pred, Hs[valid], z_hats[valid], obs_ivs[idx][valid], Rs[idx][valid]
+                )
+                if project is not None:
+                    theta = project(theta)  # keep θ on the model's valid domain
+            else:
+                P = P_pred  # predict-only when the window has no usable quote
+
+            # Post-update prediction; all quotes in the window share posterior θ.
+            for i in idx:
+                spline_ivs[i] = cfg.model.observe(theta, ks[i], Ts[i])[0]
+                thetas_hist[i] = theta
 
     F_q = df_q["forward"].to_numpy(allow_copy=True).astype(float)
     K_q = df_q["strike"].to_numpy(allow_copy=True).astype(float)
@@ -350,6 +443,16 @@ def run_spline_surface_kalman(
         ]
     )
 
+    # Build state-history DataFrame (needed by both the early return and the
+    # trade-evaluation path below). Re-use the original Polars series so the
+    # dtype (incl. timezone) is preserved. Public columns use "theta_j" names;
+    # internal join columns keep the "_th{j}" prefix.
+    th_cols = {f"_th{j}": thetas_hist[:, j].tolist() for j in range(n_p)}
+    df_state = pl.DataFrame({"ts_ns": df_q["ts_ns"], **th_cols})
+
+    # Public state history (clean names for notebook use)
+    df_state_out = df_state.rename({f"_th{j}": f"theta_{j}" for j in range(n_p)})
+
     # ── Trade evaluation ──────────────────────────────────────────────────────
     if df_trades_iv.is_empty() or "quote_ts_ns" not in df_trades_iv.columns:
         return (
@@ -362,15 +465,6 @@ def run_spline_surface_kalman(
             ),
             df_state_out,
         )
-
-    # Build state-history DataFrame and join trades backward on quote_ts_ns.
-    # Re-use the original Polars series so the dtype (incl. timezone) is preserved.
-    # Public columns use "theta_j" names; internal join columns keep "_th{j}" prefix.
-    th_cols = {f"_th{j}": thetas_hist[:, j].tolist() for j in range(n_p)}
-    df_state = pl.DataFrame({"ts_ns": df_q["ts_ns"], **th_cols})
-
-    # Public state history (clean names for notebook use)
-    df_state_out = df_state.rename({f"_th{j}": f"theta_{j}" for j in range(n_p)})
 
     df_t = df_trades_iv.sort("quote_ts_ns").join_asof(
         df_state, left_on="quote_ts_ns", right_on="ts_ns", strategy="backward"
