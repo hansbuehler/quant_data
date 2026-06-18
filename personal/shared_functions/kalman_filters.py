@@ -236,6 +236,7 @@ def build_implied_forward(
     max_leg_staleness_s: float = 60.0,
     simple: bool = True,
     discount_factor_clip: tuple[float, float] | None = (0.998, 1.002),
+    method: str = "mean_atm",
 ) -> pl.DataFrame:
     """
     Estimate the true implied forward F from put-call parity, with dynamic ATM selection.
@@ -341,7 +342,9 @@ def build_implied_forward(
     is_valid = lambda k: pl.col(col_k(k)).is_not_null()
     abs_dist = lambda k: (pl.lit(float(k)) - pl.col("spot")).abs()
 
-    return (
+    # Shared ATM selection: at each spine tick, find the 2 valid strikes nearest to spot,
+    # ordered k1 < k2, and look up their parity spreads Δ1, Δ2.
+    base = (
         wide.filter(pl.col("spot").is_not_null())
         # nearest valid strike to spot
         .with_columns(
@@ -398,30 +401,50 @@ def build_implied_forward(
                 [pl.when(pl.col("_k2") == float(k)).then(pl.col(col_k(k))) for k in ks]
             ).alias("_d2"),
         )
-        # solve 2×2 system
-        .with_columns(
-            pl.when(pl.col("_k2") > pl.col("_k1"))
-            .then((pl.col("_d1") - pl.col("_d2")) / (pl.col("_k2") - pl.col("_k1")))
-            .otherwise(None)
-            .alias("_e_rT"),
+    )
+
+    if method == "mean_atm":
+        # Robust: assume e^{-rT}=1 and AVERAGE F_i = K_i + Δ_i over the (up to) 2 nearest ATM
+        # strikes. mean_horizontal ignores nulls, so this degrades to the single nearest strike
+        # when only one leg is valid. Halves the per-tick mid-noise vs the 2×2 solve and avoids
+        # dividing Δ1-Δ2 by the strike gap (which is what makes the per-tick discount factor junk).
+        out = base.with_columns(
+            pl.mean_horizontal(
+                [pl.col("_k1") + pl.col("_d1"), pl.col("_k2") + pl.col("_d2")]
+            ).alias("_fwd"),
+            pl.lit(1.0).alias("discount_factor"),
         )
-        .with_columns(
-            pl.when(pl.col("_e_rT") > 0)
-            .then(
-                pl.col("_e_rT").clip(*discount_factor_clip)
-                if discount_factor_clip is not None
-                else pl.col("_e_rT")
+    elif method == "twostrike":
+        # Legacy: solve the 2×2 system for e^{-rT}, then F = K1 + Δ1 / e^{-rT}.
+        out = (
+            base.with_columns(
+                pl.when(pl.col("_k2") > pl.col("_k1"))
+                .then((pl.col("_d1") - pl.col("_d2")) / (pl.col("_k2") - pl.col("_k1")))
+                .otherwise(None)
+                .alias("_e_rT"),
             )
-            .otherwise(None)
-            .alias("discount_factor"),
+            .with_columns(
+                pl.when(pl.col("_e_rT") > 0)
+                .then(
+                    pl.col("_e_rT").clip(*discount_factor_clip)
+                    if discount_factor_clip is not None
+                    else pl.col("_e_rT")
+                )
+                .otherwise(None)
+                .alias("discount_factor"),
+            )
+            .with_columns(
+                pl.when(pl.col("discount_factor").is_not_null())
+                .then(pl.col("_k1") + pl.col("_d1") / pl.col("discount_factor"))
+                .otherwise(None)
+                .alias("_fwd"),
+            )
         )
-        .with_columns(
-            pl.when(pl.col("discount_factor").is_not_null())
-            .then(pl.col("_k1") + pl.col("_d1") / pl.col("discount_factor"))
-            .otherwise(None)
-            .alias("_fwd"),
-        )
-        .with_columns(
+    else:
+        raise ValueError(f"build_implied_forward: unknown method {method!r}")
+
+    return (
+        out.with_columns(
             pl.when(pl.col("_fwd") > 0).then(pl.col("_fwd")).otherwise(None).alias("forward"),
         )
         .filter(pl.col("forward").is_not_null())
