@@ -599,8 +599,8 @@ ENRICHED_PER_EXPIRY_FIELDS = RAW_PER_EXPIRY_FIELDS|{'fwd'}
 @dataclass(frozen=True)
 class ExpiryFilter:
     """ How to filter expiries to be able to compute implied forwards """
-    num_min_either_traded : int = 10
-    num_min_both_traded   : int = 4
+    num_min_either_traded : int = 10       # Drop expiries with less than this number of either calls or puts traded for a given strike.
+    num_min_both_traded   : int = 4        # Drop expiries with less than this number of both calls and puts traded for a given strike.q
     min_pure_spread       : float = 1E-6
     min_implied_vol       : float = 0.01
     max_implied_vol       : float = 5.0

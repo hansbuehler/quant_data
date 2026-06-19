@@ -104,15 +104,18 @@ def interpolate_grid(
     verbose = verbose if not verbose is None else Context.quiet
 
     def message(with_cols : bool = True) -> str:
+        my_context = f"{ticker} {d}"
         if message_context is None:
-            return ""
-            
-        if callable(message_context):
-            msg = message_context()
+            msg = my_context
         else:
-            msg = str(message_context)
-        if msg == "":
-            return msg
+            if callable(message_context):
+                msg = message_context()
+            else:
+                msg = str(message_context)
+            if msg != "":
+                msg += " " + my_context
+            else:
+                msg = my_context
         msg = msg[0].upper() + msg[1:]
         return msg if not with_cols else msg + ": "
 
@@ -215,7 +218,7 @@ def interpolate_grid(
         del strikes
 
         # fit and price market4
-        sanos           = SanosFitter(smoothness=grid_config.smoothness, min_dlv=grid_config.min_dlv, max_dlv=grid_config.max_dlv )
+        sanos           = SanosFitter(smoothness=grid_config.smoothness, min_dlv=grid_config.min_dlv, max_dlv=grid_config.max_dlv, _raise_on_eps=False )
         sn_grid         = sanos(    expiries = nms_grid.expiries, 
                                     strikes  = [ nms_grid.xstrikes[t,1:-1] for t in range(T) ],
                                     mids     = [ nms_grid.mids[t,:] for t in range(T) ], 
@@ -225,6 +228,7 @@ def interpolate_grid(
                                     verbose=verbose(1))
         nms_grid.fits,\
         nms_grid.fit_vols    = sn_grid( expiries=nms_grid.expiries[:,None], strikes=nms_grid.xstrikes[:,1:-1], and_vols=True )
+        sn_grid.__dict__["_eps_price"] = 1E-6
         nms_grid.fit_dlvsqs  = sn_grid.dlvsqs( min_dlv=0., max_dlv=None, on_all_strikes=False ) # do not use DLV bounds here!
         err_vols             = np.median( np.abs( nms_grid.fit_vols - nms_grid.mid_vols ) )
         verbose.write(f"Trained {str_smth} SANOS on NMS {grid_config.grid_range} {grid_config.mode} grid; this took {tme}. This median match to implied vols was {err_vols:.2f}.")

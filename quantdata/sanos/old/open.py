@@ -349,7 +349,7 @@ class OpenGeometryGenerator:
                         xstrikes_t  = r.xstrikes[t]
                         strikes_t   = xstrikes_t[1:-1]
                         Nt          = len(strikes_t)
-                        C           = cp.Variable(Nt+2, nonneg=True)
+                        C           = cp.Variable(Nt+2,  bounds=[0.,1.])
                         dC          = cp.multiply( C[1:] - C[:-1], 1./( xstrikes_t[1:] - xstrikes_t[:-1] ) )
                         constraints = [ -1 <= dC[0],
                                         dC[:-1] <= dC[1:],

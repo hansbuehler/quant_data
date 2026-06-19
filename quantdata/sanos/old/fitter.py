@@ -245,7 +245,7 @@ class Fitter:
         density0    = np.asarray( self.geometry.density0, dtype=np.float64 )
         Ns          = [ len(x_t) for x_t in mxstrikes[1:] ]
  
-        densities   = [ cp.Variable( (Nt,), nonneg=True ) for Nt in Ns ]
+        densities   = [ cp.Variable( (Nt,), bounds=[0.,1.]) for Nt in Ns ]#nonneg=True)
         conditions  = [ cp.sum(d_t) == 1. for d_t in densities ] +\
                       [ d_t <= 1. for d_t in densities ] +\
                       [ cp.sum( cp.multiply( s_t, d_t ) ) == 1. for s_t, d_t in zip(mxstrikes[1:], densities) ] # density conditions

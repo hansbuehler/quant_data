@@ -43,9 +43,10 @@ from quantdata.biz_calendar import DAYS_PER_YEAR, ONE_MINUTE
 from quantdata.utils.backbone import BackboneNumpy
 import math
 
+from quantdata.sanos import IMPOSE_FLOOR_ON_DENSITY
 from quantdata.sanos.sanos_tools import SanosLPSolver, repair_density_nonnegative, warn_and_fix_density, _compute_market_fit
 
-@version("0.8")
+@version("0.81")
 class ArbFreePricer(PrettyObject):
     """
     Arbitrage-Free Option pricer based on DLV/SANOS.
@@ -861,7 +862,7 @@ class MkArbFree:
                 assert xguess_t is None or xguess_t.shape == xstrikes_t.shape, f"Internal error: length of xguessed_p[{t}] {len(xguess_t)} must be the same as length of xstrikes[{t}] {len(xstrikes_t)}."
 
                 # density
-                q_t         = cp.Variable(len(xstrikes_t), nonneg=True)
+                q_t         = cp.Variable(len(xstrikes_t), bounds=[0.,1.])#nonneg=True)
                 assert q_t.shape == (len(xstrikes_t),), f"Internal error: shape of q_t {q_t.shape} must be the same as length of xstrikes_t {len(xstrikes_t)}." 
                 assert xguess_t is None or q_t.shape == xguess_t.shape, f"Internal error: shape of q_t {q_t.shape} must be the same as shape of xguess_t {xguess_t.shape}."
                 variables   += [(q_t, xguess_t)]
@@ -913,7 +914,7 @@ class MkArbFree:
                 guess_fit    = CX[mask_t,:] @ xguess_t if not xguess_t is None else None
                 if eff_mid_fit_weight < 1.:
                     e_init = np.clip( np.maximum( guess_fit - ask_t, bid_t - guess_fit ) / whalf_spread, 0., None) if guess_fit is not None else None
-                    e_box  = cp.Variable(len(bid_t), nonneg=True)
+                    e_box  = cp.Variable(len(bid_t), bounds=[0.,1E6])#nonneg=True)
                     assert e_init is None or e_box.shape == e_init.shape, f"Internal error: shape of e_box {e_box.shape} must be the same as shape of e_init {e_init.shape}."
                     variables += [ (e_box, None) ]
 
@@ -927,7 +928,7 @@ class MkArbFree:
 
                 if eff_mid_fit_weight > 0.:
                     z_init = np.clip( np.max( np.abs( guess_fit - mid_t ) / whalf_spread ), 0., None) if guess_fit is not None else None
-                    z_mid  = cp.Variable(nonneg=True)
+                    z_mid  = cp.Variable(bounds=[0.,1E6])#nonneg=True)
                     assert z_init is None or z_mid.shape == z_init.shape, f"Internal error: shape of z_mid {z_mid.shape} must be the same as shape of z_init {z_init.shape}."
                     variables += [ (z_mid, None) ]
 
@@ -980,7 +981,7 @@ class MkArbFree:
                     q_t = warn_and_fix_density( xstrikes_t, q_t, eps=self._eps_density, message = lambda : f"{message()}expiry {expiry*DAYS_PER_YEAR:.2f}d: surface density after optimization" )
 
                 # zero out some density
-                floor      = max( self.min_density / float(len(q_t)), self._eps_density )
+                floor      = max( self.min_density / float(len(q_t)), self._eps_density ) if IMPOSE_FLOOR_ON_DENSITY else 0.
                 is_zero    = q_t < floor
                 if np.any(is_zero):
                     q_t[is_zero]  = 0.
@@ -1071,26 +1072,7 @@ class MkArbFree:
         # find fit between bid/ask without hard constraints first
         # -------------------------------------------------------
         tme = verbose.timer()
-        """
-        def market_p():
-            Cx          = np.zeros((len(ask_t)+2,), dtype=np.float64)
-            Kx          = np.zeros((len(ask_t)+2,), dtype=np.float64)
-            Cx[1:-1]    = (bid_t + ask_t)/2.
-            Cx[0]       = 1. - xstrikes_t[0]
-            Cx[-1]      = 0.
-            Kx[1:-1]    = strikes_t
-            Kx[0]       = xstrikes_t[0]
-            Kx[-1]      = xstrikes_t[-1]
-            dCdK        = np.diff(Cx,prepend=1.)/np.diff(Kx,prepend=0.)
-            p           = np.diff(dCdK,append=0.)
-            return p
-        xguess_p = market_p()
-        floor    = max( self.min_density / float(len(xguess_p)), self._eps_density )
 
-        if np.all(xguess_p >= -floor) and abs( np.sum( xguess_p )-1. ) <= self._eps_dens_1 and abs( xguess_p@xstrikes_t - 1. ) <= self._eps_dens_1 and self.smoothness is None:
-            verbose.write(lambda : f"\r{message()}Mid is already arbitrage-free. This took {tme}.", end=end)
-            return xguess_p, (bid_t + ask_t)/2.
-        """
         # soft fit first
         # --------------
 

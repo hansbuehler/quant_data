@@ -28,12 +28,10 @@ globals()['QUANTDATA_ENVIRONMENT_LIVE'] = 1
 # system wide settings; import file ahead of anything else
 # --------------------------------------------------------------
 
-
 # remove ugly warning format
 def _one_line_warning(message, category, filename, lineno, line=None):
     """Remove ugly default warning format"""
     return f"{filename}:{lineno}: {category.__name__}: {message}\n"
-
 
 warnings.formatwarning = _one_line_warning
 

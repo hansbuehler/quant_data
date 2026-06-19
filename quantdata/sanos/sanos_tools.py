@@ -270,7 +270,7 @@ class SanosPricer:
                 assert xstrikes_tm1[0] >= xstrikes_t[0] and xstrikes_tm1[-1] <= xstrikes_t[-1], f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: Expected 'xstrikes[{t-1}]' to cover 'xstrikes[{t}]', but found xstrikes[{t-1}][0]={xstrikes_tm1[0]:.4g} < xstrikes[{t}][0]={xstrikes_t[0]:.4g} or xstrikes[{t-1}][-1]={xstrikes_tm1[-1]} > xstrikes[{t}][-1]={xstrikes_t[-1]}"
 
             C_t          = np.maximum( _0, xstrikes_t[None,:] - xstrikes_t[1:-1,None] ) @ p_t
-            C_tm1        = np.maximum( _0, xstrikes_tm1[None,:] - xstrikes_t[:,None] ) @ p_tm1 if t>0 else np.maximum( _0, 1. - xstrikes_t ) 
+            C_tm1        = np.maximum( _0, xstrikes_tm1[None,:] - xstrikes_t[:,None] ) @ p_tm1 if t>0 else np.maximum( _0, _1 - xstrikes_t ) 
             assert abs( 1.-xstrikes_t[0] - C_tm1[0] ) < 1E-7, f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: Expected C_tm1[0] to be 1-xstrikes_t[0], but found {C_tm1[0]} instead of {1.-xstrikes_t[0]}"
             assert abs( C_tm1[-1] ) < 1E-8, f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: Expected C_tm1[-1] to be 0, but found {C_tm1[-1]} instead of 0."
             C_tm1[0]     = 1.-xstrikes_t[0]
@@ -313,18 +313,22 @@ class SanosPricer:
                         for i in np.argsort(-errors)[:5]:
                             if errors[i] < self._eps_price:
                                 break
-                            warnings.warn( f"  strike #i {xstrikes_t[~(too_small|too_big)][i]:.4g}: p_t={p_t[1:-1][~(too_small|too_big)][i]:.4g} vs dC_t_={dC_t_[~(too_small|too_big)][i]:.4g} vs dC_t={dC_t[~(too_small|too_big)][i]:.4g}, abs error {errors[i]:.4g}; too_small={too_small[~(too_small|too_big)][i]}, too_big={too_big[~(too_small|too_big)][i]}" )
-                        if np.any(errors > self._eps_price):
-                            raise RuntimeError(msg) 
+                            strikes_t = xstrikes_t[1:-1]
+                            warnings.warn( f"  strike #{i} {strikes_t[~(too_small|too_big)][i]:.4g}: p_t={p_t[1:-1][~(too_small|too_big)][i]:.4g} C_t={C_t[~(too_small|too_big)][i]:.4g} C_tm1={C_tm1[1:-1][~(too_small|too_big)][i]:.4g} "+\
+                                           f"=> dC_t={dC_t[~(too_small|too_big)][i]:.4g} vs "+\
+                                           f"dlv={np.sqrt(dlvsqs_t[~(too_small|too_big)][i]):.4g} dC_t_={dC_t_[~(too_small|too_big)][i]:.4g} vs , abs error {errors[i]:.4g}; too_small={too_small[~(too_small|too_big)][i]}, too_big={too_big[~(too_small|too_big)][i]}" )
+                        raise RuntimeError(msg) 
                     del dC_t_
 
-                # full implicit solver
-                # compute interpolated density & check it
+                # check past call prices
+                # ----------------------
                 q_tm1 = np.diff( np.diff( C_tm1, prepend=1. ) / np.diff( xstrikes_t, prepend=0. ), append=0. ) 
                 C_tm1_ = np.maximum( _0, xstrikes_t[None,:] - xstrikes_t[1:-1,None] ) @ q_tm1
                 assert np.all( np.abs(C_tm1_ - C_tm1[1:-1]) <= self._eps_price ), f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: Expected C_tm1_ to match C_tm1[1:-1], found max absolute difference {np.max(np.abs(C_tm1_ - C_tm1[1:-1]))} [tolerance 'prices' {self._eps_price}]"
                 del C_tm1_
 
+                # full implicit solver
+                # compute interpolated density & check it
                 w       = dlvsqs_t * box
                 w_plus  = w / ( xstrikes_t[2:] - xstrikes_t[1:-1]) 
                 w_minus = w / ( xstrikes_t[1:-1] - xstrikes_t[:-2]) 
@@ -400,7 +404,6 @@ class SanosPricer:
             xstrikes_tm1 = xstrikes_t
         return xdensities
 
-
 @dataclass(frozen=True)
 class SanosLPSolver:
     timeout_seconds      : float = 60*5. # timeout in seconds
@@ -443,17 +446,19 @@ class SanosLPSolver:
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore",message=r"Solution may be inaccurate.*",category=UserWarning)
             warnings.filterwarnings("error",message=r"overflow encountered in power",category=RuntimeWarning)
+            warnings.filterwarnings("error",message=r"invalid value encountered in matmul",category=RuntimeWarning)
             try:
                 prob        = cp.Problem( cp.Minimize( objective ), constraints )
                 slv, opt    = self._lp_solver_settings( for_expiry=for_expiry, is_fallback=is_fallback )
                 prob.solve( solver=slv, **opt )
+                prob_status  = str(prob.status)
             except SolverError as e:
                 if not is_fallback:
                     warnings.warn(f"{message()}Solver error: {str(e)}. Attempting to solve with fallback solver.")
                     return self( objective=objective, constraints=constraints, variables=variables, message_context=message_context, for_expiry=for_expiry, is_fallback=True, verbose=verbose )
                 raise type(e)(f"{message()}Solver error: {str(e)}.") from e
             except RuntimeWarning as e:
-                prob.status = "overflow error"
+                prob_status = f"overflow error ({str(e.__class__.__name__)})"
             except Exception as e:
                 if not is_fallback:
                     msg = str(e)
@@ -461,8 +466,8 @@ class SanosLPSolver:
                         return self( objective=objective, constraints=constraints, variables=variables, message_context=message_context, for_expiry=for_expiry, is_fallback=True, verbose=verbose )
                 raise type(e)(f"{message()}Unexpected error: {str(e)}.") from e
 
-            success = prob.status in ["optimal", "optimal_inaccurate"]
-        return success, prob.status, is_fallback
+            success = prob_status in ["optimal", "optimal_inaccurate"]
+        return success, prob_status, is_fallback
 
     def _lp_solver_settings( self, *, for_expiry : bool, is_fallback : bool ) -> tuple[str, dict]:
         """ Return lp solver settings """

@@ -6,3 +6,4 @@ SANOS Smooth Arbitrage-free Non-parametruc Option Surfaces
 potentially depending on market data for example when used in "interpolation mode" as in https://arxiv.org/pdf/2601.11209.
 """
 
+IMPOSE_FLOOR_ON_DENSITY = False
