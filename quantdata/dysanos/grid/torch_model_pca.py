@@ -25,45 +25,43 @@ from quantdata.sanos.tridiag import solve_sanos_tridiagonal
 from quantdata.torch import BaseEnvironment, BaseModel, torch, get, pop
 from quantdata.torch.ffw import FeedForward
 from quantdata.torch.bbtorch import BackboneTorch
-from quantdata.dysanos.grid.torch_load import preprocess
+from quantdata.dysanos.grid.torch_model import SanosModelConfig
+from quantdata.dysanos.grid.torch_market import GridMarketDefinition
 import logging
 
 _bbtorch = BackboneTorch()
 
-@version("0.1", dependencies=[preprocess])
+@version("0.1", dependencies=[GridMarketDefinition, BaseEnvironment])
 @dataclass(frozen=True)
-class SanosPCACompressorConfig:
-    label : str = "SanosPCACompressor"
-    user_version : str = "0.1"
-    smoothness : float|None = None     # Model smoothness
-
+class SanosPCACompressorConfig(SanosModelConfig):
     min_dlv: float = 0.01              # Min DLV
     max_dlv: float = 2.                # Max DLV
     min_vega_sqrt : float = 1E-4       # minimum vega/sqrtT
 
-    num_state : int = 20
-    num_pca   : int = 5
-    state_config : FeedForward.Config = FeedForward.Config()
-    learn_config : FeedForward.Config|None = None
-    use_qr : bool = True
+    num_state : int = 20               # state
+    num_pca   : int = 5                # PCA of the state
+    state_config : FeedForward.Config = FeedForward.Config()  # decoder
+    learn_config : FeedForward.Config|None = None # encoder or None for direct state parameterization
+    use_qr : bool = True               # whether to orthogonalize the PCA basis using QR decomposition
 
-    def __str__(self) -> str:
-        str_smooth = f"{self.smoothness:.2f}-smooth" if not self.smoothness is None else "linear"
-        s = f"{str_smooth}@{self.num_state}@{self.num_pca}{'qr' if self.use_qr else ''} midlv={self.min_dlv:.2f},mxdlv={self.max_dlv:.2f},vsq={self.min_vega_sqrt:3g} st={self.state_config}"
+    def __post_init__(self):
+        super().__post_init__()
+        verify_inp( self.min_dlv >= 0., f"Expected min_dlv to be non-negative, but found {self.min_dlv}" )
+        verify_inp( self.min_dlv < self.max_dlv, f"Expected min_dlv to be less than max_dlv, but found min_dlv={self.min_dlv} and max_dlv={self.max_dlv}" )
+        verify_inp( self.min_vega_sqrt >= 0., f"Expected min_vega_sqrt to be non-negative, but found {self.min_vega_sqrt}" )
+        verify_inp( self.num_state > 0, f"Expected num_state to be positive, but found {self.num_state}" )
+        verify_inp( self.num_pca > 0 and self.num_pca <= self.num_state, f"Expected num_pca to be positive and less than or equal to num_state, but found {self.num_pca}" )
+        
+    def __str__(self) -> str:        
+        s = f"{super().__str__()}@{self.num_state}@{self.num_pca}{'qr' if self.use_qr else ''} midlv={self.min_dlv:.2f},mxdlv={self.max_dlv:.2f},vsq={self.min_vega_sqrt:3g} st={self.state_config}"
         if not self.learn_config is None:
             s = s + f",lrn={self.learn_config}"
         return s   
-
-    @version("0.1")
-    def preprocess(self, 
-                   env : BaseEnvironment,
-                   ts : dict, *,
-                   message_context: str|callable[[], str] | None = None ) -> dict:
-        """
-        Preprocess training data set
-        """
-        return preprocess( env=env, smoothness=self.smoothness, ts=ts, message_context=message_context )   
     
+    def create(self, env : BaseEnvironment, *, S, T, N) -> SanosPCACompressor:
+        """ Create Model """
+        return SanosPCACompressor( env, S=S, T=T, N=N, config=self )
+
 class SanosPCACompressor(BaseModel):
     
     Config = SanosPCACompressorConfig
@@ -149,10 +147,10 @@ class SanosPCACompressor(BaseModel):
         assert duT.shape == (self.config.num_state, self.config.num_pca), f"Expected duT to have shape {(self.config.num_state, self.config.num_pca)}, but found {duT.shape}"
         dh       = alpha @ duT.T # todo: add orthogonalization
         assert dh.shape == (S, self.config.num_state), f"Expected dh to have shape {(S, self.config.num_state)}, but found {dh.shape}"
-        h        = self.u_du[0,:][None,:] + dh 
-        assert h.shape == (S, self.config.num_state), f"Expected h to have shape {(S, self.config.num_state)}, but found {h.shape}"
+        state    = self.u_du[0,:][None,:] + dh 
+        assert state.shape == (S, self.config.num_state), f"Expected state to have shape {(S, self.config.num_state)}, but found {states.shape}"
 
-        dlvs_raw = self.raw_dlv_from_state( h )
+        dlvs_raw = self.raw_dlv_from_state( state )
         assert dlvs_raw.shape == (S, T*N), f"Expected raw DLVs to have shape {(S, T*N)}, but found {dlvs_raw.shape}"
         dlvs_raw = dlvs_raw.reshape( S, T, N )
         dlvsqs   = torch.sigmoid(dlvs_raw) * (max_dlvsq - min_dlvsq) + min_dlvsq

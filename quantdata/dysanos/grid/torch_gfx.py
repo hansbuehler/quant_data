@@ -1,23 +1,42 @@
+"""
+Static Model Visualization
+"""
+
 import numpy as np
-from cdxcore.dynaplot import FigStore, colors_tableau, figure, m_o_m, quantile_m_o_m
+from cdxcore.dynaplot import FigStore, colors_tableau, color_tableau, figure, m_o_m, quantile_m_o_m
 from cdxcore.bs import bs
+from cdxcore.pretty import PrettyObject
+from cdxcore.subdir import SubDir
+from dataclasses import dataclass
 
 from quantdata.biz_calendar import DAYS_PER_YEAR
-from quantdata.dysanos.grid.torch_model import SanosCompressorConfig
+from quantdata.dysanos.grid.torch_model import SanosModelConfig
 
-class Display(object):
+@dataclass(frozen=True)
+class VizConfig:
+    num_viz_dates : int = 4       # how many implied vols to render
+    seed          : int = 1231231 # seed for chosing the above
+    use_nms       : bool = True   # whether use NMS coordinates or K
+
+    def __post_init__(self):
+        assert self.num_viz_dates > 0, f"Expected 'num_viz_dates' {self.num_viz_dates} to be greater than 0"
+        assert self.seed >= 0, f"Expected 'seed' {self.seed} to be greater than or equal to 0"
+
+class Visualizer(object):
 
     class ExpiryGfx(object):
 
-        def __init__(self, ticker, *, date, index, ts, mdl_config : SanosCompressorConfig, trn_config, isNMS ):
+        def __init__(self, ticker, *, 
+                           date, index, ts, 
+                           viz_config : VizConfig,
+                           mdl_config : SanosModelConfig ):
             self.fig        = figure(f"{ticker} {date}", col_size=5, row_size=5, columns=None )
             self.index      = index
             self.date       = date
             self.ts         = ts
+            self.viz_config = viz_config    
             self.mdl_config = mdl_config
-            self.trn_config = trn_config
             self.store      = FigStore()
-            self.isNMS      = isNMS
 
             self.expiries = ts['expiries']
             assert np.max(self.index) < self.expiries.shape[0], f"Expected index {self.index} to be less than expiries.shape[0] {self.expiries.shape[0]}"
@@ -31,8 +50,8 @@ class Display(object):
             fit_vols      = ts['mid_vols'][self.index,:,:]
             fit_dlvsqs    = ts['fit_dlvsqs'][self.index,:,:]
 
-            strikes       = self.nms if self.isNMS else self.xstrikes[:,1:-1]
-            strk_name     = "NMS" if self.isNMS else "K"
+            strikes       = self.nms if self.viz_config.use_nms else self.xstrikes[:,1:-1]
+            strk_name     = "NMS" if self.viz_config.use_nms else "K"
     
             self.expiries_block = np.stack( [ self.expiries*DAYS_PER_YEAR ]*(self.xstrikes.shape[-1]-2), axis=-1 )
 
@@ -91,7 +110,7 @@ class Display(object):
             xdensities = xdensities[self.index,:,:]
             dlvsqs     = dlvsqs[self.index,:,:]
             state      = state[self.index,:]
-            strikes    = self.nms if self.isNMS else self.xstrikes[:,1:-1]
+            strikes    = self.nms if self.viz_config.use_nms else self.xstrikes[:,1:-1]
             x = np.reshape(self.expiries_block, (-1,))
             y = np.reshape(strikes, (-1,))
             dx = (x.max() - x.min())/100.
@@ -114,37 +133,40 @@ class Display(object):
             self.axState.set_title(f"State epoch {epoch}")
             self.fig.render() if not final else self.fig.close()
 
-    def __init__(self, ticker, *, data, num_viz_dates, seed_viz_dates, isNMS, mdl_config, trn_config ):
-        self.data          = data
-        self.num_viz_dates = num_viz_dates
-        self.isNMS         = isNMS
+    def __init__(self, market, *, 
+                       viz_config : VizConfig, 
+                       mdl_config : SanosModelConfig ):
+        self.market        = market
         self.mdl_config    = mdl_config
-        self.trn_config    = trn_config
+        self.viz_config    = viz_config
         self.store         = FigStore()
-        np.random.seed(seed_viz_dates)
+        self.ticker        = self.market.grid_market_def.ticker
+        self.first         = True
+        np.random.seed(self.viz_config.seed)
 
-        self._figs = {}
-        zero_dates     = np.zeros((len(self.data.ts.dates),))
+        all_dates          = self.market.dates
+        zero_ndates        = np.zeros((len(all_dates),))
 
-        # learning
-        self.fig_lrn = figure(f"Learning rate {ticker}", col_size=8, row_size=4, columns=None) 
-        self.ax_lrn  = self.fig_lrn.add_subplot("Loss")
+        # learning & fit
+        # --------------
+
+        self.fig_lrn   = figure(f"Learning rate {self.ticker}", col_size=8, row_size=4, columns=None) #
+        
+        self.ax_lrn    = self.fig_lrn.add_subplot("Loss")
         self.ax_lrn.set_xlabel("Epoch")
         self.ax_lrn.set_ylabel("Log-Loss")
         self.ax_lrn.set_yscale("log")
 
-        self.ax_error = self.fig_lrn.add_subplot("Mean and Median of err[wgt>0] divided by mean(wgt[wgt>0])")
-        self.store += self.ax_error.plot(self.data.ts.dates, zero_dates, ".-", color="orange", label="Median")
-        self.store += self.ax_error.plot(self.data.ts.dates, zero_dates, ".-", color="blue", label="Mean")
+        self.ax_error = self.fig_lrn.add_subplot(r"Stats per date of err[wgt>0] ~ $\sigma\sqrt{t}$ error")
         self.ax_error.set_xlabel("Date")
         self.ax_error.set_ylabel("Error")
         self.ax_error.tick_params(axis="x", labelrotation=90)
-        self.ax_error.legend(loc="upper left")
 
         self.fig_lrn.render()
 
-        # state
-        dates          = data.ts.dates
+        # states
+        # ------
+
         self.ax_states = []
         self.fig_state = figure(f"State", col_size=4, row_size=4, columns=min(mdl_config.num_state,10) )
         colors         = colors_tableau()
@@ -154,17 +176,23 @@ class Display(object):
             if istate>0:
                 ax.sharey(self.ax_states[0])
             self.ax_states.append(ax)
-            self.store += ax.plot(self.data.ts.dates, zero_dates, color=next(colors))
             ax.set_xlabel("Date")
             ax.tick_params(axis="x", labelrotation=90)
         self.fig_state.render()
 
+        # vols
+        # ----
+
         np.random.seed(123123)
-        self.indices     = sorted( np.random.choice( np.arange(len(dates)), size=min(self.num_viz_dates, len(dates)), replace=False ) )
-        self.expiry_gfxs = [ self.ExpiryGfx(ticker=ticker, date =dates[ix], index=ix, ts=self.data.ts, mdl_config=mdl_config, trn_config=trn_config, isNMS=self.isNMS) for ix in self.indices ]
+        self.indices     = sorted( np.random.choice( np.arange(len(all_dates)), size=min(viz_config.num_viz_dates, len(all_dates)), replace=False ) )
+        self.indices     = self.indices[::-1] # reverse so that the earliest date is plotted first
+        self.expiry_gfxs = [ self.ExpiryGfx(ticker=self.ticker, date =all_dates[ix], index=ix, ts=self.market, mdl_config=mdl_config, viz_config=viz_config ) for ix in self.indices ]
         assert len(self.expiry_gfxs) == len(self.indices), f"Expected len(expiry_gfxs) {len(self.expiry_gfxs)} to be equal to len(indices) {len(self.indices)}" 
 
-    def __call__(self, tracker, *, calls, xdensities, dlvsqs, errors, weights, state, final : bool = False ):
+    def __call__(self, tracker, num_total_epochs, *, data, final : bool = False ):
+        """
+        Update
+        """
 
         self.store.clear()
 
@@ -174,42 +202,47 @@ class Display(object):
         val_epochs =  np.asarray(tracker.val_epochs)
         val_losses =  np.asarray(tracker.val_losses) 
         epoch     =   trn_epochs[-1]
-        self.store += self.ax_lrn.plot(val_epochs, val_losses, "*:", color="orange", label="Full Loss")
+        self.fig_lrn.suptitle(f"Training loss {trn_losses[-1]:.4g} [{trn_epochs[-1]}], validation loss {val_losses[-1]:.4g} [{val_epochs[-1]}]. Total epochs {num_total_epochs}.")
+
         self.store += self.ax_lrn.plot(trn_epochs, trn_losses, color="blue", label="Batch Loss")
+        self.store += self.ax_lrn.plot(val_epochs, val_losses, "*:", color="orange", label="Full Loss")
         max_t = np.max(trn_losses) if len(trn_losses)<10 else np.quantile(trn_losses, 0.9)
         max_v = np.max(val_losses) if len(val_losses)<10 else np.quantile(val_losses, 0.9)
         max_  = max( max_t, max_v )
         self.ax_lrn.set_ylim( min( np.min(trn_losses), np.min(val_losses) )*0.9, max_ * 1.1 )
-        self.ax_lrn.legend(loc="lower left")
-        self.fig_lrn.suptitle(f"Training loss {trn_losses[-1]:.4g} [{trn_epochs[-1]}], validation loss {val_losses[-1]:.4g} [{val_epochs[-1]}]. Total epochs {self.trn_config.num_epochs}.")
+        if self.first:
+            self.ax_lrn.legend(loc="lower left")
 
-        errors  = [ errors[i,...][weights[i,...]>0] for i in range(errors.shape[0]) ]
-        weights = [ np.mean( weights[i,...][weights[i,...]>0] ) for i in range(weights.shape[0]) ]
-        medians = [ np.median(err)/w for err, w in zip(errors, weights) ]
-        means   = [ np.mean(err)/w for err, w in zip(errors, weights) ]
-        medians = np.array(medians)
-        means   = np.array(means)
-        assert medians.shape == means.shape == (len(self.data.ts.dates),), f"Expected medians and means to have shape {(len(self.data.ts.dates),)}, but found {medians.shape} and {means.shape}"
-        self.store += self.ax_error.plot(self.data.ts.dates, medians, ".-", color="orange")
-        self.store += self.ax_error.plot(self.data.ts.dates, means, ".-", color="blue")
+        medians = data.error_stats.medians
+        means   = data.error_stats.means
+        p90     = data.error_stats.p90
+        assert medians.shape == means.shape == p90.shape == (len(self.market.dates),), f"Expected medians, means, and p90 to have shape {(len(self.market.dates),)}, but found {medians.shape}, {means.shape}, and {p90.shape}"
+        self.store += self.ax_error.plot(self.market.dates, p90, "--", color="red", label="p90")
+        self.store += self.ax_error.plot(self.market.dates, means, ".-", color="blue", label="Mean")
+        self.store += self.ax_error.plot(self.market.dates, medians, ".-", color="orange", label="Median")
+        if self.first:
+            self.ax_error.legend(loc="upper left")
+
         self.ax_error.set_ylim(0.,max( np.max(medians), np.max(means) )*1.1 )
         self.fig_lrn.render() if not final else self.fig_lrn.close()
 
         # states
-        assert state.shape[1] == len(self.ax_states), f"Expected state to have shape[1] == {len(self.ax_states)}, but found {state.shape[1]}"   
+        assert data.state.shape[1] == len(self.ax_states), f"Expected state to have shape[1] == {len(self.ax_states)}, but found {data.state.shape[1]}"   
         colors  = colors_tableau()
         for istate, axstate in enumerate(self.ax_states):
-            self.store += axstate.plot(self.data.ts.dates, state[:,istate], color=next(colors))
-        self.ax_states[0].set_ylim( m_o_m( state ) )
-        self.fig_state.suptitle(f"State at epoch {epoch} / {self.trn_config.num_epochs}")
+            self.store += axstate.plot(self.market.dates, data.state[:,istate], color=next(colors))
+        self.ax_states[0].set_ylim( m_o_m( data.state ) )
+        self.fig_state.suptitle(f"State at epoch {epoch} / {num_total_epochs}")
         self.fig_state.render() if not final else self.fig_state.close()
 
         # rest
         for gfx in self.expiry_gfxs:
-            assert gfx.index<calls.shape[0], f"Expected ix {gfx.index} to be less than calls.shape[0] {calls.shape[0]}"
+            assert gfx.index<data.calls.shape[0], f"Expected ix {gfx.index} to be less than calls.shape[0] {data.calls.shape[0]}"
             gfx.update( epoch=epoch, 
-                        calls=calls,
-                        xdensities=xdensities,
-                        dlvsqs=dlvsqs, 
-                        state=state, 
+                        calls=data.calls,
+                        xdensities=data.xdensities,
+                        dlvsqs=data.dlvsqs, 
+                        state=data.state, 
                         final=final )
+
+        self.first = False
