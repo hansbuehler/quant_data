@@ -625,6 +625,7 @@ def iv_surface_from_frames(
     max_iv: float = 5.0,
     batch_seconds: float | None = None,
     q_scale: float = 0.001,
+    is_call_filter: bool | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
     """
     Phase 3 of the IV-surface pipeline: per-ticker IV Kalman (trained on quotes,
@@ -644,6 +645,12 @@ def iv_surface_from_frames(
         sequential filter is used.
     q_scale : float
         Time-proportional process-noise scale (per second) for the batch filter.
+    is_call_filter : bool | None
+        If set, only contracts of this option type are fit and returned
+        (True = calls only, False = puts only). The implied forward in
+        build_iv_frames is unaffected — it still uses the full call+put chain
+        via put-call parity. Use to restrict the comparison to the same subset
+        (e.g. puts) as the SANOS models. None = both calls and puts.
 
     Returns
     -------
@@ -658,6 +665,8 @@ def iv_surface_from_frames(
     trade_result_frames = []
 
     for strike, is_call, expiry in ticker_meta:
+        if is_call_filter is not None and is_call != is_call_filter:
+            continue
         try:
             mask = (pl.col("_strike") == strike) & (pl.col("is_call") == is_call)
             df_q_iv = all_quotes_iv.filter(mask)
@@ -755,6 +764,7 @@ def build_iv_surface(
     discount_factor_clip: tuple[float, float] | None = (0.998, 1.002),
     batch_seconds: float | None = None,
     q_scale: float = 0.001,
+    is_call_filter: bool | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
     """
     Run IV Kalman filter for all options in df_tickers, operating directly on
@@ -773,6 +783,10 @@ def build_iv_surface(
         sequential filter is used.
     q_scale : float
         Time-proportional process-noise scale (per second) for the batch filter.
+    is_call_filter : bool | None
+        If set, only contracts of this option type are fit and returned
+        (True = calls only, False = puts only). The implied forward still uses
+        the full call+put chain. None = both calls and puts.
 
     Returns
     -------
@@ -797,4 +811,5 @@ def build_iv_surface(
         max_iv=max_iv,
         batch_seconds=batch_seconds,
         q_scale=q_scale,
+        is_call_filter=is_call_filter,
     )
