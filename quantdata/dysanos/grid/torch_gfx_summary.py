@@ -7,38 +7,48 @@ from cdxcore.dynaplot import FigStore, colors_tableau, color_tableau, figure, m_
 from cdxcore.bs import bs
 from cdxcore.pretty import PrettyObject
 from cdxcore.subdir import SubDir
+from cdxcore.util import fmt_seconds, fmt_datetime
 from dataclasses import dataclass
 
 from quantdata.biz_calendar import DAYS_PER_YEAR
+from quantdata.dysanos.grid.torch_train import _cache_root, MetricTracker
+from datetime import datetime, date
+import torch
 
-class SummaryViz(object):
+@dataclass(frozen=True)
+class SummaryVizConfig:
+    pass
 
-    PATTERNS = ["-",".:","--",".:"]
+class SummaryGroup(object):
 
-    def __init__(self, market : PrettyObject, path : SubDir, *, viz_config : VizConfig ):
+    def __init__(self, *, name, market, viz_config : SummaryVizConfig = SummaryVizConfig() ):
+        self.name       = name
         self.market     = market
+        self.models     = {}
         self.viz_config = viz_config
+        self.colors     = colors_tableau()
         self.store      = FigStore()
-        self.path       = path(ext="pt")
-        self.fig        = figure(f"Summary {self.market.grid_market_def.ticker}", col_size=8, row_size=4, columns=None )
+        self.path       = _cache_root(name,ext="pt")
+        self.fig        = figure(f"Summary {self.market.grid_market_def.ticker} group '{self.name}'", col_size=8, row_size=6, columns=None )
+        self.updated    = datetime.now()
 
-        self.ax_Tloss    = self.fig.add_subplot("Loss")
+        self.ax_Tloss    = self.fig.add_subplot("Batch Loss")
         self.ax_Tloss.set_xlabel("Epoch")    
         self.ax_Tloss.set_ylabel("Log-Loss")
         self.ax_Tloss.set_yscale("log")
-        self.ax_Vloss    = self.fig.add_subplot("Loss")
+        self.ax_Vloss    = self.fig.add_subplot("Full Loss")
         self.ax_Vloss.set_xlabel("Epoch")    
         self.ax_Vloss.set_ylabel("Log-Loss")
         self.ax_Vloss.set_yscale("log")
         self.ax_Vloss.sharey(self.ax_Tloss)
         self.ax_Vloss.sharex(self.ax_Tloss)
 
-        self.ax_mean_error   = self.fig.add_subplot("Mean and Median of err[wgt>0] divided by mean(wgt[wgt>0])")
+        self.ax_mean_error   = self.fig.add_subplot("Mean of wgt*(fit-market)[wgt>0]")
         self.ax_mean_error.set_xlabel("Date")
         self.ax_mean_error.set_ylabel("Error")
         self.ax_mean_error.tick_params(axis="x", labelrotation=90)
 
-        self.ax_med_error   = self.fig.add_subplot("Mean and Median of err[wgt>0] divided by mean(wgt[wgt>0])")
+        self.ax_med_error   = self.fig.add_subplot("Median of wgt*(fit-market)[wgt>0]")
         self.ax_med_error.set_xlabel("Date")
         self.ax_med_error.set_ylabel("Error")
         self.ax_med_error.tick_params(axis="x", labelrotation=90)
@@ -46,84 +56,91 @@ class SummaryViz(object):
         self.ax_med_error.sharex(self.ax_mean_error)
 
         self.fig.render()
-        self.patterns = list( SummaryViz.PATTERNS )
-        self.classes  = {}
-        self.models   = {}
 
-    class SummaryModel(object):
-
-        def __init__(self, *, name, pattern ):
-            self.name    = name
-            self.pattern = pattern
-            self.colors  = colors_tableau()
-            self.models  = {}
-
-        def scan(self, *, cpath : SubDir ):
-            models = cpath.sub_dirs()
-            for imdl, model in enumerate(models):
-                cmpath  = cpath(model)
-                cm      = self.models.get(model, None)
-                if cm is None:
-                    cm = PrettyObject( label=f"{self.name} {model}",
-                                       color=next(self.colors),
-                                       pattern=self.pattern,
-                                       ffn=cm.cmpath.full_file_name("last"),
-                                       updated=None )
-                    self.models[model] = cm
-                cm.updated = cmpath.last_modified("last")
-            self.updated = datetime.now()
-
-        def draw( self, *, ax_loss, ax_error, store, market ):
-        
-            dates = market.dates
-
-            for model, cm in self.models.items():
-                cm_data     = torch.load(cm.ffn)
-                tracker     = MetricTracker(**cm_data.pop("tracker"))
-                error_stats = PrettyObject( cm_data.pop("error_stats"))
-                assert tracker.trn_epochs.shape == tracker.trn_losses.shape, f"Expected trn_epochs and trn_losses to have the same shape, but found {tracker.trn_epochs.shape} and {tracker.trn_losses.shape}"
-                assert tracker.val_epochs.shape == tracker.val_losses.shape, f"Expected val_epochs and val_losses to have the same shape, but found {tracker.val_epochs.shape} and {tracker.val_losses.shape}"
-                store += ax_Tloss.plot(tracker.trn_epochs, tracker.trn_losses, cm.pattern, color=cm.color, label=cm.label )
-                store += ax_Vloss.plot(tracker.val_epochs, tracker.val_losses, cm.pattern, color=cm.color, label=cm.label )
-
-                assert len(dates) == len(error_stats.mean_error), f"Expected dates and mean_error to have the same length, but found {len(dates)} and {len(error_stats.mean_error)}"
-                assert len(dates) == len(error_stats.median_error), f"Expected dates and median_error to have the same length, but found {len(dates)} and {len(error_stats.median_error)}"
-                store += ax_mean_error.plot(dates, error_stats.mean_error, cm.pattern, color=cm.color, label=cm.label )
-                store += ax_med_error.plot(dates, error_stats.median_error, cm.pattern, color=cm.color, label=cm.label )
-
-            ax_Tloss.legend(loc="upper right")
-
-    def update(self):
-
-        # identify all classes
-        # --------------------
-
-        classes     = path.sub_dirs()
-        for iclss, clss in enumerate(classes):
-            cmodels = self.classes.get(clss, None)
-            if cmodels is None:
-                cmodels = SummaryModel( name=clss, pattern=self.patterns.pop(0) )
-                self.classes[clss] = cmodels
-                if self.patterns == []:
-                    self.patterns = list( SummaryViz.PATTERNS )
-
-            # identify all models per class
-            # -----------------------------
-
-            self.store.clear()
-
-            for cls, cmodels in self.classes.items():                
-                cmodels.scan( cpath=path(cls) )
-                cmodels.draw( ax_loss=self.ax_loss, ax_error=self.ax_error, store=self.store, market=self.market )
-                
+    def update(self, removed : bool):
+        if removed:
+            self.fig.suptitle(f"Summary {self.market.grid_market_def.ticker} group '{self.name}' -- no longer on disk") 
             self.fig.render()
+            return
 
+        self.store.clear()
 
+        # find all files
+        models = self.path.files()
+        for imdl, model in enumerate(models):
+            cm      = self.models.get(model, None)
+            if cm is None:
+                cm = PrettyObject(  color=next(self.colors),
+                                    ffn=self.path.full_file_name(model),
+                                    updated=None,
+                                    deleted=False,
+                                    data=PrettyObject() )
 
+                self.models[model] = cm
 
+        # load where what can
+        for model, cm in self.models.items():
+            if not self.path.exists(cm.ffn):
+                cm.deleted = True
+                continue
+            cm.deleted = False
+            try:
+                cm_data     = torch.load(cm.ffn, map_location="cpu", weights_only=False)
+            except Exception as e:
+                print(f"Failed to load model {cm.label} from {cm.ffn}: {e}")
+                continue
 
+            cm.updated = self.path.get_last_modification_time(model)
+            cm.data.tracker = MetricTracker(**cm_data.pop("tracker"))
+            cm.data.raw_error_stats = PrettyObject( cm_data.pop("raw_error_stats"))
+
+        # draw
+        dates = self.market.dates
+        max_q = 1E-6
+        self.updated = datetime.now()
+        for model, cm in self.models.items():
+
+            if cm.updated is None:
+                print(f"Warning: {self.name} {cm.label} has has never been read -- skipping")
+                continue
+
+            str_updated     = fmt_seconds( (self.updated - cm.updated).total_seconds() ) if not cm.deleted else "(deleted)"
+            tracker         = cm.data.tracker
+            raw_error_stats = cm.data.raw_error_stats
+            assert len(tracker.trn_epochs) == len(tracker.trn_losses), f"Expected trn_epochs and trn_losses to have the same shape, but found {len(tracker.trn_epochs)} and {len(tracker.trn_losses)}"
+            assert len(tracker.val_epochs) == len(tracker.val_losses), f"Expected val_epochs and val_losses to have the same shape, but found {len(tracker.val_epochs)} and {len(tracker.val_losses)}"
+            self.store += self.ax_Tloss.plot(tracker.trn_epochs, tracker.trn_losses, "-", color=cm.color, label=f"{model} {str_updated}" )
+            self.store += self.ax_Vloss.plot(tracker.val_epochs, tracker.val_losses, "-", color=cm.color, label=f"{model} {str_updated}" )
+            self.store += self.ax_Tloss.plot(tracker.trn_epochs[-1:], tracker.trn_losses[-1:], "*", color=cm.color )
+            self.store += self.ax_Vloss.plot(tracker.val_epochs[-1:], tracker.val_losses[-1:], "*", color=cm.color )
+
+            assert len(dates) == len(raw_error_stats.means), f"Expected dates and mean_error to have the same length, but found {len(dates)} and {len(raw_error_stats.means)}"
+            assert len(dates) == len(raw_error_stats.medians), f"Expected dates and median_error to have the same length, but found {len(dates)} and {len(raw_error_stats.medians)}"
+            self.store += self.ax_mean_error.plot(dates, raw_error_stats.means, "-", color=cm.color, label=f"{model} {str_updated}" )
+            self.store += self.ax_med_error.plot(dates, raw_error_stats.medians, "-", color=cm.color, label=f"{model} {str_updated}" )
+            max_q = max( max_q, np.quantile(raw_error_stats.means, 0.95)*1.1 )
+        self.ax_Tloss.legend(loc="upper right")
+        self.ax_mean_error.set_ylim(0., max_q)
+        self.fig.suptitle(f"Summary {self.market.grid_market_def.ticker} group '{self.name}' [updated {fmt_datetime(self.updated,ignore_ms=True)}]") 
+        self.fig.render()
+        return max_q
+
+class SummaryViz(object):
+
+    def __init__(self, *, market, viz_config : SummaryVizConfig = SummaryVizConfig() ):
+        self.viz_config = viz_config
+        self.path       = _cache_root(ext="pt")
+        self.groups     = {}
+        self.market     = market
+  
+    def update(self):   
+        found_groups          = set( self.path.sub_dirs() )
+        for group in sorted(found_groups - set(self.groups)):
+            cgroup = self.groups.get(group, None)
+            if cgroup is None:
+                cgroup = SummaryGroup(name=group, market=self.market, viz_config=self.viz_config)
+                self.groups[group] = cgroup
         
-
-
-
+        for grpup, grpgfx in self.groups.items():
+            grpgfx.update(removed=not found_groups)
 

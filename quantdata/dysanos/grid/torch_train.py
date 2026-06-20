@@ -2,12 +2,15 @@ from dataclasses import dataclass, field, asdict
 from cdxcore.pretty import PrettyObject
 from cdxcore.verbose import Context
 from cdxcore.subdir import SubDir
+from cdxcore.uniquehash import unique_label48_8
 import warnings
 from quantdata.dysanos.grid.torch_model import SanosModelConfig, BaseEnvironment
 from quantdata.dysanos.grid.torch_gfx import VizConfig, Visualizer
 import torch as torch
 import time as time
 import numpy as np
+import os
+import ipynbname
 
 _cache_root = SubDir("~/.dysanos_grid/")
 
@@ -17,6 +20,7 @@ class TrainConfig:
     lr : float = 1E-3
     weight_decay : float = 1e-4
     batch_size : int|None = None
+    compile : bool = False # doesn't work yet
 
     epoch_interval : int = 200   # after how many epochs to update visualization and store checkpoint
     time_interval : float = 2*60   # after how many seconds to update visualization and store checkpoint
@@ -83,15 +87,43 @@ def train( market        : PrettyObject,*,
         weight_decay=trn_config.weight_decay
     )
 
+    # compile
+    # -------
+
+    def gradient_step( batch, idx ):
+        loss = model( batch, idx, training=True ) 
+        model.verify( lambda : torch.isfinite(loss).all(), "Internal error: loss infinite" )
+        return loss
+
+    def valuation( all_data ):
+        with torch.no_grad():
+            return model( all_data, training=False )
+
+    if trn_config.compile:
+        with verbose.write_t(lambda : f"Compiling {mdl_config.label} version {mdl_config.user_version} for {env.device}... ", end='') as tme:
+            gradient_step = torch.compile( mode="reduce-overhead",
+                            dynamic=False,
+                            fullgraph=True,
+                            disable=model.debug,
+                        )( gradient_step )
+
+            valuation = torch.compile( mode="reduce-overhead",
+                            dynamic=False,
+                            fullgraph=True,
+                            disable=model.debug,
+                        )( valuation )
+            verbose.write(lambda : f"done; this took {tme}.", head=False ) 
+
     # load
     # ----
 
-    path        = _cache_root(model.__class__.__name__)(mdl_config.label, ext="pt")
-    cache_ffn   = path.full_file_name('last')
+    path        = _cache_root(ext="pt") if mdl_config.group == "" else _cache_root(unique_label48_8(mdl_config.group),ext="pt")
+    file_name   = unique_label48_8(mdl_config.label)
+    cache_ffn   = path.full_file_name(file_name)
     start_epoch = 0
     tracker     = MetricTracker()
 
-    if not restart and path.exists("last"):
+    if not restart and path.exists(file_name):
         verbose.write(lambda : f"Found existing recovery checkpoint '{cache_ffn}'. Restoring model state from this checkpoint.")
 
         state = torch.load(cache_ffn, map_location=env.device, weights_only=False)
@@ -128,31 +160,29 @@ def train( market        : PrettyObject,*,
                 return { k: v[idx,...] if not v is None else None for k, v in tdata.items() }, idx
             
         def viz_and_store(*, epoch: int, final : bool = False):
-            ld = model( tdata, training=False )
+            ld = valuation( tdata )
             tracker.val_losses.append(ld['loss'].cpu().item())
             tracker.val_epochs.append(epoch+1)
 
-            r = PrettyObject()
-            r.xdensities = ld['xdensities'].cpu().numpy()
-            r.calls = ld['calls'].cpu().numpy()
-            r.dlvsqs = ld['dlvsqs'].cpu().numpy()
-            r.state   = ld['state'].cpu().numpy()
-            r.errors  = ld['errors'].cpu().numpy()
-            r.weights = ld['weights'].cpu().numpy()
- 
-            # convert 
-            weights = [ np.mean( r.weights[i,...][r.weights[i,...]>0] ) for i in range(r.weights.shape[0]) ]
-            errors  = [ r.errors[i,...][r.weights[i,...]>0] for i in range(r.errors.shape[0]) ]
-            medians = [ np.median(err) for err in errors ]
-            means   = [ np.mean(err) for err in errors ]
-            p90     = [ np.quantile(err, 0.9) for err in errors ]
+            # convert to numpy
+            r = PrettyObject({k:v.detach().cpu().numpy() for k,v in ld.items() if not v is None}) 
+            weights     = [ np.mean( r.weights[i,...][r.weights[i,...]>0] ) for i in range(r.weights.shape[0]) ]
+            errors      = [ r.errors[i,...][r.weights[i,...]>0] for i in range(r.errors.shape[0]) ]
+            raw_errors  = [ r.raw_errors[i,...][r.weights[i,...]>0] for i in range(r.raw_errors.shape[0]) ]
 
             # per sample summary
+            # raw_errors = abs( weight*(fit-mid) ) 
+            # errors = raw_errors**2 if raw_errirs<1 else 2*raw_errors - 1 (huber loss)
             r.error_stats = PrettyObject()
-            r.error_stats.weights = np.array(weights)
-            r.error_stats.medians = np.array(medians)
-            r.error_stats.means   = np.array(means)
-            r.error_stats.p90     = np.array(p90)
+            r.error_stats.weights     = np.array(weights)
+            r.error_stats.medians     = np.array([ np.median(err) for err in errors ])
+            r.error_stats.means       = np.array([ np.mean(err) for err in errors ])
+            r.error_stats.p90         = np.array([ np.quantile(err, 0.9) for err in errors ])
+            r.raw_error_stats         = PrettyObject()
+            r.raw_error_stats.weights = np.array(weights)
+            r.raw_error_stats.medians = np.array([ np.median(err) for err in raw_errors ])
+            r.raw_error_stats.means   = np.array([ np.mean(err) for err in raw_errors ])
+            r.raw_error_stats.p90     = np.array([ np.quantile(err, 0.9) for err in raw_errors ])
 
             path.create_directory()
             torch.save(dict(version=mdl_config.user_version,
@@ -164,7 +194,9 @@ def train( market        : PrettyObject,*,
                             mdl_config_class=mdl_config.__class__.__name__,
                             trn_config=asdict(trn_config),
                             error_stats=dict(r.error_stats),
-                            ), cache_ffn)
+                            raw_error_stats=dict(r.raw_error_stats),
+                            ), cache_ffn + ".tmp")
+            os.rename(cache_ffn + ".tmp", cache_ffn)
             
             disp(tracker=tracker, num_total_epochs=trn_config.num_epochs, data=r, final=final)
             return r if final else None
@@ -184,7 +216,7 @@ def train( market        : PrettyObject,*,
 
                 optimizer.zero_grad(set_to_none=True)
                 batch, idx = sample()
-                loss = model(batch, idx, training=True)
+                loss = gradient_step(batch,idx)
 
                 loss.backward()
 
@@ -213,4 +245,3 @@ def train( market        : PrettyObject,*,
         verbose.write(lambda : f"\rModel trained for {trn_config.num_epochs} epochs. Final training loss: {tracker.trn_losses[-1]:.4g}, valuation loss: {tracker.val_losses[-1]:.4g}. This took {tme}.")
 
     return r
-

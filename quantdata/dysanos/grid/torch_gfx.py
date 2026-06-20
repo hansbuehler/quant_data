@@ -54,26 +54,40 @@ class Visualizer(object):
             strk_name     = "NMS" if self.viz_config.use_nms else "K"
     
             self.expiries_block = np.stack( [ self.expiries*DAYS_PER_YEAR ]*(self.xstrikes.shape[-1]-2), axis=-1 )
+            exp_range = (self.expiries.max()*DAYS_PER_YEAR, self.expiries.min()*DAYS_PER_YEAR)
 
             assert self.expiries_block.shape == self.nms.shape == self.mid_vols.shape, f"Expected expiries_block, nms and mid_vols to have the same shape, but found {self.expiries_block.shape}, {self.nms.shape} and {self.mid_vols.shape}"
             self.axMarketVols = self.fig.add_subplot("Interpolated Market Vols", projection="3d") 
             self.axMarketVols.plot_surface( self.expiries_block, strikes, self.mid_vols, cmap='viridis', edgecolor='none')
             self.axMarketVols.set_xlabel("Days")
             self.axMarketVols.set_ylabel(strk_name)
-            self.axMarketVols.view_init(elev=25, azim=-45) 
+            self.axMarketVols.view_init(elev=25, azim=45) 
+            self.axMarketVols.set_xlim(*exp_range)
 
             assert self.expiries_block.shape == self.nms.shape == fit_vols.shape, f"Expected expiries_block, nms and fit_vols to have the same shape, but found {self.expiries_block.shape}, {self.nms.shape} and {fit_vols.shape}"
             self.axFittedVols = self.fig.add_subplot("Model Vols", projection="3d")
             self.axFittedVols.set_xlabel("Days")
             self.axFittedVols.set_ylabel(strk_name)
-            self.axFittedVols.view_init(elev=25, azim=-45) 
+            self.axFittedVols.view_init(elev=25, azim=45) 
+            self.axFittedVols.set_xlim(*exp_range)
+
+            """
+            assert self.expiries_block.shape == self.nms.shape == np.abs(fit_vols - self.mid_vols).shape, f"Expected expiries_block, nms and fit_vols to have the same shape, but found {self.expiries_block.shape}, {self.nms.shape} and {np.abs(fit_vols - self.mid_vols).shape}"
+            self.axWAbsVolsDiff = self.fig.add_subplot("Weighted Abs Vols Difference", projection="3d")
+            self.axWAbsVolsDiff.set_xlabel("Days")
+            self.axWAbsVolsDiff.set_ylabel(strk_name)
+            self.axWAbsVolsDiff.set_zlim( 0., 0.05 )
+            self.axWAbsVolsDiff.view_init(elev=25, azim=45) 
+            self.axWAbsVolsDiff.set_xlim(*exp_range)
+            """
 
             assert self.expiries_block.shape == self.nms.shape == np.abs(fit_vols - self.mid_vols).shape, f"Expected expiries_block, nms and fit_vols to have the same shape, but found {self.expiries_block.shape}, {self.nms.shape} and {np.abs(fit_vols - self.mid_vols).shape}"
             self.axAbsVolsDiff = self.fig.add_subplot("Abs Vols Difference", projection="3d")
             self.axAbsVolsDiff.set_xlabel("Days")
             self.axAbsVolsDiff.set_ylabel(strk_name)
             self.axAbsVolsDiff.set_zlim( 0., 0.05 )
-            self.axAbsVolsDiff.view_init(elev=25, azim=-45) 
+            self.axAbsVolsDiff.view_init(elev=25, azim=45) 
+            self.axAbsVolsDiff.set_xlim(*exp_range)
 
             x = np.reshape(self.expiries_block, (-1,))
             y = np.reshape(strikes, (-1,))
@@ -87,7 +101,8 @@ class Visualizer(object):
             self.axDLVs.set_xlabel("Days")
             self.axDLVs.set_ylabel(strk_name)
             self.axDLVs.set_zlabel("DLV")
-            self.axDLVs.view_init(elev=25, azim=-45) 
+            self.axDLVs.view_init(elev=25, azim=45) 
+            self.axDLVs.set_xlim(*exp_range)
 
             self.axDensity = self.fig.add_subplot("Density", projection="3d")
             #z = np.reshape(np.sqrt(fit_dlvsqs),(-1,))
@@ -95,7 +110,8 @@ class Visualizer(object):
             self.axDensity.set_xlabel("Days")
             self.axDensity.set_ylabel(strk_name)
             self.axDensity.set_zlabel("Density")
-            self.axDensity.view_init(elev=25, azim=-45)
+            self.axDensity.view_init(elev=25, azim=45)
+            self.axDensity.set_xlim(*exp_range)
 
             # state
             self.axState = self.fig.add_subplot("State")            
@@ -103,7 +119,7 @@ class Visualizer(object):
 
             self.fig.render()
 
-        def update(self, *, epoch, calls, dlvsqs, xdensities, state, final : bool = False ):
+        def update(self, *, epoch, calls, weights,dlvsqs, xdensities, state, final : bool = False ):
             """ update this date """
             #print(f"/n{epoch} {self.index} {self.date}")
             calls      = calls[self.index,:,:]
@@ -111,6 +127,7 @@ class Visualizer(object):
             dlvsqs     = dlvsqs[self.index,:,:]
             state      = state[self.index,:]
             strikes    = self.nms if self.viz_config.use_nms else self.xstrikes[:,1:-1]
+            weights    = weights[self.index,:,:]
             x = np.reshape(self.expiries_block, (-1,))
             y = np.reshape(strikes, (-1,))
             dx = (x.max() - x.min())/100.
@@ -122,6 +139,7 @@ class Visualizer(object):
             self.store.clear()
             self.store += self.axFittedVols.plot_surface(self.expiries_block, strikes, vols, cmap='viridis', edgecolor='none')
             self.store += self.axAbsVolsDiff.plot_surface(self.expiries_block, strikes, np.clip( np.abs(vols - self.mid_vols), 0., 0.05), cmap='viridis', edgecolor='none')
+            #self.store += self.axWAbsVolsDiff.plot_surface(self.expiries_block, strikes, np.clip( np.abs(vols - self.mid_vols), 0., 0.05)*(weights>0.), cmap='viridis', edgecolor='none')
 
             z = np.reshape(np.sqrt(dlvsqs),(-1,))
             self.store += self.axDLVs.bar3d(x=x, y=y, z=0.*z, dx=dx, dy=dy, dz=z, cmap="viridis", edgecolor='none' )
@@ -142,7 +160,6 @@ class Visualizer(object):
         self.store         = FigStore()
         self.ticker        = self.market.grid_market_def.ticker
         self.first         = True
-        np.random.seed(self.viz_config.seed)
 
         all_dates          = self.market.dates
         zero_ndates        = np.zeros((len(all_dates),))
@@ -157,10 +174,15 @@ class Visualizer(object):
         self.ax_lrn.set_ylabel("Log-Loss")
         self.ax_lrn.set_yscale("log")
 
-        self.ax_error = self.fig_lrn.add_subplot(r"Stats per date of err[wgt>0] ~ $\sigma\sqrt{t}$ error")
+        self.ax_error = self.fig_lrn.add_subplot(r"Stats per date of wgt*(Fit-Mid)[wgt>0] ~ $\sigma\sqrt{t}$ error")
         self.ax_error.set_xlabel("Date")
         self.ax_error.set_ylabel("Error")
         self.ax_error.tick_params(axis="x", labelrotation=90)
+
+        self.ax_herror = self.fig_lrn.add_subplot(r"Stats per date of Huber(wgt*(Fit-Mid)))[wgt>0] ~ $\sigma\sqrt{t}$ error")
+        self.ax_herror.set_xlabel("Date")
+        self.ax_herror.set_ylabel("Huber Error")
+        self.ax_herror.tick_params(axis="x", labelrotation=90)
 
         self.fig_lrn.render()
 
@@ -183,7 +205,7 @@ class Visualizer(object):
         # vols
         # ----
 
-        np.random.seed(123123)
+        np.random.seed(viz_config.seed)
         self.indices     = sorted( np.random.choice( np.arange(len(all_dates)), size=min(viz_config.num_viz_dates, len(all_dates)), replace=False ) )
         self.indices     = self.indices[::-1] # reverse so that the earliest date is plotted first
         self.expiry_gfxs = [ self.ExpiryGfx(ticker=self.ticker, date =all_dates[ix], index=ix, ts=self.market, mdl_config=mdl_config, viz_config=viz_config ) for ix in self.indices ]
@@ -213,17 +235,28 @@ class Visualizer(object):
         if self.first:
             self.ax_lrn.legend(loc="lower left")
 
-        medians = data.error_stats.medians
-        means   = data.error_stats.means
-        p90     = data.error_stats.p90
+        medians = data.raw_error_stats.medians
+        means   = data.raw_error_stats.means
+        p90     = data.raw_error_stats.p90
         assert medians.shape == means.shape == p90.shape == (len(self.market.dates),), f"Expected medians, means, and p90 to have shape {(len(self.market.dates),)}, but found {medians.shape}, {means.shape}, and {p90.shape}"
         self.store += self.ax_error.plot(self.market.dates, p90, "--", color="red", label="p90")
         self.store += self.ax_error.plot(self.market.dates, means, ".-", color="blue", label="Mean")
         self.store += self.ax_error.plot(self.market.dates, medians, ".-", color="orange", label="Median")
         if self.first:
             self.ax_error.legend(loc="upper left")
-
         self.ax_error.set_ylim(0.,max( np.max(medians), np.max(means) )*1.1 )
+
+        medians = data.error_stats.medians
+        means   = data.error_stats.means
+        p90     = data.error_stats.p90
+        assert medians.shape == means.shape == p90.shape == (len(self.market.dates),), f"Expected medians, means, and p90 to have shape {(len(self.market.dates),)}, but found {medians.shape}, {means.shape}, and {p90.shape}"
+        self.store += self.ax_herror.plot(self.market.dates, p90, "--", color="red", label="p90")
+        self.store += self.ax_herror.plot(self.market.dates, means, ".-", color="blue", label="Mean")
+        self.store += self.ax_herror.plot(self.market.dates, medians, ".-", color="orange", label="Median")
+        if self.first:
+            self.ax_herror.legend(loc="upper left")
+        self.ax_herror.set_ylim(0.,max( np.max(medians), np.max(means) )*1.1 )
+
         self.fig_lrn.render() if not final else self.fig_lrn.close()
 
         # states
@@ -240,6 +273,7 @@ class Visualizer(object):
             assert gfx.index<data.calls.shape[0], f"Expected ix {gfx.index} to be less than calls.shape[0] {data.calls.shape[0]}"
             gfx.update( epoch=epoch, 
                         calls=data.calls,
+                        weights=data.weights,
                         xdensities=data.xdensities,
                         dlvsqs=data.dlvsqs, 
                         state=data.state, 
