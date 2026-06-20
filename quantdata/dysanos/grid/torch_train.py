@@ -69,6 +69,14 @@ def train( market        : PrettyObject,*,
     # create model
     # ------------
 
+    def sample():
+        if trn_config.batch_size is None or trn_config.batch_size >= S:
+            return tdata, None
+        else:
+            idx = torch.randint(0, S, (trn_config.batch_size,))
+            return { k: v[idx,...] if not v is None else None for k, v in tdata.items() }, idx
+        
+
     with verbose.write_t(lambda : f"Instantiating {mdl_config.label} version {mdl_config.user_version} for {mdl_config} traing {trn_config} on {env}... ", end='') as tme:
         S, T, N    = tdata['mids'].shape
         model = mdl_config.create(  env,
@@ -100,18 +108,25 @@ def train( market        : PrettyObject,*,
             return model( all_data, training=False )
 
     if trn_config.compile:
-        with verbose.write_t(lambda : f"Compiling {mdl_config.label} version {mdl_config.user_version} for {env.device}... ", end='') as tme:
+        with verbose.write_t(lambda : f"Compiling {mdl_config.label} version {mdl_config.user_version} for {env.device}: training... ", end='') as tme:
             gradient_step = torch.compile( mode="reduce-overhead",
                             dynamic=False,
                             fullgraph=True,
                             disable=model.debug,
                         )( gradient_step )
+            _ = gradient_step(*sample())
+            del _
+
+            verbose.write("valuation... ", head=False, end='')
 
             valuation = torch.compile( mode="reduce-overhead",
                             dynamic=False,
                             fullgraph=True,
                             disable=model.debug,
                         )( valuation )
+            _ = valuation(tdata)
+            del _
+
             verbose.write(lambda : f"done; this took {tme}.", head=False ) 
 
     # load
@@ -152,13 +167,6 @@ def train( market        : PrettyObject,*,
     
     with verbose.write_t(lambda : f"Training {mdl_config} with {trn_config} on {env}:") as tme:
 
-        def sample():
-            if trn_config.batch_size is None or trn_config.batch_size >= S:
-                return tdata, None
-            else:
-                idx = torch.randint(0, S, (trn_config.batch_size,))
-                return { k: v[idx,...] if not v is None else None for k, v in tdata.items() }, idx
-            
         def viz_and_store(*, epoch: int, final : bool = False):
             ld = valuation( tdata )
             tracker.val_losses.append(ld['loss'].cpu().item())
@@ -228,7 +236,7 @@ def train( market        : PrettyObject,*,
                 tracker.trn_losses.append(train_loss)
                 tracker.trn_epochs.append(epoch+1)
 
-                if epoch in [0,trn_config.num_epochs-1] or (epoch+1) % 10 == 0:
+                if epoch in [0,trn_config.num_epochs-1] or (tme.interval_test(1.) and ((epoch+1) % 10 == 0)):
                     verbose.report(1, lambda : f"\rEpoch {epoch+1}/{trn_config.num_epochs}, Loss: {train_loss:.4g}. So far this took {tme}.", end='')
                     
                 if epoch in [0,trn_config.num_epochs-1] or (epoch+1) % trn_config.epoch_interval == 0 or (time.time() - last_update) > trn_config.time_interval:

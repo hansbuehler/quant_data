@@ -122,9 +122,13 @@ class SanosPCACompressor(SanosModel):
         # -------------
 
         assert self.u_du.shape == (1+self.config.num_pca, self.config.num_state), f"Expected h_dh to have shape {(1+self.config.num_pca, self.config.num_state)}, but found {self.u_du.shape}"
-        duT, _   = torch.linalg.qr(self.u_du[1:,:].T, mode="reduced")  
-        assert duT.shape == (self.config.num_state, self.config.num_pca), f"Expected duT to have shape {(self.config.num_state, self.config.num_pca)}, but found {duT.shape}"
-        dh       = alpha @ duT.T # todo: add orthogonalization
+        du       = self.u_du[1:,:]
+        if self.config.use_qr:
+            duT, _   = torch.linalg.qr(du.T, mode="reduced")
+            du       = duT.T
+            duT      = None
+            assert du.shape == (self.config.num_pca,self.config.num_state, ), f"Expected duT to have shape {(self.config.num_pca, self.config.num_state)}, but found {du.shape}"
+        dh       = alpha @ du
         assert dh.shape == (S, self.config.num_state), f"Expected dh to have shape {(S, self.config.num_state)}, but found {dh.shape}"
         state    = self.u_du[0,:][None,:] + dh 
         assert state.shape == (S, self.config.num_state), f"Expected state to have shape {(S, self.config.num_state)}, but found {state.shape}"

@@ -38,6 +38,7 @@ class SanosCompressorConfig(SanosModelConfig):
     max_dlv: float = 2.                # Max DLV
 
     num_state : int = 10               # states
+    qr_state  : bool = False 
     state_config : FeedForward.Config = FeedForward.Config() # decoder
     learn_config : FeedForward.Config|None = None # encoder or None for direct state parameterization
 
