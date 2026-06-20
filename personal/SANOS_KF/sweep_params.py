@@ -73,40 +73,43 @@ for _p in (
 # Enable/disable a mode by editing MODES. Anything in SanosKFConfig is fair game.
 # ---------------------------------------------------------------------------
 BASE: dict = dict(
-    n_anchors=30,
+    n_anchors=60,  # caps strike-aligned interior nodes (exact-solve); ↑ = finer, ~N³ solve
     k_min=-0.60,
     k_max=0.10,  # cover the data's log-moneyness (≈ -0.56..+0.07)
     correlated=True,
     batch_seconds=1.0,  # Gap 3: 1-second batched updates
 )
 
-# NOTE: ranges are currently tuned for EXACT-SOLVE exploration. The F-normalized
-# strike grid makes box ~F smaller than the one-phase absolute-strike model, so the
-# net-DLV² state lives ~F larger and Q/P0 ~F² larger — hence the shifted-up, log-
-# spaced ranges below (the old 1e-4..1e-2 corner left the filter unable to learn).
+# Shared dims swept across ALL modes (ell is mode-specific — unit differs).
 GRID: dict = dict(
-    Sigma_init=[0.01, 0.1, 1.0, 10.0],
-    Q_scale_dlv=[1e-2, 1.0, 1e2, 1e4],
-    P0_scale=[1e-1, 1e1, 1e3],
-    ell=[0.02, 0.05, 0.10],
+    Sigma_init=[0.01, 0.04, 0.1],
+    Q_scale_dlv=[0.1, 0.3, 1.0, 3.0],
+    P0_scale=[1e-2, 1e-1, 1.0],
 )
 
 # mode name -> (fixed overrides for the mode, mode-specific swept dims).
-# "free_sigma"   : σ* is a free EKF state (BS-mixture smoothing) — sweep σ* init + Q_vol.
-# "frozen_sigma" : σ* pinned to a constant > 0 (BS-mixture) — sweep σ* init only.
-# "exact_solve"  : σ*=0 exactly-determined SANOS density — no σ* / Q_vol dims.
+# "free_sigma"   : σ* is a free EKF state (BS-mixture smoothing) — ell in LOG-MONEYNESS.
+# "frozen_sigma" : σ* pinned to a constant > 0 (BS-mixture) — ell in LOG-MONEYNESS.
+# "exact_solve"  : σ*=0 exactly-determined SANOS density, absolute-strike grid — ell in DOLLARS.
 MODES: dict = {
     "free_sigma": (
         dict(smoothing=True),
-        dict(sigma_star_init=[0.10, 0.16, 0.22], Q_scale_vol=[1e-2, 1e-1, 1.0]),
+        dict(
+            ell=[0.02, 0.05, 0.15, 0.30],  # log-moneyness units
+            sigma_star_init=[0.10, 0.16, 0.22],
+            Q_scale_vol=[1e-2, 1e-1, 1.0],
+        ),
     ),
     "frozen_sigma": (
         dict(smoothing=False),
-        dict(sigma_star_init=[0.05, 0.10, 0.16]),
+        dict(
+            ell=[0.02, 0.05, 0.15, 0.30],  # log-moneyness units
+            sigma_star_init=[0.05, 0.10, 0.16],
+        ),
     ),
     "exact_solve": (
         dict(smoothing=False, sigma_star_init=0.0),
-        dict(),
+        dict(ell=[1.0, 3.0, 8.0]),  # DOLLARS (absolute strike distance)
     ),
 }
 
@@ -140,6 +143,7 @@ def _run_one(params: dict) -> dict:
     import personal.shared_functions.unified_metrics as um
     from personal.SANOS_KF.sanos_kf import (
         SanosKFConfig,
+        build_exact_grid,
         exact_solve_density,
         run_sanos_kf,
     )
@@ -201,15 +205,15 @@ def _run_one(params: dict) -> dict:
         # exact-solve mode: score negative mass on the model's own density
         neg_vals = None
         if exact:
-            anchor_ks = np.linspace(cfg.k_min, cfg.k_max, cfg.n_anchors)
-            tte_ref = float(np.nanmedian(df_quotes["T"].to_numpy().astype(float)))
+            grid_K, tte_ref = build_exact_grid(df_quotes, cfg)
+            F0 = float(np.nanmedian(df_quotes["forward"].to_numpy().astype(float)))
             stp = st.to_pandas()
             stp["window"] = stp["ts_ns"].astype("int64") // bs_ns
             stp = stp.sort_values("ts_ns").drop_duplicates("window", keep="last")
             xcols = [c for c in stp.columns if c.startswith("x_")]
             negs = []
             for xrow in stp[xcols].to_numpy(float):
-                d = exact_solve_density(xrow, anchor_ks, tte_ref, cfg.dlv_min)
+                d = exact_solve_density(xrow, grid_K, tte_ref, cfg.dlv_min, fwd=F0)
                 negs.append(np.nan if d is None else float(np.minimum(d, 0.0).sum()))
             neg_vals = np.array(negs)
 

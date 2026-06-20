@@ -25,11 +25,14 @@ Fixes vs. the original implementation:
 Modes (cfg.smoothing / cfg.sigma_star_init):
     smoothing=True               — σ* is a free state (BS-mixture, state = n+1).
     smoothing=False, σ*>0        — σ* frozen (BS-mixture, state = n).
-    smoothing=False, σ*=0        — EXACT-SOLVE: the SANOS exactly-determined density
-                                   {Σd=1, Σdκ=1, DLV² equalities}, state = net DLV²
-                                   over the n-2 interior anchors (well-conditioned
-                                   ∂d/∂x). This is the SANOS_KF_Strike density ported
-                                   into F-normalized strike space (no BS mixture).
+    smoothing=False, σ*=0        — EXACT-SOLVE in ABSOLUTE STRIKE space (mimics
+                                   SANOS_KF_Strike): strike-aligned grid (interior
+                                   nodes on the observed strikes, ≤ n_anchors, ±1 pad),
+                                   density {Σd=1, Σd·K=F (live forward), DLV² equalities},
+                                   state = net DLV², well-conditioned ∂d/∂x. ell is in
+                                   DOLLARS; q/Sigma/P0 are on the one-phase scale. The
+                                   output sanos_kf_price is divided by F so it stays in
+                                   the same normalized-call convention as the other modes.
 
 Observation (normalized call price):
     h(x, kˡ, T) = Σᵢ qᵢ · BSCallNorm(anchor_kᵢ, kˡ, σ*²·T)
@@ -305,65 +308,91 @@ def _exact_dens_ddx(x, kappa, box, pay_full, dlv_min, N, fwd=1.0):
     return d, dd_dx
 
 
-def exact_solve_density(x_state, anchor_ks, tte_ref, dlv_min=0.001, fwd=1.0):
-    """Reconstruct the F-normalized risk-neutral density on the anchor grid from a
+def build_exact_grid(df_quotes, cfg):
+    """Construct the absolute strike-aligned grid + reference horizon for exact-solve
+    mode (interior nodes on observed strikes within [k_min,k_max], subsampled to
+    ≤ n_anchors, padded ±1 node). Returns (grid_K, tte_ref). Use this to reconstruct
+    the model density for negative-mass scoring (see exact_solve_density)."""
+    Kall = (
+        df_quotes["strike"].to_numpy().astype(float)
+        if "strike" in df_quotes.columns
+        else (df_quotes["forward"] * np.exp(df_quotes["log_moneyness"])).to_numpy().astype(float)
+    )
+    F0 = float(np.nanmedian(df_quotes["forward"].to_numpy().astype(float)))
+    lo, hi = F0 * np.exp(cfg.k_min), F0 * np.exp(cfg.k_max)
+    Kq = np.unique(np.round(Kall[np.isfinite(Kall)], 4))
+    Kq = Kq[(Kq >= lo) & (Kq <= hi)]
+    if len(Kq) > cfg.n_anchors:
+        Kq = Kq[np.unique(np.linspace(0, len(Kq) - 1, cfg.n_anchors).round().astype(int))]
+    grid_K = np.concatenate(([Kq[0] * 0.9], Kq, [Kq[-1] * 1.1]))
+    tte_ref = float(np.nanmedian(df_quotes["T"].to_numpy().astype(float)))
+    return grid_K, tte_ref
+
+
+def exact_solve_density(x_state, grid_K, tte_ref, dlv_min=0.001, fwd=None):
+    """Reconstruct the risk-neutral density on the ABSOLUTE strike grid from a
     net-DLV² state (exact-solve mode), for diagnostics / negative-mass scoring.
 
-    Builds the same κ grid + box weights as run_sanos_kf's exact mode (so pass the
-    SAME tte_ref it used — the median quote T) and solves A(x) d = b. Returns the
-    density d (length len(anchor_ks)), or None if the linear system is singular.
-    The signed negative mass is then Σ min(d, 0) (0 = arbitrage-free)."""
-    anchor_ks = np.asarray(anchor_ks, float)
-    kappa = np.exp(anchor_ks)
-    N = len(kappa)
-    xrow = np.concatenate(([2 * kappa[0] - kappa[1]], kappa, [2 * kappa[-1] - kappa[-2]]))
-    box = kappa**2 / (xrow[2:] - xrow[:-2]) * tte_ref
+    Builds the same K grid + box weights as run_sanos_kf's exact mode (pass the SAME
+    grid_K and tte_ref it used) and solves A(x) d = b with mean = fwd (defaults to the
+    grid midpoint if None). Returns the density d (length len(grid_K)), or None if the
+    system is singular. The signed negative mass is Σ min(d, 0) (0 = arbitrage-free)."""
+    grid_K = np.asarray(grid_K, float)
+    N = len(grid_K)
+    if fwd is None:
+        fwd = float(0.5 * (grid_K[0] + grid_K[-1]))
+    xrow = np.concatenate(([2 * grid_K[0] - grid_K[1]], grid_K, [2 * grid_K[-1] - grid_K[-2]]))
+    box = grid_K**2 / (xrow[2:] - xrow[:-2]) * tte_ref
     box[0] = 0.0
     box[-1] = 0.0
-    pay_full = np.maximum(kappa[np.newaxis, :] - kappa[:, np.newaxis], 0.0)
-    d, _ = _exact_dens_ddx(np.asarray(x_state, float), kappa, box, pay_full, dlv_min, N, fwd=fwd)
+    pay_full = np.maximum(grid_K[np.newaxis, :] - grid_K[:, np.newaxis], 0.0)
+    d, _ = _exact_dens_ddx(np.asarray(x_state, float), grid_K, box, pay_full, dlv_min, N, fwd=fwd)
     return d
 
 
-def _make_exact_fns(kappa, box, pay_full, dlv_min):
-    """Build (obs_scalar, jac_scalar, obs_vec, jac_vec) closures with the same
-    signatures as the JAX ones, so the EKF loop is mode-agnostic. The observation
-    is the normalized call price h(κ_m) = Σ_j d_j·(κ_j − κ_m)⁺ (matches mid/(F·df));
-    `anchor_ks`/`T` args are ignored (grid & horizon are baked into box)."""
-    N = len(kappa)
+def _make_exact_fns(grid_K, box, pay_full, dlv_min):
+    """Build (obs_scalar, jac_scalar, obs_vec, jac_vec, dens_fn) closures for the
+    ABSOLUTE-STRIKE exact-solve (mimics SANOS_KF_Strike). Each takes the live forward
+    `fwd` (the density re-centers via Σd·K = fwd every window) and absolute quote
+    strikes K. The observation is the undiscounted call h(K) = Σ_j d_j·(K_j − K)⁺
+    (= C/df), matched against (mid/df) in call space."""
+    N = len(grid_K)
     n_state = N - 2
 
-    def _dd(xx):
-        return _exact_dens_ddx(np.asarray(xx), kappa, box, pay_full, dlv_min, N)
+    def _dd(xx, fwd):
+        return _exact_dens_ddx(np.asarray(xx), grid_K, box, pay_full, dlv_min, N, fwd=fwd)
 
-    def obs_scalar(xx, ak, mk, T):
-        d, _ = _dd(xx)
+    # obs/jac take a dummy `ak` 2nd arg to share the call signature with the JAX
+    # (BS-mixture) closures: (x, ak, arg3, arg4). Here arg3 = absolute strike(s),
+    # arg4 = live forward.
+    def obs_scalar(xx, ak, K, fwd):
+        d, _ = _dd(xx, fwd)
         if d is None:
             return float("nan")
-        return float(np.maximum(kappa - np.exp(float(mk)), 0.0) @ d)
+        return float(np.maximum(grid_K - float(K), 0.0) @ d)
 
-    def jac_scalar(xx, ak, mk, T):
-        d, dd = _dd(xx)
+    def jac_scalar(xx, ak, K, fwd):
+        d, dd = _dd(xx, fwd)
         if d is None:
             return np.full(n_state, np.nan)
-        return np.maximum(kappa - np.exp(float(mk)), 0.0) @ dd
+        return np.maximum(grid_K - float(K), 0.0) @ dd
 
-    def obs_vec(xx, ak, mk_arr, T_arr):
-        d, _ = _dd(xx)
-        km = np.exp(np.asarray(mk_arr, float))
+    def obs_vec(xx, ak, K_arr, fwd):
+        d, _ = _dd(xx, fwd)
+        K_arr = np.asarray(K_arr, float)
         if d is None:
-            return np.full(len(km), np.nan)
-        return np.maximum(kappa[None, :] - km[:, None], 0.0) @ d
+            return np.full(len(K_arr), np.nan)
+        return np.maximum(grid_K[None, :] - K_arr[:, None], 0.0) @ d
 
-    def jac_vec(xx, ak, mk_arr, T_arr):
-        d, dd = _dd(xx)
-        km = np.exp(np.asarray(mk_arr, float))
+    def jac_vec(xx, ak, K_arr, fwd):
+        d, dd = _dd(xx, fwd)
+        K_arr = np.asarray(K_arr, float)
         if d is None:
-            return np.full((len(km), n_state), np.nan)
-        return np.maximum(kappa[None, :] - km[:, None], 0.0) @ dd
+            return np.full((len(K_arr), n_state), np.nan)
+        return np.maximum(grid_K[None, :] - K_arr[:, None], 0.0) @ dd
 
-    def dens_fn(xx):
-        d, _ = _dd(xx)
+    def dens_fn(xx, fwd):
+        d, _ = _dd(xx, fwd)
         return d
 
     return obs_scalar, jac_scalar, obs_vec, jac_vec, dens_fn
@@ -563,22 +592,24 @@ def run_sanos_kf(
     reject_tol = cfg.reject_neg_mass if exact else None
 
     if exact:
-        # F-normalized strike grid (κ = K/F, forward = 1) + DLV² box weights. The
-        # horizon for box uses a fixed reference tte (median T) — the terminal
-        # density is T-independent, so the quote's own T does not enter the solve.
-        kappa = anchor_K
-        tte_ref = float(np.nanmedian(df_quotes["T"].to_numpy().astype(float)))
-        xrow = np.concatenate(([2 * kappa[0] - kappa[1]], kappa, [2 * kappa[-1] - kappa[-2]]))
-        box = kappa**2 / (xrow[2:] - xrow[:-2]) * tte_ref
+        # ABSOLUTE-STRIKE exact-solve (mimics SANOS_KF_Strike). Strike-aligned grid:
+        # interior nodes sit on the observed strikes (within [k_min,k_max], subsampled
+        # to ≤ n_anchors), padded one node each side (lower/upper scale, à la
+        # make_strike_grid). Density re-centers via Σd·K = fwd (live) each window.
+        if cfg.batch_seconds is None:
+            raise NotImplementedError("exact-solve mode requires batched mode (batch_seconds set)")
+        grid_K, tte_ref = build_exact_grid(df_quotes, cfg)
+        xrow = np.concatenate(([2 * grid_K[0] - grid_K[1]], grid_K, [2 * grid_K[-1] - grid_K[-2]]))
+        box = grid_K**2 / (xrow[2:] - xrow[:-2]) * tte_ref
         box[0] = 0.0
         box[-1] = 0.0
-        pay_full = np.maximum(kappa[np.newaxis, :] - kappa[:, np.newaxis], 0.0)  # (N,N)
+        pay_full = np.maximum(grid_K[np.newaxis, :] - grid_K[:, np.newaxis], 0.0)  # (N,N)
         obs_scalar, jac_scalar, obs_vec, jac_vec, dens_fn = _make_exact_fns(
-            kappa, box, pay_full, cfg.dlv_min
+            grid_K, box, pay_full, cfg.dlv_min
         )
-        x = np.full(n - 2, cfg.Sigma_init)  # flat net DLV² over interior anchors
-        var_diag = np.full(n - 2, cfg.Q_scale_dlv)
-        C_full = _rbf(anchor_ks[1:-1], cfg.ell, cfg.correlated)
+        x = np.full(len(grid_K) - 2, cfg.Sigma_init)  # flat net DLV² over interior nodes
+        var_diag = np.full(len(grid_K) - 2, cfg.Q_scale_dlv)
+        C_full = _rbf(grid_K[1:-1], cfg.ell, cfg.correlated)  # ell now in DOLLARS
     elif cfg.smoothing:
         obs_scalar, jac_scalar = _obs_jit, _jac_fn
         obs_vec, jac_vec = _obs_vmap, _jac_vmap
@@ -632,8 +663,19 @@ def run_sanos_kf(
     bid_norm = np.where(put, bid_norm + 1.0 - np.exp(ks), bid_norm)
     ask_norm = np.where(put, ask_norm + 1.0 - np.exp(ks), ask_norm)
     mid_norm = 0.5 * (bid_norm + ask_norm)
-    R_all = np.maximum((0.5 * (ask_norm - bid_norm)) ** 2, 1e-10)
-    valid = ok_scale & np.isfinite(mid_norm) & np.isfinite(ks) & np.isfinite(Ts) & (Ts > 0.0)
+    R_norm = np.maximum((0.5 * (ask_norm - bid_norm)) ** 2, 1e-10)
+
+    # Absolute strikes + undiscounted call space (C/df) for the exact-solve mode.
+    K_abs = fwds * np.exp(ks)
+    dfs_safe = np.where(np.isfinite(dfs) & (dfs > 0), dfs, 1.0)
+    bid_c = np.where(is_calls, bids / dfs_safe, bids / dfs_safe + fwds - K_abs)
+    ask_c = np.where(is_calls, asks / dfs_safe, asks / dfs_safe + fwds - K_abs)
+    mid_abs = 0.5 * (bid_c + ask_c)
+    R_abs = np.maximum((0.5 * (ask_c - bid_c)) ** 2, 1e-10)
+
+    # Pick the observation space for the active mode.
+    mid_obs, R_obs = (mid_abs, R_abs) if exact else (mid_norm, R_norm)
+    valid = ok_scale & np.isfinite(mid_obs) & np.isfinite(ks) & np.isfinite(Ts) & (Ts > 0.0)
     if cfg.calls_only and cfg.puts_only:
         raise ValueError("calls_only and puts_only are mutually exclusive")
     if cfg.calls_only:
@@ -653,11 +695,8 @@ def run_sanos_kf(
             Q = Q_rate * (dt_ns * _q_per_ns)
             _last_ts = ts_ns_arr[i]
             x, P, z_hat = _ekf_step(
-                x, P, anchor_ks, ks[i], Ts[i], mid_norm[i], R_all[i], Q, obs_scalar, jac_scalar
+                x, P, anchor_ks, ks[i], Ts[i], mid_obs[i], R_obs[i], Q, obs_scalar, jac_scalar
             )
-            if clip_nonneg:  # exact-solve: net DLV² state must stay ≥ 0
-                x = np.maximum(x, 0.0)
-                z_hat = obs_scalar(x, anchor_ks, ks[i], Ts[i])
             z_hats[i] = z_hat
             x_hist[i] = x
     else:
@@ -691,11 +730,17 @@ def run_sanos_kf(
                 x_hist[idx] = x_prior
                 continue
 
-            ks_w = jnp.array(ks[idx_v])
-            Ts_w = jnp.array(Ts[idx_v])
+            # Mode-specific observation args. exact: absolute strikes + live window
+            # forward (density re-centers via Σd·K=fwd). BS-mixture: (anchor_ks, k, T).
+            if exact:
+                fwd_w = float(np.nanmedian(fwds[idx_v]))
+                o3, o4 = K_abs[idx_v], fwd_w
+            else:
+                fwd_w = None
+                o3, o4 = jnp.array(ks[idx_v]), jnp.array(Ts[idx_v])
             xj = jnp.array(x_prior)
-            z_hat_p = np.asarray(obs_vec(xj, ak_j, ks_w, Ts_w))  # (m,)
-            H = np.asarray(jac_vec(xj, ak_j, ks_w, Ts_w))  # (m, n_state)
+            z_hat_p = np.asarray(obs_vec(xj, ak_j, o3, o4))  # (m,)
+            H = np.asarray(jac_vec(xj, ak_j, o3, o4))  # (m, n_state)
             z_hats_prior[idx_v] = z_hat_p
 
             fin = np.isfinite(z_hat_p) & np.isfinite(H).all(axis=1)
@@ -705,8 +750,8 @@ def run_sanos_kf(
                 continue
 
             Hf = H[fin]
-            innov = mid_norm[idx_v][fin] - z_hat_p[fin]
-            Rf = np.diag(R_all[idx_v][fin])
+            innov = mid_obs[idx_v][fin] - z_hat_p[fin]
+            Rf = np.diag(R_obs[idx_v][fin])
             S = Hf @ P_pred @ Hf.T + Rf
             try:
                 K_gain = P_pred @ Hf.T @ np.linalg.inv(S)
@@ -724,7 +769,7 @@ def run_sanos_kf(
             # state stays arbitrage-free and every snapshot is still scored honestly.
             reject = False
             if reject_tol is not None and dens_fn is not None:
-                d_cand = dens_fn(x_cand)
+                d_cand = dens_fn(x_cand, fwd_w)
                 reject = d_cand is None or (-np.minimum(d_cand, 0.0).sum() > reject_tol)
 
             if reject:
@@ -735,8 +780,15 @@ def run_sanos_kf(
                 IKH = I_n - K_gain @ Hf
                 P = IKH @ P_pred @ IKH.T + K_gain @ Rf @ K_gain.T  # Joseph form
                 P = 0.5 * (P + P.T)
-                z_hats[idx_v] = np.asarray(obs_vec(jnp.array(x), ak_j, ks_w, Ts_w))
+                z_hats[idx_v] = np.asarray(obs_vec(jnp.array(x), ak_j, o3, o4))
             x_hist[idx] = x
+
+    # exact-solve prices are absolute undiscounted calls (C/df); convert to the same
+    # F-normalized convention as the BS-mixture modes (price/(F·df)) so the IV
+    # inversion and every downstream eval (which multiplies back by F) are unchanged.
+    if exact:
+        z_hats = z_hats / fwds
+        z_hats_prior = z_hats_prior / fwds
 
     sanos_kf_ivs = _invert_iv_vec(z_hats, ks, Ts)
     sanos_kf_ivs_prior = _invert_iv_vec(z_hats_prior, ks, Ts)
