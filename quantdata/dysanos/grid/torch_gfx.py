@@ -37,8 +37,9 @@ class Visualizer(object):
             self.viz_config = viz_config    
             self.mdl_config = mdl_config
             self.store      = FigStore()
+            self.first      = True
 
-            self.expiries = ts['expiries']
+            self.expiries  = ts['expiries']
             assert np.max(self.index) < self.expiries.shape[0], f"Expected index {self.index} to be less than expiries.shape[0] {self.expiries.shape[0]}"
 
             self.expiries = self.expiries[self.index,:]
@@ -71,16 +72,6 @@ class Visualizer(object):
             self.axFittedVols.view_init(elev=25, azim=45) 
             self.axFittedVols.set_xlim(*exp_range)
 
-            """
-            assert self.expiries_block.shape == self.nms.shape == np.abs(fit_vols - self.mid_vols).shape, f"Expected expiries_block, nms and fit_vols to have the same shape, but found {self.expiries_block.shape}, {self.nms.shape} and {np.abs(fit_vols - self.mid_vols).shape}"
-            self.axWAbsVolsDiff = self.fig.add_subplot("Weighted Abs Vols Difference", projection="3d")
-            self.axWAbsVolsDiff.set_xlabel("Days")
-            self.axWAbsVolsDiff.set_ylabel(strk_name)
-            self.axWAbsVolsDiff.set_zlim( 0., 0.05 )
-            self.axWAbsVolsDiff.view_init(elev=25, azim=45) 
-            self.axWAbsVolsDiff.set_xlim(*exp_range)
-            """
-
             assert self.expiries_block.shape == self.nms.shape == np.abs(fit_vols - self.mid_vols).shape, f"Expected expiries_block, nms and fit_vols to have the same shape, but found {self.expiries_block.shape}, {self.nms.shape} and {np.abs(fit_vols - self.mid_vols).shape}"
             self.axAbsVolsDiff = self.fig.add_subplot("Abs Vols Difference", projection="3d")
             self.axAbsVolsDiff.set_xlabel("Days")
@@ -93,7 +84,6 @@ class Visualizer(object):
             y = np.reshape(strikes, (-1,))
             dx = (x.max() - x.min())/100.
             dy = (y.max() - y.min())/100.
-
             z = np.reshape(np.sqrt(fit_dlvsqs),(-1,))
             assert x.shape == y.shape == z.shape, f"Expected x, y and z to have the same shape, but found {x.shape}, {y.shape} and {z.shape}"
             self.axDLVs = self.fig.add_subplot("DLVs", projection="3d")
@@ -113,18 +103,28 @@ class Visualizer(object):
             self.axDensity.view_init(elev=25, azim=45)
             self.axDensity.set_xlim(*exp_range)
 
+            # fwd vols
+            expiries       = self.ts['expiries'][self.index,:]
+            variances      = self.ts['variances'][self.index,:]
+            vols           = np.sqrt( np.diff(variances,prepend=0.)/np.diff(expiries, prepend=0.) )
+            self.axFwdVols = self.fig.add_subplot("Fwd Vols")
+            self.axFwdVols.plot( np.sqrt(expiries), vols, ".:", color="blue", label="Market")
+            self.axFwdVols.set_xlabel("Sqrt(T)")
+
             # state
             self.axState = self.fig.add_subplot("State")            
             self.store += self.axState.bar( np.arange(mdl_config.num_state),np.zeros((mdl_config.num_state,)), width=0.2 )
 
             self.fig.render()
 
-        def update(self, *, epoch, calls, weights,dlvsqs, xdensities, state, final : bool = False ):
+        def update(self, *, epoch, calls, weights ,dlvsqs, variances, xdensities, state, final : bool = False ):
             """ update this date """
             #print(f"/n{epoch} {self.index} {self.date}")
             calls      = calls[self.index,:,:]
+            expiries   = self.ts['expiries'][self.index,:]
             xdensities = xdensities[self.index,:,:]
             dlvsqs     = dlvsqs[self.index,:,:]
+            variances  = variances[self.index,:]
             state      = state[self.index,:]
             strikes    = self.nms if self.viz_config.use_nms else self.xstrikes[:,1:-1]
             weights    = weights[self.index,:,:]
@@ -134,7 +134,7 @@ class Visualizer(object):
             dy = (y.max() - y.min())/100.
 
             assert np.all(np.isfinite(calls)), f"Expected all calls to be finite, but found {np.sum(~np.isfinite(calls))} non-finite values"
-            vols = bs.implied( k=self.xstrikes[:,1:-1], prices=calls, sqrtT=np.sqrt(self.expiries[:,None]) )
+            vols = bs.implied( k=self.xstrikes[:,1:-1], prices=calls, sqrtT=np.sqrt(self.expiries[:,None]), on_exceed_bounds="quiet" )
 
             self.store.clear()
             self.store += self.axFittedVols.plot_surface(self.expiries_block, strikes, vols, cmap='viridis', edgecolor='none')
@@ -147,9 +147,15 @@ class Visualizer(object):
             z = np.reshape(xdensities[:,1:-1],(-1,))
             self.store += self.axDensity.bar3d(x=x, y=y, z=0.*z, dx=dx, dy=dy, dz=z, cmap="viridis", edgecolor='none' )
 
+            self.store += self.axFwdVols.plot( np.sqrt(expiries), np.sqrt( np.diff(variances,prepend=0.)/np.diff(expiries, prepend=0.) ), color="orange", label="Model")
+            if self.first:
+                self.axFwdVols.legend(loc="upper left")
+
             self.store += self.axState.bar( np.arange(self.mdl_config.num_state),state, width=0.2, color="orange" )
             self.axState.set_title(f"State epoch {epoch}")
             self.fig.render() if not final else self.fig.close()
+
+            self.first = False
 
     def __init__(self, market, *, 
                        viz_config : VizConfig, 
@@ -244,7 +250,7 @@ class Visualizer(object):
         self.store += self.ax_error.plot(self.market.dates, medians, ".-", color="orange", label="Median")
         if self.first:
             self.ax_error.legend(loc="upper left")
-        self.ax_error.set_ylim(0.,max( np.max(medians), np.max(means) )*1.1 )
+        self.ax_error.set_ylim(0., min( max( np.max(medians), np.max(means) )*1.1, 0.005 ) )
 
         medians = data.error_stats.medians
         means   = data.error_stats.means
@@ -276,6 +282,7 @@ class Visualizer(object):
                         weights=data.weights,
                         xdensities=data.xdensities,
                         dlvsqs=data.dlvsqs, 
+                        variances=data.variances,
                         state=data.state, 
                         final=final )
 

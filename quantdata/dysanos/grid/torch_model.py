@@ -16,9 +16,11 @@ from cdxcore.verbose import Context
 from cdxcore.version import version
 from cdxcore.bs import bs
 from cdxcore.pretty import PrettyObject
+from cdxcore.util import is_filename
 from quantdata.biz_calendar import DAYS_PER_YEAR, ONE_MINUTE
 from quantdata.utils.backbone import Backbone, BackboneNumpy
 import logging
+import math
 
 from quantdata.sanos.tridiag import solve_sanos_tridiagonal
 from quantdata.torch import BaseEnvironment, BaseModel, torch, get, pop
@@ -26,6 +28,7 @@ from quantdata.torch.ffw import FeedForward
 from quantdata.torch.bbtorch import BackboneTorch
 from quantdata.dysanos.grid.torch_market import GridMarketDefinition, PoolConfig
 from dataclasses import asdict, dataclass, field
+from quantdata.biz_calendar import NMS
 
 _bbtorch = BackboneTorch()
 
@@ -42,29 +45,85 @@ def _notebook_name() -> str:
         nb_name = nb_name[i+len("viz_"):]
     return nb_name
 
-@version("0.1", dependencies=[GridMarketDefinition, BaseEnvironment])
+@version("0.3", dependencies=[GridMarketDefinition])
 @dataclass(frozen=True)
 class SanosModelConfig:
-    label : str = ""                  # Unique label for this experiment. If left to "" will be set to the current notebook value.
-    group : str = ""                  # Group for this experiment, if any.
-    user_version : str = "0.1"        # Version to trigger updates
-    smoothness : float|None = None    # Model smoothness
-    min_vega_sqrt : float = 1E-4      # minimum vega/sqrtT; used to compute weights
+    label            : str = ""                  # Unique label for this experiment. If left to "" will be set to the current notebook value.
+    group            : str = ""                  # Group for this experiment, if any.
+    user_version     : str = "0.1"        # Version to trigger updates
+
+    smoothness       : float|None = None    # Model smoothness
+    min_vega_sqrt    : float = 1E-4      # minimum vega/sqrtT; used to compute weights
     scale_by_weights : str = "sample" # Whether to scale the loss by weights
+
+    num_nms   : int = 20               # number of moneyness levels
+    nms_range : tuple[float,float] = (-2, 1) # range of moneyness levels
+    nms       : np.ndarray = field(init=False, repr=False) # moneyness levels, computed from num_nms and nms_range
+    xnms      : np.ndarray = field(init=False, repr=False) # extended moneyness levels, computed from nms
+    nms_eps   : float = NMS.EPS        # shift for NMS
+    learn_nms : bool = False
+    
+    min_dlv   : float = 0.01           # Min DLV
+    max_dlv   : float = 2.             # Max DLV
+    min_fvol  : float = 0.01           # minimum fwd vol
+    max_fvol  : float = 0.2            # maximum fwd vol
+
+    num_state  : int = 20
+    state_config : FeedForward.Config = FeedForward.Config()  # decoder
+
+    seed       : int = 213123123
+
+    _debug_dont_learn_sqrtVars : bool = False # debug flag to not learn sqrtVars
 
     def __post_init__(self):
         verify_inp( self.smoothness is None or self.smoothness >= 0., f"Expected 'smoothness' to be None or non-negative, but found {self.smoothness}" )
         verify_inp( self.min_vega_sqrt > 0., f"Expected 'min_vega_sqrt' to be positive, but found {self.min_vega_sqrt}" )
         verify_inp( self.scale_by_weights in ["none", "sample", "total"], f"Expected 'scale_by_weights' to be either 'none', 'sample' or 'total', but found {self.scale_by_weights}" )
 
+        verify_inp( self.group == "" or is_filename(self.group), f"Expected 'group' to be a valid file name, but found {self.group}" )
+
         if self.label == "":
             label = _notebook_name()
             verify_inp( label is not None, f"Expected to be able to determine notebook name for 'label', but failed. Please set 'label' explicitly in the config." )
             self.__dict__['label'] = label
 
+        def _nms():
+            """ Generate NMS strikes which contains '1' """
+            # generate strikes which contain '1'
+            N    = self.num_nms
+            dist = float(self.nms_range[1] - self.nms_range[0])
+            assert dist > 0., f"Internal error: expected grid_range to have positive distance but found {self.nms_range}."
+            Nlo  = min(max(2, float(N*abs(self.nms_range[0]))//dist),N-3)
+            Nhi = N - Nlo - 1
+            assert Nlo>=2 and Nhi>=2, f"{message()}Internal error: error {Nlo} {Nhi} for grid_range {self.nms_range} and grid_num_strikes {N}."
+            nms = np.concatenate( ( np.linspace(self.nms_range[0], 0., int(Nlo), endpoint=False), np.linspace(0., self.nms_range[1], int(Nhi)+1) ) )
+            assert len(nms)==N, f"{message()}Internal error: generated number of moneyness levels {len(nms)} does not match expected {N}."
+            return nms
+
+        nms = _nms()
+        xnms = np.concatenate( [[self.nms_range[0]*2], nms, [self.nms_range[1]*2]] )
+        self.__dict__['nms'] = nms
+        self.__dict__['xnms'] = xnms
+
     @property
     def label_str(self) -> str:
         return f"{self.label}{f'.{self.group}' if self.group else ''} {self.user_version} " + ( f"{self.smoothness:.2f}-smooth" if not self.smoothness is None else "linear" )
+
+    @property
+    def obj_str(self) -> str:
+        return f"{self.scale_by_weights},mvsq={self.min_vega_sqrt:.3g}"
+
+    @property
+    def nms_str(self) -> str:
+        return f"nms={self.num_nms},({self.nms_range[0]:.2f},{self.nms_range[1]:.2f})"
+
+    @property
+    def minmax_str(self):
+        return f"dlv=({self.min_dlv:.2f},{self.max_dlv:.2f}),fvol=({self.min_fvol:.2f},{self.max_fvol:.2f})"
+
+    @property
+    def state_str(self) -> str:
+        return f"state={self.num_state}@{self.state_config}"
 
     def create(self, env : BaseEnvironment, *, S, T, N) -> type:
         """ Create Model """
@@ -122,7 +181,7 @@ class SanosModelConfig:
         mid_delta: np.ndarray    = market['mid_delta']
         xstrikes: np.ndarray     = market['xstrikes']
         nms : np.ndarray         = market['nms']
-        variances: np.ndarray    = market['atm_vols']**2 * expiries
+        variances: np.ndarray    = market['variances'] # (S, T)
         weights: np.ndarray|None = market.get('weights', None)
 
         S, T, N  = mids.shape        
@@ -183,9 +242,9 @@ class SanosModelConfig:
             intr = np.maximum( 0., spots - strikes )
             if self.smoothness is None or self.smoothness == 0.:
                 return intr
-            vol     = np.sqrt( self.smoothness * variances/expiries )
-            assert np.all( np.isfinite(vol) ), f"Internal error: {message()}infinite vol"
-            return bs.price( k=strikes/spots, vol=vol, sqrtT=np.sqrt(expiries), eps=1E-6 )*spots
+            sqrtVar  = np.sqrt( self.smoothness * variances )
+            assert np.all( np.isfinite(sqrtVar) ), f"Internal error: {message()}infinite vol"
+            return bs.price( k=strikes/spots, vol=sqrtVar, sqrtT=1., eps=1E-6 )*spots
 
         r.CX       = torch.tensor( np_call( spots=xstrikes[:,:,None,:], strikes=xstrikes[:,:,1:-1,None], variances=variances[:,:,None,None], expiries=expiries[:,:,None,None] ), device=env.device, dtype=env.fdtype )
         assert r.CX.shape == (S, T, N, N+2), f"Expected CX to have shape {(S, T, N, N+2)}, but found {r.CX.shape}"
@@ -200,6 +259,7 @@ class SanosModelConfig:
         r.xstrikes  = torch.tensor( xstrikes, device=env.device, dtype=env.fdtype )
         r.nms       = torch.tensor( nms, device=env.device, dtype=env.fdtype )
         r.weights   = torch.tensor( weights, device=env.device, dtype=env.fdtype ) 
+        r.variances = torch.tensor( variances, device=env.device, dtype=env.fdtype )
 
         for k, v in r.items():
             if not v is None:
@@ -208,11 +268,16 @@ class SanosModelConfig:
 
         return dict(r)
 
+@version("0.2", dependencies=[BaseEnvironment, SanosModelConfig])
 class SanosModel(BaseModel):
 
-    def __init__( self, env : BaseEnvironment ):
-        super().__init__(env)
+    NUM_FEATURES = 7
 
+    def __init__( self, env : BaseEnvironment, T, config : SanosModelConfig ):
+        super().__init__(env)
+        self.config = config
+        np.random.seed(config.seed)
+        torch.manual_seed(config.seed)
         torch.set_float32_matmul_precision("high")
         torch._logging.set_logs(
             recompiles=True,
@@ -220,21 +285,142 @@ class SanosModel(BaseModel):
             dynamo=logging.WARNING,
         )
 
-    def compute_dlvsqs( self, data : Pytree, *, sample_indices : np.array|None = None, training : bool = False ) -> tuple[torch.Tensor, dict|None]:
-        raise NotImplementedError("This method should be implemented in subclasses to compute the DLVsq grid.")
+        n                   = config.num_nms
+        self.raw_from_state = FeedForward( env, num_input=config.num_state, num_output=T * n + T, config=config.state_config )  
+        self.xnms           = torch.tensor( config.xnms, device=env.device, dtype=env.fdtype )
 
-    def compute_calls( self, data : Pytree, dlvsqs : torch.Tensor, *, sample_indices : np.array|None = None, training : bool = False ) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
+    def build_default_features( self, data : Pytree, *, training : bool = False ) -> torch.Tensor:
+        """ Compute feature block """
+        data             = dict(data)
+        mid_vols         = data.get("mid_vols")
+        S, T, N          = mid_vols.shape
+        market_xstrikes  = get(data, "xstrikes", (S, T, N+2) )
+        expiries         = get(data, "expiries", (S, T) )
+        variances        = get(data, "variances", (S, T) )
+        market_nms       = get(data, "nms", (S, T, N) )
+        mid_vega         = get(data, "mid_vega", (S, T, N) )
+        mid_delta        = get(data, "mid_delta", (S, T, N) )
+
+        logK      = torch.log( market_xstrikes[:,:,1:-1] )
+        dsqrtVars = torch.diff( torch.sqrt(variances), dim=1, prepend=torch.zeros_like(expiries[:,:1]) )
+        features  = torch.stack( [ logK, logK*0.+expiries[:,:,None], logK*0.+dsqrtVars[:,:,None], mid_vols, market_nms, mid_vega, mid_delta ], axis=-1 )
+        assert features.shape == (S, T, N, self.NUM_FEATURES), f"Expected features to have shape {(S, T, N, self.NUM_FEATURES)}, but found {features.shape}"
+        features  = features.reshape( S, -1 )   
+        assert features.shape == (S, T*N*self.NUM_FEATURES), f"Expected features to have shape {(S, T*N*self.NUM_FEATURES)}, but found {features.shape}"
+        return features
+
+    def compute_state( self, data : Pytree, *, sample_indices : np.array|None = None, training : bool = False ) -> tuple[torch.Tensor, dict|None]:
+        raise NotImplementedError("This method should be implemented in subclasses to compute the raw DLVs from the (abstract) model state.")
+
+    def compute_dlvsqs_dsqrtVars( self, data : Pytree, *, sample_indices : np.array|None = None, training : bool = False ) -> tuple[torch.Tensor, dict|None]:
+        """
+        Decode DLVsq grid and forward variances from the (abstract) model state.
+        """
+
+        expiries      = get(data, "expiries")
+        S, T          = expiries.shape
+        n             = self.config.num_nms
+        state, other  = self.compute_state( data=data, sample_indices=sample_indices, training=training )
+        assert state.shape==(S,self.config.num_state), f"Expected raw output to have shape {(S,self.config.num_state)}, but found {state.shape}"
+
+        max_dlvsq    = self.config.max_dlv**2
+        min_dlvsq    = self.config.min_dlv**2
+        max_dsqrtVar = torch.diff( self.config.max_fvol * torch.sqrt(expiries), dim=1, prepend=torch.zeros_like(expiries[:,:1]) ).detach()
+        min_dsqrtVar = torch.diff( self.config.min_fvol * torch.sqrt(expiries), dim=1, prepend=torch.zeros_like(expiries[:,:1]) ).detach()
+
+        raw       = self.raw_from_state( state )
+        assert raw.shape == (S, T* n + T), f"Expected raw output to have shape {(S, T*n + T)}, but found {raw.shape}"
+        raw       = torch.sigmoid(raw)
+        dlvsqs    = raw[:, :T*n].reshape( S, T, n ) * (max_dlvsq - min_dlvsq) + min_dlvsq
+        dsqrtVars = raw[:, T*n:].reshape( S, T ) * (max_dsqrtVar - min_dsqrtVar) + min_dsqrtVar
+
+        if self.config._debug_dont_learn_sqrtVars:
+            variances = get(data, "variances", (S,T))
+            dsqrtVars = torch.diff( torch.sqrt(variances), dim=1, prepend=torch.zeros_like(expiries[:,:1]) ).detach()
+
+        self.verify( lambda : torch.all( torch.isfinite(dlvsqs) & (dlvsqs > 0.) ), "Infinite or non-positive 'dlvsqs'")
+        self.verify( lambda : torch.all( torch.isfinite(dsqrtVars) & (dsqrtVars > 0.) ), "Infinite or non-positive 'dsqrtVars'")
+        if training:
+            return dlvsqs, dsqrtVars, None
+        
+        return dlvsqs, dsqrtVars, dict(state=state.detach(), **{k:v.detach() for k,v in other.items() if not v is None})
+
+    def compute_model( self, dlvsqs    : torch.Tensor,
+                             dsqrtVars : torch.Tensor, 
+                             data      : Pytree, *, 
+                             training  : bool = False ) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
         """
         Utility function to compute call prices and densities.
         """
-        S, T, N      = dlvsqs.shape
-        q_tm1        = get(data, "xdensity0", (S, N+2))
-        iw_minus     = get(data, "iw_minus", (S, T, N) )
-        iw_plus      = get(data, "iw_plus", (S, T, N) )
-        L            = get(data, "L", (S, T-1, N+2, N+2) )
-        CX           = get(data, "CX", (S, T, N, N+2) )
-        Cs           = []
-        qs           = [] 
+        S, T, n      = dlvsqs.shape
+        assert n == self.config.num_nms, f"Expected 'dlvsqs' to have shape {(S, T, self.config.num_nms)}, but found {dlvsqs.shape}"
+        assert dsqrtVars.shape == (S, T), f"Expected 'dsqrtVars' to have shape {(S, T)}, but found {dsqrtVars.shape}"
+
+        expiries        = get(data, "expiries", (S, T) )
+        market_xstrikes = get(data, "xstrikes")
+        Cs              = []
+        qs              = [] 
+        assert market_xstrikes.shape[:2] == (S, T), f"Expected market_xstrikes to have shape {(S, T)}, but found {market_xstrikes.shape}"
+        N               = market_xstrikes.shape[2]-2
+
+        # compute grid geometry
+        # ---------------------
+
+        _0              = torch.zeros_like( expiries[:,:1] )
+        _1              = torch.ones_like( expiries[:,:1] )
+        dt              = torch.diff( expiries, prepend=_0, dim=1 )
+        sqrtVars        = torch.cumsum( dsqrtVars, dim=1 )
+        assert self.xnms.shape[0] == n+2, f"Expected xnms to have shape {(n+2,)}, but found {self.xnms.shape}"
+
+        """
+        NMS(z,t) = exp( nms * sqrt{ var_e + var_t }/{ e + 1 } )
+                 ~ exp( nms * sqrtVar_t * sqrt{ var_e/var_t + 1 }/{ e + 1 } )
+        """
+        var_e           = ( dsqrtVars[:,0]**2 / expiries[:,0] )[:,None] * self.config.nms_eps
+        var_t           = sqrtVars**2
+        nms_adjusment   = torch.sqrt( ( var_e / var_t + 1 ) / ( self.config.nms_eps + 1. ) )
+        xstrikes        = torch.exp(self.xnms[None,None,:] * sqrtVars[:,:,None] * nms_adjusment[:,:,None])
+        assert xstrikes.shape == (S,T,n+2), f"Expected xstrikes to have shape {(S,T,n+2)}, but found {xstrikes.shape}"
+        self.verify( lambda : torch.all( torch.isfinite(xstrikes) & (xstrikes > 0.) ), "Infinite or non-positive 'xstrikes'" )
+        xdensity0       = torch.diff( torch.diff( torch.maximum( _0[0,0], _1[0,0] - xstrikes[:,0,:] ), prepend=_1, dim=1 )
+                                      / torch.diff(xstrikes[:,0,:], prepend=_0, dim=1),
+                                      append=_0, dim=1 )
+        assert xdensity0.shape == (S,n+2), f"Expected xdensity0 to have shape {(S,n+2)}, but found {xdensity0.shape}"
+        _0 = None
+        _1 = None
+
+        # tridiagonal solver
+        box             = xstrikes[:,:,1:-1]**2 * dt[:,:,None] / ( xstrikes[:,:,2:] - xstrikes[:,:,:-2])
+        iw_plus         = box / ( xstrikes[:,:,2:] - xstrikes[:,:,1:-1] )
+        iw_minus        = box / ( xstrikes[:,:,1:-1] - xstrikes[:,:,:-2] )
+        self.verify( torch.min( iw_plus ) >= 0., lambda : f"'iw_plus' must be non-negative, but found min {torch.min(iw_plus)}" )
+        self.verify( torch.min( iw_minus ) >= 0., lambda : f"'iw_minus' must be non-negative, but found min {torch.min(iw_minus)}" )
+        box = None
+
+        # linear interpolation
+        L   = torch.maximum( xstrikes[0,0,0]*0., xstrikes[:,:-1,None,:] - xstrikes[:,1:,:,None] ) # will be multiplied from the right with q_tm1
+        L1 = torch.diff( L, dim=2, prepend=torch.ones_like( L[:,:,:1,:] ) )
+        L2 = torch.diff( xstrikes[:,1:,:,None], dim=2, prepend=torch.zeros_like( xstrikes[:,1:,:1,None] ))
+        L = torch.diff( L1/L2, dim=2, append=torch.zeros_like( L[:,:,:1,:] ) )
+        assert L.shape == (S, T-1, n+2, n+2), f"Expected L to have shape {(S, T-1, n+2, n+2)}, but found {L.shape}"
+        _0 = None
+        _1 = None
+        L1 = None
+        L2 = None
+
+
+        # model to market
+        if self.config.smoothness is None or self.config.smoothness == 0.:
+            CX = torch.maximum( xstrikes[0,0,0]*0., xstrikes[:,:,None,:] - market_xstrikes[:,:,1:-1,None] )
+        else:
+            CX = _bbtorch.bs_price( spot=xstrikes[:,:,None,:],
+                                    strikes=market_xstrikes[:,:,1:-1,None],
+                                    sqrtVars=math.sqrt(self.config.smoothness) * sqrtVars[:,:,None,None])
+        assert CX.shape == (S, T, N, n+2), f"Expected CX to have shape {(S, T, N, n+2)}, but found {CX.shape}"  
+        sqrtVars = None
+
+        # compute market call prices
+        # --------------------------
 
         for t in range(T): # loop by expiry
             iw_minus_t  = iw_minus[:,t,:]
@@ -245,8 +431,10 @@ class SanosModel(BaseModel):
             if t>0:
                 L_t     = L[:,t-1,:,:] 
                 q_tm1   = torch.sum( L_t * q_tm1[:,None,:], dim=-1 ) # TODO: make faster
+            else:
+                q_tm1   = xdensity0
 
-            self.verify( lambda : torch.min( q_tm1 ) >= -1E-8, lambda : f"Negative density values found at expiry #{t}, before solving DLV equation: min density value is {np.min(q_tm1)}.")
+            self.verify( lambda : torch.min( q_tm1 ) >= -1E-6, lambda : f"Negative density values found at expiry #{t}, before solving DLV equation: min density value is {q_tm1.detach().cpu().numpy().min()}.")
 
             # solve DLV equation
             dlvsqs_t    = dlvsqs[:,t,:]
@@ -261,9 +449,11 @@ class SanosModel(BaseModel):
             qs.append( q_t )
             q_tm1 = q_t 
 
-        Cs = torch.stack( Cs, axis=1 ) # (S, T, N)
-        qs = torch.stack( qs, axis=1 ) # (S, T, N+2)
-        return Cs, qs   
+        return dict(
+            calls=torch.stack( Cs, axis=1 ),      # (S, T, N)
+            xdensities=torch.stack( qs, axis=1 ), # (S, T, n+2)
+            xstrikes=xstrikes,                    # (S, T, n+2)
+        )
 
     def __call__(self, data : Pytree, sample_indices : np.array|None = None, training : bool = False ) -> float | Pytree:
         """ Training or valuation """
@@ -271,27 +461,32 @@ class SanosModel(BaseModel):
         # call derived model
         # ------------------
 
-        dlvsqs, other     = self.compute_dlvsqs( data, sample_indices=sample_indices, training=training )
-        calls, xdensities = self.compute_calls( data, sample_indices=sample_indices, dlvsqs=dlvsqs, training=training )    
+        dlvsqs, dsqrtVars, other = self.compute_dlvsqs_dsqrtVars( data, sample_indices=sample_indices, training=training )
+        model_output             = self.compute_model( dlvsqs=dlvsqs, dsqrtVars=dsqrtVars, data=data, training=training )    
 
-        S, T, N      = dlvsqs.shape
-        assert calls.shape == (S, T, N), f"{self.__class__.__name__}: Expected calls to have shape {(S, T, N)}, but found {calls.shape}"
+        S, T, n        = dlvsqs.shape
         assert not training or other is None, f"{self.__class__.__name__}: Expected 'other' to be None when training"
+        mids           = get(data, "mids")
+        assert mids.shape[:2] == (S, T), f"Expected mids to have shape {(S, T, None)}, but found {mids.shape}"
+        N              = mids.shape[2]
+        calls          = get(model_output, "calls", (S, T, N))
+        xdensities     = get(model_output, "xdensities", (S, T, n+2))
+        xstrikes       = get(model_output, "xstrikes", (S, T, n+2))
+        expiries       = get(data, "expiries", (S, T))
 
         # solve for the densities
         # -----------------------
 
-        mids         = get(data, "mids", (S, T, N) )
-        xstrikes     = get(data, "xstrikes", (S, T, N+2) )
-        expiries     = get(data, "expiries", (S, T) )
-        weights      = get(data, "weights", (S, T, N))
+        mids            = get(data, "mids", (S, T, N) )
+        market_xstrikes = get(data, "xstrikes", (S, T, N+2) )
+        weights         = get(data, "weights", (S, T, N))
 
-        loss         = 0.
-        raw_error    = 0.
-        wsum         = 0.
+        loss            = 0.
+        raw_error       = 0.
+        wsum            = 0.
 
-        raw_errors   = [] if not training else None
-        errors       = [] if not training else None
+        raw_errors      = [] if not training else None
+        errors          = [] if not training else None
 
         if self.config.scale_by_weights == "sample":
             sample_scale = 1./torch.sum( weights, dim=(1,2) ) # NB: we always have at least one positive weight per sample, so this should always be finite
@@ -331,19 +526,28 @@ class SanosModel(BaseModel):
         if training:
             return loss
 
-        xdensities = xdensities.detach()  # (S, T, N+2)
-        calls      = calls.detach()       # (S, T, N)
-        dlvsqs     = dlvsqs.detach()      # (S, T, N)
-        raw_errors = torch.stack( raw_errors, axis=1 ) # (S, T, N)
-        errors     = torch.stack( errors, axis=1 ) # (S, T, N) 
+        r = PrettyObject()
+        r.calls      = calls.detach()          # (S, T, N)
+        r.xdensities = xdensities.detach()     # (S, T, n+2)
+        r.xstrikes   = xstrikes.detach()       # (S, T, n+2)
+        r.dlvsqs     = dlvsqs.detach()         # (S, T, n)
+        r.dsqrtVars  = dsqrtVars.detach()     # (S, T)
+        r.variances  = (torch.cumsum(dsqrtVars.detach(),dim=1)**2) # (S, T)
+        r.weights    = weights.detach()        # (S, T, N)
+        r.raw_errors = torch.stack( raw_errors, axis=1 ) # (S, T, N)
+        r.errors     = torch.stack( errors, axis=1 ) # (S, T, N) 
 
-        assert xdensities.shape == (S, T, N+2), f"Expected xdensities to have shape {(S, T, N+2)}, but found {xdensities.shape}"
-        assert calls.shape == (S, T, N), f"Expected calls to have shape {(S, T, N)}, but found {calls.shape}"
-        assert dlvsqs.shape == (S, T, N), f"Expected dlvsqs to have shape {(S, T, N)}, but found {dlvsqs.shape}"
-        assert raw_errors.shape == (S, T, N), f"Expected raw_errors to have shape {(S, T, N)}, but found {raw_errors.shape}"
-        assert errors.shape == (S, T, N), f"Expected errors to have shape {(S, T, N)}, but found {errors.shape}"
+        assert r.calls.shape == (S, T, N), f"Expected calls to have shape {(S, T, N)}, but found {r.calls.shape}"
+        assert r.xdensities.shape == (S, T, n+2), f"Expected xdensities to have shape {(S, T, n+2)}, but found {r.xdensities.shape}"
+        assert r.xstrikes.shape == (S, T, n+2), f"Expected xstrikes to have shape {(S, T, n+2)}, but found {r.xstrikes.shape}"
+        assert r.dlvsqs.shape == (S, T, n), f"Expected dlvsqs to have shape {(S, T, n)}, but found {r.dlvsqs.shape}"
+        assert r.dsqrtVars.shape == (S, T), f"Expected dsqrtVars to have shape {(S, T)}, but found {r.dsqrtVars.shape}"
+        assert r.variances.shape == (S, T), f"Expected variances to have shape {(S, T)}, but found {r.variances.shape}"
 
-        result = dict(loss=loss, xdensities=xdensities, calls=calls, dlvsqs=dlvsqs, raw_errors=raw_errors, raw_weights=weights, errors=errors, weights=weights)
+        assert r.raw_errors.shape == (S, T, N), f"Expected raw_errors to have shape {(S, T, N)}, but found {r.raw_errors.shape}"
+        assert r.errors.shape == (S, T, N), f"Expected errors to have shape {(S, T, N)}, but found {r.errors.shape}"
+
+        result = dict(loss=loss, **r)
         if not other is None:
             assert set(other) & set(result) == set(), f"Expected 'other' to not contain any keys that are already in the result, but found {sorted(set(other) & set(result))}"
             result.update(other)

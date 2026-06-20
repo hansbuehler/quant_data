@@ -2,6 +2,8 @@ from dataclasses import dataclass, field, asdict
 from cdxcore.pretty import PrettyObject
 from cdxcore.verbose import Context
 from cdxcore.subdir import SubDir
+from cdxcore.err import verify_inp
+from cdxcore.version import version
 from cdxcore.uniquehash import unique_label48_8
 import warnings
 from quantdata.dysanos.grid.torch_model import SanosModelConfig, BaseEnvironment
@@ -16,17 +18,40 @@ _cache_root = SubDir("~/.dysanos_grid/")
 
 @dataclass(frozen=True)
 class TrainConfig:
-    num_epochs : int = 5000
-    lr : float = 1E-3
-    weight_decay : float = 1e-4
-    batch_size : int|None = None
-    compile : bool = False # doesn't work yet
+    num_epochs          : int = 5000      # total epochs
+    batch_size          : int|None = None # batch size, or None for all samples
+    lr                  : float = 1E-3    # initial learning rate
+    final_lr            : float = 1E-5    # final learning rate
+    weight_decay        : float = 1e-4    # weight decay for regularization
+    compile             : bool = False    # speed up training dramatically
 
     epoch_interval : int = 200   # after how many epochs to update visualization and store checkpoint
     time_interval : float = 2*60   # after how many seconds to update visualization and store checkpoint
 
+    def __post_init__(self):
+        verify_inp( self.num_epochs > 0, f"Expected 'num_epochs' to be positive, but found {self.num_epochs}" )
+        verify_inp( self.final_lr > 0., f"Expected 'final_lr' to be positive, but found {self.final_lr}" )
+        verify_inp( self.lr >= self.final_lr, f"Expected 'lr' to be greater than or equal to 'final_lr' {self.final_lr}, but found {self.lr}" )
+        verify_inp( self.weight_decay >= 0., f"Expected 'weight_decay' to be non-negative, but found {self.weight_decay}" )
+        verify_inp( self.epoch_interval > 0, f"Expected 'epoch_interval' to be positive, but found {self.epoch_interval}" )
+        verify_inp( self.time_interval > 0., f"Expected 'time_interval' to be positive, but found {self.time_interval}" )
+
     def __str__(self):
-        return f"epochs={self.num_epochs},lr={self.lr:.4g},wdec={self.weight_decay:.4g},bsize={'all' if self.batch_size is None else self.batch_size}"
+        return f"epochs={self.num_epochs},lr={self.lr:.4g}->{self.final_lr:.4g},wdec={self.weight_decay:.4g},bsize={'all' if self.batch_size is None else self.batch_size}"
+
+    def lr_for_epoch(self, epoch: int) -> float:
+        if epoch <= 0:
+            return self.lr
+        if epoch >= self.num_epochs - 1:
+            return self.final_lr
+        p = epoch / (self.num_epochs - 1)
+        return self.lr * (self.final_lr / self.lr) ** p
+
+    def set_lr_for_epoch(self, epoch: int, optimizer: torch.optim.Optimizer) -> float:
+        lr = self.lr_for_epoch(epoch)
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
+        return lr
 
 @dataclass
 class MetricTracker:
@@ -98,11 +123,12 @@ def train( market        : PrettyObject,*,
     # load
     # ----
 
-    path        = _cache_root(ext="pt") if mdl_config.group == "" else _cache_root(unique_label48_8(mdl_config.group),ext="pt")
-    file_name   = unique_label48_8(mdl_config.label)
-    cache_ffn   = path.full_file_name(file_name)
-    start_epoch = 0
-    tracker     = MetricTracker()
+    path          = _cache_root(ext="pt") if mdl_config.group == "" else _cache_root(mdl_config.group,ext="pt")
+    file_name     = unique_label48_8(mdl_config.label, as_file_name=True)
+    cache_ffn     = path.full_file_name(file_name)
+    start_epoch   = 0
+    tracker       = MetricTracker()
+    model_version = model.version.unique_id48
 
     if not restart and path.exists(file_name):
         verbose.write(lambda : f"Found existing recovery checkpoint '{cache_ffn}'. Restoring model state from this checkpoint.")
@@ -110,10 +136,13 @@ def train( market        : PrettyObject,*,
         state = torch.load(cache_ffn, map_location=env.device, weights_only=False)
 
         user_version = state.pop("version", None)
+        mdl_version  = state.pop("mdl_version", None)
         if user_version is None:
             warnings.warn(f"Checkpoint '{cache_ffn}' does not contain a 'version' field. This is likely an old checkpoint. Restarting training.")
         elif user_version != mdl_config.user_version:
             warnings.warn(f"Checkpoint '{cache_ffn}' file user_version {user_version} does not match model user_version {mdl_config.user_version}. Restarting training.")
+        elif not mdl_version is None and model_version != mdl_version:
+            warnings.warn(f"Checkpoint '{cache_ffn}' file model version {mdl_version} does not match model version {model_version}. Restarting training.")
         else:
             optimizer.load_state_dict(state.pop("optimizer_state_dict"))
             model.load_state_dict(state.pop("model_state_dict"))
@@ -169,10 +198,13 @@ def train( market        : PrettyObject,*,
         """ call valuation and then visualize and store the model """
         model.eval()
         ld = valuation( tdata )
-        assert tracker.val_epochs[-1] <= epoch+1, f"Expected last validation epoch {tracker.val_epochs[-1]} to be less than or equal to current epoch {epoch+1}"
-        if tracker.val_epochs[-1] < epoch+1:
+        assert len(tracker.val_epochs) == 0 or tracker.val_epochs[-1] <= epoch+1, f"Expected last validation epoch {tracker.val_epochs[-1]} to be less than or equal to current epoch {epoch+1}"
+        if len(tracker.val_epochs)==0 or tracker.val_epochs[-1] < epoch+1:
             tracker.val_losses.append(ld['loss'].cpu().item())
             tracker.val_epochs.append(epoch+1)
+        else:
+            tracker.val_losses[-1] = ld['loss'].cpu().item()
+            tracker.val_epochs[-1] = epoch+1
 
         # convert to numpy
         r = PrettyObject({k:v.detach().cpu().numpy() for k,v in ld.items() if not v is None}) 
@@ -196,6 +228,7 @@ def train( market        : PrettyObject,*,
 
         path.create_directory()
         torch.save(dict(version=mdl_config.user_version,
+                        mdl_version=model_version,
                         tracker=asdict(tracker),
                         optimizer_state_dict=optimizer.state_dict(),
                         model_state_dict=model.state_dict(),
@@ -238,6 +271,7 @@ def train( market        : PrettyObject,*,
                     # Optional but often useful
                     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
+                    lr = trn_config.set_lr_for_epoch(epoch, optimizer)
                     optimizer.step()
                     train_loss = loss.detach().item() 
                     tracker.trn_losses.append(train_loss)
@@ -246,7 +280,7 @@ def train( market        : PrettyObject,*,
                     if epoch in [0,trn_config.num_epochs-1] or (tme.interval_test(1.) and ((epoch+1) % 10 == 0)):
                         verbose.report(1, lambda : f"\rEpoch {epoch+1}/{trn_config.num_epochs}, Loss: {train_loss:.4g}. So far this took {tme}.", end='')
                         
-                    if epoch in [0,trn_config.num_epochs-1] or (epoch+1) % trn_config.epoch_interval == 0 or (time.time() - last_update) > trn_config.time_interval:
+                    if epoch in [0,trn_config.num_epochs-1] or ((epoch+1) % trn_config.epoch_interval == 0) or ((time.time() - last_update) > trn_config.time_interval):
                         viz_and_store(epoch=epoch)
                         last_update = time.time()
                         verbose.report(1, lambda : f"\rEpoch {epoch+1}/{trn_config.num_epochs}, Loss: {train_loss:.4g}. Valuation loss: {tracker.val_losses[-1]:.4g}. So far this took {tme}. [Check point saved]", end='')
