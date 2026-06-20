@@ -220,59 +220,26 @@ class SanosModel(BaseModel):
             dynamo=logging.WARNING,
         )
 
-    def compute_dlvsqs( self, data : Pytree, sample_indices : np.array|None = None, training : bool = True ) -> torch.Tensor:
+    def compute_dlvsqs( self, data : Pytree, *, sample_indices : np.array|None = None, training : bool = False ) -> tuple[torch.Tensor, dict|None]:
         raise NotImplementedError("This method should be implemented in subclasses to compute the DLVsq grid.")
 
+    def compute_calls( self, data : Pytree, dlvsqs : torch.Tensor, *, sample_indices : np.array|None = None, training : bool = False ) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
+        """
+        Utility function to compute call prices and densities.
+        """
+        S, T, N      = dlvsqs.shape
+        q_tm1        = get(data, "xdensity0", (S, N+2))
+        iw_minus     = get(data, "iw_minus", (S, T, N) )
+        iw_plus      = get(data, "iw_plus", (S, T, N) )
+        L            = get(data, "L", (S, T-1, N+2, N+2) )
+        CX           = get(data, "CX", (S, T, N, N+2) )
+        Cs           = []
+        qs           = [] 
 
-    def __call__(self, data : Pytree, sample_indices : np.array|None = None, training : bool = True ) -> float | Pytree:
-        """ Training or valuatio """
-
-        # call derived model
-        # ------------------
-
-        dlvsqs, other  = self.compute_dlvsqs( data, sample_indices=sample_indices, training=training )
-        data           = dict(data)
-        mids           = data.get("mids")
-        S, T, N        = mids.shape
-        assert dlvsqs.shape == (S, T, N), f"{self.__class__.__name__}: Expected dlvsqs to have shape {(S, T, N)}, but found {dlvsqs.shape}"
-        assert not training or other is None, f"{self.__class__.__name__}: Expected 'other' to be None when training"
-
-        # solve for the densities
-        # -----------------------
-
-        mids         = pop(data, "mids", (S, T, N) )
-        xstrikes     = pop(data, "xstrikes", (S, T, N+2) )
-        expiries     = pop(data, "expiries", (S, T) )
-        xdensity0    = pop(data, "xdensity0", (S, N+2))
-        iw_minus     = pop(data, "iw_minus", (S, T, N) )
-        iw_plus      = pop(data, "iw_plus", (S, T, N) )
-        L            = pop(data, "L", (S, T-1, N+2, N+2) )
-        CX           = pop(data, "CX", (S, T, N, N+2) )
-        weights      = pop(data, "weights", (S, T, N))
-
-        q_tm1        = xdensity0
-        loss         = 0.
-        raw_error    = 0.
-        wsum         = 0.
-
-        xdensities   = [] if not training else None
-        calls        = [] if not training else None
-        dlvsqs_out   = [] if not training else None
-        raw_errors   = [] if not training else None
-        errors       = [] if not training else None
-
-        if self.config.scale_by_weights == "sample":
-            sample_scale = 1./torch.sum( weights, dim=(1,2) ) # NB: we always have at least one positive weight per sample, so this should always be finite
-            wsum         = S # number of samples
-        else:
-            sample_scale = None
-        
         for t in range(T): # loop by expiry
             iw_minus_t  = iw_minus[:,t,:]
             iw_plus_t   = iw_plus[:,t,:]
             CX_t        = CX[:,t,:,:]
-            mids_t      = mids[:,t,:]
-            weights_t   = weights[:,t,:]
 
             # move density forward
             if t>0:
@@ -286,10 +253,57 @@ class SanosModel(BaseModel):
             w_minus_t   = dlvsqs_t * iw_minus_t
             w_plus_t    = dlvsqs_t * iw_plus_t
             q_t         = solve_sanos_tridiagonal( w_minus=w_minus_t, w_plus=w_plus_t, rhs=q_tm1, backbone=_bbtorch )
-            assert q_t.shape == xstrikes[:,t,:].shape, f"Expiry #{t}: shape error in DLV equation solution, expected {xstrikes[:,t,:].shape} but found {q_t.shape}"
 
             # compute market call prices
             C_t          = torch.sum( CX_t * q_t[:,None,:], dim=-1 ) # TODO: make faster
+            assert C_t.shape == (S,N), f"Expiry #{t}: expected shape {(S,N)} for model call prices C_t, but found {C_t.shape}"
+            Cs.append( C_t )
+            qs.append( q_t )
+            q_tm1 = q_t 
+
+        Cs = torch.stack( Cs, axis=1 ) # (S, T, N)
+        qs = torch.stack( qs, axis=1 ) # (S, T, N+2)
+        return Cs, qs   
+
+    def __call__(self, data : Pytree, sample_indices : np.array|None = None, training : bool = False ) -> float | Pytree:
+        """ Training or valuation """
+
+        # call derived model
+        # ------------------
+
+        dlvsqs, other     = self.compute_dlvsqs( data, sample_indices=sample_indices, training=training )
+        calls, xdensities = self.compute_calls( data, sample_indices=sample_indices, dlvsqs=dlvsqs, training=training )    
+
+        S, T, N      = dlvsqs.shape
+        assert calls.shape == (S, T, N), f"{self.__class__.__name__}: Expected calls to have shape {(S, T, N)}, but found {calls.shape}"
+        assert not training or other is None, f"{self.__class__.__name__}: Expected 'other' to be None when training"
+
+        # solve for the densities
+        # -----------------------
+
+        mids         = get(data, "mids", (S, T, N) )
+        xstrikes     = get(data, "xstrikes", (S, T, N+2) )
+        expiries     = get(data, "expiries", (S, T) )
+        weights      = get(data, "weights", (S, T, N))
+
+        loss         = 0.
+        raw_error    = 0.
+        wsum         = 0.
+
+        raw_errors   = [] if not training else None
+        errors       = [] if not training else None
+
+        if self.config.scale_by_weights == "sample":
+            sample_scale = 1./torch.sum( weights, dim=(1,2) ) # NB: we always have at least one positive weight per sample, so this should always be finite
+            wsum         = S # number of samples
+        else:
+            sample_scale = None
+        
+        for t in range(T): # loop by expiry
+            # compute market call prices
+            weights_t    = weights[:,t,:]
+            mids_t       = mids[:,t,:]
+            C_t          = calls[:,t,:]
             assert C_t.shape == (S,N), f"Expiry #{t}: expected shape {(S,N)} for model call prices C_t, but found {C_t.shape}"
 
             # add errors
@@ -310,29 +324,26 @@ class SanosModel(BaseModel):
                 wsum      = wsum + torch.sum( weights_t )
 
             if not training:
-                xdensities.append( torch.detach(q_t) )
-                calls.append( torch.detach(C_t) )
-                dlvsqs_out.append( torch.detach(dlvsqs_t) )
                 raw_errors.append( torch.detach(raw_error_t) )
                 errors.append( torch.detach(error_t) )
-            q_tm1 = q_t 
 
         loss = loss / wsum
         if training:
             return loss
-        with torch.no_grad():
-            xdensities = torch.stack( xdensities, axis=1 ) # (S, T, N+2)
-            calls = torch.stack( calls, axis=1 ) # (S, T, N)
-            dlvsqs_out = torch.stack( dlvsqs_out, axis=1 ) # (S, T, N)
-            raw_errors = torch.stack( raw_errors, axis=1 ) # (S, T, N)
-            errors = torch.stack( errors, axis=1 ) # (S, T, N) 
+
+        xdensities = xdensities.detach()  # (S, T, N+2)
+        calls      = calls.detach()       # (S, T, N)
+        dlvsqs     = dlvsqs.detach()      # (S, T, N)
+        raw_errors = torch.stack( raw_errors, axis=1 ) # (S, T, N)
+        errors     = torch.stack( errors, axis=1 ) # (S, T, N) 
 
         assert xdensities.shape == (S, T, N+2), f"Expected xdensities to have shape {(S, T, N+2)}, but found {xdensities.shape}"
         assert calls.shape == (S, T, N), f"Expected calls to have shape {(S, T, N)}, but found {calls.shape}"
-        assert dlvsqs_out.shape == (S, T, N), f"Expected dlvsqs_out to have shape {(S, T, N)}, but found {dlvsqs_out.shape}"
+        assert dlvsqs.shape == (S, T, N), f"Expected dlvsqs to have shape {(S, T, N)}, but found {dlvsqs.shape}"
         assert raw_errors.shape == (S, T, N), f"Expected raw_errors to have shape {(S, T, N)}, but found {raw_errors.shape}"
         assert errors.shape == (S, T, N), f"Expected errors to have shape {(S, T, N)}, but found {errors.shape}"
-        result = dict(loss=loss, xdensities=xdensities, calls=calls, dlvsqs=dlvsqs_out, raw_errors=raw_errors, raw_weights=weights, errors=errors, weights=weights)
+
+        result = dict(loss=loss, xdensities=xdensities, calls=calls, dlvsqs=dlvsqs, raw_errors=raw_errors, raw_weights=weights, errors=errors, weights=weights)
         if not other is None:
             assert set(other) & set(result) == set(), f"Expected 'other' to not contain any keys that are already in the result, but found {sorted(set(other) & set(result))}"
             result.update(other)

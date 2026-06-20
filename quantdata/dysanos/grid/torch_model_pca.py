@@ -113,6 +113,7 @@ class SanosPCACompressor(SanosModel):
             features  = features.reshape( S, -1 )
             alpha     = self.learn_alpha( features )
             features  = None
+            logK      = None
         else:
             alpha     = self.dlv_alpha
             alpha     = alpha if sample_indices is None else alpha[sample_indices,:]
@@ -122,6 +123,7 @@ class SanosPCACompressor(SanosModel):
         # -------------
 
         assert self.u_du.shape == (1+self.config.num_pca, self.config.num_state), f"Expected h_dh to have shape {(1+self.config.num_pca, self.config.num_state)}, but found {self.u_du.shape}"
+        u        = self.u_du[0,:][None,:]
         du       = self.u_du[1:,:]
         if self.config.use_qr:
             duT, _   = torch.linalg.qr(du.T, mode="reduced")
@@ -130,8 +132,11 @@ class SanosPCACompressor(SanosModel):
             assert du.shape == (self.config.num_pca,self.config.num_state, ), f"Expected duT to have shape {(self.config.num_pca, self.config.num_state)}, but found {du.shape}"
         dh       = alpha @ du
         assert dh.shape == (S, self.config.num_state), f"Expected dh to have shape {(S, self.config.num_state)}, but found {dh.shape}"
-        state    = self.u_du[0,:][None,:] + dh 
+        state    = u + dh 
         assert state.shape == (S, self.config.num_state), f"Expected state to have shape {(S, self.config.num_state)}, but found {state.shape}"
+        dh = None
+        u  = None
+        du = None
 
         dlvs_raw = self.raw_dlv_from_state( state )
         assert dlvs_raw.shape == (S, T*N), f"Expected raw DLVs to have shape {(S, T*N)}, but found {dlvs_raw.shape}"
