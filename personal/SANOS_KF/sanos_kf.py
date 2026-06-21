@@ -3,60 +3,53 @@ sanos_kf.py
 
 Online SANOS + Extended Kalman Filter for a single expiry.
 
-The SANOS call-price mixture becomes the nonlinear observation function h(x)
-of an EKF so the DLV weights and smoothing vol evolve online with each quote.
+ONE model: the exact tridiagonal SANOS density (same parameterization as
+quantdata.sanos), run in ABSOLUTE STRIKE space on the strike-aligned grid (interior
+nodes on the observed strikes within [k_min,k_max], ≤ n_anchors, padded ±1 node).
+cfg.ell is in DOLLARS.
 
-EVERY mode now runs in ABSOLUTE STRIKE space (mimics SANOS_KF_Strike). Anchors sit
-on the strike-aligned grid (interior nodes on the observed strikes within
-[k_min,k_max], ≤ n_anchors, padded ±1 node); cfg.ell is in DOLLARS for all modes.
+State  x = net DLV² over the N-2 interior strike nodes (≥ 0).
 
-State  x:
-    BS-mixture (smoothing):  x[:n] = log(Σᵢ) (log² discrete local vols, DLVs),
-                             x[n]  = log(σ*) (log shared smoothing vol; smoothing=True only).
-    exact-solve:             x = net DLV² over the N-2 interior strike nodes.
-
-Density (Ω = I, p₀ = uniform 1/n):
-    BS-mixture:  q̃ᵢ = (1/n)/(1+Σᵢ), projected onto {Σq=1, Σq·K=F (live forward)};
-                 component j is a lognormal with forward Kⱼ and total var σ*²T, so the
-                 σ*→0 limit collapses to the density-weighted intrinsic Σqⱼ(Kⱼ−K)⁺.
-    exact-solve: exactly-determined SANOS system {Σd=1, Σd·K=F, DLV² equalities}.
+Density (per window, re-centered on the LIVE forward F):
+    A(x)·d = b with rows {Σd = 1, Σd·K = F, tri-diagonal DLV² equalities} — the
+    exactly-determined SANOS system, well-conditioned ∂d/∂x. (Earlier BS-mixture
+    heuristics q ∝ (1/n)/(1+Σ) are GONE — they were not the SANOS density and could
+    not fit; see the quantdata.sanos tridiagonal operator.)
 
 Observation (undiscounted call price C(K)/df, matched against mid/df):
-    BS-mixture:  h(x, K, T, F) = Σᵢ qᵢ · [Kᵢ·N(d1ᵢ) − K·N(d2ᵢ)],  d1ᵢ=(log(Kᵢ/K)+σ*²T/2)/(σ*√T)
-    exact-solve: h(x, K, F)    = Σⱼ dⱼ · (Kⱼ − K)⁺
+    σ* = 0  (cfg.smoothing=False):  h(x,K,F) = Σⱼ dⱼ·(Kⱼ − K)⁺          (intrinsic)
+    σ* > 0  (cfg.smoothing=True) :  h(x,K,F) = Σⱼ dⱼ·[Kⱼ·N(d1ⱼ) − K·N(d2ⱼ)]
+                                    d1ⱼ = (log(Kⱼ/K) + v/2)/√v,  v = σ*²·tte_ref
+σ* (= cfg.sigma_star_init) is a GIVEN regularizer that blurs each density node into a
+lognormal of vol σ* — it smooths only the OBSERVATION, never the density (exactly how
+quantdata.sanos applies its `sqrtVar`). The σ*→0 limit recovers the intrinsic.
 The output sanos_kf_price is divided by F → F-normalized call (unchanged convention).
 
-Fixes vs. the original implementation:
-    Bug 1 — the in-filter density is forward-centered every window (Σq·K = live F).
-    Bug 2 — process & prior noise are correlated across DLV anchors via an RBF kernel
-            (cfg.correlated / cfg.ell in dollars), so a quote pulls its neighbours.
-    Gap 3 — quotes are assimilated in time windows (cfg.batch_seconds): one
-            time-proportional predict + one batch update per window, with the
-            held-out prior = previous window's posterior (sanos_kf_price_prior).
+Design notes:
+    - in-filter density is forward-centered every window (Σd·K = live F);
+    - process & prior noise correlated across DLV nodes via an RBF kernel
+      (cfg.correlated / cfg.ell in dollars), so a quote pulls its neighbours;
+    - quotes assimilated in time windows (cfg.batch_seconds): one time-proportional
+      predict + one batch update per window, held-out prior = previous window's
+      posterior (sanos_kf_price_prior);
+    - reject-update guard keeps the density arbitrage-free (cfg.reject_neg_mass).
 
-Jacobian: jax.jacrev (BS-mixture) / analytic ∂d/∂x (exact-solve).
+Jacobian: analytic ∂d/∂x (numpy) through the smoothed/intrinsic payoff.
 
 Public API
 ----------
-SanosKFConfig          — hyperparameters
-sanos_jacobian_analytic() — closed-form Jacobian (numpy)
-run_sanos_kf()         — main EKF loop (single expiry)
+SanosKFConfig  — hyperparameters
+run_sanos_kf() — main EKF loop (single expiry)
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-import jax
-import jax.numpy as jnp
 import numpy as np
 import polars as pl
 from cdxcore.bs import bs as _cdx_bs
-from jax.scipy.stats import norm as jax_norm
 from scipy.stats import norm as np_norm
-
-jax.config.update("jax_enable_x64", True)
-
 
 # ---------------------------------------------------------------------------
 # IV inversion (vectorized over per-quote T)
@@ -108,26 +101,26 @@ class SanosKFConfig:
     n_anchors: int = 20
     k_min: float = -0.20
     k_max: float = 0.15
-    sigma_star_init: float = 0.20  # initial σ* (smoothing vol)
-    Sigma_init: float = 0.25  # initial Σᵢ for all anchors (uniform)
-    Q_scale_dlv: float = 1e-3  # process noise scale for log-DLV per trading day
-    Q_scale_vol: float = 1e-4  # process noise scale for log-σ* per trading day
+    sigma_star_init: float = 0.20  # σ* smoothing vol (GIVEN regularizer, applied iff
+    # smoothing=True; blurs each density node into a lognormal of vol σ*). Not fitted.
+    Sigma_init: float = 0.25  # initial net DLV² for all interior nodes (uniform)
+    Q_scale_dlv: float = 1e-3  # process noise scale for net DLV² per trading day
+    Q_scale_vol: float = 1e-4  # UNUSED (σ* is a given regularizer, not a fitted state)
     P0_scale: float = 1e-4  # initial covariance diagonal scale
     trading_day_s: float = 23400.0  # trading day length in seconds (6.5 h) for Q scaling
     calls_only: bool = False  # if True, fit on call quotes only
     puts_only: bool = False  # if True, fit on put quotes only (mutually exclusive w/ calls_only)
-    # Bug 2 — correlated (RBF) process & prior noise across DLV anchors so that a
-    # quote at one strike pulls its neighbours (and stale wing nodes) too.
+    # correlated (RBF) process & prior noise across DLV anchors so that a quote at one
+    # strike pulls its neighbours (and stale wing nodes) too. ell is in DOLLARS.
     correlated: bool = True
-    ell: float = 3.0  # RBF correlation length in DOLLARS (absolute strike distance) —
-    # every mode now runs in absolute-strike space, so ell is in $ for all of them.
-    # smoothing — when True, σ* is a free EKF state (BS-mixture smoothing). When
-    # False, σ* is frozen at sigma_star_init (no σ* state, no log(0)).
-    # SPECIAL CASE: smoothing=False AND sigma_star_init=0 ⇒ EXACT-SOLVE mode — the
-    # density is the exactly-determined SANOS system (well-conditioned ∂d/∂x), state
-    # = net DLV² at the N-2 interior anchors, like SANOS_KF_Strike (no BS mixture).
+    ell: float = 3.0  # RBF correlation length in DOLLARS (absolute strike distance)
+    # smoothing — the model is ALWAYS the exact tridiagonal SANOS density (state = net
+    # DLV² over the N-2 interior nodes). This flag only sets whether the OBSERVATION is
+    # smoothed: True ⇒ price each density node as a lognormal of vol σ*=sigma_star_init
+    # (à la quantdata.sanos's `sqrtVar`); False ⇒ σ*=0 ⇒ intrinsic discrete calls (the
+    # original exact-solve). σ* is never a fitted state.
     smoothing: bool = True
-    dlv_min: float = 0.001  # DLV floor for exact-solve mode (v = x + dlv_min²)
+    dlv_min: float = 0.001  # DLV floor (v = x + dlv_min²) so ∂d/∂x doesn't vanish
     # exact-solve only: if a batch update yields a density with negative mass beyond
     # this fraction, REJECT the update and carry the previous (valid) state forward —
     # "propagate the old fit". This keeps the state always arbitrage-free and lets us
@@ -136,207 +129,18 @@ class SanosKFConfig:
     reject_neg_mass: float | None = 0.02
     # Gap 3 — assimilate quotes in time windows of this width (seconds): one
     # time-proportional predict + one batch EKF update per window, held-out prior =
-    # previous window's posterior. None ⇒ legacy per-quote sequential filter.
+    # previous window's posterior. Required (None raises).
     batch_seconds: float | None = 1.0
 
 
 # ---------------------------------------------------------------------------
-# JAX primitives — differentiable w.r.t. x
+# State correlation (numpy)
 # ---------------------------------------------------------------------------
-
-
-def _bs_call_norm_jax(
-    anchor_ks: jnp.ndarray,
-    market_k: float,
-    v: float,
-) -> jnp.ndarray:
-    """
-    Normalized BS call prices over anchor strikes (JAX, differentiable).
-
-    BSCallNorm(aᵢ, m, v) = exp(aᵢ)·N(d1ᵢ) − exp(m)·N(d2ᵢ)
-    d1ᵢ = (aᵢ − m + v/2) / √v,   d2ᵢ = d1ᵢ − √v
-
-    Returns (n,) array.
-    """
-    v = jnp.maximum(v, 1e-10)
-    sqrt_v = jnp.sqrt(v)
-    d1 = (anchor_ks - market_k + v / 2.0) / sqrt_v
-    d2 = d1 - sqrt_v
-    return jnp.exp(anchor_ks) * jax_norm.cdf(d1) - jnp.exp(market_k) * jax_norm.cdf(d2)
-
-
-def _h_from_state(
-    Sigma: jnp.ndarray,
-    sigma_star: float,
-    anchor_ks: jnp.ndarray,
-    market_k: float,
-    T: float,
-) -> jnp.ndarray:
-    """Normalized call price h = qᵀ·BSCallNorm given DLVs Σ and smoothing vol σ*.
-
-    Density: Ω=I → q̃ᵢ = (1/n)/(1+Σᵢ), then affine-projected onto the moment
-    constraints {Σq=1, ΣqKⁱ=1} so the filter's density is forward-centered every
-    step (martingale / "forward re-centering"). The projection is linear ⇒ fully
-    differentiable, so jax.jacrev picks up its effect on H automatically."""
-    n = anchor_ks.shape[0]
-    v = jnp.maximum(sigma_star**2 * T, 1e-10)
-    q_raw = (1.0 / n) / (1.0 + Sigma)
-    q = _project_q_moments(q_raw, jnp.exp(anchor_ks))
-    c_vec = _bs_call_norm_jax(anchor_ks, market_k, v)
-    return jnp.dot(q, c_vec)
-
-
-def _obs_fn(
-    x: jnp.ndarray,
-    anchor_ks: jnp.ndarray,
-    market_k: float,
-    T: float,
-) -> jnp.ndarray:
-    """Observation with σ* as a free state (smoothing ON). State x = (n+1,):
-    x[:n] = log Σ, x[n] = log σ*. Differentiable w.r.t. x → jac via jax.jacrev."""
-    n = anchor_ks.shape[0]
-    return _h_from_state(jnp.exp(x[:n]), jnp.exp(x[n]), anchor_ks, market_k, T)
-
-
-def _obs_fn_ns(
-    x: jnp.ndarray,
-    anchor_ks: jnp.ndarray,
-    market_k: float,
-    T: float,
-    sigma_star: float,
-) -> jnp.ndarray:
-    """Observation with σ* frozen at a constant (smoothing OFF). State x = (n,) =
-    log Σ only — no σ* dimension, no log(0). σ*=0 ⇒ v floored at 1e-10 ⇒ the
-    BS-mixture collapses to the density-weighted intrinsic (discrete payoff)."""
-    return _h_from_state(jnp.exp(x), sigma_star, anchor_ks, market_k, T)
-
-
-def _project_q_moments(q_raw: jnp.ndarray, anchor_K: jnp.ndarray) -> jnp.ndarray:
-    """Affine projection of q̃ onto {Σq = 1, Σq·K = 1} (F-normalized, F=1).
-
-    Differentiable (no nonneg clip): keeps the EKF observation/Jacobian smooth.
-    anchor_K = exp(anchor_ks). Solves the 2×2 normal system for the minimal
-    correction q = q̃ − Aᵀ(AAᵀ)⁻¹(A q̃ − b), with A = [1; K], b = [1; 1]."""
-    n = anchor_K.shape[0]
-    A = jnp.stack([jnp.ones(n), anchor_K])  # (2, n)
-    b = jnp.array([1.0, 1.0])
-    residual = A @ q_raw - b
-    correction = A.T @ jnp.linalg.solve(A @ A.T, residual)
-    return q_raw - correction
-
-
-# Pre-compile Jacobian (traces once per shape, then cached by JAX)
-_jac_fn = jax.jit(jax.jacrev(_obs_fn))
-_obs_jit = jax.jit(_obs_fn)
-
-# Batched (vmapped) observation + Jacobian: same prior state x, many (market_k, T).
-# Used by the per-snapshot batch update (Gap 3) to assimilate a whole 1-s window.
-_obs_vmap = jax.jit(jax.vmap(_obs_fn, in_axes=(None, None, 0, 0)))
-_jac_vmap = jax.jit(jax.vmap(_jac_fn, in_axes=(None, None, 0, 0)))
-
-# Smoothing-OFF variants (σ* frozen, state = (n,) DLVs). jacrev differentiates
-# w.r.t. x (argnum 0) only; sigma_star is a constant broadcast across quotes.
-_jac_fn_ns = jax.jit(jax.jacrev(_obs_fn_ns))
-_obs_jit_ns = jax.jit(_obs_fn_ns)
-_obs_vmap_ns = jax.jit(jax.vmap(_obs_fn_ns, in_axes=(None, None, 0, 0, None)))
-_jac_vmap_ns = jax.jit(jax.vmap(_jac_fn_ns, in_axes=(None, None, 0, 0, None)))
-
-
-# ---------------------------------------------------------------------------
-# ABSOLUTE-STRIKE BS-mixture observation (mirrors exact-solve's strike space)
-#
-# The smoothing modes now live in the SAME absolute-strike space as exact-solve:
-# anchors sit on the observed strike grid (build_exact_grid), the density is the
-# heuristic SANOS mixture q ∝ (1/n)/(1+Σ) re-centered on the LIVE forward each
-# window (Σq·K = F), and the observation is the UNDISCOUNTED call price C(K)/df
-# (matched against mid/df), not the F-normalized call. Component j is a lognormal
-# with forward Kⱼ (= anchor strike) and total variance v = σ*²·T, so the σ*→0
-# limit collapses to the density-weighted intrinsic Σqⱼ·(Kⱼ−K)⁺ — the same payoff
-# exact-solve scores. ell is in DOLLARS (RBF over the strike grid).
-# ---------------------------------------------------------------------------
-
-
-def _project_q_moments_abs(q_raw: jnp.ndarray, kappa: jnp.ndarray) -> jnp.ndarray:
-    """Affine projection of q̃ onto {Σq = 1, Σq·κ = 1} where κ = K/fwd (live-forward
-    NORMALIZED strikes). This is exactly the absolute-strike martingale Σq·K = fwd,
-    but in κ-space the 2×2 normal system [[n, Σκ],[Σκ, Σκ²]] has O(1) entries — vital
-    because JAX runs in float32 and the absolute-strike form (entries ~ΣK²≈1e7 for
-    K≈470) is hopelessly ill-conditioned there. Minimal correction
-    q = q̃ − Aᵀ(AAᵀ)⁻¹(A q̃ − b), A = [1; κ], b = [1; 1]. Differentiable (no clip)."""
-    n = kappa.shape[0]
-    A = jnp.stack([jnp.ones(n), kappa])  # (2, n)
-    b = jnp.array([1.0, 1.0])
-    residual = A @ q_raw - b
-    correction = A.T @ jnp.linalg.solve(A @ A.T, residual)
-    return q_raw - correction
-
-
-def _h_from_state_abs(
-    Sigma: jnp.ndarray,
-    sigma_star: float,
-    K_anchor: jnp.ndarray,
-    K_market: float,
-    T: float,
-    fwd: float,
-) -> jnp.ndarray:
-    """Undiscounted call price h = fwd·(qᵀ·BSCallNorm) given DLVs Σ, smoothing vol σ*,
-    live forward fwd. The mixture is computed in fwd-NORMALIZED space (κ = K/fwd,
-    moneyness a = log κ) — well-conditioned in float32 — then rescaled by fwd to an
-    absolute call (matches mid/df). Density q ∝ (1/n)/(1+Σ), forward-centered via
-    _project_q_moments_abs (Σq·K = live fwd). σ*→0 ⇒ density-weighted intrinsic."""
-    n = K_anchor.shape[0]
-    a = jnp.log(K_anchor / fwd)  # anchor log-moneyness vs LIVE forward
-    mk = jnp.log(K_market / fwd)  # quote log-moneyness vs live forward
-    v = jnp.maximum(sigma_star**2 * T, 1e-10)
-    q_raw = (1.0 / n) / (1.0 + Sigma)
-    q = _project_q_moments_abs(q_raw, jnp.exp(a))  # exp(a) = κ = K_anchor/fwd
-    c_vec = _bs_call_norm_jax(a, mk, v)  # normalized call κ·N(d1) − κ_m·N(d2)
-    return fwd * jnp.dot(q, c_vec)
-
-
-def _obs_fn_abs(
-    x: jnp.ndarray,
-    K_anchor: jnp.ndarray,
-    K_market: float,
-    T: float,
-    fwd: float,
-) -> jnp.ndarray:
-    """Absolute-strike observation, σ* a free state (smoothing ON). State x = (n+1,):
-    x[:n] = log Σ, x[n] = log σ*. Differentiable w.r.t. x → jac via jax.jacrev."""
-    n = K_anchor.shape[0]
-    return _h_from_state_abs(jnp.exp(x[:n]), jnp.exp(x[n]), K_anchor, K_market, T, fwd)
-
-
-def _obs_fn_abs_ns(
-    x: jnp.ndarray,
-    K_anchor: jnp.ndarray,
-    K_market: float,
-    T: float,
-    fwd: float,
-    sigma_star: float,
-) -> jnp.ndarray:
-    """Absolute-strike observation, σ* frozen at a constant (smoothing OFF). State
-    x = (n,) = log Σ only — no σ* dimension, no log(0)."""
-    return _h_from_state_abs(jnp.exp(x), sigma_star, K_anchor, K_market, T, fwd)
-
-
-# Smoothing-ON (σ* free) absolute-strike obs/jac, scalar + vmapped over (K, T) with
-# the live forward fwd broadcast (None) across the window's quotes.
-_jac_fn_abs = jax.jit(jax.jacrev(_obs_fn_abs))
-_obs_jit_abs = jax.jit(_obs_fn_abs)
-_obs_vmap_abs = jax.jit(jax.vmap(_obs_fn_abs, in_axes=(None, None, 0, 0, None)))
-_jac_vmap_abs = jax.jit(jax.vmap(_jac_fn_abs, in_axes=(None, None, 0, 0, None)))
-
-# Smoothing-OFF (σ* frozen) absolute-strike variants. jacrev differentiates w.r.t. x
-# (argnum 0); sigma_star is the trailing constant broadcast across quotes.
-_jac_fn_abs_ns = jax.jit(jax.jacrev(_obs_fn_abs_ns))
-_obs_jit_abs_ns = jax.jit(_obs_fn_abs_ns)
-_obs_vmap_abs_ns = jax.jit(jax.vmap(_obs_fn_abs_ns, in_axes=(None, None, 0, 0, None, None)))
-_jac_vmap_abs_ns = jax.jit(jax.vmap(_jac_fn_abs_ns, in_axes=(None, None, 0, 0, None, None)))
 
 
 def _rbf(nodes: np.ndarray, ell: float, correlated: bool) -> np.ndarray:
-    """(m×m) RBF correlation over node positions; identity if correlated=False/ell<=0."""
+    """(m×m) RBF correlation over node positions; identity if correlated=False/ell<=0.
+    ell is in DOLLARS (the nodes are absolute strikes)."""
     m = len(nodes)
     if not (correlated and ell > 0):
         return np.eye(m)
@@ -344,29 +148,19 @@ def _rbf(nodes: np.ndarray, ell: float, correlated: bool) -> np.ndarray:
     return np.exp(-0.5 * (dist / ell) ** 2)
 
 
-def _corr_full(nodes: np.ndarray, ell: float, correlated: bool, smoothing: bool) -> np.ndarray:
-    """State correlation matrix: RBF over the n DLV anchor positions (now absolute
-    STRIKES — ell in dollars), with σ* (last index, only present when smoothing=True)
-    left uncorrelated. Identity when correlated=False or ell<=0. Shape (n+1) with
-    smoothing, else (n)."""
-    anchor_ks = nodes
-    n = len(anchor_ks)
-    n_state = n + 1 if smoothing else n
-    C = np.eye(n_state)
-    C[:n, :n] = _rbf(anchor_ks, ell, correlated)
-    return C
-
-
 # ---------------------------------------------------------------------------
-# Exact-solve density (SANOS_KF_Strike-style), in F-normalized strike space
+# Exact tridiagonal SANOS density (mimics quantdata.sanos), in absolute strike space
 # ---------------------------------------------------------------------------
-# Used when smoothing=False AND sigma_star_init=0: instead of the BS-mixture
-# heuristic q ∝ (1/n)/(1+Σ), the density is the exactly-determined SANOS system
+# The density is the exactly-determined SANOS system (same parameterization as the
+# quantdata.sanos tridiagonal operator, here as a single-snapshot linear solve):
 #   row 0 : Σ d        = 1          (normalisation)
-#   row 1 : Σ d·κ      = 1          (martingale, κ = K/F)
+#   row 1 : Σ d·K      = F          (martingale, absolute strikes / live forward)
 #   rows  : DLV² equalities (tri-diagonal, net DLV² state x ≥ 0)
-# giving a well-conditioned ∂d/∂x (the ill-conditioning of the mixture is what
-# made σ*=0 unlearnable). State x = net DLV² at the N-2 interior anchors.
+# giving a well-conditioned ∂d/∂x. State x = net DLV² at the N-2 interior anchors.
+# σ* (cfg.sigma_star_init, when cfg.smoothing) only smooths the OBSERVATION (each
+# density node prices as a lognormal of vol σ* instead of an intrinsic), never the
+# density itself — see _make_exact_fns. This is exactly how quantdata.sanos applies
+# its `sqrtVar` smoothing on top of the fitted density.
 
 
 def _exact_dens_ddx(x, kappa, box, pay_full, dlv_min, N, fwd=1.0):
@@ -435,46 +229,65 @@ def exact_solve_density(x_state, grid_K, tte_ref, dlv_min=0.001, fwd=None):
     return d
 
 
-def _make_exact_fns(grid_K, box, pay_full, dlv_min):
+def _make_exact_fns(grid_K, box, pay_full, dlv_min, sigma_star=0.0, tte_ref=0.0):
     """Build (obs_scalar, jac_scalar, obs_vec, jac_vec, dens_fn) closures for the
-    ABSOLUTE-STRIKE exact-solve (mimics SANOS_KF_Strike). Each takes the live forward
-    `fwd` (the density re-centers via Σd·K = fwd every window) and absolute quote
-    strikes K. The observation is the undiscounted call h(K) = Σ_j d_j·(K_j − K)⁺
-    (= C/df), matched against (mid/df) in call space."""
+    exact tridiagonal SANOS density. The density `d(x)` is always the exact solve
+    (re-centered Σd·K = live fwd each window); `sigma_star` only changes how the
+    market quotes are PRICED from that density (the observation payoff):
+
+      σ* = 0  → intrinsic    payoff_j(K) = (K_j − K)⁺           (discrete calls)
+      σ* > 0  → BS-smoothed  payoff_j(K) = K_j·N(d1) − K·N(d2)  (lognormal of vol σ*,
+                forward K_j, total var v = σ*²·tte_ref), d1 = (log(K_j/K)+v/2)/√v
+
+    h(K) = Σ_j payoff_j(K)·d_j is the undiscounted call (= C/df), matched against
+    (mid/df). The σ*→0 limit recovers the intrinsic exactly. Smoothing the density
+    nodes preserves the martingale (Σd·K_j = F) and no-arbitrage, so it only blurs
+    the discrete-call kinks — this is how quantdata.sanos applies its `sqrtVar`."""
     N = len(grid_K)
     n_state = N - 2
+    gk_row = grid_K[None, :]  # (1, N)
+
+    if sigma_star and sigma_star > 0.0:
+        v = max(float(sigma_star) ** 2 * float(tte_ref), 1e-12)
+        sqrt_v = np.sqrt(v)
+
+        def _pay(K_arr):  # (m, N): BS-call of each density node (spot=K_j) at strike K_i
+            K_col = np.asarray(K_arr, float).reshape(-1, 1)
+            d1 = (np.log(gk_row / K_col) + 0.5 * v) / sqrt_v
+            d2 = d1 - sqrt_v
+            return gk_row * np_norm.cdf(d1) - K_col * np_norm.cdf(d2)
+    else:
+
+        def _pay(K_arr):  # (m, N): intrinsic discrete-call payoff (K_j − K_i)⁺
+            K_col = np.asarray(K_arr, float).reshape(-1, 1)
+            return np.maximum(gk_row - K_col, 0.0)
 
     def _dd(xx, fwd):
         return _exact_dens_ddx(np.asarray(xx), grid_K, box, pay_full, dlv_min, N, fwd=fwd)
 
-    # obs/jac take a dummy `ak` 2nd arg to share the call signature with the JAX
-    # (BS-mixture) closures: (x, ak, arg3, arg4). Here arg3 = absolute strike(s),
-    # arg4 = live forward.
-    def obs_scalar(xx, ak, K, fwd):
+    def obs_scalar(xx, K, fwd):
         d, _ = _dd(xx, fwd)
         if d is None:
             return float("nan")
-        return float(np.maximum(grid_K - float(K), 0.0) @ d)
+        return float(_pay([K])[0] @ d)
 
-    def jac_scalar(xx, ak, K, fwd):
+    def jac_scalar(xx, K, fwd):
         d, dd = _dd(xx, fwd)
         if d is None:
             return np.full(n_state, np.nan)
-        return np.maximum(grid_K - float(K), 0.0) @ dd
+        return _pay([K])[0] @ dd
 
-    def obs_vec(xx, ak, K_arr, fwd):
+    def obs_vec(xx, K_arr, fwd):
         d, _ = _dd(xx, fwd)
-        K_arr = np.asarray(K_arr, float)
         if d is None:
             return np.full(len(K_arr), np.nan)
-        return np.maximum(grid_K[None, :] - K_arr[:, None], 0.0) @ d
+        return _pay(K_arr) @ d
 
-    def jac_vec(xx, ak, K_arr, fwd):
+    def jac_vec(xx, K_arr, fwd):
         d, dd = _dd(xx, fwd)
-        K_arr = np.asarray(K_arr, float)
         if d is None:
             return np.full((len(K_arr), n_state), np.nan)
-        return np.maximum(grid_K[None, :] - K_arr[:, None], 0.0) @ dd
+        return _pay(K_arr) @ dd
 
     def dens_fn(xx, fwd):
         d, _ = _dd(xx, fwd)
@@ -515,119 +328,6 @@ def _project_q(q_raw: np.ndarray, anchor_K: np.ndarray) -> np.ndarray:
 
 
 # ---------------------------------------------------------------------------
-# Analytic Jacobian (numpy) — paper appendix / cross-check against jax.jacrev
-# ---------------------------------------------------------------------------
-
-
-def sanos_jacobian_analytic(
-    x: np.ndarray,
-    anchor_ks: np.ndarray,
-    market_k: float,
-    T: float,
-) -> np.ndarray:
-    """
-    Closed-form Jacobian ∂h/∂x ∈ ℝ^{n+1} (Ω = I).
-
-    NOTE: this corresponds to the *soft-normalized* density (Σq=1 only) and is kept
-    as a paper-appendix reference / sanity check. The live filter now uses the
-    forward-centered density (`_project_q_moments`, {Σq=1, ΣqK=1}) and gets its
-    Jacobian from `jax.jacrev(_obs_fn)`, so this function no longer matches H exactly.
-
-    Derivation (soft-normalized q, no martingale projection):
-        q_j = f_j / S,   f_j = (1/n)/(1+Σⱼ),   S = Σ fⱼ
-        ∂q_j/∂xᵢ = −qᵢ · Σᵢ/(1+Σᵢ) · (δᵢⱼ − qⱼ)
-        ∂h/∂xᵢ   = Σⱼ cⱼ · ∂q_j/∂xᵢ
-                  = −qᵢ · Σᵢ/(1+Σᵢ) · (cᵢ − h)
-
-    For the σ* component (x[n] = log σ*):
-        ∂BSCallNorm/∂xₙ = exp(aⱼ) · φ(d1ⱼ) · σ* · √T   (chain rule through v=σ*²T)
-        ∂h/∂xₙ = σ* · √T · Σⱼ qⱼ · exp(aⱼ) · φ(d1ⱼ)
-    """
-    n = len(anchor_ks)
-    Sigma = np.exp(x[:n])
-    sigma_star = np.exp(x[n])
-    v = max(float(sigma_star**2 * T), 1e-10)
-    sqrt_v = np.sqrt(v)
-
-    q_raw = (1.0 / n) / (1.0 + Sigma)
-    q = q_raw / q_raw.sum()
-
-    d1 = (anchor_ks - market_k + v / 2.0) / sqrt_v
-    d2 = d1 - sqrt_v
-    c_vec = np.exp(anchor_ks) * np_norm.cdf(d1) - np.exp(market_k) * np_norm.cdf(d2)
-    h_val = float(c_vec @ q)
-
-    # DLV Jacobian: H_dlv[i] = −qᵢ·Σᵢ/(1+Σᵢ)·(cᵢ − h)
-    H_dlv = -q * Sigma / (1.0 + Sigma) * (c_vec - h_val)
-
-    # σ* Jacobian: H_vol = σ*·√T · Σⱼ qⱼ·exp(aⱼ)·φ(d1ⱼ)
-    sqrtT = np.sqrt(max(float(T), 1e-8))
-    phi_d1 = np_norm.pdf(d1)
-    H_vol = float(sigma_star * sqrtT * (q * np.exp(anchor_ks) * phi_d1).sum())
-
-    return np.append(H_dlv, H_vol)
-
-
-# ---------------------------------------------------------------------------
-# EKF step
-# ---------------------------------------------------------------------------
-
-
-def _ekf_step(
-    x: np.ndarray,
-    P: np.ndarray,
-    anchor_K: np.ndarray,
-    market_K: float,
-    T: float,
-    fwd: float,
-    z: float,
-    R: float,
-    Q: np.ndarray,
-    obs_scalar,
-    jac_scalar,
-) -> tuple[np.ndarray, np.ndarray, float]:
-    """
-    One predict + update step of the SANOS EKF (absolute-strike BS-mixture).
-
-    obs_scalar / jac_scalar are h and ∂h/∂x for one quote (smoothing on/off bound by
-    the caller) with signature (x, K_anchor, K_market, T, fwd). z is the undiscounted
-    call mid (C/df). Returns (x_new, P_new, z_hat).
-    """
-    # Predict (random walk)
-    P_pred = P + Q
-
-    # Nonlinear observation + linearized Jacobian
-    x_jax = jnp.array(x)
-    ak_jax = jnp.array(anchor_K)
-    mk = float(market_K)
-    Tf = float(T)
-    fw = float(fwd)
-
-    z_hat = float(obs_scalar(x_jax, ak_jax, mk, Tf, fw))
-    H = np.array(jac_scalar(x_jax, ak_jax, mk, Tf, fw))  # (n_state,)
-
-    if not (np.isfinite(z_hat) and np.isfinite(H).all()):
-        return x, P_pred, float("nan")
-
-    # Update
-    innov = z - z_hat
-    S = float(H @ P_pred @ H) + R
-    if abs(S) < 1e-14:
-        return x, P_pred, z_hat
-
-    K_gain = (P_pred @ H) / S  # (n+1,)
-    x_new = x + K_gain * innov
-
-    # Joseph form for numerical stability: P_new = (I - K H) P_pred (I - K H)' + K R K'
-    IKH = np.eye(len(x)) - np.outer(K_gain, H)
-    P_new = IKH @ P_pred @ IKH.T + R * np.outer(K_gain, K_gain)
-    P_new = (P_new + P_new.T) * 0.5  # still good practice
-
-    z_hat_post = float(obs_scalar(jnp.array(x_new), ak_jax, mk, Tf, fw))
-    return x_new, P_new, z_hat_post
-
-
-# ---------------------------------------------------------------------------
 # Main EKF loop
 # ---------------------------------------------------------------------------
 
@@ -651,71 +351,40 @@ def run_sanos_kf(
     df_trades : same schema; must have quote_ts_ns for out-of-sample eval.
                 Also needs observed_iv.
     cfg       : SanosKFConfig
-    anchor_ks : optional array of log-moneyness anchor positions (sorted).
-                If None, falls back to np.linspace(cfg.k_min, cfg.k_max, cfg.n_anchors).
+    anchor_ks : deprecated / ignored (anchors are the data's strike grid).
 
     Returns
     -------
     df_quotes_result : df_quotes + sanos_kf_price (normalized call), sanos_kf_iv
     df_trades_result : df_trades + sanos_kf_matched (IV), trade_residual
     """
-    # Every mode now lives in ABSOLUTE-STRIKE space on the strike-aligned grid
+    # ONE model: the exact tridiagonal SANOS density on the strike-aligned grid
     # (interior nodes on observed strikes within [k_min,k_max], ≤ n_anchors, ±1 pad).
-    # The `anchor_ks` arg is retained for signature back-compat but is now ignored:
-    # anchors are derived from the data's strike grid, not a log-moneyness linspace.
+    # State = net DLV² over the N-2 interior nodes; density re-centers Σd·K = live fwd
+    # each window. cfg.smoothing only controls the OBSERVATION: σ*=sigma_star_init
+    # smooths each density node into a lognormal of vol σ* (matches quantdata.sanos's
+    # `sqrtVar`); cfg.smoothing=False ⇒ σ*=0 ⇒ intrinsic discrete calls (the original
+    # exact-solve). σ* is a GIVEN regularizer, not a fitted state. The `anchor_ks` arg
+    # is ignored (kept for signature back-compat).
+    if cfg.batch_seconds is None:
+        raise NotImplementedError("run_sanos_kf requires batched mode (cfg.batch_seconds set)")
     grid_K, tte_ref = build_exact_grid(df_quotes, cfg)
-    # BS-mixture anchors = the observed-strike interior nodes (the ±1 pads exist only
-    # for the exact-solve finite-difference boundary; as mixture components they'd
-    # inject lognormal mass at unobserved far strikes). exact-solve uses full grid_K.
-    bs_anchor_K = grid_K[1:-1]
-    ak_j = jnp.array(grid_K)  # absolute strike anchors (overridden per BS-mixture mode)
+    sigma_star = float(cfg.sigma_star_init) if cfg.smoothing else 0.0
 
-    # Mode selection. smoothing=False with sigma_star_init=0 ⇒ EXACT-SOLVE (state =
-    # net DLV², SANOS exactly-determined density). Otherwise BS-mixture, with σ* a
-    # free state (smoothing=True) or frozen at sigma_star_init (smoothing=False).
-    exact = (not cfg.smoothing) and (float(cfg.sigma_star_init) == 0.0)
-    clip_nonneg = exact
-    dens_fn = None  # exact-solve density reconstructor (for update rejection)
-    reject_tol = cfg.reject_neg_mass if exact else None
+    xrow = np.concatenate(([2 * grid_K[0] - grid_K[1]], grid_K, [2 * grid_K[-1] - grid_K[-2]]))
+    box = grid_K**2 / (xrow[2:] - xrow[:-2]) * tte_ref
+    box[0] = 0.0
+    box[-1] = 0.0
+    pay_full = np.maximum(grid_K[np.newaxis, :] - grid_K[:, np.newaxis], 0.0)  # (N,N) intrinsic
+    obs_scalar, jac_scalar, obs_vec, jac_vec, dens_fn = _make_exact_fns(
+        grid_K, box, pay_full, cfg.dlv_min, sigma_star=sigma_star, tte_ref=tte_ref
+    )
+    x = np.full(len(grid_K) - 2, cfg.Sigma_init)  # flat net DLV² over interior nodes
+    var_diag = np.full(len(grid_K) - 2, cfg.Q_scale_dlv)
+    C_full = _rbf(grid_K[1:-1], cfg.ell, cfg.correlated)  # ell in DOLLARS
 
-    if exact:
-        # ABSOLUTE-STRIKE exact-solve (mimics SANOS_KF_Strike). Density re-centers via
-        # Σd·K = fwd (live) each window; state = net DLV² over interior nodes.
-        if cfg.batch_seconds is None:
-            raise NotImplementedError("exact-solve mode requires batched mode (batch_seconds set)")
-        xrow = np.concatenate(([2 * grid_K[0] - grid_K[1]], grid_K, [2 * grid_K[-1] - grid_K[-2]]))
-        box = grid_K**2 / (xrow[2:] - xrow[:-2]) * tte_ref
-        box[0] = 0.0
-        box[-1] = 0.0
-        pay_full = np.maximum(grid_K[np.newaxis, :] - grid_K[:, np.newaxis], 0.0)  # (N,N)
-        obs_scalar, jac_scalar, obs_vec, jac_vec, dens_fn = _make_exact_fns(
-            grid_K, box, pay_full, cfg.dlv_min
-        )
-        x = np.full(len(grid_K) - 2, cfg.Sigma_init)  # flat net DLV² over interior nodes
-        var_diag = np.full(len(grid_K) - 2, cfg.Q_scale_dlv)
-        C_full = _rbf(grid_K[1:-1], cfg.ell, cfg.correlated)  # ell in DOLLARS
-    elif cfg.smoothing:
-        # ABSOLUTE-STRIKE BS-mixture, σ* a free state. Anchors = observed strikes;
-        # obs = undiscounted call (C/df), density re-centered Σq·K = fwd each window.
-        n = len(bs_anchor_K)
-        ak_j = jnp.array(bs_anchor_K)
-        obs_scalar, jac_scalar = _obs_jit_abs, _jac_fn_abs
-        obs_vec, jac_vec = _obs_vmap_abs, _jac_vmap_abs
-        var_diag = np.concatenate([np.full(n, cfg.Q_scale_dlv), np.array([cfg.Q_scale_vol])])
-        x = np.concatenate([np.full(n, np.log(cfg.Sigma_init)), [np.log(cfg.sigma_star_init)]])
-        C_full = _corr_full(bs_anchor_K, cfg.ell, cfg.correlated, smoothing=True)  # ell in DOLLARS
-    else:
-        # ABSOLUTE-STRIKE BS-mixture, σ* frozen at sigma_star_init.
-        n = len(bs_anchor_K)
-        ak_j = jnp.array(bs_anchor_K)
-        _ss = float(cfg.sigma_star_init)
-        obs_scalar = lambda xx, ak, K, T, fwd: _obs_jit_abs_ns(xx, ak, K, T, fwd, _ss)  # noqa: E731
-        jac_scalar = lambda xx, ak, K, T, fwd: _jac_fn_abs_ns(xx, ak, K, T, fwd, _ss)  # noqa: E731
-        obs_vec = lambda xx, ak, K, T, fwd: _obs_vmap_abs_ns(xx, ak, K, T, fwd, _ss)  # noqa: E731
-        jac_vec = lambda xx, ak, K, T, fwd: _jac_vmap_abs_ns(xx, ak, K, T, fwd, _ss)  # noqa: E731
-        var_diag = np.full(n, cfg.Q_scale_dlv)
-        x = np.full(n, np.log(cfg.Sigma_init))
-        C_full = _corr_full(bs_anchor_K, cfg.ell, cfg.correlated, smoothing=False)  # ell in DOLLARS
+    clip_nonneg = True  # net DLV² state must stay ≥ 0
+    reject_tol = cfg.reject_neg_mass  # density-arbitrage reject guard (dens_fn always set)
     n_state = len(x)
 
     # Q_rate: process noise covariance per trading day (scaled to per-second below).
@@ -744,29 +413,17 @@ def run_sanos_kf(
 
     _q_per_ns = 1.0 / (cfg.trading_day_s * 1e9)  # Q scale factor per nanosecond
 
-    # ── Vectorized per-quote normalization → call-price space (PCP for puts) ──
+    # Absolute strikes + undiscounted call space (C/df) — the observation space.
+    # PCP for puts: C/df = P/df + (F − K).
     scale = fwds * dfs
     ok_scale = np.isfinite(scale) & (scale > 0)
-    scale_safe = np.where(ok_scale, scale, 1.0)
-    bid_norm = bids / scale_safe
-    ask_norm = asks / scale_safe
-    put = ~is_calls
-    bid_norm = np.where(put, bid_norm + 1.0 - np.exp(ks), bid_norm)
-    ask_norm = np.where(put, ask_norm + 1.0 - np.exp(ks), ask_norm)
-    mid_norm = 0.5 * (bid_norm + ask_norm)
-    R_norm = np.maximum((0.5 * (ask_norm - bid_norm)) ** 2, 1e-10)
-
-    # Absolute strikes + undiscounted call space (C/df) — used by EVERY mode now
-    # (exact-solve and BS-mixture both observe the undiscounted call directly).
     K_abs = fwds * np.exp(ks)
     dfs_safe = np.where(np.isfinite(dfs) & (dfs > 0), dfs, 1.0)
     bid_c = np.where(is_calls, bids / dfs_safe, bids / dfs_safe + fwds - K_abs)
     ask_c = np.where(is_calls, asks / dfs_safe, asks / dfs_safe + fwds - K_abs)
-    mid_abs = 0.5 * (bid_c + ask_c)
-    R_abs = np.maximum((0.5 * (ask_c - bid_c)) ** 2, 1e-10)
+    mid_obs = 0.5 * (bid_c + ask_c)
+    R_obs = np.maximum((0.5 * (ask_c - bid_c)) ** 2, 1e-10)
 
-    # All modes observe in absolute-strike (undiscounted call) space.
-    mid_obs, R_obs = mid_abs, R_abs
     valid = ok_scale & np.isfinite(mid_obs) & np.isfinite(ks) & np.isfinite(Ts) & (Ts > 0.0)
     if cfg.calls_only and cfg.puts_only:
         raise ValueError("calls_only and puts_only are mutually exclusive")
@@ -775,122 +432,86 @@ def run_sanos_kf(
     if cfg.puts_only:
         valid &= ~is_calls
 
-    if cfg.batch_seconds is None:
-        # ── Legacy per-quote sequential filter ────────────────────────────────
-        _last_ts = ts_ns_arr[0] if n_q > 0 else 0
-        for i in range(n_q):
-            if not valid[i]:
-                _last_ts = ts_ns_arr[i]
-                x_hist[i] = x
-                continue
-            dt_ns = max(float(ts_ns_arr[i] - _last_ts), 0.0)
-            Q = Q_rate * (dt_ns * _q_per_ns)
-            _last_ts = ts_ns_arr[i]
-            # Absolute-strike obs (legacy path = BS-mixture only; exact raises above):
-            # anchors = bs_anchor_K, quote strike K_abs[i], live fwd[i] (per-quote
-            # re-centering for the sequential path).
-            x, P, z_hat = _ekf_step(
-                x,
-                P,
-                bs_anchor_K,
-                K_abs[i],
-                Ts[i],
-                fwds[i],
-                mid_obs[i],
-                R_obs[i],
-                Q,
-                obs_scalar,
-                jac_scalar,
-            )
-            z_hats[i] = z_hat
-            x_hist[i] = x
-    else:
-        # ── Gap 3: per-snapshot batch filter ──────────────────────────────────
-        # One time-proportional predict + one batch EKF update per window; held-out
-        # prior for every quote = the previous window's posterior, so a quote burst
-        # no longer inflates the state by quote count.
-        batch_ns = int(cfg.batch_seconds * 1e9)
-        window = ts_ns_arr // batch_ns
-        I_n = np.eye(n_state)
-        _last_ts = ts_ns_arr[0] if n_q > 0 else 0
-        bounds = np.flatnonzero(np.diff(window)) + 1 if n_q else np.array([], dtype=int)
-        starts = np.concatenate(([0], bounds))
-        ends = np.concatenate((bounds, [n_q]))
-        for s, e in zip(starts, ends):
-            if e <= s:
-                continue
-            idx = np.arange(s, e)
-            idx_v = idx[valid[idx]]
+    # ── Gap 3: per-snapshot batch filter ──────────────────────────────────────
+    # One time-proportional predict + one batch EKF update per window; held-out prior
+    # for every quote = the previous window's posterior, so a quote burst no longer
+    # inflates the state by quote count. obs/jac take (x, K_abs, live_fwd).
+    batch_ns = int(cfg.batch_seconds * 1e9)
+    window = ts_ns_arr // batch_ns
+    I_n = np.eye(n_state)
+    _last_ts = ts_ns_arr[0] if n_q > 0 else 0
+    bounds = np.flatnonzero(np.diff(window)) + 1 if n_q else np.array([], dtype=int)
+    starts = np.concatenate(([0], bounds))
+    ends = np.concatenate((bounds, [n_q]))
+    for s, e in zip(starts, ends):
+        if e <= s:
+            continue
+        idx = np.arange(s, e)
+        idx_v = idx[valid[idx]]
 
-            # predict once per window
-            t_w = float(ts_ns_arr[s])
-            dt_ns = max(t_w - float(_last_ts), 0.0)
-            _last_ts = t_w
-            P_pred = P + Q_rate * (dt_ns * _q_per_ns)
-            P_pred = 0.5 * (P_pred + P_pred.T)
-            x_prior = x.copy()
+        # predict once per window
+        t_w = float(ts_ns_arr[s])
+        dt_ns = max(t_w - float(_last_ts), 0.0)
+        _last_ts = t_w
+        P_pred = P + Q_rate * (dt_ns * _q_per_ns)
+        P_pred = 0.5 * (P_pred + P_pred.T)
+        x_prior = x.copy()
 
-            if len(idx_v) == 0:  # predict-only window
-                x, P = x_prior, P_pred
-                x_hist[idx] = x_prior
-                continue
+        if len(idx_v) == 0:  # predict-only window
+            x, P = x_prior, P_pred
+            x_hist[idx] = x_prior
+            continue
 
-            # Live window forward — the density re-centers via Σ(q or d)·K = fwd_w.
-            fwd_w = float(np.nanmedian(fwds[idx_v]))
-            # Mode-specific obs args (splatted): exact takes (K, fwd); BS-mixture (abs)
-            # takes (K, T, fwd) since the lognormal kernel needs per-quote T too.
-            if exact:
-                obs_args = (K_abs[idx_v], fwd_w)
-            else:
-                obs_args = (jnp.array(K_abs[idx_v]), jnp.array(Ts[idx_v]), fwd_w)
-            xj = jnp.array(x_prior)
-            z_hat_p = np.asarray(obs_vec(xj, ak_j, *obs_args))  # (m,)
-            H = np.asarray(jac_vec(xj, ak_j, *obs_args))  # (m, n_state)
-            z_hats_prior[idx_v] = z_hat_p
+        # Live window forward — the density re-centers via Σd·K = fwd_w.
+        fwd_w = float(np.nanmedian(fwds[idx_v]))
+        K_v = K_abs[idx_v]
+        z_hat_p = np.asarray(obs_vec(x_prior, K_v, fwd_w))  # (m,)
+        H = np.asarray(jac_vec(x_prior, K_v, fwd_w))  # (m, n_state)
+        z_hats_prior[idx_v] = z_hat_p
 
-            fin = np.isfinite(z_hat_p) & np.isfinite(H).all(axis=1)
-            if not fin.any():
-                x, P = x_prior, P_pred
-                x_hist[idx] = x_prior
-                continue
+        fin = np.isfinite(z_hat_p) & np.isfinite(H).all(axis=1)
+        if not fin.any():
+            x, P = x_prior, P_pred
+            x_hist[idx] = x_prior
+            continue
 
-            Hf = H[fin]
-            innov = mid_obs[idx_v][fin] - z_hat_p[fin]
-            Rf = np.diag(R_obs[idx_v][fin])
-            S = Hf @ P_pred @ Hf.T + Rf
-            try:
-                K_gain = P_pred @ Hf.T @ np.linalg.inv(S)
-            except np.linalg.LinAlgError:
-                x, P = x_prior, P_pred
-                x_hist[idx] = x_prior
-                continue
-            x_cand = x_prior + K_gain @ innov
-            if clip_nonneg:  # exact-solve: net DLV² state must stay ≥ 0
-                x_cand = np.maximum(x_cand, 0.0)
+        Hf = H[fin]
+        innov = mid_obs[idx_v][fin] - z_hat_p[fin]
+        Rf = np.diag(R_obs[idx_v][fin])
+        S = Hf @ P_pred @ Hf.T + Rf
+        try:
+            K_gain = P_pred @ Hf.T @ np.linalg.inv(S)
+        except np.linalg.LinAlgError:
+            x, P = x_prior, P_pred
+            x_hist[idx] = x_prior
+            continue
+        x_cand = x_prior + K_gain @ innov
+        if clip_nonneg:  # net DLV² state must stay ≥ 0
+            x_cand = np.maximum(x_cand, 0.0)
 
-            # Reject-update guard (exact-solve): if the candidate posterior implies a
-            # density with negative mass beyond reject_tol, discard the update and
-            # carry the previous valid state forward ("propagate the old fit"), so the
-            # state stays arbitrage-free and every snapshot is still scored honestly.
-            reject = False
-            if reject_tol is not None and dens_fn is not None:
-                d_cand = dens_fn(x_cand, fwd_w)
-                reject = d_cand is None or (-np.minimum(d_cand, 0.0).sum() > reject_tol)
+        # Reject-update guard: if the candidate posterior implies a density with
+        # negative mass beyond reject_tol, discard the update and carry the previous
+        # valid state forward ("propagate the old fit"), so the state stays
+        # arbitrage-free and every snapshot is still scored honestly.
+        reject = False
+        if reject_tol is not None and dens_fn is not None:
+            d_cand = dens_fn(x_cand, fwd_w)
+            reject = d_cand is None or (-np.minimum(d_cand, 0.0).sum() > reject_tol)
 
-            if reject:
-                x, P = x_prior, P_pred
-                z_hats[idx_v] = z_hat_p  # posterior == held-out prior (no update taken)
-            else:
-                x = x_cand
-                IKH = I_n - K_gain @ Hf
-                P = IKH @ P_pred @ IKH.T + K_gain @ Rf @ K_gain.T  # Joseph form
-                P = 0.5 * (P + P.T)
-                z_hats[idx_v] = np.asarray(obs_vec(jnp.array(x), ak_j, *obs_args))
-            x_hist[idx] = x
+        if reject:
+            x, P = x_prior, P_pred
+            z_hats[idx_v] = z_hat_p  # posterior == held-out prior (no update taken)
+        else:
+            x = x_cand
+            IKH = I_n - K_gain @ Hf
+            P = IKH @ P_pred @ IKH.T + K_gain @ Rf @ K_gain.T  # Joseph form
+            P = 0.5 * (P + P.T)
+            z_hats[idx_v] = np.asarray(obs_vec(x, K_v, fwd_w))
+        x_hist[idx] = x
 
-    # Every mode now emits absolute undiscounted calls (C/df); convert to the
-    # F-normalized convention (price/(F·df)) so the IV inversion and every downstream
-    # eval (which multiplies back by F) are unchanged.
+    # Observations are absolute undiscounted calls (C/df); convert to the F-normalized
+    # convention (price/(F·df)) so the IV inversion and every downstream eval (which
+    # multiplies back by F) are unchanged.
     z_hats = z_hats / fwds
     z_hats_prior = z_hats_prior / fwds
 
@@ -935,18 +556,15 @@ def run_sanos_kf(
 
     matched_call_prices = np.full(len(df_t), float("nan"))
 
-    # obs_scalar is absolute-strike for every mode: exact = (x, ak, K, fwd),
-    # BS-mixture = (x, ak, K, T, fwd). Result is an undiscounted call (C/df); divide
-    # by the trade's forward to get the F-normalized call that _invert_iv_vec expects.
+    # obs_scalar(x, K_abs, fwd) returns the undiscounted call (C/df) from the exact
+    # density at state `th`; divide by the trade's forward to get the F-normalized call
+    # that _invert_iv_vec expects.
     for i in range(len(df_t)):
         th = th_mat[i]
         K, T, fwd = t_K_abs[i], t_Ts[i], t_fwds[i]
         if not (np.isfinite(th).all() and np.isfinite(K) and np.isfinite(T) and T > 0.0):
             continue
-        if exact:
-            matched_abs = float(obs_scalar(jnp.array(th), ak_j, K, fwd))
-        else:
-            matched_abs = float(obs_scalar(jnp.array(th), ak_j, K, T, fwd))
+        matched_abs = float(obs_scalar(th, K, fwd))
         matched_call_prices[i] = matched_abs / fwd if fwd > 0 else float("nan")
 
     sanos_kf_matched = _invert_iv_vec(matched_call_prices, t_ks, t_Ts)

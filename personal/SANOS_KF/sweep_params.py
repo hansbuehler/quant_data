@@ -65,47 +65,42 @@ for _p in (
 #
 # BASE  = params fixed across every run.
 # GRID  = params swept in EVERY mode (full Cartesian product).
-# MODES = the three SANOS-KF densities (see sanos_kf docstring); each adds its
-#         own mode-specific swept dims so we never emit an invalid combo
-#         (e.g. smoothing=True with σ*=0 → log(0)) or a redundant one (sweeping
-#         Q_scale_vol / sigma_star_init when σ* is frozen or exact-solved).
+# MODES = the SANOS-KF observation variants. There is now ONE density (the exact
+#         tridiagonal SANOS solve); a mode only chooses whether the OBSERVATION is
+#         intrinsic (σ*=0) or smoothed (σ*=sigma_star_init, given). σ* is never a
+#         fitted state, so there is no Q_scale_vol dim.
 #
 # Enable/disable a mode by editing MODES. Anything in SanosKFConfig is fair game.
 # ---------------------------------------------------------------------------
 BASE: dict = dict(
-    n_anchors=300,  # caps strike-aligned interior nodes (exact-solve); ↑ = finer, ~N³ solve
+    n_anchors=300,  # caps strike-aligned interior nodes; ↑ = finer, ~N³ solve
     k_min=-0.60,
     k_max=0.10,  # cover the data's log-moneyness (≈ -0.56..+0.07)
     correlated=True,
     batch_seconds=1.0,  # Gap 3: 1-second batched updates
 )
 
-# Shared dims swept across ALL modes. Every mode now runs in ABSOLUTE STRIKE space
-# (anchors on the observed strike grid), so ell is in DOLLARS for all of them and
-# Sigma/Q/P0 are on the one-phase scale.
+# Shared dims swept across ALL modes (absolute-strike space): ell in DOLLARS, Sigma/Q/P0
+# on the net-DLV² scale.
 GRID: dict = dict(
     Sigma_init=[0.01, 0.04, 0.1],
     Q_scale_dlv=[0.1, 0.3, 1.0, 3.0],
     P0_scale=[1e-2, 1e-1, 1.0],
-    ell=[1.0, 3.0, 8.0],  # DOLLARS (absolute strike distance) — all modes
+    ell=[1.0, 3.0, 8.0],  # DOLLARS (absolute strike distance)
 )
 
 # mode name -> (fixed overrides for the mode, mode-specific swept dims).
-# "free_sigma"   : σ* is a free EKF state (BS-mixture smoothing) — sweep σ* init + Q_vol.
-# "frozen_sigma" : σ* pinned to a constant > 0 (BS-mixture) — sweep σ* init only.
-# "exact_solve"  : σ*=0 exactly-determined SANOS density (no σ* / Q_vol dims).
+# "intrinsic" : σ*=0 — exact tridiagonal density, discrete-call observation.
+# "smoothed"  : σ*>0 — same density, each node priced as a lognormal of vol σ*
+#               (given regularizer). Sweep σ* over small values (≈ 0.05·ATM and up).
 MODES: dict = {
-    "free_sigma": (
-        dict(smoothing=True),
-        dict(sigma_star_init=[0.10, 0.16, 0.22], Q_scale_vol=[1e-2, 1e-1, 1.0]),
-    ),
-    "frozen_sigma": (
-        dict(smoothing=False),
-        dict(sigma_star_init=[0.05, 0.10, 0.16]),
-    ),
-    "exact_solve": (
+    "intrinsic": (
         dict(smoothing=False, sigma_star_init=0.0),
         dict(),
+    ),
+    "smoothed": (
+        dict(smoothing=True),
+        dict(sigma_star_init=[0.005, 0.01, 0.02, 0.05]),
     ),
 }
 
@@ -152,15 +147,9 @@ def _run_one(params: dict) -> dict:
     t0 = time.perf_counter()
     try:
         cfg = SanosKFConfig(**cfg_kw)
-        # state history (st) is only needed for exact-solve negative-mass scoring;
-        # skipping it elsewhere avoids building a second quote-length frame per run.
-        exact = (not cfg.smoothing) and (float(cfg.sigma_star_init) == 0.0)
-        out = run_sanos_kf(df_quotes, df_trades, cfg, return_state=exact)
-        if exact:
-            q, _, st = out
-        else:
-            q, _ = out
-            st = None
+        # The density is always the exact tridiagonal solve, so negative-mass scoring
+        # applies to every run (intrinsic and smoothed): request the state history.
+        q, _, st = run_sanos_kf(df_quotes, df_trades, cfg, return_state=True)
         qb = q.to_pandas()
         del q
 
@@ -198,20 +187,18 @@ def _run_one(params: dict) -> dict:
             discount_factor=dfac,
         )
 
-        # exact-solve mode: score negative mass on the model's own density
-        neg_vals = None
-        if exact:
-            grid_K, tte_ref = build_exact_grid(df_quotes, cfg)
-            F0 = float(np.nanmedian(df_quotes["forward"].to_numpy().astype(float)))
-            stp = st.to_pandas()
-            stp["window"] = stp["ts_ns"].astype("int64") // bs_ns
-            stp = stp.sort_values("ts_ns").drop_duplicates("window", keep="last")
-            xcols = [c for c in stp.columns if c.startswith("x_")]
-            negs = []
-            for xrow in stp[xcols].to_numpy(float):
-                d = exact_solve_density(xrow, grid_K, tte_ref, cfg.dlv_min, fwd=F0)
-                negs.append(np.nan if d is None else float(np.minimum(d, 0.0).sum()))
-            neg_vals = np.array(negs)
+        # score negative mass on the model's own (exact tridiagonal) density
+        grid_K, tte_ref = build_exact_grid(df_quotes, cfg)
+        F0 = float(np.nanmedian(df_quotes["forward"].to_numpy().astype(float)))
+        stp = st.to_pandas()
+        stp["window"] = stp["ts_ns"].astype("int64") // bs_ns
+        stp = stp.sort_values("ts_ns").drop_duplicates("window", keep="last")
+        xcols = [c for c in stp.columns if c.startswith("x_")]
+        negs = []
+        for xrow in stp[xcols].to_numpy(float):
+            d = exact_solve_density(xrow, grid_K, tte_ref, cfg.dlv_min, fwd=F0)
+            negs.append(np.nan if d is None else float(np.minimum(d, 0.0).sum()))
+        neg_vals = np.array(negs)
 
         m = um.evaluate(df_eval, model_name="sweep", neg_mass_values=neg_vals)
         m.pop("model", None)
@@ -256,7 +243,6 @@ SIG_KEYS = (
     "P0_scale",
     "ell",
     "sigma_star_init",
-    "Q_scale_vol",
 )
 
 
@@ -443,7 +429,7 @@ def main() -> None:
     elapsed = time.perf_counter() - t0
     print(f"\nDone in {elapsed:.1f}s. Wrote {len(df)} rows to {out}")
 
-    swept = ["mode", *GRID.keys(), "sigma_star_init", "Q_scale_vol"]
+    swept = ["mode", *GRID.keys(), "sigma_star_init"]
     keep = [
         c
         for c in (*swept, "ho_nse_mean", "ho_nse_med", "ho_rmse_mean", "is_nse_mean", "secs")
