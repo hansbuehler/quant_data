@@ -412,7 +412,15 @@ def build_implied_forward(
             pl.mean_horizontal(
                 [pl.col("_k1") + pl.col("_d1"), pl.col("_k2") + pl.col("_d2")]
             ).alias("_fwd"),
-            pl.lit(1.0).alias("discount_factor"),
+        ).with_columns(
+            # discount_factor = Spot / Forward (= e^{-(r-q)T}), the carry between
+            # spot and the parity-implied forward. More meaningful than the 1.0
+            # placeholder: e^{-rT} is not identified in this branch (no strike-gap
+            # solve), but Spot/Forward is directly observable here.
+            pl.when(pl.col("_fwd") > 0)
+            .then(pl.col("spot") / pl.col("_fwd"))
+            .otherwise(None)
+            .alias("discount_factor"),
         )
     elif method == "twostrike":
         # Legacy: solve the 2×2 system for e^{-rT}, then F = K1 + Δ1 / e^{-rT}.
