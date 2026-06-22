@@ -30,8 +30,8 @@ from quantdata.widb.options_filter import MkArbFree, RawDayFilter, ExpiryFilter,
 
 _cache = _locations_dysanos_grid.training("interpolated")
 
-DEFAULT_EXPIRIES = np.array([1./255., 3./255., 5./255., 10./255., 20./255., 40./255.,0.5,1.], dtype=np.float64)
-DEFAULT_EXPIRIES = np.array([2./255., 5./255., 10./255., 40./255.,0.5,1.], dtype=np.float64)
+#DEFAULT_EXPIRIES = np.array([1./255., 3./255., 5./255., 10./255., 20./255., 40./255.,0.5,1.], dtype=np.float64)
+DEFAULT_EXPIRIES = np.array([2./255., 5./255., 10./255., 20./255., 40./255.,0.5,1.], dtype=np.float64)
 DEFAULT_NUMS     = (-2,1)
 
 
@@ -56,6 +56,9 @@ class GridConfig:
     min_dlv          : float = 0.01          # Minimum DLV used for linear programming.
     max_dlv          : float = 2.            # Maximum DLV used for linear programming.
 
+    # weights
+    min_vega_sqrt    : float = 1E-4          # minimum sqrt vega 
+
     def __post_init__(self):
         verify_inp( self.mode in ("nms", "logK"), lambda : f"Expected mode to be 'nms' or 'logK' but found {self.mode}.")
         verify_inp( self.grid_num_strikes >= 2, lambda : f"Expected grid_num_strikes to be at least 2 but found {self.grid_num_strikes}.")
@@ -63,6 +66,7 @@ class GridConfig:
         verify_inp( len(self.grid_range) == 2 and self.grid_range[0] < 0 and self.grid_range[1] > 0, lambda : f"Expected grid_range to be a tuple of two numbers (lo, hi) with lo<0 and hi>0 but found {self.grid_range}.")
         verify_inp( self.smoothness is None or (self.smoothness >= 0. and self.smoothness < 1.), lambda : f"Expected smoothness to be None or a number between 0 and 1 but found {self.smoothness:.3g}.")
         verify_inp( self.min_dlv >= 0. and self.max_dlv > self.min_dlv, lambda : f"Expected min_dlv to be non-negative and max_dlv to be greater than min_dlv but found min_dlv={self.min_dlv:.3g} and max_dlv={self.max_dlv:.3g}." )
+        verify_inp( self.min_vega_sqrt >= 0., lambda : f"Expected min_vega_sqrt to be non-negative but found {self.min_vega_sqrt:.3g}." )
     
     def __str__(self):
         expiries = "("
@@ -70,7 +74,7 @@ class GridConfig:
             expiries += f"{exp*DAYS_PER_YEAR:.1f},"
         expiries = expiries[:-1] + ")"
         str_smoothness = f"sth={self.smoothness:.2f}" if self.smoothness is not None else "lin"
-        return f"{self.mode},rg=({self.grid_range[0]},{self.grid_range[1]}),nm={self.grid_num_strikes},xp={expiries[:40]};{str_smoothness},mid={self.min_dlv:.3g},mxd={self.max_dlv:.3g}"
+        return f"{self.mode},rg=({self.grid_range[0]},{self.grid_range[1]}),nm={self.grid_num_strikes},xp={expiries[:40]};{str_smoothness},mid={self.min_dlv:.3g},mxd={self.max_dlv:.3g},msqv={self.min_vega_sqrt:.3g}"
 
     @property
     def T(self) -> int:
@@ -86,7 +90,7 @@ def _uid_int_grid( ticker, d, raw_day_filter, expiry_filter, options_filter, mk_
     return f"{named_unique_filename48_8(f"grid {grid_config}", grid_config, raw_day_filter, expiry_filter, options_filter, mk_arb_free )}/{ticker}/{d}"      
 
 @_cache(fmt=SubDir.PYTREE_HDF5).cache(
-    "0.14", dependencies=[GridConfig, MkArbFree, SanosFitter, OptionsFilter, RawDayFilter, ExpiryFilter, MkArbFree, filter_options_day],
+    "0.1", dependencies=[GridConfig, MkArbFree, SanosFitter, OptionsFilter, RawDayFilter, ExpiryFilter, MkArbFree, filter_options_day],
     uid=_uid_int_grid)
 def interpolate_grid( 
                 ticker : str, d : date, *,
@@ -203,9 +207,10 @@ def interpolate_grid(
         T                   = len( grid_config.grid_expiries )
         N                   = grid_config.grid_num_strikes
         nms_grid.expiries   = np.asarray( grid_config.grid_expiries )
-        nms_grid.atm_vols   = af_output.interpolate_atm_vols( nms_grid.expiries )
+        atm_vols            = af_output.interpolate_atm_vols( nms_grid.expiries )
         nms_grid.nms,\
-        strikes             = _generate_grid(nms_grid.expiries, nms_grid.atm_vols)
+        strikes             = _generate_grid(nms_grid.expiries, atm_vols)
+        nms_grid.variances  = (atm_vols**2) * nms_grid.expiries
 
         nms_grid.mids,\
         nms_grid.mid_vols   = af_output.price( expiries=nms_grid.expiries[:,None], strikes=strikes, and_vols=True, mode="surface" )
@@ -215,6 +220,9 @@ def interpolate_grid(
         nms_grid.xstrikes[:,1:-1] = strikes
         nms_grid.xstrikes[:,0]    = strikes[:,0]/2.
         nms_grid.xstrikes[:,-1]   = strikes[:,-1]*1.5
+        vega_sqrt                 = nms_grid.mid_vega / np.sqrt(nms_grid.expiries[:,None])
+        has_vega                  = vega_sqrt >= grid_config.min_vega_sqrt
+        nms_grid.weights          = np.where( has_vega, 1./np.where( has_vega, vega_sqrt, 1.), 0. )
         del strikes
 
         # fit and price market4
@@ -223,23 +231,22 @@ def interpolate_grid(
                                     strikes  = [ nms_grid.xstrikes[t,1:-1] for t in range(T) ],
                                     mids     = [ nms_grid.mids[t,:] for t in range(T) ], 
                                     xstrikes = [ nms_grid.xstrikes[t,:] for t in range(T) ],
-                                    vols     = nms_grid.atm_vols,
+                                    vols     = atm_vols,
                                     message_context = lambda : message(with_cols=False),
                                     verbose=verbose(1))
         nms_grid.fits,\
         nms_grid.fit_vols    = sn_grid( expiries=nms_grid.expiries[:,None], strikes=nms_grid.xstrikes[:,1:-1], and_vols=True )
         sn_grid.__dict__["_eps_price"] = 1E-6
+        assert isinstance( nms_grid.fit_vols, np.ndarray ) , f"{message()}Internal error: expected nms_grid.fit_vols to be a numpy array but found {type(nms_grid.fit_vols)}."
         nms_grid.fit_dlvsqs  = sn_grid.dlvsqs( min_dlv=0., max_dlv=None, on_all_strikes=False ) # do not use DLV bounds here!
         err_vols             = np.median( np.abs( nms_grid.fit_vols - nms_grid.mid_vols ) )
+        assert isinstance( nms_grid.fit_dlvsqs, list), f"{message()}Internal error: expected nms_grid.fit_dlvsqs to be a list but found {type(nms_grid.fit_dlvsqs)}."
+        nms_grid.fit_dlvsqs  = np.stack( nms_grid.fit_dlvsqs, axis=0 )
         verbose.write(f"Trained {str_smth} SANOS on NMS {grid_config.grid_range} {grid_config.mode} grid; this took {tme}. This median match to implied vols was {err_vols:.2f}.")
-
-    assert isinstance( nms_grid.fit_vols, np.ndarray ) , f"{message()}Internal error: expected nms_grid.fit_vols to be a numpy array but found {type(nms_grid.fit_vols)}."
-    assert isinstance( nms_grid.fit_dlvsqs, list), f"{message()}Internal error: expected nms_grid.fit_dlvsqs to be a list but found {type(nms_grid.fit_dlvsqs)}."
-    nms_grid.fit_dlvsqs       = np.stack( nms_grid.fit_dlvsqs, axis=0 )
 
     # grid
     assert nms_grid.expiries.shape == (T,), f"{message()}Internal error: expected nms_grid.expiries to have shape {(T,)} but found {nms_grid.expiries.shape}."
-    assert nms_grid.atm_vols.shape == (T,), f"{message()}Internal error: expected nms_grid.atm_vols to have shape {(T,)} but found {nms_grid.atm_vols.shape}."
+    assert nms_grid.variances.shape == (T,), f"{message()}Internal error: expected nms_grid.variances to have shape {(T,)} but found {nms_grid.variances.shape}."
     assert nms_grid.xstrikes.shape == (T,N+2), f"{message()}Internal error: expected nms_grid.strikes to have shape {(T,N)} but found {nms_grid.strikes.shape}."
     assert nms_grid.nms.shape == (T,N), f"{message()}Internal error: expected nms_grid.nms to have shape {(T,N)} but found {nms_grid.nms.shape}."
 
@@ -248,6 +255,7 @@ def interpolate_grid(
     assert nms_grid.mid_vols.shape == (T,N), f"{message()}Internal error: expected nms_grid.mid_vols to have shape {(T,N)} but found {nms_grid.mid_vols.shape}."
     assert nms_grid.mid_vega.shape == (T,N), f"{message()}Internal error: expected nms_grid.mid_vega to have shape {(T,N)} but found {nms_grid.mid_vega.shape}."
     assert nms_grid.mid_delta.shape == (T,N), f"{message()}Internal error: expected nms_grid.mid_delta to have shape {(T,N)} but found {nms_grid.mid_delta.shape}."
+    assert nms_grid.weights.shape == (T,N), f"{message()}Internal error: expected nms_grid.weights to have shape {(T,N)} but found {nms_grid.weights.shape}."
 
     # fitted with the grid SANOS
     assert nms_grid.fits.shape == (T,N), f"{message()}Internal error: expected nms_grid.fits to have shape {(T,N)} but found {nms_grid.fits.shape}."
@@ -260,7 +268,7 @@ def _uid_int_ts( ticker, date_range, raw_day_filter, expiry_filter, options_filt
     return f"{named_unique_filename48_8(f"ts {grid_config}", grid_config, raw_day_filter, expiry_filter, options_filter, mk_arb_free )}/{ticker}/{date_range}"      
 
 @_cache(fmt=SubDir.PYTREE_HDF5).cache(
-    "0.16", dependencies=[interpolate_grid,],
+    "0.16", dependencies=[interpolate_grid],
     uid=_uid_int_ts)
 def interpolate_time_series( 
                  ticker : str, 
@@ -310,14 +318,15 @@ def interpolate_time_series(
     r = PrettyObject()
     r.dates      = np.array(dates, dtype="datetime64[D]") # (S,)
     r.expiries   = np.stack( [ results[d].expiries for d in dates ], axis=0 ) # (S, T)
-    r.atm_vols   = np.stack( [ results[d].atm_vols for d in dates ], axis=0 ) # (S, T)
+    r.variances  = np.stack( [ results[d].variances for d in dates ], axis=0 ) # (S, T)
     r.xstrikes   = np.stack( [ results[d].xstrikes for d in dates ], axis=0 ) # (S, T, N+2)
     r.nms        = np.stack( [ results[d].nms for d in dates ], axis=0 ) # (S, T, N)
 
     r.mids       = np.stack( [ results[d].mids for d in dates ], axis=0 ) # (S, T, N)
     r.mid_vols   = np.stack( [ results[d].mid_vols for d in dates ], axis=0 ) # (S, T, N)
     r.mid_vega   = np.stack( [ results[d].mid_vega for d in dates ], axis=0 ) # (S, T, N)
-    r.mid_delta   = np.stack( [ results[d].mid_vega for d in dates ], axis=0 ) # (S, T, N)
+    r.mid_delta  = np.stack( [ results[d].mid_delta for d in dates ], axis=0 ) # (S, T, N)
+    r.weights    = np.stack( [ results[d].weights for d in dates ], axis=0 ) # (S, T, N)
 
     r.fits       = np.stack( [ results[d].mids for d in dates ], axis=0 ) # (S, T, N)
     r.fit_vols   = np.stack( [ results[d].mid_vols for d in dates ], axis=0 ) # (S, T, N)
@@ -327,7 +336,7 @@ def interpolate_time_series(
     T, N = grid_config.TN
 
     assert r.expiries.shape == (S, T), f"Internal error: expected expiries to have shape {(S,T)} but found {r.expiries.shape}."
-    assert r.atm_vols.shape == (S, T), f"Internal error: expected atm_vols to have shape {(S,T)} but found {r.atm_vols.shape}."
+    assert r.variances.shape == (S, T), f"Internal error: expected variances to have shape {(S,T)} but found {r.variances.shape}."
     assert r.xstrikes.shape == (S, T, N+2), f"Internal error: expected xstrikes to have shape {(S,T,N+2)} but found {r.xstrikes.shape}."    
     assert r.nms.shape == (S, T, N), f"Internal error: expected nms to have shape {(S,T,N)} but found {r.nms.shape}."
 
@@ -335,6 +344,7 @@ def interpolate_time_series(
     assert r.mid_vols.shape == (S, T, N), f"Internal error: expected mid_vols to have shape {(S,T,N)} but found {r.mid_vols.shape}."
     assert r.mid_vega.shape == (S, T, N), f"Internal error: expected mid_vega to have shape {(S,T,N)} but found {r.mid_vega.shape}."
     assert r.mid_delta.shape == (S, T, N), f"Internal error: expected mid_delta to have shape {(S,T,N)} but found {r.mid_delta.shape}."
+    assert r.weights.shape == (S, T, N), f"Internal error: expected weights to have shape {(S,T,N)} but found {r.weights.shape}."
 
     assert r.fits.shape == (S, T, N), f"Internal error: expected fits to have shape {(S,T,N)} but found {r.fits.shape}."
     assert r.fit_vols.shape == (S, T, N), f"Internal error: expected fit_vols to have shape {(S,T,N)} but found {r.fit_vols.shape}."

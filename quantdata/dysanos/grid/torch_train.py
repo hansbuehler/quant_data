@@ -108,11 +108,10 @@ def train( market        : PrettyObject,*,
                                     S=S,
                                     T=T,
                                     N=N )
-        ld = model( tdata, training=False )
-        verbose.write(lambda : f"done; initial loss is {ld['loss']:.4g}. This took {tme}.", head=False )
+        ld0 = model( tdata, training=False )
+        verbose.write(lambda : f"done; initial loss is {ld0['loss']:.4g}. This took {tme}.", head=False )
         if model.debug:
             warnings.warn("** WARNING: model is running in (very slow) debug mode. **")
-        del ld
 
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -189,10 +188,11 @@ def train( market        : PrettyObject,*,
     # ----------------------------
 
     disp = Visualizer( market=market, 
+                       model_output0=PrettyObject({k:v.detach().cpu().numpy() for k,v in ld0.items() if not v is None}),
                        viz_config=viz_config,
                        mdl_config=mdl_config
                   )
-
+    del ld0
 
     def viz_and_store(*, epoch: int, final : bool = False):
         """ call valuation and then visualize and store the model """
@@ -207,24 +207,25 @@ def train( market        : PrettyObject,*,
             tracker.val_epochs[-1] = epoch+1
 
         # convert to numpy
-        r = PrettyObject({k:v.detach().cpu().numpy() for k,v in ld.items() if not v is None}) 
-        weights     = [ np.mean( r.weights[i,...][r.weights[i,...]>0] ) for i in range(r.weights.shape[0]) ]
-        errors      = [ r.errors[i,...][r.weights[i,...]>0] for i in range(r.errors.shape[0]) ]
-        raw_errors  = [ r.raw_errors[i,...][r.weights[i,...]>0] for i in range(r.raw_errors.shape[0]) ]
+        model_output = PrettyObject({k:v.detach().cpu().numpy() for k,v in ld.items() if not v is None}) 
+        weights      = [ np.mean( market.weights[i,...][market.weights[i,...]>0] ) for i in range(market.weights.shape[0]) ]
+        errors       = [ model_output.errors[i,...][market.weights[i,...]>0] for i in range(model_output.errors.shape[0]) ]
+        raw_errors   = [ model_output.raw_errors[i,...][market.weights[i,...]>0] for i in range(model_output.raw_errors.shape[0]) ]
 
         # per sample summary
         # raw_errors = abs( weight*(fit-mid) ) 
-        # errors = raw_errors**2 if raw_errirs<1 else 2*raw_errors - 1 (huber loss)
-        r.error_stats = PrettyObject()
-        r.error_stats.weights     = np.array(weights)
-        r.error_stats.medians     = np.array([ np.median(err) for err in errors ])
-        r.error_stats.means       = np.array([ np.mean(err) for err in errors ])
-        r.error_stats.p90         = np.array([ np.quantile(err, 0.9) for err in errors ])
-        r.raw_error_stats         = PrettyObject()
-        r.raw_error_stats.weights = np.array(weights)
-        r.raw_error_stats.medians = np.array([ np.median(err) for err in raw_errors ])
-        r.raw_error_stats.means   = np.array([ np.mean(err) for err in raw_errors ])
-        r.raw_error_stats.p90     = np.array([ np.quantile(err, 0.9) for err in raw_errors ])
+        # errors = raw_errors**2 if raw_errors<1 else 2*raw_errors - 1 (huber loss)
+        es = PrettyObject()
+        es.error_stats = PrettyObject()
+        es.error_stats.weights     = np.array(weights)
+        es.error_stats.medians     = np.array([ np.median(err) for err in errors ])
+        es.error_stats.means       = np.array([ np.mean(err) for err in errors ])
+        es.error_stats.p90         = np.array([ np.quantile(err, 0.9) for err in errors ])
+        es.raw_error_stats         = PrettyObject()
+        es.raw_error_stats.weights = np.array(weights)
+        es.raw_error_stats.medians = np.array([ np.median(err) for err in raw_errors ])
+        es.raw_error_stats.means   = np.array([ np.mean(err) for err in raw_errors ])
+        es.raw_error_stats.p90     = np.array([ np.quantile(err, 0.9) for err in raw_errors ])
 
         path.create_directory()
         torch.save(dict(version=mdl_config.user_version,
@@ -236,13 +237,13 @@ def train( market        : PrettyObject,*,
                         mdl_config=asdict(mdl_config),
                         mdl_config_class=mdl_config.__class__.__name__,
                         trn_config=asdict(trn_config),
-                        error_stats=dict(r.error_stats),
-                        raw_error_stats=dict(r.raw_error_stats),
+                        error_stats=dict(es.error_stats),
+                        raw_error_stats=dict(es.raw_error_stats),
                         ), cache_ffn + ".tmp")
         os.rename(cache_ffn + ".tmp", cache_ffn)
         
-        disp(tracker=tracker, num_total_epochs=trn_config.num_epochs, data=r, final=final)
-        return r if final else None
+        disp(tracker=tracker, num_total_epochs=trn_config.num_epochs, model_output=model_output, error_stats=es, final=final)
+        return model_output if final else None
 
     # train
     # -----

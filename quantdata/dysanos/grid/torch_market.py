@@ -39,9 +39,5 @@ class GridMarketDefinition:
                                                       pool_config=pool_config, 
                                                       verbose=verbose ) )
         data.grid_market_def = self
-
-        # as extreme as it sounds the round trip vols -> variance -> vols is pretty inexact numerically.
-        data.variances = (data.atm_vols**2) * data.expiries
-        del data.atm_vols
         return data
 
