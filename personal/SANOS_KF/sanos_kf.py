@@ -101,12 +101,8 @@ class SanosKFConfig:
     n_anchors: int = 20
     k_min: float = -0.20
     k_max: float = 0.15
-    # eta — SANOS smoothness ∈ [0,1) (paper §3.1, eq 17). The smoothing kernel TOTAL
-    # variance is η·V_ATM (V_ATM = ATM total variance, estimated per run from near-ATM
-    # IV), i.e. each density node is blurred by a lognormal of vol √η·σ_ATM. η=0 ⇒
-    # intrinsic (linear interpolation); η=1 ⇒ ATM-only. Paper default η=0.25 (=0.5²).
-    # Applied iff smoothing=True.
-    eta: float = 0.25
+    sigma_star_init: float = 0.20  # σ* smoothing vol (GIVEN regularizer, applied iff
+    # smoothing=True; blurs each density node into a lognormal of vol σ*). Not fitted.
     Sigma_init: float = 0.25  # initial net DLV² for all interior nodes (uniform)
     Q_scale_dlv: float = 1e-3  # process noise scale for net DLV² per trading day
     P0_scale: float = 1e-4  # initial covariance diagonal scale
@@ -118,11 +114,11 @@ class SanosKFConfig:
     correlated: bool = True
     ell: float = 3.0  # RBF correlation length in DOLLARS (absolute strike distance)
     # smoothing — the model is ALWAYS the exact tridiagonal SANOS density (state = net
-    # DLV² over the N-2 interior nodes). This flag only gates the OBSERVATION smoothing:
-    # True ⇒ price each density node as a lognormal of variance η·V_ATM (paper production
-    # model); False ⇒ η forced to 0 ⇒ intrinsic discrete calls (the original exact-solve).
+    # DLV² over the N-2 interior nodes). This flag only sets whether the OBSERVATION is
+    # smoothed: True ⇒ price each density node as a lognormal of vol σ*=sigma_star_init
+    # (à la quantdata.sanos's `sqrtVar`); False ⇒ σ*=0 ⇒ intrinsic discrete calls (the
+    # original exact-solve). σ* is never a fitted state.
     smoothing: bool = True
-    sigma_star_init: float = 0.0  # DEPRECATED/unused — smoothing is now η·V_ATM (see `eta`)
     dlv_min: float = 0.001  # DLV floor (v = x + dlv_min²) so ∂d/∂x doesn't vanish
     # exact-solve only: if a batch update yields a density with negative mass beyond
     # this fraction, REJECT the update and carry the previous (valid) state forward —
@@ -211,72 +207,6 @@ def build_exact_grid(df_quotes, cfg):
     return grid_K, tte_ref
 
 
-def _estimate_atm_var(df_quotes, tte_ref, n_atm_strikes: int = 8) -> float:
-    """Estimate the ATM total variance V_ATM ≈ σ²_ATM·tte_ref for the SANOS smoothing
-    kernel (kernel variance = η·V_ATM, paper §3.1).
-
-    σ_ATM = skew-corrected ATM vol: take the per-strike median observed_iv over the
-    `n_atm_strikes` DISTINCT strikes nearest the (median) forward — strike-count window, so
-    it's robust to the $1 grid and the forward sitting between strikes — and read the OLS
-    intercept of iv ≈ a + b·k at k=0 (= the forward; interpolates between strikes, removes
-    the linear skew). df_quotes holds calls AND puts (puts_only only gates the filter), so
-    these straddle the forward. Falls back to the near-strike median, then a price-based ATM
-    approximation (Brenner–Subrahmanyam: normalized call ≈ 0.3989·σ·√T), then 0 (no smoothing)."""
-    k = df_quotes["log_moneyness"].to_numpy().astype(float)
-    F0 = float(np.nanmedian(df_quotes["forward"].to_numpy().astype(float)))
-    K = (
-        df_quotes["strike"].to_numpy().astype(float)
-        if "strike" in df_quotes.columns
-        else df_quotes["forward"].to_numpy().astype(float) * np.exp(k)
-    )
-    uniqK = np.unique(K[np.isfinite(K) & (K > 0)])
-    if uniqK.size == 0:
-        return 0.0
-    nearK = uniqK[np.argsort(np.abs(uniqK - F0))[: max(int(n_atm_strikes), 2)]]
-
-    # Per-strike (k, median IV) points at the near strikes → OLS intercept at k=0.
-    ks: list[float] = []
-    ivs: list[float] = []
-    if "observed_iv" in df_quotes.columns:
-        iv = df_quotes["observed_iv"].to_numpy().astype(float)
-        for s in nearK:
-            sel = (K == s) & np.isfinite(iv) & (iv > 0)
-            if sel.any():
-                ks.append(float(np.log(s / F0)))
-                ivs.append(float(np.median(iv[sel])))
-    ks_arr = np.asarray(ks)
-    ivs_arr = np.asarray(ivs)
-
-    sigma_atm = float("nan")
-    if ivs_arr.size >= 3 and np.ptp(ks_arr) > 1e-6:
-        a, _b = np.linalg.lstsq(np.vstack([np.ones(ivs_arr.size), ks_arr]).T, ivs_arr, rcond=None)[
-            0
-        ]
-        sigma_atm = float(a)
-    elif ivs_arr.size >= 1:
-        sigma_atm = float(np.median(ivs_arr))
-
-    if not (np.isfinite(sigma_atm) and sigma_atm > 0.0):
-        # Price-based fallback (no observed_iv, or degenerate fit) at the near strikes.
-        Fq = df_quotes["forward"].to_numpy().astype(float)
-        T = df_quotes["T"].to_numpy().astype(float)
-        ic = df_quotes["is_call"].to_numpy().astype(bool)
-        mid = 0.5 * (
-            df_quotes["bid_price"].to_numpy().astype(float)
-            + df_quotes["ask_price"].to_numpy().astype(float)
-        )
-        call = np.where(ic, mid, mid + Fq - K)  # PCP → undiscounted call
-        cnorm = call / np.where(Fq > 0, Fq, 1.0)
-        sel = np.isin(K, nearK) & np.isfinite(cnorm) & (cnorm > 0) & np.isfinite(T) & (T > 0)
-        if not sel.any():
-            return 0.0
-        sigma_atm = float(np.median(cnorm[sel] / (0.3989 * np.sqrt(T[sel]))))
-
-    if not (np.isfinite(sigma_atm) and sigma_atm > 0.0):
-        return 0.0
-    return sigma_atm**2 * tte_ref
-
-
 def exact_solve_density(x_state, grid_K, tte_ref, dlv_min=0.001, fwd=None):
     """Reconstruct the risk-neutral density on the ABSOLUTE strike grid from a
     net-DLV² state (exact-solve mode), for diagnostics / negative-mass scoring.
@@ -298,29 +228,26 @@ def exact_solve_density(x_state, grid_K, tte_ref, dlv_min=0.001, fwd=None):
     return d
 
 
-def _make_exact_fns(grid_K, box, pay_full, dlv_min, kernel_var=0.0):
+def _make_exact_fns(grid_K, box, pay_full, dlv_min, sigma_star=0.0, tte_ref=0.0):
     """Build (obs_scalar, jac_scalar, obs_vec, jac_vec, dens_fn) closures for the
     exact tridiagonal SANOS density. The density `d(x)` is always the exact solve
-    (re-centered Σd·K = live fwd each window); `kernel_var` only changes how the
+    (re-centered Σd·K = live fwd each window); `sigma_star` only changes how the
     market quotes are PRICED from that density (the observation payoff):
 
-      kernel_var = 0  → intrinsic    payoff_j(K) = (K_j − K)⁺          (discrete calls)
-      kernel_var > 0  → BS-smoothed  payoff_j(K) = K_j·N(d1) − K·N(d2),
-                        d1 = (log(K_j/K) + v/2)/√v with TOTAL variance v = kernel_var.
+      σ* = 0  → intrinsic    payoff_j(K) = (K_j − K)⁺           (discrete calls)
+      σ* > 0  → BS-smoothed  payoff_j(K) = K_j·N(d1) − K·N(d2)  (lognormal of vol σ*,
+                forward K_j, total var v = σ*²·tte_ref), d1 = (log(K_j/K)+v/2)/√v
 
-    Per the SANOS paper (§3.1, eq 17) the production model uses Call(K_j, K, η·V_ATM):
-    the kernel variance is η·V_ATM (η = smoothness ∈ [0,1), V_ATM = ATM total variance),
-    i.e. each density node is blurred by a lognormal of vol √η·σ_ATM. So pass
-    kernel_var = η·V_ATM here. h(K) = Σ_j payoff_j(K)·d_j is the undiscounted call
-    (= C/df). The kernel_var→0 limit recovers the intrinsic (= linear interpolation)
-    exactly. Smoothing the nodes preserves the martingale (Σd·K_j = F) and no-arbitrage,
-    so it only blurs the discrete-call kinks."""
+    h(K) = Σ_j payoff_j(K)·d_j is the undiscounted call (= C/df), matched against
+    (mid/df). The σ*→0 limit recovers the intrinsic exactly. Smoothing the density
+    nodes preserves the martingale (Σd·K_j = F) and no-arbitrage, so it only blurs
+    the discrete-call kinks — this is how quantdata.sanos applies its `sqrtVar`."""
     N = len(grid_K)
     n_state = N - 2
     gk_row = grid_K[None, :]  # (1, N)
 
-    if kernel_var and kernel_var > 0.0:
-        v = max(float(kernel_var), 1e-12)
+    if sigma_star and sigma_star > 0.0:
+        v = max(float(sigma_star) ** 2 * float(tte_ref), 1e-12)
         sqrt_v = np.sqrt(v)
 
         def _pay(K_arr):  # (m, N): BS-call of each density node (spot=K_j) at strike K_i
@@ -433,16 +360,15 @@ def run_sanos_kf(
     # ONE model: the exact tridiagonal SANOS density on the strike-aligned grid
     # (interior nodes on observed strikes within [k_min,k_max], ≤ n_anchors, ±1 pad).
     # State = net DLV² over the N-2 interior nodes; density re-centers Σd·K = live fwd
-    # each window. cfg.smoothing only controls the OBSERVATION: the SANOS production
-    # smoothing (paper §3.1) prices each density node as a lognormal of TOTAL variance
-    # η·V_ATM (η=cfg.eta, V_ATM = estimated ATM total variance), i.e. smoothing vol
-    # √η·σ_ATM; cfg.smoothing=False ⇒ η=0 ⇒ intrinsic discrete calls (exact-solve).
-    # The `anchor_ks` arg is ignored (kept for signature back-compat).
+    # each window. cfg.smoothing only controls the OBSERVATION: σ*=sigma_star_init
+    # smooths each density node into a lognormal of vol σ* (matches quantdata.sanos's
+    # `sqrtVar`); cfg.smoothing=False ⇒ σ*=0 ⇒ intrinsic discrete calls (the original
+    # exact-solve). σ* is a GIVEN regularizer, not a fitted state. The `anchor_ks` arg
+    # is ignored (kept for signature back-compat).
     if cfg.batch_seconds is None:
         raise NotImplementedError("run_sanos_kf requires batched mode (cfg.batch_seconds set)")
     grid_K, tte_ref = build_exact_grid(df_quotes, cfg)
-    eta = float(cfg.eta) if cfg.smoothing else 0.0
-    kernel_var = eta * _estimate_atm_var(df_quotes, tte_ref) if eta > 0.0 else 0.0
+    sigma_star = float(cfg.sigma_star_init) if cfg.smoothing else 0.0
 
     xrow = np.concatenate(([2 * grid_K[0] - grid_K[1]], grid_K, [2 * grid_K[-1] - grid_K[-2]]))
     box = grid_K**2 / (xrow[2:] - xrow[:-2]) * tte_ref
@@ -450,7 +376,7 @@ def run_sanos_kf(
     box[-1] = 0.0
     pay_full = np.maximum(grid_K[np.newaxis, :] - grid_K[:, np.newaxis], 0.0)  # (N,N) intrinsic
     obs_scalar, jac_scalar, obs_vec, jac_vec, dens_fn = _make_exact_fns(
-        grid_K, box, pay_full, cfg.dlv_min, kernel_var=kernel_var
+        grid_K, box, pay_full, cfg.dlv_min, sigma_star=sigma_star, tte_ref=tte_ref
     )
     x = np.full(len(grid_K) - 2, cfg.Sigma_init)  # flat net DLV² over interior nodes
     var_diag = np.full(len(grid_K) - 2, cfg.Q_scale_dlv)
