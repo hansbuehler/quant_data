@@ -67,8 +67,8 @@ for _p in (
 # GRID  = params swept in EVERY mode (full Cartesian product).
 # MODES = the SANOS-KF observation variants. There is now ONE density (the exact
 #         tridiagonal SANOS solve); a mode only chooses whether the OBSERVATION is
-#         intrinsic (σ*=0) or smoothed (σ*=sigma_star_init, given). σ* is never a
-#         fitted state, so there is no Q_scale_vol dim.
+#         intrinsic (η=0) or smoothed (kernel variance η·V_ATM, paper §3.1). η is the
+#         given smoothness, never a fitted state.
 #
 # Enable/disable a mode by editing MODES. Anything in SanosKFConfig is fair game.
 # ---------------------------------------------------------------------------
@@ -90,17 +90,17 @@ GRID: dict = dict(
 )
 
 # mode name -> (fixed overrides for the mode, mode-specific swept dims).
-# "intrinsic" : σ*=0 — exact tridiagonal density, discrete-call observation.
-# "smoothed"  : σ*>0 — same density, each node priced as a lognormal of vol σ*
-#               (given regularizer). Sweep σ* over small values (≈ 0.05·ATM and up).
+# "intrinsic" : η=0 — exact tridiagonal density, discrete-call observation (linear interp).
+# "smoothed"  : η>0 — same density, each node priced as a lognormal of variance η·V_ATM
+#               (paper §3.1). Sweep η; paper values 0.06 (=0.25²), 0.25 (=0.5², default), 0.5.
 MODES: dict = {
     "intrinsic": (
-        dict(smoothing=False, sigma_star_init=0.0),
+        dict(smoothing=False),
         dict(),
     ),
     "smoothed": (
         dict(smoothing=True),
-        dict(sigma_star_init=[0.005, 0.01, 0.02, 0.05]),
+        dict(eta=[0.06, 0.25, 0.5]),
     ),
 }
 
@@ -242,7 +242,7 @@ SIG_KEYS = (
     "Q_scale_dlv",
     "P0_scale",
     "ell",
-    "sigma_star_init",
+    "eta",
 )
 
 
@@ -429,7 +429,7 @@ def main() -> None:
     elapsed = time.perf_counter() - t0
     print(f"\nDone in {elapsed:.1f}s. Wrote {len(df)} rows to {out}")
 
-    swept = ["mode", *GRID.keys(), "sigma_star_init"]
+    swept = ["mode", *GRID.keys(), "eta"]
     keep = [
         c
         for c in (*swept, "ho_nse_mean", "ho_nse_med", "ho_rmse_mean", "is_nse_mean", "secs")

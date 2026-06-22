@@ -1,17 +1,23 @@
 """
 quick_sweep_free_sigma.py
 
-Fast, focused sweep to answer one question: does the log-moneyness `free_sigma`
-mode (σ* a free EKF state, BS-mixture) have any hope, or do we switch to the
-absolute-strike `exact_solve` mode?
+Fast, focused sweep over the ONE model: the exact tridiagonal SANOS density in
+absolute-strike space (see sanos_kf.py). There is no BS-mixture and no "free σ*"
+state — σ* (cfg.sigma_star_init) is a GIVEN regularizer that, when cfg.smoothing
+is on, blurs each density node into a lognormal of vol σ*. It smooths only the
+OBSERVATION (how market quotes are priced from the density), never the density
+itself, which is always the exact solve. The question this sweep answers:
 
-Reuses sweep_params' worker (_run_one), data loader, and BASE/SIDE so the score
-is identical to the full sweep — we only swap in a small, targeted grid and run
-it across a process pool. A handful of exact_solve points are included as an
-apples-to-apples strike-space baseline on the same date/side.
+    does the σ*-smoothed observation (cfg.smoothing=True) beat the intrinsic
+    discrete-call observation (σ*=0, cfg.smoothing=False)?
+
+Both arms are the exact-solve density; they differ only in the observation
+payoff. Reuses sweep_params' worker (_run_one), data loader, and BASE/SIDE so
+the score is identical to the full sweep — we only swap in a small, targeted
+grid and run it across a process pool.
 
     python personal/SANOS_KF/quick_sweep_free_sigma.py
-    python personal/SANOS_KF/quick_sweep_free_sigma.py --workers 10
+    python personal/SANOS_KF/quick_sweep_free_sigma.py --workers 4 --mode exact_smoothed
 """
 
 from __future__ import annotations
@@ -39,20 +45,24 @@ import pandas as pd
 import sweep_params as sp  # noqa: E402  (same dir; sys.path set by sweep_params import)
 
 # --- Focused grids -----------------------------------------------------------
-# free_sigma: sweep the two knobs that actually decide log-moneyness fit quality
-# (RBF length `ell` and DLV process noise), with a light σ* exploration.
-FREE_SIGMA = dict(
+# Both grids are the exact-solve density; they differ only in the observation
+# (σ*-smoothed vs intrinsic). σ* (sigma_star_init) is a given regularizer, not a
+# fitted state. `ell` is the RBF correlation length in DOLLARS (strike space).
+
+# exact_smoothed: smoothing on (σ* > 0). Sweep the two knobs that decide fit
+# quality (RBF length `ell` and DLV process noise) with a light σ* exploration.
+EXACT_SMOOTHED = dict(
     smoothing=True,
     Sigma_init=[0.04],
     P0_scale=[0.1],
-    Q_scale_vol=[0.1],
-    ell=[0.02, 0.05, 0.15, 0.30],  # log-moneyness units — the key dim
-    Q_scale_dlv=[0.1, 0.3, 1.0, 3.0],
-    sigma_star_init=[0.10, 0.16],
+    ell=[1.0, 5.0],  # DOLLARS — the key dim
+    Q_scale_dlv=[0.1, 1.0],
+    sigma_star_init=[1e-4, 0.001, 0.01, 0.05, 0.1],
 )
 
-# exact_solve baseline (absolute-strike): a few points for the comparison line.
-EXACT_SOLVE = dict(
+# exact_intrinsic baseline: smoothing off (σ* = 0, intrinsic discrete calls).
+# A few points for the comparison line on the same date/side.
+EXACT_INTRINSIC = dict(
     smoothing=False,
     sigma_star_init=[0.0],
     Sigma_init=[0.04],
@@ -74,16 +84,24 @@ def main() -> None:
     ap.add_argument("--date", default="2024-01-03")
     ap.add_argument("--min-trades", type=int, default=100)
     ap.add_argument("--workers", type=int, default=min(10, max(1, (os.cpu_count() or 2) - 1)))
+    ap.add_argument(
+        "--mode",
+        choices=["exact_smoothed", "exact_intrinsic"],
+        default=None,
+        help="restrict the sweep to a single mode (default: run both)",
+    )
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
-    points = _points("free_sigma", FREE_SIGMA) + _points("exact_solve", EXACT_SOLVE)
+    points = _points("exact_smoothed", EXACT_SMOOTHED) + _points("exact_intrinsic", EXACT_INTRINSIC)
+    if args.mode is not None:
+        points = [p for p in points if p["mode"] == args.mode]
     out = args.out or f"quick_sweep_free_sigma_{args.ticker}_{args.date}.csv"
     trade_date = date.fromisoformat(args.date)
 
-    nf = sum(p["mode"] == "free_sigma" for p in points)
-    ne = sum(p["mode"] == "exact_solve" for p in points)
-    print(f"Grid: {len(points)} points (free_sigma={nf}, exact_solve={ne})")
+    ns = sum(p["mode"] == "exact_smoothed" for p in points)
+    ni = sum(p["mode"] == "exact_intrinsic" for p in points)
+    print(f"Grid: {len(points)} points (exact_smoothed={ns}, exact_intrinsic={ni})")
 
     print(f"Loading {args.ticker} {args.date} ...")
     df_quotes, df_trades = sp._load_data(args.ticker, trade_date, args.min_trades)
@@ -104,7 +122,6 @@ def main() -> None:
         "P0_scale",
         "ell",
         "sigma_star_init",
-        "Q_scale_vol",
         "ok",
         "err",
         "secs",
@@ -158,7 +175,6 @@ def main() -> None:
             "ell",
             "Q_scale_dlv",
             "sigma_star_init",
-            "Q_scale_vol",
             "ho_nse_med",
             "ho_nse_mean",
             "is_nse_med",
@@ -167,7 +183,7 @@ def main() -> None:
         ]
         if c in df.columns
     ]
-    for mode in ("free_sigma", "exact_solve"):
+    for mode in ("exact_smoothed", "exact_intrinsic"):
         sub = df[df["mode"] == mode].sort_values("ho_nse_med", na_position="last")
         print(f"=== {mode}  (best ho_nse_med first) ===")
         with pd.option_context("display.max_columns", None, "display.width", 200):
