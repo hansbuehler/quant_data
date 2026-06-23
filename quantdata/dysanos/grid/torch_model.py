@@ -107,8 +107,12 @@ class SanosModelConfig:
         self.__dict__['xnms'] = xnms
 
     @property
+    def qualified_label(self) -> str:
+        return f"{self.label}@{f'.{self.group}' if self.group else ''} {self.user_version}"
+    
+    @property
     def label_str(self) -> str:
-        return f"{self.label}{f'.{self.group}' if self.group else ''} {self.user_version} " + ( f"{self.smoothness:.2f}-smooth" if not self.smoothness is None else "linear" )
+        return self.qualified_label + ( f" {self.smoothness:.2f}-smooth" if not self.smoothness is None else " linear" )
 
     @property
     def obj_str(self) -> str:
@@ -290,6 +294,14 @@ class SanosModel(BaseModel):
         self.num_output     = ( T * n + T ) if not self.config.learn_nnms else ( T * n + T + T * n)
         self.raw_from_state = FeedForward( env, num_input=config.num_state, num_output=self.num_output, config=config.state_config )  
         self.xnms           = torch.tensor( config.xnms, device=env.device, dtype=env.fdtype ) 
+
+    @property
+    def label(self) -> str:
+        return self.config.label
+    
+    @property
+    def qualified_label(self) -> str:
+        return self.config.qualified_label
 
     def build_default_features( self, data : Pytree, *, training : bool = False ) -> torch.Tensor:
         """ Compute feature block """
