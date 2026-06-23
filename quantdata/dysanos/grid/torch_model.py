@@ -323,17 +323,18 @@ class SanosModel(BaseModel):
         assert features.shape == (S, T*N*self.NUM_FEATURES), f"Expected features to have shape {(S, T*N*self.NUM_FEATURES)}, but found {features.shape}"
         return features
 
-    def compute_state( self, data : Pytree, *, sample_indices : np.array|None = None, training : bool = False ) -> tuple[torch.Tensor, dict|None]:
+    def compute_state( self, data : Pytree, *, debug_sample_indices : np.array|None = None, training : bool = False ) -> tuple[torch.Tensor, dict|None]:
         raise NotImplementedError("This method should be implemented in subclasses to compute the raw DLVs from the (abstract) model state.")
 
-    def translate_state( self, data : Pytree, *, sample_indices : np.array|None = None, training : bool = False ) -> tuple[torch.Tensor, dict|None]:
+    def translate_state( self, data : Pytree, *, state : Pytree|None = None, debug_sample_indices : np.array|None = None, training : bool = False ) -> tuple[torch.Tensor, dict|None]:
         """
         Decode DLVsq grid and forward variances from the (abstract) model state.
+        If ``state`` is None, it will be computed from the data using :meth:`compute_state`. Otherwise, it will be used as is.
         """
         expiries      = get(data, "expiries")
         S, T          = expiries.shape
         n             = self.config.num_nms
-        state, other  = self.compute_state( data=data, sample_indices=sample_indices, training=training )
+        state, other  = self.compute_state( data=data, debug_sample_indices=debug_sample_indices, training=training ) if state is None else (state, None)
         assert state.shape==(S,self.config.num_state), f"Expected raw output to have shape {(S,self.config.num_state)}, but found {state.shape}"
 
         max_dlvsq    = self.config.max_dlv**2
@@ -371,13 +372,14 @@ class SanosModel(BaseModel):
                 nnms=nnms,
                 state=state.detach(),
                 )
-        assert set(r) & set(other) == set(), f"Internal error: expected 'other' to not contain keys {set(r)}, but found {set(r) & set(other)}"
-        r.update({k:v.detach() for k,v in other.items() if not v is None})
+        if not other is None:
+            assert set(r) & set(other) == set(), f"Internal error: expected 'other' to not contain keys {set(r)}, but found {set(r) & set(other)}"
+            r.update({k:v.detach() for k,v in other.items() if not v is None})
         return r
 
     def compute_model( self, model_state : dict[str, torch.Tensor],
-                            data      : Pytree, *, 
-                            training  : bool = False ) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
+                             data        : Pytree, *, 
+                             training    : bool = False ) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
         """
         Utility function to compute call prices and densities.
         """
@@ -393,8 +395,8 @@ class SanosModel(BaseModel):
         assert market_xstrikes.shape[:2] == (S, T), f"Expected market_xstrikes to have shape {(S, T)}, but found {market_xstrikes.shape}"
         N               = market_xstrikes.shape[2]-2
 
-        # compute grid geometry
-        # ---------------------
+        # compute grid 
+        # ------------
 
         _0              = torch.zeros_like( expiries[:,:1] )
         _1              = torch.ones_like( expiries[:,:1] )
@@ -496,12 +498,17 @@ class SanosModel(BaseModel):
             xstrikes=xstrikes,                    # (S, T, n+2)
         )
 
-    def __call__(self, data : Pytree, sample_indices : np.array|None = None, training : bool = False ) -> float | Pytree:
-        """ Training or valuation """
+    def __call__(self, data : Pytree, *, 
+                       state : Pytree|None = None,
+                       debug_sample_indices : np.array|None = None,   # TODO: remove
+                       training : bool = False ) -> float | Pytree:
+        """
+        Run Training or valuation
+        """
 
         # call derived model
         # ------------------
-        model_state  = self.translate_state( data, sample_indices=sample_indices, training=training )
+        model_state  = self.translate_state( data, state=state, debug_sample_indices=debug_sample_indices, training=training )
         model_output = self.compute_model( model_state=model_state, data=data, training=training )    
         assert set(model_state) & set(model_output) == set(), f"Expected 'model_output' to not contain any keys that are already in 'model_state', but found {sorted(set(model_state) & set(model_output))}"
 

@@ -96,7 +96,7 @@ class FullSanosPCACompressor(SanosModel):
             alpha0           = np.full( (S, config.num_pca), alpha0, dtype=np.float32 )
             self.dlv_alpha   = torch.nn.Parameter(torch.tensor(alpha0, device=env.device, dtype=env.fdtype), requires_grad=True)
 
-    def compute_dlvsqs( self, data : Pytree, sample_indices : np.array|None = None, training : bool = True ) -> torch.Tensor:
+    def compute_dlvsqs( self, data : Pytree, debug_sample_indices : np.array|None = None, training : bool = True ) -> torch.Tensor:
         """ Compute DLVsq grid """
         data       = dict(data)
         mid_vols   = data.pop("mid_vols")
@@ -121,7 +121,7 @@ class FullSanosPCACompressor(SanosModel):
             logK      = None
         else:
             alpha     = self.dlv_alpha
-            alpha     = alpha if sample_indices is None else alpha[sample_indices,:]
+            alpha     = alpha if debug_sample_indices is None else alpha[debug_sample_indices,:]
         assert alpha.shape == (S, self.config.num_pca), f"Expected alpha to have shape {(S, self.config.num_pca)}, but found {alpha.shape}"  
 
         # compute h, dh

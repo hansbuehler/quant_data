@@ -75,7 +75,7 @@ class SanosCompressor(SanosModel):
         # define the map state (S, X) -> raw_dlv (S, T, N)
         self.raw_dlv_from_state = FeedForward( env, num_input=config.num_state, num_output=T * N, config=config.state_config )  
 
-    def compute_state( self, data : Pytree, *, sample_indices : np.array|None = None, training : bool = False ) -> tuple[torch.Tensor, dict|None]:
+    def compute_state( self, data : Pytree, *, debug_sample_indices : np.array|None = None, training : bool = False ) -> tuple[torch.Tensor, dict|None]:
         """ Compute DLVsq grid """
         S, T, N          = data['mid_vols'].shape
 
@@ -90,6 +90,6 @@ class SanosCompressor(SanosModel):
             features  = None
         else:
             state     = self.dlv_state
-            state     = state if sample_indices is None else state[sample_indices,:]
+            state     = state if debug_sample_indices is None else state[debug_sample_indices,:]
         assert state.shape == (S, self.config.num_state), f"Expected state to have shape {(S, self.config.num_state)}, but found {state.shape}"  
         return state, {}
