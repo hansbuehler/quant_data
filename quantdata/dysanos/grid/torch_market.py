@@ -8,7 +8,7 @@ Defines the market data used for Grid models.
 from cdxcore.pretty import PrettyObject
 from cdxcore.version import version
 from quantdata.dysanos.grid.interpolated import GridConfig, interpolate_time_series, Context, OptionsFilter, RawDayFilter, ExpiryFilter, MkArbFree
-from quantdata.biz_calendar import DateRange
+from quantdata.biz_calendar import DAYS_PER_YEAR, DateRange, count_business_days_between
 from quantdata.pool import PoolConfig
 from datetime import date
 from quantdata.torch import BaseEnvironment, torch
@@ -39,5 +39,7 @@ class GridMarketDefinition:
                                                       pool_config=pool_config, 
                                                       verbose=verbose ) )
         data.grid_market_def = self
+        dates                = data['dates']
+        data.time_y          = np.array( [ count_business_days_between( dates[0], dates[i] ) for i in range(len(dates)) ] ) / float(DAYS_PER_YEAR)
         return data
 
