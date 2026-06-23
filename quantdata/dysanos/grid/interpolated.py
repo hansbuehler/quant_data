@@ -294,7 +294,7 @@ def interpolate_time_series(
     verbose.report(1,lambda : f"Options filter: {options_filter}")
     verbose.report(1,lambda : f"Market Arb free settings: {mk_arb_free}")
     verbose.report(1,lambda : f"Grid config: {grid_config}")
-    with verbose.write_t(lambda : f"\rLoading marker data for {ticker} for {len(dates)} dates from {dates[0]} to {dates[-1]} on NMS grid with {str(pool_config)} pool:") as tme:
+    with verbose.write_t(lambda : f"\rLoading market data for {ticker} for {len(dates)} dates from {dates[0]} to {dates[-1]} on NMS grid with {str(pool_config)} pool:") as tme:
 
         for d, nms_grid in pool.parallel( { d: pool.delayed(interpolate_grid)( 
                                                                         ticker=ticker, d=d,

@@ -41,5 +41,6 @@ class GridMarketDefinition:
         data.grid_market_def = self
         dates                = data['dates']
         data.time_y          = np.array( [ count_business_days_between( dates[0], dates[i] ) for i in range(len(dates)) ] ) / float(DAYS_PER_YEAR)
+        data.ticker          = self.ticker
         return data
 
