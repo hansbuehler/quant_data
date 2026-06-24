@@ -17,12 +17,13 @@ Density (per window, re-centered on the LIVE forward F):
     not fit; see the quantdata.sanos tridiagonal operator.)
 
 Observation (undiscounted call price C(K)/df, matched against mid/df):
-    σ* = 0  (cfg.smoothing=False):  h(x,K,F) = Σⱼ dⱼ·(Kⱼ − K)⁺          (intrinsic)
-    σ* > 0  (cfg.smoothing=True) :  h(x,K,F) = Σⱼ dⱼ·[Kⱼ·N(d1ⱼ) − K·N(d2ⱼ)]
-                                    d1ⱼ = (log(Kⱼ/K) + v/2)/√v,  v = σ*²·tte_ref
-σ* (= cfg.sigma_star_init) is a GIVEN regularizer that blurs each density node into a
-lognormal of vol σ* — it smooths only the OBSERVATION, never the density (exactly how
-quantdata.sanos applies its `sqrtVar`). The σ*→0 limit recovers the intrinsic.
+    η = 0  (cfg.smoothing=False):  h(x,K,F) = Σⱼ dⱼ·(Kⱼ − K)⁺          (intrinsic)
+    η > 0  (cfg.smoothing=True) :  h(x,K,F) = Σⱼ dⱼ·[Kⱼ·N(d1ⱼ) − K·N(d2ⱼ)]
+                                   d1ⱼ = (log(Kⱼ/K) + v/2)/√v,  v = η·V_ATM
+η (= cfg.eta, paper smoothness) sets the smoothing variance v = η·V_ATM (V_ATM =
+estimated ATM total variance) that blurs each density node into a lognormal — it
+smooths only the OBSERVATION, never the density (exactly how quantdata.sanos applies
+its `sqrtVar`). The η→0 limit recovers the intrinsic.
 The output sanos_kf_price is divided by F → F-normalized call (unchanged convention).
 
 Design notes:
@@ -122,7 +123,6 @@ class SanosKFConfig:
     # True ⇒ price each density node as a lognormal of variance η·V_ATM (paper production
     # model); False ⇒ η forced to 0 ⇒ intrinsic discrete calls (the original exact-solve).
     smoothing: bool = True
-    sigma_star_init: float = 0.0  # DEPRECATED/unused — smoothing is now η·V_ATM (see `eta`)
     dlv_min: float = 0.001  # DLV floor (v = x + dlv_min²) so ∂d/∂x doesn't vanish
     # exact-solve only: if a batch update yields a density with negative mass beyond
     # this fraction, REJECT the update and carry the previous (valid) state forward —
@@ -160,8 +160,8 @@ def _rbf(nodes: np.ndarray, ell: float, correlated: bool) -> np.ndarray:
 #   row 1 : Σ d·K      = F          (martingale, absolute strikes / live forward)
 #   rows  : DLV² equalities (tri-diagonal, net DLV² state x ≥ 0)
 # giving a well-conditioned ∂d/∂x. State x = net DLV² at the N-2 interior anchors.
-# σ* (cfg.sigma_star_init, when cfg.smoothing) only smooths the OBSERVATION (each
-# density node prices as a lognormal of vol σ* instead of an intrinsic), never the
+# η·V_ATM (η=cfg.eta, when cfg.smoothing) only smooths the OBSERVATION (each density
+# node prices as a lognormal of variance η·V_ATM instead of an intrinsic), never the
 # density itself — see _make_exact_fns. This is exactly how quantdata.sanos applies
 # its `sqrtVar` smoothing on top of the fitted density.
 

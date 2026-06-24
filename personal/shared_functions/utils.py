@@ -37,6 +37,7 @@ def synchronize_iv_surface(df_long: pl.DataFrame) -> pl.DataFrame:
     (e.g. bid_iv_479_C, kalman_iv_479_P). Without it, the old _<strike> naming is used.
     """
     has_type = "is_call" in df_long.columns
+    has_var = "kalman_var" in df_long.columns
     spine = df_long.select("ts_ns").unique().sort("ts_ns")
     result = spine
 
@@ -45,34 +46,32 @@ def synchronize_iv_surface(df_long: pl.DataFrame) -> pl.DataFrame:
         for strike, is_call in keys:
             K_int = int(strike)
             suffix = f"_{K_int}_{'C' if is_call else 'P'}"
+            cols = [
+                "ts_ns",
+                pl.col("bid_iv").alias(f"bid_iv{suffix}"),
+                pl.col("ask_iv").alias(f"ask_iv{suffix}"),
+                pl.col("kalman_iv").alias(f"kalman_iv{suffix}"),
+            ]
+            if has_var:
+                cols.append(pl.col("kalman_var").alias(f"kalman_var{suffix}"))
             df_k = (
                 df_long.filter((pl.col("strike") == strike) & (pl.col("is_call") == is_call))
                 .sort("ts_ns")
-                .select(
-                    [
-                        "ts_ns",
-                        pl.col("bid_iv").alias(f"bid_iv{suffix}"),
-                        pl.col("ask_iv").alias(f"ask_iv{suffix}"),
-                        pl.col("kalman_iv").alias(f"kalman_iv{suffix}"),
-                    ]
-                )
+                .select(cols)
             )
             result = result.join_asof(df_k, on="ts_ns", strategy="backward")
     else:
         for strike in sorted(df_long["strike"].unique().to_list()):
             K_int = int(strike)
-            df_k = (
-                df_long.filter(pl.col("strike") == strike)
-                .sort("ts_ns")
-                .select(
-                    [
-                        "ts_ns",
-                        pl.col("bid_iv").alias(f"bid_iv_{K_int}"),
-                        pl.col("ask_iv").alias(f"ask_iv_{K_int}"),
-                        pl.col("kalman_iv").alias(f"kalman_iv_{K_int}"),
-                    ]
-                )
-            )
+            cols = [
+                "ts_ns",
+                pl.col("bid_iv").alias(f"bid_iv_{K_int}"),
+                pl.col("ask_iv").alias(f"ask_iv_{K_int}"),
+                pl.col("kalman_iv").alias(f"kalman_iv_{K_int}"),
+            ]
+            if has_var:
+                cols.append(pl.col("kalman_var").alias(f"kalman_var_{K_int}"))
+            df_k = df_long.filter(pl.col("strike") == strike).sort("ts_ns").select(cols)
             result = result.join_asof(df_k, on="ts_ns", strategy="backward")
 
     if "forward" in df_long.columns:

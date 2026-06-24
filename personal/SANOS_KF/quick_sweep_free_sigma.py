@@ -3,13 +3,13 @@ quick_sweep_free_sigma.py
 
 Fast, focused sweep over the ONE model: the exact tridiagonal SANOS density in
 absolute-strike space (see sanos_kf.py). There is no BS-mixture and no "free σ*"
-state — σ* (cfg.sigma_star_init) is a GIVEN regularizer that, when cfg.smoothing
-is on, blurs each density node into a lognormal of vol σ*. It smooths only the
+state — η (cfg.eta) is a GIVEN smoothness that, when cfg.smoothing is on, blurs
+each density node into a lognormal of variance η·V_ATM. It smooths only the
 OBSERVATION (how market quotes are priced from the density), never the density
 itself, which is always the exact solve. The question this sweep answers:
 
-    does the σ*-smoothed observation (cfg.smoothing=True) beat the intrinsic
-    discrete-call observation (σ*=0, cfg.smoothing=False)?
+    does the η-smoothed observation (cfg.smoothing=True) beat the intrinsic
+    discrete-call observation (η=0, cfg.smoothing=False)?
 
 Both arms are the exact-solve density; they differ only in the observation
 payoff. Reuses sweep_params' worker (_run_one), data loader, and BASE/SIDE so
@@ -46,25 +46,24 @@ import sweep_params as sp  # noqa: E402  (same dir; sys.path set by sweep_params
 
 # --- Focused grids -----------------------------------------------------------
 # Both grids are the exact-solve density; they differ only in the observation
-# (σ*-smoothed vs intrinsic). σ* (sigma_star_init) is a given regularizer, not a
-# fitted state. `ell` is the RBF correlation length in DOLLARS (strike space).
+# (η-smoothed vs intrinsic). η (eta) is a given smoothness, not a fitted state.
+# `ell` is the RBF correlation length in DOLLARS (strike space).
 
-# exact_smoothed: smoothing on (σ* > 0). Sweep the two knobs that decide fit
-# quality (RBF length `ell` and DLV process noise) with a light σ* exploration.
+# exact_smoothed: smoothing on (η > 0). Sweep the two knobs that decide fit
+# quality (RBF length `ell` and DLV process noise) with a light η exploration.
 EXACT_SMOOTHED = dict(
     smoothing=True,
-    Sigma_init=[0.04],
-    P0_scale=[0.1],
-    ell=[1.0, 5.0],  # DOLLARS — the key dim
-    Q_scale_dlv=[0.1, 1.0],
-    sigma_star_init=[1e-4, 0.001, 0.01, 0.05, 0.1],
+    Sigma_init=[0.01, 0.04],
+    P0_scale=[0.1, 1.0],
+    ell=[5.0],  # DOLLARS — the key dim
+    Q_scale_dlv=[1e-5, 1e-4, 0.001, 0.01],
+    eta=[0.001, 0.01, 0.06, 0.25, 0.5],
 )
 
-# exact_intrinsic baseline: smoothing off (σ* = 0, intrinsic discrete calls).
+# exact_intrinsic baseline: smoothing off (η = 0, intrinsic discrete calls).
 # A few points for the comparison line on the same date/side.
 EXACT_INTRINSIC = dict(
     smoothing=False,
-    sigma_star_init=[0.0],
     Sigma_init=[0.04],
     P0_scale=[0.1],
     Q_scale_dlv=[0.3, 1.0],
@@ -121,7 +120,7 @@ def main() -> None:
         "Q_scale_dlv",
         "P0_scale",
         "ell",
-        "sigma_star_init",
+        "eta",
         "ok",
         "err",
         "secs",
@@ -174,7 +173,7 @@ def main() -> None:
             "mode",
             "ell",
             "Q_scale_dlv",
-            "sigma_star_init",
+            "eta",
             "ho_nse_med",
             "ho_nse_mean",
             "is_nse_med",

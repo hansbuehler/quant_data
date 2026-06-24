@@ -698,7 +698,11 @@ def iv_surface_from_frames(
                 ic_sc,
             )
 
-            extra_cols = [c for c in ["forward", "discount_factor"] if c in df_iv_quotes_r.columns]
+            extra_cols = [
+                c
+                for c in ["kalman_var", "forward", "discount_factor"]
+                if c in df_iv_quotes_r.columns
+            ]
             quote_result_frames.append(
                 df_iv_quotes_r.select(["ts_ns"] + iv_cols + ["bid_price", "ask_price"] + extra_cols)
                 .with_columns(
@@ -710,7 +714,7 @@ def iv_surface_from_frames(
                         for c in iv_cols
                     ]
                 )
-                .with_columns(pl.Series("kalman_price", kalman_prices_q.tolist()))
+                .with_columns(pl.Series("kalman_price", kalman_prices_q.tolist(), dtype=pl.Float64))
                 .with_columns(meta_cols)
             )
 
@@ -744,7 +748,7 @@ def iv_surface_from_frames(
                     .otherwise(pl.col("observed_iv"))
                     .alias("observed_iv")
                 )
-                .with_columns(pl.Series("kalman_price", kalman_prices_t.tolist()))
+                .with_columns(pl.Series("kalman_price", kalman_prices_t.tolist(), dtype=pl.Float64))
                 .with_columns(meta_cols)
             )
 

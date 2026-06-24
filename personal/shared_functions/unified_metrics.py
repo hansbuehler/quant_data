@@ -217,6 +217,10 @@ def evaluate(
     RMS over that snapshot's strikes), then averaged across snapshots — reported
     as both the mean and the median over snapshots.
 
+    ``*_out_pct`` is the percentage of strikes priced outside the bid-ask band
+    (``|model - mid| > half_spread``), computed per snapshot then averaged /
+    medianed across snapshots — same prior/post (held-out/in-sample) split.
+
     Negative mass (signed, <= 0; 0 = arbitrage-free):
       * default — computed per snapshot via Breeden-Litzenberger on the
         *posterior* call-price curve (needs multi-strike snapshots, e.g. SANOS EKF).
@@ -237,6 +241,7 @@ def evaluate(
         neg_mass = []
 
     ho_nse, is_nse, ho_rmse, is_rmse = [], [], [], []
+    ho_out, is_out = [], []
 
     for _, g in df.groupby(ts_col, sort=True):
         mid = g[mid_col].to_numpy(float)
@@ -249,9 +254,11 @@ def evaluate(
         if m_prior.any():
             ho_nse.append(np.mean(np.abs(prior[m_prior] - mid[m_prior]) / hsg[m_prior]))
             ho_rmse.append(np.sqrt(np.mean((prior[m_prior] - mid[m_prior]) ** 2)))
+            ho_out.append(np.mean(np.abs(prior[m_prior] - mid[m_prior]) > hsg[m_prior]))
         if m_post.any():
             is_nse.append(np.mean(np.abs(post[m_post] - mid[m_post]) / hsg[m_post]))
             is_rmse.append(np.sqrt(np.mean((post[m_post] - mid[m_post]) ** 2)))
+            is_out.append(np.mean(np.abs(post[m_post] - mid[m_post]) > hsg[m_post]))
 
         if neg_mass_values is None:
             fwd = float(g[forward_col].iloc[0])
@@ -269,6 +276,9 @@ def evaluate(
     is_nse_mean, is_nse_med, is_nse_std = _agg(is_nse)
     ho_rmse_mean, ho_rmse_med, ho_rmse_std = _agg(ho_rmse)
     is_rmse_mean, is_rmse_med, is_rmse_std = _agg(is_rmse)
+    # Fraction of strikes priced outside the bid-ask band, in percent.
+    ho_out_mean, ho_out_med, _ = _agg(np.asarray(ho_out) * 100.0)
+    is_out_mean, is_out_med, _ = _agg(np.asarray(is_out) * 100.0)
     nm_mean, nm_med, _ = _agg(neg_mass)
     arb_frac = float(np.mean(np.asarray(neg_mass) < arb_tol)) if neg_mass else np.nan
 
@@ -286,6 +296,10 @@ def evaluate(
         "is_rmse_mean": is_rmse_mean,
         "is_rmse_med": is_rmse_med,
         "is_rmse_std": is_rmse_std,
+        "ho_out_pct_mean": ho_out_mean,
+        "ho_out_pct_med": ho_out_med,
+        "is_out_pct_mean": is_out_mean,
+        "is_out_pct_med": is_out_med,
         "neg_mass_mean": nm_mean,
         "neg_mass_med": nm_med,
         "arb_frac": arb_frac,
@@ -360,6 +374,10 @@ def comparison_table(metric_dicts: list[dict]) -> pd.DataFrame:
         "is_rmse_mean",
         "is_rmse_med",
         "is_rmse_std",
+        "ho_out_pct_mean",
+        "ho_out_pct_med",
+        "is_out_pct_mean",
+        "is_out_pct_med",
         "neg_mass_mean",
         "neg_mass_med",
         "arb_frac",

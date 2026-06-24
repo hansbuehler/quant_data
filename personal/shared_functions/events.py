@@ -123,8 +123,26 @@ def match_trade_to_closest_quote(
 
 # ── 1. PROCESS QUOTES ───────────────────────────────────────────────────────
 def process_quotes(
-    df_quotes: pl.DataFrame, one_sided_R_multiplier=ONE_SIDED_R_MULTIPLIER
+    df_quotes: pl.DataFrame,
+    one_sided_R_multiplier=ONE_SIDED_R_MULTIPLIER,
+    price_type: str = "mid",
 ) -> pl.DataFrame:
+    """
+    price_type : "mid"   -> observed_price = (bid + ask) / 2  (default)
+                 "micro" -> observed_price = size-weighted microprice
+                            (ask_size * bid + bid_size * ask) / (ask_size + bid_size)
+    One-sided quotes always fall back to the single available side.
+    """
+    if price_type not in ("mid", "micro"):
+        raise ValueError(f"price_type must be 'mid' or 'micro', got {price_type!r}")
+
+    if price_type == "micro":
+        two_sided_price = (
+            pl.col("ask_size") * pl.col("bid_price") + pl.col("bid_size") * pl.col("ask_price")
+        ) / (pl.col("ask_size") + pl.col("bid_size"))
+    else:  # "mid"
+        two_sided_price = (pl.col("bid_price") + pl.col("ask_price")) / 2
+
     df = (
         df_quotes.with_columns(
             [
@@ -160,13 +178,7 @@ def process_quotes(
         .with_columns(
             [
                 pl.when(pl.col("quote_side") == "two_sided")
-                .then(
-                    (
-                        pl.col("ask_size") * pl.col("bid_price")
-                        + pl.col("bid_size") * pl.col("ask_price")
-                    )
-                    / (pl.col("ask_size") + pl.col("bid_size"))
-                )
+                .then(two_sided_price)
                 .when(pl.col("quote_side") == "bid_only")
                 .then(pl.col("bid_price"))
                 .otherwise(pl.col("ask_price"))
@@ -257,8 +269,10 @@ def process_trades(
 
 
 # ── 3. MERGE INTO EVENT STREAM ───────────────────────────────────────────────
-def build_event_stream(df_quotes: pl.DataFrame, df_trades: pl.DataFrame) -> pl.DataFrame:
-    df_q = process_quotes(df_quotes)
+def build_event_stream(
+    df_quotes: pl.DataFrame, df_trades: pl.DataFrame, price_type: str = "mid"
+) -> pl.DataFrame:
+    df_q = process_quotes(df_quotes, price_type=price_type)
     df_t = process_trades(df_trades, df_quotes)  # pass raw quotes, not processed
 
     df_events = (

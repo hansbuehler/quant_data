@@ -43,10 +43,10 @@ def run_ekf(prices, Rs):
         z = jnp.array([price], dtype=jnp.float32)
         R = jnp.array([[R_scalar]], dtype=jnp.float32)
         x_new, P_new = ekf_step(x, P, z, R, Q)
-        return (x_new, P_new), x_new[0]
+        return (x_new, P_new), (x_new[0], P_new[0, 0])
 
-    (_, _), estimates = jax.lax.scan(scan_step, (x0, P0), (prices, Rs))
-    return estimates
+    (_, _), (estimates, variances) = jax.lax.scan(scan_step, (x0, P0), (prices, Rs))
+    return estimates, variances
 
 
 def run_ekf_batched(
@@ -69,14 +69,15 @@ def run_ekf_batched(
         x_new = x + P_pred/(1+P_pred·w) · Σ(zᵢ-x)/Rᵢ
         P_new = P_pred / (1 + P_pred·w)
 
-    Returns the posterior kalman_iv for each input row (all quotes in the same
-    window receive the same posterior state).
+    Returns (kalman_iv, variance) for each input row (all quotes in the same
+    window receive the same posterior state and posterior variance P).
     """
     n = len(ivs)
     if n == 0:
-        return np.empty(0)
+        return np.empty(0), np.empty(0)
 
     result = np.empty(n)
+    var = np.empty(n)
     finite = np.isfinite(ivs)
     x = float(np.mean(ivs[finite][:10]) if finite.any() else 0.2)
     P = 1.0
@@ -110,14 +111,15 @@ def run_ekf_batched(
             P = P_pred
 
         result[mask] = x
+        var[mask] = P
 
-    return result
+    return result, var
 
 
 def estimate_true_price(df_events: pl.DataFrame) -> pl.DataFrame:
     prices = jnp.array(df_events["observed_price"].to_numpy(), dtype=jnp.float32)
     Rs = jnp.array(df_events["R"].to_numpy(), dtype=jnp.float32)
-    estimates = run_ekf(prices, Rs)
+    estimates, _ = run_ekf(prices, Rs)
     return df_events.with_columns(
         pl.Series(name="kalman_price", values=jax.device_get(estimates).tolist())
     )
@@ -126,7 +128,7 @@ def estimate_true_price(df_events: pl.DataFrame) -> pl.DataFrame:
 def estimate_true_iv(df_events: pl.DataFrame) -> pl.DataFrame:
     prices = jnp.array(df_events["observed_iv"].to_numpy(), dtype=jnp.float32)
     Rs = jnp.array(df_events["R_iv"].to_numpy(), dtype=jnp.float32)
-    estimates = run_ekf(prices, Rs)
+    estimates, _ = run_ekf(prices, Rs)
     return df_events.with_columns(
         pl.Series(name="kalman_iv", values=jax.device_get(estimates).tolist())
     )
@@ -137,7 +139,7 @@ def kalman_filters_price_from_events(df_events):
 
     prices_train = jnp.array(df_quotes_only["observed_price"].to_numpy(), dtype=jnp.float32)
     Rs_train = jnp.array(df_quotes_only["R"].to_numpy(), dtype=jnp.float32)
-    estimates_train = run_ekf(prices_train, Rs_train)
+    estimates_train, _ = run_ekf(prices_train, Rs_train)
 
     df_quotes_result = df_quotes_only.with_columns(
         pl.Series("kalman_price", jax.device_get(estimates_train).tolist())
@@ -162,7 +164,7 @@ def kalman_filters_iv_from_events(df_events):
 
     prices_train = jnp.array(df_valid["observed_iv"].to_numpy(), dtype=jnp.float32)
     Rs_train = jnp.array(df_valid["R_iv"].to_numpy(), dtype=jnp.float32)
-    estimates_train = run_ekf(prices_train, Rs_train)
+    estimates_train, _ = run_ekf(prices_train, Rs_train)
 
     df_valid = df_valid.with_columns(
         pl.Series("kalman_iv", jax.device_get(estimates_train).tolist())
@@ -221,7 +223,7 @@ def kalman_filters_price(
 
     prices_train = jnp.array(df_q["observed_price"].to_numpy(), dtype=jnp.float32)
     Rs_train = jnp.array(df_q["R"].to_numpy(), dtype=jnp.float32)
-    estimates = run_ekf(prices_train, Rs_train)
+    estimates, _ = run_ekf(prices_train, Rs_train)
 
     df_quotes_result = df_q.with_columns(
         pl.Series("kalman_price", jax.device_get(estimates).tolist())
@@ -280,24 +282,36 @@ def kalman_filters_iv(
 
     if batch_ns is not None:
         df_valid = df_valid.sort("ts_ns")
-        estimates = run_ekf_batched(
+        estimates, variances = run_ekf_batched(
             df_valid["observed_iv"].to_numpy().astype(float),
             df_valid["R_iv"].to_numpy().astype(float),
             df_valid["ts_ns"].cast(pl.Int64).to_numpy(),
             batch_ns=int(batch_ns),
             q_scale=q_scale,
         )
-        df_valid = df_valid.with_columns(pl.Series("kalman_iv", estimates.tolist()))
+        df_valid = df_valid.with_columns(
+            pl.Series("kalman_iv", estimates.tolist()),
+            pl.Series("kalman_var", variances.tolist()),
+        )
     else:
         prices_train = jnp.array(df_valid["observed_iv"].to_numpy(), dtype=jnp.float32)
         Rs_train = jnp.array(df_valid["R_iv"].to_numpy(), dtype=jnp.float32)
-        estimates = run_ekf(prices_train, Rs_train)
-        df_valid = df_valid.with_columns(pl.Series("kalman_iv", jax.device_get(estimates).tolist()))
+        estimates, variances = run_ekf(prices_train, Rs_train)
+        df_valid = df_valid.with_columns(
+            pl.Series("kalman_iv", jax.device_get(estimates).tolist()),
+            pl.Series("kalman_var", jax.device_get(variances).tolist()),
+        )
 
     # Forward-fill over gaps where IV/R was NaN so every quote row has a kalman_iv
     df_iv_quotes_result = df_quotes_with_iv.join(
-        df_valid.select(["ts_ns", "kalman_iv"]), on="ts_ns", how="left"
-    ).with_columns(pl.col("kalman_iv").fill_null(strategy="forward"))
+        df_valid.select(["ts_ns", "kalman_iv", "kalman_var"]), on="ts_ns", how="left"
+    ).with_columns(
+        # cast guards the all-null case (option with no valid IV quotes): the
+        # joined columns would otherwise be Null-dtyped and break pl.concat in
+        # iv_surface_from_frames against the Float64 columns of other options.
+        pl.col("kalman_iv").fill_null(strategy="forward").cast(pl.Float64),
+        pl.col("kalman_var").fill_null(strategy="forward").cast(pl.Float64),
+    )
 
     # For each trade, look up the Kalman IV at its matched quote's timestamp
     df_iv_trades_result = (
