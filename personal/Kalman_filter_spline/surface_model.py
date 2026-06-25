@@ -13,6 +13,9 @@ Available models (swap in the notebook config cell):
   QUAD_SLICE_MODEL   — 3 params, a + b·k + c·k²                       (linear KF, single expiry)
   SVI_SLICE_MODEL    — 5 params, w=a+b·[ρ(k−m)+√((k−m)²+σ²)], IV=√(w/T)  (EKF, single expiry)
   SVI_MODEL          — 5 params, same formula, shared state across T   (EKF, multiple maturities)
+  SSVI_SLICE_MODEL   — 3 params, w=(ϑ/2)·[1+ρζk+√((ζk+ρ)²+(1−ρ²))]      (EKF, single expiry)
+                       SSVI collapsed to one maturity; project() enforces the
+                       closed-form butterfly-free region ϑζ(1+|ρ|)<4, ϑζ²(1+|ρ|)≤4
   TANH_MODEL         — 3 params, a·√T·(1+tanh(b·k+c·k²))              (EKF, multiple maturities)
   BSPLINE_SLICE_MODEL— 8 params, cubic B-splines on fixed k grid       (linear KF, single expiry)
                        default knots: log-moneyness ∈ [−0.30, +0.15]
@@ -184,6 +187,104 @@ SVI_MODEL = Model(
     initial_theta=_initial_theta_svi,
     q_diag_weights=np.array([1.0, 0.2, 0.1, 0.02, 0.02]),
     project=_project_svi,
+)
+
+
+# ---------------------------------------------------------------------------
+# Model 2b — SSVI slice  (3 params, surface-SVI collapsed to one maturity)
+# w(k) = (ϑ/2)·[1 + ρ·ζ·k + √((ζ·k+ρ)² + (1−ρ²))]   (total variance)
+# IV(k) = √(w(k) / T)
+# θ = [ϑ, ρ, ζ]   with ϑ = ATM total variance (w(0)=ϑ), ρ = skew sign, ζ = slope.
+#
+# In the SSVI surface (Gatheral–Jacquier 1204.0646, Def 4.1) the third ingredient
+# φ is a FUNCTION of ATM variance, φ(θ_t). For ONE maturity θ_t is fixed, so
+# φ(θ_t) collapses to a single scalar ζ — there is no function to choose, and we
+# estimate ζ as a free parameter (= natural SVI 3.2 with Δ=μ=0). The function
+# form of φ only matters in a multi-maturity surface model (not this one).
+#
+# Constrained sub-family of raw SVI (3 dof vs 5): less flexible, but butterfly-
+# arbitrage-freeness is a CLOSED-FORM region in the parameters, so project() can
+# enforce it exactly at every KF step (unlike SVI, whose no-arb condition g(k)≥0
+# is pointwise and only checkable a posteriori). Single expiry only.
+# ---------------------------------------------------------------------------
+
+
+def _observe_ssvi_slice(theta: np.ndarray, k: float, T: float) -> tuple[float, np.ndarray]:
+    """
+    SSVI single slice (Gatheral–Jacquier total-variance form, one maturity):
+        s(k) = √((ζ·k + ρ)² + (1 − ρ²))
+        w(k) = (ϑ/2)·[1 + ρ·ζ·k + s(k)]        (total variance)
+        IV(k) = √(w(k) / T)
+
+    θ = [ϑ, ρ, ζ]   (ζ is the scalar value φ(θ_t) takes at this maturity)
+    ATM (k=0): s=1, w = ϑ  ⇒  ϑ is exactly the ATM total variance.
+
+    Returns (nan, zeros) when w ≤ 0 so the KF skips the update rather than
+    taking a sqrt of a negative number.
+    """
+    vth, rho, zeta = float(theta[0]), float(theta[1]), float(theta[2])
+    vth = max(vth, 1e-12)
+    T_safe = max(float(T), 1e-6)
+
+    u = zeta * k
+    s = np.sqrt((u + rho) ** 2 + (1.0 - rho**2))
+    w = 0.5 * vth * (1.0 + rho * u + s)  # total variance
+
+    if w <= 0:
+        return float("nan"), np.zeros(3)
+
+    z_hat = np.sqrt(w / T_safe)  # IV
+
+    # ∂IV/∂θ = (1 / (2·√(w·T))) · ∂w/∂θ
+    scale = 1.0 / (2.0 * np.sqrt(w * T_safe))
+    dw_dvth = w / vth  # ∂w/∂ϑ = w/ϑ
+    dw_drho = 0.5 * vth * u * (1.0 + 1.0 / s)  # ∂w/∂ρ
+    dw_dzeta = 0.5 * vth * k * (rho + (u + rho) / s)  # ∂w/∂ζ
+    H = scale * np.array([dw_dvth, dw_drho, dw_dzeta])
+    return z_hat, H
+
+
+def _project_ssvi(theta: np.ndarray) -> np.ndarray:
+    """Project θ = [ϑ, ρ, ζ] onto the valid, butterfly-arbitrage-free SSVI domain.
+
+    Box: ϑ > 0, ζ > 0, ρ ∈ [−0.999, 0.999].
+    Butterfly-free (Gatheral–Jacquier Thm 4.2), a closed-form region in the
+    parameters themselves:
+        ϑ·ζ·(1+|ρ|) < 4    and    ϑ·ζ²·(1+|ρ|) ≤ 4.
+    With (ϑ, ρ) fixed these are upper bounds on ζ; clamp ζ to the binding one.
+    (The ratio of the two bounds is ζ, so cond. 1 binds for ζ<1, cond. 2 for ζ>1.)
+    Unlike SVI's pointwise g(k)≥0 (see _project_svi), this guarantee is enforceable
+    in-state — the whole reason to prefer SSVI inside the filter.
+    """
+    vth, rho, zeta = float(theta[0]), float(theta[1]), float(theta[2])
+    vth = max(vth, 1e-12)
+    rho = min(max(rho, -0.999), 0.999)
+    zeta = max(zeta, 1e-6)
+
+    margin = 1.0 - 1e-6  # keep the strict inequality strict
+    c = vth * (1.0 + abs(rho))
+    zeta_max1 = 4.0 * margin / c  # from ϑζ(1+|ρ|) < 4
+    zeta_max2 = np.sqrt(4.0 * margin / c)  # from ϑζ²(1+|ρ|) ≤ 4
+    zeta = min(zeta, zeta_max1, zeta_max2)
+    return np.array([vth, rho, zeta])
+
+
+def _initial_theta_ssvi_slice(cfg: "SurfaceModelConfig") -> np.ndarray:
+    """ϑ=1.5e-4, ρ=−0.7, ζ=10  (matches SVI_SLICE_MODEL's ATM total variance).
+    ATM w = ϑ = 1.5e-4; for T=0.008 (2-day SPY): ATM IV = √(1.5e-4/0.008) ≈ 0.137.
+    ζ only sets the initial slope (ATM vol skew = ρζ√ϑ/(2√T) ≈ −0.48 here); the
+    filter estimates it. Butterfly: ϑζ²(1+|ρ|) = 1.5e-4·100·1.7 ≈ 0.026 ≪ 4."""
+    return np.array([1.5e-4, -0.7, 10.0])
+
+
+SSVI_SLICE_MODEL = Model(
+    name="ssvi_slice",
+    n_params=3,
+    observe=_observe_ssvi_slice,
+    initial_theta=_initial_theta_ssvi_slice,
+    # level (ϑ) moves with spot; ρ moderate; ζ near-static shape
+    q_diag_weights=np.array([1.0, 0.1, 0.05]),
+    project=_project_ssvi,
 )
 
 
