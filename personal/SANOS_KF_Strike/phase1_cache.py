@@ -37,7 +37,7 @@ from quantdata.massive.client import MassiveClient
 TICKER = "SPY"
 TRADE_DATE = date(2024, 1, 3)
 BATCH_FREQ = "1s"
-MIN_TRADES = 100
+MIN_TRADES = 0  # 0 = pre-committed universe; >0 selects on same-day trades (look-ahead)
 
 LOWER_SCALE = 0.9
 UPPER_SCALE = 1.1

@@ -123,7 +123,15 @@ class SanosKFConfig:
     # True ⇒ price each density node as a lognormal of variance η·V_ATM (paper production
     # model); False ⇒ η forced to 0 ⇒ intrinsic discrete calls (the original exact-solve).
     smoothing: bool = True
-    dlv_min: float = 0.001  # DLV floor (v = x + dlv_min²) so ∂d/∂x doesn't vanish
+    # DLV² is a sigmoid map of the (unconstrained) state x:
+    #   DLV² = sigmoid(x)·(max_dlvsq − min_dlvsq) + min_dlvsq  ∈ (min_dlvsq, max_dlvsq).
+    # This bounds the variance away from 0 (so ∂d/∂x never vanishes) and from above,
+    # WITHOUT any state clipping (x ranges over all of ℝ).
+    min_dlvsq: float = 1e-6  # lower DLV² bound (≈ old dlv_min² floor)
+    max_dlvsq: float = 4.0  # upper DLV² bound
+    # use_sigmoid=False reverts to the legacy parametrization (v = x + min_dlvsq, state
+    # x = net DLV² clipped ≥ 0, max_dlvsq ignored) — kept so the sigmoid can be A/B'd.
+    use_sigmoid: bool = True
     # exact-solve only: if a batch update yields a density with negative mass beyond
     # this fraction, REJECT the update and carry the previous (valid) state forward —
     # "propagate the old fit". This keeps the state always arbitrage-free and lets us
@@ -166,12 +174,26 @@ def _rbf(nodes: np.ndarray, ell: float, correlated: bool) -> np.ndarray:
 # its `sqrtVar` smoothing on top of the fitted density.
 
 
-def _exact_dens_ddx(x, kappa, box, pay_full, dlv_min, N, fwd=1.0):
+def _exact_dens_ddx(x, kappa, box, pay_full, min_dlvsq, max_dlvsq, N, fwd=1.0, use_sigmoid=True):
     """Solve A(x) d = b for the density d and return (d, ∂d/∂x).
 
-    ∂d/∂x_s = box[s+1]·d[s+1]·A⁻¹[:, s+2] (single-entry ∂A/∂x). Returns
-    (None, None) if the linear system is singular."""
-    v = np.asarray(x, float) + dlv_min**2
+    The DLV² fed into the operator is a map of the state x, selected by `use_sigmoid`:
+      use_sigmoid=True  (default): v = σ(x)·(max_dlvsq − min_dlvsq) + min_dlvsq,
+        σ(x)=1/(1+e^−x), so v ∈ (min_dlvsq, max_dlvsq) for any x ∈ ℝ — no clipping.
+        Jacobian carries ∂v/∂x = σ(x)(1−σ(x))·(max_dlvsq − min_dlvsq).
+      use_sigmoid=False (legacy): v = x + min_dlvsq (x is the net DLV², clipped ≥0 by
+        the caller), ∂v/∂x = 1. Recovers the pre-sigmoid parametrization for A/B compare.
+    Then ∂d/∂x_s = box[s+1]·d[s+1]·A⁻¹[:, s+2]·(∂v/∂x_s).
+    Returns (None, None) if the linear system is singular."""
+    x = np.asarray(x, float)
+    if use_sigmoid:
+        span = max_dlvsq - min_dlvsq
+        sig = 1.0 / (1.0 + np.exp(-x))
+        v = sig * span + min_dlvsq
+        dv_dx = sig * (1.0 - sig) * span
+    else:
+        v = x + min_dlvsq
+        dv_dx = np.ones_like(x)
     A = np.zeros((N, N))
     b = np.zeros(N)
     A[0] = 1.0
@@ -186,7 +208,8 @@ def _exact_dens_ddx(x, kappa, box, pay_full, dlv_min, N, fwd=1.0):
     except np.linalg.LinAlgError:
         return None, None
     d = Ainv @ b
-    dd_dx = Ainv[:, 2:N] * (box[1 : N - 1] * d[1 : N - 1])[np.newaxis, :]
+    dd_dv = Ainv[:, 2:N] * (box[1 : N - 1] * d[1 : N - 1])[np.newaxis, :]
+    dd_dx = dd_dv * dv_dx[np.newaxis, :]
     return d, dd_dx
 
 
@@ -277,7 +300,9 @@ def _estimate_atm_var(df_quotes, tte_ref, n_atm_strikes: int = 8) -> float:
     return sigma_atm**2 * tte_ref
 
 
-def exact_solve_density(x_state, grid_K, tte_ref, dlv_min=0.001, fwd=None):
+def exact_solve_density(
+    x_state, grid_K, tte_ref, min_dlvsq=1e-6, max_dlvsq=4.0, fwd=None, use_sigmoid=True
+):
     """Reconstruct the risk-neutral density on the ABSOLUTE strike grid from a
     net-DLV² state (exact-solve mode), for diagnostics / negative-mass scoring.
 
@@ -294,11 +319,33 @@ def exact_solve_density(x_state, grid_K, tte_ref, dlv_min=0.001, fwd=None):
     box[0] = 0.0
     box[-1] = 0.0
     pay_full = np.maximum(grid_K[np.newaxis, :] - grid_K[:, np.newaxis], 0.0)
-    d, _ = _exact_dens_ddx(np.asarray(x_state, float), grid_K, box, pay_full, dlv_min, N, fwd=fwd)
+    d, _ = _exact_dens_ddx(
+        np.asarray(x_state, float),
+        grid_K,
+        box,
+        pay_full,
+        min_dlvsq,
+        max_dlvsq,
+        N,
+        fwd=fwd,
+        use_sigmoid=use_sigmoid,
+    )
     return d
 
 
-def _make_exact_fns(grid_K, box, pay_full, dlv_min, kernel_var=0.0):
+def state_to_dlvsq(x, cfg):
+    """Map the filter state x to the net DLV² it represents, per cfg.use_sigmoid.
+
+    sigmoid: DLV² = σ(x)·(max_dlvsq − min_dlvsq) + min_dlvsq; legacy: DLV² = x + min_dlvsq.
+    Use this to put sigmoid (logit) and legacy (raw DLV²) state histories on the SAME axis
+    when comparing parametrizations."""
+    x = np.asarray(x, float)
+    if cfg.use_sigmoid:
+        return 1.0 / (1.0 + np.exp(-x)) * (cfg.max_dlvsq - cfg.min_dlvsq) + cfg.min_dlvsq
+    return x + cfg.min_dlvsq
+
+
+def _make_exact_fns(grid_K, box, pay_full, min_dlvsq, max_dlvsq, kernel_var=0.0, use_sigmoid=True):
     """Build (obs_scalar, jac_scalar, obs_vec, jac_vec, dens_fn) closures for the
     exact tridiagonal SANOS density. The density `d(x)` is always the exact solve
     (re-centered Σd·K = live fwd each window); `kernel_var` only changes how the
@@ -335,7 +382,17 @@ def _make_exact_fns(grid_K, box, pay_full, dlv_min, kernel_var=0.0):
             return np.maximum(gk_row - K_col, 0.0)
 
     def _dd(xx, fwd):
-        return _exact_dens_ddx(np.asarray(xx), grid_K, box, pay_full, dlv_min, N, fwd=fwd)
+        return _exact_dens_ddx(
+            np.asarray(xx),
+            grid_K,
+            box,
+            pay_full,
+            min_dlvsq,
+            max_dlvsq,
+            N,
+            fwd=fwd,
+            use_sigmoid=use_sigmoid,
+        )
 
     def obs_scalar(xx, K, fwd):
         d, _ = _dd(xx, fwd)
@@ -410,6 +467,7 @@ def run_sanos_kf(
     cfg: SanosKFConfig,
     return_state: bool = False,
     anchor_ks: np.ndarray | None = None,
+    x_init: np.ndarray | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame] | tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
     """
     Online SANOS EKF on a single expiry.
@@ -424,6 +482,11 @@ def run_sanos_kf(
                 Also needs observed_iv.
     cfg       : SanosKFConfig
     anchor_ks : deprecated / ignored (anchors are the data's strike grid).
+    x_init    : optional initial state (length N-2, RAW state units — logit if
+                cfg.use_sigmoid else net DLV²) overriding the flat Sigma_init init.
+                Use it to warm-start from a previous day's end-of-day posterior state;
+                must match the strike grid (same data + n_anchors/k_min/k_max ⇒ same N).
+                P still resets to P0 (only the state mean is carried).
 
     Returns
     -------
@@ -450,13 +513,33 @@ def run_sanos_kf(
     box[-1] = 0.0
     pay_full = np.maximum(grid_K[np.newaxis, :] - grid_K[:, np.newaxis], 0.0)  # (N,N) intrinsic
     obs_scalar, jac_scalar, obs_vec, jac_vec, dens_fn = _make_exact_fns(
-        grid_K, box, pay_full, cfg.dlv_min, kernel_var=kernel_var
+        grid_K,
+        box,
+        pay_full,
+        cfg.min_dlvsq,
+        cfg.max_dlvsq,
+        kernel_var=kernel_var,
+        use_sigmoid=cfg.use_sigmoid,
     )
-    x = np.full(len(grid_K) - 2, cfg.Sigma_init)  # flat net DLV² over interior nodes
+    if cfg.use_sigmoid:
+        # State x is the unconstrained sigmoid logit; invert Sigma_init (target DLV²) to it.
+        span = cfg.max_dlvsq - cfg.min_dlvsq
+        s0 = np.clip((cfg.Sigma_init - cfg.min_dlvsq) / span, 1e-6, 1.0 - 1e-6)
+        x0 = float(np.log(s0 / (1.0 - s0)))
+    else:
+        x0 = float(cfg.Sigma_init)  # legacy: x IS the net DLV²
+    x = np.full(len(grid_K) - 2, x0)  # flat init over interior nodes
+    if x_init is not None:  # warm-start: carry a previous posterior state mean
+        x_init = np.asarray(x_init, float)
+        if x_init.shape != x.shape:
+            raise ValueError(f"x_init shape {x_init.shape} != state shape {x.shape}")
+        x = x_init.copy()
     var_diag = np.full(len(grid_K) - 2, cfg.Q_scale_dlv)
     C_full = _rbf(grid_K[1:-1], cfg.ell, cfg.correlated)  # ell in DOLLARS
 
-    clip_nonneg = True  # net DLV² state must stay ≥ 0
+    # Sigmoid keeps DLV² ∈ (min_dlvsq, max_dlvsq) for any x ∈ ℝ ⇒ no clipping. Legacy
+    # parametrization (x = net DLV²) must still clip x ≥ 0.
+    clip_nonneg = not cfg.use_sigmoid
     reject_tol = cfg.reject_neg_mass  # density-arbitrage reject guard (dens_fn always set)
     n_state = len(x)
 
@@ -559,7 +642,7 @@ def run_sanos_kf(
             x_hist[idx] = x_prior
             continue
         x_cand = x_prior + K_gain @ innov
-        if clip_nonneg:  # net DLV² state must stay ≥ 0
+        if clip_nonneg:  # legacy: net DLV² state must stay ≥ 0
             x_cand = np.maximum(x_cand, 0.0)
 
         # Reject-update guard: if the candidate posterior implies a density with

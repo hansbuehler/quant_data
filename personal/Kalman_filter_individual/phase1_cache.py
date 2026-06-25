@@ -38,7 +38,7 @@ from quantdata.massive.client import MassiveClient
 # ── Phase 1 config ──────────────────────────────────────────────────────────
 TICKER = "SPY"
 TRADE_DATE = date(2024, 1, 3)
-MIN_TRADES = 100
+MIN_TRADES = 0  # 0 = pre-committed universe; >0 selects on same-day trades (look-ahead)
 SIMPLE = False  # estimate the implied forward via put-call parity (notebook default)
 DISCOUNT_FACTOR_CLIP = None  # matches sanos_dlv_intraday / notebook (no clip)
 

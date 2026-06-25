@@ -80,13 +80,19 @@ BASE: dict = dict(
     batch_seconds=1.0,  # Gap 3: 1-second batched updates
 )
 
-# Shared dims swept across ALL modes (absolute-strike space): ell in DOLLARS, Sigma/Q/P0
-# on the net-DLV² scale.
+# Shared dims swept across ALL modes (absolute-strike space). The state x is now the
+# UNCONSTRAINED sigmoid logit (DLV² = σ(x)·(max_dlvsq−min_dlvsq)+min_dlvsq), so:
+#   - Sigma_init : still a TARGET DLV² (logit-inverted internally for the flat init);
+#   - Q_scale_dlv, P0_scale : process noise / initial covariance on the LOGIT scale
+#     (NOT DLV² units anymore) — a unit logit step moves DLV² by up to 0.25·span;
+#   - max_dlvsq : the sigmoid ceiling (DLV² upper bound); min_dlvsq stays at its tiny floor.
+#   - ell : RBF correlation length in DOLLARS (absolute strike distance).
 GRID: dict = dict(
-    Sigma_init=[0.01, 0.04, 0.1],
-    Q_scale_dlv=[0.1, 0.3, 1.0, 3.0],
-    P0_scale=[1e-2, 1e-1, 1.0],
-    ell=[1.0, 3.0, 8.0],  # DOLLARS (absolute strike distance)
+    Sigma_init=[0.01, 0.1],
+    Q_scale_dlv=[0.1, 1.0],
+    P0_scale=[1e-2, 1.0],
+    max_dlvsq=[1.0, 10.0],  # sigmoid ceiling: DLV² ceilings for vol≈1, 2, 3
+    ell=[1.0, 5.0],  # DOLLARS (absolute strike distance)
 )
 
 # mode name -> (fixed overrides for the mode, mode-specific swept dims).
@@ -100,7 +106,7 @@ MODES: dict = {
     ),
     "smoothed": (
         dict(smoothing=True),
-        dict(eta=[0.06, 0.25, 0.5]),
+        dict(eta=[0.06, 0.5]),
     ),
 }
 
@@ -196,7 +202,15 @@ def _run_one(params: dict) -> dict:
         xcols = [c for c in stp.columns if c.startswith("x_")]
         negs = []
         for xrow in stp[xcols].to_numpy(float):
-            d = exact_solve_density(xrow, grid_K, tte_ref, cfg.dlv_min, fwd=F0)
+            d = exact_solve_density(
+                xrow,
+                grid_K,
+                tte_ref,
+                cfg.min_dlvsq,
+                cfg.max_dlvsq,
+                fwd=F0,
+                use_sigmoid=cfg.use_sigmoid,
+            )
             negs.append(np.nan if d is None else float(np.minimum(d, 0.0).sum()))
         neg_vals = np.array(negs)
 
@@ -241,6 +255,7 @@ SIG_KEYS = (
     "Sigma_init",
     "Q_scale_dlv",
     "P0_scale",
+    "max_dlvsq",
     "ell",
     "eta",
 )
@@ -283,7 +298,12 @@ def main() -> None:
     )
     ap.add_argument("--ticker", default="SPY")
     ap.add_argument("--date", default="2024-01-03", help="trade date YYYY-MM-DD")
-    ap.add_argument("--min-trades", type=int, default=100)
+    ap.add_argument(
+        "--min-trades",
+        type=int,
+        default=0,
+        help="0 = pre-committed universe; >0 selects on same-day trades (look-ahead)",
+    )
     ap.add_argument(
         "--workers",
         type=int,
@@ -379,6 +399,10 @@ def main() -> None:
         "is_rmse_mean",
         "is_rmse_med",
         "is_rmse_std",
+        "ho_out_pct_mean",
+        "ho_out_pct_med",
+        "is_out_pct_mean",
+        "is_out_pct_med",
         "neg_mass_mean",
         "neg_mass_med",
         "arb_frac",
@@ -432,7 +456,16 @@ def main() -> None:
     swept = ["mode", *GRID.keys(), "eta"]
     keep = [
         c
-        for c in (*swept, "ho_nse_mean", "ho_nse_med", "ho_rmse_mean", "is_nse_mean", "secs")
+        for c in (
+            *swept,
+            "ho_nse_mean",
+            "ho_nse_med",
+            "ho_out_pct_mean",
+            "is_out_pct_mean",
+            "ho_rmse_mean",
+            "is_nse_mean",
+            "secs",
+        )
         if c in df.columns
     ]
     print("\nTop 10 by", args.sort)
