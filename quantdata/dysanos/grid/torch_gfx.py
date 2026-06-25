@@ -128,7 +128,7 @@ class Visualizer(object):
             weights    = self.weights
             mid_vols   = self.mid_vols  
             expiries   = self.expiries
-            calls      = model_output.calls[self.index,:,:]
+            calls      = model_output.fits[self.index,:,:]
             
             assert calls.shape == weights.shape, f"Expected calls and weights to have the same shape, but found {calls.shape} and {weights.shape}"
             assert np.all(np.isfinite(calls)), f"Expected all calls to be finite, but found {np.sum(~np.isfinite(calls))} non-finite values"
@@ -314,7 +314,7 @@ class Visualizer(object):
 
         # rest
         for gfx in self.expiry_gfxs:
-            assert gfx.index<model_output.calls.shape[0], f"Expected ix {gfx.index} to be less than calls.shape[0] {model_output.calls.shape[0]}"
+            assert gfx.index<model_output.fits.shape[0], f"Expected ix {gfx.index} to be less than fits.shape[0] {model_output.fits.shape[0]}"
             gfx.update( epoch=epoch, model_output=model_output, final=final )
 
         self.first = False

@@ -2,17 +2,18 @@ from dataclasses import dataclass, field, asdict
 from cdxcore.pretty import PrettyObject
 from cdxcore.verbose import Context
 from cdxcore.subdir import SubDir
-from cdxcore.err import verify_inp
+from cdxcore.err import verify, verify_inp
 from cdxcore.version import version
 from cdxcore.uniquehash import unique_label48_8
-import warnings
+from quantdata.dysanos.grid.torch_market import GridMarketDefinition
 from quantdata.dysanos.grid.torch_model import SanosModelConfig, BaseEnvironment
 from quantdata.dysanos.grid.torch_gfx import VizConfig, Visualizer
+from quantdata.pool import PoolConfig
 import torch as torch
 import time as time
 import numpy as np
 import os
-import ipynbname
+import warnings
 
 _cache_root = SubDir("~/.dysanos_grid/")
 
@@ -65,11 +66,16 @@ def train( market        : PrettyObject,*,
            trn_config    : TrainConfig = TrainConfig(),
            viz_config    : VizConfig = VizConfig(),
            restart       : bool = False,
+           just_load     : bool = False,
            env           : BaseEnvironment = BaseEnvironment(),
            verbose       : Context = Context.all ) -> dict:
     """
     Train model
     """
+    verify_inp( not (restart and just_load), f"Expected at most one of 'restart' and 'just_load' to be True, but found both True" )
+
+    verbose = verbose if not verbose is None else Context.all
+    verbose = verbose if not just_load else Context.quiet
 
     verbose.write(lambda : f"Training {mdl_config.label} version {mdl_config.user_version} group '{mdl_config.group}' for {trn_config.num_epochs} epochs on {market.grid_market_def.ticker} for date range {market.grid_market_def.date_range}")
     verbose.write(lambda : f"Using {'all samples' if trn_config.batch_size is None else f'batches of {trn_config.batch_size} samples'} with learning rate {trn_config.lr:.4g} and weight decay {trn_config.weight_decay:.4g}.")
@@ -80,36 +86,16 @@ def train( market        : PrettyObject,*,
     verbose.report(1,lambda : f"Raw day filter: {market.grid_market_def.raw_day_filter}")
     verbose.report(1,lambda : f"Expiry filter: {market.grid_market_def.expiry_filter}")
 
-    # preprocess & copy data into tensors
-    # -----------------------------------
-
-    with verbose.write_t(lambda : f"Preparing data set {mdl_config.label} version {mdl_config.user_version} on {env}... ", end='') as tme:
-        tdata      = mdl_config.torch_data(
-                                env = env,
-                                market = market, # no reload here
-                                message_context = None,
-                                verbose = Context.quiet  )
-        verbose.write(lambda : f"done; this took {tme}.", head=False )
+    num_samples = len(market.dates)
 
     # create model
     # ------------
-
-    def sample():
-        if trn_config.batch_size is None or trn_config.batch_size >= S:
-            return tdata, None
-        else:
-            idx = torch.randint(0, S, (trn_config.batch_size,))
-            return { k: v[idx,...] if not v is None else None for k, v in tdata.items() }, idx
-        
-
     with verbose.write_t(lambda : f"Instantiating {mdl_config.label} version {mdl_config.user_version} on {env}... ", end='') as tme:
-        S, T, N    = tdata['mids'].shape
-        model = mdl_config.create(  env,
-                                    S=S,
-                                    T=T,
-                                    N=N )
-        ld0 = model( tdata, training=False )
-        verbose.write(lambda : f"done; initial loss is {ld0['loss']:.4g}. This took {tme}.", head=False )
+        T, N      = market.grid_market_def.TN
+        model     = mdl_config.create(  env,
+                                        num_expiries=T,
+                                        num_market_strikes=N )
+        verbose.write(lambda : f"done; this took {tme}.", head=False )
         if model.debug:
             warnings.warn("** WARNING: model is running in (very slow) debug mode. **")
 
@@ -133,29 +119,59 @@ def train( market        : PrettyObject,*,
         verbose.write(lambda : f"Found existing recovery checkpoint '{cache_ffn}'. Restoring model state from this checkpoint.")
 
         state = torch.load(cache_ffn, map_location=env.device, weights_only=False)
-
         user_version = state.pop("version", None)
         mdl_version  = state.pop("mdl_version", None)
+        err          = None
         if user_version is None:
-            warnings.warn(f"Checkpoint '{cache_ffn}' does not contain a 'version' field. This is likely an old checkpoint. Restarting training.")
+            err = f"Checkpoint '{cache_ffn}' does not contain a 'version'. This is likely an invalid checkpoint file."
         elif user_version != mdl_config.user_version:
-            warnings.warn(f"Checkpoint '{cache_ffn}' file user_version {user_version} does not match model user_version {mdl_config.user_version}. Restarting training.")
+            err = f"Checkpoint '{cache_ffn}' file user_version {user_version} does not match model user_version {mdl_config.user_version}."
         elif not mdl_version is None and model_version != mdl_version:
-            warnings.warn(f"Checkpoint '{cache_ffn}' file model version {mdl_version} does not match model version {model_version}. Restarting training.")
+            err = f"Checkpoint '{cache_ffn}' file model version {mdl_version} does not match model version {model_version}."
         else:
-            optimizer.load_state_dict(state.pop("optimizer_state_dict"))
             model.load_state_dict(state.pop("model_state_dict"))
+            if just_load:
+                return model
+
+            optimizer.load_state_dict(state.pop("optimizer_state_dict"))
             tracker = MetricTracker(**state.pop("tracker"))
             start_epoch = tracker.trn_epochs[-1] + 1
+
+        if not err is None:
+            if just_load:
+                raise RuntimeError(err)
+            warnings.warn(err + f" -- Restarting training.")
 
     else:
         verbose.write(lambda : f"Using recovery checkpoint '{cache_ffn}'.")
 
+    # preprocess & copy data into tensors
+    # -----------------------------------
+
+    with verbose.write_t(lambda : f"Preparing data set {mdl_config.label} version {mdl_config.user_version} on {env}... ", end='') as tme:
+        tdata      = mdl_config.torch_data(
+                                env = env,
+                                market = market, # no reload here
+                                message_context = None,
+                                verbose = Context.quiet  )
+        verbose.write(lambda : f"done; this took {tme}.", head=False )
+
+    with verbose.write_t(lambda : f"\rComputing loss... ", end='') as tme:        
+        ld0 = model( tdata, training=False )
+        verbose.write(lambda : f"\n{'Initial' if start_epoch == 0 else 'Current'} loss is {ld0['loss']:.4g}. This took {tme}.", head=False )
+
+    def sample():
+        if trn_config.batch_size is None or trn_config.batch_size >= num_samples:
+            return tdata, None
+        else:
+            idx = torch.randint(0, num_samples, (trn_config.batch_size,))
+            return { k: v[idx,...] if not v is None else None for k, v in tdata.items() }, idx
+
     # compile
     # -------
 
-    def gradient_step( batch, idx ):
-        loss = model( batch, idx, training=True ) 
+    def gradient_step( batch ):
+        loss = model( batch, training=True ) 
         model.verify( lambda : torch.isfinite(loss).all(), "Internal error: loss infinite" )
         return loss
 
@@ -170,7 +186,7 @@ def train( market        : PrettyObject,*,
                             fullgraph=True,
                             disable=model.debug,
                         )( gradient_step )
-            _ = gradient_step(*sample())
+            _ = gradient_step(sample()[0])
             del _
 
             verbose.write("valuation... ", head=False, end='')
@@ -227,7 +243,7 @@ def train( market        : PrettyObject,*,
         es.raw_error_stats.means   = np.array([ np.mean(err) for err in raw_errors ])
         es.raw_error_stats.p90     = np.array([ np.quantile(err, 0.9) for err in raw_errors ])
 
-        path.create_directory()
+        tmp_name = path.full_temp_file_name(file_name, ext="tmp", create_directory=True)
         torch.save(dict(version=mdl_config.user_version,
                         mdl_version=model_version,
                         tracker=asdict(tracker),
@@ -239,8 +255,8 @@ def train( market        : PrettyObject,*,
                         trn_config=asdict(trn_config),
                         error_stats=dict(es.error_stats),
                         raw_error_stats=dict(es.raw_error_stats),
-                        ), cache_ffn + ".tmp")
-        os.rename(cache_ffn + ".tmp", cache_ffn)
+                        ), tmp_name)
+        os.rename(tmp_name, cache_ffn)
         
         disp(tracker=tracker, num_total_epochs=trn_config.num_epochs, model_output=model_output, error_stats=es, final=final)
         return model_output if final else None
@@ -265,7 +281,7 @@ def train( market        : PrettyObject,*,
 
                     optimizer.zero_grad(set_to_none=True)
                     batch, idx = sample()
-                    loss = gradient_step(batch,idx)
+                    loss = gradient_step(batch)
 
                     loss.backward()
 
@@ -295,7 +311,55 @@ def train( market        : PrettyObject,*,
     # finalize & return
     # -----------------
 
-    r = viz_and_store(epoch=epoch,final=True)
-    verbose.write(lambda : f"\rModel {mdl_config.label} version {mdl_config.user_version} group '{mdl_config.group}' trained for {trn_config.num_epochs} epochs. Final training loss: {tracker.trn_losses[-1]:.4g}, valuation loss: {tracker.val_losses[-1]:.4g}. This took {tme}.\nCheckpoint file is {cache_ffn}.")
     model.eval()
-    return r,  model, tdata
+    model_output = viz_and_store(epoch=epoch,final=True)
+    mo_path      = path(ext="mo", fmt=SubDir.PYTREE_HDF5)
+    verbose1     = verbose(1)
+    verbose1.write(lambda : f"\rModel checkpoint file is'{cache_ffn}'.")
+    with verbose1.write_t(lambda : f"\rWriting model output to '{mo_path.full_file_name(file_name)}'... ", end='') as tme: 
+        mo_path.write(file_name, model_output, raise_on_error=True)
+        verbose1.write(lambda : f"done; this took {tme}.", head=False )
+
+    verbose.write(lambda : f"\rModel {mdl_config.label} version {mdl_config.user_version} group '{mdl_config.group}' trained for {trn_config.num_epochs} epochs. Final training loss: {tracker.trn_losses[-1]:.4g}, valuation loss: {tracker.val_losses[-1]:.4g}. This took {tme}.")
+    return model_output,  model, tdata
+
+def load_model_market( ffn, env : BaseEnvironment = BaseEnvironment(), *, 
+                       pool_config : PoolConfig = PoolConfig.off(),
+                      verbose : Context = Context.all ):
+    """
+    Load model and market from a file ``ffn``.
+    """
+    if not os.path.exists(ffn):
+        raise FileNotFoundError(f"File '{ffn}' does not exist")
+
+    with verbose.write_t(lambda : f"Loading model from '{ffn}' on {env}... ", end='') as tme:   
+        state = torch.load(ffn, map_location=env.device, weights_only=False)
+        verbose.write(lambda : f"done; this took {tme}.", head=False )
+
+    user_version     = state.pop("version", None)
+    mdl_version      = state.pop("mdl_version", None)
+    mdl_config_class = state.pop("mdl_config_class", None)
+    mdl_config       = state.pop("mdl_config", None)
+    grid_market_def  = state.pop("grid_market_def", None)
+    verify( not (mdl_version is None or mdl_config is None or mdl_config_class is None or grid_market_def is None), lambda : f"File '{ffn}' does not contain a valid model configuration.")
+
+    grid_market_def  = GridMarketDefinition(**grid_market_def)
+    mdl_config       = SanosModelConfig(**mdl_config)
+
+    verify(user_version == mdl_config.user_version, lambda : f"File '{ffn}' user_version {user_version} does not match configured model user_version {mdl_config.user_version}.")
+
+    with verbose.write_t(lambda : f"Loading market... ", end='') as tme:   
+        market        = grid_market_def.load( pool_config = pool_config, verbose=Context.quiet )
+        verbose.write(lambda : f"done; this took {tme}. Found {len(market.dates)} dates.", head=False )
+
+    with verbose.write_t(lambda : f"Instantiating {mdl_config.label} version {mdl_config.user_version} on {env}... ", end='') as tme:
+        T, N      = market.grid_market_def.TN
+        model     = mdl_config.create(  env,
+                                        num_expiries=T,
+                                        num_market_strikes=N )
+        verify(model.version.unique_id48 == mdl_version, lambda : f"File '{ffn}' model version {mdl_version} does not match model version {model.version.unique_id48}.")
+        verbose.write(lambda : f"done; this took {tme}.", head=False )
+        if model.debug:
+            warnings.warn("** WARNING: model is running in (very slow) debug mode. **")
+
+    return model, market
