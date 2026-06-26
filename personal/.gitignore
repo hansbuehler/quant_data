@@ -1,0 +1,6 @@
+*.pkl
+*.csv
+
+# ...but DO track sweep result CSVs (the *.csv rule above ignores them by default).
+!Kalman_filter_individual/results/*.csv
+!Kalman_filter_SSVI/results/*.csv
