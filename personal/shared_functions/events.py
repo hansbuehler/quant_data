@@ -332,7 +332,7 @@ def events_to_iv(df_events: pl.DataFrame, trade_R_divisor=TRADE_R_DIVISOR) -> pl
     )
     df_events = df_events.rename({"iv": "observed_iv"})
     df_events = df_events.with_columns(
-        ((((pl.col("ask_iv") - pl.col("bid_iv")) * 100) / 2) ** 2).alias("R_iv")
+        (((pl.col("ask_iv") - pl.col("bid_iv")) / 2) ** 2).alias("R_iv")
     ).with_columns(
         pl.when(pl.col("event_type") == "trade")
         .then(pl.col("R_iv").fill_null(strategy="forward") / trade_R_divisor)
