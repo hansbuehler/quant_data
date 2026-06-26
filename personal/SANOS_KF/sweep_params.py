@@ -3,22 +3,42 @@ sweep_params.py
 
 Parallel hyperparameter sweep for the fixed SANOS-KF (sanos_kf.run_sanos_kf).
 
-Loads one trade-date of quotes/trades ONCE in the parent process, then fans a
-large parameter grid out to a process pool. Each worker builds a SanosKFConfig
-from its grid point, runs the EKF, and scores it with the same unified-metrics
-pipeline used in sanos_kf_fixed_eval.ipynb. Results stream to a CSV.
+One invocation sweeps a grid over MANY trade dates and BOTH market sides, with a
+SEPARATE filter run per side (like the single-strike IV-KF sweep):
+
+  * multi-date  — pass --dates / --start..--end (or a single --date). Each date's
+    quotes/trades are loaded ONCE in the parent, spilled to parquet, and fanned out
+    to the worker pool; rows from every date stream into ONE CSV with a leading
+    `date` column.
+  * per-side    — puts and calls are evaluated INDEPENDENTLY. For each grid point we
+    run the EKF twice: once fed puts-only (scored on puts), once fed calls-only
+    (scored on calls). One CSV row per (date, side, grid point). Metrics for the two
+    sides never mix (unlike a single joint fit scored on both).
+  * sigmoid A/B — the DLV² parametrization is a sweep AXIS with its OWN grid per mode:
+      "sigmoid" (use_sigmoid=True)  — state is the unconstrained logit; Q_scale_dlv /
+        P0_scale live on the LOGIT scale and max_dlvsq (the sigmoid ceiling) is swept.
+      "legacy"  (use_sigmoid=False) — state is the net DLV² (clipped ≥0); Q_scale_dlv /
+        P0_scale are in DLV² units and max_dlvsq is ignored (not swept).
+    The two parametrizations are NOT comparable on the same Q/P0 numbers, hence
+    separate grids (GRID_SIGMOID vs GRID_LEGACY in SIGMOID_MODES).
+
+Each worker builds a SanosKFConfig from its grid point, runs the EKF, and scores it
+with the same unified-metrics pipeline used in sanos_kf_fixed_eval.ipynb. Results
+stream to a CSV and are re-sorted at the end.
 
 Usage
 -----
-    python personal/SANOS_KF/sweep_params.py                       # full grid
+    python personal/SANOS_KF/sweep_params.py --date 2024-01-03            # one date
+    python personal/SANOS_KF/sweep_params.py --start 2024-01-03 --end 2024-01-17
+    python personal/SANOS_KF/sweep_params.py --dates 2024-01-03 2024-01-04
     python personal/SANOS_KF/sweep_params.py --workers 8
-    python personal/SANOS_KF/sweep_params.py --dry-run             # just count
-    python personal/SANOS_KF/sweep_params.py --limit 50            # first 50 pts
-    python personal/SANOS_KF/sweep_params.py --ticker SPY --date 2024-01-03
-    python personal/SANOS_KF/sweep_params.py --sort ho_nse_mean    # final ranking
+    python personal/SANOS_KF/sweep_params.py --dry-run                    # just count
+    python personal/SANOS_KF/sweep_params.py --sigmoid-mode legacy        # one param'n
+    python personal/SANOS_KF/sweep_params.py --obs-mode smoothed --side puts
+    python personal/SANOS_KF/sweep_params.py --resume                     # append rest
 
-Edit GRID / BASE below to change what is swept. The grid is the Cartesian
-product of every list in GRID, merged on top of BASE.
+Edit GRID_* / BASE / MODES below to change what is swept. The grid is the Cartesian
+product of every list in the chosen grids, merged on top of BASE.
 """
 
 from __future__ import annotations
@@ -63,14 +83,19 @@ for _p in (
 # ---------------------------------------------------------------------------
 # The sweep grid.
 #
-# BASE  = params fixed across every run.
-# GRID  = params swept in EVERY mode (full Cartesian product).
-# MODES = the SANOS-KF observation variants. There is now ONE density (the exact
-#         tridiagonal SANOS solve); a mode only chooses whether the OBSERVATION is
-#         intrinsic (η=0) or smoothed (kernel variance η·V_ATM, paper §3.1). η is the
-#         given smoothness, never a fitted state.
+# BASE          = params fixed across every run.
+# SIGMOID_MODES = the DLV² parametrization axis. Each mode pins use_sigmoid AND
+#                 carries its OWN shared grid (the two parametrizations measure Q/P0 on
+#                 different scales, so they cannot share one grid — see module docstring).
+# OBS_MODES     = the observation variants. There is ONE density (the exact tridiagonal
+#                 SANOS solve); a mode only chooses whether the OBSERVATION is intrinsic
+#                 (η=0) or smoothed (kernel variance η·V_ATM, paper §3.1). η is the given
+#                 smoothness, never a fitted state.
+# SIDES         = market sides, each fed to its OWN filter run and scored independently.
 #
-# Enable/disable a mode by editing MODES. Anything in SanosKFConfig is fair game.
+# A grid point is the Cartesian product:
+#   sigmoid_mode × obs_mode × (shared grid ∪ obs-mode dims) × side.
+# Anything in SanosKFConfig is fair game in any grid.
 # ---------------------------------------------------------------------------
 BASE: dict = dict(
     n_anchors=300,  # caps strike-aligned interior nodes; ↑ = finer, ~N³ solve
@@ -80,26 +105,42 @@ BASE: dict = dict(
     batch_seconds=1.0,  # Gap 3: 1-second batched updates
 )
 
-# Shared dims swept across ALL modes (absolute-strike space). The state x is now the
-# UNCONSTRAINED sigmoid logit (DLV² = σ(x)·(max_dlvsq−min_dlvsq)+min_dlvsq), so:
-#   - Sigma_init : still a TARGET DLV² (logit-inverted internally for the flat init);
+# Sigmoid parametrization (use_sigmoid=True). State x is the UNCONSTRAINED sigmoid logit
+# (DLV² = σ(x)·(max_dlvsq−min_dlvsq)+min_dlvsq), so:
+#   - Sigma_init : a TARGET DLV² (logit-inverted internally for the flat init);
 #   - Q_scale_dlv, P0_scale : process noise / initial covariance on the LOGIT scale
-#     (NOT DLV² units anymore) — a unit logit step moves DLV² by up to 0.25·span;
-#   - max_dlvsq : the sigmoid ceiling (DLV² upper bound); min_dlvsq stays at its tiny floor.
+#     (NOT DLV² units) — a unit logit step moves DLV² by up to 0.25·span;
+#   - max_dlvsq : the sigmoid ceiling (DLV² upper bound); min_dlvsq stays at its tiny floor;
 #   - ell : RBF correlation length in DOLLARS (absolute strike distance).
-GRID: dict = dict(
+GRID_SIGMOID: dict = dict(
     Sigma_init=[0.01, 0.1],
     Q_scale_dlv=[0.1, 1.0],
-    P0_scale=[1e-2, 1.0],
-    max_dlvsq=[1.0, 10.0],  # sigmoid ceiling: DLV² ceilings for vol≈1, 2, 3
+    P0_scale=[1e-2],  # pinned tight to keep the overnight grid small (was [1e-2, 1.0])
+    max_dlvsq=[1.0, 10.0],  # sigmoid ceiling: DLV² ceilings for vol≈1, ~3
     ell=[1.0, 5.0],  # DOLLARS (absolute strike distance)
-)
+)  # 2×2×1×2×2 = 16
 
-# mode name -> (fixed overrides for the mode, mode-specific swept dims).
+# Legacy parametrization (use_sigmoid=False). State x is the net DLV² (clipped ≥0), so
+# Sigma_init / Q_scale_dlv / P0_scale are all in DLV² units and max_dlvsq is IGNORED
+# (so it is not swept). These are the pre-sigmoid grid ranges.
+GRID_LEGACY: dict = dict(
+    Sigma_init=[0.01, 0.1],  # dropped 0.04 for the overnight grid
+    Q_scale_dlv=[0.1, 1.0, 3.0],  # dropped 0.3
+    P0_scale=[1e-2, 1.0],  # dropped 1e-1
+    ell=[1.0, 3.0],  # DOLLARS (absolute strike distance); dropped 8.0
+)  # 2×3×2×2 = 24
+
+# sigmoid_mode -> (fixed overrides, shared grid for that parametrization).
+SIGMOID_MODES: dict = {
+    "sigmoid": (dict(use_sigmoid=True), GRID_SIGMOID),
+    "legacy": (dict(use_sigmoid=False), GRID_LEGACY),
+}
+
+# obs_mode -> (fixed overrides, mode-specific swept dims).
 # "intrinsic" : η=0 — exact tridiagonal density, discrete-call observation (linear interp).
 # "smoothed"  : η>0 — same density, each node priced as a lognormal of variance η·V_ATM
 #               (paper §3.1). Sweep η; paper values 0.06 (=0.25²), 0.25 (=0.5², default), 0.5.
-MODES: dict = {
+OBS_MODES: dict = {
     "intrinsic": (
         dict(smoothing=False),
         dict(),
@@ -110,9 +151,12 @@ MODES: dict = {
     ),
 }
 
-# Market side fed to every run: "both" | "calls" | "puts".
-SIDE = "puts"
-_SIDE_KW = {"calls": dict(calls_only=True), "puts": dict(puts_only=True), "both": {}}
+# Market sides scored INDEPENDENTLY. Each side gets its own filter run (fed that side
+# only) and its own metric row; puts and calls metrics never mix.
+SIDES = ["puts", "calls"]
+_SIDE_KW = {"calls": dict(calls_only=True), "puts": dict(puts_only=True)}
+
+TICKER_DEFAULT = "SPY"
 
 
 # ---------------------------------------------------------------------------
@@ -133,7 +177,8 @@ def _init_worker(quotes_path: str, trades_path: str) -> None:
 
 
 def _run_one(params: dict) -> dict:
-    """Build a config from `params`, run the EKF, return {params..., metrics...}.
+    """Build a config from `params`, run the EKF fed ONE side, score THAT side, and
+    return {params..., metrics...}.
 
     Imported lazily so jax is initialized inside the worker (after the
     single-thread env vars above are in effect)."""
@@ -146,10 +191,13 @@ def _run_one(params: dict) -> dict:
     )
 
     df_quotes, df_trades = _DFQ, _DFT
-    # `params` carries a "mode" tag for reporting; strip it before building cfg.
+    # `params` carries report-only tags; strip them before building cfg.
     params = dict(params)
-    mode = params.pop("mode", "")
-    cfg_kw = {**BASE, **params, **_SIDE_KW[SIDE]}
+    sigmoid_mode = params.pop("sigmoid_mode", "")
+    obs_mode = params.pop("obs_mode", "")
+    side = params.pop("side", "puts")
+    side_is_call = side == "calls"
+    cfg_kw = {**BASE, **params, **_SIDE_KW[side]}
     t0 = time.perf_counter()
     try:
         cfg = SanosKFConfig(**cfg_kw)
@@ -166,6 +214,10 @@ def _run_one(params: dict) -> dict:
             .drop_duplicates(["window", "strike", "is_call"], keep="last")
             .dropna(subset=["sanos_kf_price_prior"])
         )
+        # Score ONLY the side this run was fed (per-side independent evaluation).
+        qb = qb[qb["is_call"] == side_is_call]
+        if qb.empty:
+            raise ValueError(f"no {side} quotes priced")
 
         F = qb["forward"].to_numpy(float)
         K = qb["strike"].to_numpy(float)
@@ -220,7 +272,9 @@ def _run_one(params: dict) -> dict:
         del qb, df_eval, st
         gc.collect()
         return {
-            "mode": mode,
+            "sigmoid_mode": sigmoid_mode,
+            "obs_mode": obs_mode,
+            "side": side,
             **params,
             **m,
             "ok": True,
@@ -229,7 +283,9 @@ def _run_one(params: dict) -> dict:
         }
     except Exception as exc:  # keep the sweep going; record the failure
         return {
-            "mode": mode,
+            "sigmoid_mode": sigmoid_mode,
+            "obs_mode": obs_mode,
+            "side": side,
             **params,
             "ok": False,
             "err": f"{type(exc).__name__}: {exc}",
@@ -238,19 +294,33 @@ def _run_one(params: dict) -> dict:
 
 
 def _build_points() -> list[dict]:
-    """Cartesian product of GRID × (per-mode fixed + mode-specific dims)."""
+    """Cartesian product of sigmoid_mode × obs_mode × (shared grid ∪ obs dims) × side."""
     points: list[dict] = []
-    for mode, (fixed, mode_grid) in MODES.items():
-        dims = {**GRID, **mode_grid}
-        keys = list(dims.keys())
-        for combo in itertools.product(*dims.values()):
-            points.append({"mode": mode, **fixed, **dict(zip(keys, combo))})
+    for sig_name, (sig_fixed, sig_grid) in SIGMOID_MODES.items():
+        for obs_name, (obs_fixed, obs_grid) in OBS_MODES.items():
+            dims = {**sig_grid, **obs_grid}
+            keys = list(dims.keys())
+            for combo in itertools.product(*dims.values()):
+                pt = {
+                    "sigmoid_mode": sig_name,
+                    "obs_mode": obs_name,
+                    **sig_fixed,
+                    **obs_fixed,
+                    **dict(zip(keys, combo)),
+                }
+                for side in SIDES:
+                    points.append({**pt, "side": side})
     return points
 
 
 # Param keys that uniquely identify a grid point (for --resume de-duplication).
+# `date` is prepended by the driver so a point is unique across dates too.
 SIG_KEYS = (
-    "mode",
+    "date",
+    "sigmoid_mode",
+    "obs_mode",
+    "side",
+    "use_sigmoid",
     "smoothing",
     "Sigma_init",
     "Q_scale_dlv",
@@ -279,6 +349,30 @@ def _sig(d) -> tuple:
     return tuple(out)
 
 
+def _resolve_dates(args: argparse.Namespace) -> list[date]:
+    """Trading dates to sweep: a --start..--end range, an explicit --dates list, or
+    the single --date fallback (weekends/holidays dropped)."""
+    from quantdata.biz_calendar import get_business_days, to_date
+
+    if args.start or args.end:
+        if not (args.start and args.end):
+            raise SystemExit("--start and --end must be given together")
+        return list(get_business_days(to_date(args.start), to_date(args.end)))
+    if args.dates:
+        out: list[date] = []
+        for s in args.dates:
+            d = to_date(s)
+            if not get_business_days(d, d):
+                print(f"skip {d}: not a trading day")
+                continue
+            out.append(d)
+        return out
+    d = to_date(args.date)
+    if not get_business_days(d, d):
+        raise SystemExit(f"{d} is not a trading day")
+    return [d]
+
+
 def _load_data(ticker: str, trade_date: date, min_trades: int) -> tuple[pl.DataFrame, pl.DataFrame]:
     from personal.Kalman_filter_spline.surface_kalman_filters import build_iv_observations
     from quantdata.massive.client import MassiveClient
@@ -292,12 +386,75 @@ def _load_data(ticker: str, trade_date: date, min_trades: int) -> tuple[pl.DataF
     return df_quotes, df_trades
 
 
+def _run_date(
+    ticker: str,
+    trade_date: date,
+    min_trades: int,
+    points: list[dict],
+    workers: int,
+    mtpc: int | None,
+    writer: csv.DictWriter,
+    fh,
+) -> int:
+    """Load one date, fan its grid out to a pool, stream rows (tagged with `date`)
+    into the shared CSV writer. Returns the number of rows written."""
+    print(f"\n===== {trade_date} =====")
+    print(f"Loading {ticker} {trade_date} ...")
+    df_quotes, df_trades = _load_data(ticker, trade_date, min_trades)
+    print(f"quotes: {len(df_quotes):,}   trades: {len(df_trades):,}")
+
+    # Spill the data to parquet so workers load it from disk (one copy each) and the
+    # parent can free its own copy — avoids pickling ~GB into every worker.
+    tmpdir = tempfile.mkdtemp(prefix="sweep_data_")
+    q_path = os.path.join(tmpdir, "quotes.parquet")
+    t_path = os.path.join(tmpdir, "trades.parquet")
+    df_quotes.write_parquet(q_path)
+    df_trades.write_parquet(t_path)
+    del df_quotes, df_trades
+    gc.collect()
+
+    print(f"Running {len(points)} configs on {workers} workers ...")
+    n_written = 0
+    try:
+        with ProcessPoolExecutor(
+            max_workers=workers,
+            initializer=_init_worker,
+            initargs=(q_path, t_path),
+            max_tasks_per_child=mtpc,
+        ) as ex:
+            futs = {ex.submit(_run_one, p): p for p in points}
+            for i, fut in enumerate(as_completed(futs), 1):
+                r = fut.result()
+                r["date"] = str(trade_date)
+                writer.writerow(r)
+                fh.flush()  # land this row on disk before moving on
+                n_written += 1
+                tag = "ok " if r.get("ok") else "ERR"
+                score = r.get("ho_nse_mean", float("nan"))
+                p = futs[fut]
+                lbl = f"{p['sigmoid_mode']}/{p['obs_mode']}/{p['side']}"
+                print(
+                    f"[{trade_date}][{i}/{len(points)}] {tag} {lbl} ho_nse={score:.4f} "
+                    f"({r['secs']:.1f}s)" + (f"  {r['err']}" if not r.get("ok") else ""),
+                    flush=True,
+                )
+    finally:
+        import shutil
+
+        shutil.rmtree(tmpdir, ignore_errors=True)  # drop the spilled parquet copies
+        gc.collect()
+    return n_written
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("--ticker", default="SPY")
-    ap.add_argument("--date", default="2024-01-03", help="trade date YYYY-MM-DD")
+    ap.add_argument("--ticker", default=TICKER_DEFAULT)
+    ap.add_argument("--date", default="2024-01-03", help="single trade date YYYY-MM-DD")
+    ap.add_argument("--start", help="range start YYYY-MM-DD (inclusive); use with --end")
+    ap.add_argument("--end", help="range end YYYY-MM-DD (inclusive); use with --start")
+    ap.add_argument("--dates", nargs="*", help="explicit trade dates YYYY-MM-DD")
     ap.add_argument(
         "--min-trades",
         type=int,
@@ -313,10 +470,17 @@ def main() -> None:
     )
     ap.add_argument("--limit", type=int, default=None, help="only run the first N grid points")
     ap.add_argument(
-        "--mode", choices=list(MODES), default=None, help="restrict to one density mode"
+        "--sigmoid-mode",
+        choices=list(SIGMOID_MODES),
+        default=None,
+        help="restrict to one DLV² parametrization",
     )
     ap.add_argument(
-        "--out", default=None, help="output CSV path (default: sweep_<ticker>_<date>.csv)"
+        "--obs-mode", choices=list(OBS_MODES), default=None, help="restrict to one observation mode"
+    )
+    ap.add_argument("--side", choices=SIDES, default=None, help="restrict to one market side")
+    ap.add_argument(
+        "--out", default=None, help="output CSV path (default: sweep_<ticker>_<span>.csv)"
     )
     ap.add_argument(
         "--sort", default="ho_nse_mean", help="metric to sort the final table by (ascending)"
@@ -324,7 +488,7 @@ def main() -> None:
     ap.add_argument(
         "--resume",
         action="store_true",
-        help="skip grid points already present in --out and append the rest",
+        help="skip (date, grid point) rows already present in --out and append the rest",
     )
     ap.add_argument(
         "--max-tasks-per-child",
@@ -335,56 +499,43 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true", help="print grid size and exit")
     args = ap.parse_args()
 
+    dates = _resolve_dates(args)
+
     points = _build_points()
-    if args.mode is not None:
-        points = [p for p in points if p["mode"] == args.mode]
+    if args.sigmoid_mode is not None:
+        points = [p for p in points if p["sigmoid_mode"] == args.sigmoid_mode]
+    if args.obs_mode is not None:
+        points = [p for p in points if p["obs_mode"] == args.obs_mode]
+    if args.side is not None:
+        points = [p for p in points if p["side"] == args.side]
     if args.limit is not None:
         points = points[: args.limit]
 
-    trade_date = date.fromisoformat(args.date)
-    out = args.out or f"sweep_{args.ticker}_{args.date}.csv"
-
-    # --resume: drop points already recorded in the existing CSV.
-    resuming = args.resume and os.path.exists(out)
-    done_sigs: set = set()
-    if resuming:
-        prev = pd.read_csv(out)
-        done_sigs = {_sig(row) for row in prev.to_dict("records")}
-        before = len(points)
-        points = [p for p in points if _sig(p) not in done_sigs]
-        print(f"Resume: {len(done_sigs)} already done, {before - len(points)} skipped")
-
-    by_mode = {m: sum(p["mode"] == m for p in points) for m in MODES}
-    print(
-        f"Grid: {len(points)} points to run  " + "  ".join(f"{m}={n}" for m, n in by_mode.items())
+    span = str(dates[0]) if len(dates) == 1 else f"{dates[0]}_to_{dates[-1]}"
+    out = args.out or os.path.join(
+        PROJECT_ROOT, "personal", "SANOS_KF", f"sweep_{args.ticker}_{span}.csv"
     )
-    print(f"  shared dims: {list(GRID.keys())}")
+
+    by_sig = {m: sum(p["sigmoid_mode"] == m for p in points) for m in SIGMOID_MODES}
+    by_side = {s: sum(p["side"] == s for p in points) for s in SIDES}
+    print(
+        f"Grid: {len(points)} points/date × {len(dates)} date(s) = {len(points) * len(dates)} runs"
+    )
+    print("  by sigmoid_mode: " + "  ".join(f"{m}={n}" for m, n in by_sig.items()))
+    print("  by side: " + "  ".join(f"{s}={n}" for s, n in by_side.items()))
+    print(f"  dates: {', '.join(str(d) for d in dates)}")
     if args.dry_run:
         return
     if not points:
         print("Nothing to run.")
         return
 
-    print(f"Loading {args.ticker} {args.date} ...")
-    df_quotes, df_trades = _load_data(args.ticker, trade_date, args.min_trades)
-    print(f"quotes: {len(df_quotes):,}   trades: {len(df_trades):,}")
-
-    # Spill the data to parquet so workers load it from disk (one copy each) and
-    # the parent can free its own copy — avoids pickling ~GB into every worker.
-    tmpdir = tempfile.mkdtemp(prefix="sweep_data_")
-    q_path = os.path.join(tmpdir, "quotes.parquet")
-    t_path = os.path.join(tmpdir, "trades.parquet")
-    df_quotes.write_parquet(q_path)
-    df_trades.write_parquet(t_path)
-    del df_quotes, df_trades
-    gc.collect()
-    print(f"Running {len(points)} configs on {args.workers} workers -> {out}")
-
-    # Stable CSV schema so we can stream-append heterogeneous rows (modes differ
-    # in which params they carry; failed rows lack metrics). Params first (mode
-    # leading), then run status, then the unified-metrics fields.
+    # Stable CSV schema so we can stream-append heterogeneous rows (modes differ in
+    # which params they carry; failed rows lack metrics). date + tags first, then
+    # params, then run status, then the unified-metrics fields.
     all_points = _build_points()
-    param_fields = ["mode"] + sorted({k for p in all_points for k in p} - {"mode"})
+    tag_fields = ["date", "sigmoid_mode", "obs_mode", "side"]
+    param_fields = sorted({k for p in all_points for k in p} - set(tag_fields))
     status_fields = ["ok", "err", "secs"]
     metric_fields = [
         "ho_nse_mean",
@@ -408,56 +559,59 @@ def main() -> None:
         "arb_frac",
         "n_snapshots",
     ]
-    fieldnames = param_fields + status_fields + metric_fields
+    fieldnames = tag_fields + param_fields + status_fields + metric_fields
     mtpc = args.max_tasks_per_child or None
 
+    # --resume: drop (date, point) pairs already recorded in the existing CSV.
+    resuming = args.resume and os.path.exists(out)
+    done_sigs: set = set()
+    if resuming:
+        prev = pd.read_csv(out)
+        done_sigs = {_sig(row) for row in prev.to_dict("records")}
+        print(f"Resume: {len(done_sigs)} rows already done in {out}")
+
     t0 = time.perf_counter()
+    total_written = 0
     # Append when resuming (keep prior rows); otherwise truncate + write header.
-    # Flush after every result so the file is updated throughout the run.
     mode_flag = "a" if resuming else "w"
     with open(out, mode_flag, newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
         if not resuming:
             writer.writeheader()
             fh.flush()
-        with ProcessPoolExecutor(
-            max_workers=args.workers,
-            initializer=_init_worker,
-            initargs=(q_path, t_path),
-            max_tasks_per_child=mtpc,
-        ) as ex:
-            futs = {ex.submit(_run_one, p): p for p in points}
-            for i, fut in enumerate(as_completed(futs), 1):
-                r = fut.result()
-                writer.writerow(r)
-                fh.flush()  # land this row on disk before moving on
-                tag = "ok " if r.get("ok") else "ERR"
-                score = r.get("ho_nse_mean", float("nan"))
-                print(
-                    f"[{i}/{len(points)}] {tag} ho_nse={score:.4f} "
-                    f"({r['secs']:.1f}s) {futs[fut]}"
-                    + (f"  {r['err']}" if not r.get("ok") else ""),
-                    flush=True,
+        for d in dates:
+            day_points = points
+            if resuming:
+                day_points = [p for p in points if _sig({**p, "date": str(d)}) not in done_sigs]
+                skipped = len(points) - len(day_points)
+                if skipped:
+                    print(f"[{d}] resume: {skipped} already done, {len(day_points)} to run")
+            if not day_points:
+                print(f"[{d}] nothing to run, skipping")
+                continue
+            try:
+                total_written += _run_date(
+                    args.ticker, d, args.min_trades, day_points, args.workers, mtpc, writer, fh
                 )
+            except Exception as exc:
+                print(f"[{d}] FAILED: {type(exc).__name__}: {exc}")
 
-    import shutil
-
-    shutil.rmtree(tmpdir, ignore_errors=True)  # drop the spilled parquet copies
-
-    # Re-read the streamed CSV and rewrite it sorted (the run is done; the
-    # streamed file already holds every row should this step be interrupted).
+    # Re-read the streamed CSV and rewrite it sorted (the run is done; the streamed
+    # file already holds every row should this step be interrupted).
     df = pd.read_csv(out)
     if args.sort in df.columns:
-        df = df.sort_values(args.sort, na_position="last")
+        df = df.sort_values(["side", args.sort], na_position="last")
         df.to_csv(out, index=False)
     elapsed = time.perf_counter() - t0
-    print(f"\nDone in {elapsed:.1f}s. Wrote {len(df)} rows to {out}")
+    print(
+        f"\nDone in {elapsed:.1f}s. Wrote {total_written} rows this run; {len(df)} total in {out}"
+    )
 
-    swept = ["mode", *GRID.keys(), "eta"]
+    swept = ["date", "sigmoid_mode", "obs_mode", "side", *GRID_LEGACY.keys(), "max_dlvsq", "eta"]
     keep = [
         c
         for c in (
-            *swept,
+            *dict.fromkeys(swept),  # de-dup while preserving order
             "ho_nse_mean",
             "ho_nse_med",
             "ho_out_pct_mean",
@@ -468,9 +622,13 @@ def main() -> None:
         )
         if c in df.columns
     ]
-    print("\nTop 10 by", args.sort)
-    with pd.option_context("display.max_columns", None, "display.width", 200):
-        print(df[keep].head(10).to_string(index=False))
+    for side in SIDES:
+        sub = df[df["side"] == side] if "side" in df.columns else df
+        if sub.empty:
+            continue
+        print(f"\n[{side}] Top 10 by {args.sort}")
+        with pd.option_context("display.max_columns", None, "display.width", 240):
+            print(sub[keep].head(10).to_string(index=False))
 
 
 if __name__ == "__main__":

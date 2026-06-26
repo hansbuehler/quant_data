@@ -44,10 +44,21 @@ DISCOUNT_FACTOR_CLIP = None  # matches sanos_dlv_intraday / notebook (no clip)
 
 
 def _tickers_path(trade_date: date) -> str:
-    """Prefer the date-specific ticker file, fall back to the generic one."""
-    dated = os.path.join(project_root, "personal", f"spy_options_tickers_{trade_date}.csv")
-    generic = os.path.join(project_root, "personal", "spy_options_tickers.csv")
-    return dated if os.path.exists(dated) else generic
+    """Prefer the date-specific ticker file, fall back to the generic one.
+
+    The per-date universes are produced by build_ticker_universe.py into
+    personal/ticker_universes/; an older copy may also sit directly in personal/.
+    Check both before falling back to the (date-agnostic) generic file."""
+    candidates = [
+        os.path.join(
+            project_root, "personal", "ticker_universes", f"spy_options_tickers_{trade_date}.csv"
+        ),
+        os.path.join(project_root, "personal", f"spy_options_tickers_{trade_date}.csv"),
+    ]
+    for dated in candidates:
+        if os.path.exists(dated):
+            return dated
+    return os.path.join(project_root, "personal", "spy_options_tickers.csv")
 
 
 def main(trade_date: date, out_path: str) -> None:
