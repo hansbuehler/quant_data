@@ -395,14 +395,15 @@ class GridMarketDefinition:
         dates                = data['dates']
         data.time_y          = np.array( [ count_business_days_between( dates[0], dates[i] ) for i in range(len(dates)) ] ) / float(DAYS_PER_YEAR)
         data.ticker          = self.ticker
+        data.grid_expiries   = self.grid_config.grid_expiries
         return data
 
     @property
-    def expiries(self) -> np.ndarray:
+    def grid_expiries(self) -> np.ndarray:
         """ Return the expiries in years. """
         return self.grid_config.grid_expiries
     
     @property
     def TN(self) -> tuple[int,int]:
         """ Return the number of expiries and strikes in the grid. """
-        return (len(self.expiries), self.grid_config.grid_num_strikes)
+        return (len(self.grid_expiries), self.grid_config.grid_num_strikes)

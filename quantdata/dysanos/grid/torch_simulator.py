@@ -1,21 +1,33 @@
 from dataclasses import dataclass
 import math
+from cdxcore.version import version
 from cdxcore.err import verify_inp
 from cdxcore.pretty import PrettyObject
+from cdxcore.uniquehash import unique_hash8
 from cdxcore.verbose import Context
-from flax import config
 import numpy as np
-import torch
+from quantdata.dysanos.grid.torch_model import SanosModel
 from quantdata.dysanos.grid.torch_pricer import SanosPricer
-from quantdata.biz_calendar import DAYS_PER_YEAR, count_business_days_between
+from quantdata.biz_calendar import DAYS_PER_YEAR
+import torch
 
+@version("0.1")
 @dataclass(frozen=True)
 class ARSamplerConfig:
-    num_alpha : int|float|None = 0.95   # number of PCA factors as integer or float for % vriance cut off
-    rescale_var : bool = True
-    seed : int = 113123231
+    num_alpha      : int|float|None = 0.95   # number of PCA factors as integer or float for % vriance cut off
+    rescale_var    : bool = True
+    seed           : int = 113123231
     use_matrix_exp : bool = True       # if True, use exact affine matrix-exponential AR transition
+    
+    def __str__(self) -> str:
+        return f"nalp={self.num_alpha},{'rescl' if self.rescale_var else 'nat'},{'mxp' if self.use_matrix_exp else 'eul'},seed={self.seed}"
+    
+    @property
+    def rng_current_state_uid(self) -> np.random.Generator:
+        """ Utility to mimic the same function in ARSampler, but for the config object. """
+        return unique_hash8( np.random.default_rng(seed=self.seed).bit_generator.state )
 
+@version("0.1", dependencies=[ARSamplerConfig, SanosPricer, SanosModel])
 class ARSampler(object):
 
     Config : ARSamplerConfig
@@ -67,11 +79,9 @@ class ARSampler(object):
 
         # Prepare simulation
         # ------------------
-        alpha_hist = self.pcaxar1.alpha
-        alpha_mean = np.mean(alpha_hist, axis=0)
-        alpha_cov  = np.cov(alpha_hist, rowvar=False, bias=True)
-
-        self.alpha_mean = alpha_mean
+        alpha_hist      = self.pcaxar1.alpha
+        self.alpha_mean = np.mean(alpha_hist, axis=0)
+        alpha_cov       = np.cov(alpha_hist, rowvar=False, bias=True)
         self.cholesky   = np.linalg.cholesky( alpha_cov + 1e-12 * np.eye(self.num_alpha) )
         
         if False:
@@ -92,23 +102,22 @@ class ARSampler(object):
     @property
     def num_xstate(self) -> int:
         return self.model.config.num_state+1
+    
+    def reset_rng(self):
+        """ Reset the random number generator to the original seed. """
+        self.rng = np.random.default_rng(seed=self.config.seed)
 
-    """
-    def pred_xstate( self, index : int, offset : int = 1 ) -> np.ndarray:
-        verify_inp( 0 <= index < self.xstate.shape[0]-1, lambda : f"Index {index} must be in [0,{self.xstate.shape[0]-1}]")
-        verify_inp( offset >= 0, lambda : f"Offset {offset} must be non-negative")
-        verify_inp( index+offset <= self.pcaxar1.ndt.shape[0], lambda : f"Index+offset {index+offset} must be less than {self.pcaxar1.ndt.shape[0]}")
-        if offset == 0:
-            return self.xstate[index,:]
-        ndt = self.pcaxar1.ndt[index] if offset == 1 else np.sum(self.pcaxar1.ndt[index:index+offset])
-        return self.xstate[index,:] + self.pcaxar1.alpha[index,:] @ self.pcaxar1.dU * np.sqrt(ndt)
-    """
-    def sample_xstates(self, 
+    @property
+    def rng_current_state_uid(self) -> np.random.Generator:
+        """ Identifies current 'seed'. Used for caching samples """
+        return unique_hash8( self.rng.bit_generator.state )
+
+    def hist_sample_xstates(self, 
                  index       : int,
                  num_steps   : int, *,
                  num_samples : int = 0,
                  bandwidth   : float = 0.,
-                 replay      : bool = False,
+                 replay      : bool = True,
                   ) -> np.ndarray:
         """
         Generate ``num_samples`` of ``num_steps``-day extedned state scenarios starting in the state of ``index``.
@@ -125,7 +134,7 @@ class ARSampler(object):
             Set to zero to generate one sample, and return a matrix of shape (num_steps, num_xstate) instead of (num_samples, num_steps, num_xstate).
         bandwidth : float, default 0.
             The bandwidth for the PCA noise. A value of 0 means no noise, while a value of 1 means full noise. Must be in [0,1].
-        replay : bool, default False
+        replay : bool, default True
             If True, the PCA factors are replayed from the historical data, instead of being sampled.
             That means with bandwidth=0, the historical path is generated.
 
@@ -191,12 +200,12 @@ class ARSampler(object):
             new_xstates[:,j+1,:] = Xt
         return new_xstates[0,...] if squeeze_sample else new_xstates
 
-    def sample_log_nspot_states(self, 
+    def hist_sample_log_nspot_states(self, 
                  index       : int,
                  num_steps   : int, *,
                  num_samples : int = 0,
                  bandwidth   : float = 0.,
-                 replay      : bool = False,
+                 replay      : bool = True,
                   ) -> tuple[np.ndarray, np.ndarray]:
         """
         Generate ``num_samples`` of ``num_steps``-day log normalized spot/state scenarios starting in the state of ``index``.
@@ -213,12 +222,96 @@ class ARSampler(object):
             Set to zero to generate one sample, and return a matrix of shape (num_steps, num_xstate) instead of (num_samples, num_steps, num_xstate).
         bandwidth : float, default 0.
             The bandwidth for the PCA noise. A value of 0 means no noise, while a value of 1 means full noise. Must be in [0,1].
-        replay : bool, default False
+        replay : bool, default True
             If True, the PCA factors are replayed from the historical data, instead of being sampled.
             That means with bandwidth=0, the historical path is generated.
         """
-        xstate = self.sample_xstates(index=index, num_steps=num_steps, num_samples=num_samples, bandwidth=bandwidth, replay=replay)
+        xstate = self.hist_sample_xstates(index=index, num_steps=num_steps, num_samples=num_samples, bandwidth=bandwidth, replay=replay)
         return ( xstate[:,:,0], xstate[:,:,1:] ) if num_samples > 0 else ( xstate[:,0], xstate[:,1:] )
+
+    def free_sample_xstates(self, 
+                 num_steps       : int, 
+                 num_samples     : int = 1, 
+                 dt              : float = 1./DAYS_PER_YEAR,*,
+                 index           : int = None, 
+                 bandwidth       : float = 0.,
+                 random_start    : bool = True,
+                  ) -> np.ndarray:
+        """
+        Generate ``num_samples`` of ``num_steps``-day extended state scenarios starting in the state of ``index``.
+
+        Parameters
+        ----------
+        index : int
+            The index of the starting state in the time series.
+        num_steps : int
+            The number of steps to simulate. This includes ``index``; so if ``num_steps=1``, the returned state is just the
+            state at ``index``.
+        num_samples : int, default 0
+            The number of independent samples to generate.
+            Set to zero to generate one sample, and return a matrix of shape (num_steps, num_xstate) instead of (num_samples, num_steps, num_xstate).
+        bandwidth : float, default 0.
+            The bandwidth for the PCA noise. A value of 0 means no noise, while a value of 1 means full noise. Must be in [0,1].
+        replay : bool, default False
+            If True, the PCA factors are replayed from the historical data, instead of being sampled.
+            That means with bandwidth=0, the historical path is generated.
+
+        Returns
+        -------
+        Result : :class:`np.ndarray`
+            Returns a matrix of form ``(num_samples, num_steps, num_xstate)`` if ``num_samples>0`` else ``(num_steps, num_xstate)``.
+        """
+        verify_inp( num_steps > 0, lambda: f"num_steps {num_steps} must be positive")
+        verify_inp( num_samples >= 0, lambda: f"num_samples {num_samples} must be positive")
+        verify_inp( index is None or (0 <= index < self.alpha.shape[0]), lambda: f"index {index} must be in [0,{self.alphaalpha.shape[0]-1}]")
+        verify_inp( bandwidth >= 0. and bandwidth <= 1. , lambda: f"bandwidth {bandwidth} must be in [0,1]")
+        verify_inp( dt > 0., lambda: f"dt {dt} must be positive")
+        verify_inp( index is not None or random_start, lambda: "'random_start' cannot be False if 'index' is None")
+ 
+        squeeze_sample = num_samples == 0
+        num_samples    = 1 if squeeze_sample else num_samples
+        num_alpha      = self.num_alpha
+        num_xstate     = self.num_xstate
+
+        ndt            = dt / self.pcaxar1.mean_dt 
+        Tm1            = self.pcaxar1.alpha.shape[0]
+
+        if index is None:
+            X0         = self.xstate[self.rng.integers(0, Tm1, size=(num_samples,)),:]
+            idx        = self.rng.integers(0, Tm1, size=(num_samples*(num_steps-1),))
+            alpha      = self.pcaxar1.alpha[idx,:].reshape((num_samples, num_steps-1, num_alpha))
+        else:
+            X0         = self.xstate[index,:][None,:] if index is not None else self.xstate[self.rng.integers(0, index+1, size=(num_samples,)),:]
+            idx        = self.rng.integers(0, index+1, size=(num_samples*(num_steps-1),))
+            alpha      = self.pcaxar1.alpha[idx,:].reshape((num_samples, num_steps-1, num_alpha))
+
+        if bandwidth > 0.:
+            z     = self.rng.normal(size=(num_samples, num_steps-1, num_alpha)) @ self.cholesky.T
+            alpha = self.alpha_mean + math.sqrt(max(0., 1. - bandwidth**2)) * (alpha - self.alpha_mean) + bandwidth * z
+
+        noise      = (alpha @ self.pcaxar1.dU) * np.sqrt(ndt)
+        assert noise.shape == (num_samples, num_steps-1, num_xstate), f"Internal noise error {noise.shape} != {(num_samples, num_steps-1, num_xstate)}"
+        k          = self.pcaxar1.k[:,:]
+        U0         = self.pcaxar1.U0
+        assert X0.shape == ( 1, num_xstate) or X0.shape == (num_samples, num_xstate), f"Internal X0 error {X0.shape} != {( 1, num_xstate)}"
+        assert k.shape == (num_xstate, num_xstate), f"Internal k error {k.shape} != {(num_xstate, num_xstate)}"
+        assert U0.shape == (1, num_xstate), f"Internal U0 error {U0.shape} != {(1, num_xstate)}"
+
+        new_xstates         = np.zeros((num_samples, num_steps, num_xstate), dtype=X0.dtype )
+        new_xstates[:,0,:]  = X0
+        Xt                  = new_xstates[:,0,:]
+        A, b                = _xar1_matrix_exp_terms(U0=U0, k=k, h=ndt)
+
+        for j in range(num_steps-1):
+            Xt = Xt @ A + b + noise[:,j,:]
+            assert Xt.shape == (num_samples, num_xstate), f"Internal Xt error {Xt.shape} != {(num_samples, num_xstate)}"
+            new_xstates[:,j+1,:] = Xt
+        new_xstates = new_xstates[0,...] if squeeze_sample else new_xstates
+        return new_xstates
+
+
+
+
 
 def _xar1_matrix_exp_terms(U0: np.ndarray, k: np.ndarray, h: float) -> tuple[np.ndarray, np.ndarray]:
     """

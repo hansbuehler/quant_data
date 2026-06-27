@@ -93,7 +93,7 @@ class BaseModel(tnn.Module):
         self._env = env
 
     @property
-    def environment(self) -> BaseEnvironment:
+    def env(self) -> BaseEnvironment:
         """Get environment"""
         return self._env
 
@@ -426,7 +426,7 @@ def lazy_verify(
     exception : Exception, default :class:`RuntimeError`
         The type of exception to raise if the condition is not satisfied.
     """
-    if not self.debug:
+    if not debug:
         return
 
     with torch.no_grad():

@@ -10,6 +10,8 @@ from __future__ import annotations
 from collections.abc import Callable
 import warnings as warnings
 
+from cdxcore.subdir import SubDir
+from cdxcore.uniquehash import named_unique_filename48_8
 import numpy as np
 from dataclasses import asdict, dataclass, field
 from cdxcore.err import error, verify, verify_inp
@@ -17,12 +19,12 @@ from cdxcore.verbose import Context
 from cdxcore.version import version
 from cdxcore.bs import bs
 from cdxcore.pretty import PrettyObject
-from cdxcore.util import is_filename
+from cdxcore.util import fmt_big_byte_number, fmt_digits, is_filename
 import logging
 import math
 
-from quantdata.sanos.tridiag import solve_sanos_tridiagonal
-from quantdata.torch import BaseEnvironment, BaseModel, torch, get, pop, lazy_verify
+from quantdata.biz_calendar import DAYS_PER_YEAR
+from quantdata.torch import BaseEnvironment, BaseModel, torch, get
 from quantdata.torch.ffw import FeedForward, FeedForwardConfig
 from quantdata.torch.bbtorch import BackboneTorch
 from quantdata.dysanos.grid.torch_market import GridMarketDefinition, PoolConfig
@@ -261,7 +263,7 @@ class SanosModel(BaseModel):
                                              num_output=config.decoder_config.num_state,
                                              config=config.encoder_config )
         self.decoder     = SanosDecoder( env, num_expiries=num_expiries, config=config.decoder_config )
-
+ 
     @property
     def label(self) -> str:
         return self.config.label
@@ -286,7 +288,7 @@ class SanosModel(BaseModel):
         assert (T,N) == (self.num_expiries, self.num_market_strikes), f"Expected (T,N)=({self.num_expiries},{self.num_market_strikes}), but found {(T,N)}"
 
         market_xstrikes  = get(data, "xstrikes", (S, T, N+2) )
-        expiries         = get(data, "expiries", (S, T) )
+        expiries         = get(data, "expiries", (S, T) )  # must be the same as self.expiries
         variances        = get(data, "variances", (S, T) )
         market_nms       = get(data, "nms", (S, T, N) )
         mid_vega         = get(data, "mid_vega", (S, T, N) )
@@ -337,7 +339,6 @@ class SanosModel(BaseModel):
         assert state is None or state.shape == (S, self.num_state), f"Expected state to have shape {(S, self.num_state)}, but found {state.shape}"
         state           = self.encoder( features ) if state is None else state
 
-
         market_xstrikes = get( data, "xstrikes", (S,T,N+2) )
         mids            = get( data, "mids", (S, T, N) )
         weights         = get( data, "weights", (S, T, N))
@@ -345,7 +346,7 @@ class SanosModel(BaseModel):
         market_strikes  = market_xstrikes[:,:,1:-1]
 
         pricer          = self.decoder( state=state, expiries=expiries, training=training )
-        fits            = pricer( market_strikes, and_vols=False, training=training )
+        fits            = pricer( market_strikes, training=training )
         mids            = get(data, "mids", (S, T, N) )
         weights         = get(data, "weights", (S, T, N))
 
@@ -390,7 +391,7 @@ class SanosModel(BaseModel):
         # from model_output
         assert r.fits.shape == (S, T, N), f"Expected fits to have shape {(S, T, N)}, but found {r.fits.shape}"
         assert r.xstrikes.shape == (S, T, n+2), f"Expected xstrikes to have shape {(S, T, n+2)}, but found {r.xstrikes.shape}"
-        assert r.xnms.shape == (n+2,), f"Expected xnms to have shape {(n+2,)}, but found {r.xnms.shape}"
+        assert r.xnms.shape == (1, 1, n+2) or r.xnms.shape == (S, T, n+2), f"Expected xnms to have shape (1|{S}, 1|{T}, {n+2}), but found {r.xnms.shape}"
         assert r.xdensities.shape == (S, T, n+2), f"Expected xdensities to have shape {(S, T, n+2)}, but found {r.xdensities.shape}"
         assert r.xdensity0.shape == (S, n+2), f"Expected xdensity0 to have shape {(S, n+2)}, but found {r.xdensity0.shape}"
         assert r.expiries.shape == (S, T), f"Expected expiries to have shape {(S, T)}, but found {r.expiries.shape}"  
@@ -401,8 +402,139 @@ class SanosModel(BaseModel):
 
         return dict(r)
         
+    @version("0.1")
+    def create_paths(self,  spots      : torch.Tensor,
+                            expiries   : torch.Tensor, 
+                            dt         : float,
+                            state      : torch.Tensor, *,
+                            block_size : int|None = 10000,
+                            with_vols  : bool = False,
+                            verbose    : Context = Context.all ) -> dict[str, torch.Tensor]:
+        """
+        Create a universe of calls and vols from a 'state'.
+        """
+        assert len(spots.shape) == 2, f"Expected spots to have shape (S,) but found {spots.shape}"
+        assert dt>0., f"Expected dt to be positive, but found {dt}"
+        S, TAU          = spots.shape
+        T               = len(expiries)
+        assert state.shape == (S,TAU,self.num_state), f"Expected state to have shape {(S,TAU,self.num_state)}, but found {state.shape}"
+        N               = self.config.decoder_config.num_nms
 
+        if not block_size is None and S > block_size:
+            num_blocks = math.ceil(S / block_size)
+            with verbose.write_t(lambda : f"\rCreating paths of {fmt_digits(S)} samples over {TAU} time steps in {num_blocks} blocks of size {block_size} (total {S})...", end='') as tme:
+                results = None
+                for i in range(num_blocks):
+                    verbose.write_t(lambda : f"\rCreating paths of {fmt_digits(S)} samples over {TAU} time steps, block {i+1}/{num_blocks}; so far this took {tme}... ", end='')
+                    start = i * block_size
+                    end = min((i + 1) * block_size, S)
+                    r = self.create_universe(spots[start:end,...], 
+                                             expiries, 
+                                             dt=dt, 
+                                             state=state[start:end,...], 
+                                             block_size=None, 
+                                             with_vols=with_vols,
+                                             verbose=Context.quiet )
 
+                    if results is None:
+                        results = { k: [v] for k,v in r.items() }
+                    else:
+                        for k,v in r.items():
+                            results[k].append(v)
+                # concatenate results
+                results = { k: torch.cat(v, dim=0) for k,v in results.items() }
+                verbose.write_t(lambda : f"\rCreated paths of {S} samples over {TAU} time steps in {num_blocks} blocks of size {block_size}: this took {tme}")
+                return results
 
+        tme = verbose.timer()
 
+        try:
+            pricer          = self.decoder( state=torch.reshape(state,(-1,self.num_state)), 
+                                            expiries=expiries[None,:], training=False )
 
+            # calls in t
+            strikes_t       = pricer.strikes  
+            assert strikes_t.shape == (S*TAU, T, N), f"Expected strikes to have shape {(S*TAU, T, N)}, but found {strikes_t.shape}" 
+            strikes_t       = torch.reshape( strikes_t, (S, TAU, T, N) )
+            calls_t         = pricer( pricer.strikes, training=False )
+            calls_t         = torch.reshape( calls_t, (S, TAU, T, N) )
+            calls_t         = calls_t[:,:-1,:,:] # remove last time step
+            strikes_t       = strikes_t[:,:-1,:,:] # remove last time step
+            cash_calls_t    = calls_t * spots[:,:-1,None,None]
+            assert cash_calls_t.shape == (S, TAU-1, T, N), f"Expected cash_calls_t to have shape {(S, TAU-1, T, N)}, but found {cash_calls_t.shape}"
+
+            # calls in t+1
+            strikes_tp1     = strikes_t * spots[:,:-1,None,None]  / spots[:,1:,None,None] # strikes at t+1
+
+            strikes_tp1     = torch.cat( [ strikes_t[:,:1,:,:], strikes_tp1 ], dim=1 ) # add last strike to make it the same shape as strikes_t
+            assert strikes_tp1.shape == (S, TAU, T, N), f"Expected strikes_tp1 to have shape {(S, TAU, T, N)}, but found {strikes_tp1.shape}"
+
+            calls_tp1       = pricer( torch.reshape(strikes_tp1, (-1, T, N)),
+                                      dt=dt,
+                                      training=False )
+            pricer = None
+            assert calls_tp1.shape == (S*TAU, T, N), f"Expected calls_tp1 to have shape {(S*TAU, T, N)}, but found {calls_tp1.shape}"
+            calls_tp1       = torch.reshape( calls_tp1, (S, TAU, T, N) )
+            calls_tp1       = calls_tp1[:,1:,:,:] # remove first time step
+            strikes_tp1     = strikes_tp1[:,1:,:,:] # remove first time step
+            cash_calls_tp1  = calls_tp1 * spots[:,1:,None,None] 
+
+            universe = dict(
+                C_t       = cash_calls_t, # (S, TAU-1, T, N)
+                C_tp1     = cash_calls_tp1, # (S , TAU-1, T, N)
+                strikes_t = strikes_t,  # (S, TAU-1, T, N)
+                strikes_tp1 = strikes_tp1, # (S, TAU-1, T, N)
+                spots     = spots,     # (S, TAU)
+                vols_t    = None,      # None or (S, TAU-1, T, N)
+                vols_tp1  = None,      # None or (S, TAU-1, T, N)
+                delta_t   = None,      # None or (S, TAU-1,  T, N)
+                vega_t    = None,      # None or (S, TAU-1,  T, N)
+                gamma_t   = None,      # None or (S, TAU-1,  T, N)
+                theta_t   = None,      # None or (S, TAU-1,  T, N)
+            )
+
+            if with_vols:
+                warnings.warn("with_vols: transferring data to CPU")
+                np_spots       = spots.detach().cpu().numpy()
+                np_expires     = expiries.detach().cpu().numpy()
+                np_calls_t     = calls_t.detach().cpu().numpy()
+                np_strikes_t   = strikes_t.detach().cpu().numpy()
+                np_calls_tp1   = calls_tp1.detach().cpu().numpy()
+                np_strikes_tp1 = strikes_tp1.detach().cpu().numpy()
+                np_sqrtT       = np.sqrt( np_expires )
+
+                assert np_calls_t.shape == (S, TAU-1, T, N), f"Expected np_calls_t to have shape {(S, TAU-1, T, N)}, but found {np_calls_t.shape}"
+                assert np_calls_tp1.shape == (S, TAU-1, T, N), f"Expected np_calls_tp1 to have shape {(S, TAU-1, T, N)}, but found {np_calls_tp1.shape}"
+                np_vols_t      = bs.implied( k=np_strikes_t, prices=np_calls_t, sqrtT=np_sqrtT[None,None,:,None], eps=1E-6 )
+                np_vols_tp1    = bs.implied( k=np_strikes_tp1, prices=np_calls_tp1, sqrtT=np_sqrtT[None,None,:,None], eps=1E-6 )
+                assert np_vols_t.shape == np_calls_t.shape, f"Expected np_vols_t to have shape {np_calls_t.shape}, but found {np_vols_t.shape}"
+                assert np_vols_tp1.shape == np_calls_tp1.shape, f"Expected np_vols_tp1 to have shape {np_calls_tp1.shape}, but found {np_vols_tp1.shape}"
+
+                delta_t,\
+                vega_t,\
+                gamma_t,\
+                theta_t        = bs( k=np_strikes_t, vol=np_vols_t, sqrtT=np_sqrtT[None,None,:,None],
+                                    what=bs.DELTA|bs.GAMMA|bs.VEGA|bs.THETA, on_precision_error="clip" )['delta', 'vega', 'gamma', 'theta']
+                vega_t         = np_spots[:,:-1,None,None] * vega_t
+                theta_t        = np_spots[:,:-1,None,None] * theta_t
+                gamma_t        = gamma_t / np_spots[:,:-1,None,None]
+
+                vols_t         = torch.tensor( np_vols_t, device=spots.device, dtype=spots.dtype )
+                vols_tp1       = torch.tensor( np_vols_tp1, device=spots.device, dtype=spots.dtype )
+                delta_t        = torch.tensor( delta_t, device=spots.device, dtype=spots.dtype )
+                vega_t         = torch.tensor( vega_t, device=spots.device, dtype=spots.dtype )
+                gamma_t        = torch.tensor( gamma_t, device=spots.device, dtype=spots.dtype )
+                theta_t        = torch.tensor( theta_t, device=spots.device, dtype=spots.dtype )
+
+                universe['vols_t']   = vols_t
+                universe['vols_tp1'] = vols_tp1
+                universe['delta_t']  = delta_t
+                universe['vega_t']   = vega_t
+                universe['gamma_t']  = gamma_t
+                universe['theta_t']  = theta_t
+
+        except MemoryError as e:
+            raise MemoryError(f"MemoryError in create_paths: {e}. Consider reducing 'block_size', currently {block_size}. Error message: {e}") from e
+
+        verbose.write(lambda : f"Created paths of {S} samples over {TAU} time steps: this took {tme}")
+        return universe        

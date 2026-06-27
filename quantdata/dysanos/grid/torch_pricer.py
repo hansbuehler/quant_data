@@ -12,7 +12,7 @@ import warnings as warnings
 import numpy as np
 import math
 from dataclasses import dataclass
-from cdxcore.err import verify_inp
+from cdxcore.err import verify, verify_inp
 from cdxcore.version import version
 from cdxcore.pretty import PrettyObject
 
@@ -22,6 +22,7 @@ from quantdata.torch.ffw import FeedForward
 from quantdata.torch.bbtorch import BackboneTorch
 from quantdata.biz_calendar import NMS
 from fast_vollib import fast_implied_volatility
+import gc
 
 _bbtorch = BackboneTorch()
 
@@ -89,23 +90,39 @@ class SanosDecoderConfig:
         return xnms
 
 @version("0.1")
-@dataclass(kw_only=True) # can't freeze - torch won't compile
 class SanosPricer:
-    smoothness: float | None
-    expiries  : torch.Tensor
-    xstrikes  : torch.Tensor
-    xdensities: torch.Tensor
-    xdensity0 : torch.Tensor
-    sqrtVars  : torch.Tensor
-    # information only - no gradient
-    dlvsqs    : torch.Tensor
-    xnms      : torch.Tensor
-    # debugging
-    debug     : bool = False
 
+    def __init__(self, *,
+        smoothness: float | None,
+        expiries  : torch.Tensor,   # (1|S,T)
+        xstrikes  : torch.Tensor,   # (S, T, N+2)
+        xdensities: torch.Tensor,   # (S, T, N+2)
+        xdensity0 : torch.Tensor,   # (S, N+2)
+        sqrtVars  : torch.Tensor,   # (S, T)
+        # information only - no gradient
+        dlvsqs    : torch.Tensor|None = None, # (S, T, N)
+        xnms      : torch.Tensor|None = None, # (S|1, T|1, N+2)
+        # debugging
+        debug     : bool = False
+    ):
+        self.smoothness  = smoothness
+        self.expiries    = expiries
+        self.xstrikes    = xstrikes
+        self.xdensities  = xdensities
+        self.xdensity0   = xdensity0
+        self.sqrtVars    = sqrtVars
+        self.dlvsqs      = dlvsqs
+        self.xnms        = xnms
+        self.debug       = debug
+        
     def verify( self, condition : Callable, message : Callable|str ) -> None:
         """ verify ``condition`` and raise an error with ``message`` if not satisfied; if ``self.debug`` is False, this function does nothing. """
         lazy_verify( self.debug, condition, message )
+
+    @property
+    def strikes(self) -> torch.Tensor:
+        """ Return the strikes (S, T, N) """
+        return self.xstrikes[:,:,1:-1]
 
     @staticmethod
     def create( smoothness : float, model_output : dict, *, debug : bool = False ) -> SanosPricer:
@@ -116,36 +133,161 @@ class SanosPricer:
                             xdensities=model_output['xdensities'],
                             xdensity0=model_output['xdensity0'],
                             sqrtVars=model_output['sqrtVars'],
-                            dlvsqs=model_output['dlvsqs'],
-                            xnms=model_output['xnms'],
+                            dlvsqs=model_output.get('dlvsqs', None),
+                            xnms=model_output.get('xnms', None),
                             debug=debug )
 
-    def __call__(self, market_strikes : torch.Tensor, *, and_vols : bool = False, training : bool = False ) -> tuple[torch.Tensor, torch.Tensor|None]:
+    #@torch.compile(fullgraph=True)
+    def __call__(self, market_strikes : torch.Tensor, *,
+                       dt             : float|None = None,
+                       training       : bool = False ) -> tuple[torch.Tensor, torch.Tensor|None]:
         """ Price call prices for the provided market strikes """
         S, T, n2 = self.xstrikes.shape
         assert market_strikes.shape[:2] == (S, T), f"Expected market_strikes to have shape {(S, T, ...)}, but found {market_strikes.shape}"
         N        = market_strikes.shape[2]
-
-         # model to market
-        if self.smoothness is None or self.smoothness == 0.:
-            C = torch.sum( torch.maximum( self.xstrikes[0,0,0]*0., self.xstrikes[:,:,None,:] - market_strikes[:,:,:,None] ) * self.xdensities[:,:,None,:], dim=-1 )
-        else:
-            C = torch.sum( _bbtorch.bs_price(  
-                                    spot=self.xstrikes[:,:,None,:],
-                                    strikes=market_strikes[:,:,:,None],
-                                    sqrtVars=math.sqrt(self.smoothness) * self.sqrtVars[:,:,None,None]) * self.xdensities[:,:,None,:], dim=-1 )
-        assert C.shape == (S, T, N), f"Expected C to have shape {(S, T, N)}, but found {C.shape}"  
-
-        if not and_vols:
+        xS       = self.expiries.shape[0]
+    
+        if dt is None:
+            # model to market
+            if self.smoothness is None or self.smoothness == 0.:
+                C = torch.sum( torch.maximum( self.xstrikes[0,0,0]*0., self.xstrikes[:,:,None,:] - market_strikes[:,:,:,None] ) * self.xdensities[:,:,None,:], dim=-1 )
+            else:
+                C = torch.sum( _bbtorch.bs_price(  
+                                        spot=self.xstrikes[:,:,None,:],
+                                        strikes=market_strikes[:,:,:,None],
+                                        sqrtVars=math.sqrt(self.smoothness) * self.sqrtVars[:,:,None,None]) * self.xdensities[:,:,None,:], dim=-1 )
+            assert C.shape == (S, T, N), f"Expected C to have shape {(S, T, N)}, but found {C.shape}"  
             return C
-        raise NotImplementedError("'fast_implied_volatility' defunct - do not use 'and_vols'")
-        """
-        # call https://arxiv.org/pdf/2604.27210
+
+        # 'dt' pricing: assume we do not cross the expiry boundary
+        # The pricing rule is is follows:
+        #
+        # SANOS pricing at a fixed expory j is
+        #  C = BSCall( Spot=Strike_j, Strikes, sqrtVar ) * density_j
+        #
+        # If we price at an intermediate time t with
+        #  alpha_j = (t - t_{j-1}) / (t_j - t_{j-1})
+        #
+        # we first interpolate variance linearly:
+        #  sqrtVar_t = sqrt( var_j * alpha_j + var_{j-1} * (1-alpha_j) ) 
+        #
+        # The we interpolate call prices to t>t_1 as
+        # 
+        #  C =     alpha_j * BSCall( Spot=Strike_j, Strikes, sqrtVar_t ) * density_j +
+        #      (1-alpha_j) * BSCall( Spot=Strike_{j-1}, Strikes, sqrtVar_t ) * density_{j-1}
+        # 
+        # for t<t_1 we use
+        #  C =     BSCall( Spot=Strike_1, Strikes, sqrtVar_1 ) * ( alpha_1 density_1 + (1-alpha_1) density_0 )
+        
+        assert dt > 0., f"Expected dt to be positive, but found {dt}"
+
+        expiries_tp1 = torch.clip( self.expiries - dt, min=0. )
+        assert expiries_tp1.shape == (S,T) or expiries_tp1.shape == (1,T), f"Expected expiries_tp1 to have shape ({S}|1,{T}), but found {expiries_tp1.shape}"
+        self.verify( lambda : torch.all( dt >= 0. ), "Negative 'dt' values found" )
+        self.verify( lambda : torch.all( expiries_tp1[:,1:] >= self.expiries[:, :-1] ), "'dt' transcends expiry boundaries" )
+        self.verify( lambda : torch.all( expiries_tp1[:,0] >= 0. ), "'expiries_tp1[0]'<0" )
+
+        alpha_j_tp1  = ( expiries_tp1[:,1:] - self.expiries[:, :-1] ) / ( self.expiries[:,1:] - self.expiries[:,:-1] )
+        alpha_0_tp1  = expiries_tp1[:,0] / self.expiries[:,0] # (S,)
+        assert alpha_j_tp1.shape == (xS, T-1), f"Expected alpha_j_tp1 to have shape {(xS, T-1)}, but found {alpha_j_tp1.shape}"
+        assert alpha_0_tp1.shape == (xS,), f"Expected alpha_0_tp1 to have shape {(xS,)}, but found {alpha_0_tp1.shape}"
+        self.verify( lambda : torch.all( torch.isfinite(alpha_j_tp1) & ( alpha_j_tp1 >= 0. ) & ( alpha_j_tp1 <= 1. ) ), "alpha_j_tp1 not within [0,1]" )
+        good =torch.isfinite(alpha_0_tp1) & ( alpha_0_tp1 >= 0. ) & ( alpha_0_tp1 <= 1. )
+        self.verify( lambda : torch.all( torch.isfinite(alpha_0_tp1) & ( alpha_0_tp1 >= 0. ) & ( alpha_0_tp1 <= 1.+1E-8 ) ), lambda : f"alpha_0_tp1 not within [0,1] {alpha_0_tp1[~good]}" )
+        variances    = None
+
+        variances    = self.sqrtVars**2
+        int_var_j    = variances[:,1:] * alpha_j_tp1 + variances[:,:-1] * (1. - alpha_j_tp1)
+        int_var_0    = variances[:,:1] * alpha_0_tp1[:,None]
+        int_sqrV     = torch.cat( (int_var_0, int_var_j), dim=1 )
+        assert int_sqrV.shape == (S, T), f"Expected int_sqrV to have shape {(S, T)}, but found {int_sqrV.shape}"
+        int_sqrtV    = torch.sqrt( int_sqrV )
+        blend_q0     = self.xdensity0[:,None,:] * (1.- alpha_0_tp1)[:,None,None] + self.xdensities[:,:1,:] * alpha_0_tp1[:,None,None]
+        int_var_j    = None
+        int_var_0    = None
+        int_sqrV     = None
+        variances    = None
+        self.verify( lambda : torch.all( torch.isfinite(int_sqrtV) & (int_sqrtV >= 0.) ), "Infinite or negative 'int_sqrtV' values found" )
+
+        # model to market
+        # ---------------
+
+        # vector version uses too much memory
+        if self.smoothness is None or self.smoothness == 0.:
+            C_hi    = torch.sum( torch.maximum(self.xstrikes[0,0,0]*0., self.xstrikes[:,1:,None,:] - market_strikes[:,1:,:,None]) * self.xdensities[:,1:,None,:], dim=-1, )
+            C_lo    = torch.sum( torch.maximum(self.xstrikes[0,0,0]*0., self.xstrikes[:,:-1,None,:] - market_strikes[:,1:,:,None]) * self.xdensities[:,:-1,None,:], dim=-1, )
+            C_j     = C_hi * alpha_j_tp1[:,:,None] + C_lo * (1. - alpha_j_tp1[:,:,None])
+            C_hi    = None
+            C_lo    = None
+        else:
+            C_hi    = torch.sum( _bbtorch.bs_price(  
+                                    spot=self.xstrikes[:,1:,None,:],
+                                    strikes=market_strikes[:,1:,:,None],
+                                    sqrtVars=math.sqrt(self.smoothness) * int_sqrtV[:,1:,None,None]) * self.xdensities[:,1:,None,:], dim=-1 )
+            C_lo    = torch.sum( _bbtorch.bs_price(  
+                                    spot=self.xstrikes[:,:-1,None,:],
+                                    strikes=market_strikes[:,1:,:,None],
+                                    sqrtVars=math.sqrt(self.smoothness) * int_sqrtV[:,1:,None,None]) * self.xdensities[:,:-1,None,:], dim=-1 )
+            C_j     =  C_hi * alpha_j_tp1[:,:,None] + C_lo * (1.- alpha_j_tp1[:,:,None])
+            assert C_hi.shape == (S, T-1, N), f"Expected C_hi to have shape {(S, T-1, N)}, but found {C_hi.shape}"  
+            assert C_lo.shape == (S, T-1, N), f"Expected C_lo to have shape {(S, T-1, N)}, but found {C_lo.shape}"  
+            assert C_j.shape == (S, T-1, N), f"Expected C_j to have shape {(S, T-1, N)}, but found {C_j.shape}"  
+            C_hi    = None
+            C_lo    = None
+
+            X       = _bbtorch.bs_price(  
+                                    spot=self.xstrikes[:,0,None,:],
+                                    strikes=market_strikes[:,0,:,None],
+                                    sqrtVars=math.sqrt(self.smoothness)* int_sqrtV[:,0,None,None])
+            C_0     = torch.sum( X  * blend_q0, dim=-1 )
+            assert C_0.shape == (S, N), f"Expected C_0 to have shape {(S, N)}, but found {C_0.shape}"  
+            C       = torch.cat( (C_0[:,None,:], C_j), dim=1 )
+        self.verify( lambda : torch.all( torch.isfinite(C) & (C >= 0.) ), "Infinite or negative 'C' values found" )
         assert C.shape == (S, T, N), f"Expected C to have shape {(S, T, N)}, but found {C.shape}"  
-        assert market_strikes.shape == (S, T, N), f"Expected market_strikes to have shape {(S, T, N)}, but found {market_strikes.shape}"
-        vol = fast_implied_volatility( price=C, S=1., K=market_strikes, t=self.expiries[:,:,None], r=0., flag="c", backbone="torch" )
-        return C, vol
-        """
+        return C
+
+        # loop in T
+        if self.smoothness is None or self.smoothness == 0.:
+            C_0     = torch.sum( torch.relu(self.xstrikes[:,0,None,:] - market_strikes[:,0,:,None]) * blend_q0, dim=-1 )
+        else:
+            C_0     = torch.sum( _bbtorch.bs_price(  
+                                    spot=self.xstrikes[:,0,None,:],
+                                    strikes=market_strikes[:,0,:,None],
+                                    sqrtVars=math.sqrt(self.smoothness)* int_sqrtV[:,0,None,None]) * blend_q0, dim=-1 )
+            assert C_0.shape == (S, N), f"Expected C_0 to have shape {(S, N)}, but found {C_0.shape}"  
+
+        C       = [ C_0 ]
+        C_0     = None
+
+        for t in range(1,T):
+            if self.smoothness is None or self.smoothness == 0.:
+                C_hi    = torch.sum( torch.relu(self.xstrikes[:,t,None,:] - market_strikes[:,t,:,None]) * self.xdensities[:,t,None,:], dim=-1, )
+                C_lo    = torch.sum( torch.relu(self.xstrikes[:,t-1,None,:] - market_strikes[:,t,:,None]) * self.xdensities[:,t-1,None,:], dim=-1, )
+                C_j     = C_hi * alpha_j_tp1[:,t-1,None] + C_lo * (1. - alpha_j_tp1[:,t-1,None])
+                C_hi    = None
+                C_lo    = None
+            else:
+                C_hi    = torch.sum( _bbtorch.bs_price(  
+                                        spot=self.xstrikes[:,t,None,:],
+                                        strikes=market_strikes[:,t,:,None],
+                                        sqrtVars=math.sqrt(self.smoothness) * int_sqrtV[:,t,None,None]) * self.xdensities[:,t,None,:], dim=-1 )
+                C_lo    = torch.sum( _bbtorch.bs_price(  
+                                        spot=self.xstrikes[:,t-1,None,:],
+                                        strikes=market_strikes[:,t,:,None],
+                                        sqrtVars=math.sqrt(self.smoothness) * int_sqrtV[:,t-1,None,None]) * self.xdensities[:,t-1,None,:], dim=-1 )
+                C_j     =  C_hi * alpha_j_tp1[:,t-1,None] + C_lo * (1.- alpha_j_tp1[:,t-1,None])
+                assert C_hi.shape == (S, N), f"Expected C_hi to have shape {(S, N)}, but found {C_hi.shape}"  
+                assert C_lo.shape == (S, N), f"Expected C_lo to have shape {(S, N)}, but found {C_lo.shape}"  
+                assert C_j.shape == (S, N), f"Expected C_j to have shape {(S, N)}, but found {C_j.shape}"  
+                C_hi    = None
+                C_lo    = None
+            C.append( C_j )
+            C_j = None
+            gc.collect()
+
+        C = torch.stack( C, dim=1 )
+        assert C.shape == (S, T, N), f"Expected C to have shape {(S, T, N)}, but found {C.shape}"  
+        return C
 
     def asdict(self) -> dict:
         """ Return a dictionary representation of the :class:`SanosPricer` """
@@ -178,16 +320,17 @@ class SanosDecoder(BaseModel):
         self.decoder      = FeedForward( env, num_input=config.num_state, num_output=self.num_output, config=config.nn_config )  
         self.xnms         = torch.tensor( config.xnms, device=env.device, dtype=env.fdtype )
 
-    def __call__(self, state : torch.Tensor,
-                       expiries : torch.Tensor,
+    def __call__(self, state    : torch.Tensor,
+                       expiries : torch.Tensor, *,
                        training : bool = False ) -> dict[str, torch.Tensor]:
         """
         Decode a ``state`` into dlvsqs and foward variances.
         """
-        S, T          = expiries.shape
+        S             = state.shape[0]
+        T             = expiries.shape[1]
         n             = self.config.num_nms
-        assert T == self.num_expiries, f"Expected expiries to have shape {(S, self.num_expiries)}, but found {expiries.shape}"
-        assert state.shape==(S,self.config.num_state), f"Expected raw output to have shape {(S,self.config.num_state)}, but found {state.shape}"
+        assert len(expiries.shape) == 2 and expiries.shape[0] in [1, S] and expiries.shape[1] == self.num_expiries, f"Expected 'expiries' to have shape ({S}|1, {self.num_expiries}), but found {expiries.shape}"
+        assert state.shape==(S,self.config.num_state), f"Expected 'state' to have shape {(S,self.config.num_state)}, but found {state.shape}"
 
         # extract DLVs, dsqrtVars
         # -----------------------
@@ -206,7 +349,7 @@ class SanosDecoder(BaseModel):
         raw          = torch.sigmoid( raw )
         r.dlvsqs     = raw[:, :T*n].reshape( S, T, n ) * (max_dlvsq - min_dlvsq) + min_dlvsq
         dsqrtVars    = raw[:, T*n:T*n+T].reshape( S, T ) * (max_dsqrtVar - min_dsqrtVar) + min_dsqrtVar
-        r.xnms       = self.xnms
+        r.xnms       = self.xnms[None,None,:]
 
         if self.config.learn_nms:
             fnms   = raw[:, T*n+T:].reshape( S, T, 1 ) * 1.9 + 0.1  # learn to scale NMS between 10% and 200%
@@ -221,7 +364,7 @@ class SanosDecoder(BaseModel):
         # --------
 
         if self.config.nms_eps is None:
-            r.xstrikes = torch.exp(r.xnms[None,None,:] * r.sqrtVars[:,:,None] )
+            r.xstrikes = torch.exp(r.xnms * r.sqrtVars[:,:,None] )
         else:
             """
             NMS(z,t) = exp( nms * sqrt{ var_e + var_t }/{ e + 1 } )
@@ -231,7 +374,7 @@ class SanosDecoder(BaseModel):
             var_e      = ( r.sqrtVars[:,0]**2 / expiries[:,0] )[:,None] * self.config.nms_eps
             var_t      = r.sqrtVars**2
             nms_adj    = torch.sqrt( ( var_e / var_t + 1 ) / ( self.config.nms_eps + 1. ) ) if not self.config.nms_eps is None else 1.
-            r.xstrikes = torch.exp(r.xnms[None,None,:] * r.sqrtVars[:,:,None] * nms_adj[:,:,None] )
+            r.xstrikes = torch.exp(r.xnms * r.sqrtVars[:,:,None] * nms_adj[:,:,None] )
 
         # Pricing
         # -------
@@ -244,7 +387,7 @@ class SanosDecoder(BaseModel):
                                       append=_0_S1, dim=1 )
 
         # prep tridiagonal solver
-        dt         = torch.diff( expiries, prepend=_0_S1, dim=1 )
+        dt         = torch.diff( expiries, prepend=torch.zeros_like(expiries[:,:1]), dim=1 )
         box        = r.xstrikes[:,:,1:-1]**2 * dt[:,:,None] / ( r.xstrikes[:,:,2:] - r.xstrikes[:,:,:-2])
         iw_plus    = box / ( r.xstrikes[:,:,2:] - r.xstrikes[:,:,1:-1] )
         iw_minus   = box / ( r.xstrikes[:,:,1:-1] - r.xstrikes[:,:,:-2] )
