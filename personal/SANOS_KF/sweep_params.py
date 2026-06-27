@@ -61,7 +61,6 @@ import gc
 import itertools
 import math
 import sys
-import tempfile
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import date
@@ -373,17 +372,79 @@ def _resolve_dates(args: argparse.Namespace) -> list[date]:
     return [d]
 
 
-def _load_data(ticker: str, trade_date: date, min_trades: int) -> tuple[pl.DataFrame, pl.DataFrame]:
+# Per-date data cache. build_iv_observations walks the WHOLE contract universe doing
+# one small per-contract read, so a cold load is thousands of tiny I/O ops (~minutes,
+# ~0% CPU). We pickle its output to parquet keyed by (ticker, date, min_trades); a warm
+# load then collapses to a single parquet read — and every resume/re-run is instant.
+DATA_CACHE_DIR = os.path.join(PROJECT_ROOT, "personal", "SANOS_KF", "data_cache")
+
+
+def _tickers_path(trade_date: date) -> str:
+    """Per-date option universe. A date-specific file is REQUIRED for correctness:
+    the generic spy_options_tickers.csv is the 2024-01-03 universe, whose near-term
+    contracts expire within days, so later trade dates would see no valid quotes
+    ("No options produced valid data"). Prefer ticker_universes/, then personal/, and
+    only fall back to the generic file (valid for ~2024-01-03..05) as a last resort."""
+    candidates = [
+        os.path.join(
+            PROJECT_ROOT, "personal", "ticker_universes", f"spy_options_tickers_{trade_date}.csv"
+        ),
+        os.path.join(PROJECT_ROOT, "personal", f"spy_options_tickers_{trade_date}.csv"),
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    generic = os.path.join(PROJECT_ROOT, "personal", "spy_options_tickers.csv")
+    print(f"  WARNING: no per-date universe for {trade_date}; using generic {generic}")
+    return generic
+
+
+def _data_cache_paths(ticker: str, trade_date: date, min_trades: int) -> tuple[str, str]:
+    base = f"{ticker}_{trade_date}_mt{min_trades}"
+    return (
+        os.path.join(DATA_CACHE_DIR, f"quotes_{base}.parquet"),
+        os.path.join(DATA_CACHE_DIR, f"trades_{base}.parquet"),
+    )
+
+
+def _ensure_data_cache(
+    ticker: str, trade_date: date, min_trades: int, rebuild: bool = False
+) -> tuple[str, str]:
+    """Build the date's (df_quotes, df_trades) via build_iv_observations and pickle to
+    parquet, unless a fresh cache already exists. Returns the two parquet PATHS — the
+    workers read them directly (one copy each), so the parent never holds the frames."""
+    q_path, t_path = _data_cache_paths(ticker, trade_date, min_trades)
+    if not rebuild and os.path.exists(q_path) and os.path.exists(t_path):
+        print(f"data cache HIT → {os.path.basename(q_path)} (skipping the slow rebuild)")
+        return q_path, t_path
+
     from personal.Kalman_filter_spline.surface_kalman_filters import build_iv_observations
     from quantdata.massive.client import MassiveClient
 
-    df_tickers = pl.read_csv(os.path.join(PROJECT_ROOT, "personal", "spy_options_tickers.csv"))
+    tickers_path = _tickers_path(trade_date)
+    print(
+        f"data cache MISS → building {ticker} {trade_date} (slow, ~minutes) "
+        f"[universe: {os.path.basename(tickers_path)}] ..."
+    )
+    df_tickers = pl.read_csv(tickers_path)
     client = MassiveClient()
     df_spy = client.fetch_trades(ticker, trade_date)
     df_quotes, df_trades = build_iv_observations(
         df_tickers, trade_date, df_spy, min_trades=min_trades
     )
-    return df_quotes, df_trades
+    os.makedirs(DATA_CACHE_DIR, exist_ok=True)
+    # write to a temp name then rename, so an interrupted build never leaves a half cache.
+    df_quotes.write_parquet(q_path + ".tmp")
+    df_trades.write_parquet(t_path + ".tmp")
+    os.replace(q_path + ".tmp", q_path)
+    os.replace(t_path + ".tmp", t_path)
+    print(
+        f"data cache WRITTEN → {os.path.basename(q_path)} "
+        f"({len(df_quotes):,} quotes, {len(df_trades):,} trades)"
+    )
+    del df_quotes, df_trades, df_spy
+    gc.collect()
+    return q_path, t_path
 
 
 def _run_date(
@@ -395,54 +456,40 @@ def _run_date(
     mtpc: int | None,
     writer: csv.DictWriter,
     fh,
+    rebuild_cache: bool = False,
 ) -> int:
-    """Load one date, fan its grid out to a pool, stream rows (tagged with `date`)
-    into the shared CSV writer. Returns the number of rows written."""
+    """Load one date (via the per-date parquet cache), fan its grid out to a pool,
+    stream rows (tagged with `date`) into the shared CSV writer. Returns rows written."""
     print(f"\n===== {trade_date} =====")
-    print(f"Loading {ticker} {trade_date} ...")
-    df_quotes, df_trades = _load_data(ticker, trade_date, min_trades)
-    print(f"quotes: {len(df_quotes):,}   trades: {len(df_trades):,}")
-
-    # Spill the data to parquet so workers load it from disk (one copy each) and the
-    # parent can free its own copy — avoids pickling ~GB into every worker.
-    tmpdir = tempfile.mkdtemp(prefix="sweep_data_")
-    q_path = os.path.join(tmpdir, "quotes.parquet")
-    t_path = os.path.join(tmpdir, "trades.parquet")
-    df_quotes.write_parquet(q_path)
-    df_trades.write_parquet(t_path)
-    del df_quotes, df_trades
-    gc.collect()
+    # Workers read the cached parquet directly (one copy each), so the parent never
+    # holds the frames — the cache IS the spill, and it persists across runs.
+    q_path, t_path = _ensure_data_cache(ticker, trade_date, min_trades, rebuild_cache)
 
     print(f"Running {len(points)} configs on {workers} workers ...")
     n_written = 0
-    try:
-        with ProcessPoolExecutor(
-            max_workers=workers,
-            initializer=_init_worker,
-            initargs=(q_path, t_path),
-            max_tasks_per_child=mtpc,
-        ) as ex:
-            futs = {ex.submit(_run_one, p): p for p in points}
-            for i, fut in enumerate(as_completed(futs), 1):
-                r = fut.result()
-                r["date"] = str(trade_date)
-                writer.writerow(r)
-                fh.flush()  # land this row on disk before moving on
-                n_written += 1
-                tag = "ok " if r.get("ok") else "ERR"
-                score = r.get("ho_nse_mean", float("nan"))
-                p = futs[fut]
-                lbl = f"{p['sigmoid_mode']}/{p['obs_mode']}/{p['side']}"
-                print(
-                    f"[{trade_date}][{i}/{len(points)}] {tag} {lbl} ho_nse={score:.4f} "
-                    f"({r['secs']:.1f}s)" + (f"  {r['err']}" if not r.get("ok") else ""),
-                    flush=True,
-                )
-    finally:
-        import shutil
-
-        shutil.rmtree(tmpdir, ignore_errors=True)  # drop the spilled parquet copies
-        gc.collect()
+    with ProcessPoolExecutor(
+        max_workers=workers,
+        initializer=_init_worker,
+        initargs=(q_path, t_path),
+        max_tasks_per_child=mtpc,
+    ) as ex:
+        futs = {ex.submit(_run_one, p): p for p in points}
+        for i, fut in enumerate(as_completed(futs), 1):
+            r = fut.result()
+            r["date"] = str(trade_date)
+            writer.writerow(r)
+            fh.flush()  # land this row on disk before moving on
+            n_written += 1
+            tag = "ok " if r.get("ok") else "ERR"
+            score = r.get("ho_nse_mean", float("nan"))
+            p = futs[fut]
+            lbl = f"{p['sigmoid_mode']}/{p['obs_mode']}/{p['side']}"
+            print(
+                f"[{trade_date}][{i}/{len(points)}] {tag} {lbl} ho_nse={score:.4f} "
+                f"({r['secs']:.1f}s)" + (f"  {r['err']}" if not r.get("ok") else ""),
+                flush=True,
+            )
+    gc.collect()
     return n_written
 
 
@@ -495,6 +542,11 @@ def main() -> None:
         type=int,
         default=50,
         help="recycle each worker after this many configs to cap memory creep (0 = never recycle).",
+    )
+    ap.add_argument(
+        "--rebuild-data-cache",
+        action="store_true",
+        help="rebuild the per-date data cache (data_cache/*.parquet) even if present",
     )
     ap.add_argument("--dry-run", action="store_true", help="print grid size and exit")
     args = ap.parse_args()
@@ -591,7 +643,15 @@ def main() -> None:
                 continue
             try:
                 total_written += _run_date(
-                    args.ticker, d, args.min_trades, day_points, args.workers, mtpc, writer, fh
+                    args.ticker,
+                    d,
+                    args.min_trades,
+                    day_points,
+                    args.workers,
+                    mtpc,
+                    writer,
+                    fh,
+                    rebuild_cache=args.rebuild_data_cache,
                 )
             except Exception as exc:
                 print(f"[{d}] FAILED: {type(exc).__name__}: {exc}")

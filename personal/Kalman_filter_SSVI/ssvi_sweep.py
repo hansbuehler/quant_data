@@ -9,6 +9,8 @@ over a sweep of the KF hyper-parameters:
     P0_scale      — initial state-covariance scale
     Q_structure   — "scaled_identity" (Q = Q_scale·I) vs
                     "diagonal"        (Q = diag(Q_scale · model.q_diag_weights))
+    fit_mode      — "joint"    (legacy: θ fit on the union of puts+calls) vs
+                    "per_side" (θ fit on puts-only, then calls-only, separately)
 
 REUSES the single-strike Phase-1 cache (Kalman_filter_individual/phase1_cache_{date}.pkl):
 both pipelines share the identical Phase 1+2 (fetch + IV batch), so there is no need
@@ -69,9 +71,18 @@ P0_SCALES = [1e-2, 1e-1, 1.0, 10.0]
 Q_STRUCTURES = ["scaled_identity", "diagonal"]
 BATCH_S = 1.0  # batch window width (seconds) — fixed, not swept
 
-# Market sides scored INDEPENDENTLY (the surface θ is fit on the union of quotes,
-# but the eval table is split, so each side's NSE/RMSE/neg-mass never mix).
+# Market sides scored INDEPENDENTLY. How each side relates to the SSVI fit depends
+# on FIT_MODE (below).
 SIDES = ["puts", "calls"]
+
+# Fit modes — swept like the other axes (edit to restrict). Each produces its own
+# block of result rows (ranked independently), so the legacy behaviour is preserved
+# bit-for-bit whenever "joint" is present.
+#   "joint"    — legacy: θ is fit on the UNION of quotes (puts + calls), then the
+#                eval table is split so each side's NSE/RMSE/neg-mass never mix.
+#   "per_side" — θ is fit on ONE side only (puts-only, then calls-only, as two
+#                independent filter runs); each side is scored against its own fit.
+FIT_MODES = ["per_side"]
 
 TRADE_DATE = "2024-01-03"
 
@@ -98,7 +109,7 @@ _METRIC_KEYS = [
     "arb_frac",
     "n_snapshots",
 ]
-_PARAM_KEYS = ["Q_scale", "P0_scale", "Q_structure"]
+_PARAM_KEYS = ["Q_scale", "P0_scale", "Q_structure", "fit_mode"]
 
 # ── Worker globals (set once per process by _init_worker) ─────────────────────
 _sm = None  # surface_model
@@ -145,16 +156,16 @@ def _init_worker(trade_date: str) -> None:
     _DFT = _adapt(cache["all_trades_iv"])
 
 
-def _eval_params(params: dict) -> dict:
-    """Run the 1 s batched SSVI surface KF for one config, then score each side."""
-    cfg = _sm.SurfaceModelConfig(
-        model=_sm.SSVI_SLICE_MODEL,
-        Q_scale=params["Q_scale"],
-        P0_scale=params["P0_scale"],
-        Q_structure=params["Q_structure"],
-    )
-    df_quotes_res, _, _ = _skf.run_spline_surface_kalman(_DFQ, _DFT, cfg, batch_seconds=BATCH_S)
+def _nan_row() -> dict:
+    return {k: (0 if k == "n_snapshots" else np.nan) for k in _METRIC_KEYS}
 
+
+def _score_sides(df_quotes_res, sides: list[str]) -> dict[str, dict]:
+    """Window-dedup a quote result frame and score each requested side from it.
+
+    For "joint" fits the frame holds both sides (each `side` masks its half); for
+    "per_side" fits it already holds a single side (then `sides` is that one side).
+    """
     qb = df_quotes_res.to_pandas()
     # 1 s window id; posterior θ (hence kalman_price) is shared within a window.
     qb["window"] = qb["ts_ns"].astype("int64") // int(BATCH_S * 1e9)
@@ -165,12 +176,11 @@ def _eval_params(params: dict) -> dict:
     )
 
     out: dict[str, dict] = {}
-    nan_row = {k: (0 if k == "n_snapshots" else np.nan) for k in _METRIC_KEYS}
-    for side in SIDES:
+    for side in sides:
         side_mask = qb["is_call"] if side == "calls" else ~qb["is_call"]
         qs = qb[side_mask]
         if qs.empty:
-            out[side] = dict(nan_row)
+            out[side] = _nan_row()
             continue
         df_eval = _um.from_option_prices(
             ts=qs["window"].to_numpy(),
@@ -190,13 +200,47 @@ def _eval_params(params: dict) -> dict:
     return out
 
 
+def _eval_params(params: dict) -> dict:
+    """Run the 1 s batched SSVI surface KF for one config, then score each side.
+
+    fit_mode="joint"    — one filter run on the union of quotes; both sides scored
+                          from that single shared-θ fit (legacy).
+    fit_mode="per_side" — one filter run PER side on that side's quotes only; each
+                          side scored against its own independently-fit θ.
+    """
+    import polars as pl
+
+    cfg = _sm.SurfaceModelConfig(
+        model=_sm.SSVI_SLICE_MODEL,
+        Q_scale=params["Q_scale"],
+        P0_scale=params["P0_scale"],
+        Q_structure=params["Q_structure"],
+    )
+
+    if params["fit_mode"] == "joint":
+        df_quotes_res, _, _ = _skf.run_spline_surface_kalman(_DFQ, _DFT, cfg, batch_seconds=BATCH_S)
+        return _score_sides(df_quotes_res, SIDES)
+
+    # per_side: restrict BOTH the fit and the eval to one side's quotes/trades.
+    out: dict[str, dict] = {}
+    for side in SIDES:
+        want_call = side == "calls"
+        dfq = _DFQ.filter(pl.col("is_call") == want_call)
+        dft = _DFT.filter(pl.col("is_call") == want_call)
+        if dfq.is_empty():
+            out[side] = _nan_row()
+            continue
+        df_quotes_res, _, _ = _skf.run_spline_surface_kalman(dfq, dft, cfg, batch_seconds=BATCH_S)
+        out.update(_score_sides(df_quotes_res, [side]))
+    return out
+
+
 def _run_one(params: dict) -> list[dict]:
     try:
         per_side = _eval_params(params)
     except Exception as e:  # keep the sweep alive; failed combos sink in the sort
         print(f"{params} failed: {e}")
-        nan_row = {k: (0 if k == "n_snapshots" else np.nan) for k in _METRIC_KEYS}
-        per_side = {s: nan_row for s in SIDES}
+        per_side = {s: _nan_row() for s in SIDES}
     base = {k: params[k] for k in _PARAM_KEYS}
     return [
         {**base, "side": side, **{k: m.get(k, np.nan) for k in _METRIC_KEYS}}
@@ -206,8 +250,8 @@ def _run_one(params: dict) -> list[dict]:
 
 def _make_tasks() -> list[dict]:
     return [
-        {"Q_scale": q, "P0_scale": p0, "Q_structure": qs}
-        for q, p0, qs in itertools.product(Q_SCALES, P0_SCALES, Q_STRUCTURES)
+        {"Q_scale": q, "P0_scale": p0, "Q_structure": qs, "fit_mode": fm}
+        for q, p0, qs, fm in itertools.product(Q_SCALES, P0_SCALES, Q_STRUCTURES, FIT_MODES)
     ]
 
 
@@ -221,20 +265,24 @@ def main(trade_date: str, out_path: str, n_workers: int) -> None:
 
     tasks = _make_tasks()
     print(
-        f"Sweeping {len(tasks)} SSVI configs (batch={BATCH_S}s) × {len(SIDES)} sides "
-        f"on {trade_date} across {n_workers} workers ..."
+        f"Sweeping {len(tasks)} SSVI configs (batch={BATCH_S}s, fit_modes={FIT_MODES}) "
+        f"× {len(SIDES)} sides on {trade_date} across {n_workers} workers ..."
     )
 
     ctx = mp.get_context("spawn")
     with ctx.Pool(processes=n_workers, initializer=_init_worker, initargs=(trade_date,)) as pool:
         records = [r for sub in pool.imap_unordered(_run_one, tasks, chunksize=1) for r in sub]
 
-    # Rank within each side independently (nan-safe; failures sink to the bottom).
-    records.sort(key=lambda r: (r["side"], np.isnan(r["ho_nse_mean"]), r["ho_nse_mean"]))
-    side_counter: dict[str, int] = {}
+    # Rank within each (fit_mode, side) block independently so legacy "joint" and the
+    # new "per_side" fits never share a leaderboard (nan-safe; failures sink to bottom).
+    records.sort(
+        key=lambda r: (r["fit_mode"], r["side"], np.isnan(r["ho_nse_mean"]), r["ho_nse_mean"])
+    )
+    rank_counter: dict[tuple, int] = {}
     for r in records:
-        side_counter[r["side"]] = side_counter.get(r["side"], 0) + 1
-        r["rank"] = side_counter[r["side"]]
+        key = (r["fit_mode"], r["side"])
+        rank_counter[key] = rank_counter.get(key, 0) + 1
+        r["rank"] = rank_counter[key]
 
     fieldnames = ["rank", "side"] + _PARAM_KEYS + _METRIC_KEYS
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
@@ -248,24 +296,25 @@ def main(trade_date: str, out_path: str, n_workers: int) -> None:
         f"{'rank':>4}  {'Q_scale':>8}  {'P0_scale':>8}  {'Q_struct':>15}  {'ho_nse':>7}"
         f"  {'is_nse':>7}  {'ho_rmse':>8}  {'ho_out%':>7}  {'neg_mass':>9}  {'arb':>6}  {'n_snap':>7}"
     )
-    for side in SIDES:
-        side_rows = [r for r in records if r["side"] == side]
-        print(f"\n[{side}] Top 10 by held-out mean NSE:")
-        print(header)
-        for r in side_rows[:10]:
-            print(
-                f"{r['rank']:>4}  {r['Q_scale']:>8.0e}  {r['P0_scale']:>8.0e}"
-                f"  {r['Q_structure']:>15}  {r['ho_nse_mean']:>7.3f}  {r['is_nse_mean']:>7.3f}"
-                f"  {r['ho_rmse_mean']:>8.5f}  {r['ho_out_pct_mean']:>7.1f}"
-                f"  {r['neg_mass_mean']:>9.2e}  {r['arb_frac']:>6.1%}  {r['n_snapshots']:>7}"
-            )
-        if side_rows:
-            b = side_rows[0]
-            print(
-                f"  Best [{side}]: Q_scale={b['Q_scale']:.0e} P0_scale={b['P0_scale']:.0e} "
-                f"{b['Q_structure']} → ho_nse_mean={b['ho_nse_mean']:.3f} "
-                f"ho_rmse_mean={b['ho_rmse_mean']:.5f}"
-            )
+    for fit_mode in FIT_MODES:
+        for side in SIDES:
+            side_rows = [r for r in records if r["fit_mode"] == fit_mode and r["side"] == side]
+            print(f"\n[{fit_mode} | {side}] Top 10 by held-out mean NSE:")
+            print(header)
+            for r in side_rows[:10]:
+                print(
+                    f"{r['rank']:>4}  {r['Q_scale']:>8.0e}  {r['P0_scale']:>8.0e}"
+                    f"  {r['Q_structure']:>15}  {r['ho_nse_mean']:>7.3f}  {r['is_nse_mean']:>7.3f}"
+                    f"  {r['ho_rmse_mean']:>8.5f}  {r['ho_out_pct_mean']:>7.1f}"
+                    f"  {r['neg_mass_mean']:>9.2e}  {r['arb_frac']:>6.1%}  {r['n_snapshots']:>7}"
+                )
+            if side_rows:
+                b = side_rows[0]
+                print(
+                    f"  Best [{fit_mode} | {side}]: Q_scale={b['Q_scale']:.0e} "
+                    f"P0_scale={b['P0_scale']:.0e} {b['Q_structure']} → "
+                    f"ho_nse_mean={b['ho_nse_mean']:.3f} ho_rmse_mean={b['ho_rmse_mean']:.5f}"
+                )
 
 
 if __name__ == "__main__":
