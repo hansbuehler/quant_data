@@ -6,6 +6,8 @@ One metric set, computed identically for every model:
 
     * held-out  RMSE   (price space)
     * held-out  NSE    = mean over strikes of |model - mid| / half-spread
+    * held-out  ESE    = excess spread error; NSE counting any price inside
+                         the bid-ask band as 0 (max(|model-mid|-hs, 0)/hs)
     * in-sample RMSE   (price space)
     * in-sample NSE
     * implied negative mass  (Breeden-Litzenberger, butterfly-arbitrage proxy)
@@ -213,9 +215,14 @@ def evaluate(
     """
     Compute the unified metric set from a standard evaluation table.
 
-    NSE and RMSE are aggregated the SANOS way: computed per snapshot (mean /
-    RMS over that snapshot's strikes), then averaged across snapshots — reported
-    as both the mean and the median over snapshots.
+    NSE, ESE and RMSE are aggregated the SANOS way: computed per snapshot (mean
+    / RMS over that snapshot's strikes), then averaged across snapshots —
+    reported as both the mean and the median over snapshots.
+
+    ESE (excess spread error) is identical to NSE except prices that fall inside
+    the bid-ask band contribute 0: per strike it is
+    ``max(|model - mid| - half_spread, 0) / half_spread``, so only the distance
+    by which a quote misses the band (in half-spread units) is penalised.
 
     ``*_out_pct`` is the percentage of strikes priced outside the bid-ask band
     (``|model - mid| > half_spread``), computed per snapshot then averaged /
@@ -242,6 +249,7 @@ def evaluate(
 
     ho_nse, is_nse, ho_rmse, is_rmse = [], [], [], []
     ho_out, is_out = [], []
+    ho_ese, is_ese = [], []
 
     for _, g in df.groupby(ts_col, sort=True):
         mid = g[mid_col].to_numpy(float)
@@ -252,13 +260,18 @@ def evaluate(
         m_prior = np.isfinite(prior) & np.isfinite(mid) & np.isfinite(hsg)
         m_post = np.isfinite(post) & np.isfinite(mid) & np.isfinite(hsg)
         if m_prior.any():
-            ho_nse.append(np.mean(np.abs(prior[m_prior] - mid[m_prior]) / hsg[m_prior]))
+            err_p = np.abs(prior[m_prior] - mid[m_prior])
+            ho_nse.append(np.mean(err_p / hsg[m_prior]))
             ho_rmse.append(np.sqrt(np.mean((prior[m_prior] - mid[m_prior]) ** 2)))
-            ho_out.append(np.mean(np.abs(prior[m_prior] - mid[m_prior]) > hsg[m_prior]))
+            ho_out.append(np.mean(err_p > hsg[m_prior]))
+            # Excess spread error: NSE counting prices inside bid-ask as 0.
+            ho_ese.append(np.mean(np.maximum(err_p - hsg[m_prior], 0.0) / hsg[m_prior]))
         if m_post.any():
-            is_nse.append(np.mean(np.abs(post[m_post] - mid[m_post]) / hsg[m_post]))
+            err_q = np.abs(post[m_post] - mid[m_post])
+            is_nse.append(np.mean(err_q / hsg[m_post]))
             is_rmse.append(np.sqrt(np.mean((post[m_post] - mid[m_post]) ** 2)))
-            is_out.append(np.mean(np.abs(post[m_post] - mid[m_post]) > hsg[m_post]))
+            is_out.append(np.mean(err_q > hsg[m_post]))
+            is_ese.append(np.mean(np.maximum(err_q - hsg[m_post], 0.0) / hsg[m_post]))
 
         if neg_mass_values is None:
             fwd = float(g[forward_col].iloc[0])
@@ -274,6 +287,8 @@ def evaluate(
 
     ho_nse_mean, ho_nse_med, ho_nse_std = _agg(ho_nse)
     is_nse_mean, is_nse_med, is_nse_std = _agg(is_nse)
+    ho_ese_mean, ho_ese_med, ho_ese_std = _agg(ho_ese)
+    is_ese_mean, is_ese_med, is_ese_std = _agg(is_ese)
     ho_rmse_mean, ho_rmse_med, ho_rmse_std = _agg(ho_rmse)
     is_rmse_mean, is_rmse_med, is_rmse_std = _agg(is_rmse)
     # Fraction of strikes priced outside the bid-ask band, in percent.
@@ -290,6 +305,12 @@ def evaluate(
         "is_nse_mean": is_nse_mean,
         "is_nse_med": is_nse_med,
         "is_nse_std": is_nse_std,
+        "ho_ese_mean": ho_ese_mean,
+        "ho_ese_med": ho_ese_med,
+        "ho_ese_std": ho_ese_std,
+        "is_ese_mean": is_ese_mean,
+        "is_ese_med": is_ese_med,
+        "is_ese_std": is_ese_std,
         "ho_rmse_mean": ho_rmse_mean,
         "ho_rmse_med": ho_rmse_med,
         "ho_rmse_std": ho_rmse_std,
@@ -368,6 +389,12 @@ def comparison_table(metric_dicts: list[dict]) -> pd.DataFrame:
         "is_nse_mean",
         "is_nse_med",
         "is_nse_std",
+        "ho_ese_mean",
+        "ho_ese_med",
+        "ho_ese_std",
+        "is_ese_mean",
+        "is_ese_med",
+        "is_ese_std",
         "ho_rmse_mean",
         "ho_rmse_med",
         "ho_rmse_std",

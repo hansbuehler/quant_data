@@ -49,6 +49,7 @@ import pickle
 import sys
 
 import numpy as np
+from scipy.special import ndtr
 
 project_root = "/Users/elie/Documents/GitHub/quant_data/"
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -94,6 +95,12 @@ _METRIC_KEYS = [
     "is_nse_mean",
     "is_nse_med",
     "is_nse_std",
+    "ho_ese_mean",
+    "ho_ese_med",
+    "ho_ese_std",
+    "is_ese_mean",
+    "is_ese_med",
+    "is_ese_std",
     "ho_rmse_mean",
     "ho_rmse_med",
     "ho_rmse_std",
@@ -160,13 +167,54 @@ def _nan_row() -> dict:
     return {k: (0 if k == "n_snapshots" else np.nan) for k in _METRIC_KEYS}
 
 
-def _score_sides(df_quotes_res, sides: list[str]) -> dict[str, dict]:
+# ── Forward-consistent negative mass (replaces evaluate()'s inline per-row BL) ──
+# evaluate()'s default BL second-differences the stored per-quote kalman_price — each
+# rendered at its OWN forward — against a single window forward, which fabricates
+# negative mass even though the SSVI slice is butterfly-arb-free (project() enforces
+# ϑζ(1+|ρ|)<4 & ϑζ²(1+|ρ|)≤4). Since one posterior θ defines the whole window's curve,
+# we rebuild that single curve at ONE forward F* and BL it, then feed the result to
+# evaluate(neg_mass_values=...) so the inline path is bypassed.
+def _ssvi_iv(theta, k, T):
+    """Vectorised SSVI implied vol (mirrors surface_model._observe_ssvi_slice)."""
+    vth, rho, zeta = float(theta[0]), float(theta[1]), float(theta[2])
+    vth = max(vth, 1e-12)
+    Ts = max(float(T), 1e-6)
+    u = zeta * k
+    s = np.sqrt((u + rho) ** 2 + (1.0 - rho**2))
+    w = np.maximum(0.5 * vth * (1.0 + rho * u + s), 1e-16)  # total variance
+    return np.sqrt(w / Ts)
+
+
+def _black76_call(F, K, T, sig):
+    """Undiscounted (forward) Black-76 call — matches negative_mass_bl's C/df space."""
+    sig = np.maximum(sig, 1e-9)
+    Ts = max(float(T), 1e-9)
+    rt = sig * np.sqrt(Ts)
+    d1 = (np.log(F / K) + 0.5 * sig**2 * Ts) / rt
+    return F * ndtr(d1) - K * ndtr(d1 - rt)
+
+
+def _curve_neg_mass(theta, strikes, T, F):
+    """Negative BL mass of the single posterior-θ SSVI curve priced at ONE forward F."""
+    Ks = np.unique(np.asarray(strikes, float))
+    if Ks.size < 3 or not np.isfinite(F) or F <= 0:
+        return np.nan
+    k = np.log(Ks / F)
+    C = _black76_call(F, Ks, T, _ssvi_iv(theta, k, T))
+    nm, _ = _um.negative_mass_bl(Ks, C, F)
+    return nm
+
+
+def _score_sides(df_quotes_res, df_state, sides: list[str]) -> dict[str, dict]:
     """Window-dedup a quote result frame and score each requested side from it.
 
     For "joint" fits the frame holds both sides (each `side` masks its half); for
     "per_side" fits it already holds a single side (then `sides` is that one side).
+    ``df_state`` carries the per-quote posterior θ (row-aligned with ``df_quotes_res``),
+    used to rebuild each window's curve for the forward-consistent negative mass.
     """
-    qb = df_quotes_res.to_pandas()
+    th_cols = [f"theta_{j}" for j in range(_sm.SSVI_SLICE_MODEL.n_params)]
+    qb = df_quotes_res.hstack(df_state.select(th_cols)).to_pandas()
     # 1 s window id; posterior θ (hence kalman_price) is shared within a window.
     qb["window"] = qb["ts_ns"].astype("int64") // int(BATCH_S * 1e9)
     qb = (
@@ -182,6 +230,18 @@ def _score_sides(df_quotes_res, sides: list[str]) -> dict[str, dict]:
         if qs.empty:
             out[side] = _nan_row()
             continue
+        # One arb-free θ-curve per window, BL'd at a single forward (see note above).
+        negs = []
+        for _, gw in qs.groupby("window"):
+            theta = gw[th_cols].iloc[-1].to_numpy(float)  # shared within the window
+            nm = _curve_neg_mass(
+                theta,
+                gw["strike"].to_numpy(float),
+                float(gw["T"].median()),
+                float(gw["forward"].median()),
+            )
+            if np.isfinite(nm):
+                negs.append(nm)
         df_eval = _um.from_option_prices(
             ts=qs["window"].to_numpy(),
             strike=qs["strike"].to_numpy(float),
@@ -195,8 +255,9 @@ def _score_sides(df_quotes_res, sides: list[str]) -> dict[str, dict]:
             if "discount_factor" in qs
             else None,
         )
-        # Multi-strike snapshots → evaluate() computes negative mass via BL directly.
-        out[side] = _um.evaluate(df_eval, model_name=f"ssvi|{side}")
+        out[side] = _um.evaluate(
+            df_eval, model_name=f"ssvi|{side}", neg_mass_values=np.asarray(negs, float)
+        )
     return out
 
 
@@ -218,8 +279,10 @@ def _eval_params(params: dict) -> dict:
     )
 
     if params["fit_mode"] == "joint":
-        df_quotes_res, _, _ = _skf.run_spline_surface_kalman(_DFQ, _DFT, cfg, batch_seconds=BATCH_S)
-        return _score_sides(df_quotes_res, SIDES)
+        df_quotes_res, _, df_state = _skf.run_spline_surface_kalman(
+            _DFQ, _DFT, cfg, batch_seconds=BATCH_S
+        )
+        return _score_sides(df_quotes_res, df_state, SIDES)
 
     # per_side: restrict BOTH the fit and the eval to one side's quotes/trades.
     out: dict[str, dict] = {}
@@ -230,8 +293,10 @@ def _eval_params(params: dict) -> dict:
         if dfq.is_empty():
             out[side] = _nan_row()
             continue
-        df_quotes_res, _, _ = _skf.run_spline_surface_kalman(dfq, dft, cfg, batch_seconds=BATCH_S)
-        out.update(_score_sides(df_quotes_res, [side]))
+        df_quotes_res, _, df_state = _skf.run_spline_surface_kalman(
+            dfq, dft, cfg, batch_seconds=BATCH_S
+        )
+        out.update(_score_sides(df_quotes_res, df_state, [side]))
     return out
 
 
@@ -294,7 +359,7 @@ def main(trade_date: str, out_path: str, n_workers: int) -> None:
 
     header = (
         f"{'rank':>4}  {'Q_scale':>8}  {'P0_scale':>8}  {'Q_struct':>15}  {'ho_nse':>7}"
-        f"  {'is_nse':>7}  {'ho_rmse':>8}  {'ho_out%':>7}  {'neg_mass':>9}  {'arb':>6}  {'n_snap':>7}"
+        f"  {'is_nse':>7}  {'ho_ese':>7}  {'ho_rmse':>8}  {'ho_out%':>7}  {'neg_mass':>9}  {'arb':>6}  {'n_snap':>7}"
     )
     for fit_mode in FIT_MODES:
         for side in SIDES:
@@ -305,7 +370,7 @@ def main(trade_date: str, out_path: str, n_workers: int) -> None:
                 print(
                     f"{r['rank']:>4}  {r['Q_scale']:>8.0e}  {r['P0_scale']:>8.0e}"
                     f"  {r['Q_structure']:>15}  {r['ho_nse_mean']:>7.3f}  {r['is_nse_mean']:>7.3f}"
-                    f"  {r['ho_rmse_mean']:>8.5f}  {r['ho_out_pct_mean']:>7.1f}"
+                    f"  {r['ho_ese_mean']:>7.3f}  {r['ho_rmse_mean']:>8.5f}  {r['ho_out_pct_mean']:>7.1f}"
                     f"  {r['neg_mass_mean']:>9.2e}  {r['arb_frac']:>6.1%}  {r['n_snapshots']:>7}"
                 )
             if side_rows:

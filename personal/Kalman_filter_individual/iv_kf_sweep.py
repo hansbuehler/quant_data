@@ -46,7 +46,7 @@ os.environ.setdefault("QUANTDATA_CACHE_MODE", "on")
 os.environ.setdefault("QUANTDATA_TEST_MODE", "0")
 
 # ── Search space — edit this ──────────────────────────────────────────────────
-Q_SCALES = [1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1, 3e-1, 1.0, 3.0]
+Q_SCALES = [1e-9, 1e-6, 1e-3, 1e-2, 0.1, 30.0]
 BATCH_S = 1.0  # batch window width (seconds) — fixed, not swept
 
 # Market sides scored INDEPENDENTLY. The single-strike KF is per-contract, so each
@@ -67,6 +67,12 @@ _METRIC_KEYS = [
     "is_nse_mean",
     "is_nse_med",
     "is_nse_std",
+    "ho_ese_mean",
+    "ho_ese_med",
+    "ho_ese_std",
+    "is_ese_mean",
+    "is_ese_med",
+    "is_ese_std",
     "ho_rmse_mean",
     "ho_rmse_med",
     "ho_rmse_std",
@@ -246,7 +252,7 @@ def main(trade_date: str, out_path: str, n_workers: int) -> None:
 
     header = (
         f"{'rank':>4}  {'q_scale':>8}  {'ho_nse':>7}  {'ho_nse_med':>10}  {'is_nse':>7}"
-        f"  {'ho_rmse':>8}  {'ho_out%':>7}  {'neg_mass':>9}  {'arb':>6}  {'n_snap':>7}"
+        f"  {'ho_ese':>7}  {'ho_rmse':>8}  {'ho_out%':>7}  {'neg_mass':>9}  {'arb':>6}  {'n_snap':>7}"
     )
     for side in SIDES:
         side_rows = [r for r in records if r["side"] == side]
@@ -255,7 +261,8 @@ def main(trade_date: str, out_path: str, n_workers: int) -> None:
         for r in side_rows[:10]:
             print(
                 f"{r['rank']:>4}  {r['q_scale']:>8.0e}  {r['ho_nse_mean']:>7.3f}"
-                f"  {r['ho_nse_med']:>10.3f}  {r['is_nse_mean']:>7.3f}  {r['ho_rmse_mean']:>8.5f}"
+                f"  {r['ho_nse_med']:>10.3f}  {r['is_nse_mean']:>7.3f}"
+                f"  {r['ho_ese_mean']:>7.3f}  {r['ho_rmse_mean']:>8.5f}"
                 f"  {r['ho_out_pct_mean']:>7.1f}  {r['neg_mass_mean']:>9.2e}"
                 f"  {r['arb_frac']:>6.1%}  {r['n_snapshots']:>7}"
             )

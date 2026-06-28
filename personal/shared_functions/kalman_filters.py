@@ -219,7 +219,7 @@ def kalman_filter_from_matched(
 
     # ── BS IV (single cdxcore.bs pass per df) ────────────────────────────────
     df_q_with_iv = _compute_iv_batch(df_quotes_result, price_col="observed_price").with_columns(
-        (((pl.col("ask_iv") - pl.col("bid_iv")) * 100 / 2) ** 2).alias("R_iv")
+        (((pl.col("ask_iv") - pl.col("bid_iv")) / 2) ** 2).alias("R_iv")
     )
     df_t_with_iv = _compute_iv_batch(df_trades_result, price_col="price")
 
