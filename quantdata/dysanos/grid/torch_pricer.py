@@ -21,7 +21,6 @@ from quantdata.torch import BaseEnvironment, BaseModel, torch, lazy_verify
 from quantdata.torch.ffw import FeedForward
 from quantdata.torch.bbtorch import BackboneTorch
 from quantdata.biz_calendar import NMS
-from fast_vollib import fast_implied_volatility
 import gc
 
 _bbtorch = BackboneTorch()

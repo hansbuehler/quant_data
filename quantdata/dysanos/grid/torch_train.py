@@ -15,7 +15,10 @@ import numpy as np
 import os
 import warnings
 
-_cache_root = SubDir("~/.dysanos_grid/")
+if os.environ.get("DYSANONS_USE_LAPTOP") is not None:
+    _cache_root = SubDir(r"C:\users\public\.dysanos_grid/")
+else:
+    _cache_root = SubDir("~/.dysanos_grid")
 
 @dataclass(frozen=True)
 class TrainConfig:

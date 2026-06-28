@@ -6,7 +6,7 @@ from quantdata.torch import BaseModel, BaseEnvironment, get
 from quantdata.torch.ffw import FeedForward, FeedForwardConfig
 from quantdata.dysanos.grid.torch_train import TrainConfig, MetricTracker
 from quantdata.pool import PoolConfig
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from cdxcore.version import version
 from cdxcore.subdir import SubDir
 from cdxcore.err import verify_inp, verify
@@ -18,7 +18,10 @@ import torch
 from collections.abc import Callable
 import warnings as warnings
 
-_cache_root = SubDir("~/.dysanos_dh/")
+if os.environ.get("DYSANONS_USE_LAPTOP") is not None:
+    _cache_root = SubDir(r"C:\users\public\.dysanos_dh/")
+else:
+    _cache_root = SubDir("~/.dysanos_dh")
 
 def _notebook_name() -> str:
     """ Return a name for the notebook based on the current notebook name and the training config. """
@@ -70,19 +73,31 @@ def torch_utility(utility="entropy", lmbda=1.0) -> tuple[Callable, Callable]:
 
 @version("0.1")
 @dataclass(frozen=True)
-class DeepHedgingConfig:
-    label : str = ""
-    group : str = "deephedging"
+class DualRiskNeutralDeepHedgingConfig:
+    label        : str = ""
+    group        : str = "deephedging"
     user_version : str = "0.1"
-
-    utility : str = "entropy"
-    lmnda : float = 1.0
+    utility      : str = "entropy"
+    lmnda        : float = 1.0
     delta_hedged : bool = True
-    action_config : FeedForwardConfig = FeedForwardConfig()
+    action_config: FeedForwardConfig = FeedForwardConfig()
+    dual_weight  : float|None = 0.01
+    spot_only    : bool = False
+    per_step     : str = "off"
+    cost         : float = 0.
+
+    _debug_no_xstate : bool = False
+    _debug_hard_entropy : bool = False
+    _debug_ignore_prior : bool = False
+    _debug_do_not_normalize_dQdP : bool = False
 
     def __post_init__(self):
         verify_inp( self.utility in ("entropy", "cvar", "powexp"), f"Expected utility to be one of 'entropy', 'cvar', or 'powexp' but got '{self.utility}'." )  
-        verify_inp( self.lmnda > 0., f"Expected lmnda to be positive but got {self.lmnda}." )   
+        verify_inp( self.lmnda > 0., f"Expected lmnda to be positive but got {self.lmnda}." )
+        verify_inp( self.dual_weight is None or self.dual_weight >= 0., f"Expected dual_weight to be positive or None but got {self.dual_weight}." )
+
+        if self.dual_weight == 0.:
+            self.__dict__['dual_weight'] = None
 
         if self.label == "":
             label = _notebook_name()
@@ -96,29 +111,53 @@ class DeepHedgingConfig:
     @property
     def label_str(self) -> str:
         return self.qualified_label + ( f" {self.smoothness:.2f}-smooth" if not self.smoothness is None else " linear" )
+    
+    @property
+    def is_dual(self) -> bool:
+        return not self.dual_weight is None
 
+@dataclass
+class UtilityTracker:
+    util_epochs : list[int] = field(default_factory=list)
+    util_values : list[float] = field(default_factory=list)
+    dual_epochs : list[int] = field(default_factory=list)
+    dual_values : list[float] = field(default_factory=list)
 
-@version("0.1", dependencies=[DeepHedgingConfig])
-class DeepHedging(BaseModel):
-
-    NUM_FEATURES = 6
+@version("0.1", dependencies=[DualRiskNeutralDeepHedgingConfig])
+class DualRiskNeutralDeepHedging(BaseModel):
 
     def __init__(self, env : BaseEnvironment, *,
                        num_xstate  : int, 
                        num_expiries: int,
                        num_strikes : int,
-                       ref_dQdP    : np.ndarray|None = None,    
-                       config : DeepHedgingConfig = DeepHedgingConfig() ):
+                       num_steps   : int,
+                       config : DualRiskNeutralDeepHedgingConfig = DualRiskNeutralDeepHedgingConfig() ):
         super().__init__(env)
-        self.config       = config
-        self.num_xstate   = num_xstate
-        self.num_features = num_xstate + num_expiries
-        num_instruments   = num_strikes*num_expiries + 1
-        self.a            = FeedForward( env, num_input = self.num_features, num_output = num_instruments, config = config.action_config )
-        self.y            = torch.nn.Parameter(torch.zeros( (), dtype=env.fdtype, device=env.device ), requires_grad=True)
+        self.config         = config
+        self.num_xstate     = num_xstate
+        self.num_features   = ( num_xstate + num_expiries + 1 ) if not config._debug_no_xstate else ( num_expiries + 1 )
+        self.num_instruments = (num_strikes*num_expiries + 1) if not config.spot_only else 1
         self.u,\
         self.u_deriv,\
-        self.u_label     = torch_utility(config.utility, config.lmnda)
+        self.u_label        = torch_utility(config.utility, config.lmnda)
+
+        if config.per_step == "off":
+            self.a           = FeedForward( env, num_input = self.num_features, num_output = self.num_instruments, config = config.action_config )
+            self.dual_a      = FeedForward( env, num_input = self.num_features, num_output = self.num_instruments, config = config.action_config ) if not self.config.dual_weight is None else None
+        elif config.per_step == "learn":
+            self.a_s         = torch.nn.ModuleList( [ FeedForward( env, num_input = self.num_features, num_output = self.num_instruments, config = config.action_config ) for i in range(num_steps) ] )
+            self.dual_a_s    = torch.nn.ModuleList( [ FeedForward( env, num_input = self.num_features, num_output = self.num_instruments, config = config.action_config ) for i in range(num_steps) ] ) if not self.config.dual_weight is None else None
+        else:
+            verify_inp( config.per_step == "fixed", f"Expected per_step to be one of 'off', 'learn', or 'fixed' but got '{config.per_step}'." )
+            self.a_s         = torch.nn.Parameter(torch.zeros( (num_steps,self.num_instruments), dtype=env.fdtype, device=env.device ), requires_grad=True)
+            self.dual_a_s    = torch.nn.Parameter(torch.zeros( (num_steps,self.num_instruments), dtype=env.fdtype, device=env.device ), requires_grad=True) if not self.config.dual_weight is None else None
+
+        self.y           = torch.nn.Parameter(torch.zeros( (), dtype=env.fdtype, device=env.device ), requires_grad=True)
+        self.dual_a      = FeedForward( env, num_input = self.num_features, num_output = self.num_instruments, config = config.action_config ) if not self.config.dual_weight is None else None
+        self.dual_y      = torch.nn.Parameter(torch.zeros( (), dtype=env.fdtype, device=env.device ), requires_grad=True) if not self.config.dual_weight is None else None
+        self.pcnt_time   = torch.linspace(0, 1, num_steps, dtype=env.fdtype, device=env.device)
+        self.y           = torch.nn.Parameter(torch.zeros( (), dtype=env.fdtype, device=env.device ), requires_grad=True)
+        self.pcnt_time   = torch.linspace(0, 1, num_steps, dtype=env.fdtype, device=env.device)
 
     @property
     def label(self) -> str:
@@ -128,9 +167,14 @@ class DeepHedging(BaseModel):
     def qualified_label(self) -> str:
         return self.config.qualified_label
 
+    @property
+    def is_dual(self) -> bool:
+        return not self.dual_a is None
+
     def __call__(self, data, *, training : bool = False) -> torch.Tensor|dict[str, torch.Tensor]:
         """ Forward pass of the model. """
 
+        use_cost     = self.config.cost > 0.
         dC           = get(data, "dC", 4)
         S, TAU, T, N = dC.shape
         spots        = get(data, "spots", (S, TAU+1))
@@ -138,36 +182,96 @@ class DeepHedging(BaseModel):
         dS           = spots[:,1:] - spots[:,:-1]
         dC_h         = ( dC - delta_t * dS[:,:,None,None] ) if self.config.delta_hedged else dC
         expiries     = get(data, "expiries", (1, 1, T))
-        ref_dQdP     = get(data, "ref_dQdP", (S,), optional=True)
+        ref_dQdP     = get(data, "ref_dQdP", (S,), optional=True) if not self.config._debug_ignore_prior else None
+        C            = get(data, "C", (S, TAU, T, N)) if use_cost else None
+        C            = C - delta_t * spots[:,:-1,None,None] if use_cost and self.config.delta_hedged else C
+        assert C is None or C.shape == (S, TAU, T, N), f"Expected C to have shape {(S, TAU, T, N)} but got {C.shape}"
 
         # we predict this
         dC_h         = dC_h.reshape(S, TAU, T*N)
-        dX           = torch.concatenate( [ dS[:,:,None] + dC_h[:,:,:1]*0, dC_h ], axis=-1 )
-        assert dX.shape == (S, TAU, T*N+1), f"Expected dX to have shape {(S, TAU, T*N+1)} but got {dX.shape}"
+        C_h          = C.reshape(S, TAU, T*N) if use_cost else None
+        dX           = torch.concatenate( [ dS[:,:,None] + dC_h[:,:,:1]*0, dC_h ], dim=-1 ) if not self.config.spot_only else dS[:,:,None]
+        abs_X        = torch.abs( torch.concatenate( [ spots[:,:-1,None], C_h ], dim=-1 ) if not self.config.spot_only else spots[:,:-1,None] ) if use_cost else None
+        assert dX.shape == (S, TAU, self.num_instruments), f"Expected dX to have shape {(S, TAU, self.num_instruments)} but got {dX.shape}"
+        assert abs_X is None or abs_X.shape == (S, TAU, self.num_instruments), f"Expected abs_X to have shape {(S, TAU, self.num_instruments)} but got {abs_X.shape}"
+        dC_h          = None
+        C_h           = None
 
         # features ... are mostly just the states
         XS           = self.num_xstate
         xstate       = get(data, "xstate", (S, TAU, XS))
+        time_pcnt    = self.pcnt_time[:TAU].reshape(1, TAU, 1).repeat(S, 1, 1)#
+        expiries_    = expiries .repeat(S, TAU, 1)
+        assert time_pcnt.shape == (S, TAU, 1), f"Expected time_pcnt to have shape {(S, TAU, 1)} but got {time_pcnt.shape}"
+        assert expiries_.shape == (S, TAU, T), f"Expected expiries_ to have shape {(S, TAU, T)} but got {expiries_.shape}"
 
-        features     = torch.concatenate( [xstate, expiries+0*xstate[:,:,:1]], axis=-1 )
+        if not self.config._debug_no_xstate:
+                features     = torch.concatenate( [
+                                xstate, 
+                                expiries_,
+                                time_pcnt
+                                ], dim=-1 )
+        else:
+            features     = torch.concatenate( [
+                                expiries_,
+                                time_pcnt
+                                ], dim=-1 )
+        xstate       = None
+        time_pcnt    = None
+        expiries_    = None
         assert features.shape == (S, TAU, self.num_features), f"Expected features to have shape {(S, TAU, self.num_features)} but got {features.shape}"
-        a            = self.a(features)
-        assert a.shape == (S, TAU, T*N+1), f"Expected action to have shape {(S, TAU, T*N+1)} but got {a.shape}"
 
-        a_dX         = torch.sum( a * dX, axis=(1,2) )
+        if self.config.per_step == "off":
+            a            = self.a(features)
+            dual_a       = self.dual_a(features) if not self.dual_a is None else None
+        elif self.config.per_step == "learn":
+            a            = torch.stack( [ self.a_s[i](features[:,i,:]) for i in range(TAU) ], dim=1 )
+            dual_a       = torch.stack( [ self.dual_a_s[i](features[:,i,:]) for i in range(TAU) ], dim=1 ) if not self.dual_a_s is None else None
+        else:
+            a            = self.a_s[None,:,:].repeat(S, 1, 1)
+            dual_a       = self.dual_a_s[None,:,:].repeat(S, 1, 1) if not self.dual_a_s is None else None
+        assert a.shape == (S, TAU, self.num_instruments), f"Expected action to have shape {(S, TAU, self.num_instruments)} but got {a.shape}"
+        features     = None
+
+        a_dX         = torch.sum( a * dX - self.config.cost * torch.abs(a) * abs_X, dim=(1,2) ) if use_cost else torch.sum( a * dX, dim=(1,2) )
+
         assert a_dX.shape == (S,), f"Expected a_dX to have shape {(S,)} but got {a_dX.shape}"
-        utility      = self.u( a_dX + self.y ) - self.y   # we wish to maximize this
-        loss         = torch.mean( -ref_dQdP * utility ) if ref_dQdP is not None else torch.mean( -utility )
+
+        if self.config._debug_hard_entropy:
+            loss    = torch.log( torch.mean( torch.exp( - ( a_dX  ) ) ) )
+            utility = - loss
+            dQdP    = torch.exp( - ( a_dX  ) )
+            dQdP    = dQdP / torch.mean(dQdP) # normalize to mean 1
+
+        else:
+            utility      = self.u( a_dX + self.y ) - self.y   # we wish to maximize this
+            utility      = torch.mean( ref_dQdP * utility ) if ref_dQdP is not None else torch.mean( utility )
+            loss         = -utility
+
+            dQdP         = self.u_deriv( a_dX + self.y ).detach() # sever the gradient here, as we do not want to backprop a and y through the dual action
+            dQdP         = dQdP * ref_dQdP if not ref_dQdP is None else dQdP
+            dQdP         = dQdP / torch.mean(dQdP) if self.config._debug_do_not_normalize_dQdP is False else dQdP # normalize to mean 1
+
+        if self.dual_a is not None:
+            dual_a_dX    = torch.sum( dual_a * dX - self.config.cost * torch.abs(dual_a) * abs_X, dim=(1,2) ) if use_cost else torch.sum( dual_a * dX, dim=(1,2) )
+            dual_utility = self.u( dual_a_dX + self.dual_y ) - self.dual_y
+            dual_utility = torch.mean( dQdP * dual_utility ) 
+            loss         = loss - self.config.dual_weight * dual_utility
 
         if training:
             return loss
 
-        a_S          = a[...,0]
-        a_C          = a[...,1:].reshape(S, TAU, T, N)
-        dQdP         = self.u_deriv( a_dX + self.y )
-        dQdP         = dQdP * ref_dQdP if not ref_dQdP is None else dQdP
         assert dQdP.shape == (S,), f"Expected dQdP to have shape {(S,)} but got {dQdP.shape}"
-        return dict( loss=loss, utility=utility.detach(), dQdP=dQdP.detach(), a_S=a_S.detach(), a_C=a_C.detach(), y=self.y.detach() )
+        r = dict( loss=loss,
+                  utility=utility.detach(), 
+                  dQdP=dQdP.detach(),
+                  a=a.detach(), 
+                  y=self.y.detach() )
+        if self.dual_a is not None:
+            r.update( dual_utility=dual_utility.detach(),
+                      dual_a=dual_a.detach(), 
+                      dual_y=self.dual_y.detach() )
+        return r
 
 """
 Static Model Visualization
@@ -205,16 +309,18 @@ class VizConfig:
 class Visualizer(object):
 
     def __init__(self, universe, 
-                       total_epochs : int,*,
-                       ref_dQdP   : np.ndarray|None = None, 
-                       viz_config : VizConfig, 
-                       mdl_config : DeepHedgingConfig ):
+                       total_epochs: int,*,
+                       ref_dQdP    : np.ndarray|None = None, 
+                       viz_config  : VizConfig, 
+                       mdl_config : DualRiskNeutralDeepHedgingConfig ):
         self.universe      = universe
         self.total_epochs  = total_epochs
         self.mdl_config    = mdl_config
         self.viz_config    = viz_config
         self.store         = FigStore()
         self.first         = True
+        self.S_T           = self.universe["spots"][:,-1]
+        self.sample_Six    = np.argsort(self.S_T)
         self.dS            = self.universe["spots"][:,1:] - self.universe["spots"][:,:-1]
         self.dC            = self.universe["C_tp1"] - self.universe["C_t"]
         self.days          = np.arange( self.dS.shape[1] )
@@ -224,64 +330,98 @@ class Visualizer(object):
         # learning & fit
         # --------------
 
-        dev_dS,\
-        rdev_dC        = self.compute_devs( None )
-        ref_dev_dS,\
-        ref_rdev_dC    = self.compute_devs( ref_dQdP ) if ref_dQdP is not None else (None, None)
+        rdS, rdC       = self.compute_devs( None )
+        ref_rdS,\
+        ref_rdC        = self.compute_devs( ref_dQdP ) if ref_dQdP is not None else (None, None)
 
         self.fig_lrn   = figure(f"Loss", col_size=8, row_size=6, columns=None) #
         self.ax_lrn    = self.fig_lrn.add_subplot("Loss")
         self.ax_lrn.set_xlabel("Epoch")
         self.ax_lrn.set_ylabel("Loss (-Utility)")
 
-        self.ax_dS = self.fig_lrn.add_subplot(r"$E[dS]/\epsilon[dS]$")
-        self.ax_dS.plot( self.days, dev_dS, "--", color="blue", label="Market")
-        self.ax_dS.plot( self.days, ref_dev_dS, "*:", color="orange", label="Prior") if not ref_dev_dS is None else None
-        self.ax_dS.set_xlabel("Days")
-        self.ax_dS.set_ylabel("Drift as fraction of MC error")
-        self.ref_dS_min_max = np.quantile( ref_dev_dS, q=[0.01, 0.91] ) if not ref_dev_dS is None else None
-
-        self.ax_dC = self.fig_lrn.add_subplot(r"$E[dC]/\epsilon[dC]$")
-        self.ax_dC.plot( self.days, rdev_dC.mean, "--", color="blue", label="Market")
-        self.ax_dC.fill_between( self.days, rdev_dC.q05, rdev_dC.q95, color="blue", alpha=0.1 )
-        self.ax_dC.plot( self.days, ref_rdev_dC.mean, "*:", color="orange", label="Prior") if not ref_rdev_dC is None else None
-        self.ax_dC.fill_between( self.days, ref_rdev_dC.q05, ref_rdev_dC.q95, color="orange", alpha=0.1 ) if not ref_rdev_dC is None else None
-        self.ax_dC.set_xlabel("Days")
-        self.ax_dC.set_ylabel("Drift as fraction of MC error")
-        self.ref_dC_min_max = ( np.min(ref_rdev_dC.q05), np.max(ref_rdev_dC.q95) ) if not ref_rdev_dC is None else None
+        if mdl_config.is_dual:
+            self.ax_util    = self.fig_lrn.add_subplot("Dual Utility")
+            self.ax_util.set_xlabel("Epoch")
+            self.ax_util.set_ylabel("Dual Utility")
 
         self.ax_dQdP = self.fig_lrn.add_subplot(r"$dQ/dP$")
         self.ax_dQdP.plot( self.xdensity, self.xdensity*0., "--", color="blue")
+        self.ax_dQdP.plot( self.xdensity, ref_dQdP[self.sample_Six], "*:", color="orange", label="Prior") if not ref_dQdP is None else None
         self.ax_dQdP.set_xlabel("Samples, sorted")
         self.ax_dQdP.set_ylabel("Density ratio")
+
+        self.fig_lrn.next_row()
+
+        self.ax_dev_dS = self.fig_lrn.add_subplot(r"$E[dS]/\epsilon[dS]$")
+        self.ax_dev_dS.plot( self.days, rdS.dev, "--", color="blue", label="Market")
+        self.ax_dev_dS.plot( self.days, ref_rdS.dev, "*:", color="orange", label="Prior") if not ref_rdS is None else None
+        self.ax_dev_dS.set_xlabel("Days")
+        self.ax_dev_dS.set_ylabel("Drift as fraction of MC error")
+        self.ref_dev_dS_min_max = np.quantile( ref_rdS.dev, q=[0.01, 0.91] ) if not ref_rdS is None else None
+
+        self.ax_dev_dC = self.fig_lrn.add_subplot(r"$E[dC]/\epsilon[dC]$")
+        self.ax_dev_dC.plot( self.days, rdC.tmean, "--", color="blue", label="Market")
+        self.ax_dev_dC.fill_between( self.days, rdC.tq05, rdC.tq95, color="blue", alpha=0.1 )
+        self.ax_dev_dC.plot( self.days, ref_rdC.tmean, "*:", color="orange", label="Prior") if not ref_rdC is None else None
+        self.ax_dev_dC.fill_between( self.days, ref_rdC.tq05, ref_rdC.tq95, color="orange", alpha=0.1 ) if not ref_rdC is None else None
+        self.ax_dev_dC.set_xlabel("Days")
+        self.ax_dev_dC.set_ylabel("Drift as fraction of MC error")
+        self.ref_dev_dC_min_max = ( np.min(ref_rdC.tq05), np.max(ref_rdC.tq95) ) if not ref_rdC is None else None
+
+        self.ax_mu_dS = self.fig_lrn.add_subplot(r"$E[dS]$ with $\epsilon[dS]$ Bands")
+        self.ax_mu_dS.plot( self.days, rdS.drift, "--", color="blue", label="Market")
+        self.ax_mu_dS.fill_between( self.days, rdS.drift-rdS.err, rdS.drift+rdS.err, color="blue", alpha=0.1 )
+        self.ax_mu_dS.plot( self.days, ref_rdS.drift, "*:", color="orange", label="Prior") if not ref_rdS is None else None
+        self.ax_mu_dS.fill_between( self.days, ref_rdS.drift-ref_rdS.err, ref_rdS.drift+ref_rdS.err, color="orange", alpha=0.1 ) if not ref_rdS is None else None
+        self.ax_mu_dS.set_xlabel("Days")
+        self.ax_mu_dS.set_ylabel("Drift as fraction of MC error\n(with standard error)")
+        self.ref_mu_dS_min_max = np.quantile( ref_rdS.drift, q=[0.01, 0.91] ) if not ref_rdS is None else None
+
+        self.ax_mu_dC = self.fig_lrn.add_subplot(r"$\mathrm{Mean}\,E[dC]$ with $\mathrm{Mean}\,\epsilon[dC]$ Bands")
+        dC_mean_drift = np.mean( rdC.drift, axis=(1,2) )
+        dC_mean_err   = np.mean( rdC.err, axis=(1,2) )
+        self.ax_mu_dC.plot( self.days, dC_mean_drift, "--", color="blue", label="Market")
+        self.ax_mu_dC.fill_between( self.days, dC_mean_drift-dC_mean_err, dC_mean_drift+dC_mean_err, color="blue", alpha=0.1 )
+        if not ref_rdC is None:
+            ref_dC_mean_drift = np.mean( ref_rdC.drift, axis=(1,2) )
+            ref_dC_mean_err   = np.mean( ref_rdC.err, axis=(1,2) )
+            self.ax_mu_dC.plot( self.days, ref_dC_mean_drift, "*:", color="orange", label="Prior") 
+            self.ax_mu_dC.fill_between( self.days, ref_dC_mean_drift-ref_dC_mean_err, ref_dC_mean_drift+ref_dC_mean_err, color="orange", alpha=0.1 )
+            self.ref_mu_dC_min_max = np.quantile( ref_dC_mean_drift, q=[0.01, 0.91] ) 
+        else:
+            self.ref_mu_dC_min_max = None
+        self.ax_mu_dC.set_xlabel("Days")
+        self.ax_mu_dC.set_ylabel("Drift as fraction of MC error")
 
         self.fig_lrn.render()
 
     def compute_devs( self, dQdS : np.ndarray|None ):
         dQdS = dQdS if dQdS is not None else np.ones( (self.dS.shape[0], ), dtype=self.dS.dtype )
-        drift_dS = np.mean( dQdS[:,None]*self.dS, axis=0 )
-        drift_dC = np.mean( dQdS[:,None,None,None]*self.dC, axis=0 )
-        std_dS   = np.sqrt( np.mean( dQdS[:,None]*(self.dS-drift_dS[None,...])**2, axis=0 ) ) / np.sqrt(self.dS.shape[0])
-        std_dC   = np.sqrt( np.mean( dQdS[:,None,None,None]*(self.dC-drift_dC[None,...])**2, axis=0 ) ) / np.sqrt(self.dC.shape[0])
-        dev_dS   = np.where( std_dS > 0., drift_dS / np.where( std_dS > 0., std_dS, 1.), 0. )
-        dev_dC   = np.where( std_dC > 0., drift_dC / np.where( std_dC > 0., std_dC, 1.), 0. )
-        del drift_dS, drift_dC, std_dS, std_dC
-        dev_dC   = dev_dC.reshape( dev_dC.shape[0], -1 )
-        r = PrettyObject()
-        r.mean  = np.mean( dev_dC, axis=1 )    
-        r.q05,\
-        r.median,\
-        r.q95 = np.quantile( dev_dC, q=[0.05, 0.5, 0.95], axis=1 )
-        return dev_dS, r
+        rdS = PrettyObject()
+        rdC = PrettyObject()
+        rdS.drift = np.mean( dQdS[:,None]*self.dS, axis=0 )
+        rdC.drift = np.mean( dQdS[:,None,None,None]*self.dC, axis=0 )
+        rdS.err   = np.sqrt( np.mean( dQdS[:,None]*(self.dS-rdS.drift[None,...])**2, axis=0 ) ) / np.sqrt(self.dS.shape[0])
+        rdC.err   = np.sqrt( np.mean( dQdS[:,None,None,None]*(self.dC-rdC.drift[None,...])**2, axis=0 ) ) / np.sqrt(self.dC.shape[0])
+        rdS.dev   = np.where( rdS.err > 0., rdS.drift / np.where( rdS.err > 0., rdS.err, 1.), 0. )
+        rdC.dev   = np.where( rdC.err > 0., rdC.drift / np.where( rdC.err > 0., rdC.err, 1.), 0. )
+        rdC.dev   = rdC.dev.reshape( rdC.dev.shape[0], -1 )
+        rdC.tmean  = np.mean( rdC.dev, axis=1 )    
+        rdC.tq05,\
+        rdC.tmedian,\
+        rdC.tq95  = np.quantile( rdC.dev, q=[0.05, 0.5, 0.95], axis=1 )
+        return rdS, rdC
 
-    def __call__(self, tracker, dQdP, *, final : bool = False ):
+    def __call__(self, tracker, util_tracker, model_output, *, final : bool = False ):
         """
         Update
         """
 
-        epoch     =   tracker.trn_epochs[-1]
+        epoch     = tracker.trn_epochs[-1]
         self.store.clear()
 
+        dQdP      = model_output.get("dQdP", None)
+        y         = model_output.get("y", None)
         assert dQdP is None or dQdP.shape[0] == self.dS.shape[0], f"Expected dQdP to have shape {(self.dS.shape[0],)} but got {dQdP.shape}"
 
         # losses
@@ -300,40 +440,65 @@ class Visualizer(object):
             max_v = np.max(val_losses) if len(val_losses)<10 else np.quantile(val_losses, 0.9)
             max_  = max( max_t, max_v )
             self.ax_lrn.set_ylim( min( np.min(trn_losses), np.min(val_losses), )*1.1, max_ * ( 1.1 if max_ > 0. else 0.9 ) )
-            self.ax_lrn.legend(loc="lower left")
+            self.ax_lrn.legend(loc="upper right")
         losses()
 
-        # drift dS
+        # utilities
+        # --------
+        if util_tracker is not None and self.mdl_config.is_dual:
+            def utilities():
+                util_epochs =  np.asarray(util_tracker.util_epochs)
+                util_values =  np.asarray(util_tracker.util_values) 
+                dual_epochs =  np.asarray(util_tracker.dual_epochs)
+                dual_values =  np.asarray(util_tracker.dual_values) 
+                self.store += self.ax_util.plot(dual_epochs, dual_epochs*0., ":", color="black")
+                self.store += self.ax_util.plot(dual_epochs, dual_values, ".-", color="green", label="Dual")
+                self.store += self.ax_util.plot(util_epochs, util_values, "--", color="red", label="Primary")
+                if self.first:
+                    self.ax_util.legend(loc="upper left")
+            utilities()
+
+        # dev dS
         # --------
 
-        def drift():
-            dev_dS, rdev_dC = self.compute_devs( dQdP )
+        def dev_drift():
+            rdS, rdC = self.compute_devs( dQdP )
 
-            self.store += self.ax_dS.plot( self.days, dev_dS, "-", color="red", label=f"Epoch {epoch}")
-            self.store += self.ax_dC.plot( self.days, rdev_dC.mean, "-", color="red", label=f"Epoch {epoch}")
-            self.store += self.ax_dC.fill_between( self.days, rdev_dC.q05, rdev_dC.q95, color="red", alpha=0.1 )
-            self.ax_dS.legend(loc="upper left")
-            self.ax_dC.legend(loc="upper left")
-            min_dS = np.min(dev_dS) if self.ref_dS_min_max is None else min( np.min(dev_dS), self.ref_dS_min_max[0] )
-            max_dS = np.max(dev_dS) if self.ref_dS_min_max is None else max( np.max(dev_dS), self.ref_dS_min_max[1] )
+            self.store += self.ax_dev_dS.plot( self.days, rdS.dev, "-", color="red", label=f"Epoch {epoch}")
+            self.store += self.ax_dev_dC.plot( self.days, rdC.tmean, "-", color="red", label=f"Epoch {epoch}")
+            self.store += self.ax_dev_dC.fill_between( self.days, rdC.tq05, rdC.tq95, color="red", alpha=0.1 )
+            self.ax_dev_dS.legend(loc="upper left")
+            self.ax_dev_dC.legend(loc="upper left")
+
+            min_dS = np.min(rdS.dev) if self.ref_dev_dS_min_max is None else min( np.min(rdS.dev), self.ref_dev_dS_min_max[0] )
+            max_dS = np.max(rdS.dev) if self.ref_dev_dS_min_max is None else max( np.max(rdS.dev), self.ref_dev_dS_min_max[1] )
             ex_dS  = max( abs(min_dS), abs(max_dS) )
-
-            min_dC = np.min(rdev_dC.q05)# if self.ref_dC_min_max is None else min( np.min(rdev_dC.q05), self.ref_dC_min_max[0] )
-            max_dC = np.max(rdev_dC.q95) # if self.ref_dC_min_max is None else max( np.max(rdev_dC.q95), self.ref_dC_min_max[1] )
+            min_dC = np.min(rdC.tq05)# if self.ref_dev_dC_min_max is None else min( np.min(rdC.tq05), self.ref_dev_dC_min_max[0] )
+            max_dC = np.max(rdC.tq95) # if self.ref_dev_dC_min_max is None else max( np.max(rdC.tq95), self.ref_dev_dC_min_max[1] )
             ex_dC  = max( abs(min_dC), abs(max_dC) )
-            self.ax_dS.set_ylim( -ex_dS*1.5, ex_dS*1.5 )
-            self.ax_dC.set_ylim( -ex_dC*1.5, ex_dC*1.5 )
-        drift()
+            self.ax_dev_dS.set_ylim( -ex_dS*1.5, ex_dS*1.5 )
+            self.ax_dev_dC.set_ylim( -ex_dC*1.5, ex_dC*1.5 )
+
+            # drift
+            self.store += self.ax_mu_dS.plot( self.days, rdS.drift, "-", color="red", label=f"Epoch {epoch}")
+            self.store += self.ax_mu_dS.fill_between( self.days, rdS.drift-rdS.err, rdS.drift+rdS.err, color="red", alpha=0.1 )
+            dC_mean_drift = np.mean( rdC.drift, axis=(1,2) )
+            dC_mean_err   = np.mean( rdC.err, axis=(1,2) )
+            self.store += self.ax_mu_dC.plot( self.days, dC_mean_drift, "-", color="red", label=f"Epoch {epoch}")
+            self.store += self.ax_mu_dC.fill_between( self.days, dC_mean_drift-dC_mean_err, dC_mean_drift+dC_mean_err, color="red", alpha=0.1 )
+            self.ax_mu_dS.legend(loc="upper left")
+            self.ax_mu_dC.legend(loc="upper left")
+
+        dev_drift()
 
         # dQ/dP
         # -----
 
         def density():
-            dQdP_sorted = np.sort(dQdP)
-            self.store += self.ax_dQdP.plot( self.xdensity, dQdP_sorted, "-", color="red", label=f"Epoch {epoch}")
-            if self.first:
-                self.ax_dQdP.legend(loc="upper left")
-            self.ax_dQdP.set_ylim( dQdP_sorted[0]*1.1, dQdP_sorted[-1]*1.1 )
+            self.store += self.ax_dQdP.plot( self.xdensity, dQdP[self.sample_Six], "-", color="red", label=f"Model {np.mean(dQdP):.4g}")
+            self.ax_dQdP.legend(loc="upper left")
+            max_ = np.max(dQdP) if self.ref_dQdP is None else max( np.max(dQdP), np.quantile(self.ref_dQdP, 0.99) )
+            self.ax_dQdP.set_ylim( 0., max_ )
         density()
 
         self.fig_lrn.render() if not final else self.fig_lrn.close()
@@ -342,7 +507,7 @@ class Visualizer(object):
 def train( universe,
            sampler, *,
            ref_dQdP      : np.ndarray|None = None,
-           mdl_config    : DeepHedgingConfig = DeepHedgingConfig(),   
+           mdl_config    : DualRiskNeutralDeepHedgingConfig = DualRiskNeutralDeepHedgingConfig(),   
            trn_config    : TrainConfig = TrainConfig(),
            viz_config    : VizConfig = VizConfig(),
            restart       : bool = False,
@@ -381,6 +546,14 @@ def train( universe,
         assert ndata["expiries"].shape == (1, 1, num_expiries), f"Expected expiries to have shape {(1, 1, num_expiries)} but got {ndata['expiries'].shape}"
         assert ndata["xstate"].shape == (num_samples, num_steps, sampler.num_xstate), f"Expected xstate to have shape {(num_samples, num_steps, sampler.num_xstate)} but got {ndata['xstate'].shape}"
 
+        if not ref_dQdP is None:
+            verify_inp(ref_dQdP.shape == (num_samples,), f"Expected ref_dQdP to have shape {(num_samples,)} but got {ref_dQdP.shape}" )
+            ndata['ref_dQdP'] = ref_dQdP
+
+        if mdl_config.cost > 0.:
+            ndata['C'] = universe["C_t"]
+            assert ndata["C"].shape == (num_samples, num_steps, num_expiries, num_strikes), f"Expected C to have shape {(num_samples, num_steps, num_expiries, num_strikes)} but got {ndata['C'].shape}"  
+
         size  = 0
         tdata = {}
         for k, v in ndata.items():
@@ -388,20 +561,18 @@ def train( universe,
             size += v.nbytes
             verbose.write(lambda : f"\rCopying {k} of size {fmt_big_byte_number(v.nbytes)} to {env} which brings total GPU memory use to {fmt_big_byte_number(size)} used)... ", end='')
             tdata[k] = torch.tensor(v, dtype=env.fdtype, device=env.device)
-
-        if not ref_dQdP is None: verify_inp(ref_dQdP.shape == (num_samples,), f"Expected ref_dQdP to have shape {(num_samples,)} but got {ref_dQdP.shape}" )
-
-        verbose.write(lambda : f"\rCopied {len(ndata)} arrays with a total size {fmt_big_byte_number(size)} to {env}. This took {tme}.")
+        del ndata
+        verbose.write(lambda : f"\rCopied {len(tdata)} arrays with a total size {fmt_big_byte_number(size)} to {env}. This took {tme}.")
 
     # create model
     # ------------
 
     with verbose.write_t(lambda : f"Instantiating {mdl_config.label} version {mdl_config.user_version} on {env}... ", end='') as tme:
-        model     = DeepHedging(  env,
+        model     = DualRiskNeutralDeepHedging(  env,
                        num_xstate   = sampler.num_xstate,
                        num_expiries = num_expiries,
                        num_strikes  = num_strikes,
-                       ref_dQdP     = ref_dQdP,
+                       num_steps    = num_steps,
                        config       = mdl_config )
         verbose.write(lambda : f"done; this took {tme}.", head=False )
         if model.debug:
@@ -421,6 +592,7 @@ def train( universe,
     cache_ffn     = path.full_file_name(file_name)
     start_epoch   = 0
     tracker       = MetricTracker()
+    util_tracker  = UtilityTracker()
     model_version = model.version.unique_id48
 
     if not restart and path.exists(file_name):
@@ -443,6 +615,7 @@ def train( universe,
 
             optimizer.load_state_dict(state.pop("optimizer_state_dict"))
             tracker = MetricTracker(**state.pop("tracker"))
+            util_tracker = UtilityTracker(**state.pop("util_tracker"))
             start_epoch = tracker.trn_epochs[-1] + 1
 
         if not err is None:
@@ -458,11 +631,11 @@ def train( universe,
 
     with verbose.write_t(lambda : f"\rComputing loss... ", end='') as tme:        
         ld0 = model( tdata, training=False )
-        verbose.write(lambda : f"\n{'Initial' if start_epoch == 0 else 'Current'} loss is {ld0['loss']:.4g}. This took {tme}.", head=False )
+        verbose.write(lambda : f"\r{'Initial' if start_epoch == 0 else 'Current'} loss is {ld0['loss']:.4g}. This took {tme}.", head=False )
 
     def sample():
         if trn_config.batch_size is None or trn_config.batch_size >= num_samples:
-            return tdata, None
+            return tdata
         else:
             idx = torch.randint(0, num_samples, (trn_config.batch_size,))
             return { k: v[idx,...] if v.shape[0] > 1 else v for k, v in tdata.items() }
@@ -514,14 +687,25 @@ def train( universe,
         if len(tracker.val_epochs)==0 or tracker.val_epochs[-1] < epoch+1:
             tracker.val_losses.append(ld['loss'].cpu().item())
             tracker.val_epochs.append(epoch+1)
+            util_tracker.util_epochs.append(epoch+1)
+            util_tracker.util_values.append(ld['utility'].cpu().item())
+            if 'dual_utility' in ld:
+                util_tracker.dual_epochs.append(epoch+1)
+                util_tracker.dual_values.append(ld['dual_utility'].cpu().item())
         else:
             tracker.val_losses[-1] = ld['loss'].cpu().item()
             tracker.val_epochs[-1] = epoch+1
+            util_tracker.util_values[-1] = ld['utility'].cpu().item()
+            util_tracker.util_epochs[-1] = epoch+1
+            if 'dual_utility' in ld:
+                util_tracker.dual_values[-1] = ld['dual_utility'].cpu().item()
+                util_tracker.dual_epochs[-1] = epoch+1
 
         tmp_name = path.full_temp_file_name(file_name, ext="tmp", create_directory=True)
         torch.save(dict(version=mdl_config.user_version,
                         mdl_version=model_version,
                         tracker=asdict(tracker),
+                        util_tracker=asdict(util_tracker),
                         optimizer_state_dict=optimizer.state_dict(),
                         model_state_dict=model.state_dict(),
                         mdl_config=asdict(mdl_config),
@@ -532,11 +716,16 @@ def train( universe,
         os.rename(tmp_name, cache_ffn)
         model_output = dict( 
             dQdP = ld['dQdP'].cpu().numpy(),
-            a_S  = ld['a_S'].cpu().numpy(),
-            a_C  = ld['a_C'].cpu().numpy(),
-            y = ld['y'].cpu().numpy()
+            a  = ld['a'].cpu().numpy(),
+            y = ld['y'].cpu().numpy(),
+            utility = ld['utility'].cpu().numpy(),
         )
-        disp(tracker=tracker, dQdP=model_output['dQdP'], final=final)
+        if 'dual_utility' in ld:
+            model_output.update( dual_utility = ld['dual_utility'].cpu().numpy(),
+                                 dual_a = ld['dual_a'].cpu().numpy(),
+                                 dual_y = ld['dual_y'].cpu().numpy() )
+
+        disp(tracker=tracker, util_tracker=util_tracker, model_output=model_output, final=final)
 
         return model_output if final else None
 
@@ -598,4 +787,4 @@ def train( universe,
         mo_path.write(file_name, model_output, raise_on_error=True)
         verbose1.write(lambda : f"done; this took {tme}.", head=False )
     verbose.write(lambda : f"\rModel {mdl_config.label} version {mdl_config.user_version} group '{mdl_config.group}' trained for {trn_config.num_epochs} epochs. Final training loss: {tracker.trn_losses[-1]:.4g}, valuation loss: {tracker.val_losses[-1]:.4g}. This took {tme}.")
-    return model, tdata
+    return model_output

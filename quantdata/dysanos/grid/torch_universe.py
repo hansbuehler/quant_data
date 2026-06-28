@@ -8,6 +8,7 @@ Fitting the DLVs of SANOS.
 from __future__ import annotations
 
 from collections.abc import Callable
+import os
 import re
 import warnings as warnings
 
@@ -28,7 +29,10 @@ from quantdata.biz_calendar import DAYS_PER_YEAR
 from quantdata.dysanos.grid.torch_simulator import ARSampler
 from quantdata.dysanos.grid.torch_model import SanosModel
 
-universe_cache = SubDir("~/.dysanos_universe", fmt=SubDir.PYTREE_HDF5)
+if os.environ.get("DYSANONS_USE_LAPTOP") is not None:
+    universe_cache = SubDir(r"C:\users\public\.dysanos_universe/", fmt=SubDir.PYTREE_HDF5)
+else:
+    universe_cache = SubDir("~/.dysanos_universe", fmt=SubDir.PYTREE_HDF5)
 
 def _uid( model : SanosModel,
          sampler : ARSampler,

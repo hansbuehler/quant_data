@@ -380,7 +380,7 @@ class GridMarketDefinition:
     options_filter : OptionsFilter = OptionsFilter()                                                # options filter
 
     @version("0.1", dependencies=[interpolate_time_series])
-    def load( self, *, pool_config : PoolConfig = PoolConfig.off(), verbose : Context = Context.all ) -> PrettyObject:
+    def load( self, *, pool_config : PoolConfig = PoolConfig.off(), override_cache_mode : str|None = None, verbose : Context = Context.all ) -> PrettyObject:
         """ Load the market data; this is a wrapper around :func:`interpolate_time_series` that returns a PrettyObject with the market data. """
         data = PrettyObject( interpolate_time_series( self.ticker,
                                                       date_range = self.date_range, 
@@ -390,6 +390,7 @@ class GridMarketDefinition:
                                                       mk_arb_free=self.mk_arb_free,
                                                       grid_config=self.grid_config, 
                                                       pool_config=pool_config, 
+                                                      override_cache_mode=override_cache_mode,
                                                       verbose=verbose ) )
         data.grid_market_def = self
         dates                = data['dates']
