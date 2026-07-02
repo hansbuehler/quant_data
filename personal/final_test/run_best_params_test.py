@@ -95,8 +95,8 @@ DEFAULT_END = "2024-02-14"  # 20 held-out business days
 #  REPLACE them with the actual winners before the real run.
 # ─────────────────────────────────────────────────────────────────────────────
 BEST_INDIV: dict[str, dict] = {
-    "puts": {"q_scale": 0.01},  # TODO: plug in best q_scale (puts)
-    "calls": {"q_scale": 0.01},  # TODO: plug in best q_scale (calls)
+    "puts": {"q_scale": 1e-6},  # TODO: plug in best q_scale (puts)
+    "calls": {"q_scale": 1e-6},  # TODO: plug in best q_scale (calls)
 }
 
 _SSVI_COMMON = {"P0_scale": 1.0, "Q_structure": "diagonal", "fit_mode": "per_side"}
