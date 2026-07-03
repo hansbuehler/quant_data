@@ -160,7 +160,7 @@ class FeedForward(BaseModel):
             assert input.shape[-1] == self.num_input, f"Input shape mismatch: expected last dimension to be {self.num_input}, but found {input.shape}"
             x    = torch.where( mask[...,None], input, 0.) if not mask is None else input
         else:
-            assert not isinstance(x, nnp.ndarray), f"Input of type {type(x)} is not supported"
+            assert not isinstance(input, nnp.ndarray), f"Input of type {type(input)} is not supported"
             assert len(input) == self.num_input, f"Input length mismatch: expected {self.num_input} elements in the input list, but found {len(input)}"
             shape = torch.broadcast_shapes( *[x.shape for x in input] )
             x     = torch.stack([ torch.where(mask, x, 0.).expand(shape) for x in input], dim=-1) if not mask is None else\
