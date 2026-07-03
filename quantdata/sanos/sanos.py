@@ -21,9 +21,10 @@ from quantdata.biz_calendar import DAYS_PER_YEAR, ONE_MINUTE
 from quantdata.utils.backbone import BackboneNumpy
 import math
 
+from quantdata.sanos import IMPOSE_FLOOR_ON_DENSITY
 from quantdata.sanos.sanos_tools import SanosPricer, SanosLPSolver, warn_and_fix_density
 
-@version("0.4", dependencies=[SanosPricer])
+@version("0.41", dependencies=[SanosPricer])
 @dataclass(frozen=True)
 class SanosFitter:
     """
@@ -33,14 +34,19 @@ class SanosFitter:
     smoothness           : float|None = None   # Whether to impose SANOS smoothness.
     timeout_seconds      : float|None = 60.*5. #: Time limit for the optimization solver, in seconds. This is passed to the CVXPY solver options as "time_limit".
 
-    min_dlv              : float = 0.01   #: Minimum local volatility to impose in the fit, in absolute terms. This is a soft constraint which is implemented as a penalty term in the optimization problem, so it may not be perfectly respected. If None, no minimum local volatility is imposed.
-    max_dlv              : float = 5.     #: Maximum local volatility to impose in the fit, in absolute terms. This is a soft constraint which is implemented as a penalty term in the optimization problem, so it may not be perfectly respected. If None, no maximum local volatility is imposed.
+    min_dlv              : float = 0.01      #: Minimum local volatility to impose in the fit.
+    max_dlv              : float = 50.        #: Maximum local volatility to impose in the fit.
+    min_density_vol      : float|None = 1E-4 # Minimum local volatility to impose in the fit.
+    min_density_cap      : float|None = 1E-5 # Maximum density floor. Only used if :attr:`IMPOSE_FLOOR_ON_DENSITY` is set to True; otherwise 0.
 
     # protected variables do not alter the ID of this field (because they start with '_')
     _debug_verbose_cvxpy  : set[str]|None = None
     _eps_price            : float = 1E-6
     _eps_density          : float = 1E-7
     _min_density          : float = 1E-5
+    _eps_dlv_box          : float = 1E-6
+    _dlv_mode             : bool = True
+    _raise_on_eps         : bool = True
 
     def __post_init__(self):
         verify_inp( self.timeout_seconds is None or self.timeout_seconds >= 0., lambda : f"'timeout_seconds' must be positive or None, but found {self.timeout_seconds}" )
@@ -48,10 +54,11 @@ class SanosFitter:
 
     def __str__(self) -> str:
         """ Very compact but still readable summary """
-        return (
-            f"sanos,{f'sth={self.smoothness:.2g},' if self.smoothness is not None else ''}"
-            f"{',midv='+str(self.min_dlv) if self.min_dlv is not None else ''}{',mxdv='+str(self.max_dlv) if self.max_dlv is not None else ''}"
-        )
+        return\
+            f"sanos,{f'sth={self.smoothness:.2g},' if self.smoothness is not None else ''}"+\
+            f"{',midv='+str(self.min_dlv) if self.min_dlv is not None else ''}{',mxdv='+str(self.max_dlv) if self.max_dlv is not None else ''}{',mindv='+str(self.min_density_vol) if self.min_density_vol is not None else ''}"+\
+            ("" if self.min_density_vol is None else f",mdv={self.min_density_vol:.4g}") +\
+            ("" if self.min_density_cap is None else f",mdc={self.min_density_cap:.4g}")      
 
     def __unique_hash__( self, unique_hash, debug_trace ) -> str:
         """ Overwrite hash function to ignore non-functional parameters. Note that unique_hash already ignored protected variables """
@@ -150,16 +157,13 @@ class SanosFitter:
         variances = make_variances() 
         del vols
 
-        # generate strike range, fit per-expiry
-        # -------------------------------------
-        # Add strikes to the left and right which are consistent with the no-arb condition.
-
         tme         = verbose.timer()
         variables   = []
         constraints = []
         objective   = 0.
         xdensities  = []
         CXs         = []
+        dCts        = []
 
         for t, expiry in enumerate(expiries):
             def local_message():
@@ -170,7 +174,6 @@ class SanosFitter:
                 else:
                     msg += " " + ext
                 return msg
-            verbose.write(lambda : f"\r{local_message()}: Generating extended strikes... ", end='')
 
             strikes_t  = strikes[t]
             mids_t     = mids[t]
@@ -182,41 +185,50 @@ class SanosFitter:
             verify_inp( strikes_t.shape == mids_t.shape, f"{local_message()}: 'strikes' and 'mids' must have the same shape, found {strikes_t.shape} and {mids_t.shape}")
             if not weights_t is None: verify_inp( strikes_t.shape == weights_t.shape, f"{local_message()}: 'strikes' and 'weights' must have the same shape, found {strikes_t.shape} and {weights_t.shape}")
 
-            q_t         = cp.Variable(len(xstrikes_t), nonneg=True)
+            if t>0:
+                assert strikes_t[0] <= strikes[t-1][0], f"{local_message()}: 'strikes' must be increasing across expiries, but found {strikes[t-1][0]:.4g} and {strikes_t[0]:.4g} for current and previous expiry."
+                assert strikes_t[-1] >= strikes[t-1][-1], f"{local_message()}: 'strikes' must be increasing across expiries, but found {strikes[t-1][-1]:.4g} and {strikes_t[-1]:.4g} for current and previous expiry."  
+
+            q_t         = cp.Variable(len(xstrikes_t), bounds=[0.,1.])#nonneg=True)
             constraints += [ cp.sum( q_t ) == 1.,
-                             q_t @ xstrikes_t == 1., # martingale condition
-                             q_t <= 1.
+                            q_t @ xstrikes_t == 1., 
+                            q_t <= 1.
                             ]
+            if not self.min_density_vol is None:
+                bscalls     = bs.price( k=xstrikes_t, vol=self.min_density_vol, sqrtT=math.sqrt(expiry), eps=self._eps_price )
+                bsdensity   = np.diff( np.diff( bscalls, prepend=1. ) / np.diff(xstrikes_t, prepend=0.), append=0. )
+                bsdensity   = np.clip( bsdensity, a_min=0., a_max=None if self.min_density_cap is None else self.min_density_cap / float(len(xstrikes_t)) )
+                constraints += [ q_t >= bsdensity ]
+                del bscalls, bsdensity
 
             # martingale
-            Cm          = np.maximum( 0., xstrikes_t[None,:] - xstrikes_t[1:-1,None] ) @ q_t    # model strikes - do not use "call"
+            Cm          = np.maximum( 0., xstrikes_t[None,:] - xstrikes_t[1:-1,None] ) @ q_t    # internal model prices
             if t>0:
                 assert xstrikes[t-1].shape == xdensities[t-1].shape, f"Internal error {message()}: shape mismatch between previous and current mstrikes, {xstrikes[t-1].shape} vs {xdensities[t-1].shape}"
                 Cm1         = np.maximum( 0., xstrikes[t-1][None,:] - xstrikes_t[1:-1,None] ) @ xdensities[t-1]
                 constraints += [ Cm >= Cm1 ]
             else:
-                Cm1   = np.maximum( 0., 1. - xstrikes_t[1:-1] )    # model strikes, previous density is dirac at 1
+                Cm1   = np.maximum( 0., 1. - xstrikes_t[1:-1] )    # internal model prices, previous density is dirac at 1
+            dCt = Cm - Cm1
+            dCts.append(dCt)
 
-            # dlv constaints
+            # dlv constraints
             # dC = 1/2 * dlvsq * x^2 * dt * K^2 / (1/2 (k^+ - k^-)) q
             box         = xstrikes_t[1:-1]**2 * ( expiries[t] - ( expiries[t-1] if t>0 else 0. ) ) / ( xstrikes_t[2:] - xstrikes_t[:-2])
-            constraints += [ Cm - Cm1 >= cp.multiply( box * (self.min_dlv**2), q_t[1:-1] ) ]
-            constraints += [ Cm - Cm1 <= cp.multiply( box * (self.max_dlv**2), q_t[1:-1] ) ]
-            del box, Cm1
+            constraints += [ dCt >= cp.multiply( box * (self.min_dlv**2), q_t[1:-1] ) ]
+            constraints += [ dCt <= cp.multiply( box * (self.max_dlv**2), q_t[1:-1] ) ]
+            del box, Cm1, dCt
 
             # fit
             def call( spots, strikes ):
                 if self.smoothness is None or self.smoothness == 0. or expiry < ONE_MINUTE:
                     return np.maximum( 0., spots - strikes )
-                expiry_ = np.clip( expiry, expiries[0], expiries[-1] )
-                vol     = math.sqrt( self.smoothness * np.interp( expiry_, expiries, variances ) / expiry_ )
+                vol     = math.sqrt( variances[t] / expiry * self.smoothness ) 
                 assert np.isfinite(vol), f"Internal error: {message()}infinite vol"
-                if vol == 0.:
-                    return np.maximum( 0., spots - strikes )
                 return bs.price( k=strikes/spots, vol=vol, sqrtT=math.sqrt(expiry), eps=self._eps_price )*spots
 
             CX           = call( spots=xstrikes_t[None,:], strikes=strikes_t[:,None] )
-            fits_t       = CX @ q_t    # market strikes
+            fits_t       = CX @ q_t    # market prices according to the model (with smoothness)
             err_t        = cp.abs(fits_t-mids_t)
             err_t        = err_t if weights_t is None else cp.multiply( weights_t, err_t )
             objective    += cp.sum( err_t )
@@ -224,13 +236,14 @@ class SanosFitter:
             xdensities.append(q_t)
             CXs.append(CX)
 
-        success, status, fell_back = SanosLPSolver(timeout_seconds=self.timeout_seconds,
-                                                   _debug_verbose_cvxpy=self._debug_verbose_cvxpy)( 
-                                                     objective=objective,
-                                                     variables=variables, 
-                                                     constraints=constraints, 
-                                                     message_context=lambda : message(False),
-                                                     verbose=verbose )
+        with verbose.write_t(lambda : f"Fitting {'linear' if self.smoothness is None else f'{self.smoothness:.2f}-smooth'} SANOS surface... ", end=''):
+            success, status, fell_back = SanosLPSolver(timeout_seconds=self.timeout_seconds,
+                                                _debug_verbose_cvxpy=self._debug_verbose_cvxpy)( 
+                                                    objective=objective,
+                                                    variables=variables, 
+                                                    constraints=constraints, 
+                                                    message_context=lambda : message(False),
+                                                    verbose=verbose )
         if fell_back:
             verbose.write(lambda : f"had to fall back to a slower solver... ", head=False, end='' )
 
@@ -258,16 +271,36 @@ class SanosFitter:
                 warnings.warn(f"{message()}Warning: no-arbitrage density does not satisfy basic properties after optimization: min {q_t.min():.3e}, sum {q_t.sum():.6f}, integral {q_t@xstrikes_t:.6f} -- attempting fix.")
                 q_t = warn_and_fix_density( xstrikes_t, q_t, eps=self._eps_density, message = lambda : f"{message()}expiry {expiry*DAYS_PER_YEAR:.2f}d: surface density after optimization" )
 
+            # debug conditions on dC_t
+            box         = xstrikes_t[1:-1]**2 * ( expiries[t] - ( expiries[t-1] if t>0 else 0. ) ) / ( xstrikes_t[2:] - xstrikes_t[:-2])
+            q_box       = box * q_t[1:-1]
+            dCt         = dCts[t].value
+            lower       = dCt - np.maximum((self.min_dlv**2)*q_box, 0.) # must be >= 0
+            upper       = (self.max_dlv**2)*q_box - dCt # must be >= 0
+            if not np.all(lower >= -self._eps_dlv_box - np.abs(dCt)*self._eps_dlv_box):
+                index  = np.arange((len(lower)))[lower < -self._eps_dlv_box - np.abs(dCt)*self._eps_dlv_box][:4]
+                msg    = f"{message()}expiry {expiry*DAYS_PER_YEAR:.2f}d: dC_t[{index}] {dCt[index]} below min dlv constraint {np.maximum((self.min_dlv**2)*q_box, 0.)[index]} difference {lower[index]} [tolerance {self._eps_dlv_box} -> {(+self._eps_dlv_box + np.abs(dCt)*self._eps_dlv_box)[index]}]"
+                warnings.warn(msg)
+                assert not self._raise_on_eps or np.all(lower >= -self._eps_dlv_box - np.abs(dCt)*self._eps_dlv_box), msg
+
+            if not np.all(upper >= -self._eps_dlv_box - np.abs(dCt)*self._eps_dlv_box):
+                index = np.arange((len(upper)))[upper < -self._eps_dlv_box - np.abs(dCt)*self._eps_dlv_box][:4]
+                msg    = f"{message()}expiry {expiry*DAYS_PER_YEAR:.2f}d: dC_t[{index}] {dCt[index]} above max dlv constraint {((self.max_dlv**2)*q_box+1E-6)[index]} difference {upper[index]} [tolerance {self._eps_dlv_box} -> {(self._eps_dlv_box + np.abs(dCt)*self._eps_dlv_box)[index]}]"
+                warnings.warn(msg)
+                assert not self._raise_on_eps or np.all(upper >= -self._eps_dlv_box - np.abs(dCt)*self._eps_dlv_box), msg
+
             # zero out some density
-            floor      = max( self._min_density / float(len(q_t)), self._eps_density )
+            floor      = max( self._min_density / float(len(q_t)), self._eps_density ) if IMPOSE_FLOOR_ON_DENSITY else 0.
             is_zero    = q_t < floor
             if np.any(is_zero):
                 q_t[is_zero]  = 0.
+
             q_t           = warn_and_fix_density( xstrikes_t, q_t, eps=self._eps_density, message = lambda : f"{message()} expiry {expiry*DAYS_PER_YEAR:.2f}d: surface density" )
             xdensities[t] = q_t
             fit_t         = CX @ q_t
             assert fit_t.shape == strikes_t.shape, f"Internal error: {message()}Shape of fit_t {fit_t.shape} does not match shape of strikes_t {strikes_t.shape}"
             fits.append( fit_t )
+
         verbose.write(lambda : f"done. This took {tme}.", head=False )
 
         return SanosPricer( smoothness=self.smoothness,
@@ -277,5 +310,7 @@ class SanosFitter:
                             xdensities=xdensities,
                             min_dlv=self.min_dlv,
                             max_dlv=self.max_dlv,)
+
+
 
 

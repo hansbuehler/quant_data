@@ -141,7 +141,7 @@ def fetch_minute_bars(
             verbose.write("no data found.", head=False)
             return _empty_minute_df()
 
-        df = pl.DataFrame(rows)
+        df = pl.DataFrame(rows, infer_schema_length=None)
 
         if "vw" not in df.columns:
             df = df.with_columns(pl.lit(None).alias("vw"))

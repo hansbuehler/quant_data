@@ -35,9 +35,7 @@ class BaseEnvironment(object):
 
     Tensor = torch.Tensor
 
-    def __init__(
-        self, *, precision: int = 32, device: torch.device | str | None = None, debug: bool = False
-    ):
+    def __init__( self, *, precision: int = 32, device: torch.device | str | None = None, debug: bool = False ):
         """Initialize environment"""
         self._precision = precision
         self.device = (
@@ -46,6 +44,9 @@ class BaseEnvironment(object):
             else device
         )
         self.debug = debug
+
+    def __str__(self):
+        return f"Env(prec={self._precision},device={self.device},debug={self.debug})"
 
     @property
     def fdtype(self) -> torch.dtype:
@@ -92,7 +93,7 @@ class BaseModel(tnn.Module):
         self._env = env
 
     @property
-    def environment(self) -> BaseEnvironment:
+    def env(self) -> BaseEnvironment:
         """Get environment"""
         return self._env
 
@@ -425,7 +426,7 @@ def lazy_verify(
     exception : Exception, default :class:`RuntimeError`
         The type of exception to raise if the condition is not satisfied.
     """
-    if not self.debug:
+    if not debug:
         return
 
     with torch.no_grad():

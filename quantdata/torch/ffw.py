@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from cdxcore.err import verify_inp
 import math as math
+import numpy as nnp
 
 @dataclass(frozen=True)
 class FeedForwardConfig:
@@ -21,6 +22,9 @@ class FeedForwardConfig:
     num_depth : int = 0             # Depth; if zero then the network becomes a single linear layer.
     num_width : int = 16            # Inner width; use a negative number as multiplier of ``num_output`` (output dimension). If ``num_depth`` is zero, then this is ignored.
     use_bias : bool = True          # Whether to use bias in the inner layers. If ``num_depth`` is zero, then this is ignored.
+
+    def __str__(self) -> str:
+        return f"FF(d={self.num_depth},w={self.num_width},a={self.activation},b={self.use_bias})"
 
     def __post_init__(self):
         verify_inp( not isinstance(self.activation,str) or hasattr(torch.nn, self.activation), f"Unknown torchh activation function 'torch.nn.{self.activation}' see https://docs.pytorch.org/docs/stable/nn.html")
@@ -156,6 +160,7 @@ class FeedForward(BaseModel):
             assert input.shape[-1] == self.num_input, f"Input shape mismatch: expected last dimension to be {self.num_input}, but found {input.shape}"
             x    = torch.where( mask[...,None], input, 0.) if not mask is None else input
         else:
+            assert not isinstance(input, nnp.ndarray), f"Input of type {type(input)} is not supported"
             assert len(input) == self.num_input, f"Input length mismatch: expected {self.num_input} elements in the input list, but found {len(input)}"
             shape = torch.broadcast_shapes( *[x.shape for x in input] )
             x     = torch.stack([ torch.where(mask, x, 0.).expand(shape) for x in input], dim=-1) if not mask is None else\

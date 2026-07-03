@@ -37,58 +37,97 @@ NYSE_CALENDAR = mcal.get_calendar("NYSE")
 _BUSINESS_DAYS_CACHE = {}
 _EARLY_DAYS_CACHE = {}
 
-class NMS:
+@dataclass(frozen=True)
+class NormalizedStrikes:
     r"""
     NMS generates relative strikes by:
     $$
-        \mathrm{NMS}(z,t) := \exp\left( \log(1.1)\ z \cdot \sqrt{\frac{\epsilon+t}{\epsilon+1}} \right)
+        \mathrm{NMS}(z,t) := \exp\left(  z \cdot \sqrt{\frac{\sigma_\epsilon^2\epsilon+\sigma^2 t}{\epsilon+1}} \right)
     $$
-    where $\epsilon$ is roughly on trading hour.
+    where:
+    
+    * $\epsilon$ is :attr:`EPS`, and $t$ is time to expiry in years. 
+    * $\sigma$ is the volatility scale, which defaults to :attr:`SCALE`.
+    * $\sigma_\epsilon$ is the volatility scale for epsilon.
     """
 
-    EPS = 1.0 / DAYS_PER_YEAR / 8.0  #: Small epsilon for NMS computation ~ 1 hour
-    SCALE = math.log(1.1)            # 10% vol
+    EPS   : float = 1.0 / DAYS_PER_YEAR / 8.0  #: Small epsilon for NMS computation ~ 1 hour
+    SCALE : float = math.log(1.1)            #: 10% vol
 
-    @staticmethod
-    def from_nms(z: float|np.ndarray, t: float|np.ndarray, *, vol : float|np.ndarray = SCALE, backbone=np) -> float|np.ndarray:
-        """ Converts an NMS strike to a relative strike. """
-        assert np.min(vol) > 0., "Volatility must be positive"
-        return backbone.exp(vol * z * backbone.sqrt((NMS.EPS + t) / (NMS.EPS + 1.0)))
+    def __post_init__(self):
+        verify_inp( self.EPS > 0., "EPS must be positive" )
+        verify_inp( self.SCALE > 0., "SCALE must be positive" )
 
-    @staticmethod
-    def to_nms(k: float|np.ndarray, t: float|np.ndarray, *, vol: float|np.ndarray = SCALE, backbone=np) -> float|np.ndarray:
-        """ Converts a relative strike to an NMS strike. """
-        assert np.min(vol) > 0., "Volatility must be positive"
-        assert np.min(k) > 0., "Relative strike must be positive"
-        return (backbone.log(k) / vol) / backbone.sqrt((NMS.EPS + t) / (NMS.EPS + 1.0))
+    def from_nms(self, z: float|np.ndarray, t: float|np.ndarray, *, vol : float|np.ndarray|None = None, eps_vol : float|np.ndarray|None = None, backbone=np) -> float|np.ndarray:
+        """
+        Converts an NMS strike to a relative strike
 
-class NMS5:
-    r"""
-    NMS generates relative strikes by:
-    $$
-        \mathrm{NMS}(z,t) := \exp\left( \log(1.1)\ z \cdot \sqrt{\frac{\epsilon+t}{\epsilon+1}} \right)
-    $$
-    and in reverse:
-    $$
-        z = \frac{\log(K/F)}{\log(1.1)} \cdot \sqrt{\frac{\epsilon+T}{\epsilon+1}}
-    $$
-    where $\epsilon$ is five days.
+        Parameters
+        ----------
+        z : float | :class:`numpy.ndarray`
+            NMS strike level.
+        t : float | :class:`numpy.ndarray`
+            Time to expiry in years.
+        vol : float | :class:`numpy.ndarray` | None, default ``None``
+            Volatility in year fraction. If None, :attr:`SCALE` is used.
+        eps_vol : float | :class:`numpy.ndarray`| None, default ``None``
+            Volatility scale for epsilon. If None, :attr:`SCALE` is used.
+        backbone : :class:`Backbone`, default :class:`BackboneNumpy`
+            Alternative backbone, e.g. torch or jax.
 
-    This seems statistically the correct NMS measure for SPX, c.f. notebook ``viz_sanos_mass``.
-    """
+        Returns
+        -------
+        Strikes: float or :class:`numpy.ndarray`
+            Relative strikes corresponding to the given NMS strikes, time to expiry and volatility.
+        """
+        assert np.min(t) >= 0., "Time must be non-negative"
+        if not vol is None:
+            assert np.min(vol) > 0., "Volatility must be positive"
+        else:
+            vol = self.SCALE
+        if eps_vol is None:
+            eps_vol = self.SCALE
+        else:
+            assert np.min(eps_vol) > 0., "Eps_vol must be positive"
+        return backbone.exp(z * backbone.sqrt((eps_vol * eps_vol * self.EPS + vol * vol * t) / (self.EPS + 1.0)))
 
-    EPS = 5.0 / DAYS_PER_YEAR #: 5 days
-    SCALE = math.log(1.1)     # 10% vol
+    def to_nms(self, k: float|np.ndarray, t: float|np.ndarray, *, vol: float|np.ndarray|None = None, eps_vol : float|np.ndarray|None = None, backbone=np) -> float|np.ndarray:
+        """
+        Converts a relative strike to an NMS strike.
 
-    @staticmethod
-    def from_nms(z: float|np.ndarray, t: float|np.ndarray, *, vol : float|np.ndarray = SCALE, backbone=np) -> float|np.ndarray:
-        """ Converts an NMS strike to a relative strike. """
-        return backbone.exp(vol * z * backbone.sqrt((NMS5.EPS + t) / (NMS5.EPS + 1.0)))
+        Parameters
+        ----------
+        k : float | :class:`numpy.ndarray`
+            Relative strike level.
+        t : float | :class:`numpy.ndarray`
+            Time to expiry in years.
+        vol : float | :class:`numpy.ndarray` | None, default ``None``
+            Volatility in year fraction. If None, :attr:`SCALE` is used.
+        eps_vol : float | :class:`numpy.ndarray`| None, default ``None``
+            Volatility scale for epsilon. If None, :attr:`SCALE` is used.
+        backbone : :class:`Backbone`, default :class:`BackboneNumpy`
+            Alternative backbone, e.g. torch or jax.
 
-    @staticmethod
-    def to_nms(k: float|np.ndarray, t: float|np.ndarray, *, vol: float|np.ndarray = SCALE, backbone=np) -> float|np.ndarray:
-        """ Converts a relative strike to an NMS strike. """
-        return (backbone.log(k) / vol) / backbone.sqrt((NMS5.EPS + t) / (NMS5.EPS + 1.0))
+        Returns
+        -------
+        NMS Strikes: float or :class:`numpy.ndarray`
+            Relative strikes corresponding to the given NMS strikes, time to expiry and volatility.
+        """
+        vol = self.SCALE if vol is None else vol
+        assert np.min(k) > 0., "Strike must be positive"
+        assert np.min(t) >= 0., "Time must be non-negative"
+        if not vol is None:
+            assert np.min(vol) > 0., "Volatility must be positive"
+        else:
+            vol = self.SCALE
+        if eps_vol is None:
+            eps_vol = self.SCALE
+        else:
+            assert np.min(eps_vol) > 0., "Eps_vol must be positive"
+        return (backbone.log(k) ) * backbone.sqrt((self.EPS + 1.0) / (eps_vol * eps_vol * self.EPS + vol * vol * t))
+
+NMS = NormalizedStrikes(EPS = 1.0 / DAYS_PER_YEAR / 8.0, SCALE = math.log(1.1))
+NMS5 = NormalizedStrikes(EPS = 5.0 / DAYS_PER_YEAR, SCALE=math.log(1.1))
 
 def to_date(d: str | dt.datetime | dt.date | np.datetime64 | None) -> dt.date | None:
     """

@@ -100,7 +100,8 @@ class YFClient(object):
             dict(
                 date=pl.Series(earnings_dates, dtype=pl.Date),
                 is_earnings=pl.Series([True] * len(earnings_dates), dtype=pl.Boolean),
-            )
+            ),
+            infer_schema_length=None
         )
         df = df.sort("date")
         assert set(df.columns) == set(self.SCHEMA_HAS_EARNINGS), f"Internal error retrieving earnings for {ticker} between {fmt_date(start)} and {fmt_date(end)}: expected columns {set(self.SCHEMA_HAS_EARNINGS)} but got {set(df.columns)}. Please update code. Ref: https://massive.com/docs/rest/stocks/corporate-actions/earnings"

@@ -387,9 +387,20 @@ def filter_contracts(
     if len(used_ticker_data) == 0:
         return None
 
-    used_ticker_data = pl.DataFrame(used_ticker_data)
-    expted_columns = {'opt_ticker','reject_code','approx_cash_vol_prev_k','approx_cash_vol_today_k','has_prev_quotes','has_prev_trades','has_today_quotes','has_today_trades', 'opt_open', 'opt_close', 'opt_prev_open', 'opt_prev_close'}
-    assert set(used_ticker_data.columns) == expted_columns, f"{underlying} {d}: Missing expected columns in used ticker data: {expted_columns - set(used_ticker_data.columns)}. This is unexpected, please investigate."
+    expted_schema = {'opt_ticker':pl.String,
+                     'reject_code':pl.UInt32,
+                     'approx_cash_vol_prev_k':pl.Float64,
+                     'approx_cash_vol_today_k':pl.Float64,
+                     'has_prev_quotes':pl.Boolean,
+                     'has_prev_trades':pl.Boolean,
+                     'has_today_quotes':pl.Boolean,
+                     'has_today_trades':pl.Boolean,
+                     'opt_open':pl.Float64,
+                     'opt_close':pl.Float64,
+                     'opt_prev_open':pl.Float64,
+                     'opt_prev_close':pl.Float64}
+    used_ticker_data = pl.DataFrame(used_ticker_data, schema=expted_schema, infer_schema_length=None)
+    assert set(used_ticker_data.columns) == set(expted_schema), f"{underlying} {d}: Missing expected columns in used ticker data: {set(expted_schema) - set(used_ticker_data.columns)}. This is unexpected, please investigate."
 
     all_contracts = all_contracts.join( used_ticker_data, left_on="ticker", right_on="opt_ticker", how="left" )
     assert "reject_code_right" in all_contracts.columns, f"{underlying} {d}: Missing 'reject_code_right' column in all_contracts after join. This is unexpected, please investigate."

@@ -90,7 +90,7 @@ def _uid(ticker, d, raw_day_filter, expiry_filter, mk_arb_free) -> str:
     )
 
 @_processing(fmt=SubDir.PANDAS_PARQUET).cache(
-    "0.6",
+    "0.63",
     dependencies=[enrich_day, MkArbFree],
     uid=_uid,
     exclude_args=["verbose", "enriched_data", "raise_if_bad_day", "refresh_cache"],
@@ -288,8 +288,11 @@ def mk_arb_free_day(
                 f"Internal error: {ticker} {d}: arb-free DataFrame column '{column}' is expected to have exactly one unique value per expiry. Found expiries with multiple values: {fmt_list(values_per_expiry[values_per_expiry != 1].index.tolist())}."
             )
 
-    dropped_expiries = len(unique_expiry_ids) - len(output_indices)
-    verbose.write( lambda: f"{ticker} {d}: generated arbitrage-free price surface. Dropped {dropped_expiries} expiries and {dropped_strikes} strikes of the remaining expiries. This took {tme}.")
+
+    remaining_expiries = sorted( result['expiry'].unique() )
+    dropped_expiries   = len(unique_expiry_ids) - len(output_indices)
+    verbose.write( lambda: f"{ticker} {d}: generated arbitrage-free price surface. Dropped {dropped_expiries} expiries and {dropped_strikes} strikes of the remaining expiries from "+\
+                           f"{remaining_expiries[0]} to {remaining_expiries[-1]}. This took {tme}.")
     result.attrs['arb_free_timing'] = tme.seconds
     return result
 

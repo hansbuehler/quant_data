@@ -424,7 +424,7 @@ def ticker_curve_bins(
                 end="",
             )
 
-    df = pl.DataFrame(day_records)
+    df = pl.DataFrame(day_records, infer_schema_length=None)
 
     vol_cols = [c for c in df.columns if c.startswith("vol_")]
     cash_cols = [c for c in df.columns if c.startswith("cash_vol_")]
