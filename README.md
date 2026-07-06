@@ -111,7 +111,7 @@ Use `.[dev]` for the full local development toolchain. It includes testing and d
 If conda plugin warnings interfere with environment creation, retry with:
 
 ```cmd
-conda create --no-plugins --prefix .\.vqdata python=3.12
+conda create --prefix .\.vqdata python=3.12
 ```
 
 #### uv
