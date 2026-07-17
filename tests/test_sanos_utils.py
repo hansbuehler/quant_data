@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from quantdata.sanos.old.utils import extract_atm_fwd_vols
+from quantdata.sanos.sanos_tools import extract_atm_fwd_vols
 
 
 def test_extract_atm_fwd_vols_interpolates_atm_and_forward_variance():
