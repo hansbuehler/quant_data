@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openqai-data"
+version = "0.1.0"
+description = "openqai data adapters: WRDS IvyDB, massive.com, Yahoo Finance, FRED, tickers."
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+  { name = "Hans Buehler" },
+]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "openqai-core",
+    "wrds>=3.2.0",
+    "massive>=2.5.0",
+    "yfinance>=1.3.0",
+    "polars>=1.0.0",
+    "pandas>=2.2.0",
+    "numpy>=1.26.0",
+    "pyarrow",
+    "click>=8.1.0",
+    # Previously undeclared: resolved transitively via wrds/massive/yfinance.
+    "prettytable",
+    "requests",
+    "urllib3",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["openqai*"]
+# See the note in core/pyproject.toml: src/openqai/ MUST NOT contain __init__.py.

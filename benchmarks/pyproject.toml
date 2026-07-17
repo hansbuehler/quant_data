@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openqai-benchmarks"
+version = "0.1.0"
+description = "openqai models and benchmarks: SANOS, NCDE, volsim, deep hedging."
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+  { name = "Hans Buehler" },
+]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "openqai-core",
+    "openqai-data",
+    "cdxcore",
+    "numpy>=1.26.0",
+    "scipy>=1.12.0",
+    "pandas>=2.2.0",
+    "polars>=1.0.0",
+    "cvxpy",
+    "click>=8.1.0",
+    # Previously undeclared: used by sanos/sanos_jax.py.
+    "sympy",
+]
+
+[project.optional-dependencies]
+torch = ["openqai-core[torch]"]
+jax = ["openqai-core[jax]"]
+# Declared by the pre-split pyproject but imported by no .py file in the tree
+# (orbax appears in one notebook only). Parked here rather than dropped, since
+# they look like intent for training loops that do not exist yet. Confirm with
+# Hans whether these stay or go.
+training = [
+    "wandb",
+    "orbax",
+    "scikit-learn",
+    "ipynbname",
+    "highspy",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["openqai*"]
+# See the note in core/pyproject.toml: src/openqai/ MUST NOT contain __init__.py.

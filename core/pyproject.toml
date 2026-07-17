@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openqai-core"
+version = "0.1.0"
+description = "openqai commons: environment, surface state, risk measures, backbones, shared numerics."
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+  { name = "Hans Buehler" },
+]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "cdxcore",
+    "numpy>=1.26.0",
+    "scipy>=1.12.0",
+    "pandas>=2.2.0",
+    "polars>=1.0.0",
+    "pandas_market_calendars>=4.4.0",
+    "cvxpy",
+]
+
+# Framework backends are optional: core/nn and core/backbone must import them
+# lazily so that `pip install openqai-core` stays free of both torch and jax.
+[project.optional-dependencies]
+torch = ["torch"]
+jax = ["jax", "flax", "optax"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["openqai*"]
+# namespaces = true is the setuptools default. src/openqai/ MUST NOT contain an
+# __init__.py: it is a PEP 420 namespace shared with openqai-data and
+# openqai-benchmarks. Adding one here silently shadows the sibling packages.
