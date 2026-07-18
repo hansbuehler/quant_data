@@ -155,6 +155,56 @@ Split `tests/` to sit beside each distribution. Mapping by actual imports:
 ### conftest.py
 `tests/conftest.py` creates the stored_data dirs and sets `QUANTDATA_TEST_MODE=1`.
 Both data and benchmarks tests need it. Options: duplicate a small conftest into
-each, or keep one at the workspace root. The `QUANTDATA_*` env var names live in
-`core/env.py` — rename to `OPENQAI_*` there and in every test in the same pass,
-or leave as-is for now (they still work). test_env.py hard-codes the names.
+each, or keep one at the workspace root.
+
+---
+
+## DO NOT rename cache keys or env vars (Hans)
+
+These identify data already sitting on users' disks (WRDS IvyDB, massive.com
+caches). Change them and the code looks in a new directory, finds nothing, and
+either re-downloads gigabytes or fails. They are decoupled from import paths on
+purpose — move modules freely, keep these byte-identical:
+
+- **`env.locations("...")` string keys:** `"widb"`, `"massive"`, `"ncde"`,
+  `"sanos"`, `"volsim"`, and sub-keys `"implied"`, `"voluvol"`. These ARE the
+  on-disk directory names.
+- **`QUANTDATA_*` env vars:** `QUANTDATA_ROOT`, `QUANTDATA_RAW_DATA`,
+  `QUANTDATA_PROCESSING_DATA`, `QUANTDATA_TRAINING_DATA`, `QUANTDATA_EXPERIMENTS`,
+  `QUANTDATA_TEMP_DATA`, `QUANTDATA_CACHE_MODE`, `QUANTDATA_TEST_MODE`,
+  `QUANTDATA_WRDS_OFF`. Live in users' shell profiles / .env files.
+- **`SubDir` format enums** (`PANDAS_PARQUET`, `PYTREE_HDF5`) and the
+  `raw`/`processing`/`training`/`experiments` subdir names.
+
+(Earlier draft suggested renaming `QUANTDATA_*` -> `OPENQAI_*`. Do NOT — that is
+the exact breakage Hans flagged. A rename, if ever wanted, is a separate change
+with a migration/back-compat shim, not part of this restructure.)
+
+---
+
+## PyCharm hazard: it re-adds namespace-breaking __init__.py
+
+Every Move can drop an `__init__.py` into intermediate dirs. If one lands at
+`<dist>/src/openqai/__init__.py` (or `src/__init__.py`), core's `openqai`
+becomes a regular package and SHADOWS data + benchmarks — imports silently
+resolve to core only. Guard after each batch of moves:
+
+    python -c "import openqai; print(openqai.__file__)"   # must print: None
+
+If it prints a path instead of None, find and delete the offending file:
+
+    find core data benchmarks -path '*/src/openqai/__init__.py' -o -path '*/src/__init__.py'
+
+Only the leaf packages (`openqai/core/`, `openqai/data/`, `openqai/benchmarks/`
+and below) get `__init__.py`. `openqai/` and `src/` never do.
+
+---
+
+## Collapsing to a single distribution (if Hans wants that)
+
+The three-dist layout downgrades to one distribution trivially: merge the three
+`pyproject.toml` dependency lists into one root `pyproject.toml`, point
+`packages.find` at all three `src/` roots, and drop the two child pyprojects.
+No source or import changes. (Going the other way later — one paper per repo —
+is also just moving `benchmarks/<paper>/` into its own dist; the namespace
+already supports it.)
