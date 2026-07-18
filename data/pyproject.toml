@@ -21,6 +21,7 @@ classifiers = [
 ]
 dependencies = [
     "openqai-core",
+    "cdxcore",
     "wrds>=3.2.0",
     "massive>=2.5.0",
     "yfinance>=1.3.0",
