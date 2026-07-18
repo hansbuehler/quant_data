@@ -9,12 +9,12 @@ python -m generate
 import os
 os.environ["QUANTDATA_TEST_MODE"] = "generate_tests" # do this before importing anything else
 
-from quantdata import env# triggers construction of caches.
-from quantdata.massive.testing.scope import TICKERS, DATES
+from openqai.core import env# triggers construction of caches.
+from openqai.data.massive.testing.scope import TICKERS, DATES
 
 def generate_day(ticker, d):
-    from quantdata.massive.client import MassiveClient
-    from quantdata.massive.processing import filter_valid_trades, filter_valid_quotes, align_quotes_to_trades, align_trades_to_quotes
+    from openqai.data.massive.client import MassiveClient
+    from openqai.data.massive.processing import filter_valid_trades, filter_valid_quotes, align_quotes_to_trades, align_trades_to_quotes
 
     client = MassiveClient()
     ocv = client.fetch_day_summary(ticker, d, adjusted=True)

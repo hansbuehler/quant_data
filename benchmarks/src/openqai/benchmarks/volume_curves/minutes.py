@@ -20,8 +20,8 @@ import polars as pl
 from cdxcore.err import verify_inp
 from cdxcore.util import fmt_date
 
-from quantdata import Context, env
-from core.src.openqai.core.biz_calendar import get_half_days, prev_business_day
+from openqai.core import Context, env
+from openqai.core.biz_calendar import get_half_days, prev_business_day
 from openqai.data.massive import MassiveClient
 
 _a1m_cache = env.locations.raw("volume_curves")("a1m")

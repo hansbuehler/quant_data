@@ -21,8 +21,8 @@ from cdxcore.jcpool import JCPool
 from cdxcore.subdir import SubDir, version
 from cdxcore.util import fmt_date, fmt_digits, fmt_list
 
-from quantdata import Context, env
-from core.src.openqai.core.biz_calendar import (
+from openqai.core import Context, env
+from openqai.core.biz_calendar import (
     DAYS_PER_YEAR,
     get_business_days,
     get_half_days,
@@ -30,8 +30,8 @@ from core.src.openqai.core.biz_calendar import (
 )
 from openqai.data.massive import MassiveClient
 from openqai.data.massive.tickers.basics import get_listing_date
-from quantdata.tickers.ticker_calendar import EXPIRY, DateRange, build_ticker_calendar
-from quantdata.volume_curves.minutes import fetch_minute_bars
+from openqai.data.tickers.ticker_calendar import EXPIRY, DateRange, build_ticker_calendar
+from openqai.benchmarks.volume_curves.minutes import fetch_minute_bars
 
 _curves_cache = env.locations.processing("volume_curves")
 

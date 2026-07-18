@@ -1,5 +1,5 @@
 """
-quantdata.massive.options.contracts
+openqai.data.massive.options.contracts
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Managing contract information per underyling.
@@ -13,12 +13,10 @@ Each retrieves, filters, and caches contrats for a given underlying.
 
 from __future__ import annotations
 
-import warnings as warnings
 from dataclasses import dataclass
 from datetime import date, datetime
 
 import polars as pl
-from cdxcore.err import verify
 from cdxcore.jcpool import JCPool
 from cdxcore.pretty import PrettyObject
 from cdxcore.uniquehash import named_unique_filename48_8
@@ -26,20 +24,17 @@ from cdxcore.util import TrackTime, fmt_date, fmt_digits, fmt_list
 from cdxcore.verbose import Context
 
 from cdxcore.version import version
-from prettytable import PrettyTable
 
-from quantdata.biz_calendar import (
+from openqai.core.biz_calendar import (
     DAYS_PER_YEAR,
     NMS,
     NMS5,
-    TZ_NY,
     DateRange,
     add_business_days,
     count_business_days_between,
-    get_business_days,
 )
-from quantdata.massive import MassiveClient, SubDir
-from quantdata.pool import PoolConfig
+from openqai.data.massive import MassiveClient, SubDir
+from openqai.core.pool import PoolConfig
 
 _cache = MassiveClient.locations.processing("contracts", fmt=SubDir.POLARS_PARQUET)
 
@@ -163,7 +158,7 @@ def filter_contracts(
     The returned :class:`polars.DataFrame` includes all contracts, with a "reject_code" column indicating the reason for rejection based on the above rules.
     To obtain the filtered options, use::
 
-        from quantdata.massive.options.contracts import filter_contracts, ContractsFilter, REJECTED
+        from openqai.data.massive.options.contracts import filter_contracts, ContractsFilter, REJECTED
         df = filter_contracts(...).filter(pl.col("reject_code") == REJECTED.USED)
 
     **Performance Warning**
@@ -464,15 +459,15 @@ def filter_contracts_between(
     ----------
     ticker : str
         Underlying ticker symbol, e.g. "AAPL" for Apple.
-    date_range : :class:`quantdata.biz_calenddar.DateRange`
+    date_range : :class:`openqai.core.biz_calendar.DateRange`
         Date range for which to filter contracts. Only contracts with expiration_date >= date_range.start and expiration_date <= date_range.end are returned.
-    contracts_filter : :class:`quantdata.massive.options.ContractsFilter`
+    contracts_filter : :class:`openqai.data.massive.options.ContractsFilter`
         Filter parameters for contract filtering. See :class:`ContractsFilter` for details.
     refresh : bool, default False
         If True, refresh data (this will only refresh the top level files, i.e. the files for individual dates, but it will not refresh the cached results of individual contracts).
-    pool_config : :class:`quantdata.massive.options.PoolConfig`, default ``PoolConfig()``
+    pool_config : :class:`openqai.data.massive.options.PoolConfig`, default ``PoolConfig()``
         Configuration for parallel processing. See :class:`PoolConfig` for details.
-    verbose : :class:`quantdata.massive.options.Context`, default ``Context.quiet``
+    verbose : :class:`openqai.data.massive.options.Context`, default ``Context.quiet``
         Verbose context for logging. See :class:`Context` for details.
 
     Returns
@@ -539,8 +534,8 @@ def filter_contracts_between(
 import click
 from cdxcore.err import verify_inp
 
-from quantdata.biz_calendar import to_date
-from quantdata.massive import _cli_defaults
+from openqai.core.biz_calendar import to_date
+from openqai.data.massive import _cli_defaults
 
 
 @click.command()

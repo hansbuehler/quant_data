@@ -27,7 +27,7 @@ requires_fred = pytest.mark.skipif(
 
 @requires_fred
 def test_load_fred_rates() -> None:
-    from quantdata.fred.rates import load_fred_rates
+    from openqai.data.fred.rates import load_fred_rates
 
     df = load_fred_rates(date(2022, 1, 1), date(2024, 1, 1))
 

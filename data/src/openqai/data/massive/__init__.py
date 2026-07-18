@@ -5,8 +5,8 @@ Massive.com Data Module
 Data pipeline for `massive.com <https://massive.com/>`_ market data.
 """
 
-from quantdata import env, SubDir, Context, version#NOQA
-from quantdata.massive.client import MassiveClient
+from openqai.core import env, SubDir, Context, version#NOQA
+from openqai.data.massive.client import MassiveClient
 
 _locations_massive = MassiveClient.locations
 

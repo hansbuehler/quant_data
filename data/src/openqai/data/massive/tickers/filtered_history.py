@@ -1,5 +1,5 @@
 """
-quantdata.massive.tickers.filtered_history
+openqai.data.massive.tickers.filtered_history
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Adjusted daily bars for a ticker over a date range, handling ticker-change events
@@ -16,13 +16,11 @@ from cdxcore.err import verify, verify_inp
 from cdxcore.jcpool import JCPool
 from cdxcore.util import fmt_date, fmt_digits
 from cdxcore.verbose import Context
-from cdxcore.version import version
 
-from quantdata import env
-from quantdata.biz_calendar import TZ_NY, prev_business_day
-from quantdata.massive import MassiveClient
-from quantdata.massive.tickers.basics import get_listing_date
-from quantdata.tickers import SubDir, _locations_tickers
+from openqai.core.biz_calendar import prev_business_day
+from openqai.data.massive import MassiveClient
+from openqai.data.massive.tickers.basics import get_listing_date
+from openqai.data.tickers import SubDir, _locations_tickers
 
 MIN_CASH_VOLUME_M = 10
 MIN_NUM_TRADES = 1000

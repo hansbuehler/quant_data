@@ -1,5 +1,5 @@
 """
-quantdata.massive.client
+openqai.data.massive.client
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 A simple client wrapper for the `www.massive.com <https://www.massive.com>`_ API.
@@ -16,7 +16,7 @@ Set the token in the ``MASSIVE_TOKEN`` environment variable, e.g. by adding the 
 
 Once installed, use is straightforward, e.g. to fetch trades and quotes for Apple 150 call expiring on 2023-06-16::
 
-    from quantdata.massive import MassiveClient
+    from openqai.data.massive import MassiveClient
     client = MassiveClient()
 
     trades = client.fetch_trades("AAPL230616C00150000", date(2023,6,16))
@@ -41,9 +41,9 @@ from massive import RESTClient
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from quantdata import env, Locations
-from quantdata.biz_calendar import TZ_NY, add_business_days
-from quantdata.massive.trade_conds import pack_conditions
+from openqai.core import env
+from openqai.core.biz_calendar import TZ_NY, add_business_days
+from openqai.data.massive.trade_conds import pack_conditions
 
 _massive_locations = env.locations(
     "massive",
@@ -64,7 +64,7 @@ class MassiveClient(object):
 
     Standard usage::
 
-        from quantdata.massive import MassiveClient
+        from openqai.data.massive import MassiveClient
         client = MassiveClient()
 
         trades = client.fetch_trades("AAPL230616C00150000", date(2023,6,16))
@@ -72,7 +72,7 @@ class MassiveClient(object):
 
     **Temporary Caching**
 
-    This client supports in-session caching. Unlike the overall caching framework for :mod:`quantdata`, this caching
+    This client supports in-session caching. Unlike the overall caching framework for :mod:`openqai.core`, this caching
     scheme is temporary and is not guaranteed to persist between machine reboots (e.g. in Linux the root temporary directory is ``/tmp/massive``).
     This can be useful for speeding up repeated requests during an active session
     but should not be relied upon for long-term storage of data.
@@ -83,7 +83,7 @@ class MassiveClient(object):
     """
 
     locations = _massive_locations
-    """ :class:`quantdata.Locations` for massive data. """
+    """ :class:`openqai.core.Locations` for massive data. """
 
     _MASSIVE_TOKEN = None
     _HTTP_SESSION = None
@@ -336,8 +336,8 @@ class MassiveClient(object):
         * ts_ns: Datetime[ns, tz]: time zone information with nanonsecond resolutuin.
         * price: Float64
         * size: Float64
-        * trade_code: UInt32. Compressed & Packed trade conditions, see :func:`quantdata.massive.trade_conds.pack_conditions`.
-          It is recommended to remove trades with uncommon conditions, see :attr:`quantdata.massive.trade_conds.NORMAL_TRADE_EXCLUDE_FLAGS`.
+        * trade_code: UInt32. Compressed & Packed trade conditions, see :func:`openqai.data.massive.trade_conds.pack_conditions`.
+          It is recommended to remove trades with uncommon conditions, see :attr:`openqai.data.massive.trade_conds.NORMAL_TRADE_EXCLUDE_FLAGS`.
         * sequence_number: UInt64. Sequence number of the trade for a given timestamp, useful for ordering trades with the same timestamp.
 
         Parameters
@@ -356,7 +356,7 @@ class MassiveClient(object):
             * ts_ns: Datetime[ns, tz]
             * price: Float64
             * size: Float64
-            * trade_code: UInt32. Compressed & Packed trade conditions, see :func:`quantdata.massive.trade_conds.pack_conditions`.
+            * trade_code: UInt32. Compressed & Packed trade conditions, see :func:`openqai.data.massive.trade_conds.pack_conditions`.
             * sequence_number: UInt64. Sequence number of the trade for a given timestamp. Trades will be sorted by (ts_ns, sequence_number) asc.
         """
         url = f"{self.BASE_URL}/v3/trades/{ticker}"
@@ -691,7 +691,7 @@ class MassiveClient(object):
             Date for which to fetch contracts. Only contracts with expiration_date >= d are returned.
         max_dte : int | None, default ``None``
             If not None, only return contracts with ``expiration_date <= d + max_dte`` in business days.
-            This is computed using :func:`quantdata.biz_calendar.add_business_days` with the NYSE calendar *including half days*.
+            This is computed using :func:`openqai.core.biz_calendar.add_business_days` with the NYSE calendar *including half days*.
 
         Returns:
         -------

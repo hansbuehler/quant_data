@@ -9,19 +9,19 @@ from sphinx.util import logging as sphinx_logging
 
 DOCS_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = DOCS_ROOT.parent
-PACKAGE_ROOT = REPO_ROOT / "quantdata"
+PACKAGE_ROOT = REPO_ROOT / "openqai.core"
 GENERATED_API_DIR = DOCS_ROOT / "api_generated"
-DOCS_BUILD_ROOT = DOCS_ROOT / "_build" / "quantdata-root"
+DOCS_BUILD_ROOT = DOCS_ROOT / "_build" / "openqai.core-root"
 LOGGER = sphinx_logging.getLogger(__name__)
 
 sys.path.insert(0, str(REPO_ROOT))
 
 # Make docs generation reproducible in CI and on fresh machines where the
-# quantdata cache roots are not configured.
+# openqai.core cache roots are not configured.
 DOCS_BUILD_ROOT.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("QUANTDATA_ROOT", str(DOCS_BUILD_ROOT))
 
-project = "quantdata"
+project = "openqai.core"
 copyright = "2026, Hans Buehler"
 author = "Hans Buehler"
 release = "0.1.0"
@@ -92,8 +92,8 @@ myst_enable_extensions = [
 ]
 
 _LITERAL_DOCSTRING_NAMES = {
-    "quantdata.biz_calendar.NMS",
-    "quantdata.sanos",
+    "openqai.core.biz_calendar.NMS",
+    "openqai.benchmarks.sanos",
 }
 
 _DOCSTRING_SUMMARY_OVERRIDES = {
@@ -103,11 +103,11 @@ _DOCSTRING_SUMMARY_OVERRIDES = {
 _LITERAL_DOCSTRING_PREFIXES = (
     "quantdata.dysanos.simple.model.AttentionPoolingEncoderFactory",
     "quantdata.dysanos.simple.sampler",
-    "quantdata.massive.client.MassiveClient",
-    "quantdata.massive.options.contracts",
-    "quantdata.sanos.grid",
-    "quantdata.utils.sanos.MkArbFree",
-    "quantdata.widb.options_filter.OptionsFilter",
+    "openqai.data.massive.client.MassiveClient",
+    "openqai.data.massive.options.contracts",
+    "openqai.benchmarks.sanos.grid",
+    "openqai.benchmarks.sanos.sanos.MkArbFree",
+    "openqai.data.widb.options_filter.OptionsFilter",
 )
 
 _DOCSTRING_ROLE_RE = re.compile(r":[a-zA-Z]+:`([^`]+)`")
@@ -131,7 +131,7 @@ def _safe_import_module(module_name: str):
     module_path = Path(module_file).resolve()
     if not module_path.is_relative_to(PACKAGE_ROOT):
         LOGGER.info(
-            "Skipping API docs for %s because it resolves outside the quantdata tree: %s",
+            "Skipping API docs for %s because it resolves outside the openqai.core tree: %s",
             module_name,
             module_path,
         )
@@ -188,7 +188,7 @@ def _write_package_page(package_name: str, package_path: Path, output_dir: Path)
 
     lines = [package_name, "=" * len(package_name), ""]
 
-    if package_name != "quantdata":
+    if package_name != "openqai.core":
         lines.extend(
             [
                 f".. automodule:: {package_name}",
@@ -224,7 +224,7 @@ def _generate_api_pages(app) -> None:
     for rst_file in GENERATED_API_DIR.glob("*.rst"):
         rst_file.unlink()
 
-    _write_package_page("quantdata", PACKAGE_ROOT, GENERATED_API_DIR)
+    _write_package_page("openqai.core", PACKAGE_ROOT, GENERATED_API_DIR)
 
 
 def _plain_doc_line(line: str) -> str:
@@ -301,11 +301,19 @@ def _skip_problem_members(app, what, name, obj, skip, options):
         return True
 
     member_module = getattr(obj, "__module__", None)
-    if isinstance(member_module, str) and member_module and not member_module.startswith("quantdata"):
+    if (
+        isinstance(member_module, str)
+        and member_module
+        and not member_module.startswith("openqai.core")
+    ):
         return True
 
     module_name = getattr(obj, "__name__", None)
-    if isinstance(obj, type(sys)) and isinstance(module_name, str) and not module_name.startswith("quantdata"):
+    if (
+        isinstance(obj, type(sys))
+        and isinstance(module_name, str)
+        and not module_name.startswith("openqai.core")
+    ):
         return True
 
     return skip

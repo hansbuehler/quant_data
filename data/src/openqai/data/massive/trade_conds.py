@@ -1,5 +1,5 @@
 """
-quantdata.massive.trade_conds
+openqai.data.massive.trade_conds
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 OPRA (options) and spot (stocks) trade condition codes and bitmask flags.
@@ -13,7 +13,7 @@ Design:
 - Provide IntFlag bitmasks for fast filtering/joins (int32).
 - pack_conditions raises on unknown codes so vendor schema changes are explicit.
 
-Use the function :func:`filter_valid_trades` in :mod:`quantdata.massive.processing` to filter out bad trades based 
+Use the function :func:`filter_valid_trades` in :mod:`openqai.data.massive.processing` to filter out bad trades based 
 :data:`NORMAL_TRADE_EXCLUDE_FLAGS`.
 """
 
@@ -278,7 +278,7 @@ Microstructure conditions to exclude for clean trade/quote analysis.
 These include bad trade conditions compression, corrections, as-of trades, and errored trades.
 
 We do *not* exclude  ``ConditionFlag.EXTENDED_HOURS`` here as extended hours trades can be exluded
-easily later based on their time stamp, see :func:`filter_valid_trades` in :mod:`quantdata.massive.processing`.
+easily later based on their time stamp, see :func:`filter_valid_trades` in :mod:`openqai.data.massive.processing`.
 """
 
 NORMAL_TRADE_EXCLUDE_FLAGS = (

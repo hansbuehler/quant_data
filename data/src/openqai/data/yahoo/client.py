@@ -2,8 +2,8 @@
 Yahoo finance
 """
 
-from quantdata import env, SubDir, Context, version#NOQA
-from quantdata.biz_calendar import to_date
+from openqai.core import env, SubDir, version#NOQA
+from openqai.core.biz_calendar import to_date
 from datetime import date
 import yfinance as yf
 import polars as pl

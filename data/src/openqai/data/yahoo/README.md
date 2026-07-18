@@ -6,9 +6,9 @@ So far coverage is minimal.
 ## Data Access
 
 This data is freely available and does not require configuration
-beyon what is required by **quantdata**:
+beyon what is required by **openqai.core**:
 
-  1. Make sure you configure the python environment for **quantdata** following [the introduction](../../README.md) which means to set at 
+  1. Make sure you configure the python environment for **openqai.core** following [the introduction](../../README.md) which means to set at 
   least the ``QUANTDATA_ROOT`` environment variable. 
   [See the discussion in data locations and how to set them](../../
   README.md#data-locations).

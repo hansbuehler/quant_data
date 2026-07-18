@@ -11,8 +11,8 @@ Key entry points:
   whenever necessary.
 """
 
-from quantdata import env, SubDir, Context, version#NOQA
-from quantdata.widb.client import WIDBClient, interpolate_zero_curve
+from openqai.core import env, SubDir, Context, version#NOQA
+from openqai.data.widb.client import WIDBClient, interpolate_zero_curve
 
 _locations_widb = WIDBClient.locations
 

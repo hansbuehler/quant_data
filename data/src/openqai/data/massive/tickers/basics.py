@@ -1,5 +1,5 @@
 """
-quantdata.massive.tickers.basics
+openqai.data.massive.tickers.basics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Listing date and basic reference data for tickers via MassiveClient.
@@ -12,7 +12,7 @@ from datetime import date
 from cdxcore.err import verify
 from cdxcore.version import version
 
-from quantdata.massive import MassiveClient
+from openqai.data.massive import MassiveClient
 
 MANUAL_LISTING_DATES: dict[str, date] = {
     "VXX": date(2019, 5, 1),

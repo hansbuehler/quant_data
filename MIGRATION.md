@@ -82,7 +82,7 @@ New empty packages (docstring only): `benchmarks/.../benchmarks/deephedging/`,
 - `from quantdata.torch import ...` -> `from openqai.core.nn.torch import ...`
 - `from quantdata.jax import ...` -> `from openqai.core.nn.jax import ...`
 - `from quantdata.<adapter> import ...` -> `from openqai.data.<adapter> import ...`
-- `from quantdata.sanos... / .ncde... / .volsim...` -> `from openqai.benchmarks...`
+- `from openqai.benchmarks.sanos... / .ncde... / .volsim...` -> `from openqai.benchmarks...`
 
 PyCharm: rename `quantdata` -> the new locations with **Refactor > Move** /
 **Rename** so references update. It will NOT touch the 397 imports across 44

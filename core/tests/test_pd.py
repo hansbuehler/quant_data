@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from core.src.openqai.core.utils import create_empty_df, verify_schema
+from openqai.core.pd import create_empty_df, verify_schema
 
 
 def test_create_empty_df_preserves_schema_columns_and_dtypes() -> None:

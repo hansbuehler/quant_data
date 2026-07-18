@@ -1,5 +1,5 @@
 """
-quantdata.massive.processing
+openqai.data.massive.processing
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Some simple tools to make life easier when working with Massive data.
@@ -13,18 +13,19 @@ Function in this file:
 * :func:`align_trades_to_quotes` matches each quote to a nearby valid trade based on price and timestamp criteria.
 """
 
-from quantdata import version
-import quantdata
-from quantdata.biz_calendar import session_open_close
-from quantdata.massive.client import MassiveClient
-from quantdata.massive.trade_conds import NORMAL_TRADE_EXCLUDE_FLAGS
+from openqai.core import version
+import openqai.core
+from openqai.core.biz_calendar import session_open_close
+from openqai.data.massive.client import MassiveClient
+from openqai.data.massive.trade_conds import NORMAL_TRADE_EXCLUDE_FLAGS
 import numpy as np
 import polars as pl
 from datetime import date
 from cdxcore.err import verify_inp, verify
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-@version("0.1", dependencies=[quantdata.biz_calendar.session_open_close, quantdata.massive.client.MassiveClient.fetch_trades])
+
+@version("0.1", dependencies=[openqai.core.biz_calendar.session_open_close, openqai.data.massive.client.MassiveClient.fetch_trades])
 def filter_valid_trades(
     ticker: str,
     d: date,
@@ -86,7 +87,7 @@ def filter_valid_trades(
     
     return trades
 
-@version("0.1", dependencies=[quantdata.biz_calendar.session_open_close, quantdata.massive.client.MassiveClient.fetch_quotes])
+@version("0.1", dependencies=[openqai.core.biz_calendar.session_open_close, openqai.data.massive.client.MassiveClient.fetch_quotes])
 def filter_valid_quotes(
     ticker: str,
     d: date,

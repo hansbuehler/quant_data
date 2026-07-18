@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pytest
 
-from core.src.openqai.core.biz_calendar import (
+from openqai.core.biz_calendar import (
     DateRange,
     session_open_close,
     add_business_days,

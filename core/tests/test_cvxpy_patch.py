@@ -3,7 +3,7 @@ from __future__ import annotations
 import cvxpy as cp
 import cvxpy.atoms.affine.sum as cvxpy_sum
 
-from core.src.openqai.core.utils import patch_cvxpy_sum_shape_from_args
+from openqai.core.cvxpy import patch_cvxpy_sum_shape_from_args
 
 
 def test_patch_cvxpy_sum_shape_from_args_is_idempotent() -> None:

@@ -1,5 +1,5 @@
 """
-quantdata.massive.expiries
+openqai.data.massive.expiries
 
 Per-ticker option expiry flags via the Massive API.
 
@@ -23,9 +23,9 @@ from cdxcore.util import fmt_date
 from cdxcore.verbose import Context
 from cdxcore.version import version
 
-from quantdata.massive import MassiveClient
-from quantdata.tickers import SubDir, _locations_tickers
-from quantdata.tickers.ticker_calendar import EXPIRY
+from openqai.data.massive import MassiveClient
+from openqai.data.tickers import SubDir, _locations_tickers
+from openqai.data.tickers.ticker_calendar import EXPIRY
 
 _expiries_cache = _locations_tickers
 
@@ -48,7 +48,7 @@ def _third_friday_expr() -> pl.Expr:
 @version("0.1", dependencies=[_third_friday_expr])
 def classify_expiry(df: pl.DataFrame) -> pl.DataFrame:
     """
-    Add ``has_expiry`` (Int8, values from :class:`quantdata.tickers.ticker_calendar.EXPIRY`)
+    Add ``has_expiry`` (Int8, values from :class:`openqai.data.tickers.ticker_calendar.EXPIRY`)
     to a DataFrame that already contains a ``date`` column of trading days.
 
     The classification is purely calendar-based:

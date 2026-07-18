@@ -1,6 +1,6 @@
 """
-Tests for ticker-level data loading utilities added in quantdata.massive.tickers
-and the session-calendar helpers in quantdata.biz_calendar.
+Tests for ticker-level data loading utilities added in openqai.data.massive.tickers
+and the session-calendar helpers in openqai.core.biz_calendar.
 
 Mirrors the checks done manually in:
   poly/tickers/test_adj.ipynb
@@ -38,7 +38,7 @@ requires_massive = pytest.mark.skipif(
 
 
 def test_session_open_close_normal_day() -> None:
-    from core.src.openqai.core.biz_calendar import session_open_close
+    from openqai.core.biz_calendar import session_open_close
 
     open_dt, close_dt, is_half_day = session_open_close(date(2024, 6, 17))
 
@@ -48,7 +48,7 @@ def test_session_open_close_normal_day() -> None:
 
 
 def test_session_open_close_half_day() -> None:
-    from core.src.openqai.core.biz_calendar import session_open_close
+    from openqai.core.biz_calendar import session_open_close
 
     # Black Friday 2024 (confirmed half day in test_biz_calendar.py)
     open_dt, close_dt, is_half_day = session_open_close(date(2024, 11, 29))
@@ -59,7 +59,7 @@ def test_session_open_close_half_day() -> None:
 
 
 def test_full_second_grid_ns_normal_day() -> None:
-    from core.src.openqai.core.biz_calendar import full_second_grid_ns, session_open_close
+    from openqai.core.biz_calendar import full_second_grid_ns, session_open_close
 
     open_dt, close_dt, _ = session_open_close(date(2024, 6, 17))
     grid = full_second_grid_ns(open_dt, close_dt)
@@ -78,7 +78,7 @@ def test_full_second_grid_ns_normal_day() -> None:
 
 
 def test_classify_expiry_normal_day() -> None:
-    from quantdata.massive.expiries import classify_expiry
+    from openqai.data.massive.expiries import classify_expiry
 
     # June 24 is after the third Friday of June 2024 (Jun 21), so it can never be
     # selected as the monthly expiry date and is always classified NONE.
@@ -87,7 +87,7 @@ def test_classify_expiry_normal_day() -> None:
 
 
 def test_classify_expiry_monthly() -> None:
-    from quantdata.massive.expiries import classify_expiry
+    from openqai.data.massive.expiries import classify_expiry
 
     # Third Friday of January 2024 = Jan 19
     df = classify_expiry(pl.DataFrame({"date": [date(2024, 1, 19)]}))
@@ -95,7 +95,7 @@ def test_classify_expiry_monthly() -> None:
 
 
 def test_classify_expiry_quad_witching() -> None:
-    from quantdata.massive.expiries import classify_expiry
+    from openqai.data.massive.expiries import classify_expiry
 
     # Third Friday of March 2024 = Mar 15 (quad witching)
     df = classify_expiry(pl.DataFrame({"date": [date(2024, 3, 15)]}))
@@ -103,7 +103,7 @@ def test_classify_expiry_quad_witching() -> None:
 
 
 def test_classify_expiry_shifted_when_friday_is_holiday() -> None:
-    from quantdata.massive.expiries import classify_expiry
+    from openqai.data.massive.expiries import classify_expiry
 
     # Good Friday 2022 (Apr 15) is a market holiday — the third Friday of April falls on it.
     # When only trading days are passed (Apr 15 absent), expiry shifts to Thu Apr 14.
@@ -122,7 +122,7 @@ def test_classify_expiry_shifted_when_friday_is_holiday() -> None:
 
 @requires_massive
 def test_get_listing_date() -> None:
-    from quantdata.massive.tickers.basics import get_listing_date
+    from openqai.data.massive.tickers.basics import get_listing_date
 
     d = get_listing_date("SPY")
 
@@ -132,7 +132,7 @@ def test_get_listing_date() -> None:
 
 @requires_massive
 def test_adjustment_factors_aapl() -> None:
-    from quantdata.massive import MassiveClient
+    from openqai.data.massive import MassiveClient
 
     df = MassiveClient().adjustment_factors("AAPL", date(2020, 1, 1), date(2021, 1, 1))
 
@@ -148,7 +148,7 @@ def test_adjustment_factors_aapl() -> None:
 
 @requires_massive
 def test_ticker_filtered_history_spy() -> None:
-    from quantdata.massive.tickers.filtered_history import ticker_filtered_history
+    from openqai.data.massive.tickers.filtered_history import ticker_filtered_history
 
     df = ticker_filtered_history("SPY", date(2023, 1, 1), date(2024, 1, 1))
 
@@ -167,7 +167,7 @@ def test_ticker_filtered_history_spy() -> None:
 @requires_massive
 def test_ticker_filtered_history_meta_handles_ticker_change() -> None:
     """META was called FB before Oct 2021 — exercises the ticker-change code path."""
-    from quantdata.massive.tickers.filtered_history import ticker_filtered_history
+    from openqai.data.massive.tickers.filtered_history import ticker_filtered_history
 
     df = ticker_filtered_history("META", date(2021, 1, 1), date(2023, 1, 1))
 
@@ -180,7 +180,7 @@ def test_ticker_filtered_history_meta_handles_ticker_change() -> None:
 @requires_massive
 def test_ticker_filtered_history_vxx() -> None:
     """VXX exercises the MANUAL_LISTING_DATES override."""
-    from quantdata.massive.tickers.filtered_history import ticker_filtered_history
+    from openqai.data.massive.tickers.filtered_history import ticker_filtered_history
 
     df = ticker_filtered_history("VXX", date(2023, 1, 1), date(2024, 1, 1))
 
@@ -189,7 +189,7 @@ def test_ticker_filtered_history_vxx() -> None:
 
 @requires_massive
 def test_ticker_filtered_history_arkk() -> None:
-    from quantdata.massive.tickers.filtered_history import ticker_filtered_history
+    from openqai.data.massive.tickers.filtered_history import ticker_filtered_history
 
     df = ticker_filtered_history("ARKK", date(2023, 1, 1), date(2024, 1, 1))
 
@@ -203,8 +203,8 @@ def test_ticker_filtered_history_arkk() -> None:
 
 @requires_massive
 def test_build_ticker_calendar_spy() -> None:
-    from core.src.openqai.core.biz_calendar import DateRange
-    from quantdata.tickers.ticker_calendar import build_ticker_calendar
+    from openqai.core.biz_calendar import DateRange
+    from openqai.data.tickers.ticker_calendar import build_ticker_calendar
 
     dr = DateRange(date(2024, 1, 2), date(2024, 3, 31))
     df = build_ticker_calendar("SPY", dr)
@@ -222,8 +222,8 @@ def test_build_ticker_calendar_spy() -> None:
 
 @requires_massive
 def test_ticker_expiries_short_window() -> None:
-    from core.src.openqai.core.biz_calendar import get_business_days
-    from quantdata.massive.expiries import ticker_expiries
+    from openqai.core.biz_calendar import get_business_days
+    from openqai.data.massive.expiries import ticker_expiries
 
     days = get_business_days(date(2024, 1, 2), date(2024, 1, 19))  # ~13 trading days
     df = ticker_expiries("SPY", days, num_workers=4, threading=True)
@@ -240,7 +240,7 @@ def test_ticker_expiries_short_window() -> None:
 
 @requires_massive
 def test_build_unadjusted_trades() -> None:
-    from quantdata.massive.tickers.data import build_unadjusted_trades
+    from openqai.data.massive.tickers.data import build_unadjusted_trades
 
     df = build_unadjusted_trades("SPY", date(2024, 1, 2))
 
@@ -251,7 +251,7 @@ def test_build_unadjusted_trades() -> None:
 
 @requires_massive
 def test_build_1s_trade_bars() -> None:
-    from quantdata.massive.tickers.data import build_1s_trade_bars
+    from openqai.data.massive.tickers.data import build_1s_trade_bars
 
     df = build_1s_trade_bars("SPY", date(2024, 1, 2))
 

@@ -1,7 +1,7 @@
 """
-quantdata.fred
+openqai.data.fred
 
 FRED (Federal Reserve Economic Data) rate fetching utilities.
 """
 
-from quantdata.fred.rates import load_fred_rates
+from openqai.data.fred.rates import load_fred_rates

@@ -21,8 +21,8 @@ Both functions use filtering configurations to control data quality and processi
 
 Usage Example
 -------------
-    >>> from quantdata.widb.day import collect_raw_day, enrich_day, RawDayFilter, ExpiryFilter
-    >>> from quantdata.biz_calendar import to_date
+    >>> from openqai.data.widb.day import collect_raw_day, enrich_day, RawDayFilter, ExpiryFilter
+    >>> from openqai.core.biz_calendar import to_date
     >>> from cdxcore.verbose import Context
     >>> import datetime as dt
     >>>
@@ -50,12 +50,13 @@ This file's ``main`` can also be used to generate data manually:
 """
 from __future__ import annotations
 
-from quantdata.widb import WIDBClient, interpolate_zero_curve
-from quantdata.biz_calendar import NMS5, count_business_days_between, DAYS_PER_YEAR, AM_EXIRY_SUBTRACT, to_date, NMS, prev_business_day, DateRange
-from quantdata.widb.client import WIDBClient
-from quantdata.widb.bad import BAD
-from quantdata.pool import PoolConfig
-from quantdata.utils.pd import create_empty_df, verify_schema
+from openqai.data.widb import interpolate_zero_curve
+from openqai.core.biz_calendar import NMS5, count_business_days_between, DAYS_PER_YEAR, AM_EXIRY_SUBTRACT, to_date, \
+    prev_business_day, DateRange
+from openqai.data.widb.client import WIDBClient
+from openqai.data.widb.bad import BAD
+from openqai.core.pool import PoolConfig
+from openqai.core.pl import create_empty_df, verify_schema
 
 from cdxcore.version import version
 from cdxcore.verbose import Context
@@ -71,7 +72,7 @@ import numpy as np
 import pandas as pd
 import math as math
 import warnings
-from dataclasses import dataclass, field    
+from dataclasses import dataclass
 
 _processing = WIDBClient.locations.processing("day",fmt=SubDir.PANDAS_PARQUET)
 _IMPLIED_VOL_CALC_EPS = 1E-8
@@ -149,7 +150,7 @@ def collect_raw_day( ticker : str,
     The function:
 
     * Downloads spot, forward, discount and option data.
-    * Removes and bad days/tickers/options using :attr:`quantdata.widb.bad.BAD`.
+    * Removes and bad days/tickers/options using :attr:`openqai.data.widb.bad.BAD`.
     * Removes options with same-day expiry, NA or zero bid prices, and bad settlement (ss_flag != '0').
       By default the function also removed irregular expiries, which are holidays that were announced shortly before the expiry date, leading to data issues.
     * Computes the implied discount factor from the zero curve and the refernece forward price from the forward table (which is off as the forward table is 15min delayed).
@@ -183,7 +184,7 @@ def collect_raw_day( ticker : str,
     No data: :class:`EOFError`
         If no data was available for the given ticker and date.
     Bad day: :class:`IndexError`
-        If this date and ticker are known to have bad data; see :class:`quantdata.widb.bad.BAD` for details.
+        If this date and ticker are known to have bad data; see :class:`openqai.data.widb.bad.BAD` for details.
     Bad data: :class:`RuntimeError`
         If data was downloaded but found to be bad after basic cleaning steps.
         This can happen for example if the forward price is highly suspicious, or if all options had zero or NA bid prices. Please check the date range and calendar settings,
@@ -674,7 +675,7 @@ def enrich_day( ticker : str, d : dt.date, raw_data : pd.DataFrame|None = None, 
     No data: :class:`EOFError`
         If no data was available for the given ticker and date.
     Bad day: :class:`IndexError`
-        If this date and ticker are known to have bad data; see :class:`quantdata.widb.bad.BAD` for details.
+        If this date and ticker are known to have bad data; see :class:`openqai.data.widb.bad.BAD` for details.
     Bad data: :class:`RuntimeError`
         If data was downloaded but found to be bad after basic cleaning steps.
         This can happen for example if the forward price is highly suspicious, or if all options had zero or NA bid prices. Please check the date range and calendar settings,
@@ -955,7 +956,7 @@ def enrich_day( ticker : str, d : dt.date, raw_data : pd.DataFrame|None = None, 
 # ================================================================
 
 import click
-from quantdata.widb import _cli_defaults
+from openqai.data.widb import _cli_defaults
 
 @click.command()
 @click.argument("tickers", nargs=-1, required=True)

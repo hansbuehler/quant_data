@@ -3,7 +3,7 @@ Grid Sanos tridiagonal solver for SANOS-type transition operators, c.f. http://a
 """
 
 from __future__ import annotations
-from core.src.openqai.core.utils import Backbone, BackboneNumpy
+from openqai.core.backbone import Backbone, BackboneNumpy
 
 
 def solve_sanos_tridiagonal(*, w_minus: Backbone.Array,

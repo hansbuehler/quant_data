@@ -1,5 +1,5 @@
 """
-quantdata.tickers.ticker_calendar
+openqai.data.tickers.ticker_calendar
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Build a calendar for a given ticker:
@@ -14,25 +14,20 @@ Build a calendar for a given ticker:
 
 """
 
-from quantdata.tickers import _locations_tickers, SubDir, version
-from quantdata.yahoo import YFClient
-from quantdata.biz_calendar import (
+from openqai.data.tickers import _locations_tickers
+from openqai.data.yahoo import YFClient
+from openqai.core.biz_calendar import (
     DateRange,
     get_business_days,
     next_business_day,
     prev_business_day,
 )
-from quantdata.massive import MassiveClient
-from quantdata.tickers import Context, SubDir, version
-from quantdata.yahoo import YFClient
+from openqai.data.massive import MassiveClient
+from openqai.data.yahoo import YFClient
 
-from cdxcore.util import fmt_date
 from cdxcore.pretty import PrettyObject
-from cdxcore.jcpool import SubDir
 from cdxcore.subdir import version, Context, SubDir
 from cdxcore.util import fmt_date
-from cdxcore.pretty import PrettyObject
-import os as os
 import polars as pl
 from datetime import date, timedelta
 import warnings as warnings
@@ -41,7 +36,6 @@ from enum import IntEnum
 
 import numpy as np
 import polars as pl
-from cdxcore.err import verify
 from cdxcore.pretty import PrettyObject
 from cdxcore.util import fmt_date
 

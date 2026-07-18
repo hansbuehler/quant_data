@@ -1,5 +1,5 @@
 """
-quantdata.massive.tickers.data
+openqai.data.massive.tickers.data
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Build underlying tick-level data from Massive: unadjusted trades, weighted mid-price
@@ -16,9 +16,9 @@ from cdxcore.err import verify
 from cdxcore.util import fmt_date
 from cdxcore.version import version
 
-from quantdata.biz_calendar import TZ_NY, full_second_grid_ns, session_open_close
-from quantdata.massive import MassiveClient
-from quantdata.tickers import SubDir, _locations_tickers
+from openqai.core.biz_calendar import TZ_NY, full_second_grid_ns, session_open_close
+from openqai.data.massive import MassiveClient
+from openqai.data.tickers import SubDir, _locations_tickers
 
 _data_cache = _locations_tickers
 

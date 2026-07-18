@@ -4,8 +4,8 @@ from datetime import date
 
 import polars as pl
 
-from core.src.openqai.core.biz_calendar import DateRange
-from quantdata.tickers.ticker_calendar import EXPIRY, SCHEMA_TICKER_CALENDAR, get_standard_expiries
+from openqai.core.biz_calendar import DateRange
+from openqai.data.tickers.ticker_calendar import EXPIRY, SCHEMA_TICKER_CALENDAR, get_standard_expiries
 
 
 def _expiry_codes_by_date(date_range: DateRange) -> dict[date, int]:

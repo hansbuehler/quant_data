@@ -3,8 +3,8 @@ from __future__ import annotations
 import torch
 import pytest
 
-from quantdata.torch import BaseEnvironment
-from quantdata.torch.ffw import FeedForward, FeedForwardConfig
+from openqai.core.nn.torch import BaseEnvironment
+from openqai.core.nn.torch.ffw import FeedForward, FeedForwardConfig
 
 
 def test_feedforward_config_defaults_and_validation() -> None:

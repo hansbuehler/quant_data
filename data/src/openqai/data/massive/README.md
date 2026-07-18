@@ -16,7 +16,7 @@ This directory contains Ivy DB data processing in the following files:
 
 To access this data:
 
-  1. Make sure you configure the python environment for **quantdata** following [the introduction](../../README.md) which means to set at 
+  1. Make sure you configure the python environment for **openqai.core** following [the introduction](../../README.md) which means to set at 
   least the ``QUANTDATA_ROOT`` environment variable. 
   [See the discussion in data locations and how to set them](../../README.md#data-locations).
 
@@ -28,7 +28,7 @@ To access this data:
 
       ```python
       from datetime import date
-      from quantdata.massive import MassiveClient
+      from openqai.data.massive import MassiveClient
       client = MassiveClient()
       adj_bars = client.fetch_bars("AAPL", date(2020,1,1), date(2020,1,15), adjusted=False, timespan="second")
       print(adj_bars)
@@ -38,13 +38,13 @@ To access this data:
 ### Option Contracts
 
 Options are just tickers for Massive. 
-In order to retrieve the option tickers for listed options of a given underlying ticker on a given date, use ``quantdata/massive/options/contracts.py``. 
+In order to retrieve the option tickers for listed options of a given underlying ticker on a given date, use ``openqai.core/massive/options/contracts.py``. 
 
 
 
 ```python
   from datetime import date
-  from quantdata.massive.options.contracts import (
+  from openqai.data.massive.options.contracts import (
     Context,
     ContractsFilter,
     DateRange,

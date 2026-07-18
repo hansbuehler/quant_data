@@ -13,8 +13,8 @@ from cdxcore.err import verify, verify_inp
 from cdxcore.subdir import version
 from cdxcore.util import fmt_date
 
-from quantdata import Context, SubDir, env
-from quantdata.volume_curves.curve_bins import curve_def, date, ticker_curve_bins
+from openqai.core import Context, SubDir, env
+from openqai.benchmarks.volume_curves.curve_bins import curve_def, date, ticker_curve_bins
 
 _curves_cache = env.locations.processing("volume_curves")
 

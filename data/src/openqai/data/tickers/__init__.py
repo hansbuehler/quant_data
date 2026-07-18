@@ -7,8 +7,8 @@ You may need access to different data source to be able to use some of the funct
 in this sub-module.
 """
 
-from quantdata import env, version, SubDir, Context#NOQA
-from quantdata.massive import MassiveClient
+from openqai.core import env, version, SubDir, Context#NOQA
+from openqai.data.massive import MassiveClient
 
 _locations_tickers = env.locations.processing("tickers")
 

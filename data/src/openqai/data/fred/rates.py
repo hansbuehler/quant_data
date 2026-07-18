@@ -1,5 +1,5 @@
 """
-quantdata.fred.rates
+openqai.data.fred.rates
 
 Download SOFR, EFFR and Treasury rates from FRED.
 Requires the ``FRED_API_KEY`` environment variable.
@@ -15,7 +15,7 @@ import polars as pl
 import requests
 from cdxcore.err import verify
 
-from quantdata import env
+from openqai.core import env
 
 _fred_cache = env.locations.raw("fred")
 

@@ -7,7 +7,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from quantdata.massive.options.contracts import (
+from openqai.data.massive.options.contracts import (
     REJECTED,
     ContractsFilter,
     filter_contracts,

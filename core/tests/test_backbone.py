@@ -3,9 +3,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from quantdata.torch import BaseEnvironment
-from quantdata.torch.bbtorch import BackboneTorch
-from core.src.openqai.core.utils import BackboneNumpy, are_broadcastable, relu, sigmoid
+from openqai.core.nn.torch import BaseEnvironment
+from openqai.core.backbone.torch import BackboneTorch
+from openqai.core.backbone import BackboneNumpy, are_broadcastable, relu, sigmoid
 
 
 def _make_backbones() -> tuple[BackboneNumpy, BackboneTorch]:
@@ -34,15 +34,35 @@ def _geometry_reference(
     fwd_vols = np.broadcast_to(fwd_vols, target_shape)
 
     if vol_interp == "lin_sqrt_time":
-        total = np.cumsum((fwd_vols + fwdvol_floor) * dsqrtTs.reshape((1,) * len(head) + dsqrtTs.shape), axis=-1)
-        prev = np.where(opt_lix == 0, 0.0, np.take_along_axis(total, np.clip(opt_lix - 1, a_min=0, a_max=None), axis=-1))
+        total = np.cumsum(
+            (fwd_vols + fwdvol_floor) * dsqrtTs.reshape((1,) * len(head) + dsqrtTs.shape), axis=-1
+        )
+        prev = np.where(
+            opt_lix == 0,
+            0.0,
+            np.take_along_axis(total, np.clip(opt_lix - 1, a_min=0, a_max=None), axis=-1),
+        )
         curr = np.take_along_axis(total, opt_lix, axis=-1)
-        return opt_vweight * prev + (1.0 - opt_vweight) * curr + opt_vextra * (fwd_vols[..., -1:] + fwdvol_floor)
+        return (
+            opt_vweight * prev
+            + (1.0 - opt_vweight) * curr
+            + opt_vextra * (fwd_vols[..., -1:] + fwdvol_floor)
+        )
 
-    total = np.cumsum((fwd_vols + fwdvol_floor) ** 2 * dts.reshape((1,) * len(head) + dts.shape), axis=-1)
-    prev = np.where(opt_lix == 0, 0.0, np.take_along_axis(total, np.clip(opt_lix - 1, a_min=0, a_max=None), axis=-1))
+    total = np.cumsum(
+        (fwd_vols + fwdvol_floor) ** 2 * dts.reshape((1,) * len(head) + dts.shape), axis=-1
+    )
+    prev = np.where(
+        opt_lix == 0,
+        0.0,
+        np.take_along_axis(total, np.clip(opt_lix - 1, a_min=0, a_max=None), axis=-1),
+    )
     curr = np.take_along_axis(total, opt_lix, axis=-1)
-    return np.sqrt(opt_vweight * prev + (1.0 - opt_vweight) * curr + opt_vextra * ((fwd_vols[..., -1:] + fwdvol_floor) ** 2))
+    return np.sqrt(
+        opt_vweight * prev
+        + (1.0 - opt_vweight) * curr
+        + opt_vextra * ((fwd_vols[..., -1:] + fwdvol_floor) ** 2)
+    )
 
 
 def test_numpy_backbone_scalar_helpers() -> None:
@@ -86,8 +106,12 @@ def test_numpy_and_torch_backbones_share_common_array_semantics() -> None:
     _assert_same_values(bbnp.stop_gradient(lhs_np), bbt.to_numpy(bbt.stop_gradient(lhs_t)))
     _assert_same_values(bbnp.sigmoid(lhs_np), bbt.to_numpy(bbt.sigmoid(lhs_t)))
     _assert_same_values(bbnp.relu(lhs_np), bbt.to_numpy(bbt.relu(lhs_t)))
-    _assert_same_values(bbnp.where(mask_np, lhs_np, rhs_np), bbt.to_numpy(bbt.where(mask_t, lhs_t, rhs_t)))
-    _assert_same_values(bbnp.clip(lhs_np, min=-1.0, max=2.5), bbt.to_numpy(bbt.clip(lhs_t, min=-1.0, max=2.5)))
+    _assert_same_values(
+        bbnp.where(mask_np, lhs_np, rhs_np), bbt.to_numpy(bbt.where(mask_t, lhs_t, rhs_t))
+    )
+    _assert_same_values(
+        bbnp.clip(lhs_np, min=-1.0, max=2.5), bbt.to_numpy(bbt.clip(lhs_t, min=-1.0, max=2.5))
+    )
     _assert_same_values(bbnp.minimum(lhs_np, rhs_np), bbt.to_numpy(bbt.minimum(lhs_t, rhs_t)))
     _assert_same_values(bbnp.cumsum(lhs_np, axis=-1), bbt.to_numpy(bbt.cumsum(lhs_t, axis=-1)))
     _assert_same_values(

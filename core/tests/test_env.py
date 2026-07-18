@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from cdxcore.subdir import CacheMustExistError, SubDir
 
-import quantdata
+import openqai.core
 
 
 def test_environment_defaults_use_root_directory(monkeypatch, tmp_path) -> None:
@@ -20,13 +20,13 @@ def test_environment_defaults_use_root_directory(monkeypatch, tmp_path) -> None:
     monkeypatch.delenv("QUANTDATA_TEMP_DATA", raising=False)
     monkeypatch.setenv("QUANTDATA_ROOT", str(tmp_path / "quantdata_root"))
 
-    env = quantdata.Environment()
+    env = openqai.core.Environment()
 
     assert env.test_mode is False
     assert Path(env.locations.raw.path) == tmp_path / "quantdata_root" / "raw"
     assert Path(env.locations.processing.path) == tmp_path / "quantdata_root" / "processing"
     assert Path(env.locations.training.path) == tmp_path / "quantdata_root" / "training"
-    assert Path(env.locations.temp.path) == Path(tempfile.gettempdir()) / "quantdata"
+    assert Path(env.locations.temp.path) == Path(tempfile.gettempdir()) / "openqai.core"
 
 
 def test_environment_test_mode_uses_stored_data(monkeypatch) -> None:
@@ -37,7 +37,7 @@ def test_environment_test_mode_uses_stored_data(monkeypatch) -> None:
     monkeypatch.delenv("QUANTDATA_TRAINING_DATA", raising=False)
     monkeypatch.delenv("QUANTDATA_TEMP_DATA", raising=False)
 
-    env = quantdata.Environment()
+    env = openqai.core.Environment()
 
     assert env.test_mode is True
     assert Path(env.locations.raw.path).name == "raw"
@@ -48,7 +48,7 @@ def test_environment_test_mode_uses_stored_data(monkeypatch) -> None:
 
 def test_test_mode_cached_function_does_not_create_files(monkeypatch) -> None:
     monkeypatch.setenv("QUANTDATA_TEST_MODE", "1")
-    env = quantdata.Environment()
+    env = openqai.core.Environment()
 
     raw_root = Path(env.locations.raw.path)
     before = {path for path in raw_root.rglob("*") if path.is_file()}

@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import torch
 
-from quantdata.torch import (
+from openqai.core.nn.torch import (
     BaseEnvironment,
     BaseModel,
     MetricTacker,
@@ -14,8 +14,8 @@ from quantdata.torch import (
     get,
     pop,
 )
-from quantdata.torch.bbtorch import BackboneTorch
-from quantdata.torch.ffw import FeedForward, FeedForwardConfig
+from openqai.core.backbone.torch import BackboneTorch
+from openqai.core.nn.torch.ffw import FeedForward, FeedForwardConfig
 
 
 class _DummyModel(BaseModel):

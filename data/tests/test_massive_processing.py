@@ -11,9 +11,9 @@ import os
 from datetime import date
 from pathlib import Path
 
-from quantdata.massive import client
-from quantdata.massive.testing.scope import TICKERS, DATES
-from core.src.openqai.core.utils import hash_polars_df
+from openqai.data.massive import client
+from openqai.data.massive.testing.scope import TICKERS, DATES
+from openqai.core.pl import hash_polars_df
 import numpy as np
 
 def _assert_simple_dict_equal(d1, d2):
@@ -24,7 +24,7 @@ def _assert_simple_dict_equal(d1, d2):
 
 
 def _massive_processing(ticker, d):
-    from quantdata.massive.processing import filter_valid_trades, filter_valid_quotes, align_quotes_to_trades, align_trades_to_quotes
+    from openqai.data.massive.processing import filter_valid_trades, filter_valid_quotes, align_quotes_to_trades, align_trades_to_quotes
 
     r1 = filter_valid_trades(ticker, d)
     assert hash_polars_df(r1) == "027a67e7d81937acb5ba0cb51763d115", f"Unexpected hash for valid trades of {ticker} on {d}"    

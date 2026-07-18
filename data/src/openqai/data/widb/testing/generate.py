@@ -5,13 +5,13 @@ Generate WIDB test data
 import os
 os.environ["QUANTDATA_TEST_MODE"] = "generate_tests" # do this before importing anything else
 
-from quantdata import env# triggers construction of caches.
+from openqai.core import env# triggers construction of caches.
 from cdxcore.verbose import Context
-from quantdata.widb.testing.scope import TICKERS, DATES
+from openqai.data.widb.testing.scope import TICKERS, DATES
 
 def generate_day(ticker, d):
-    from quantdata.widb.day import collect_raw_day, enrich_day, ExpiryFilter, RawDayFilter
-    from quantdata.widb.arbfree import mk_arb_free_day, MkArbFree
+    from openqai.data.widb.day import collect_raw_day, enrich_day, ExpiryFilter, RawDayFilter
+    from openqai.data.widb.arbfree import mk_arb_free_day, MkArbFree
 
     raw_day_filter = RawDayFilter()
     expiry_filter = ExpiryFilter()

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from quantdata.torch import MetricTacker
+from openqai.core.nn.torch import MetricTacker
 
 
 def test_metric_tracker_state_roundtrip() -> None:

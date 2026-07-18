@@ -16,7 +16,7 @@ import pandas_market_calendars as mcal
 import polars as pl
 from cdxcore.err import verify_inp
 from cdxcore.version import version
-import quantdata as quantdata  # NOQA
+import openqai.core  # NOQA
 import warnings
 
 TZ_NY = ZoneInfo("America/New_York")

@@ -13,7 +13,7 @@ Please update this file as you experience errors in the data.
 """
 
 from __future__ import annotations
-import quantdata as quantdata#NOQA
+import openqai.core#NOQA
 import datetime as dt
 
 class BAD:

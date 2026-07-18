@@ -3,20 +3,20 @@ WIDB connection and OptionMetrics query helpers
 ===============================================
 
 Wraps the ``wrds`` Python library to execute SQL queries against
-the OptionMetrics (IvyDB) dataset into a :class:`quantdata.widb.WIDBClient` class
+the OptionMetrics (IvyDB) dataset into a :class:`openqai.data.widb.WIDBClient` class
 which provides access via the following functions:
 
-* :meth:`quantdata.widb.WIDBClient.lookup_secid(ticker)`: look up the OptionMetrics secid for a given ticker symbol.
-* :meth:`quantdata.widb.WIDBClient.zero_curve(date)`: fetch the zero-coupon yield curve for a given date.
-* :meth:`quantdata.widb.WIDBClient.spot_price(secid, date)`: fetch the spot price of the underlying for a given secid and date.
-* :meth:`quantdata.widb.WIDBClient.option_prices(secid, date)`: fetch raw option price records for a given secid and date.
-* :meth:`quantdata.widb.WIDBClient.forward_prices(secid, date)`: fetch forward prices for a given secid and date
+* :meth:`openqai.data.widb.WIDBClient.lookup_secid(ticker)`: look up the OptionMetrics secid for a given ticker symbol.
+* :meth:`openqai.data.widb.WIDBClient.zero_curve(date)`: fetch the zero-coupon yield curve for a given date.
+* :meth:`openqai.data.widb.WIDBClient.spot_price(secid, date)`: fetch the spot price of the underlying for a given secid and date.
+* :meth:`openqai.data.widb.WIDBClient.option_prices(secid, date)`: fetch raw option price records for a given secid and date.
+* :meth:`openqai.data.widb.WIDBClient.forward_prices(secid, date)`: fetch forward prices for a given secid and date
 """
 
 from __future__ import annotations
 
-from quantdata import env
-from quantdata.biz_calendar import to_date
+from openqai.core import env
+from openqai.core.biz_calendar import to_date
 from cdxcore.subdir import SubDir, verify, version
 from cdxcore.verbose import Context
 from cdxcore.util import fmt_date, verify_inp
@@ -187,7 +187,7 @@ class WIDBClient(object):
     def ticker_to_secid_map(self) -> dict[str, int]:
         """
         Fetch a mapping of all tickers to secids from the securd table.
-        Use :meth:`quantdata.widb.client.WIDBClient.lookup_secid` for individual lookups, which is cached separately.
+        Use :meth:`openqai.data.widb.client.WIDBClient.lookup_secid` for individual lookups, which is cached separately.
         """
         conn = self.connect()
         assert not conn is None, "WRDS connection is not established."
@@ -263,14 +263,14 @@ class WIDBClient(object):
     ) -> pd.DataFrame:
         """Fetch all option price records for a given secid on a single date.
 
-        Columns returned are contained in :attr:`quantdata.widb.client.WIDBClient.OPTION_COLS`, which includes:
+        Columns returned are contained in :attr:`openqai.data.widb.client.WIDBClient.OPTION_COLS`, which includes:
         'symbol', 'optionid', 'am_settlement', 'cp_flag', 'exercise_style', 'strike_price', 'exdate', 'best_bid', 'best_offer', 'volume', 'open_interest', 'impl_volatility', 'delta', 'gamma', 'vega', 'theta', 'ss_flag', 'expiry_indicator', 'contract_size'.
         See `the IvyDB reference manual <https://wrds-www.wharton.upenn.edu/documents/1995/IvyDB_US_v6.0_Reference_Manual.pdf>`_ page 20.
 
         Parameters
         ----------
         secid : int
-            OptionMetrics security ID. Use :meth:`quantdata.widb.client.WIDBClient.lookup_secid` to obtain the secid for a given ticker.
+            OptionMetrics security ID. Use :meth:`openqai.data.widb.client.WIDBClient.lookup_secid` to obtain the secid for a given ticker.
         date : :class:`dt.date`
             Observation date.
         verbose : :class:`cdxcore.verbose.Context`, default :attr:`cdxcore.verbose.Context.quiet`
@@ -339,7 +339,7 @@ class WIDBClient(object):
         Returns columns: 'date', 'days', 'rate'
         Rate is continuously compounded using ACT/365, i.e. ``df = exp(-rate * calendar_days/365)``.
 
-        Use :func:`quantdata.widb.client.interpolate_zero_curve`
+        Use :func:`openqai.data.widb.client.interpolate_zero_curve`
         to interpolate discount factors for specific days to expiry.
 
         Parameters
@@ -352,7 +352,7 @@ class WIDBClient(object):
         Returns
         -------
         Zero curve: :class:`pandas.DataFrame`
-            Zero-curve data. Use :func:`quantdata.widb.client.interpolate_zero_curve`
+            Zero-curve data. Use :func:`openqai.data.widb.client.interpolate_zero_curve`
             to interpolate discount factors for specific days to expiry.
         """
         date  = to_date(date)
@@ -386,7 +386,7 @@ class WIDBClient(object):
         Parameters
         ----------
         secid : int
-            OptionMetrics security ID. Use :meth:`quantdata.widb.client.WIDBClient.lookup_secid` to obtain the secid for a given ticker.
+            OptionMetrics security ID. Use :meth:`openqai.data.widb.client.WIDBClient.lookup_secid` to obtain the secid for a given ticker.
         date : :class:`dt.date`
             Observation date.
         verbose : :class:`cdxcore.verbose.Context`, default ``Context.quiet``
@@ -437,7 +437,7 @@ class WIDBClient(object):
         Parameters
         ----------
         secid : int
-            OptionMetrics security ID. Use :meth:`quantdata.widb.client.WIDBClient.lookup_secid` to obtain the secid for a given ticker.
+            OptionMetrics security ID. Use :meth:`openqai.data.widb.client.WIDBClient.lookup_secid` to obtain the secid for a given ticker.
         date : :class:`dt.date`
             Observation date.
         verbose : :class:`cdxcore.verbose.Context`, default ``Context.quiet``   

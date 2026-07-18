@@ -13,7 +13,7 @@ The main modules are:
 
 To access this data:
 
-  1. Make sure you configure the python environment for **quantdata** following [the introduction](../../README.md) which means to set at 
+  1. Make sure you configure the python environment for **openqai.core** following [the introduction](../../README.md) which means to set at 
   least the ``QUANTDATA_ROOT`` environment variable. 
   [See the discussion in data locations and how to set them](../../README.md#data-locations).
 
@@ -45,14 +45,14 @@ There a number of notebooks which will show how to call the functionality contai
 To mass download raw data and generate "daily" snapshots, call:
 
 ```bash
-cd quant_data/quantdata/widb
+cd quant_data/openqai.core/widb
 python -m day SPX --workers 4
 ```
 
 To embedd this data with no-arbitrage fits (see below), call:
 
 ```bash
-cd quant_data/quantdata/widb
+cd quant_data/openqai.core/widb
 python -m arbfree SPX --workers 4 --proceed
 ```
 
@@ -113,7 +113,7 @@ and asks. This acts as an input into arbitrage-free models who otherwise will no
 
 Run the ``viz_arb_free.ipynb`` notebook to test this functionality.
 
-* ``mk_arb_free_day(ticker, d, enriched_data=None, raw_day_filter=..., expiry_filter=..., mk_arb_free=..., ...)`` runs ``quantdata.sanos.arbfree.MkArbFree`` on the enriched per-expiry pure prices.
+* ``mk_arb_free_day(ticker, d, enriched_data=None, raw_day_filter=..., expiry_filter=..., mk_arb_free=..., ...)`` runs ``openqai.benchmarks.sanos.arbfree.MkArbFree`` on the enriched per-expiry pure prices.
 * The function keeps the retained expiries and original strike rows, adds ``mask_arb_free`` to indicate which strikes survived the fit, and writes fitted arbitrage-free prices and Greeks into the ``pure_fit1_*`` and ``pure_fitX_*`` columns. The latter is the result of a "surface"
 fit, if requested.
 
@@ -159,7 +159,7 @@ Here is an example output for 62 days "SPX" using arb-free mode ``expiry`` (that
 ```python
 
 from datetime import date
-from quantdata.widb.options_filter import build_time_series, ExpiryFilter, RawDayFilter, OptionsFilter, DateRange, PoolConfig, table_of_time_series, MkArbFree
+from openqai.data.widb.options_filter import build_time_series, ExpiryFilter, RawDayFilter, OptionsFilter, DateRange, PoolConfig, table_of_time_series, MkArbFree
 from cdxcore.verbose import Context
 
 def test():
