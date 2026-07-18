@@ -29,19 +29,19 @@ Install all three editable for development:
 |------------------------------|------------------------------------------|----------------------------------------------|
 | `__init__.py` (Environment)  | `core/.../core/env.py`                   | 308L: Environment, Locations, `env` singleton, cvxpy patch, warning setup |
 | `pool.py`                    | `core/.../core/pool.py`                  |                                              |
-| `biz_calendar.py`            | `core/.../core/calendar.py`              | **minus `NormalizedStrikes`**                |
-| `biz_calendar.py::NormalizedStrikes` | `core/.../core/state.py`         | surface state x_t — split out                |
-| `utils/pl.py`                | `core/.../core/polars.py`                | **rename** — it's polars, not P&L            |
-| `utils/pd.py`                | `core/.../core/pandas.py`                | rename for symmetry                          |
-| `utils/testing.py`           | `core/.../core/testing.py`               |                                              |
+| `biz_calendar.py`            | `core/.../core/biz_calendar.py`          | kept as-is (NormalizedStrikes split deferred)|
+| `utils/pl.py`                | `core/.../core/pl.py`                     | polars helpers (P&L-name concern dismissed — no P&L code) |
+| `utils/pd.py`                | `core/.../core/pd.py`                      | pandas helpers                               |
+| `utils/__init__.py::Eps`     | `core/.../core/eps.py`                     | shared tolerances (currently unused)         |
+| `utils/testing.py`           | merged into `core/.../core/pl.py` + `pd.py` | assert/hash frame helpers                 |
 | `utils/cvxpy.py`             | `core/.../core/cvxpy.py`                 |                                              |
-| `utils/backbone.py`          | `core/.../core/backbone/__init__.py`     | Backbone, BackboneNumpy                      |
-| `torch/bbtorch.py`           | `core/.../core/backbone/torch.py`        |                                              |
-| `jax/bbjax.py`               | `core/.../core/backbone/jax.py`          |                                              |
-| `torch/__init__.py`          | `core/.../core/nn/torch.py`              | BaseEnvironment, BaseModel, helpers          |
-| `jax/__init__.py`            | `core/.../core/nn/jax.py`                | copy-paste twin of the above — see TODO      |
-| `torch/ffw.py`               | `core/.../core/nn/ffw.py`                |                                              |
-| `jax/utility.py`             | `core/.../core/risk.py`                  | entropic u(x)=1-e^-x — the only risk measure |
+| `utils/backbone.py`          | `core/.../core/backbone/__init__.py`     | Backbone, BackboneNumpy (flattened, no stutter) |
+| `torch/bbtorch.py`           | `core/.../core/backbone/torch.py`        | BackboneTorch                                |
+| `jax/bbjax.py`               | `core/.../core/backbone/jax.py`          | BackboneJax                                  |
+| `torch/__init__.py`          | `core/.../core/nn/torch/__init__.py`     | BaseEnvironment, BaseModel, helpers          |
+| `jax/__init__.py`            | `core/.../core/nn/jax/__init__.py`       | copy-paste twin of the above — see TODO      |
+| `torch/ffw.py`               | `core/.../core/nn/torch/ffw.py`          |                                              |
+| `jax/utility.py`             | `core/.../core/nn/jax/utility.py`        | entropic u(x)=1-e^-x (kept in jax, not core/risk) |
 
 ### -> openqai.data  (from quantdata/)
 
@@ -57,14 +57,14 @@ Install all three editable for development:
 
 | From                       | To                                          |
 |----------------------------|---------------------------------------------|
-| `sanos/`                   | `benchmarks/.../benchmarks/sanos/`          |
-| `sanos/widb_sanos_day.py`  | stays in `sanos/` (this file is the adapter)|
+| `sanos/`                   | **`core/.../core/sanos/`** (see Notes)      |
+| `sanos/widb_sanos_day.py`  | `benchmarks/.../benchmarks/processing/`     |
 | `ncde/`                    | `benchmarks/.../benchmarks/ncde/`           |
 | `volsim/`                  | `benchmarks/.../benchmarks/volsim/`         |
-| `volume_curves/`           | **UNDECIDED** — parked, see below           |
+| `volume_curves/`           | `benchmarks/.../benchmarks/volume_curves/`  |
 
-New empty packages (docstring only): `benchmarks/.../benchmarks/deephedging/`,
-`deepbellman/`, `memm/`.
+New empty packages (docstring only): `benchmarks/.../benchmarks/deep_hedging/`,
+`deep_bellman_hedging/`. (`memm` was dropped.)
 
 ---
 
@@ -74,15 +74,15 @@ New empty packages (docstring only): `benchmarks/.../benchmarks/deephedging/`,
   -> `from openqai.core.env import env, SubDir, Context, version`
   Consider re-exporting these four from `openqai/core/__init__.py` so the sites
   become `from openqai.core import ...`.
-- `from quantdata.biz_calendar import ...` -> `from openqai.core.calendar import ...`
-  (but `NormalizedStrikes` -> `from openqai.core.state import NormalizedStrikes`)
-- `from quantdata.utils.pl import ...` -> `from openqai.core.polars import ...`
-- `from quantdata.utils.pd import ...` -> `from openqai.core.pandas import ...`
+- `from quantdata.biz_calendar import ...` -> `from openqai.core.biz_calendar import ...`
+- `from quantdata.utils.pl import ...` -> `from openqai.core.pl import ...`
+- `from quantdata.utils.pd import ...` -> `from openqai.core.pd import ...`
 - `from quantdata.pool import ...` -> `from openqai.core.pool import ...`
 - `from quantdata.torch import ...` -> `from openqai.core.nn.torch import ...`
 - `from quantdata.jax import ...` -> `from openqai.core.nn.jax import ...`
 - `from quantdata.<adapter> import ...` -> `from openqai.data.<adapter> import ...`
-- `from openqai.benchmarks.sanos... / .ncde... / .volsim...` -> `from openqai.benchmarks...`
+- `from quantdata.sanos... ` -> `from openqai.core.sanos...` (sanos landed in core)
+- `from quantdata.ncde... / .volsim... / .volume_curves...` -> `from openqai.benchmarks...`
 
 PyCharm: rename `quantdata` -> the new locations with **Refactor > Move** /
 **Rename** so references update. It will NOT touch the 397 imports across 44
@@ -90,20 +90,17 @@ notebooks — those are string edits (find/replace `quantdata.` per subtree).
 
 ---
 
-## Must fix during the move — cross-distribution cycles
+## Cross-distribution cycles
 
-These are not style issues. They make the distributions un-installable or
-circular once split.
+1. **`widb/arbfree.py` (data) needs `MkArbFree` — RESOLVED.** `widb` uses
+   `MkArbFree` internally (`widb.options_filter`, `widb.testing.generate` import
+   `widb.arbfree`), so data genuinely depends on the arb-free fitter. Resolved
+   by moving the whole `sanos` package **into `core`**, so the import is
+   `data -> core` (allowed). `widb_sanos_day.py` (the widb×sanos pipeline glue)
+   moved to `benchmarks/processing/`. See Notes for the standalone-sanos target.
 
-1. **`widb/arbfree.py` (data) imports `sanos.arbfree.MkArbFree` (benchmarks).**
-   This is `data -> benchmarks`, the wrong direction, and becomes a circular
-   dependency between two published packages. Must invert: either lift the
-   arb-free primitive `MkArbFree` down into `core`, or move whatever in
-   `widb/arbfree.py` needs it up into `benchmarks/sanos`.
-   (`sanos/widb_sanos_day.py` importing `widb` is the allowed direction —
-   benchmarks -> data — and is fine.)
-
-2. **`massive <-> tickers` cycle (both in data).** `tickers/__init__.py` imports
+2. **`massive <-> tickers` cycle (both in data) — OPEN, non-blocking.**
+   `tickers/__init__.py` imports
    `MassiveClient`; `massive/expiries.py` + `massive/tickers/{data,filtered_history}.py`
    import `_locations_tickers` and `EXPIRY` back out of `tickers`. Intra-data so
    it won't block install, but resolve it: `_locations_tickers` / `EXPIRY` are
@@ -114,8 +111,8 @@ circular once split.
 ## Undeclared dependencies (now declared — do not lose)
 
 Previously worked only via transitive installs; explicit now:
-- `sympy` (benchmarks) — `sanos/sanos_jax.py`
 - `prettytable`, `requests`, `urllib3` (data) — massive, widb, fred
+- `cdxcore` (data) — declared directly, was transitive via core
 
 ## Dropped / parked dependencies
 - Removed from any distribution: `wandb`, `orbax`, `scikit-learn`, `ipynbname`,
@@ -140,6 +137,8 @@ Split `tests/` to sit beside each distribution. Mapping by actual imports:
 - test_env.py, test_biz_calendar.py, test_cvxpy_patch.py
 - test_pd.py, test_pl.py
 - test_backbone.py, test_ffw.py, test_torch_helpers.py, test_trainer_checkpoint.py
+- test_arbfree.py, test_arbfree_density_projection.py, test_sanos_utils.py (sanos is in core)
+- fixture: stored_data/training/grid_sanos_four_samples.h5
 
 ### data/tests/
 - test_fred_rates.py
@@ -148,14 +147,13 @@ Split `tests/` to sit beside each distribution. Mapping by actual imports:
 - fixtures: stored_data/raw/massive, stored_data/raw/widb, stored_data/processing/widb
 
 ### benchmarks/tests/
-- test_arbfree.py, test_arbfree_density_projection.py, test_sanos_utils.py
 - test_ncde_voluvol_generate.py
-- fixture: stored_data/training/grid_sanos_four_samples.h5
 
 ### conftest.py
-`tests/conftest.py` creates the stored_data dirs and sets `QUANTDATA_TEST_MODE=1`.
-Both data and benchmarks tests need it. Options: duplicate a small conftest into
-each, or keep one at the workspace root.
+A copy sits in each of `core/tests/`, `data/tests/`, `benchmarks/tests/`. Each
+creates its stored_data dirs, sets `QUANTDATA_TEST_MODE=1`, and points
+`QUANTDATA_TEST_DATA` at its own `stored_data` (env singleton is process-global,
+so each dist's tests run in a separate pytest process).
 
 ---
 
@@ -208,3 +206,22 @@ The three-dist layout downgrades to one distribution trivially: merge the three
 No source or import changes. (Going the other way later — one paper per repo —
 is also just moving `benchmarks/<paper>/` into its own dist; the namespace
 already supports it.)
+
+---
+
+## Notes: sanos in core (interim)
+
+The `sanos` package lives in `core` because `data` depends on its arb-free
+fitter (`MkArbFree`), and `data` can only depend downward. This keeps the
+dependency graph acyclic today.
+
+The eventual target (per Hans: sanos should be a standalone paper repo) is to
+split sanos in two:
+
+- the **arb-free fitter primitive** (`MkArbFree`, `sanos_tools`, `tridiag` —
+  cvxpy/scipy/numpy only) stays low enough for `data` to use it, and
+- the **sanos paper model** (`sanos.py`, `sanos_jax.py`) becomes its own
+  distribution depending on that primitive.
+
+Until that split, all of sanos sits in core. `openqai-core` therefore carries
+cvxpy/scipy in its base deps and jax as the `[jax]` extra.
