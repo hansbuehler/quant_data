@@ -17,9 +17,9 @@ from openqai.core.biz_calendar import DAYS_PER_YEAR, ONE_MINUTE
 from openqai.core.backbone import Backbone
 import math
 
-from openqai.benchmarks.sanos.sanos_tools import SanosPricer, make_variances
-from openqai.benchmarks.sanos.sanos import SanosFitter
-from openqai.benchmarks.sanos.tridiag import solve_sanos_tridiagonal
+from openqai.core.sanos.sanos_tools import SanosPricer, make_variances
+from openqai.core.sanos.sanos import SanosFitter
+from openqai.core.sanos.tridiag import solve_sanos_tridiagonal
 from openqai.core.nn.jax.jax import BackboneJax
 
 _bbjax = BackboneJax()

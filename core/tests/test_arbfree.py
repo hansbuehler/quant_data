@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from cdxcore.verbose import Context
 
-from openqai.benchmarks.sanos.arbfree import MkArbFree
+from openqai.core.sanos.arbfree import MkArbFree
 
 
 DATA_FILE = (

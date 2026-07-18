@@ -41,8 +41,8 @@ from cdxcore.pretty import PrettyObject
 from openqai.core.biz_calendar import DAYS_PER_YEAR, ONE_MINUTE
 import math
 
-from openqai.benchmarks.sanos import IMPOSE_FLOOR_ON_DENSITY
-from openqai.benchmarks.sanos.sanos_tools import (
+from openqai.core.sanos import IMPOSE_FLOOR_ON_DENSITY
+from openqai.core.sanos.sanos_tools import (
     SanosLPSolver,
     warn_and_fix_density,
     _compute_market_fit,

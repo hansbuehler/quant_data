@@ -15,7 +15,7 @@ from collections.abc import Callable
 import warnings
 
 from openqai.core.biz_calendar import NormalizedStrikes, NMS
-from openqai.benchmarks.sanos.sanos import SanosFitter
+from openqai.core.sanos.sanos import SanosFitter
 from openqai.data.widb.options_filter import (
     MkArbFree,
     RawDayFilter,

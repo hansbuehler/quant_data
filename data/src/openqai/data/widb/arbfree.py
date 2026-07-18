@@ -13,7 +13,7 @@ Example
 -------
     >>> import datetime as dt
     >>> from openqai.data.widb.arbfree import mk_arb_free_day
-    >>> from openqai.benchmarks.sanos.arbfree import MkArbFree
+    >>> from openqai.core.sanos.arbfree import MkArbFree
     >>>
     >>> # Generate arbitrage-free prices for SPX on a specific date
     >>> df = mk_arb_free_day("SPX", dt.date(2023, 1, 15))
@@ -41,7 +41,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from openqai.benchmarks.sanos.arbfree import MkArbFree
+from openqai.core.sanos.arbfree import MkArbFree
 from openqai.core.pl import create_empty_df, verify_schema
 from openqai.data.widb.day import (
     ENRICHED_PER_DAY_FIELDS,

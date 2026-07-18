@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from openqai.benchmarks.sanos.sanos_tools import extract_atm_fwd_vols
+from openqai.core.sanos.sanos_tools import extract_atm_fwd_vols
 
 
 def test_extract_atm_fwd_vols_interpolates_atm_and_forward_variance():

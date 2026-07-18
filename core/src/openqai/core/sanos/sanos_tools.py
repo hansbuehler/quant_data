@@ -16,7 +16,7 @@ from cdxcore.verbose import Context
 from cdxcore.version import version
 from cdxcore.bs import bs
 from cdxcore.pretty import PrettyObject
-from openqai.benchmarks.sanos.tridiag import solve_sanos_tridiagonal
+from openqai.core.sanos.tridiag import solve_sanos_tridiagonal
 from openqai.core.biz_calendar import DAYS_PER_YEAR, ONE_MINUTE
 import math
 
