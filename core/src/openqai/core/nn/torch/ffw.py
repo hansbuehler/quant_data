@@ -37,7 +37,7 @@ class FeedForwardConfig:
             verify_inp( callable(self.activation), "'activation' must be a string" )
             return self.activation
         f = getattr(torch.nn, self.activation, None)
-        verify_inp( not f is None, f"Cannot find activation function 'torch.nn.{self.activation}'" )
+        verify_inp( f is not None, f"Cannot find activation function 'torch.nn.{self.activation}'" )
         return f()
     
     @staticmethod
@@ -158,12 +158,12 @@ class FeedForward(BaseModel):
 
         if isinstance(input, torch.Tensor ):
             assert input.shape[-1] == self.num_input, f"Input shape mismatch: expected last dimension to be {self.num_input}, but found {input.shape}"
-            x    = torch.where( mask[...,None], input, 0.) if not mask is None else input
+            x    = torch.where( mask[...,None], input, 0.) if mask is not None else input
         else:
             assert not isinstance(input, nnp.ndarray), f"Input of type {type(input)} is not supported"
             assert len(input) == self.num_input, f"Input length mismatch: expected {self.num_input} elements in the input list, but found {len(input)}"
             shape = torch.broadcast_shapes( *[x.shape for x in input] )
-            x     = torch.stack([ torch.where(mask, x, 0.).expand(shape) for x in input], dim=-1) if not mask is None else\
+            x     = torch.stack([ torch.where(mask, x, 0.).expand(shape) for x in input], dim=-1) if mask is not None else\
                     torch.stack([ x.expand(shape) for x in input], dim=-1)
 
         self.verify( lambda : torch.isfinite(x), lambda : f"{FeedForward}: not finite input 'x' after masking and stacking" )
@@ -200,16 +200,16 @@ class FeedForward(BaseModel):
         if self.num_output == 0:
             assert x.shape[-1] == 1, ("Internal error: output shape mismatch:", x.shape)
             x = x[...,0]
-            x = torch.where(mask, x, 0.)     if not mask is None else x
+            x = torch.where(mask, x, 0.)     if mask is not None else x
             self.verify( lambda : torch.isfinite(x), lambda : f"{FeedForward}: Output 'x' is not finite (num_output=0)" )
         elif isinstance(self.num_output, int):
             assert x.shape[-1] == self.num_output, ("Internal error: output shape mismatch:", x.shape, "vs", self.num_output)    
-            x = torch.where(mask[...,None], x, 0.) if not mask is None else x
+            x = torch.where(mask[...,None], x, 0.) if mask is not None else x
             self.verify( lambda : torch.isfinite(x), lambda : f"{FeedForward}: Output 'x' is not finite (num_output={self.num_output})" )
         else:
             x = x.reshape( x.shape[:-1] + self.num_output )
-            if not mask is None:
+            if mask is not None:
                 m = mask.reshape( mask.shape + (1,)*(len(x.shape)-len(mask.shape)) )
-                x = torch.where(m, x, 0.) if not mask is None else x
+                x = torch.where(m, x, 0.) if mask is not None else x
                 self.verify( lambda : torch.isfinite(x), lambda : f"{FeedForward}: Output 'x' is not finite (num_output={self.num_output})" )
         return x

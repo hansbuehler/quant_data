@@ -20,10 +20,8 @@ from openqai.core.biz_calendar import (
     DateRange,
     get_business_days,
     next_business_day,
-    prev_business_day,
 )
 from openqai.data.massive import MassiveClient
-from openqai.data.yahoo import YFClient
 
 from cdxcore.pretty import PrettyObject
 from cdxcore.subdir import version, Context, SubDir
@@ -31,13 +29,9 @@ from cdxcore.util import fmt_date
 import polars as pl
 from datetime import date, timedelta
 import warnings as warnings
-from datetime import date, timedelta
 from enum import IntEnum
 
 import numpy as np
-import polars as pl
-from cdxcore.pretty import PrettyObject
-from cdxcore.util import fmt_date
 
 class EXPIRY(IntEnum):
     """Expory codes"""
@@ -122,7 +116,7 @@ def get_standard_expiries(date_range: DateRange) -> pl.DataFrame:
             if ix > 0:
                 assert lpm_code >= datecodes[ix-1], f"Internal error: lpm_code {lpm_code} should be >= datecodes[{ix-1}]={datecodes[ix-1]}"
                 if dates[ix-1] in business_days:
-                    assert not dates[ix-1] in expiries, f"Internal error: duplicate expiry date {dates[ix-1]}"
+                    assert dates[ix-1] not in expiries, f"Internal error: duplicate expiry date {dates[ix-1]}"
                     expiries.append( dates[ix-1] )
                     codes.append( int( EXPIRY.EOM if last_prev_month.month not in {3, 6, 9, 12} else EXPIRY.QUARTERLY ) )
 
@@ -134,7 +128,7 @@ def get_standard_expiries(date_range: DateRange) -> pl.DataFrame:
             if ix > 0:
                 assert tf_code >= datecodes[ix-1], f"Internal error: tf_code {tf_code} should be >= datecodes[{ix-1}]={datecodes[ix-1]}"
                 if dates[ix-1] in business_days:
-                    assert not dates[ix-1] in expiries, f"Internal error: duplicate expiry date {dates[ix-1]}"
+                    assert dates[ix-1] not in expiries, f"Internal error: duplicate expiry date {dates[ix-1]}"
                     expiries.append( dates[ix-1] )
                     codes.append( int( EXPIRY.QUAD_WITCHING if month in {3, 6, 9, 12} else EXPIRY.MONTHLY ) )
 

@@ -1,18 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
-from enum import IntEnum
-from pyexpat import model
 
 import numpy as nnp
 import jax as jax
-import jax.numpy as jnp
 import flax as flax
 import optax as optax
-from cdxcore.pretty import PrettyObject
-from cdxcore.verbose import Context
-from cdxcore.version import version
 
 
 class MetricTracker(object):
@@ -25,7 +18,7 @@ class MetricTracker(object):
 
     def record(self, epoch: int, metrics: Mapping[str, tuple[float, float | None]]):
         """Update the metric tracker with new metrics and their corresponding weights"""
-        assert "loss" in metrics, f"'loss' should be included in the metrics directory"
+        assert "loss" in metrics, "'loss' should be included in the metrics directory"
         for k, v in metrics.items():
             if isinstance(v, tuple):
                 assert (
@@ -39,7 +32,7 @@ class MetricTracker(object):
         """Add a single metric"""
         tm = self.metrics.get(name)
         if tm is None:
-            tm = dict(epochs=[epoch], values=[mean], stds=[std] if not std is None else None)
+            tm = dict(epochs=[epoch], values=[mean], stds=[std] if std is not None else None)
             self.metrics[name] = tm
         else:
             assert (
@@ -93,7 +86,7 @@ class MetricTracker(object):
             k: {
                 "epochs": x["epochs"].tolist(),
                 "values": x["values"].tolist(),
-                "stds": x["stds"].tolist() if not x["stds"] is None else None,
+                "stds": x["stds"].tolist() if x["stds"] is not None else None,
             }
             for k, x in state.items()
         }

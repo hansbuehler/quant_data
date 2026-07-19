@@ -281,7 +281,7 @@ def _opt_quote_time_series(
         len(spot_trades) > 0 and spot_trades["spot_price"].is_not_null().all()
     ), f"{ticker} {d} option {opt_ticker}: Found null values in 'spot_price'...?"
     assert (
-        not "spot_price" in opt_quotes.columns
+        "spot_price" not in opt_quotes.columns
     ), f"{ticker} {d} option {opt_ticker}: 'spot_price' should not be in opt_quotes columns...?"
     result = opt_quotes.join_asof(
         spot_trades, left_on="ts_ns", right_on="spot_ts_ns", strategy="backward"
@@ -564,7 +564,7 @@ def _opt_quote_time_series(
     )
 
     for c in result.columns:
-        if not c in TRADE_COLUMNS:
+        if c not in TRADE_COLUMNS:
             assert (
                 result[c].is_not_null().all()
             ), f"{ticker} {d} option {opt_ticker}: Found null values in {c} after conversion...?"

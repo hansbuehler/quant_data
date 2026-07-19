@@ -13,8 +13,6 @@ __version__ = "0.1.0"
 
 import warnings
 from dataclasses import dataclass
-import warnings
-from dataclasses import dataclass
 from pathlib import Path
 
 from cdxcore.err import verify_inp
@@ -211,7 +209,7 @@ class Environment(object):
             def_root    = os.environ.get("QUANTDATA_ROOT", None)
             temp        = os.environ.get("QUANTDATA_TEMP_DATA", "!/openqai.core")
 
-            if not cache_mode is None:
+            if cache_mode is not None:
                 try:
                     cache_mode = CacheMode(cache_mode)
                 except ValueError as e:
@@ -222,16 +220,16 @@ class Environment(object):
                     f"Using cache mode '{cache_mode}' as specified in environment variable QUANTDATA_CACHE_MODE."
                 )
 
-            raw = SubDir(raw) if not raw is None else None
-            processing = SubDir(processing) if not processing is None else None
-            training   = SubDir(training) if not training is None else None
-            experiments = SubDir(experiments) if not experiments is None else None
-            temp       = SubDir(temp) if not temp is None else None
+            raw = SubDir(raw) if raw is not None else None
+            processing = SubDir(processing) if processing is not None else None
+            training   = SubDir(training) if training is not None else None
+            experiments = SubDir(experiments) if experiments is not None else None
+            temp       = SubDir(temp) if temp is not None else None
 
             if raw is None or processing is None or training is None or experiments is None:
                 if def_root is None:
                     raise RuntimeError(
-                                    f"Could not identify all working directories: you can use QUANTDATA_ROOT to set an overall root directory; the following were found/missing: "+\
+                                    "Could not identify all working directories: you can use QUANTDATA_ROOT to set an overall root directory; the following were found/missing: "+\
                                     f"QUANTDATA_RAW_DATA: '{'(missing)' if raw is None else raw }'; "+\
                                     f"QUANTDATA_PROCESSING_DATA: '{'(missing)' if processing is None else processing }'; "+\
                                     f"QUANTDATA_TRAINING_DATA: '{'(missing)' if training is None else training }'; "+\

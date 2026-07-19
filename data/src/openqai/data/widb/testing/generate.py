@@ -5,7 +5,6 @@ Generate WIDB test data
 import os
 os.environ["QUANTDATA_TEST_MODE"] = "generate_tests" # do this before importing anything else
 
-from openqai.core import env# triggers construction of caches.
 from cdxcore.verbose import Context
 from openqai.data.widb.testing.scope import TICKERS, DATES
 

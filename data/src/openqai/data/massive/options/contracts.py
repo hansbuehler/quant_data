@@ -286,9 +286,9 @@ def filter_contracts(
 
     import numpy as np
     rejected = np.where( days_to_exp > contracts_filter.max_dte, REJECTED.EXPIRY, rejected )
-    if not contracts_filter.max_mns is None:
+    if contracts_filter.max_mns is not None:
         rejected = np.where( (np.abs(nms) > contracts_filter.max_mns) & ~np.isnan(nms) & (rejected == REJECTED.USED), REJECTED.MONEYNESS, rejected )
-    if not contracts_filter.max_mns5 is None:
+    if contracts_filter.max_mns5 is not None:
         rejected = np.where( (np.abs(nms5) > contracts_filter.max_mns5) & ~np.isnan(nms5) & (rejected == REJECTED.USED), REJECTED.MONEYNESS, rejected )
 
     all_contracts = all_contracts.with_columns(
@@ -313,7 +313,7 @@ def filter_contracts(
         # ---- volume filter first: cheapest check that rejects the most contracts
         with timing("Fetch open close volume prev"):
             oc_prev = client.fetch_day_summary( opt_ticker, prev_d, adjusted=False, can_be_none=True )
-            c["approx_cash_vol_prev_k"] = approx_cash_vol_k(oc_prev) if not oc_prev is None else None
+            c["approx_cash_vol_prev_k"] = approx_cash_vol_k(oc_prev) if oc_prev is not None else None
 
         # ---- prev quotes/trades check
         with timing("Fetch quotes & trades"):
@@ -330,7 +330,7 @@ def filter_contracts(
         # ---- today volume (diagnostic only, not used for rejection)
         with timing("Fetch open close volume today"):
             oc_today = client.fetch_day_summary(opt_ticker, d, adjusted=False, can_be_none=True)
-            assert not oc_today is None or not has_today_trades, f"If there are trades today, there should be a day summary with volume data. This is unexpected, please investigate: opt_ticker={opt_ticker}, d={d}, has_today_trades={has_today_trades}"
+            assert oc_today is not None or not has_today_trades, f"If there are trades today, there should be a day summary with volume data. This is unexpected, please investigate: opt_ticker={opt_ticker}, d={d}, has_today_trades={has_today_trades}"
         with timing("Fetch open close volume yesterday"):
             oc_yesterday = None
             try:
@@ -339,9 +339,9 @@ def filter_contracts(
                 if has_prev_trades:
                     raise type(e)(f"Failed to fetch yesterday's open/close/volume for {opt_ticker} on {prev_d}: {e} despite has_prev_trades={has_prev_trades}") from e
 
-        c["approx_cash_vol_today_k"] = approx_cash_vol_k(oc_today) if not oc_today is None else None
-        c['opt_open'] = oc_today['open'] if not oc_today is None else None
-        c['opt_close'] = oc_today['close'] if not oc_today is None else None
+        c["approx_cash_vol_today_k"] = approx_cash_vol_k(oc_today) if oc_today is not None else None
+        c['opt_open'] = oc_today['open'] if oc_today is not None else None
+        c['opt_close'] = oc_today['close'] if oc_today is not None else None
         c['opt_prev_open'] = oc_yesterday['open'] if oc_yesterday is not None else None
         c['opt_prev_close'] = oc_yesterday['close'] if oc_yesterday is not None else None
 
@@ -399,7 +399,7 @@ def filter_contracts(
 
     all_contracts = all_contracts.join( used_ticker_data, left_on="ticker", right_on="opt_ticker", how="left" )
     assert "reject_code_right" in all_contracts.columns, f"{underlying} {d}: Missing 'reject_code_right' column in all_contracts after join. This is unexpected, please investigate."
-    assert not "opt_ticker" in all_contracts.columns, f"{underlying} {d}: 'opt_ticker' column should not be in all_contracts after join. This is unexpected, please investigate."
+    assert "opt_ticker" not in all_contracts.columns, f"{underlying} {d}: 'opt_ticker' column should not be in all_contracts after join. This is unexpected, please investigate."
 
     all_contracts = all_contracts.with_columns(
         pl.when(pl.col("reject_code_right").is_not_null())
@@ -497,7 +497,7 @@ def filter_contracts_between(
         )
         if df is None:
             continue
-        if not "correction" in df.columns:
+        if "correction" not in df.columns:
             df = df.with_columns(pl.lit(None).alias("correction"))
 
         existing_cols = set(df.columns) & set(SCHEMA.keys())

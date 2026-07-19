@@ -7,11 +7,7 @@ To generate tests run python -m generate from massive/testing
 
 from __future__ import annotations
 
-import os
-from datetime import date
-from pathlib import Path
 
-from openqai.data.massive import client
 from openqai.data.massive.testing.scope import TICKERS, DATES
 from openqai.core.pl import hash_polars_df
 import numpy as np

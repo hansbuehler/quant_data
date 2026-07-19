@@ -14,7 +14,6 @@ import polars as pl
 from cdxcore.err import verify_inp
 from cdxcore.util import fmt_list
 
-import polars as pl
 from polars.testing import assert_frame_equal as pl_assert_frame_equal
 import hashlib
 

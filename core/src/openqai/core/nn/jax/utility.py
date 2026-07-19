@@ -1,4 +1,3 @@
-import jax
 import jax.numpy as jnp
 from cdxcore.err import verify_inp
 from collections.abc import Callable

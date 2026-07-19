@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import importlib
 import tempfile
 import uuid
 from pathlib import Path
 
 import pytest
-from cdxcore.subdir import CacheMustExistError, SubDir
+from cdxcore.subdir import CacheMustExistError
 
 import openqai.core
 

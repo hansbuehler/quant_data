@@ -71,7 +71,7 @@ def _assemble_time_series(*,
 
     verbose.write(lambda: f"Generating daily data for {ticker} time series from {dates[0]} to {dates[-1]} {'excluding' if date_range.exclude_half_days else 'including'} half days:")
     verbose.report(1,lambda: f"Options filter: {time_series_def.options_filter}")
-    if not time_series_def.mk_arb_free is None:
+    if time_series_def.mk_arb_free is not None:
         verbose.report(1,lambda: f"MkArbFree config: {time_series_def.mk_arb_free}")
     verbose.report(1,lambda: f"Raw Day filter: {time_series_def.raw_day_filter}")
     verbose.report(1,lambda: f"Expiry filter: {time_series_def.expiry_filter}")
@@ -111,8 +111,8 @@ def build_time_series_uid(ticker, date_range, include_fields, exclude_fields, ti
     """ Returns a relative UID for a time series based on its definition and the requested fields. """
     assert isinstance(time_series_def, TimeSeriesDefinition), f"Internal error: expected 'time_series_def' to be an instance of TimeSeriesDefinition, but got {type(time_series_def)}. Please contact the authors with an example."
     ts_id  = named_unique_filename48_8(str(time_series_def), time_series_def)
-    fl_id  = f"incl_{fmt_list(sorted(include_fields))}," if not include_fields is None else "incl_all,"
-    fl_id += f"excl_{fmt_list(sorted(exclude_fields))}" if not exclude_fields is None else "excl_none"
+    fl_id  = f"incl_{fmt_list(sorted(include_fields))}," if include_fields is not None else "incl_all,"
+    fl_id += f"excl_{fmt_list(sorted(exclude_fields))}" if exclude_fields is not None else "excl_none"
     fl_id  = named_unique_filename48_8(fl_id, include_fields, exclude_fields)
     return f"{ts_id}/{ticker}/{str(date_range)}/{fl_id}"
 
@@ -184,11 +184,11 @@ def build_time_series(
     available_fields = applicable_fields|{'is_valid','time_y'}  # source + what we will generate
 
     def get_fields():
-        if not exclude_fields is None:
-            verify_inp( not 'is_valid' in exclude_fields, lambda : f"'is_valid' cannot be excluded, as it is used for masking invalid options.")
+        if exclude_fields is not None:
+            verify_inp( 'is_valid' not in exclude_fields, lambda : "'is_valid' cannot be excluded, as it is used for masking invalid options.")
             verify_inp( set(exclude_fields) <= available_fields, lambda : f"'exclude_fields' unknown fields found: {sorted(set(exclude_fields) - available_fields)}. Available fields not yet selected: {sorted(available_fields - set(exclude_fields))}")
-        if not include_fields is None:
-            verify_inp( 'is_valid' in include_fields, lambda : f"'is_valid' must be included in the fields to include, as it is used for masking invalid options.")
+        if include_fields is not None:
+            verify_inp( 'is_valid' in include_fields, lambda : "'is_valid' must be included in the fields to include, as it is used for masking invalid options.")
             verify_inp( set(include_fields) <= available_fields, lambda : f"'include_fields' unknown fields found: {sorted(set(include_fields) - available_fields)}. Available fields not yet selected: {sorted(available_fields - set(include_fields))}")
 
         flds = {f for f in available_fields if f in include_fields} if include_fields is not None else available_fields
@@ -217,7 +217,7 @@ def build_time_series(
 
     verbose.write(lambda: f"Aggregating {'' if time_series_def.mk_arb_free is None else 'arbitrage-free '}data for ticker {ticker} for {len(dates)} business days from {fmt_date(dates[0])} to {fmt_date(dates[-1])} {'excluding' if date_range.exclude_half_days else 'including'} half days:")
     verbose.report(1,lambda: f"Options filter: {time_series_def.options_filter}")
-    if not time_series_def.mk_arb_free is None:
+    if time_series_def.mk_arb_free is not None:
         verbose.report(1,lambda: f"MkArbFree config: {time_series_def.mk_arb_free}")
     verbose.report(1,lambda: f"Raw Day filter: {time_series_def.raw_day_filter}")
     verbose.report(1,lambda: f"Expiry filter: {time_series_def.expiry_filter}")
@@ -250,10 +250,10 @@ def build_time_series(
                                     verbose=Context.quiet )
                 except CacheMustExistError as e:
                     raise RuntimeError(f"Internal error: {ticker} {d}: expected {'' if time_series_def.mk_arb_free is None else 'arbitrage-free '}enriched data to be available in the cache after generation, but it was not found. Please contact the authors with an example. Original error message: {str(e)}")
-                assert not df is None, f"Internal error: {ticker} {d}: {'' if time_series_def.mk_arb_free is None else 'arbitrage-free '}enrich_day returned None after generation. Please contact the authors with an example."                
+                assert df is not None, f"Internal error: {ticker} {d}: {'' if time_series_def.mk_arb_free is None else 'arbitrage-free '}enrich_day returned None after generation. Please contact the authors with an example."                
                 assert set(df.columns) == set(source_fields), f"Internal error: {ticker} {d}: {sorted(source_fields)}, but found {sorted(df.columns)}."
-                assert not 'is_valid' in df.columns, f"Internal error: {ticker} {d}: 'is_valid' should not be included in the enriched day data"
-                assert not 'time_y' in df.columns, f"Internal error: {ticker} {d}: 'time_y' should not be included in the enriched day data"
+                assert 'is_valid' not in df.columns, f"Internal error: {ticker} {d}: 'is_valid' should not be included in the enriched day data"
+                assert 'time_y' not in df.columns, f"Internal error: {ticker} {d}: 'time_y' should not be included in the enriched day data"
                 return df
 
             for d, df in thread_pool.parallel( { d: thread_pool.delayed(process)(d) for d in dates } ):
@@ -347,7 +347,7 @@ def table_of_time_series( r : dict[str:np.array|str|type] ) -> PrettyTable:
             vlid = v[is_valid] if k!="is_valid" and v.shape==is_valid.shape else v
             try:
                 vlid = vlid.astype(np.float64)
-            except Exception as e:
+            except Exception:
                 tbl.add_row( [k, v.shape, v.dtype, fmt_big_byte_number(v.nbytes), "", "", "", ""] )
                 nsize += v.nbytes   
                 continue
@@ -372,7 +372,7 @@ def extract_day_block( time_series : Mapping, isample : int, *fields, **rename_f
     ttey_t     = time_series['tte_y'][isample,:]
     slices     = { k: time_series[k][isample,:][is_valid_t] for k in fields }
 
-    r = PrettyObject({ k: list() if not k in RAW_PER_DAY_FIELDS else None for k in fields })
+    r = PrettyObject({ k: list() if k not in RAW_PER_DAY_FIELDS else None for k in fields })
 
     uttys = np.unique(ttey_t)
     for utty in uttys:
@@ -394,7 +394,7 @@ def extract_day_block( time_series : Mapping, isample : int, *fields, **rename_f
  
     for k in fields:
         if k in RAW_PER_DAY_FIELDS:
-            assert not r[k] is None
+            assert r[k] is not None
         elif k in RAW_PER_EXPIRY_FIELDS:
             r[k] = np.array(r[k])
         

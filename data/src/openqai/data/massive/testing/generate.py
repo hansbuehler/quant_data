@@ -9,7 +9,6 @@ python -m generate
 import os
 os.environ["QUANTDATA_TEST_MODE"] = "generate_tests" # do this before importing anything else
 
-from openqai.core import env# triggers construction of caches.
 from openqai.data.massive.testing.scope import TICKERS, DATES
 
 def generate_day(ticker, d):

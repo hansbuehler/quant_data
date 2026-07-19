@@ -153,7 +153,7 @@ def interpolate_grid(
     Interpolate the market for a given target grid
     """
 
-    verbose = verbose if not verbose is None else Context.quiet
+    verbose = verbose if verbose is not None else Context.quiet
 
     def message(with_cols: bool = True) -> str:
         my_context = f"{ticker} {d}"

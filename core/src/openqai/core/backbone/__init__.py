@@ -75,7 +75,7 @@ class Backbone(object):
         out_dtype = strikes.dtype
         if high_precision:
             strikes = self.to_array(strikes, dtype=self.float64)
-            spot    = self.to_array(spot, dtype=self.float64) if not spot is None else None
+            spot    = self.to_array(spot, dtype=self.float64) if spot is not None else None
             sqrtVars= self.to_array(sqrtVars, dtype=self.float64)
         spot = spot if spot is not None else (strikes*0.+1.) # TODO: provide better "1"
         k    = strikes/spot if spot is not None else strikes

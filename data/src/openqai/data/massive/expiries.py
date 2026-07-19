@@ -24,7 +24,7 @@ from cdxcore.verbose import Context
 from cdxcore.version import version
 
 from openqai.data.massive import MassiveClient
-from openqai.data.tickers import SubDir, _locations_tickers
+from openqai.data.tickers import _locations_tickers
 from openqai.data.tickers.ticker_calendar import EXPIRY
 
 _expiries_cache = _locations_tickers

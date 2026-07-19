@@ -95,7 +95,7 @@ def fit_dlvsqs(
     )
 
     assert (
-        not debug_do_not_optimize or not init_dlvs is None
+        not debug_do_not_optimize or init_dlvs is not None
     ), f"{message()}If 'debug_do_not_optimize' is True, 'init_dlvs' must be provided to initialize the DLVs, but found init_dlvs={init_dlvs} and debug_do_not_optimize={debug_do_not_optimize}"
     variances = make_variances(expiries, strikes, mids, vols=vols, message_context=message_context)
     del vols
@@ -103,7 +103,7 @@ def fit_dlvsqs(
     tme = verbose.timer()
     jdtype = jnp.float64
     jdevice = jax.devices("cpu")[0]
-    max_dlvsq = self.max_dlv**2 if not self.max_dlv is None else None
+    max_dlvsq = self.max_dlv**2 if self.max_dlv is not None else None
     min_dlvsq = self.min_dlv**2
 
     class JaxObjective:
@@ -153,7 +153,7 @@ def fit_dlvsqs(
                 L_t = jself.L[t]
                 CX_t = jself.CX[t]
                 mids_t = jself.mids[t]
-                weights_t = jself.weights[t] if not jself.weights is None else 1.0
+                weights_t = jself.weights[t] if jself.weights is not None else 1.0
 
                 # move density forward
                 if t > 0:
@@ -169,7 +169,7 @@ def fit_dlvsqs(
                 # solve DLV equation
                 dlvsqs_t = (
                     (jax.nn.sigmoid(dlvinp_t) * (max_dlvsq - min_dlvsq) + min_dlvsq)
-                    if not max_dlvsq is None
+                    if max_dlvsq is not None
                     else (jnp.exp(dlvinp_t) + min_dlvsq)
                 )
                 w_minus_t = dlvsqs_t * iw_minus_t
@@ -250,7 +250,7 @@ def fit_dlvsqs(
         strikes_t = strikes[t]
         mids_t = mids[t]
         xstrikes_t = xstrikes[t]
-        weights_t = weights[t] if not weights is None else None
+        weights_t = weights[t] if weights is not None else None
 
         verify_inp(
             len(strikes_t) > 1 and strikes_t[0] > 0.0 and jnp.min(jnp.diff(strikes_t)) > 0.0,
@@ -264,7 +264,7 @@ def fit_dlvsqs(
             strikes_t.shape == mids_t.shape,
             f"{local_message()}: 'strikes' and 'mids' must have the same shape, found {strikes_t.shape} and {mids_t.shape}",
         )
-        if not weights_t is None:
+        if weights_t is not None:
             verify_inp(
                 strikes_t.shape == weights_t.shape,
                 f"{local_message()}: 'strikes' and 'weights' must have the same shape, found {strikes_t.shape} and {weights_t.shape}",
@@ -282,12 +282,12 @@ def fit_dlvsqs(
         jself.dlv_slices.append(slice(jself.num_dlvs, jself.num_dlvs + Nj))
         jself.num_dlvs += Nj
 
-        if not init_dlvs is None:
+        if init_dlvs is not None:
             init_dlvsqs_t = init_dlvs[t] ** 2
             assert (
                 len(init_dlvsqs_t) == Nj
             ), f"{message()} init_dlvs for expiry #{t} must have length {Nj}, but found {len(init_dlvsqs_t)}"
-            if not max_dlvsq is None:
+            if max_dlvsq is not None:
                 ddlvsq = max_dlvsq - min_dlvsq
                 init_dlvsqs_t = (
                     np.clip(init_dlvsqs_t - min_dlvsq, min=1e-8, max=ddlvsq - 1e-8) / ddlvsq
@@ -347,7 +347,7 @@ def fit_dlvsqs(
         )
         jself.weights.append(
             jax.device_put(weights_t, device=jdevice)
-        ) if not weights_t is None else None
+        ) if weights_t is not None else None
         jself.mids.append(jax.device_put(mids_t, device=jdevice))
 
     # DLVs
@@ -428,7 +428,7 @@ def fit_dlvsqs(
     if debug_print_info:
         rawdlvsqs = (
             (jax.nn.sigmoid(result_raw) * (max_dlvsq - min_dlvsq) + min_dlvsq)
-            if not max_dlvsq is None
+            if max_dlvsq is not None
             else (jnp.exp(result_raw) + min_dlvsq)
         )
         rawdlvs = [np.sqrt(rawdlvsqs[slice_]) for slice_ in jself.dlv_slices]

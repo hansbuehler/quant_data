@@ -225,7 +225,7 @@ class SanosFitter:
             strikes_t = strikes[t]
             mids_t = mids[t]
             xstrikes_t = xstrikes[t]
-            weights_t = weights[t] if not weights is None else None
+            weights_t = weights[t] if weights is not None else None
 
             verify_inp(
                 len(strikes_t) > 1 and strikes_t[0] > 0.0 and np.min(np.diff(strikes_t)) > 0.0,
@@ -239,7 +239,7 @@ class SanosFitter:
                 strikes_t.shape == mids_t.shape,
                 f"{local_message()}: 'strikes' and 'mids' must have the same shape, found {strikes_t.shape} and {mids_t.shape}",
             )
-            if not weights_t is None:
+            if weights_t is not None:
                 verify_inp(
                     strikes_t.shape == weights_t.shape,
                     f"{local_message()}: 'strikes' and 'weights' must have the same shape, found {strikes_t.shape} and {weights_t.shape}",
@@ -255,7 +255,7 @@ class SanosFitter:
 
             q_t = cp.Variable(len(xstrikes_t), bounds=[0.0, 1.0])  # nonneg=True)
             constraints += [cp.sum(q_t) == 1.0, q_t @ xstrikes_t == 1.0, q_t <= 1.0]
-            if not self.min_density_vol is None:
+            if self.min_density_vol is not None:
                 bscalls = bs.price(
                     k=xstrikes_t,
                     vol=self.min_density_vol,
@@ -342,7 +342,7 @@ class SanosFitter:
                 verbose=verbose,
             )
         if fell_back:
-            verbose.write(lambda: f"had to fall back to a slower solver... ", head=False, end="")
+            verbose.write(lambda: "had to fall back to a slower solver... ", head=False, end="")
 
         if not success:
             if status in ["infeasible", "infeasible_inaccurate"]:

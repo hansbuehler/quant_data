@@ -35,8 +35,6 @@ This file's ``main`` can also be used to generate data manually:
 from __future__ import annotations
 
 import datetime as dt
-import math
-import warnings
 
 from cdxcore.pretty import PrettyObject
 import numpy as np
@@ -45,23 +43,13 @@ import pandas as pd
 from openqai.core import env
 from openqai.core.sanos.arbfree import MkArbFree
 from openqai.data.widb.options_filter import OptionsFilter, filter_options_day
-from openqai.core.pl import create_empty_df, verify_schema
 from openqai.data.widb.day import (
-    ENRICHED_PER_DAY_FIELDS,
-    ENRICHED_PER_EXPIRY_FIELDS,
     ExpiryFilter,
     RawDayFilter,
-    SCHEMA_ENRICHED_DAY,
-    _GREEK_CALC_EPS,
-    _IMPLIED_VOL_CALC_EPS,
-    _processing,
-    enrich_day,
 )
 
-from cdxcore.bs import bs
-from cdxcore.subdir import CacheMode, SubDir
+from cdxcore.subdir import SubDir
 from cdxcore.uniquehash import named_unique_filename48_8
-from cdxcore.util import fmt_date, fmt_list, verify_inp
 from cdxcore.verbose import Context
 
 _sanos_data_processing = env.locations("sanos").processing

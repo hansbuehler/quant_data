@@ -180,7 +180,7 @@ def ticker_filtered_history(
             verbose.write(lambda: f"\r  {t_} {fmt_date(rs)}–{fmt_date(re)}", end="")
             all_bars.append(df)
 
-    with verbose.write_t(lambda: f"\rComputing metrics... ", end="") as tme:
+    with verbose.write_t(lambda: "\rComputing metrics... ", end="") as tme:
         df = pl.concat(all_bars).sort("date")
 
         df = df.with_columns(

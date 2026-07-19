@@ -196,10 +196,10 @@ class ArbFreePricer(PrettyObject):
             mode is None or mode in ["surface", "expiry"],
             lambda: f"Expected 'mode' to be one of 'surface', 'expiry' or None, but found {str(mode)}",
         )
-        per_expiry = mode == "expiry" if not mode is None else (self.fitsX is None)
+        per_expiry = mode == "expiry" if mode is not None else (self.fitsX is None)
         verify_inp(
-            per_expiry or not self.fitsX is None,
-            f"Cannot use 'mode' \"surface\" since no surface fit is available",
+            per_expiry or self.fitsX is not None,
+            "Cannot use 'mode' \"surface\" since no surface fit is available",
         )
 
         strikes = (
@@ -342,7 +342,7 @@ class ArbFreePricer(PrettyObject):
 
     def interpolate_atm_vols(self, expiries: float | np.ndarray) -> float | np.ndarray:
         """Interpolates the (ATM) variances (not smoothed)"""
-        assert not self.variances is None, "Internal error - variances are missing"
+        assert self.variances is not None, "Internal error - variances are missing"
         is_float = not hasattr(expiries, "shape")
         expiries = np.asarray([float(expiries)]) if is_float else np.asarray(expiries)
         expiries = np.clip(expiries, self.expiries[0], self.expiries[-1])
@@ -393,7 +393,7 @@ class ArbFreePricer(PrettyObject):
         return len(self.expiries)
 
     def _make_numpy(self):
-        self.smoothness = float(self.smoothness) if not self.smoothness is None else None
+        self.smoothness = float(self.smoothness) if self.smoothness is not None else None
         self.expiries = np.asarray(self.expiries)
         self.variances = np.asarray(self.variances)
         self.input_index = np.asarray(self.input_index, dtype=np.int32)
@@ -403,26 +403,26 @@ class ArbFreePricer(PrettyObject):
         self.asks = [np.asarray(x) for x in self.asks]
         self.bids = [np.asarray(x) for x in self.bids]
         self.fits1 = [np.asarray(x) for x in self.fits1]
-        self.fitsX = [np.asarray(x) for x in self.fitsX] if not self.fitsX is None else None
+        self.fitsX = [np.asarray(x) for x in self.fitsX] if self.fitsX is not None else None
 
         self.xstrikes = [np.asarray(x) for x in self.xstrikes]
         self.xdensities = [np.asarray(x) for x in self.xdensities]
 
         self.xix_to_mix = (
-            [(np.asarray(x, dtype=np.int32) if not x is None else None) for x in self.xix_to_mix]
-            if not self.xix_to_mix is None
+            [(np.asarray(x, dtype=np.int32) if x is not None else None) for x in self.xix_to_mix]
+            if self.xix_to_mix is not None
             else None
         )
         self.mstrikes = (
-            [np.asarray(x) for x in self.mstrikes] if not self.mstrikes is None else None
+            [np.asarray(x) for x in self.mstrikes] if self.mstrikes is not None else None
         )
         self.mdensities = (
-            [np.asarray(x) for x in self.mdensities] if not self.mdensities is None else None
+            [np.asarray(x) for x in self.mdensities] if self.mdensities is not None else None
         )
 
         self.run_time_expiry = float(self.run_time_expiry)
         self.run_time_surface = (
-            float(self.run_time_surface) if not self.run_time_surface is None else None
+            float(self.run_time_surface) if self.run_time_surface is not None else None
         )
 
         T = len(self.expiries)
@@ -456,7 +456,7 @@ class ArbFreePricer(PrettyObject):
             len(self.xdensities) == T
         ), f"Internal error: 'xdensities' must be a list of length {T}, but found {len(self.xdensities)}"
 
-        if not self.mstrikes is None:
+        if self.mstrikes is not None:
             assert (
                 self.fitsX is None or len(self.fitsX) == T
             ), f"Internal error: 'fitsX' must be a list of length {T}, but found {len(self.fitsX)}"
@@ -473,7 +473,7 @@ class ArbFreePricer(PrettyObject):
             asks_t = self.asks[t]
             bids_t = self.bids[t]
             fits1_t = self.fits1[t]
-            fitsX_t = self.fitsX[t] if not self.fitsX is None else None
+            fitsX_t = self.fitsX[t] if self.fitsX is not None else None
 
             assert (
                 mask_t.shape == strikes_t.shape == asks_t.shape == bids_t.shape == fits1_t.shape
@@ -485,7 +485,7 @@ class ArbFreePricer(PrettyObject):
                 xstrikes_t.shape == xdensities_t.shape
             ), f"Internal error: 'xstrikes[{t}]' and 'xdensities[{t}]' must have the same shape, but found {xstrikes_t.shape} and {xdensities_t.shape}"
 
-            if not self.mstrikes is None:
+            if self.mstrikes is not None:
                 assert (
                     fitsX_t is None or fitsX_t.shape == mask_t.shape
                 ), f"Internal error: 'fitsX[{t}]' must have the same shape as 'masks[{t}]', but found {fitsX_t.shape} and {mask_t.shape}"
@@ -591,13 +591,13 @@ class MkArbFree:
         surface_expiry_linear = (
             self.surface_expiry_linear
             and self.no_arb_mode == "surface"
-            and not self.smoothness is None
+            and self.smoothness is not None
         )
         return (
             f"{self.no_arb_mode},{f'std={self.smoothness:.2g},' if self.smoothness is not None else ''}{'elin' if surface_expiry_linear else ''}mhs={self.min_half_spread:.3g},"
             + f"mw={self.mid_fit_weight:.2f},mav={self.min_atm_vol:.2g},"
-            + (f"midl={self.min_dlv:.3g}," if not self.min_dlv is None else "")
-            + (f"mxdv={self.max_dlv:.3g}," if not self.max_dlv is None else "")
+            + (f"midl={self.min_dlv:.3g}," if self.min_dlv is not None else "")
+            + (f"mxdv={self.max_dlv:.3g}," if self.max_dlv is not None else "")
             + f"mik={self.min_strikes_per_expiry},mdn={self.min_density:.3g},dC={self.min_dC_eps:.3g},dps={self._eps_dens_1:.1g}"
         )
 
@@ -760,7 +760,7 @@ class MkArbFree:
         r.expiry_linear = (
             self.surface_expiry_linear
             and self.no_arb_mode == "surface"
-            and not self.smoothness is None
+            and self.smoothness is not None
         )
 
         for t, expiry in enumerate(expiries):
@@ -795,8 +795,8 @@ class MkArbFree:
                 prev_upper=r.xstrikes[-1][-1] if len(r.xstrikes) > 0 else None,
                 message_context=local_message,
             )
-            assert not xstrikes_t is None, "Internal error: xstrikes_t is None."
-            if not notice is None:
+            assert xstrikes_t is not None, "Internal error: xstrikes_t is None."
+            if notice is not None:
                 verbose.write(lambda: notice() + ": ", head=False, end="")
             assert np.all(xstrikes_t[1:-1] == strikes_t[mask_t]), "Mask error...?"
             verbose.write(
@@ -1130,10 +1130,10 @@ class MkArbFree:
                 expiry = expiries[t]
                 strikes_t = strikes[t]
                 xstrikes_t = xstrikes[t]
-                mask_t = masks[t] if not masks is None else slice(None, None)
+                mask_t = masks[t] if masks is not None else slice(None, None)
                 ask_t = asks[t][mask_t]
                 bid_t = bids[t][mask_t]
-                xguess_t = np.clip(xguessed_p[t], 0.0, None) if not xguessed_p is None else None
+                xguess_t = np.clip(xguessed_p[t], 0.0, None) if xguessed_p is not None else None
                 assert (
                     xguess_t is None or xguess_t.shape == xstrikes_t.shape
                 ), f"Internal error: length of xguessed_p[{t}] {len(xguess_t)} must be the same as length of xstrikes[{t}] {len(xstrikes_t)}."
@@ -1178,9 +1178,9 @@ class MkArbFree:
                     * (expiries[t] - (expiries[t - 1] if t > 0 else 0.0))
                     / (xstrikes_t[2:] - xstrikes_t[:-2])
                 )
-                if not self.min_dlv is None:
+                if self.min_dlv is not None:
                     constraints += [Cm - Cm1 >= cp.multiply(box * (self.min_dlv**2), q_t[1:-1])]
-                if not self.max_dlv is None:
+                if self.max_dlv is not None:
                     constraints += [Cm - Cm1 <= cp.multiply(box * (self.max_dlv**2), q_t[1:-1])]
                 del box, Cm1
 
@@ -1220,7 +1220,7 @@ class MkArbFree:
                     ]
 
                 # slack variable version  *should* be better..?
-                guess_fit = CX[mask_t, :] @ xguess_t if not xguess_t is None else None
+                guess_fit = CX[mask_t, :] @ xguess_t if xguess_t is not None else None
                 if eff_mid_fit_weight < 1.0:
                     e_init = (
                         np.clip(
@@ -1285,7 +1285,7 @@ class MkArbFree:
             )
             if fell_back:
                 verbose.write(
-                    lambda: f"had to fall back to a slower solver... ", head=False, end=""
+                    lambda: "had to fall back to a slower solver... ", head=False, end=""
                 )
 
             if not success:
@@ -1453,8 +1453,8 @@ class MkArbFree:
         # --------------
 
         expiries = np.array([expiry], dtype=np.float64)
-        variances = np.array([variance], dtype=np.float64) if not variance is None else None
-        msk_t = mask_t if not mask_t is None else slice(None, None)
+        variances = np.array([variance], dtype=np.float64) if variance is not None else None
+        msk_t = mask_t if mask_t is not None else slice(None, None)
 
         r = self.surface_densities(
             expiries=expiries,
@@ -1462,7 +1462,7 @@ class MkArbFree:
             strikes=[strikes_t],
             asks=[ask_t],
             bids=[bid_t],
-            masks=[mask_t] if not mask_t is None else None,
+            masks=[mask_t] if mask_t is not None else None,
             xstrikes=[xstrikes_t],
             xguessed_p=None,
             hard_fit=False,
@@ -1470,7 +1470,7 @@ class MkArbFree:
             message_context=lambda: message(False),
             verbose=Context.quiet,
         )
-        assert not r is None, "Internal error"
+        assert r is not None, "Internal error"
         xdensity = r.xdensities[0]
         fit = r.fits[0]
         does_fit = (fit > bid_t - self._eps_price) & (fit < ask_t + self._eps_price)
@@ -1493,7 +1493,7 @@ class MkArbFree:
             strikes=[strikes_t],
             asks=[ask_t],
             bids=[bid_t],
-            masks=[mask_t] if not mask_t is None else None,
+            masks=[mask_t] if mask_t is not None else None,
             xstrikes=[xstrikes_t],
             xguessed_p=[xdensity],
             hard_fit=True,
@@ -1502,7 +1502,7 @@ class MkArbFree:
             verbose=verbose,
         )
 
-        if not r is None:
+        if r is not None:
             fit = r.fits[0]
             does_fit = (fit > bid_t - self._eps_price) & (fit < ask_t + self._eps_price)
             does_fit_msk = does_fit[msk_t]
@@ -1720,8 +1720,8 @@ class MkArbFree:
             upper_k = 1.0 + (xstrikes_t[1] - xstrikes_t[0])
 
         # previous step?
-        lower_k = min(lower_k, prev_lower) if not prev_lower is None else lower_k
-        upper_k = max(upper_k, prev_upper) if not prev_upper is None else upper_k
+        lower_k = min(lower_k, prev_lower) if prev_lower is not None else lower_k
+        upper_k = max(upper_k, prev_upper) if prev_upper is not None else upper_k
         xstrikes_t = np.concatenate(([lower_k], xstrikes_t, [upper_k]))
 
         assert np.all(bid_t == input_bid_t[mask_t]), "Mask error...?"

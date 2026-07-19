@@ -119,7 +119,7 @@ class MassiveClient(object):
             verify( not env.test_mode, "Attempted to connect to massive.com in test mode. Set QUANTDATA_TEST_MODE=0 to enable connections." )
             MassiveClient._MASSIVE_TOKEN = os.environ.get("MASSIVE_TOKEN", None)
             verify(
-                not MassiveClient._MASSIVE_TOKEN is None,
+                MassiveClient._MASSIVE_TOKEN is not None,
                 "Must specify environment variable 'MASSIVE_TOKEN' to access `massive.com <https://www.massive.com>`_ data",
                 exception=RuntimeError,
             )
@@ -170,12 +170,12 @@ class MassiveClient(object):
         self._session = None
         self._temp_dir = (
             MassiveClient.locations.temp("massive_api")(temp_caching_topic, fmt=fmt)
-            if not temp_caching_topic is None
+            if temp_caching_topic is not None
             else None
         )
         self.get = (
             self._temp_dir.cache(label="massive_get", exclude_args=["self"])(self._get)
-            if not self._temp_dir is None
+            if self._temp_dir is not None
             else self._get
         )
 
@@ -633,7 +633,7 @@ class MassiveClient(object):
             ) from e
 
         # Polygon open-close has "open","close","volume" (and more)
-        assert not "next_url" in data, (
+        assert "next_url" not in data, (
             f"Internal error: pagination not expected for open-close endpoint, url '{url}' response '{data}'. Sanity check request & contact the authors."
         )
         open = data.get("open")
@@ -673,7 +673,7 @@ class MassiveClient(object):
     @_cache(fmt=SubDir.PICKLE).cache(
         "0.1",
         label=lambda underlying, d, max_dte: (
-            f"all_contracts/max_dte={max_dte if not max_dte is None else 'all'}/{underlying}/{fmt_date(d)}"
+            f"all_contracts/max_dte={max_dte if max_dte is not None else 'all'}/{underlying}/{fmt_date(d)}"
         ),
         exclude_args=["self"],
     )  # 'self' is excluded fromm the arguments as it does not affect the output.
@@ -707,7 +707,7 @@ class MassiveClient(object):
             "order": "asc",
             "sort": "expiration_date",
         }
-        if not max_dte is None:
+        if max_dte is not None:
             max_expiry = add_business_days(d, max_dte, exclude_half_days=False)
             verify_inp(
                 max_expiry >= d,
@@ -1164,7 +1164,7 @@ class MassiveClient(object):
         Close : ``float``
             The previous day's close, consistent with today's unadjusted prices.
         """
-        prev_d = prev_d if not prev_d is None else add_business_days( d, -1, exclude_half_days=exclude_half_days )  # previous business day (NB: if d is a Monday then this is the previous Friday, so we correctly skip the weekend)
+        prev_d = prev_d if prev_d is not None else add_business_days( d, -1, exclude_half_days=exclude_half_days )  # previous business day (NB: if d is a Monday then this is the previous Friday, so we correctly skip the weekend)
         r = self._PREV_CLOSE_CACHE.get((ticker, d, prev_d), None)
         if r is not None:
             return r

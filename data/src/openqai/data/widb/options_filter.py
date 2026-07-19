@@ -12,17 +12,17 @@ from openqai.data.widb.arbfree import MkArbFree, mk_arb_free_day, SCHEMA_ARB_FRE
 from cdxcore.version import version
 from cdxcore.verbose import Context
 from cdxcore.subdir import CacheMode
-from cdxcore.util import fmt_date, fmt_list, fmt_big_byte_number, fmt_dict
+from cdxcore.util import fmt_list, fmt_dict
 from cdxcore.uniquehash import named_unique_filename48_8
 from openqai.core.pl import create_empty_df, verify_schema
 
-from cdxcore.err import verify_inp, verify
+from cdxcore.err import verify_inp
 
 import datetime as dt
 import numpy as np
 import pandas as pd
 import math as math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import warnings as warnings
 
 # ======================================================================
@@ -261,7 +261,7 @@ def filter_options_day(
 
     schema = SCHEMA_OPTION_DAY(mk_arb_free, options_filter.normalize)
 
-    if not source_data is None:
+    if source_data is not None:
         verify_inp( isinstance(source_data, pd.DataFrame), f"{ticker} {d}: expected 'source_data' to be a pandas DataFrame or None, got {type(source_data)}.")
         data = source_data
     else:
@@ -317,6 +317,6 @@ def _filter_options_day_num_options( *,
         raw_day_filter=raw_day_filter, expiry_filter=expiry_filter, mk_arb_free=mk_arb_free, options_filter=options_filter,
         raise_if_bad_day=raise_if_bad_day, 
         override_cache_mode=override_cache_mode, cache_generate_only=cache_generate_only,
-        verbose=verbose if not verbose is None else Context.quiet
+        verbose=verbose if verbose is not None else Context.quiet
     )
-    return len(r) if not r is None else None
+    return len(r) if r is not None else None

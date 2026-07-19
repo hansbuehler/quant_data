@@ -190,7 +190,7 @@ class WIDBClient(object):
         Use :meth:`openqai.data.widb.client.WIDBClient.lookup_secid` for individual lookups, which is cached separately.
         """
         conn = self.connect()
-        assert not conn is None, "WRDS connection is not established."
+        assert conn is not None, "WRDS connection is not established."
         securd = _resolve_table(conn, logical="securd", candidates=["securd", "securd1"])
         query = f"""
             SELECT ticker, secid
@@ -285,7 +285,7 @@ class WIDBClient(object):
         date  = to_date(date)
         secid = int(secid)
         conn = self.connect()
-        assert not conn is None, "WIDB connection is not established."
+        assert conn is not None, "WIDB connection is not established."
 
         opprcd = _resolve_table(
             conn,
@@ -357,7 +357,7 @@ class WIDBClient(object):
         """
         date  = to_date(date)
         conn = self.connect()
-        assert not conn is None, "WIDB connection is not established."
+        assert conn is not None, "WIDB connection is not established."
         zerocd = _resolve_table(conn, logical="zerocd", candidates=["zerocd"])
         query = f"""
             SELECT date, days, rate
@@ -401,7 +401,7 @@ class WIDBClient(object):
         date  = to_date(date)
         secid = int(secid)
         conn = self.connect()
-        assert not conn is None, "WIDB connection is not established."
+        assert conn is not None, "WIDB connection is not established."
         fwdprd = _resolve_table(
             conn,
             logical="fwdprd",
@@ -458,7 +458,7 @@ class WIDBClient(object):
         date  = to_date(date)
         secid = int(secid)
         conn = self.connect()
-        assert not conn is None, "WIDB connection is not established."
+        assert conn is not None, "WIDB connection is not established."
         secprd = _resolve_table(
             conn,
             logical="secprd",

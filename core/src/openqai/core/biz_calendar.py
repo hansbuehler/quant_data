@@ -81,7 +81,7 @@ class NormalizedStrikes:
             Relative strikes corresponding to the given NMS strikes, time to expiry and volatility.
         """
         assert np.min(t) >= 0., "Time must be non-negative"
-        if not vol is None:
+        if vol is not None:
             assert np.min(vol) > 0., "Volatility must be positive"
         else:
             vol = self.SCALE
@@ -116,7 +116,7 @@ class NormalizedStrikes:
         vol = self.SCALE if vol is None else vol
         assert np.min(k) > 0., "Strike must be positive"
         assert np.min(t) >= 0., "Time must be non-negative"
-        if not vol is None:
+        if vol is not None:
             assert np.min(vol) > 0., "Volatility must be positive"
         else:
             vol = self.SCALE

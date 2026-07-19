@@ -264,7 +264,7 @@ class SanosPricer:
 
     def model_vols(self, expiries: float | np.ndarray) -> float | np.ndarray:
         """Interpolates the model variances, scaled by ``smoothness``"""
-        assert not self.variances is None, "Internal error - variances are missing"
+        assert self.variances is not None, "Internal error - variances are missing"
         is_float = not hasattr(expiries, "shape")
         expiries = np.asarray([float(expiries)]) if is_float else np.asarray(expiries)
         expiries = np.clip(expiries, self.expiries[0], self.expiries[-1])
@@ -355,7 +355,7 @@ class SanosPricer:
             box = xstrikes_t[1:-1] ** 2 * dts[t] / (xstrikes_t[2:] - xstrikes_t[:-2])
             p_box = box * p_t[1:-1]
 
-            if not xstrikes_tm1 is None:
+            if xstrikes_tm1 is not None:
                 assert (
                     xstrikes_tm1[0] >= xstrikes_t[0] and xstrikes_tm1[-1] <= xstrikes_t[-1]
                 ), f"Expiry #{t} {expiry*DAYS_PER_YEAR:.1f}d: Expected 'xstrikes[{t-1}]' to cover 'xstrikes[{t}]', but found xstrikes[{t-1}][0]={xstrikes_tm1[0]:.4g} < xstrikes[{t}][0]={xstrikes_t[0]:.4g} or xstrikes[{t-1}][-1]={xstrikes_tm1[-1]} > xstrikes[{t}][-1]={xstrikes_t[-1]}"
@@ -407,7 +407,7 @@ class SanosPricer:
             )  # dC_t can be positive while p_t is zero ... in this case we cannot determine a correct DLV - any will do.
             dlvsqs_t = np.select(
                 [p_or_dC_zero, too_small, too_big],
-                [0.0, min_dlvsq, max_dlvsq if not max_dlvsq is None else np.nan],
+                [0.0, min_dlvsq, max_dlvsq if max_dlvsq is not None else np.nan],
                 default=(dC_t * 1e6) / (divisor * 1e6),
             )
             if not np.all(np.isfinite(dlvsqs_t)):
@@ -621,7 +621,7 @@ class SanosLPSolver:
 
         # initialize
         for v, val in variables:
-            if not val is None:
+            if val is not None:
                 assert (
                     v.shape == val.shape
                 ), f"Internal error: variable shape {v.shape} does not match provided value shape {val.shape}"
@@ -970,18 +970,18 @@ def _compute_market_fit(
 
         if and_vols:
             r.fits, r.fit_vols = pricer(
-                expiries[masks] if not masks is None else expiries,
-                strikes[masks] if not masks is None else strikes,
+                expiries[masks] if masks is not None else expiries,
+                strikes[masks] if masks is not None else strikes,
                 and_vols=True,
             )
         else:
             r.fits = pricer(
-                expiries[masks] if not masks is None else expiries,
-                strikes[masks] if not masks is None else strikes,
+                expiries[masks] if masks is not None else expiries,
+                strikes[masks] if masks is not None else strikes,
                 and_vols=False,
             )
 
-        if not masks is None:
+        if masks is not None:
             x = np.zeros_like(strikes)
             x[masks] = r.fits
             r.fits = x
@@ -1015,7 +1015,7 @@ def _compute_market_fit(
         r.q10_err = yxquantiles[2]
         r.median_err = yxquantiles[3]
 
-        if not masks is None:
+        if masks is not None:
             x = np.zeros_like(strikes)
             x[masks] = r.fit_err
             r.fit_err = x
@@ -1040,10 +1040,10 @@ def _compute_market_fit(
     masked_fit_errors = []
 
     for t, expiry in enumerate(expiries):
-        masks_t = masks[t] if not masks is None else None
-        strikes_t = strikes[t][masks_t if not masks is None else slice(None)]
-        bids_t = bids[t][masks_t if not masks is None else slice(None)]
-        asks_t = asks[t][masks_t if not masks is None else slice(None)]
+        masks_t = masks[t] if masks is not None else None
+        strikes_t = strikes[t][masks_t if masks is not None else slice(None)]
+        bids_t = bids[t][masks_t if masks is not None else slice(None)]
+        asks_t = asks[t][masks_t if masks is not None else slice(None)]
 
         verify_inp(
             strikes_t.shape == bids_t.shape == asks_t.shape,
@@ -1065,20 +1065,20 @@ def _compute_market_fit(
         fit_err = (np.maximum(0.0, f - asks_t) + np.maximum(0.0, bids_t - f)) / half_spreads
         masked_fit_errors.append(fit_err)
 
-        if not masks_t is None:
+        if masks_t is not None:
             x = np.zeros_like(strikes[t])
             x[masks_t] = fit_err
             fit_err = x
             x = np.zeros_like(strikes[t])
             x[masks_t] = f
             f = x
-            if not v is None:
+            if v is not None:
                 x = np.zeros_like(strikes[t])
                 x[masks_t] = v
                 v = x
         r.fits.append(f)
         r.fit_errs.append(fit_err)
-        if not v is None:
+        if v is not None:
             r.fit_vols.append(v)
 
     masked_fit_errors = np.concatenate(masked_fit_errors)

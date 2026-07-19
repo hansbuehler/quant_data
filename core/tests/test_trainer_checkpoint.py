@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-import torch
 
 from openqai.core.nn.metric_tracker import MetricTracker
 

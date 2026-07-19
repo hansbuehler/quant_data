@@ -136,7 +136,7 @@ def mk_arb_free_day(
     Result: :class:`pandas.DataFrame`|None
         This function may return None if ``raise_if_bad_day`` is False and the day is deemed bad as defined by :data:`bad.BAD.DAYS_ALL`.
     """
-    if not enriched_data is None:
+    if enriched_data is not None:
         verify_inp(
             isinstance(enriched_data, pd.DataFrame),
             f"{ticker} {d}: expected 'enriched_data' to be a pandas DataFrame or None, got {type(enriched_data)}.",
@@ -231,13 +231,13 @@ def mk_arb_free_day(
 
     fit1_all = arb_result.fits1
     assert (
-        not fit1_all is None
+        fit1_all is not None
     ), f"Internal error: {ticker} {d}: MkArbFree returned None for fits; expected arrays of shape (num_expiries, num_strikes_per_expiry)."
 
     if mode_surface:
         fitx_all = arb_result.fitsX
         assert (
-            not fitx_all is None
+            fitx_all is not None
         ), f"Internal error: {ticker} {d}: MkArbFree returned None for fitsX; expected arrays of shape (num_expiries, num_strikes_per_expiry)."
     else:
         fitx_all = None
