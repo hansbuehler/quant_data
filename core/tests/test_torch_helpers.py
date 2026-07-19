@@ -9,11 +9,12 @@ import torch
 from openqai.core.nn.torch import (
     BaseEnvironment,
     BaseModel,
-    MetricTacker,
     check,
     get,
     pop,
 )
+from openqai.core.nn.metric_tracker import MetricTracker
+
 from openqai.core.backbone.torch import BackboneTorch
 from openqai.core.nn.torch.ffw import FeedForward, FeedForwardConfig
 
@@ -65,7 +66,7 @@ def test_grad_diagnostics_and_metric_tracker() -> None:
     with pytest.raises(RuntimeError, match="non-finite grad"):
         model.debug_detect_grad_issues()
 
-    tracker = MetricTacker()
+    tracker = MetricTracker()
     tracker.record(1, {"loss": 0.5, "accuracy": 0.9})
     tracker.record_metric(2, "accuracy", 0.95)
 
@@ -73,7 +74,7 @@ def test_grad_diagnostics_and_metric_tracker() -> None:
     assert state["loss"]["epochs"].dtype == np.int32
     assert tracker["accuracy"]["values"] == [0.9, 0.95]
 
-    restored = MetricTacker().load_state_dict(state)
+    restored = MetricTracker().load_state_dict(state)
     assert restored.get("loss")["values"] == pytest.approx([0.5])
 
 
