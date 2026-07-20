@@ -56,7 +56,7 @@ from openqai.core.biz_calendar import NMS5, count_business_days_between, DAYS_PE
 from openqai.data.widb.client import WIDBClient
 from openqai.data.widb.bad import BAD
 from openqai.core.pool import PoolConfig
-from openqai.core.pl import create_empty_df, verify_schema
+from openqai.core.pd import create_empty_df, verify_schema
 
 from cdxcore.version import version
 from cdxcore.verbose import Context

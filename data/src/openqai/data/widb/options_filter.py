@@ -14,7 +14,7 @@ from cdxcore.verbose import Context
 from cdxcore.subdir import CacheMode
 from cdxcore.util import fmt_list, fmt_dict
 from cdxcore.uniquehash import named_unique_filename48_8
-from openqai.core.pl import create_empty_df, verify_schema
+from openqai.core.pd import create_empty_df, verify_schema
 
 from cdxcore.err import verify_inp
 

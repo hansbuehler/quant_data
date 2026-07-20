@@ -42,7 +42,7 @@ import numpy as np
 import pandas as pd
 
 from openqai.core.sanos.arbfree import MkArbFree
-from openqai.core.pl import create_empty_df, verify_schema
+from openqai.core.pd import create_empty_df, verify_schema
 from openqai.data.widb.day import (
     ENRICHED_PER_DAY_FIELDS,
     ENRICHED_PER_EXPIRY_FIELDS,
