@@ -29,5 +29,10 @@ In this project we turned on the rather aggressive memory leak detection of :mod
 which is described `here <https://joblib.readthedocs.io/en/latest/generated/joblib.Parallel.html>`__.
 """
 
-from cdxcore.jcpool import JCPool
+from cdxcore.jcpool import JCPool, JCPoolConfig as PoolConfig
 JCPool.DEFAULT_MEM_LEAK_ENFORCE = False
+
+# PoolConfig is re-exported for openqai.data / openqai.benchmarks. Keep it in
+# __all__ so linters don't strip it as unused (it's only referenced in the
+# module docstring here).
+__all__ = ["JCPool", "PoolConfig"]
