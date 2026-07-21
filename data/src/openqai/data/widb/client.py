@@ -95,11 +95,15 @@ class WRDSCredentials:
         username = os.environ.get("WRDS_USERNAME", None)
         wrds_off = os.environ.get("WRDS_OFF", None) == "1"
 
-        if username is None:
-            raise RuntimeError("For live access to WIDB, set the environment variable WRDS_USERNAME: currently " + ("not set" if username is None else f"'{username}'")+".")
         if wrds_off:
+            # WIDB is disabled: we never connect, so a username is not required.
+            # connect() raises a clear "access disabled" error instead of a
+            # confusing "WRDS_USERNAME not set" one on a cache miss.
             warnings.warn("WIDB is disabled")
-        return WRDSCredentials(username=username,wrds_off=wrds_off)
+            return WRDSCredentials(username=username or "", wrds_off=True)
+        if username is None:
+            raise RuntimeError("For live access to WIDB, set the environment variable WRDS_USERNAME: currently not set.")
+        return WRDSCredentials(username=username, wrds_off=False)
 
 @version("1.0", dependencies=[WRDSCredentials])
 class WIDBClient(object):
@@ -171,7 +175,7 @@ class WIDBClient(object):
         if WIDBClient._conn is None:
             verify( not env.test_mode, "Attempted to connect to WRDS IvyDB in test mode. Set QUANTDATA_TEST_MODE=0 to enable connections." )
             credentials = WIDBClient.credentials()
-            verify( not credentials.wrds_off, "Attempted to connect to WRDS IvyDB while WRDS IvyDB access is disabled. Set QUANTDATA_WRDS_OFF=0 to enable connections." )
+            verify( not credentials.wrds_off, "Attempted to connect to WRDS IvyDB while WRDS IvyDB access is disabled. Unset WRDS_OFF (or pass --offline to skip un-cached days) to enable connections." )
             try:
                WIDBClient._conn  = wrds.Connection(wrds_username=credentials.username) 
             except EOFError as e:

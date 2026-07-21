@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import datetime as dt
 import math
+import os
 import warnings
 
 import numpy as np
@@ -370,6 +371,11 @@ from openqai.data.widb import _cli_defaults
 )
 @click.option("--proceed", is_flag=True, help="Proceed upon encountering bad data.")
 @click.option(
+    "--offline",
+    is_flag=True,
+    help="Never connect to WRDS; skip any day that is not fully available in the local cache.",
+)
+@click.option(
     "--no-arb-mode",
     "arb_mode",
     type=click.Choice(["surface", "expiry"], case_sensitive=False),
@@ -385,10 +391,16 @@ def main(
     refresh: bool,
     arb_warnings_off: bool,
     proceed: bool,
+    offline: bool,
     arb_mode: str,
 ):
     verify_inp(len(tickers) > 0, "At least one ticker must be specified")
     verify_inp(period is not None and len(period) == 2, "A start and end date must be specified")
+
+    if offline:
+        # Forbid WRDS connections and skip any day not fully in the local cache.
+        # Set before the pool is created so worker processes inherit it.
+        os.environ["WRDS_OFF"] = "1"
 
     from openqai.core.biz_calendar import DateRange, to_date
     from openqai.core.pool import PoolConfig
@@ -417,25 +429,33 @@ def main(
     for it, ticker in enumerate(tickers):
 
         def processing(*, ticker, d, mk_arb_free, raw_day_filter, expiry_filter, refresh):
-            mk_arb_free_day(
-                ticker=ticker,
-                d=d,
-                mk_arb_free=mk_arb_free,
-                raw_day_filter=raw_day_filter,
-                expiry_filter=expiry_filter,
-                override_cache_mode="update" if refresh else "on",
-                raise_if_bad_day=False,
-                verbose=Context.quiet,
-                cache_generate_only=True,
-            )
-            return 0
+            try:
+                mk_arb_free_day(
+                    ticker=ticker,
+                    d=d,
+                    mk_arb_free=mk_arb_free,
+                    raw_day_filter=raw_day_filter,
+                    expiry_filter=expiry_filter,
+                    override_cache_mode="update" if refresh else "on",
+                    raise_if_bad_day=False,
+                    verbose=Context.quiet,
+                    cache_generate_only=True,
+                )
+                return ("ok", None)
+            except Exception as e:
+                # In offline mode a day that is not fully cached raises (WRDS is
+                # disabled). Skip it rather than aborting the whole pool.
+                if not offline:
+                    raise
+                return ("skip", f"{type(e).__name__}: {str(e).splitlines()[0][:160]}")
 
         with verbose.write_t(
             lambda: f"\rProcessing ticker {it+1}/{len(tickers)} {ticker} from {fmt_date(date_range.start)} to {fmt_date(date_range.end)}:",
             end="",
         ) as tme:
             cnt = 0
-            for d, _ in pool.parallel(
+            skipped = 0
+            for d, status, _ in pool.parallel(
                 {
                     d: pool.delayed(processing)(
                         ticker=ticker,
@@ -449,13 +469,15 @@ def main(
                 }
             ):
                 cnt += 1
+                if status == "skip":
+                    skipped += 1
                 if tme.interval_test(1.0):
                     verbose.write(
-                        f"\rProcessing ticker {it+1}/{len(tickers)} '{ticker}' date {cnt}/{len(dates)} {fmt_date(d)}. So far this took {tme}...",
+                        f"\rProcessing ticker {it+1}/{len(tickers)} '{ticker}' date {cnt}/{len(dates)} {fmt_date(d)} (skipped {skipped}). So far this took {tme}...",
                         end="",
                     )
             verbose.write(
-                f"\rProcessed ticker {it+1}/{len(tickers)} '{ticker}' for all {len(dates)} dates. This took {tme}."
+                f"\rProcessed ticker {it+1}/{len(tickers)} '{ticker}' for all {len(dates)} dates ({skipped} skipped). This took {tme}."
             )
 
     verbose.write(f"All {len(tickers)} tickers processed.")
