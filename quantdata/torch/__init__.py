@@ -7,14 +7,112 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import IntEnum
+import os
 from pyexpat import model
+import warnings
 
+from cdxcore.subdir import SubDir
 import numpy as nnp
 import torch as torch
 import torch.nn as tnn
 from cdxcore.pretty import PrettyObject
 from cdxcore.verbose import Context
 from cdxcore.version import version
+from filelock import FileLock
+
+_lock_dir = SubDir("!/locks/quant_data/torch",ext=".lck")
+
+class DeviceLock(object):
+
+    def __init__(self, fall_back : bool = False):
+        self._lock : FileLock | None = None
+        self._device : torch.device | None = None
+
+        if torch.cuda.device_count() == 0:
+            if fall_back:
+                warnings.warn(f"No CUDA devices available for allocation; falling back to CPU device.")
+                self._device = torch.device("cpu")
+                self._lock  = None
+                return
+            else:
+                raise AttributeError("No CUDA devices available for allocation.")
+
+        for i in range(torch.cuda.device_count()):
+            ffn = _lock_dir.full_file_name(f"cuda_{i}")
+            try:
+                lock = FileLock(ffn)  # thread_local=True by default
+                lock.acquire(blocking=False)
+            except TimeoutError as err:
+                continue  # device is locked by another process
+
+            self._device = torch.device(f"cuda:{i}")
+            self._lock  = lock
+            print(f"\n***Allocated CUDA device {self._device} with lock file {ffn}.", flush=True)   
+            return
+
+        raise ResourceWarning(f"All {torch.cuda.device_count()} CUDA devices are locked by other processes; cannot allocate GPU device. Lock directory is {_lock_dir}.")
+
+    def __del__(self):
+        self.release()
+
+    @property
+    def device(self) -> torch.device:
+        if self._device is None:
+            raise RuntimeError("No device allocated.")
+        return self._device
+
+    def __str__(self):
+        return str(self.device) if not self._device is None else "(No device allocated)"
+
+    def release(self):
+        if self._lock is not None:
+            self._lock.release()
+        self._device = None
+        self._lock  = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.release()
+
+
+    def allocate_gpu( self, fall_back : bool = False ):
+        """
+        Obtain a GPU device lock
+        """
+        total_available = self.get_number_of_cuda_devices()
+
+        class Device:
+            def __init__(self, device: torch.device, lock: FileLock | None = None):
+                self.device = device
+                self._lock  = lock
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                if self._lock is not None:
+                    self._lock.release()
+                self.device = None
+                self._lock  = None
+
+        if total_available == 0:
+            if fall_back:
+                warnings.warn(f"No CUDA devices available for allocation; falling back to CPU device.")
+                return Device( torch.device("cpu") )
+            raise AttributeError("No CUDA devices available for allocation.")
+
+        for i in range(total_available):
+            ffn = self._lock_dir.full_file_name(f"gpu_{i}")
+            try:
+                lock = FileLock(ffn, blocking =False)  # thread_local=True by default
+            except TimeoutError as err:
+                continue  # device is locked by another process
+
+            return Device(torch.device(f"cuda:{i}"), lock)
+
+        raise ResourceWarning(f"All {total_available} CUDA devices are locked by other processes; cannot allocate GPU device. Lock directory is {self._lock_dir}.")
 
 
 @version("1.0")
@@ -33,17 +131,44 @@ class BaseEnvironment(object):
         This is heavy; avoid in a production setting.
     """
 
-    Tensor = torch.Tensor
+    Tensor    = torch.Tensor
 
     def __init__( self, *, precision: int = 32, device: torch.device | str | None = None, debug: bool = False ):
         """Initialize environment"""
-        self._precision = precision
+        self._precision : int = precision
+        self.debug : bool = debug  #: debug flag for CPU-based debugging. This is slow.
+
+        if device is None:
+            device = "any"
+
+        if isinstance(device, torch.device):
+            if device.type in ["cuda", "gpu"] and not torch.cuda.is_available():
+                if device.index is None or device.index < 0 or device.index >= torch.cuda.device_count():
+                    raise RuntimeError(f"CUDA device {device} requested but not available.")
+                device = f"cuda:{device.index}"
+
+        if isinstance(device, str):
+            if device == "cpu":
+                device = torch.device("cpu")
+            elif device == "any":
+                if not torch.cuda.is_available():
+                    device = torch.device("cpu")
+                else:
+                    device = None
+            elif device in ["cuda","gpu"]:
+                if not torch.cuda.is_available():
+                    raise RuntimeError("CUDA device requested but not available.")
+                device = None
+
+            if device is None:
+                torch.cuda.device_count()
+
+
         self.device = (
             (torch.device("cuda" if torch.cuda.is_available() else "cpu"))
             if device is None
             else device
         )
-        self.debug = debug
 
     def __str__(self):
         return f"Env(prec={self._precision},device={self.device},debug={self.debug})"
@@ -75,6 +200,23 @@ class BaseEnvironment(object):
             raise ValueError(
                 f"Unsupported precision {self._precision}; supported values are 16, 32, and 64."
             )
+
+    # allocate cuda devices
+    # ---------------------
+
+    @staticmethod
+    def get_number_of_cuda_devices() -> int:
+        """
+        Get the number of available CUDA devices.
+        """
+        total_available =  os.environ.get("CUDA_VISIBLE_DEVICES", None)
+        if total_available is None:
+            raise RuntimeError("Cannot allocate GPU: CUDA_VISIBLE_DEVICES environment variable is not set.")
+        try:
+            total_available = int(total_available)
+        except ValueError as e:
+            raise RuntimeError(f"Cannot allocate GPU: CUDA_VISIBLE_DEVICES environment variable is not an integer: {total_available}") from e
+        return total_available
 
 
 class BaseModel(tnn.Module):
@@ -270,6 +412,7 @@ def check(
     shape: tuple | int | None = None,
     dtype: type | None = None,
     optional: bool = False,
+    d: dict | None = None,
 ) -> torch.Tensor:
     """
     Check that a tensor satisfies the specified shape and dtype requirements. This is a helper function to perform checks during model execution.
@@ -292,7 +435,7 @@ def check(
     if tensor is None:
         if optional:
             return None
-        raise KeyError(f"Expected item '{item}' not found in dictionary.")
+        raise KeyError(f"Expected item '{item}' not found in dictionary.{'' if d is None else f' Available keys: {sorted(d)}'}")
 
     if shape is not None:
         if isinstance(shape, int):
@@ -363,7 +506,7 @@ def get(
         Whether the item is optional. If True, the function will return None if the item is not found in the dictionary.
     """
 
-    return check(d.get(item, None), item, shape=shape, dtype=dtype, optional=optional)
+    return check(d.get(item, None), item, shape=shape, dtype=dtype, optional=optional, d=d)
 
 
 def pop(
@@ -392,7 +535,7 @@ def pop(
         Whether the item is optional. If True, the function will return None if the item is not found in the dictionary.
     """
 
-    return check(d.pop(item, None), item, shape=shape, dtype=dtype, optional=optional)
+    return check(d.pop(item, None), item, shape=shape, dtype=dtype, optional=optional, d=d  )
 
 
 def are_broadcastable(shape1, shape2) -> bool:
