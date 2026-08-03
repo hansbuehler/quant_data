@@ -1,11 +1,15 @@
-import numpy as np
-from scipy.linalg import expm
 from types import SimpleNamespace
+
+import numpy as np
+import pytest
+from scipy.linalg import expm
 
 from quantdata.dysanos.grid.torch_simulator import (
     AR1PCA,
     ARSampler,
+    GaussianSpotImportanceConfig,
     _fit_continuous_ou_drift,
+    _importance_sample_gaussian_spot_paths,
     fit_xar1_pca,
 )
 
@@ -92,7 +96,61 @@ def test_free_sampler_uses_euler_transition_when_matrix_exp_is_disabled():
     )
 
     path = sampler.free_sample_xstates(
-        num_steps=2, num_samples=1, dt=1.0, bandwidth=1.0
+        num_steps=4, num_samples=1, dt=1.0, bandwidth=1.0
     )
 
-    assert np.allclose(path[0, :, 0], [2.0, 1.7])
+    assert np.allclose(path[0, :, 0], [2.0, 1.7, 1.46, 1.268])
+
+
+def test_gaussian_spot_importance_sampling_recovers_joint_path_moments():
+    samples, steps = 80_000, 5
+    path_rng = np.random.default_rng(71)
+    A = np.array([[0.85, 0.10], [0.0, 0.80]])
+    b = np.array([[0.02, -0.01]])
+    Q = np.array([[0.04, 0.015], [0.015, 0.03]])
+    noise_factor = np.linalg.cholesky(Q)
+    reference = np.zeros((samples, steps, 2))
+    reference[:, 0] = np.array([0.1, -0.2])
+    for step in range(1, steps):
+        reference[:, step] = (
+            reference[:, step - 1] @ A
+            + b
+            + path_rng.normal(size=(samples, 2)) @ noise_factor.T
+        )
+
+    proposal, log_weight, component, _ = (
+        _importance_sample_gaussian_spot_paths(
+            reference_paths=reference,
+            A=A,
+            b=b,
+            Q=Q,
+            target_steps=(2, 4),
+            config=GaussianSpotImportanceConfig(
+                spot_std_multiplier=4.0,
+                base_probability=0.2,
+            ),
+            rng=np.random.default_rng(72),
+        )
+    )
+    weight = np.exp(log_weight)
+    weighted_mean = np.average(proposal[:, 4], axis=0, weights=weight)
+    weighted_variance = np.average(
+        np.square(proposal[:, 4] - weighted_mean), axis=0, weights=weight
+    )
+
+    assert np.bincount(component, minlength=3) == pytest.approx(
+        [0.2 * samples, 0.4 * samples, 0.4 * samples], rel=0.02
+    )
+    assert weight.mean() == pytest.approx(1.0, abs=0.01)
+    assert weighted_mean == pytest.approx(reference[:, 4].mean(axis=0), abs=0.006)
+    assert weighted_variance == pytest.approx(
+        reference[:, 4].var(axis=0), abs=0.006
+    )
+    assert proposal[:, 4, 0].std() > 2.0 * reference[:, 4, 0].std()
+
+
+def test_gaussian_spot_importance_config_rejects_invalid_mixture():
+    with pytest.raises(ValueError, match="greater than one"):
+        GaussianSpotImportanceConfig(spot_std_multiplier=1.0)
+    with pytest.raises(ValueError, match="strictly between"):
+        GaussianSpotImportanceConfig(base_probability=0.0)

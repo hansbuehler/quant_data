@@ -33,6 +33,7 @@ class DeviceLock(object):
                 warnings.warn(f"No CUDA devices available for allocation; falling back to CPU device.")
                 self._device = torch.device("cpu")
                 self._lock  = None
+                return
             else:
                 raise AttributeError("No CUDA devices available for allocation.")
 
