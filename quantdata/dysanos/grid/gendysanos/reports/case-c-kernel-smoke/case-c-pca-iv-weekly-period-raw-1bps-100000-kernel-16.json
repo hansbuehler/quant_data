@@ -1,0 +1,577 @@
+{
+  "status": "complete",
+  "schema_version": "1.0",
+  "experiment": "Case C fixed-lambda notional continuation",
+  "definition": {
+    "objective": "sup over unit-gross separate long/short actions of E_P[u_1(n X)]",
+    "pnl": "X=(a_plus-a_minus)'R-(a_plus+a_minus)'c",
+    "gradient": "sum_s D_s grad(X_s), D proportional to (p/q) u_1'(n X_s)",
+    "action_constraint": "a_plus,a_minus nonnegative and sum(a_plus+a_minus)<=1",
+    "validation_policy": "held-out paths never enter fitting, convergence, or stopping",
+    "architecture": "kernel"
+  },
+  "configuration": {
+    "generator": "pca-iv",
+    "trading_frequency": "weekly",
+    "return_horizon": "incremental",
+    "hedge": "raw",
+    "cost_rate": 0.0001,
+    "path_count": 100000,
+    "num_trading_times": 10,
+    "schema_version": "1.0"
+  },
+  "source_cache": "/media/storage/tmp/quantdata/dysanos/required-runs/universes/pca-iv-weekly-100000-f082b69cd7ba6170",
+  "source_cache_uid": "pca-iv-weekly-100000-f082b69cd7ba6170",
+  "split": {
+    "split_seed": 100097,
+    "validation_fraction": 0.2,
+    "component_counts": {
+      "0": {
+        "total": 10025,
+        "reference": 8020,
+        "audit": 2005
+      },
+      "1": {
+        "total": 1952,
+        "reference": 1562,
+        "audit": 390
+      },
+      "2": {
+        "total": 1908,
+        "reference": 1526,
+        "audit": 382
+      },
+      "3": {
+        "total": 1905,
+        "reference": 1524,
+        "audit": 381
+      },
+      "4": {
+        "total": 1938,
+        "reference": 1550,
+        "audit": 388
+      },
+      "5": {
+        "total": 1907,
+        "reference": 1526,
+        "audit": 381
+      },
+      "6": {
+        "total": 1890,
+        "reference": 1512,
+        "audit": 378
+      },
+      "7": {
+        "total": 1874,
+        "reference": 1499,
+        "audit": 375
+      },
+      "8": {
+        "total": 1921,
+        "reference": 1537,
+        "audit": 384
+      },
+      "9": {
+        "total": 1896,
+        "reference": 1517,
+        "audit": 379
+      },
+      "10": {
+        "total": 1964,
+        "reference": 1571,
+        "audit": 393
+      },
+      "11": {
+        "total": 1908,
+        "reference": 1526,
+        "audit": 382
+      },
+      "12": {
+        "total": 1888,
+        "reference": 1510,
+        "audit": 378
+      },
+      "13": {
+        "total": 1812,
+        "reference": 1450,
+        "audit": 362
+      },
+      "14": {
+        "total": 1896,
+        "reference": 1517,
+        "audit": 379
+      },
+      "15": {
+        "total": 1910,
+        "reference": 1528,
+        "audit": 382
+      },
+      "16": {
+        "total": 1953,
+        "reference": 1562,
+        "audit": 391
+      },
+      "17": {
+        "total": 1936,
+        "reference": 1549,
+        "audit": 387
+      },
+      "18": {
+        "total": 1943,
+        "reference": 1554,
+        "audit": 389
+      },
+      "19": {
+        "total": 2016,
+        "reference": 1613,
+        "audit": 403
+      },
+      "20": {
+        "total": 1878,
+        "reference": 1502,
+        "audit": 376
+      },
+      "21": {
+        "total": 1842,
+        "reference": 1474,
+        "audit": 368
+      },
+      "22": {
+        "total": 1948,
+        "reference": 1558,
+        "audit": 390
+      },
+      "23": {
+        "total": 1861,
+        "reference": 1489,
+        "audit": 372
+      },
+      "24": {
+        "total": 1870,
+        "reference": 1496,
+        "audit": 374
+      },
+      "25": {
+        "total": 1869,
+        "reference": 1495,
+        "audit": 374
+      },
+      "26": {
+        "total": 1924,
+        "reference": 1539,
+        "audit": 385
+      },
+      "27": {
+        "total": 2009,
+        "reference": 1607,
+        "audit": 402
+      },
+      "28": {
+        "total": 1886,
+        "reference": 1509,
+        "audit": 377
+      },
+      "29": {
+        "total": 1971,
+        "reference": 1577,
+        "audit": 394
+      },
+      "30": {
+        "total": 1945,
+        "reference": 1556,
+        "audit": 389
+      },
+      "31": {
+        "total": 1893,
+        "reference": 1514,
+        "audit": 379
+      },
+      "32": {
+        "total": 1893,
+        "reference": 1514,
+        "audit": 379
+      },
+      "33": {
+        "total": 1854,
+        "reference": 1483,
+        "audit": 371
+      },
+      "34": {
+        "total": 1926,
+        "reference": 1541,
+        "audit": 385
+      },
+      "35": {
+        "total": 1955,
+        "reference": 1564,
+        "audit": 391
+      },
+      "36": {
+        "total": 1964,
+        "reference": 1571,
+        "audit": 393
+      },
+      "37": {
+        "total": 1977,
+        "reference": 1582,
+        "audit": 395
+      },
+      "38": {
+        "total": 1850,
+        "reference": 1480,
+        "audit": 370
+      },
+      "39": {
+        "total": 1861,
+        "reference": 1489,
+        "audit": 372
+      },
+      "40": {
+        "total": 1913,
+        "reference": 1530,
+        "audit": 383
+      },
+      "41": {
+        "total": 1913,
+        "reference": 1530,
+        "audit": 383
+      },
+      "42": {
+        "total": 1893,
+        "reference": 1515,
+        "audit": 378
+      },
+      "43": {
+        "total": 1942,
+        "reference": 1554,
+        "audit": 388
+      },
+      "44": {
+        "total": 2006,
+        "reference": 1605,
+        "audit": 401
+      },
+      "45": {
+        "total": 1943,
+        "reference": 1555,
+        "audit": 388
+      },
+      "46": {
+        "total": 1851,
+        "reference": 1481,
+        "audit": 370
+      },
+      "47": {
+        "total": 1921,
+        "reference": 1537,
+        "audit": 384
+      }
+    },
+    "weight_definition": "exp(log(p/q)); physical estimates are N^-1 sum_r (p/q)_r f_r",
+    "full_weight_mean": 0.9995465226423768,
+    "full_weight_effective_sample_size": 30252.21601274515
+  },
+  "model_config": {
+    "label": "case-c-pca-iv-weekly-period-raw-1bps-100000-kernel-16",
+    "source_cache_uid": "pca-iv-weekly-100000-f082b69cd7ba6170",
+    "state_features": 21,
+    "kernels": 16,
+    "notionals": [
+      64.0
+    ],
+    "deterministic_time": 0,
+    "conditional_time": 6,
+    "expiries": 7,
+    "instruments_per_expiry": 21,
+    "group": "gendysanos/case-c-kernel/1bps",
+    "user_version": "kernel-smoke-1.0"
+  },
+  "train_config": {
+    "batch_size": 4096,
+    "valuation_batch_size": 16384,
+    "epochs_per_notional": 500,
+    "minimum_epochs_per_notional": 500,
+    "value_update": 250,
+    "checkpoint_update": 500,
+    "convergence_points": 8,
+    "action_change_tolerance": 2e-05,
+    "lr": 0.0003,
+    "compile": true,
+    "seed": 77123
+  },
+  "whitening": {
+    "definition": "xi_t=(x_t-m_t) Q_t Lambda_t^{-1/2}; m_t and covariance are estimated on training paths with physical p/q weights",
+    "relative_eigenvalue_floor": 1e-10,
+    "training_path_count": 80000,
+    "training_weight_effective_sample_size": 24243.393500365157,
+    "minimum_covariance_eigenvalue_by_time": [
+      0.0031008489579801733,
+      0.0009270026701595402
+    ],
+    "maximum_covariance_eigenvalue_by_time": [
+      77.79401984769117,
+      77.80090787939315
+    ],
+    "clipped_eigenvalue_count_by_time": [
+      0,
+      0
+    ],
+    "maximum_absolute_weighted_factor_mean": 4.705437428587089e-16,
+    "maximum_absolute_weighted_factor_covariance_error": 2.9110047705671604e-13
+  },
+  "kernel_basis": {
+    "definition": "physical-weighted MiniBatchKMeans centers in orthogonal t6 state; bandwidth is weighted within-center RMS distance",
+    "kernels": 16,
+    "radius_floor": 1.050877611420022,
+    "minimum_radius": 4.170208324278,
+    "median_radius": 4.203510445680088,
+    "maximum_radius": 4.239449984427781,
+    "minimum_physical_cluster_mass": 0.05816666805186685,
+    "maximum_physical_cluster_mass": 0.06661181868507518
+  },
+  "stages": [
+    {
+      "notional": 64.0,
+      "pre_training_gradient": {
+        "sample_paths": 16384,
+        "normalized_parameter_gradient_l2": 0.03229326009750366,
+        "normalized_notional_derivative_by_time": [
+          0.0,
+          0.0
+        ],
+        "marginal_density_effective_sample_size_by_time": [
+          4973.48583984375,
+          4973.48583984375
+        ],
+        "gradient_exact_zero_fraction": 0.0
+      },
+      "training": {
+        "steps": 500,
+        "converged": false,
+        "resumed_complete_checkpoint": false,
+        "elapsed_seconds_this_invocation": 3.3607511710142717,
+        "constant_learning_rate": 0.0003,
+        "gradient_clipping": false,
+        "optimizer_reset_at_notional_start": true,
+        "tracker": [
+          {
+            "step": 250,
+            "loss": -0.0007942788070067763,
+            "objective_by_time": [
+              0.08117229491472244,
+              0.08018817007541656
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.014093820005655289,
+              0.013629209250211716
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.014093820005655289,
+            "stable_points": 0,
+            "elapsed_seconds": 3.02536395995412
+          },
+          {
+            "step": 500,
+            "loss": -0.0007997447391971946,
+            "objective_by_time": [
+              0.08145557343959808,
+              0.0802619531750679
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.0000001192092896
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.013880881480872631,
+              0.013482587411999702
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0004681173013523221,
+            "stable_points": 0,
+            "elapsed_seconds": 3.342465164954774
+          }
+        ]
+      },
+      "training_set": {
+        "paths": 80000,
+        "direct_P_paths": 8020,
+        "physical_weight_effective_sample_size": 24243.393500365146,
+        "times": [
+          {
+            "name": "t0_deterministic",
+            "objective": 0.08006801732366788,
+            "objective_standard_error": 0.0014204773907416548,
+            "P_mean_unit_pnl": 0.0019737824005760804,
+            "P_mean_unit_pnl_standard_error": 3.2249950930021245e-05,
+            "P_loss_probability": 0.4212716048168722,
+            "P_loss_probability_standard_error": 0.003177539972418851,
+            "P_gain_probability": 0.5779405210136951,
+            "P_gain_probability_standard_error": 0.0031781775282302043,
+            "P_unit_pnl_01_quantile": -0.0047091158350505416,
+            "P_unit_pnl_05_quantile": -0.0029220901294699252,
+            "P_unit_pnl_median": 0.0005231693601133707,
+            "proposal_minimum_unit_pnl_plus_band": -0.011505031664910348,
+            "proposal_numerically_nonnegative": false,
+            "direct_P_paths": 8020,
+            "direct_P_loss_count": 3412,
+            "direct_P_gain_count": 4603,
+            "base_action_gross_P_median": 1.0,
+            "base_action_gross_P_99_percentile": 1.0,
+            "base_action_gross_proposal_maximum": 1.0,
+            "economic_gross_P_median": 64.0,
+            "raw_output_maximum_absolute_proposal": 0.013880881480872631,
+            "P_boundary_fraction": 1.0,
+            "P_long_short_overlap": 0.0005720529006794095,
+            "normalized_notional_derivative": 0.0007807600019718808,
+            "normalized_notional_derivative_standard_error": 2.0157652191299207e-05,
+            "marginal_density_effective_sample_size": 22753.340225643693
+          },
+          {
+            "name": "t6_conditional",
+            "objective": 0.08164004423239538,
+            "objective_standard_error": 0.0014237294923024084,
+            "P_mean_unit_pnl": 0.0019777433429357034,
+            "P_mean_unit_pnl_standard_error": 3.2395173983869355e-05,
+            "P_loss_probability": 0.4254363474434216,
+            "P_loss_probability_standard_error": 0.0031779479416780593,
+            "P_gain_probability": 0.5737028090805029,
+            "P_gain_probability_standard_error": 0.003178689492185644,
+            "P_unit_pnl_01_quantile": -0.004362094995223068,
+            "P_unit_pnl_05_quantile": -0.0028469969985688358,
+            "P_unit_pnl_median": 0.0005493503584349636,
+            "proposal_minimum_unit_pnl_plus_band": -0.010567997609086888,
+            "proposal_numerically_nonnegative": false,
+            "direct_P_paths": 8020,
+            "direct_P_loss_count": 3392,
+            "direct_P_gain_count": 4620,
+            "base_action_gross_P_median": 1.0,
+            "base_action_gross_P_99_percentile": 1.0000001192092896,
+            "base_action_gross_proposal_maximum": 1.000000238418579,
+            "economic_gross_P_median": 64.0,
+            "raw_output_maximum_absolute_proposal": 0.013497442938387394,
+            "P_boundary_fraction": 1.0,
+            "P_long_short_overlap": 0.0015823436133638395,
+            "normalized_notional_derivative": 0.0008193272913318506,
+            "normalized_notional_derivative_standard_error": 2.0082160723176323e-05,
+            "marginal_density_effective_sample_size": 22895.969505399207
+          }
+        ]
+      },
+      "validation_set": {
+        "paths": 20000,
+        "direct_P_paths": 2005,
+        "physical_weight_effective_sample_size": 6009.088535694597,
+        "times": [
+          {
+            "name": "t0_deterministic",
+            "objective": 0.08199675231858765,
+            "objective_standard_error": 0.0028809737699936337,
+            "P_mean_unit_pnl": 0.0020188702972677892,
+            "P_mean_unit_pnl_standard_error": 6.587637359186334e-05,
+            "P_loss_probability": 0.4172228060655218,
+            "P_loss_probability_standard_error": 0.006374945124550328,
+            "P_gain_probability": 0.5818319092073472,
+            "P_gain_probability_standard_error": 0.006376968503223836,
+            "P_unit_pnl_01_quantile": -0.0046658443785289406,
+            "P_unit_pnl_05_quantile": -0.002921202101575181,
+            "P_unit_pnl_median": 0.0006179299123006811,
+            "proposal_minimum_unit_pnl_plus_band": -0.00963479419988289,
+            "proposal_numerically_nonnegative": false,
+            "direct_P_paths": 2005,
+            "direct_P_loss_count": 801,
+            "direct_P_gain_count": 1202,
+            "base_action_gross_P_median": 1.0,
+            "base_action_gross_P_99_percentile": 1.0,
+            "base_action_gross_proposal_maximum": 1.0,
+            "economic_gross_P_median": 64.0,
+            "raw_output_maximum_absolute_proposal": 0.013880881480872631,
+            "P_boundary_fraction": 1.0,
+            "P_long_short_overlap": 0.0005720529006794097,
+            "normalized_notional_derivative": 0.0008047961676534561,
+            "normalized_notional_derivative_standard_error": 4.080018831830759e-05,
+            "marginal_density_effective_sample_size": 5639.359643044375
+          },
+          {
+            "name": "t6_conditional",
+            "objective": 0.08612103031135976,
+            "objective_standard_error": 0.0029113719268611124,
+            "P_mean_unit_pnl": 0.0021087575847724537,
+            "P_mean_unit_pnl_standard_error": 6.953122502663366e-05,
+            "P_loss_probability": 0.4148410055423125,
+            "P_loss_probability_standard_error": 0.006349834001906212,
+            "P_gain_probability": 0.5843948325324174,
+            "P_gain_probability_standard_error": 0.006351484295414916,
+            "P_unit_pnl_01_quantile": -0.004461496950251036,
+            "P_unit_pnl_05_quantile": -0.0028381346523357253,
+            "P_unit_pnl_median": 0.0006373900450940785,
+            "proposal_minimum_unit_pnl_plus_band": -0.008502042935788268,
+            "proposal_numerically_nonnegative": false,
+            "direct_P_paths": 2005,
+            "direct_P_loss_count": 846,
+            "direct_P_gain_count": 1156,
+            "base_action_gross_P_median": 1.0,
+            "base_action_gross_P_99_percentile": 1.0000001192092896,
+            "base_action_gross_proposal_maximum": 1.000000238418579,
+            "economic_gross_P_median": 64.0,
+            "raw_output_maximum_absolute_proposal": 0.013486454263329506,
+            "P_boundary_fraction": 1.0,
+            "P_long_short_overlap": 0.0015823861728630692,
+            "normalized_notional_derivative": 0.0008663324420109686,
+            "normalized_notional_derivative_standard_error": 4.0563485747056155e-05,
+            "marginal_density_effective_sample_size": 5676.431038161768
+          }
+        ]
+      },
+      "post_training_gradient": {
+        "training": {
+          "sample_paths": 16384,
+          "normalized_parameter_gradient_l2": 0.006678312085568905,
+          "normalized_notional_derivative_by_time": [
+            0.0007978274952620268,
+            0.0007488236296921968
+          ],
+          "marginal_density_effective_sample_size_by_time": [
+            4671.68505859375,
+            4705.9580078125
+          ],
+          "gradient_exact_zero_fraction": 0.0
+        },
+        "validation": {
+          "sample_paths": 16384,
+          "normalized_parameter_gradient_l2": 0.006965090055018663,
+          "normalized_notional_derivative_by_time": [
+            0.0008077420643530786,
+            0.0008397235651500523
+          ],
+          "marginal_density_effective_sample_size_by_time": [
+            4631.89892578125,
+            4661.71875
+          ],
+          "gradient_exact_zero_fraction": 0.0
+        }
+      },
+      "checkpoint": "/media/storage/tmp/quantdata/dysanos/case-c-kernel-smoke/checkpoints/gendysanos/case-c-kernel/1bps/case-c-pca-iv-weekly-period-raw-1bps-10 bcc471f1-notional-1.pt"
+    }
+  ],
+  "runtime_seconds": 3.63715793506708,
+  "device": "cuda:0",
+  "peak_gpu_memory_bytes": 2034203136
+}

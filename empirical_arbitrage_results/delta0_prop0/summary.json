@@ -1,0 +1,79 @@
+{
+  "arbitrage": {
+    "solver_success": true,
+    "found": true,
+    "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+    "config": {
+      "delta": 0.0,
+      "prop_cost": 0.0,
+      "max_abs_position": 1.0,
+      "payoff_tolerance": 1e-10,
+      "active_tolerance": 1e-08,
+      "method": "highs",
+      "presolve": true,
+      "threads": 8
+    },
+    "minimum_payoff": -1.0000051134384513e-10,
+    "mean_payoff": 0.0754442507544031,
+    "maximum_payoff": 0.665230042607297,
+    "l1_position": 1223.5989219362373,
+    "max_abs_position": 1.0,
+    "num_active": 1269,
+    "fraction_negative": 0.0,
+    "solver_status": 0,
+    "solver_nit": 1346
+  },
+  "sparse": [
+    {
+      "solver_success": true,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "required_mean_payoff": 0.03772212537720155,
+      "minimum_payoff": -1.0017657536831592e-10,
+      "mean_payoff": 0.03772212537719921,
+      "maximum_payoff": 0.7227738840112367,
+      "l1_position": 205.89824958717588,
+      "num_active": 107,
+      "fraction_negative": 0.001375,
+      "solver_status": 0,
+      "solver_nit": 1735
+    },
+    {
+      "solver_success": true,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "required_mean_payoff": 0.018861062688600775,
+      "minimum_payoff": -1.0005864192752512e-10,
+      "mean_payoff": 0.01886106268860014,
+      "maximum_payoff": 0.3613869388903358,
+      "l1_position": 102.94912434212777,
+      "num_active": 107,
+      "fraction_negative": 0.00125,
+      "solver_status": 0,
+      "solver_nit": 1735
+    },
+    {
+      "solver_success": true,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "required_mean_payoff": 0.007544425075440311,
+      "minimum_payoff": -1.0004730117280092e-10,
+      "mean_payoff": 0.007544425075439873,
+      "maximum_payoff": 0.14455477181632104,
+      "l1_position": 41.179649195076294,
+      "num_active": 107,
+      "fraction_negative": 0.001325,
+      "solver_status": 0,
+      "solver_nit": 1735
+    }
+  ],
+  "ray_comparison": [
+    {
+      "reference_index": 0.0,
+      "comparison_index": 1.0,
+      "max_abs_normalised_difference": 1.0338306733262415e-08
+    },
+    {
+      "reference_index": 0.0,
+      "comparison_index": 2.0,
+      "max_abs_normalised_difference": 4.1351593885186055e-08
+    }
+  ]
+}

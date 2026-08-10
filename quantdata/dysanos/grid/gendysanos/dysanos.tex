@@ -1,0 +1,448 @@
+% ----------------------------------------------------------------------
+% ----------------------------------------------------------------------
+
+\documentclass{hbarticle}
+\usepackage{graphicx}
+\usepackage{theorem}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{subfiles}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+
+\DeclareRobustCommand{\mdelta}{\boldsymbol\delta}
+
+%%%%%%%%%%%%%% Layoutgroesse%%%%%
+\topmargin=-1cm
+\textheight=24cm
+\oddsidemargin=-0.2truecm
+\evensidemargin=-0.2truecm
+\textwidth=16cm%\textwidth=17cm
+\renewcommand{\baselinestretch}{1.1}\normalsize
+\overfullrule=0pt
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newcommand{\symbolfootnote}{\fnsymbol{footnote}}
+
+\title{Discrete Time Risk Neutral Dynamics}
+\author{Hans Buehler}
+
+\pagestyle{fancy}
+\lhead{Discrete Time Risk Neutral Dynamics}
+\rhead{Buehler, Aug 2026}
+
+\makeindex
+
+\begin{document}
+
+
+    \maketitle
+    
+    \begin{abstract}
+        Finding a risk-neutral measure for discrete time
+        markets.
+    \end{abstract}
+
+    \tableofcontents
+
+    \section{Theory}
+    
+    We revisit the concept of risk-neutrality in markets with many
+    more instruments that market factors relevant for modern generative
+    machine learning applications in finance.
+    
+    To this end, our basic assumption is that our market dynamics
+    is given over time steps~$t_j$ by a hidden state process~$h_j\in \calH \subseteq \R^d$
+    which follows
+    \eq{h}
+    	h_{j+1} = G(h_j; Y_j)   
+    \eqend
+    where the generator $G$ of the state~$h_j$ 
+    and some normal noise $Y_j\in \R^m$ defined
+    under the real market (``statistical'') measure~$\P$. Essentially
+    the latter means that this is our model learned to historic market data.
+
+
+       
+    We here explicitly assume
+    that $\Delta_j := t_{j+1} - t_j$
+    is not in the limit zero. Typical values are
+    a day or several days. We will use '$dt$' to refer to infinisemal
+    time increments.
+   
+   	\begin{example}[AR(1)]
+    As an example, consider a classic
+    diffusion AR(1) process like the one used in~\cite{DYSANOS}
+    given in continuous time formulation as
+    \eqx
+	    	dh_t = ( \theta - K h_t )\, dt + \Sigma Y_t \sqrt{dt} \ .  
+    \eqend
+    where $\theta\in \R^d$, $K\in \R^{d,d}$ must have eigenvalues
+    with non-negative 
+    real values, and $\Sigma \in \R^{d,m}$ for $m\leq d$.
+    
+    In discrete-time increments of this process over~$\Delta t$ 
+    are distributed exactly as
+    \eqx
+    	h_{j+1} = e^{-K\,\Delta_j} h_j + \int_0^{\Delta_j} 
+    	e^{-K\,s} \bar h\,ds
+    		+
+    			S_\Delta \tilde Y_j  
+    \eqend
+    with
+    \eqx		
+  	   S_\Delta S _\Delta  = \int_0^{\Delta _j} ( e^{-K\,dt} \Sigma )(\Sigma' e^{-K'\,dt}) dt \ .
+    \eqend
+    Here $\tilde Y_t\in \R^{\mathrm{rank} S_\Delta}$
+    with $\mathrm{rank} S_\Delta \in \{m,\ldots,d\}$.
+    
+    In the special case where all eigenvalues of $K$
+    have positive real values, $\mathrm{rank} S_\Delta=d$
+    and $K$ is invertible, which then leads to the 
+    well-known \emph{flow} 
+    \eqx
+    	h_{j+1} = e^{-K\,\Delta_j} h_j + K^{-1}
+    	\big( I - e^{-K\,\Delta_j} \big) \theta 
+    	+
+    	e^{-K\,s} \bar h\,ds
+    		+
+    			S_\Delta \tilde Y_j \ .
+    \eqend
+    This is a simple and transparent example of a process with in infinitesimal time
+    $dt$ has a stochastic dimension of only $m\ll d$, but once discrete time steps
+    are taken, its stochastic dimension increases.
+    \end{example}
+    
+    We now assume that at each time step we are able to trade
+    the stock price $S_j=\exp h^0_j$ and a large number of $L$ 
+    of options, which are identified by their abstract
+    contract \emph{terms}~$\xi^\ell\in \Xi$ which are shared accross all~$j$.  In~\cite{DYSANOS} for example
+    this was simply~$\xi^\ell = (\tau^\ell, x^\ell)$
+    where $\tau_j$ is the time-to-expiry and $x^\ell$ a log-strike price,
+    with by convention $\xi^0 \equiv (0,0)$ for spot.
+    All options were calls.
+    We will assume in this article that all terms remain the same across $j$.
+    We will also assume that all terms contain a time-to-expiry~$\tau^\ell$
+    which $\infty$ for perpetual assets such as equities and FX.\footnote{
+        In our agents we encode such expiries as zero.
+    }
+    
+    The terms translate into a concrete \emph{instance} of a contract
+    by applying them to the current environment represented by $h_j$.
+    Formally each $\xi^\ell$
+    is a map from $\calH$ into the set of $L^1$ integrable random variables. That yields the \emph{instances}
+    $$
+         \xi^\ell_j := \xi^\ell(h_j) \ .
+    $$
+    In above
+    example the \emph{instance} for $\xi^\ell = (\tau^\ell, x^\ell)$
+    is given by
+    $$
+        \xi^\ell_j := \left( \frac{ S_{t_j+\tau^\ell}}{ S_{t_j} } - x^\ell \right)^+ \ .
+    $$
+    We may think of this as the ``issuance'' of the contract; 
+    \begin{assumption}
+        Fix $h_0\in \calH $.  Then we can compute a finite mid-price
+        $$
+            H^\ell(h_0):= H\big(\, \xi^\ell(h_0); h_0, 0\, \big)
+        $$
+        and half-spread
+        $$
+            \gamma^\ell(h_0):= \gamma\big(\, \xi^\ell(h_0); h_0, 0\, \big)
+        $$
+        for all contracts $\xi^\ell\in\Xi$.      
+
+        Let, moreover, $\tau > 0$ be a time step and $\tau^\ell$ the time-to-expiry for the $\ell$th option.
+        We also assume that we may compute
+        the mid-price and half-spread \emph{of the same instance} $\xi^\ell(h_0)$ as
+        $$
+            H^\ell_\tau(h_0):= H\left(\, \xi^\ell(h_0); h_{\min\{ \tau, \tau^\ell \}},\tau\, \right) \ \ \mbox{and}\ \
+            \gamma^\ell_\tau(h_0):= \gamma\!\left(\, \xi^\ell(h_0); h_{\min\{ \tau, \tau^\ell \}},\tau \, \right)
+        $$
+        This condition simply means that either we can compute the expiry value of the option if it
+        expired before~$\tau$, or that we can can compute its mid-price and half-spread from
+        the current market, represented in its entirety by~$h_\tau$.
+    \end{assumption}
+
+    \begin{remark}
+        We note that this
+        formulation assumes that all our contracts require only one expiry value; it is easily extended
+        to pathwise payoffs; it just clutters notation. The main point is that all future values of
+        any tradable instrument depend
+        only on future values of the Markov process~$h$.
+    \end{remark}
+    %
+    With above assumption we can compute relative returns for each option given~$h_0$ as
+    \eq{ret}
+        \Delta H^\ell_\tau(h_0) := \frac1{ H^\ell(h_0) } \left(  H^\ell_\tau(h_0)  - H^\ell(h_0)  \right)
+    \eqend
+    We will use $\Delta H\in\R^{1+L}$ to refer to the vector of returns given~$\tau$.
+    
+	\begin{remark}
+		For swaps the initial value $H_j^\ell$ is zero. In this case, we use either
+		the value of the fixed leg (which is usually readily computed) or otherwise
+		the ``notional''.	
+		
+		For futures the returns in each case refer to the accrued pnl from
+		daily margin calls.
+	\end{remark}
+
+
+    \begin{assumptions}
+    \hspace{1cm}
+    	\begin{enumerate}
+			\item Assume for now interest rates, 
+			forward rates and dividends are zero.
+    		\item $ \Delta H$ is a $C^2$ function of the state~$h_0$.
+    		\item Assume that $\E^\P[| \Delta H(h_0)| ]<\infty$.
+    	\end{enumerate}
+    \end{assumptions}
+
+    The main focus of this paper is the construction of risk-neutral margingale measures
+    if they exist, and to ascertain which conditions are sufficient to do so in the setting
+    introduced earlier. A well known key result due to~\cite{FFTOAP_DT} is 
+	that existence of a martingale measure
+	is equivalent to absence of arbitrage. We note here that absence of arbitrage
+    is a \emph{local} condition for one return: an asset is a martingale if
+    its conditional return is zero. 
+    
+	
+	\begin{prop}[First Fundamental Theorem of Asset Pricing]	
+		\hspace{1cm}\\
+		Let $c\in\R_{\geq 0}^{1+:}$.
+		Assume that there exists an arbitrage
+		opportunity $g\in \R^{1+L}$ (conditional on~$h$)
+		which means
+		\eq{arb}
+			g'\Delta H - |g'|c \geq 0 \ \ \ 
+			\mbox{and} \ \ \ g'\Delta H - |g'|c \not=0 \ .
+		\eqend 	
+		Then no equivalent near-martingale or, if $c\equiv0$, martingale measure~$\Q$
+		exists.
+	\end{prop}
+
+
+
+    Considering the Markov nature of our setup with~\eqref{h} with both~\eqref{D} and~\eqref{Delta}
+    will often consider states and returns accross time jointly. This is justified by the following
+    simplisitc proposition
+
+
+    
+    \begin{definition}
+    	Let $u$ be a $C^1$ utility function which is strictly
+    	concave, strictly increasing, is centered to $u(0)=0$
+    	and $u'(0)=1$,\footnote{both can always be achieved
+    	by translation for non-degenerate utilities} and
+    	$u'(-\infty) = \infty$ and $u'(\infty) = 0$. 
+    	
+    	The Optimized Certainty Equivalent (OCE) of $u$ is
+    	then defined as
+    	\eqx
+    		U(X) := \sup_{y\in\R} \E^\P\left[ u(y+X)-y \right]
+    	\eqend
+    	for any $L^1$ random variable $X$.
+    \end{definition}
+    
+	\begin{example}
+		The most important examples are:
+		\begin{itemize}
+			\item \textbf{Entropy}: the entropy for a risk-aversion $\lambda>0$ is given by
+			\eqx
+				u(x) := \frac{ 1-\exp(-\lambda,x) }\lambda
+			\eqend
+			for which the OCE has the explicit solution
+			$$
+				U(X) = -\frac1\lambda \log \E^\P\left[ \exp(-\lambda X)\right] \ .
+			$$
+			The entropy reduces to mean-variance for normal~$X$
+			and in this and many other ways a natural mathematical choice
+			for a utility. However, the utility of a short position
+			in a Black \& Scholes equity is negative infinite which
+			limits its theoretical appeal and in practise easily
+			leads to exploding gradients in machine learning.
+			
+		    \item \textbf{Truncated Exponential}: we introduce
+		    therefore the truncated $C^2$ exponential as
+		    \eqx
+		    	u(x) := \left\{
+		    		\begin{array}{lll}
+		    			\frac{1 - \exp(-\lambda\,x)}\lambda & x\geq 0 \\
+		    			x - \frac\lambda2 (-x)^2 & x<0 	 
+		    		\end{array}
+		    	\right.
+		    \eqend
+		\end{itemize}
+	\end{example}
+	We note that our definition here is tighter than~\cite{DH} or~\cite{NEARMART} since 
+	we require strict monotonicity and concavity, and because $u'(-\infty) = \infty$.
+	Those conditions \emph{exclude} the CVaR OCE measure given by $u(x) = (1+\lambda) \min\{ 0, x \}$.
+    
+	We have shown before the following result:
+	\begin{theorem}[Near-Martingale Measures~\cite{NEARMART}]\label{th:remove}\hspace{1cm}\\
+		Let $c\in\R_{\geq 0}^{1+L}$.
+		Let~$(a^*,y^*)$ be a finite optimal solution to the problem
+		\eq{coeopt}
+			\sup_{a\in\R^{1+L},y\in\R}:\ \E^\P\left[\ u\big( y + a' \Delta H
+			- |a|'c
+			\big)-y\ \right] 
+		\eqend
+        (conditional on~$h_0$)
+		with
+		$$
+			(*) \ \ \ \E^\P\left[\ u\left( y^* + {a^*}' dH -
+			|a^*|'c 
+			\right)-y^*\ \right] < \infty \ .
+		$$
+		Then, then measure~$\Q$ 
+		defined (conditional on~$h_0$) via the density
+		\eqx
+			\frac{d\Q}{d\P} := u'\big(\ y^* + {a^*}' \Delta H - |a^*|' c\ \big) 
+		\eqend
+		is a \emph{near-martingale measure} in the sense that
+		$$
+			\Big|\ \E^\Q\big[\ \Delta H\ \big]\ \Big| \leq c \ .
+		$$
+		Specifically, if $c\equiv 0$ then $\Q$ is a full martingale
+		measure.
+	\end{theorem}
+	%
+	This theorem yields a risk-neutral density if
+	our optimal solution does not explode and satisfies~$(*)$. 	 (The actual statement in~\cite{NEARMART} is stronger
+		and covers not only proportional transaction cost, but also
+		more general convex cost.)
+	The 
+	open question so far was when that will happen. The
+	following is the main result of this section (the existence of a~$\Q$
+    with the specific construction above being the contribution here):
+	
+	\begin{prop}[Absence of Arbitrage for Near-Martingale Measures]
+		\hspace{1cm}\\
+		Let $c\in\R_{\geq 0}^{1+}$.
+	Assume that the following integrability condition  
+	\eq{intgrd}
+		\E^\P\big[\, u\left(\,y + a\, \Delta H - |a|c\,\right)\, \big] < \infty 
+	\eqend
+	holds for all $y\in\R$ and $a\in\R^{1+L}$.
+
+	Then a finite solution to~\eqref {coeopt} and therefore
+	the [near-] martingale measure~$\Q$ exists if and only if
+	there
+	is no arbitrage opportunity which means for
+	there is no $a\in\R^{1+L}$
+	\eq{noarbcost}
+			a'\Delta H - |a'|c \geq 0 \ \ \ \mbox{with} \ \ \ \P[ a'\Delta H - |a'|c ] > 0 \ .
+	\eqend	
+	In the case of zero transaction cost and absent any market frictions
+	this condition becomes the classic
+	\eq{noarb}
+			a'\Delta H \geq 0 \ \ \ \mbox{with} \ \ \ \P[ a'\Delta H  ] > 0 \ .
+	\eqend
+	\end{prop}	
+	For the utilities introduced above the integrability
+	condition~\eqref {intgrd} is satisfied if:
+	\begin{itemize}
+		\item \textbf{Entropy}: all moment $\E^\P[ a'\Delta H ]<\infty$
+		for $a\in\R^{1+L}$
+		must exist.
+		
+		\item \textbf{Truncated Entropy}: the second moment
+		must exist
+		$\E^\P[ \Delta H^2 ]<\infty$.
+	\end{itemize}
+
+    \begin{prop}[SANOS]
+        Assume that the market is given by SANOS and that $\tau\geq\max\{\tau^\ell\}$ (i.e.~the returns $dH$
+        are computed to expiry of each option). Then~\eqref{noarb} is satisfied.
+    \end{prop}
+
+    \begin{proof}
+        Absence of static arbitrage for each state~$h_0$ is exactly condition~\eqref{noarb}
+        where for each expiry $\tau^\ell\leq \tau$ the spot takes as values the entire
+        positive real line.
+        
+        Statistically, this statement is also true
+        provided the spot at expiry covers the entire strike range of all options and beyond.        
+    \end{proof}
+
+	\noindent	
+	We now translate the above into a setting suitable for machine
+	learning:
+	\begin{itemize}
+		\item
+			We normalize
+			$$
+				\Delta \hat H_j := \frac{ \Delta H_j }{ H_j } 
+				\ \ \ \mbox{and} \ \ \ 
+				D \hat H_j := \frac{ D H_j }{ H_j } 
+			$$
+			which represents in each case the return on a $1\$$
+			investment.
+			We simularly scale cost to
+			$$
+				\hat c_j := \frac{ c_j }{ H_j }\ .
+			$$
+			These definitions make sense if the trading instruments are ``funded''. 
+			Swaps, on the other hand, have zero initial value as do futures. In such a case we use the value of the ``fixed leg`` 
+			as denominator (swaps) or its quoted spot value (futures).
+		\item
+			Accordingly, an action $a$ with payoff 
+			$$
+				a' d\hat H_j - |a'|\hat c_j 
+			$$
+			now represents heuristically ``capital invested''.
+			We parameterize an action therefore as
+			$$
+				a_j^\ell := a^{\max}_j \alpha^\ell_j
+			$$
+			with
+			\begin{itemize}
+				\item maximum cash invested $a^{\max}\in\R$ and
+				\item its allocation $\alpha_j \in (-1,+1)^{1+L}$.t
+			\end{itemize}
+	\end{itemize}
+
+
+
+	\pagebreak    
+    
+    Let
+    $$
+    		\sup_{y,a} : - \frac1\lambda\log  \E_b\left[ \exp\left( - \lambda \E_\omega\left[ D_b: u(y + a\,dX) - y \right] \right) \right]
+	$$
+    $$
+    		\sup_{y,a} : - \E_b\left[ \lambda \exp\left( - \lambda \E_\omega\left[ D_b: u(y + a\,dX) - y\right] \right) \right]
+	$$
+	$$
+		\partial_a = \E_b\left[ \exp\left( - \E_\omega\left[ D_b: u(y + a\,dX) - y\right] \right) \E_\omega\left[ D_b u'(y + a\,dX)\,dX \right] \right]
+	$$
+	$$
+		\partial_a = \E_{b\times\omega} \left[ \exp\left( - \E_\omega\left[ D_b: u(y + a\,dX) - y\right] \right)\, D_b\,u'(y + a\,dX)\,dX  \right]
+	$$
+	$$
+		\partial_a = \E_{\omega} \left[ \E_b\left\{ D_b 
+					\exp\left( - \E_\omega\left[D_b: u(y + a\,dX) - y\right] \right)\right\}\, u'(y + a\,dX)\,dX  \right]
+	$$
+    
+    
+
+
+    
+
+
+	\pagebreak    
+    
+    $$
+
+    
+    % ------------------------------------------------------------------
+    % ------------------------------------------------------------------
+
+   \addcontentsline{toc}{section}{Bibliography}
+
+   \bibliography{references}
+   \bibliographystyle{alpha}
+  
+
+
+\end{document}/
