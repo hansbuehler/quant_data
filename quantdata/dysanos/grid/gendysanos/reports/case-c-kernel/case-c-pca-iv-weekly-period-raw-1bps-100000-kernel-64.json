@@ -1,0 +1,2683 @@
+{
+  "status": "complete",
+  "schema_version": "1.0",
+  "experiment": "Case C fixed-lambda notional continuation",
+  "definition": {
+    "objective": "sup over unit-gross separate long/short actions of E_P[u_1(n X)]",
+    "pnl": "X=(a_plus-a_minus)'R-(a_plus+a_minus)'c",
+    "gradient": "sum_s D_s grad(X_s), D proportional to (p/q) u_1'(n X_s)",
+    "action_constraint": "a_plus,a_minus nonnegative and sum(a_plus+a_minus)<=1",
+    "validation_policy": "held-out paths never enter fitting, convergence, or stopping",
+    "architecture": "kernel"
+  },
+  "configuration": {
+    "generator": "pca-iv",
+    "trading_frequency": "weekly",
+    "return_horizon": "incremental",
+    "hedge": "raw",
+    "cost_rate": 0.0001,
+    "path_count": 100000,
+    "num_trading_times": 10,
+    "schema_version": "1.0"
+  },
+  "source_cache": "/media/storage/tmp/quantdata/dysanos/required-runs/universes/pca-iv-weekly-100000-f082b69cd7ba6170",
+  "source_cache_uid": "pca-iv-weekly-100000-f082b69cd7ba6170",
+  "split": {
+    "split_seed": 100097,
+    "validation_fraction": 0.2,
+    "component_counts": {
+      "0": {
+        "total": 10025,
+        "reference": 8020,
+        "audit": 2005
+      },
+      "1": {
+        "total": 1952,
+        "reference": 1562,
+        "audit": 390
+      },
+      "2": {
+        "total": 1908,
+        "reference": 1526,
+        "audit": 382
+      },
+      "3": {
+        "total": 1905,
+        "reference": 1524,
+        "audit": 381
+      },
+      "4": {
+        "total": 1938,
+        "reference": 1550,
+        "audit": 388
+      },
+      "5": {
+        "total": 1907,
+        "reference": 1526,
+        "audit": 381
+      },
+      "6": {
+        "total": 1890,
+        "reference": 1512,
+        "audit": 378
+      },
+      "7": {
+        "total": 1874,
+        "reference": 1499,
+        "audit": 375
+      },
+      "8": {
+        "total": 1921,
+        "reference": 1537,
+        "audit": 384
+      },
+      "9": {
+        "total": 1896,
+        "reference": 1517,
+        "audit": 379
+      },
+      "10": {
+        "total": 1964,
+        "reference": 1571,
+        "audit": 393
+      },
+      "11": {
+        "total": 1908,
+        "reference": 1526,
+        "audit": 382
+      },
+      "12": {
+        "total": 1888,
+        "reference": 1510,
+        "audit": 378
+      },
+      "13": {
+        "total": 1812,
+        "reference": 1450,
+        "audit": 362
+      },
+      "14": {
+        "total": 1896,
+        "reference": 1517,
+        "audit": 379
+      },
+      "15": {
+        "total": 1910,
+        "reference": 1528,
+        "audit": 382
+      },
+      "16": {
+        "total": 1953,
+        "reference": 1562,
+        "audit": 391
+      },
+      "17": {
+        "total": 1936,
+        "reference": 1549,
+        "audit": 387
+      },
+      "18": {
+        "total": 1943,
+        "reference": 1554,
+        "audit": 389
+      },
+      "19": {
+        "total": 2016,
+        "reference": 1613,
+        "audit": 403
+      },
+      "20": {
+        "total": 1878,
+        "reference": 1502,
+        "audit": 376
+      },
+      "21": {
+        "total": 1842,
+        "reference": 1474,
+        "audit": 368
+      },
+      "22": {
+        "total": 1948,
+        "reference": 1558,
+        "audit": 390
+      },
+      "23": {
+        "total": 1861,
+        "reference": 1489,
+        "audit": 372
+      },
+      "24": {
+        "total": 1870,
+        "reference": 1496,
+        "audit": 374
+      },
+      "25": {
+        "total": 1869,
+        "reference": 1495,
+        "audit": 374
+      },
+      "26": {
+        "total": 1924,
+        "reference": 1539,
+        "audit": 385
+      },
+      "27": {
+        "total": 2009,
+        "reference": 1607,
+        "audit": 402
+      },
+      "28": {
+        "total": 1886,
+        "reference": 1509,
+        "audit": 377
+      },
+      "29": {
+        "total": 1971,
+        "reference": 1577,
+        "audit": 394
+      },
+      "30": {
+        "total": 1945,
+        "reference": 1556,
+        "audit": 389
+      },
+      "31": {
+        "total": 1893,
+        "reference": 1514,
+        "audit": 379
+      },
+      "32": {
+        "total": 1893,
+        "reference": 1514,
+        "audit": 379
+      },
+      "33": {
+        "total": 1854,
+        "reference": 1483,
+        "audit": 371
+      },
+      "34": {
+        "total": 1926,
+        "reference": 1541,
+        "audit": 385
+      },
+      "35": {
+        "total": 1955,
+        "reference": 1564,
+        "audit": 391
+      },
+      "36": {
+        "total": 1964,
+        "reference": 1571,
+        "audit": 393
+      },
+      "37": {
+        "total": 1977,
+        "reference": 1582,
+        "audit": 395
+      },
+      "38": {
+        "total": 1850,
+        "reference": 1480,
+        "audit": 370
+      },
+      "39": {
+        "total": 1861,
+        "reference": 1489,
+        "audit": 372
+      },
+      "40": {
+        "total": 1913,
+        "reference": 1530,
+        "audit": 383
+      },
+      "41": {
+        "total": 1913,
+        "reference": 1530,
+        "audit": 383
+      },
+      "42": {
+        "total": 1893,
+        "reference": 1515,
+        "audit": 378
+      },
+      "43": {
+        "total": 1942,
+        "reference": 1554,
+        "audit": 388
+      },
+      "44": {
+        "total": 2006,
+        "reference": 1605,
+        "audit": 401
+      },
+      "45": {
+        "total": 1943,
+        "reference": 1555,
+        "audit": 388
+      },
+      "46": {
+        "total": 1851,
+        "reference": 1481,
+        "audit": 370
+      },
+      "47": {
+        "total": 1921,
+        "reference": 1537,
+        "audit": 384
+      }
+    },
+    "weight_definition": "exp(log(p/q)); physical estimates are N^-1 sum_r (p/q)_r f_r",
+    "full_weight_mean": 0.9995465226423768,
+    "full_weight_effective_sample_size": 30252.21601274515
+  },
+  "model_config": {
+    "label": "case-c-pca-iv-weekly-period-raw-1bps-100000-kernel-64",
+    "source_cache_uid": "pca-iv-weekly-100000-f082b69cd7ba6170",
+    "state_features": 21,
+    "kernels": 64,
+    "notionals": [
+      256.0
+    ],
+    "deterministic_time": 0,
+    "conditional_time": 6,
+    "expiries": 7,
+    "instruments_per_expiry": 21,
+    "group": "gendysanos/case-c-kernel/1bps",
+    "user_version": "kernel-cold-256-1.0"
+  },
+  "train_config": {
+    "batch_size": 4096,
+    "valuation_batch_size": 16384,
+    "epochs_per_notional": 20000,
+    "minimum_epochs_per_notional": 2000,
+    "value_update": 250,
+    "checkpoint_update": 2000,
+    "convergence_points": 8,
+    "action_change_tolerance": 2e-05,
+    "lr": 0.0003,
+    "compile": true,
+    "seed": 77123
+  },
+  "whitening": {
+    "definition": "xi_t=(x_t-m_t) Q_t Lambda_t^{-1/2}; m_t and covariance are estimated on training paths with physical p/q weights",
+    "relative_eigenvalue_floor": 1e-10,
+    "training_path_count": 80000,
+    "training_weight_effective_sample_size": 24243.393500365157,
+    "minimum_covariance_eigenvalue_by_time": [
+      0.0031008489579801733,
+      0.0009270026701595402
+    ],
+    "maximum_covariance_eigenvalue_by_time": [
+      77.79401984769117,
+      77.80090787939315
+    ],
+    "clipped_eigenvalue_count_by_time": [
+      0,
+      0
+    ],
+    "maximum_absolute_weighted_factor_mean": 4.705437428587089e-16,
+    "maximum_absolute_weighted_factor_covariance_error": 2.9110047705671604e-13
+  },
+  "kernel_basis": {
+    "definition": "physical-weighted MiniBatchKMeans centers in orthogonal t6 state; bandwidth is weighted within-center RMS distance",
+    "kernels": 64,
+    "radius_floor": 0.9824411483033171,
+    "minimum_radius": 3.8414064695236103,
+    "median_radius": 3.9297645932132683,
+    "maximum_radius": 4.194374869226473,
+    "minimum_physical_cluster_mass": 0.013100383206981998,
+    "maximum_physical_cluster_mass": 0.019183613649827836
+  },
+  "stages": [
+    {
+      "notional": 256.0,
+      "pre_training_gradient": {
+        "sample_paths": 16384,
+        "normalized_parameter_gradient_l2": 0.03180800750851631,
+        "normalized_notional_derivative_by_time": [
+          0.0,
+          0.0
+        ],
+        "marginal_density_effective_sample_size_by_time": [
+          4973.48583984375,
+          4973.48583984375
+        ],
+        "gradient_exact_zero_fraction": 0.0
+      },
+      "training": {
+        "steps": 20000,
+        "converged": false,
+        "resumed_complete_checkpoint": false,
+        "elapsed_seconds_this_invocation": 31.461580420960672,
+        "constant_learning_rate": 0.0003,
+        "gradient_clipping": false,
+        "optimizer_reset_at_notional_start": true,
+        "tracker": [
+          {
+            "step": 250,
+            "loss": -0.00030613201670348644,
+            "objective_by_time": [
+              0.16725020110607147,
+              0.15779203176498413
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.0238480381667614,
+              0.023167716339230537
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0238480381667614,
+            "stable_points": 0,
+            "elapsed_seconds": 3.3390936219366267
+          },
+          {
+            "step": 500,
+            "loss": -0.0003130195545963943,
+            "objective_by_time": [
+              0.1677533984184265,
+              0.16032862663269043
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023545144125819206,
+              0.02411038614809513
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0014742836356163025,
+            "stable_points": 0,
+            "elapsed_seconds": 3.6779866479337215
+          },
+          {
+            "step": 750,
+            "loss": -0.0003035550471395254,
+            "objective_by_time": [
+              0.16853174567222595,
+              0.16051270067691803
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023351075127720833,
+              0.02404453419148922
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0009245611727237701,
+            "stable_points": 0,
+            "elapsed_seconds": 4.011156733962707
+          },
+          {
+            "step": 1000,
+            "loss": -0.00030573311960324645,
+            "objective_by_time": [
+              0.16895098984241486,
+              0.16029639542102814
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02401569113135338,
+              0.024066664278507233
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0009725368581712246,
+            "stable_points": 0,
+            "elapsed_seconds": 4.342904080986045
+          },
+          {
+            "step": 1250,
+            "loss": -0.00031257624505087733,
+            "objective_by_time": [
+              0.16786667704582214,
+              0.16031403839588165
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023419437929987907,
+              0.02435057982802391
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0007556239143013954,
+            "stable_points": 0,
+            "elapsed_seconds": 4.673515738919377
+          },
+          {
+            "step": 1500,
+            "loss": -0.00030481029534712434,
+            "objective_by_time": [
+              0.1692516952753067,
+              0.16064289212226868
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02357032708823681,
+              0.02461114153265953
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.000798279419541359,
+            "stable_points": 0,
+            "elapsed_seconds": 5.0129061749903485
+          },
+          {
+            "step": 1750,
+            "loss": -0.00029047124553471804,
+            "objective_by_time": [
+              0.1668212115764618,
+              0.16035491228103638
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023428047075867653,
+              0.02430926263332367
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0016304347664117813,
+            "stable_points": 0,
+            "elapsed_seconds": 5.374477569945157
+          },
+          {
+            "step": 2000,
+            "loss": -0.00031100038904696703,
+            "objective_by_time": [
+              0.16830919682979584,
+              0.16009089350700378
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.024028092622756958,
+              0.024189526215195656
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0016253353096544743,
+            "stable_points": 0,
+            "elapsed_seconds": 5.732168747927062
+          },
+          {
+            "step": 2250,
+            "loss": -0.0003012892557308078,
+            "objective_by_time": [
+              0.16880163550376892,
+              0.16015997529029846
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02333407662808895,
+              0.023854436352849007
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0010715816169977188,
+            "stable_points": 0,
+            "elapsed_seconds": 6.072906290995888
+          },
+          {
+            "step": 2500,
+            "loss": -0.00030173000413924456,
+            "objective_by_time": [
+              0.16902682185173035,
+              0.16073909401893616
+            ],
+            "gross_mean_by_time": [
+              0.9999999403953552,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              0.9999999403953552,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023689810186624527,
+              0.024134602397680283
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0009058886207640171,
+            "stable_points": 0,
+            "elapsed_seconds": 6.417917883954942
+          },
+          {
+            "step": 2750,
+            "loss": -0.0002926737070083618,
+            "objective_by_time": [
+              0.16817769408226013,
+              0.16041143238544464
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023097893223166466,
+              0.02413131482899189
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0009727589786052704,
+            "stable_points": 0,
+            "elapsed_seconds": 6.762713591917418
+          },
+          {
+            "step": 3000,
+            "loss": -0.0002850235905498266,
+            "objective_by_time": [
+              0.16797345876693726,
+              0.15923213958740234
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023079372942447662,
+              0.023942209780216217
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.000949301291257143,
+            "stable_points": 0,
+            "elapsed_seconds": 7.108142253011465
+          },
+          {
+            "step": 3250,
+            "loss": -0.0003003136080224067,
+            "objective_by_time": [
+              0.1682121902704239,
+              0.15984795987606049
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.0232307817786932,
+              0.02370193973183632
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0014500324614346027,
+            "stable_points": 0,
+            "elapsed_seconds": 7.4659483060240746
+          },
+          {
+            "step": 3500,
+            "loss": -0.0002933825890067965,
+            "objective_by_time": [
+              0.16911034286022186,
+              0.15962332487106323
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023048141971230507,
+              0.024065539240837097
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0006915027042850852,
+            "stable_points": 0,
+            "elapsed_seconds": 7.825704611954279
+          },
+          {
+            "step": 3750,
+            "loss": -0.0003061292809434235,
+            "objective_by_time": [
+              0.1682765781879425,
+              0.16019180417060852
+            ],
+            "gross_mean_by_time": [
+              0.9999999403953552,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              0.9999998807907104,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02260042354464531,
+              0.02405724674463272
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0010078111663460732,
+            "stable_points": 0,
+            "elapsed_seconds": 8.185763663961552
+          },
+          {
+            "step": 4000,
+            "loss": -0.00029381352942436934,
+            "objective_by_time": [
+              0.16769668459892273,
+              0.15838533639907837
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.022429073229432106,
+              0.023540927097201347
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.001109306700527668,
+            "stable_points": 0,
+            "elapsed_seconds": 8.577190637937747
+          },
+          {
+            "step": 4250,
+            "loss": -0.00029793079011142254,
+            "objective_by_time": [
+              0.16788943111896515,
+              0.16021732985973358
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.022580759599804878,
+              0.024002304300665855
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0013527274131774902,
+            "stable_points": 0,
+            "elapsed_seconds": 8.938210465945303
+          },
+          {
+            "step": 4500,
+            "loss": -0.0002809766447171569,
+            "objective_by_time": [
+              0.165807843208313,
+              0.15982285141944885
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02285972610116005,
+              0.02315063215792179
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0010119210928678513,
+            "stable_points": 0,
+            "elapsed_seconds": 9.297252189018764
+          },
+          {
+            "step": 4750,
+            "loss": -0.0002986654289998114,
+            "objective_by_time": [
+              0.1672462522983551,
+              0.160264790058136
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023148441687226295,
+              0.023752180859446526
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0012175580486655235,
+            "stable_points": 0,
+            "elapsed_seconds": 9.645155224017799
+          },
+          {
+            "step": 5000,
+            "loss": -0.0003048243233934045,
+            "objective_by_time": [
+              0.16752734780311584,
+              0.16053186357021332
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023287072777748108,
+              0.024275818839669228
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.000851665623486042,
+            "stable_points": 0,
+            "elapsed_seconds": 10.00939947401639
+          },
+          {
+            "step": 5250,
+            "loss": -0.00030105409678071737,
+            "objective_by_time": [
+              0.16894668340682983,
+              0.15918192267417908
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023694410920143127,
+              0.023948784917593002
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0007525880355387926,
+            "stable_points": 0,
+            "elapsed_seconds": 10.360866712988354
+          },
+          {
+            "step": 5500,
+            "loss": -0.000306514062685892,
+            "objective_by_time": [
+              0.16850872337818146,
+              0.15874382853507996
+            ],
+            "gross_mean_by_time": [
+              1.0000001192092896,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0000001192092896,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023830033838748932,
+              0.02372133731842041
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0008905804716050625,
+            "stable_points": 0,
+            "elapsed_seconds": 10.731822729925625
+          },
+          {
+            "step": 5750,
+            "loss": -0.0002978060219902545,
+            "objective_by_time": [
+              0.16918030381202698,
+              0.1604364812374115
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023828480392694473,
+              0.024370916187763214
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0016116145998239517,
+            "stable_points": 0,
+            "elapsed_seconds": 11.109997658990324
+          },
+          {
+            "step": 6000,
+            "loss": -0.0002975226962007582,
+            "objective_by_time": [
+              0.169266939163208,
+              0.1604577898979187
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023520445451140404,
+              0.024252956733107567
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0013339594006538391,
+            "stable_points": 0,
+            "elapsed_seconds": 11.483732968918048
+          },
+          {
+            "step": 6250,
+            "loss": -0.00029856731998734176,
+            "objective_by_time": [
+              0.1680542230606079,
+              0.15986916422843933
+            ],
+            "gross_mean_by_time": [
+              0.9999999403953552,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              0.9999999403953552,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.022951997816562653,
+              0.024792347103357315
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0015164902433753014,
+            "stable_points": 0,
+            "elapsed_seconds": 11.892656847951002
+          },
+          {
+            "step": 6500,
+            "loss": -0.0002975087845697999,
+            "objective_by_time": [
+              0.1688283085823059,
+              0.16002339124679565
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02339623123407364,
+              0.02389853075146675
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0010813958942890167,
+            "stable_points": 0,
+            "elapsed_seconds": 12.247790194000117
+          },
+          {
+            "step": 6750,
+            "loss": -0.000301889784168452,
+            "objective_by_time": [
+              0.1689780056476593,
+              0.16088511049747467
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.022713501006364822,
+              0.02492363192141056
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0013213884085416794,
+            "stable_points": 0,
+            "elapsed_seconds": 12.592353236977942
+          },
+          {
+            "step": 7000,
+            "loss": -0.0003015953698195517,
+            "objective_by_time": [
+              0.16823174059391022,
+              0.16065117716789246
+            ],
+            "gross_mean_by_time": [
+              0.9999999403953552,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              0.9999998807907104,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023096874356269836,
+              0.024428095668554306
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0008532870560884476,
+            "stable_points": 0,
+            "elapsed_seconds": 12.946060035959817
+          },
+          {
+            "step": 7250,
+            "loss": -0.0003031751257367432,
+            "objective_by_time": [
+              0.167827770113945,
+              0.1602345108985901
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023448696359992027,
+              0.024114377796649933
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0009321626275777817,
+            "stable_points": 0,
+            "elapsed_seconds": 13.323414161917754
+          },
+          {
+            "step": 7500,
+            "loss": -0.00029405709938146174,
+            "objective_by_time": [
+              0.16897158324718475,
+              0.1603463888168335
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023863013833761215,
+              0.024594809859991074
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0011047013103961945,
+            "stable_points": 0,
+            "elapsed_seconds": 13.672160950023681
+          },
+          {
+            "step": 7750,
+            "loss": -0.0002828463329933584,
+            "objective_by_time": [
+              0.16807635128498077,
+              0.16071420907974243
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023841366171836853,
+              0.024532871320843697
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0010943366214632988,
+            "stable_points": 0,
+            "elapsed_seconds": 14.062860463978723
+          },
+          {
+            "step": 8000,
+            "loss": -0.00029630050994455814,
+            "objective_by_time": [
+              0.16768017411231995,
+              0.16033712029457092
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023533860221505165,
+              0.02450256422162056
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.000892451498657465,
+            "stable_points": 0,
+            "elapsed_seconds": 14.417176501010545
+          },
+          {
+            "step": 8250,
+            "loss": -0.0003034415130969137,
+            "objective_by_time": [
+              0.16960173845291138,
+              0.16080501675605774
+            ],
+            "gross_mean_by_time": [
+              0.9999999403953552,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              0.9999999403953552,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023877864703536034,
+              0.024547182023525238
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0010969159193336964,
+            "stable_points": 0,
+            "elapsed_seconds": 14.77664822502993
+          },
+          {
+            "step": 8500,
+            "loss": -0.0002912372874561697,
+            "objective_by_time": [
+              0.16594263911247253,
+              0.160133957862854
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02390982396900654,
+              0.024737033993005753
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0007511531002819538,
+            "stable_points": 0,
+            "elapsed_seconds": 15.121814677957445
+          },
+          {
+            "step": 8750,
+            "loss": -0.00029768332024104893,
+            "objective_by_time": [
+              0.16940586268901825,
+              0.15963532030582428
+            ],
+            "gross_mean_by_time": [
+              1.0000001192092896,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0000001192092896,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.024078885093331337,
+              0.024149419739842415
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0006677638739347458,
+            "stable_points": 0,
+            "elapsed_seconds": 15.458360400982201
+          },
+          {
+            "step": 9000,
+            "loss": -0.0002950682828668505,
+            "objective_by_time": [
+              0.16913709044456482,
+              0.15826433897018433
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02387404814362526,
+              0.024353167042136192
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0011974871158599854,
+            "stable_points": 0,
+            "elapsed_seconds": 15.797697674948722
+          },
+          {
+            "step": 9250,
+            "loss": -0.00030407379381358624,
+            "objective_by_time": [
+              0.16826212406158447,
+              0.16083958745002747
+            ],
+            "gross_mean_by_time": [
+              1.0000001192092896,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0000001192092896,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023663107305765152,
+              0.02468651719391346
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0009387526661157608,
+            "stable_points": 0,
+            "elapsed_seconds": 16.135318415937945
+          },
+          {
+            "step": 9500,
+            "loss": -0.00030040027922950685,
+            "objective_by_time": [
+              0.16830384731292725,
+              0.16069689393043518
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023674391210079193,
+              0.02482014335691929
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.001052195206284523,
+            "stable_points": 0,
+            "elapsed_seconds": 16.46886513894424
+          },
+          {
+            "step": 9750,
+            "loss": -0.0003012388478964567,
+            "objective_by_time": [
+              0.16877862811088562,
+              0.16043810546398163
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02413085289299488,
+              0.024667244404554367
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0007140254601836205,
+            "stable_points": 0,
+            "elapsed_seconds": 16.81436072802171
+          },
+          {
+            "step": 10000,
+            "loss": -0.00029211019864305854,
+            "objective_by_time": [
+              0.167035311460495,
+              0.160720095038414
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.0235024131834507,
+              0.02455621026456356
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0014995592646300793,
+            "stable_points": 0,
+            "elapsed_seconds": 17.18987282598391
+          },
+          {
+            "step": 10250,
+            "loss": -0.00029458763310685754,
+            "objective_by_time": [
+              0.1688184291124344,
+              0.16007846593856812
+            ],
+            "gross_mean_by_time": [
+              1.0000001192092896,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0000001192092896,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023356446996331215,
+              0.02422214113175869
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0012072836980223656,
+            "stable_points": 0,
+            "elapsed_seconds": 17.54440896701999
+          },
+          {
+            "step": 10500,
+            "loss": -0.0002976891410071403,
+            "objective_by_time": [
+              0.16858822107315063,
+              0.15915226936340332
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02360873483121395,
+              0.02413422241806984
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0013077082112431526,
+            "stable_points": 0,
+            "elapsed_seconds": 17.880189871997572
+          },
+          {
+            "step": 10750,
+            "loss": -0.0002905040164478123,
+            "objective_by_time": [
+              0.1681079864501953,
+              0.16000767052173615
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023855319246649742,
+              0.0243249349296093
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0011740932241082191,
+            "stable_points": 0,
+            "elapsed_seconds": 18.23379762598779
+          },
+          {
+            "step": 11000,
+            "loss": -0.0002938453108072281,
+            "objective_by_time": [
+              0.16753436625003815,
+              0.16065719723701477
+            ],
+            "gross_mean_by_time": [
+              0.9999999403953552,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              0.9999999403953552,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023414142429828644,
+              0.024192344397306442
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0010294318199157715,
+            "stable_points": 0,
+            "elapsed_seconds": 18.567309377947822
+          },
+          {
+            "step": 11250,
+            "loss": -0.000286284601315856,
+            "objective_by_time": [
+              0.16648408770561218,
+              0.16032811999320984
+            ],
+            "gross_mean_by_time": [
+              1.0000001192092896,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0000001192092896,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023602211847901344,
+              0.024664664641022682
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0010173250921070576,
+            "stable_points": 0,
+            "elapsed_seconds": 18.897329216008075
+          },
+          {
+            "step": 11500,
+            "loss": -0.00028495219885371625,
+            "objective_by_time": [
+              0.16694024205207825,
+              0.16009461879730225
+            ],
+            "gross_mean_by_time": [
+              1.0000001192092896,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0000001192092896,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02330780401825905,
+              0.024414779618382454
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0010682432912290096,
+            "stable_points": 0,
+            "elapsed_seconds": 19.23123447992839
+          },
+          {
+            "step": 11750,
+            "loss": -0.000297686317935586,
+            "objective_by_time": [
+              0.16867384314537048,
+              0.16081121563911438
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02408992126584053,
+              0.025022068992257118
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0009723473340272903,
+            "stable_points": 0,
+            "elapsed_seconds": 19.5816491820151
+          },
+          {
+            "step": 12000,
+            "loss": -0.00029246025951579213,
+            "objective_by_time": [
+              0.16843950748443604,
+              0.16008716821670532
+            ],
+            "gross_mean_by_time": [
+              0.9999999403953552,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              0.9999999403953552,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023650482296943665,
+              0.02445482648909092
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0006766906008124352,
+            "stable_points": 0,
+            "elapsed_seconds": 19.916807451983914
+          },
+          {
+            "step": 12250,
+            "loss": -0.00030108593637123704,
+            "objective_by_time": [
+              0.168985053896904,
+              0.1603342890739441
+            ],
+            "gross_mean_by_time": [
+              1.0000001192092896,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0000001192092896,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023930072784423828,
+              0.02397231198847294
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0007455255836248398,
+            "stable_points": 0,
+            "elapsed_seconds": 20.257617234019563
+          },
+          {
+            "step": 12500,
+            "loss": -0.0002879858948290348,
+            "objective_by_time": [
+              0.1680326759815216,
+              0.1566322147846222
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.0000001192092896
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02388106845319271,
+              0.023901289328932762
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.001083998242393136,
+            "stable_points": 0,
+            "elapsed_seconds": 20.592323845019564
+          },
+          {
+            "step": 12750,
+            "loss": -0.00029579183319583535,
+            "objective_by_time": [
+              0.16895094513893127,
+              0.16062907874584198
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.024149587377905846,
+              0.024271206930279732
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0014905957505106926,
+            "stable_points": 0,
+            "elapsed_seconds": 20.935142920003273
+          },
+          {
+            "step": 13000,
+            "loss": -0.0002887485024984926,
+            "objective_by_time": [
+              0.16616147756576538,
+              0.16010387241840363
+            ],
+            "gross_mean_by_time": [
+              1.0000001192092896,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0000001192092896,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.024346891790628433,
+              0.02382592111825943
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.001146172871813178,
+            "stable_points": 0,
+            "elapsed_seconds": 21.29530989495106
+          },
+          {
+            "step": 13250,
+            "loss": -0.00028800085419788957,
+            "objective_by_time": [
+              0.16596700251102448,
+              0.1601642370223999
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02386086992919445,
+              0.024028610438108444
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0017240396700799465,
+            "stable_points": 0,
+            "elapsed_seconds": 21.63508198701311
+          },
+          {
+            "step": 13500,
+            "loss": -0.0002919626422226429,
+            "objective_by_time": [
+              0.1683591902256012,
+              0.159669429063797
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023949289694428444,
+              0.02429678849875927
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0015477510169148445,
+            "stable_points": 0,
+            "elapsed_seconds": 21.99654827802442
+          },
+          {
+            "step": 13750,
+            "loss": -0.0002977041876874864,
+            "objective_by_time": [
+              0.16897279024124146,
+              0.16065004467964172
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023940222337841988,
+              0.02433454804122448
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.001510042231529951,
+            "stable_points": 0,
+            "elapsed_seconds": 22.364430831978098
+          },
+          {
+            "step": 14000,
+            "loss": -0.0003040765004698187,
+            "objective_by_time": [
+              0.1685960292816162,
+              0.16055181622505188
+            ],
+            "gross_mean_by_time": [
+              0.9999999403953552,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              0.9999998807907104,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02356054075062275,
+              0.024147363379597664
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0013756100088357925,
+            "stable_points": 0,
+            "elapsed_seconds": 22.70907352201175
+          },
+          {
+            "step": 14250,
+            "loss": -0.0003041193704120815,
+            "objective_by_time": [
+              0.16810059547424316,
+              0.1606103479862213
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023464582860469818,
+              0.025056516751646996
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.002006166148930788,
+            "stable_points": 0,
+            "elapsed_seconds": 23.08232967101503
+          },
+          {
+            "step": 14500,
+            "loss": -0.00030538858845829964,
+            "objective_by_time": [
+              0.16726885735988617,
+              0.15971748530864716
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023649098351597786,
+              0.02452964335680008
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0010683764703571796,
+            "stable_points": 0,
+            "elapsed_seconds": 23.474859245936386
+          },
+          {
+            "step": 14750,
+            "loss": -0.0003077434957958758,
+            "objective_by_time": [
+              0.16875556111335754,
+              0.16022273898124695
+            ],
+            "gross_mean_by_time": [
+              1.0000001192092896,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0000001192092896,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023478204384446144,
+              0.023739933967590332
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0009567374363541603,
+            "stable_points": 0,
+            "elapsed_seconds": 23.836447141016833
+          },
+          {
+            "step": 15000,
+            "loss": -0.00029891112353652716,
+            "objective_by_time": [
+              0.1688022017478943,
+              0.15837571024894714
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023336093872785568,
+              0.024084167554974556
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.001188207883387804,
+            "stable_points": 0,
+            "elapsed_seconds": 24.188228591927327
+          },
+          {
+            "step": 15250,
+            "loss": -0.00028672011103481054,
+            "objective_by_time": [
+              0.16807958483695984,
+              0.1580895185470581
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023475656285881996,
+              0.02392047829926014
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.001017346978187561,
+            "stable_points": 0,
+            "elapsed_seconds": 24.528220998006873
+          },
+          {
+            "step": 15500,
+            "loss": -0.00029681797605007887,
+            "objective_by_time": [
+              0.16777600347995758,
+              0.1602517068386078
+            ],
+            "gross_mean_by_time": [
+              0.9999999403953552,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              0.9999999403953552,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02350885607302189,
+              0.024173691868782043
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0012969509698450565,
+            "stable_points": 0,
+            "elapsed_seconds": 24.884651934960857
+          },
+          {
+            "step": 15750,
+            "loss": -0.00029230647487565875,
+            "objective_by_time": [
+              0.16819949448108673,
+              0.16053438186645508
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02381099760532379,
+              0.024328341707587242
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0012311264872550964,
+            "stable_points": 0,
+            "elapsed_seconds": 25.247672506957315
+          },
+          {
+            "step": 16000,
+            "loss": -0.0002982550940942019,
+            "objective_by_time": [
+              0.16685348749160767,
+              0.1600014865398407
+            ],
+            "gross_mean_by_time": [
+              1.0000001192092896,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.000000238418579,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023478085175156593,
+              0.02434944361448288
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0011560991406440735,
+            "stable_points": 0,
+            "elapsed_seconds": 25.594667968922295
+          },
+          {
+            "step": 16250,
+            "loss": -0.00028473144629970193,
+            "objective_by_time": [
+              0.16827833652496338,
+              0.15949663519859314
+            ],
+            "gross_mean_by_time": [
+              0.9999999403953552,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              0.9999998807907104,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023180777207016945,
+              0.023798292502760887
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0013512822333723307,
+            "stable_points": 0,
+            "elapsed_seconds": 25.950318873976357
+          },
+          {
+            "step": 16500,
+            "loss": -0.0003051848616451025,
+            "objective_by_time": [
+              0.16890239715576172,
+              0.15963876247406006
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023426925763487816,
+              0.02440464310348034
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.001288671512156725,
+            "stable_points": 0,
+            "elapsed_seconds": 26.306154837016948
+          },
+          {
+            "step": 16750,
+            "loss": -0.000297692691674456,
+            "objective_by_time": [
+              0.16746896505355835,
+              0.15986917912960052
+            ],
+            "gross_mean_by_time": [
+              1.0000001192092896,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0000001192092896,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023119574412703514,
+              0.024183223024010658
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0012833685614168644,
+            "stable_points": 0,
+            "elapsed_seconds": 26.676641260972247
+          },
+          {
+            "step": 17000,
+            "loss": -0.00028558680787682533,
+            "objective_by_time": [
+              0.16905571520328522,
+              0.15526698529720306
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.022991329431533813,
+              0.024257035925984383
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.001079090405255556,
+            "stable_points": 0,
+            "elapsed_seconds": 27.028121481998824
+          },
+          {
+            "step": 17250,
+            "loss": -0.00029693852411583066,
+            "objective_by_time": [
+              0.16798779368400574,
+              0.16020548343658447
+            ],
+            "gross_mean_by_time": [
+              0.9999999403953552,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              0.9999999403953552,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02303655631840229,
+              0.024663332849740982
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.001041911542415619,
+            "stable_points": 0,
+            "elapsed_seconds": 27.401832027942874
+          },
+          {
+            "step": 17500,
+            "loss": -0.00028754325467161834,
+            "objective_by_time": [
+              0.16613858938217163,
+              0.15946215391159058
+            ],
+            "gross_mean_by_time": [
+              0.9999999403953552,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              0.9999999403953552,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02356012351810932,
+              0.0242980495095253
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.000768028199672699,
+            "stable_points": 0,
+            "elapsed_seconds": 27.771944651030935
+          },
+          {
+            "step": 17750,
+            "loss": -0.0002997962001245469,
+            "objective_by_time": [
+              0.16871055960655212,
+              0.1600862741470337
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02292337641119957,
+              0.025111379101872444
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0009486297494731843,
+            "stable_points": 0,
+            "elapsed_seconds": 28.147884501959197
+          },
+          {
+            "step": 18000,
+            "loss": -0.00029750962858088315,
+            "objective_by_time": [
+              0.16787777841091156,
+              0.16008085012435913
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.022708725184202194,
+              0.02489357441663742
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0008393991738557816,
+            "stable_points": 0,
+            "elapsed_seconds": 28.54107778891921
+          },
+          {
+            "step": 18250,
+            "loss": -0.0002967226901091635,
+            "objective_by_time": [
+              0.16892622411251068,
+              0.16086412966251373
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02248782478272915,
+              0.02512308396399021
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0008539236150681973,
+            "stable_points": 0,
+            "elapsed_seconds": 28.964009969029576
+          },
+          {
+            "step": 18500,
+            "loss": -0.00029713386902585626,
+            "objective_by_time": [
+              0.16837181150913239,
+              0.15944594144821167
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02285749278962612,
+              0.02449699677526951
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0010251253843307495,
+            "stable_points": 0,
+            "elapsed_seconds": 29.339915988966823
+          },
+          {
+            "step": 18750,
+            "loss": -0.0002984947641380131,
+            "objective_by_time": [
+              0.16942936182022095,
+              0.1606196165084839
+            ],
+            "gross_mean_by_time": [
+              0.9999999403953552,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              0.9999999403953552,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023260662332177162,
+              0.024782845750451088
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0008390611037611961,
+            "stable_points": 0,
+            "elapsed_seconds": 29.688748728949577
+          },
+          {
+            "step": 19000,
+            "loss": -0.0002869635936804116,
+            "objective_by_time": [
+              0.16802842915058136,
+              0.15991799533367157
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023780805990099907,
+              0.02472846582531929
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0010238420218229294,
+            "stable_points": 0,
+            "elapsed_seconds": 30.033440729021095
+          },
+          {
+            "step": 19250,
+            "loss": -0.0002946125459857285,
+            "objective_by_time": [
+              0.16860949993133545,
+              0.1588076949119568
+            ],
+            "gross_mean_by_time": [
+              1.0000001192092896,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0000001192092896,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02295246534049511,
+              0.02372026816010475
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0015257373452186584,
+            "stable_points": 0,
+            "elapsed_seconds": 30.381077750003897
+          },
+          {
+            "step": 19500,
+            "loss": -0.0002823026152327657,
+            "objective_by_time": [
+              0.16620643436908722,
+              0.15995243191719055
+            ],
+            "gross_mean_by_time": [
+              1.0,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              1.0,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.02285647951066494,
+              0.02406853623688221
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.001159009407274425,
+            "stable_points": 0,
+            "elapsed_seconds": 30.713750768918544
+          },
+          {
+            "step": 19750,
+            "loss": -0.0002904798893723637,
+            "objective_by_time": [
+              0.1684289574623108,
+              0.1577708125114441
+            ],
+            "gross_mean_by_time": [
+              0.9999999403953552,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              0.9999998807907104,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023346398025751114,
+              0.02427540346980095
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.001269639702513814,
+            "stable_points": 0,
+            "elapsed_seconds": 31.067860938957892
+          },
+          {
+            "step": 20000,
+            "loss": -0.00028612458845600486,
+            "objective_by_time": [
+              0.168559730052948,
+              0.15982791781425476
+            ],
+            "gross_mean_by_time": [
+              0.9999999403953552,
+              1.0
+            ],
+            "gross_maximum_by_time": [
+              0.9999999403953552,
+              1.000000238418579
+            ],
+            "raw_output_maximum_absolute_by_time": [
+              0.023059356957674026,
+              0.02446923777461052
+            ],
+            "boundary_fraction_by_time": [
+              1.0,
+              1.0
+            ],
+            "maximum_fixed_action_change": 0.0009262030944228172,
+            "stable_points": 0,
+            "elapsed_seconds": 31.4545523179695
+          }
+        ]
+      },
+      "training_set": {
+        "paths": 80000,
+        "direct_P_paths": 8020,
+        "physical_weight_effective_sample_size": 24243.393500365146,
+        "times": [
+          {
+            "name": "t0_deterministic",
+            "objective": 0.16534527821977993,
+            "objective_standard_error": 0.002277264883128856,
+            "P_mean_unit_pnl": 0.0014148441474640845,
+            "P_mean_unit_pnl_standard_error": 2.005505215009093e-05,
+            "P_loss_probability": 0.30330034914701365,
+            "P_loss_probability_standard_error": 0.0029672068339220642,
+            "P_gain_probability": 0.6947037158632647,
+            "P_gain_probability_standard_error": 0.0029724764160345284,
+            "P_unit_pnl_01_quantile": -0.0022741929492570184,
+            "P_unit_pnl_05_quantile": -0.001269122924931496,
+            "P_unit_pnl_median": 0.00056625947020167,
+            "proposal_minimum_unit_pnl_plus_band": -0.006149584357672211,
+            "proposal_numerically_nonnegative": false,
+            "direct_P_paths": 8020,
+            "direct_P_loss_count": 2379,
+            "direct_P_gain_count": 5624,
+            "base_action_gross_P_median": 0.9999999403953552,
+            "base_action_gross_P_99_percentile": 0.9999999403953552,
+            "base_action_gross_proposal_maximum": 0.9999999403953552,
+            "economic_gross_P_median": 255.99998474121094,
+            "raw_output_maximum_absolute_proposal": 0.023059356957674026,
+            "P_boundary_fraction": 1.0,
+            "P_long_short_overlap": 0.0015525431372225285,
+            "normalized_notional_derivative": 0.00030432155710184515,
+            "normalized_notional_derivative_standard_error": 8.99892181354611e-06,
+            "marginal_density_effective_sample_size": 20523.123491358718
+          },
+          {
+            "name": "t6_conditional",
+            "objective": 0.16401225557224264,
+            "objective_standard_error": 0.0024503886767754104,
+            "P_mean_unit_pnl": 0.0014408681028926491,
+            "P_mean_unit_pnl_standard_error": 2.0920326407135556e-05,
+            "P_loss_probability": 0.31733001818875894,
+            "P_loss_probability_standard_error": 0.0029933635062043768,
+            "P_gain_probability": 0.6807144473944282,
+            "P_gain_probability_standard_error": 0.002998334024428222,
+            "P_unit_pnl_01_quantile": -0.00247135532968271,
+            "P_unit_pnl_05_quantile": -0.001488262020876979,
+            "P_unit_pnl_median": 0.000664247327853449,
+            "proposal_minimum_unit_pnl_plus_band": -0.007430308938410235,
+            "proposal_numerically_nonnegative": false,
+            "direct_P_paths": 8020,
+            "direct_P_loss_count": 2511,
+            "direct_P_gain_count": 5491,
+            "base_action_gross_P_median": 1.0,
+            "base_action_gross_P_99_percentile": 1.0000001192092896,
+            "base_action_gross_proposal_maximum": 1.000000238418579,
+            "economic_gross_P_median": 256.0,
+            "raw_output_maximum_absolute_proposal": 0.02449057437479496,
+            "P_boundary_fraction": 1.0,
+            "P_long_short_overlap": 0.01539531265387832,
+            "normalized_notional_derivative": 0.00026354356467738377,
+            "normalized_notional_derivative_standard_error": 1.0012766993002781e-05,
+            "marginal_density_effective_sample_size": 20366.661529402896
+          }
+        ]
+      },
+      "validation_set": {
+        "paths": 20000,
+        "direct_P_paths": 2005,
+        "physical_weight_effective_sample_size": 6009.088535694597,
+        "times": [
+          {
+            "name": "t0_deterministic",
+            "objective": 0.1698335916010293,
+            "objective_standard_error": 0.004537598515923839,
+            "P_mean_unit_pnl": 0.0014466257030176259,
+            "P_mean_unit_pnl_standard_error": 4.110011155844533e-05,
+            "P_loss_probability": 0.30515808937081584,
+            "P_loss_probability_standard_error": 0.005978410001455988,
+            "P_gain_probability": 0.691341379128841,
+            "P_gain_probability_standard_error": 0.005998549189276962,
+            "P_unit_pnl_01_quantile": -0.0020406372031249492,
+            "P_unit_pnl_05_quantile": -0.001207415220076575,
+            "P_unit_pnl_median": 0.0005676721573129985,
+            "proposal_minimum_unit_pnl_plus_band": -0.005838021994350129,
+            "proposal_numerically_nonnegative": false,
+            "direct_P_paths": 2005,
+            "direct_P_loss_count": 570,
+            "direct_P_gain_count": 1430,
+            "base_action_gross_P_median": 0.9999999403953552,
+            "base_action_gross_P_99_percentile": 0.9999999403953552,
+            "base_action_gross_proposal_maximum": 0.9999999403953552,
+            "economic_gross_P_median": 255.99998474121094,
+            "raw_output_maximum_absolute_proposal": 0.023059356957674026,
+            "P_boundary_fraction": 1.0,
+            "P_long_short_overlap": 0.0015525431372225282,
+            "normalized_notional_derivative": 0.0003239718468054471,
+            "normalized_notional_derivative_standard_error": 1.770296920019677e-05,
+            "marginal_density_effective_sample_size": 5083.185659365984
+          },
+          {
+            "name": "t6_conditional",
+            "objective": 0.16803164316040986,
+            "objective_standard_error": 0.005005735637586212,
+            "P_mean_unit_pnl": 0.0015279502292868152,
+            "P_mean_unit_pnl_standard_error": 4.61312274503745e-05,
+            "P_loss_probability": 0.31701143567225815,
+            "P_loss_probability_standard_error": 0.005990486442017792,
+            "P_gain_probability": 0.6815155055134382,
+            "P_gain_probability_standard_error": 0.005998543002248711,
+            "P_unit_pnl_01_quantile": -0.0024227757133787895,
+            "P_unit_pnl_05_quantile": -0.0015339185454501046,
+            "P_unit_pnl_median": 0.0007187469575640744,
+            "proposal_minimum_unit_pnl_plus_band": -0.005163783527905252,
+            "proposal_numerically_nonnegative": false,
+            "direct_P_paths": 2005,
+            "direct_P_loss_count": 658,
+            "direct_P_gain_count": 1344,
+            "base_action_gross_P_median": 1.0,
+            "base_action_gross_P_99_percentile": 1.0000001192092896,
+            "base_action_gross_proposal_maximum": 1.000000238418579,
+            "economic_gross_P_median": 256.0,
+            "raw_output_maximum_absolute_proposal": 0.02445969171822071,
+            "P_boundary_fraction": 1.0,
+            "P_long_short_overlap": 0.015394100058138401,
+            "normalized_notional_derivative": 0.00026229882923666675,
+            "normalized_notional_derivative_standard_error": 2.0551489040552398e-05,
+            "marginal_density_effective_sample_size": 5033.849385004625
+          }
+        ]
+      },
+      "post_training_gradient": {
+        "training": {
+          "sample_paths": 16384,
+          "normalized_parameter_gradient_l2": 0.003880452597513795,
+          "normalized_notional_derivative_by_time": [
+            0.0003146436356473714,
+            0.00025084131630137563
+          ],
+          "marginal_density_effective_sample_size_by_time": [
+            4218.873046875,
+            4206.58154296875
+          ],
+          "gradient_exact_zero_fraction": 0.0
+        },
+        "validation": {
+          "sample_paths": 16384,
+          "normalized_parameter_gradient_l2": 0.004710522945970297,
+          "normalized_notional_derivative_by_time": [
+            0.0003267072606831789,
+            0.0002612657845020294
+          ],
+          "marginal_density_effective_sample_size_by_time": [
+            4181.4248046875,
+            4143.33837890625
+          ],
+          "gradient_exact_zero_fraction": 0.0
+        }
+      },
+      "checkpoint": "/media/storage/tmp/quantdata/dysanos/case-c-kernel/checkpoints/gendysanos/case-c-kernel/1bps/case-c-pca-iv-weekly-period-raw-1bps-10 fbdbc8e3-notional-1.pt"
+    }
+  ],
+  "runtime_seconds": 31.76847149396781,
+  "device": "cuda:1",
+  "peak_gpu_memory_bytes": 2034203136
+}

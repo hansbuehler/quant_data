@@ -1,0 +1,1147 @@
+{
+  "status": "complete",
+  "schema_version": "1.0",
+  "experiment": "empirical implied-CVaR martingale-level search",
+  "definition": {
+    "OCE": "sup_{a,y} E[(1+lambda) min(y+a(x)^T R,0)]-y; implemented as the exact weighted lower-tail mean",
+    "density_dual": "E[D]=1, 0<=D<=1+lambda; zero maximum is equivalent within the fixed kernel strategy class to a martingale density",
+    "strategy": "t0 is deterministic; t6 is a convex mixture of 64 fixed Gaussian state kernels with independent portfolio rows for every lambda",
+    "sample": "all 100,000 fixed paths are used for optimization and valuation"
+  },
+  "configuration": {
+    "generator": "dysanos",
+    "trading_frequency": "weekly",
+    "return_horizon": "expiry",
+    "hedge": "raw",
+    "cost_rate": 0.0,
+    "path_count": 100000,
+    "num_trading_times": 10,
+    "schema_version": "1.0"
+  },
+  "lambdas": [
+    10.0,
+    12.0,
+    15.0,
+    20.0,
+    30.0
+  ],
+  "source_cache": "/media/storage/tmp/quantdata/dysanos/required-runs/universes/dysanos-weekly-100000-d2de605ddfcb8df9",
+  "source_split_unused_for_fitting": {
+    "split_seed": 100097,
+    "validation_fraction": 0.2,
+    "component_counts": {
+      "0": {
+        "total": 10025,
+        "reference": 8020,
+        "audit": 2005
+      },
+      "1": {
+        "total": 1952,
+        "reference": 1562,
+        "audit": 390
+      },
+      "2": {
+        "total": 1908,
+        "reference": 1526,
+        "audit": 382
+      },
+      "3": {
+        "total": 1905,
+        "reference": 1524,
+        "audit": 381
+      },
+      "4": {
+        "total": 1938,
+        "reference": 1550,
+        "audit": 388
+      },
+      "5": {
+        "total": 1907,
+        "reference": 1526,
+        "audit": 381
+      },
+      "6": {
+        "total": 1890,
+        "reference": 1512,
+        "audit": 378
+      },
+      "7": {
+        "total": 1874,
+        "reference": 1499,
+        "audit": 375
+      },
+      "8": {
+        "total": 1921,
+        "reference": 1537,
+        "audit": 384
+      },
+      "9": {
+        "total": 1896,
+        "reference": 1517,
+        "audit": 379
+      },
+      "10": {
+        "total": 1964,
+        "reference": 1571,
+        "audit": 393
+      },
+      "11": {
+        "total": 1908,
+        "reference": 1526,
+        "audit": 382
+      },
+      "12": {
+        "total": 1888,
+        "reference": 1510,
+        "audit": 378
+      },
+      "13": {
+        "total": 1812,
+        "reference": 1450,
+        "audit": 362
+      },
+      "14": {
+        "total": 1896,
+        "reference": 1517,
+        "audit": 379
+      },
+      "15": {
+        "total": 1910,
+        "reference": 1528,
+        "audit": 382
+      },
+      "16": {
+        "total": 1953,
+        "reference": 1562,
+        "audit": 391
+      },
+      "17": {
+        "total": 1936,
+        "reference": 1549,
+        "audit": 387
+      },
+      "18": {
+        "total": 1943,
+        "reference": 1554,
+        "audit": 389
+      },
+      "19": {
+        "total": 2016,
+        "reference": 1613,
+        "audit": 403
+      },
+      "20": {
+        "total": 1878,
+        "reference": 1502,
+        "audit": 376
+      },
+      "21": {
+        "total": 1842,
+        "reference": 1474,
+        "audit": 368
+      },
+      "22": {
+        "total": 1948,
+        "reference": 1558,
+        "audit": 390
+      },
+      "23": {
+        "total": 1861,
+        "reference": 1489,
+        "audit": 372
+      },
+      "24": {
+        "total": 1870,
+        "reference": 1496,
+        "audit": 374
+      },
+      "25": {
+        "total": 1869,
+        "reference": 1495,
+        "audit": 374
+      },
+      "26": {
+        "total": 1924,
+        "reference": 1539,
+        "audit": 385
+      },
+      "27": {
+        "total": 2009,
+        "reference": 1607,
+        "audit": 402
+      },
+      "28": {
+        "total": 1886,
+        "reference": 1509,
+        "audit": 377
+      },
+      "29": {
+        "total": 1971,
+        "reference": 1577,
+        "audit": 394
+      },
+      "30": {
+        "total": 1945,
+        "reference": 1556,
+        "audit": 389
+      },
+      "31": {
+        "total": 1893,
+        "reference": 1514,
+        "audit": 379
+      },
+      "32": {
+        "total": 1893,
+        "reference": 1514,
+        "audit": 379
+      },
+      "33": {
+        "total": 1854,
+        "reference": 1483,
+        "audit": 371
+      },
+      "34": {
+        "total": 1926,
+        "reference": 1541,
+        "audit": 385
+      },
+      "35": {
+        "total": 1955,
+        "reference": 1564,
+        "audit": 391
+      },
+      "36": {
+        "total": 1964,
+        "reference": 1571,
+        "audit": 393
+      },
+      "37": {
+        "total": 1977,
+        "reference": 1582,
+        "audit": 395
+      },
+      "38": {
+        "total": 1850,
+        "reference": 1480,
+        "audit": 370
+      },
+      "39": {
+        "total": 1861,
+        "reference": 1489,
+        "audit": 372
+      },
+      "40": {
+        "total": 1913,
+        "reference": 1530,
+        "audit": 383
+      },
+      "41": {
+        "total": 1913,
+        "reference": 1530,
+        "audit": 383
+      },
+      "42": {
+        "total": 1893,
+        "reference": 1515,
+        "audit": 378
+      },
+      "43": {
+        "total": 1942,
+        "reference": 1554,
+        "audit": 388
+      },
+      "44": {
+        "total": 2006,
+        "reference": 1605,
+        "audit": 401
+      },
+      "45": {
+        "total": 1943,
+        "reference": 1555,
+        "audit": 388
+      },
+      "46": {
+        "total": 1851,
+        "reference": 1481,
+        "audit": 370
+      },
+      "47": {
+        "total": 1921,
+        "reference": 1537,
+        "audit": 384
+      }
+    },
+    "weight_definition": "exp(log(p/q)); physical estimates are N^-1 sum_r (p/q)_r f_r",
+    "full_weight_mean": 0.9995465226423768,
+    "full_weight_effective_sample_size": 30252.21601274515
+  },
+  "reciprocal_fold_unused_for_fitting": {
+    "definition": "component-stratified reciprocal 50/50 folds; fold 0 trains on the first half and fold 1 trains on the second",
+    "seed": 100097,
+    "fold": 0,
+    "training_paths": 50000,
+    "validation_paths": 50000,
+    "training_direct_P_paths": 5012,
+    "validation_direct_P_paths": 5013,
+    "component_counts": {
+      "0": {
+        "total": 10025,
+        "reference": 5012,
+        "audit": 5013
+      },
+      "1": {
+        "total": 1952,
+        "reference": 976,
+        "audit": 976
+      },
+      "2": {
+        "total": 1908,
+        "reference": 954,
+        "audit": 954
+      },
+      "3": {
+        "total": 1905,
+        "reference": 952,
+        "audit": 953
+      },
+      "4": {
+        "total": 1938,
+        "reference": 969,
+        "audit": 969
+      },
+      "5": {
+        "total": 1907,
+        "reference": 953,
+        "audit": 954
+      },
+      "6": {
+        "total": 1890,
+        "reference": 945,
+        "audit": 945
+      },
+      "7": {
+        "total": 1874,
+        "reference": 937,
+        "audit": 937
+      },
+      "8": {
+        "total": 1921,
+        "reference": 960,
+        "audit": 961
+      },
+      "9": {
+        "total": 1896,
+        "reference": 948,
+        "audit": 948
+      },
+      "10": {
+        "total": 1964,
+        "reference": 982,
+        "audit": 982
+      },
+      "11": {
+        "total": 1908,
+        "reference": 954,
+        "audit": 954
+      },
+      "12": {
+        "total": 1888,
+        "reference": 944,
+        "audit": 944
+      },
+      "13": {
+        "total": 1812,
+        "reference": 906,
+        "audit": 906
+      },
+      "14": {
+        "total": 1896,
+        "reference": 948,
+        "audit": 948
+      },
+      "15": {
+        "total": 1910,
+        "reference": 955,
+        "audit": 955
+      },
+      "16": {
+        "total": 1953,
+        "reference": 976,
+        "audit": 977
+      },
+      "17": {
+        "total": 1936,
+        "reference": 968,
+        "audit": 968
+      },
+      "18": {
+        "total": 1943,
+        "reference": 971,
+        "audit": 972
+      },
+      "19": {
+        "total": 2016,
+        "reference": 1008,
+        "audit": 1008
+      },
+      "20": {
+        "total": 1878,
+        "reference": 939,
+        "audit": 939
+      },
+      "21": {
+        "total": 1842,
+        "reference": 921,
+        "audit": 921
+      },
+      "22": {
+        "total": 1948,
+        "reference": 974,
+        "audit": 974
+      },
+      "23": {
+        "total": 1861,
+        "reference": 930,
+        "audit": 931
+      },
+      "24": {
+        "total": 1870,
+        "reference": 935,
+        "audit": 935
+      },
+      "25": {
+        "total": 1869,
+        "reference": 934,
+        "audit": 935
+      },
+      "26": {
+        "total": 1924,
+        "reference": 962,
+        "audit": 962
+      },
+      "27": {
+        "total": 2009,
+        "reference": 1004,
+        "audit": 1005
+      },
+      "28": {
+        "total": 1886,
+        "reference": 943,
+        "audit": 943
+      },
+      "29": {
+        "total": 1971,
+        "reference": 985,
+        "audit": 986
+      },
+      "30": {
+        "total": 1945,
+        "reference": 972,
+        "audit": 973
+      },
+      "31": {
+        "total": 1893,
+        "reference": 947,
+        "audit": 946
+      },
+      "32": {
+        "total": 1893,
+        "reference": 947,
+        "audit": 946
+      },
+      "33": {
+        "total": 1854,
+        "reference": 927,
+        "audit": 927
+      },
+      "34": {
+        "total": 1926,
+        "reference": 963,
+        "audit": 963
+      },
+      "35": {
+        "total": 1955,
+        "reference": 978,
+        "audit": 977
+      },
+      "36": {
+        "total": 1964,
+        "reference": 982,
+        "audit": 982
+      },
+      "37": {
+        "total": 1977,
+        "reference": 989,
+        "audit": 988
+      },
+      "38": {
+        "total": 1850,
+        "reference": 925,
+        "audit": 925
+      },
+      "39": {
+        "total": 1861,
+        "reference": 931,
+        "audit": 930
+      },
+      "40": {
+        "total": 1913,
+        "reference": 957,
+        "audit": 956
+      },
+      "41": {
+        "total": 1913,
+        "reference": 957,
+        "audit": 956
+      },
+      "42": {
+        "total": 1893,
+        "reference": 947,
+        "audit": 946
+      },
+      "43": {
+        "total": 1942,
+        "reference": 971,
+        "audit": 971
+      },
+      "44": {
+        "total": 2006,
+        "reference": 1003,
+        "audit": 1003
+      },
+      "45": {
+        "total": 1943,
+        "reference": 972,
+        "audit": 971
+      },
+      "46": {
+        "total": 1851,
+        "reference": 926,
+        "audit": 925
+      },
+      "47": {
+        "total": 1921,
+        "reference": 961,
+        "audit": 960
+      }
+    }
+  },
+  "portfolio_normalization": {
+    "definition": "calls with K<S are retained; calls with K>=S are replaced at entry by puts through P=C+K-S and dP=dC-dS; spot and option returns are divided by their positive entry prices",
+    "paths": 100000,
+    "times": 2,
+    "expiries": 7,
+    "strikes_per_expiry": 20,
+    "put_coordinate_fraction": 0.3500000238418579,
+    "minimum_selected_option_price": 0.0006322860717773438,
+    "maximum_selected_option_price": 1.7200261354446411,
+    "cost": "coordinatewise proportional cost after entry-value normalization",
+    "cost_rate": 0.0
+  },
+  "model_config": {
+    "label": "implied-cvar-dysanos-weekly-expiry-raw-0bps-100000-fixed-kernel-64-lambda-10-12-15-20-30",
+    "source_cache_uid": "dysanos-weekly-100000-d2de605ddfcb8df9",
+    "architecture": "kernel",
+    "state_features": 21,
+    "notionals": [
+      11.0,
+      13.0,
+      16.0,
+      21.0,
+      31.0
+    ],
+    "partitions": 16,
+    "kernels": 64,
+    "deterministic_time": 0,
+    "conditional_time": 6,
+    "expiries": 7,
+    "instruments_per_expiry": 21,
+    "learn_oce_translation": false,
+    "action_radius": 1.0,
+    "group": "gendysanos/implied-cvar/dysanos",
+    "user_version": "0.5-refine",
+    "network_config": {
+      "activation": "SiLU",
+      "num_depth": 2,
+      "num_width": 96,
+      "use_bias": true
+    }
+  },
+  "whitening": {
+    "definition": "xi_t=(x_t-m_t) Q_t Lambda_t^{-1/2}; m_t and covariance are estimated on training paths with physical p/q weights",
+    "relative_eigenvalue_floor": 1e-10,
+    "training_path_count": 100000,
+    "training_weight_effective_sample_size": 30252.21601274514,
+    "minimum_covariance_eigenvalue_by_time": [
+      6.069200104924859e-06,
+      3.990990995068093e-06
+    ],
+    "maximum_covariance_eigenvalue_by_time": [
+      14.06687141106491,
+      13.708252226596485
+    ],
+    "clipped_eigenvalue_count_by_time": [
+      0,
+      0
+    ],
+    "maximum_absolute_weighted_factor_mean": 4.70914973682568e-13,
+    "maximum_absolute_weighted_factor_covariance_error": 1.6596528595869131e-09
+  },
+  "kernel_basis": {
+    "definition": "physical-weighted MiniBatchKMeans centers in orthogonal t6 state; bandwidth is weighted within-center RMS distance",
+    "kernels": 64,
+    "radius_floor": 0.9876188719636703,
+    "minimum_radius": 3.8510972966737747,
+    "median_radius": 3.950475487854681,
+    "maximum_radius": 4.15112667700785,
+    "minimum_physical_cluster_mass": 0.013237266951445047,
+    "maximum_physical_cluster_mass": 0.01805274579531947
+  },
+  "training": {
+    "steps": 30000,
+    "resumed_complete_checkpoint": false,
+    "elapsed_seconds_this_invocation": 106.47621699201409,
+    "constant_learning_rate": 0.001,
+    "gradient_clipping": false,
+    "tracker": [
+      {
+        "step": 3000,
+        "objective_by_density_cap_and_time": [
+          [
+            -0.09946388751268387,
+            -0.0007460811175405979
+          ],
+          [
+            -0.1685471087694168,
+            -0.0005787168629467487
+          ],
+          [
+            -0.030289532616734505,
+            -0.0007965635159052908
+          ],
+          [
+            -0.13346675038337708,
+            -0.0006939885206520557
+          ],
+          [
+            -0.20466935634613037,
+            -0.0009110425598919392
+          ]
+        ],
+        "elapsed_seconds": 12.382686588098295
+      },
+      {
+        "step": 6000,
+        "objective_by_density_cap_and_time": [
+          [
+            -0.05235518142580986,
+            -0.0007447386160492897
+          ],
+          [
+            -0.16268141567707062,
+            -0.0003635582106653601
+          ],
+          [
+            -0.04752910137176514,
+            -0.00024279940407723188
+          ],
+          [
+            -0.10055898129940033,
+            -0.000496293359901756
+          ],
+          [
+            -0.06249389424920082,
+            -0.0004081339866388589
+          ]
+        ],
+        "elapsed_seconds": 22.830887418007478
+      },
+      {
+        "step": 9000,
+        "objective_by_density_cap_and_time": [
+          [
+            -0.07090539485216141,
+            -1.878127113741357e-05
+          ],
+          [
+            -0.049634672701358795,
+            -0.0006794509245082736
+          ],
+          [
+            -0.03036053478717804,
+            -0.000474161293823272
+          ],
+          [
+            -0.033399082720279694,
+            -0.002285110065713525
+          ],
+          [
+            -0.07394866645336151,
+            -0.000646917789708823
+          ]
+        ],
+        "elapsed_seconds": 33.14210263907444
+      },
+      {
+        "step": 12000,
+        "objective_by_density_cap_and_time": [
+          [
+            -0.061256930232048035,
+            -0.00047694670502096415
+          ],
+          [
+            -0.05310538038611412,
+            -0.0003536841250024736
+          ],
+          [
+            -0.02654678001999855,
+            -0.0004869168624281883
+          ],
+          [
+            -0.056634001433849335,
+            -0.0010803689947351813
+          ],
+          [
+            -0.05346312373876572,
+            -0.002251379657536745
+          ]
+        ],
+        "elapsed_seconds": 43.46528464509174
+      },
+      {
+        "step": 15000,
+        "objective_by_density_cap_and_time": [
+          [
+            -0.03275066614151001,
+            3.91277571907267e-05
+          ],
+          [
+            -0.045225758105516434,
+            -0.00013729116471949965
+          ],
+          [
+            -0.06580208986997604,
+            -0.0005349977873265743
+          ],
+          [
+            -0.07895974069833755,
+            -0.0007246456225402653
+          ],
+          [
+            -0.03978537395596504,
+            -0.0009307672153227031
+          ]
+        ],
+        "elapsed_seconds": 53.772243084036745
+      },
+      {
+        "step": 18000,
+        "objective_by_density_cap_and_time": [
+          [
+            -0.027149463072419167,
+            -0.00011088769679190591
+          ],
+          [
+            -0.058593928813934326,
+            -0.00019501069618854672
+          ],
+          [
+            -0.0794261023402214,
+            -0.00033324892865493894
+          ],
+          [
+            -0.05739372968673706,
+            -0.0006718833465129137
+          ],
+          [
+            -0.12310109287500381,
+            -0.0007640593103133142
+          ]
+        ],
+        "elapsed_seconds": 64.63543890207075
+      },
+      {
+        "step": 21000,
+        "objective_by_density_cap_and_time": [
+          [
+            -0.1044064611196518,
+            -0.00040783642907626927
+          ],
+          [
+            -0.0660473182797432,
+            -0.0005729760741814971
+          ],
+          [
+            -0.033428989350795746,
+            -0.00025604391703382134
+          ],
+          [
+            -0.053633831441402435,
+            -0.0006864314782433212
+          ],
+          [
+            -0.029945936053991318,
+            -0.0007215866935439408
+          ]
+        ],
+        "elapsed_seconds": 74.99624753603712
+      },
+      {
+        "step": 24000,
+        "objective_by_density_cap_and_time": [
+          [
+            -0.1557256579399109,
+            -5.107029210194014e-05
+          ],
+          [
+            -0.04301697015762329,
+            -0.0003371753264218569
+          ],
+          [
+            -0.07509646564722061,
+            -0.00028283806750550866
+          ],
+          [
+            -0.023684190586209297,
+            -0.0003737523511517793
+          ],
+          [
+            -0.0651574432849884,
+            -0.0003966439689975232
+          ]
+        ],
+        "elapsed_seconds": 85.83988906210288
+      },
+      {
+        "step": 27000,
+        "objective_by_density_cap_and_time": [
+          [
+            -0.05300430208444595,
+            1.54843121435988e-07
+          ],
+          [
+            -0.06023801863193512,
+            -0.00026930533931590617
+          ],
+          [
+            -0.030438538640737534,
+            -0.00047497893683612347
+          ],
+          [
+            -0.07943002879619598,
+            -0.00042790238512679935
+          ],
+          [
+            -0.06511340290307999,
+            -0.0004985196283087134
+          ]
+        ],
+        "elapsed_seconds": 96.13503326999489
+      },
+      {
+        "step": 30000,
+        "objective_by_density_cap_and_time": [
+          [
+            -0.05222316458821297,
+            0.0001162697808467783
+          ],
+          [
+            -0.02319515496492386,
+            -7.468427065759897e-05
+          ],
+          [
+            -0.052915073931217194,
+            -0.000333986448822543
+          ],
+          [
+            -0.03660440444946289,
+            -0.0007976557244546711
+          ],
+          [
+            -0.07191993296146393,
+            -0.0008065738948062062
+          ]
+        ],
+        "elapsed_seconds": 106.47207082610112
+      }
+    ]
+  },
+  "full_sample": {
+    "paths": 100000,
+    "by_lambda": [
+      {
+        "lambda": 10.0,
+        "density_cap": 11.0,
+        "times": [
+          {
+            "name": "t0_deterministic",
+            "fitted_direction_empirical_OCE_CVaR": -0.05063027600020008,
+            "retained_lower_tail_probability": 0.09090909090909091,
+            "upper_VaR_endpoint_of_retained_tail": -0.026499582454562187,
+            "P_mean_pnl": 0.07313527734427624,
+            "P_loss_probability": 0.26459236524494073,
+            "P_net_L1_mean": 0.8802718223582446,
+            "P_net_L1_99_quantile": 0.880271852016449,
+            "sample_minimum_pnl": -0.772391676902771,
+            "direct_P_loss_count": 2655
+          },
+          {
+            "name": "t6_state_dependent",
+            "fitted_direction_empirical_OCE_CVaR": 0.00021065725889254396,
+            "retained_lower_tail_probability": 0.09090909090909091,
+            "upper_VaR_endpoint_of_retained_tail": 0.0009228162234649062,
+            "P_mean_pnl": 0.0033701629444980543,
+            "P_loss_probability": 0.016458226123336604,
+            "P_net_L1_mean": 0.08496564226412129,
+            "P_net_L1_99_quantile": 0.08660908070979469,
+            "sample_minimum_pnl": -0.05322828143835068,
+            "direct_P_loss_count": 182
+          }
+        ]
+      },
+      {
+        "lambda": 12.0,
+        "density_cap": 13.0,
+        "times": [
+          {
+            "name": "t0_deterministic",
+            "fitted_direction_empirical_OCE_CVaR": -0.022495023547077865,
+            "retained_lower_tail_probability": 0.07692307692307693,
+            "upper_VaR_endpoint_of_retained_tail": -0.0134207122027874,
+            "P_mean_pnl": 0.04928387839719271,
+            "P_loss_probability": 0.19139064942008752,
+            "P_net_L1_mean": 0.8537131251345814,
+            "P_net_L1_99_quantile": 0.8537131547927856,
+            "sample_minimum_pnl": -0.3840988576412201,
+            "direct_P_loss_count": 1907
+          },
+          {
+            "name": "t6_state_dependent",
+            "fitted_direction_empirical_OCE_CVaR": 3.365587072597475e-05,
+            "retained_lower_tail_probability": 0.07692307692307693,
+            "upper_VaR_endpoint_of_retained_tail": 0.0006040073931217194,
+            "P_mean_pnl": 0.002893453989507687,
+            "P_loss_probability": 0.019428148054049667,
+            "P_net_L1_mean": 0.0774915206155772,
+            "P_net_L1_99_quantile": 0.07898648365252944,
+            "sample_minimum_pnl": -0.04363540560007095,
+            "direct_P_loss_count": 199
+          }
+        ]
+      },
+      {
+        "lambda": 15.0,
+        "density_cap": 16.0,
+        "times": [
+          {
+            "name": "t0_deterministic",
+            "fitted_direction_empirical_OCE_CVaR": -0.052726063951454905,
+            "retained_lower_tail_probability": 0.0625,
+            "upper_VaR_endpoint_of_retained_tail": -0.040336139500141144,
+            "P_mean_pnl": 0.09775277158221622,
+            "P_loss_probability": 0.265973504218132,
+            "P_net_L1_mean": 0.8719294071197509,
+            "P_net_L1_99_quantile": 0.871929407119751,
+            "sample_minimum_pnl": -0.36103466153144836,
+            "direct_P_loss_count": 2608
+          },
+          {
+            "name": "t6_state_dependent",
+            "fitted_direction_empirical_OCE_CVaR": -0.00024275704214366748,
+            "retained_lower_tail_probability": 0.0625,
+            "upper_VaR_endpoint_of_retained_tail": 0.0003571858396753669,
+            "P_mean_pnl": 0.003022679547690934,
+            "P_loss_probability": 0.02553744799451081,
+            "P_net_L1_mean": 0.07268487192420427,
+            "P_net_L1_99_quantile": 0.07401092112540222,
+            "sample_minimum_pnl": -0.03942873328924179,
+            "direct_P_loss_count": 272
+          }
+        ]
+      },
+      {
+        "lambda": 20.0,
+        "density_cap": 21.0,
+        "times": [
+          {
+            "name": "t0_deterministic",
+            "fitted_direction_empirical_OCE_CVaR": -0.03629704181529152,
+            "retained_lower_tail_probability": 0.047619047619047616,
+            "upper_VaR_endpoint_of_retained_tail": -0.029059749096632004,
+            "P_mean_pnl": 0.07360663048230116,
+            "P_loss_probability": 0.2386319921477935,
+            "P_net_L1_mean": 0.8135437369346618,
+            "P_net_L1_99_quantile": 0.8135437369346619,
+            "sample_minimum_pnl": -0.26608893275260925,
+            "direct_P_loss_count": 2363
+          },
+          {
+            "name": "t6_state_dependent",
+            "fitted_direction_empirical_OCE_CVaR": -0.0007294401615110551,
+            "retained_lower_tail_probability": 0.047619047619047616,
+            "upper_VaR_endpoint_of_retained_tail": -0.0004497980698943138,
+            "P_mean_pnl": 0.0019848579955873743,
+            "P_loss_probability": 0.14791598396115943,
+            "P_net_L1_mean": 0.06727116645295153,
+            "P_net_L1_99_quantile": 0.06869461224394155,
+            "sample_minimum_pnl": -0.024281371384859085,
+            "direct_P_loss_count": 1464
+          }
+        ]
+      },
+      {
+        "lambda": 30.0,
+        "density_cap": 31.0,
+        "times": [
+          {
+            "name": "t0_deterministic",
+            "fitted_direction_empirical_OCE_CVaR": -0.07174911858180806,
+            "retained_lower_tail_probability": 0.03225806451612903,
+            "upper_VaR_endpoint_of_retained_tail": -0.061460062861442566,
+            "P_mean_pnl": 0.11013491837265658,
+            "P_loss_probability": 0.2678697017644961,
+            "P_net_L1_mean": 0.8078972101211548,
+            "P_net_L1_99_quantile": 0.8078972101211548,
+            "sample_minimum_pnl": -0.295423686504364,
+            "direct_P_loss_count": 2641
+          },
+          {
+            "name": "t6_state_dependent",
+            "fitted_direction_empirical_OCE_CVaR": -0.000712596448718341,
+            "retained_lower_tail_probability": 0.03225806451612903,
+            "upper_VaR_endpoint_of_retained_tail": -0.00030701630748808384,
+            "P_mean_pnl": 0.0025548488079316506,
+            "P_loss_probability": 0.09508058156080768,
+            "P_net_L1_mean": 0.05596722684950365,
+            "P_net_L1_99_quantile": 0.05745570603306319,
+            "sample_minimum_pnl": -0.023407118394970894,
+            "direct_P_loss_count": 993
+          }
+        ]
+      }
+    ]
+  },
+  "global_optimality_certificate": {
+    "definition": "For the fixed Gaussian basis the objective is concave in the long-short portfolio rows. A CVaR supergradient gives a global upper bound via the Frank-Wolfe gap on each nonnegative unit-L1 row.",
+    "zero_tolerance": 1e-06,
+    "by_lambda": [
+      {
+        "lambda": 10.0,
+        "density_cap": 11.0,
+        "times": [
+          {
+            "name": "t0_deterministic",
+            "fitted_CVaR": -0.05063027600020007,
+            "Frank_Wolfe_supergradient_gap": 2.592249870300293,
+            "certified_maximum_lower_bound": 0.0,
+            "certified_maximum_upper_bound": 2.541619594300093,
+            "zero_within_tolerance": false
+          },
+          {
+            "name": "t6_state_dependent",
+            "fitted_CVaR": 0.000210657258892544,
+            "Frank_Wolfe_supergradient_gap": 0.22044888138771057,
+            "certified_maximum_lower_bound": 0.000210657258892544,
+            "certified_maximum_upper_bound": 0.22065953864660312,
+            "zero_within_tolerance": false
+          }
+        ]
+      },
+      {
+        "lambda": 12.0,
+        "density_cap": 13.0,
+        "times": [
+          {
+            "name": "t0_deterministic",
+            "fitted_CVaR": -0.022495023547077865,
+            "Frank_Wolfe_supergradient_gap": 0.7609620690345764,
+            "certified_maximum_lower_bound": 0.0,
+            "certified_maximum_upper_bound": 0.7384670454874985,
+            "zero_within_tolerance": false
+          },
+          {
+            "name": "t6_state_dependent",
+            "fitted_CVaR": 3.365587072597471e-05,
+            "Frank_Wolfe_supergradient_gap": 0.44428592920303345,
+            "certified_maximum_lower_bound": 3.365587072597471e-05,
+            "certified_maximum_upper_bound": 0.4443195850737594,
+            "zero_within_tolerance": false
+          }
+        ]
+      },
+      {
+        "lambda": 15.0,
+        "density_cap": 16.0,
+        "times": [
+          {
+            "name": "t0_deterministic",
+            "fitted_CVaR": -0.052726063951454905,
+            "Frank_Wolfe_supergradient_gap": 0.9468975067138672,
+            "certified_maximum_lower_bound": 0.0,
+            "certified_maximum_upper_bound": 0.8941714427624123,
+            "zero_within_tolerance": false
+          },
+          {
+            "name": "t6_state_dependent",
+            "fitted_CVaR": -0.00024275704214366746,
+            "Frank_Wolfe_supergradient_gap": 0.8147555589675903,
+            "certified_maximum_lower_bound": 0.0,
+            "certified_maximum_upper_bound": 0.8145128019254466,
+            "zero_within_tolerance": false
+          }
+        ]
+      },
+      {
+        "lambda": 20.0,
+        "density_cap": 21.0,
+        "times": [
+          {
+            "name": "t0_deterministic",
+            "fitted_CVaR": -0.03629704181529152,
+            "Frank_Wolfe_supergradient_gap": 0.7246758937835693,
+            "certified_maximum_lower_bound": 0.0,
+            "certified_maximum_upper_bound": 0.6883788519682779,
+            "zero_within_tolerance": false
+          },
+          {
+            "name": "t6_state_dependent",
+            "fitted_CVaR": -0.0007294401615110552,
+            "Frank_Wolfe_supergradient_gap": 1.0394889116287231,
+            "certified_maximum_lower_bound": 0.0,
+            "certified_maximum_upper_bound": 1.0387594714672121,
+            "zero_within_tolerance": false
+          }
+        ]
+      },
+      {
+        "lambda": 30.0,
+        "density_cap": 31.0,
+        "times": [
+          {
+            "name": "t0_deterministic",
+            "fitted_CVaR": -0.07174911858180806,
+            "Frank_Wolfe_supergradient_gap": 0.9292992353439331,
+            "certified_maximum_lower_bound": 0.0,
+            "certified_maximum_upper_bound": 0.857550116762125,
+            "zero_within_tolerance": false
+          },
+          {
+            "name": "t6_state_dependent",
+            "fitted_CVaR": -0.0007125964487183409,
+            "Frank_Wolfe_supergradient_gap": 0.9589739441871643,
+            "certified_maximum_lower_bound": 0.0,
+            "certified_maximum_upper_bound": 0.958261347738446,
+            "zero_within_tolerance": false
+          }
+        ]
+      }
+    ],
+    "smallest_tested_lambda_certified_zero": {
+      "t0_deterministic": null,
+      "t6_state_dependent": null
+    }
+  },
+  "checkpoint": "/media/storage/tmp/quantdata/dysanos/implied-cvar/checkpoints/gendysanos/implied-cvar/dysanos/implied-cvar-dysanos-weekly-expiry-raw- aa1351e0.pt",
+  "device": "cuda:1",
+  "peak_gpu_memory_bytes": 1492476416
+}

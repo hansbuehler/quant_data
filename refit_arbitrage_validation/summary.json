@@ -1,0 +1,178 @@
+{
+  "training_shape": [
+    40000,
+    9,
+    141
+  ],
+  "tolerance": 1e-10,
+  "experiments": {
+    "delta0_prop0": {
+      "cost": {
+        "delta": 0.0,
+        "prop_cost": 0.0
+      },
+      "solver": {
+        "solver_success": true,
+        "solver_message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "solver_status": 0,
+        "solver_nit_last": 973,
+        "iterations": 5,
+        "active_constraints": 2255,
+        "verification_slack": 1e-12,
+        "worst_remaining_violation": 1.8817753911512175e-15,
+        "violated_paths": 0,
+        "elapsed_seconds": 15.397481393010821
+      },
+      "training": {
+        "n": 40000,
+        "min": -1.0000188177539115e-10,
+        "mean": 0.07544425075440313,
+        "max": 0.665230042607291,
+        "std": 0.05878015401944093,
+        "sem": 0.00029390077009720463,
+        "negative_count": 51,
+        "negative_fraction": 0.001275,
+        "q0.001": -1.0000004817441177e-10,
+        "q0.01": 0.008574079941079634,
+        "median": 0.05912306449693358,
+        "ci95": [
+          0.0748682052450126,
+          0.07602029626379365
+        ],
+        "pathwise_certificate": false
+      },
+      "validation_frozen": {
+        "n": 400000,
+        "min": -0.0375552877816752,
+        "mean": 0.07556992169174848,
+        "max": 0.9483171965821353,
+        "std": 0.05876417966983061,
+        "sem": 9.291432629401307e-05,
+        "negative_count": 874,
+        "negative_fraction": 0.002185,
+        "q0.001": -0.003951997682529046,
+        "q0.01": 0.008660341785521533,
+        "median": 0.059541090644817385,
+        "ci95": [
+          0.07538780961221221,
+          0.07575203377128474
+        ],
+        "pathwise_certificate": false
+      },
+      "l1_beta": 1223.5989219362355,
+      "max_abs_beta": 1.0
+    },
+    "delta1_prop0": {
+      "cost": {
+        "delta": 1.0,
+        "prop_cost": 0.0
+      },
+      "solver": {
+        "solver_success": true,
+        "solver_message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "solver_status": 0,
+        "solver_nit_last": 3211,
+        "iterations": 7,
+        "active_constraints": 3034,
+        "verification_slack": 1e-10,
+        "worst_remaining_violation": 9.631592318371521e-11,
+        "violated_paths": 0,
+        "elapsed_seconds": 58.33022459500353
+      },
+      "training": {
+        "n": 40000,
+        "min": -1.9631592318371522e-10,
+        "mean": 9.215932128529377e-10,
+        "max": 1.1325218228373222e-08,
+        "std": 9.016289793654643e-10,
+        "sem": 4.5081448968273215e-12,
+        "negative_count": 151,
+        "negative_fraction": 0.003775,
+        "q0.001": -1.1409922234151095e-10,
+        "q0.01": -4.690993392655013e-11,
+        "median": 6.644177138034e-10,
+        "ci95": [
+          9.127572488551562e-10,
+          9.304291768507192e-10
+        ],
+        "pathwise_certificate": false
+      },
+      "validation_frozen": {
+        "n": 400000,
+        "min": -4.234068451562368e-09,
+        "mean": 9.248698926084671e-10,
+        "max": 1.8148614319225527e-08,
+        "std": 9.10659695983001e-10,
+        "sem": 1.4398794063113858e-12,
+        "negative_count": 2056,
+        "negative_fraction": 0.00514,
+        "q0.001": -2.2959170040847603e-10,
+        "q0.01": -4.7360755850637246e-11,
+        "median": 6.758682577758579e-10,
+        "ci95": [
+          9.220477289720967e-10,
+          9.276920562448374e-10
+        ],
+        "pathwise_certificate": false
+      },
+      "l1_beta": 3.824147242154134e-05,
+      "max_abs_beta": 1.5856153430573928e-06
+    },
+    "delta0_prop1bp": {
+      "cost": {
+        "delta": 0.0,
+        "prop_cost": 0.0001
+      },
+      "solver": {
+        "solver_success": true,
+        "solver_message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "solver_status": 0,
+        "solver_nit_last": 1301,
+        "iterations": 5,
+        "active_constraints": 2426,
+        "verification_slack": 2e-10,
+        "worst_remaining_violation": 1.9954634259143907e-10,
+        "violated_paths": 0,
+        "elapsed_seconds": 19.492670717998408
+      },
+      "training": {
+        "n": 40000,
+        "min": -2.995463425914391e-10,
+        "mean": 0.06029092569659414,
+        "max": 0.4531358364609572,
+        "std": 0.04740966000924975,
+        "sem": 0.00023704830004624876,
+        "negative_count": 108,
+        "negative_fraction": 0.0027,
+        "q0.001": -2.193842980439953e-10,
+        "q0.01": 0.00599412968907736,
+        "median": 0.04708468197542677,
+        "ci95": [
+          0.05982631102850349,
+          0.060755540364684786
+        ],
+        "pathwise_certificate": false
+      },
+      "validation_frozen": {
+        "n": 400000,
+        "min": -0.02874489658683698,
+        "mean": 0.060382314925510244,
+        "max": 0.7174156528610092,
+        "std": 0.0474255620573298,
+        "sem": 7.498639770741156e-05,
+        "negative_count": 996,
+        "negative_fraction": 0.00249,
+        "q0.001": -0.0038804432915698255,
+        "q0.01": 0.006300724522800007,
+        "median": 0.04726724633625108,
+        "ci95": [
+          0.060235341586003716,
+          0.06052928826501677
+        ],
+        "pathwise_certificate": false
+      },
+      "l1_beta": 975.8197491560093,
+      "max_abs_beta": 1.0
+    }
+  }
+}

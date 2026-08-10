@@ -1,0 +1,42 @@
+{
+  "status": "complete",
+  "experiment": "exact empirical time-zero fixed-cap feasibility",
+  "configuration": {
+    "generator": "pca-iv",
+    "trading_frequency": "weekly",
+    "return_horizon": "expiry",
+    "hedge": "raw",
+    "cost_rate": 0.0,
+    "path_count": 100000,
+    "num_trading_times": 10,
+    "schema_version": "1.0"
+  },
+  "source_cache": "/media/storage/tmp/quantdata/dysanos/required-runs/universes/pca-iv-weekly-100000-f082b69cd7ba6170",
+  "source_cache_uid": "pca-iv-weekly-100000-f082b69cd7ba6170",
+  "portfolio_normalization": {
+    "definition": "calls with K<S are retained; calls with K>=S are replaced at entry by puts through P=C+K-S and dP=dC-dS; spot and option returns are divided by their positive entry prices",
+    "paths": 100000,
+    "times": 2,
+    "expiries": 7,
+    "strikes_per_expiry": 20,
+    "put_coordinate_fraction": 0.3499999940395355,
+    "minimum_selected_option_price": 0.0012727484930560307,
+    "maximum_selected_option_price": 1.5581859350204468,
+    "cost": "coordinatewise proportional cost after entry-value normalization",
+    "cost_rate": 0.0
+  },
+  "paths": 100000,
+  "independent_return_coordinates": 147,
+  "density_cap": 10.0,
+  "lambda": 9.0,
+  "solver": {
+    "method": "highs-ipm",
+    "success": false,
+    "status": 2,
+    "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+    "iterations": 31,
+    "crossover_iterations": 0,
+    "elapsed_seconds": 295.05499428207986
+  },
+  "density_path": null
+}

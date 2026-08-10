@@ -1,0 +1,83 @@
+{
+  "status": "complete",
+  "experiment": "positive-lambda empirical CVaR martingale-density search",
+  "lambda_zero_tested": false,
+  "definition": {
+    "OCE": "sup_{a,y} E[(1+lambda) min(y+a(x)^T R,0)]-y",
+    "density_dual": "E_P[D]=1, 0<=D<=1+lambda, and E_P[D R]=0 for every return coordinate in the strategy class",
+    "density_cap": "c=1+lambda",
+    "retained_lower_tail_probability": "1/c"
+  },
+  "market": {
+    "paths": 100000,
+    "trading_frequency": "weekly",
+    "return_horizon": "expiry",
+    "hedge": "raw",
+    "transaction_cost": 0.0,
+    "return_coordinates": 147,
+    "portfolio_normalization": "calls with K<S are retained; calls with K>=S are replaced by their ITM puts through put-call parity; every expiry-specific stock and option return is divided by its positive entry value"
+  },
+  "t0_deterministic": {
+    "strict_sample_arbitrage_margin": {
+      "pca-iv": 0.0,
+      "dysanos": 0.0
+    },
+    "pca-iv": {
+      "minimum_lambda_lower_bound": 9.0,
+      "minimum_lambda_upper_bound": 11.5,
+      "lower_cap_infeasible": 10.0,
+      "upper_cap_feasible": 12.5,
+      "feasible_retained_lower_tail_probability": 0.08,
+      "maximum_absolute_scaled_martingale_error": 2.2869769380514465e-11,
+      "density_weighted_mean": 1.0000000000000853,
+      "density_minimum": 0.0,
+      "density_maximum": 12.495193440988949,
+      "target_measure_effective_sample_size": 2806.3433491807095,
+      "feasible_report": "quantdata/dysanos/grid/gendysanos/reports/implied-cvar/implied-cvar-pca-iv-weekly-expiry-itm-dollar-t0-cap-12.5-feasibility.json",
+      "infeasible_report": "quantdata/dysanos/grid/gendysanos/reports/implied-cvar/implied-cvar-pca-iv-weekly-expiry-itm-dollar-t0-cap-10-feasibility.json",
+      "density_path": "/tmp/quantdata/dysanos/implied-cvar/densities/pca-iv-weekly-expiry-itm-dollar-t0-cap-12.5-density.npz"
+    },
+    "dysanos": {
+      "minimum_lambda_lower_bound": 9.0,
+      "minimum_lambda_upper_bound": 11.5,
+      "lower_cap_infeasible": 10.0,
+      "upper_cap_feasible": 12.5,
+      "feasible_retained_lower_tail_probability": 0.08,
+      "maximum_absolute_scaled_martingale_error": 9.257860633136043e-12,
+      "density_weighted_mean": 0.9999999999999991,
+      "density_minimum": 0.0,
+      "density_maximum": 12.497739479049425,
+      "target_measure_effective_sample_size": 2582.5414324180488,
+      "feasible_report": "quantdata/dysanos/grid/gendysanos/reports/implied-cvar/implied-cvar-dysanos-weekly-expiry-itm-dollar-t0-cap-12.5-feasibility.json",
+      "infeasible_report": "quantdata/dysanos/grid/gendysanos/reports/implied-cvar/implied-cvar-dysanos-weekly-expiry-itm-dollar-t0-cap-10-feasibility.json",
+      "density_path": "/tmp/quantdata/dysanos/implied-cvar/densities/dysanos-weekly-expiry-itm-dollar-t0-cap-12.5-density.npz"
+    }
+  },
+  "t6_state_dependent_hard_partition": {
+    "strategy_class": "one independent deterministic 147-coordinate portfolio in each of 64 learned state cells",
+    "pca-iv": {
+      "minimum_lambda_lower_bound": 1.3088935245424929,
+      "minimum_lambda_upper_bound": 1544.7195483530231,
+      "feasible_retained_lower_tail_probability": 0.000646947889780852,
+      "feasible_cells": 26,
+      "strictly_separated_cells": 9,
+      "numerically_unresolved_cells": 29,
+      "maximum_absolute_hard_cell_martingale_error": 9.915286153637667e-16,
+      "density_weighted_mean": 1.0000000000000007,
+      "target_measure_effective_sample_size": 100.8658943356895,
+      "report": "quantdata/dysanos/grid/gendysanos/reports/implied-cvar/implied-cvar-pca-iv-weekly-expiry-itm-dollar-t6-hard-64-exact-lp.json"
+    },
+    "dysanos": {
+      "minimum_lambda_lower_bound": 0.6855473775113547,
+      "minimum_lambda_upper_bound": 2423.9441898319783,
+      "feasible_retained_lower_tail_probability": 0.000412380624755446,
+      "feasible_cells": 18,
+      "strictly_separated_cells": 6,
+      "numerically_unresolved_cells": 40,
+      "maximum_absolute_hard_cell_martingale_error": 2.2427568970809914e-15,
+      "density_weighted_mean": 1.0000000000000002,
+      "target_measure_effective_sample_size": 112.8124622203859,
+      "report": "quantdata/dysanos/grid/gendysanos/reports/implied-cvar/implied-cvar-dysanos-weekly-expiry-itm-dollar-t6-hard-64-exact-lp.json"
+    }
+  }
+}

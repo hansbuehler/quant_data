@@ -1,0 +1,2501 @@
+{
+  "status": "complete",
+  "experiment": "empirical time-six hard-partition CVaR density-cap construction",
+  "definition": "the action is an independent deterministic portfolio in each learned hard state cell; solved cells use their exact conditional minimum-cap martingale LP, strictly separated cells receive zero target mass, and numerically unresolved cells also receive zero mass for the reported constructive upper bound",
+  "configuration": {
+    "generator": "pca-iv",
+    "trading_frequency": "weekly",
+    "return_horizon": "expiry",
+    "hedge": "raw",
+    "cost_rate": 0.0,
+    "path_count": 100000,
+    "num_trading_times": 10,
+    "schema_version": "1.0"
+  },
+  "source_cache": "/media/storage/tmp/quantdata/dysanos/required-runs/universes/pca-iv-weekly-100000-f082b69cd7ba6170",
+  "source_cache_uid": "pca-iv-weekly-100000-f082b69cd7ba6170",
+  "source_split_unused_for_fitting": {
+    "split_seed": 100097,
+    "validation_fraction": 0.2,
+    "component_counts": {
+      "0": {
+        "total": 10025,
+        "reference": 8020,
+        "audit": 2005
+      },
+      "1": {
+        "total": 1952,
+        "reference": 1562,
+        "audit": 390
+      },
+      "2": {
+        "total": 1908,
+        "reference": 1526,
+        "audit": 382
+      },
+      "3": {
+        "total": 1905,
+        "reference": 1524,
+        "audit": 381
+      },
+      "4": {
+        "total": 1938,
+        "reference": 1550,
+        "audit": 388
+      },
+      "5": {
+        "total": 1907,
+        "reference": 1526,
+        "audit": 381
+      },
+      "6": {
+        "total": 1890,
+        "reference": 1512,
+        "audit": 378
+      },
+      "7": {
+        "total": 1874,
+        "reference": 1499,
+        "audit": 375
+      },
+      "8": {
+        "total": 1921,
+        "reference": 1537,
+        "audit": 384
+      },
+      "9": {
+        "total": 1896,
+        "reference": 1517,
+        "audit": 379
+      },
+      "10": {
+        "total": 1964,
+        "reference": 1571,
+        "audit": 393
+      },
+      "11": {
+        "total": 1908,
+        "reference": 1526,
+        "audit": 382
+      },
+      "12": {
+        "total": 1888,
+        "reference": 1510,
+        "audit": 378
+      },
+      "13": {
+        "total": 1812,
+        "reference": 1450,
+        "audit": 362
+      },
+      "14": {
+        "total": 1896,
+        "reference": 1517,
+        "audit": 379
+      },
+      "15": {
+        "total": 1910,
+        "reference": 1528,
+        "audit": 382
+      },
+      "16": {
+        "total": 1953,
+        "reference": 1562,
+        "audit": 391
+      },
+      "17": {
+        "total": 1936,
+        "reference": 1549,
+        "audit": 387
+      },
+      "18": {
+        "total": 1943,
+        "reference": 1554,
+        "audit": 389
+      },
+      "19": {
+        "total": 2016,
+        "reference": 1613,
+        "audit": 403
+      },
+      "20": {
+        "total": 1878,
+        "reference": 1502,
+        "audit": 376
+      },
+      "21": {
+        "total": 1842,
+        "reference": 1474,
+        "audit": 368
+      },
+      "22": {
+        "total": 1948,
+        "reference": 1558,
+        "audit": 390
+      },
+      "23": {
+        "total": 1861,
+        "reference": 1489,
+        "audit": 372
+      },
+      "24": {
+        "total": 1870,
+        "reference": 1496,
+        "audit": 374
+      },
+      "25": {
+        "total": 1869,
+        "reference": 1495,
+        "audit": 374
+      },
+      "26": {
+        "total": 1924,
+        "reference": 1539,
+        "audit": 385
+      },
+      "27": {
+        "total": 2009,
+        "reference": 1607,
+        "audit": 402
+      },
+      "28": {
+        "total": 1886,
+        "reference": 1509,
+        "audit": 377
+      },
+      "29": {
+        "total": 1971,
+        "reference": 1577,
+        "audit": 394
+      },
+      "30": {
+        "total": 1945,
+        "reference": 1556,
+        "audit": 389
+      },
+      "31": {
+        "total": 1893,
+        "reference": 1514,
+        "audit": 379
+      },
+      "32": {
+        "total": 1893,
+        "reference": 1514,
+        "audit": 379
+      },
+      "33": {
+        "total": 1854,
+        "reference": 1483,
+        "audit": 371
+      },
+      "34": {
+        "total": 1926,
+        "reference": 1541,
+        "audit": 385
+      },
+      "35": {
+        "total": 1955,
+        "reference": 1564,
+        "audit": 391
+      },
+      "36": {
+        "total": 1964,
+        "reference": 1571,
+        "audit": 393
+      },
+      "37": {
+        "total": 1977,
+        "reference": 1582,
+        "audit": 395
+      },
+      "38": {
+        "total": 1850,
+        "reference": 1480,
+        "audit": 370
+      },
+      "39": {
+        "total": 1861,
+        "reference": 1489,
+        "audit": 372
+      },
+      "40": {
+        "total": 1913,
+        "reference": 1530,
+        "audit": 383
+      },
+      "41": {
+        "total": 1913,
+        "reference": 1530,
+        "audit": 383
+      },
+      "42": {
+        "total": 1893,
+        "reference": 1515,
+        "audit": 378
+      },
+      "43": {
+        "total": 1942,
+        "reference": 1554,
+        "audit": 388
+      },
+      "44": {
+        "total": 2006,
+        "reference": 1605,
+        "audit": 401
+      },
+      "45": {
+        "total": 1943,
+        "reference": 1555,
+        "audit": 388
+      },
+      "46": {
+        "total": 1851,
+        "reference": 1481,
+        "audit": 370
+      },
+      "47": {
+        "total": 1921,
+        "reference": 1537,
+        "audit": 384
+      }
+    },
+    "weight_definition": "exp(log(p/q)); physical estimates are N^-1 sum_r (p/q)_r f_r",
+    "full_weight_mean": 0.9995465226423768,
+    "full_weight_effective_sample_size": 30252.21601274515
+  },
+  "portfolio_normalization": {
+    "definition": "calls with K<S are retained; calls with K>=S are replaced at entry by puts through P=C+K-S and dP=dC-dS; spot and option returns are divided by their positive entry prices",
+    "paths": 100000,
+    "times": 2,
+    "expiries": 7,
+    "strikes_per_expiry": 20,
+    "put_coordinate_fraction": 0.3499999940395355,
+    "minimum_selected_option_price": 0.0012727484930560307,
+    "maximum_selected_option_price": 1.5581859350204468,
+    "cost": "coordinatewise proportional cost after entry-value normalization",
+    "cost_rate": 0.0
+  },
+  "whitening": {
+    "definition": "xi_t=(x_t-m_t) Q_t Lambda_t^{-1/2}; m_t and covariance are estimated on training paths with physical p/q weights",
+    "relative_eigenvalue_floor": 1e-10,
+    "training_path_count": 100000,
+    "training_weight_effective_sample_size": 30252.21601274514,
+    "minimum_covariance_eigenvalue_by_time": [
+      0.0030955484965820984,
+      0.0009393708013890498
+    ],
+    "maximum_covariance_eigenvalue_by_time": [
+      77.42548930697087,
+      77.35131290385216
+    ],
+    "clipped_eigenvalue_count_by_time": [
+      0,
+      0
+    ],
+    "maximum_absolute_weighted_factor_mean": 1.508558834183658e-14,
+    "maximum_absolute_weighted_factor_covariance_error": 4.3454129183828627e-13
+  },
+  "kernel_basis": {
+    "definition": "physical-weighted MiniBatchKMeans centers in orthogonal t6 state; bandwidth is weighted within-center RMS distance",
+    "kernels": 64,
+    "radius_floor": 0.9825760557204206,
+    "minimum_radius": 3.8683954087894117,
+    "median_radius": 3.9303042228816825,
+    "maximum_radius": 4.189950054997548,
+    "minimum_physical_cluster_mass": 0.013109085075832482,
+    "maximum_physical_cluster_mass": 0.02036663316487393
+  },
+  "return_coordinates": 147,
+  "hard_partition": {
+    "cells": 64,
+    "feasible_cells": 26,
+    "strictly_separated_cells": 9,
+    "numerically_unresolved_cells": 29,
+    "numerically_unresolved_cell_indices": [
+      0,
+      1,
+      2,
+      9,
+      11,
+      12,
+      15,
+      16,
+      17,
+      20,
+      21,
+      23,
+      27,
+      28,
+      32,
+      34,
+      35,
+      38,
+      42,
+      43,
+      44,
+      46,
+      51,
+      54,
+      55,
+      58,
+      59,
+      60,
+      61
+    ],
+    "numerically_unresolved_physical_probability": 0.43246094096280274,
+    "minimum_paths_per_cell": 1008,
+    "median_paths_per_cell": 1468.5,
+    "maximum_paths_per_cell": 8624
+  },
+  "minimum_density_cap_lower_bound": 2.308893524542493,
+  "minimum_density_cap_upper_bound": 1545.7195483530231,
+  "minimum_lambda_lower_bound": 1.3088935245424929,
+  "minimum_lambda_upper_bound": 1544.7195483530231,
+  "feasible_retained_lower_tail_probability": 0.000646947889780852,
+  "density_diagnostics": {
+    "minimum": 0.0,
+    "maximum": 1545.7195483530236,
+    "weighted_mean": 1.0000000000000007,
+    "normalization_error": 4.440892098500626e-16,
+    "maximum_cap_excess": 4.547473508864641e-13,
+    "maximum_negative_target_mass": 0.0,
+    "maximum_absolute_hard_cell_martingale_error": 9.915286153637667e-16,
+    "positive_density_path_fraction": 0.04483,
+    "target_measure_effective_sample_size": 100.8658943356895
+  },
+  "cells": [
+    {
+      "cell": 0,
+      "paths": 1791,
+      "physical_probability": 0.014556830400771133,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 4,
+      "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+      "iterations": 776,
+      "elapsed_seconds": 0.3522491999901831,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 776,
+          "elapsed_seconds": 0.37808726401999593
+        },
+        {
+          "method": "highs-ipm",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 16,
+          "elapsed_seconds": 1.0163577069761232
+        },
+        {
+          "method": "highs-ds",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 776,
+          "elapsed_seconds": 0.3522491999901831
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 426,
+        "elapsed_seconds": 0.25787447299808264,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 1,
+      "paths": 1216,
+      "physical_probability": 0.013671779162416322,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 4,
+      "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+      "iterations": 856,
+      "elapsed_seconds": 0.33784048492088914,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 856,
+          "elapsed_seconds": 0.34518288006074727
+        },
+        {
+          "method": "highs-ipm",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 19,
+          "elapsed_seconds": 0.8651759459171444
+        },
+        {
+          "method": "highs-ds",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 856,
+          "elapsed_seconds": 0.33784048492088914
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 535,
+        "elapsed_seconds": 0.20923608995508403,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 2,
+      "paths": 2221,
+      "physical_probability": 0.01587894897094501,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 1023,
+      "elapsed_seconds": 0.2619999840389937,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 1023,
+          "elapsed_seconds": 0.2619999840389937
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 540,
+        "elapsed_seconds": 0.38701654702890664,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 3,
+      "paths": 1123,
+      "physical_probability": 0.013094967497362527,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 4,
+      "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+      "iterations": 1063,
+      "elapsed_seconds": 0.3305857010418549,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 1063,
+          "elapsed_seconds": 0.331093915970996
+        },
+        {
+          "method": "highs-ipm",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 17,
+          "elapsed_seconds": 0.8186797869857401
+        },
+        {
+          "method": "highs-ds",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 1063,
+          "elapsed_seconds": 0.3305857010418549
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 778,
+        "elapsed_seconds": 0.25373058300465345,
+        "margin": 1.4393421780278993e-05,
+        "certifies_no_cell_martingale_density": true
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 4,
+      "paths": 1335,
+      "physical_probability": 0.013388589025732912,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 338,
+      "elapsed_seconds": 0.09985077194869518,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 338,
+          "elapsed_seconds": 0.09985077194869518
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 551,
+        "elapsed_seconds": 0.2036704489728436,
+        "margin": 0.0005466071616176725,
+        "certifies_no_cell_martingale_density": true
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 5,
+      "paths": 1544,
+      "physical_probability": 0.015266680921702237,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1491,
+      "elapsed_seconds": 0.30580008192919195,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1491,
+          "elapsed_seconds": 0.30580008192919195
+        }
+      ],
+      "minimum_conditional_density_cap": 193182.45990864807,
+      "minimum_conditional_lambda": 193181.45990864807,
+      "maximum_absolute_martingale_error": 4.454769886308441e-15,
+      "positive_density_path_fraction": 0.10297927461139897,
+      "target_measure_probability": 0.0001221539841158576
+    },
+    {
+      "cell": 6,
+      "paths": 1375,
+      "physical_probability": 0.01634576643743061,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1206,
+      "elapsed_seconds": 0.24206644005607814,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1206,
+          "elapsed_seconds": 0.24206644005607814
+        }
+      ],
+      "minimum_conditional_density_cap": 4866284.044551827,
+      "minimum_conditional_lambda": 4866283.044551827,
+      "maximum_absolute_martingale_error": 8.257283745649602e-16,
+      "positive_density_path_fraction": 0.10763636363636364,
+      "target_measure_probability": 5.192046021940789e-06
+    },
+    {
+      "cell": 7,
+      "paths": 1700,
+      "physical_probability": 0.01902217703539261,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1964,
+      "elapsed_seconds": 0.4454186409711838,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1964,
+          "elapsed_seconds": 0.4454186409711838
+        }
+      ],
+      "minimum_conditional_density_cap": 7911.36305952057,
+      "minimum_conditional_lambda": 7910.36305952057,
+      "maximum_absolute_martingale_error": 2.0643209364124004e-15,
+      "positive_density_path_fraction": 0.10058823529411764,
+      "target_measure_probability": 0.0037165467789339627
+    },
+    {
+      "cell": 8,
+      "paths": 1100,
+      "physical_probability": 0.012176900532344753,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 638,
+      "elapsed_seconds": 0.13399327802471817,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 638,
+          "elapsed_seconds": 0.13399327802471817
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 694,
+        "elapsed_seconds": 0.22232187096960843,
+        "margin": 8.798519460712813e-05,
+        "certifies_no_cell_martingale_density": true
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 9,
+      "paths": 1514,
+      "physical_probability": 0.01635760589568685,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 651,
+      "elapsed_seconds": 0.16018104902468622,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 651,
+          "elapsed_seconds": 0.16018104902468622
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 450,
+        "elapsed_seconds": 0.24108523305039853,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 10,
+      "paths": 1613,
+      "physical_probability": 0.01600522664962732,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1983,
+      "elapsed_seconds": 0.41696492896880955,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1983,
+          "elapsed_seconds": 0.41696492896880955
+        }
+      ],
+      "minimum_conditional_density_cap": 296199.50280289416,
+      "minimum_conditional_lambda": 296198.50280289416,
+      "maximum_absolute_martingale_error": 1.6653345369377348e-15,
+      "positive_density_path_fraction": 0.09609423434593925,
+      "target_measure_probability": 8.352340727800838e-05
+    },
+    {
+      "cell": 11,
+      "paths": 1140,
+      "physical_probability": 0.013944582995371192,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 4,
+      "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+      "iterations": 1021,
+      "elapsed_seconds": 0.3415811260929331,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 1021,
+          "elapsed_seconds": 0.339647124055773
+        },
+        {
+          "method": "highs-ipm",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 18,
+          "elapsed_seconds": 0.8750074759591371
+        },
+        {
+          "method": "highs-ds",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 1021,
+          "elapsed_seconds": 0.3415811260929331
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 422,
+        "elapsed_seconds": 0.17516969598364085,
+        "margin": -1.9328171423170186e-11,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 12,
+      "paths": 1405,
+      "physical_probability": 0.01632438630122819,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 4,
+      "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+      "iterations": 1075,
+      "elapsed_seconds": 0.3865442650858313,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 1075,
+          "elapsed_seconds": 0.3963036589557305
+        },
+        {
+          "method": "highs-ipm",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 17,
+          "elapsed_seconds": 0.9856196700129658
+        },
+        {
+          "method": "highs-ds",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 1075,
+          "elapsed_seconds": 0.3865442650858313
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 477,
+        "elapsed_seconds": 0.2214485569857061,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 13,
+      "paths": 1641,
+      "physical_probability": 0.01525992985727122,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1545,
+      "elapsed_seconds": 0.3234058889793232,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1545,
+          "elapsed_seconds": 0.3234058889793232
+        }
+      ],
+      "minimum_conditional_density_cap": 80974.92586489322,
+      "minimum_conditional_lambda": 80973.92586489322,
+      "maximum_absolute_martingale_error": 2.6899337382217947e-15,
+      "positive_density_path_fraction": 0.10542352224253504,
+      "target_measure_probability": 0.0002912947635943005
+    },
+    {
+      "cell": 14,
+      "paths": 1819,
+      "physical_probability": 0.019353759710930445,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1540,
+      "elapsed_seconds": 0.38035154005046934,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1540,
+          "elapsed_seconds": 0.38035154005046934
+        }
+      ],
+      "minimum_conditional_density_cap": 6821.237941677596,
+      "minimum_conditional_lambda": 6820.237941677596,
+      "maximum_absolute_martingale_error": 2.55351295663786e-15,
+      "positive_density_path_fraction": 0.09400769653655855,
+      "target_measure_probability": 0.004385638644347746
+    },
+    {
+      "cell": 15,
+      "paths": 1318,
+      "physical_probability": 0.015494872978950872,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 663,
+      "elapsed_seconds": 0.14968949102330953,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 663,
+          "elapsed_seconds": 0.14968949102330953
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 538,
+        "elapsed_seconds": 0.2304784619482234,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 16,
+      "paths": 1154,
+      "physical_probability": 0.013784492280000553,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 973,
+      "elapsed_seconds": 0.17856568994466215,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 973,
+          "elapsed_seconds": 0.17856568994466215
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 586,
+        "elapsed_seconds": 0.2162487469613552,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 17,
+      "paths": 1530,
+      "physical_probability": 0.015510817919809843,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 848,
+      "elapsed_seconds": 0.19602185196708888,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 848,
+          "elapsed_seconds": 0.19602185196708888
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 611,
+        "elapsed_seconds": 0.2961295699933544,
+        "margin": 1.1232629593058592e-10,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 18,
+      "paths": 1465,
+      "physical_probability": 0.01662245372180006,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1252,
+      "elapsed_seconds": 0.2591235919389874,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1252,
+          "elapsed_seconds": 0.2591235919389874
+        }
+      ],
+      "minimum_conditional_density_cap": 158163.07378435507,
+      "minimum_conditional_lambda": 158162.07378435507,
+      "maximum_absolute_martingale_error": 2.5743296383495817e-15,
+      "positive_density_path_fraction": 0.10853242320819112,
+      "target_measure_probability": 0.00016245038139819804
+    },
+    {
+      "cell": 19,
+      "paths": 1775,
+      "physical_probability": 0.01894621802469897,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1173,
+      "elapsed_seconds": 0.293946222984232,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1173,
+          "elapsed_seconds": 0.293946222984232
+        }
+      ],
+      "minimum_conditional_density_cap": 253308.8612345757,
+      "minimum_conditional_lambda": 253307.8612345757,
+      "maximum_absolute_martingale_error": 1.3877787807814457e-15,
+      "positive_density_path_fraction": 0.0923943661971831,
+      "target_measure_probability": 0.0001156119822473002
+    },
+    {
+      "cell": 20,
+      "paths": 1922,
+      "physical_probability": 0.016267919211296278,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 979,
+      "elapsed_seconds": 0.231578539009206,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 979,
+          "elapsed_seconds": 0.231578539009206
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 485,
+        "elapsed_seconds": 0.32942936895415187,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 21,
+      "paths": 1524,
+      "physical_probability": 0.015977291313351974,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 4,
+      "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+      "iterations": 1359,
+      "elapsed_seconds": 0.48624686198309064,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 1359,
+          "elapsed_seconds": 0.4996442240662873
+        },
+        {
+          "method": "highs-ipm",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 15,
+          "elapsed_seconds": 1.0724528779974207
+        },
+        {
+          "method": "highs-ds",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 1359,
+          "elapsed_seconds": 0.48624686198309064
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 458,
+        "elapsed_seconds": 0.23758370999712497,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 22,
+      "paths": 1601,
+      "physical_probability": 0.017166050626837206,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1426,
+      "elapsed_seconds": 0.3309314399957657,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1426,
+          "elapsed_seconds": 0.3309314399957657
+        }
+      ],
+      "minimum_conditional_density_cap": 784.6435409634677,
+      "minimum_conditional_lambda": 783.6435409634677,
+      "maximum_absolute_martingale_error": 1.6930901125533637e-15,
+      "positive_density_path_fraction": 0.11617738913179262,
+      "target_measure_probability": 0.033816502190713034
+    },
+    {
+      "cell": 23,
+      "paths": 1559,
+      "physical_probability": 0.017489594812886953,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 4,
+      "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+      "iterations": 1143,
+      "elapsed_seconds": 0.4502424399834126,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 1143,
+          "elapsed_seconds": 0.44811093097086996
+        },
+        {
+          "method": "highs-ipm",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 17,
+          "elapsed_seconds": 1.2035166139248759
+        },
+        {
+          "method": "highs-ds",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 1143,
+          "elapsed_seconds": 0.4502424399834126
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 675,
+        "elapsed_seconds": 0.3180811209604144,
+        "margin": 2.7149266113361827e-11,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 24,
+      "paths": 1214,
+      "physical_probability": 0.014111836035854666,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 4,
+      "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+      "iterations": 770,
+      "elapsed_seconds": 0.2390362760052085,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 770,
+          "elapsed_seconds": 0.25444910302758217
+        },
+        {
+          "method": "highs-ipm",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 15,
+          "elapsed_seconds": 0.8604670179774985
+        },
+        {
+          "method": "highs-ds",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 770,
+          "elapsed_seconds": 0.2390362760052085
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 737,
+        "elapsed_seconds": 0.25772202003281564,
+        "margin": 4.760676951216184e-05,
+        "certifies_no_cell_martingale_density": true
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 25,
+      "paths": 1321,
+      "physical_probability": 0.014864599767713387,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1165,
+      "elapsed_seconds": 0.230470389011316,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1165,
+          "elapsed_seconds": 0.230470389011316
+        }
+      ],
+      "minimum_conditional_density_cap": 178022.5393846456,
+      "minimum_conditional_lambda": 178021.5393846456,
+      "maximum_absolute_martingale_error": 1.7486012637846216e-15,
+      "positive_density_path_fraction": 0.11733535200605602,
+      "target_measure_probability": 0.00012906513140874848
+    },
+    {
+      "cell": 26,
+      "paths": 1478,
+      "physical_probability": 0.01633432063833189,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1081,
+      "elapsed_seconds": 0.23478329298086464,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1081,
+          "elapsed_seconds": 0.23478329298086464
+        }
+      ],
+      "minimum_conditional_density_cap": 118574.03785039057,
+      "minimum_conditional_lambda": 118573.03785039057,
+      "maximum_absolute_martingale_error": 4.3298697960381105e-15,
+      "positive_density_path_fraction": 0.10960757780784844,
+      "target_measure_probability": 0.00021293260461950836
+    },
+    {
+      "cell": 27,
+      "paths": 1326,
+      "physical_probability": 0.015170178635926856,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 945,
+      "elapsed_seconds": 0.18338402302470058,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 945,
+          "elapsed_seconds": 0.18338402302470058
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 391,
+        "elapsed_seconds": 0.18941546394489706,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 28,
+      "paths": 1334,
+      "physical_probability": 0.014706610157520058,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 1105,
+      "elapsed_seconds": 0.21056113298982382,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 1105,
+          "elapsed_seconds": 0.21056113298982382
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 449,
+        "elapsed_seconds": 0.22302926506381482,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 29,
+      "paths": 1043,
+      "physical_probability": 0.012075354153229866,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 435,
+      "elapsed_seconds": 0.10603980906307697,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 435,
+          "elapsed_seconds": 0.10603980906307697
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 559,
+        "elapsed_seconds": 0.17206416907720268,
+        "margin": 0.00032881349884873127,
+        "certifies_no_cell_martingale_density": true
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 30,
+      "paths": 1776,
+      "physical_probability": 0.019508277209071744,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1892,
+      "elapsed_seconds": 0.4526938199996948,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1892,
+          "elapsed_seconds": 0.4526938199996948
+        }
+      ],
+      "minimum_conditional_density_cap": 5721.408627846023,
+      "minimum_conditional_lambda": 5720.408627846023,
+      "maximum_absolute_martingale_error": 5.98739807733395e-15,
+      "positive_density_path_fraction": 0.09966216216216216,
+      "target_measure_probability": 0.005270437299302698
+    },
+    {
+      "cell": 31,
+      "paths": 2497,
+      "physical_probability": 0.01630892435459761,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1244,
+      "elapsed_seconds": 0.3436263030162081,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1244,
+          "elapsed_seconds": 0.3436263030162081
+        }
+      ],
+      "minimum_conditional_density_cap": 40036.75200166601,
+      "minimum_conditional_lambda": 40035.75200166601,
+      "maximum_absolute_martingale_error": 4.256707770756773e-15,
+      "positive_density_path_fraction": 0.06567881457749299,
+      "target_measure_probability": 0.0006296470599429053
+    },
+    {
+      "cell": 32,
+      "paths": 1550,
+      "physical_probability": 0.013730449162775228,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 4,
+      "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+      "iterations": 976,
+      "elapsed_seconds": 0.33075700607150793,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 976,
+          "elapsed_seconds": 0.3271000599488616
+        },
+        {
+          "method": "highs-ipm",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 24,
+          "elapsed_seconds": 1.0361199280014262
+        },
+        {
+          "method": "highs-ds",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 976,
+          "elapsed_seconds": 0.33075700607150793
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 497,
+        "elapsed_seconds": 0.25021573808044195,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 33,
+      "paths": 1473,
+      "physical_probability": 0.015951682246517808,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1344,
+      "elapsed_seconds": 0.28738051606342196,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1344,
+          "elapsed_seconds": 0.28738051606342196
+        }
+      ],
+      "minimum_conditional_density_cap": 1705.312181909451,
+      "minimum_conditional_lambda": 1704.312181909451,
+      "maximum_absolute_martingale_error": 2.55351295663786e-15,
+      "positive_density_path_fraction": 0.12763068567549218,
+      "target_measure_probability": 0.014458834774727291
+    },
+    {
+      "cell": 34,
+      "paths": 1580,
+      "physical_probability": 0.015901705975597154,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 941,
+      "elapsed_seconds": 0.2127945349784568,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 941,
+          "elapsed_seconds": 0.2127945349784568
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 646,
+        "elapsed_seconds": 0.29778904700651765,
+        "margin": 8.33036076774574e-11,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 35,
+      "paths": 1247,
+      "physical_probability": 0.013604070259462774,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 1413,
+      "elapsed_seconds": 0.2579072689404711,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 1413,
+          "elapsed_seconds": 0.2579072689404711
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 402,
+        "elapsed_seconds": 0.17792114696931094,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 36,
+      "paths": 1348,
+      "physical_probability": 0.015374004895769091,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1241,
+      "elapsed_seconds": 0.2561775150243193,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1241,
+          "elapsed_seconds": 0.2561775150243193
+        }
+      ],
+      "minimum_conditional_density_cap": 2719.665205762921,
+      "minimum_conditional_lambda": 2718.665205762921,
+      "maximum_absolute_martingale_error": 2.0122792321330962e-15,
+      "positive_density_path_fraction": 0.13427299703264095,
+      "target_measure_probability": 0.00873780340812174
+    },
+    {
+      "cell": 37,
+      "paths": 1134,
+      "physical_probability": 0.012776807563318511,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 1097,
+      "elapsed_seconds": 0.1900479559553787,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 1097,
+          "elapsed_seconds": 0.1900479559553787
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 792,
+        "elapsed_seconds": 0.25728933804202825,
+        "margin": 6.509944972220836e-06,
+        "certifies_no_cell_martingale_density": true
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 38,
+      "paths": 1518,
+      "physical_probability": 0.017538570698395844,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 4,
+      "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+      "iterations": 938,
+      "elapsed_seconds": 0.3726601459784433,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 938,
+          "elapsed_seconds": 0.3911236859858036
+        },
+        {
+          "method": "highs-ipm",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 19,
+          "elapsed_seconds": 1.1936615689191967
+        },
+        {
+          "method": "highs-ds",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 938,
+          "elapsed_seconds": 0.3726601459784433
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 578,
+        "elapsed_seconds": 0.2745105270296335,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 39,
+      "paths": 1194,
+      "physical_probability": 0.01413542961726215,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 697,
+      "elapsed_seconds": 0.14546446898020804,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 697,
+          "elapsed_seconds": 0.14546446898020804
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 760,
+        "elapsed_seconds": 0.26250083395279944,
+        "margin": 8.109960397058302e-05,
+        "certifies_no_cell_martingale_density": true
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 40,
+      "paths": 8624,
+      "physical_probability": 0.03288613739945596,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 2839,
+      "elapsed_seconds": 1.3973757600178942,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 2839,
+          "elapsed_seconds": 1.3973757600178942
+        }
+      ],
+      "minimum_conditional_density_cap": 57.268814178811965,
+      "minimum_conditional_lambda": 56.268814178811965,
+      "maximum_absolute_martingale_error": 1.1171619185290638e-15,
+      "positive_density_path_fraction": 0.03814935064935065,
+      "target_measure_probability": 0.8876165182929416
+    },
+    {
+      "cell": 41,
+      "paths": 1520,
+      "physical_probability": 0.017211959075169102,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1202,
+      "elapsed_seconds": 0.2822520330082625,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1202,
+          "elapsed_seconds": 0.2822520330082625
+        }
+      ],
+      "minimum_conditional_density_cap": 102780.60180421895,
+      "minimum_conditional_lambda": 102779.60180421895,
+      "maximum_absolute_martingale_error": 1.700029006457271e-15,
+      "positive_density_path_fraction": 0.10921052631578948,
+      "target_measure_probability": 0.0002588510004895595
+    },
+    {
+      "cell": 42,
+      "paths": 1443,
+      "physical_probability": 0.016813237040772935,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 4,
+      "message": "(HiGHS Status 0: Not Set)",
+      "iterations": 0,
+      "elapsed_seconds": 0.29590157396160066,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 4,
+          "message": "(HiGHS Status 0: Not Set)",
+          "iterations": 0,
+          "elapsed_seconds": 0.2902079219929874
+        },
+        {
+          "method": "highs-ipm",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 19,
+          "elapsed_seconds": 1.086095520062372
+        },
+        {
+          "method": "highs-ds",
+          "success": false,
+          "status": 4,
+          "message": "(HiGHS Status 0: Not Set)",
+          "iterations": 0,
+          "elapsed_seconds": 0.29590157396160066
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 447,
+        "elapsed_seconds": 0.20595729001797736,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 43,
+      "paths": 1323,
+      "physical_probability": 0.014391933412508254,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 4,
+      "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+      "iterations": 909,
+      "elapsed_seconds": 0.3670492379460484,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 909,
+          "elapsed_seconds": 0.3663359429920092
+        },
+        {
+          "method": "highs-ipm",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 16,
+          "elapsed_seconds": 0.9782983340555802
+        },
+        {
+          "method": "highs-ds",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 909,
+          "elapsed_seconds": 0.3670492379460484
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 474,
+        "elapsed_seconds": 0.20536436699330807,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 44,
+      "paths": 1333,
+      "physical_probability": 0.014532321240205582,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 1021,
+      "elapsed_seconds": 0.19747233390808105,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 1021,
+          "elapsed_seconds": 0.19747233390808105
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 447,
+        "elapsed_seconds": 0.18864819803275168,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 45,
+      "paths": 1703,
+      "physical_probability": 0.018130499389692904,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1137,
+      "elapsed_seconds": 0.26384467689786106,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1137,
+          "elapsed_seconds": 0.26384467689786106
+        }
+      ],
+      "minimum_conditional_density_cap": 24237.8671839571,
+      "minimum_conditional_lambda": 24236.8671839571,
+      "maximum_absolute_martingale_error": 4.9682480351975755e-15,
+      "positive_density_path_fraction": 0.09982384028185555,
+      "target_measure_probability": 0.0011562348747665488
+    },
+    {
+      "cell": 46,
+      "paths": 1147,
+      "physical_probability": 0.014228474958410613,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 609,
+      "elapsed_seconds": 0.12797524605412036,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 609,
+          "elapsed_seconds": 0.12797524605412036
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 537,
+        "elapsed_seconds": 0.1806447480339557,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 47,
+      "paths": 1592,
+      "physical_probability": 0.01681720889276426,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1411,
+      "elapsed_seconds": 0.2921960949897766,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1411,
+          "elapsed_seconds": 0.2921960949897766
+        }
+      ],
+      "minimum_conditional_density_cap": 285427.17065518146,
+      "minimum_conditional_lambda": 285426.17065518146,
+      "maximum_absolute_martingale_error": 4.432218481120742e-15,
+      "positive_density_path_fraction": 0.10050251256281408,
+      "target_measure_probability": 9.107292930316591e-05
+    },
+    {
+      "cell": 48,
+      "paths": 1042,
+      "physical_probability": 0.012886615818877088,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 4,
+      "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+      "iterations": 684,
+      "elapsed_seconds": 0.23051665700040758,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 684,
+          "elapsed_seconds": 0.22722556197550148
+        },
+        {
+          "method": "highs-ipm",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 20,
+          "elapsed_seconds": 0.7313953540287912
+        },
+        {
+          "method": "highs-ds",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 684,
+          "elapsed_seconds": 0.23051665700040758
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 696,
+        "elapsed_seconds": 0.2155439929338172,
+        "margin": 5.091430185768012e-05,
+        "certifies_no_cell_martingale_density": true
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 49,
+      "paths": 1602,
+      "physical_probability": 0.01627904605601841,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1358,
+      "elapsed_seconds": 0.2931693400023505,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1358,
+          "elapsed_seconds": 0.2931693400023505
+        }
+      ],
+      "minimum_conditional_density_cap": 90233.74715570448,
+      "minimum_conditional_lambda": 90232.74715570448,
+      "maximum_absolute_martingale_error": 1.124100812432971e-15,
+      "positive_density_path_fraction": 0.1017478152309613,
+      "target_measure_probability": 0.0002788628479975086
+    },
+    {
+      "cell": 50,
+      "paths": 1472,
+      "physical_probability": 0.015464791130436967,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1251,
+      "elapsed_seconds": 0.2623199720401317,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1251,
+          "elapsed_seconds": 0.2623199720401317
+        }
+      ],
+      "minimum_conditional_density_cap": 629825.0378303276,
+      "minimum_conditional_lambda": 629824.0378303276,
+      "maximum_absolute_martingale_error": 7.771561172376096e-16,
+      "positive_density_path_fraction": 0.10529891304347826,
+      "target_measure_probability": 3.795376259391036e-05
+    },
+    {
+      "cell": 51,
+      "paths": 1628,
+      "physical_probability": 0.01734333945504306,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 859,
+      "elapsed_seconds": 0.19948637601919472,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 859,
+          "elapsed_seconds": 0.19948637601919472
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 488,
+        "elapsed_seconds": 0.2356960050528869,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 52,
+      "paths": 1505,
+      "physical_probability": 0.016795651975584622,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1418,
+      "elapsed_seconds": 0.29529523104429245,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1418,
+          "elapsed_seconds": 0.29529523104429245
+        }
+      ],
+      "minimum_conditional_density_cap": 1771.106334565784,
+      "minimum_conditional_lambda": 1770.106334565784,
+      "maximum_absolute_martingale_error": 7.86176679312689e-15,
+      "positive_density_path_fraction": 0.12425249169435217,
+      "target_measure_probability": 0.014658277190544904
+    },
+    {
+      "cell": 53,
+      "paths": 1093,
+      "physical_probability": 0.013189896814610594,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1469,
+      "elapsed_seconds": 0.25526292610447854,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1469,
+          "elapsed_seconds": 0.25526292610447854
+        }
+      ],
+      "minimum_conditional_density_cap": 2134407.4016343327,
+      "minimum_conditional_lambda": 2134406.4016343327,
+      "maximum_absolute_martingale_error": 4.9404924595819466e-15,
+      "positive_density_path_fraction": 0.13632204940530648,
+      "target_measure_probability": 9.552010235483489e-06
+    },
+    {
+      "cell": 54,
+      "paths": 1008,
+      "physical_probability": 0.01220334376049206,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 582,
+      "elapsed_seconds": 0.11135743500199169,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 582,
+          "elapsed_seconds": 0.11135743500199169
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 586,
+        "elapsed_seconds": 0.1785113950027153,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 55,
+      "paths": 1193,
+      "physical_probability": 0.012968217846863729,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 4,
+      "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+      "iterations": 943,
+      "elapsed_seconds": 0.28647085395641625,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 943,
+          "elapsed_seconds": 0.28668803989421576
+        },
+        {
+          "method": "highs-ipm",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 18,
+          "elapsed_seconds": 0.8262696099700406
+        },
+        {
+          "method": "highs-ds",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 943,
+          "elapsed_seconds": 0.28647085395641625
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 541,
+        "elapsed_seconds": 0.1927687319694087,
+        "margin": -1.758884704550212e-11,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 56,
+      "paths": 1976,
+      "physical_probability": 0.017279538965211776,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1783,
+      "elapsed_seconds": 0.38729539001360536,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1783,
+          "elapsed_seconds": 0.38729539001360536
+        }
+      ],
+      "minimum_conditional_density_cap": 216705.0299315957,
+      "minimum_conditional_lambda": 216704.0299315957,
+      "maximum_absolute_martingale_error": 2.886579864025407e-15,
+      "positive_density_path_fraction": 0.08046558704453441,
+      "target_measure_probability": 0.00012325196684860788
+    },
+    {
+      "cell": 57,
+      "paths": 1637,
+      "physical_probability": 0.018066585715164257,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1926,
+      "elapsed_seconds": 0.39793058193754405,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1926,
+          "elapsed_seconds": 0.39793058193754405
+        }
+      ],
+      "minimum_conditional_density_cap": 514508.5298411805,
+      "minimum_conditional_lambda": 514507.5298411805,
+      "maximum_absolute_martingale_error": 1.6028844918025698e-15,
+      "positive_density_path_fraction": 0.09102015882712279,
+      "target_measure_probability": 5.427679638381329e-05
+    },
+    {
+      "cell": 58,
+      "paths": 1394,
+      "physical_probability": 0.015492865607599481,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 828,
+      "elapsed_seconds": 0.1777099579339847,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 828,
+          "elapsed_seconds": 0.1777099579339847
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 549,
+        "elapsed_seconds": 0.22005845000967383,
+        "margin": 1.0460063894081972e-11,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 59,
+      "paths": 1273,
+      "physical_probability": 0.01212039588750225,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 4,
+      "message": "(HiGHS Status 0: Not Set)",
+      "iterations": 0,
+      "elapsed_seconds": 0.21675947296898812,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 4,
+          "message": "(HiGHS Status 0: Not Set)",
+          "iterations": 0,
+          "elapsed_seconds": 0.21680029400158674
+        },
+        {
+          "method": "highs-ipm",
+          "success": false,
+          "status": 4,
+          "message": "The HiGHS status code was not recognized. (HiGHS Status 15: model_status is Unknown; primal_status is Infeasible)",
+          "iterations": 18,
+          "elapsed_seconds": 0.8701430159853771
+        },
+        {
+          "method": "highs-ds",
+          "success": false,
+          "status": 4,
+          "message": "(HiGHS Status 0: Not Set)",
+          "iterations": 0,
+          "elapsed_seconds": 0.21675947296898812
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 509,
+        "elapsed_seconds": 0.2066821800544858,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 60,
+      "paths": 1240,
+      "physical_probability": 0.014682432524095367,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 1072,
+      "elapsed_seconds": 0.2048739680321887,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 1072,
+          "elapsed_seconds": 0.2048739680321887
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 429,
+        "elapsed_seconds": 0.16981980798300356,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 61,
+      "paths": 1104,
+      "physical_probability": 0.011773672096916333,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 731,
+      "elapsed_seconds": 0.13395093195140362,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 731,
+          "elapsed_seconds": 0.13395093195140362
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 483,
+        "elapsed_seconds": 0.17355146689806134,
+        "margin": -0.0,
+        "certifies_no_cell_martingale_density": false
+      },
+      "target_measure_probability": 0.0
+    },
+    {
+      "cell": 62,
+      "paths": 1619,
+      "physical_probability": 0.016747592656086184,
+      "active_return_coordinates": 147,
+      "success": true,
+      "status": 0,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+      "iterations": 1391,
+      "elapsed_seconds": 0.30607545003294945,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": true,
+          "status": 0,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+          "iterations": 1391,
+          "elapsed_seconds": 0.30607545003294945
+        }
+      ],
+      "minimum_conditional_density_cap": 1097.9563620604329,
+      "minimum_conditional_lambda": 1096.9563620604329,
+      "maximum_absolute_martingale_error": 2.248201624865942e-15,
+      "positive_density_path_fraction": 0.11303273625694873,
+      "target_measure_probability": 0.02357751387112149
+    },
+    {
+      "cell": 63,
+      "paths": 1111,
+      "physical_probability": 0.011693578625327512,
+      "active_return_coordinates": 147,
+      "success": false,
+      "status": 2,
+      "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+      "iterations": 648,
+      "elapsed_seconds": 0.12351691303774714,
+      "attempts": [
+        {
+          "method": "highs",
+          "success": false,
+          "status": 2,
+          "message": "The problem is infeasible. (HiGHS Status 8: model_status is Infeasible; primal_status is None)",
+          "iterations": 648,
+          "elapsed_seconds": 0.12351691303774714
+        }
+      ],
+      "strict_separation": {
+        "definition": "maximize delta subject to R a>=delta on every cell path and ||a||_1<=1",
+        "success": true,
+        "status": 0,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+        "iterations": 772,
+        "elapsed_seconds": 0.23377281799912453,
+        "margin": 1.1385156568462446e-05,
+        "certifies_no_cell_martingale_density": true
+      },
+      "target_measure_probability": 0.0
+    }
+  ],
+  "density_path": "/tmp/quantdata/dysanos/implied-cvar/densities/pca-iv-weekly-expiry-itm-dollar-t6-hard-64-density.npz"
+}

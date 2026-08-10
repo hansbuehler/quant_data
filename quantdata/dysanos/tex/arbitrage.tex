@@ -1,0 +1,429 @@
+\subsection{Testing for Arbitrage in Generated Data}
+\label{sec:arbitrage}
+
+Static absence of arbitrage of each decoded surface does not by itself imply
+absence of dynamic arbitrage between trading times. We here brute-force test a subset of possible arbitrage-strategies and will show that
+while DYSANOS does not have arbitrage opportunities when traded options expire at their expiry -- as expected --, it does have arbitrage opportunities
+if the same options can be sold at a later point for their mark to market.\\
+
+\noindent
+\textbf{Generators:}
+We compare DYSANOS at smoothness~$\mu=0.5$ with a PCA-IV benchmark which
+applies PCA directly to log-implied volatilities on the same regular grid  without any static arbitrage considerations. We therefore fully expect
+it to have static arbitrage. We use this model as a canary -- any test for dynamic arbitrage should trigger in this model.\\
+
+
+\noindent
+\textbf{Scope:}
+For each generator we use returns to expiry,
+daily and weekly trading times, and
+costs
+corresponding to zero, one, and ten basis points. As spot is tradable to each option expiry, our experiments
+include delta hedging.\\
+
+\noindent
+\textbf{Generated Market:}
+We generate 100,000 and 1,000,000 samples for 10 trading times, daily or weekly. For the weekly generator, we also simulate
+intermediate steps in order to obtain consistent spot values for options which expire before the next trading time. However, no
+additional trading may occur at those times.
+
+We use
+the exact Gaussian transition for the autonomous surface state~$h$ and draw
+spot under the importance-sampling law~$\O$ discussed in
+Section~\ref{sec:importance}. If $p(\omega)$ and $q(\omega)$ are the densities
+of a complete path under the fitted law~$\P$ and~$\O$, respectively, then
+\begin{equation}\label{eq:arbitrage_importance_mixture}
+ q(\omega)=0.1p(\omega)+0.9\bar q(\omega),
+ \qquad
+ D(\omega)=\frac{p(\omega)}{q(\omega)},
+ \qquad
+ \E_\P[F]=\E_\O[DF].
+\end{equation}
+The first mixture component draws the complete path directly from~$\P$; we
+refer to these observations as ``direct-$\P$'' paths. The widened components use
+a spot standard-deviation multiplier of eight and are tuned to place at least
+1,000 observations on both sides of each relevant strike and return-sign
+boundary. The reported runs satisfy $\E_\O[D]\simeq1$, and weighted spot and
+return moments recover their direct-$\P$ estimates.\\
+
+\noindent
+\textbf{Trading Opportunities:}
+We will consider trading opportunities conditional on each state: at each of our ten daily or weekly trading time $t$ conditional
+on our state $x_t=(s_t,h_t)$, we are able to
+trade calls for $M$ expiries and $N$
+strikes per expiry, giving a total of $L=MN$ calls indexed by $\ell=1,\ldots,L$. 
+In the
+reported experiments, $M=7$, $N=20$, and $L=140$. Their surface coordinates are the
+time-to-expiries and relative strikes $(T^\ell_t,K^\ell_t)$.
+ The corresponding
+fixed contracts have calendar expiries and cash strikes
+\begin{equation}\label{eq:fixed_contract_coordinates}
+ \tau^\ell_t=t+T^\ell_t,
+ \qquad
+ k^\ell_t=S_tK^\ell_t,
+ \qquad
+ C_t^\ell=S_tC(h_t;T^\ell_t,K^\ell_t),
+\end{equation}
+with Black\&Scholes delta~$\Delta_t^\ell$.
+We consider holding either to the next trading time~$u$ or beyond expiry of each option, denoted by $u=\infty$. Spots between trading
+times will be simulated as necessary to compute expiry values, no trading may occur at those times.
+
+
+The return of each option from trading time $t$ to $u$ is then given as
+\begin{equation}\label{eq:perdiexpriret}
+ R_t^\ell
+ := \left\{
+ \begin{array}{ll}
+	 S_u  C_u\left( u -t, \frac{ K^\ell_t }{ S_u } \right) -C_t^\ell & u\geq \tau^\ell_t \ ,\\
+	 \left( S_{\tau^\ell_t} - S_t \right)^+  -C_t^\ell & u < \tau^\ell_t \ .
+	\end{array}
+	\right .
+\end{equation}
+In order to allow for delta hedging up to each expiry we add artificial strikes of zero to our list of strikes.
+The zero strike call price return over the respective period is simply the spot return. As a result, we have $N':=N+1$ strikes
+and $L':=N'M$ call contracts.
+
+While we do not charge exit cost, we will charge proportional entry cost
+\begin{equation}\label{eq:multi_expiry_costs}
+ c_t^{\ell}=\gamma|C_t^\ell| \in \R^{L'}_{\geq 0}
+\end{equation}
+for cost rates~$\gamma\in\{0,10^{-4},10^{-3}\}$.
+
+
+Let $a_t=a_t(s_t,h_t)\in\R^{L'}$ be a trading action. The P\&L from trading time $t$ to $u$ is given as
+\begin{equation}\label{eq:multi_expiry_group_pnl}
+ \pi_t(a_t)
+ =
+  \sum_{\ell=1}^{L'}
+   a_t^\ell R_t^\ell-|a_t^\ell|c_t^\ell \ .
+\end{equation}
+We note that the zero strike calls introduced early allow the optimizer to construct a delta hedge,
+or any other stock hedge, without defining a separate delta-hedged return explicitly.
+
+A~portfolio~$a$ is an arbitrage opportunity for a given state $x_t = (s_t,h_t)$
+if its P\&L is non-negative and positive for some samples.
+It is clear that if $a$ is an arbitrage opportunity, then so is $a/|a|$. For numerical implementation we therefore impose~$\| a_t \|_1\leq 1$.
+
+
+\subsubsection{Returns to Expiry}
+
+In this section we test for each state $x_t$ on each sample path
+whether their portfolios held to expiry ($u=\infty$) can generate arbitrage. Theoretically, this is not possible for DYSANOS as for each state all option
+prices are free of static arbitrage; however, insufficient sampling can still generate such opportunities. An example is a very out of the money
+put with a positive price, which simply does not pay on the generated set of paths. That means for DYSANOS the test in this section
+validates the use of importance sampling for the spot.
+
+We perform the following tests
+\begin{enumerate}
+	\item We first solve per state $x_t$ per sample $\omega$ the linear program of finding $a_t$ such that $\max \pi_t(a_t) > 0$ and $\min \pi_t(a_t) \geq 0$
+	using synthetic spot prices (since $\pi$ is piece-wise affine this can be done on a much reduced synthetic spot set). 
+	
+	The resulting ``candidates'' $a_t(\omega)$ are real arbitrage opportunities in theory.
+
+DYSANOS produces no candidates in this test, as expected.
+	
+	\item As a next step, we test whether these opportunities appear in sampled data.
+
+We standardize $(s_t,h_t)$ at each trading
+time using means and standard deviations computed from direct-$\P$ (non-importance sampled) paths, and
+select the 1,024 nearest other states from either the original sample space (``Direct-$\P$'') or including the importance sampled space (``Weighted-$\P$'').
+We compute the corresponding mean and standard errors and report in how many cases the mean exceeds three times its standard error.\footnote{
+Details: with
+$\bar D_r=D_r/\sum_vD_v$, the importance-weighted estimate and its
+finite-sample standard error are
+\begin{equation}\label{eq:multi_expiry_weighted_mean}
+ \widehat\mu_D=\sum_r\bar D_r\pi_r,
+ \qquad
+ \operatorname{se}_D
+ =\left\{
+   \frac{\sum_r\bar D_r^2(\pi_r-\widehat\mu_D)^2}
+        {1-\sum_r\bar D_r^2}
+   \right\}^{1/2}.
+\end{equation}
+This estimate uses all neighbours drawn under~$\O$ and weights them by
+$D=p/q$; we call it the \emph{importance-weighted $\P$ estimate}. Let
+$\mathcal I_{\rm dir}$ be the neighbours belonging to the direct-$\P$
+mixture component and $n_{\rm dir}:=|\mathcal I_{\rm dir}|$. The independent
+\emph{direct-$\P$ estimate} is
+\begin{equation}\label{eq:multi_expiry_direct_mean}
+ \widehat\mu_{\rm dir}
+ =\frac{1}{n_{\rm dir}}\sum_{r\in\mathcal I_{\rm dir}}\pi_r,
+ \qquad
+ \operatorname{se}_{\rm dir}
+ =\left\{
+   \frac{1}{n_{\rm dir}(n_{\rm dir}-1)}
+   \sum_{r\in\mathcal I_{\rm dir}}(\pi_r-\widehat\mu_{\rm dir})^2
+  \right\}^{1/2}.
+\end{equation}
+Thus both estimators target the same conditional mean under~$\P$: one uses
+only paths drawn directly from~$\P$, while the other uses every neighbour
+with its likelihood ratio. The tables report separately whether
+$\widehat\mu_{\rm dir}>3\operatorname{se}_{\rm dir}$ and
+$\widehat\mu_D>3\operatorname{se}_D$, as well as their intersection. These
+conditional-mean calculations measure the physical incidence and scale of a
+complete-support certificate; they do not replace its pathwise non-loss
+condition.
+
+For each universe we select ten disjoint batches of 1,000 paths. Their ten
+trading times give 100,000 separately solved state--time LPs in every row
+of Tables~\ref{tab:multi_expiry_100k} and~\ref{tab:multi_expiry_1m}. Increasing
+the universe from 100,000 to one million paths therefore changes the sampled
+states and the population available to the nearest-neighbour diagnostic, but
+not the table denominator.}
+\end{enumerate}
+
+
+
+
+
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{llrrrrrrrr}
+\toprule
+ & & \multicolumn{4}{c}{PCA-IV occurrence (\%)}
+       & \multicolumn{4}{c}{DYSANOS occurrence (\%)}\\
+\cmidrule(lr){3-6}\cmidrule(lr){7-10}
+Trading interval & Cost & Candidates & Direct-$\P$ & Weighted-$\P$ & Both
+                         & Candidates & Direct-$\P$ & Weighted-$\P$ & Both\\
+\midrule
+Daily  & $0$ bp  & $5.273\%$ & $2.333\%$ & $3.282\%$ & $1.721\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$\\
+Daily  & $1$ bp  & $0.950\%$ & $0.398\%$ & $0.743\%$ & $0.331\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$\\
+Daily  & $10$ bp & $0.042\%$ & $0.037\%$ & $0.042\%$ & $0.037\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$\\
+Weekly & $0$ bp  & $5.525\%$ & $2.520\%$ & $3.712\%$ & $2.043\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$\\
+Weekly & $1$ bp  & $0.923\%$ & $0.466\%$ & $0.750\%$ & $0.415\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$\\
+Weekly & $10$ bp & $0.059\%$ & $0.057\%$ & $0.059\%$ & $0.057\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$\\
+\bottomrule
+\end{tabular}
+\caption{Statewise multi-expiry arbitrage test with a 100,000-path universe.
+Every percentage uses 100,000 state--time pairs as its denominator.
+``Candidates'' is the occurrence of theoretical arbitrage opportunities. ``Direct-$\P$'' and
+``Weighted-$\P$'' require, respectively, a conditional mean exceeding three
+standard errors under the direct and importance-weighted estimators; ``Both''
+is their intersection.}
+\label{tab:multi_expiry_100k}
+\end{table}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{llrrrrrrrr}
+\toprule
+ & & \multicolumn{4}{c}{PCA-IV occurrence (\%)}
+       & \multicolumn{4}{c}{DYSANOS occurrence (\%)}\\
+\cmidrule(lr){3-6}\cmidrule(lr){7-10}
+Trading interval & Cost & Candidates & Direct-$\P$ & Weighted-$\P$ & Both
+                         & Candidates & Direct-$\P$ & Weighted-$\P$ & Both\\
+\midrule
+Daily  & $0$ bp  & $5.097\%$ & $2.158\%$ & $3.022\%$ & $1.564\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$\\
+Daily  & $1$ bp  & $0.844\%$ & $0.303\%$ & $0.618\%$ & $0.258\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$\\
+Daily  & $10$ bp & $0.043\%$ & $0.029\%$ & $0.043\%$ & $0.029\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$\\
+Weekly & $0$ bp  & $5.537\%$ & $2.510\%$ & $3.689\%$ & $1.970\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$\\
+Weekly & $1$ bp  & $0.940\%$ & $0.426\%$ & $0.767\%$ & $0.375\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$\\
+Weekly & $10$ bp & $0.059\%$ & $0.050\%$ & $0.059\%$ & $0.050\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$ & $0.000\%$\\
+\bottomrule
+\end{tabular}
+\caption{Statewise multi-expiry arbitrage test with a one-million-path
+universe. Every percentage uses the same 100,000 audited state--time
+denominator and definitions as Table~\ref{tab:multi_expiry_100k}.}
+\label{tab:multi_expiry_1m}
+\end{table}
+
+We run this experiment for 100,000 and 1,000,000 paths.
+The larger universe leaves the conclusion unchanged. PCA-IV certificate
+occurrence rates are stable across path counts. The occurrence significant
+under both physical estimators is somewhat lower in
+the larger universe, but remains positive in every case. We retain both
+tables to display this difference. PCA-IV contains complete-support arbitrage
+at zero cost and after one- and ten-basis-point costs.
+
+DYSANOS produces no certificate in any reported to-expiry case. The PCA-IV detections are
+the positive control: the same statewise test finds its known payoff
+violations without imposing a particular monotonicity, convexity, or calendar
+spread in advance. Within the sampled states and the tested to-expiry strategy
+class, the results therefore detect conditional arbitrage in PCA-IV and do
+not detect it in DYSANOS.
+
+\subsubsection{Period Returns}
+
+The preceding test holds each option to expiry. To test trading between
+let~$u$ be the next trading time in~\eqref{eq:perdiexpriret}, conditional
+on neighbouring states.
+
+
+We split our paths, stratified by importance-sampling component, into
+$80\%$ training and $20\%$ validation sets. For each~$t$, the state
+coordinates are standardized using only the training set. We select 1,024
+training states $(\bar s,\bar h)$ from the direct-$\P$ component. Let
+$\mathcal N_t(\bar s,\bar h)$ contain the nearest training states in the
+standardized Euclidean metric: 1,024 neighbours for 100,000 paths and 4,096
+for one million paths. At each selected state we solve
+\begin{equation}\label{eq:period_local_lp}
+\begin{split}
+ \max_{a_t}\quad
+ &\sum_{\omega\in\mathcal N_t(\bar s,\bar h)}
+   \bar D_\omega\pi_t^\omega(a_t),\\
+ \text{subject to}\quad
+ &\|a_t\|_1\leq1,\\
+ &\pi_t^\omega(a_t)\geq0,
+ \qquad \omega\in\mathcal N_t(\bar s,\bar h),
+\end{split}
+\end{equation}
+where the importance weights~$\bar D_\omega$ are normalized within the
+training neighbourhood. This gives a locally constant approximation to the
+conditional action $a_t=a_t(s_t,h_t)$ without restricting it to individual
+options or prescribed spreads.
+
+The action, state normalization, center, and radius of the smallest closed
+ball containing its training neighbours are then frozen. Validation uses all
+paths in the disjoint validation set whose states lie in that ball. Let $\eta(a_t)$
+be a numerical threshold.
+
+A validation observation is a loss when
+$\pi_t(a_t)<-\eta_t(a_t)$ for each $\omega$ in the validation ball, and a gain when
+$\pi_t(a_t)>\eta_t(a_t)$. A portfolio is considered an arbitrage only when there is
+no loss in its validation ball and the lower confidence bounds for both mean
+P\&L and gain probability are positive under both the direct-$\P$ sample and
+the importance-weighted sample. We use the Bonferroni level
+$0.05/442{,}368$ for these simultaneous statements. A candidate is ``unresolved''
+if its validation ball contains fewer than twenty direct-$\P$ paths or has
+importance-weighted effective sample size below twenty. 
+
+There are nine period returns and 1,024
+selected states per return, so every occurrence rate below has denominator
+$9{,}216$. Unlike the complete-support test above, this finite-neighbourhood
+test is an empirical detection of conditional arbitrage within the stated
+state regions.
+
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrrrr}
+\toprule
+ & & \multicolumn{2}{c}{PCA-IV occurrence (\%)}
+       & \multicolumn{2}{c}{DYSANOS occurrence (\%)}\\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}
+Trading interval & Cost & Arbitrage & Unresolved
+                         & Arbitrage & Unresolved\\
+\midrule
+Daily  & $0$ bp  & $0.803\%$ & $10.569\%$ & $7.107\%$ & $9.429\%$\\
+Daily  & $1$ bp  & $0.315\%$ & $10.569\%$ & $5.534\%$ & $9.429\%$\\
+Daily  & $10$ bp & $0.054\%$ & $1.421\%$  & $2.365\%$ & $9.429\%$\\
+Weekly & $0$ bp  & $0.130\%$ & $7.975\%$  & $2.268\%$ & $7.227\%$\\
+Weekly & $1$ bp  & $0.076\%$ & $7.975\%$  & $1.736\%$ & $7.227\%$\\
+Weekly & $10$ bp & $0.022\%$ & $5.968\%$  & $0.738\%$ & $7.140\%$\\
+\bottomrule
+\end{tabular}
+\caption{Fixed-contract period-return test with 100,000 paths.
+ ``Unresolved'' occurrences lack the prescribed validation support and are
+not classified as failures.}
+\label{tab:period_comparison_100k}
+\end{table}
+
+The 100,000-path test retains finite-neighbourhood candidates in every case.
+DYSANOS has the higher validated occurrence in every row. Higher transaction
+costs reduce occurrence. Both generators retain substantial unresolved
+regions, so the larger universe is needed to distinguish a stable finding
+from sparse validation support.
+
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrrrr}
+\toprule
+ & & \multicolumn{2}{c}{PCA-IV occurrence (\%)}
+       & \multicolumn{2}{c}{DYSANOS occurrence (\%)}\\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}
+Trading interval & Cost & Arbitrage & Unresolved
+                         & Arbitrage & Unresolved\\
+\midrule
+Daily  & $0$ bp  & $1.584\%$ & $0.000\%$ & $12.500\%$ & $0.000\%$\\
+Daily  & $1$ bp  & $0.564\%$ & $0.000\%$ & $9.082\%$  & $0.000\%$\\
+Daily  & $10$ bp & $0.141\%$ & $0.000\%$ & $3.266\%$  & $0.000\%$\\
+Weekly & $0$ bp  & $0.423\%$ & $0.000\%$ & $2.365\%$  & $0.000\%$\\
+Weekly & $1$ bp  & $0.358\%$ & $0.000\%$ & $1.758\%$  & $0.000\%$\\
+Weekly & $10$ bp & $0.184\%$ & $0.000\%$ & $0.412\%$  & $0.000\%$\\
+\bottomrule
+\end{tabular}
+\caption{Fixed-contract period-return test with one million paths. The
+definitions, denominator, and cost hierarchy are those of
+Table~\ref{tab:period_comparison_100k}.}
+\label{tab:period_comparison_1m}
+\end{table}
+
+The larger universe resolves every selected state--time center. The retained
+occurrence changes materially in several rows. DYSANOS has the higher
+occurrence in every row, and both generators retain candidates at ten basis
+points. Thus the period-return detections are not explained by sparse
+validation support in the smaller universe.
+
+The neighbourhood test can miss a rare loss. We therefore perform a second
+numerical test on the two strongest DYSANOS weekly raw candidates at ten basis
+points, ranked by the smaller of the direct-$\P$ and importance-weighted lower
+mean bounds. For each candidate, we freeze its exact initial state and
+unit-$\ell^1$ action, then draw one million independent five-day
+continuations under the fitted physical law~$\P$. Contracts expiring within
+the week and their matched spot coordinates close at the exact expiry; all
+other positions close after five daily steps. If $\pi_r$ and $\eta_r$ are the
+resulting P\&L and numerical band, we record
+\begin{equation}\label{eq:period_exact_state_loss}
+ \widehat p_-=\frac{1}{N}\sum_{r=1}^N\bm 1_{\{\pi_r<0\}},
+ \qquad
+ \widehat p_{-,\eta}=\frac{1}{N}\sum_{r=1}^N
+                 \bm 1_{\{\pi_r<-\eta_r\}},
+ \qquad N=10^6.
+\end{equation}
+The observed loss occurrences and P\&Ls are reported in
+Table~\ref{tab:period_exact_state_replay}.
+
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{rrrrrr}
+\toprule
+Rank & Loss (\%) & Beyond band (\%) & Minimum P\&L
+     & Mean P\&L & MC error\\
+\midrule
+$1$ & $0.0000\%$ & $0.0000\%$ & $ 2.963\times10^{-4}$
+    & $4.683\times10^{-3}$ & $1.019\times10^{-6}$\\
+$2$ & $0.0752\%$ & $0.0746\%$ & $-1.478\times10^{-3}$
+    & $5.821\times10^{-3}$ & $2.175\times10^{-6}$\\
+\bottomrule
+\end{tabular}
+\caption{Exact-state conditional resampling of the two strongest DYSANOS
+weekly raw period-return candidates at ten basis points. Each row uses one
+million fresh physical continuations of the frozen state and action.}
+\label{tab:period_exact_state_replay}
+\end{table}
+
+The first portfolio uses one expiry-matched stock leg and eight calls. It is
+long the two-day stock leg, long calls at ten and twenty days, and short calls
+at two, five, forty days, and six months. The second is call-only: it combines
+small front-end call spreads and long forty-day and six-month calls with a
+dominant short one-year in-the-money call and a small long one-year
+at-the-money call. The
+second candidate is rejected by observed losses beyond the numerical band.
+The first has no loss in one million continuations; its one-sided $95\%$
+Clopper--Pearson upper bound on loss probability is
+$1-0.05^{1/N}=2.996\times10^{-6}$, or $0.000300\%$. It is not falsified by
+this numerical test, but finite sampling does not certify non-negative P\&L
+on the complete conditional support.
+
+The zero to-expiry counts above follow from the cross-sectional SANOS
+constraints on each decoded surface and its terminal payoff cone. Those
+constraints do not restrict the transition
+$C_u(\tau,k)-C_t(\tau,k)$ of the same fixed contract. The period-return results
+therefore identify state regions requiring a separate conditional test. The
+exact-state replay rejects one of the two strongest DYSANOS candidates and
+leaves the other unresolved at the stated sampling precision. It does not
+establish non-negative P\&L on the complete conditional support, but, considering
+the evidence, is a strong indicator that DYSANOS does admit dynamic arbitrage.
+
+
+\endinput
