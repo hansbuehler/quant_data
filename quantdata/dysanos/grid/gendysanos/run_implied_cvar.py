@@ -209,6 +209,19 @@ def _train(
 
     if model.config.architecture == "radial-feedforward":
         if best_conditional is None:
+            current_conditional = [
+                {
+                    name: value.detach().cpu().clone()
+                    for name, value in network.state_dict().items()
+                }
+                for network in model.conditional
+            ]
+            with torch.no_grad():
+                for network in model.conditional:
+                    output = network.In[-1] if network.In else network.I0
+                    output.weight.zero_()
+                    if output.bias is not None:
+                        output.bias.zero_()
             best_conditional = [
                 {
                     name: value.detach().cpu().clone()
@@ -216,6 +229,10 @@ def _train(
                 }
                 for network in model.conditional
             ]
+            for network, state_dict in zip(
+                model.conditional, current_conditional
+            ):
+                network.load_state_dict(state_dict)
             best_objective = torch.zeros(
                 len(model.config.notionals), dtype=torch.float64
             )
@@ -241,6 +258,35 @@ def _train(
     fixed = torch.randperm(
         state.shape[0], generator=fixed_generator, device=model.device
     )[: min(16_384, state.shape[0])]
+    if best_conditional is not None:
+        assert best_objective is not None
+        with torch.no_grad():
+            initial_action = model(state[fixed])[0]
+            initial_pnl = _parallel_pnl(
+                initial_action,
+                returns[fixed],
+                costs[fixed],
+            )
+            initial_objective = weighted_lower_tail_mean(
+                initial_pnl,
+                path_weight[fixed],
+                density_caps,
+            )
+        conditional_objective = initial_objective[:, 1].cpu().double()
+        for head, value in enumerate(conditional_objective):
+            if value > best_objective[head]:
+                best_objective[head] = value
+                best_conditional[head] = {
+                    name: tensor.detach().cpu().clone()
+                    for name, tensor in model.conditional[head].state_dict().items()
+                }
+        tracker.append(
+            {
+                "step": start_step,
+                "objective_by_density_cap_and_time": initial_objective.cpu().tolist(),
+                "initialization_valuation": True,
+            }
+        )
     started = time.monotonic()
     for step in range(start_step + 1, epochs + 1):
         indices = torch.randint(
@@ -343,6 +389,65 @@ def _train(
             None if best_objective is None else best_objective.tolist()
         ),
         "tracker": tracker,
+    }
+
+
+def _warm_start_feedforward(
+    model: ParallelRadialFeedForwardDirections,
+    *,
+    checkpoint_path: Path,
+    source_head: int,
+) -> dict[str, Any]:
+    """Copy one learned conditional action into every target objective head."""
+
+    verify_inp(
+        checkpoint_path.is_file(),
+        lambda: f"warm-start checkpoint does not exist: {checkpoint_path}",
+    )
+    saved = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    source = saved.get("model")
+    verify_inp(isinstance(source, dict), "warm-start checkpoint has no model state")
+    source_heads = sorted(
+        {
+            int(name.split(".")[1])
+            for name in source
+            if name.startswith("conditional.")
+        }
+    )
+    verify_inp(
+        bool(source_heads), "warm-start checkpoint has no conditional action heads"
+    )
+    verify_inp(
+        -len(source_heads) <= source_head < len(source_heads),
+        lambda: (
+            f"warm-start source head {source_head} is outside "
+            f"{len(source_heads)} available heads"
+        ),
+    )
+    resolved_head = source_heads[source_head]
+    prefix = f"conditional.{resolved_head}."
+    copied = {
+        name[len(prefix) :]: value
+        for name, value in source.items()
+        if name.startswith(prefix)
+    }
+    verify_inp(bool(copied), lambda: f"source head {resolved_head} is empty")
+    for network in model.conditional:
+        network.load_state_dict(copied, strict=True)
+    verify_inp(
+        all(
+            torch.isfinite(value).all().item()
+            for network in model.conditional
+            for value in network.state_dict().values()
+        ),
+        "warm-started feed-forward parameters contain NaN or infinity",
+    )
+    return {
+        "checkpoint": str(checkpoint_path),
+        "requested_source_head": source_head,
+        "resolved_source_head": resolved_head,
+        "source_step": int(saved.get("step", -1)),
+        "source_completed": bool(saved.get("completed", False)),
     }
 
 
@@ -563,19 +668,23 @@ def _feedforward_optimality_audit(
 
     probability = path_weight[indices].cpu().double().numpy()
     probability /= probability.sum()
-    target_mass = np.empty_like(pnl)
-    objective = np.empty(heads, dtype=np.float64)
-    var_endpoint = np.empty(heads, dtype=np.float64)
+    own_target_mass = np.empty_like(pnl)
+    own_objective = np.empty(heads, dtype=np.float64)
+    candidate_pool_objective = np.empty((heads, heads), dtype=np.float64)
     for head, cap in enumerate(density_caps):
-        target_mass[:, head] = _weighted_lower_tail_dual_numpy(
+        own_target_mass[:, head] = _weighted_lower_tail_dual_numpy(
             pnl[:, head], probability, cap
         )
-        objective[head], var_endpoint[head] = _weighted_lower_tail_numpy(
+        own_objective[head], _ = _weighted_lower_tail_numpy(
             pnl[:, head], probability, cap
         )
+        for source in range(heads):
+            candidate_pool_objective[head, source], _ = _weighted_lower_tail_numpy(
+                pnl[:, source], probability, cap
+            )
 
     coefficient = torch.as_tensor(
-        target_mass, dtype=returns.dtype, device=returns.device
+        own_target_mass, dtype=returns.dtype, device=returns.device
     )
     model.zero_grad(set_to_none=True)
     for start in range(0, paths, batch_size):
@@ -599,7 +708,18 @@ def _feedforward_optimality_audit(
             if parameter.grad is not None
         ]
         gradient = torch.cat(gradients) if gradients else torch.zeros(1)
-        q = target_mass[:, head]
+        source = int(np.argmax(candidate_pool_objective[head]))
+        pooled_objective = float(candidate_pool_objective[head, source])
+        selected_is_zero = pooled_objective <= 0.0
+        selected_pnl = (
+            np.zeros(paths, dtype=np.float64)
+            if selected_is_zero
+            else pnl[:, source]
+        )
+        q = _weighted_lower_tail_dual_numpy(selected_pnl, probability, cap)
+        var_endpoint = _weighted_lower_tail_numpy(
+            selected_pnl, probability, cap
+        )[1]
         density = q / probability
         moment = q @ flattened_return
         scaled_moment = np.divide(
@@ -610,17 +730,39 @@ def _feedforward_optimality_audit(
         )
         positive = density > 0.0
         tied = np.isclose(
-            pnl[:, head],
-            var_endpoint[head],
+            selected_pnl,
+            var_endpoint,
             rtol=0.0,
-            atol=32.0 * np.finfo(np.float64).eps * max(1.0, abs(var_endpoint[head])),
+            atol=32.0 * np.finfo(np.float64).eps * max(1.0, abs(var_endpoint)),
         )
         result.append(
             {
                 "lambda": cap - 1.0,
                 "density_cap": cap,
-                "fitted_full_sample_CVaR": float(objective[head]),
-                "upper_VaR_endpoint_of_retained_tail": float(var_endpoint[head]),
+                "own_head_full_sample_CVaR": float(own_objective[head]),
+                "candidate_pool_CVaR_by_source_lambda": (
+                    candidate_pool_objective[head].tolist()
+                ),
+                "maximum_candidate_pool_CVaR_with_zero_baseline": max(
+                    0.0, pooled_objective
+                ),
+                "selected_source_lambda": (
+                    None if selected_is_zero else density_caps[source] - 1.0
+                ),
+                "selected_zero_action": selected_is_zero,
+                "upper_VaR_endpoint_of_retained_tail": float(var_endpoint),
+                "selected_candidate_P_mean_pnl": float(
+                    np.dot(probability, selected_pnl)
+                ),
+                "selected_candidate_P_loss_probability": float(
+                    np.dot(probability, selected_pnl < 0.0)
+                ),
+                "selected_candidate_sample_minimum_pnl": float(
+                    selected_pnl.min()
+                ),
+                "selected_candidate_sample_maximum_pnl": float(
+                    selected_pnl.max()
+                ),
                 "paths_with_positive_density": int(positive.sum()),
                 "positive_density_path_fraction": float(positive.mean()),
                 "physical_probability_of_positive_density_paths": float(
@@ -641,6 +783,7 @@ def _feedforward_optimality_audit(
                 ),
                 "network_parameter_gradient_L2": float(torch.linalg.vector_norm(gradient)),
                 "network_parameter_gradient_maximum_absolute": float(gradient.abs().max()),
+                "gradient_applies_to_own_head_not_selected_candidate": True,
             }
         )
     model.zero_grad(set_to_none=True)
@@ -648,9 +791,11 @@ def _feedforward_optimality_audit(
         "definition": (
             "For each fitted action, the exact lower-tail CVaR subgradient gives "
             "one density with 0<=D<=1+lambda. Network-parameter gradients test "
-            "stationarity of that fitted action. Because the feed-forward problem "
-            "is non-convex, these are diagnostics rather than a global certificate; "
-            "when the action is identically zero, the CVaR subgradient is non-unique."
+            "stationarity of its own objective head. Every learned action is also "
+            "revalued at every lambda and the best candidate is compared with the "
+            "zero action. Because the feed-forward problem is non-convex, these are "
+            "diagnostics and lower bounds rather than a global certificate; when the "
+            "action is identically zero, the CVaR subgradient is non-unique."
         ),
         "global_certificate_available": False,
         "by_lambda": result,
@@ -739,6 +884,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         f"{args.architecture}-"
         f"{args.kernels if args.architecture == 'kernel' else 'ffw'}-"
         f"lambda-{lambda_label}"
+        + (
+            f"-warm-head-{args.warm_start_source_head}"
+            if args.warm_start_checkpoint is not None
+            else ""
+        )
     )
     config = ParallelDirectionConfig(
         label=label,
@@ -773,6 +923,32 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             state_mean=state_mean[1],
             state_whitener=state_whitener[1],
         )
+    warm_start = None
+    if args.warm_start_checkpoint is not None:
+        verify_inp(
+            args.architecture == "radial-feedforward",
+            "warm start is implemented only for radial-feedforward actions",
+        )
+        warm_start = _warm_start_feedforward(
+            model,
+            checkpoint_path=Path(args.warm_start_checkpoint),
+            source_head=args.warm_start_source_head,
+        )
+    warm_start_full_sample = (
+        _evaluate(
+            model,
+            state=data.state[:, 1],
+            returns=data.returns,
+            costs=data.costs,
+            path_weight=data.path_weight,
+            component=data.component,
+            density_caps=density_caps,
+            indices=all_indices,
+            batch_size=args.valuation_batch_size,
+        )
+        if warm_start is not None
+        else None
+    )
     callable_model = torch.compile(model, dynamic=False) if not args.no_compile else model
     cap_tensor = torch.as_tensor(density_caps, dtype=env.fdtype, device=env.device)
     checkpoint_path = Path(args.checkpoint_root) / config.group / f"{config.filename}.pt"
@@ -858,6 +1034,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "model_config": asdict(config),
         "whitening": whitening,
         "kernel_basis": kernel_basis,
+        "warm_start": warm_start,
+        "warm_start_full_sample_before_training": warm_start_full_sample,
         "training": training,
         "full_sample": full,
         "global_optimality_certificate": optimality,
@@ -898,6 +1076,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--checkpoint-update", type=int, default=5_000)
     parser.add_argument("--lr", type=float, default=1.0e-2)
     parser.add_argument("--initial-output-noise", type=float, default=1.0e-4)
+    parser.add_argument("--warm-start-checkpoint")
+    parser.add_argument("--warm-start-source-head", type=int, default=-1)
     parser.add_argument("--zero-tolerance", type=float, default=1.0e-6)
     parser.add_argument("--precision", type=int, choices=(32, 64), default=32)
     parser.add_argument("--covariance-relative-floor", type=float, default=1.0e-10)

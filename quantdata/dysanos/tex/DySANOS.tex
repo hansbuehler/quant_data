@@ -130,7 +130,7 @@ foundational work of~\cite{ContVol} on dynamics of the implied volatility surfac
 The most advanced approach until recently were the simulators~\cite{wiese2019simulate,wiese2021multiassetspotoptionmarket,Cohen02012023} 
 for realistic dynamics of
 a \emph{discrete floating grid} of options which are strictly
-arbitrage-free. These simulators are using, in essence, the discrete local volatility
+ arbitrage-free at each simulation date. These simulators are using, in essence, the discrete local volatility
 representation pioneered in~\cite{DLV} to ensure absence of static arbitrage in every simulated
 option surface. 
 
@@ -174,8 +174,7 @@ This article presents a model framework for
 \begin{itemize}
     \item  \textbf{(i) realistic generative dynamics} of
     \item  \textbf{(ii) smooth option surfaces for all strikes and expiries} which are
-    \item  \textbf{(iii) free of static arbitrage}, together with
-    \item  \textbf{(iv) direct diagnostics for dynamic arbitrage}.
+    \item  \textbf{(iii) free of static arbitrage}.
 \end{itemize}
 
 \subsection*{Historic Context and Literature Review}
@@ -314,6 +313,9 @@ will just be another representation of the same surface).
     We define a number of statistical tests in section~\ref{sec:arbitrage} 
     to test presence of actionable arbitrage in our generated data. We compare
     with a naive AR(1) PCA model applied directly to implied volatilities.
+    While DYSANOS, as expected does not have arbitrage when traded options
+    are held to expiry, it does exhibit evidence of dynamic arbitrage
+    when options are traded from period to another.
  
 
 %% ============================================================
@@ -1349,7 +1351,8 @@ option on each path given the ML-SANOS parameters for the respective sample and
 time step. Contrary to previous results, agents can therefore choose which
 options to trade at each time step.
 
-We have found strong numerical indications that in this situation, DYSANOS admits dynamic arbitrage along its paths.
+We have found 
+numerical indication that in this situation, DYSANOS admits dynamic arbitrage along its paths.
 
 \section{Thanks}
 
