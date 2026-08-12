@@ -13,7 +13,6 @@ from cdxcore.version import version
 from quantdata.biz_calendar import DAYS_PER_YEAR
 from quantdata.dysanos.grid.torch_model import SanosModel
 from quantdata.dysanos.grid.torch_pricer import SanosPricer
-from quantdata.dysanos.simple import sampler
 
 
 @version("0.3")

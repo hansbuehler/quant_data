@@ -27,24 +27,29 @@ A really diffult day for testing (likely very wrong data) is ``SPX 2005-11-21``.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+import math
 import warnings as warnings
+from dataclasses import asdict, dataclass, field
 
-import numpy as np
 import cvxpy as cp
-from cvxpy.error import SolverError
-from dataclasses import dataclass, field
+import numpy as np
+from cdxcore.bs import bs
 from cdxcore.err import verify, verify_inp
+from cdxcore.pretty import PrettyObject
 from cdxcore.verbose import Context
 from cdxcore.version import version
-from cdxcore.bs import bs
-from cdxcore.pretty import PrettyObject
-from quantdata.biz_calendar import DAYS_PER_YEAR, ONE_MINUTE
-from quantdata.utils.backbone import BackboneNumpy
-import math
+from cvxpy.error import SolverError
 
+from quantdata.biz_calendar import DAYS_PER_YEAR, ONE_MINUTE
 from quantdata.sanos import IMPOSE_FLOOR_ON_DENSITY
-from quantdata.sanos.sanos_tools import SanosLPSolver, repair_density_nonnegative, warn_and_fix_density, _compute_market_fit
+from quantdata.sanos.sanos_tools import (
+    SanosLPSolver,
+    _compute_market_fit,
+    repair_density_nonnegative,
+    warn_and_fix_density,
+)
+from quantdata.utils.backbone import BackboneNumpy
+
 
 @version("0.81")
 class ArbFreePricer(PrettyObject):
@@ -144,6 +149,45 @@ class ArbFreePricer(PrettyObject):
         self.run_time_expiry  : float|None = None
         self.run_time_surface : float|None = None
 
+    def to_dict(self) -> dict[str, object]:
+        """Return an HDF5-compatible representation of the pricer."""
+        def encode(value):
+            if value is None:
+                return self._none_sentinel
+            if isinstance(value, list):
+                return [encode(item) for item in value]
+            return value
+
+        return {key: encode(value) for key, value in self.items()}
+
+    @staticmethod
+    def from_dict(d: dict[str, object]) -> ArbFreePricer:
+        """Reconstruct a pricer serialized by :meth:`to_dict`."""
+        verify_inp(isinstance(d, dict), lambda: f"Expected 'd' to be a dict, found {type(d)}")
+
+        def decode(value):
+            if isinstance(value, str) and value == ArbFreePricer._none_sentinel:
+                return None
+            if isinstance(value, list):
+                return [decode(item) for item in value]
+            return value
+
+        decoded = {key: decode(value) for key, value in d.items()}
+        pricer = ArbFreePricer(smoothness=decoded.get("smoothness"))
+        expected_fields = set(pricer)
+        verify_inp(
+            set(decoded) == expected_fields,
+            lambda: (
+                "Serialized ArbFreePricer fields do not match the current implementation. "
+                f"Missing fields: {sorted(expected_fields - set(decoded))}; "
+                f"unexpected fields: {sorted(set(decoded) - expected_fields)}"
+            ),
+        )
+        pricer.update(decoded)
+        pricer._make_numpy()
+        return pricer
+
+    _none_sentinel = "__ARB_FREE_PRICER_NONE__"
     _eps_price = 1E-6
     _eps_density = 1E-7
 
@@ -335,7 +379,7 @@ class ArbFreePricer(PrettyObject):
         self.mstrikes    = [ np.asarray(x) for x in self.mstrikes ] if not self.mstrikes is None else None
         self.mdensities  = [ np.asarray(x) for x in self.mdensities ] if not self.mdensities is None else None
 
-        self.run_time_expiry = float(self.run_time_expiry)
+        self.run_time_expiry = float(self.run_time_expiry) if not self.run_time_expiry is None else None
         self.run_time_surface = float(self.run_time_surface) if not self.run_time_surface is None else None
 
         T = len(self.expiries) 
