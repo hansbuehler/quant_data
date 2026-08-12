@@ -102,7 +102,7 @@ S\&P Index data from 2020 to~2025 and compare it to a pure implied-vol PCA model
 
 %% ============================================================
 
-\newpage 
+% \newpage 
 \section{Introduction}
 \label{sec:intro}
 %% ============================================================
@@ -300,18 +300,9 @@ will just be another representation of the same surface).
 
 \subsubsection*{Absence of Dynamic Arbitrage}
 
-    Every decoded SANOS surface is free of static arbitrage by construction.
-	However, this  cross-sectional property does not by itself imply absence of dynamic
-    arbitrage. Such property compes particularly challenging with generated discrete data: 
-    a conditional mean is usually sampled noisly which makes assessment of absence of
-    arbitrage challening.
-    
-    We define a number of statistical tests in section~\ref{sec:arbitrage} 
-    to test presence of actionable arbitrage in our generated data. We compare
-    with a naive AR(1) PCA model applied directly to implied volatilities.
-    While DYSANOS, as expected does not have arbitrage when traded options
-    are held to expiry, it does exhibit evidence of dynamic arbitrage
-    when options are traded from period to another.
+Every decoded SANOS surface is free of static arbitrage by construction. However, this cross-sectional property does not by itself imply the absence of dynamic arbitrage. Encoding dynamic no-arbitrage is particularly challenging for generated discrete data, since conditional means are typically estimated from noisy samples, making violations difficult to assess reliably. This issue is shared by several other state-of-the-art generative models in finance; see, e.g.,~\cite{VolGAN,na2023computing,wang2025controllable,bajalica2026latent}. We therefore focus on assessing how static no-arbitrage propagates through the dynamically evolving call surfaces.
+
+We define a number of statistical tests in Section~\ref{sec:arbitrage} to detect the presence of actionable arbitrage in the generated data. We compare DYSANOS with a naive AR(1) PCA model applied directly to implied volatilities. While DYSANOS, as expected, exhibits no arbitrage when traded options are held to expiry, we nevertheless find evidence of dynamic arbitrage when options are traded from one period to the next.
  
 
 %% ============================================================
@@ -672,11 +663,46 @@ from~\cite{SANOS2026}:
     \begin{itemize}
         \item Total volatilities: 
         define the forward volatilities
-             $$
+             \eqx
                        \sigma_j := \sigma_{\min}\sqrt{\hat T_j}
                + \mathrm{sigmoid}( x^\sigma_j ) ( \sigma_{\max} - \sigma_{\min} )
-            $$
-            and with them the total volatilities
+            \eqend
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            +
+            
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        and with them the total volatilities
              \begin{equation}\label{eq:totalW}
              W_j := \sum_{\ell=1}^{j} \sigma_\ell \left( 
              \sqrt{ \hat T_\ell  } - \sqrt{ \hat T_{\ell -1} } \right) \ .                 
@@ -806,7 +832,9 @@ $\tilde s_t:=\log\bm S_t$. We use the tilde to distinguish real observed
 data from siumlated data.
 
 \begin{theorem}
-Any generative model for sequences $x_t=(s_t,h_t)$
+Any generative non-degenerate\footnote{
+in the sense that $S_t = \log s_t$ is suitably intergable
+}model for sequences $x_t=(s_t,h_t)$
 of model real-valued parameters 
 gives rise to a \emph{dynamic generative ML-SANOS} model
 which has for each time step $t$ a spot price $S_t$ and a call price function $C_t$,
