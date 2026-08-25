@@ -774,7 +774,7 @@ def run_surface_reversion_attribution(
 
 
 def main() -> None:
-    project = Path("aae/ideas/localvolbysanos")
+    project = Path("quantdata/dysanos/localvolbysanos")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--panel-file",

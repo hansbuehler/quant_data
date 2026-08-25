@@ -8,22 +8,22 @@ import polars as pl
 import pytest
 from cdxcore.bs import bs
 
-from aae.ideas.localvolbysanos.real_trading.atm_loss_classifier import (
+from quantdata.dysanos.localvolbysanos.real_trading.atm_loss_classifier import (
     AtmLossClassifierConfig,
     build_atm_loss_panel,
     build_classifier_trading_results,
     expanding_loss_probabilities,
 )
-from aae.ideas.localvolbysanos.real_trading.atm_pnl_predictor import (
+from quantdata.dysanos.localvolbysanos.real_trading.atm_pnl_predictor import (
     expanding_pnl_predictions,
 )
-from aae.ideas.localvolbysanos.real_trading.attribution import _regression
-from aae.ideas.localvolbysanos.real_trading.delta_buckets import (
+from quantdata.dysanos.localvolbysanos.real_trading.attribution import _regression
+from quantdata.dysanos.localvolbysanos.real_trading.delta_buckets import (
     build_delta_bucket_panel,
     build_eight_category_attribution,
     build_source_characteristic_attribution,
 )
-from aae.ideas.localvolbysanos.real_trading.experiment import (
+from quantdata.dysanos.localvolbysanos.real_trading.experiment import (
     Instrument,
     JointDynamics,
     OptionPair,
@@ -38,30 +38,30 @@ from aae.ideas.localvolbysanos.real_trading.experiment import (
     instrument_return_matrix,
     optimize_oce,
 )
-from aae.ideas.localvolbysanos.real_trading.loss_diagnostics import (
+from quantdata.dysanos.localvolbysanos.real_trading.loss_diagnostics import (
     _ols_return_diagnostics,
 )
-from aae.ideas.localvolbysanos.real_trading.reversion_oce_counterfactual import (
+from quantdata.dysanos.localvolbysanos.real_trading.reversion_oce_counterfactual import (
     build_entry_horizon_returns,
     freeze_surface_generator,
     realized_delta_returns,
 )
-from aae.ideas.localvolbysanos.real_trading.sequential import (
+from quantdata.dysanos.localvolbysanos.real_trading.sequential import (
     SequentialAnalysisConfig,
     build_sign_only_ledger,
 )
-from aae.ideas.localvolbysanos.real_trading.spot_only import _horizon_dates
-from aae.ideas.localvolbysanos.real_trading.surface_reversion_attribution import (
+from quantdata.dysanos.localvolbysanos.real_trading.spot_only import _horizon_dates
+from quantdata.dysanos.localvolbysanos.real_trading.surface_reversion_attribution import (
     ExpandingSurfaceFit,
     SpotStateFit,
     _newey_west_mean_t,
     _surface_training_shocks,
     forecast_spot_log_return,
 )
-from aae.ideas.localvolbysanos.real_trading.tail_risk_diagnostics import (
+from quantdata.dysanos.localvolbysanos.real_trading.tail_risk_diagnostics import (
     expanding_inverse_median_exposure,
 )
-from aae.ideas.localvolbysanos.surface_dynamics import (
+from quantdata.dysanos.localvolbysanos.surface_dynamics import (
     MatrixExponentialAR1,
     PCAResult,
     SurfacePanel,

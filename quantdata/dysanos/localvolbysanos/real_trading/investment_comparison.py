@@ -327,7 +327,7 @@ def compare_investment_strategies(
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    base = Path("aae/ideas/localvolbysanos/real_trading/results")
+    base = Path("quantdata/dysanos/localvolbysanos/real_trading/results")
     parser.add_argument(
         "--legacy-comparison-file",
         type=Path,
@@ -343,7 +343,7 @@ def _parser() -> argparse.ArgumentParser:
         "--daily-market-file",
         type=Path,
         default=Path(
-            "aae/ideas/localvolbysanos/results/2025_full_reference_grid/"
+            "quantdata/dysanos/localvolbysanos/results/2025_full_reference_grid/"
             "daily_summary.parquet"
         ),
     )

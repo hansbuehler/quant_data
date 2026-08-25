@@ -19,8 +19,8 @@ options. Actual entry quotes determine the executable entry prices. The current
 experiment exits survivors at the scenario-model midpoint; a future spread
 model could instead impose conservative scenario-horizon liquidation costs.
 
-The project may use shared production code such as `aae.dysanos` and
-`quantdata.sanos`, but must not import from another `aae.ideas` project.
+The project may use shared production code such as `quantdata.dysanos` and
+`quantdata.sanos`, but must not import from `aae` or another research project.
 
 ## Does the proposal make sense?
 
@@ -483,9 +483,9 @@ the repository root with:
 
 ```bash
 /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.experiment \
+  -m quantdata.dysanos.localvolbysanos.real_trading.experiment \
   --scenario-paths 256 \
-  --output-dir aae/ideas/localvolbysanos/real_trading/results/2025
+  --output-dir quantdata/dysanos/localvolbysanos/real_trading/results/2025
 ```
 
 The run uses:
@@ -536,9 +536,9 @@ Recreate the realized comparison after the optimization run with:
 
 ```bash
 /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.realized \
-  --results-dir aae/ideas/localvolbysanos/real_trading/results/2025 \
-  --output-dir aae/ideas/localvolbysanos/real_trading/results/2025
+  -m quantdata.dysanos.localvolbysanos.real_trading.realized \
+  --results-dir quantdata/dysanos/localvolbysanos/real_trading/results/2025 \
+  --output-dir quantdata/dysanos/localvolbysanos/real_trading/results/2025
 ```
 
 The comparison tracks the exact absolute strike and stable AM/PM expiry ID.
@@ -583,7 +583,7 @@ Recreate the return attribution with:
 
 ```bash
 /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.attribution
+  -m quantdata.dysanos.localvolbysanos.real_trading.attribution
 ```
 
 For each of the 18 complete-portfolio series, the script joins the observed
@@ -697,7 +697,7 @@ optimizer as a signal generator. Recreate it with:
 
 ```bash
 /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.spot_only
+  -m quantdata.dysanos.localvolbysanos.real_trading.spot_only
 ```
 
 For every decision date and optimized option portfolio:
@@ -773,28 +773,28 @@ the constrained optimization and its one-day spot evaluation with:
 
 ```bash
 /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.experiment \
+  -m quantdata.dysanos.localvolbysanos.real_trading.experiment \
   --output-dir \
-  aae/ideas/localvolbysanos/real_trading/results/2025_delta_cap_1m \
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025_delta_cap_1m \
   --max-abs-net-delta-fraction 1
 
 /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.realized \
+  -m quantdata.dysanos.localvolbysanos.real_trading.realized \
   --results-dir \
-  aae/ideas/localvolbysanos/real_trading/results/2025_delta_cap_1m \
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025_delta_cap_1m \
   --output-dir \
-  aae/ideas/localvolbysanos/real_trading/results/2025_delta_cap_1m
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025_delta_cap_1m
 
 /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.spot_only \
+  -m quantdata.dysanos.localvolbysanos.real_trading.spot_only \
   --positions-file \
-  aae/ideas/localvolbysanos/real_trading/results/2025_delta_cap_1m/positions.parquet \
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025_delta_cap_1m/positions.parquet \
   --results-file \
-  aae/ideas/localvolbysanos/real_trading/results/2025_delta_cap_1m/oce_results.parquet \
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025_delta_cap_1m/oce_results.parquet \
   --realized-comparison-file \
-  aae/ideas/localvolbysanos/real_trading/results/2025_delta_cap_1m/realized_comparison.parquet \
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025_delta_cap_1m/realized_comparison.parquet \
   --output-dir \
-  aae/ideas/localvolbysanos/real_trading/results/2025_delta_cap_1m/spot_1d \
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025_delta_cap_1m/spot_1d \
   --horizon-sessions 1 --hac-lags 0
 ```
 
@@ -873,19 +873,19 @@ Recreate the stateful run and comparison with:
 
 ```bash
 /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.experiment \
+  -m quantdata.dysanos.localvolbysanos.real_trading.experiment \
   --output-dir \
-  aae/ideas/localvolbysanos/real_trading/results/2025_sequential_cap_1m \
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025_sequential_cap_1m \
   --carry-spot-position --max-abs-net-delta-fraction 1
 
 /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.sequential \
+  -m quantdata.dysanos.localvolbysanos.real_trading.sequential \
   --continuous-results-file \
-  aae/ideas/localvolbysanos/real_trading/results/2025_sequential_cap_1m/oce_results.parquet \
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025_sequential_cap_1m/oce_results.parquet \
   --sign-comparison-file \
-  aae/ideas/localvolbysanos/real_trading/results/2025/one_day/spot_only_comparison.parquet \
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025/one_day/spot_only_comparison.parquet \
   --output-dir \
-  aae/ideas/localvolbysanos/real_trading/results/2025_sequential_cap_1m
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025_sequential_cap_1m
 ```
 
 For `normalised / entropy / risk aversion 10`, the 162 realized daily returns
@@ -966,7 +966,7 @@ Recreate the diagnostics with:
 
 ```bash
 /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.loss_diagnostics
+  -m quantdata.dysanos.localvolbysanos.real_trading.loss_diagnostics
 ```
 
 Natural next variables should remain split by timing. Candidate predictors
@@ -1008,21 +1008,21 @@ Recreate the two objectives and one-day spot test with:
 
 ```bash
 /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.experiment \
+  -m quantdata.dysanos.localvolbysanos.real_trading.experiment \
   --utilities cvar10 cvar50 \
   --output-dir \
-  aae/ideas/localvolbysanos/real_trading/results/2025_cvar_daily
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025_cvar_daily
 
 /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.spot_only \
+  -m quantdata.dysanos.localvolbysanos.real_trading.spot_only \
   --positions-file \
-  aae/ideas/localvolbysanos/real_trading/results/2025_cvar_daily/positions.parquet \
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025_cvar_daily/positions.parquet \
   --results-file \
-  aae/ideas/localvolbysanos/real_trading/results/2025_cvar_daily/oce_results.parquet \
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025_cvar_daily/oce_results.parquet \
   --realized-comparison-file \
-  aae/ideas/localvolbysanos/real_trading/results/2025/realized_comparison.parquet \
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025/realized_comparison.parquet \
   --output-dir \
-  aae/ideas/localvolbysanos/real_trading/results/2025_cvar_daily/one_day \
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025_cvar_daily/one_day \
   --horizon-sessions 1 --hac-lags 0
 ```
 
@@ -1065,20 +1065,20 @@ Recreate the stateful run and sign comparison with:
 
 ```bash
 /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.experiment \
+  -m quantdata.dysanos.localvolbysanos.real_trading.experiment \
   --utilities cvar10 cvar50 \
   --carry-spot-position --max-abs-net-delta-fraction 1 \
   --output-dir \
-  aae/ideas/localvolbysanos/real_trading/results/2025_cvar_sequential_cap_1m
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025_cvar_sequential_cap_1m
 
 /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.sequential \
+  -m quantdata.dysanos.localvolbysanos.real_trading.sequential \
   --continuous-results-file \
-  aae/ideas/localvolbysanos/real_trading/results/2025_cvar_sequential_cap_1m/oce_results.parquet \
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025_cvar_sequential_cap_1m/oce_results.parquet \
   --sign-comparison-file \
-  aae/ideas/localvolbysanos/real_trading/results/2025_cvar_daily/one_day/spot_only_comparison.parquet \
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025_cvar_daily/one_day/spot_only_comparison.parquet \
   --output-dir \
-  aae/ideas/localvolbysanos/real_trading/results/2025_cvar_sequential_cap_1m
+  quantdata/dysanos/localvolbysanos/real_trading/results/2025_cvar_sequential_cap_1m
 ```
 
 For the normalised universe:
@@ -1130,7 +1130,7 @@ Recreate the analysis with:
 
 ```bash
 /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.tail_risk_diagnostics
+  -m quantdata.dysanos.localvolbysanos.real_trading.tail_risk_diagnostics
 ```
 
 ATM volatility targeting is the only consistent tail reducer. It lowers worst-
@@ -1199,7 +1199,7 @@ Recreate the paths, summary, and graph with:
 ```bash
 MPLCONFIGDIR=/tmp/aae_localvol_matplotlib \
   /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.investment_comparison
+  -m quantdata.dysanos.localvolbysanos.real_trading.investment_comparison
 ```
 
 The raw worst-90% CVaR digital signal has the largest terminal P&L. ATM
@@ -1328,7 +1328,7 @@ Recreate the predictions and cutoff sweep with:
 ```bash
 MPLCONFIGDIR=/tmp/aae_localvol_matplotlib \
   /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.atm_pnl_predictor
+  -m quantdata.dysanos.localvolbysanos.real_trading.atm_pnl_predictor
 ```
 
 Recreate the panel, expanding predictions, coefficients, and summary with:
@@ -1336,7 +1336,7 @@ Recreate the panel, expanding predictions, coefficients, and summary with:
 ```bash
 MPLCONFIGDIR=/tmp/aae_localvol_matplotlib \
   /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.atm_loss_classifier
+  -m quantdata.dysanos.localvolbysanos.real_trading.atm_loss_classifier
 ```
 
 ### Delta attribution by strike region, option type, and side
@@ -1412,7 +1412,7 @@ eight-category attribution with:
 
 ```bash
 /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.delta_buckets
+  -m quantdata.dysanos.localvolbysanos.real_trading.delta_buckets
 ```
 
 ### Does surface reversion generate the spot signal?
@@ -1490,7 +1490,7 @@ Recreate the expanding fits, tables, joined signal diagnostics, and graph with:
 ```bash
 MPLCONFIGDIR=/tmp/aae_localvol_matplotlib \
   /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.surface_reversion_attribution
+  -m quantdata.dysanos.localvolbysanos.real_trading.surface_reversion_attribution
 ```
 
 ### Controlled OCE reversion ablation
@@ -1584,7 +1584,7 @@ Recreate the full chronological refits and 1,782 OCE optimizations with:
 ```bash
 MPLCONFIGDIR=/tmp/aae_localvol_matplotlib \
   /home/hans/vqdata/bin/python \
-  -m aae.ideas.localvolbysanos.real_trading.reversion_oce_counterfactual
+  -m quantdata.dysanos.localvolbysanos.real_trading.reversion_oce_counterfactual
 ```
 
 For the option strategy, the positive mean is carried by a right tail. Win

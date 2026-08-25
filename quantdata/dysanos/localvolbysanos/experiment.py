@@ -11,7 +11,7 @@ import numpy as np
 from cdxcore.err import verify, verify_inp
 from cdxcore.verbose import Context
 
-from aae.dysanos.markets import DysanosMarketDay, MarketConfig, load_market_day
+from quantdata.dysanos.localvolbysanos.markets import DysanosMarketDay, MarketConfig, load_market_day
 from quantdata.biz_calendar import DAYS_PER_YEAR, NMS
 from quantdata.sanos.tridiag import solve_sanos_tridiagonal
 
@@ -673,7 +673,7 @@ def run_experiment(
     dates: tuple[date, ...] = (date(2024, 3, 5), date(2024, 3, 6)),
     ticker: str = "SPX",
     config: ExperimentConfig = ExperimentConfig(),
-    output_directory: Path = Path("aae/ideas/localvolbysanos/results"),
+    output_directory: Path = Path("quantdata/dysanos/localvolbysanos/results"),
     verbose: Context = Context.all,
 ) -> dict[str, object]:
     """Run the requested dates and write a compact JSON summary and plot."""

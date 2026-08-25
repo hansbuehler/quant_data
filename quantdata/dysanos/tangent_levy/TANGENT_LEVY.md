@@ -29,31 +29,93 @@ reason, and an ablation result.
 
 ## Implementation status
 
-The double-exponential core, cache-only grid-market adapter, constrained maturity
-reconstruction, constrained PCA/HJM dynamics, seeded risk-neutral simulator,
-optional constant physical-measure drift, daily evaluation metrics, versioned
-history cache, CLI, and diagnostic plotting command are implemented. The
-discrete extension remains behind its stated go/no-go gate.
+The double-exponential core, cache-only grid-market adapter, constrained
+maturity reconstruction, constrained PCA/HJM dynamics, seeded risk-neutral
+simulator, optional constant physical-measure drift, daily evaluation metrics,
+versioned history cache, CLI, and diagnostic plotting command are implemented.
+The discrete extension remains behind its stated go/no-go gate.
 
-A cache-only smoke test on SPX sessions 2024-03-05 through 2024-03-07 loaded
-the existing shared artifact and produced 21 successful maturity fits (seven
-per date). The median grid-weighted maturity RMSE was 0.00366 and the largest
-normalized-price error was 0.00470. No raw data were queried or downloaded.
+A full cache-only static calibration and evaluation was completed on
+2026-08-25 for the requested 2022--2025 period. Of 918 exchange-calendar dates,
+910 were present in the shared grid panel. All 910 available dates calibrated,
+and all 6,370 maturity fits (seven per date) reported optimizer success. The
+eight sessions without a cache observation were `2022-11-25`, `2023-07-03`,
+`2023-11-24`, `2024-07-03`, `2024-11-29`, `2024-12-24`, `2025-01-08`, and
+`2025-07-03`. The run used the default six-start, 300-iteration static-fit
+configuration and took 322 seconds for calibration plus daily evaluation on
+the current Linux host. No raw data were queried or downloaded.
 
-The same smoke test did **not** pass the nonnegative cumulative-density
-reconstruction gate. This remains a material
-model-consistency warning, not a tail-division artifact. Production dynamics
-and simulation therefore fail fast when any required date misses the gate.
-The CLI exposes `--allow-failed-reconstruction` only for explicitly labeled
-diagnostic runs. Accordingly, no locked-test, historical-prediction, or
-discrete-model claim has been made. The full 2022--2025 training audit must
-establish whether the failure is pervasive before the later phases proceed.
+The full audit confirms a sharp distinction between static approximation and
+Tangent Lévy consistency. Daily fits are moderately close to the cached smooth
+SANOS prices, particularly at short maturities, but the nonnegative
+cumulative-density reconstruction gate failed on **all 910 dates**. Production
+dynamics and simulation therefore continue to fail fast. The CLI exposes
+`--allow-failed-reconstruction` only for explicitly labeled diagnostic runs.
+Accordingly, no locked-test, historical-prediction, or discrete-model claim has
+been made.
 
 The shared grid artifact does not retain raw quote intervals, exercise-style
 metadata, or the upstream option-cap diagnostic. Those quantities must be
 reported as unavailable, never reconstructed from the grid. Executable-quote
 metrics therefore require a separately cached compatible raw-quote panel and
 are outside the primary cache-only run.
+
+### Full-panel static-fit findings
+
+Daily price statistics aggregate the seven maturities and 100 cached strikes
+per maturity. Normalized price errors are also shown in basis points of the
+forward, where one basis point is `1e-4` in normalized price. The grid-weighted
+RMSE is
+`sqrt(mean((weight * (TangentLevyCall - grid_mid))**2))`; it is an objective
+unit, not a bid/ask-spread unit.
+
+| Daily statistic | Median | 90th percentile | 95th percentile | 99th percentile | Worst |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| normalized-price RMSE | 12.54 bp | 21.54 bp | 24.65 bp | 29.95 bp | 39.11 bp |
+| normalized-price MAE | 7.99 bp | 13.45 bp | 16.86 bp | 21.23 bp | 29.45 bp |
+| maximum pointwise price error | 54.50 bp | 112.11 bp | 125.76 bp | 149.72 bp | 179.90 bp |
+| implied-volatility RMSE | 1.11 vol points | 2.68 vol points | 3.88 vol points | 4.91 vol points | 5.57 vol points |
+| grid-weighted RMSE | 0.00432 | 0.00734 | 0.00852 | 0.01001 | 0.01384 |
+
+Price metrics used all 700 active grid points on each available day. Implied
+volatility inversion used between 678 and 700 points; it excluded only active
+points whose fitted or target price lay outside numerical no-arbitrage bounds.
+The larger IV tail reflects the ill-conditioning of IV inversion in extreme
+wings as well as model error.
+
+Fit quality deteriorates materially at the long end:
+
+| Cached maturity | Median grid-weighted RMSE | 95th percentile | Median maximum pointwise price error |
+| --- | ---: | ---: | ---: |
+| 2 days | 0.00140 | 0.00746 | 6.44 bp |
+| 5 days | 0.00183 | 0.00460 | 9.51 bp |
+| 10 days | 0.00287 | 0.00705 | 16.72 bp |
+| 20 days | 0.00135 | 0.00471 | 7.67 bp |
+| 40 days | 0.00247 | 0.00756 | 14.13 bp |
+| 0.5 years | 0.00478 | 0.01125 | 28.93 bp |
+| 1 year | 0.00814 | 0.01523 | 54.21 bp |
+
+The five worst daily price-RMSE dates were `2025-04-08` (39.11 bp),
+`2025-04-07` (35.97 bp), `2022-03-08` (35.39 bp), `2022-03-03` (32.27 bp), and
+`2022-01-26` (31.89 bp). The concentration around stressed periods is evidence
+of state-dependent model misspecification and should be included in any later
+volatility-regime analysis.
+
+For the reconstruction gate, the relative `L1` modification required to turn
+the independently fitted average Lévy densities into a nonnegative forward
+density had minimum, median, 95th-percentile, and maximum values of 0.313,
+0.616, 0.847, and 1.061, respectively. Even the best day exceeded the configured
+0.25 tolerance. The corresponding grid-weighted repricing RMSE had median
+0.00374, 95th percentile 0.01909, and maximum 0.03576, all below its configured
+2.0 tolerance. Thus the zero pass rate is driven by a large cross-maturity
+density projection, not optimizer failure or the repricing threshold.
+
+The current empirical conclusion is therefore limited but clear: the
+double-exponential family is a useful daily static approximation to the smooth
+SPX grid, especially at short maturities, but the independently calibrated
+maturities do not form a valid Tangent Lévy code-book under the implemented
+nonnegative-forward-density requirement. Static RMSE alone must not be used to
+justify dynamics, simulation, or the discrete extension.
 
 ## Primary references
 
@@ -378,6 +440,12 @@ localization, but negligible tail cells do not define pass/fail.
 Exit criterion: daily fits are reproducible, finite, and produce nonnegative
 `kappa`; residuals and parameter instability are fully reported.
 
+Status: **not met**. Although every available daily and maturity calibration
+completed, zero of 910 dates passed the nonnegative forward-density
+reconstruction gate. Phases 3--6 may be exercised only as explicitly labeled
+diagnostics until the model or reconstruction specification is revised and
+this gate is rerun.
+
 ### Phase 3: constrained dynamics
 
 1. Evaluate every daily `hat_kappa` on the frozen Musiela grid.
@@ -668,17 +736,20 @@ pilot and before reading locked-test results. The non-negotiable gates are:
 4. At least 99% of available baseline-period market days produce a finite
    static calibration, or every remaining failure is explained and included in
    the reported failure rate.
-5. No accepted simulated path silently clips a density or hides a numerical or
+5. Every daily code-book admitted to dynamics passes the nonnegative
+   forward-density reconstruction gate without exceeding either its density or
+   repricing tolerance. The current baseline fails this gate on all 910 dates.
+6. No accepted simulated path silently clips a density or hides a numerical or
    no-arbitrage violation.
-6. Locked-test reporting includes all metrics and all origins, not only days on
+7. Locked-test reporting includes all metrics and all origins, not only days on
    which the model performs well.
-7. Only an implemented physical-measure layer may be described as historically
+8. Only an implemented physical-measure layer may be described as historically
    predictive. It must beat unchanged-surface persistence on a prespecified
    5- or 8-day proper multivariate score: the upper endpoint of the 95% block-
    bootstrap confidence interval for paired `model - persistence` scores must
    be below zero. A `Q`-only implementation makes no predictive claim and is
    not failed merely because this conditional claim gate is inapplicable.
-8. The discrete extension must improve a prespecified validation score after
+9. The discrete extension must improve a prespecified validation score after
    accounting for runtime and failed fits; in-sample price fit alone is not an
    acceptance criterion.
 

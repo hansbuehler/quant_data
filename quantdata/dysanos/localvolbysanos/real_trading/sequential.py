@@ -285,7 +285,7 @@ def analyze_sequential_strategies(
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    base = Path("aae/ideas/localvolbysanos/real_trading/results")
+    base = Path("quantdata/dysanos/localvolbysanos/real_trading/results")
     parser.add_argument(
         "--continuous-results-file",
         type=Path,

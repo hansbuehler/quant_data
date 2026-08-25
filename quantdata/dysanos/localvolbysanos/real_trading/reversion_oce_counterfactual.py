@@ -1029,7 +1029,7 @@ def run_reversion_oce_counterfactual(
 
 
 def main() -> None:
-    project = Path("aae/ideas/localvolbysanos")
+    project = Path("quantdata/dysanos/localvolbysanos")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ticker", default="SPX")
     parser.add_argument(

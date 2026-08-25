@@ -450,7 +450,7 @@ def analyze_daily_losses(
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    base = Path("aae/ideas/localvolbysanos/real_trading/results/2025")
+    base = Path("quantdata/dysanos/localvolbysanos/real_trading/results/2025")
     parser.add_argument(
         "--comparison-file",
         type=Path,
@@ -460,7 +460,7 @@ def _parser() -> argparse.ArgumentParser:
         "--daily-market-file",
         type=Path,
         default=Path(
-            "aae/ideas/localvolbysanos/results/2025_full_reference_grid/"
+            "quantdata/dysanos/localvolbysanos/results/2025_full_reference_grid/"
             "daily_summary.parquet"
         ),
     )

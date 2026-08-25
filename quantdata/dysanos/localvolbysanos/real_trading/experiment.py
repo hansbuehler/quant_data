@@ -20,7 +20,7 @@ from scipy.optimize import linprog, minimize
 from scipy.special import logsumexp
 from scipy.stats import norm, qmc
 
-from aae.dysanos.markets import DysanosMarketDay, load_market_day
+from quantdata.dysanos.localvolbysanos.markets import DysanosMarketDay, load_market_day
 from quantdata.biz_calendar import DAYS_PER_YEAR, NMS
 
 from ..surface_dynamics import (
@@ -1508,14 +1508,14 @@ def _parser() -> argparse.ArgumentParser:
         "--panel",
         type=Path,
         default=Path(
-            "aae/ideas/localvolbysanos/results/2025_full_reference_grid/"
+            "quantdata/dysanos/localvolbysanos/results/2025_full_reference_grid/"
             "balanced_panel.parquet"
         ),
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("aae/ideas/localvolbysanos/real_trading/results/2025"),
+        default=Path("quantdata/dysanos/localvolbysanos/real_trading/results/2025"),
     )
     parser.add_argument("--start-date", type=date.fromisoformat)
     parser.add_argument("--end-date", type=date.fromisoformat)

@@ -12,7 +12,7 @@ import polars as pl
 from cdxcore.err import verify, verify_inp
 from cdxcore.verbose import Context
 
-from aae.dysanos.markets import MarketConfig, load_market_day
+from quantdata.dysanos.localvolbysanos.markets import MarketConfig, load_market_day
 from quantdata.biz_calendar import DAYS_PER_YEAR
 from quantdata.pool import PoolConfig
 
@@ -135,11 +135,11 @@ def run_market_fit_diagnostics(
     *,
     ticker: str = "SPX",
     sample_file: Path = Path(
-        "aae/ideas/localvolbysanos/results/2025_full_reference_grid/"
+        "quantdata/dysanos/localvolbysanos/results/2025_full_reference_grid/"
         "balanced_panel.parquet"
     ),
     output_directory: Path = Path(
-        "aae/ideas/localvolbysanos/results/2025_full_reference_grid"
+        "quantdata/dysanos/localvolbysanos/results/2025_full_reference_grid"
     ),
     market_config: MarketConfig = MarketConfig(smoothness=0.25),
     workers: int = 4,

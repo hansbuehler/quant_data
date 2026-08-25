@@ -333,7 +333,7 @@ def run_spot_only_test(
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    base = Path("aae/ideas/localvolbysanos/real_trading/results/2025")
+    base = Path("quantdata/dysanos/localvolbysanos/real_trading/results/2025")
     parser.add_argument(
         "--positions-file", type=Path, default=base / "positions.parquet"
     )
@@ -349,7 +349,7 @@ def _parser() -> argparse.ArgumentParser:
         "--spot-file",
         type=Path,
         default=Path(
-            "aae/ideas/localvolbysanos/results/2025_full_reference_grid/"
+            "quantdata/dysanos/localvolbysanos/results/2025_full_reference_grid/"
             "daily_summary.parquet"
         ),
     )

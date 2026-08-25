@@ -1,12 +1,63 @@
 # FLEX: fixed-weekly SANOS market model
 
-FLEX is a new Torch-native SANOS code path under `quantdata/dysanos/flex`.
+FLEX is the Torch-native fixed-weekly SANOS research code path under
+`quantdata/dysanos/flex`.
 It may use `quantdata/dysanos/market.py` and the common SANOS mathematics, but
 it does not depend on the old `quantdata/dysanos/grid` model implementation.
 
 This file is the authoritative specification. Earlier FLEX experiments using
 NMS5, 49 strikes, a `(-5,2)` range, or one model-density node per observed
 market expiry are provisional and are not evidence for this project.
+
+## Current baseline and research status
+
+This section is the concise status index as of 2026-08-25. The formulas and
+research gates in the remainder of this file remain authoritative. Operational
+machine-transfer details, artifact hashes, and restart commands are in
+[`HANDOVER.md`](HANDOVER.md). Detailed measured history is retained in the
+phase reports linked there.
+
+FLEX is structural research, not a production risk-neutral model. The selected
+research stack is:
+
+| layer | current baseline | measured status or open issue |
+| --- | --- | --- |
+| Static surface | Shared strikes, 14 weekly expiries, 200 inner strikes, 2,828 native coordinates | Independent calibration on 891 dates put 73.4281% of 3,569,180 eligible books inside bid/ask; the 0DTE--2DTE fit remains poor. |
+| Market inference | Gaussian expiry/NMS RBF quote summary and Torch encoder | Full 2,828-state validation containment is only 26.28%, versus a 70.87% independently calibrated 2025 ceiling. This non-degenerate but weak temporal generalization is accepted for structural research and must not be hidden. |
+| Compressed surface | Direct-200 control and expiry-triangular Hierarchical-200 candidate | With one quote-optimized state per held-out date, 2025 containment is 65.8973% and 63.8836%, respectively. These are oracle capacity tests, not market-encoder results. |
+| Historical law `P` | Jointly learned stationary matrix-exponential weekly AR(1) | Hierarchical-200 is selected: weekly spectral radius 0.90282 and half-life 6.78 weeks. It beats persistence at 1W/2W/4W and is more useful than Direct-200, although later-expiry innovations are under-dispersed. |
+| Execution cost | Two-layer width-64 SiLU half-spread network with an SPX tick floor | Frozen-2025 date-balanced normalized half-spread MAE is 0.00013639; the model remains differentiable in Torch. |
+| Exact `Q` feasibility anchor | Native SANOS discrete martingale transition plus the independent backbone increment | Exact W2-to-W1 through W14-to-W13 tower identities pass on all 162 validation states and all intended ITM grid options have positive return variance. This law is P-free and uses a revealed discrete node. |
+| P-relative `Q` | Conditional Gaussian and generic/transport experiments | No accepted P-supported or P-equivalent full-surface `Q` exists yet. The first Gaussian W2 line improved validation RMSE only 0.98%; earlier OCE/transport variants did not validate robustly. |
+| Local existence control | Arbitrary full-support law for next front state at one fixed state and the ATM W2 roll | The latest pooled 24,000/24,000-path fit/validation control passes without collapse. It proves only a one-state, one-option existence statement. |
+
+The principal structural blocker is the shared-strike decoder. It is triangular
+in raw `u` blocks, but its common strike support depends on the final cumulative
+strike volatility; later state blocks can therefore move earlier option prices.
+Before claiming an expiry-by-expiry hierarchical measure change, introduce the
+root geometry state `g`, hold it fixed through the roll cone, and pass the
+price-Jacobian zero test specified below.
+
+The target direction is then to put the exact native `Q` and historical `P` on
+one causal full-support state, preserve the martingale equations as hard
+constraints, and minimize a clearly defined conditional distance toward `P`.
+Risk neutrality must not again be softened merely to improve entropy distance.
+
+### Document map
+
+- [`PHASE_2_SUMMARY.md`](PHASE_2_SUMMARY.md): static native calibration and
+  decoder-capacity history;
+- [`PHASE_3_WEEKLY_SANOS.md`](PHASE_3_WEEKLY_SANOS.md): weekly model and
+  simulator specification;
+- [`PHASE_3_WEEKLY_CODE.md`](PHASE_3_WEEKLY_CODE.md): implemented `P` models,
+  validation, and Direct/Hierarchical-200 comparison;
+- [`PHASE_3_COST_MODEL.md`](PHASE_3_COST_MODEL.md): differentiable execution
+  cost model;
+- [`PHASE_3_DYNAMICS_ESTIMATOR_COMPARISON.md`](PHASE_3_DYNAMICS_ESTIMATOR_COMPARISON.md):
+  rejected dynamics estimators and the matrix-exponential selection;
+- [`PHASE_4_WEEKLY_Q.md`](PHASE_4_WEEKLY_Q.md): `Q` experiments and the exact
+  native SANOS martingale construction; and
+- [`HANDOVER.md`](HANDOVER.md): machine-independent continuation instructions.
 
 ## Canonical state notation
 
@@ -702,9 +753,9 @@ no-holdout capacity comparison.
 
 The production universe contains 874 market days and 3,492,782 eligible option
 books. The completed eager repricing report is
-[`reports/batch-descent/spx-2022-2025-native-v1.json`](reports/batch-descent/spx-2022-2025-native-v1.json).
+[`reports/batch-descent/spx-2022-2025-forward-mu-v1.json`](reports/batch-descent/spx-2022-2025-forward-mu-v1.json).
 The independent final audit is
-[`reports/batch-descent/spx-2022-2025-native-v1-capacity-review.md`](reports/batch-descent/spx-2022-2025-native-v1-capacity-review.md).
+[`reports/batch-descent/spx-2022-2025-forward-mu-v1-native-review.md`](reports/batch-descent/spx-2022-2025-forward-mu-v1-native-review.md).
 
 | State | Objective | Inside bid/ask | Conditional positive mean | Conditional positive median | Surface mean | Fit MAE (half-spreads) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -751,17 +802,17 @@ and retains 98.94% of State-2,815 containment; State-1,000 loses 4.6021 points
 and retains 93.20%. The tested passing boundary is therefore bracketed between
 1,000 and 1,500; 1,500 is the smallest completed passing state tested so far.
 
-All completed latent checkpoints are schema 2, phase `complete`, finite, and
+All completed latent checkpoints were schema 2, phase `complete`, finite, and
 bound to the same ordered 874-day market fingerprint digest and native raw
-state digest. The controlled search is recorded in
-[`reports/batch-descent/spx-2022-2025-latent-capacity-sweep.md`](reports/batch-descent/spx-2022-2025-latent-capacity-sweep.md),
-including checkpoint hashes for States 1,000, 1,500, 2,000, and 2,815.
+state digest. Their large detailed capacity-sweep artifacts were retired; the
+table above and [`PHASE_2_SUMMARY.md`](PHASE_2_SUMMARY.md) retain the milestone
+conclusion.
 
 ### Affine PCA decoder result
 
 The simpler affine experiment uses the same 874 days, 3,492,782 option books,
-objective, and 300 market epochs. Its complete eager report is
-[`reports/batch-descent/spx-2022-2025-native-v1.md`](reports/batch-descent/spx-2022-2025-native-v1.md).
+objective, and 300 market epochs. Its detailed eager artifact was retired; the
+verified compact result is retained below.
 
 | Affine state | Raw variance retained | Initial objective | Initial inside bid/ask | Final objective | Final inside bid/ask | Conditional positive mean | Conditional positive median |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -790,46 +841,61 @@ well-conditioned reproducible gauge, but quote-objective fine-tuning remains
 essential. The next market-to-state or dynamics model should target the final
 100-dimensional daily coordinates, not the untouched PCA scores.
 
-## Later work
+## Current phase and forward program
 
-Only after these two static capacity stages should FLEX add the market-to-state
-map and weekly physical-measure dynamics. The later model will use native
-Torch path generation, five-business-day trading steps, and an explicit
-choice of sampling measure. None of those components is implemented or
-benchmarked by the static capacity code above.
+The market encoder, weekly historical law, Torch path generator, option-return
+interface, and differentiable cost model now exist. The current research phase
+is no longer static capacity; it is construction of a weekly target law that
+preserves the option roll identities while remaining close enough to the
+calibrated historical process to be useful for trading research.
 
-The dynamic model is to be learned under the historical measure `P`. At each
-five-business-day trading step it will roll a fixed set of weekly expiries,
-simulate the lower state inside the Torch graph, decode that state through the
-same SANOS surface, and expose the corresponding weekly option prices to a
-trading loss. The market-to-state map should first learn the directly fitted
-daily states and then be fine-tuned through the quote objective. Its input is
-an unordered set of live option books; use a controlled set-invariant radial
-basis or transformer-style architecture rather than a slow generic Deep Set.
+The physical baseline is the jointly learned Hierarchical-200 model. It is
+trained on 729 dates through 2024 and tested on 162 dates in 2025. A trading
+date has total objective weight one, independent of its number of quotes. The
+Direct-200 model is retained as the non-causal control. Both processes are
+stationary in the SANOS state only; spot is not made stationary.
 
-Bid/ask intervals remain observation uncertainty during state inference. The
-smooth pre-SANOS `fit` remains the weak central target inside those intervals;
-raw book midpoints do not replace it.
+The exact native SANOS transition is the hard feasibility anchor for `Q`. Its
+discrete density transition and independent backbone increment satisfy every
+modeled-strike tower identity from W2 through W14. It does not yet solve the
+research objective because its revealed discrete node and shifted natural grid
+are not the same state representation as the continuous historical `h` law.
 
-Execution costs require a separate positive half-spread model. Model the
-realized half-spread primarily in normalized option-price units, conditional
-on NMS/moneyness, expiry, call/put side, model delta and vega, and available
-volume/open-interest fields. This is more natural than making implied-volatility
-spread the target: trading P&L pays a price spread directly, while converting a
-volatility spread back to price is unstable when vega is small, especially for
-short-dated and deep ITM/OTM options. A relative-price or log-spread transform
-may stabilize scale, but it needs a positive price floor near zero; volatility
-half-spread remains a useful diagnostic or feature rather than the execution
-cost itself.
+Proceed through these gates:
 
-The SANOS density decoded from option prices is a risk-neutral conditional law,
-even when the historical state dynamics are learned under `P`. Drawing the next
-spot directly from the front-week SANOS density would therefore use that law as
-a proposal, not by itself produce a physical spot transition. The dynamic stage
-must make the sampling measure explicit—for example through a learned physical
-tilt with likelihood weights—so the same Torch simulator can later revisit the
-risk-neutral discussion by changing measure. Risk-neutral versus physical spot
-sampling is deliberately not resolved by the two static stages above.
+1. **Portable restart.** Reconstruct all paths through
+   `quantdata.env.locations`, verify the retained artifact hashes, and run the
+   focused smoke tests in `HANDOVER.md`. Never derive a new result from an
+   unverified copied checkpoint.
+2. **Price-triangular decoder.** Add the root geometry state `g`; with `g`
+   fixed, require `d C[j] / d h[k] = 0` for every `k>j`. Preserve the current
+   decoder as a measured control.
+3. **Common causal state.** Represent both laws on
+   `(g, I, backbone noise, h[1], ..., h[M])`, retaining the revealed node `I`
+   under both `P` and `Q` and non-degenerate continuous innovations in every
+   modeled direction.
+4. **W2 hard-constrained projection.** Start from the exact native law and move
+   toward the historical proposal while enforcing the fixed-cash-strike W2
+   roll moments exactly. Use rank diagnostics to remove redundant option
+   moments. Fit with fixed common random numbers and validate on an independent
+   equally large path set.
+5. **Equivalence and non-collapse gates.** Report conditional roll residuals,
+   option-return variances, density/Jacobian lower bounds, innovation rank,
+   integrability, and long-horizon stability. A small unconditional residual is
+   not a substitute for state-conditional martingale constraints.
+6. **Sequential expiry extension.** Only after W2 passes, freeze the accepted
+   lower line and continue W3, W4, and so on. Stop and report when a line
+   materially degrades; do not silently relax an earlier restriction. Specify
+   a separate regularized law for the newly created longest expiry.
+7. **Trading integration.** Once a useful law passes the structural gates,
+   generate fresh antithetic paths inside the Torch optimization loop and use
+   the retained half-spread network for proportional execution costs.
+
+Bid/ask remains observational uncertainty. The smooth pre-SANOS `fit` returned
+by `market.py` remains the weak center inside the interval; raw quote midpoint
+does not replace it. A poor but non-degenerate market encoder is acceptable for
+the current structural research, but its validation score must accompany every
+downstream empirical claim.
 
 ## Research history and artifact retention
 
@@ -844,11 +910,13 @@ cleanup. Near a strong model, retain useful close variants for controlled
 comparison rather than cleaning them up automatically.
 
 Every guarded FLEX activity measures Linux `MemAvailable`, which includes
-immediately reclaimable page cache. It emits a warning below 200 GiB and
-terminates at or below 100 GiB, recording the memory-triggered termination in
-the activity's failure directory. Literal `MemFree` is not used because it
-would classify useful reclaimable cache as unavailable memory. These checks run
-at startup and every 30 seconds thereafter.
+immediately reclaimable page cache; literal `MemFree` is not used. Persistent
+and temporary storage checks resolve the filesystems configured by
+`quantdata.env.locations`, not a machine-specific path. Warning and termination
+thresholds follow the repository `AGENTS.md` guardrails and any stricter
+explicit run policy. Memory/resource terminations are recorded in the
+activity's failure directory. Checks run at startup and every 30 seconds during
+guarded activity.
 
 Do not preserve large obsolete artifacts merely for reproducibility. Instead,
 retain a compact milestone report in this history, including the specification,
@@ -859,33 +927,35 @@ selected artifact that remains. The detailed Phase 2 history is in
 
 Current milestones are:
 
-- The native 2,828-state calibration established the static SANOS fit ceiling.
-- The selected Strong triangular 140-state decoder established the by-expiry
-  capacity allocation; superseded compression, fixed-mu, and the obsolete
-  scalar-eta shared-strike checkpoints have been deleted while their measured
-  conclusions remain in the Phase 2 report. The forward-mu shared-strikes
-  geometry above is a separate live experiment.
-- The DYSANOS/grid lag-only matrix-exponential hierarchy replaced the rejected
-  contemporaneous and exact-weekly-log dynamics estimators. Their rationale and
-  comparison statistics remain in the dynamics-estimator report.
-- The retired Global-140 surface-decoder control reached 25.98% all-option and
-  24.11% weekly 2025 containment. That was only 0.83 and 0.67 percentage points
-  above the Strong decoder with its global market encoder, so changing the
-  surface-decoder topology did not resolve OOS deterioration. Its large
-  checkpoints and experiment branch were removed after this conclusion.
-- The global market-to-Strong encoder is the incumbent OOS control. The
-  expiry-causal hierarchical market-to-Strong encoder remains a live variant;
-  both checkpoints and implementations are retained.
-- A capped-unbounded native-DLV branch now represents raw DLV² as
-  `0.01^2 + exp(z)`, caps it mechanically at `3^2` for pricing, and uses a
-  separate smooth log-coordinate cap penalty.  Legacy Strong checkpoints keep
-  their original sigmoid gauge.  On frozen 2025, the flat market-to-native
-  2,828 and flat affine-140 controls reached 28.28%/26.20% and 26.23%/24.41%
-  all/weekly containment, respectively, versus a 69.17%/83.16% independently
-  calibrated direct-state ceiling.  The small compression loss and large
-  ceiling gap identify market-to-state temporal generalization as the dominant
-  problem.  Both encoders also extrapolate above the DLV pricing cap OOS
-  despite zero training cap contacts; this is a live diagnostic concern.
-- The linear and histogram-gradient-boosting spread models remain historical
-  attribution benchmarks only. Their fitted objects were removed; the
-  differentiable Torch feed-forward spread model is the simulation candidate.
+- The original NMS-strike native 2,828-state and Strong-140 experiments
+  established the static fit and by-expiry allocation logic. Superseded
+  fixed-`mu`, scalar-`eta`, Global-140, and failed dynamics variants were
+  retired; their measured conclusions remain in the phase reports.
+- Shared strikes is the current geometry. Its independently calibrated native
+  surface reaches 73.4281% containment over 891 dates. The full market encoder
+  falls to 26.28% on 2025 while the independent 2025 native ceiling is 70.87%,
+  proving that temporal market-to-state generalization is the dominant static
+  weakness even without compression.
+- Quote-optimal held-out states show that Direct-200 and Hierarchical-200 retain
+  65.8973% and 63.8836% 2025 containment. Hierarchy costs 2.01 percentage
+  points but is not a capacity collapse. These figures are decoder ceilings,
+  not deployable market-encoder validation.
+- Joint dynamics training selected Hierarchical-200 as the historical `P`
+  candidate. It is stationary, has a 0.90282 weekly spectral radius, and beats
+  persistence at 1W/2W/4W. Direct-200 is stable but dynamically weaker and is
+  retained as a control.
+- The capped-unbounded DLV gauge represents raw DLV² as `0.01^2 + exp(z)`, caps
+  it mechanically at `3^2` for pricing, and supplies a separate cap penalty
+  without sigmoid saturation. OOS cap excursions remain an encoder diagnostic.
+- The differentiable feed-forward half-spread model is the simulation cost
+  candidate. Linear and tree fitted objects are historical benchmarks only.
+- The first P-relative Gaussian W2 kernel is finite and non-degenerate but
+  improves 2025 roll RMSE by only 0.98%. It is not an accepted risk-neutral
+  law. Earlier cumulative OCE and clipped-density constructions are retired.
+- The P-free native SANOS construction proves exact, non-collapsed martingale
+  rolls from W2 through W14 on all 162 2025 validation states. It is the hard
+  feasible `Q` anchor, not yet an equivalent change from the historical law.
+- The pooled arbitrary-law ATM control at the fixed 2025-04-04 state passes
+  independent 24,000-path validation with adjusted mean `-1.153 +/- 1.132` bps
+  spot and 283.70 bps return standard deviation. It proves local one-option
+  existence only.

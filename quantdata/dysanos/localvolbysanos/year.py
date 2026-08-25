@@ -393,7 +393,7 @@ def run_year(
     verify_inp(config.full_reference_grid, lambda: "year panel requires full grid")
     verify_inp(workers >= 1, lambda: "workers must be positive")
     output_directory = output_directory or Path(
-        f"aae/ideas/localvolbysanos/results/{year}_full_reference_grid"
+        f"quantdata/dysanos/localvolbysanos/results/{year}_full_reference_grid"
     )
     requested_dates = get_business_days(date(year, 1, 1), date(year, 12, 31))
     last_eligible_date = min(

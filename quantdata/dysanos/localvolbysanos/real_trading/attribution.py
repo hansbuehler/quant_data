@@ -603,7 +603,7 @@ def _parser() -> argparse.ArgumentParser:
         "--comparison-file",
         type=Path,
         default=Path(
-            "aae/ideas/localvolbysanos/real_trading/results/2025/"
+            "quantdata/dysanos/localvolbysanos/real_trading/results/2025/"
             "realized_comparison.parquet"
         ),
     )
@@ -611,21 +611,21 @@ def _parser() -> argparse.ArgumentParser:
         "--positions-file",
         type=Path,
         default=Path(
-            "aae/ideas/localvolbysanos/real_trading/results/2025/positions.parquet"
+            "quantdata/dysanos/localvolbysanos/real_trading/results/2025/positions.parquet"
         ),
     )
     parser.add_argument(
         "--spot-file",
         type=Path,
         default=Path(
-            "aae/ideas/localvolbysanos/results/2025_full_reference_grid/"
+            "quantdata/dysanos/localvolbysanos/results/2025_full_reference_grid/"
             "daily_summary.parquet"
         ),
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("aae/ideas/localvolbysanos/real_trading/results/2025"),
+        default=Path("quantdata/dysanos/localvolbysanos/real_trading/results/2025"),
     )
     return parser
 

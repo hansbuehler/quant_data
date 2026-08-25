@@ -14,6 +14,9 @@ from quantdata.dysanos.flex.run_atm_q_existence import (
     make_q_existence_batch,
     spot_control_variate,
 )
+from quantdata.dysanos.flex.run_vector_q_existence import (
+    spot_control_variate_vector,
+)
 from quantdata.torch import BaseEnvironment
 
 
@@ -98,3 +101,15 @@ def test_spot_control_variate_removes_exact_linear_spot_component() -> None:
     assert torch.allclose(adjusted, torch.full_like(adjusted, 0.02))
     assert torch.allclose(mean, torch.tensor(0.02, dtype=torch.float64))
     assert torch.allclose(beta, torch.tensor(3.0, dtype=torch.float64))
+
+
+def test_vector_spot_control_variate_removes_each_linear_spot_component() -> None:
+    gross = torch.tensor((0.8, 0.9, 1.1, 1.2), dtype=torch.float64)
+    intercept = torch.tensor((0.02, -0.03), dtype=torch.float64)
+    loading = torch.tensor((3.0, -2.0), dtype=torch.float64)
+    returns = intercept + (gross - 1.0)[:, None] * loading
+    adjusted, mean, beta = spot_control_variate_vector(returns, gross)
+
+    assert torch.allclose(adjusted, intercept.expand_as(adjusted))
+    assert torch.allclose(mean, intercept)
+    assert torch.allclose(beta, loading)

@@ -15,6 +15,7 @@ from quantdata.dysanos.flex.failure_reporting import (
     LowAvailableMemoryError,
     available_memory_bytes,
     failure_directory_from_argv,
+    ram_limits_for_hostname,
     run_guarded_cli,
 )
 
@@ -33,17 +34,24 @@ def test_available_memory_uses_memavailable(tmp_path: Path) -> None:
     assert available_memory_bytes(path) == 321 * GIB
 
 
+def test_ram_limits_are_host_specific() -> None:
+    assert ram_limits_for_hostname("Sommer") == (30 * GIB, 20 * GIB)
+    assert ram_limits_for_hostname("ws-artp-wrx900-01") == (200 * GIB, 100 * GIB)
+
+
 def test_guarded_cli_warns_below_ram_warning_threshold(
     tmp_path: Path,
     capfd: pytest.CaptureFixture[str],
 ) -> None:
     path = tmp_path / "meminfo"
-    _write_meminfo(path, available_bytes=150 * GIB)
+    _write_meminfo(path, available_bytes=25 * GIB)
     run_guarded_cli(
         lambda: None,
         program="ram-warning-test",
         failure_directory=tmp_path / "failures",
         ram_meminfo_path=path,
+        ram_warning_available_bytes=30 * GIB,
+        ram_terminate_available_bytes=20 * GIB,
     )
     assert "FLEX RAM warning" in capfd.readouterr().err
     assert not tuple((tmp_path / "failures").iterdir())
@@ -53,7 +61,7 @@ def test_guarded_cli_stops_and_records_ram_termination_threshold(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "meminfo"
-    _write_meminfo(path, available_bytes=100 * GIB)
+    _write_meminfo(path, available_bytes=20 * GIB)
     failure_directory = tmp_path / "failures"
     with pytest.raises(LowAvailableMemoryError, match="at or below"):
         run_guarded_cli(
@@ -61,6 +69,8 @@ def test_guarded_cli_stops_and_records_ram_termination_threshold(
             program="ram-termination-test",
             failure_directory=failure_directory,
             ram_meminfo_path=path,
+            ram_warning_available_bytes=30 * GIB,
+            ram_terminate_available_bytes=20 * GIB,
         )
     payload = json.loads(
         (failure_directory / "ram-termination-test-latest.failure.json").read_text(
@@ -68,9 +78,9 @@ def test_guarded_cli_stops_and_records_ram_termination_threshold(
         )
     )
     assert payload["source"] == "ram_guard"
-    assert payload["extra"]["available_bytes"] == 100 * GIB
-    assert payload["extra"]["warning_available_bytes"] == 200 * GIB
-    assert payload["extra"]["terminate_available_bytes"] == 100 * GIB
+    assert payload["extra"]["available_bytes"] == 20 * GIB
+    assert payload["extra"]["warning_available_bytes"] == 30 * GIB
+    assert payload["extra"]["terminate_available_bytes"] == 20 * GIB
     assert not tuple(failure_directory.glob("*.fatal.log"))
 
 
@@ -78,7 +88,7 @@ def test_guarded_cli_allows_a_supervisor_to_own_the_ram_guard(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "meminfo"
-    _write_meminfo(path, available_bytes=99 * GIB)
+    _write_meminfo(path, available_bytes=19 * GIB)
     called: list[bool] = []
     run_guarded_cli(
         lambda: called.append(True),
@@ -94,11 +104,11 @@ def test_guarded_cli_allows_a_supervisor_to_own_the_ram_guard(
 @pytest.mark.skipif(not hasattr(signal, "SIGTERM"), reason="SIGTERM unavailable")
 def test_ram_monitor_terminates_a_running_activity(tmp_path: Path) -> None:
     path = tmp_path / "meminfo"
-    _write_meminfo(path, available_bytes=150 * GIB)
+    _write_meminfo(path, available_bytes=25 * GIB)
     failure_directory = tmp_path / "failures"
 
     def consume_memory_headroom() -> None:
-        _write_meminfo(path, available_bytes=99 * GIB)
+        _write_meminfo(path, available_bytes=19 * GIB)
         time.sleep(2.0)
 
     with pytest.raises(SystemExit) as raised:
@@ -108,6 +118,8 @@ def test_ram_monitor_terminates_a_running_activity(tmp_path: Path) -> None:
             failure_directory=failure_directory,
             ram_poll_seconds=0.01,
             ram_meminfo_path=path,
+            ram_warning_available_bytes=30 * GIB,
+            ram_terminate_available_bytes=20 * GIB,
         )
     assert raised.value.code == 128 + signal.SIGTERM
     payload = json.loads(
@@ -116,7 +128,7 @@ def test_ram_monitor_terminates_a_running_activity(tmp_path: Path) -> None:
         )
     )
     assert payload["source"] == "ram_guard"
-    assert payload["extra"]["available_bytes"] == 99 * GIB
+    assert payload["extra"]["available_bytes"] == 19 * GIB
     assert not tuple(failure_directory.glob("*.fatal.log"))
 
 

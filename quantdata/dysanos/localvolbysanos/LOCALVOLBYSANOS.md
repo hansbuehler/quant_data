@@ -3,7 +3,7 @@
 ## Project objective
 
 This project recovers discrete local-volatility (DLV) surfaces from the smooth,
-arbitrage-free SPX option surface produced by `aae.dysanos.markets`. It then
+arbitrage-free SPX option surface produced by `quantdata.dysanos.localvolbysanos.markets`. It then
 turns those surfaces into a balanced time-series panel and studies their first
 statistical representation:
 
@@ -22,14 +22,14 @@ The complete numerical findings are recorded in [RESULTS.md](RESULTS.md).
 ## Project isolation
 
 The code in this directory may use general production packages such as
-`aae.dysanos` and `quantdata.sanos`, but it must not import from any other
-`aae.ideas` project. Functionality that becomes genuinely reusable should be
+`quantdata.dysanos` and `quantdata.sanos`, but it must not import from `aae` or
+another research project. Functionality that becomes genuinely reusable should be
 moved to a general non-project package rather than creating an ideas-to-ideas
 dependency.
 
 ## Market input
 
-`aae.dysanos.markets.load_market_day` is the only market loader used by this
+`quantdata.dysanos.localvolbysanos.markets.load_market_day` is the only market loader used by this
 project. It returns:
 
 - filtered forward-normalized SPX option quotes;
@@ -229,7 +229,7 @@ The examples below use its absolute interpreter path on Linux.
 ### Prerequisites
 
 The market-data steps require access to the data used by
-`aae.dysanos.markets`. Cached dates run without a new download; uncached dates
+`quantdata.dysanos.localvolbysanos.markets`. Cached dates run without a new download; uncached dates
 may require configured WRDS or other market-data credentials.
 
 Graphs require Matplotlib. MP4 creation requires either a system `ffmpeg`
@@ -245,7 +245,7 @@ executable or the small Python wrapper that provides one:
 ### 1. Original two-day nested-grid experiment
 
 ```bash
-/home/hans/vqdata/bin/python -m aae.ideas.localvolbysanos.experiment
+/home/hans/vqdata/bin/python -m quantdata.dysanos.localvolbysanos.experiment
 ```
 
 This writes `results/two_day_summary.json` and `results/two_day_dlvs.png`.
@@ -253,7 +253,7 @@ This writes `results/two_day_summary.json` and `results/two_day_dlvs.png`.
 ### 2. Two-day full-reference-grid ablation
 
 ```bash
-/home/hans/vqdata/bin/python -c "from pathlib import Path; from aae.ideas.localvolbysanos.experiment import ExperimentConfig, run_experiment; run_experiment(config=ExperimentConfig(full_reference_grid=True), output_directory=Path('aae/ideas/localvolbysanos/results/full_reference_grid'))"
+/home/hans/vqdata/bin/python -c "from pathlib import Path; from quantdata.dysanos.localvolbysanos.experiment import ExperimentConfig, run_experiment; run_experiment(config=ExperimentConfig(full_reference_grid=True), output_directory=Path('quantdata/dysanos/localvolbysanos/results/full_reference_grid'))"
 ```
 
 This also performs the forward input-price recovery check.
@@ -261,7 +261,7 @@ This also performs the forward input-price recovery check.
 The separate front-week-scaled-grid pilot can be reproduced with:
 
 ```bash
-/home/hans/vqdata/bin/python -c "from pathlib import Path; from aae.ideas.localvolbysanos.experiment import ExperimentConfig, run_experiment; run_experiment(config=ExperimentConfig(front_week_vol_scaled_nms=True), output_directory=Path('aae/ideas/localvolbysanos/results/front_week_scaled_nms'))"
+/home/hans/vqdata/bin/python -c "from pathlib import Path; from quantdata.dysanos.localvolbysanos.experiment import ExperimentConfig, run_experiment; run_experiment(config=ExperimentConfig(front_week_vol_scaled_nms=True), output_directory=Path('quantdata/dysanos/localvolbysanos/results/front_week_scaled_nms'))"
 ```
 
 This grid remains forward-relative: its stored strikes are `K/F`. Front-week
@@ -271,7 +271,7 @@ spot-relative levels.
 ### 3. Build the annual raw and balanced panels
 
 ```bash
-/home/hans/vqdata/bin/python -m aae.ideas.localvolbysanos.year
+/home/hans/vqdata/bin/python -m quantdata.dysanos.localvolbysanos.year
 ```
 
 This creates or replaces the following files under
@@ -291,7 +291,7 @@ sample if more 2025 data become available.
 ### 4. Recompute market-fit errors and their graph
 
 ```bash
-/home/hans/vqdata/bin/python -m aae.ideas.localvolbysanos.fit_diagnostics
+/home/hans/vqdata/bin/python -m quantdata.dysanos.localvolbysanos.fit_diagnostics
 ```
 
 The exact dates are read from `balanced_panel.parquet`. This regenerates the
@@ -301,7 +301,7 @@ quote, expiry, daily, and monthly Parquet files, `market_fit_report.json`, and
 ### 5. Recompute PCA, AR estimates, 3D plots, and video
 
 ```bash
-/home/hans/vqdata/bin/python -m aae.ideas.localvolbysanos.surface_dynamics
+/home/hans/vqdata/bin/python -m quantdata.dysanos.localvolbysanos.surface_dynamics
 ```
 
 This reads only `balanced_panel.parquet` and regenerates:
@@ -322,7 +322,7 @@ axis.
 To recompute the statistical files and PCA graph without rendering MP4, run:
 
 ```bash
-/home/hans/vqdata/bin/python -c "from aae.ideas.localvolbysanos.surface_dynamics import run_surface_dynamics; run_surface_dynamics(render_video=False)"
+/home/hans/vqdata/bin/python -c "from quantdata.dysanos.localvolbysanos.surface_dynamics import run_surface_dynamics; run_surface_dynamics(render_video=False)"
 ```
 
 ### 6. Verification
@@ -330,12 +330,12 @@ To recompute the statistical files and PCA graph without rendering MP4, run:
 The following checks cover the project modules changed by this experiment:
 
 ```bash
-ruff check aae/ideas/localvolbysanos
+ruff check quantdata/dysanos/localvolbysanos
 /home/hans/vqdata/bin/python -m py_compile \
-  aae/ideas/localvolbysanos/experiment.py \
-  aae/ideas/localvolbysanos/year.py \
-  aae/ideas/localvolbysanos/fit_diagnostics.py \
-  aae/ideas/localvolbysanos/surface_dynamics.py
+  quantdata/dysanos/localvolbysanos/experiment.py \
+  quantdata/dysanos/localvolbysanos/year.py \
+  quantdata/dysanos/localvolbysanos/fit_diagnostics.py \
+  quantdata/dysanos/localvolbysanos/surface_dynamics.py
 ```
 
 The commands intentionally overwrite artifacts with the same names. Preserve a

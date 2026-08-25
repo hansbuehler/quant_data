@@ -632,11 +632,11 @@ def _rank_check_frame(
 def run_surface_dynamics(
     *,
     panel_file: Path = Path(
-        "aae/ideas/localvolbysanos/results/2025_full_reference_grid/"
+        "quantdata/dysanos/localvolbysanos/results/2025_full_reference_grid/"
         "balanced_panel.parquet"
     ),
     output_directory: Path = Path(
-        "aae/ideas/localvolbysanos/results/2025_full_reference_grid"
+        "quantdata/dysanos/localvolbysanos/results/2025_full_reference_grid"
     ),
     config: SurfaceDynamicsConfig = SurfaceDynamicsConfig(),
     render_video: bool = True,

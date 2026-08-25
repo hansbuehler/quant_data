@@ -14,7 +14,7 @@ import polars as pl
 from cdxcore.err import verify, verify_inp
 from cdxcore.verbose import Context
 
-from aae.dysanos.markets import DysanosMarketDay, ListedOptionBook, load_market_day
+from quantdata.dysanos.localvolbysanos.markets import DysanosMarketDay, ListedOptionBook, load_market_day
 from quantdata.biz_calendar import DAYS_PER_YEAR
 
 PORTFOLIO_KEYS = ("date", "universe", "utility", "risk_aversion")
@@ -457,12 +457,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--results-dir",
         type=Path,
-        default=Path("aae/ideas/localvolbysanos/real_trading/results/2025"),
+        default=Path("quantdata/dysanos/localvolbysanos/real_trading/results/2025"),
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("aae/ideas/localvolbysanos/real_trading/results/2025"),
+        default=Path("quantdata/dysanos/localvolbysanos/real_trading/results/2025"),
     )
     return parser
 

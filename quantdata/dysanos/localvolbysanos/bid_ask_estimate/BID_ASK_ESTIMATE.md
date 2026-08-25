@@ -8,7 +8,7 @@ contemporaneous market state. The initial core features proposed for this
 project are delta, vega, and time to expiry (TTE).
 
 The first application is the filtered European SPX market returned by
-`aae.dysanos.markets`. All option prices, strikes, and Greeks must use the same
+`quantdata.dysanos.localvolbysanos.markets`. All option prices, strikes, and Greeks must use the same
 forward-normalized convention as the parent `localvolbysanos` project. The
 subproject must not import from another `aae.ideas` project.
 
@@ -119,7 +119,7 @@ economic model.
 ## Recommended target units
 
 The primary target should be the forward-normalized price half-spread used by
-`aae.dysanos.markets`. It can be converted back to currency units by multiplying
+`quantdata.dysanos.localvolbysanos.markets`. It can be converted back to currency units by multiplying
 by the relevant forward and contract multiplier.
 
 Two secondary targets should be reported where numerically valid:
@@ -273,7 +273,7 @@ because it is the fair-value input available for any requested option.
 ## Dataset construction
 
 The initial dataset should be built directly from
-`aae.dysanos.markets.load_market_day`, not from another ideas project. For every
+`quantdata.dysanos.localvolbysanos.markets.load_market_day`, not from another ideas project. For every
 retained quote, store at least:
 
 - market date and expiry;

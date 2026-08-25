@@ -580,7 +580,7 @@ def split_delta_buckets(
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    base = Path("aae/ideas/localvolbysanos/real_trading/results")
+    base = Path("quantdata/dysanos/localvolbysanos/real_trading/results")
     parser.add_argument(
         "--legacy-positions-file",
         type=Path,

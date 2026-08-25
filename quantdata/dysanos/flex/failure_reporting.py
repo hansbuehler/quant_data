@@ -24,8 +24,18 @@ _DEFAULT_FAILURE_DIRECTORY = Path(__file__).with_name("reports") / "failures"
 _DIRECTORY_OPTIONS = ("--report-directory", "--output-directory")
 _FILE_OPTIONS = ("--output",)
 GIB = 1024**3
-RAM_WARNING_AVAILABLE_BYTES = 200 * GIB
-RAM_TERMINATE_AVAILABLE_BYTES = 100 * GIB
+
+
+def ram_limits_for_hostname(hostname: str) -> tuple[int, int]:
+    """Return warning and termination thresholds for a FLEX host."""
+    if hostname.casefold() == "sommer":
+        return 30 * GIB, 20 * GIB
+    return 200 * GIB, 100 * GIB
+
+
+RAM_WARNING_AVAILABLE_BYTES, RAM_TERMINATE_AVAILABLE_BYTES = ram_limits_for_hostname(
+    socket.gethostname()
+)
 RAM_POLL_SECONDS = 30.0
 
 
