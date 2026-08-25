@@ -1,0 +1,1386 @@
+{
+  "schema": "flex-expiry-state-allocation-diagnostic-v1",
+  "direct_checkpoint": "/media/storage/quantdata/training/flex-fixed-weekly/spx-2022-2025-forward-mu-v1/native.pt",
+  "global_checkpoint": "/media/storage/quantdata/training/flex-fixed-weekly/spx-2022-2025-forward-mu-v1/global-140.pt",
+  "num_days": 874,
+  "num_expiries": 14,
+  "expiry_block_width": 202,
+  "global_state_size": 140,
+  "num_contiguous_oof_folds": 5,
+  "global_rank_diagnostics": {
+    "individual_expiry_blocks": [
+      {
+        "expiry_index": 0,
+        "ranks": {
+          "0.9": 5,
+          "0.95": 7,
+          "0.99": 13,
+          "0.995": 15,
+          "0.999": 23,
+          "0.9999": 34
+        },
+        "top_10_fraction": 0.981415835941289,
+        "smallest_to_largest_ratio": 2.7079116822405343e-17
+      },
+      {
+        "expiry_index": 1,
+        "ranks": {
+          "0.9": 5,
+          "0.95": 8,
+          "0.99": 14,
+          "0.995": 17,
+          "0.999": 24,
+          "0.9999": 35
+        },
+        "top_10_fraction": 0.9759343310485618,
+        "smallest_to_largest_ratio": 3.4363285021275183e-17
+      },
+      {
+        "expiry_index": 2,
+        "ranks": {
+          "0.9": 5,
+          "0.95": 7,
+          "0.99": 14,
+          "0.995": 17,
+          "0.999": 25,
+          "0.9999": 37
+        },
+        "top_10_fraction": 0.9771935684689794,
+        "smallest_to_largest_ratio": 2.8002493928215283e-17
+      },
+      {
+        "expiry_index": 3,
+        "ranks": {
+          "0.9": 5,
+          "0.95": 8,
+          "0.99": 14,
+          "0.995": 18,
+          "0.999": 25,
+          "0.9999": 38
+        },
+        "top_10_fraction": 0.9719991250576145,
+        "smallest_to_largest_ratio": 2.936133413373956e-17
+      },
+      {
+        "expiry_index": 4,
+        "ranks": {
+          "0.9": 5,
+          "0.95": 8,
+          "0.99": 15,
+          "0.995": 19,
+          "0.999": 25,
+          "0.9999": 38
+        },
+        "top_10_fraction": 0.9731319429579021,
+        "smallest_to_largest_ratio": 2.8881574197396226e-17
+      },
+      {
+        "expiry_index": 5,
+        "ranks": {
+          "0.9": 5,
+          "0.95": 8,
+          "0.99": 15,
+          "0.995": 18,
+          "0.999": 24,
+          "0.9999": 37
+        },
+        "top_10_fraction": 0.9743288895459195,
+        "smallest_to_largest_ratio": 2.8122454729048635e-17
+      },
+      {
+        "expiry_index": 6,
+        "ranks": {
+          "0.9": 5,
+          "0.95": 8,
+          "0.99": 14,
+          "0.995": 18,
+          "0.999": 24,
+          "0.9999": 37
+        },
+        "top_10_fraction": 0.9740831835787959,
+        "smallest_to_largest_ratio": 2.6498809742196874e-17
+      },
+      {
+        "expiry_index": 7,
+        "ranks": {
+          "0.9": 5,
+          "0.95": 8,
+          "0.99": 15,
+          "0.995": 18,
+          "0.999": 24,
+          "0.9999": 36
+        },
+        "top_10_fraction": 0.9702547350098025,
+        "smallest_to_largest_ratio": 2.918877637516533e-17
+      },
+      {
+        "expiry_index": 8,
+        "ranks": {
+          "0.9": 6,
+          "0.95": 9,
+          "0.99": 16,
+          "0.995": 18,
+          "0.999": 25,
+          "0.9999": 37
+        },
+        "top_10_fraction": 0.9692793459037959,
+        "smallest_to_largest_ratio": 2.835453694211679e-17
+      },
+      {
+        "expiry_index": 9,
+        "ranks": {
+          "0.9": 6,
+          "0.95": 8,
+          "0.99": 15,
+          "0.995": 18,
+          "0.999": 25,
+          "0.9999": 38
+        },
+        "top_10_fraction": 0.9728793507945385,
+        "smallest_to_largest_ratio": 2.7378313372511287e-17
+      },
+      {
+        "expiry_index": 10,
+        "ranks": {
+          "0.9": 6,
+          "0.95": 9,
+          "0.99": 16,
+          "0.995": 19,
+          "0.999": 26,
+          "0.9999": 38
+        },
+        "top_10_fraction": 0.9656008913235864,
+        "smallest_to_largest_ratio": 2.982233226444836e-17
+      },
+      {
+        "expiry_index": 11,
+        "ranks": {
+          "0.9": 7,
+          "0.95": 9,
+          "0.99": 16,
+          "0.995": 19,
+          "0.999": 26,
+          "0.9999": 39
+        },
+        "top_10_fraction": 0.9658775238065722,
+        "smallest_to_largest_ratio": 3.370669851021842e-17
+      },
+      {
+        "expiry_index": 12,
+        "ranks": {
+          "0.9": 5,
+          "0.95": 7,
+          "0.99": 14,
+          "0.995": 17,
+          "0.999": 24,
+          "0.9999": 34
+        },
+        "top_10_fraction": 0.979282456152131,
+        "smallest_to_largest_ratio": 3.4580741122795946e-17
+      },
+      {
+        "expiry_index": 13,
+        "ranks": {
+          "0.9": 3,
+          "0.95": 5,
+          "0.99": 10,
+          "0.995": 13,
+          "0.999": 19,
+          "0.9999": 28
+        },
+        "top_10_fraction": 0.9907402205145985,
+        "smallest_to_largest_ratio": 2.789775906250469e-17
+      }
+    ],
+    "grid_0_to_full_surface": {
+      "grid_0_numerical_rank": 140,
+      "ranks": {
+        "0.9": 16,
+        "0.95": 29,
+        "0.99": 71,
+        "0.995": 90,
+        "0.999": 123,
+        "0.9999": 138
+      },
+      "top_10_fraction": 0.8537107985528456,
+      "smallest_to_largest_ratio": 0.008564273092892536
+    }
+  },
+  "selected_relative_ridge": 0.1,
+  "ridge_diagnostics": [
+    {
+      "relative_ridge": 1e-05,
+      "oof_mse": 6.293913371153301
+    },
+    {
+      "relative_ridge": 0.0001,
+      "oof_mse": 5.399464373356189
+    },
+    {
+      "relative_ridge": 0.001,
+      "oof_mse": 5.082879251840612
+    },
+    {
+      "relative_ridge": 0.01,
+      "oof_mse": 4.979701457520545
+    },
+    {
+      "relative_ridge": 0.1,
+      "oof_mse": 4.922430029276637
+    },
+    {
+      "relative_ridge": 1.0,
+      "oof_mse": 4.970734587670275
+    },
+    {
+      "relative_ridge": 10.0,
+      "oof_mse": 5.306623353852899
+    }
+  ],
+  "sequential_policies": [
+    {
+      "retention": 0.5,
+      "allocation": [
+        1,
+        2,
+        1,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        9,
+        0,
+        1,
+        1,
+        1
+      ],
+      "total_states": 17,
+      "oof_global_surface_variance_explained": 0.5651915460837718,
+      "steps": [
+        {
+          "expiry_index": 0,
+          "selected_rank": 1,
+          "best_oof_rank": 41,
+          "residual_energy_before": 1321108.1714823344,
+          "residual_energy_after": 774477.7828659047,
+          "selected_relative_reduction": 0.4137665638712152,
+          "best_relative_reduction": 0.5440889727254851
+        },
+        {
+          "expiry_index": 1,
+          "selected_rank": 2,
+          "best_oof_rank": 8,
+          "residual_energy_before": 774477.7828659047,
+          "residual_energy_after": 696669.4009115829,
+          "selected_relative_reduction": 0.10046560879564163,
+          "best_relative_reduction": 0.1803572809548341
+        },
+        {
+          "expiry_index": 2,
+          "selected_rank": 1,
+          "best_oof_rank": 3,
+          "residual_energy_before": 696669.4009115829,
+          "residual_energy_after": 681761.6015966014,
+          "selected_relative_reduction": 0.021398671013072745,
+          "best_relative_reduction": 0.03272970690719422
+        },
+        {
+          "expiry_index": 3,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 681761.6015966014,
+          "residual_energy_after": 681761.6015966014,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 4,
+          "selected_rank": 1,
+          "best_oof_rank": 1,
+          "residual_energy_before": 681761.6015966014,
+          "residual_energy_after": 675170.8670028488,
+          "selected_relative_reduction": 0.009667212964646248,
+          "best_relative_reduction": 0.009667212964646078
+        },
+        {
+          "expiry_index": 5,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 675170.8670028488,
+          "residual_energy_after": 675170.8670028488,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 6,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 675170.8670028488,
+          "residual_energy_after": 675170.8670028488,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 7,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 675170.8670028488,
+          "residual_energy_after": 675170.8670028488,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 8,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 675170.8670028488,
+          "residual_energy_after": 675170.8670028488,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 9,
+          "selected_rank": 9,
+          "best_oof_rank": 11,
+          "residual_energy_before": 675170.8670028488,
+          "residual_energy_after": 670007.0120883684,
+          "selected_relative_reduction": 0.0076482193868986454,
+          "best_relative_reduction": 0.011071581916418929
+        },
+        {
+          "expiry_index": 10,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 670007.0120883684,
+          "residual_energy_after": 670007.0120883684,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 11,
+          "selected_rank": 1,
+          "best_oof_rank": 1,
+          "residual_energy_before": 670007.0120883684,
+          "residual_energy_after": 662929.8658959117,
+          "selected_relative_reduction": 0.010562794216731711,
+          "best_relative_reduction": 0.010562794216731368
+        },
+        {
+          "expiry_index": 12,
+          "selected_rank": 1,
+          "best_oof_rank": 1,
+          "residual_energy_before": 662929.8658959117,
+          "residual_energy_after": 637564.4997570344,
+          "selected_relative_reduction": 0.038262518320241176,
+          "best_relative_reduction": 0.03826251832024135
+        },
+        {
+          "expiry_index": 13,
+          "selected_rank": 1,
+          "best_oof_rank": 1,
+          "residual_energy_before": 637564.4997570344,
+          "residual_energy_after": 574429.0014983292,
+          "selected_relative_reduction": 0.09902605663076451,
+          "best_relative_reduction": 0.09902605663076436
+        }
+      ]
+    },
+    {
+      "retention": 0.7,
+      "allocation": [
+        1,
+        3,
+        0,
+        0,
+        1,
+        9,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1
+      ],
+      "total_states": 17,
+      "oof_global_surface_variance_explained": 0.596025654239298,
+      "steps": [
+        {
+          "expiry_index": 0,
+          "selected_rank": 1,
+          "best_oof_rank": 41,
+          "residual_energy_before": 1321108.1714823344,
+          "residual_energy_after": 774477.7828659047,
+          "selected_relative_reduction": 0.4137665638712152,
+          "best_relative_reduction": 0.5440889727254851
+        },
+        {
+          "expiry_index": 1,
+          "selected_rank": 3,
+          "best_oof_rank": 8,
+          "residual_energy_before": 774477.7828659047,
+          "residual_energy_after": 656379.5678065026,
+          "selected_relative_reduction": 0.15248754408730408,
+          "best_relative_reduction": 0.1803572809548341
+        },
+        {
+          "expiry_index": 2,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 656379.5678065026,
+          "residual_energy_after": 656379.5678065026,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 3,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 656379.5678065026,
+          "residual_energy_after": 656379.5678065026,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 4,
+          "selected_rank": 1,
+          "best_oof_rank": 66,
+          "residual_energy_before": 656379.5678065026,
+          "residual_energy_after": 641873.6935013541,
+          "selected_relative_reduction": 0.02209982610157169,
+          "best_relative_reduction": 0.02515188275296452
+        },
+        {
+          "expiry_index": 5,
+          "selected_rank": 9,
+          "best_oof_rank": 9,
+          "residual_energy_before": 641873.6935013541,
+          "residual_energy_after": 640658.4058099487,
+          "selected_relative_reduction": 0.0018933439767193521,
+          "best_relative_reduction": 0.0018933439767195332
+        },
+        {
+          "expiry_index": 6,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 640658.4058099487,
+          "residual_energy_after": 640658.4058099487,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 7,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 640658.4058099487,
+          "residual_energy_after": 640658.4058099487,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 8,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 640658.4058099487,
+          "residual_energy_after": 640658.4058099487,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 9,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 640658.4058099487,
+          "residual_energy_after": 640658.4058099487,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 10,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 640658.4058099487,
+          "residual_energy_after": 640658.4058099487,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 11,
+          "selected_rank": 1,
+          "best_oof_rank": 1,
+          "residual_energy_before": 640658.4058099487,
+          "residual_energy_after": 621527.1105242294,
+          "selected_relative_reduction": 0.029861928154259837,
+          "best_relative_reduction": 0.029861928154259657
+        },
+        {
+          "expiry_index": 12,
+          "selected_rank": 1,
+          "best_oof_rank": 1,
+          "residual_energy_before": 621527.1105242294,
+          "residual_energy_after": 594941.1555090162,
+          "selected_relative_reduction": 0.042775213767890334,
+          "best_relative_reduction": 0.04277521376789033
+        },
+        {
+          "expiry_index": 13,
+          "selected_rank": 1,
+          "best_oof_rank": 1,
+          "residual_energy_before": 594941.1555090162,
+          "residual_energy_after": 533693.8092536933,
+          "selected_relative_reduction": 0.10294689766910019,
+          "best_relative_reduction": 0.10294689766910017
+        }
+      ]
+    },
+    {
+      "retention": 0.8,
+      "allocation": [
+        2,
+        4,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        10,
+        0,
+        0,
+        1,
+        1
+      ],
+      "total_states": 19,
+      "oof_global_surface_variance_explained": 0.6241946348036056,
+      "steps": [
+        {
+          "expiry_index": 0,
+          "selected_rank": 2,
+          "best_oof_rank": 41,
+          "residual_energy_before": 1321108.1714823344,
+          "residual_energy_after": 707666.2447664518,
+          "selected_relative_reduction": 0.46433890877200246,
+          "best_relative_reduction": 0.5440889727254851
+        },
+        {
+          "expiry_index": 1,
+          "selected_rank": 4,
+          "best_oof_rank": 6,
+          "residual_energy_before": 707666.2447664518,
+          "residual_energy_after": 636950.0338116932,
+          "selected_relative_reduction": 0.09992876087808421,
+          "best_relative_reduction": 0.11516074361062029
+        },
+        {
+          "expiry_index": 2,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 636950.0338116932,
+          "residual_energy_after": 636950.0338116932,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 3,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 636950.0338116932,
+          "residual_energy_after": 636950.0338116932,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 4,
+          "selected_rank": 1,
+          "best_oof_rank": 1,
+          "residual_energy_before": 636950.0338116932,
+          "residual_energy_after": 636170.3182473417,
+          "selected_relative_reduction": 0.0012241392934473768,
+          "best_relative_reduction": 0.0012241392934471942
+        },
+        {
+          "expiry_index": 5,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 636170.3182473417,
+          "residual_energy_after": 636170.3182473417,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 6,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 636170.3182473417,
+          "residual_energy_after": 636170.3182473417,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 7,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 636170.3182473417,
+          "residual_energy_after": 636170.3182473417,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 8,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 636170.3182473417,
+          "residual_energy_after": 636170.3182473417,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 9,
+          "selected_rank": 10,
+          "best_oof_rank": 10,
+          "residual_energy_before": 636170.3182473417,
+          "residual_energy_after": 622976.904791243,
+          "selected_relative_reduction": 0.020738807010749392,
+          "best_relative_reduction": 0.020738807010749212
+        },
+        {
+          "expiry_index": 10,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 622976.904791243,
+          "residual_energy_after": 622976.904791243,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 11,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 622976.904791243,
+          "residual_energy_after": 622976.904791243,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 12,
+          "selected_rank": 1,
+          "best_oof_rank": 1,
+          "residual_energy_before": 622976.904791243,
+          "residual_energy_after": 556531.098124988,
+          "selected_relative_reduction": 0.10665853927365207,
+          "best_relative_reduction": 0.10665853927365242
+        },
+        {
+          "expiry_index": 13,
+          "selected_rank": 1,
+          "best_oof_rank": 1,
+          "residual_energy_before": 556531.098124988,
+          "residual_energy_after": 496479.5388478595,
+          "selected_relative_reduction": 0.10790333097188744,
+          "best_relative_reduction": 0.10790333097188724
+        }
+      ]
+    },
+    {
+      "retention": 0.9,
+      "allocation": [
+        4,
+        4,
+        0,
+        0,
+        0,
+        0,
+        11,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1
+      ],
+      "total_states": 22,
+      "oof_global_surface_variance_explained": 0.5946649718157766,
+      "steps": [
+        {
+          "expiry_index": 0,
+          "selected_rank": 4,
+          "best_oof_rank": 41,
+          "residual_energy_before": 1321108.1714823344,
+          "residual_energy_after": 641722.1089987052,
+          "selected_relative_reduction": 0.5142546819018853,
+          "best_relative_reduction": 0.5440889727254851
+        },
+        {
+          "expiry_index": 1,
+          "selected_rank": 4,
+          "best_oof_rank": 4,
+          "residual_energy_before": 641722.1089987052,
+          "residual_energy_after": 632115.8609625932,
+          "selected_relative_reduction": 0.014969482742461224,
+          "best_relative_reduction": 0.01496948274246104
+        },
+        {
+          "expiry_index": 2,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 632115.8609625932,
+          "residual_energy_after": 632115.8609625932,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 3,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 632115.8609625932,
+          "residual_energy_after": 632115.8609625932,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 4,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 632115.8609625932,
+          "residual_energy_after": 632115.8609625932,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 5,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 632115.8609625932,
+          "residual_energy_after": 632115.8609625932,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 6,
+          "selected_rank": 11,
+          "best_oof_rank": 87,
+          "residual_energy_before": 632115.8609625932,
+          "residual_energy_after": 620120.8208022482,
+          "selected_relative_reduction": 0.01897601515975069,
+          "best_relative_reduction": 0.019440148472135838
+        },
+        {
+          "expiry_index": 7,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 620120.8208022482,
+          "residual_energy_after": 620120.8208022482,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 8,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 620120.8208022482,
+          "residual_energy_after": 620120.8208022482,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 9,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 620120.8208022482,
+          "residual_energy_after": 620120.8208022482,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 10,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 620120.8208022482,
+          "residual_energy_after": 620120.8208022482,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 11,
+          "selected_rank": 1,
+          "best_oof_rank": 1,
+          "residual_energy_before": 620120.8208022482,
+          "residual_energy_after": 611758.4865855663,
+          "selected_relative_reduction": 0.013485007979354036,
+          "best_relative_reduction": 0.013485007979354221
+        },
+        {
+          "expiry_index": 12,
+          "selected_rank": 1,
+          "best_oof_rank": 1,
+          "residual_energy_before": 611758.4865855663,
+          "residual_energy_after": 589293.9671205869,
+          "selected_relative_reduction": 0.03672122243920406,
+          "best_relative_reduction": 0.03672122243920406
+        },
+        {
+          "expiry_index": 13,
+          "selected_rank": 1,
+          "best_oof_rank": 1,
+          "residual_energy_before": 589293.9671205869,
+          "residual_energy_after": 535491.4179221998,
+          "selected_relative_reduction": 0.0913000169699302,
+          "best_relative_reduction": 0.0913000169699302
+        }
+      ]
+    },
+    {
+      "retention": 0.95,
+      "allocation": [
+        5,
+        4,
+        0,
+        0,
+        0,
+        0,
+        11,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1
+      ],
+      "total_states": 23,
+      "oof_global_surface_variance_explained": 0.6321275190966537,
+      "steps": [
+        {
+          "expiry_index": 0,
+          "selected_rank": 5,
+          "best_oof_rank": 41,
+          "residual_energy_before": 1321108.1714823344,
+          "residual_energy_after": 623436.3500341716,
+          "selected_relative_reduction": 0.5280959095615525,
+          "best_relative_reduction": 0.5440889727254851
+        },
+        {
+          "expiry_index": 1,
+          "selected_rank": 4,
+          "best_oof_rank": 4,
+          "residual_energy_before": 623436.3500341716,
+          "residual_energy_after": 617226.1524395532,
+          "selected_relative_reduction": 0.009961237573455628,
+          "best_relative_reduction": 0.009961237573455628
+        },
+        {
+          "expiry_index": 2,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 617226.1524395532,
+          "residual_energy_after": 617226.1524395532,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 3,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 617226.1524395532,
+          "residual_energy_after": 617226.1524395532,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 4,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 617226.1524395532,
+          "residual_energy_after": 617226.1524395532,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 5,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 617226.1524395532,
+          "residual_energy_after": 617226.1524395532,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 6,
+          "selected_rank": 11,
+          "best_oof_rank": 88,
+          "residual_energy_before": 617226.1524395532,
+          "residual_energy_after": 598836.1328267717,
+          "selected_relative_reduction": 0.02979462153393194,
+          "best_relative_reduction": 0.031289847909851766
+        },
+        {
+          "expiry_index": 7,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 598836.1328267717,
+          "residual_energy_after": 598836.1328267717,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 8,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 598836.1328267717,
+          "residual_energy_after": 598836.1328267717,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 9,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 598836.1328267717,
+          "residual_energy_after": 598836.1328267717,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 10,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 598836.1328267717,
+          "residual_energy_after": 598836.1328267717,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 11,
+          "selected_rank": 1,
+          "best_oof_rank": 1,
+          "residual_energy_before": 598836.1328267717,
+          "residual_energy_after": 578045.707328352,
+          "selected_relative_reduction": 0.03471805450395864,
+          "best_relative_reduction": 0.034718054503958255
+        },
+        {
+          "expiry_index": 12,
+          "selected_rank": 1,
+          "best_oof_rank": 1,
+          "residual_energy_before": 578045.707328352,
+          "residual_energy_after": 544044.4500652597,
+          "selected_relative_reduction": 0.05882105313131979,
+          "best_relative_reduction": 0.05882105313131998
+        },
+        {
+          "expiry_index": 13,
+          "selected_rank": 1,
+          "best_oof_rank": 1,
+          "residual_energy_before": 544044.4500652597,
+          "residual_energy_after": 485999.34058488987,
+          "selected_relative_reduction": 0.10669185114085285,
+          "best_relative_reduction": 0.10669185114085285
+        }
+      ]
+    },
+    {
+      "retention": 0.99,
+      "allocation": [
+        11,
+        0,
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        38,
+        0,
+        0,
+        0,
+        1,
+        1
+      ],
+      "total_states": 54,
+      "oof_global_surface_variance_explained": 0.6342670158367415,
+      "steps": [
+        {
+          "expiry_index": 0,
+          "selected_rank": 11,
+          "best_oof_rank": 41,
+          "residual_energy_before": 1321108.1714823344,
+          "residual_energy_after": 606525.4956074696,
+          "selected_relative_reduction": 0.5408964165841738,
+          "best_relative_reduction": 0.5440889727254851
+        },
+        {
+          "expiry_index": 1,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 606525.4956074696,
+          "residual_energy_after": 606525.4956074696,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 2,
+          "selected_rank": 3,
+          "best_oof_rank": 3,
+          "residual_energy_before": 606525.4956074696,
+          "residual_energy_after": 597655.4811052898,
+          "selected_relative_reduction": 0.01462430609499109,
+          "best_relative_reduction": 0.014624306094991282
+        },
+        {
+          "expiry_index": 3,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 597655.4811052898,
+          "residual_energy_after": 597655.4811052898,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 4,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 597655.4811052898,
+          "residual_energy_after": 597655.4811052898,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 5,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 597655.4811052898,
+          "residual_energy_after": 597655.4811052898,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 6,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 597655.4811052898,
+          "residual_energy_after": 597655.4811052898,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 7,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 597655.4811052898,
+          "residual_energy_after": 597655.4811052898,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 8,
+          "selected_rank": 38,
+          "best_oof_rank": 40,
+          "residual_energy_before": 597655.4811052898,
+          "residual_energy_after": 596884.8653841494,
+          "selected_relative_reduction": 0.001289397898125602,
+          "best_relative_reduction": 0.0012949440062693229
+        },
+        {
+          "expiry_index": 9,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 596884.8653841494,
+          "residual_energy_after": 596884.8653841494,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 10,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 596884.8653841494,
+          "residual_energy_after": 596884.8653841494,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 11,
+          "selected_rank": 0,
+          "best_oof_rank": 0,
+          "residual_energy_before": 596884.8653841494,
+          "residual_energy_after": 596884.8653841494,
+          "selected_relative_reduction": 0.0,
+          "best_relative_reduction": 0.0
+        },
+        {
+          "expiry_index": 12,
+          "selected_rank": 1,
+          "best_oof_rank": 1,
+          "residual_energy_before": 596884.8653841494,
+          "residual_energy_after": 530896.2665082837,
+          "selected_relative_reduction": 0.11055498757435583,
+          "best_relative_reduction": 0.11055498757435567
+        },
+        {
+          "expiry_index": 13,
+          "selected_rank": 1,
+          "best_oof_rank": 1,
+          "residual_energy_before": 530896.2665082837,
+          "residual_energy_after": 483172.8339587,
+          "selected_relative_reduction": 0.08989219845801841,
+          "best_relative_reduction": 0.0898921984580183
+        }
+      ]
+    }
+  ],
+  "ideal_global_surface_triangular_allocations": [
+    {
+      "grid_0_states": 10,
+      "initial_allocation": [
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10
+      ],
+      "optimized_allocation": [
+        10,
+        15,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        5
+      ],
+      "selected_numerical_ranks": [
+        10,
+        15,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        10,
+        5
+      ],
+      "residual_global_surface_variance_fraction": 0.0299872523188417,
+      "explained_global_surface_variance_fraction": 0.9700127476811583,
+      "num_exchange_iterations": 5,
+      "objective_history": [
+        0.033025052025346745,
+        0.032069359023950764,
+        0.031416842369878725,
+        0.030910633620602253,
+        0.03054456352853708,
+        0.0299872523188417
+      ]
+    },
+    {
+      "grid_0_states": 20,
+      "initial_allocation": [
+        20,
+        10,
+        10,
+        10,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9
+      ],
+      "optimized_allocation": [
+        20,
+        15,
+        10,
+        10,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        4
+      ],
+      "selected_numerical_ranks": [
+        20,
+        15,
+        10,
+        10,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        4
+      ],
+      "residual_global_surface_variance_fraction": 0.015873097947824467,
+      "explained_global_surface_variance_fraction": 0.9841269020521756,
+      "num_exchange_iterations": 5,
+      "objective_history": [
+        0.017448074869864473,
+        0.0171503503914259,
+        0.016827801251796542,
+        0.016479896234810932,
+        0.01624201599637973,
+        0.015873097947824467
+      ]
+    },
+    {
+      "grid_0_states": 30,
+      "initial_allocation": [
+        30,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8
+      ],
+      "optimized_allocation": [
+        30,
+        14,
+        9,
+        9,
+        9,
+        9,
+        9,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        3
+      ],
+      "selected_numerical_ranks": [
+        30,
+        14,
+        9,
+        9,
+        9,
+        9,
+        9,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        3
+      ],
+      "residual_global_surface_variance_fraction": 0.010078693423243777,
+      "explained_global_surface_variance_fraction": 0.9899213065767563,
+      "num_exchange_iterations": 5,
+      "objective_history": [
+        0.011487581780665725,
+        0.011117599039322752,
+        0.010854647788198142,
+        0.010602799030118593,
+        0.01038489495627688,
+        0.010078693423243777
+      ]
+    },
+    {
+      "grid_0_states": 40,
+      "initial_allocation": [
+        40,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        7,
+        7,
+        7,
+        7
+      ],
+      "optimized_allocation": [
+        40,
+        13,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        7,
+        7,
+        7,
+        2
+      ],
+      "selected_numerical_ranks": [
+        40,
+        13,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        7,
+        7,
+        7,
+        2
+      ],
+      "residual_global_surface_variance_fraction": 0.006988942567879644,
+      "explained_global_surface_variance_fraction": 0.9930110574321204,
+      "num_exchange_iterations": 5,
+      "objective_history": [
+        0.007929528135346163,
+        0.007741595075686772,
+        0.007571021850475613,
+        0.0073838080008780645,
+        0.007213748371558927,
+        0.006988942567879644
+      ]
+    }
+  ]
+}

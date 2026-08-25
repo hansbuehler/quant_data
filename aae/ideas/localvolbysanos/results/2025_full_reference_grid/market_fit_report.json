@@ -1,0 +1,97 @@
+{
+  "ticker": "SPX",
+  "dates_requested": 163,
+  "dates_completed": 163,
+  "failures": [],
+  "error_definition": "distance outside bid/ask divided by max(half-spread, 1e-4); zero for a fit inside bid/ask",
+  "aggregate_quote_weighted": {
+    "num_quotes": 162699,
+    "num_inside_bid_ask": 157673,
+    "percent_inside_bid_ask": 96.91085993153,
+    "mean_error_all": 0.04499986388791569,
+    "median_error_all": 0.0,
+    "mean_error_outside": 1.456711670254675,
+    "median_error_outside": 0.6745284028414297
+  },
+  "daily_percent_inside_bid_ask": {
+    "mean": 96.91006271314234,
+    "median": 97.4974974974975,
+    "minimum": 89.88988988988989,
+    "maximum": 99.9,
+    "worst_date": "2025-04-14"
+  },
+  "monthly": [
+    {
+      "month": "2025-01",
+      "num_quotes": 18971,
+      "percent_inside_bid_ask": 97.14300774866902,
+      "mean_error_all": 0.03942407086062508,
+      "median_error_all": 0.0,
+      "mean_error_outside": 1.379915218259997,
+      "median_error_outside": 0.7133653421077508
+    },
+    {
+      "month": "2025-02",
+      "num_quotes": 18954,
+      "percent_inside_bid_ask": 97.07713411417114,
+      "mean_error_all": 0.06240245356820133,
+      "median_error_all": 0.0,
+      "mean_error_outside": 2.1349749186492564,
+      "median_error_outside": 0.6431367222149679
+    },
+    {
+      "month": "2025-03",
+      "num_quotes": 20928,
+      "percent_inside_bid_ask": 95.74254587155964,
+      "mean_error_all": 0.04597437004934494,
+      "median_error_all": 0.0,
+      "mean_error_outside": 1.079855910653974,
+      "median_error_outside": 0.6159632453853181
+    },
+    {
+      "month": "2025-04",
+      "num_quotes": 20969,
+      "percent_inside_bid_ask": 95.39796842958653,
+      "mean_error_all": 0.06260484413560427,
+      "median_error_all": 0.0,
+      "mean_error_outside": 1.360374069097913,
+      "median_error_outside": 0.5976848982722562
+    },
+    {
+      "month": "2025-05",
+      "num_quotes": 20947,
+      "percent_inside_bid_ask": 96.27154246431469,
+      "mean_error_all": 0.04332766537118933,
+      "median_error_all": 0.0,
+      "mean_error_outside": 1.1620801620106311,
+      "median_error_outside": 0.6589541113148696
+    },
+    {
+      "month": "2025-06",
+      "num_quotes": 19986,
+      "percent_inside_bid_ask": 97.26308415891124,
+      "mean_error_all": 0.04668109420400345,
+      "median_error_all": 0.0,
+      "mean_error_outside": 1.7056094127261665,
+      "median_error_outside": 0.7833948069669866
+    },
+    {
+      "month": "2025-07",
+      "num_quotes": 20976,
+      "percent_inside_bid_ask": 98.15026697177727,
+      "mean_error_all": 0.03335659816371618,
+      "median_error_all": 0.0,
+      "mean_error_outside": 1.8033195955724501,
+      "median_error_outside": 0.8570391822144063
+    },
+    {
+      "month": "2025-08",
+      "num_quotes": 20968,
+      "percent_inside_bid_ask": 98.29263639832125,
+      "mean_error_all": 0.027450836990918825,
+      "median_error_all": 0.0,
+      "mean_error_outside": 1.6077909218591786,
+      "median_error_outside": 0.7058904593181773
+    }
+  ]
+}

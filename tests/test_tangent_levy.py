@@ -29,9 +29,14 @@ from quantdata.dysanos.tangent_levy.double_exponential import (
 )
 from quantdata.dysanos.tangent_levy.dynamics import DynamicsFit, fit_dynamics
 from quantdata.dysanos.tangent_levy.experiment import validate_reconstruction_gate
-from quantdata.dysanos.tangent_levy.markets import MarketAudit, common_grid_coverage
+from quantdata.dysanos.tangent_levy.markets import (
+    MarketAudit,
+    common_grid_coverage,
+    grid_market_days_from_panel,
+)
 from quantdata.dysanos.tangent_levy.metrics import (
     energy_score,
+    implied_volatility_error,
     interval_error_metrics,
     no_arbitrage_metrics,
     paired_block_bootstrap_interval,
@@ -63,6 +68,14 @@ def _parameters() -> DoubleExponentialParameters:
 
 
 def test_configs_enforce_market_and_grid_contracts() -> None:
+    market = MarketConfig()
+    assert market.source == "dysanos_grid_cache"
+    assert market.smoothness == 0.25
+    assert market.grid_num_strikes == 100
+    assert market.grid_cache_start == date(2020, 1, 1)
+    assert market.grid_cache_end == date(2025, 8, 30)
+    assert market.min_tau == pytest.approx(2.0 / 255.0)
+    assert market.max_tau == 1.0
     with pytest.raises(ValueError, match="strictly greater than 0.01"):
         MarketConfig(smoothness=0.01)
     with pytest.raises(ValueError, match="start at zero"):
@@ -71,6 +84,51 @@ def test_configs_enforce_market_and_grid_contracts() -> None:
         DynamicsConfig(jump_x_grid=(-0.2, -0.1, 0.0, 0.1))
     with pytest.raises(ValueError, match="must be boolean"):
         DynamicsConfig(require_reconstruction_pass=1)
+
+
+def test_grid_panel_adapter_preserves_targets_weights_and_missing_intervals() -> None:
+    config = MarketConfig(grid_num_strikes=5)
+    expiries = np.asarray([[2.0 / 255.0, 1.0]])
+    strikes = np.asarray(
+        [
+            [
+                [0.4, 0.8, 0.9, 1.0, 1.1, 1.2, 1.8],
+                [0.3, 0.7, 0.85, 1.0, 1.2, 1.5, 2.0],
+            ]
+        ]
+    )
+    mids = np.asarray(
+        [[[0.21, 0.13, 0.07, 0.03, 0.01], [0.36, 0.25, 0.16, 0.09, 0.04]]]
+    )
+    weights = np.asarray([[[2.0, 3.0, 4.0, 3.0, 0.0], [1.0] * 5]])
+    panel = {
+        "dates": np.asarray(["2024-03-05"], dtype="datetime64[D]"),
+        "expiries": expiries,
+        "xstrikes": strikes,
+        "mids": mids,
+        "weights": weights,
+        "spot_ref": np.asarray([5_000.0]),
+        "spot_ret": np.asarray([0.01]),
+    }
+    markets = grid_market_days_from_panel(
+        panel,
+        ticker="SPX",
+        start=date(2024, 3, 5),
+        end=date(2024, 3, 5),
+        config=config,
+    )
+    market = markets[date(2024, 3, 5)]
+    assert market.source == "dysanos_grid_cache"
+    assert market.pricer is None
+    np.testing.assert_array_equal(market.strikes[0], strikes[0, 0, 1:-1])
+    np.testing.assert_array_equal(market.sanos_calls[1], mids[0, 1])
+    np.testing.assert_array_equal(market.fit_weights[0], weights[0, 0])
+    np.testing.assert_array_equal(
+        market.model_masks[0],
+        np.asarray([True, True, True, True, False]),
+    )
+    assert np.all(np.isnan(market.pure_bids[0]))
+    assert not np.any(market.call_active[0])
 
 
 def test_common_grid_coverage_keeps_missing_sessions_in_denominator() -> None:
@@ -189,8 +247,7 @@ def test_double_exponential_fourier_price_matches_monte_carlo() -> None:
     )
     jump_sum = np.bincount(path_index, weights=jumps, minlength=paths)
     log_return = (
-        jump_sum
-        - parameters.intensity * tau * parameters.exponential_jump_mean
+        jump_sum - parameters.intensity * tau * parameters.exponential_jump_mean
     )
     terminal = np.exp(log_return)
     actual = np.mean(
@@ -270,6 +327,21 @@ def test_static_fit_recovers_synthetic_parameters() -> None:
     assert constrained.success
     assert symmetry_index(constrained.parameters) == pytest.approx(
         symmetry_index(parameters), rel=1.0e-12
+    )
+
+    cached_grid = fit_maturity(
+        tau=tau,
+        strikes=strikes,
+        target_calls=calls,
+        bids=np.full_like(calls, np.nan),
+        asks=np.full_like(calls, np.nan),
+        mask=np.ones(strikes.size, dtype=bool),
+        config=config,
+        objective_weights=np.full_like(calls, 100.0),
+    )
+    assert cached_grid.success
+    assert cached_grid.parameters.intensity == pytest.approx(
+        parameters.intensity, rel=2.0e-4
     )
 
 
@@ -436,6 +508,14 @@ def test_static_and_probabilistic_metrics() -> None:
     )
     assert price.observations == 3
     assert price.rmse == pytest.approx(np.sqrt(5.0e-4 / 3.0))
+    weighted = price_error_metrics(
+        model,
+        target,
+        residual_multiplier=np.asarray([1.0, 2.0, 3.0]),
+    )
+    assert weighted.weighted_rmse == pytest.approx(
+        np.sqrt((0.0**2 + 0.02**2 + 0.06**2) / 3.0)
+    )
     interval = interval_error_metrics(
         model,
         target - 0.005,
@@ -451,6 +531,15 @@ def test_static_and_probabilistic_metrics() -> None:
         vol=0.25,
         sqrtT=np.sqrt(tau)[:, None],
     )
+    model_calls = calls.copy()
+    model_calls[0, 0] = 1.0 - strikes[0] - 1.0e-6
+    iv_error = implied_volatility_error(
+        tau=np.broadcast_to(tau[:, None], calls.shape),
+        strikes=np.broadcast_to(strikes[None], calls.shape),
+        model_calls=model_calls,
+        target_calls=calls,
+    )
+    assert iv_error.observations == calls.size - 1
     assert no_arbitrage_metrics(calls, tau=tau, strikes=strikes).maximum < 1.0e-12
 
     ensemble = np.asarray([[0.0, 0.0], [1.0, 0.5], [2.0, 1.0]])

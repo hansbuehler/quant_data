@@ -226,17 +226,37 @@ def front_week_inverse_cdf_components(
         )
     if torch.any(sqrt_variance <= 0.0):
         raise ValueError("implied spot mode requires a positive front backbone variance")
+    # The SANOS tridiagonal solve preserves mass, mean, and non-negativity up
+    # to the decoder's floating-point tolerance.  An inverse CDF needs those
+    # identities exactly: otherwise an upper-tail probability can exceed the
+    # numerically available mass and drive the implicit derivative through a
+    # near-zero density.  Remove only numerical negative mass, then normalize
+    # both mass and mean.  This produces the closest simple martingale mixture
+    # used for spot sampling without changing the calibrated pricing surface.
+    sampling_density = torch.clamp_min(density, 0.0)
+    sampling_mass = torch.sum(sampling_density, dim=-1, keepdim=True)
+    if torch.any(~torch.isfinite(sampling_mass)) or torch.any(sampling_mass <= 0.0):
+        raise ValueError("front SANOS sampling density has no positive finite mass")
+    sampling_density = sampling_density / sampling_mass
+    sampling_mean = torch.sum(
+        sampling_density * support,
+        dim=-1,
+        keepdim=True,
+    )
+    if torch.any(~torch.isfinite(sampling_mean)) or torch.any(sampling_mean <= 0.0):
+        raise ValueError("front SANOS sampling density has no positive finite mean")
+    sampling_support = support / sampling_mean
     eps = 32.0 * torch.finfo(gaussian_coordinate.dtype).eps
     probability = torch.clamp(torch.special.ndtr(gaussian_coordinate), eps, 1.0 - eps)
-    lower = torch.log(support[:, 0]) - 10.0 * sqrt_variance
-    upper = torch.log(support[:, -1]) + 10.0 * sqrt_variance
+    lower = torch.log(sampling_support[:, 0]) - 10.0 * sqrt_variance
+    upper = torch.log(sampling_support[:, -1]) + 10.0 * sqrt_variance
     with torch.no_grad():
         for _ in range(bisection_steps):
             middle = 0.5 * (lower + upper)
             cdf = _front_mixture_log_cdf(
                 middle,
-                support=support,
-                density=density,
+                support=sampling_support,
+                density=sampling_density,
                 sqrt_variance=sqrt_variance,
             )
             lower = torch.where(cdf < probability, middle, lower)
@@ -244,21 +264,27 @@ def front_week_inverse_cdf_components(
         root = 0.5 * (lower + upper)
     z = (
         root.unsqueeze(-1)
-        - torch.log(support)
+        - torch.log(sampling_support)
         + 0.5 * sqrt_variance.square().unsqueeze(-1)
     ) / sqrt_variance.unsqueeze(-1)
     normal_pdf = torch.exp(-0.5 * z.square()) / math.sqrt(2.0 * math.pi)
     log_pdf = torch.sum(
-        density * normal_pdf / sqrt_variance.unsqueeze(-1), dim=-1
+        sampling_density * normal_pdf / sqrt_variance.unsqueeze(-1), dim=-1
     )
     cdf_at_root = _front_mixture_log_cdf(
         root,
-        support=support,
-        density=density,
+        support=sampling_support,
+        density=sampling_density,
         sqrt_variance=sqrt_variance,
     )
-    differentiable_root = root + (probability - cdf_at_root) / torch.clamp(
+    implicit_correction = (probability - cdf_at_root) / torch.clamp(
         log_pdf, min=torch.finfo(log_pdf.dtype).tiny
+    )
+    # Bisection is the forward value.  The zero-valued straight-through term
+    # supplies its implicit derivative without applying a numerically unstable
+    # Newton update to the sampled spot itself.
+    differentiable_root = (
+        root + implicit_correction - implicit_correction.detach()
     )
     return torch.exp(differentiable_root)
 

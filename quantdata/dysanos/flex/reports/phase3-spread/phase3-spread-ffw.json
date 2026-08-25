@@ -1,0 +1,899 @@
+{
+  "schema": "flex-phase3-spread-ffw-v1",
+  "status": "complete",
+  "ticker": "SPX",
+  "source_dates_report": "quantdata/dysanos/flex/reports/batch-descent/rebalanced-stronger/spx-2022-2025-forward-mu-v1/spx-2022-2025-forward-mu-v1.json",
+  "split": {
+    "train_start": "2022-01-03",
+    "train_end": "2024-12-31",
+    "validation_start": "2025-01-02",
+    "validation_end": "2025-08-29",
+    "no_2026": true
+  },
+  "config": {
+    "label": "phase3-spread-ffw-v1",
+    "group": "dysanos/flex/phase3-spread",
+    "user_version": "0.1",
+    "network": {
+      "activation": "SiLU",
+      "num_depth": 2,
+      "num_width": 64,
+      "use_bias": true
+    },
+    "minimum_option_price_dollars": 0.25,
+    "low_premium_threshold_dollars": 3.0,
+    "low_premium_tick_dollars": 0.05,
+    "high_premium_tick_dollars": 0.1,
+    "proportional_price_floor": 1e-06,
+    "learning_rate": 0.001,
+    "weight_decay": 1e-06,
+    "batch_size": 65536,
+    "num_epochs": 100,
+    "gradient_clip": 10.0,
+    "random_seed": 20260819
+  },
+  "compile_model": true,
+  "features": [
+    "vega",
+    "sqrt_tte",
+    "nms",
+    "log_strike",
+    "signed_delta",
+    "log_option_price_dollars"
+  ],
+  "target": "log normalized price half-spread, date-weighted Huber loss",
+  "filtering": {
+    "minimum_option_price_dollars": 0.25,
+    "train_quotes_before": 2784378,
+    "train_quotes_after": 2783262,
+    "train_retained_percent": 99.95991923510385,
+    "validation_quotes_before": 708404,
+    "validation_quotes_after": 708288,
+    "validation_retained_percent": 99.98362516304256
+  },
+  "normalizers": {
+    "feature_mean": [
+      0.07574699724467633,
+      0.2715606096258378,
+      -0.5615537166940686,
+      -0.022625142363915798,
+      0.10898966589058114,
+      4.067752675871493
+    ],
+    "feature_scale": [
+      0.046395021748413263,
+      0.11756088362503964,
+      1.1064973935468436,
+      0.05569125127297886,
+      0.5738398203703908,
+      1.4359305510969298
+    ],
+    "log_target_mean": -9.186998024420287,
+    "log_target_scale": 1.3141994385297378
+  },
+  "training": {
+    "history": [
+      {
+        "epoch": 1.0,
+        "date_weighted_log_huber": 0.7153647204316756,
+        "learning_rate": 0.0009997532801828658
+      },
+      {
+        "epoch": 2.0,
+        "date_weighted_log_huber": 0.39107489866091605,
+        "learning_rate": 0.0009990133642141358
+      },
+      {
+        "epoch": 3.0,
+        "date_weighted_log_huber": 0.36548632236965434,
+        "learning_rate": 0.00099778098230154
+      },
+      {
+        "epoch": 4.0,
+        "date_weighted_log_huber": 0.3571576529701387,
+        "learning_rate": 0.000996057350657239
+      },
+      {
+        "epoch": 5.0,
+        "date_weighted_log_huber": 0.35183060807777383,
+        "learning_rate": 0.0009938441702975688
+      },
+      {
+        "epoch": 6.0,
+        "date_weighted_log_huber": 0.34814407273859305,
+        "learning_rate": 0.0009911436253643444
+      },
+      {
+        "epoch": 7.0,
+        "date_weighted_log_huber": 0.3450392586676975,
+        "learning_rate": 0.0009879583809693736
+      },
+      {
+        "epoch": 8.0,
+        "date_weighted_log_huber": 0.34165753200023014,
+        "learning_rate": 0.0009842915805643154
+      },
+      {
+        "epoch": 9.0,
+        "date_weighted_log_huber": 0.3377847851617538,
+        "learning_rate": 0.0009801468428384714
+      },
+      {
+        "epoch": 10.0,
+        "date_weighted_log_huber": 0.33371515519523526,
+        "learning_rate": 0.0009755282581475767
+      },
+      {
+        "epoch": 11.0,
+        "date_weighted_log_huber": 0.3300158446753753,
+        "learning_rate": 0.0009704403844771127
+      },
+      {
+        "epoch": 12.0,
+        "date_weighted_log_huber": 0.32681102780908394,
+        "learning_rate": 0.0009648882429441257
+      },
+      {
+        "epoch": 13.0,
+        "date_weighted_log_huber": 0.3239276049259704,
+        "learning_rate": 0.0009588773128419905
+      },
+      {
+        "epoch": 14.0,
+        "date_weighted_log_huber": 0.3211865608086393,
+        "learning_rate": 0.0009524135262330098
+      },
+      {
+        "epoch": 15.0,
+        "date_weighted_log_huber": 0.31842956809129297,
+        "learning_rate": 0.0009455032620941839
+      },
+      {
+        "epoch": 16.0,
+        "date_weighted_log_huber": 0.31561913320747875,
+        "learning_rate": 0.0009381533400219318
+      },
+      {
+        "epoch": 17.0,
+        "date_weighted_log_huber": 0.31307209684059484,
+        "learning_rate": 0.0009303710135019719
+      },
+      {
+        "epoch": 18.0,
+        "date_weighted_log_huber": 0.31090485283226144,
+        "learning_rate": 0.0009221639627510076
+      },
+      {
+        "epoch": 19.0,
+        "date_weighted_log_huber": 0.3092290498944,
+        "learning_rate": 0.000913540287137281
+      },
+      {
+        "epoch": 20.0,
+        "date_weighted_log_huber": 0.3078165693558241,
+        "learning_rate": 0.0009045084971874739
+      },
+      {
+        "epoch": 21.0,
+        "date_weighted_log_huber": 0.30666458595279106,
+        "learning_rate": 0.0008950775061878452
+      },
+      {
+        "epoch": 22.0,
+        "date_weighted_log_huber": 0.30559082264578397,
+        "learning_rate": 0.0008852566213878947
+      },
+      {
+        "epoch": 23.0,
+        "date_weighted_log_huber": 0.3045809498521638,
+        "learning_rate": 0.0008750555348152298
+      },
+      {
+        "epoch": 24.0,
+        "date_weighted_log_huber": 0.3036832034876006,
+        "learning_rate": 0.0008644843137107057
+      },
+      {
+        "epoch": 25.0,
+        "date_weighted_log_huber": 0.3027914930256903,
+        "learning_rate": 0.0008535533905932737
+      },
+      {
+        "epoch": 26.0,
+        "date_weighted_log_huber": 0.3019373624521643,
+        "learning_rate": 0.0008422735529643444
+      },
+      {
+        "epoch": 27.0,
+        "date_weighted_log_huber": 0.30112210883411694,
+        "learning_rate": 0.0008306559326618259
+      },
+      {
+        "epoch": 28.0,
+        "date_weighted_log_huber": 0.3003405379215651,
+        "learning_rate": 0.0008187119948743449
+      },
+      {
+        "epoch": 29.0,
+        "date_weighted_log_huber": 0.29960733841095133,
+        "learning_rate": 0.0008064535268264883
+      },
+      {
+        "epoch": 30.0,
+        "date_weighted_log_huber": 0.29892231838495914,
+        "learning_rate": 0.0007938926261462367
+      },
+      {
+        "epoch": 31.0,
+        "date_weighted_log_huber": 0.2982630747555157,
+        "learning_rate": 0.0007810416889260654
+      },
+      {
+        "epoch": 32.0,
+        "date_weighted_log_huber": 0.29765852036867824,
+        "learning_rate": 0.0007679133974894983
+      },
+      {
+        "epoch": 33.0,
+        "date_weighted_log_huber": 0.29708350345107964,
+        "learning_rate": 0.0007545207078751857
+      },
+      {
+        "epoch": 34.0,
+        "date_weighted_log_huber": 0.2966249199378335,
+        "learning_rate": 0.0007408768370508577
+      },
+      {
+        "epoch": 35.0,
+        "date_weighted_log_huber": 0.29614501544186284,
+        "learning_rate": 0.0007269952498697734
+      },
+      {
+        "epoch": 36.0,
+        "date_weighted_log_huber": 0.295701999293556,
+        "learning_rate": 0.0007128896457825364
+      },
+      {
+        "epoch": 37.0,
+        "date_weighted_log_huber": 0.2952969351032685,
+        "learning_rate": 0.0006985739453173903
+      },
+      {
+        "epoch": 38.0,
+        "date_weighted_log_huber": 0.29492441073583353,
+        "learning_rate": 0.0006840622763423391
+      },
+      {
+        "epoch": 39.0,
+        "date_weighted_log_huber": 0.29460423220776605,
+        "learning_rate": 0.0006693689601226458
+      },
+      {
+        "epoch": 40.0,
+        "date_weighted_log_huber": 0.29423564225046656,
+        "learning_rate": 0.0006545084971874737
+      },
+      {
+        "epoch": 41.0,
+        "date_weighted_log_huber": 0.2939326738816448,
+        "learning_rate": 0.0006394955530196147
+      },
+      {
+        "epoch": 42.0,
+        "date_weighted_log_huber": 0.29364530371961234,
+        "learning_rate": 0.0006243449435824273
+      },
+      {
+        "epoch": 43.0,
+        "date_weighted_log_huber": 0.2933868589980155,
+        "learning_rate": 0.0006090716206982714
+      },
+      {
+        "epoch": 44.0,
+        "date_weighted_log_huber": 0.29314553169278557,
+        "learning_rate": 0.0005936906572928625
+      },
+      {
+        "epoch": 45.0,
+        "date_weighted_log_huber": 0.29292990374394506,
+        "learning_rate": 0.0005782172325201156
+      },
+      {
+        "epoch": 46.0,
+        "date_weighted_log_huber": 0.2926951143336313,
+        "learning_rate": 0.0005626666167821523
+      },
+      {
+        "epoch": 47.0,
+        "date_weighted_log_huber": 0.2925031037097837,
+        "learning_rate": 0.0005470541566592572
+      },
+      {
+        "epoch": 48.0,
+        "date_weighted_log_huber": 0.2922798214799851,
+        "learning_rate": 0.0005313952597646569
+      },
+      {
+        "epoch": 49.0,
+        "date_weighted_log_huber": 0.29211722175628196,
+        "learning_rate": 0.0005157053795390643
+      },
+      {
+        "epoch": 50.0,
+        "date_weighted_log_huber": 0.29193858699489467,
+        "learning_rate": 0.0005000000000000002
+      },
+      {
+        "epoch": 51.0,
+        "date_weighted_log_huber": 0.29177913212323386,
+        "learning_rate": 0.00048429462046093607
+      },
+      {
+        "epoch": 52.0,
+        "date_weighted_log_huber": 0.29162092441758847,
+        "learning_rate": 0.0004686047402353435
+      },
+      {
+        "epoch": 53.0,
+        "date_weighted_log_huber": 0.2914652494057852,
+        "learning_rate": 0.000452945843340743
+      },
+      {
+        "epoch": 54.0,
+        "date_weighted_log_huber": 0.29134068908929545,
+        "learning_rate": 0.00043733338321784806
+      },
+      {
+        "epoch": 55.0,
+        "date_weighted_log_huber": 0.2911897472856006,
+        "learning_rate": 0.0004217827674798847
+      },
+      {
+        "epoch": 56.0,
+        "date_weighted_log_huber": 0.2910382370013199,
+        "learning_rate": 0.00040630934270713783
+      },
+      {
+        "epoch": 57.0,
+        "date_weighted_log_huber": 0.2909216192055627,
+        "learning_rate": 0.000390928379301729
+      },
+      {
+        "epoch": 58.0,
+        "date_weighted_log_huber": 0.29084300678247826,
+        "learning_rate": 0.0003756550564175727
+      },
+      {
+        "epoch": 59.0,
+        "date_weighted_log_huber": 0.2907131819241011,
+        "learning_rate": 0.00036050444698038553
+      },
+      {
+        "epoch": 60.0,
+        "date_weighted_log_huber": 0.2905915606941597,
+        "learning_rate": 0.00034549150281252655
+      },
+      {
+        "epoch": 61.0,
+        "date_weighted_log_huber": 0.2905086169580342,
+        "learning_rate": 0.0003306310398773544
+      },
+      {
+        "epoch": 62.0,
+        "date_weighted_log_huber": 0.2904024832333652,
+        "learning_rate": 0.00031593772365766127
+      },
+      {
+        "epoch": 63.0,
+        "date_weighted_log_huber": 0.2903152429057528,
+        "learning_rate": 0.0003014260546826097
+      },
+      {
+        "epoch": 64.0,
+        "date_weighted_log_huber": 0.2902048531972873,
+        "learning_rate": 0.0002871103542174637
+      },
+      {
+        "epoch": 65.0,
+        "date_weighted_log_huber": 0.2901346898944831,
+        "learning_rate": 0.0002730047501302267
+      },
+      {
+        "epoch": 66.0,
+        "date_weighted_log_huber": 0.29006548530250986,
+        "learning_rate": 0.00025912316294914234
+      },
+      {
+        "epoch": 67.0,
+        "date_weighted_log_huber": 0.28997945336106823,
+        "learning_rate": 0.0002454792921248144
+      },
+      {
+        "epoch": 68.0,
+        "date_weighted_log_huber": 0.28990533906896127,
+        "learning_rate": 0.00023208660251050164
+      },
+      {
+        "epoch": 69.0,
+        "date_weighted_log_huber": 0.28984412213357275,
+        "learning_rate": 0.00021895831107393473
+      },
+      {
+        "epoch": 70.0,
+        "date_weighted_log_huber": 0.28977742282731306,
+        "learning_rate": 0.00020610737385376356
+      },
+      {
+        "epoch": 71.0,
+        "date_weighted_log_huber": 0.28971283818922916,
+        "learning_rate": 0.00019354647317351177
+      },
+      {
+        "epoch": 72.0,
+        "date_weighted_log_huber": 0.2896608006601786,
+        "learning_rate": 0.0001812880051256552
+      },
+      {
+        "epoch": 73.0,
+        "date_weighted_log_huber": 0.2896030404033398,
+        "learning_rate": 0.00016934406733817422
+      },
+      {
+        "epoch": 74.0,
+        "date_weighted_log_huber": 0.2895550949173436,
+        "learning_rate": 0.0001577264470356557
+      },
+      {
+        "epoch": 75.0,
+        "date_weighted_log_huber": 0.28951041244574716,
+        "learning_rate": 0.00014644660940672634
+      },
+      {
+        "epoch": 76.0,
+        "date_weighted_log_huber": 0.2894618779968103,
+        "learning_rate": 0.0001355156862892944
+      },
+      {
+        "epoch": 77.0,
+        "date_weighted_log_huber": 0.28942749006317864,
+        "learning_rate": 0.00012494446518477025
+      },
+      {
+        "epoch": 78.0,
+        "date_weighted_log_huber": 0.28938622151787097,
+        "learning_rate": 0.00011474337861210548
+      },
+      {
+        "epoch": 79.0,
+        "date_weighted_log_huber": 0.289352947873171,
+        "learning_rate": 0.00010492249381215483
+      },
+      {
+        "epoch": 80.0,
+        "date_weighted_log_huber": 0.2893188523220299,
+        "learning_rate": 9.549150281252637e-05
+      },
+      {
+        "epoch": 81.0,
+        "date_weighted_log_huber": 0.28929030829621644,
+        "learning_rate": 8.645971286271918e-05
+      },
+      {
+        "epoch": 82.0,
+        "date_weighted_log_huber": 0.2892515576246031,
+        "learning_rate": 7.78360372489926e-05
+      },
+      {
+        "epoch": 83.0,
+        "date_weighted_log_huber": 0.2892340121613596,
+        "learning_rate": 6.962898649802815e-05
+      },
+      {
+        "epoch": 84.0,
+        "date_weighted_log_huber": 0.28920932461341675,
+        "learning_rate": 6.184665997806824e-05
+      },
+      {
+        "epoch": 85.0,
+        "date_weighted_log_huber": 0.2891912106997923,
+        "learning_rate": 5.449673790581613e-05
+      },
+      {
+        "epoch": 86.0,
+        "date_weighted_log_huber": 0.2891716808313342,
+        "learning_rate": 4.758647376699034e-05
+      },
+      {
+        "epoch": 87.0,
+        "date_weighted_log_huber": 0.28916160229597276,
+        "learning_rate": 4.112268715800956e-05
+      },
+      {
+        "epoch": 88.0,
+        "date_weighted_log_huber": 0.2891420218646897,
+        "learning_rate": 3.511175705587434e-05
+      },
+      {
+        "epoch": 89.0,
+        "date_weighted_log_huber": 0.2891308289161461,
+        "learning_rate": 2.9559615522887284e-05
+      },
+      {
+        "epoch": 90.0,
+        "date_weighted_log_huber": 0.289117850704051,
+        "learning_rate": 2.447174185242324e-05
+      },
+      {
+        "epoch": 91.0,
+        "date_weighted_log_huber": 0.2891082374094215,
+        "learning_rate": 1.9853157161528526e-05
+      },
+      {
+        "epoch": 92.0,
+        "date_weighted_log_huber": 0.2890990885899489,
+        "learning_rate": 1.570841943568452e-05
+      },
+      {
+        "epoch": 93.0,
+        "date_weighted_log_huber": 0.28909562662940985,
+        "learning_rate": 1.204161903062634e-05
+      },
+      {
+        "epoch": 94.0,
+        "date_weighted_log_huber": 0.2890910019131869,
+        "learning_rate": 8.85637463565564e-06
+      },
+      {
+        "epoch": 95.0,
+        "date_weighted_log_huber": 0.2890847586959382,
+        "learning_rate": 6.155829702431171e-06
+      },
+      {
+        "epoch": 96.0,
+        "date_weighted_log_huber": 0.28908213742970135,
+        "learning_rate": 3.942649342761118e-06
+      },
+      {
+        "epoch": 97.0,
+        "date_weighted_log_huber": 0.28908003479342514,
+        "learning_rate": 2.2190176984600023e-06
+      },
+      {
+        "epoch": 98.0,
+        "date_weighted_log_huber": 0.28907860780607736,
+        "learning_rate": 9.866357858642206e-07
+      },
+      {
+        "epoch": 99.0,
+        "date_weighted_log_huber": 0.28907769112610543,
+        "learning_rate": 2.467198171342e-07
+      },
+      {
+        "epoch": 100.0,
+        "date_weighted_log_huber": 0.28907730818445543,
+        "learning_rate": 0.0
+      }
+    ],
+    "elapsed_seconds": 10.444795430172235,
+    "train": {
+      "eligible": {
+        "regression": {
+          "num_quotes": 2783262,
+          "num_dates": 712,
+          "mae": 9.294103473650259e-05,
+          "rmse": 0.00020073001366244963,
+          "r2": 0.6618560135846632,
+          "date_balanced_mae": 9.140926781076096e-05,
+          "date_balanced_rmse": 0.0001974722222277188,
+          "date_balanced_r2": 0.6636189062498462,
+          "prediction_zero_percent": 0.0
+        },
+        "proportional_cost": {
+          "price_floor": 1e-06,
+          "price_floor_active_percent": 0.0,
+          "all": {
+            "num_quotes": 2783262,
+            "actual_half_spread_over_fit": {
+              "q00": 0.0004323424431141532,
+              "q10": 0.0029280500006853664,
+              "q50": 0.007738354318210089,
+              "q90": 0.022755530455524305,
+              "q95": 0.029486868898535124,
+              "q99": 0.047316333886774135,
+              "q100": 0.5567819382716577
+            },
+            "predicted_half_spread_over_fit": {
+              "q00": 0.0017350089225380094,
+              "q10": 0.003339400147418121,
+              "q50": 0.007601496378669873,
+              "q90": 0.018911194140218426,
+              "q95": 0.023992083628803302,
+              "q99": 0.04181200071507455,
+              "q100": 0.1907185149606481
+            },
+            "absolute_ratio_error": {
+              "q00": 2.580213886299587e-09,
+              "q10": 0.0002731931931004495,
+              "q50": 0.001734143672573876,
+              "q90": 0.00835575970458502,
+              "q95": 0.012459497301483827,
+              "q99": 0.02427314128418661,
+              "q100": 0.5368736123882843
+            }
+          },
+          "itm_default_universe": {
+            "num_quotes": 1392192,
+            "actual_half_spread_over_fit": {
+              "q00": 0.0004323424431141532,
+              "q10": 0.0024836684495640133,
+              "q50": 0.00726032803066781,
+              "q90": 0.02124869574015791,
+              "q95": 0.027568024609628414,
+              "q99": 0.03888657564819049,
+              "q100": 0.2542134495158962
+            },
+            "predicted_half_spread_over_fit": {
+              "q00": 0.0017350089225380094,
+              "q10": 0.0029389651438111748,
+              "q50": 0.007338404557532905,
+              "q90": 0.015967487053856786,
+              "q95": 0.019320503138594933,
+              "q99": 0.024975031644097555,
+              "q100": 0.03599498533983763
+            },
+            "absolute_ratio_error": {
+              "q00": 3.6352023773979225e-09,
+              "q10": 0.00031439328536854715,
+              "q50": 0.0021734574111855545,
+              "q90": 0.010024639713721329,
+              "q95": 0.0143463670282797,
+              "q99": 0.02528063441646628,
+              "q100": 0.24616930121567046
+            }
+          }
+        }
+      },
+      "all_with_tick_floor": {
+        "regression": {
+          "num_quotes": 2784378,
+          "num_dates": 712,
+          "mae": 9.290478082795584e-05,
+          "rmse": 0.00020068979247963155,
+          "r2": 0.6619203462642306,
+          "date_balanced_mae": 9.137807082438643e-05,
+          "date_balanced_rmse": 0.00019744292521863466,
+          "date_balanced_r2": 0.6636684213213065,
+          "prediction_zero_percent": 0.0
+        },
+        "proportional_cost": {
+          "price_floor": 1e-06,
+          "price_floor_active_percent": 0.0,
+          "all": {
+            "num_quotes": 2784378,
+            "actual_half_spread_over_fit": {
+              "q00": 0.0004323424431141532,
+              "q10": 0.0029284168833114046,
+              "q50": 0.007741921535573759,
+              "q90": 0.02279718912502496,
+              "q95": 0.02955699868634515,
+              "q99": 0.04763929026197504,
+              "q100": 0.6721574354743032
+            },
+            "predicted_half_spread_over_fit": {
+              "q00": 0.0017350089225380094,
+              "q10": 0.0033397478600998834,
+              "q50": 0.007604109518518163,
+              "q90": 0.01893755901640711,
+              "q95": 0.024049844140125464,
+              "q99": 0.04245597864099042,
+              "q100": 0.4544465244142706
+            },
+            "absolute_ratio_error": {
+              "q00": 2.580213886299587e-09,
+              "q10": 0.00027323485516929407,
+              "q50": 0.001735107943982326,
+              "q90": 0.008372858829067761,
+              "q95": 0.012499846309434983,
+              "q99": 0.024507111070916854,
+              "q100": 0.5368736123882843
+            }
+          },
+          "itm_default_universe": {
+            "num_quotes": 1392192,
+            "actual_half_spread_over_fit": {
+              "q00": 0.0004323424431141532,
+              "q10": 0.0024836684495640133,
+              "q50": 0.00726032803066781,
+              "q90": 0.02124869574015791,
+              "q95": 0.027568024609628414,
+              "q99": 0.03888657564819049,
+              "q100": 0.2542134495158962
+            },
+            "predicted_half_spread_over_fit": {
+              "q00": 0.0017350089225380094,
+              "q10": 0.0029389651438111748,
+              "q50": 0.007338404557532905,
+              "q90": 0.015967487053856786,
+              "q95": 0.019320503138594933,
+              "q99": 0.024975031644097555,
+              "q100": 0.03599498533983763
+            },
+            "absolute_ratio_error": {
+              "q00": 3.6352023773979225e-09,
+              "q10": 0.00031439328536854715,
+              "q50": 0.0021734574111855545,
+              "q90": 0.010024639713721329,
+              "q95": 0.0143463670282797,
+              "q99": 0.02528063441646628,
+              "q100": 0.24616930121567046
+            }
+          }
+        }
+      }
+    }
+  },
+  "validation": {
+    "eligible": {
+      "regression": {
+        "num_quotes": 708288,
+        "num_dates": 162,
+        "mae": 0.00014052082958228453,
+        "rmse": 0.000265085232834998,
+        "r2": 0.5111449660499634,
+        "date_balanced_mae": 0.00013638626553509625,
+        "date_balanced_rmse": 0.0002576533839475286,
+        "date_balanced_r2": 0.499749827049944,
+        "prediction_zero_percent": 0.0
+      },
+      "proportional_cost": {
+        "price_floor": 1e-06,
+        "price_floor_active_percent": 0.0,
+        "all": {
+          "num_quotes": 708288,
+          "actual_half_spread_over_fit": {
+            "q00": 0.0005564819508038975,
+            "q10": 0.0028006876587476433,
+            "q50": 0.008004385496541366,
+            "q90": 0.022974754281344885,
+            "q95": 0.028819524081255828,
+            "q99": 0.04475669184875171,
+            "q100": 0.36537534100696173
+          },
+          "predicted_half_spread_over_fit": {
+            "q00": 0.002932377250783755,
+            "q10": 0.004531194334309556,
+            "q50": 0.01086802557790946,
+            "q90": 0.024189925811346435,
+            "q95": 0.028354480121154105,
+            "q99": 0.04309714851847661,
+            "q100": 0.21084081245397454
+          },
+          "absolute_ratio_error": {
+            "q00": 2.028144112722896e-08,
+            "q10": 0.0006282601306621067,
+            "q50": 0.0031588233732009387,
+            "q90": 0.011468896181184884,
+            "q95": 0.014917143077165849,
+            "q99": 0.02302720491519164,
+            "q100": 0.28687306208308566
+          }
+        },
+        "itm_default_universe": {
+          "num_quotes": 354202,
+          "actual_half_spread_over_fit": {
+            "q00": 0.0005564819508038975,
+            "q10": 0.0023862123670984436,
+            "q50": 0.008475474117825448,
+            "q90": 0.02292537533822797,
+            "q95": 0.02770598568412096,
+            "q99": 0.036189119701552246,
+            "q100": 0.17236696249824424
+          },
+          "predicted_half_spread_over_fit": {
+            "q00": 0.002932377250783755,
+            "q10": 0.004179142185350628,
+            "q50": 0.013059791151974653,
+            "q90": 0.024489715853270123,
+            "q95": 0.0272886701237394,
+            "q99": 0.03280475156726571,
+            "q100": 0.03915557752885292
+          },
+          "absolute_ratio_error": {
+            "q00": 2.028144112722896e-08,
+            "q10": 0.0008266056324129097,
+            "q50": 0.004436445420823527,
+            "q90": 0.013146578200331133,
+            "q95": 0.016099462727405506,
+            "q99": 0.020987445884247148,
+            "q100": 0.15896020966862
+          }
+        }
+      }
+    },
+    "all_with_tick_floor": {
+      "regression": {
+        "num_quotes": 708404,
+        "num_dates": 162,
+        "mae": 0.0001404981839104448,
+        "rmse": 0.0002650635304496644,
+        "r2": 0.5111837341953589,
+        "date_balanced_mae": 0.00013636579324593194,
+        "date_balanced_rmse": 0.0002576355502640222,
+        "date_balanced_r2": 0.49976435920587503,
+        "prediction_zero_percent": 0.0
+      },
+      "proportional_cost": {
+        "price_floor": 1e-06,
+        "price_floor_active_percent": 0.0,
+        "all": {
+          "num_quotes": 708404,
+          "actual_half_spread_over_fit": {
+            "q00": 0.0005564819508038975,
+            "q10": 0.0028007748116429874,
+            "q50": 0.00800568984689732,
+            "q90": 0.022988573481875055,
+            "q95": 0.028847886694235977,
+            "q99": 0.04495607462726845,
+            "q100": 0.46421358935961565
+          },
+          "predicted_half_spread_over_fit": {
+            "q00": 0.002932377250783755,
+            "q10": 0.004531370946974204,
+            "q50": 0.010869662630441115,
+            "q90": 0.02419864255895334,
+            "q95": 0.028372038611723167,
+            "q99": 0.043308855684428,
+            "q100": 0.27227264950991487
+          },
+          "absolute_ratio_error": {
+            "q00": 2.028144112722896e-08,
+            "q10": 0.0006283125789356016,
+            "q50": 0.0031594540743143697,
+            "q90": 0.011476680679000815,
+            "q95": 0.014933113356423115,
+            "q99": 0.02312052754102841,
+            "q100": 0.33167711662366317
+          }
+        },
+        "itm_default_universe": {
+          "num_quotes": 354202,
+          "actual_half_spread_over_fit": {
+            "q00": 0.0005564819508038975,
+            "q10": 0.0023862123670984436,
+            "q50": 0.008475474117825448,
+            "q90": 0.02292537533822797,
+            "q95": 0.02770598568412096,
+            "q99": 0.036189119701552246,
+            "q100": 0.17236696249824424
+          },
+          "predicted_half_spread_over_fit": {
+            "q00": 0.002932377250783755,
+            "q10": 0.004179142185350628,
+            "q50": 0.013059791151974653,
+            "q90": 0.024489715853270123,
+            "q95": 0.0272886701237394,
+            "q99": 0.03280475156726571,
+            "q100": 0.03915557752885292
+          },
+          "absolute_ratio_error": {
+            "q00": 2.028144112722896e-08,
+            "q10": 0.0008266056324129097,
+            "q50": 0.004436445420823527,
+            "q90": 0.013146578200331133,
+            "q95": 0.016099462727405506,
+            "q99": 0.020987445884247148,
+            "q100": 0.15896020966862
+          }
+        }
+      }
+    }
+  },
+  "ad_hoc_choices": [
+    "$0.25 minimum input premium",
+    "$0.05/$0.10 SPX tick schedule split at $3 premium",
+    "two width-64 SiLU hidden layers",
+    "log-half-spread Huber loss with beta 0.10",
+    "AdamW learning rate, weight decay, batch size, and cosine horizon"
+  ],
+  "checkpoint": "quantdata/dysanos/flex/reports/phase3-spread/feed_forward.pt"
+}

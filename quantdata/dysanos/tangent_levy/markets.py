@@ -13,6 +13,7 @@ from cdxcore.verbose import Context
 
 from quantdata.biz_calendar import DAYS_PER_YEAR, DateRange, get_half_days, to_date
 from quantdata.dysanos.market import MARKET_SCHEMA_VERSION, smooth_interpolated_market
+from quantdata.pool import PoolConfig
 from quantdata.sanos.arbfree import ArbFreePricer
 
 from .config import MarketConfig
@@ -52,7 +53,7 @@ class CommonGridCoverage:
 
 @dataclass(frozen=True)
 class TangentLevyMarketDay:
-    """One normalized smoothed market with ragged original observations."""
+    """One normalized smoothed market from a fixed-grid or quote-level source."""
 
     ticker: str
     market_date: date
@@ -73,8 +74,10 @@ class TangentLevyMarketDay:
     expiry_dates: tuple[str, ...]
     expiry_ids: np.ndarray
     is_am: np.ndarray
-    pricer: ArbFreePricer
+    pricer: ArbFreePricer | None
     audit: MarketAudit
+    fit_weights: tuple[np.ndarray, ...] | None = None
+    source: str = "smooth_market"
 
     def dense_surface(
         self,
@@ -86,6 +89,13 @@ class TangentLevyMarketDay:
 
         tau = np.asarray(tau, dtype=np.float64)
         x = np.asarray(log_moneyness, dtype=np.float64)
+        verify(
+            self.pricer is not None,
+            lambda: (
+                "dense-surface interpolation is unavailable for a market day "
+                f"loaded from {self.source!r}"
+            ),
+        )
         verify_inp(
             tau.ndim == 1
             and x.ndim == 1
@@ -93,7 +103,9 @@ class TangentLevyMarketDay:
             and x.size > 0
             and np.all(np.isfinite(tau))
             and np.all(np.isfinite(x)),
-            lambda: f"expected finite one-dimensional grids, got {tau.shape}, {x.shape}",
+            lambda: (
+                f"expected finite one-dimensional grids, got {tau.shape}, {x.shape}"
+            ),
         )
         verify_inp(
             np.all(tau >= self.pricer.expiries[0])
@@ -183,18 +195,14 @@ def market_day_from_payload(
 
     def choose_european_active(name: str) -> tuple[np.ndarray, ...]:
         values = _arrays(market[name], dtype=bool)
-        return tuple(
-            values[index] & ~american_all[index] for index in selected
-        )
+        return tuple(values[index] & ~american_all[index] for index in selected)
 
     expiries = expiries_all[selected]
     strikes = tuple(strikes_all[index] for index in selected)
     sanos_calls = tuple(calls_all[index] for index in selected)
     pure_bids = tuple(bids_all[index] for index in selected)
     pure_asks = tuple(asks_all[index] for index in selected)
-    model_masks = tuple(
-        masks_all[index] & ~american_all[index] for index in selected
-    )
+    model_masks = tuple(masks_all[index] & ~american_all[index] for index in selected)
     expiry_dates_all = tuple(str(value) for value in market["expiry_dates"])
     expiry_ids_all = np.asarray(market["expiry_ids"], dtype=np.int64)
     is_am_all = np.asarray(market["is_am"], dtype=bool)
@@ -215,7 +223,9 @@ def market_day_from_payload(
         active_quotes=int(active_quotes),
         excluded_american_quotes=int(excluded_american),
         option_cap_bound=input_quotes >= config.options_filter.max_num_options,
-        reason="" if expiries.size > 0 else "no retained European expiry in configured range",
+        reason=""
+        if expiries.size > 0
+        else "no retained European expiry in configured range",
     )
     if expiries.size == 0:
         return None
@@ -255,6 +265,183 @@ def market_day_from_payload(
         is_am=is_am_all[selected],
         pricer=pricer,
         audit=audit,
+        fit_weights=None,
+        source="smooth_market",
+    )
+
+
+def grid_market_days_from_panel(
+    panel: object,
+    *,
+    ticker: str,
+    start: date | str,
+    end: date | str,
+    config: MarketConfig,
+) -> dict[date, TangentLevyMarketDay]:
+    """Adapt the cached Dysanos/grid panel without fabricating quote intervals."""
+
+    dates = np.asarray(panel["dates"], dtype="datetime64[D]")
+    expiries = np.asarray(panel["expiries"], dtype=np.float64)
+    xstrikes = np.asarray(panel["xstrikes"], dtype=np.float64)
+    calls = np.asarray(panel["mids"], dtype=np.float64)
+    weights = np.asarray(panel["weights"], dtype=np.float64)
+    spot_ref = np.asarray(panel["spot_ref"], dtype=np.float64)
+    spot_return = np.asarray(panel["spot_ret"], dtype=np.float64)
+    verify(
+        dates.ndim == 1
+        and expiries.ndim == 2
+        and xstrikes.ndim == 3
+        and calls.ndim == 3
+        and weights.shape == calls.shape
+        and expiries.shape == calls.shape[:2]
+        and xstrikes.shape == (calls.shape[0], calls.shape[1], calls.shape[2] + 2)
+        and spot_ref.shape == dates.shape
+        and spot_return.shape == dates.shape
+        and calls.shape[0] == dates.size,
+        lambda: (
+            "Dysanos/grid cache has an incompatible panel schema: "
+            f"dates={dates.shape}, expiries={expiries.shape}, "
+            f"xstrikes={xstrikes.shape}, mids={calls.shape}, "
+            f"weights={weights.shape}"
+        ),
+    )
+    verify(
+        calls.shape[2] == config.grid_num_strikes,
+        lambda: (
+            "Dysanos/grid strike count does not match MarketConfig: "
+            f"{calls.shape[2]} != {config.grid_num_strikes}"
+        ),
+    )
+    start_date = to_date(start)
+    end_date = to_date(end)
+    result: dict[date, TangentLevyMarketDay] = {}
+    for date_index, numpy_date in enumerate(dates):
+        market_date = to_date(numpy_date)
+        if market_date < start_date or market_date > end_date:
+            continue
+        selected = np.flatnonzero(
+            (expiries[date_index] >= config.min_tau - 1.0e-12)
+            & (expiries[date_index] <= config.max_tau + 1.0e-12)
+        )
+        if selected.size == 0:
+            continue
+        selected_expiries = expiries[date_index, selected]
+        selected_strikes = tuple(
+            np.asarray(xstrikes[date_index, maturity_index, 1:-1])
+            for maturity_index in selected
+        )
+        selected_calls = tuple(
+            np.asarray(calls[date_index, maturity_index]) for maturity_index in selected
+        )
+        selected_weights = tuple(
+            np.asarray(weights[date_index, maturity_index])
+            for maturity_index in selected
+        )
+        masks = tuple(
+            np.isfinite(strike)
+            & np.isfinite(call)
+            & np.isfinite(weight)
+            & (strike > 0.0)
+            & (weight > 0.0)
+            for strike, call, weight in zip(
+                selected_strikes,
+                selected_calls,
+                selected_weights,
+                strict=True,
+            )
+        )
+        missing_prices = tuple(np.full_like(value, np.nan) for value in selected_calls)
+        inactive = tuple(np.zeros_like(value, dtype=bool) for value in selected_calls)
+        input_quotes = int(sum(value.size for value in selected_calls))
+        active_quotes = int(sum(np.count_nonzero(value) for value in masks))
+        audit = MarketAudit(
+            market_date=market_date,
+            early_close=False,
+            available=True,
+            input_expiries=int(expiries.shape[1]),
+            retained_expiries=int(selected.size),
+            retained_min_tau=float(selected_expiries[0]),
+            retained_max_tau=float(selected_expiries[-1]),
+            input_quotes=input_quotes,
+            active_quotes=active_quotes,
+            excluded_american_quotes=0,
+            option_cap_bound=False,
+            reason=(
+                "source=dysanos/grid cache; original quote intervals and raw "
+                "option-cap diagnostics are unavailable"
+            ),
+        )
+        result[market_date] = TangentLevyMarketDay(
+            ticker=ticker,
+            market_date=market_date,
+            spot_ref=float(spot_ref[date_index]),
+            spot_return=float(spot_return[date_index]),
+            expiries=selected_expiries,
+            strikes=selected_strikes,
+            sanos_calls=selected_calls,
+            pure_bids=missing_prices,
+            pure_asks=missing_prices,
+            model_masks=masks,
+            call_bids=missing_prices,
+            call_asks=missing_prices,
+            put_bids=missing_prices,
+            put_asks=missing_prices,
+            call_active=inactive,
+            put_active=inactive,
+            expiry_dates=tuple("" for _ in selected),
+            expiry_ids=np.full(selected.size, -1, dtype=np.int64),
+            is_am=np.zeros(selected.size, dtype=bool),
+            pricer=None,
+            audit=audit,
+            fit_weights=selected_weights,
+            source="dysanos_grid_cache",
+        )
+    return result
+
+
+def load_grid_market_days(
+    ticker: str,
+    start: date | str,
+    end: date | str,
+    *,
+    config: MarketConfig = MarketConfig(),
+    verbose: Context | None = Context.all,
+) -> dict[date, TangentLevyMarketDay]:
+    """Load the existing Dysanos/grid panel strictly in cache-only mode."""
+
+    from quantdata.dysanos.grid.torch_market import GridConfig, GridMarketDefinition
+
+    verify_inp(
+        config.source == "dysanos_grid_cache",
+        lambda: f"grid cache loader received source {config.source!r}",
+    )
+    definition = GridMarketDefinition(
+        ticker=ticker,
+        date_range=DateRange(
+            start=config.grid_cache_start,
+            end=config.grid_cache_end,
+            exclude_half_days=True,
+        ),
+        grid_config=GridConfig(
+            smoothness=config.smoothness,
+            grid_num_strikes=config.grid_num_strikes,
+        ),
+        raw_day_filter=config.raw_day_filter,
+        expiry_filter=config.expiry_filter,
+        mk_arb_free=config.mk_arb_free,
+        options_filter=config.options_filter,
+    )
+    panel = definition.load(
+        pool_config=PoolConfig.off(),
+        override_cache_mode="cacheonly",
+        verbose=Context.quiet if verbose is None else verbose,
+    )
+    return grid_market_days_from_panel(
+        panel,
+        ticker=ticker,
+        start=start,
+        end=end,
+        config=config,
     )
 
 
@@ -295,9 +482,8 @@ def common_grid_coverage(
             continue
         available += 1
         cap_bound += audit.option_cap_bound
-        coverage[1:] += (
-            (tau[1:] >= audit.retained_min_tau - maturity_tolerance)
-            & (tau[1:] <= audit.retained_max_tau + maturity_tolerance)
+        coverage[1:] += (tau[1:] >= audit.retained_min_tau - maturity_tolerance) & (
+            tau[1:] <= audit.retained_max_tau + maturity_tolerance
         )
     coverage[1:] /= len(audits)
     selected = tau[coverage >= minimum_fraction]
@@ -326,7 +512,20 @@ def load_market_day(
     config: MarketConfig = MarketConfig(),
     verbose: Context | None = Context.all,
 ) -> TangentLevyMarketDay | None:
-    """Load one smoothed market through the canonical ``market.py`` producer."""
+    """Load one market from the configured source.
+
+    The default grid route is deliberately cache-only.  It never falls back to
+    the raw-data producer when the shared Dysanos/grid artifact is missing.
+    """
+
+    if config.source == "dysanos_grid_cache":
+        return load_grid_market_days(
+            ticker,
+            market_date,
+            market_date,
+            config=config,
+            verbose=verbose,
+        ).get(market_date)
 
     payload = smooth_interpolated_market(
         ticker,
@@ -351,10 +550,26 @@ def iter_market_days(
 ) -> Iterator[tuple[date, TangentLevyMarketDay | None]]:
     """Yield every requested session and its market, preserving empty dates."""
 
-    for market_date in market_dates(start, end):
-        yield market_date, load_market_day(
+    dates = market_dates(start, end)
+    if config.source == "dysanos_grid_cache":
+        cached = load_grid_market_days(
             ticker,
-            market_date,
+            start,
+            end,
             config=config,
             verbose=verbose,
+        )
+        for market_date in dates:
+            yield market_date, cached.get(market_date)
+        return
+
+    for market_date in dates:
+        yield (
+            market_date,
+            load_market_day(
+                ticker,
+                market_date,
+                config=config,
+                verbose=verbose,
+            ),
         )

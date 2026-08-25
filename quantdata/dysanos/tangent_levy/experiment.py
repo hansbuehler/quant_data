@@ -20,6 +20,7 @@ from .dynamics import DynamicsFit, fit_dynamics
 from .markets import (
     MarketAudit,
     TangentLevyMarketDay,
+    load_grid_market_days,
     load_market_day,
     market_dates,
 )
@@ -100,9 +101,7 @@ class HistoricalCalibration:
                         [fit.selected_start for fit in day_fit.fits],
                         dtype=np.int32,
                     ),
-                    "start_objectives": [
-                        fit.start_objectives for fit in day_fit.fits
-                    ],
+                    "start_objectives": [fit.start_objectives for fit in day_fit.fits],
                     "num_quotes": np.asarray(
                         [fit.num_quotes for fit in day_fit.fits],
                         dtype=np.int32,
@@ -302,16 +301,15 @@ def _reconstruction_repricing_error(
             config=config.static_fit.pricing,
         )
         active = market.model_masks[market_index]
-        half_spread = np.maximum(
-            0.5
-            * (
-                market.pure_asks[market_index]
-                - market.pure_bids[market_index]
-            ),
-            config.static_fit.half_spread_floor,
-        )
         errors = reconstructed_calls[active] - fitted_calls[active]
-        normalized_errors.append(errors / half_spread[active])
+        if market.fit_weights is None:
+            half_spread = np.maximum(
+                0.5 * (market.pure_asks[market_index] - market.pure_bids[market_index]),
+                config.static_fit.half_spread_floor,
+            )
+            normalized_errors.append(errors / half_spread[active])
+        else:
+            normalized_errors.append(errors * market.fit_weights[market_index][active])
         price_errors.append(errors)
     normalized = np.concatenate(normalized_errors)
     price = np.concatenate(price_errors)
@@ -348,7 +346,9 @@ def calibrate_history(
         len(requested) > 0,
         lambda: f"no exchange sessions in requested range {start} through {end}",
     )
-    requested_positions = {market_date: index for index, market_date in enumerate(requested)}
+    requested_positions = {
+        market_date: index for index, market_date in enumerate(requested)
+    }
     tau = np.asarray(config.dynamics.tau_grid, dtype=np.float64)
     jump_x = np.asarray(config.dynamics.jump_x_grid, dtype=np.float64)
     symmetry_curve: SymmetryCurve | None = None
@@ -363,14 +363,29 @@ def calibrate_history(
     reconstruction_passed: list[bool] = []
     audits: list[MarketAudit] = []
     failure_reasons: dict[str, str] = {}
+    grid_markets = (
+        load_grid_market_days(
+            ticker,
+            start,
+            end,
+            config=config.market,
+            verbose=verbose,
+        )
+        if config.market.source == "dysanos_grid_cache"
+        else None
+    )
 
     for market_date in requested:
         try:
-            market = load_market_day(
-                ticker,
-                market_date,
-                config=config.market,
-                verbose=verbose,
+            market = (
+                grid_markets.get(market_date)
+                if grid_markets is not None
+                else load_market_day(
+                    ticker,
+                    market_date,
+                    config=config.market,
+                    verbose=verbose,
+                )
             )
         except (AssertionError, RuntimeError, ValueError) as error:
             reason = f"market generation failed: {error}"
@@ -378,7 +393,11 @@ def calibrate_history(
             failure_reasons[market_date.isoformat()] = reason
             continue
         if market is None:
-            reason = "canonical smoothed market unavailable or outside configured domain"
+            reason = (
+                "shared Dysanos/grid cache has no observation for this session"
+                if grid_markets is not None
+                else "canonical smoothed market unavailable or outside configured domain"
+            )
             audits.append(_missing_audit(market_date, reason))
             failure_reasons[market_date.isoformat()] = reason
             continue
@@ -391,9 +410,7 @@ def calibrate_history(
                 warm_start=previous_fit,
             )
             candidate_symmetry_curve = (
-                day_fit.symmetry_curve()
-                if symmetry_curve is None
-                else symmetry_curve
+                day_fit.symmetry_curve() if symmetry_curve is None else symmetry_curve
             )
             eta = fitted_average_density(day_fit, jump_x)
             reconstruction = reconstruct_forward_density(
@@ -426,8 +443,7 @@ def calibrate_history(
         maximum_price_errors.append(maximum_price_error)
         reconstruction_passed.append(
             reconstruction.passed_tolerance
-            and repricing_rmse
-            <= config.static_fit.reconstruction_repricing_tolerance
+            and repricing_rmse <= config.static_fit.reconstruction_repricing_tolerance
         )
         symmetry_curve = candidate_symmetry_curve
         previous_fit = day_fit
@@ -439,7 +455,9 @@ def calibrate_history(
             f"{len(dates)}; failures={failure_reasons}"
         ),
     )
-    positions = np.asarray([requested_positions[value] for value in dates], dtype=np.int64)
+    positions = np.asarray(
+        [requested_positions[value] for value in dates], dtype=np.int64
+    )
     consecutive = np.diff(positions) == 1
     return HistoricalCalibration(
         ticker=ticker,
@@ -481,7 +499,7 @@ def _history_cache_uid(
 
 
 @_history_cache(fmt=SubDir.PYTREE_HDF5).cache(
-    "0.7",
+    "0.8",
     dependencies=[TangentLevyConfig],
     uid=_history_cache_uid,
     exclude_args=["verbose"],
@@ -558,7 +576,8 @@ def validate_reconstruction_gate(
             f"{float(np.max(history.reconstruction_l1_error[failed])):.6g}, "
             "maximum repricing RMSE="
             f"{float(np.max(history.reconstruction_repricing_rmse[failed])):.6g} "
-            "half-spreads. Set DynamicsConfig(require_reconstruction_pass=False) "
+            "in the configured market-objective units. Set "
+            "DynamicsConfig(require_reconstruction_pass=False) "
             "only for an explicitly labeled diagnostic run."
         ),
     )

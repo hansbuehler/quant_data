@@ -13,13 +13,14 @@ The historical scope is fixed:
 - ticker: `SPX`;
 - requested range: `2022-01-01` through `2025-08-30`, inclusive;
 - actual exchange sessions: all business dates returned by the repository
-  calendar, including early-close sessions, and ending on Friday `2025-08-29`
-  because `2025-08-30` is a Saturday;
-- source surface: `smooth_interpolated_market()` from
-  `quantdata/dysanos/market.py`;
-- baseline horizon: expiries from five business days through one year. Shorter
-  expiries, including 0DTE, form a separate stress test rather than part of the
-  first fit.
+  calendar that are present in the shared grid panel. The grid definition
+  excludes half-days and ends on Friday `2025-08-29` because `2025-08-30` is a
+  Saturday;
+- source surface: the existing cache-only `dysanos/grid` SPX panel whose cache
+  definition spans `2020-01-01` through `2025-08-30`;
+- baseline grid: 100 normalized-moneyness strikes at maturities
+  `2/255`, `5/255`, `10/255`, `20/255`, `40/255`, `0.5`, and `1.0` years;
+- smoothing: the grid default `smoothness=0.25`.
 
 This is an implementation and empirical-validation project. Reproducing every
 numerical choice in the 2015 preprint is not itself the goal. Any deliberate
@@ -28,23 +29,19 @@ reason, and an ablation result.
 
 ## Implementation status
 
-The double-exponential core, canonical market adapter, constrained maturity
+The double-exponential core, cache-only grid-market adapter, constrained maturity
 reconstruction, constrained PCA/HJM dynamics, seeded risk-neutral simulator,
 optional constant physical-measure drift, daily evaluation metrics, versioned
 history cache, CLI, and diagnostic plotting command are implemented. The
 discrete extension remains behind its stated go/no-go gate.
 
-A real-data smoke test on SPX sessions 2024-03-05 through 2024-03-07 produced
-all three requested market artifacts and 128 successful maturity fits. The
-median maturity objective was 0.55 half-spreads and the largest normalized
-price error was 0.00490. On 2024-03-05 alone, the aggregate normalized-price
-RMSE was 0.000117, IV RMSE was 0.000443, and all 43 optimizers converged.
+A cache-only smoke test on SPX sessions 2024-03-05 through 2024-03-07 loaded
+the existing shared artifact and produced 21 successful maturity fits (seven
+per date). The median grid-weighted maturity RMSE was 0.00366 and the largest
+normalized-price error was 0.00470. No raw data were queried or downloaded.
 
 The same smoke test did **not** pass the nonnegative cumulative-density
-reconstruction gate. On the production 101-point jump grid, relative `L1`
-projections were 0.469, 0.475, and 0.517 against the configured 0.25 threshold;
-repricing changes were 6.95, 7.48, and 8.11 half-spreads RMS, with maximum
-normalized-price changes between 0.00254 and 0.00446. This is a material
+reconstruction gate. This remains a material
 model-consistency warning, not a tail-division artifact. Production dynamics
 and simulation therefore fail fast when any required date misses the gate.
 The CLI exposes `--allow-failed-reconstruction` only for explicitly labeled
@@ -52,11 +49,11 @@ diagnostic runs. Accordingly, no locked-test, historical-prediction, or
 discrete-model claim has been made. The full 2022--2025 training audit must
 establish whether the failure is pervasive before the later phases proceed.
 
-The 1,000-record market cap bound on all five sampled dates spanning
-2022--2025. The canonical SANOS solve completed in roughly five seconds per
-sampled day; an attempted effectively uncapped solve was not operationally
-viable. Higher-cap sensitivity therefore remains conditional on its solver
-feasibility pilot.
+The shared grid artifact does not retain raw quote intervals, exercise-style
+metadata, or the upstream option-cap diagnostic. Those quantities must be
+reported as unavailable, never reconstructed from the grid. Executable-quote
+metrics therefore require a separately cached compatible raw-quote panel and
+are outside the primary cache-only run.
 
 ## Primary references
 
@@ -154,8 +151,8 @@ statistical fidelity.
 | The continuous-time positivity argument does not make a one-day explicit Euler step positivity preserving; Gaussian shocks are unbounded. | Silent clipping can break the HJM drift and bias tails. | Use adaptive substeps or step rejection/refinement, record boundary-scaling and rejection rates, and fail a path that cannot be advanced without violating tolerance. Do not silently clip `kappa`. |
 | A single near-zero grid cell drives the paper's global boundary scale. | One irrelevant wing cell may freeze the entire surface. | Reproduce the scalar scheme in reference mode, then test a documented alternative such as adaptive stepping on a support-trimmed grid. Report the time spent boundary-limited. |
 | The paper assumes stationary daily changes in Musiela coordinates and constant factor loadings. | The 2022--2025 sample contains distinct volatility regimes and volatility clustering. | Test stationarity, rolling covariance, factor stability, autocorrelation, and squared-innovation autocorrelation. Add a rolling/regime extension only after the constant-factor baseline. |
-| Both paper variants are pure jump and omit a continuous martingale component. | Very short-dated ATM SPX behavior may be poorly represented, especially in the modern 0DTE market. | Exclude expiries below five business days from the first acceptance gate; report them separately. Add a diffusion extension only as a versioned follow-up. |
-| The SANOS source is a smoothed, arbitrage-free estimate rather than an untouched quote surface. | Fit quality partly measures agreement between two model classes and can hide quote noise or smoothing bias. | Fit the Tangent Lévy model to SANOS prices as requested, but score it both against the SANOS target and against the original normalized bid/ask intervals retained in the market payload. Run a smoothing-parameter sensitivity analysis. |
+| Both paper variants are pure jump and omit a continuous martingale component. | Very short-dated ATM SPX behavior may be poorly represented, especially in the modern 0DTE market. | Report the cached two-day maturity separately from maturities of five days and longer. Add a diffusion extension only as a versioned follow-up. |
+| The SANOS source is a smoothed, arbitrage-free estimate rather than an untouched quote surface. | Fit quality partly measures agreement between two model classes and can hide quote noise or smoothing bias. | Fit the Tangent Lévy model to the cached SANOS grid as requested. Quote-interval and smoothing-sensitivity studies require separately available, pre-registered cache artifacts; they must not trigger raw-data generation during the primary run. |
 | The paper's empirical evidence uses two old samples, 500 scenarios, overlapping horizons, unconstrained covariance inversion, and a small baseline set. | Its reported superiority should not be treated as an expected project result. | Use rolling-origin tests, shrinkage/regularization for portfolio covariance, confidence intervals that account for overlapping windows, and persistence/direct-surface baselines. |
 | Dependence between spot returns and code-book innovations is not determined by daily option marginals alone. | Surface-only simulations can match option changes while missing the SPX leverage effect. | Estimate and report historical spot/factor dependence separately. Do not add a coupling to the risk-neutral simulator until its compatibility with the consistency conditions is established. |
 
@@ -172,93 +169,78 @@ predictive accuracy by itself.
 ### Generation route
 
 Create `quantdata/dysanos/tangent_levy/markets.py` as the only historical-data
-entry point for this project. It must enumerate exchange sessions and call the
-canonical producer:
+entry point for this project. The primary run must reconstruct the same
+`GridMarketDefinition` used by `dysanos/grid` and load it strictly cache-only:
 
 ```python
 from datetime import date
 
 from quantdata.biz_calendar import DateRange
-from quantdata.dysanos.market import smooth_interpolated_market
-from quantdata.widb.options_filter import OptionsFilter
+from quantdata.dysanos.grid.torch_market import GridConfig, GridMarketDefinition
+from quantdata.pool import PoolConfig
 
-date_range = DateRange(
-    start=date(2022, 1, 1),
-    end=date(2025, 8, 30),
-    exclude_half_days=False,
-)
-dates = date_range.get_business_days()
-payload = smooth_interpolated_market(
-    "SPX",
-    market_date,
-    smoothness=0.25,
-    options_filter=OptionsFilter(
-        normalize=True,
-        max_num_options=1_000,
-        max_business_days_to_expiry=252,
+definition = GridMarketDefinition(
+    ticker="SPX",
+    date_range=DateRange(
+        start=date(2020, 1, 1),
+        end=date(2025, 8, 30),
+        exclude_half_days=True,
     ),
+    grid_config=GridConfig(
+        grid_num_strikes=100,
+        smoothness=0.25,
+    ),
+)
+panel = definition.load(
+    pool_config=PoolConfig.off(),
+    override_cache_mode="cacheonly",
 )
 ```
 
-The exact `DateRange`, `RawDayFilter`, `ExpiryFilter`, `OptionsFilter`, input
-`MkArbFree`, and smoothing configurations must be immutable versioned fields in
-a `TangentLevyMarketConfig`; the example above is the initial default, not an
-untracked convention. Operational worker count and verbosity stay outside the
-logical configuration. The 1,000-option cap is the repository's operational
-baseline for the global SANOS solve; the data audit must report whenever it
-binds, and higher-cap sensitivity runs must first pass a solver-feasibility
-pilot.
+The `DateRange`, `RawDayFilter`, `ExpiryFilter`, `OptionsFilter`, `MkArbFree`,
+and `GridConfig` inputs are immutable versioned fields. The apparently wider
+2020 cache definition is intentional: it identifies the artifact already on
+disk; the adapter then selects the requested 2022--2025 observations in memory.
+Operational worker count and verbosity remain outside the logical config.
 
-Use `smoothness=0.25` for the primary panel. Pre-register `0.05` and `1.0` as
-sensitivity panels; all values obey `market.py`'s strict `smoothness > 0.01`
-contract. Select no smoothing value after observing locked-test performance.
+`override_cache_mode="cacheonly"` is mandatory. If that exact artifact is
+absent, the run must fail with a cache miss. It must not invoke
+`smooth_interpolated_market()`, WRDS, or any other raw-data fallback. The grid
+cache contains 1,412 dates overall and 910 dates in the requested 2022--2025
+window, from `2022-01-03` through `2025-08-29`.
 
-`markets.py` must not refit or independently smooth raw quotes. It reconstructs
-the serialized `ArbFreePricer` and evaluates the existing smooth surface at the
-project grid. Empty days are recorded, not silently replaced.
+Use `mids` as the daily smooth SANOS targets, `xstrikes[..., 1:-1]` as their
+matching strikes, and the stored positive `weights` as objective multipliers.
+The cache's seven expiries and 100 strikes are already fixed across days, so no
+second surface interpolation or coverage-selected market grid is needed.
+Empty or excluded sessions are recorded, not silently replaced.
 
 ### Mapping to paper coordinates
 
 | Project value | Paper value | Mapping |
 | --- | --- | --- |
-| `tau` | `T - t` | Use the year fraction returned by the market file; one simulation day is `1 / 252`. |
+| `tau` | `T - t` | Use the cached grid fractions, whose maturity basis is 255 days; one simulated exchange-session step remains `1 / 252`. |
 | `k` | forward-relative strike | `k = K / F`. |
 | `x` | log moneyness | `x = log(k)`. |
 | `c` | zero-carry normalized call | `c = C / (DF * F)`, already represented by the market contract. |
 | normalized intrinsic | call intrinsic | `max(1 - k, 0)`. |
 | normalized time value | fitted target | `v = c - max(1 - k, 0)`. |
-| `af_pricer.price(tau, k)` | arbitrage-free target call | Primary daily fitting target. |
-| `market.bids`, `market.asks` | observed call interval | Secondary executable-interval score at original strikes. |
+| `panel["mids"]` | arbitrage-free target call | Primary daily fitting target. |
+| `panel["weights"]` | grid loss multiplier | `1 / (mid_vega / sqrt(tau))` where the upstream vega floor is active, otherwise zero. |
 
-At original strikes, use `market.af_call_mids` (equivalently
-`fit_result.fits`) as the SANOS target and `market.model_masks` to identify
-strikes retained by the final pricer. Report excluded and inactive observations
-instead of dropping them from counts. `market.bids` and `market.asks` are
-synthetic pure-call intervals; keep them distinct from executable real
-`call_bids`/`call_asks` and `put_bids`/`put_asks`, whose inclusion is defined by
-`call_active` and `put_active`.
-
-Fit only European exercise observations. Preserve AM/PM metadata for
-diagnostics. Use all retained SPX expiries in the data extract, then select the
-configured Tangent Lévy maturity domain without relying on rounded expiry
-identities.
+Fit where the cached multiplier is finite and positive, and report zero-weight
+points as inactive. The artifact does not contain bid/ask intervals, raw option
+identities, AM/PM flags, or exercise style. The adapter represents these as
+unavailable and must not fabricate them. Any later executable-interval study
+must load a separately versioned compatible artifact and join it explicitly.
 
 ### Common grid and coverage pilot
 
-The dynamics require a fixed `(tau, x)` grid across dates. Do not choose it from
-the locked test sample. Run a training-only coverage pilot and freeze:
-
-- maturity nodes between 5 business days and 1 year, with extra resolution
-  below 60 days;
-- a log-forward-moneyness interval supported by at least 95% of training days;
-- a dense scoring grid and a smaller dynamics grid;
-- extrapolation rules, which should normally reject a point rather than hide a
-  large extrapolation behind flat values.
-
-The initial implementation candidate is 10 maturity nodes and 21 scoring
-moneyness nodes. This is not the discrete model's jump grid, which has its own
-paper-reference specification. The chosen grids and coverage statistics are
-stored in the experiment manifest.
+The market panel is already fixed at seven maturities and 100 NMS strikes. The
+dynamics maturity grid is those same seven nodes prefixed by `tau=0`; this
+avoids a second maturity interpolation. The jump-size grid used to represent
+Lévy densities is a separate object and must not be confused with the cached
+market-strike grid. Store both grids in the experiment manifest.
 
 Maintain two distinct evaluation alignments. Surface-dynamics diagnostics use
 fixed Musiela `(tau, x)` coordinates. The paper's portfolio reproduction holds
@@ -266,10 +248,9 @@ actual contract expiry and strike identities fixed, so remaining maturity
 falls over the forecast horizon. Results from these alignments are not
 interchangeable.
 
-For each requested date, report whether it is a regular or early-close session,
-whether the market payload exists, number of input and retained expiries,
-number of quotes, final-pricer fit statistics, common-grid coverage, and any
-reason for exclusion.
+For each requested date, report cache availability, retained maturities,
+active/zero-weight grid points, and any reason for exclusion. Early-close and
+raw-option-cap fields are unavailable in this artifact; report them as such.
 
 ### Time split and leakage rules
 
@@ -344,20 +325,17 @@ code is written.
 
 ### Phase 1: historical market panel
 
-1. Implement the exact date/config route in `markets.py`.
-2. Reconstruct each `ArbFreePricer` and create both:
-   - a fixed-grid panel of smooth call prices and implied volatilities;
-   - ragged original-strike SANOS prices plus normalized bid/ask intervals.
+1. Reconstruct the exact `dysanos/grid` definition in `markets.py` and load it
+   with `override_cache_mode="cacheonly"`.
+2. Adapt the cached fixed-grid `mids`, interior `xstrikes`, and `weights`
+   directly. Do not refit an `ArbFreePricer` and do not invent bid/ask data.
 3. Store spot returns and metadata without using them as calibration targets.
-4. Produce a data audit for every requested session and freeze the common grid
-   from the training sample.
+4. Produce a data audit for every requested session and explicitly identify
+   diagnostics absent from the artifact.
 
-The implemented reference grid uses maturities of 0, 5, 10, 20, 40, 60, 90,
-126, and 189 business days. The market fit still retains expiries through 252
-business days. A five-date coverage smoke test spanning 2022--2025 found the
-longest retained expiry between 239 and 249 business days, so 252 days is not a
-valid fixed daily endpoint; the nine-month endpoint avoids extrapolation. The
-full training audit must confirm this choice before the locked evaluation.
+The implemented market grid uses the exact cached maturities `2/255`, `5/255`,
+`10/255`, `20/255`, `40/255`, `0.5`, and `1.0`; the dynamics grid prefixes
+zero. Each maturity has 100 normalized-moneyness strikes.
 
 Exit criterion: all retained target calls satisfy normalized bounds and static
 arbitrage tolerances; date gaps and exclusions are explicit.
@@ -373,8 +351,10 @@ arbitrage tolerances; date gaps and exclusions are explicit.
    equations (2.18) and (2.16). Enforce `lambda > 0`, the full domain in
    equation (2.19), including its upper bound on `lambda_1` when `Xi > 0`, and
    verify the derived `lambda_2 > 0` and `0 < p < 1`.
-3. Implement paper-reference calibration of normalized call time values with
-   inverse-half-spread-squared weights at original strikes.
+3. Implement calibration of normalized call time values with the cached grid
+   multipliers. The objective is the mean square of
+   `weight * (TL_call - grid_mid)`. A separately cached raw-quote ablation may
+   use inverse half-spreads, but it is not part of the primary run.
 4. Fit the deterministic symmetry-index curve using training data only. Report
    the literal first-training-day estimate and a robust training-window estimate
    as an ablation; choose on validation data.
@@ -388,9 +368,9 @@ arbitrage tolerances; date gaps and exclusions are explicit.
 
 The reconstruction gate uses both the relative `L1` change in cumulative
 intensity after the nonnegative projection and the RMS change in fitted prices,
-measured in original half-spreads. A material-floor pointwise maximum and the
-maximum normalized-price change are also reported for localization, but
-negligible tail cells do not define pass/fail.
+measured in the same cached grid-weight units. A material-floor pointwise
+maximum and the maximum normalized-price change are also reported for
+localization, but negligible tail cells do not define pass/fail.
 6. Use deterministic multi-start calibration and previous-day parameters only
    as starts. Save all objective values so warm starts cannot conceal a worse
    local optimum.
@@ -512,48 +492,39 @@ intervals. Never report only a grand average.
 ### Data and operational metrics
 
 - requested, available, empty, excluded, calibrated, and failed date counts;
-- common-grid coverage and number of original quotes by date/maturity;
+- active and zero-weight cached grid points by date/maturity;
 - static-fit wall time, iterations, restarts, selected start, and failure cause;
 - dynamic-fit and simulation time, paths per second, peak memory, and cache hit;
 - boundary-scale distribution, rejected/refined step count, and failed-path rate.
 
 ### Outright daily fit
 
-Let `c_j^TL` be the fitted Tangent Lévy call, `c_j^AF` the smooth SANOS call,
-`b_j` and `a_j` the original normalized pure-call bid and ask, and
+Let `c_j^TL` be the fitted Tangent Lévy call, `m_j` the cached smooth SANOS
+`mid`, and `w_j` the cached grid multiplier. Upstream, the grid defines
 
 ```text
-h_j = max(0.5 * (a_j - b_j), h_floor).
+w_j = 1 / (mid_vega_j / sqrt(tau_j))
 ```
 
-Use the final-pricer `model_masks` for the primary original-strike aggregate and
-report all inactive/excluded points separately. Compute the spread-weighted
-metrics only at original market strikes. On the fixed dense grid, where no
-observed half-spread exists, use unweighted errors and a frozen quadrature
-weighting over `(tau, x)`; do not invent or interpolate spreads.
+where the upstream vega threshold is met, and zero otherwise. Use finite,
+positive weights as the primary mask and report inactive points separately.
 
 1. **SANOS price error**
 
    ```text
-   delta_c_j = c_j^TL - c_j^AF
-   weighted_RMSE = sqrt(sum_j delta_c_j^2 / h_j^2 / sum_j 1 / h_j^2)
+   delta_c_j = c_j^TL - m_j
+   grid_weighted_RMSE = sqrt(mean_j((w_j * delta_c_j)^2))
    ```
 
    Also report unweighted RMSE, MAE, median absolute error, 95th/99th absolute
    error, and maximum absolute error.
 
-2. **Executable-interval error**, using the repository convention
+2. **Executable-interval error**, optional secondary analysis
 
-   ```text
-   e_j = (max(0, c_j^TL - a_j) + max(0, b_j - c_j^TL)) / h_j.
-   ```
-
-   Report fraction inside spread, fraction outside spread, median/mean positive
-   `e_j`, total median/mean `e_j`, and its 95th/99th percentiles. Report the same
-   figures for SANOS so the smoothing error and Tangent Lévy representation
-   error are not conflated. This metric uses synthetic pure-call intervals.
-   Separately price real calls and puts, by normalized parity where necessary,
-   and score their executable intervals under `call_active` and `put_active`.
+   The shared grid cache has no bid/ask intervals, so interval scores are
+   `null` in the primary report. If a separately cached compatible quote panel
+   is explicitly joined, use the repository half-spread convention and report
+   both SANOS and Tangent Lévy interval errors. Never infer spreads from `w_j`.
 
 3. **Implied-volatility error**: RMSE, MAE, median, 95th percentile, and maximum
    absolute error in volatility points, after checking price bounds before

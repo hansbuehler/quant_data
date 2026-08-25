@@ -1,4 +1,4 @@
-"""Fit the first hierarchical normal-Q line to the 2W-to-1W roll restriction."""
+"""Fit the first hierarchical target-Q line to the 2W-to-1W roll restriction."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ import numpy as np
 import torch
 from filelock import FileLock
 
+from quantdata import env as quantdata_env
 from quantdata.dysanos.flex.config import JointHierarchicalDynamicsConfig
 from quantdata.dysanos.flex.failure_reporting import run_guarded_cli
 from quantdata.dysanos.flex.joint_spot_correlation import (
@@ -23,6 +24,7 @@ from quantdata.dysanos.flex.joint_spot_correlation import (
 from quantdata.dysanos.flex.market_encoder import checkpoint_digest, write_json_atomic
 from quantdata.dysanos.flex.model import JointHierarchicalDynamicsModel
 from quantdata.dysanos.flex.weekly_measure import (
+    GenericWeeklyMeasureKernel,
     JointHierarchicalWeeklyDynamicsAdapter,
     NormalWeeklyMeasureKernel,
     WeeklyMeasureConfig,
@@ -45,6 +47,11 @@ def _parse_arguments() -> argparse.Namespace:
     parser.add_argument("--checkpoint-directory", type=Path, required=True)
     parser.add_argument("--report-directory", type=Path, required=True)
     parser.add_argument("--device", default="cuda:0")
+    parser.add_argument(
+        "--kernel-kind",
+        choices=("normal", "generic"),
+        default="normal",
+    )
     parser.add_argument("--epochs", type=int, default=400)
     parser.add_argument("--learning-rate", type=float, default=5.0e-4)
     parser.add_argument("--origins-per-batch", type=int, default=16)
@@ -72,6 +79,48 @@ def _load_json(path: Path) -> Mapping[str, Any]:
     return payload
 
 
+def _resolve_training_artifact(
+    recorded_path: object,
+    expected_sha256: object,
+    *,
+    training_root: Path | None = None,
+) -> Path:
+    """Resolve a provenance path after moving the QuantData training root.
+
+    Completion proofs retain the original absolute path for auditability.  A
+    copied artifact may instead live below the current
+    ``quantdata.env.locations.training`` root.  The rebased candidate is
+    accepted only when its content digest is unchanged.
+    """
+    if not isinstance(expected_sha256, str) or len(expected_sha256) != 64:
+        raise ValueError("Training artifact has no valid SHA-256 provenance")
+    recorded = Path(str(recorded_path))
+    root = (
+        Path(quantdata_env.locations.training.path)
+        if training_root is None
+        else training_root
+    )
+    candidates = [recorded]
+    for marker in ("flex-shared-strikes", "flex-fixed-weekly", "flex-phase3"):
+        if marker in recorded.parts:
+            marker_index = recorded.parts.index(marker)
+            candidates.append(root.joinpath(*recorded.parts[marker_index:]))
+            break
+    checked: list[str] = []
+    for candidate in dict.fromkeys(candidates):
+        if not candidate.is_file():
+            checked.append(f"{candidate} (missing)")
+            continue
+        actual_sha256 = checkpoint_digest(candidate)
+        if actual_sha256 == expected_sha256:
+            return candidate
+        checked.append(f"{candidate} (digest {actual_sha256})")
+    raise ValueError(
+        "Could not resolve a checksum-valid migrated training artifact; checked "
+        + "; ".join(checked)
+    )
+
+
 def _load_inputs(
     completion_path: Path,
     *,
@@ -93,18 +142,20 @@ def _load_inputs(
         or completion.get("status") != "complete"
     ):
         raise ValueError("Joint hierarchical completion proof is not complete")
-    report_path = Path(str(completion["report"]))
-    if checkpoint_digest(report_path) != completion.get("report_sha256"):
-        raise ValueError("Joint hierarchical report digest mismatch")
+    report_path = _resolve_training_artifact(
+        completion["report"],
+        completion.get("report_sha256"),
+    )
     report = _load_json(report_path)
     if report.get("status") != "complete" or not cast(
         Mapping[str, object], report.get("convergence", {})
     ).get("converged"):
         raise ValueError("Joint hierarchical report lacks convergence evidence")
 
-    checkpoint_path = Path(str(completion["checkpoint"]))
-    if checkpoint_digest(checkpoint_path) != completion.get("checkpoint_sha256"):
-        raise ValueError("Joint hierarchical checkpoint digest mismatch")
+    checkpoint_path = _resolve_training_artifact(
+        completion["checkpoint"],
+        completion.get("checkpoint_sha256"),
+    )
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     if (
         not isinstance(checkpoint, Mapping)
@@ -113,9 +164,10 @@ def _load_inputs(
     ):
         raise ValueError("Joint hierarchical model checkpoint is not complete")
 
-    history_path = Path(str(report["target_history"]))
-    if checkpoint_digest(history_path) != report.get("target_history_sha256"):
-        raise ValueError("Joint hierarchical target-history digest mismatch")
+    history_path = _resolve_training_artifact(
+        report["target_history"],
+        report.get("target_history_sha256"),
+    )
     history = torch.load(history_path, map_location="cpu", weights_only=False)
     if (
         not isinstance(history, Mapping)
@@ -325,8 +377,14 @@ def run(arguments: argparse.Namespace) -> None:
         training_data,
         arguments.train_audit_origins,
     )
+    kernel_kind = str(arguments.kernel_kind)
+    kernel_type = (
+        NormalWeeklyMeasureKernel
+        if kernel_kind == "normal"
+        else GenericWeeklyMeasureKernel
+    )
     measure_config = WeeklyMeasureConfig(
-        label="joint-hierarchical-200-normal-q1-v1",
+        label=f"joint-hierarchical-200-{kernel_kind}-q1-v1",
         state_sizes_by_expiry=model.config.state_sizes_by_expiry,
         hierarchical=True,
     )
@@ -346,13 +404,14 @@ def run(arguments: argparse.Namespace) -> None:
 
     arguments.checkpoint_directory.mkdir(parents=True, exist_ok=True)
     arguments.report_directory.mkdir(parents=True, exist_ok=True)
-    report_path = arguments.report_directory / "joint-hierarchical-normal-q1.json"
+    stem = f"joint-hierarchical-{kernel_kind}-q1"
+    report_path = arguments.report_directory / f"{stem}.json"
     completion_path = (
-        arguments.report_directory / "joint-hierarchical-normal-q1-complete.json"
+        arguments.report_directory / f"{stem}-complete.json"
     )
-    checkpoint_path = arguments.checkpoint_directory / "joint-hierarchical-normal-q1.pt"
+    checkpoint_path = arguments.checkpoint_directory / f"{stem}.pt"
 
-    baseline_kernel = NormalWeeklyMeasureKernel(
+    baseline_kernel = kernel_type(
         env,
         dynamics=dynamics,
         config=measure_config,
@@ -394,8 +453,10 @@ def run(arguments: argparse.Namespace) -> None:
         seed=train_config.seed + 30_001,
     )
 
-    kernel = NormalWeeklyMeasureKernel(env, dynamics=dynamics, config=measure_config)
-    with FileLock(str(arguments.checkpoint_directory / "joint-q1.lock")):
+    kernel = kernel_type(env, dynamics=dynamics, config=measure_config)
+    with FileLock(
+        str(arguments.checkpoint_directory / f"joint-{kernel_kind}-q1.lock")
+    ):
         training = fit_weekly_measure_kernel(
             kernel,
             simulator,
@@ -425,9 +486,17 @@ def run(arguments: argparse.Namespace) -> None:
         seed=train_config.seed + 30_001,
     )
     report: dict[str, object] = {
-        "schema": "flex-joint-hierarchical-normal-q1-report-v1",
+        "schema": f"flex-joint-hierarchical-{kernel_kind}-q1-report-v1",
         "status": "complete",
-        "measure": "Q1 conditional Gaussian change on the exact one-week step",
+        "measure": (
+            "Q1 conditional Gaussian change on the exact one-week step"
+            if kernel_kind == "normal"
+            else (
+                "Q1 conditional generic triangular full-support transport "
+                "on the exact one-week step"
+            )
+        ),
+        "kernel_kind": kernel_kind,
         "target": "today 2W fixed-cash-strike calls equal expected next-week 1W calls",
         "spot_law": (
             "current front-week SANOS inverse CDF; its standard-normal rank is "
@@ -472,8 +541,16 @@ def run(arguments: argparse.Namespace) -> None:
         "checkpoint_sha256": checkpoint_digest(checkpoint_path),
         "ad_hoc_choices": [
             "11 log-moneyness calls from -0.30 to 0.30",
-            "two-layer width-256 SiLU Q1 context network",
-            f"conditional Gaussian KL weight {arguments.p_kl_weight:g}",
+            (
+                "two-layer width-256 SiLU Q1 context network with conditional "
+                "mean/scale"
+                if kernel_kind == "normal"
+                else (
+                    "two-layer width-256 SiLU Q1 context network with triangular "
+                    "shift/scale/tanh-amplitude/gate transport"
+                )
+            ),
+            f"P-proximity regularization weight {arguments.p_kl_weight:g}",
             f"{arguments.epochs} constant-learning-rate epochs",
             f"{arguments.origins_per_batch} origins x "
             f"{arguments.paths_per_origin} live antithetic paths per update",
@@ -482,7 +559,7 @@ def run(arguments: argparse.Namespace) -> None:
     write_json_atomic(report, report_path)
     write_json_atomic(
         {
-            "schema": "flex-joint-hierarchical-normal-q1-completion-v1",
+            "schema": f"flex-joint-hierarchical-{kernel_kind}-q1-completion-v1",
             "status": "complete",
             "report": str(report_path),
             "report_sha256": checkpoint_digest(report_path),

@@ -42,7 +42,9 @@ class SymmetryCurve:
             and np.all(np.isfinite(values))
             and np.all(maturities > 0.0)
             and np.all(np.diff(maturities) > 0.0),
-            lambda: "symmetry-curve maturities must be finite, positive, and increasing",
+            lambda: (
+                "symmetry-curve maturities must be finite, positive, and increasing"
+            ),
         )
 
     def __call__(self, tau: float | np.ndarray) -> np.ndarray:
@@ -224,6 +226,7 @@ def fit_maturity(
     config: StaticFitConfig = StaticFitConfig(),
     target_symmetry_index: float | None = None,
     warm_start: DoubleExponentialParameters | None = None,
+    objective_weights: np.ndarray | None = None,
 ) -> MaturityFit:
     """Fit one maturity using equations (2.14), (2.20), or (2.21)."""
 
@@ -232,25 +235,32 @@ def fit_maturity(
     bids = np.asarray(bids, dtype=np.float64)
     asks = np.asarray(asks, dtype=np.float64)
     mask = np.asarray(mask, dtype=bool)
+    weights = (
+        None
+        if objective_weights is None
+        else np.asarray(objective_weights, dtype=np.float64)
+    )
     verify_inp(
         math.isfinite(tau) and tau > 0.0,
         lambda: f"'tau' must be finite and positive, got {tau!r}",
     )
     verify_inp(
-        strikes.shape
-        == target_calls.shape
-        == bids.shape
-        == asks.shape
-        == mask.shape,
+        strikes.shape == target_calls.shape == bids.shape == asks.shape == mask.shape,
         lambda: "strike, price, interval, and mask arrays must have the same shape",
     )
-    finite = (
-        np.isfinite(strikes)
-        & np.isfinite(target_calls)
-        & np.isfinite(bids)
-        & np.isfinite(asks)
+    verify_inp(
+        weights is None or weights.shape == strikes.shape,
+        lambda: (
+            "objective weights must match the strike shape, got "
+            f"{None if weights is None else weights.shape} and {strikes.shape}"
+        ),
     )
-    active = mask & finite & (strikes > 0.0) & (asks > bids)
+    finite_target = np.isfinite(strikes) & np.isfinite(target_calls)
+    active = mask & finite_target & (strikes > 0.0)
+    if weights is None:
+        active &= np.isfinite(bids) & np.isfinite(asks) & (asks > bids)
+    else:
+        active &= np.isfinite(weights) & (weights > 0.0)
     verify_inp(
         np.count_nonzero(active) >= 5,
         lambda: (
@@ -263,9 +273,14 @@ def fit_maturity(
     target_fit = target_calls[active]
     intrinsic = normalized_call_intrinsic(strikes_fit)
     target_time_value = target_fit - intrinsic
-    half_spread = np.maximum(
-        0.5 * (asks[active] - bids[active]),
-        config.half_spread_floor,
+    residual_multiplier = (
+        1.0
+        / np.maximum(
+            0.5 * (asks[active] - bids[active]),
+            config.half_spread_floor,
+        )
+        if weights is None
+        else weights[active]
     )
     prepared = PreparedFourierPricer.create(x_fit, config=config.pricing)
     initial = target_symmetry_index is None
@@ -285,7 +300,7 @@ def fit_maturity(
                 lambda z: characteristic_function(z, tau=tau, parameters=parameters)
             )
             model_time_value = model_calls - intrinsic
-            residual = (model_time_value - target_time_value) / half_spread
+            residual = (model_time_value - target_time_value) * residual_multiplier
             value = float(np.mean(np.square(residual)))
             return value if math.isfinite(value) else 1.0e30
         except (FloatingPointError, OverflowError, ValueError):
@@ -368,9 +383,7 @@ def fit_market_day(
     for index, tau in enumerate(market.expiries):
         tau_value = float(tau)
         if symmetry_curve is not None and not (
-            symmetry_curve.maturities[0]
-            <= tau_value
-            <= symmetry_curve.maturities[-1]
+            symmetry_curve.maturities[0] <= tau_value <= symmetry_curve.maturities[-1]
         ):
             continue
         target_xi = (
@@ -393,6 +406,9 @@ def fit_market_day(
                 config=config,
                 target_symmetry_index=target_xi,
                 warm_start=warm,
+                objective_weights=(
+                    None if market.fit_weights is None else market.fit_weights[index]
+                ),
             )
         )
     verify(
@@ -474,8 +490,7 @@ def reconstruct_forward_density(
     verify_inp(
         math.isfinite(forward_density_floor) and forward_density_floor >= 0.0,
         lambda: (
-            "'forward_density_floor' must be finite and nonnegative, got "
-            f"{forward_density_floor}"
+            f"'forward_density_floor' must be finite and nonnegative, got {forward_density_floor}"
         ),
     )
     source_tau = np.concatenate(([0.0], fitted_tau))
@@ -485,10 +500,7 @@ def reconstruct_forward_density(
     )
     projected_shifted_a = np.empty_like(source_a)
     for jump_index in range(jump_x.size):
-        shifted = (
-            source_a[:, jump_index]
-            - forward_density_floor * source_tau
-        )
+        shifted = source_a[:, jump_index] - forward_density_floor * source_tau
         result = isotonic_regression(shifted, increasing=True)
         # The PAVA solution is unconstrained in level. Tiny tail intensities
         # below the configured forward floor can otherwise pool A(0, x) below
@@ -498,10 +510,7 @@ def reconstruct_forward_density(
             np.asarray(result.x, dtype=np.float64),
             0.0,
         )
-    projected_a = (
-        projected_shifted_a
-        + forward_density_floor * source_tau[:, None]
-    )
+    projected_a = projected_shifted_a + forward_density_floor * source_tau[:, None]
     interpolator = PchipInterpolator(
         source_tau,
         projected_shifted_a,
@@ -533,16 +542,13 @@ def reconstruct_forward_density(
     )
     maximum_relative = float(np.max(relative_projection))
     relative_l1 = float(
-        np.sum(absolute_projection)
-        / max(float(np.sum(np.abs(source_a[1:]))), 1.0e-15)
+        np.sum(absolute_projection) / max(float(np.sum(np.abs(source_a[1:]))), 1.0e-15)
     )
     return ForwardDensityReconstruction(
         tau=target_tau,
         jump_x=jump_x,
         average_density=eta,
-        projected_fitted_average_density=(
-            projected_a[1:] / fitted_tau[:, None]
-        ),
+        projected_fitted_average_density=(projected_a[1:] / fitted_tau[:, None]),
         forward_density=kappa,
         maximum_relative_projection=maximum_relative,
         relative_l1_projection=relative_l1,

@@ -121,9 +121,7 @@ class JointHierarchicalWeeklyDynamicsAdapter(BaseModel):
         if spot_front_beta.shape != (front_width,) or not bool(
             torch.all(torch.isfinite(spot_front_beta))
         ):
-            raise ValueError(
-                f"spot beta must be finite with shape ({front_width},)"
-            )
+            raise ValueError(f"spot beta must be finite with shape ({front_width},)")
         if not math.isfinite(spot_orthogonal_std) or spot_orthogonal_std <= 0.0:
             raise ValueError("spot orthogonal standard deviation must be positive")
         transition = model.weekly_transition().detach().clone()
@@ -169,8 +167,7 @@ class JointHierarchicalWeeklyDynamicsAdapter(BaseModel):
         """Return h unchanged; no additional PCA layer exists in joint mode."""
         if reduced_state.shape[-1] != self.reduced_state_size:
             raise ValueError(
-                f"expected state width {self.reduced_state_size}, "
-                f"found {reduced_state.shape}"
+                f"expected state width {self.reduced_state_size}, found {reduced_state.shape}"
             )
         return reduced_state
 
@@ -193,9 +190,7 @@ class _WeeklyMeasureKernel(BaseModel):
                 "measure blocks do not match the P dynamics dimension: "
                 f"{config.state_size} versus {dynamics.reduced_state_size}"
             )
-        if tuple(config.state_sizes_by_expiry) != tuple(
-            dynamics.reduced_sizes_by_expiry
-        ):
+        if tuple(config.state_sizes_by_expiry) != tuple(dynamics.reduced_sizes_by_expiry):
             raise ValueError(
                 "measure blocks must equal the fitted per-expiry PCA blocks: "
                 f"{config.state_sizes_by_expiry} versus "
@@ -205,26 +200,22 @@ class _WeeklyMeasureKernel(BaseModel):
         self.dynamics = dynamics
         covariance = dynamics.weekly_joint_covariance
         eigenvalues = torch.linalg.eigvalsh(covariance)
-        floor = torch.finfo(env.fdtype).eps * torch.clamp_min(
-            torch.max(eigenvalues), 1.0
-        ) * covariance.shape[0]
+        floor = (
+            torch.finfo(env.fdtype).eps
+            * torch.clamp_min(torch.max(eigenvalues), 1.0)
+            * covariance.shape[0]
+        )
         regularized = covariance + torch.clamp_min(floor - torch.min(eigenvalues), 0.0) * (
             torch.eye(covariance.shape[0], dtype=env.fdtype, device=env.device)
         )
         self.register_buffer("reference_joint_cholesky", torch.linalg.cholesky(regularized))
         self._offsets = tuple(
-            torch.cumsum(
-                torch.tensor((0, *config.state_sizes_by_expiry)), dim=0
-            ).tolist()
+            torch.cumsum(torch.tensor((0, *config.state_sizes_by_expiry)), dim=0).tolist()
         )
 
     @property
     def transformed_block_count(self) -> int:
-        return (
-            len(self.config.state_sizes_by_expiry) - 1
-            if self.config.hierarchical
-            else 1
-        )
+        return len(self.config.state_sizes_by_expiry) - 1 if self.config.hierarchical else 1
 
     def _block_slice(self, index: int) -> slice:
         return slice(self._offsets[index], self._offsets[index + 1])
@@ -248,9 +239,7 @@ class _WeeklyMeasureKernel(BaseModel):
     ) -> torch.Tensor:
         if not self.config.hierarchical:
             return torch.cat((current_state, log_gross_spot_return.unsqueeze(-1)), dim=-1)
-        current_stop = self._offsets[
-            min(block_index + 2, len(self._offsets) - 1)
-        ]
+        current_stop = self._offsets[min(block_index + 2, len(self._offsets) - 1)]
         parts = [current_state[..., :current_stop]]
         if transformed_surface_normals:
             parts.extend(transformed_surface_normals)
@@ -272,9 +261,7 @@ class _WeeklyMeasureKernel(BaseModel):
             raise ValueError("state and gross spot return batch shapes differ")
         if current_state.shape[-1] != self.config.state_size:
             raise ValueError("current state has the wrong target-kernel width")
-        if standard_normals.shape != current_state.shape[:-1] + (
-            self.config.state_size + 1,
-        ):
+        if standard_normals.shape != current_state.shape[:-1] + (self.config.state_size + 1,):
             raise ValueError("standard normals have the wrong target-kernel geometry")
         if torch.any(gross_spot_return <= 0.0):
             raise ValueError("gross spot returns must be positive")
@@ -295,14 +282,13 @@ class _WeeklyMeasureKernel(BaseModel):
             (reference_standard_normals[..., :1], *transformed_surface_normals),
             dim=-1,
         )
-        reference_innovation = reference_standard_normals @ (
-            self.reference_joint_cholesky.T
-        )
+        reference_innovation = reference_standard_normals @ (self.reference_joint_cholesky.T)
         transformed_innovation = transformed @ self.reference_joint_cholesky.T
         transition = self.dynamics.weekly_surface_transition
-        reference_mean = self.dynamics.equilibrium_mean + (
-            current_state - self.dynamics.equilibrium_mean
-        ) @ transition
+        reference_mean = (
+            self.dynamics.equilibrium_mean
+            + (current_state - self.dynamics.equilibrium_mean) @ transition
+        )
         reference_state = reference_mean + reference_innovation[..., 1:]
         transformed_state = reference_mean + transformed_innovation[..., 1:]
         self.verify(
@@ -341,9 +327,7 @@ class NormalWeeklyMeasureKernel(_WeeklyMeasureKernel):
             _zero_final_layer(network)
             networks.append(network)
             local_factors.append(
-                torch.nn.Parameter(
-                    torch.zeros((width, width), dtype=env.fdtype, device=env.device)
-                )
+                torch.nn.Parameter(torch.zeros((width, width), dtype=env.fdtype, device=env.device))
             )
         self.context_networks = torch.nn.ModuleList(networks)
         self.local_factor_raw = torch.nn.ParameterList(local_factors)
@@ -371,9 +355,7 @@ class NormalWeeklyMeasureKernel(_WeeklyMeasureKernel):
                 block_index,
             )
             mean_raw, log_scale_raw = torch.split(network(context), width, dim=-1)
-            mean = self.config.maximum_shift * torch.tanh(
-                mean_raw / self.config.maximum_shift
-            )
+            mean = self.config.maximum_shift * torch.tanh(mean_raw / self.config.maximum_shift)
             log_scale = self.config.maximum_log_scale * torch.tanh(
                 log_scale_raw / self.config.maximum_log_scale
             )
@@ -421,37 +403,75 @@ class NormalWeeklyMeasureKernel(_WeeklyMeasureKernel):
         gross_spot_return: torch.Tensor,
         *,
         line_index: int,
+        standard_normals: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Return conditional Gaussian ``KL(Q_line || P_line)`` per coordinate.
 
         This is evaluated in the ordered standard-normal coordinates before
-        the frozen P Cholesky factor.  For the first roll line the context is
-        exactly current ``h^1,h^2`` and realized implied spot.  Later lines are
-        deliberately unsupported here because their contexts also contain
-        random already-transformed blocks; the current Q1 experiment does not
-        fit them.
+        the frozen P Cholesky factor. Later expiry lines condition on the
+        already transformed lower-expiry innovations from the same path, so
+        their KL is the one relevant to the hierarchical Q factorization.
         """
-        if line_index != 0:
-            raise ValueError("conditional Gaussian KL is currently defined for Q1 only")
+        if not 0 <= line_index < self.transformed_block_count:
+            raise ValueError(f"invalid conditional Gaussian line {line_index}")
         if current_state.shape[:-1] != gross_spot_return.shape:
             raise ValueError("state and gross spot return batch shapes differ")
-        width = self.config.state_sizes_by_expiry[0]
+        if line_index > 0 and standard_normals is None:
+            raise ValueError("later conditional Gaussian lines require path normals")
+        if standard_normals is not None:
+            self._validate_inputs(
+                current_state,
+                gross_spot_return,
+                standard_normals,
+            )
+        log_gross = torch.log(gross_spot_return)
+        transformed_blocks: list[torch.Tensor] = []
+        reference_surface = None if standard_normals is None else standard_normals[..., 1:]
+        # Reproduce the frozen earlier Q lines to form the same random context
+        # that the active line sees in ``step``.
+        for prior_index in range(line_index):
+            prior_slice = self._block_slice(prior_index)
+            prior_width = prior_slice.stop - prior_slice.start
+            prior_context = self._context(
+                current_state,
+                transformed_blocks,
+                log_gross,
+                prior_index,
+            )
+            prior_mean_raw, prior_log_scale_raw = torch.split(
+                self.context_networks[prior_index](prior_context),
+                prior_width,
+                dim=-1,
+            )
+            prior_mean = self.config.maximum_shift * torch.tanh(
+                prior_mean_raw / self.config.maximum_shift
+            )
+            prior_log_scale = self.config.maximum_log_scale * torch.tanh(
+                prior_log_scale_raw / self.config.maximum_log_scale
+            )
+            prior_raw_factor = self.local_factor_raw[prior_index]
+            prior_lower = torch.tril(prior_raw_factor, diagonal=-1) + torch.diag_embed(
+                torch.exp(torch.diagonal(prior_raw_factor))
+            )
+            assert reference_surface is not None
+            prior_mixed = reference_surface[..., prior_slice] @ prior_lower.T
+            transformed_blocks.append(prior_mean + torch.exp(prior_log_scale) * prior_mixed)
+
+        width = self.config.state_sizes_by_expiry[line_index]
         context = self._context(
             current_state,
-            [],
-            torch.log(gross_spot_return),
-            0,
+            transformed_blocks,
+            log_gross,
+            line_index,
         )
         mean_raw, log_scale_raw = torch.split(
-            self.context_networks[0](context), width, dim=-1
+            self.context_networks[line_index](context), width, dim=-1
         )
-        mean = self.config.maximum_shift * torch.tanh(
-            mean_raw / self.config.maximum_shift
-        )
+        mean = self.config.maximum_shift * torch.tanh(mean_raw / self.config.maximum_shift)
         log_scale = self.config.maximum_log_scale * torch.tanh(
             log_scale_raw / self.config.maximum_log_scale
         )
-        raw_factor = self.local_factor_raw[0]
+        raw_factor = self.local_factor_raw[line_index]
         lower = torch.tril(raw_factor, diagonal=-1) + torch.diag_embed(
             torch.exp(torch.diagonal(raw_factor))
         )
@@ -501,9 +521,7 @@ class GenericWeeklyMeasureKernel(_WeeklyMeasureKernel):
             _zero_final_layer(network)
             networks.append(network)
             strict_lower.append(
-                torch.nn.Parameter(
-                    torch.zeros((width, width), dtype=env.fdtype, device=env.device)
-                )
+                torch.nn.Parameter(torch.zeros((width, width), dtype=env.fdtype, device=env.device))
             )
         self.context_networks = torch.nn.ModuleList(networks)
         self.strict_lower_raw = torch.nn.ParameterList(strict_lower)
@@ -533,18 +551,12 @@ class GenericWeeklyMeasureKernel(_WeeklyMeasureKernel):
             shift_raw, scale_raw, amplitude_raw, gate_raw = torch.split(
                 network(context), width, dim=-1
             )
-            shift = self.config.maximum_shift * torch.tanh(
-                shift_raw / self.config.maximum_shift
-            )
+            shift = self.config.maximum_shift * torch.tanh(shift_raw / self.config.maximum_shift)
             log_scale = self.config.maximum_log_scale * torch.tanh(
                 scale_raw / self.config.maximum_log_scale
             )
             scale = torch.exp(log_scale)
-            amplitude = (
-                self.config.generic_amplitude_fraction
-                * scale
-                * torch.tanh(amplitude_raw)
-            )
+            amplitude = self.config.generic_amplitude_fraction * scale * torch.tanh(amplitude_raw)
             gate = torch.sigmoid(gate_raw)
             reference_block = reference_surface[..., block_slice]
             lower_effect = reference_block @ torch.tril(raw_lower, diagonal=-1).T
@@ -560,6 +572,100 @@ class GenericWeeklyMeasureKernel(_WeeklyMeasureKernel):
             standard_normals,
             transformed_blocks,
         )
+
+    def step_first_line_with_log_abs_det(
+        self,
+        current_state: torch.Tensor,
+        gross_spot_return: torch.Tensor,
+        standard_normals: torch.Tensor,
+        current_log_spot: torch.Tensor | None = None,
+    ) -> tuple[WeeklyMeasureDraw, torch.Tensor]:
+        """Transform only W2's first surface line and return its log Jacobian.
+
+        The spot rank and every later surface block remain the exact P draw.
+        This is the narrow transport needed to change the conditional next-front
+        surface law while preserving the front-week implied spot distribution.
+        """
+
+        del current_log_spot
+        self._validate_inputs(current_state, gross_spot_return, standard_normals)
+        if not self.config.hierarchical:
+            raise ValueError("first-line transport requires hierarchical geometry")
+        block_index = 0
+        block_slice = self._block_slice(block_index)
+        width = block_slice.stop - block_slice.start
+        context = self._context(
+            current_state,
+            [],
+            torch.log(gross_spot_return),
+            block_index,
+        )
+        shift_raw, scale_raw, amplitude_raw, gate_raw = torch.split(
+            self.context_networks[block_index](context), width, dim=-1
+        )
+        shift = self.config.maximum_shift * torch.tanh(shift_raw / self.config.maximum_shift)
+        log_scale = self.config.maximum_log_scale * torch.tanh(
+            scale_raw / self.config.maximum_log_scale
+        )
+        scale = torch.exp(log_scale)
+        amplitude = self.config.generic_amplitude_fraction * scale * torch.tanh(amplitude_raw)
+        gate = torch.sigmoid(gate_raw)
+        reference_surface = standard_normals[..., 1:]
+        reference_block = reference_surface[..., block_slice]
+        lower_effect = (
+            reference_block @ torch.tril(self.strict_lower_raw[block_index], diagonal=-1).T
+        )
+        proposal = (
+            shift + scale * reference_block + amplitude * torch.tanh(reference_block) + lower_effect
+        )
+        transformed_block = (1.0 - gate) * reference_block + gate * proposal
+        coordinate_derivative = (1.0 - gate) + gate * (
+            scale + amplitude * (1.0 - torch.tanh(reference_block).square())
+        )
+        self.verify(
+            lambda: torch.all(coordinate_derivative > 0.0),
+            "non-positive first-line transport derivative",
+        )
+        log_abs_det = torch.sum(torch.log(coordinate_derivative), dim=-1)
+        transformed_blocks = [transformed_block]
+        for later_index in range(1, self.transformed_block_count):
+            transformed_blocks.append(reference_surface[..., self._block_slice(later_index)])
+        return (
+            self._assemble_draw(
+                current_state,
+                standard_normals,
+                transformed_blocks,
+            ),
+            log_abs_det,
+        )
+
+    def minimum_first_line_coordinate_derivative(
+        self,
+        current_state: torch.Tensor,
+        gross_spot_return: torch.Tensor,
+    ) -> torch.Tensor:
+        """Return the global Jacobian-diagonal lower bound for the W2 line."""
+
+        if current_state.shape[:-1] != gross_spot_return.shape:
+            raise ValueError("state and gross spot return batch shapes differ")
+        if not self.config.hierarchical:
+            raise ValueError("first-line transport requires hierarchical geometry")
+        width = self.config.state_sizes_by_expiry[0]
+        context = self._context(
+            current_state,
+            [],
+            torch.log(gross_spot_return),
+            0,
+        )
+        _, scale_raw, amplitude_raw, gate_raw = torch.split(
+            self.context_networks[0](context), width, dim=-1
+        )
+        scale = torch.exp(
+            self.config.maximum_log_scale * torch.tanh(scale_raw / self.config.maximum_log_scale)
+        )
+        amplitude = self.config.generic_amplitude_fraction * scale * torch.tanh(amplitude_raw)
+        gate = torch.sigmoid(gate_raw)
+        return torch.min((1.0 - gate) + gate * (scale - torch.abs(amplitude)))
 
     def minimum_coordinate_derivative(
         self,
@@ -590,26 +696,18 @@ class GenericWeeklyMeasureKernel(_WeeklyMeasureKernel):
                 self.config.maximum_log_scale
                 * torch.tanh(scale_raw / self.config.maximum_log_scale)
             )
-            amplitude = (
-                self.config.generic_amplitude_fraction
-                * scale
-                * torch.tanh(amplitude_raw)
-            )
+            amplitude = self.config.generic_amplitude_fraction * scale * torch.tanh(amplitude_raw)
             gate = torch.sigmoid(gate_raw)
             bounds.append((1.0 - gate) + gate * (scale - torch.abs(amplitude)))
             reference_block = reference_surface[..., block_slice]
-            shift = self.config.maximum_shift * torch.tanh(
-                shift_raw / self.config.maximum_shift
-            )
+            shift = self.config.maximum_shift * torch.tanh(shift_raw / self.config.maximum_shift)
             proposal = (
                 shift
                 + scale * reference_block
                 + amplitude * torch.tanh(reference_block)
                 + reference_block @ torch.tril(raw_lower, diagonal=-1).T
             )
-            transformed_blocks.append(
-                (1.0 - gate) * reference_block + gate * proposal
-            )
+            transformed_blocks.append((1.0 - gate) * reference_block + gate * proposal)
         return torch.min(torch.cat(bounds, dim=-1))
 
     def regularization_loss(self, current_state: torch.Tensor) -> torch.Tensor:

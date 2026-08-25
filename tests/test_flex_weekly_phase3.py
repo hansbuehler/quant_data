@@ -51,12 +51,14 @@ from quantdata.dysanos.flex.weekly_measure_training import (
     WeeklyMeasureTrainConfig,
     audit_front_week_consistency,
     audit_weekly_roll_line,
+    extend_weekly_measure_checkpoint,
     fit_weekly_measure_kernel,
     precompute_measure_training_data,
 )
 from quantdata.dysanos.flex.weekly_simulation import (
     WeeklyOptionGridConfig,
     WeeklySanosSimulator,
+    front_week_inverse_cdf_components,
     front_week_sanos_inverse_cdf,
     hjm_roll_moment_loss,
     load_strong_calibrated_model,
@@ -88,9 +90,7 @@ def _history(
             own = 0.72 + 0.04 * expiry_index
             value = own * block[time_index - 1] + innovation
             if expiry_index > 0:
-                lag_driver = np.resize(
-                    blocks[expiry_index - 1][time_index - 1], block.shape[1]
-                )
+                lag_driver = np.resize(blocks[expiry_index - 1][time_index - 1], block.shape[1])
                 value += 0.11 * lag_driver
             block[time_index] = value
         log_spot[time_index] = (
@@ -151,15 +151,12 @@ def test_weekly_fit_exposes_full_and_reduced_pca_and_is_stationary() -> None:
         pca_variance_threshold=0.995,
         ridge_penalty=1.0e-5,
     )
-    reduced = fit_weekly_hierarchical_dynamics(
-        states, log_spot, config=reduced_config, dates=dates
-    )
+    reduced = fit_weekly_hierarchical_dynamics(states, log_spot, config=reduced_config, dates=dates)
     expected_transitions = len(dates) - 5
     expected_daily_transitions = len(dates) - 1
     assert reduced.weekly_transition_observations == expected_transitions
     assert reduced.diagnostics["origin_weighting"] == (
-        "equal weight per exact daily origin for drift and per exact weekly "
-        "origin for innovations"
+        "equal weight per exact daily origin for drift and per exact weekly origin for innovations"
     )
     assert np.all(np.isfinite(reduced.equilibrium_mean))
     assert reduced.diagnostics["training_score_mean_max_abs"] < 1.0e-12
@@ -169,9 +166,15 @@ def test_weekly_fit_exposes_full_and_reduced_pca_and_is_stationary() -> None:
     for pca in reduced.pca_by_expiry:
         assert pca.full_components.shape[1] == len(pca.mean)
         assert pca.explained_variance[pca.reduced_rank - 1] >= 0.995
-    assert np.max(np.abs(reduced.mean_reversion_generator - np.diag(
-        np.diag(reduced.mean_reversion_generator)
-    ))) > 0.0
+    assert (
+        np.max(
+            np.abs(
+                reduced.mean_reversion_generator
+                - np.diag(np.diag(reduced.mean_reversion_generator))
+            )
+        )
+        > 0.0
+    )
     assert np.min(np.linalg.eigvals(reduced.mean_reversion_generator).real) > 0.0
     assert np.max(np.abs(np.linalg.eigvals(reduced.reduced_transition))) < 1.0
     assert reduced.diagnostics["generator_roundtrip_relative_error"] <= (
@@ -183,19 +186,17 @@ def test_weekly_fit_exposes_full_and_reduced_pca_and_is_stationary() -> None:
     assert reduced.diagnostics["estimator"] == (
         "DYSANOS/grid lag-only daily affine matrix logarithm"
     )
-    assert reduced.diagnostics[
-        "standardized_transition_maximum_power_norm"
-    ] <= reduced.config.maximum_standardized_transition_power_norm
+    assert (
+        reduced.diagnostics["standardized_transition_maximum_power_norm"]
+        <= reduced.config.maximum_standardized_transition_power_norm
+    )
     np.testing.assert_allclose(
         expm(-reduced.mean_reversion_generator),
         reduced.reduced_transition,
         rtol=1.0e-8,
         atol=1.0e-10,
     )
-    assert all(
-        block.observations == expected_daily_transitions
-        for block in reduced.blocks
-    )
+    assert all(block.observations == expected_daily_transitions for block in reduced.blocks)
     assert all(block.design_rank <= block.design_columns for block in reduced.blocks)
 
     full = fit_weekly_hierarchical_dynamics(
@@ -281,9 +282,7 @@ def test_torch_weekly_transition_has_exact_long_horizon_and_gradients() -> None:
         requires_grad=True,
     )
     log_spot = torch.zeros(4, dtype=env.fdtype, requires_grad=True)
-    normal = torch.zeros(
-        (4, dynamics.reduced_state_size + 1), dtype=env.fdtype
-    )
+    normal = torch.zeros((4, dynamics.reduced_state_size + 1), dtype=env.fdtype)
     step = dynamics.step(initial, log_spot, standard_normals=normal)
     loss = step.reduced_state.square().sum() + step.normal_log_spot.sum()
     loss.backward()
@@ -295,9 +294,7 @@ def test_torch_weekly_transition_has_exact_long_horizon_and_gradients() -> None:
     )
     torch.testing.assert_close(
         dynamics.stationary_surface_covariance,
-        weekly.T
-        @ dynamics.stationary_surface_covariance
-        @ weekly
+        weekly.T @ dynamics.stationary_surface_covariance @ weekly
         + dynamics.weekly_joint_covariance[1:, 1:],
     )
     invariant = dynamics.sample_stationary_reduced_states(5)
@@ -358,25 +355,41 @@ def test_front_inverse_cdf_is_monotone_and_differentiable() -> None:
     assert torch.all(torch.isfinite(gaussian.grad) & (gaussian.grad > 0.0))
 
 
+def test_front_inverse_cdf_repairs_float32_martingale_tail() -> None:
+    support = torch.tensor([[0.5, 1.0, 2.0]], dtype=torch.float32)
+    # The missing 2e-5 mass is within the decoder's float32 tolerance but is
+    # larger than this draw's upper-tail probability.  The old forward Newton
+    # correction therefore divided by a nearly zero PDF and returned infinity.
+    density = torch.tensor([[0.0, 0.99998, 0.0]], dtype=torch.float32)
+    sqrt_variance = torch.tensor([0.025], dtype=torch.float32)
+    gaussian = torch.tensor([4.2653208], dtype=torch.float32, requires_grad=True)
+
+    gross = front_week_inverse_cdf_components(
+        support,
+        density,
+        sqrt_variance,
+        gaussian,
+    )
+
+    assert torch.all(torch.isfinite(gross) & (gross > 0.0))
+    gross.sum().backward()
+    assert gaussian.grad is not None
+    assert torch.all(torch.isfinite(gaussian.grad) & (gaussian.grad > 0.0))
+
+
 def test_implied_front_distribution_reproduces_front_call_prices() -> None:
     env = BaseEnvironment(precision=64, device="cpu", debug=True)
     simulator = _simulator(env)
     num_quantiles = 4096
-    probabilities = (
-        torch.arange(num_quantiles, dtype=env.fdtype) + 0.5
-    ) / num_quantiles
+    probabilities = (torch.arange(num_quantiles, dtype=env.fdtype) + 0.5) / num_quantiles
     gaussian = torch.special.ndtri(probabilities)
-    state = torch.zeros(
-        (num_quantiles, simulator.dynamics.reduced_state_size), dtype=env.fdtype
-    )
+    state = torch.zeros((num_quantiles, simulator.dynamics.reduced_state_size), dtype=env.fdtype)
     surface = simulator.decode_surface(state)
     gross_return = front_week_sanos_inverse_cdf(surface, gaussian)
     assert torch.mean(gross_return).item() == pytest.approx(1.0, abs=5.0e-4)
 
     strikes = torch.tensor([0.85, 1.0, 1.15], dtype=env.fdtype)
-    sampled_calls = torch.mean(
-        torch.relu(gross_return.unsqueeze(-1) - strikes), dim=0
-    )
+    sampled_calls = torch.mean(torch.relu(gross_return.unsqueeze(-1) - strikes), dim=0)
     initial_surface = simulator.decode_surface(state[:1])
     front_expiry = simulator.calibrated_model.sanos_decoder.model_expiries_y[0]
     decoded_calls = simulator.calibrated_model.sanos_decoder.price_calls_batch(
@@ -460,9 +473,115 @@ def test_antithetic_front_audit_and_q1_only_training(tmp_path: Path) -> None:
         paths_per_origin=8,
         origins_per_batch=2,
         seed=8702,
+        include_origin_details=True,
     )
     assert audit["num_origins"] == len(states)
     assert audit["paths_per_origin"] == 8
+    assert len(audit["origin_estimates"]) == len(states)
+    assert len(audit["origin_estimates"][0]) == len(strikes)
+    assert len(audit["origin_standard_errors"]) == len(states)
+
+
+def test_hierarchical_q_checkpoint_extends_exactly_one_line(tmp_path: Path) -> None:
+    env = BaseEnvironment(precision=64, device="cpu", debug=True)
+    simulator = _simulator(env)
+    dynamics = simulator.dynamics
+    measure_config = WeeklyMeasureConfig(
+        label="test-q-continuation",
+        state_sizes_by_expiry=dynamics.reduced_sizes_by_expiry,
+        hierarchical=True,
+        context_network=FeedForwardConfig(
+            activation="SiLU",
+            num_depth=1,
+            num_width=8,
+        ),
+    )
+    states = torch.linspace(
+        -0.1,
+        0.1,
+        6 * dynamics.reduced_state_size,
+        dtype=env.fdtype,
+    ).reshape(6, -1)
+    strikes = torch.tensor([0.9, 1.0, 1.1], dtype=env.fdtype)
+    data = precompute_measure_training_data(simulator, states, strikes)
+    q1_config = WeeklyMeasureTrainConfig(
+        epochs_per_line=1,
+        origins_per_batch=2,
+        paths_per_origin=4,
+        audit_origins=2,
+        audit_paths_per_origin=8,
+        report_every=1,
+        checkpoint_every=1,
+        compile_objective=False,
+        maximum_roll_lines=1,
+        log_moneyness=tuple(float(torch.log(value)) for value in strikes),
+        absolute_audit_tolerance=1.0e6,
+    )
+    q1_path = tmp_path / "q1.pt"
+    q1_kernel = NormalWeeklyMeasureKernel(
+        env,
+        dynamics=dynamics,
+        config=measure_config,
+    )
+    fit_weekly_measure_kernel(
+        q1_kernel,
+        simulator,
+        data,
+        data,
+        checkpoint_path=q1_path,
+        config=q1_config,
+    )
+    q1_payload = torch.load(q1_path, map_location="cpu", weights_only=False)
+    q2_config = replace(
+        q1_config,
+        maximum_roll_lines=2,
+        learning_rate=0.5 * q1_config.learning_rate,
+    )
+    q2_path = tmp_path / "q2.pt"
+    q2_kernel = NormalWeeklyMeasureKernel(
+        env,
+        dynamics=dynamics,
+        config=measure_config,
+    )
+    seeded = extend_weekly_measure_checkpoint(
+        q1_path,
+        q2_path,
+        kernel=q2_kernel,
+        training_data=data,
+        source_config=q1_config,
+        target_config=q2_config,
+    )
+    assert seeded == {
+        "checkpoint_action": "seeded",
+        "line_index": 1,
+        "phase": "training",
+    }
+    normals = torch.zeros((len(states), dynamics.reduced_state_size + 1), dtype=env.fdtype)
+    torch.testing.assert_close(
+        q2_kernel.conditional_kl_loss(
+            states,
+            torch.ones(len(states), dtype=env.fdtype),
+            line_index=1,
+            standard_normals=normals,
+        ),
+        torch.zeros((), dtype=env.fdtype),
+    )
+    result = fit_weekly_measure_kernel(
+        q2_kernel,
+        simulator,
+        data,
+        data,
+        checkpoint_path=q2_path,
+        config=q2_config,
+    )
+    assert result["status"] == "complete"
+    assert len(result["lines"]) == 2
+    q2_payload = torch.load(q2_path, map_location="cpu", weights_only=False)
+    assert q2_payload["phase"] == "complete"
+    assert q2_payload["line_index"] == 2
+    for name, value in q1_payload["model_state_dict"].items():
+        if name.startswith("context_networks.0.") or name == "local_factor_raw.0":
+            torch.testing.assert_close(q2_payload["model_state_dict"][name], value)
 
 
 def test_joint_hierarchical_adapter_is_identity_state_p_law() -> None:
@@ -499,6 +618,54 @@ def test_joint_hierarchical_adapter_is_identity_state_p_law() -> None:
     torch.testing.assert_close(
         adapter.weekly_joint_covariance[0],
         torch.tensor([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=env.fdtype),
+    )
+
+
+def test_generic_first_line_transport_starts_as_identity_with_zero_logdet() -> None:
+    env = BaseEnvironment(precision=64, device="cpu", debug=True)
+    geometry = SharedStrikeCappedUnboundedDlvFlexGeometryConfig(
+        num_inner_strikes=8,
+        num_model_expiries=3,
+    )
+    config = JointHierarchicalDynamicsConfig(
+        label="test-oce-first-line-transport",
+        state_sizes_by_expiry=(3, 2, 2),
+        state_size=7,
+        geometry=geometry,
+    )
+    model = JointHierarchicalDynamicsModel(env, num_days=2, config=config)
+    adapter = JointHierarchicalWeeklyDynamicsAdapter(
+        env,
+        model=model,
+        spot_front_beta=torch.zeros(3, dtype=env.fdtype),
+        spot_orthogonal_std=1.0,
+    )
+    kernel = GenericWeeklyMeasureKernel(
+        env,
+        dynamics=adapter,
+        config=WeeklyMeasureConfig(
+            label="test-oce-first-line-kernel",
+            state_sizes_by_expiry=config.state_sizes_by_expiry,
+            hierarchical=True,
+            context_network=FeedForwardConfig(activation="SiLU", num_depth=1, num_width=8),
+        ),
+    )
+    states = torch.linspace(-0.2, 0.2, 28, dtype=env.fdtype).reshape(4, 7)
+    gross = torch.tensor((0.9, 0.98, 1.04, 1.1), dtype=env.fdtype)
+    normals = torch.linspace(-1.0, 1.0, 32, dtype=env.fdtype).reshape(4, 8)
+
+    ordinary = kernel.step(states, gross, normals)
+    first_line, log_abs_det = kernel.step_first_line_with_log_abs_det(states, gross, normals)
+
+    torch.testing.assert_close(first_line.reduced_state, ordinary.reduced_state)
+    torch.testing.assert_close(
+        first_line.transformed_standard_normals,
+        normals,
+    )
+    torch.testing.assert_close(log_abs_det, torch.zeros_like(log_abs_det))
+    torch.testing.assert_close(
+        kernel.minimum_first_line_coordinate_derivative(states, gross),
+        torch.ones((), dtype=env.fdtype),
     )
 
 
@@ -575,17 +742,20 @@ def test_hjm_roll_hook_matches_cash_roll_formula_and_has_gradients() -> None:
         dtype=env.fdtype,
         requires_grad=True,
     )
-    next_state = torch.linspace(
-        -0.05,
-        0.05,
-        paths * simulator.dynamics.reduced_state_size,
-        dtype=env.fdtype,
-    ).reshape(paths, -1).detach().requires_grad_()
+    next_state = (
+        torch.linspace(
+            -0.05,
+            0.05,
+            paths * simulator.dynamics.reduced_state_size,
+            dtype=env.fdtype,
+        )
+        .reshape(paths, -1)
+        .detach()
+        .requires_grad_()
+    )
     gross = torch.tensor([0.9, 0.98, 1.03, 1.12], dtype=env.fdtype, requires_grad=True)
     strikes = torch.tensor([0.9, 1.0, 1.1], dtype=env.fdtype)
-    residuals = simulator.hjm_roll_residuals(
-        current, next_state, gross, strikes
-    )
+    residuals = simulator.hjm_roll_residuals(current, next_state, gross, strikes)
     assert residuals.shape == (paths, simulator.num_model_expiries, len(strikes))
 
     current_surface = simulator.decode_surface(current)
@@ -617,9 +787,7 @@ def test_hjm_roll_hook_matches_cash_roll_formula_and_has_gradients() -> None:
     assert gross.grad is not None and torch.all(torch.isfinite(gross.grad))
 
 
-@pytest.mark.parametrize(
-    "kernel_type", [NormalWeeklyMeasureKernel, GenericWeeklyMeasureKernel]
-)
+@pytest.mark.parametrize("kernel_type", [NormalWeeklyMeasureKernel, GenericWeeklyMeasureKernel])
 def test_weekly_measure_kernels_start_at_p_and_train_through_roll_loss(
     kernel_type: type[NormalWeeklyMeasureKernel] | type[GenericWeeklyMeasureKernel],
 ) -> None:
@@ -641,9 +809,7 @@ def test_weekly_measure_kernels_start_at_p_and_train_through_roll_loss(
         ),
     )
     paths = 8
-    current = torch.zeros(
-        (paths, dynamics.reduced_state_size), dtype=env.fdtype
-    )
+    current = torch.zeros((paths, dynamics.reduced_state_size), dtype=env.fdtype)
     normals = torch.linspace(
         -1.5,
         1.5,
@@ -817,9 +983,7 @@ def test_option_returns_have_exact_horizons_zero_calls_and_costs(
     assert torch.all(torch.isfinite(result.returns))
 
     period_normals = normals[:, :steps]
-    per_option_cost = torch.linspace(
-        0.0, 0.02, result.grid.num_options, dtype=env.fdtype
-    )
+    per_option_cost = torch.linspace(0.0, 0.02, result.grid.num_options, dtype=env.fdtype)
     period = simulator.simulate_option_returns(
         torch.zeros(simulator.dynamics.reduced_state_size, dtype=env.fdtype),
         torch.tensor(100.0, dtype=env.fdtype),

@@ -1,0 +1,493 @@
+{
+  "panel_file": "aae/ideas/localvolbysanos/results/2025_full_reference_grid/balanced_panel.parquet",
+  "num_dates": 163,
+  "date_range": [
+    "2025-01-02",
+    "2025-08-29"
+  ],
+  "surface_shape": [
+    10,
+    100
+  ],
+  "expiry_coordinate": "sqrt(expiry_years)",
+  "strike_coordinate": "front_week_vol_scaled_effective_NMS",
+  "num_factors": 5,
+  "pca": {
+    "log_dlvsq": {
+      "explained_variance_ratio": [
+        0.7788827225631361,
+        0.056850248600274135,
+        0.046264039271639204,
+        0.021930087127795764,
+        0.015051226099025643
+      ],
+      "cumulative_explained_variance_ratio": [
+        0.7788827225631361,
+        0.8357329711634102,
+        0.8819970104350494,
+        0.9039270975628452,
+        0.9189783236618708
+      ]
+    },
+    "log_forward_volatility": {
+      "explained_variance_ratio": [
+        0.9642088702120168,
+        0.023725691845281116,
+        0.004151542867175751,
+        0.0035237172842802946,
+        0.001223120420941283
+      ],
+      "cumulative_explained_variance_ratio": [
+        0.9642088702120168,
+        0.9879345620572979,
+        0.9920861049244737,
+        0.9956098222087539,
+        0.9968329426296952
+      ]
+    }
+  },
+  "matrix_exponential_ar1": {
+    "log_dlvsq": {
+      "factor_coordinate": "PCA scores divided by sample standard deviation",
+      "time_coordinate": "calendar years using actual gaps between observations",
+      "equilibrium": "zero PCA score, corresponding to the sample mean surface",
+      "equation": "z(t+dt) = exp(G*dt) z(t) + error",
+      "generator_G_per_calendar_year": [
+        [
+          -16.610202761200462,
+          -46.18282257916468,
+          -0.02372671626714389,
+          2.430610601122059,
+          24.759421675615204
+        ],
+        [
+          -20.137414912635638,
+          -331.13081301931584,
+          2.765264365770831,
+          10.56916763689804,
+          -30.908386453021176
+        ],
+        [
+          -25.342736612553562,
+          0.027757050175345483,
+          -51.64105911654477,
+          -40.09684009333935,
+          72.99724593131393
+        ],
+        [
+          4.6892587956173495,
+          32.03016097269583,
+          11.776119680773123,
+          -134.88385915592684,
+          -40.03813377303567
+        ],
+        [
+          26.548364984565097,
+          -3.477791186215848,
+          94.58184527839107,
+          -37.93604822831867,
+          -231.50289520640686
+        ]
+      ],
+      "one_calendar_day_transition": [
+        [
+          0.959999213528783,
+          -0.08127661781789759,
+          0.006699443977528097,
+          0.0013862110578840908,
+          0.05254726707272712
+        ],
+        [
+          -0.037168184382482886,
+          0.40675072768170684,
+          -0.001599715143887779,
+          0.017762624902945747,
+          -0.041422676117429565
+        ],
+        [
+          -0.05860768037857507,
+          -0.0008237138017292414,
+          0.8861473414847232,
+          -0.09330389917622862,
+          0.1408289993015344
+        ],
+        [
+          0.005388813772884284,
+          0.04692110117068224,
+          0.015518793186624124,
+          0.6946277051187479,
+          -0.06685226163831748
+        ],
+        [
+          0.045939793481230284,
+          -0.009678481327541903,
+          0.17825744753825726,
+          -0.07358457333328156,
+          0.552334691251241
+        ]
+      ],
+      "generator_eigenvalues": [
+        {
+          "real": -13.166628463415964,
+          "imaginary": 11.90838232060857
+        },
+        {
+          "real": -13.166628463415964,
+          "imaginary": -11.90838232060857
+        },
+        {
+          "real": -129.88380552663634,
+          "imaginary": 0.0
+        },
+        {
+          "real": -275.9604058741098,
+          "imaginary": 0.0
+        },
+        {
+          "real": -333.5913609318164,
+          "imaginary": 0.0
+        }
+      ],
+      "mode_half_life_calendar_days": [
+        19.228309540515188,
+        19.228309540515188,
+        1.949219201523934,
+        0.9174214934841571,
+        0.7589285495653663
+      ],
+      "spectral_radius_one_calendar_day": 0.9645937371086912,
+      "mean_reverting": true,
+      "in_sample_r_squared_standardized_factors": 0.47918655630373497,
+      "factor_sample_standard_deviations": [
+        15.454067070391858,
+        4.175158255680622,
+        3.7664181290786796,
+        2.5931458026222596,
+        2.1482889642358822
+      ],
+      "optimizer": {
+        "success": true,
+        "message": "`ftol` termination condition is satisfied.",
+        "num_function_evaluations": 16
+      }
+    },
+    "log_forward_volatility": {
+      "factor_coordinate": "PCA scores divided by sample standard deviation",
+      "time_coordinate": "calendar years using actual gaps between observations",
+      "equilibrium": "zero PCA score, corresponding to the sample mean surface",
+      "equation": "z(t+dt) = exp(G*dt) z(t) + error",
+      "generator_G_per_calendar_year": [
+        [
+          -15.849114909758875,
+          -4.13534751805055,
+          -15.984611518668506,
+          16.7472706092083,
+          -39.084051564830105
+        ],
+        [
+          -23.074673867262238,
+          -84.979326030994,
+          -108.83816086602134,
+          -21.022071984248626,
+          35.9156648092221
+        ],
+        [
+          -9.237096493509663,
+          -94.13014734930125,
+          -167.14565895379562,
+          -50.50677256157928,
+          -10.333859821146893
+        ],
+        [
+          14.708551816737321,
+          -0.32079422096378474,
+          -27.884296833976524,
+          -129.710609086571,
+          138.50985535295672
+        ],
+        [
+          -23.246135721321792,
+          -22.501793686402095,
+          -39.332441516757505,
+          106.15191390178875,
+          -391.05095608520304
+        ]
+      ],
+      "one_calendar_day_transition": [
+        [
+          0.961109729763585,
+          -0.0037011250932404045,
+          -0.031460440197756304,
+          0.030801442980450507,
+          -0.05931147883669257
+        ],
+        [
+          -0.05540831406425523,
+          0.8193997030099041,
+          -0.21492330494437806,
+          -0.021520675582549123,
+          0.05405790518996024
+        ],
+        [
+          -0.014745528706359054,
+          -0.1845950376501227,
+          0.6644857279779339,
+          -0.09307354061203708,
+          -0.034352599279646956
+        ],
+        [
+          0.02691159954523355,
+          0.0003927074958608324,
+          -0.06345110584281123,
+          0.7370028370656228,
+          0.19339656661042315
+        ],
+        [
+          -0.03306419394555318,
+          -0.025552422905638514,
+          -0.052939728195386324,
+          0.15248971243291565,
+          0.3688520545196725
+        ]
+      ],
+      "generator_eigenvalues": [
+        {
+          "real": -435.701525293136,
+          "imaginary": 0.0
+        },
+        {
+          "real": -252.9542546996344,
+          "imaginary": 0.0
+        },
+        {
+          "real": -11.551192462453837,
+          "imaginary": 8.345142967612558
+        },
+        {
+          "real": -11.551192462453837,
+          "imaginary": -8.345142967612558
+        },
+        {
+          "real": -76.97750014864447,
+          "imaginary": 0.0
+        }
+      ],
+      "mode_half_life_calendar_days": [
+        0.5810675267413586,
+        1.0008608394436544,
+        21.917391518012877,
+        21.917391518012877,
+        3.2889091904860757
+      ],
+      "spectral_radius_one_calendar_day": 0.9688694125186535,
+      "mean_reverting": true,
+      "in_sample_r_squared_standardized_factors": 0.5008150448778536,
+      "factor_sample_standard_deviations": [
+        8.889574021731173,
+        1.394456053765679,
+        0.5833109815886789,
+        0.5373978414823937,
+        0.3166139149760171
+      ],
+      "optimizer": {
+        "success": true,
+        "message": "`ftol` termination condition is satisfied.",
+        "num_function_evaluations": 10
+      }
+    }
+  },
+  "mean_reversion_rank_check": {
+    "maximum_num_factors": 10,
+    "all_models_mean_reverting": true,
+    "models": [
+      {
+        "state": "log_dlvsq",
+        "num_factors": 1,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.9624295077368203,
+        "minimum_mode_half_life_calendar_days": 18.100458531858493,
+        "maximum_mode_half_life_calendar_days": 18.100458531858493,
+        "in_sample_r_squared_standardized_factors": 0.8532352435217736
+      },
+      {
+        "state": "log_dlvsq",
+        "num_factors": 2,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.9633373735943097,
+        "minimum_mode_half_life_calendar_days": 0.7575343390248724,
+        "maximum_mode_half_life_calendar_days": 18.55736620530576,
+        "in_sample_r_squared_standardized_factors": 0.48786621914227746
+      },
+      {
+        "state": "log_dlvsq",
+        "num_factors": 3,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.9395550194709106,
+        "minimum_mode_half_life_calendar_days": 0.7591314104933126,
+        "maximum_mode_half_life_calendar_days": 11.117232026320044,
+        "in_sample_r_squared_standardized_factors": 0.5567919691241017
+      },
+      {
+        "state": "log_dlvsq",
+        "num_factors": 4,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.9359036010414163,
+        "minimum_mode_half_life_calendar_days": 0.7498499082262278,
+        "maximum_mode_half_life_calendar_days": 10.463736435214292,
+        "in_sample_r_squared_standardized_factors": 0.5225285659053025
+      },
+      {
+        "state": "log_dlvsq",
+        "num_factors": 5,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.9645937371086912,
+        "minimum_mode_half_life_calendar_days": 0.7589285495653663,
+        "maximum_mode_half_life_calendar_days": 19.228309540515188,
+        "in_sample_r_squared_standardized_factors": 0.47918655630373497
+      },
+      {
+        "state": "log_dlvsq",
+        "num_factors": 6,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.9636925885401737,
+        "minimum_mode_half_life_calendar_days": 0.6564016732415884,
+        "maximum_mode_half_life_calendar_days": 18.742356022968448,
+        "in_sample_r_squared_standardized_factors": 0.45148476476232924
+      },
+      {
+        "state": "log_dlvsq",
+        "num_factors": 7,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.9636302890008193,
+        "minimum_mode_half_life_calendar_days": 0.43624838045154135,
+        "maximum_mode_half_life_calendar_days": 18.709650225314547,
+        "in_sample_r_squared_standardized_factors": 0.4174394468594602
+      },
+      {
+        "state": "log_dlvsq",
+        "num_factors": 8,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.9674783831024073,
+        "minimum_mode_half_life_calendar_days": 0.5632350032938622,
+        "maximum_mode_half_life_calendar_days": 20.964945938417515,
+        "in_sample_r_squared_standardized_factors": 0.4109410986960321
+      },
+      {
+        "state": "log_dlvsq",
+        "num_factors": 9,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.9651211815781138,
+        "minimum_mode_half_life_calendar_days": 0.5099285654507848,
+        "maximum_mode_half_life_calendar_days": 19.524387900264923,
+        "in_sample_r_squared_standardized_factors": 0.4036877909668227
+      },
+      {
+        "state": "log_dlvsq",
+        "num_factors": 10,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.963095433553707,
+        "minimum_mode_half_life_calendar_days": 0.025868075539736128,
+        "maximum_mode_half_life_calendar_days": 18.433406549958615,
+        "in_sample_r_squared_standardized_factors": 0.3906465268040342
+      },
+      {
+        "state": "log_forward_volatility",
+        "num_factors": 1,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.9628770167824567,
+        "minimum_mode_half_life_calendar_days": 18.32288678604304,
+        "maximum_mode_half_life_calendar_days": 18.32288678604304,
+        "in_sample_r_squared_standardized_factors": 0.8626170035052731
+      },
+      {
+        "state": "log_forward_volatility",
+        "num_factors": 2,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.9632855079922561,
+        "minimum_mode_half_life_calendar_days": 4.750458166141719,
+        "maximum_mode_half_life_calendar_days": 18.53065494671765,
+        "in_sample_r_squared_standardized_factors": 0.7264219302061801
+      },
+      {
+        "state": "log_forward_volatility",
+        "num_factors": 3,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.959364207379193,
+        "minimum_mode_half_life_calendar_days": 1.123503885632822,
+        "maximum_mode_half_life_calendar_days": 16.708583097977964,
+        "in_sample_r_squared_standardized_factors": 0.6370716132704823
+      },
+      {
+        "state": "log_forward_volatility",
+        "num_factors": 4,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.9666531430952795,
+        "minimum_mode_half_life_calendar_days": 1.0027544353085562,
+        "maximum_mode_half_life_calendar_days": 20.437449804063657,
+        "in_sample_r_squared_standardized_factors": 0.581487260958609
+      },
+      {
+        "state": "log_forward_volatility",
+        "num_factors": 5,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.9688694125186535,
+        "minimum_mode_half_life_calendar_days": 0.5810675267413586,
+        "maximum_mode_half_life_calendar_days": 21.917391518012877,
+        "in_sample_r_squared_standardized_factors": 0.5008150448778536
+      },
+      {
+        "state": "log_forward_volatility",
+        "num_factors": 6,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.9753655431985457,
+        "minimum_mode_half_life_calendar_days": 0.5631815808679517,
+        "maximum_mode_half_life_calendar_days": 27.789288877693913,
+        "in_sample_r_squared_standardized_factors": 0.5055387699284847
+      },
+      {
+        "state": "log_forward_volatility",
+        "num_factors": 7,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.9816794179529642,
+        "minimum_mode_half_life_calendar_days": 0.4090237369325802,
+        "maximum_mode_half_life_calendar_days": 37.486701114374355,
+        "in_sample_r_squared_standardized_factors": 0.4800276329079144
+      },
+      {
+        "state": "log_forward_volatility",
+        "num_factors": 8,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.9813270261273056,
+        "minimum_mode_half_life_calendar_days": 0.4191582965808766,
+        "maximum_mode_half_life_calendar_days": 36.77267985300397,
+        "in_sample_r_squared_standardized_factors": 0.4664458793931918
+      },
+      {
+        "state": "log_forward_volatility",
+        "num_factors": 9,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.9842283716979955,
+        "minimum_mode_half_life_calendar_days": 0.2804980818548678,
+        "maximum_mode_half_life_calendar_days": 43.60150106677629,
+        "in_sample_r_squared_standardized_factors": 0.46188569142353864
+      },
+      {
+        "state": "log_forward_volatility",
+        "num_factors": 10,
+        "mean_reverting": true,
+        "spectral_radius_one_calendar_day": 0.9840997358361688,
+        "minimum_mode_half_life_calendar_days": 0.22804912237573383,
+        "maximum_mode_half_life_calendar_days": 43.24593863300669,
+        "in_sample_r_squared_standardized_factors": 0.4425249657483783
+      }
+    ]
+  },
+  "artifacts": {
+    "pca_summary": "pca_summary.parquet",
+    "pca_loadings": "pca_loadings.parquet",
+    "pca_scores": "pca_scores.parquet",
+    "mean_reversion_rank_check": "mean_reversion_rank_check.parquet",
+    "pca_3d_plot": "pca_factors_3d.png",
+    "surface_video": "surface_history_3d.mp4"
+  }
+}

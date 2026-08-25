@@ -347,6 +347,46 @@ class FlexSanosDecoder(BaseModel):
         """Restore eager arithmetic for exact, comparable fit reporting."""
         self._sanos_step = self._solve_sanos_step
 
+    def solve_density_step_batch(
+        self,
+        *,
+        support: torch.Tensor,
+        dlvsqs: torch.Tensor,
+        time_increment_y: torch.Tensor,
+        rhs_density: torch.Tensor,
+    ) -> torch.Tensor:
+        """Apply one native SANOS density step to an arbitrary batched RHS.
+
+        This public wrapper exposes the same differentiable tridiagonal solve
+        used by :meth:`forward_batch`.  In particular, a one-hot RHS at support
+        node ``i`` returns row ``i`` of the implied martingale transition
+        without constructing its dense transition matrix.
+        """
+        assert support.ndim >= 2
+        assert rhs_density.shape == support.shape
+        assert dlvsqs.shape == support.shape[:-1] + (support.shape[-1] - 2,)
+        assert time_increment_y.ndim == 0
+        box = (
+            support[..., 1:-1].square()
+            * time_increment_y
+            / (support[..., 2:] - support[..., :-2])
+        )
+        w_plus = (
+            dlvsqs
+            * box
+            / (support[..., 2:] - support[..., 1:-1])
+        )
+        w_minus = (
+            dlvsqs
+            * box
+            / (support[..., 1:-1] - support[..., :-2])
+        )
+        return self._sanos_step(
+            w_minus=w_minus,
+            w_plus=w_plus,
+            rhs=rhs_density,
+        )
+
     def _total_vols(self, forward_vols: torch.Tensor) -> torch.Tensor:
         """Apply the user-specified cumulative square-root-time formula."""
         return torch.cumsum(

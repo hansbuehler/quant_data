@@ -5,6 +5,7 @@
 - This repository is a Python 3.12+ quantitative-data and numerical-research codebase.
 - Preserve existing user work and notebook workflows. Do not rewrite unrelated code while making a focused change.
 - Treat correctness of measures, densities, sample normalization, tensor shapes, and train/validation separation as higher priority than cosmetic cleanup.
+- Keep research ideas and projects isolated: code in one idea/project must not import from another. Put genuinely shared functionality in a general non-project package.
 
 ## System and Environment
 

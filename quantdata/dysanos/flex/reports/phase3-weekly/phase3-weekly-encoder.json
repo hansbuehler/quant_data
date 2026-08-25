@@ -1,0 +1,6275 @@
+{
+  "ad_hoc_choices": [
+    "per-expiry PCA variance threshold 99.5% for reduced mode",
+    "ordinary least squares for the lag-only daily affine transition",
+    "training-coordinate standardization before fitting the generator",
+    "full real stable matrix logarithm with no fallback",
+    "transient-power cap 10 in standardized coordinates",
+    "stationary/training variance trace-ratio gate [0.01,100]",
+    "Gaussian likelihood for weekly innovations"
+  ],
+  "date_weighting": "one equal exact daily origin for drift and one equal exact five-session origin for innovations",
+  "num_train_dates": 712,
+  "num_validation_dates": 162,
+  "production_complete": true,
+  "research_gate": "Weak forecast fit is retained if finite, stationary, and non-degenerate; statistics are diagnostics, not production gates.",
+  "ridge_sensitivity": {
+    "fit_range": [
+      "2022-01-03",
+      "2023-12-31"
+    ],
+    "score_range": [
+      "2024-01-01",
+      "2024-12-31"
+    ],
+    "selection_policy": "diagnostic only; the DYSANOS/grid ordinary least-squares fit is retained and 2025 is not used to select it",
+    "variants": {
+      "full": {
+        "0e+00": {
+          "generator_roundtrip_relative_error": 1.7717251392248629e-15,
+          "reduced_state_size": 140,
+          "score_2024": {
+            "finite": true,
+            "mahalanobis_mean_per_dimension": 3.0237981489511148,
+            "negative_log_likelihood_per_dimension": 1.2351643985653633,
+            "num_pairs": 210,
+            "surface_rmse": 1.249008297760676
+          },
+          "standardized_transition_maximum_power_norm": 1.4087035122288534,
+          "status": "complete",
+          "transition_condition_number": 9758402.722815653
+        },
+        "1e-04": {
+          "generator_roundtrip_relative_error": 1.6342446110402638e-15,
+          "reduced_state_size": 140,
+          "score_2024": {
+            "finite": true,
+            "mahalanobis_mean_per_dimension": 3.0237983580127317,
+            "negative_log_likelihood_per_dimension": 1.2351644557816388,
+            "num_pairs": 210,
+            "surface_rmse": 1.249008301685217
+          },
+          "standardized_transition_maximum_power_norm": 1.4087009429534414,
+          "status": "complete",
+          "transition_condition_number": 9758005.852913007
+        },
+        "1e-06": {
+          "generator_roundtrip_relative_error": 1.786290944693797e-15,
+          "reduced_state_size": 140,
+          "score_2024": {
+            "finite": true,
+            "mahalanobis_mean_per_dimension": 3.0237981510417686,
+            "negative_log_likelihood_per_dimension": 1.2351643991375387,
+            "num_pairs": 210,
+            "surface_rmse": 1.249008297799916
+          },
+          "standardized_transition_maximum_power_norm": 1.4087034865358705,
+          "status": "complete",
+          "transition_condition_number": 9758398.755184669
+        }
+      },
+      "reduced": {
+        "0e+00": {
+          "generator_roundtrip_relative_error": 1.4944900726487724e-15,
+          "reduced_state_size": 118,
+          "score_2024": {
+            "finite": true,
+            "mahalanobis_mean_per_dimension": 2.5956726954692906,
+            "negative_log_likelihood_per_dimension": 1.2575121315801796,
+            "num_pairs": 210,
+            "surface_rmse": 1.3676409310997375
+          },
+          "standardized_transition_maximum_power_norm": 1.299604729364114,
+          "status": "complete",
+          "transition_condition_number": 24171.06820031707
+        },
+        "1e-04": {
+          "generator_roundtrip_relative_error": 1.6074811566906899e-15,
+          "reduced_state_size": 118,
+          "score_2024": {
+            "finite": true,
+            "mahalanobis_mean_per_dimension": 2.5956728237348266,
+            "negative_log_likelihood_per_dimension": 1.2575121563365657,
+            "num_pairs": 210,
+            "surface_rmse": 1.3676410305655737
+          },
+          "standardized_transition_maximum_power_norm": 1.29960340440246,
+          "status": "complete",
+          "transition_condition_number": 24170.98626842135
+        },
+        "1e-06": {
+          "generator_roundtrip_relative_error": 1.6212289687393461e-15,
+          "reduced_state_size": 118,
+          "score_2024": {
+            "finite": true,
+            "mahalanobis_mean_per_dimension": 2.5956726967519543,
+            "negative_log_likelihood_per_dimension": 1.2575121318277462,
+            "num_pairs": 210,
+            "surface_rmse": 1.3676409320943925
+          },
+          "standardized_transition_maximum_power_norm": 1.2996047161144653,
+          "status": "complete",
+          "transition_condition_number": 24171.06738099395
+        }
+      }
+    }
+  },
+  "schema": "flex-phase3-weekly-v2-grid-hierarchy",
+  "source": {
+    "checkpoint": "/media/storage/quantdata/training/flex-phase3/market-encoder-v1/market-to-strong.pt",
+    "checkpoint_sha256": "f12e9587bd30ff7c7497ad002b0f38187f571497f02ee8e65f13733147380b50",
+    "kind": "market-to-strong-encoder",
+    "num_train_dates": 712,
+    "num_validation_dates": 162,
+    "report": "quantdata/dysanos/flex/reports/phase3-encoder/phase3-market-encoder.json",
+    "report_sha256": "0a58567d3f431ec978ec3e4a0bca73c023234fe73cf870642896cdd0a3bea3d6",
+    "strong_decoder_sha256": "738a77afa1eab80869fe7c2313b1c77650644230a51ad8865f5bfdb17a651bef",
+    "train_range": [
+      "2022-01-03",
+      "2024-12-31"
+    ],
+    "validation_range": [
+      "2025-01-02",
+      "2025-08-29"
+    ]
+  },
+  "status": "complete",
+  "train_range": [
+    "2022-01-03",
+    "2024-12-31"
+  ],
+  "validation_range": [
+    "2025-01-02",
+    "2025-08-29"
+  ],
+  "variants": {
+    "full": {
+      "checkpoint": "/media/storage/quantdata/training/flex-phase3/weekly-dynamics-grid-v1/phase3-weekly-encoder-full.pt",
+      "checkpoint_action": "loaded",
+      "checkpoint_sha256": "5e2ade55338ea7ddbb646d58e9e5d895b171f3ffa97a1d484fae82153bb0dded",
+      "config": {
+        "covariance_eigenvalue_floor": 1e-10,
+        "generator_roundtrip_relative_tolerance": 1e-08,
+        "group": "flex/weekly-dynamics",
+        "label": "phase3-weekly-encoder-full",
+        "maximum_standardized_transition_power_norm": 10.0,
+        "maximum_stationary_variance_trace_ratio": 100.0,
+        "maximum_transition_condition_number": 100000000.0,
+        "minimum_stationary_variance_trace_ratio": 0.01,
+        "pca_mode": "full",
+        "pca_variance_threshold": 0.995,
+        "ridge_penalty": 0.0,
+        "state_sizes_by_expiry": [
+          16,
+          19,
+          17,
+          15,
+          13,
+          10,
+          10,
+          10,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        "user_version": "0.1",
+        "weekly_session_stride": 5
+      },
+      "diagnostics": {
+        "covariance_eigenvalue_floor": 1e-10,
+        "daily_transition_condition_number": 13.31222226784266,
+        "daily_transition_observations": 675,
+        "daily_transition_selection": "exact adjacent NYSE business-session endpoints",
+        "equilibrium_constraint": "daily affine equilibrium estimated in training-standardized PCA coordinates",
+        "equilibrium_distance_over_training_rms": 0.5621090192332582,
+        "equilibrium_l2": 1.5390403713823344,
+        "estimator": "DYSANOS/grid lag-only daily affine matrix logarithm",
+        "full_state_size": 140,
+        "generator_roundtrip_relative_error": 1.6840512219650588e-15,
+        "generator_roundtrip_relative_tolerance": 1e-08,
+        "hierarchy_by_expiry": [
+          {
+            "design_columns": 17,
+            "design_condition": 1.0642290385145927,
+            "design_rank": 17,
+            "expiry_index": 0,
+            "generator_roundtrip_relative_error": 1.5358563857178947e-15,
+            "maximum_half_life_weeks": 4.662329060637223,
+            "maximum_mean_reversion_per_week": 5.408705652441964,
+            "minimum_mean_reversion_per_week": 0.14866972526928623,
+            "observations_per_design_column": 39.705882352941174,
+            "r2": 0.4396191317321485,
+            "structural_residual_mean_l2": 0.09144409812529777,
+            "structural_residual_mean_max_abs": 0.048312979678089764,
+            "underidentified": false
+          },
+          {
+            "design_columns": 36,
+            "design_condition": 7.632035175759263,
+            "design_rank": 36,
+            "expiry_index": 1,
+            "generator_roundtrip_relative_error": 1.9846825635984494e-15,
+            "maximum_half_life_weeks": 0.515445510873874,
+            "maximum_mean_reversion_per_week": 9.056293684170601,
+            "minimum_mean_reversion_per_week": 1.3447535499626335,
+            "observations_per_design_column": 18.75,
+            "r2": 0.44594031960638947,
+            "structural_residual_mean_l2": 0.1002224473566916,
+            "structural_residual_mean_max_abs": 0.05968933650842494,
+            "underidentified": false
+          },
+          {
+            "design_columns": 37,
+            "design_condition": 5.960888124340821,
+            "design_rank": 37,
+            "expiry_index": 2,
+            "generator_roundtrip_relative_error": 2.6217156862698013e-15,
+            "maximum_half_life_weeks": 0.6613670143791184,
+            "maximum_mean_reversion_per_week": 7.623052904103811,
+            "minimum_mean_reversion_per_week": 1.0480522395128242,
+            "observations_per_design_column": 18.243243243243242,
+            "r2": 0.468032192431558,
+            "structural_residual_mean_l2": 0.055026298984105756,
+            "structural_residual_mean_max_abs": 0.03427681513812369,
+            "underidentified": false
+          },
+          {
+            "design_columns": 33,
+            "design_condition": 5.629614134190596,
+            "design_rank": 33,
+            "expiry_index": 3,
+            "generator_roundtrip_relative_error": 1.652866774868093e-15,
+            "maximum_half_life_weeks": 1.0651573762341533,
+            "maximum_mean_reversion_per_week": 6.208462217514493,
+            "minimum_mean_reversion_per_week": 0.650746261562358,
+            "observations_per_design_column": 20.454545454545453,
+            "r2": 0.46636701404482805,
+            "structural_residual_mean_l2": 0.0757313044029841,
+            "structural_residual_mean_max_abs": 0.0375150258064561,
+            "underidentified": false
+          },
+          {
+            "design_columns": 29,
+            "design_condition": 4.6884231482392815,
+            "design_rank": 29,
+            "expiry_index": 4,
+            "generator_roundtrip_relative_error": 2.0578694231622154e-15,
+            "maximum_half_life_weeks": 0.6358203537123369,
+            "maximum_mean_reversion_per_week": 5.362227732452754,
+            "minimum_mean_reversion_per_week": 1.0901619876005804,
+            "observations_per_design_column": 23.275862068965516,
+            "r2": 0.45811144085534017,
+            "structural_residual_mean_l2": 0.05855484502200595,
+            "structural_residual_mean_max_abs": 0.029662567329936763,
+            "underidentified": false
+          },
+          {
+            "design_columns": 24,
+            "design_condition": 3.4441829995731004,
+            "design_rank": 24,
+            "expiry_index": 5,
+            "generator_roundtrip_relative_error": 1.1157267391295998e-15,
+            "maximum_half_life_weeks": 0.5060912991073052,
+            "maximum_mean_reversion_per_week": 4.628370703753191,
+            "minimum_mean_reversion_per_week": 1.3696089653834953,
+            "observations_per_design_column": 28.125,
+            "r2": 0.49304146359768086,
+            "structural_residual_mean_l2": 0.061104824848367,
+            "structural_residual_mean_max_abs": 0.035426113632024595,
+            "underidentified": false
+          },
+          {
+            "design_columns": 21,
+            "design_condition": 2.9577224615741113,
+            "design_rank": 21,
+            "expiry_index": 6,
+            "generator_roundtrip_relative_error": 9.19974084978615e-16,
+            "maximum_half_life_weeks": 1.205086819662912,
+            "maximum_mean_reversion_per_week": 4.704461921331461,
+            "minimum_mean_reversion_per_week": 0.5751844342251067,
+            "observations_per_design_column": 32.142857142857146,
+            "r2": 0.464966173973105,
+            "structural_residual_mean_l2": 0.05764767076920897,
+            "structural_residual_mean_max_abs": 0.03741989679060416,
+            "underidentified": false
+          },
+          {
+            "design_columns": 21,
+            "design_condition": 3.578740077854384,
+            "design_rank": 21,
+            "expiry_index": 7,
+            "generator_roundtrip_relative_error": 9.772300241684541e-16,
+            "maximum_half_life_weeks": 0.811915194758962,
+            "maximum_mean_reversion_per_week": 4.664123075635937,
+            "minimum_mean_reversion_per_week": 0.8537186950488393,
+            "observations_per_design_column": 32.142857142857146,
+            "r2": 0.486330751946605,
+            "structural_residual_mean_l2": 0.04611719021896262,
+            "structural_residual_mean_max_abs": 0.028313536221487988,
+            "underidentified": false
+          },
+          {
+            "design_columns": 16,
+            "design_condition": 2.7258687632919223,
+            "design_rank": 16,
+            "expiry_index": 8,
+            "generator_roundtrip_relative_error": 1.0075524867267423e-15,
+            "maximum_half_life_weeks": 0.6313194644128957,
+            "maximum_mean_reversion_per_week": 4.140014367924484,
+            "minimum_mean_reversion_per_week": 1.0979341199380683,
+            "observations_per_design_column": 42.1875,
+            "r2": 0.47329728486449407,
+            "structural_residual_mean_l2": 0.027993164902459643,
+            "structural_residual_mean_max_abs": 0.019916716021021418,
+            "underidentified": false
+          },
+          {
+            "design_columns": 11,
+            "design_condition": 2.167988102052764,
+            "design_rank": 11,
+            "expiry_index": 9,
+            "generator_roundtrip_relative_error": 7.567642210194197e-16,
+            "maximum_half_life_weeks": 0.8431833321855029,
+            "maximum_mean_reversion_per_week": 3.5875960292876763,
+            "minimum_mean_reversion_per_week": 0.8220598701391915,
+            "observations_per_design_column": 61.36363636363637,
+            "r2": 0.5089549624452587,
+            "structural_residual_mean_l2": 0.03573055221234991,
+            "structural_residual_mean_max_abs": 0.026435092528274636,
+            "underidentified": false
+          },
+          {
+            "design_columns": 11,
+            "design_condition": 2.1919872026971725,
+            "design_rank": 11,
+            "expiry_index": 10,
+            "generator_roundtrip_relative_error": 4.230408633136123e-16,
+            "maximum_half_life_weeks": 0.5600092959950428,
+            "maximum_mean_reversion_per_week": 2.933317987647983,
+            "minimum_mean_reversion_per_week": 1.2377422759176502,
+            "observations_per_design_column": 61.36363636363637,
+            "r2": 0.5181199910280156,
+            "structural_residual_mean_l2": 0.04058412108650177,
+            "structural_residual_mean_max_abs": 0.024316055485232035,
+            "underidentified": false
+          },
+          {
+            "design_columns": 11,
+            "design_condition": 2.129666760470935,
+            "design_rank": 11,
+            "expiry_index": 11,
+            "generator_roundtrip_relative_error": 5.939572228400887e-16,
+            "maximum_half_life_weeks": 0.7083801351063933,
+            "maximum_mean_reversion_per_week": 3.32311599914191,
+            "minimum_mean_reversion_per_week": 0.9784960732359326,
+            "observations_per_design_column": 61.36363636363637,
+            "r2": 0.5214179333320361,
+            "structural_residual_mean_l2": 0.04083272768667958,
+            "structural_residual_mean_max_abs": 0.03144546152528938,
+            "underidentified": false
+          },
+          {
+            "design_columns": 11,
+            "design_condition": 2.4368441198777875,
+            "design_rank": 11,
+            "expiry_index": 12,
+            "generator_roundtrip_relative_error": 7.510605722909833e-16,
+            "maximum_half_life_weeks": 0.6743997689758939,
+            "maximum_mean_reversion_per_week": 3.7853653256283093,
+            "minimum_mean_reversion_per_week": 1.0277986625240398,
+            "observations_per_design_column": 61.36363636363637,
+            "r2": 0.42332022877666275,
+            "structural_residual_mean_l2": 0.02577856501614323,
+            "structural_residual_mean_max_abs": 0.019755599390239797,
+            "underidentified": false
+          },
+          {
+            "design_columns": 11,
+            "design_condition": 2.3089417530903362,
+            "design_rank": 11,
+            "expiry_index": 13,
+            "generator_roundtrip_relative_error": 1.1423176201801266e-15,
+            "maximum_half_life_weeks": 0.4900205265745921,
+            "maximum_mean_reversion_per_week": 4.191048588410463,
+            "minimum_mean_reversion_per_week": 1.4145268268765732,
+            "observations_per_design_column": 61.36363636363637,
+            "r2": 0.42396448676365706,
+            "structural_residual_mean_l2": 0.0299048697747752,
+            "structural_residual_mean_max_abs": 0.017864830150639294,
+            "underidentified": false
+          }
+        ],
+        "innovation_covariance": "unrestricted full weekly residual covariance",
+        "maximum_generator_off_diagonal": 26.516572036958852,
+        "maximum_standardized_transition_power_norm": 10.0,
+        "maximum_stationary_variance_trace_ratio": 100.0,
+        "maximum_structural_cross_expiry_residual_correlation": 0.6532431436049796,
+        "maximum_transition_condition_number": 100000000.0,
+        "maximum_transition_spectral_radius": 0.8618537164021305,
+        "minimum_generator_real_eigenvalue": 0.1486697252692868,
+        "minimum_stationary_variance_trace_ratio": 0.01,
+        "origin_weighting": "equal weight per exact daily origin for drift and per exact weekly origin for innovations",
+        "pair_endpoint_drift_l2": 0.16862456385226068,
+        "pair_endpoint_drift_max_abs": 0.07772590550663358,
+        "pca_by_expiry": [
+          {
+            "expiry_index": 0,
+            "full_rank": 16,
+            "reduced_rank": 16,
+            "retained_variance": 1.0
+          },
+          {
+            "expiry_index": 1,
+            "full_rank": 19,
+            "reduced_rank": 19,
+            "retained_variance": 1.0000000000000002
+          },
+          {
+            "expiry_index": 2,
+            "full_rank": 17,
+            "reduced_rank": 17,
+            "retained_variance": 1.0
+          },
+          {
+            "expiry_index": 3,
+            "full_rank": 15,
+            "reduced_rank": 15,
+            "retained_variance": 1.0000000000000002
+          },
+          {
+            "expiry_index": 4,
+            "full_rank": 13,
+            "reduced_rank": 13,
+            "retained_variance": 0.9999999999999997
+          },
+          {
+            "expiry_index": 5,
+            "full_rank": 10,
+            "reduced_rank": 10,
+            "retained_variance": 0.9999999999999998
+          },
+          {
+            "expiry_index": 6,
+            "full_rank": 10,
+            "reduced_rank": 10,
+            "retained_variance": 1.0
+          },
+          {
+            "expiry_index": 7,
+            "full_rank": 10,
+            "reduced_rank": 10,
+            "retained_variance": 1.0
+          },
+          {
+            "expiry_index": 8,
+            "full_rank": 5,
+            "reduced_rank": 5,
+            "retained_variance": 1.0
+          },
+          {
+            "expiry_index": 9,
+            "full_rank": 5,
+            "reduced_rank": 5,
+            "retained_variance": 1.0
+          },
+          {
+            "expiry_index": 10,
+            "full_rank": 5,
+            "reduced_rank": 5,
+            "retained_variance": 1.0
+          },
+          {
+            "expiry_index": 11,
+            "full_rank": 5,
+            "reduced_rank": 5,
+            "retained_variance": 1.0
+          },
+          {
+            "expiry_index": 12,
+            "full_rank": 5,
+            "reduced_rank": 5,
+            "retained_variance": 1.0
+          },
+          {
+            "expiry_index": 13,
+            "full_rank": 5,
+            "reduced_rank": 5,
+            "retained_variance": 1.0
+          }
+        ],
+        "pca_mode": "full",
+        "pca_variance_threshold": 0.995,
+        "reduced_residual_mean_l2": 0.2723564649612921,
+        "reduced_residual_mean_max_abs": 0.17458036058192916,
+        "reduced_sizes_by_expiry": [
+          16,
+          19,
+          17,
+          15,
+          13,
+          10,
+          10,
+          10,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        "reduced_state_size": 140,
+        "ridge_penalty": 0.0,
+        "scipy_logm_estimated_error": 4.05861164456008e-15,
+        "score_standardization_maximum_scale": 10.848029626351424,
+        "score_standardization_minimum_scale": 0.06843473304445219,
+        "spot_front_explained_fraction": 0.5402481620056792,
+        "spot_orthogonal_std": 0.016483305669905766,
+        "standardized_stationary_variance_trace_ratio": 0.9527970267439551,
+        "standardized_training_score_rms": 1.0,
+        "standardized_transition_maximum_power_norm": 1.342750094327729,
+        "standardized_transition_maximum_power_week": 1,
+        "standardized_transition_norm": 1.342750094327729,
+        "standardized_transition_power_norms": {
+          "1": 1.342750094327729,
+          "1040": 1.7836470129868913e-67,
+          "260": 4.1032987042880025e-17,
+          "4": 1.116460885792245,
+          "52": 0.0011039589509827205,
+          "520": 6.696662199797649e-34
+        },
+        "training_rows": 712,
+        "training_score_mean_max_abs": 1.6516126793300081e-15,
+        "training_score_rms": 1.419561893036717,
+        "transition_condition_number": 225037.1571428413,
+        "transition_selection": "exact five-NYSE-session endpoints",
+        "underidentified_expiries": [],
+        "weekly_discrete_roundtrip_relative_error": 6.7593567660213525e-15,
+        "weekly_transition_observations": 671
+      },
+      "simulation_validation": {
+        "decoder_saturation": {
+          "density_mass_max_abs_error": 2.384185791015625e-05,
+          "density_mean_max_abs_error": 1.2874603271484375e-05,
+          "density_min": 5.926739676288817e-13,
+          "dlvsq_max": 8.999656677246094,
+          "dlvsq_min": 0.00010000338807003573,
+          "float_density_tolerance": 3.0517578125e-05,
+          "forward_vol_max": 0.44800713658332825,
+          "forward_vol_min": 0.01092674769461155,
+          "mu_max": 0.4988522529602051,
+          "mu_min": 0.027576660737395287,
+          "num_audit_path_steps": 2560,
+          "raw_abs_gt_12_fraction": 0.000486071192426607,
+          "raw_abs_gt_8_fraction": 0.026773005723953247
+        },
+        "device": "cuda:0",
+        "endpoint_dates": {
+          "1w": "2025-01-10",
+          "2w": "2025-01-17",
+          "4w": "2025-02-03"
+        },
+        "implied_mode_status": "structural simulator test only; not the calibrated historical-P spot model",
+        "implied_spot_test_mode": {
+          "elapsed_seconds": 0.6551742551382631,
+          "finite": true,
+          "horizons": {
+            "1w": {
+              "realized_log_spot_return": -0.007098391868394671,
+              "realized_spot_inside_central_intervals": {
+                "50pct": true,
+                "80pct": true,
+                "90pct": true,
+                "95pct": true,
+                "99pct": true
+              },
+              "realized_spot_percentile": 0.356689453125,
+              "realized_spot_z": -0.23544294313196273,
+              "realized_state_vs_simulated_mean_rmse": 0.795336160305098,
+              "simulated_log_spot_return_mean": -0.0005669862730428576,
+              "simulated_log_spot_return_std": 0.027740927413105965
+            },
+            "2w": {
+              "realized_log_spot_return": 0.021595122315867243,
+              "realized_spot_inside_central_intervals": {
+                "50pct": false,
+                "80pct": true,
+                "90pct": true,
+                "95pct": true,
+                "99pct": true
+              },
+              "realized_spot_percentile": 0.76171875,
+              "realized_spot_z": 0.5962992355516693,
+              "realized_state_vs_simulated_mean_rmse": 0.7378839374699445,
+              "simulated_log_spot_return_mean": -0.0008883650880306959,
+              "simulated_log_spot_return_std": 0.03770504146814346
+            },
+            "4w": {
+              "realized_log_spot_return": 0.02124647883962183,
+              "realized_spot_inside_central_intervals": {
+                "50pct": true,
+                "80pct": true,
+                "90pct": true,
+                "95pct": true,
+                "99pct": true
+              },
+              "realized_spot_percentile": 0.66015625,
+              "realized_spot_z": 0.41379809398653616,
+              "realized_state_vs_simulated_mean_rmse": 0.7751725476409929,
+              "simulated_log_spot_return_mean": -0.0014590411446988583,
+              "simulated_log_spot_return_std": 0.05487101152539253
+            }
+          },
+          "num_paths": 4096,
+          "path_steps_per_second": 25007.087612962514
+        },
+        "initial_date": "2025-01-02",
+        "long_run_surface": {
+          "finite": true,
+          "noncollapsed": true,
+          "num_paths": 2048,
+          "num_weeks": 260,
+          "stationary_covariance_relative_frobenius_error": 0.05350910499691963,
+          "stationary_mean_normalized_rms": 0.09951261430978775,
+          "stationary_variance_trace_ratio": 1.0264252424240112
+        },
+        "nondegenerate": true,
+        "normal_p": {
+          "elapsed_seconds": 0.00101312599144876,
+          "finite": true,
+          "horizons": {
+            "1w": {
+              "realized_log_spot_return": -0.007098391868394671,
+              "realized_spot_inside_central_intervals": {
+                "50pct": true,
+                "80pct": true,
+                "90pct": true,
+                "95pct": true,
+                "99pct": true
+              },
+              "realized_spot_percentile": 0.360107421875,
+              "realized_spot_z": -0.3519070211053251,
+              "realized_state_vs_simulated_mean_rmse": 0.7913559161433303,
+              "simulated_log_spot_return_mean": 0.0014861223753541708,
+              "simulated_log_spot_return_std": 0.024394268169999123
+            },
+            "2w": {
+              "realized_log_spot_return": 0.021595122315867243,
+              "realized_spot_inside_central_intervals": {
+                "50pct": true,
+                "80pct": true,
+                "90pct": true,
+                "95pct": true,
+                "99pct": true
+              },
+              "realized_spot_percentile": 0.7030029296875,
+              "realized_spot_z": 0.5410319984068898,
+              "realized_state_vs_simulated_mean_rmse": 0.7300183947262989,
+              "simulated_log_spot_return_mean": 0.002946509514003992,
+              "simulated_log_spot_return_std": 0.03446859493851662
+            },
+            "4w": {
+              "realized_log_spot_return": 0.02124647883962183,
+              "realized_spot_inside_central_intervals": {
+                "50pct": true,
+                "80pct": true,
+                "90pct": true,
+                "95pct": true,
+                "99pct": true
+              },
+              "realized_spot_percentile": 0.6220703125,
+              "realized_spot_z": 0.3165691795473508,
+              "realized_state_vs_simulated_mean_rmse": 0.772432269625321,
+              "simulated_log_spot_return_mean": 0.0058468906208872795,
+              "simulated_log_spot_return_std": 0.0486452542245388
+            }
+          },
+          "num_paths": 32768,
+          "path_steps_per_second": 129373840.08139832
+        },
+        "option_return_checks": {
+          "implied_expiry": {
+            "cost_feature_volatility": "SANOS strike-total-volatility ATM proxy",
+            "cost_model": "date-balanced linear half-spread attribution",
+            "finite": true,
+            "internal_simulation_steps": 27,
+            "num_options": 84,
+            "proportional_entry_cost_mean": 0.008157610893249512,
+            "proportional_entry_cost_median": 0.006429643370211124,
+            "shape": [
+              64,
+              14,
+              84
+            ],
+            "zero_strike_calls": 14
+          },
+          "implied_period": {
+            "cost_feature_volatility": "SANOS strike-total-volatility ATM proxy",
+            "cost_model": "date-balanced linear half-spread attribution",
+            "finite": true,
+            "internal_simulation_steps": 14,
+            "num_options": 84,
+            "proportional_entry_cost_mean": 0.008337504230439663,
+            "proportional_entry_cost_median": 0.006565220188349485,
+            "shape": [
+              64,
+              14,
+              84
+            ],
+            "zero_strike_calls": 14
+          },
+          "normal_expiry": {
+            "cost_feature_volatility": "SANOS strike-total-volatility ATM proxy",
+            "cost_model": "date-balanced linear half-spread attribution",
+            "finite": true,
+            "internal_simulation_steps": 27,
+            "num_options": 84,
+            "proportional_entry_cost_mean": 0.008340666070580482,
+            "proportional_entry_cost_median": 0.006538950372487307,
+            "shape": [
+              64,
+              14,
+              84
+            ],
+            "zero_strike_calls": 14
+          },
+          "normal_period": {
+            "cost_feature_volatility": "SANOS strike-total-volatility ATM proxy",
+            "cost_model": "date-balanced linear half-spread attribution",
+            "finite": true,
+            "internal_simulation_steps": 14,
+            "num_options": 84,
+            "proportional_entry_cost_mean": 0.008510983549058437,
+            "proportional_entry_cost_median": 0.006595695856958628,
+            "shape": [
+              64,
+              14,
+              84
+            ],
+            "zero_strike_calls": 14
+          }
+        },
+        "precision": 32,
+        "real_decoder_gradient": {
+          "finite": true,
+          "spot_gradient_abs": 0.0007969136349856853,
+          "state_gradient_l2": 4.027615070343018,
+          "state_nonzero": true
+        },
+        "spread_checkpoint": "quantdata/dysanos/flex/reports/phase3-spread/feed_forward.pt",
+        "spread_checkpoint_sha256": "ebee252f39f78d6ffc59eb865860f5ab8fa1bf5784bf48944eba5078aed4ce3f",
+        "spread_report": "quantdata/dysanos/flex/reports/phase3-spread/phase3-spread-ffw.json",
+        "spread_report_sha256": "c6eae660b59d1ba10b68142d1163ddf41c48f66a940a6de435d907ade48091fd",
+        "spread_split": {
+          "no_2026": true,
+          "train_end": "2024-12-31",
+          "train_start": "2022-01-03",
+          "validation_end": "2025-08-29",
+          "validation_start": "2025-01-02"
+        }
+      },
+      "validation_2025": {
+        "all_horizons_finite": true,
+        "all_horizons_nondegenerate": true,
+        "baseline_training_end": "2024-12-31",
+        "date_weighting": "one equal observation per exact horizon origin date",
+        "horizons": {
+          "1w": {
+            "coordinate_negative_log_likelihood": [
+              -2.1670321815303266,
+              3.6861724248222982,
+              2.419311647061328,
+              2.5275964280337853,
+              1.8779201579152673,
+              1.544786387109416,
+              1.575915152277774,
+              1.2179493279811968,
+              1.2081620161991078,
+              0.3932436834261684,
+              0.31341230638829226,
+              0.3113359310480526,
+              0.03663623636418506,
+              -0.2446427097615783,
+              -0.3163578454597209,
+              -0.7339949806854271,
+              -0.6889678490596771,
+              2.1476858410923976,
+              2.0737065251471294,
+              1.4370043784816366,
+              1.336769769991537,
+              1.212401302050689,
+              0.8290073073709588,
+              0.5614705599826636,
+              0.4664224181742601,
+              0.5466144594986122,
+              0.13171198615034327,
+              -0.11537128075733603,
+              -0.2626266017986309,
+              -0.7027126409974636,
+              -0.6755840129954582,
+              -0.6935153429114305,
+              -0.9966176580132161,
+              -1.1334132395879086,
+              -1.3427931699806326,
+              -1.2750340276583225,
+              2.0309725405600796,
+              1.4992699363789517,
+              1.0725489748814285,
+              0.978608708066797,
+              0.6251600234744525,
+              0.6193695998362837,
+              0.3783382530172349,
+              0.29264489962992785,
+              0.16873709029533446,
+              -0.06818833554643619,
+              -0.38690112522802633,
+              -0.4674379259315188,
+              -0.52569881483703,
+              -0.9739367440695608,
+              -1.088197501818314,
+              -1.175115198643106,
+              -1.0062846828241052,
+              2.337777371700751,
+              1.239637389640241,
+              1.0782186179833846,
+              1.3289543503241994,
+              0.3204357060698551,
+              0.2734877722345865,
+              0.20596955150032592,
+              0.04718348378944921,
+              -0.16744179163437356,
+              -0.30111368609374134,
+              -0.47732265819333825,
+              -0.20728298805289394,
+              -0.6618806680271491,
+              -0.8612317398970366,
+              -1.099666127681104,
+              1.5951268565651526,
+              1.0693190377011843,
+              0.6294813282380537,
+              0.7506184156149481,
+              0.6283972443851545,
+              0.30503980741396175,
+              0.2388625805511639,
+              -0.19563283937322543,
+              -0.14680855514330202,
+              -0.31872121716722135,
+              -0.5238831868852666,
+              -0.800519930906541,
+              -0.916725441957807,
+              1.6079877084191008,
+              0.7034403706902899,
+              1.155633224447717,
+              0.5383733333715569,
+              0.48316926870424043,
+              0.1953656480877685,
+              -0.08215839096492784,
+              -0.20245687489124015,
+              -0.3627161808603962,
+              -0.4100617113647484,
+              1.553344805897388,
+              1.035053770816381,
+              0.984351261585408,
+              0.6678537953698996,
+              0.25844682869154795,
+              0.3979279377876303,
+              -0.10804827814511087,
+              -0.2560331222142956,
+              -0.2830110944468276,
+              -0.4917807947862179,
+              1.1682869439330676,
+              1.4186490157146767,
+              0.7852983049829192,
+              0.5866613079762344,
+              0.25106787790296403,
+              0.4243035992854751,
+              0.2126845283574972,
+              -0.06130684296723381,
+              -0.07418898001985025,
+              -0.22650061874552613,
+              1.0833855834169808,
+              0.7396411704255349,
+              0.578805633653762,
+              0.1424617892247373,
+              0.10795966727255098,
+              1.5252132504662237,
+              1.055783767038085,
+              0.5753121427894339,
+              0.5322381553893858,
+              0.3428175806623896,
+              1.2950636524431167,
+              1.0824061759129322,
+              0.5587557796271161,
+              0.42411764695095056,
+              0.26854925682481606,
+              2.11200822694487,
+              1.4908875878798402,
+              1.0581617682632922,
+              0.6803974795911599,
+              0.4711542260777622,
+              2.821501957567514,
+              1.5100175733011518,
+              1.3955991533041592,
+              1.0605403875082187,
+              0.7140524793317382,
+              3.037577215670199,
+              1.7297704371877969,
+              1.7179840500360364,
+              1.5285001818120638,
+              0.6158743992310514
+            ],
+            "covariance_calibration_frobenius_per_dimension": 0.1283020592134814,
+            "diagonal_ar_log_score_hac_standard_error_per_dimension": 0.0037571325375299466,
+            "diagonal_ar_log_score_improvement_per_dimension": 0.004043755213752364,
+            "diagonal_ar_negative_log_likelihood_per_dimension": 0.2713478496903177,
+            "excluded_origin_dates": [
+              "2025-05-09",
+              "2025-06-26",
+              "2025-08-25",
+              "2025-08-26",
+              "2025-08-27",
+              "2025-08-28",
+              "2025-08-29"
+            ],
+            "expiry_conditional_nll_per_dimension": [
+              0.9262056095225346,
+              0.057998838949342914,
+              -0.07659060797350253,
+              -0.0648699427463658,
+              -0.053448991738835216,
+              0.12900936154979015,
+              0.1242591514162329,
+              0.18557097913060935,
+              0.32506232674471836,
+              0.5234927774375951,
+              0.45858921969015576,
+              0.7320177085969062,
+              1.1945322965055234,
+              1.4054847877959458
+            ],
+            "finite": true,
+            "hac_lag_origins": 4,
+            "joint_dimension": 141,
+            "joint_energy_score": 8.768923182998307,
+            "log_score_improvement_hac_ci95_lower_per_dimension": -0.032500492718550836,
+            "log_score_improvement_hac_ci95_upper_per_dimension": 0.0017608095913611965,
+            "log_score_improvement_hac_standard_error_per_dimension": 0.008740128140283682,
+            "log_score_improvement_per_dimension": -0.01536984156359482,
+            "mahalanobis_coverage_50": 0.7225806451612903,
+            "mahalanobis_coverage_90": 0.8193548387096774,
+            "mahalanobis_coverage_95": 0.8387096774193549,
+            "mahalanobis_ks_iid_naive_pvalue": 1.8325109415426656e-34,
+            "mahalanobis_mean_per_dimension": 0.9225222555068727,
+            "mahalanobis_median_per_dimension": 0.8019182093087255,
+            "mahalanobis_nonoverlap_ks_pvalue": 4.755857372972043e-10,
+            "negative_log_likelihood": 37.689877321195716,
+            "negative_log_likelihood_per_dimension": 0.2673040944765654,
+            "nondegenerate": true,
+            "nonoverlapping_pairs": 32,
+            "num_pairs": 155,
+            "origin_endpoint_dates": [
+              [
+                "2025-01-02",
+                "2025-01-10"
+              ],
+              [
+                "2025-01-03",
+                "2025-01-13"
+              ],
+              [
+                "2025-01-06",
+                "2025-01-14"
+              ],
+              [
+                "2025-01-07",
+                "2025-01-15"
+              ],
+              [
+                "2025-01-10",
+                "2025-01-17"
+              ],
+              [
+                "2025-01-13",
+                "2025-01-21"
+              ],
+              [
+                "2025-01-14",
+                "2025-01-22"
+              ],
+              [
+                "2025-01-15",
+                "2025-01-23"
+              ],
+              [
+                "2025-01-16",
+                "2025-01-24"
+              ],
+              [
+                "2025-01-17",
+                "2025-01-27"
+              ],
+              [
+                "2025-01-21",
+                "2025-01-28"
+              ],
+              [
+                "2025-01-22",
+                "2025-01-29"
+              ],
+              [
+                "2025-01-23",
+                "2025-01-30"
+              ],
+              [
+                "2025-01-24",
+                "2025-01-31"
+              ],
+              [
+                "2025-01-27",
+                "2025-02-03"
+              ],
+              [
+                "2025-01-28",
+                "2025-02-04"
+              ],
+              [
+                "2025-01-29",
+                "2025-02-05"
+              ],
+              [
+                "2025-01-30",
+                "2025-02-06"
+              ],
+              [
+                "2025-01-31",
+                "2025-02-07"
+              ],
+              [
+                "2025-02-03",
+                "2025-02-10"
+              ],
+              [
+                "2025-02-04",
+                "2025-02-11"
+              ],
+              [
+                "2025-02-05",
+                "2025-02-12"
+              ],
+              [
+                "2025-02-06",
+                "2025-02-13"
+              ],
+              [
+                "2025-02-07",
+                "2025-02-14"
+              ],
+              [
+                "2025-02-10",
+                "2025-02-18"
+              ],
+              [
+                "2025-02-11",
+                "2025-02-19"
+              ],
+              [
+                "2025-02-12",
+                "2025-02-20"
+              ],
+              [
+                "2025-02-13",
+                "2025-02-21"
+              ],
+              [
+                "2025-02-14",
+                "2025-02-24"
+              ],
+              [
+                "2025-02-18",
+                "2025-02-25"
+              ],
+              [
+                "2025-02-19",
+                "2025-02-26"
+              ],
+              [
+                "2025-02-20",
+                "2025-02-27"
+              ],
+              [
+                "2025-02-21",
+                "2025-02-28"
+              ],
+              [
+                "2025-02-24",
+                "2025-03-03"
+              ],
+              [
+                "2025-02-25",
+                "2025-03-04"
+              ],
+              [
+                "2025-02-26",
+                "2025-03-05"
+              ],
+              [
+                "2025-02-27",
+                "2025-03-06"
+              ],
+              [
+                "2025-02-28",
+                "2025-03-07"
+              ],
+              [
+                "2025-03-03",
+                "2025-03-10"
+              ],
+              [
+                "2025-03-04",
+                "2025-03-11"
+              ],
+              [
+                "2025-03-05",
+                "2025-03-12"
+              ],
+              [
+                "2025-03-06",
+                "2025-03-13"
+              ],
+              [
+                "2025-03-07",
+                "2025-03-14"
+              ],
+              [
+                "2025-03-10",
+                "2025-03-17"
+              ],
+              [
+                "2025-03-11",
+                "2025-03-18"
+              ],
+              [
+                "2025-03-12",
+                "2025-03-19"
+              ],
+              [
+                "2025-03-13",
+                "2025-03-20"
+              ],
+              [
+                "2025-03-14",
+                "2025-03-21"
+              ],
+              [
+                "2025-03-17",
+                "2025-03-24"
+              ],
+              [
+                "2025-03-18",
+                "2025-03-25"
+              ],
+              [
+                "2025-03-19",
+                "2025-03-26"
+              ],
+              [
+                "2025-03-20",
+                "2025-03-27"
+              ],
+              [
+                "2025-03-21",
+                "2025-03-28"
+              ],
+              [
+                "2025-03-24",
+                "2025-03-31"
+              ],
+              [
+                "2025-03-25",
+                "2025-04-01"
+              ],
+              [
+                "2025-03-26",
+                "2025-04-02"
+              ],
+              [
+                "2025-03-27",
+                "2025-04-03"
+              ],
+              [
+                "2025-03-28",
+                "2025-04-04"
+              ],
+              [
+                "2025-03-31",
+                "2025-04-07"
+              ],
+              [
+                "2025-04-01",
+                "2025-04-08"
+              ],
+              [
+                "2025-04-02",
+                "2025-04-09"
+              ],
+              [
+                "2025-04-03",
+                "2025-04-10"
+              ],
+              [
+                "2025-04-04",
+                "2025-04-11"
+              ],
+              [
+                "2025-04-07",
+                "2025-04-14"
+              ],
+              [
+                "2025-04-08",
+                "2025-04-15"
+              ],
+              [
+                "2025-04-09",
+                "2025-04-16"
+              ],
+              [
+                "2025-04-10",
+                "2025-04-17"
+              ],
+              [
+                "2025-04-11",
+                "2025-04-21"
+              ],
+              [
+                "2025-04-14",
+                "2025-04-22"
+              ],
+              [
+                "2025-04-15",
+                "2025-04-23"
+              ],
+              [
+                "2025-04-16",
+                "2025-04-24"
+              ],
+              [
+                "2025-04-17",
+                "2025-04-25"
+              ],
+              [
+                "2025-04-21",
+                "2025-04-28"
+              ],
+              [
+                "2025-04-22",
+                "2025-04-29"
+              ],
+              [
+                "2025-04-23",
+                "2025-04-30"
+              ],
+              [
+                "2025-04-24",
+                "2025-05-01"
+              ],
+              [
+                "2025-04-25",
+                "2025-05-02"
+              ],
+              [
+                "2025-04-28",
+                "2025-05-05"
+              ],
+              [
+                "2025-04-29",
+                "2025-05-06"
+              ],
+              [
+                "2025-04-30",
+                "2025-05-07"
+              ],
+              [
+                "2025-05-01",
+                "2025-05-08"
+              ],
+              [
+                "2025-05-02",
+                "2025-05-09"
+              ],
+              [
+                "2025-05-05",
+                "2025-05-12"
+              ],
+              [
+                "2025-05-06",
+                "2025-05-13"
+              ],
+              [
+                "2025-05-07",
+                "2025-05-14"
+              ],
+              [
+                "2025-05-08",
+                "2025-05-15"
+              ],
+              [
+                "2025-05-12",
+                "2025-05-19"
+              ],
+              [
+                "2025-05-13",
+                "2025-05-20"
+              ],
+              [
+                "2025-05-14",
+                "2025-05-21"
+              ],
+              [
+                "2025-05-15",
+                "2025-05-22"
+              ],
+              [
+                "2025-05-19",
+                "2025-05-27"
+              ],
+              [
+                "2025-05-20",
+                "2025-05-28"
+              ],
+              [
+                "2025-05-21",
+                "2025-05-29"
+              ],
+              [
+                "2025-05-22",
+                "2025-05-30"
+              ],
+              [
+                "2025-05-23",
+                "2025-06-02"
+              ],
+              [
+                "2025-05-27",
+                "2025-06-03"
+              ],
+              [
+                "2025-05-28",
+                "2025-06-04"
+              ],
+              [
+                "2025-05-29",
+                "2025-06-05"
+              ],
+              [
+                "2025-05-30",
+                "2025-06-06"
+              ],
+              [
+                "2025-06-02",
+                "2025-06-09"
+              ],
+              [
+                "2025-06-03",
+                "2025-06-10"
+              ],
+              [
+                "2025-06-04",
+                "2025-06-11"
+              ],
+              [
+                "2025-06-05",
+                "2025-06-12"
+              ],
+              [
+                "2025-06-06",
+                "2025-06-13"
+              ],
+              [
+                "2025-06-09",
+                "2025-06-16"
+              ],
+              [
+                "2025-06-10",
+                "2025-06-17"
+              ],
+              [
+                "2025-06-11",
+                "2025-06-18"
+              ],
+              [
+                "2025-06-12",
+                "2025-06-20"
+              ],
+              [
+                "2025-06-13",
+                "2025-06-23"
+              ],
+              [
+                "2025-06-16",
+                "2025-06-24"
+              ],
+              [
+                "2025-06-17",
+                "2025-06-25"
+              ],
+              [
+                "2025-06-18",
+                "2025-06-26"
+              ],
+              [
+                "2025-06-20",
+                "2025-06-27"
+              ],
+              [
+                "2025-06-23",
+                "2025-06-30"
+              ],
+              [
+                "2025-06-24",
+                "2025-07-01"
+              ],
+              [
+                "2025-06-25",
+                "2025-07-02"
+              ],
+              [
+                "2025-06-27",
+                "2025-07-07"
+              ],
+              [
+                "2025-06-30",
+                "2025-07-08"
+              ],
+              [
+                "2025-07-01",
+                "2025-07-09"
+              ],
+              [
+                "2025-07-02",
+                "2025-07-10"
+              ],
+              [
+                "2025-07-07",
+                "2025-07-14"
+              ],
+              [
+                "2025-07-08",
+                "2025-07-15"
+              ],
+              [
+                "2025-07-09",
+                "2025-07-16"
+              ],
+              [
+                "2025-07-10",
+                "2025-07-17"
+              ],
+              [
+                "2025-07-11",
+                "2025-07-18"
+              ],
+              [
+                "2025-07-14",
+                "2025-07-21"
+              ],
+              [
+                "2025-07-15",
+                "2025-07-22"
+              ],
+              [
+                "2025-07-16",
+                "2025-07-23"
+              ],
+              [
+                "2025-07-17",
+                "2025-07-24"
+              ],
+              [
+                "2025-07-18",
+                "2025-07-25"
+              ],
+              [
+                "2025-07-21",
+                "2025-07-28"
+              ],
+              [
+                "2025-07-22",
+                "2025-07-29"
+              ],
+              [
+                "2025-07-23",
+                "2025-07-30"
+              ],
+              [
+                "2025-07-24",
+                "2025-07-31"
+              ],
+              [
+                "2025-07-25",
+                "2025-08-01"
+              ],
+              [
+                "2025-07-28",
+                "2025-08-04"
+              ],
+              [
+                "2025-07-29",
+                "2025-08-05"
+              ],
+              [
+                "2025-07-30",
+                "2025-08-06"
+              ],
+              [
+                "2025-07-31",
+                "2025-08-07"
+              ],
+              [
+                "2025-08-01",
+                "2025-08-08"
+              ],
+              [
+                "2025-08-04",
+                "2025-08-11"
+              ],
+              [
+                "2025-08-05",
+                "2025-08-12"
+              ],
+              [
+                "2025-08-06",
+                "2025-08-13"
+              ],
+              [
+                "2025-08-07",
+                "2025-08-14"
+              ],
+              [
+                "2025-08-08",
+                "2025-08-15"
+              ],
+              [
+                "2025-08-11",
+                "2025-08-18"
+              ],
+              [
+                "2025-08-12",
+                "2025-08-19"
+              ],
+              [
+                "2025-08-13",
+                "2025-08-20"
+              ],
+              [
+                "2025-08-14",
+                "2025-08-21"
+              ],
+              [
+                "2025-08-15",
+                "2025-08-22"
+              ],
+              [
+                "2025-08-18",
+                "2025-08-25"
+              ],
+              [
+                "2025-08-19",
+                "2025-08-26"
+              ],
+              [
+                "2025-08-20",
+                "2025-08-27"
+              ],
+              [
+                "2025-08-21",
+                "2025-08-28"
+              ],
+              [
+                "2025-08-22",
+                "2025-08-29"
+              ]
+            ],
+            "persistence_surface_rmse": 1.4043620178149916,
+            "random_walk_log_score_hac_standard_error_per_dimension": 0.020271609666319575,
+            "random_walk_log_score_improvement_per_dimension": 0.2873889002729065,
+            "random_walk_negative_log_likelihood_per_dimension": 0.5546929947494718,
+            "spot_conditional_front_log_density": 2.845754506672937,
+            "spot_conditional_front_standardized_std": 0.8254690968306833,
+            "spot_coverage_50": 0.5806451612903226,
+            "spot_coverage_80": 0.8064516129032258,
+            "spot_coverage_90": 0.8903225806451613,
+            "spot_coverage_95": 0.9419354838709677,
+            "spot_coverage_99": 0.9612903225806452,
+            "spot_log_density": 2.167032181530327,
+            "spot_pit_ks_iid_naive_pvalue": 0.03527666647175698,
+            "spot_pit_mean": 0.5281188618085353,
+            "spot_pit_nonoverlap_ks_pvalue": 0.46408009585944066,
+            "spot_standardized_mean": 0.04638899726605282,
+            "spot_standardized_std": 1.1223424564136144,
+            "surface_mae": 0.48029479795639946,
+            "surface_rmse": 1.1782046842133054,
+            "unconditional_negative_log_likelihood": 35.52272966072884,
+            "unconditional_negative_log_likelihood_per_dimension": 0.2519342529129705,
+            "unconditional_surface_rmse": 1.3232421508946388,
+            "weeks": 1
+          },
+          "2w": {
+            "coordinate_negative_log_likelihood": [
+              -1.8933812977354896,
+              3.830910535950993,
+              2.4930416273048905,
+              2.5365052972615634,
+              1.9227513746941354,
+              1.54014528242084,
+              1.5939606549940848,
+              1.2501311454179032,
+              1.224401356698688,
+              0.41763865735261363,
+              0.3117181142712562,
+              0.3170165999781062,
+              0.01999443538007212,
+              -0.23813349557302535,
+              -0.27970743852210833,
+              -0.7225830061051138,
+              -0.6646797547900922,
+              2.2225621124506656,
+              2.1205892623470346,
+              1.5256780154513743,
+              1.3409936871491919,
+              1.2683700276591972,
+              0.9001716868361136,
+              0.5932416472945798,
+              0.417555796298949,
+              0.5487739554881579,
+              0.17140866408845684,
+              -0.13247012802416314,
+              -0.2703658177666541,
+              -0.6714943711799042,
+              -0.6798128642388245,
+              -0.6628694298017273,
+              -0.9861486745813619,
+              -1.14702900758077,
+              -1.3281379997398761,
+              -1.2374624231537514,
+              2.0569334649735507,
+              1.5930803229452948,
+              1.114379047405576,
+              1.0264611773893706,
+              0.6409176311643883,
+              0.736995584717787,
+              0.3936283280766104,
+              0.3522351034342093,
+              0.1828622283197763,
+              -0.07211191098749944,
+              -0.37166108350240856,
+              -0.4684275664400453,
+              -0.49355897367933804,
+              -0.9517687167658039,
+              -1.0719379705399157,
+              -1.1706474994772755,
+              -0.9932757928689177,
+              2.369582278028711,
+              1.3501623917302632,
+              1.0612594514379823,
+              1.3147872512643577,
+              0.3438099123658384,
+              0.285137331990652,
+              0.21025079642317565,
+              0.11339486694760356,
+              -0.11630497199906246,
+              -0.3188002839024669,
+              -0.500061021325325,
+              -0.1921374386025221,
+              -0.6537726781120592,
+              -0.866120182498539,
+              -1.0992185166536936,
+              1.6332596550375793,
+              1.162059097917711,
+              0.6539107643923835,
+              0.7856372324744086,
+              0.6435126118805721,
+              0.29203305984221317,
+              0.27683216136227157,
+              -0.17546121600298992,
+              -0.1744512872121145,
+              -0.29930117088246516,
+              -0.5100629373697748,
+              -0.7918765190453696,
+              -0.906946441938532,
+              1.601799487029108,
+              0.719868513967302,
+              1.2629166808695302,
+              0.6472603131865675,
+              0.4871264863089882,
+              0.27983268151472607,
+              -0.05653174846102225,
+              -0.1746050829724802,
+              -0.33701918831443634,
+              -0.4012060441536198,
+              1.576626766458347,
+              1.100210947880476,
+              1.0297815989073915,
+              0.6914609097890503,
+              0.25975819020882357,
+              0.4662444432122726,
+              -0.0794573733462597,
+              -0.2546635370978257,
+              -0.2960404044773,
+              -0.48025189565790016,
+              1.3195398665129596,
+              1.378577901241005,
+              0.7885597754280037,
+              0.5983331800188274,
+              0.2672853513132658,
+              0.47211907867560127,
+              0.2775028028108901,
+              -0.028775690745679167,
+              -0.05659568271526175,
+              -0.20430139761803043,
+              1.0866538931727363,
+              0.7536167098160601,
+              0.621046517302567,
+              0.12636092803236895,
+              0.15412047887625208,
+              1.5943737115037167,
+              1.041267199001604,
+              0.6000576055610161,
+              0.5731997318123417,
+              0.3532667864842956,
+              1.3290196411028246,
+              1.1154893373434613,
+              0.5912026737839948,
+              0.4414789733143044,
+              0.2837936331105248,
+              2.157123738673492,
+              1.5079274260575868,
+              1.0636947342188792,
+              0.6937090558379214,
+              0.4819243806843743,
+              2.9059556119131793,
+              1.5664936927840984,
+              1.4164748170340522,
+              1.066659922885662,
+              0.7079565147211204,
+              3.0620492474929852,
+              1.8015545194496398,
+              1.7361955964704403,
+              1.5963619863682947,
+              0.6247827974580594
+            ],
+            "covariance_calibration_frobenius_per_dimension": 0.11956703111708517,
+            "diagonal_ar_log_score_hac_standard_error_per_dimension": 0.00344827794020627,
+            "diagonal_ar_log_score_improvement_per_dimension": 0.010561899165450967,
+            "diagonal_ar_negative_log_likelihood_per_dimension": 0.2807252907972318,
+            "excluded_origin_dates": [
+              "2025-05-02",
+              "2025-06-18",
+              "2025-08-18",
+              "2025-08-19",
+              "2025-08-20",
+              "2025-08-21",
+              "2025-08-22",
+              "2025-08-25",
+              "2025-08-26",
+              "2025-08-27",
+              "2025-08-28",
+              "2025-08-29"
+            ],
+            "expiry_conditional_nll_per_dimension": [
+              0.9576386125938913,
+              0.06463809304902628,
+              -0.0521538623136802,
+              -0.0641656960535595,
+              -0.049367420553575944,
+              0.1363649619842146,
+              0.10451132039141497,
+              0.1833511041958718,
+              0.27702557600166045,
+              0.4886742260640009,
+              0.4287929223229653,
+              0.7373686024025595,
+              1.1569681005650092,
+              1.3706206205825335
+            ],
+            "finite": true,
+            "hac_lag_origins": 9,
+            "joint_dimension": 141,
+            "joint_energy_score": 9.245654803897205,
+            "log_score_improvement_hac_ci95_lower_per_dimension": -0.023532793522683348,
+            "log_score_improvement_hac_ci95_upper_per_dimension": -0.0036281241818468535,
+            "log_score_improvement_hac_standard_error_per_dimension": 0.005077721770621555,
+            "log_score_improvement_per_dimension": -0.0135804588522651,
+            "mahalanobis_coverage_50": 0.78,
+            "mahalanobis_coverage_90": 0.9,
+            "mahalanobis_coverage_95": 0.92,
+            "mahalanobis_ks_iid_naive_pvalue": 5.341490308916019e-53,
+            "mahalanobis_mean_per_dimension": 0.8252324317982859,
+            "mahalanobis_median_per_dimension": 0.7144701773550935,
+            "mahalanobis_nonoverlap_ks_pvalue": 7.272904430805156e-09,
+            "negative_log_likelihood": 38.0930382200811,
+            "negative_log_likelihood_per_dimension": 0.2701633916317808,
+            "nondegenerate": true,
+            "nonoverlapping_pairs": 16,
+            "num_pairs": 150,
+            "origin_endpoint_dates": [
+              [
+                "2025-01-02",
+                "2025-01-17"
+              ],
+              [
+                "2025-01-03",
+                "2025-01-21"
+              ],
+              [
+                "2025-01-06",
+                "2025-01-22"
+              ],
+              [
+                "2025-01-07",
+                "2025-01-23"
+              ],
+              [
+                "2025-01-10",
+                "2025-01-27"
+              ],
+              [
+                "2025-01-13",
+                "2025-01-28"
+              ],
+              [
+                "2025-01-14",
+                "2025-01-29"
+              ],
+              [
+                "2025-01-15",
+                "2025-01-30"
+              ],
+              [
+                "2025-01-16",
+                "2025-01-31"
+              ],
+              [
+                "2025-01-17",
+                "2025-02-03"
+              ],
+              [
+                "2025-01-21",
+                "2025-02-04"
+              ],
+              [
+                "2025-01-22",
+                "2025-02-05"
+              ],
+              [
+                "2025-01-23",
+                "2025-02-06"
+              ],
+              [
+                "2025-01-24",
+                "2025-02-07"
+              ],
+              [
+                "2025-01-27",
+                "2025-02-10"
+              ],
+              [
+                "2025-01-28",
+                "2025-02-11"
+              ],
+              [
+                "2025-01-29",
+                "2025-02-12"
+              ],
+              [
+                "2025-01-30",
+                "2025-02-13"
+              ],
+              [
+                "2025-01-31",
+                "2025-02-14"
+              ],
+              [
+                "2025-02-03",
+                "2025-02-18"
+              ],
+              [
+                "2025-02-04",
+                "2025-02-19"
+              ],
+              [
+                "2025-02-05",
+                "2025-02-20"
+              ],
+              [
+                "2025-02-06",
+                "2025-02-21"
+              ],
+              [
+                "2025-02-07",
+                "2025-02-24"
+              ],
+              [
+                "2025-02-10",
+                "2025-02-25"
+              ],
+              [
+                "2025-02-11",
+                "2025-02-26"
+              ],
+              [
+                "2025-02-12",
+                "2025-02-27"
+              ],
+              [
+                "2025-02-13",
+                "2025-02-28"
+              ],
+              [
+                "2025-02-14",
+                "2025-03-03"
+              ],
+              [
+                "2025-02-18",
+                "2025-03-04"
+              ],
+              [
+                "2025-02-19",
+                "2025-03-05"
+              ],
+              [
+                "2025-02-20",
+                "2025-03-06"
+              ],
+              [
+                "2025-02-21",
+                "2025-03-07"
+              ],
+              [
+                "2025-02-24",
+                "2025-03-10"
+              ],
+              [
+                "2025-02-25",
+                "2025-03-11"
+              ],
+              [
+                "2025-02-26",
+                "2025-03-12"
+              ],
+              [
+                "2025-02-27",
+                "2025-03-13"
+              ],
+              [
+                "2025-02-28",
+                "2025-03-14"
+              ],
+              [
+                "2025-03-03",
+                "2025-03-17"
+              ],
+              [
+                "2025-03-04",
+                "2025-03-18"
+              ],
+              [
+                "2025-03-05",
+                "2025-03-19"
+              ],
+              [
+                "2025-03-06",
+                "2025-03-20"
+              ],
+              [
+                "2025-03-07",
+                "2025-03-21"
+              ],
+              [
+                "2025-03-10",
+                "2025-03-24"
+              ],
+              [
+                "2025-03-11",
+                "2025-03-25"
+              ],
+              [
+                "2025-03-12",
+                "2025-03-26"
+              ],
+              [
+                "2025-03-13",
+                "2025-03-27"
+              ],
+              [
+                "2025-03-14",
+                "2025-03-28"
+              ],
+              [
+                "2025-03-17",
+                "2025-03-31"
+              ],
+              [
+                "2025-03-18",
+                "2025-04-01"
+              ],
+              [
+                "2025-03-19",
+                "2025-04-02"
+              ],
+              [
+                "2025-03-20",
+                "2025-04-03"
+              ],
+              [
+                "2025-03-21",
+                "2025-04-04"
+              ],
+              [
+                "2025-03-24",
+                "2025-04-07"
+              ],
+              [
+                "2025-03-25",
+                "2025-04-08"
+              ],
+              [
+                "2025-03-26",
+                "2025-04-09"
+              ],
+              [
+                "2025-03-27",
+                "2025-04-10"
+              ],
+              [
+                "2025-03-28",
+                "2025-04-11"
+              ],
+              [
+                "2025-03-31",
+                "2025-04-14"
+              ],
+              [
+                "2025-04-01",
+                "2025-04-15"
+              ],
+              [
+                "2025-04-02",
+                "2025-04-16"
+              ],
+              [
+                "2025-04-03",
+                "2025-04-17"
+              ],
+              [
+                "2025-04-04",
+                "2025-04-21"
+              ],
+              [
+                "2025-04-07",
+                "2025-04-22"
+              ],
+              [
+                "2025-04-08",
+                "2025-04-23"
+              ],
+              [
+                "2025-04-09",
+                "2025-04-24"
+              ],
+              [
+                "2025-04-10",
+                "2025-04-25"
+              ],
+              [
+                "2025-04-11",
+                "2025-04-28"
+              ],
+              [
+                "2025-04-14",
+                "2025-04-29"
+              ],
+              [
+                "2025-04-15",
+                "2025-04-30"
+              ],
+              [
+                "2025-04-16",
+                "2025-05-01"
+              ],
+              [
+                "2025-04-17",
+                "2025-05-02"
+              ],
+              [
+                "2025-04-21",
+                "2025-05-05"
+              ],
+              [
+                "2025-04-22",
+                "2025-05-06"
+              ],
+              [
+                "2025-04-23",
+                "2025-05-07"
+              ],
+              [
+                "2025-04-24",
+                "2025-05-08"
+              ],
+              [
+                "2025-04-25",
+                "2025-05-09"
+              ],
+              [
+                "2025-04-28",
+                "2025-05-12"
+              ],
+              [
+                "2025-04-29",
+                "2025-05-13"
+              ],
+              [
+                "2025-04-30",
+                "2025-05-14"
+              ],
+              [
+                "2025-05-01",
+                "2025-05-15"
+              ],
+              [
+                "2025-05-05",
+                "2025-05-19"
+              ],
+              [
+                "2025-05-06",
+                "2025-05-20"
+              ],
+              [
+                "2025-05-07",
+                "2025-05-21"
+              ],
+              [
+                "2025-05-08",
+                "2025-05-22"
+              ],
+              [
+                "2025-05-09",
+                "2025-05-23"
+              ],
+              [
+                "2025-05-12",
+                "2025-05-27"
+              ],
+              [
+                "2025-05-13",
+                "2025-05-28"
+              ],
+              [
+                "2025-05-14",
+                "2025-05-29"
+              ],
+              [
+                "2025-05-15",
+                "2025-05-30"
+              ],
+              [
+                "2025-05-19",
+                "2025-06-03"
+              ],
+              [
+                "2025-05-20",
+                "2025-06-04"
+              ],
+              [
+                "2025-05-21",
+                "2025-06-05"
+              ],
+              [
+                "2025-05-22",
+                "2025-06-06"
+              ],
+              [
+                "2025-05-23",
+                "2025-06-09"
+              ],
+              [
+                "2025-05-27",
+                "2025-06-10"
+              ],
+              [
+                "2025-05-28",
+                "2025-06-11"
+              ],
+              [
+                "2025-05-29",
+                "2025-06-12"
+              ],
+              [
+                "2025-05-30",
+                "2025-06-13"
+              ],
+              [
+                "2025-06-02",
+                "2025-06-16"
+              ],
+              [
+                "2025-06-03",
+                "2025-06-17"
+              ],
+              [
+                "2025-06-04",
+                "2025-06-18"
+              ],
+              [
+                "2025-06-05",
+                "2025-06-20"
+              ],
+              [
+                "2025-06-06",
+                "2025-06-23"
+              ],
+              [
+                "2025-06-09",
+                "2025-06-24"
+              ],
+              [
+                "2025-06-10",
+                "2025-06-25"
+              ],
+              [
+                "2025-06-11",
+                "2025-06-26"
+              ],
+              [
+                "2025-06-12",
+                "2025-06-27"
+              ],
+              [
+                "2025-06-13",
+                "2025-06-30"
+              ],
+              [
+                "2025-06-16",
+                "2025-07-01"
+              ],
+              [
+                "2025-06-17",
+                "2025-07-02"
+              ],
+              [
+                "2025-06-20",
+                "2025-07-07"
+              ],
+              [
+                "2025-06-23",
+                "2025-07-08"
+              ],
+              [
+                "2025-06-24",
+                "2025-07-09"
+              ],
+              [
+                "2025-06-25",
+                "2025-07-10"
+              ],
+              [
+                "2025-06-26",
+                "2025-07-11"
+              ],
+              [
+                "2025-06-27",
+                "2025-07-14"
+              ],
+              [
+                "2025-06-30",
+                "2025-07-15"
+              ],
+              [
+                "2025-07-01",
+                "2025-07-16"
+              ],
+              [
+                "2025-07-02",
+                "2025-07-17"
+              ],
+              [
+                "2025-07-07",
+                "2025-07-21"
+              ],
+              [
+                "2025-07-08",
+                "2025-07-22"
+              ],
+              [
+                "2025-07-09",
+                "2025-07-23"
+              ],
+              [
+                "2025-07-10",
+                "2025-07-24"
+              ],
+              [
+                "2025-07-11",
+                "2025-07-25"
+              ],
+              [
+                "2025-07-14",
+                "2025-07-28"
+              ],
+              [
+                "2025-07-15",
+                "2025-07-29"
+              ],
+              [
+                "2025-07-16",
+                "2025-07-30"
+              ],
+              [
+                "2025-07-17",
+                "2025-07-31"
+              ],
+              [
+                "2025-07-18",
+                "2025-08-01"
+              ],
+              [
+                "2025-07-21",
+                "2025-08-04"
+              ],
+              [
+                "2025-07-22",
+                "2025-08-05"
+              ],
+              [
+                "2025-07-23",
+                "2025-08-06"
+              ],
+              [
+                "2025-07-24",
+                "2025-08-07"
+              ],
+              [
+                "2025-07-25",
+                "2025-08-08"
+              ],
+              [
+                "2025-07-28",
+                "2025-08-11"
+              ],
+              [
+                "2025-07-29",
+                "2025-08-12"
+              ],
+              [
+                "2025-07-30",
+                "2025-08-13"
+              ],
+              [
+                "2025-07-31",
+                "2025-08-14"
+              ],
+              [
+                "2025-08-01",
+                "2025-08-15"
+              ],
+              [
+                "2025-08-04",
+                "2025-08-18"
+              ],
+              [
+                "2025-08-05",
+                "2025-08-19"
+              ],
+              [
+                "2025-08-06",
+                "2025-08-20"
+              ],
+              [
+                "2025-08-07",
+                "2025-08-21"
+              ],
+              [
+                "2025-08-08",
+                "2025-08-22"
+              ],
+              [
+                "2025-08-11",
+                "2025-08-25"
+              ],
+              [
+                "2025-08-12",
+                "2025-08-26"
+              ],
+              [
+                "2025-08-13",
+                "2025-08-27"
+              ],
+              [
+                "2025-08-14",
+                "2025-08-28"
+              ],
+              [
+                "2025-08-15",
+                "2025-08-29"
+              ]
+            ],
+            "persistence_surface_rmse": 1.6091529414124324,
+            "random_walk_log_score_hac_standard_error_per_dimension": 0.02059974938312744,
+            "random_walk_log_score_improvement_per_dimension": 0.4229103496667064,
+            "random_walk_negative_log_likelihood_per_dimension": 0.6930737412984871,
+            "spot_conditional_front_log_density": 2.4963582138949225,
+            "spot_conditional_front_standardized_std": 0.7902098150508523,
+            "spot_coverage_50": 0.58,
+            "spot_coverage_80": 0.8,
+            "spot_coverage_90": 0.8933333333333333,
+            "spot_coverage_95": 0.94,
+            "spot_coverage_99": 0.98,
+            "spot_log_density": 1.8933812977354898,
+            "spot_pit_ks_iid_naive_pvalue": 0.00012950084214825245,
+            "spot_pit_mean": 0.5459034559643935,
+            "spot_pit_nonoverlap_ks_pvalue": 0.22769406533592207,
+            "spot_standardized_mean": 0.06424596060695109,
+            "spot_standardized_std": 1.0544342426682256,
+            "surface_mae": 0.5031974529469492,
+            "surface_rmse": 1.2923404514389734,
+            "unconditional_negative_log_likelihood": 36.17819352191172,
+            "unconditional_negative_log_likelihood_per_dimension": 0.25658293277951577,
+            "unconditional_surface_rmse": 1.3350785864129673,
+            "weeks": 2
+          },
+          "4w": {
+            "coordinate_negative_log_likelihood": [
+              -1.5118190429140925,
+              3.8073318400228096,
+              2.552926668246116,
+              2.5356421224869394,
+              1.9109149092782811,
+              1.5368476376916822,
+              1.616885980355035,
+              1.1975177582952443,
+              1.2453631589328396,
+              0.43639255461747073,
+              0.31217199574264703,
+              0.34176353963292666,
+              0.0006542498428184222,
+              -0.22478517550516589,
+              -0.25800218958259485,
+              -0.7029197161344515,
+              -0.6408485244330154,
+              2.2820274683530237,
+              2.1333504891808976,
+              1.5581442642728722,
+              1.3659521707141948,
+              1.2789485853447948,
+              0.8925352328689805,
+              0.60293935448378,
+              0.45371426871675563,
+              0.5900511851522676,
+              0.1707578145957415,
+              -0.12361658144726466,
+              -0.32226580934830423,
+              -0.673482884083894,
+              -0.6835773112848765,
+              -0.6328290345773668,
+              -0.9799320278202515,
+              -1.1320512502689088,
+              -1.3199003164275804,
+              -1.2328633533002877,
+              2.04876157225846,
+              1.6434860554416273,
+              1.1538641371747922,
+              1.0153098804192207,
+              0.6580176554705817,
+              0.7009357240222377,
+              0.4021294255771586,
+              0.37406147415973684,
+              0.2123741206632207,
+              -0.07750663222155407,
+              -0.36157249556102217,
+              -0.4553454605716292,
+              -0.5339200569192822,
+              -0.948364683898546,
+              -1.0696975664126833,
+              -1.1630270974556245,
+              -0.9669858704649753,
+              2.3715912839238045,
+              1.3754119796059021,
+              1.0550541739236785,
+              1.355403364658581,
+              0.35647379432031223,
+              0.2956955266503205,
+              0.15738066354531327,
+              0.10582866557902043,
+              -0.130617586025428,
+              -0.3184700208693026,
+              -0.4768875136003711,
+              -0.1446349276877885,
+              -0.6309762009198303,
+              -0.8638368228718041,
+              -1.0865444627228986,
+              1.6562214439426264,
+              1.1369229781206336,
+              0.6511502036852748,
+              0.7953006999422497,
+              0.6820204706698684,
+              0.30375282817971994,
+              0.2949635640817951,
+              -0.1686690034867838,
+              -0.12607658908311462,
+              -0.3092085305849842,
+              -0.5054435262912308,
+              -0.7791705020498458,
+              -0.9122302517159322,
+              1.6429356036579343,
+              0.7598369769193783,
+              1.2988760262565984,
+              0.7356444565147665,
+              0.5099973604131248,
+              0.32371035168500684,
+              -0.05387741127173811,
+              -0.1442906010514029,
+              -0.3254589020468165,
+              -0.395133605883414,
+              1.5880347939038337,
+              1.1561763251745643,
+              1.0726983423263836,
+              0.7066258151395441,
+              0.26374159306519074,
+              0.4630952129928941,
+              -0.07078456303326175,
+              -0.2547088421653334,
+              -0.29528989842662173,
+              -0.4817081433731344,
+              1.4335744039501948,
+              1.3949437979949795,
+              0.7998745386711853,
+              0.6186608842990868,
+              0.28650445121410006,
+              0.5135104385681127,
+              0.30581421290439953,
+              -0.05686912209116548,
+              -0.08308419145790494,
+              -0.18331060781762681,
+              1.0840485709891463,
+              0.7327234020678514,
+              0.6511100759578701,
+              0.15647176767199417,
+              0.15284938407916943,
+              1.6550910792940112,
+              1.060214978601084,
+              0.5788957494165943,
+              0.5760350918346425,
+              0.331815502338383,
+              1.342486086641839,
+              1.1596735076041875,
+              0.5829575317884025,
+              0.4668562340813059,
+              0.2657553034998876,
+              2.2639086767124037,
+              1.521789732683711,
+              1.0754302473885933,
+              0.6947197467459566,
+              0.4906061472956843,
+              2.9674107694652827,
+              1.5815249471926478,
+              1.4047031028965806,
+              1.0741598487870514,
+              0.7130621989640281,
+              3.054469449410421,
+              1.8396497708570894,
+              1.7122864864677263,
+              1.5908723838906837,
+              0.655355473235839
+            ],
+            "covariance_calibration_frobenius_per_dimension": 0.12093879833194005,
+            "diagonal_ar_log_score_hac_standard_error_per_dimension": 0.0030526246817888583,
+            "diagonal_ar_log_score_improvement_per_dimension": 0.011093708152924152,
+            "diagonal_ar_negative_log_likelihood_per_dimension": 0.29086314343142433,
+            "excluded_origin_dates": [
+              "2025-04-17",
+              "2025-06-04",
+              "2025-08-04",
+              "2025-08-05",
+              "2025-08-06",
+              "2025-08-07",
+              "2025-08-08",
+              "2025-08-11",
+              "2025-08-12",
+              "2025-08-13",
+              "2025-08-14",
+              "2025-08-15",
+              "2025-08-18",
+              "2025-08-19",
+              "2025-08-20",
+              "2025-08-21",
+              "2025-08-22",
+              "2025-08-25",
+              "2025-08-26",
+              "2025-08-27",
+              "2025-08-28",
+              "2025-08-29"
+            ],
+            "expiry_conditional_nll_per_dimension": [
+              0.9722878075936366,
+              0.06852701726065173,
+              -0.05276224220490214,
+              -0.060206562608499,
+              -0.04534170839864859,
+              0.1549539056596281,
+              0.11529502325334648,
+              0.2004000356541528,
+              0.27737972277663336,
+              0.48475744820957534,
+              0.4316756686821628,
+              0.7566593324504552,
+              1.1649660702917222,
+              1.357862874029256
+            ],
+            "finite": true,
+            "hac_lag_origins": 19,
+            "joint_dimension": 141,
+            "joint_energy_score": 9.855192273420899,
+            "log_score_improvement_hac_ci95_lower_per_dimension": -0.028106835244655806,
+            "log_score_improvement_hac_ci95_upper_per_dimension": 0.0010398325879201406,
+            "log_score_improvement_hac_standard_error_per_dimension": 0.007435374447085701,
+            "log_score_improvement_per_dimension": -0.013533501328367833,
+            "mahalanobis_coverage_50": 0.7857142857142857,
+            "mahalanobis_coverage_90": 0.8785714285714286,
+            "mahalanobis_coverage_95": 0.9142857142857143,
+            "mahalanobis_ks_iid_naive_pvalue": 2.690149645544143e-49,
+            "mahalanobis_mean_per_dimension": 0.8110434807182189,
+            "mahalanobis_median_per_dimension": 0.702614255498553,
+            "mahalanobis_nonoverlap_ks_pvalue": 3.898328385076304e-05,
+            "negative_log_likelihood": 39.44749037426852,
+            "negative_log_likelihood_per_dimension": 0.2797694352785001,
+            "nondegenerate": true,
+            "nonoverlapping_pairs": 8,
+            "num_pairs": 140,
+            "origin_endpoint_dates": [
+              [
+                "2025-01-02",
+                "2025-02-03"
+              ],
+              [
+                "2025-01-03",
+                "2025-02-04"
+              ],
+              [
+                "2025-01-06",
+                "2025-02-05"
+              ],
+              [
+                "2025-01-07",
+                "2025-02-06"
+              ],
+              [
+                "2025-01-10",
+                "2025-02-10"
+              ],
+              [
+                "2025-01-13",
+                "2025-02-11"
+              ],
+              [
+                "2025-01-14",
+                "2025-02-12"
+              ],
+              [
+                "2025-01-15",
+                "2025-02-13"
+              ],
+              [
+                "2025-01-16",
+                "2025-02-14"
+              ],
+              [
+                "2025-01-17",
+                "2025-02-18"
+              ],
+              [
+                "2025-01-21",
+                "2025-02-19"
+              ],
+              [
+                "2025-01-22",
+                "2025-02-20"
+              ],
+              [
+                "2025-01-23",
+                "2025-02-21"
+              ],
+              [
+                "2025-01-24",
+                "2025-02-24"
+              ],
+              [
+                "2025-01-27",
+                "2025-02-25"
+              ],
+              [
+                "2025-01-28",
+                "2025-02-26"
+              ],
+              [
+                "2025-01-29",
+                "2025-02-27"
+              ],
+              [
+                "2025-01-30",
+                "2025-02-28"
+              ],
+              [
+                "2025-01-31",
+                "2025-03-03"
+              ],
+              [
+                "2025-02-03",
+                "2025-03-04"
+              ],
+              [
+                "2025-02-04",
+                "2025-03-05"
+              ],
+              [
+                "2025-02-05",
+                "2025-03-06"
+              ],
+              [
+                "2025-02-06",
+                "2025-03-07"
+              ],
+              [
+                "2025-02-07",
+                "2025-03-10"
+              ],
+              [
+                "2025-02-10",
+                "2025-03-11"
+              ],
+              [
+                "2025-02-11",
+                "2025-03-12"
+              ],
+              [
+                "2025-02-12",
+                "2025-03-13"
+              ],
+              [
+                "2025-02-13",
+                "2025-03-14"
+              ],
+              [
+                "2025-02-14",
+                "2025-03-17"
+              ],
+              [
+                "2025-02-18",
+                "2025-03-18"
+              ],
+              [
+                "2025-02-19",
+                "2025-03-19"
+              ],
+              [
+                "2025-02-20",
+                "2025-03-20"
+              ],
+              [
+                "2025-02-21",
+                "2025-03-21"
+              ],
+              [
+                "2025-02-24",
+                "2025-03-24"
+              ],
+              [
+                "2025-02-25",
+                "2025-03-25"
+              ],
+              [
+                "2025-02-26",
+                "2025-03-26"
+              ],
+              [
+                "2025-02-27",
+                "2025-03-27"
+              ],
+              [
+                "2025-02-28",
+                "2025-03-28"
+              ],
+              [
+                "2025-03-03",
+                "2025-03-31"
+              ],
+              [
+                "2025-03-04",
+                "2025-04-01"
+              ],
+              [
+                "2025-03-05",
+                "2025-04-02"
+              ],
+              [
+                "2025-03-06",
+                "2025-04-03"
+              ],
+              [
+                "2025-03-07",
+                "2025-04-04"
+              ],
+              [
+                "2025-03-10",
+                "2025-04-07"
+              ],
+              [
+                "2025-03-11",
+                "2025-04-08"
+              ],
+              [
+                "2025-03-12",
+                "2025-04-09"
+              ],
+              [
+                "2025-03-13",
+                "2025-04-10"
+              ],
+              [
+                "2025-03-14",
+                "2025-04-11"
+              ],
+              [
+                "2025-03-17",
+                "2025-04-14"
+              ],
+              [
+                "2025-03-18",
+                "2025-04-15"
+              ],
+              [
+                "2025-03-19",
+                "2025-04-16"
+              ],
+              [
+                "2025-03-20",
+                "2025-04-17"
+              ],
+              [
+                "2025-03-21",
+                "2025-04-21"
+              ],
+              [
+                "2025-03-24",
+                "2025-04-22"
+              ],
+              [
+                "2025-03-25",
+                "2025-04-23"
+              ],
+              [
+                "2025-03-26",
+                "2025-04-24"
+              ],
+              [
+                "2025-03-27",
+                "2025-04-25"
+              ],
+              [
+                "2025-03-28",
+                "2025-04-28"
+              ],
+              [
+                "2025-03-31",
+                "2025-04-29"
+              ],
+              [
+                "2025-04-01",
+                "2025-04-30"
+              ],
+              [
+                "2025-04-02",
+                "2025-05-01"
+              ],
+              [
+                "2025-04-03",
+                "2025-05-02"
+              ],
+              [
+                "2025-04-04",
+                "2025-05-05"
+              ],
+              [
+                "2025-04-07",
+                "2025-05-06"
+              ],
+              [
+                "2025-04-08",
+                "2025-05-07"
+              ],
+              [
+                "2025-04-09",
+                "2025-05-08"
+              ],
+              [
+                "2025-04-10",
+                "2025-05-09"
+              ],
+              [
+                "2025-04-11",
+                "2025-05-12"
+              ],
+              [
+                "2025-04-14",
+                "2025-05-13"
+              ],
+              [
+                "2025-04-15",
+                "2025-05-14"
+              ],
+              [
+                "2025-04-16",
+                "2025-05-15"
+              ],
+              [
+                "2025-04-21",
+                "2025-05-19"
+              ],
+              [
+                "2025-04-22",
+                "2025-05-20"
+              ],
+              [
+                "2025-04-23",
+                "2025-05-21"
+              ],
+              [
+                "2025-04-24",
+                "2025-05-22"
+              ],
+              [
+                "2025-04-25",
+                "2025-05-23"
+              ],
+              [
+                "2025-04-28",
+                "2025-05-27"
+              ],
+              [
+                "2025-04-29",
+                "2025-05-28"
+              ],
+              [
+                "2025-04-30",
+                "2025-05-29"
+              ],
+              [
+                "2025-05-01",
+                "2025-05-30"
+              ],
+              [
+                "2025-05-02",
+                "2025-06-02"
+              ],
+              [
+                "2025-05-05",
+                "2025-06-03"
+              ],
+              [
+                "2025-05-06",
+                "2025-06-04"
+              ],
+              [
+                "2025-05-07",
+                "2025-06-05"
+              ],
+              [
+                "2025-05-08",
+                "2025-06-06"
+              ],
+              [
+                "2025-05-09",
+                "2025-06-09"
+              ],
+              [
+                "2025-05-12",
+                "2025-06-10"
+              ],
+              [
+                "2025-05-13",
+                "2025-06-11"
+              ],
+              [
+                "2025-05-14",
+                "2025-06-12"
+              ],
+              [
+                "2025-05-15",
+                "2025-06-13"
+              ],
+              [
+                "2025-05-19",
+                "2025-06-17"
+              ],
+              [
+                "2025-05-20",
+                "2025-06-18"
+              ],
+              [
+                "2025-05-21",
+                "2025-06-20"
+              ],
+              [
+                "2025-05-22",
+                "2025-06-23"
+              ],
+              [
+                "2025-05-23",
+                "2025-06-24"
+              ],
+              [
+                "2025-05-27",
+                "2025-06-25"
+              ],
+              [
+                "2025-05-28",
+                "2025-06-26"
+              ],
+              [
+                "2025-05-29",
+                "2025-06-27"
+              ],
+              [
+                "2025-05-30",
+                "2025-06-30"
+              ],
+              [
+                "2025-06-02",
+                "2025-07-01"
+              ],
+              [
+                "2025-06-03",
+                "2025-07-02"
+              ],
+              [
+                "2025-06-05",
+                "2025-07-07"
+              ],
+              [
+                "2025-06-06",
+                "2025-07-08"
+              ],
+              [
+                "2025-06-09",
+                "2025-07-09"
+              ],
+              [
+                "2025-06-10",
+                "2025-07-10"
+              ],
+              [
+                "2025-06-11",
+                "2025-07-11"
+              ],
+              [
+                "2025-06-12",
+                "2025-07-14"
+              ],
+              [
+                "2025-06-13",
+                "2025-07-15"
+              ],
+              [
+                "2025-06-16",
+                "2025-07-16"
+              ],
+              [
+                "2025-06-17",
+                "2025-07-17"
+              ],
+              [
+                "2025-06-18",
+                "2025-07-18"
+              ],
+              [
+                "2025-06-20",
+                "2025-07-21"
+              ],
+              [
+                "2025-06-23",
+                "2025-07-22"
+              ],
+              [
+                "2025-06-24",
+                "2025-07-23"
+              ],
+              [
+                "2025-06-25",
+                "2025-07-24"
+              ],
+              [
+                "2025-06-26",
+                "2025-07-25"
+              ],
+              [
+                "2025-06-27",
+                "2025-07-28"
+              ],
+              [
+                "2025-06-30",
+                "2025-07-29"
+              ],
+              [
+                "2025-07-01",
+                "2025-07-30"
+              ],
+              [
+                "2025-07-02",
+                "2025-07-31"
+              ],
+              [
+                "2025-07-07",
+                "2025-08-04"
+              ],
+              [
+                "2025-07-08",
+                "2025-08-05"
+              ],
+              [
+                "2025-07-09",
+                "2025-08-06"
+              ],
+              [
+                "2025-07-10",
+                "2025-08-07"
+              ],
+              [
+                "2025-07-11",
+                "2025-08-08"
+              ],
+              [
+                "2025-07-14",
+                "2025-08-11"
+              ],
+              [
+                "2025-07-15",
+                "2025-08-12"
+              ],
+              [
+                "2025-07-16",
+                "2025-08-13"
+              ],
+              [
+                "2025-07-17",
+                "2025-08-14"
+              ],
+              [
+                "2025-07-18",
+                "2025-08-15"
+              ],
+              [
+                "2025-07-21",
+                "2025-08-18"
+              ],
+              [
+                "2025-07-22",
+                "2025-08-19"
+              ],
+              [
+                "2025-07-23",
+                "2025-08-20"
+              ],
+              [
+                "2025-07-24",
+                "2025-08-21"
+              ],
+              [
+                "2025-07-25",
+                "2025-08-22"
+              ],
+              [
+                "2025-07-28",
+                "2025-08-25"
+              ],
+              [
+                "2025-07-29",
+                "2025-08-26"
+              ],
+              [
+                "2025-07-30",
+                "2025-08-27"
+              ],
+              [
+                "2025-07-31",
+                "2025-08-28"
+              ],
+              [
+                "2025-08-01",
+                "2025-08-29"
+              ]
+            ],
+            "persistence_surface_rmse": 1.6552724424640353,
+            "random_walk_log_score_hac_standard_error_per_dimension": 0.027212226333230737,
+            "random_walk_log_score_improvement_per_dimension": 0.6205940381655106,
+            "random_walk_negative_log_likelihood_per_dimension": 0.9003634734440109,
+            "spot_conditional_front_log_density": 2.0513759832921106,
+            "spot_conditional_front_standardized_std": 0.857191173418618,
+            "spot_coverage_50": 0.4142857142857143,
+            "spot_coverage_80": 0.7714285714285715,
+            "spot_coverage_90": 0.85,
+            "spot_coverage_95": 0.9214285714285714,
+            "spot_coverage_99": 0.9857142857142858,
+            "spot_log_density": 1.5118190429140916,
+            "spot_pit_ks_iid_naive_pvalue": 0.005949147018800116,
+            "spot_pit_mean": 0.5322154294523962,
+            "spot_pit_nonoverlap_ks_pvalue": 0.8817138730784364,
+            "spot_standardized_mean": 0.06273232770722145,
+            "spot_standardized_std": 1.0871987397476641,
+            "surface_mae": 0.5245878867211284,
+            "surface_rmse": 1.320979843173418,
+            "unconditional_negative_log_likelihood": 37.53926668696865,
+            "unconditional_negative_log_likelihood_per_dimension": 0.2662359339501323,
+            "unconditional_surface_rmse": 1.350883192477885,
+            "weeks": 4
+          }
+        },
+        "num_validation_dates": 162,
+        "uncertainty": "Newey-West standard errors use 5*weeks-1 overlapping-origin lags; nonoverlapping_pairs is a greedy disjoint-interval count",
+        "validation_end": "2025-08-29",
+        "validation_start": "2025-01-02"
+      }
+    },
+    "reduced": {
+      "checkpoint": "/media/storage/quantdata/training/flex-phase3/weekly-dynamics-grid-v1/phase3-weekly-encoder-reduced.pt",
+      "checkpoint_action": "loaded",
+      "checkpoint_sha256": "3f9ecc1ca997a7b0000bef169c8613618c4facdc01865b83bb685af00ab760a2",
+      "config": {
+        "covariance_eigenvalue_floor": 1e-10,
+        "generator_roundtrip_relative_tolerance": 1e-08,
+        "group": "flex/weekly-dynamics",
+        "label": "phase3-weekly-encoder-reduced",
+        "maximum_standardized_transition_power_norm": 10.0,
+        "maximum_stationary_variance_trace_ratio": 100.0,
+        "maximum_transition_condition_number": 100000000.0,
+        "minimum_stationary_variance_trace_ratio": 0.01,
+        "pca_mode": "reduced",
+        "pca_variance_threshold": 0.995,
+        "ridge_penalty": 0.0,
+        "state_sizes_by_expiry": [
+          16,
+          19,
+          17,
+          15,
+          13,
+          10,
+          10,
+          10,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        "user_version": "0.1",
+        "weekly_session_stride": 5
+      },
+      "diagnostics": {
+        "covariance_eigenvalue_floor": 1e-10,
+        "daily_transition_condition_number": 5.121641361519711,
+        "daily_transition_observations": 675,
+        "daily_transition_selection": "exact adjacent NYSE business-session endpoints",
+        "equilibrium_constraint": "daily affine equilibrium estimated in training-standardized PCA coordinates",
+        "equilibrium_distance_over_training_rms": 0.4571676376118856,
+        "equilibrium_l2": 1.1940473016789952,
+        "estimator": "DYSANOS/grid lag-only daily affine matrix logarithm",
+        "full_state_size": 140,
+        "generator_roundtrip_relative_error": 1.5915145717679036e-15,
+        "generator_roundtrip_relative_tolerance": 1e-08,
+        "hierarchy_by_expiry": [
+          {
+            "design_columns": 9,
+            "design_condition": 1.0475389325359181,
+            "design_rank": 9,
+            "expiry_index": 0,
+            "generator_roundtrip_relative_error": 1.2268976113885706e-15,
+            "maximum_half_life_weeks": 3.688726383949951,
+            "maximum_mean_reversion_per_week": 2.781303224268845,
+            "minimum_mean_reversion_per_week": 0.18790962202452965,
+            "observations_per_design_column": 75.0,
+            "r2": 0.5764220402125525,
+            "structural_residual_mean_l2": 0.04891763100522713,
+            "structural_residual_mean_max_abs": 0.040601465356312455,
+            "underidentified": false
+          },
+          {
+            "design_columns": 22,
+            "design_condition": 6.2927828941915545,
+            "design_rank": 22,
+            "expiry_index": 1,
+            "generator_roundtrip_relative_error": 1.6495910147736147e-15,
+            "maximum_half_life_weeks": 0.5162029797432681,
+            "maximum_mean_reversion_per_week": 4.910576273829483,
+            "minimum_mean_reversion_per_week": 1.3427802778369853,
+            "observations_per_design_column": 30.681818181818183,
+            "r2": 0.498238363779581,
+            "structural_residual_mean_l2": 0.07229581946105904,
+            "structural_residual_mean_max_abs": 0.04584313208427324,
+            "underidentified": false
+          },
+          {
+            "design_columns": 27,
+            "design_condition": 4.874028627314667,
+            "design_rank": 27,
+            "expiry_index": 2,
+            "generator_roundtrip_relative_error": 1.5815084522099578e-15,
+            "maximum_half_life_weeks": 0.598746324685414,
+            "maximum_mean_reversion_per_week": 6.003323510965291,
+            "minimum_mean_reversion_per_week": 1.1576641926347193,
+            "observations_per_design_column": 25.0,
+            "r2": 0.5038529147508906,
+            "structural_residual_mean_l2": 0.05194419083514616,
+            "structural_residual_mean_max_abs": 0.03056746990833064,
+            "underidentified": false
+          },
+          {
+            "design_columns": 26,
+            "design_condition": 5.353625023555704,
+            "design_rank": 26,
+            "expiry_index": 3,
+            "generator_roundtrip_relative_error": 2.2076078987106975e-15,
+            "maximum_half_life_weeks": 1.1759116058705619,
+            "maximum_mean_reversion_per_week": 5.520237956309617,
+            "minimum_mean_reversion_per_week": 0.5894551742660862,
+            "observations_per_design_column": 25.96153846153846,
+            "r2": 0.4980040210647765,
+            "structural_residual_mean_l2": 0.08269792463383402,
+            "structural_residual_mean_max_abs": 0.04694526173071084,
+            "underidentified": false
+          },
+          {
+            "design_columns": 25,
+            "design_condition": 4.439839860203987,
+            "design_rank": 25,
+            "expiry_index": 4,
+            "generator_roundtrip_relative_error": 2.4462536444127013e-15,
+            "maximum_half_life_weeks": 0.6490013274735533,
+            "maximum_mean_reversion_per_week": 4.314722951966025,
+            "minimum_mean_reversion_per_week": 1.068021206147981,
+            "observations_per_design_column": 27.0,
+            "r2": 0.4751502710510507,
+            "structural_residual_mean_l2": 0.050564692686422046,
+            "structural_residual_mean_max_abs": 0.023317368407466288,
+            "underidentified": false
+          },
+          {
+            "design_columns": 23,
+            "design_condition": 3.4411970865138493,
+            "design_rank": 23,
+            "expiry_index": 5,
+            "generator_roundtrip_relative_error": 1.2094851622653016e-15,
+            "maximum_half_life_weeks": 0.5205289521355575,
+            "maximum_mean_reversion_per_week": 4.605238978096602,
+            "minimum_mean_reversion_per_week": 1.3316208017175462,
+            "observations_per_design_column": 29.347826086956523,
+            "r2": 0.492086123743951,
+            "structural_residual_mean_l2": 0.06407338599568876,
+            "structural_residual_mean_max_abs": 0.03741185945155289,
+            "underidentified": false
+          },
+          {
+            "design_columns": 21,
+            "design_condition": 2.9577224615741113,
+            "design_rank": 21,
+            "expiry_index": 6,
+            "generator_roundtrip_relative_error": 1.064694781414135e-15,
+            "maximum_half_life_weeks": 1.2050868196629156,
+            "maximum_mean_reversion_per_week": 4.7044619213314505,
+            "minimum_mean_reversion_per_week": 0.575184434225105,
+            "observations_per_design_column": 32.142857142857146,
+            "r2": 0.464966173973105,
+            "structural_residual_mean_l2": 0.057569802761917,
+            "structural_residual_mean_max_abs": 0.03733904253546692,
+            "underidentified": false
+          },
+          {
+            "design_columns": 21,
+            "design_condition": 3.578740077854384,
+            "design_rank": 21,
+            "expiry_index": 7,
+            "generator_roundtrip_relative_error": 1.3983634725610218e-15,
+            "maximum_half_life_weeks": 0.8119151947589597,
+            "maximum_mean_reversion_per_week": 4.6641230756359455,
+            "minimum_mean_reversion_per_week": 0.8537186950488418,
+            "observations_per_design_column": 32.142857142857146,
+            "r2": 0.486330751946605,
+            "structural_residual_mean_l2": 0.046210963537622274,
+            "structural_residual_mean_max_abs": 0.02841909375429144,
+            "underidentified": false
+          },
+          {
+            "design_columns": 16,
+            "design_condition": 2.7258687632919223,
+            "design_rank": 16,
+            "expiry_index": 8,
+            "generator_roundtrip_relative_error": 1.0100786385486037e-15,
+            "maximum_half_life_weeks": 0.631319464412897,
+            "maximum_mean_reversion_per_week": 4.140014367924481,
+            "minimum_mean_reversion_per_week": 1.097934119938066,
+            "observations_per_design_column": 42.1875,
+            "r2": 0.47329728486449407,
+            "structural_residual_mean_l2": 0.027981535887669426,
+            "structural_residual_mean_max_abs": 0.019905526527337694,
+            "underidentified": false
+          },
+          {
+            "design_columns": 11,
+            "design_condition": 2.167988102052764,
+            "design_rank": 11,
+            "expiry_index": 9,
+            "generator_roundtrip_relative_error": 7.5926004732384285e-16,
+            "maximum_half_life_weeks": 0.843183332185501,
+            "maximum_mean_reversion_per_week": 3.587596029287682,
+            "minimum_mean_reversion_per_week": 0.8220598701391933,
+            "observations_per_design_column": 61.36363636363637,
+            "r2": 0.5089549624452587,
+            "structural_residual_mean_l2": 0.035730603376100095,
+            "structural_residual_mean_max_abs": 0.02643507755023082,
+            "underidentified": false
+          },
+          {
+            "design_columns": 11,
+            "design_condition": 2.1919872026971725,
+            "design_rank": 11,
+            "expiry_index": 10,
+            "generator_roundtrip_relative_error": 4.230408633136123e-16,
+            "maximum_half_life_weeks": 0.5600092959950428,
+            "maximum_mean_reversion_per_week": 2.933317987647983,
+            "minimum_mean_reversion_per_week": 1.2377422759176502,
+            "observations_per_design_column": 61.36363636363637,
+            "r2": 0.5181199910280156,
+            "structural_residual_mean_l2": 0.04058412108650175,
+            "structural_residual_mean_max_abs": 0.024316055485232024,
+            "underidentified": false
+          },
+          {
+            "design_columns": 11,
+            "design_condition": 2.129666760470935,
+            "design_rank": 11,
+            "expiry_index": 11,
+            "generator_roundtrip_relative_error": 4.741504416458766e-16,
+            "maximum_half_life_weeks": 0.7083801351063926,
+            "maximum_mean_reversion_per_week": 3.3231159991419212,
+            "minimum_mean_reversion_per_week": 0.9784960732359336,
+            "observations_per_design_column": 61.36363636363637,
+            "r2": 0.5214179333320361,
+            "structural_residual_mean_l2": 0.040832727686679664,
+            "structural_residual_mean_max_abs": 0.03144546152528952,
+            "underidentified": false
+          },
+          {
+            "design_columns": 11,
+            "design_condition": 2.4368441198777875,
+            "design_rank": 11,
+            "expiry_index": 12,
+            "generator_roundtrip_relative_error": 7.515632814265089e-16,
+            "maximum_half_life_weeks": 0.6743997689758932,
+            "maximum_mean_reversion_per_week": 3.785365325628308,
+            "minimum_mean_reversion_per_week": 1.0277986625240412,
+            "observations_per_design_column": 61.36363636363637,
+            "r2": 0.42332022877666275,
+            "structural_residual_mean_l2": 0.025778565016143264,
+            "structural_residual_mean_max_abs": 0.019755599390239784,
+            "underidentified": false
+          },
+          {
+            "design_columns": 11,
+            "design_condition": 2.3089417530903362,
+            "design_rank": 11,
+            "expiry_index": 13,
+            "generator_roundtrip_relative_error": 1.1423889981883101e-15,
+            "maximum_half_life_weeks": 0.4900205265745921,
+            "maximum_mean_reversion_per_week": 4.191048588410463,
+            "minimum_mean_reversion_per_week": 1.4145268268765732,
+            "observations_per_design_column": 61.36363636363637,
+            "r2": 0.42396448676365706,
+            "structural_residual_mean_l2": 0.0299048697747752,
+            "structural_residual_mean_max_abs": 0.017864830150639315,
+            "underidentified": false
+          }
+        ],
+        "innovation_covariance": "unrestricted full weekly residual covariance",
+        "maximum_generator_off_diagonal": 10.877161607852015,
+        "maximum_standardized_transition_power_norm": 10.0,
+        "maximum_stationary_variance_trace_ratio": 100.0,
+        "maximum_structural_cross_expiry_residual_correlation": 0.6491227926742394,
+        "maximum_transition_condition_number": 100000000.0,
+        "maximum_transition_spectral_radius": 0.8286895991366046,
+        "minimum_generator_real_eigenvalue": 0.18790962202452954,
+        "minimum_stationary_variance_trace_ratio": 0.01,
+        "origin_weighting": "equal weight per exact daily origin for drift and per exact weekly origin for innovations",
+        "pair_endpoint_drift_l2": 0.16839840921521967,
+        "pair_endpoint_drift_max_abs": 0.07772590550663358,
+        "pca_by_expiry": [
+          {
+            "expiry_index": 0,
+            "full_rank": 16,
+            "reduced_rank": 8,
+            "retained_variance": 0.9960069980058641
+          },
+          {
+            "expiry_index": 1,
+            "full_rank": 19,
+            "reduced_rank": 13,
+            "retained_variance": 0.9962594438968331
+          },
+          {
+            "expiry_index": 2,
+            "full_rank": 17,
+            "reduced_rank": 13,
+            "retained_variance": 0.9960506472726084
+          },
+          {
+            "expiry_index": 3,
+            "full_rank": 15,
+            "reduced_rank": 12,
+            "retained_variance": 0.9953673855199464
+          },
+          {
+            "expiry_index": 4,
+            "full_rank": 13,
+            "reduced_rank": 12,
+            "retained_variance": 0.9974110974463364
+          },
+          {
+            "expiry_index": 5,
+            "full_rank": 10,
+            "reduced_rank": 10,
+            "retained_variance": 0.9999999999999998
+          },
+          {
+            "expiry_index": 6,
+            "full_rank": 10,
+            "reduced_rank": 10,
+            "retained_variance": 1.0
+          },
+          {
+            "expiry_index": 7,
+            "full_rank": 10,
+            "reduced_rank": 10,
+            "retained_variance": 1.0
+          },
+          {
+            "expiry_index": 8,
+            "full_rank": 5,
+            "reduced_rank": 5,
+            "retained_variance": 1.0
+          },
+          {
+            "expiry_index": 9,
+            "full_rank": 5,
+            "reduced_rank": 5,
+            "retained_variance": 1.0
+          },
+          {
+            "expiry_index": 10,
+            "full_rank": 5,
+            "reduced_rank": 5,
+            "retained_variance": 1.0
+          },
+          {
+            "expiry_index": 11,
+            "full_rank": 5,
+            "reduced_rank": 5,
+            "retained_variance": 1.0
+          },
+          {
+            "expiry_index": 12,
+            "full_rank": 5,
+            "reduced_rank": 5,
+            "retained_variance": 1.0
+          },
+          {
+            "expiry_index": 13,
+            "full_rank": 5,
+            "reduced_rank": 5,
+            "retained_variance": 1.0
+          }
+        ],
+        "pca_mode": "reduced",
+        "pca_variance_threshold": 0.995,
+        "reduced_residual_mean_l2": 0.23700849736727678,
+        "reduced_residual_mean_max_abs": 0.13754545096603277,
+        "reduced_sizes_by_expiry": [
+          8,
+          13,
+          13,
+          12,
+          12,
+          10,
+          10,
+          10,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        "reduced_state_size": 118,
+        "ridge_penalty": 0.0,
+        "scipy_logm_estimated_error": 5.084449961088248e-15,
+        "score_standardization_maximum_scale": 10.848029626351424,
+        "score_standardization_minimum_scale": 0.14463251000939917,
+        "spot_front_explained_fraction": 0.5532061020271999,
+        "spot_orthogonal_std": 0.016249357433660266,
+        "standardized_stationary_variance_trace_ratio": 0.9482396977281335,
+        "standardized_training_score_rms": 1.0,
+        "standardized_transition_maximum_power_norm": 1.2570829423403387,
+        "standardized_transition_maximum_power_week": 2,
+        "standardized_transition_norm": 1.2569726794280356,
+        "standardized_transition_power_norms": {
+          "1": 1.2569726794280356,
+          "1040": 3.8019837756054265e-85,
+          "260": 1.7152900715393676e-21,
+          "4": 1.0202873130144376,
+          "52": 0.00016174276040991056,
+          "520": 1.0380743712050733e-42
+        },
+        "training_rows": 712,
+        "training_score_mean_max_abs": 1.6516126793300081e-15,
+        "training_score_rms": 1.5440160280207595,
+        "transition_condition_number": 3042.7601565967266,
+        "transition_selection": "exact five-NYSE-session endpoints",
+        "underidentified_expiries": [],
+        "weekly_discrete_roundtrip_relative_error": 7.408053925870997e-15,
+        "weekly_transition_observations": 671
+      },
+      "simulation_validation": {
+        "decoder_saturation": {
+          "density_mass_max_abs_error": 2.4318695068359375e-05,
+          "density_mean_max_abs_error": 9.894371032714844e-06,
+          "density_min": 7.518550018681402e-12,
+          "dlvsq_max": 8.98935317993164,
+          "dlvsq_min": 0.00010000009933719411,
+          "float_density_tolerance": 3.0517578125e-05,
+          "forward_vol_max": 0.43994173407554626,
+          "forward_vol_min": 0.011187324300408363,
+          "mu_max": 0.4974212348461151,
+          "mu_min": 0.03106577880680561,
+          "num_audit_path_steps": 2560,
+          "raw_abs_gt_12_fraction": 0.0005131441866979003,
+          "raw_abs_gt_8_fraction": 0.027163906022906303
+        },
+        "device": "cuda:0",
+        "endpoint_dates": {
+          "1w": "2025-01-10",
+          "2w": "2025-01-17",
+          "4w": "2025-02-03"
+        },
+        "implied_mode_status": "structural simulator test only; not the calibrated historical-P spot model",
+        "implied_spot_test_mode": {
+          "elapsed_seconds": 0.7225331468507648,
+          "finite": true,
+          "horizons": {
+            "1w": {
+              "realized_log_spot_return": -0.007098391868394671,
+              "realized_spot_inside_central_intervals": {
+                "50pct": true,
+                "80pct": true,
+                "90pct": true,
+                "95pct": true,
+                "99pct": true
+              },
+              "realized_spot_percentile": 0.333740234375,
+              "realized_spot_z": -0.3511714262527735,
+              "realized_state_vs_simulated_mean_rmse": 0.853620052394962,
+              "simulated_log_spot_return_mean": -7.913867011666298e-05,
+              "simulated_log_spot_return_std": 0.019988110288977623
+            },
+            "2w": {
+              "realized_log_spot_return": 0.021595122315867243,
+              "realized_spot_inside_central_intervals": {
+                "50pct": false,
+                "80pct": true,
+                "90pct": true,
+                "95pct": true,
+                "99pct": true
+              },
+              "realized_spot_percentile": 0.772216796875,
+              "realized_spot_z": 0.6576175486778054,
+              "realized_state_vs_simulated_mean_rmse": 0.7829620906792216,
+              "simulated_log_spot_return_mean": -0.0006875147810205817,
+              "simulated_log_spot_return_std": 0.03388388454914093
+            },
+            "4w": {
+              "realized_log_spot_return": 0.02124647883962183,
+              "realized_spot_inside_central_intervals": {
+                "50pct": true,
+                "80pct": true,
+                "90pct": true,
+                "95pct": true,
+                "99pct": true
+              },
+              "realized_spot_percentile": 0.654296875,
+              "realized_spot_z": 0.435643929237461,
+              "realized_state_vs_simulated_mean_rmse": 0.8232831045733842,
+              "simulated_log_spot_return_mean": -0.0007566920248791575,
+              "simulated_log_spot_return_std": 0.050507236272096634
+            }
+          },
+          "num_paths": 4096,
+          "path_steps_per_second": 22675.776289864836
+        },
+        "initial_date": "2025-01-02",
+        "long_run_surface": {
+          "finite": true,
+          "noncollapsed": true,
+          "num_paths": 2048,
+          "num_weeks": 260,
+          "stationary_covariance_relative_frobenius_error": 0.045040618628263474,
+          "stationary_mean_normalized_rms": 0.06849372386932373,
+          "stationary_variance_trace_ratio": 1.0027824640274048
+        },
+        "nondegenerate": true,
+        "normal_p": {
+          "elapsed_seconds": 0.06867962097749114,
+          "finite": true,
+          "horizons": {
+            "1w": {
+              "realized_log_spot_return": -0.007098391868394671,
+              "realized_spot_inside_central_intervals": {
+                "50pct": true,
+                "80pct": true,
+                "90pct": true,
+                "95pct": true,
+                "99pct": true
+              },
+              "realized_spot_percentile": 0.362518310546875,
+              "realized_spot_z": -0.3492719236814123,
+              "realized_state_vs_simulated_mean_rmse": 0.849800261491929,
+              "simulated_log_spot_return_mean": 0.0013760618166998029,
+              "simulated_log_spot_return_std": 0.02426319755613804
+            },
+            "2w": {
+              "realized_log_spot_return": 0.021595122315867243,
+              "realized_spot_inside_central_intervals": {
+                "50pct": true,
+                "80pct": true,
+                "90pct": true,
+                "95pct": true,
+                "99pct": true
+              },
+              "realized_spot_percentile": 0.70648193359375,
+              "realized_spot_z": 0.5438323443373988,
+              "realized_state_vs_simulated_mean_rmse": 0.7804666769360271,
+              "simulated_log_spot_return_mean": 0.0027998234145343304,
+              "simulated_log_spot_return_std": 0.034560833126306534
+            },
+            "4w": {
+              "realized_log_spot_return": 0.02124647883962183,
+              "realized_spot_inside_central_intervals": {
+                "50pct": true,
+                "80pct": true,
+                "90pct": true,
+                "95pct": true,
+                "99pct": true
+              },
+              "realized_spot_percentile": 0.630889892578125,
+              "realized_spot_z": 0.32959994173109414,
+              "realized_state_vs_simulated_mean_rmse": 0.8340218664249829,
+              "simulated_log_spot_return_mean": 0.005158009007573128,
+              "simulated_log_spot_return_std": 0.04881211370229721
+            }
+          },
+          "num_paths": 32768,
+          "path_steps_per_second": 1908455.4942863933
+        },
+        "option_return_checks": {
+          "implied_expiry": {
+            "cost_feature_volatility": "SANOS strike-total-volatility ATM proxy",
+            "cost_model": "date-balanced linear half-spread attribution",
+            "finite": true,
+            "internal_simulation_steps": 27,
+            "num_options": 84,
+            "proportional_entry_cost_mean": 0.008155353367328644,
+            "proportional_entry_cost_median": 0.0063622440211474895,
+            "shape": [
+              64,
+              14,
+              84
+            ],
+            "zero_strike_calls": 14
+          },
+          "implied_period": {
+            "cost_feature_volatility": "SANOS strike-total-volatility ATM proxy",
+            "cost_model": "date-balanced linear half-spread attribution",
+            "finite": true,
+            "internal_simulation_steps": 14,
+            "num_options": 84,
+            "proportional_entry_cost_mean": 0.008126821368932724,
+            "proportional_entry_cost_median": 0.006308732088655233,
+            "shape": [
+              64,
+              14,
+              84
+            ],
+            "zero_strike_calls": 14
+          },
+          "normal_expiry": {
+            "cost_feature_volatility": "SANOS strike-total-volatility ATM proxy",
+            "cost_model": "date-balanced linear half-spread attribution",
+            "finite": true,
+            "internal_simulation_steps": 27,
+            "num_options": 84,
+            "proportional_entry_cost_mean": 0.008305469527840614,
+            "proportional_entry_cost_median": 0.006534704938530922,
+            "shape": [
+              64,
+              14,
+              84
+            ],
+            "zero_strike_calls": 14
+          },
+          "normal_period": {
+            "cost_feature_volatility": "SANOS strike-total-volatility ATM proxy",
+            "cost_model": "date-balanced linear half-spread attribution",
+            "finite": true,
+            "internal_simulation_steps": 14,
+            "num_options": 84,
+            "proportional_entry_cost_mean": 0.008347944356501102,
+            "proportional_entry_cost_median": 0.00649332907050848,
+            "shape": [
+              64,
+              14,
+              84
+            ],
+            "zero_strike_calls": 14
+          }
+        },
+        "precision": 32,
+        "real_decoder_gradient": {
+          "finite": true,
+          "spot_gradient_abs": 0.0007617967203259468,
+          "state_gradient_l2": 1.727831244468689,
+          "state_nonzero": true
+        },
+        "spread_checkpoint": "quantdata/dysanos/flex/reports/phase3-spread/feed_forward.pt",
+        "spread_checkpoint_sha256": "ebee252f39f78d6ffc59eb865860f5ab8fa1bf5784bf48944eba5078aed4ce3f",
+        "spread_report": "quantdata/dysanos/flex/reports/phase3-spread/phase3-spread-ffw.json",
+        "spread_report_sha256": "c6eae660b59d1ba10b68142d1163ddf41c48f66a940a6de435d907ade48091fd",
+        "spread_split": {
+          "no_2026": true,
+          "train_end": "2024-12-31",
+          "train_start": "2022-01-03",
+          "validation_end": "2025-08-29",
+          "validation_start": "2025-01-02"
+        }
+      },
+      "validation_2025": {
+        "all_horizons_finite": true,
+        "all_horizons_nondegenerate": true,
+        "baseline_training_end": "2024-12-31",
+        "date_weighting": "one equal observation per exact horizon origin date",
+        "horizons": {
+          "1w": {
+            "coordinate_negative_log_likelihood": [
+              -2.1671315154909525,
+              3.6744810456604915,
+              2.383298258466782,
+              2.534594810004488,
+              1.8933133260704356,
+              1.5439190241459773,
+              1.562942394895925,
+              1.2047493126003777,
+              1.1861476835818754,
+              2.2032353059898626,
+              2.051414393311746,
+              1.4078751972957344,
+              1.3346864520755188,
+              1.2278834948736672,
+              0.836167221961873,
+              0.5762084841627247,
+              0.4378114731542968,
+              0.5294909717313538,
+              0.11822083400784886,
+              -0.1277879346288946,
+              -0.2728534584700128,
+              -0.700759274793986,
+              2.0527823741040354,
+              1.4857166782685947,
+              1.0741278709045985,
+              0.9797045053836194,
+              0.644755173339267,
+              0.5770919160335118,
+              0.38097738524825714,
+              0.30309065340416297,
+              0.1726976227177425,
+              -0.04837796182432024,
+              -0.37640194474447075,
+              -0.46833328730540563,
+              -0.52159541414428,
+              2.3191826584700133,
+              1.2585347365529926,
+              1.0829491012738681,
+              1.327947226898828,
+              0.32505337942384627,
+              0.2780510434879899,
+              0.20822753298424157,
+              0.04748838638789941,
+              -0.17016369262884018,
+              -0.29744422307949026,
+              -0.4828195162589633,
+              -0.20827731811290512,
+              1.5928396217006542,
+              1.0609227971113198,
+              0.626492434881481,
+              0.7357747494428167,
+              0.6306651958512391,
+              0.31795901565024237,
+              0.2197032671908617,
+              -0.19337085998129513,
+              -0.14588002560225533,
+              -0.31937648778224487,
+              -0.5199650290773606,
+              -0.8007450124031258,
+              1.6047489675824518,
+              0.705637986187992,
+              1.1504122770806005,
+              0.5382321982218399,
+              0.4821755200691355,
+              0.19693359290071463,
+              -0.08123275222512075,
+              -0.202236933064169,
+              -0.3605785957781276,
+              -0.40901030396813354,
+              1.5543827178476175,
+              1.033587494540401,
+              0.9862954074395356,
+              0.6675096200121151,
+              0.25800979608305585,
+              0.3997282286818562,
+              -0.10829814148136871,
+              -0.25664986859862277,
+              -0.2843399709822543,
+              -0.49252167517260154,
+              1.1684951432433903,
+              1.4188010808587115,
+              0.7859143093596933,
+              0.5866896516500122,
+              0.2506643863860034,
+              0.42449413710947514,
+              0.2125127800191763,
+              -0.061383073988676755,
+              -0.07428268249815843,
+              -0.22647201399657585,
+              1.083413795598908,
+              0.7396986755141183,
+              0.5787860260250406,
+              0.14244368546044064,
+              0.10799699195190884,
+              1.5252132064321717,
+              1.0557838184695547,
+              0.5753138829888498,
+              0.5322380686838711,
+              0.34281714598855145,
+              1.2950636524431163,
+              1.0824061759129322,
+              0.5587557796271161,
+              0.42411764695095044,
+              0.26854925682481606,
+              2.1120082269448703,
+              1.4908875878798402,
+              1.0581617682632922,
+              0.6803974795911598,
+              0.4711542260777623,
+              2.821501957567514,
+              1.5100175733011516,
+              1.3955991533041592,
+              1.0605403875082184,
+              0.7140524793317382,
+              3.037577215670199,
+              1.729770437187797,
+              1.717984050036036,
+              1.5285001818120638,
+              0.6158743992310513
+            ],
+            "covariance_calibration_frobenius_per_dimension": 0.1261944678734906,
+            "diagonal_ar_log_score_hac_standard_error_per_dimension": 0.004399023592571869,
+            "diagonal_ar_log_score_improvement_per_dimension": 0.0019238440553159591,
+            "diagonal_ar_negative_log_likelihood_per_dimension": 0.4744993945227059,
+            "excluded_origin_dates": [
+              "2025-05-09",
+              "2025-06-26",
+              "2025-08-25",
+              "2025-08-26",
+              "2025-08-27",
+              "2025-08-28",
+              "2025-08-29"
+            ],
+            "expiry_conditional_nll_per_dimension": [
+              1.9794068175784787,
+              0.6170072756185618,
+              0.30627694584598003,
+              0.21120169655740306,
+              0.04241124082445397,
+              0.1512157066273024,
+              0.13208001564151786,
+              0.19127845395323895,
+              0.33343377377845546,
+              0.48719378237252686,
+              0.4860870303394148,
+              0.7611838571858426,
+              1.1760566679299662,
+              1.4466784838948683
+            ],
+            "finite": true,
+            "hac_lag_origins": 4,
+            "joint_dimension": 119,
+            "joint_energy_score": 8.516176760608841,
+            "log_score_improvement_hac_ci95_lower_per_dimension": -0.02719053839878776,
+            "log_score_improvement_hac_ci95_upper_per_dimension": 0.005478609266043788,
+            "log_score_improvement_hac_standard_error_per_dimension": 0.008333966241028456,
+            "log_score_improvement_per_dimension": -0.010855964566371985,
+            "mahalanobis_coverage_50": 0.7612903225806451,
+            "mahalanobis_coverage_90": 0.8580645161290322,
+            "mahalanobis_coverage_95": 0.8774193548387097,
+            "mahalanobis_ks_iid_naive_pvalue": 3.1466136550560292e-37,
+            "mahalanobis_mean_per_dimension": 0.8792632305245968,
+            "mahalanobis_median_per_dimension": 0.7513465950117927,
+            "mahalanobis_nonoverlap_ks_pvalue": 8.237244620286053e-09,
+            "negative_log_likelihood": 56.23649050561941,
+            "negative_log_likelihood_per_dimension": 0.47257555046738997,
+            "nondegenerate": true,
+            "nonoverlapping_pairs": 32,
+            "num_pairs": 155,
+            "origin_endpoint_dates": [
+              [
+                "2025-01-02",
+                "2025-01-10"
+              ],
+              [
+                "2025-01-03",
+                "2025-01-13"
+              ],
+              [
+                "2025-01-06",
+                "2025-01-14"
+              ],
+              [
+                "2025-01-07",
+                "2025-01-15"
+              ],
+              [
+                "2025-01-10",
+                "2025-01-17"
+              ],
+              [
+                "2025-01-13",
+                "2025-01-21"
+              ],
+              [
+                "2025-01-14",
+                "2025-01-22"
+              ],
+              [
+                "2025-01-15",
+                "2025-01-23"
+              ],
+              [
+                "2025-01-16",
+                "2025-01-24"
+              ],
+              [
+                "2025-01-17",
+                "2025-01-27"
+              ],
+              [
+                "2025-01-21",
+                "2025-01-28"
+              ],
+              [
+                "2025-01-22",
+                "2025-01-29"
+              ],
+              [
+                "2025-01-23",
+                "2025-01-30"
+              ],
+              [
+                "2025-01-24",
+                "2025-01-31"
+              ],
+              [
+                "2025-01-27",
+                "2025-02-03"
+              ],
+              [
+                "2025-01-28",
+                "2025-02-04"
+              ],
+              [
+                "2025-01-29",
+                "2025-02-05"
+              ],
+              [
+                "2025-01-30",
+                "2025-02-06"
+              ],
+              [
+                "2025-01-31",
+                "2025-02-07"
+              ],
+              [
+                "2025-02-03",
+                "2025-02-10"
+              ],
+              [
+                "2025-02-04",
+                "2025-02-11"
+              ],
+              [
+                "2025-02-05",
+                "2025-02-12"
+              ],
+              [
+                "2025-02-06",
+                "2025-02-13"
+              ],
+              [
+                "2025-02-07",
+                "2025-02-14"
+              ],
+              [
+                "2025-02-10",
+                "2025-02-18"
+              ],
+              [
+                "2025-02-11",
+                "2025-02-19"
+              ],
+              [
+                "2025-02-12",
+                "2025-02-20"
+              ],
+              [
+                "2025-02-13",
+                "2025-02-21"
+              ],
+              [
+                "2025-02-14",
+                "2025-02-24"
+              ],
+              [
+                "2025-02-18",
+                "2025-02-25"
+              ],
+              [
+                "2025-02-19",
+                "2025-02-26"
+              ],
+              [
+                "2025-02-20",
+                "2025-02-27"
+              ],
+              [
+                "2025-02-21",
+                "2025-02-28"
+              ],
+              [
+                "2025-02-24",
+                "2025-03-03"
+              ],
+              [
+                "2025-02-25",
+                "2025-03-04"
+              ],
+              [
+                "2025-02-26",
+                "2025-03-05"
+              ],
+              [
+                "2025-02-27",
+                "2025-03-06"
+              ],
+              [
+                "2025-02-28",
+                "2025-03-07"
+              ],
+              [
+                "2025-03-03",
+                "2025-03-10"
+              ],
+              [
+                "2025-03-04",
+                "2025-03-11"
+              ],
+              [
+                "2025-03-05",
+                "2025-03-12"
+              ],
+              [
+                "2025-03-06",
+                "2025-03-13"
+              ],
+              [
+                "2025-03-07",
+                "2025-03-14"
+              ],
+              [
+                "2025-03-10",
+                "2025-03-17"
+              ],
+              [
+                "2025-03-11",
+                "2025-03-18"
+              ],
+              [
+                "2025-03-12",
+                "2025-03-19"
+              ],
+              [
+                "2025-03-13",
+                "2025-03-20"
+              ],
+              [
+                "2025-03-14",
+                "2025-03-21"
+              ],
+              [
+                "2025-03-17",
+                "2025-03-24"
+              ],
+              [
+                "2025-03-18",
+                "2025-03-25"
+              ],
+              [
+                "2025-03-19",
+                "2025-03-26"
+              ],
+              [
+                "2025-03-20",
+                "2025-03-27"
+              ],
+              [
+                "2025-03-21",
+                "2025-03-28"
+              ],
+              [
+                "2025-03-24",
+                "2025-03-31"
+              ],
+              [
+                "2025-03-25",
+                "2025-04-01"
+              ],
+              [
+                "2025-03-26",
+                "2025-04-02"
+              ],
+              [
+                "2025-03-27",
+                "2025-04-03"
+              ],
+              [
+                "2025-03-28",
+                "2025-04-04"
+              ],
+              [
+                "2025-03-31",
+                "2025-04-07"
+              ],
+              [
+                "2025-04-01",
+                "2025-04-08"
+              ],
+              [
+                "2025-04-02",
+                "2025-04-09"
+              ],
+              [
+                "2025-04-03",
+                "2025-04-10"
+              ],
+              [
+                "2025-04-04",
+                "2025-04-11"
+              ],
+              [
+                "2025-04-07",
+                "2025-04-14"
+              ],
+              [
+                "2025-04-08",
+                "2025-04-15"
+              ],
+              [
+                "2025-04-09",
+                "2025-04-16"
+              ],
+              [
+                "2025-04-10",
+                "2025-04-17"
+              ],
+              [
+                "2025-04-11",
+                "2025-04-21"
+              ],
+              [
+                "2025-04-14",
+                "2025-04-22"
+              ],
+              [
+                "2025-04-15",
+                "2025-04-23"
+              ],
+              [
+                "2025-04-16",
+                "2025-04-24"
+              ],
+              [
+                "2025-04-17",
+                "2025-04-25"
+              ],
+              [
+                "2025-04-21",
+                "2025-04-28"
+              ],
+              [
+                "2025-04-22",
+                "2025-04-29"
+              ],
+              [
+                "2025-04-23",
+                "2025-04-30"
+              ],
+              [
+                "2025-04-24",
+                "2025-05-01"
+              ],
+              [
+                "2025-04-25",
+                "2025-05-02"
+              ],
+              [
+                "2025-04-28",
+                "2025-05-05"
+              ],
+              [
+                "2025-04-29",
+                "2025-05-06"
+              ],
+              [
+                "2025-04-30",
+                "2025-05-07"
+              ],
+              [
+                "2025-05-01",
+                "2025-05-08"
+              ],
+              [
+                "2025-05-02",
+                "2025-05-09"
+              ],
+              [
+                "2025-05-05",
+                "2025-05-12"
+              ],
+              [
+                "2025-05-06",
+                "2025-05-13"
+              ],
+              [
+                "2025-05-07",
+                "2025-05-14"
+              ],
+              [
+                "2025-05-08",
+                "2025-05-15"
+              ],
+              [
+                "2025-05-12",
+                "2025-05-19"
+              ],
+              [
+                "2025-05-13",
+                "2025-05-20"
+              ],
+              [
+                "2025-05-14",
+                "2025-05-21"
+              ],
+              [
+                "2025-05-15",
+                "2025-05-22"
+              ],
+              [
+                "2025-05-19",
+                "2025-05-27"
+              ],
+              [
+                "2025-05-20",
+                "2025-05-28"
+              ],
+              [
+                "2025-05-21",
+                "2025-05-29"
+              ],
+              [
+                "2025-05-22",
+                "2025-05-30"
+              ],
+              [
+                "2025-05-23",
+                "2025-06-02"
+              ],
+              [
+                "2025-05-27",
+                "2025-06-03"
+              ],
+              [
+                "2025-05-28",
+                "2025-06-04"
+              ],
+              [
+                "2025-05-29",
+                "2025-06-05"
+              ],
+              [
+                "2025-05-30",
+                "2025-06-06"
+              ],
+              [
+                "2025-06-02",
+                "2025-06-09"
+              ],
+              [
+                "2025-06-03",
+                "2025-06-10"
+              ],
+              [
+                "2025-06-04",
+                "2025-06-11"
+              ],
+              [
+                "2025-06-05",
+                "2025-06-12"
+              ],
+              [
+                "2025-06-06",
+                "2025-06-13"
+              ],
+              [
+                "2025-06-09",
+                "2025-06-16"
+              ],
+              [
+                "2025-06-10",
+                "2025-06-17"
+              ],
+              [
+                "2025-06-11",
+                "2025-06-18"
+              ],
+              [
+                "2025-06-12",
+                "2025-06-20"
+              ],
+              [
+                "2025-06-13",
+                "2025-06-23"
+              ],
+              [
+                "2025-06-16",
+                "2025-06-24"
+              ],
+              [
+                "2025-06-17",
+                "2025-06-25"
+              ],
+              [
+                "2025-06-18",
+                "2025-06-26"
+              ],
+              [
+                "2025-06-20",
+                "2025-06-27"
+              ],
+              [
+                "2025-06-23",
+                "2025-06-30"
+              ],
+              [
+                "2025-06-24",
+                "2025-07-01"
+              ],
+              [
+                "2025-06-25",
+                "2025-07-02"
+              ],
+              [
+                "2025-06-27",
+                "2025-07-07"
+              ],
+              [
+                "2025-06-30",
+                "2025-07-08"
+              ],
+              [
+                "2025-07-01",
+                "2025-07-09"
+              ],
+              [
+                "2025-07-02",
+                "2025-07-10"
+              ],
+              [
+                "2025-07-07",
+                "2025-07-14"
+              ],
+              [
+                "2025-07-08",
+                "2025-07-15"
+              ],
+              [
+                "2025-07-09",
+                "2025-07-16"
+              ],
+              [
+                "2025-07-10",
+                "2025-07-17"
+              ],
+              [
+                "2025-07-11",
+                "2025-07-18"
+              ],
+              [
+                "2025-07-14",
+                "2025-07-21"
+              ],
+              [
+                "2025-07-15",
+                "2025-07-22"
+              ],
+              [
+                "2025-07-16",
+                "2025-07-23"
+              ],
+              [
+                "2025-07-17",
+                "2025-07-24"
+              ],
+              [
+                "2025-07-18",
+                "2025-07-25"
+              ],
+              [
+                "2025-07-21",
+                "2025-07-28"
+              ],
+              [
+                "2025-07-22",
+                "2025-07-29"
+              ],
+              [
+                "2025-07-23",
+                "2025-07-30"
+              ],
+              [
+                "2025-07-24",
+                "2025-07-31"
+              ],
+              [
+                "2025-07-25",
+                "2025-08-01"
+              ],
+              [
+                "2025-07-28",
+                "2025-08-04"
+              ],
+              [
+                "2025-07-29",
+                "2025-08-05"
+              ],
+              [
+                "2025-07-30",
+                "2025-08-06"
+              ],
+              [
+                "2025-07-31",
+                "2025-08-07"
+              ],
+              [
+                "2025-08-01",
+                "2025-08-08"
+              ],
+              [
+                "2025-08-04",
+                "2025-08-11"
+              ],
+              [
+                "2025-08-05",
+                "2025-08-12"
+              ],
+              [
+                "2025-08-06",
+                "2025-08-13"
+              ],
+              [
+                "2025-08-07",
+                "2025-08-14"
+              ],
+              [
+                "2025-08-08",
+                "2025-08-15"
+              ],
+              [
+                "2025-08-11",
+                "2025-08-18"
+              ],
+              [
+                "2025-08-12",
+                "2025-08-19"
+              ],
+              [
+                "2025-08-13",
+                "2025-08-20"
+              ],
+              [
+                "2025-08-14",
+                "2025-08-21"
+              ],
+              [
+                "2025-08-15",
+                "2025-08-22"
+              ],
+              [
+                "2025-08-18",
+                "2025-08-25"
+              ],
+              [
+                "2025-08-19",
+                "2025-08-26"
+              ],
+              [
+                "2025-08-20",
+                "2025-08-27"
+              ],
+              [
+                "2025-08-21",
+                "2025-08-28"
+              ],
+              [
+                "2025-08-22",
+                "2025-08-29"
+              ]
+            ],
+            "persistence_surface_rmse": 1.5270120763603348,
+            "random_walk_log_score_hac_standard_error_per_dimension": 0.01696631418536345,
+            "random_walk_log_score_improvement_per_dimension": 0.2700200028197823,
+            "random_walk_negative_log_likelihood_per_dimension": 0.7425955532871722,
+            "spot_conditional_front_log_density": 2.8437239023557455,
+            "spot_conditional_front_standardized_std": 0.8444022544146265,
+            "spot_coverage_50": 0.5806451612903226,
+            "spot_coverage_80": 0.8064516129032258,
+            "spot_coverage_90": 0.8838709677419355,
+            "spot_coverage_95": 0.9419354838709677,
+            "spot_coverage_99": 0.9612903225806452,
+            "spot_log_density": 2.1671315154909516,
+            "spot_pit_ks_iid_naive_pvalue": 0.03752642813075946,
+            "spot_pit_mean": 0.5274762778953583,
+            "spot_pit_nonoverlap_ks_pvalue": 0.4716052839747652,
+            "spot_standardized_mean": 0.04419582724761756,
+            "spot_standardized_std": 1.1223424564136146,
+            "surface_mae": 0.5474968958873905,
+            "surface_rmse": 1.2790388398736328,
+            "unconditional_negative_log_likelihood": 54.944630722221135,
+            "unconditional_negative_log_likelihood_per_dimension": 0.4617195859010179,
+            "unconditional_surface_rmse": 1.438349576668627,
+            "weeks": 1
+          },
+          "2w": {
+            "coordinate_negative_log_likelihood": [
+              -1.8935757537050502,
+              3.8157135680390386,
+              2.4749838200792817,
+              2.53858122848292,
+              1.921288147398016,
+              1.5468558479143226,
+              1.5972775365176795,
+              1.2539991518490576,
+              1.2134804249659392,
+              2.2415648090209555,
+              2.1064365080591436,
+              1.5097629568788211,
+              1.3444106691940219,
+              1.2784621759798598,
+              0.8952648456199381,
+              0.6040384898656228,
+              0.4230499614626002,
+              0.5643844544760558,
+              0.16785869350127428,
+              -0.135782526813302,
+              -0.2701699926640846,
+              -0.6720100770910402,
+              2.0741822706137754,
+              1.574181569077782,
+              1.1155715381036742,
+              1.0235117682276742,
+              0.6528197549134215,
+              0.7129663032162254,
+              0.40076777124550417,
+              0.34572464951321225,
+              0.18461430504404586,
+              -0.05568585786049882,
+              -0.3708359709481909,
+              -0.4684178153205566,
+              -0.501112933830302,
+              2.3461312413704523,
+              1.3566882485687903,
+              1.0622496974164206,
+              1.3081199450362384,
+              0.3487330288414092,
+              0.2898657278546393,
+              0.22387480647896743,
+              0.10739110376218887,
+              -0.1148565337100734,
+              -0.31839582277675577,
+              -0.501178855478096,
+              -0.19150296251270887,
+              1.6376308723918431,
+              1.1517167850327013,
+              0.6483447102452693,
+              0.7778306682156674,
+              0.6402836972728434,
+              0.3009988797294027,
+              0.2700375319797477,
+              -0.17234177051162394,
+              -0.17140633043313444,
+              -0.29815213156433334,
+              -0.5090901619972786,
+              -0.7903724956916001,
+              1.5972559647672142,
+              0.7236161014868079,
+              1.2639466807018187,
+              0.6413807191336129,
+              0.49334440726232665,
+              0.2814812889636843,
+              -0.05733364521591106,
+              -0.1743974341997372,
+              -0.33534820134845017,
+              -0.40011447462137967,
+              1.577764300153092,
+              1.0996180557984618,
+              1.0312304157954093,
+              0.6915471241205352,
+              0.2595892295833494,
+              0.4686238336439778,
+              -0.08102475801295624,
+              -0.25505740631742135,
+              -0.2970125089016168,
+              -0.4808914268081887,
+              1.31964397786307,
+              1.3807751910043493,
+              0.7893321633460286,
+              0.5982186199882845,
+              0.2664618870551289,
+              0.471582403474494,
+              0.2785664964948533,
+              -0.028778231581806465,
+              -0.05720619472549029,
+              -0.2043894411276034,
+              1.0865500521119593,
+              0.7539914578132662,
+              0.6210098519279578,
+              0.126346882499797,
+              0.1541123447632727,
+              1.5943687785398049,
+              1.041264635418426,
+              0.6001097542452902,
+              0.573214244687107,
+              0.35324277531841713,
+              1.329019556112637,
+              1.1154874761089466,
+              0.5912027925118858,
+              0.44147700815659247,
+              0.2837906176221759,
+              2.157123610072092,
+              1.5079273934140558,
+              1.063694998784687,
+              0.6937089739228246,
+              0.4819244970067556,
+              2.9059556081902085,
+              1.5664936922511525,
+              1.4164748315036613,
+              1.066659923922969,
+              0.707956514770374,
+              3.0620492475066174,
+              1.8015545194893567,
+              1.7361955967178664,
+              1.5963619869997758,
+              0.6247827974454115
+            ],
+            "covariance_calibration_frobenius_per_dimension": 0.11834592033007932,
+            "diagonal_ar_log_score_hac_standard_error_per_dimension": 0.0039271282900144675,
+            "diagonal_ar_log_score_improvement_per_dimension": 0.009314875724234239,
+            "diagonal_ar_negative_log_likelihood_per_dimension": 0.48895781033524194,
+            "excluded_origin_dates": [
+              "2025-05-02",
+              "2025-06-18",
+              "2025-08-18",
+              "2025-08-19",
+              "2025-08-20",
+              "2025-08-21",
+              "2025-08-22",
+              "2025-08-25",
+              "2025-08-26",
+              "2025-08-27",
+              "2025-08-28",
+              "2025-08-29"
+            ],
+            "expiry_conditional_nll_per_dimension": [
+              2.0291512926467306,
+              0.6326039277301845,
+              0.3250442755271654,
+              0.21640476019143687,
+              0.046508926564673175,
+              0.1617937129690872,
+              0.11880480880262498,
+              0.20258135014267514,
+              0.3081996969866356,
+              0.4777821710436371,
+              0.46081926297491715,
+              0.7603520881377622,
+              1.155647505401444,
+              1.4215599901625562
+            ],
+            "finite": true,
+            "hac_lag_origins": 9,
+            "joint_dimension": 119,
+            "joint_energy_score": 9.49527564413918,
+            "log_score_improvement_hac_ci95_lower_per_dimension": -0.02231257839563925,
+            "log_score_improvement_hac_ci95_upper_per_dimension": -0.0030621371294125357,
+            "log_score_improvement_hac_standard_error_per_dimension": 0.004910826853629264,
+            "log_score_improvement_per_dimension": -0.012687357762525893,
+            "mahalanobis_coverage_50": 0.84,
+            "mahalanobis_coverage_90": 0.9066666666666666,
+            "mahalanobis_coverage_95": 0.92,
+            "mahalanobis_ks_iid_naive_pvalue": 5.136812576295811e-58,
+            "mahalanobis_mean_per_dimension": 0.7905379565332825,
+            "mahalanobis_median_per_dimension": 0.7045095647905766,
+            "mahalanobis_nonoverlap_ks_pvalue": 1.5267812455944668e-08,
+            "negative_log_likelihood": 57.077509218709906,
+            "negative_log_likelihood_per_dimension": 0.4796429346110076,
+            "nondegenerate": true,
+            "nonoverlapping_pairs": 16,
+            "num_pairs": 150,
+            "origin_endpoint_dates": [
+              [
+                "2025-01-02",
+                "2025-01-17"
+              ],
+              [
+                "2025-01-03",
+                "2025-01-21"
+              ],
+              [
+                "2025-01-06",
+                "2025-01-22"
+              ],
+              [
+                "2025-01-07",
+                "2025-01-23"
+              ],
+              [
+                "2025-01-10",
+                "2025-01-27"
+              ],
+              [
+                "2025-01-13",
+                "2025-01-28"
+              ],
+              [
+                "2025-01-14",
+                "2025-01-29"
+              ],
+              [
+                "2025-01-15",
+                "2025-01-30"
+              ],
+              [
+                "2025-01-16",
+                "2025-01-31"
+              ],
+              [
+                "2025-01-17",
+                "2025-02-03"
+              ],
+              [
+                "2025-01-21",
+                "2025-02-04"
+              ],
+              [
+                "2025-01-22",
+                "2025-02-05"
+              ],
+              [
+                "2025-01-23",
+                "2025-02-06"
+              ],
+              [
+                "2025-01-24",
+                "2025-02-07"
+              ],
+              [
+                "2025-01-27",
+                "2025-02-10"
+              ],
+              [
+                "2025-01-28",
+                "2025-02-11"
+              ],
+              [
+                "2025-01-29",
+                "2025-02-12"
+              ],
+              [
+                "2025-01-30",
+                "2025-02-13"
+              ],
+              [
+                "2025-01-31",
+                "2025-02-14"
+              ],
+              [
+                "2025-02-03",
+                "2025-02-18"
+              ],
+              [
+                "2025-02-04",
+                "2025-02-19"
+              ],
+              [
+                "2025-02-05",
+                "2025-02-20"
+              ],
+              [
+                "2025-02-06",
+                "2025-02-21"
+              ],
+              [
+                "2025-02-07",
+                "2025-02-24"
+              ],
+              [
+                "2025-02-10",
+                "2025-02-25"
+              ],
+              [
+                "2025-02-11",
+                "2025-02-26"
+              ],
+              [
+                "2025-02-12",
+                "2025-02-27"
+              ],
+              [
+                "2025-02-13",
+                "2025-02-28"
+              ],
+              [
+                "2025-02-14",
+                "2025-03-03"
+              ],
+              [
+                "2025-02-18",
+                "2025-03-04"
+              ],
+              [
+                "2025-02-19",
+                "2025-03-05"
+              ],
+              [
+                "2025-02-20",
+                "2025-03-06"
+              ],
+              [
+                "2025-02-21",
+                "2025-03-07"
+              ],
+              [
+                "2025-02-24",
+                "2025-03-10"
+              ],
+              [
+                "2025-02-25",
+                "2025-03-11"
+              ],
+              [
+                "2025-02-26",
+                "2025-03-12"
+              ],
+              [
+                "2025-02-27",
+                "2025-03-13"
+              ],
+              [
+                "2025-02-28",
+                "2025-03-14"
+              ],
+              [
+                "2025-03-03",
+                "2025-03-17"
+              ],
+              [
+                "2025-03-04",
+                "2025-03-18"
+              ],
+              [
+                "2025-03-05",
+                "2025-03-19"
+              ],
+              [
+                "2025-03-06",
+                "2025-03-20"
+              ],
+              [
+                "2025-03-07",
+                "2025-03-21"
+              ],
+              [
+                "2025-03-10",
+                "2025-03-24"
+              ],
+              [
+                "2025-03-11",
+                "2025-03-25"
+              ],
+              [
+                "2025-03-12",
+                "2025-03-26"
+              ],
+              [
+                "2025-03-13",
+                "2025-03-27"
+              ],
+              [
+                "2025-03-14",
+                "2025-03-28"
+              ],
+              [
+                "2025-03-17",
+                "2025-03-31"
+              ],
+              [
+                "2025-03-18",
+                "2025-04-01"
+              ],
+              [
+                "2025-03-19",
+                "2025-04-02"
+              ],
+              [
+                "2025-03-20",
+                "2025-04-03"
+              ],
+              [
+                "2025-03-21",
+                "2025-04-04"
+              ],
+              [
+                "2025-03-24",
+                "2025-04-07"
+              ],
+              [
+                "2025-03-25",
+                "2025-04-08"
+              ],
+              [
+                "2025-03-26",
+                "2025-04-09"
+              ],
+              [
+                "2025-03-27",
+                "2025-04-10"
+              ],
+              [
+                "2025-03-28",
+                "2025-04-11"
+              ],
+              [
+                "2025-03-31",
+                "2025-04-14"
+              ],
+              [
+                "2025-04-01",
+                "2025-04-15"
+              ],
+              [
+                "2025-04-02",
+                "2025-04-16"
+              ],
+              [
+                "2025-04-03",
+                "2025-04-17"
+              ],
+              [
+                "2025-04-04",
+                "2025-04-21"
+              ],
+              [
+                "2025-04-07",
+                "2025-04-22"
+              ],
+              [
+                "2025-04-08",
+                "2025-04-23"
+              ],
+              [
+                "2025-04-09",
+                "2025-04-24"
+              ],
+              [
+                "2025-04-10",
+                "2025-04-25"
+              ],
+              [
+                "2025-04-11",
+                "2025-04-28"
+              ],
+              [
+                "2025-04-14",
+                "2025-04-29"
+              ],
+              [
+                "2025-04-15",
+                "2025-04-30"
+              ],
+              [
+                "2025-04-16",
+                "2025-05-01"
+              ],
+              [
+                "2025-04-17",
+                "2025-05-02"
+              ],
+              [
+                "2025-04-21",
+                "2025-05-05"
+              ],
+              [
+                "2025-04-22",
+                "2025-05-06"
+              ],
+              [
+                "2025-04-23",
+                "2025-05-07"
+              ],
+              [
+                "2025-04-24",
+                "2025-05-08"
+              ],
+              [
+                "2025-04-25",
+                "2025-05-09"
+              ],
+              [
+                "2025-04-28",
+                "2025-05-12"
+              ],
+              [
+                "2025-04-29",
+                "2025-05-13"
+              ],
+              [
+                "2025-04-30",
+                "2025-05-14"
+              ],
+              [
+                "2025-05-01",
+                "2025-05-15"
+              ],
+              [
+                "2025-05-05",
+                "2025-05-19"
+              ],
+              [
+                "2025-05-06",
+                "2025-05-20"
+              ],
+              [
+                "2025-05-07",
+                "2025-05-21"
+              ],
+              [
+                "2025-05-08",
+                "2025-05-22"
+              ],
+              [
+                "2025-05-09",
+                "2025-05-23"
+              ],
+              [
+                "2025-05-12",
+                "2025-05-27"
+              ],
+              [
+                "2025-05-13",
+                "2025-05-28"
+              ],
+              [
+                "2025-05-14",
+                "2025-05-29"
+              ],
+              [
+                "2025-05-15",
+                "2025-05-30"
+              ],
+              [
+                "2025-05-19",
+                "2025-06-03"
+              ],
+              [
+                "2025-05-20",
+                "2025-06-04"
+              ],
+              [
+                "2025-05-21",
+                "2025-06-05"
+              ],
+              [
+                "2025-05-22",
+                "2025-06-06"
+              ],
+              [
+                "2025-05-23",
+                "2025-06-09"
+              ],
+              [
+                "2025-05-27",
+                "2025-06-10"
+              ],
+              [
+                "2025-05-28",
+                "2025-06-11"
+              ],
+              [
+                "2025-05-29",
+                "2025-06-12"
+              ],
+              [
+                "2025-05-30",
+                "2025-06-13"
+              ],
+              [
+                "2025-06-02",
+                "2025-06-16"
+              ],
+              [
+                "2025-06-03",
+                "2025-06-17"
+              ],
+              [
+                "2025-06-04",
+                "2025-06-18"
+              ],
+              [
+                "2025-06-05",
+                "2025-06-20"
+              ],
+              [
+                "2025-06-06",
+                "2025-06-23"
+              ],
+              [
+                "2025-06-09",
+                "2025-06-24"
+              ],
+              [
+                "2025-06-10",
+                "2025-06-25"
+              ],
+              [
+                "2025-06-11",
+                "2025-06-26"
+              ],
+              [
+                "2025-06-12",
+                "2025-06-27"
+              ],
+              [
+                "2025-06-13",
+                "2025-06-30"
+              ],
+              [
+                "2025-06-16",
+                "2025-07-01"
+              ],
+              [
+                "2025-06-17",
+                "2025-07-02"
+              ],
+              [
+                "2025-06-20",
+                "2025-07-07"
+              ],
+              [
+                "2025-06-23",
+                "2025-07-08"
+              ],
+              [
+                "2025-06-24",
+                "2025-07-09"
+              ],
+              [
+                "2025-06-25",
+                "2025-07-10"
+              ],
+              [
+                "2025-06-26",
+                "2025-07-11"
+              ],
+              [
+                "2025-06-27",
+                "2025-07-14"
+              ],
+              [
+                "2025-06-30",
+                "2025-07-15"
+              ],
+              [
+                "2025-07-01",
+                "2025-07-16"
+              ],
+              [
+                "2025-07-02",
+                "2025-07-17"
+              ],
+              [
+                "2025-07-07",
+                "2025-07-21"
+              ],
+              [
+                "2025-07-08",
+                "2025-07-22"
+              ],
+              [
+                "2025-07-09",
+                "2025-07-23"
+              ],
+              [
+                "2025-07-10",
+                "2025-07-24"
+              ],
+              [
+                "2025-07-11",
+                "2025-07-25"
+              ],
+              [
+                "2025-07-14",
+                "2025-07-28"
+              ],
+              [
+                "2025-07-15",
+                "2025-07-29"
+              ],
+              [
+                "2025-07-16",
+                "2025-07-30"
+              ],
+              [
+                "2025-07-17",
+                "2025-07-31"
+              ],
+              [
+                "2025-07-18",
+                "2025-08-01"
+              ],
+              [
+                "2025-07-21",
+                "2025-08-04"
+              ],
+              [
+                "2025-07-22",
+                "2025-08-05"
+              ],
+              [
+                "2025-07-23",
+                "2025-08-06"
+              ],
+              [
+                "2025-07-24",
+                "2025-08-07"
+              ],
+              [
+                "2025-07-25",
+                "2025-08-08"
+              ],
+              [
+                "2025-07-28",
+                "2025-08-11"
+              ],
+              [
+                "2025-07-29",
+                "2025-08-12"
+              ],
+              [
+                "2025-07-30",
+                "2025-08-13"
+              ],
+              [
+                "2025-07-31",
+                "2025-08-14"
+              ],
+              [
+                "2025-08-01",
+                "2025-08-15"
+              ],
+              [
+                "2025-08-04",
+                "2025-08-18"
+              ],
+              [
+                "2025-08-05",
+                "2025-08-19"
+              ],
+              [
+                "2025-08-06",
+                "2025-08-20"
+              ],
+              [
+                "2025-08-07",
+                "2025-08-21"
+              ],
+              [
+                "2025-08-08",
+                "2025-08-22"
+              ],
+              [
+                "2025-08-11",
+                "2025-08-25"
+              ],
+              [
+                "2025-08-12",
+                "2025-08-26"
+              ],
+              [
+                "2025-08-13",
+                "2025-08-27"
+              ],
+              [
+                "2025-08-14",
+                "2025-08-28"
+              ],
+              [
+                "2025-08-15",
+                "2025-08-29"
+              ]
+            ],
+            "persistence_surface_rmse": 1.7500358048720155,
+            "random_walk_log_score_hac_standard_error_per_dimension": 0.017538034769685212,
+            "random_walk_log_score_improvement_per_dimension": 0.41702536598968243,
+            "random_walk_negative_log_likelihood_per_dimension": 0.89666830060069,
+            "spot_conditional_front_log_density": 2.5086273604022216,
+            "spot_conditional_front_standardized_std": 0.8035833128932095,
+            "spot_coverage_50": 0.58,
+            "spot_coverage_80": 0.8,
+            "spot_coverage_90": 0.8933333333333333,
+            "spot_coverage_95": 0.94,
+            "spot_coverage_99": 0.98,
+            "spot_log_density": 1.8935757537050495,
+            "spot_pit_ks_iid_naive_pvalue": 0.00014782220068732536,
+            "spot_pit_mean": 0.5449920677013834,
+            "spot_pit_nonoverlap_ks_pvalue": 0.23242826420904406,
+            "spot_standardized_mean": 0.06114434982228995,
+            "spot_standardized_std": 1.0544342426682258,
+            "surface_mae": 0.5739812913377422,
+            "surface_rmse": 1.403008588625478,
+            "unconditional_negative_log_likelihood": 55.56771364496934,
+            "unconditional_negative_log_likelihood_per_dimension": 0.4669555768484818,
+            "unconditional_surface_rmse": 1.4509776587412202,
+            "weeks": 2
+          },
+          "4w": {
+            "coordinate_negative_log_likelihood": [
+              -1.5120845882452607,
+              3.8004047658447786,
+              2.5343930575725846,
+              2.5336874861408414,
+              1.9134980413245244,
+              1.5442638749468627,
+              1.6122913901820677,
+              1.2133410434220018,
+              1.238250909493932,
+              2.2807954463431193,
+              2.1394230811634345,
+              1.5530261115817203,
+              1.3684228380069996,
+              1.2833291507422748,
+              0.8904845300153966,
+              0.6102308360398245,
+              0.44994773802974447,
+              0.6010737641654461,
+              0.17086146067570698,
+              -0.12574646973723957,
+              -0.321720770061583,
+              -0.6720321371039951,
+              2.0661191188726407,
+              1.6346804145854554,
+              1.1585165472284031,
+              1.0122638624760918,
+              0.6638621225660458,
+              0.6953440974848265,
+              0.40472473421204497,
+              0.375170655090382,
+              0.20872740635193682,
+              -0.07475160746059381,
+              -0.36056403209255633,
+              -0.4545594221463523,
+              -0.5396429143448069,
+              2.3648448225583394,
+              1.3751394622323343,
+              1.0638835840949659,
+              1.3526739549135802,
+              0.3663618657103296,
+              0.2979987806802171,
+              0.15663600758560173,
+              0.10428563237804127,
+              -0.12792978487245815,
+              -0.31975494504982266,
+              -0.4763139845988238,
+              -0.14145350782677124,
+              1.6608504132416506,
+              1.1358969453931271,
+              0.6502021906811494,
+              0.793353953002055,
+              0.6761305594560205,
+              0.3077038394709167,
+              0.285683117793271,
+              -0.16663340866804702,
+              -0.12520842162885848,
+              -0.31181036386398736,
+              -0.5085941149946491,
+              -0.7783512318767809,
+              1.6411064954616628,
+              0.7582181255986232,
+              1.2976460702226735,
+              0.7263722912854406,
+              0.5136091819425895,
+              0.32498212724971204,
+              -0.05679795902108415,
+              -0.14411599428699867,
+              -0.32614728018468997,
+              -0.39268853189557384,
+              1.5870172834331149,
+              1.155621678668279,
+              1.0744268383777231,
+              0.7053817000258475,
+              0.2627440229151233,
+              0.4645956529053602,
+              -0.07166973829929886,
+              -0.2549437276037792,
+              -0.2956625365336904,
+              -0.4828065505008557,
+              1.4331584731619738,
+              1.3956244415390857,
+              0.8001617397495446,
+              0.6187047600539793,
+              0.2862718944269596,
+              0.5136290271004929,
+              0.3054738505275233,
+              -0.05699666000433413,
+              -0.08322049466929658,
+              -0.18336720188244984,
+              1.0843373196151167,
+              0.7328657990672136,
+              0.6508228625641356,
+              0.1568166780917339,
+              0.15270267407398155,
+              1.6547812418409455,
+              1.0604933045590816,
+              0.578781042066591,
+              0.5760183783035617,
+              0.3317628325161268,
+              1.342469093650547,
+              1.1596415815534908,
+              0.5829402196307402,
+              0.4667666222050253,
+              0.26575855139160476,
+              2.2639133833904146,
+              1.5217841152196172,
+              1.0754444083813048,
+              0.6947227151736616,
+              0.49060560785309193,
+              2.9674109885817144,
+              1.5815232626609739,
+              1.404704094633316,
+              1.0741597485350043,
+              0.7130623459321157,
+              3.054469322626837,
+              1.8396495027970068,
+              1.7122864508005862,
+              1.5908723404052432,
+              0.655355813677024
+            ],
+            "covariance_calibration_frobenius_per_dimension": 0.11923086619372207,
+            "diagonal_ar_log_score_hac_standard_error_per_dimension": 0.0031973393140942124,
+            "diagonal_ar_log_score_improvement_per_dimension": 0.01080994832048637,
+            "diagonal_ar_negative_log_likelihood_per_dimension": 0.4989286311848268,
+            "excluded_origin_dates": [
+              "2025-04-17",
+              "2025-06-04",
+              "2025-08-04",
+              "2025-08-05",
+              "2025-08-06",
+              "2025-08-07",
+              "2025-08-08",
+              "2025-08-11",
+              "2025-08-12",
+              "2025-08-13",
+              "2025-08-14",
+              "2025-08-15",
+              "2025-08-18",
+              "2025-08-19",
+              "2025-08-20",
+              "2025-08-21",
+              "2025-08-22",
+              "2025-08-25",
+              "2025-08-26",
+              "2025-08-27",
+              "2025-08-28",
+              "2025-08-29"
+            ],
+            "expiry_conditional_nll_per_dimension": [
+              2.042753953512058,
+              0.6385224489274282,
+              0.3219072125829182,
+              0.22023761245068982,
+              0.044525819441088584,
+              0.17601810222329747,
+              0.12529444051983513,
+              0.22202117740919075,
+              0.3012487784263508,
+              0.4719583261161061,
+              0.46831475865911615,
+              0.7724517707492866,
+              1.1650272566972595,
+              1.4060657078140921
+            ],
+            "finite": true,
+            "hac_lag_origins": 19,
+            "joint_dimension": 119,
+            "joint_energy_score": 9.879789712350505,
+            "log_score_improvement_hac_ci95_lower_per_dimension": -0.0260177635811723,
+            "log_score_improvement_hac_ci95_upper_per_dimension": 0.0030997857734742264,
+            "log_score_improvement_hac_standard_error_per_dimension": 0.007427946263940441,
+            "log_score_improvement_per_dimension": -0.011458988903849037,
+            "mahalanobis_coverage_50": 0.8357142857142857,
+            "mahalanobis_coverage_90": 0.9,
+            "mahalanobis_coverage_95": 0.9357142857142857,
+            "mahalanobis_ks_iid_naive_pvalue": 5.414389540481494e-58,
+            "mahalanobis_mean_per_dimension": 0.7727994425136072,
+            "mahalanobis_median_per_dimension": 0.6664784688583376,
+            "mahalanobis_nonoverlap_ks_pvalue": 7.78406541807366e-07,
+            "negative_log_likelihood": 58.08612326085652,
+            "negative_log_likelihood_per_dimension": 0.48811868286434046,
+            "nondegenerate": true,
+            "nonoverlapping_pairs": 8,
+            "num_pairs": 140,
+            "origin_endpoint_dates": [
+              [
+                "2025-01-02",
+                "2025-02-03"
+              ],
+              [
+                "2025-01-03",
+                "2025-02-04"
+              ],
+              [
+                "2025-01-06",
+                "2025-02-05"
+              ],
+              [
+                "2025-01-07",
+                "2025-02-06"
+              ],
+              [
+                "2025-01-10",
+                "2025-02-10"
+              ],
+              [
+                "2025-01-13",
+                "2025-02-11"
+              ],
+              [
+                "2025-01-14",
+                "2025-02-12"
+              ],
+              [
+                "2025-01-15",
+                "2025-02-13"
+              ],
+              [
+                "2025-01-16",
+                "2025-02-14"
+              ],
+              [
+                "2025-01-17",
+                "2025-02-18"
+              ],
+              [
+                "2025-01-21",
+                "2025-02-19"
+              ],
+              [
+                "2025-01-22",
+                "2025-02-20"
+              ],
+              [
+                "2025-01-23",
+                "2025-02-21"
+              ],
+              [
+                "2025-01-24",
+                "2025-02-24"
+              ],
+              [
+                "2025-01-27",
+                "2025-02-25"
+              ],
+              [
+                "2025-01-28",
+                "2025-02-26"
+              ],
+              [
+                "2025-01-29",
+                "2025-02-27"
+              ],
+              [
+                "2025-01-30",
+                "2025-02-28"
+              ],
+              [
+                "2025-01-31",
+                "2025-03-03"
+              ],
+              [
+                "2025-02-03",
+                "2025-03-04"
+              ],
+              [
+                "2025-02-04",
+                "2025-03-05"
+              ],
+              [
+                "2025-02-05",
+                "2025-03-06"
+              ],
+              [
+                "2025-02-06",
+                "2025-03-07"
+              ],
+              [
+                "2025-02-07",
+                "2025-03-10"
+              ],
+              [
+                "2025-02-10",
+                "2025-03-11"
+              ],
+              [
+                "2025-02-11",
+                "2025-03-12"
+              ],
+              [
+                "2025-02-12",
+                "2025-03-13"
+              ],
+              [
+                "2025-02-13",
+                "2025-03-14"
+              ],
+              [
+                "2025-02-14",
+                "2025-03-17"
+              ],
+              [
+                "2025-02-18",
+                "2025-03-18"
+              ],
+              [
+                "2025-02-19",
+                "2025-03-19"
+              ],
+              [
+                "2025-02-20",
+                "2025-03-20"
+              ],
+              [
+                "2025-02-21",
+                "2025-03-21"
+              ],
+              [
+                "2025-02-24",
+                "2025-03-24"
+              ],
+              [
+                "2025-02-25",
+                "2025-03-25"
+              ],
+              [
+                "2025-02-26",
+                "2025-03-26"
+              ],
+              [
+                "2025-02-27",
+                "2025-03-27"
+              ],
+              [
+                "2025-02-28",
+                "2025-03-28"
+              ],
+              [
+                "2025-03-03",
+                "2025-03-31"
+              ],
+              [
+                "2025-03-04",
+                "2025-04-01"
+              ],
+              [
+                "2025-03-05",
+                "2025-04-02"
+              ],
+              [
+                "2025-03-06",
+                "2025-04-03"
+              ],
+              [
+                "2025-03-07",
+                "2025-04-04"
+              ],
+              [
+                "2025-03-10",
+                "2025-04-07"
+              ],
+              [
+                "2025-03-11",
+                "2025-04-08"
+              ],
+              [
+                "2025-03-12",
+                "2025-04-09"
+              ],
+              [
+                "2025-03-13",
+                "2025-04-10"
+              ],
+              [
+                "2025-03-14",
+                "2025-04-11"
+              ],
+              [
+                "2025-03-17",
+                "2025-04-14"
+              ],
+              [
+                "2025-03-18",
+                "2025-04-15"
+              ],
+              [
+                "2025-03-19",
+                "2025-04-16"
+              ],
+              [
+                "2025-03-20",
+                "2025-04-17"
+              ],
+              [
+                "2025-03-21",
+                "2025-04-21"
+              ],
+              [
+                "2025-03-24",
+                "2025-04-22"
+              ],
+              [
+                "2025-03-25",
+                "2025-04-23"
+              ],
+              [
+                "2025-03-26",
+                "2025-04-24"
+              ],
+              [
+                "2025-03-27",
+                "2025-04-25"
+              ],
+              [
+                "2025-03-28",
+                "2025-04-28"
+              ],
+              [
+                "2025-03-31",
+                "2025-04-29"
+              ],
+              [
+                "2025-04-01",
+                "2025-04-30"
+              ],
+              [
+                "2025-04-02",
+                "2025-05-01"
+              ],
+              [
+                "2025-04-03",
+                "2025-05-02"
+              ],
+              [
+                "2025-04-04",
+                "2025-05-05"
+              ],
+              [
+                "2025-04-07",
+                "2025-05-06"
+              ],
+              [
+                "2025-04-08",
+                "2025-05-07"
+              ],
+              [
+                "2025-04-09",
+                "2025-05-08"
+              ],
+              [
+                "2025-04-10",
+                "2025-05-09"
+              ],
+              [
+                "2025-04-11",
+                "2025-05-12"
+              ],
+              [
+                "2025-04-14",
+                "2025-05-13"
+              ],
+              [
+                "2025-04-15",
+                "2025-05-14"
+              ],
+              [
+                "2025-04-16",
+                "2025-05-15"
+              ],
+              [
+                "2025-04-21",
+                "2025-05-19"
+              ],
+              [
+                "2025-04-22",
+                "2025-05-20"
+              ],
+              [
+                "2025-04-23",
+                "2025-05-21"
+              ],
+              [
+                "2025-04-24",
+                "2025-05-22"
+              ],
+              [
+                "2025-04-25",
+                "2025-05-23"
+              ],
+              [
+                "2025-04-28",
+                "2025-05-27"
+              ],
+              [
+                "2025-04-29",
+                "2025-05-28"
+              ],
+              [
+                "2025-04-30",
+                "2025-05-29"
+              ],
+              [
+                "2025-05-01",
+                "2025-05-30"
+              ],
+              [
+                "2025-05-02",
+                "2025-06-02"
+              ],
+              [
+                "2025-05-05",
+                "2025-06-03"
+              ],
+              [
+                "2025-05-06",
+                "2025-06-04"
+              ],
+              [
+                "2025-05-07",
+                "2025-06-05"
+              ],
+              [
+                "2025-05-08",
+                "2025-06-06"
+              ],
+              [
+                "2025-05-09",
+                "2025-06-09"
+              ],
+              [
+                "2025-05-12",
+                "2025-06-10"
+              ],
+              [
+                "2025-05-13",
+                "2025-06-11"
+              ],
+              [
+                "2025-05-14",
+                "2025-06-12"
+              ],
+              [
+                "2025-05-15",
+                "2025-06-13"
+              ],
+              [
+                "2025-05-19",
+                "2025-06-17"
+              ],
+              [
+                "2025-05-20",
+                "2025-06-18"
+              ],
+              [
+                "2025-05-21",
+                "2025-06-20"
+              ],
+              [
+                "2025-05-22",
+                "2025-06-23"
+              ],
+              [
+                "2025-05-23",
+                "2025-06-24"
+              ],
+              [
+                "2025-05-27",
+                "2025-06-25"
+              ],
+              [
+                "2025-05-28",
+                "2025-06-26"
+              ],
+              [
+                "2025-05-29",
+                "2025-06-27"
+              ],
+              [
+                "2025-05-30",
+                "2025-06-30"
+              ],
+              [
+                "2025-06-02",
+                "2025-07-01"
+              ],
+              [
+                "2025-06-03",
+                "2025-07-02"
+              ],
+              [
+                "2025-06-05",
+                "2025-07-07"
+              ],
+              [
+                "2025-06-06",
+                "2025-07-08"
+              ],
+              [
+                "2025-06-09",
+                "2025-07-09"
+              ],
+              [
+                "2025-06-10",
+                "2025-07-10"
+              ],
+              [
+                "2025-06-11",
+                "2025-07-11"
+              ],
+              [
+                "2025-06-12",
+                "2025-07-14"
+              ],
+              [
+                "2025-06-13",
+                "2025-07-15"
+              ],
+              [
+                "2025-06-16",
+                "2025-07-16"
+              ],
+              [
+                "2025-06-17",
+                "2025-07-17"
+              ],
+              [
+                "2025-06-18",
+                "2025-07-18"
+              ],
+              [
+                "2025-06-20",
+                "2025-07-21"
+              ],
+              [
+                "2025-06-23",
+                "2025-07-22"
+              ],
+              [
+                "2025-06-24",
+                "2025-07-23"
+              ],
+              [
+                "2025-06-25",
+                "2025-07-24"
+              ],
+              [
+                "2025-06-26",
+                "2025-07-25"
+              ],
+              [
+                "2025-06-27",
+                "2025-07-28"
+              ],
+              [
+                "2025-06-30",
+                "2025-07-29"
+              ],
+              [
+                "2025-07-01",
+                "2025-07-30"
+              ],
+              [
+                "2025-07-02",
+                "2025-07-31"
+              ],
+              [
+                "2025-07-07",
+                "2025-08-04"
+              ],
+              [
+                "2025-07-08",
+                "2025-08-05"
+              ],
+              [
+                "2025-07-09",
+                "2025-08-06"
+              ],
+              [
+                "2025-07-10",
+                "2025-08-07"
+              ],
+              [
+                "2025-07-11",
+                "2025-08-08"
+              ],
+              [
+                "2025-07-14",
+                "2025-08-11"
+              ],
+              [
+                "2025-07-15",
+                "2025-08-12"
+              ],
+              [
+                "2025-07-16",
+                "2025-08-13"
+              ],
+              [
+                "2025-07-17",
+                "2025-08-14"
+              ],
+              [
+                "2025-07-18",
+                "2025-08-15"
+              ],
+              [
+                "2025-07-21",
+                "2025-08-18"
+              ],
+              [
+                "2025-07-22",
+                "2025-08-19"
+              ],
+              [
+                "2025-07-23",
+                "2025-08-20"
+              ],
+              [
+                "2025-07-24",
+                "2025-08-21"
+              ],
+              [
+                "2025-07-25",
+                "2025-08-22"
+              ],
+              [
+                "2025-07-28",
+                "2025-08-25"
+              ],
+              [
+                "2025-07-29",
+                "2025-08-26"
+              ],
+              [
+                "2025-07-30",
+                "2025-08-27"
+              ],
+              [
+                "2025-07-31",
+                "2025-08-28"
+              ],
+              [
+                "2025-08-01",
+                "2025-08-29"
+              ]
+            ],
+            "persistence_surface_rmse": 1.800472331430131,
+            "random_walk_log_score_hac_standard_error_per_dimension": 0.025165980013538154,
+            "random_walk_log_score_improvement_per_dimension": 0.6251025217813162,
+            "random_walk_negative_log_likelihood_per_dimension": 1.1132212046456564,
+            "spot_conditional_front_log_density": 2.042951426325883,
+            "spot_conditional_front_standardized_std": 0.9008284374470278,
+            "spot_coverage_50": 0.4142857142857143,
+            "spot_coverage_80": 0.7714285714285715,
+            "spot_coverage_90": 0.85,
+            "spot_coverage_95": 0.9214285714285714,
+            "spot_coverage_99": 0.9857142857142858,
+            "spot_log_density": 1.5120845882452603,
+            "spot_pit_ks_iid_naive_pvalue": 0.006844418786285973,
+            "spot_pit_mean": 0.5310441504567667,
+            "spot_pit_nonoverlap_ks_pvalue": 0.8860209054932385,
+            "spot_standardized_mean": 0.058345987670351054,
+            "spot_standardized_std": 1.0871987397476648,
+            "surface_mae": 0.5999280774229216,
+            "surface_rmse": 1.4358894684425443,
+            "unconditional_negative_log_likelihood": 56.72250358129847,
+            "unconditional_negative_log_likelihood_per_dimension": 0.47665969396049135,
+            "unconditional_surface_rmse": 1.4673622297222417,
+            "weeks": 4
+          }
+        },
+        "num_validation_dates": 162,
+        "uncertainty": "Newey-West standard errors use 5*weeks-1 overlapping-origin lags; nonoverlapping_pairs is a greedy disjoint-interval count",
+        "validation_end": "2025-08-29",
+        "validation_start": "2025-01-02"
+      }
+    }
+  }
+}

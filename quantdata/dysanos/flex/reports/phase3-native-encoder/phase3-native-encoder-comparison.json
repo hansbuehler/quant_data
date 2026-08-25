@@ -1,0 +1,46 @@
+{
+  "evaluation_semantics": "same-set amortized calibration",
+  "rows": {
+    "direct_native_ceiling": {
+      "all_percent_zero": 69.16759363301168,
+      "date_weighted_objective": 1.5966744949052363,
+      "positive_mean": 4.89178108308212,
+      "positive_median": 1.4836295491861375,
+      "weekly_percent_zero": 83.16034359341445
+    },
+    "flat_native_140": {
+      "all_percent_zero": 26.22712463509523,
+      "date_weighted_objective": 8.156210602065663,
+      "positive_mean": 10.45449585381492,
+      "positive_median": 7.091862676137735,
+      "weekly_percent_zero": 24.410567287043666
+    },
+    "flat_native_2828": {
+      "all_percent_zero": 28.280472724603474,
+      "date_weighted_objective": 7.112244438977889,
+      "positive_mean": 9.305956541069422,
+      "positive_median": 6.161427498799171,
+      "weekly_percent_zero": 26.197133738964446
+    },
+    "strong_global_140": {
+      "all_percent_zero": 25.149349806042878,
+      "date_weighted_objective": 8.75538718553237,
+      "positive_mean": 10.996403732942873,
+      "positive_median": 7.251794822942557,
+      "weekly_percent_zero": 23.433026127415893
+    },
+    "strong_hierarchical_140": {
+      "all_percent_zero": 23.773863501617722,
+      "date_weighted_objective": 11.540429759172746,
+      "positive_mean": 13.919739087082128,
+      "positive_median": 8.608760508650933,
+      "weekly_percent_zero": 20.153677523264136
+    }
+  },
+  "schema": "flex-phase3-native-encoder-comparison-v1",
+  "status": "complete",
+  "validation_period": [
+    "2025-01-02",
+    "2025-08-29"
+  ]
+}

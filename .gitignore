@@ -219,3 +219,6 @@ __marimo__/
 /.vqdatalx
 /docs/generated
 /docs/api_generated
+
+# Local generated notebook exceeds GitHub's per-file size limit.
+/quantdata/ncde/implied/notebooks/viz_day_detail.ipynb

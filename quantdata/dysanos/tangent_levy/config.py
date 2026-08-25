@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from datetime import date
 
 import numpy as np
 from cdxcore.err import verify_inp
@@ -17,11 +18,18 @@ from quantdata.widb.options_filter import OptionsFilter
 
 
 def _default_tau_grid() -> tuple[float, ...]:
-    # The market route still fits expiries through one business year.  The
-    # fixed dynamics panel stops at nine months because the one-year contract
-    # is not present on every SPX session after filtering.
-    business_days = (0, 5, 10, 20, 40, 60, 90, 126, 189)
-    return tuple(day / DAYS_PER_YEAR for day in business_days)
+    # Prefix the exact Dysanos/grid maturity grid with the simulation origin.
+    # That legacy artifact uses 255 maturity days per year.
+    return (
+        0.0,
+        2.0 / 255.0,
+        5.0 / 255.0,
+        10.0 / 255.0,
+        20.0 / 255.0,
+        40.0 / 255.0,
+        0.5,
+        1.0,
+    )
 
 
 def _default_jump_grid() -> tuple[float, ...]:
@@ -35,31 +43,66 @@ def _default_scoring_x_grid() -> tuple[float, ...]:
     return tuple(np.linspace(-0.35, 0.20, 57).tolist())
 
 
-@version("0.1", dependencies=[RawDayFilter, ExpiryFilter, OptionsFilter, MkArbFree])
+@version("0.2", dependencies=[RawDayFilter, ExpiryFilter, OptionsFilter, MkArbFree])
 @dataclass(frozen=True, kw_only=True)
 class MarketConfig:
-    """Logical inputs to the canonical smoothed SPX market route."""
+    """Logical inputs to the shared Dysanos/grid SPX market route."""
 
+    source: str = "dysanos_grid_cache"
     smoothness: float = 0.25
-    min_business_days_to_expiry: int = 5
-    max_business_days_to_expiry: int = DAYS_PER_YEAR
-    options_filter: OptionsFilter = field(
-        default_factory=lambda: OptionsFilter(
-            normalize=True,
-            max_num_options=1_000,
-            max_business_days_to_expiry=DAYS_PER_YEAR,
-        )
-    )
+    grid_num_strikes: int = 100
+    grid_cache_start: date = date(2020, 1, 1)
+    grid_cache_end: date = date(2025, 8, 30)
+    maturity_days_per_year: int = 255
+    min_business_days_to_expiry: int = 2
+    max_business_days_to_expiry: int = 255
+    options_filter: OptionsFilter = field(default_factory=OptionsFilter)
     raw_day_filter: RawDayFilter = field(default_factory=RawDayFilter)
     expiry_filter: ExpiryFilter = field(default_factory=ExpiryFilter)
     mk_arb_free: MkArbFree = field(default_factory=MkArbFree)
 
     def __post_init__(self) -> None:
         verify_inp(
+            self.source in {"dysanos_grid_cache", "smooth_market"},
+            lambda: (
+                f"'source' must be 'dysanos_grid_cache' or 'smooth_market', got {self.source!r}"
+            ),
+        )
+        verify_inp(
             math.isfinite(self.smoothness) and self.smoothness > 0.01,
             lambda: (
                 "'smoothness' must be finite and strictly greater than 0.01, "
                 f"got {self.smoothness!r}"
+            ),
+        )
+        verify_inp(
+            self.source != "dysanos_grid_cache" or self.smoothness < 1.0,
+            lambda: (
+                f"Dysanos/grid requires 'smoothness' below 1, got {self.smoothness!r}"
+            ),
+        )
+        verify_inp(
+            isinstance(self.grid_num_strikes, int) and self.grid_num_strikes >= 2,
+            lambda: (
+                "'grid_num_strikes' must be an integer of at least two, got "
+                f"{self.grid_num_strikes!r}"
+            ),
+        )
+        verify_inp(
+            isinstance(self.grid_cache_start, date)
+            and isinstance(self.grid_cache_end, date)
+            and self.grid_cache_start <= self.grid_cache_end,
+            lambda: (
+                "the grid cache date range is invalid: "
+                f"{self.grid_cache_start!r} through {self.grid_cache_end!r}"
+            ),
+        )
+        verify_inp(
+            isinstance(self.maturity_days_per_year, int)
+            and self.maturity_days_per_year > 0,
+            lambda: (
+                "'maturity_days_per_year' must be a positive integer, got "
+                f"{self.maturity_days_per_year!r}"
             ),
         )
         verify_inp(
@@ -72,8 +115,7 @@ class MarketConfig:
         )
         verify_inp(
             isinstance(self.max_business_days_to_expiry, int)
-            and self.max_business_days_to_expiry
-            >= self.min_business_days_to_expiry,
+            and self.max_business_days_to_expiry >= self.min_business_days_to_expiry,
             lambda: (
                 "'max_business_days_to_expiry' must be at least the minimum, got "
                 f"{self.max_business_days_to_expiry!r}"
@@ -85,10 +127,10 @@ class MarketConfig:
         )
         verify_inp(
             self.options_filter.max_business_days_to_expiry
-            == self.max_business_days_to_expiry,
+            >= math.ceil(self.max_tau * DAYS_PER_YEAR),
             lambda: (
-                "the market and option-filter maximum expiries must agree, got "
-                f"{self.max_business_days_to_expiry} and "
+                "the option-filter horizon is shorter than the fitted horizon: "
+                f"fit tau={self.max_tau} and option filter "
                 f"{self.options_filter.max_business_days_to_expiry}"
             ),
         )
@@ -97,17 +139,18 @@ class MarketConfig:
     def min_tau(self) -> float:
         """Minimum fitted time to maturity in business-year units."""
 
-        return self.min_business_days_to_expiry / DAYS_PER_YEAR
+        return self.min_business_days_to_expiry / self.maturity_days_per_year
 
     @property
     def max_tau(self) -> float:
         """Maximum fitted time to maturity in business-year units."""
 
-        return self.max_business_days_to_expiry / DAYS_PER_YEAR
+        return self.max_business_days_to_expiry / self.maturity_days_per_year
 
     def __str__(self) -> str:
         return (
-            f"sm={self.smoothness:.3g},bdte="
+            f"src={self.source},sm={self.smoothness:.3g},n="
+            f"{self.grid_num_strikes},bdte="
             f"{self.min_business_days_to_expiry}-{self.max_business_days_to_expiry},"
             f"{self.options_filter}"
         )
@@ -126,8 +169,7 @@ class PricingConfig:
         verify_inp(
             math.isfinite(self.integration_upper) and self.integration_upper > 0.0,
             lambda: (
-                "'integration_upper' must be finite and positive, got "
-                f"{self.integration_upper!r}"
+                f"'integration_upper' must be finite and positive, got {self.integration_upper!r}"
             ),
         )
         verify_inp(
@@ -142,8 +184,7 @@ class PricingConfig:
         verify_inp(
             isinstance(self.strike_chunk_size, int) and self.strike_chunk_size > 0,
             lambda: (
-                "'strike_chunk_size' must be a positive integer, got "
-                f"{self.strike_chunk_size!r}"
+                f"'strike_chunk_size' must be a positive integer, got {self.strike_chunk_size!r}"
             ),
         )
 
@@ -175,16 +216,12 @@ class StaticFitConfig:
         )
         verify_inp(
             isinstance(self.max_iterations, int) and self.max_iterations > 0,
-            lambda: (
-                "'max_iterations' must be positive, got "
-                f"{self.max_iterations!r}"
-            ),
+            lambda: f"'max_iterations' must be positive, got {self.max_iterations!r}",
         )
         verify_inp(
             math.isfinite(self.half_spread_floor) and self.half_spread_floor > 0.0,
             lambda: (
-                "'half_spread_floor' must be finite and positive, got "
-                f"{self.half_spread_floor!r}"
+                f"'half_spread_floor' must be finite and positive, got {self.half_spread_floor!r}"
             ),
         )
         for name, bounds in (
@@ -200,15 +237,13 @@ class StaticFitConfig:
         verify_inp(
             self.positive_tail_bounds[0] > 1.0,
             lambda: (
-                "the lower positive-tail bound must exceed one, got "
-                f"{self.positive_tail_bounds[0]}"
+                f"the lower positive-tail bound must exceed one, got {self.positive_tail_bounds[0]}"
             ),
         )
         verify_inp(
             0.0 < self.probability_floor < 0.5,
             lambda: (
-                "'probability_floor' must lie in (0, 0.5), got "
-                f"{self.probability_floor!r}"
+                f"'probability_floor' must lie in (0, 0.5), got {self.probability_floor!r}"
             ),
         )
         verify_inp(
@@ -247,7 +282,7 @@ class StaticFitConfig:
         )
 
 
-@version("0.1")
+@version("0.2")
 @dataclass(frozen=True, kw_only=True)
 class DynamicsConfig:
     """Fixed-grid covariance and HJM drift settings."""
@@ -271,8 +306,7 @@ class DynamicsConfig:
             and tau[0] == 0.0
             and np.all(np.diff(tau) > 0.0),
             lambda: (
-                "'tau_grid' must start at zero and be strictly increasing, got "
-                f"{self.tau_grid!r}"
+                f"'tau_grid' must start at zero and be strictly increasing, got {self.tau_grid!r}"
             ),
         )
         verify_inp(
@@ -305,8 +339,7 @@ class DynamicsConfig:
         verify_inp(
             0.0 <= self.covariance_shrinkage < 1.0,
             lambda: (
-                "'covariance_shrinkage' must lie in [0, 1), got "
-                f"{self.covariance_shrinkage!r}"
+                f"'covariance_shrinkage' must lie in [0, 1), got {self.covariance_shrinkage!r}"
             ),
         )
         verify_inp(
@@ -371,8 +404,7 @@ class SimulationConfig:
         verify_inp(
             math.isfinite(self.boundary_epsilon) and self.boundary_epsilon > 0.0,
             lambda: (
-                "'boundary_epsilon' must be finite and positive, got "
-                f"{self.boundary_epsilon!r}"
+                f"'boundary_epsilon' must be finite and positive, got {self.boundary_epsilon!r}"
             ),
         )
         verify_inp(
@@ -435,8 +467,7 @@ class TangentLevyConfig:
             self.dynamics.inactive_density_threshold
             >= self.static_fit.forward_density_floor,
             lambda: (
-                "the dynamics inactive-density threshold must be at least the "
-                "reconstruction floor"
+                "the dynamics inactive-density threshold must be at least the reconstruction floor"
             ),
         )
 

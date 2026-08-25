@@ -35,7 +35,7 @@ def write_diagnostic_figure(
 
     axes[0, 0].plot(dates, daily_rmse, linewidth=0.8)
     axes[0, 0].set_title("Median maturity fit error")
-    axes[0, 0].set_ylabel("half spreads")
+    axes[0, 0].set_ylabel("weighted residual units")
     axes[0, 0].grid(alpha=0.25)
 
     axes[0, 1].plot(

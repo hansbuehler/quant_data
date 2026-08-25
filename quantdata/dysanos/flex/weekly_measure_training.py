@@ -490,6 +490,7 @@ def audit_weekly_roll_line(
     paths_per_origin: int,
     origins_per_batch: int,
     seed: int,
+    include_origin_details: bool = False,
 ) -> dict[str, object]:
     """Evaluate one conditional roll line on every supplied historic origin."""
     if paths_per_origin < 4 or paths_per_origin % 2 != 0:
@@ -547,6 +548,11 @@ def audit_weekly_roll_line(
             "path_residual_rmse": math.sqrt(path_square_total / path_count),
         }
     )
+    if include_origin_details:
+        # Retain conditional estimates only for dedicated statistical audits.
+        # Ordinary training reports deliberately remain compact.
+        result["origin_estimates"] = estimates.tolist()
+        result["origin_standard_errors"] = standard_errors.tolist()
     return result
 
 
@@ -655,6 +661,82 @@ def _restore_checkpoint(
         raise ValueError(f"target-measure checkpoint identity mismatch: {path}")
     kernel.load_state_dict(cast(Mapping[str, torch.Tensor], payload["model_state_dict"]))
     return payload
+
+
+def extend_weekly_measure_checkpoint(
+    source_path: Path,
+    target_path: Path,
+    *,
+    kernel: TargetKernel,
+    training_data: WeeklyMeasureTrainingData,
+    source_config: WeeklyMeasureTrainConfig,
+    target_config: WeeklyMeasureTrainConfig,
+) -> dict[str, object]:
+    """Seed one additional hierarchical Q line from a completed checkpoint.
+
+    The target has an independent durable identity. Existing targets are only
+    validated and never overwritten, while a new target retains the fitted
+    earlier lines, their histories, and the serialized random stream.
+    """
+    state_sha256 = _tensor_sha256(training_data.reduced_states)
+    if target_path.exists():
+        restored = _restore_checkpoint(
+            target_path,
+            kernel=kernel,
+            config=target_config,
+            state_sha256=state_sha256,
+        )
+        assert restored is not None
+        return {
+            "checkpoint_action": "validated_existing",
+            "line_index": int(restored.get("line_index", 0)),
+            "phase": str(restored.get("phase")),
+        }
+
+    source = _restore_checkpoint(
+        source_path,
+        kernel=kernel,
+        config=source_config,
+        state_sha256=state_sha256,
+    )
+    if source is None or source.get("phase") != "complete":
+        raise ValueError(f"source Q checkpoint is not complete: {source_path}")
+    source_line = int(source.get("line_index", 0))
+    # A new line starts with no optimizer state, so its operational training
+    # controls may change without reinterpreting the frozen earlier-line fit.
+    # The source config is still validated above against its own checkpoint.
+    if (
+        source_config.maximum_roll_lines != source_line
+        or target_config.maximum_roll_lines != source_line + 1
+        or source_line >= kernel.transformed_block_count
+    ):
+        raise ValueError(
+            "Q continuation must add exactly one available hierarchical roll line"
+        )
+    histories = list(cast(list[dict[str, object]], source.get("histories", [])))
+    if len(histories) != source_line or any(
+        line.get("status") != "complete" for line in histories
+    ):
+        raise ValueError("source Q checkpoint has incomplete line histories")
+    generator = torch.Generator(device=kernel.device)
+    generator.set_state(cast(torch.Tensor, source["generator_state"]))
+    _save_checkpoint(
+        target_path,
+        kernel=kernel,
+        config=target_config,
+        state_sha256=state_sha256,
+        line_index=source_line,
+        completed_epochs=0,
+        histories=histories,
+        optimizer=None,
+        generator=generator,
+        phase="training",
+    )
+    return {
+        "checkpoint_action": "seeded",
+        "line_index": source_line,
+        "phase": "training",
+    }
 
 
 def fit_weekly_measure_kernel(
@@ -787,9 +869,9 @@ def fit_weekly_measure_kernel(
                     current,
                     gross,
                     line_index=line_index,
+                    standard_normals=normals,
                 )
                 if isinstance(kernel, NormalWeeklyMeasureKernel)
-                and line_index == 0
                 else kernel.regularization_loss(
                     training_data.reduced_states[indices]
                 )
@@ -917,6 +999,7 @@ __all__ = [
     "WeeklyMeasureTrainingData",
     "audit_front_week_consistency",
     "audit_weekly_roll_line",
+    "extend_weekly_measure_checkpoint",
     "fit_weekly_measure_kernel",
     "precompute_measure_training_data",
 ]

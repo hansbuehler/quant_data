@@ -89,10 +89,13 @@ def main() -> None:
         "successful_date_fraction": history.successful_date_fraction,
         "failed_dates": history.failure_reasons,
         "market_audit": {
+            "source": config.market.source,
             "available_dates": sum(audit.available for audit in history.audits),
             "early_close_dates": sum(audit.early_close for audit in history.audits),
-            "option_cap_bound_dates": sum(
-                audit.option_cap_bound for audit in history.audits
+            "option_cap_bound_dates": (
+                None
+                if config.market.source == "dysanos_grid_cache"
+                else sum(audit.option_cap_bound for audit in history.audits)
             ),
             "candidate_tau": coverage.candidate_tau.tolist(),
             "coverage_fraction": coverage.coverage_fraction.tolist(),
@@ -103,7 +106,12 @@ def main() -> None:
             "optimizer_success_fraction": float(
                 np.mean([fit.success for fit in maturity_fits])
             ),
-            "median_half_spread_rmse": float(
+            "objective_weighting": (
+                "dysanos_grid_inverse_vega_sqrt"
+                if config.market.source == "dysanos_grid_cache"
+                else "inverse_half_spread"
+            ),
+            "median_weighted_rmse": float(
                 np.median([fit.weighted_rmse for fit in maturity_fits])
             ),
             "maximum_price_error": float(
@@ -141,9 +149,7 @@ def main() -> None:
                 "maximum_constraint_residual": (
                     result.dynamics.maximum_constraint_residual
                 ),
-                "active_cell_fraction": float(
-                    np.mean(result.dynamics.active_mask)
-                ),
+                "active_cell_fraction": float(np.mean(result.dynamics.active_mask)),
             }
         ),
         "simulation": (

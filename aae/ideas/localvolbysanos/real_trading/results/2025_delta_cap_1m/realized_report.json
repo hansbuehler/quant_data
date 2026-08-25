@@ -1,0 +1,517 @@
+{
+  "ticker": "SPX",
+  "results_dir": "aae/ideas/localvolbysanos/real_trading/results/2025_delta_cap_1m",
+  "output_dir": "aae/ideas/localvolbysanos/real_trading/results/2025_delta_cap_1m",
+  "entry": "observed ask for longs and observed bid for shorts",
+  "exit": "observed future mid for survivors",
+  "expiry": "intrinsic payoff using expiry-date SPX spot_ref when available",
+  "funding": "ignored, matching the prediction run",
+  "horizon_sessions": 5,
+  "num_comparisons": 2844,
+  "num_complete": 2561,
+  "num_missing_positions": 425,
+  "missing_errors": [
+    {
+      "error": "expiry-date SPX spot is unavailable",
+      "len": 139
+    },
+    {
+      "error": "future expiry ID 202510311 missing",
+      "len": 40
+    },
+    {
+      "error": "future expiry ID 202509261 missing",
+      "len": 25
+    },
+    {
+      "error": "future expiry ID 202510171 missing",
+      "len": 16
+    },
+    {
+      "error": "future expiry ID 202511281 missing",
+      "len": 16
+    },
+    {
+      "error": "future absolute strike mismatch 145",
+      "len": 12
+    },
+    {
+      "error": "future absolute strike mismatch 89.9996",
+      "len": 12
+    },
+    {
+      "error": "future absolute strike mismatch 150",
+      "len": 12
+    },
+    {
+      "error": "future absolute strike mismatch 160",
+      "len": 12
+    },
+    {
+      "error": "future expiry ID 202508291 missing",
+      "len": 12
+    },
+    {
+      "error": "future absolute strike mismatch 70.0002",
+      "len": 10
+    },
+    {
+      "error": "future absolute strike mismatch 15",
+      "len": 10
+    },
+    {
+      "error": "future absolute strike mismatch 120",
+      "len": 9
+    },
+    {
+      "error": "future absolute strike mismatch 59.9994",
+      "len": 9
+    },
+    {
+      "error": "future expiry ID 202601301 missing",
+      "len": 8
+    },
+    {
+      "error": "future absolute strike mismatch 65.0005",
+      "len": 8
+    },
+    {
+      "error": "future absolute strike mismatch 30.0003",
+      "len": 8
+    },
+    {
+      "error": "future absolute strike mismatch 34.9995",
+      "len": 7
+    },
+    {
+      "error": "future absolute strike mismatch 49.9999",
+      "len": 7
+    },
+    {
+      "error": "future absolute strike mismatch 39.9997",
+      "len": 7
+    },
+    {
+      "error": "future absolute strike mismatch 50.0001",
+      "len": 6
+    },
+    {
+      "error": "future absolute strike mismatch 85",
+      "len": 6
+    },
+    {
+      "error": "future absolute strike mismatch 55",
+      "len": 6
+    },
+    {
+      "error": "future absolute strike mismatch 24.9996",
+      "len": 4
+    },
+    {
+      "error": "future absolute strike mismatch 79.9999",
+      "len": 4
+    },
+    {
+      "error": "future absolute strike mismatch 95.0004",
+      "len": 4
+    },
+    {
+      "error": "future absolute strike mismatch 100",
+      "len": 3
+    },
+    {
+      "error": "future absolute strike mismatch 4.99997",
+      "len": 2
+    },
+    {
+      "error": "future absolute strike mismatch 39.9998",
+      "len": 2
+    },
+    {
+      "error": "future absolute strike mismatch 44.9997",
+      "len": 2
+    },
+    {
+      "error": "future absolute strike mismatch 10.0001",
+      "len": 2
+    },
+    {
+      "error": "future absolute strike mismatch 65.0001",
+      "len": 2
+    },
+    {
+      "error": "future absolute strike mismatch 30",
+      "len": 1
+    },
+    {
+      "error": "future absolute strike mismatch 60.0002",
+      "len": 1
+    },
+    {
+      "error": "future absolute strike mismatch 25.0001",
+      "len": 1
+    }
+  ],
+  "summary": [
+    {
+      "universe": "ITM",
+      "utility": "entropy",
+      "risk_aversion": 1.0,
+      "num_portfolios": 158,
+      "num_complete": 153,
+      "coverage": 0.9683544303797469,
+      "mean_predicted_return": 0.14271810016935305,
+      "median_predicted_return": 0.1367394011218007,
+      "mean_realized_return": 0.009922741869297362,
+      "median_realized_return": -0.011284976716530198,
+      "mean_error_realized_minus_predicted": -0.13279535830005568,
+      "mae": 0.18909110758613126,
+      "rmse": 0.2285985957103515,
+      "correlation": -0.113032151377153,
+      "calibration_slope": -0.1828590669629652,
+      "realized_positive_fraction": 0.47058823529411764,
+      "direction_accuracy": 0.47058823529411764,
+      "mean_settlement_proxy_positions": 3.2091503267973858
+    },
+    {
+      "universe": "ITM",
+      "utility": "entropy",
+      "risk_aversion": 10.0,
+      "num_portfolios": 158,
+      "num_complete": 152,
+      "coverage": 0.9620253164556962,
+      "mean_predicted_return": 0.07246729526526687,
+      "median_predicted_return": 0.05700396779900728,
+      "mean_realized_return": 0.004890940205293327,
+      "median_realized_return": -0.0020660922207998344,
+      "mean_error_realized_minus_predicted": -0.06757635505997354,
+      "mae": 0.08366248399456572,
+      "rmse": 0.10681557408338672,
+      "correlation": 0.026432981815885097,
+      "calibration_slope": 0.03196256357196912,
+      "realized_positive_fraction": 0.47368421052631576,
+      "direction_accuracy": 0.47368421052631576,
+      "mean_settlement_proxy_positions": 3.361842105263158
+    },
+    {
+      "universe": "ITM",
+      "utility": "entropy",
+      "risk_aversion": 100.0,
+      "num_portfolios": 158,
+      "num_complete": 142,
+      "coverage": 0.8987341772151899,
+      "mean_predicted_return": 0.013450223651257727,
+      "median_predicted_return": 0.009877263230018349,
+      "mean_realized_return": 0.002738348634634746,
+      "median_realized_return": -0.00045098805836737586,
+      "mean_error_realized_minus_predicted": -0.010711875016622982,
+      "mae": 0.011973050019260226,
+      "rmse": 0.0145785141115567,
+      "correlation": 0.7092537700451161,
+      "calibration_slope": 0.6957265876460084,
+      "realized_positive_fraction": 0.4788732394366197,
+      "direction_accuracy": 0.4788732394366197,
+      "mean_settlement_proxy_positions": 4.084507042253521
+    },
+    {
+      "universe": "ITM",
+      "utility": "powexp",
+      "risk_aversion": 1.0,
+      "num_portfolios": 158,
+      "num_complete": 153,
+      "coverage": 0.9683544303797469,
+      "mean_predicted_return": 0.14294189775194982,
+      "median_predicted_return": 0.13673940112180383,
+      "mean_realized_return": 0.0101667390957574,
+      "median_realized_return": -0.01128497671652988,
+      "mean_error_realized_minus_predicted": -0.13277515865619244,
+      "mae": 0.18937791418029068,
+      "rmse": 0.22894661256824844,
+      "correlation": -0.11309435026198544,
+      "calibration_slope": -0.1833447778226612,
+      "realized_positive_fraction": 0.47058823529411764,
+      "direction_accuracy": 0.47058823529411764,
+      "mean_settlement_proxy_positions": 3.189542483660131
+    },
+    {
+      "universe": "ITM",
+      "utility": "powexp",
+      "risk_aversion": 10.0,
+      "num_portfolios": 158,
+      "num_complete": 152,
+      "coverage": 0.9620253164556962,
+      "mean_predicted_return": 0.08889171317610996,
+      "median_predicted_return": 0.06270455880590949,
+      "mean_realized_return": 0.005159420255383366,
+      "median_realized_return": -0.001804321848861895,
+      "mean_error_realized_minus_predicted": -0.0837322929207266,
+      "mae": 0.1027840103463436,
+      "rmse": 0.13956425142950407,
+      "correlation": 0.057756479894618594,
+      "calibration_slope": 0.06502631445986756,
+      "realized_positive_fraction": 0.4868421052631579,
+      "direction_accuracy": 0.4868421052631579,
+      "mean_settlement_proxy_positions": 3.25
+    },
+    {
+      "universe": "ITM",
+      "utility": "powexp",
+      "risk_aversion": 100.0,
+      "num_portfolios": 158,
+      "num_complete": 144,
+      "coverage": 0.9113924050632911,
+      "mean_predicted_return": 0.01820495066794439,
+      "median_predicted_return": 0.01209572891337592,
+      "mean_realized_return": 0.003962873992497256,
+      "median_realized_return": -0.00022191636172754067,
+      "mean_error_realized_minus_predicted": -0.014242076675447132,
+      "mae": 0.01617201599847113,
+      "rmse": 0.021870226390786226,
+      "correlation": 0.6683020066496903,
+      "calibration_slope": 0.6106571760909038,
+      "realized_positive_fraction": 0.4930555555555556,
+      "direction_accuracy": 0.4930555555555556,
+      "mean_settlement_proxy_positions": 3.8680555555555554
+    },
+    {
+      "universe": "actual",
+      "utility": "entropy",
+      "risk_aversion": 1.0,
+      "num_portfolios": 158,
+      "num_complete": 148,
+      "coverage": 0.9367088607594937,
+      "mean_predicted_return": 0.4129288386971678,
+      "median_predicted_return": 0.30037041764079186,
+      "mean_realized_return": -0.018137398808610684,
+      "median_realized_return": -0.08960541954628437,
+      "mean_error_realized_minus_predicted": -0.43106623750577855,
+      "mae": 0.501011322240299,
+      "rmse": 0.650322878047684,
+      "correlation": -0.0901116476159278,
+      "calibration_slope": -0.07351690076127863,
+      "realized_positive_fraction": 0.3581081081081081,
+      "direction_accuracy": 0.3581081081081081,
+      "mean_settlement_proxy_positions": 3.7567567567567566
+    },
+    {
+      "universe": "actual",
+      "utility": "entropy",
+      "risk_aversion": 10.0,
+      "num_portfolios": 158,
+      "num_complete": 140,
+      "coverage": 0.8860759493670886,
+      "mean_predicted_return": 0.09677104252932998,
+      "median_predicted_return": 0.07243363406697542,
+      "mean_realized_return": -0.0011624951225316386,
+      "median_realized_return": -0.009510876987620926,
+      "mean_error_realized_minus_predicted": -0.09793353765186162,
+      "mae": 0.10814698805413485,
+      "rmse": 0.1393586804154186,
+      "correlation": -0.2554466997150783,
+      "calibration_slope": -0.18746585507085978,
+      "realized_positive_fraction": 0.45,
+      "direction_accuracy": 0.45,
+      "mean_settlement_proxy_positions": 3.157142857142857
+    },
+    {
+      "universe": "actual",
+      "utility": "entropy",
+      "risk_aversion": 100.0,
+      "num_portfolios": 158,
+      "num_complete": 136,
+      "coverage": 0.8607594936708861,
+      "mean_predicted_return": 0.018064706734690527,
+      "median_predicted_return": 0.015312168297408734,
+      "mean_realized_return": 0.003297194472672852,
+      "median_realized_return": -0.0002928793684692718,
+      "mean_error_realized_minus_predicted": -0.014767512262017671,
+      "mae": 0.01647853486729443,
+      "rmse": 0.01955721389448018,
+      "correlation": 0.6187149048793029,
+      "calibration_slope": 0.6397168887474161,
+      "realized_positive_fraction": 0.49264705882352944,
+      "direction_accuracy": 0.49264705882352944,
+      "mean_settlement_proxy_positions": 3.7941176470588234
+    },
+    {
+      "universe": "actual",
+      "utility": "powexp",
+      "risk_aversion": 1.0,
+      "num_portfolios": 158,
+      "num_complete": 148,
+      "coverage": 0.9367088607594937,
+      "mean_predicted_return": 0.4208318010644705,
+      "median_predicted_return": 0.3018871393413888,
+      "mean_realized_return": -0.01838822840517997,
+      "median_realized_return": -0.09337921483357935,
+      "mean_error_realized_minus_predicted": -0.4392200294696504,
+      "mae": 0.5109298014888257,
+      "rmse": 0.6640350940136553,
+      "correlation": -0.08384370952706074,
+      "calibration_slope": -0.06826058821606454,
+      "realized_positive_fraction": 0.3581081081081081,
+      "direction_accuracy": 0.3581081081081081,
+      "mean_settlement_proxy_positions": 3.6283783783783785
+    },
+    {
+      "universe": "actual",
+      "utility": "powexp",
+      "risk_aversion": 10.0,
+      "num_portfolios": 158,
+      "num_complete": 143,
+      "coverage": 0.9050632911392406,
+      "mean_predicted_return": 0.12818690867240862,
+      "median_predicted_return": 0.09112481533322284,
+      "mean_realized_return": 0.0029572169613140326,
+      "median_realized_return": -0.010125452017966101,
+      "mean_error_realized_minus_predicted": -0.12522969171109455,
+      "mae": 0.1405440964203465,
+      "rmse": 0.19025508027293273,
+      "correlation": 0.029970327400751486,
+      "calibration_slope": 0.02444803398083328,
+      "realized_positive_fraction": 0.44755244755244755,
+      "direction_accuracy": 0.44755244755244755,
+      "mean_settlement_proxy_positions": 3.132867132867133
+    },
+    {
+      "universe": "actual",
+      "utility": "powexp",
+      "risk_aversion": 100.0,
+      "num_portfolios": 158,
+      "num_complete": 135,
+      "coverage": 0.8544303797468354,
+      "mean_predicted_return": 0.02447170178783666,
+      "median_predicted_return": 0.0188006855395592,
+      "mean_realized_return": 0.0050627465883422065,
+      "median_realized_return": -0.0005423063457777426,
+      "mean_error_realized_minus_predicted": -0.01940895519949445,
+      "mae": 0.021307578801571567,
+      "rmse": 0.0264220181725517,
+      "correlation": 0.702302549924675,
+      "calibration_slope": 0.6534199537450529,
+      "realized_positive_fraction": 0.48148148148148145,
+      "direction_accuracy": 0.48148148148148145,
+      "mean_settlement_proxy_positions": 3.7111111111111112
+    },
+    {
+      "universe": "normalised",
+      "utility": "entropy",
+      "risk_aversion": 1.0,
+      "num_portfolios": 158,
+      "num_complete": 141,
+      "coverage": 0.8924050632911392,
+      "mean_predicted_return": 0.19958738426850814,
+      "median_predicted_return": 0.18594514096308748,
+      "mean_realized_return": -0.0007227463896410887,
+      "median_realized_return": -0.029426104385802655,
+      "mean_error_realized_minus_predicted": -0.20031013065814926,
+      "mae": 0.25398307313474633,
+      "rmse": 0.30833066515920515,
+      "correlation": -0.08743147650385001,
+      "calibration_slope": -0.12322627696656031,
+      "realized_positive_fraction": 0.3900709219858156,
+      "direction_accuracy": 0.3900709219858156,
+      "mean_settlement_proxy_positions": 5.5177304964539005
+    },
+    {
+      "universe": "normalised",
+      "utility": "entropy",
+      "risk_aversion": 10.0,
+      "num_portfolios": 158,
+      "num_complete": 134,
+      "coverage": 0.8481012658227848,
+      "mean_predicted_return": 0.08539371252458786,
+      "median_predicted_return": 0.06759424856300195,
+      "mean_realized_return": -0.000633317351925423,
+      "median_realized_return": -0.008111031598614126,
+      "mean_error_realized_minus_predicted": -0.0860270298765133,
+      "mae": 0.09634916259537496,
+      "rmse": 0.12258232715035138,
+      "correlation": -0.24250781236422192,
+      "calibration_slope": -0.21143531389452205,
+      "realized_positive_fraction": 0.43283582089552236,
+      "direction_accuracy": 0.43283582089552236,
+      "mean_settlement_proxy_positions": 3.6641791044776117
+    },
+    {
+      "universe": "normalised",
+      "utility": "entropy",
+      "risk_aversion": 100.0,
+      "num_portfolios": 158,
+      "num_complete": 130,
+      "coverage": 0.8227848101265823,
+      "mean_predicted_return": 0.01740305291774546,
+      "median_predicted_return": 0.014730754788507184,
+      "mean_realized_return": 0.003657071792367275,
+      "median_realized_return": 0.00018892316088152327,
+      "mean_error_realized_minus_predicted": -0.013745981125378186,
+      "mae": 0.015472395080915831,
+      "rmse": 0.01844304843792137,
+      "correlation": 0.6433047817649978,
+      "calibration_slope": 0.6581847856320548,
+      "realized_positive_fraction": 0.5076923076923077,
+      "direction_accuracy": 0.5076923076923077,
+      "mean_settlement_proxy_positions": 4.030769230769231
+    },
+    {
+      "universe": "normalised",
+      "utility": "powexp",
+      "risk_aversion": 1.0,
+      "num_portfolios": 158,
+      "num_complete": 141,
+      "coverage": 0.8924050632911392,
+      "mean_predicted_return": 0.19997675564710649,
+      "median_predicted_return": 0.18594189345131873,
+      "mean_realized_return": -0.0004473933300247802,
+      "median_realized_return": -0.02881444425144599,
+      "mean_error_realized_minus_predicted": -0.20042414897713132,
+      "mae": 0.25503348173021223,
+      "rmse": 0.30928022170124714,
+      "correlation": -0.08922856729609518,
+      "calibration_slope": -0.12660426552889645,
+      "realized_positive_fraction": 0.3900709219858156,
+      "direction_accuracy": 0.3900709219858156,
+      "mean_settlement_proxy_positions": 5.475177304964539
+    },
+    {
+      "universe": "normalised",
+      "utility": "powexp",
+      "risk_aversion": 10.0,
+      "num_portfolios": 158,
+      "num_complete": 136,
+      "coverage": 0.8607594936708861,
+      "mean_predicted_return": 0.10357650556382243,
+      "median_predicted_return": 0.07198628441832954,
+      "mean_realized_return": -0.0031914224163046533,
+      "median_realized_return": -0.005890622925713771,
+      "mean_error_realized_minus_predicted": -0.1067679279801271,
+      "mae": 0.11747735186787646,
+      "rmse": 0.15761723054851842,
+      "correlation": -0.2485577921453254,
+      "calibration_slope": -0.1837319674930671,
+      "realized_positive_fraction": 0.4411764705882353,
+      "direction_accuracy": 0.4411764705882353,
+      "mean_settlement_proxy_positions": 3.7720588235294117
+    },
+    {
+      "universe": "normalised",
+      "utility": "powexp",
+      "risk_aversion": 100.0,
+      "num_portfolios": 158,
+      "num_complete": 133,
+      "coverage": 0.8417721518987342,
+      "mean_predicted_return": 0.023218280498817925,
+      "median_predicted_return": 0.018190894093977714,
+      "mean_realized_return": 0.0048470983239871125,
+      "median_realized_return": 0.00021267461283495936,
+      "mean_error_realized_minus_predicted": -0.01837118217483081,
+      "mae": 0.02035661976746116,
+      "rmse": 0.025353135543437808,
+      "correlation": 0.6861967558802506,
+      "calibration_slope": 0.6633826830785661,
+      "realized_positive_fraction": 0.5112781954887218,
+      "direction_accuracy": 0.5112781954887218,
+      "mean_settlement_proxy_positions": 3.954887218045113
+    }
+  ]
+}

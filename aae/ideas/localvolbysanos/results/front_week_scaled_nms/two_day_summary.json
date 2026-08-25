@@ -1,0 +1,1125 @@
+{
+  "ticker": "SPX",
+  "dates": [
+    "2024-03-05",
+    "2024-03-06"
+  ],
+  "config": {
+    "model_expiry_days": [
+      2,
+      5,
+      10,
+      15,
+      20,
+      30,
+      40,
+      50,
+      70,
+      120
+    ],
+    "nms_range": [
+      -3.0,
+      2.0
+    ],
+    "base_nms_strikes": 100,
+    "short_anchor_days": 5,
+    "merge_gap_fraction": 0.5,
+    "full_reference_grid": false,
+    "front_week_vol_scaled_nms": true,
+    "smoothness": 0.25,
+    "density_flux_floor": 1e-14,
+    "density_negative_tolerance": 1e-08,
+    "negative_increment_tolerance": 1e-06,
+    "price_recovery_tolerance": 1e-08
+  },
+  "days": [
+    {
+      "date": "2024-03-05",
+      "spot_ref": 5078.64990234375,
+      "source_expiries": 50,
+      "master_grid": {
+        "strike_coordinate": "K_over_F",
+        "num_strikes": 100,
+        "strike_min": 0.9474206150201387,
+        "strike_max": 1.0366642290314598,
+        "minimum_log_strike_gap": 0.0009002021525916677,
+        "grid_mode": "front_week_vol_scaled_nms",
+        "short_anchor_atm_vol": 0.12627897948495972
+      },
+      "dlv": {
+        "num_values": 1000,
+        "num_finite": 993,
+        "num_nonfinite": 7,
+        "num_negative_call_increments": 7,
+        "num_material_negative_call_increments": 6,
+        "minimum_call_increment": -3.573310163823996e-05,
+        "median": 0.11817448473036257,
+        "p95": 0.28773890322760315,
+        "p99": 0.5472905195297431,
+        "max": 0.6680929866790554,
+        "num_above_2": 0,
+        "num_above_5": 0
+      },
+      "expiries": [
+        {
+          "expiry_days": 2,
+          "atm_vol": 0.11752878920914955,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.9658183173916929,
+          "inner_strike_max": 1.0234572530599617,
+          "outer_strike_min": 0.48290915869584644,
+          "outer_strike_max": 1.5351858795899425,
+          "density_min": 6.67487632166619e-07,
+          "density_sum_error": 2.220446049250313e-16,
+          "density_mean_error": 2.220446049250313e-16,
+          "call_increment_min": 3.223358906873086e-07,
+          "num_negative_call_increments": 0,
+          "num_material_negative_call_increments": 0,
+          "dlv_min": 0.027243884097855428,
+          "dlv_median": 0.09782098479557835,
+          "dlv_p95": 0.15713596224223564,
+          "dlv_p99": 0.2932929965837286,
+          "dlv_max": 0.3745213975196966,
+          "dlv_max_strike": 1.0234572530599617,
+          "num_dlv_nonfinite": 0,
+          "nonfinite_dlv_strikes": [],
+          "material_negative_call_increments": [],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 3.469446951953614e-18
+        },
+        {
+          "expiry_days": 5,
+          "atm_vol": 0.12627897948495972,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.9474206150201387,
+          "inner_strike_max": 1.0366642290314598,
+          "outer_strike_min": 0.4737103075100694,
+          "outer_strike_max": 1.5549963435471899,
+          "density_min": 1.729250361526269e-05,
+          "density_sum_error": 1.1102230246251565e-16,
+          "density_mean_error": 0.0,
+          "call_increment_min": 7.881581553348393e-06,
+          "num_negative_call_increments": 0,
+          "num_material_negative_call_increments": 0,
+          "dlv_min": 0.04914350970216312,
+          "dlv_median": 0.13077297234126617,
+          "dlv_p95": 0.17282669388426386,
+          "dlv_p99": 0.3378410917669106,
+          "dlv_max": 0.3552609565599853,
+          "dlv_max_strike": 0.9474206150201387,
+          "num_dlv_nonfinite": 0,
+          "nonfinite_dlv_strikes": [],
+          "material_negative_call_increments": [],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 6.938893903907228e-18
+        },
+        {
+          "expiry_days": 10,
+          "atm_vol": 0.11762079387406281,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.9268926752201309,
+          "inner_strike_max": 1.0519143181646058,
+          "outer_strike_min": 0.46344633761006543,
+          "outer_strike_max": 1.5778714772469087,
+          "density_min": 2.8432744218598316e-05,
+          "density_sum_error": 2.220446049250313e-16,
+          "density_mean_error": 0.0,
+          "call_increment_min": -3.573310163823996e-05,
+          "num_negative_call_increments": 3,
+          "num_material_negative_call_increments": 3,
+          "dlv_min": 0.004961838324452355,
+          "dlv_median": 0.106158556466516,
+          "dlv_p95": 0.19544512387965524,
+          "dlv_p99": 0.19915223172269084,
+          "dlv_max": 0.20844484275194786,
+          "dlv_max_strike": 0.9268926752201309,
+          "num_dlv_nonfinite": 3,
+          "nonfinite_dlv_strikes": [
+            1.049187646170623,
+            1.0505500975433293,
+            1.0519143181646058
+          ],
+          "material_negative_call_increments": [
+            {
+              "strike": 1.049187646170623,
+              "increment": -1.4213761998529902e-05
+            },
+            {
+              "strike": 1.0505500975433293,
+              "increment": -2.613811680077373e-05
+            },
+            {
+              "strike": 1.0519143181646058,
+              "increment": -3.573310163823996e-05
+            }
+          ],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 1.3877787807814457e-17
+        },
+        {
+          "expiry_days": 15,
+          "atm_vol": 0.11860231830619333,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.9113866469724852,
+          "inner_strike_max": 1.0638120184455457,
+          "outer_strike_min": 0.4556933234862426,
+          "outer_strike_max": 1.5957180276683185,
+          "density_min": 2.7797512753946485e-05,
+          "density_sum_error": 1.1102230246251565e-16,
+          "density_mean_error": 0.0,
+          "call_increment_min": -6.903126963109241e-08,
+          "num_negative_call_increments": 1,
+          "num_material_negative_call_increments": 0,
+          "dlv_min": 0.029521147570826453,
+          "dlv_median": 0.1145872230218392,
+          "dlv_p95": 0.2345124166040277,
+          "dlv_p99": 0.24139927339720363,
+          "dlv_max": 0.29157786504095584,
+          "dlv_max_strike": 1.0638120184455457,
+          "num_dlv_nonfinite": 1,
+          "nonfinite_dlv_strikes": [
+            0.9113866469724852
+          ],
+          "material_negative_call_increments": [],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 1.3877787807814457e-17
+        },
+        {
+          "expiry_days": 20,
+          "atm_vol": 0.116813665120147,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.8984972159310589,
+          "inner_strike_max": 1.073961821559196,
+          "outer_strike_min": 0.44924860796552946,
+          "outer_strike_max": 1.610942732338794,
+          "density_min": 5.129361917499686e-05,
+          "density_sum_error": 0.0,
+          "density_mean_error": 0.0,
+          "call_increment_min": -2.4738376115654734e-05,
+          "num_negative_call_increments": 2,
+          "num_material_negative_call_increments": 2,
+          "dlv_min": 0.019827642535622015,
+          "dlv_median": 0.10874440685745568,
+          "dlv_p95": 0.2663090862444069,
+          "dlv_p99": 0.2752068161199545,
+          "dlv_max": 0.2765613627821322,
+          "dlv_max_strike": 0.9478909303981439,
+          "num_dlv_nonfinite": 2,
+          "nonfinite_dlv_strikes": [
+            1.0719986961168058,
+            1.073961821559196
+          ],
+          "material_negative_call_increments": [
+            {
+              "strike": 1.0719986961168058,
+              "increment": -1.1728996932321635e-05
+            },
+            {
+              "strike": 1.073961821559196,
+              "increment": -2.4738376115654734e-05
+            }
+          ],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 1.3877787807814457e-17
+        },
+        {
+          "expiry_days": 30,
+          "atm_vol": 0.11880845873905024,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.877261004804908,
+          "inner_strike_max": 1.0912245215580327,
+          "outer_strike_min": 0.438630502402454,
+          "outer_strike_max": 1.636836782337049,
+          "density_min": 7.634543459966725e-05,
+          "density_sum_error": 2.220446049250313e-16,
+          "density_mean_error": 0.0,
+          "call_increment_min": 8.601498613342341e-07,
+          "num_negative_call_increments": 0,
+          "num_material_negative_call_increments": 0,
+          "dlv_min": 0.03137055601935728,
+          "dlv_median": 0.11722440811474547,
+          "dlv_p95": 0.20587522748784276,
+          "dlv_p99": 0.20956777753200365,
+          "dlv_max": 0.21003366120230674,
+          "dlv_max_strike": 0.9386685462580454,
+          "num_dlv_nonfinite": 0,
+          "nonfinite_dlv_strikes": [],
+          "material_negative_call_increments": [],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 1.3877787807814457e-17
+        },
+        {
+          "expiry_days": 40,
+          "atm_vol": 0.11935126828005165,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.8597355658166964,
+          "inner_strike_max": 1.1060041025118597,
+          "outer_strike_min": 0.4298677829083482,
+          "outer_strike_max": 1.6590061537677894,
+          "density_min": 0.0001324611247000007,
+          "density_sum_error": 2.220446049250313e-16,
+          "density_mean_error": 0.0,
+          "call_increment_min": 2.479132091787184e-05,
+          "num_negative_call_increments": 0,
+          "num_material_negative_call_increments": 0,
+          "dlv_min": 0.06591943080045623,
+          "dlv_median": 0.11997250065207207,
+          "dlv_p95": 0.24938916263368646,
+          "dlv_p99": 0.2553555432270222,
+          "dlv_max": 0.28226982799239225,
+          "dlv_max_strike": 1.1060041025118597,
+          "num_dlv_nonfinite": 0,
+          "nonfinite_dlv_strikes": [],
+          "material_negative_call_increments": [],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 1.3877787807814457e-17
+        },
+        {
+          "expiry_days": 50,
+          "atm_vol": 0.12213940399722156,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.8445795932134726,
+          "inner_strike_max": 1.119196330299264,
+          "outer_strike_min": 0.4222897966067363,
+          "outer_strike_max": 1.678794495448896,
+          "density_min": 0.0002098812577061553,
+          "density_sum_error": 0.0,
+          "density_mean_error": 2.220446049250313e-16,
+          "call_increment_min": 1.4407248974436716e-05,
+          "num_negative_call_increments": 0,
+          "num_material_negative_call_increments": 0,
+          "dlv_min": 0.052951431671267916,
+          "dlv_median": 0.13477698257692478,
+          "dlv_p95": 0.30512422419284196,
+          "dlv_p99": 0.3148263024779846,
+          "dlv_max": 0.31493565924066924,
+          "dlv_max_strike": 0.9138501301131725,
+          "num_dlv_nonfinite": 0,
+          "nonfinite_dlv_strikes": [],
+          "material_negative_call_increments": [],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 2.7755575615628914e-17
+        },
+        {
+          "expiry_days": 70,
+          "atm_vol": 0.12626079684154887,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.8189000475976727,
+          "inner_strike_max": 1.14247332590898,
+          "outer_strike_min": 0.4094500237988363,
+          "outer_strike_max": 1.7137099888634701,
+          "density_min": 0.0001933556425541827,
+          "density_sum_error": 0.0,
+          "density_mean_error": 0.0,
+          "call_increment_min": -1.9383313988541317e-05,
+          "num_negative_call_increments": 1,
+          "num_material_negative_call_increments": 1,
+          "dlv_min": 0.006006199415386166,
+          "dlv_median": 0.12621370915467853,
+          "dlv_p95": 0.2894775313341225,
+          "dlv_p99": 0.3024280648434858,
+          "dlv_max": 0.30379691809575843,
+          "dlv_max_strike": 0.9170648654394125,
+          "num_dlv_nonfinite": 1,
+          "nonfinite_dlv_strikes": [
+            0.8189000475976727
+          ],
+          "material_negative_call_increments": [
+            {
+              "strike": 0.8189000475976727,
+              "increment": -1.9383313988541317e-05
+            }
+          ],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 2.7755575615628914e-17
+        },
+        {
+          "expiry_days": 120,
+          "atm_vol": 0.1329826576893049,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.7699008032874776,
+          "inner_strike_max": 1.190447237348528,
+          "outer_strike_min": 0.3849504016437388,
+          "outer_strike_max": 1.7856708560227919,
+          "density_min": 0.0003219452868776267,
+          "density_sum_error": 0.0,
+          "density_mean_error": 2.220446049250313e-16,
+          "call_increment_min": 2.8100510699341735e-05,
+          "num_negative_call_increments": 0,
+          "num_material_negative_call_increments": 0,
+          "dlv_min": 0.03805861752621126,
+          "dlv_median": 0.17381181598961942,
+          "dlv_p95": 0.6337667785513517,
+          "dlv_p99": 0.6667194113042618,
+          "dlv_max": 0.6680929866790554,
+          "dlv_max_strike": 0.8363673965509597,
+          "num_dlv_nonfinite": 0,
+          "nonfinite_dlv_strikes": [],
+          "material_negative_call_increments": [],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 2.7755575615628914e-17
+        }
+      ],
+      "input_price_recovery": {
+        "num_input_prices": 1000,
+        "num_nonfinite_dlvs_set_to_zero": 7,
+        "tolerance": 1e-08,
+        "passed": false,
+        "abs_error_median": 4.0746568893273993e-07,
+        "abs_error_rmse": 1.6310768885386754e-05,
+        "abs_error_max": 5.7236622146377316e-05,
+        "abs_error_max_forward_bps": 0.5723662214637731,
+        "expiries": [
+          {
+            "expiry_days": 2,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 0,
+            "abs_error_median": 3.5561831257524545e-17,
+            "abs_error_rmse": 6.265495298993935e-17,
+            "abs_error_max": 1.3183898417423734e-16,
+            "abs_error_max_forward_bps": 1.3183898417423734e-12,
+            "density_abs_error_max": 4.156831129309424e-16,
+            "density_sum_error": 3.3306690738754696e-15,
+            "density_mean_error": 3.552713678800501e-15
+          },
+          {
+            "expiry_days": 5,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 0,
+            "abs_error_median": 9.280770596475918e-17,
+            "abs_error_rmse": 1.8460446168167967e-16,
+            "abs_error_max": 4.0245584642661925e-16,
+            "abs_error_max_forward_bps": 4.0245584642661925e-12,
+            "density_abs_error_max": 2.845380181470958e-15,
+            "density_sum_error": 4.551914400963142e-15,
+            "density_mean_error": 4.440892098500626e-15
+          },
+          {
+            "expiry_days": 10,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 3,
+            "abs_error_median": 2.427058559337225e-09,
+            "abs_error_rmse": 4.657164160946487e-06,
+            "abs_error_max": 3.573310163823958e-05,
+            "abs_error_max_forward_bps": 0.3573310163823958,
+            "density_abs_error_max": 0.00877715218987722,
+            "density_sum_error": 4.440892098500626e-16,
+            "density_mean_error": 6.661338147750939e-16
+          },
+          {
+            "expiry_days": 15,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 1,
+            "abs_error_median": 8.910615269426547e-08,
+            "abs_error_rmse": 9.295557381586874e-06,
+            "abs_error_max": 3.313043937100039e-05,
+            "abs_error_max_forward_bps": 0.33130439371000386,
+            "density_abs_error_max": 0.0005015407562087709,
+            "density_sum_error": 0.0,
+            "density_mean_error": 0.0
+          },
+          {
+            "expiry_days": 20,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 2,
+            "abs_error_median": 2.206274196878133e-07,
+            "abs_error_rmse": 1.3046339046573389e-05,
+            "abs_error_max": 5.7236622146377316e-05,
+            "abs_error_max_forward_bps": 0.5723662214637731,
+            "density_abs_error_max": 0.0066711744722384595,
+            "density_sum_error": 4.440892098500626e-16,
+            "density_mean_error": 5.551115123125783e-16
+          },
+          {
+            "expiry_days": 30,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 0,
+            "abs_error_median": 9.06279878138197e-07,
+            "abs_error_rmse": 1.895060259651136e-05,
+            "abs_error_max": 5.535394710954256e-05,
+            "abs_error_max_forward_bps": 0.5535394710954256,
+            "density_abs_error_max": 0.0002803817409087247,
+            "density_sum_error": 1.7763568394002505e-15,
+            "density_mean_error": 1.5543122344752192e-15
+          },
+          {
+            "expiry_days": 40,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 0,
+            "abs_error_median": 1.671969686346808e-06,
+            "abs_error_rmse": 2.0649715710077956e-05,
+            "abs_error_max": 5.269856027491766e-05,
+            "abs_error_max_forward_bps": 0.5269856027491766,
+            "density_abs_error_max": 0.00016613505037298137,
+            "density_sum_error": 6.661338147750939e-16,
+            "density_mean_error": 6.661338147750939e-16
+          },
+          {
+            "expiry_days": 50,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 0,
+            "abs_error_median": 2.6429303001188065e-06,
+            "abs_error_rmse": 2.1636261087202985e-05,
+            "abs_error_max": 5.127322667504719e-05,
+            "abs_error_max_forward_bps": 0.5127322667504719,
+            "density_abs_error_max": 0.00010903821059996335,
+            "density_sum_error": 5.551115123125783e-16,
+            "density_mean_error": 3.3306690738754696e-16
+          },
+          {
+            "expiry_days": 70,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 1,
+            "abs_error_median": 5.002356101249661e-06,
+            "abs_error_rmse": 2.2722313885677944e-05,
+            "abs_error_max": 4.8866286255389946e-05,
+            "abs_error_max_forward_bps": 0.48866286255389946,
+            "density_abs_error_max": 0.0063581916729503135,
+            "density_sum_error": 0.0,
+            "density_mean_error": 0.0
+          },
+          {
+            "expiry_days": 120,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 0,
+            "abs_error_median": 1.3114813545028053e-05,
+            "abs_error_rmse": 2.4741480329997465e-05,
+            "abs_error_max": 4.595581315801388e-05,
+            "abs_error_max_forward_bps": 0.4595581315801388,
+            "density_abs_error_max": 7.491950867660003e-05,
+            "density_sum_error": 2.1094237467877974e-15,
+            "density_mean_error": 2.4424906541753444e-15
+          }
+        ]
+      }
+    },
+    {
+      "date": "2024-03-06",
+      "spot_ref": 5104.759765625,
+      "source_expiries": 49,
+      "master_grid": {
+        "strike_coordinate": "K_over_F",
+        "num_strikes": 100,
+        "strike_min": 0.947161897705429,
+        "strike_max": 1.0368529970254565,
+        "minimum_log_strike_gap": 0.000904754031692212,
+        "grid_mode": "front_week_vol_scaled_nms",
+        "short_anchor_atm_vol": 0.126917510114886
+      },
+      "dlv": {
+        "num_values": 1000,
+        "num_finite": 970,
+        "num_nonfinite": 30,
+        "num_negative_call_increments": 30,
+        "num_material_negative_call_increments": 30,
+        "minimum_call_increment": -0.0002806570403805081,
+        "median": 0.12124846724092159,
+        "p95": 0.3207737485983352,
+        "p99": 0.5784822159751503,
+        "max": 1.3234788021479085,
+        "num_above_2": 0,
+        "num_above_5": 0
+      },
+      "expiries": [
+        {
+          "expiry_days": 2,
+          "atm_vol": 0.1250291278631028,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.9656484806100573,
+          "inner_strike_max": 1.0235772522761502,
+          "outer_strike_min": 0.48282424030502863,
+          "outer_strike_max": 1.5353658784142252,
+          "density_min": 6.453721470456308e-06,
+          "density_sum_error": 4.440892098500626e-16,
+          "density_mean_error": 2.220446049250313e-16,
+          "call_increment_min": 3.116013165958831e-06,
+          "num_negative_call_increments": 0,
+          "num_material_negative_call_increments": 0,
+          "dlv_min": 0.037022721312720566,
+          "dlv_median": 0.11197279394181672,
+          "dlv_p95": 0.1687875432509225,
+          "dlv_p99": 0.34515526224708093,
+          "dlv_max": 0.4551121840554892,
+          "dlv_max_strike": 1.0235772522761502,
+          "num_dlv_nonfinite": 0,
+          "nonfinite_dlv_strikes": [],
+          "material_negative_call_increments": [],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 6.938893903907228e-18
+        },
+        {
+          "expiry_days": 5,
+          "atm_vol": 0.126917510114886,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.947161897705429,
+          "inner_strike_max": 1.0368529970254565,
+          "outer_strike_min": 0.4735809488527145,
+          "outer_strike_max": 1.5552794955381848,
+          "density_min": 2.123695105737955e-05,
+          "density_sum_error": 2.220446049250313e-16,
+          "density_mean_error": 0.0,
+          "call_increment_min": -1.4935191059462473e-05,
+          "num_negative_call_increments": 2,
+          "num_material_negative_call_increments": 2,
+          "dlv_min": 0.021459195478126882,
+          "dlv_median": 0.1306479917012861,
+          "dlv_p95": 0.16973756751073787,
+          "dlv_p99": 0.1757727083516946,
+          "dlv_max": 0.31018216281898614,
+          "dlv_max_strike": 0.947161897705429,
+          "num_dlv_nonfinite": 2,
+          "nonfinite_dlv_strikes": [
+            1.0358912926058967,
+            1.0368529970254565
+          ],
+          "material_negative_call_increments": [
+            {
+              "strike": 1.0358912926058967,
+              "increment": -4.25464681339175e-06
+            },
+            {
+              "strike": 1.0368529970254565,
+              "increment": -1.4935191059462473e-05
+            }
+          ],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 6.938893903907228e-18
+        },
+        {
+          "expiry_days": 10,
+          "atm_vol": 0.12481156291411367,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.9265369303511011,
+          "inner_strike_max": 1.052183556706956,
+          "outer_strike_min": 0.46326846517555054,
+          "outer_strike_max": 1.578275335060434,
+          "density_min": 4.7501864288923557e-05,
+          "density_sum_error": 0.0,
+          "density_mean_error": 0.0,
+          "call_increment_min": -7.016478935148351e-06,
+          "num_negative_call_increments": 1,
+          "num_material_negative_call_increments": 1,
+          "dlv_min": 0.013605770405935283,
+          "dlv_median": 0.12334314313655785,
+          "dlv_p95": 0.18547392739116794,
+          "dlv_p99": 0.1882476353164776,
+          "dlv_max": 0.26424614624207177,
+          "dlv_max_strike": 0.9265369303511011,
+          "num_dlv_nonfinite": 1,
+          "nonfinite_dlv_strikes": [
+            1.052183556706956
+          ],
+          "material_negative_call_increments": [
+            {
+              "strike": 1.052183556706956,
+              "increment": -7.016478935148351e-06
+            }
+          ],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 1.3877787807814457e-17
+        },
+        {
+          "expiry_days": 15,
+          "atm_vol": 0.11962963842422873,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.9109591396980077,
+          "inner_strike_max": 1.0641448191846758,
+          "outer_strike_min": 0.45547956984900384,
+          "outer_strike_max": 1.5962172287770138,
+          "density_min": 2.42806915027316e-05,
+          "density_sum_error": 1.1102230246251565e-16,
+          "density_mean_error": 0.0,
+          "call_increment_min": -1.0206782743243936e-05,
+          "num_negative_call_increments": 3,
+          "num_material_negative_call_increments": 3,
+          "dlv_min": 0.024034875564971206,
+          "dlv_median": 0.10335191921660267,
+          "dlv_p95": 0.18513435566027237,
+          "dlv_p99": 0.18831390925960448,
+          "dlv_max": 0.18865817680813424,
+          "dlv_max_strike": 0.9589026169669613,
+          "num_dlv_nonfinite": 3,
+          "nonfinite_dlv_strikes": [
+            0.9109591396980077,
+            0.9123761327940334,
+            0.9137953300168379
+          ],
+          "material_negative_call_increments": [
+            {
+              "strike": 0.9109591396980077,
+              "increment": -1.0206782743243936e-05
+            },
+            {
+              "strike": 0.9123761327940334,
+              "increment": -6.735634633645016e-06
+            },
+            {
+              "strike": 0.9137953300168379,
+              "increment": -2.306094665546765e-06
+            }
+          ],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 1.3877787807814457e-17
+        },
+        {
+          "expiry_days": 20,
+          "atm_vol": 0.11816808035730772,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.8980110749891276,
+          "inner_strike_max": 1.0743493815280796,
+          "outer_strike_min": 0.4490055374945638,
+          "outer_strike_max": 1.6115240722921194,
+          "density_min": 6.016376919874721e-05,
+          "density_sum_error": 2.220446049250313e-16,
+          "density_mean_error": 0.0,
+          "call_increment_min": -3.066073133532671e-06,
+          "num_negative_call_increments": 1,
+          "num_material_negative_call_increments": 1,
+          "dlv_min": 0.02925621993774861,
+          "dlv_median": 0.1316581641662747,
+          "dlv_p95": 0.7655038200773111,
+          "dlv_p99": 1.085338166595899,
+          "dlv_max": 1.3234788021479085,
+          "dlv_max_strike": 0.8980110749891276,
+          "num_dlv_nonfinite": 1,
+          "nonfinite_dlv_strikes": [
+            1.0743493815280796
+          ],
+          "material_negative_call_increments": [
+            {
+              "strike": 1.0743493815280796,
+              "increment": -3.066073133532671e-06
+            }
+          ],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 1.3877787807814457e-17
+        },
+        {
+          "expiry_days": 30,
+          "atm_vol": 0.12007201210578139,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.8766803157906339,
+          "inner_strike_max": 1.0917063331888313,
+          "outer_strike_min": 0.43834015789531694,
+          "outer_strike_max": 1.6375594997832468,
+          "density_min": 7.413391721498539e-05,
+          "density_sum_error": 2.220446049250313e-16,
+          "density_mean_error": 1.1102230246251565e-16,
+          "call_increment_min": -0.0002806570403805081,
+          "num_negative_call_increments": 10,
+          "num_material_negative_call_increments": 10,
+          "dlv_min": 0.03135975830999565,
+          "dlv_median": 0.11479355279836864,
+          "dlv_p95": 0.18163892397222886,
+          "dlv_p99": 0.18555332144918116,
+          "dlv_max": 0.1858895027083334,
+          "dlv_max_strike": 0.954980358584773,
+          "num_dlv_nonfinite": 10,
+          "nonfinite_dlv_strikes": [
+            0.8766803157906339,
+            0.8786054667289046,
+            0.8805348452129161,
+            0.8824684605261708,
+            0.884406321972557,
+            0.8863484388763938,
+            0.8882948205824764,
+            0.8902454764561207,
+            0.8922004158832084,
+            0.894159648270232
+          ],
+          "material_negative_call_increments": [
+            {
+              "strike": 0.8766803157906339,
+              "increment": -0.0002806570403805081
+            },
+            {
+              "strike": 0.8786054667289046,
+              "increment": -0.00025517930210332274
+            },
+            {
+              "strike": 0.8805348452129161,
+              "increment": -0.00022920455213618074
+            },
+            {
+              "strike": 0.8824684605261708,
+              "increment": -0.0002026855068347766
+            },
+            {
+              "strike": 0.884406321972557,
+              "increment": -0.00017555088763290816
+            },
+            {
+              "strike": 0.8863484388763938,
+              "increment": -0.00014770233560494617
+            },
+            {
+              "strike": 0.8882948205824764,
+              "increment": -0.0001190112121006448
+            },
+            {
+              "strike": 0.8902454764561207,
+              "increment": -8.93153654601131e-05
+            },
+            {
+              "strike": 0.8922004158832084,
+              "increment": -5.8415977653006324e-05
+            },
+            {
+              "strike": 0.894159648270232,
+              "increment": -2.6074637985568083e-05
+            }
+          ],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 1.3877787807814457e-17
+        },
+        {
+          "expiry_days": 40,
+          "atm_vol": 0.12023170404937948,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.8590788136439326,
+          "inner_strike_max": 1.1065677124837665,
+          "outer_strike_min": 0.4295394068219663,
+          "outer_strike_max": 1.6598515687256499,
+          "density_min": 9.133248196587369e-05,
+          "density_sum_error": 2.220446049250313e-16,
+          "density_mean_error": 0.0,
+          "call_increment_min": -0.00014788933213030764,
+          "num_negative_call_increments": 4,
+          "num_material_negative_call_increments": 4,
+          "dlv_min": 0.04503542492030735,
+          "dlv_median": 0.12580250319844422,
+          "dlv_p95": 0.24483575416535389,
+          "dlv_p99": 0.2486687892580171,
+          "dlv_max": 0.24921136017364737,
+          "dlv_max_strike": 0.915206835428769,
+          "num_dlv_nonfinite": 4,
+          "nonfinite_dlv_strikes": [
+            0.8590788136439326,
+            0.8612563928688581,
+            0.863439491786745,
+            0.8656281243888223
+          ],
+          "material_negative_call_increments": [
+            {
+              "strike": 0.8590788136439326,
+              "increment": -0.00014788933213030764
+            },
+            {
+              "strike": 0.8612563928688581,
+              "increment": -0.0001103114259586313
+            },
+            {
+              "strike": 0.863439491786745,
+              "increment": -6.959835272501991e-05
+            },
+            {
+              "strike": 0.8656281243888223,
+              "increment": -2.5594158035130432e-05
+            }
+          ],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 2.7755575615628914e-17
+        },
+        {
+          "expiry_days": 50,
+          "atm_vol": 0.12288002914707122,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.8438585233373012,
+          "inner_strike_max": 1.1198338019834722,
+          "outer_strike_min": 0.4219292616686506,
+          "outer_strike_max": 1.6797507029752081,
+          "density_min": 0.00014255446974539526,
+          "density_sum_error": 2.220446049250313e-16,
+          "density_mean_error": 0.0,
+          "call_increment_min": -0.00016698219278965531,
+          "num_negative_call_increments": 6,
+          "num_material_negative_call_increments": 6,
+          "dlv_min": 0.055660539993602286,
+          "dlv_median": 0.11831665305966882,
+          "dlv_p95": 0.19953935867321562,
+          "dlv_p99": 0.20489401683268008,
+          "dlv_max": 0.23188197712965603,
+          "dlv_max_strike": 1.1198338019834722,
+          "num_dlv_nonfinite": 6,
+          "nonfinite_dlv_strikes": [
+            0.8438585233373012,
+            0.8462496082043149,
+            0.8486474682435682,
+            0.8510521226526054,
+            0.8534635906833683,
+            0.8558818916423486
+          ],
+          "material_negative_call_increments": [
+            {
+              "strike": 0.8438585233373012,
+              "increment": -0.00016698219278965531
+            },
+            {
+              "strike": 0.8462496082043149,
+              "increment": -0.00014194582547305545
+            },
+            {
+              "strike": 0.8486474682435682,
+              "increment": -0.00011406265616620281
+            },
+            {
+              "strike": 0.8510521226526054,
+              "increment": -8.311547406614217e-05
+            },
+            {
+              "strike": 0.8534635906833683,
+              "increment": -4.887232248623752e-05
+            },
+            {
+              "strike": 0.8558818916423486,
+              "increment": -1.1084781556647272e-05
+            }
+          ],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 2.7755575615628914e-17
+        },
+        {
+          "expiry_days": 70,
+          "atm_vol": 0.12670639813905296,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.8180731665999096,
+          "inner_strike_max": 1.1432430454974272,
+          "outer_strike_min": 0.4090365832999548,
+          "outer_strike_max": 1.7148645682461408,
+          "density_min": 0.00019942272606414727,
+          "density_sum_error": 1.1102230246251565e-16,
+          "density_mean_error": 1.1102230246251565e-16,
+          "call_increment_min": -6.52718864989632e-05,
+          "num_negative_call_increments": 3,
+          "num_material_negative_call_increments": 3,
+          "dlv_min": 0.03420849382240667,
+          "dlv_median": 0.12935177166375994,
+          "dlv_p95": 0.2771083760196919,
+          "dlv_p99": 0.2845665037130054,
+          "dlv_max": 0.28542262416309605,
+          "dlv_max_strike": 0.9166634828178813,
+          "num_dlv_nonfinite": 3,
+          "nonfinite_dlv_strikes": [
+            0.8180731665999096,
+            0.8208156190847833,
+            0.8235672651796406
+          ],
+          "material_negative_call_increments": [
+            {
+              "strike": 0.8180731665999096,
+              "increment": -6.52718864989632e-05
+            },
+            {
+              "strike": 0.8208156190847833,
+              "increment": -4.041543158231353e-05
+            },
+            {
+              "strike": 0.8235672651796406,
+              "increment": -1.0921039559769197e-05
+            }
+          ],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 2.7755575615628914e-17
+        },
+        {
+          "expiry_days": 120,
+          "atm_vol": 0.13347936820844772,
+          "num_inner_strikes": 100,
+          "inner_strike_min": 0.7688834789902899,
+          "inner_strike_max": 1.1914970747850582,
+          "outer_strike_min": 0.38444173949514493,
+          "outer_strike_max": 1.7872456121775873,
+          "density_min": 0.0003727536671693837,
+          "density_sum_error": 0.0,
+          "density_mean_error": 0.0,
+          "call_increment_min": 0.00011769607974449307,
+          "num_negative_call_increments": 0,
+          "num_material_negative_call_increments": 0,
+          "dlv_min": 0.06028580250522822,
+          "dlv_median": 0.1760845407708599,
+          "dlv_p95": 0.36804302275258954,
+          "dlv_p99": 0.3767802359680455,
+          "dlv_max": 0.7831775356527961,
+          "dlv_max_strike": 0.7688834789902899,
+          "num_dlv_nonfinite": 0,
+          "nonfinite_dlv_strikes": [],
+          "material_negative_call_increments": [],
+          "num_dlv_above_2": 0,
+          "num_dlv_above_5": 0,
+          "density_repricing_abs_error_median": 0.0,
+          "density_repricing_abs_error_max": 2.7755575615628914e-17
+        }
+      ],
+      "input_price_recovery": {
+        "num_input_prices": 1000,
+        "num_nonfinite_dlvs_set_to_zero": 30,
+        "tolerance": 1e-08,
+        "passed": false,
+        "abs_error_median": 6.768263489283222e-06,
+        "abs_error_rmse": 0.00012356142700099845,
+        "abs_error_max": 0.0006037556902116215,
+        "abs_error_max_forward_bps": 6.037556902116215,
+        "expiries": [
+          {
+            "expiry_days": 2,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 0,
+            "abs_error_median": 6.5052130349130266e-18,
+            "abs_error_rmse": 2.243992636953033e-17,
+            "abs_error_max": 5.551115123125783e-17,
+            "abs_error_max_forward_bps": 5.551115123125783e-13,
+            "density_abs_error_max": 1.788499903732088e-15,
+            "density_sum_error": 2.4424906541753444e-15,
+            "density_mean_error": 2.4424906541753444e-15
+          },
+          {
+            "expiry_days": 5,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 2,
+            "abs_error_median": 1.2989849054907687e-08,
+            "abs_error_rmse": 1.6151306015922888e-06,
+            "abs_error_max": 1.4935191059462656e-05,
+            "abs_error_max_forward_bps": 0.14935191059462655,
+            "density_abs_error_max": 0.011134657882321847,
+            "density_sum_error": 1.3322676295501878e-15,
+            "density_mean_error": 1.3322676295501878e-15
+          },
+          {
+            "expiry_days": 10,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 1,
+            "abs_error_median": 1.8811339486113354e-07,
+            "abs_error_rmse": 5.44493380943346e-06,
+            "abs_error_max": 2.1510016571129474e-05,
+            "abs_error_max_forward_bps": 0.21510016571129473,
+            "density_abs_error_max": 0.002915101550446853,
+            "density_sum_error": 1.3322676295501878e-15,
+            "density_mean_error": 1.3322676295501878e-15
+          },
+          {
+            "expiry_days": 15,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 3,
+            "abs_error_median": 6.259275629168573e-07,
+            "abs_error_rmse": 7.4814779180117534e-06,
+            "abs_error_max": 2.092803058651785e-05,
+            "abs_error_max_forward_bps": 0.20928030586517848,
+            "density_abs_error_max": 0.00247206659901944,
+            "density_sum_error": 8.881784197001252e-16,
+            "density_mean_error": 9.992007221626409e-16
+          },
+          {
+            "expiry_days": 20,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 1,
+            "abs_error_median": 2.598757990926459e-06,
+            "abs_error_rmse": 8.597454019038285e-06,
+            "abs_error_max": 2.35927271611562e-05,
+            "abs_error_max_forward_bps": 0.235927271611562,
+            "density_abs_error_max": 0.0006969664740119185,
+            "density_sum_error": 1.1102230246251565e-15,
+            "density_mean_error": 8.881784197001252e-16
+          },
+          {
+            "expiry_days": 30,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 10,
+            "abs_error_median": 6.747381487155323e-06,
+            "abs_error_rmse": 5.849401074982327e-05,
+            "abs_error_max": 0.0002850435172124105,
+            "abs_error_max_forward_bps": 2.8504351721241052,
+            "density_abs_error_max": 0.01387417372958133,
+            "density_sum_error": 2.220446049250313e-16,
+            "density_mean_error": 2.220446049250313e-16
+          },
+          {
+            "expiry_days": 40,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 4,
+            "abs_error_median": 2.1172828641692176e-05,
+            "abs_error_rmse": 0.00011520819810482817,
+            "abs_error_max": 0.00042148695740301667,
+            "abs_error_max_forward_bps": 4.214869574030167,
+            "density_abs_error_max": 0.017587708356639475,
+            "density_sum_error": 2.220446049250313e-16,
+            "density_mean_error": 8.881784197001252e-16
+          },
+          {
+            "expiry_days": 50,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 6,
+            "abs_error_median": 2.157506521222517e-05,
+            "abs_error_rmse": 0.00017203590631090476,
+            "abs_error_max": 0.0005735341902091684,
+            "abs_error_max_forward_bps": 5.735341902091684,
+            "density_abs_error_max": 0.010848774960146468,
+            "density_sum_error": 1.3322676295501878e-15,
+            "density_mean_error": 1.3322676295501878e-15
+          },
+          {
+            "expiry_days": 70,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 3,
+            "abs_error_median": 5.8820484046363114e-05,
+            "abs_error_rmse": 0.00024300623782692505,
+            "abs_error_max": 0.0006037556902116215,
+            "abs_error_max_forward_bps": 6.037556902116215,
+            "density_abs_error_max": 0.009180315993674193,
+            "density_sum_error": 3.3306690738754696e-16,
+            "density_mean_error": 0.0
+          },
+          {
+            "expiry_days": 120,
+            "num_prices": 100,
+            "num_nonfinite_dlvs_set_to_zero": 0,
+            "abs_error_median": 0.00011718759633622122,
+            "abs_error_rmse": 0.00021718484030788606,
+            "abs_error_max": 0.00038777293858588413,
+            "abs_error_max_forward_bps": 3.8777293858588413,
+            "density_abs_error_max": 0.0010048435170557177,
+            "density_sum_error": 1.3322676295501878e-15,
+            "density_mean_error": 1.3322676295501878e-15
+          }
+        ]
+      }
+    }
+  ]
+}

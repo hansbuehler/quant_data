@@ -1,0 +1,204 @@
+{
+  "legacy_comparison_file": "aae/ideas/localvolbysanos/real_trading/results/2025_delta_cap_1m/spot_1d/spot_only_comparison.parquet",
+  "cvar_comparison_file": "aae/ideas/localvolbysanos/real_trading/results/2025_cvar_daily/one_day/spot_only_comparison.parquet",
+  "daily_market_file": "aae/ideas/localvolbysanos/results/2025_full_reference_grid/daily_summary.parquet",
+  "output_dir": "aae/ideas/localvolbysanos/real_trading/results/2025/tail_risk_diagnostics",
+  "config": {
+    "minimum_training_days": 60,
+    "tail_fraction": 0.1,
+    "bootstrap_samples": 5000,
+    "bootstrap_block_days": 5,
+    "annual_sessions": 252,
+    "seed": 19870211
+  },
+  "outcome": "continuous option-implied delta return over the next SPX session",
+  "timing": "every overlay signal is known on the option decision date",
+  "risk_target": "exposure=min(1, expanding historical median/current signal); cross-objective agreement is used directly as exposure",
+  "benchmark": "constant exposure equal to the overlay's realized mean exposure",
+  "tail_measure": "empirical mean of the worst 10% of daily returns with fractional boundary mass",
+  "methodology": "chronological overlay evaluation on full-sample-fitted OCE signals; not a look-ahead-free model backtest",
+  "summary": [
+    {
+      "signal": "atm_volatility",
+      "utility": "cvar10",
+      "num_series": 3,
+      "num_expected_shortfall_improvements": 3,
+      "median_expected_shortfall_reduction": 0.20814267423257293,
+      "num_sharpe_improvements": 3,
+      "num_mean_to_tail_improvements": 0,
+      "median_mean_return_change": -0.0007175909409487505
+    },
+    {
+      "signal": "atm_volatility",
+      "utility": "entropy",
+      "num_series": 9,
+      "num_expected_shortfall_improvements": 9,
+      "median_expected_shortfall_reduction": 0.20794693692665212,
+      "num_sharpe_improvements": 9,
+      "num_mean_to_tail_improvements": 0,
+      "median_mean_return_change": -0.0007330703780096611
+    },
+    {
+      "signal": "atm_volatility",
+      "utility": "powexp",
+      "num_series": 9,
+      "num_expected_shortfall_improvements": 9,
+      "median_expected_shortfall_reduction": 0.22058515591571826,
+      "num_sharpe_improvements": 9,
+      "num_mean_to_tail_improvements": 0,
+      "median_mean_return_change": -0.0007641529119345296
+    },
+    {
+      "signal": "cross_objective_sign_agreement",
+      "utility": "cvar10",
+      "num_series": 3,
+      "num_expected_shortfall_improvements": 0,
+      "median_expected_shortfall_reduction": -0.04113403308777408,
+      "num_sharpe_improvements": 1,
+      "num_mean_to_tail_improvements": 2,
+      "median_mean_return_change": 0.00018106905000491022
+    },
+    {
+      "signal": "cross_objective_sign_agreement",
+      "utility": "entropy",
+      "num_series": 9,
+      "num_expected_shortfall_improvements": 0,
+      "median_expected_shortfall_reduction": -0.05963756398530751,
+      "num_sharpe_improvements": 6,
+      "num_mean_to_tail_improvements": 6,
+      "median_mean_return_change": 0.0002002823105847723
+    },
+    {
+      "signal": "cross_objective_sign_agreement",
+      "utility": "powexp",
+      "num_series": 9,
+      "num_expected_shortfall_improvements": 0,
+      "median_expected_shortfall_reduction": -0.06109754427237157,
+      "num_sharpe_improvements": 5,
+      "num_mean_to_tail_improvements": 6,
+      "median_mean_return_change": 0.00018444488887064026
+    },
+    {
+      "signal": "scenario_downside_p05",
+      "utility": "cvar10",
+      "num_series": 3,
+      "num_expected_shortfall_improvements": 0,
+      "median_expected_shortfall_reduction": -0.019939704325491192,
+      "num_sharpe_improvements": 1,
+      "num_mean_to_tail_improvements": 3,
+      "median_mean_return_change": 0.0002216939271135177
+    },
+    {
+      "signal": "scenario_downside_p05",
+      "utility": "entropy",
+      "num_series": 9,
+      "num_expected_shortfall_improvements": 0,
+      "median_expected_shortfall_reduction": -0.046725279655688734,
+      "num_sharpe_improvements": 1,
+      "num_mean_to_tail_improvements": 6,
+      "median_mean_return_change": 0.0001493334353099068
+    },
+    {
+      "signal": "scenario_downside_p05",
+      "utility": "powexp",
+      "num_series": 9,
+      "num_expected_shortfall_improvements": 0,
+      "median_expected_shortfall_reduction": -0.08184589394528419,
+      "num_sharpe_improvements": 3,
+      "num_mean_to_tail_improvements": 7,
+      "median_mean_return_change": 0.00015741452626587792
+    },
+    {
+      "signal": "scenario_return_std",
+      "utility": "cvar10",
+      "num_series": 3,
+      "num_expected_shortfall_improvements": 0,
+      "median_expected_shortfall_reduction": -0.1412069902335229,
+      "num_sharpe_improvements": 0,
+      "num_mean_to_tail_improvements": 3,
+      "median_mean_return_change": 0.0005697952346139165
+    },
+    {
+      "signal": "scenario_return_std",
+      "utility": "entropy",
+      "num_series": 9,
+      "num_expected_shortfall_improvements": 0,
+      "median_expected_shortfall_reduction": -0.17421935425379598,
+      "num_sharpe_improvements": 3,
+      "num_mean_to_tail_improvements": 6,
+      "median_mean_return_change": 0.0004970423397525751
+    },
+    {
+      "signal": "scenario_return_std",
+      "utility": "powexp",
+      "num_series": 9,
+      "num_expected_shortfall_improvements": 1,
+      "median_expected_shortfall_reduction": -0.1482491326567552,
+      "num_sharpe_improvements": 3,
+      "num_mean_to_tail_improvements": 6,
+      "median_mean_return_change": 0.0004895614937626843
+    },
+    {
+      "signal": "today_absolute_return",
+      "utility": "cvar10",
+      "num_series": 3,
+      "num_expected_shortfall_improvements": 3,
+      "median_expected_shortfall_reduction": 0.044753109481771136,
+      "num_sharpe_improvements": 0,
+      "num_mean_to_tail_improvements": 0,
+      "median_mean_return_change": -0.0009507702128998051
+    },
+    {
+      "signal": "today_absolute_return",
+      "utility": "entropy",
+      "num_series": 9,
+      "num_expected_shortfall_improvements": 6,
+      "median_expected_shortfall_reduction": 0.03617570021631655,
+      "num_sharpe_improvements": 0,
+      "num_mean_to_tail_improvements": 0,
+      "median_mean_return_change": -0.0009589397024475741
+    },
+    {
+      "signal": "today_absolute_return",
+      "utility": "powexp",
+      "num_series": 9,
+      "num_expected_shortfall_improvements": 7,
+      "median_expected_shortfall_reduction": 0.025321547147855172,
+      "num_sharpe_improvements": 0,
+      "num_mean_to_tail_improvements": 0,
+      "median_mean_return_change": -0.0009589397024501807
+    }
+  ],
+  "representative_atm_bootstrap": [
+    {
+      "universe": "normalised",
+      "utility": "cvar10",
+      "risk_aversion": 1.0,
+      "signal": "atm_volatility",
+      "lower_95": -0.03327468760328933,
+      "median": 0.19069777433034119,
+      "upper_95": 0.3347062258991706,
+      "fraction_positive": 0.9142
+    },
+    {
+      "universe": "normalised",
+      "utility": "entropy",
+      "risk_aversion": 10.0,
+      "signal": "atm_volatility",
+      "lower_95": -0.03016124448425198,
+      "median": 0.17903076942320034,
+      "upper_95": 0.3299826304994452,
+      "fraction_positive": 0.9192
+    },
+    {
+      "universe": "normalised",
+      "utility": "powexp",
+      "risk_aversion": 10.0,
+      "signal": "atm_volatility",
+      "lower_95": -0.029196744048501665,
+      "median": 0.21242140172242369,
+      "upper_95": 0.35649651469486204,
+      "fraction_positive": 0.923
+    }
+  ]
+}

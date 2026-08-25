@@ -1,0 +1,211 @@
+{
+  "schema": "flex-expiry-state-allocation-quote-evaluation-v1",
+  "market_report": "quantdata/dysanos/flex/reports/batch-descent/spx-2022-2025-forward-mu-v1.json",
+  "allocation_report": "quantdata/dysanos/flex/reports/batch-descent/spx-2022-2025-forward-mu-v1-state-allocation-extended.json",
+  "global_checkpoint": "/media/storage/quantdata/training/flex-fixed-weekly/spx-2022-2025-forward-mu-v1/global-140.pt",
+  "num_days": 874,
+  "num_quotes": 3492782,
+  "evaluations": [
+    {
+      "label": "global_exact",
+      "allocation": null,
+      "objective": 1.251199647565143,
+      "statistics": {
+        "all": {
+          "num_options": 3492782,
+          "num_zero": 2464057,
+          "percent_zero": 70.54711688275994,
+          "num_positive": 1028725,
+          "positive_mean": 3.956361908082423,
+          "positive_median": 1.279339289330963,
+          "surface_mean": 1.1652626484825248,
+          "surface_median": 0.0
+        },
+        "0DTE": {
+          "num_options": 2430,
+          "num_zero": 631,
+          "percent_zero": 25.967078189300413,
+          "num_positive": 1799,
+          "positive_mean": 13.323741683623798,
+          "positive_median": 11.776072109764351,
+          "surface_mean": 9.863955262896795,
+          "surface_median": 6.584252913541203
+        },
+        "1DTE": {
+          "num_options": 77236,
+          "num_zero": 17323,
+          "percent_zero": 22.428660210264642,
+          "num_positive": 59913,
+          "positive_mean": 16.076662253621837,
+          "positive_median": 9.324540951213555,
+          "surface_mean": 12.47088230360512,
+          "surface_median": 4.9019578573437075
+        },
+        "2DTE": {
+          "num_options": 102320,
+          "num_zero": 31967,
+          "percent_zero": 31.242181391712275,
+          "num_positive": 70353,
+          "positive_mean": 11.488004481684037,
+          "positive_median": 7.329301278583533,
+          "surface_mean": 7.898901283228274,
+          "surface_median": 2.7791686572915104
+        }
+      },
+      "surface_fit": {
+        "num_options": 3492782,
+        "half_spread_mae": 1.718740134114594,
+        "half_spread_median_absolute_error": 0.43728833754598506,
+        "normalized_price_mae": 8.958964567109534e-05,
+        "normalized_price_median_absolute_error": 3.80518105264141e-05,
+        "normalized_price_rmse": 0.00020867253843364817,
+        "normalized_price_bias": -1.7726359293271505e-05
+      },
+      "num_days": 874
+    },
+    {
+      "label": "triangular_20_108_1_1_1_1_1_1_1_1_1_1_1_1",
+      "allocation": [
+        20,
+        108,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "objective": 3.7329728047012383,
+      "statistics": {
+        "all": {
+          "num_options": 3492782,
+          "num_zero": 1445841,
+          "percent_zero": 41.39511140403266,
+          "num_positive": 2046941,
+          "positive_mean": 6.007750455024469,
+          "positive_median": 3.258439543467634,
+          "surface_mean": 3.5208354612908113,
+          "surface_median": 0.622714016672868
+        },
+        "0DTE": {
+          "num_options": 2430,
+          "num_zero": 634,
+          "percent_zero": 26.090534979423868,
+          "num_positive": 1796,
+          "positive_mean": 13.102255101697537,
+          "positive_median": 11.367331905501743,
+          "surface_mean": 9.683806651295791,
+          "surface_median": 6.299181543267921
+        },
+        "1DTE": {
+          "num_options": 77236,
+          "num_zero": 16172,
+          "percent_zero": 20.93842249728106,
+          "num_positive": 61064,
+          "positive_mean": 17.219416906566693,
+          "positive_median": 10.1570576767978,
+          "surface_mean": 13.613942643101511,
+          "surface_median": 5.698653996087197
+        },
+        "2DTE": {
+          "num_options": 102320,
+          "num_zero": 28282,
+          "percent_zero": 27.640734949179045,
+          "num_positive": 74038,
+          "positive_mean": 14.191252673053622,
+          "positive_median": 8.938114279706856,
+          "surface_mean": 10.268686135726584,
+          "surface_median": 3.8720668615494622
+        }
+      },
+      "surface_fit": {
+        "num_options": 3492782,
+        "half_spread_mae": 4.242746190577251,
+        "half_spread_median_absolute_error": 1.6198054901820504,
+        "normalized_price_mae": 0.0002558979352588277,
+        "normalized_price_median_absolute_error": 0.00013928094529797042,
+        "normalized_price_rmse": 0.00042057004771427117,
+        "normalized_price_bias": -1.905864526118849e-05
+      },
+      "num_days": 874
+    },
+    {
+      "label": "triangular_30_98_1_1_1_1_1_1_1_1_1_1_1_1",
+      "allocation": [
+        30,
+        98,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "objective": 3.2938617053683856,
+      "statistics": {
+        "all": {
+          "num_options": 3492782,
+          "num_zero": 1518671,
+          "percent_zero": 43.480268737069764,
+          "num_positive": 1974111,
+          "positive_mean": 5.490241069097568,
+          "positive_median": 3.017434055200126,
+          "surface_mean": 3.103069497940973,
+          "surface_median": 0.4366534125335856
+        },
+        "0DTE": {
+          "num_options": 2430,
+          "num_zero": 629,
+          "percent_zero": 25.88477366255144,
+          "num_positive": 1801,
+          "positive_mean": 13.1728503668196,
+          "positive_median": 11.508805952137344,
+          "surface_mean": 9.76308786446177,
+          "surface_median": 6.459095927003627
+        },
+        "1DTE": {
+          "num_options": 77236,
+          "num_zero": 16359,
+          "percent_zero": 21.180537573152417,
+          "num_positive": 60877,
+          "positive_mean": 17.17129310065259,
+          "positive_median": 10.079803566977615,
+          "surface_mean": 13.534320913672742,
+          "surface_median": 5.628386081644485
+        },
+        "2DTE": {
+          "num_options": 102320,
+          "num_zero": 28840,
+          "percent_zero": 28.18608287724785,
+          "num_positive": 73480,
+          "positive_mean": 13.737142274428525,
+          "positive_median": 8.771696782699927,
+          "surface_mean": 9.86517996799265,
+          "surface_median": 3.7151480220289637
+        }
+      },
+      "surface_fit": {
+        "num_options": 3492782,
+        "half_spread_mae": 3.815844468287095,
+        "half_spread_median_absolute_error": 1.4428493494051795,
+        "normalized_price_mae": 0.00022463172340791092,
+        "normalized_price_median_absolute_error": 0.0001264469745909315,
+        "normalized_price_rmse": 0.00036192761009056813,
+        "normalized_price_bias": -1.1390287366697545e-05
+      },
+      "num_days": 874
+    }
+  ]
+}

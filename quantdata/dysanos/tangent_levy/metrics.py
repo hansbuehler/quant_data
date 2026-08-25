@@ -86,6 +86,7 @@ def price_error_metrics(
     target: np.ndarray,
     *,
     half_spread: np.ndarray | None = None,
+    residual_multiplier: np.ndarray | None = None,
     mask: np.ndarray | None = None,
 ) -> PriceErrorMetrics:
     """Compute original-strike or dense-grid outright price errors."""
@@ -96,7 +97,15 @@ def price_error_metrics(
         model.shape == target.shape,
         lambda: f"model and target shapes differ: {model.shape}, {target.shape}",
     )
-    active = np.ones(model.shape, dtype=bool) if mask is None else np.asarray(mask, dtype=bool)
+    verify_inp(
+        half_spread is None or residual_multiplier is None,
+        "provide either half spreads or residual multipliers, not both",
+    )
+    active = (
+        np.ones(model.shape, dtype=bool)
+        if mask is None
+        else np.asarray(mask, dtype=bool)
+    )
     verify_inp(
         active.shape == model.shape,
         lambda: f"mask shape {active.shape} does not match prices {model.shape}",
@@ -105,7 +114,16 @@ def price_error_metrics(
     verify_inp(np.any(active), "no finite active observations for price metrics")
     errors = model[active] - target[active]
     absolute = np.abs(errors)
-    if half_spread is None:
+    if residual_multiplier is not None:
+        multiplier = np.asarray(residual_multiplier, dtype=np.float64)
+        verify_inp(
+            multiplier.shape == model.shape
+            and np.all(np.isfinite(multiplier[active]))
+            and np.all(multiplier[active] > 0.0),
+            lambda: "residual multipliers must be finite, positive, and match prices",
+        )
+        weighted_rmse = float(np.sqrt(np.mean(np.square(multiplier[active] * errors))))
+    elif half_spread is None:
         weighted_rmse = float(np.sqrt(np.mean(np.square(errors))))
     else:
         spread = np.asarray(half_spread, dtype=np.float64)
@@ -117,7 +135,9 @@ def price_error_metrics(
         )
         inverse_variance = 1.0 / np.square(spread[active])
         weighted_rmse = float(
-            np.sqrt(np.sum(inverse_variance * np.square(errors)) / np.sum(inverse_variance))
+            np.sqrt(
+                np.sum(inverse_variance * np.square(errors)) / np.sum(inverse_variance)
+            )
         )
     return PriceErrorMetrics(
         observations=int(errors.size),
@@ -153,14 +173,13 @@ def interval_error_metrics(
         math.isfinite(half_spread_floor) and half_spread_floor > 0.0,
         lambda: f"invalid half-spread floor {half_spread_floor!r}",
     )
-    active = np.ones(model.shape, dtype=bool) if mask is None else np.asarray(mask, dtype=bool)
-    verify_inp(active.shape == model.shape, "mask shape does not match interval arrays")
-    active &= (
-        np.isfinite(model)
-        & np.isfinite(bids)
-        & np.isfinite(asks)
-        & (asks > bids)
+    active = (
+        np.ones(model.shape, dtype=bool)
+        if mask is None
+        else np.asarray(mask, dtype=bool)
     )
+    verify_inp(active.shape == model.shape, "mask shape does not match interval arrays")
+    active &= np.isfinite(model) & np.isfinite(bids) & np.isfinite(asks) & (asks > bids)
     verify_inp(np.any(active), "no finite active observations for interval metrics")
     model_active = model[active]
     bids_active = bids[active]
@@ -197,9 +216,42 @@ def implied_volatility_error(
 ) -> PriceErrorMetrics:
     """Return implied-volatility error summaries in volatility points."""
 
-    model_vol = implied_volatility(tau=tau, strike=strikes, call_price=model_calls)
-    target_vol = implied_volatility(tau=tau, strike=strikes, call_price=target_calls)
-    return price_error_metrics(model_vol, target_vol, mask=mask)
+    tau_array, strike_array, model_array, target_array = np.broadcast_arrays(
+        np.asarray(tau, dtype=np.float64),
+        np.asarray(strikes, dtype=np.float64),
+        np.asarray(model_calls, dtype=np.float64),
+        np.asarray(target_calls, dtype=np.float64),
+    )
+    active = (
+        np.ones(model_array.shape, dtype=bool)
+        if mask is None
+        else np.broadcast_to(np.asarray(mask, dtype=bool), model_array.shape).copy()
+    )
+    lower = normalized_call_intrinsic(strike_array)
+    active &= (
+        np.isfinite(tau_array)
+        & (tau_array > 0.0)
+        & np.isfinite(strike_array)
+        & (strike_array > 0.0)
+        & np.isfinite(model_array)
+        & np.isfinite(target_array)
+        & (model_array >= lower - 1.0e-10)
+        & (model_array <= 1.0 + 1.0e-10)
+        & (target_array >= lower - 1.0e-10)
+        & (target_array <= 1.0 + 1.0e-10)
+    )
+    verify_inp(np.any(active), "no active calls satisfy implied-volatility bounds")
+    model_vol = implied_volatility(
+        tau=tau_array[active],
+        strike=strike_array[active],
+        call_price=model_array[active],
+    )
+    target_vol = implied_volatility(
+        tau=tau_array[active],
+        strike=strike_array[active],
+        call_price=target_array[active],
+    )
+    return price_error_metrics(model_vol, target_vol)
 
 
 def no_arbitrage_metrics(
@@ -332,11 +384,7 @@ def statistical_fidelity_metrics(
 
     def condition(values: np.ndarray) -> float:
         positive = values[values > 1.0e-15]
-        return (
-            float(positive[0] / positive[-1])
-            if positive.size > 0
-            else math.inf
-        )
+        return float(positive[0] / positive[-1]) if positive.size > 0 else math.inf
 
     return StatisticalFidelityMetrics(
         reference_observations=reference.shape[0],

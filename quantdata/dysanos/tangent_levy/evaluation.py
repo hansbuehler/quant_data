@@ -30,8 +30,8 @@ class DailyFitEvaluation:
     optimizer_success_fraction: float
     tangent_vs_sanos_price: PriceErrorMetrics
     tangent_vs_sanos_iv: PriceErrorMetrics
-    tangent_pure_interval: IntervalErrorMetrics
-    sanos_pure_interval: IntervalErrorMetrics
+    tangent_pure_interval: IntervalErrorMetrics | None
+    sanos_pure_interval: IntervalErrorMetrics | None
     tangent_call_interval: IntervalErrorMetrics | None
     tangent_put_interval: IntervalErrorMetrics | None
 
@@ -73,8 +73,7 @@ def evaluate_day_fit(
     verify(
         market.market_date == day_fit.market_date,
         lambda: (
-            f"market date {market.market_date} does not match fit date "
-            f"{day_fit.market_date}"
+            f"market date {market.market_date} does not match fit date {day_fit.market_date}"
         ),
     )
     model_parts: list[np.ndarray] = []
@@ -90,6 +89,7 @@ def evaluate_day_fit(
     put_ask_parts: list[np.ndarray] = []
     call_active_parts: list[np.ndarray] = []
     put_active_parts: list[np.ndarray] = []
+    fit_weight_parts: list[np.ndarray] = []
 
     for fit in day_fit.fits:
         matches = np.flatnonzero(
@@ -122,6 +122,8 @@ def evaluate_day_fit(
         put_ask_parts.append(market.put_asks[index])
         call_active_parts.append(market.call_active[index])
         put_active_parts.append(market.put_active[index])
+        if market.fit_weights is not None:
+            fit_weight_parts.append(market.fit_weights[index])
 
     model = np.concatenate(model_parts)
     target = np.concatenate(target_parts)
@@ -130,10 +132,15 @@ def evaluate_day_fit(
     pure_bids = np.concatenate(pure_bid_parts)
     pure_asks = np.concatenate(pure_ask_parts)
     model_mask = np.concatenate(model_mask_parts)
-    half_spread = np.maximum(
-        0.5 * (pure_asks - pure_bids),
-        config.half_spread_floor,
-    )
+    if market.fit_weights is None:
+        half_spread = np.maximum(
+            0.5 * (pure_asks - pure_bids),
+            config.half_spread_floor,
+        )
+        residual_multiplier = None
+    else:
+        half_spread = None
+        residual_multiplier = np.concatenate(fit_weight_parts)
     call_bids = np.concatenate(call_bid_parts)
     call_asks = np.concatenate(call_ask_parts)
     put_bids = np.concatenate(put_bid_parts)
@@ -152,6 +159,7 @@ def evaluate_day_fit(
             model,
             target,
             half_spread=half_spread,
+            residual_multiplier=residual_multiplier,
             mask=model_mask,
         ),
         tangent_vs_sanos_iv=implied_volatility_error(
@@ -161,19 +169,27 @@ def evaluate_day_fit(
             target_calls=target,
             mask=model_mask,
         ),
-        tangent_pure_interval=interval_error_metrics(
-            model,
-            pure_bids,
-            pure_asks,
-            mask=model_mask,
-            half_spread_floor=config.half_spread_floor,
+        tangent_pure_interval=(
+            None
+            if market.fit_weights is not None
+            else interval_error_metrics(
+                model,
+                pure_bids,
+                pure_asks,
+                mask=model_mask,
+                half_spread_floor=config.half_spread_floor,
+            )
         ),
-        sanos_pure_interval=interval_error_metrics(
-            target,
-            pure_bids,
-            pure_asks,
-            mask=model_mask,
-            half_spread_floor=config.half_spread_floor,
+        sanos_pure_interval=(
+            None
+            if market.fit_weights is not None
+            else interval_error_metrics(
+                target,
+                pure_bids,
+                pure_asks,
+                mask=model_mask,
+                half_spread_floor=config.half_spread_floor,
+            )
         ),
         tangent_call_interval=_optional_interval_metrics(
             model,
