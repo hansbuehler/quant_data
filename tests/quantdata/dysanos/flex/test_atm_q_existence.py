@@ -5,6 +5,16 @@ from pathlib import Path
 import torch
 
 from quantdata import env as quantdata_env
+from quantdata.dysanos.flex.run_all_state_vector_q_existence import (
+    AllStateQExistenceLaw,
+    _summary_quantiles,
+    control_variate_noise_scale_by_state,
+    make_common_q_draw,
+    normalize_front_components,
+    pooled_spot_control_beta_by_state,
+    sample_front_components_common,
+    spot_control_variate_by_state,
+)
 from quantdata.dysanos.flex.run_atm_q_existence import (
     _DEFAULT_JOINT_COMPLETION,
     _DEFAULT_OUTPUT_ROOT,
@@ -93,6 +103,13 @@ def test_q_existence_law_is_differentiable_and_has_positive_noise() -> None:
     assert all(torch.all(torch.isfinite(parameter.grad)) for parameter in law.parameters())
 
 
+def test_raw_z_summary_reports_mean_of_worst_decile() -> None:
+    summary = _summary_quantiles(torch.arange(1.0, 21.0))
+
+    assert summary["maximum"] == 20.0
+    assert summary["worst_10_percent_mean"] == 19.5
+
+
 def test_spot_control_variate_removes_exact_linear_spot_component() -> None:
     gross = torch.tensor((0.8, 0.9, 1.1, 1.2), dtype=torch.float64)
     returns = 0.02 + 3.0 * (gross - 1.0)
@@ -113,3 +130,144 @@ def test_vector_spot_control_variate_removes_each_linear_spot_component() -> Non
     assert torch.allclose(adjusted, intercept.expand_as(adjusted))
     assert torch.allclose(mean, intercept)
     assert torch.allclose(beta, loading)
+
+
+def test_common_draw_is_reused_exactly_across_identical_front_marginals() -> None:
+    dtype = torch.float64
+    support, density, variance = normalize_front_components(
+        torch.tensor(((0.8, 1.2), (0.8, 1.2)), dtype=dtype),
+        torch.tensor(((0.5, 0.5), (0.5, 0.5)), dtype=dtype),
+        torch.tensor((0.20, 0.20), dtype=dtype),
+    )
+    draw = make_common_q_draw(
+        front_state_size=3,
+        spot_contexts=125,
+        surface_paths=8,
+        seed=101,
+        dtype=dtype,
+        device=torch.device("cpu"),
+    )
+    gross, rank = sample_front_components_common(
+        support=support,
+        density=density,
+        sqrt_variance=variance,
+        draw=draw,
+    )
+
+    assert gross.shape == (2, 1_000)
+    assert rank.shape == (2, 1_000)
+    assert torch.equal(gross[0], gross[1])
+    assert torch.equal(rank[0], rank[1])
+    assert torch.allclose(torch.mean(draw.epsilon, dim=0), torch.zeros(3, dtype=dtype))
+
+
+def test_all_state_law_and_control_variate_keep_origins_separate() -> None:
+    dtype = torch.float64
+    env = BaseEnvironment(precision=64, device="cpu", debug=True)
+    config = AtmQExistenceLawConfig(front_state_size=2)
+    law = AllStateQExistenceLaw(
+        env,
+        current_front_states=torch.tensor(((1.0, 2.0), (3.0, 4.0)), dtype=dtype),
+        config=config,
+        initialization_seed=103,
+    )
+    spot_rank = torch.tensor(((-1.0, 1.0), (-1.0, 1.0)), dtype=dtype)
+    output = law(
+        origin_indices=torch.tensor((0, 1)),
+        spot_rank=spot_rank,
+        branch=torch.tensor((-1.0, 1.0), dtype=dtype),
+        epsilon=torch.tensor(((0.5, -0.5), (-0.5, 0.5)), dtype=dtype),
+    )
+    gross = torch.tensor(((0.8, 1.2), (0.9, 1.1)), dtype=dtype)
+    intercept = torch.tensor(((0.02, -0.03), (0.04, 0.01)), dtype=dtype)
+    loading = torch.tensor(((3.0, -2.0), (1.5, 0.5)), dtype=dtype)
+    returns = intercept[:, None] + (gross - 1.0)[..., None] * loading[:, None]
+    adjusted, mean, beta = spot_control_variate_by_state(returns, gross)
+    output.square().sum().backward()
+
+    assert output.shape == (2, 2, 2)
+    assert torch.allclose(adjusted, intercept[:, None].expand_as(adjusted))
+    assert torch.allclose(mean, intercept)
+    assert torch.allclose(beta, loading)
+    assert all(parameter.grad is not None for parameter in law.parameters())
+
+
+def test_statewise_beta_and_mean_are_dataset_local() -> None:
+    dtype = torch.float64
+    training_spot = torch.tensor(
+        ((-0.20, -0.10, 0.10, 0.20), (-0.30, -0.10, 0.20, 0.40)),
+        dtype=dtype,
+    )
+    intercept = torch.tensor(((0.02, -0.03), (0.04, 0.01)), dtype=dtype)
+    loading = torch.tensor(((3.0, -2.0), (1.5, 0.5)), dtype=dtype)
+    training_returns = (
+        intercept[:, None] + training_spot[..., None] * loading[:, None]
+    )
+    num_paths = training_spot.shape[1]
+    training_beta = pooled_spot_control_beta_by_state(
+        path_sum=torch.sum(training_returns, dim=1),
+        spot_sum=torch.sum(training_spot, dim=1),
+        spot_square_sum=torch.sum(training_spot.square(), dim=1),
+        spot_return_product_sum=torch.sum(
+            training_spot[..., None] * training_returns,
+            dim=1,
+        ),
+        num_paths=num_paths,
+    )
+
+    validation_spot = torch.tensor(
+        ((-0.10, 0.10, 0.30), (-0.20, 0.10, 0.40)),
+        dtype=dtype,
+    )
+    validation_returns = (
+        intercept[:, None] + validation_spot[..., None] * loading[:, None]
+    )
+    validation_returns = validation_returns + torch.tensor(
+        (
+            ((0.01, 0.00), (-0.02, 0.01), (0.03, -0.01)),
+            ((-0.01, 0.02), (0.02, -0.01), (0.00, 0.01)),
+        ),
+        dtype=dtype,
+    )
+    validation_beta = pooled_spot_control_beta_by_state(
+        path_sum=torch.sum(validation_returns, dim=1),
+        spot_sum=torch.sum(validation_spot, dim=1),
+        spot_square_sum=torch.sum(validation_spot.square(), dim=1),
+        spot_return_product_sum=torch.sum(
+            validation_spot[..., None] * validation_returns,
+            dim=1,
+        ),
+        num_paths=validation_spot.shape[1],
+    )
+    adjusted, adjusted_mean, returned_beta = spot_control_variate_by_state(
+        validation_returns,
+        validation_spot + 1.0,
+        beta=validation_beta,
+    )
+    expected_mean = torch.mean(validation_returns, dim=1) - validation_beta * torch.mean(
+        validation_spot,
+        dim=1,
+        keepdim=True,
+    )
+
+    assert torch.allclose(training_beta, loading)
+    assert not torch.allclose(validation_beta, training_beta)
+    assert torch.allclose(returned_beta, validation_beta)
+    assert torch.allclose(adjusted_mean, expected_mean)
+
+
+def test_control_variate_reporting_noise_uses_larger_raw_component() -> None:
+    beta = torch.tensor(((-2.0, 0.5), (1.0, -3.0)), dtype=torch.float64)
+    spot_se = torch.tensor((0.10, 0.20), dtype=torch.float64)
+    raw_se = torch.tensor(((0.30, 0.04), (0.10, 0.80)), dtype=torch.float64)
+
+    noise_scale = control_variate_noise_scale_by_state(
+        beta=beta,
+        spot_mc_standard_error=spot_se,
+        raw_mc_standard_error=raw_se,
+    )
+
+    assert torch.allclose(
+        noise_scale,
+        torch.tensor(((0.30, 0.05), (0.20, 0.80)), dtype=torch.float64),
+    )

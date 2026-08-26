@@ -54,6 +54,62 @@ def _surface(
     return env, geometry, decoder, surface, dlvsqs
 
 
+def test_first_expiry_fast_pricer_matches_full_surface_value_and_gradient() -> None:
+    env = BaseEnvironment(precision=64, device="cpu", debug=True)
+    geometry = SharedStrikeCappedUnboundedDlvFlexGeometryConfig(
+        num_inner_strikes=6,
+        num_model_expiries=3,
+    )
+    decoder = FlexSanosDecoder(env, geometry=geometry)
+    base_dlv = torch.tensor(
+        [[
+            [0.12, 0.09, 0.07, 0.08, 0.11, 0.14],
+            [0.10, 0.08, 0.06, 0.07, 0.10, 0.13],
+            [0.09, 0.07, 0.05, 0.06, 0.09, 0.12],
+        ]],
+        dtype=env.fdtype,
+    )
+    base_forward = torch.tensor([[0.22, 0.24, 0.25]], dtype=env.fdtype)
+    base_eta = torch.tensor([[0.35, 0.40, 0.42]], dtype=env.fdtype)
+    strikes = torch.tensor([[0.85, 1.0, 1.15]], dtype=env.fdtype)
+
+    full_inputs = tuple(
+        value.clone().requires_grad_() for value in (base_dlv, base_forward, base_eta)
+    )
+    surface = decoder.forward_batch(
+        dlvsqs=full_inputs[0],
+        forward_vols=full_inputs[1],
+        eta=full_inputs[2],
+    )
+    full = decoder.price_calls_batch(
+        surface,
+        expiries_y=decoder.model_expiries_y[0].expand_as(strikes),
+        strikes=strikes,
+    )
+    full.sum().backward()
+    full_gradients = tuple(value.grad.clone() for value in full_inputs)
+
+    fast_inputs = tuple(
+        value.clone().requires_grad_() for value in (base_dlv, base_forward, base_eta)
+    )
+    fast = decoder.price_first_expiry_calls_from_parameters(
+        dlvsqs=fast_inputs[0],
+        forward_vols=fast_inputs[1],
+        eta=fast_inputs[2],
+        strikes=strikes,
+    )
+    fast.sum().backward()
+
+    torch.testing.assert_close(fast, full, atol=1.0e-13, rtol=1.0e-13)
+    for fast_input, full_gradient in zip(fast_inputs, full_gradients, strict=True):
+        torch.testing.assert_close(
+            fast_input.grad,
+            full_gradient,
+            atol=1.0e-12,
+            rtol=1.0e-12,
+        )
+
+
 def test_transition_rows_have_exact_one_and_two_step_martingale_towers() -> None:
     env, geometry, _, surface, _ = _surface()
     roller = NativeSanosQRoller(env, geometry=geometry)

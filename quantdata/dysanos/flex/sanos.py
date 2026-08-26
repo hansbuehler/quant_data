@@ -394,6 +394,112 @@ class FlexSanosDecoder(BaseModel):
             dim=-1,
         )
 
+    def _support_strikes_from_forward_vols(
+        self,
+        forward_vols: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Construct batched supports and return their model total vols."""
+        total_vols = self._total_vols(forward_vols)
+        epsilon_vol = total_vols[:, :1] / torch.sqrt(self.model_expiries_y[:1])
+        nms_scale = torch.sqrt(
+            (
+                epsilon_vol.square() * self.geometry.nms_epsilon_y
+                + total_vols.square()
+            )
+            / (1.0 + self.geometry.nms_epsilon_y)
+        )
+        if uses_shared_strikes(self.geometry):
+            merged_log_strikes = _space_merged_log_strikes_torch(
+                torch.cat(
+                    (
+                        nms_scale[:, :1] * self.shared_first_nms,
+                        nms_scale[:, -1:] * self.shared_last_nms,
+                    ),
+                    dim=-1,
+                ),
+                atm_index=self.shared_atm_index,
+                minimum_log_spacing_fraction=(
+                    self.geometry.minimum_log_spacing_fraction
+                ),
+            )
+            shared_inner = torch.exp(merged_log_strikes)
+            inner = shared_inner.unsqueeze(1).expand(
+                -1, self.geometry.num_model_expiries, -1
+            )
+        else:
+            inner = torch.exp(nms_scale.unsqueeze(-1) * self.inner_nms)
+        support_strikes = torch.cat(
+            (
+                self.geometry.lower_boundary_scale * inner[..., :1],
+                inner,
+                self.geometry.upper_boundary_scale * inner[..., -1:],
+            ),
+            dim=-1,
+        )
+        return total_vols, support_strikes
+
+    def price_first_expiry_calls_from_parameters(
+        self,
+        *,
+        dlvsqs: torch.Tensor,
+        forward_vols: torch.Tensor,
+        eta: torch.Tensor,
+        strikes: torch.Tensor,
+    ) -> torch.Tensor:
+        """Price first-expiry calls without decoding unused later densities."""
+        T = self.geometry.num_model_expiries
+        N = self.geometry.num_inner_strikes
+        if (
+            dlvsqs.ndim != 3
+            or dlvsqs.shape[1:] != (T, N)
+            or forward_vols.shape != dlvsqs.shape[:2]
+            or eta.shape not in {dlvsqs.shape[:1], dlvsqs.shape[:2]}
+            or strikes.ndim != 2
+            or strikes.shape[0] != len(dlvsqs)
+        ):
+            raise ValueError("invalid first-expiry batched pricing inputs")
+        _, support_strikes = self._support_strikes_from_forward_vols(forward_vols)
+        support = support_strikes[:, 0]
+        calls0 = torch.relu(1.0 - support)
+        density0 = self._density_from_calls(support, calls0)
+        box = (
+            support[:, 1:-1].square()
+            * self.model_dts_y[0]
+            / (support[:, 2:] - support[:, :-2])
+        )
+        w_plus = (
+            dlvsqs[:, 0]
+            * box
+            / (support[:, 2:] - support[:, 1:-1])
+        )
+        w_minus = (
+            dlvsqs[:, 0]
+            * box
+            / (support[:, 1:-1] - support[:, :-2])
+        )
+        density = self._sanos_step(
+            w_minus=w_minus,
+            w_plus=w_plus,
+            rhs=density0,
+        )
+        first_backbone_forward_vol = (
+            forward_vols[:, 0] * eta[:, 0]
+            if eta.ndim == 2
+            else forward_vols[:, 0] * eta
+        )
+        first_backbone_total_vol = (
+            first_backbone_forward_vol * torch.sqrt(self.model_dts_y[0])
+        )
+        return torch.sum(
+            self._black_call(
+                support[:, None],
+                strikes[..., None],
+                first_backbone_total_vol[:, None, None],
+            )
+            * density[:, None],
+            dim=-1,
+        )
+
     @staticmethod
     def _density_from_calls(
         support: torch.Tensor,
@@ -502,40 +608,8 @@ class FlexSanosDecoder(BaseModel):
         assert forward_vols.shape == (B, T)
         assert eta.shape in {(B,), (B, T)}
 
-        total_vols = self._total_vols(forward_vols)
-        epsilon_vol = total_vols[:, :1] / torch.sqrt(self.model_expiries_y[:1])
-        nms_scale = torch.sqrt(
-            (
-                epsilon_vol.square() * self.geometry.nms_epsilon_y
-                + total_vols.square()
-            )
-            / (1.0 + self.geometry.nms_epsilon_y)
-        )
-        if uses_shared_strikes(self.geometry):
-            merged_log_strikes = _space_merged_log_strikes_torch(
-                torch.cat(
-                    (
-                        nms_scale[:, :1] * self.shared_first_nms,
-                        nms_scale[:, -1:] * self.shared_last_nms,
-                    ),
-                    dim=-1,
-                ),
-                atm_index=self.shared_atm_index,
-                minimum_log_spacing_fraction=(
-                    self.geometry.minimum_log_spacing_fraction
-                ),
-            )
-            shared_inner = torch.exp(merged_log_strikes)
-            inner = shared_inner.unsqueeze(1).expand(-1, T, -1)
-        else:
-            inner = torch.exp(nms_scale.unsqueeze(-1) * self.inner_nms)
-        support_strikes = torch.cat(
-            (
-                self.geometry.lower_boundary_scale * inner[..., :1],
-                inner,
-                self.geometry.upper_boundary_scale * inner[..., -1:],
-            ),
-            dim=-1,
+        total_vols, support_strikes = self._support_strikes_from_forward_vols(
+            forward_vols
         )
 
         calls0 = torch.relu(1.0 - support_strikes[:, 0])
