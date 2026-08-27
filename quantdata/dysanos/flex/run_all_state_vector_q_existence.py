@@ -424,6 +424,7 @@ def _parse_arguments() -> argparse.Namespace:
     parser.add_argument("--maximum-states", type=int)
     parser.add_argument("--selected-state-index", type=int)
     parser.add_argument("--teacher-checkpoint", type=Path)
+    parser.add_argument("--objective-instrument-index", type=int)
     parser.add_argument("--optimize-raw-means", action="store_true")
     parser.add_argument("--benchmark-only", action="store_true")
     parser.add_argument("--no-compile", action="store_true")
@@ -462,6 +463,13 @@ def _validate_arguments(arguments: argparse.Namespace) -> None:
         and arguments.selected_state_index is not None
     ):
         raise ValueError("maximum states and selected state index are mutually exclusive")
+    if arguments.objective_instrument_index is not None:
+        if not 0 <= arguments.objective_instrument_index < 11:
+            raise ValueError("objective instrument index must be in [0, 11)")
+        if arguments.selected_state_index is None:
+            raise ValueError(
+                "an objective instrument index requires a selected state"
+            )
 
 
 def _common_draws(
@@ -1164,6 +1172,10 @@ def run(arguments: argparse.Namespace) -> None:
         ),
         "control_beta_scope": "separate_per_dataset_and_historical_state",
     }
+    if arguments.objective_instrument_index is not None:
+        simulation_config["objective_instrument_index"] = (
+            arguments.objective_instrument_index
+        )
     if arguments.checkpoint.exists():
         checkpoint_payload = torch.load(
             arguments.checkpoint,
@@ -1298,8 +1310,13 @@ def run(arguments: argparse.Namespace) -> None:
                     torch.mean(adjusted_rep, dim=0)
                     / fit_noise_scale.clamp_min(1.0e-12)
                 )
-                state_loss = (
+                moment_loss = (
                     torch.mean(pooled.square(), dim=1)
+                    if arguments.objective_instrument_index is None
+                    else pooled[:, arguments.objective_instrument_index].square()
+                )
+                state_loss = (
+                    moment_loss
                     + 0.01
                     * ((negative_atm + target).square() + (positive_atm - target).square())
                     + torch.mean(values["cap_values"], dim=0)
@@ -1361,11 +1378,24 @@ def run(arguments: argparse.Namespace) -> None:
                     raw_next, geometry=model.config.geometry
                 )
                 replication_scale = 1.0 / (num_states * len(fit_draws))
+                moment_surrogate = (
+                    torch.sum(pooled * (1.0e4 * objective_mean))
+                    / len(normalized_strikes)
+                    if arguments.objective_instrument_index is None
+                    else torch.sum(
+                        pooled[:, arguments.objective_instrument_index]
+                        * (
+                            1.0e4
+                            * objective_mean[
+                                :, arguments.objective_instrument_index
+                            ]
+                        )
+                    )
+                )
                 surrogate = (
                     2.0
                     * replication_scale
-                    * torch.sum(pooled * (1.0e4 * objective_mean))
-                    / len(normalized_strikes)
+                    * moment_surrogate
                     + 0.02
                     * replication_scale
                     * torch.sum((negative_atm + target) * (1.0e4 * negative_mean[:, 0]))

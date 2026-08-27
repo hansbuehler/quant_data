@@ -1,0 +1,26 @@
+{
+  "schema": "flex-process-failure-v1",
+  "failure_id": "run_six_state_joint_generic_q_existence-20260827T084057.994359Z-pid778150",
+  "timestamp_utc": "2026-08-27T08:40:57.994724+00:00",
+  "program": "run_six_state_joint_generic_q_existence",
+  "source": "main",
+  "exception": {
+    "module": "builtins",
+    "type": "KeyboardInterrupt",
+    "message": "",
+    "traceback": "Traceback (most recent call last):\n  File \"/home/hans/python/quant_data/quantdata/dysanos/flex/failure_reporting.py\", line 431, in run_guarded_cli\n    main()\n  File \"/home/hans/python/quant_data/quantdata/dysanos/flex/run_six_state_joint_generic_q_existence.py\", line 1081, in main\n    run(arguments)\n  File \"/home/hans/python/quant_data/quantdata/dysanos/flex/run_six_state_joint_generic_q_existence.py\", line 875, in run\n    surrogate.backward()\n  File \"/home/hans/vqdata/lib/python3.12/site-packages/torch/_tensor.py\", line 623, in backward\n    torch.autograd.backward(\n  File \"/home/hans/vqdata/lib/python3.12/site-packages/torch/autograd/__init__.py\", line 395, in backward\n    _engine_run_backward(\n  File \"/home/hans/vqdata/lib/python3.12/site-packages/torch/autograd/graph.py\", line 979, in _engine_run_backward\n    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nKeyboardInterrupt\n"
+  },
+  "process": {
+    "pid": 778150,
+    "parent_pid": 2105,
+    "thread": "MainThread",
+    "hostname": "Sommer",
+    "working_directory": "/home/hans/python/quant_data",
+    "argv": [
+      "/home/hans/python/quant_data/quantdata/dysanos/flex/run_six_state_joint_generic_q_existence.py"
+    ],
+    "python": "3.12.3 (main, Jun 19 2026, 12:46:00) [GCC 13.3.0]",
+    "executable": "/home/hans/vqdata/bin/python",
+    "cuda_visible_devices": null
+  }
+}
