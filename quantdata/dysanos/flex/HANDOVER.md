@@ -60,11 +60,12 @@ QUANTDATA_EXPERIMENTS
 QUANTDATA_TEMP_DATA
 ```
 
-The canonical persistent mount name for the migrated machine is
-`/mnt/storage`; do not restore the legacy mount spelling. Prefer, for example,
-`/mnt/storage/quantdata/training` through `QUANTDATA_TRAINING_DATA`; code should
-still ask `quantdata.env.locations.training` for the resolved path. Raw market
-data may be on a separate mount and must be configured rather than guessed.
+The canonical persistent local root on Sommer is
+`/home/hans/quantdata_data`. Prefer, for example,
+`/home/hans/quantdata_data/training` through `QUANTDATA_TRAINING_DATA`; code
+should still ask `quantdata.env.locations.training` for the resolved path. Raw
+market data may be on a separate mount and must be configured rather than
+guessed.
 
 Verify the resolved locations before importing or training models:
 
