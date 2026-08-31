@@ -287,13 +287,14 @@ class SharedStrikeCappedUnboundedDlvFlexGeometryConfig(
         )
 
 
-@version("1.0", dependencies=[FlexGeometryConfig])
+@version("1.1", dependencies=[FlexGeometryConfig])
 @dataclass(frozen=True, kw_only=True)
 class FlexMarketConfig:
     """Upstream market controls that do not alter the fixed model geometry."""
 
     max_num_options: int = 100_000
     smoothness: float = 0.25
+    excluded_business_dtes: tuple[float, ...] = ()
 
     def __post_init__(self) -> None:
         verify_inp(
@@ -306,6 +307,28 @@ class FlexMarketConfig:
         verify_inp(
             self.smoothness > 0.01,
             lambda: f"'smoothness' must exceed 0.01, found {self.smoothness}",
+        )
+        excluded_business_dtes = np.asarray(
+            self.excluded_business_dtes,
+            dtype=np.float64,
+        )
+        verify_inp(
+            np.all(
+                np.isfinite(excluded_business_dtes)
+                & (excluded_business_dtes >= 0.0)
+            ),
+            lambda: (
+                "'excluded_business_dtes' must contain finite non-negative "
+                f"values, found {self.excluded_business_dtes}"
+            ),
+        )
+        verify_inp(
+            len(excluded_business_dtes) <= 1
+            or np.all(np.diff(excluded_business_dtes) > 1.0e-4),
+            lambda: (
+                "'excluded_business_dtes' must be strictly increasing and "
+                f"distinct, found {self.excluded_business_dtes}"
+            ),
         )
 
 

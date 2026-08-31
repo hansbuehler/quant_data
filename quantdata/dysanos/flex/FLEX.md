@@ -841,6 +841,52 @@ well-conditioned reproducible gauge, but quote-objective fine-tuning remains
 essential. The next market-to-state or dynamics model should target the final
 100-dimensional daily coordinates, not the untouched PCA scores.
 
+### All-history weekly and daily-front affine-200 result
+
+The completed all-history comparison uses 891 dates from 2022 through August
+2025 and excludes the 0.2-day/AM-expiry population. The weekly geometry has
+nodes at 5, 10, ..., 70 business days. The daily-front geometry adds explicit
+1-, 2-, 3-, and 4-day nodes before the same weekly tail. Both joint models use
+an affine SANOS decoder with a 200-dimensional state and no additional
+nonlinear decoder.
+
+| Model | Option books | Inside bid/ask | Mean excess | Conditional mean | Conditional median |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Weekly native | 3,566,742 | 73.2911% | 1.1091 | 4.1525 | 1.4238 |
+| Weekly affine-200 | 3,566,742 | 72.9744% | 1.0996 | 4.0689 | 1.3980 |
+| Daily-front native | 3,566,258 | 81.8431% | 0.3157 | 1.7387 | 0.6891 |
+| Daily-front affine-200 | 3,566,258 | 80.0141% | 0.3320 | 1.6610 | 0.6806 |
+
+Excess is measured in half-spreads. Conditional statistics use only books with
+positive excess. Affine compression costs 0.32 percentage points of aggregate
+containment for the weekly geometry and 1.83 points for the daily-front
+geometry. By comparison, adding explicit 1--4 day nodes raises native
+containment from 73.29% to 81.84%; expiry geometry is therefore the dominant
+effect. At 1D, native containment rises from 24.10% to 93.55%.
+
+The fitted weekly AR(1) transitions are stationary. The weekly model has
+`rho(A)=0.959735` and a 16.87-week slow-mode half-life; the daily-front model
+has `rho(A)=0.953502` and a 14.56-week half-life. Gaussian innovations are much
+too thin-tailed relative to observed state returns. Independent historical-
+innovation resampling reproduces the 1W empirical innovation law by
+construction and remains materially closer than the Gaussian law at 2W and
+3W, although its tails are still lighter than the market's.
+
+The invariant decoded-IV covariance is strongly concentrated: PC1 explains
+95.11% for the weekly model and 94.31% for the daily-front model; the first
+eight PCs explain 99.76% and 99.54%, respectively. These IV-space PCs are
+post-hoc diagnostics of the decoded invariant distribution, not the 200 affine
+state coordinates themselves.
+
+Completed artifacts are stored outside the source tree at:
+
+- `/home/hans/quantdata_data/training/flex-shared-strikes/joint-direct/integer-weekly-no-am-all-history-v1`;
+- `/home/hans/quantdata_data/training/flex-shared-strikes/joint-direct/dte1-5-weekly-no-am-all-history-v1`.
+
+The presentation-ready tables, factor surfaces, simulation figures, exact
+checkpoint hashes, and handover notes are in
+[`paper/2026 09 02 SANOS ICCF HANDOVER.md`](../../../paper/2026%2009%2002%20SANOS%20ICCF%20HANDOVER.md).
+
 ## Current phase and forward program
 
 The market encoder, weekly historical law, Torch path generator, option-return

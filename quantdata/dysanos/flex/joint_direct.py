@@ -381,6 +381,19 @@ def _atomic_torch_save(payload: object, path: Path) -> None:
     temporary.replace(path)
 
 
+def _restart_train_config_identity(
+    config: JointDirectTrainConfig | dict[str, object],
+) -> dict[str, object]:
+    """Exclude the operational batch size from checkpoint compatibility."""
+    values = (
+        asdict(config)
+        if isinstance(config, JointDirectTrainConfig)
+        else dict(config)
+    )
+    values.pop("day_batch_size", None)
+    return values
+
+
 def _save_checkpoint(
     model: JointDirectDynamicsModel,
     optimizer: torch.optim.Optimizer,
@@ -440,7 +453,10 @@ def _restore_checkpoint(
         )
     if payload.get("model_config") != asdict(model.config):
         raise ValueError("Joint Direct checkpoint model configuration mismatch")
-    if payload.get("train_config") != asdict(train_config):
+    saved_train_config = payload.get("train_config")
+    if not isinstance(saved_train_config, dict) or _restart_train_config_identity(
+        saved_train_config
+    ) != _restart_train_config_identity(train_config):
         raise ValueError("Joint Direct checkpoint training configuration mismatch")
     if tuple(payload.get("market_fingerprints", ())) != market_fingerprints:
         raise ValueError("Joint Direct checkpoint market identity mismatch")

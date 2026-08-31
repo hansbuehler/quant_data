@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
+from datetime import date, timedelta
+from types import SimpleNamespace
+
 import numpy as np
 import torch
 
 from quantdata.dysanos.flex.config import (
+    FlexMarketConfig,
     JointDirectDynamicsConfig,
     PcaDecoderConfig,
     SharedStrikeCappedUnboundedDlvFlexGeometryConfig,
@@ -13,6 +18,7 @@ from quantdata.dysanos.flex.config import (
 from quantdata.dysanos.flex.joint_direct import (
     JointDirectTrainConfig,
     _convergence_audit,
+    _restart_train_config_identity,
     _save_checkpoint,
     factor_gauge_penalty,
     initialize_joint_model,
@@ -23,6 +29,14 @@ from quantdata.dysanos.flex.joint_direct import (
 from quantdata.dysanos.flex.model import (
     JointDirectDynamicsModel,
     LatentStateSanosModel,
+)
+from quantdata.dysanos.flex.run_all_history_joint_direct import (
+    _market_config_from_completion,
+    install_all_history_warm_start,
+    install_direct_decoder_initialization,
+)
+from quantdata.dysanos.flex.run_shared_strikes_full_encoder import (
+    _market_cache_geometry,
 )
 from quantdata.torch import BaseEnvironment
 
@@ -68,6 +82,31 @@ def _source(env: BaseEnvironment, *, num_days: int = 40) -> LatentStateSanosMode
             )
         )
     return model
+
+
+def test_all_history_market_config_inherits_native_exclusions() -> None:
+    expected = FlexMarketConfig(excluded_business_dtes=(0.2,))
+    restored = _market_config_from_completion(
+        {"market_config": asdict(expected)}
+    )
+
+    assert restored == expected
+
+
+def test_all_history_market_cache_retains_explicit_expiry_grid() -> None:
+    geometry = SharedStrikeCappedUnboundedDlvFlexGeometryConfig(
+        num_model_expiries=4,
+        explicit_model_business_dtes=(1.0, 2.0, 5.0, 10.0),
+    )
+
+    cached = _market_cache_geometry(geometry)
+
+    assert type(cached).__name__ == "FlexGeometryConfig"
+    assert cached.explicit_model_business_dtes == (1.0, 2.0, 5.0, 10.0)
+    np.testing.assert_array_equal(
+        cached.model_business_dtes,
+        geometry.model_business_dtes,
+    )
 
 
 def test_affine_whitening_preserves_raw_states_and_fixes_gauge() -> None:
@@ -209,6 +248,15 @@ def test_checkpoint_accepts_environment_string_device(tmp_path) -> None:
     assert payload["phase"] == "training"
 
 
+def test_joint_restart_identity_ignores_operational_day_batch_size() -> None:
+    first = JointDirectTrainConfig(day_batch_size=16)
+    second = JointDirectTrainConfig(day_batch_size=128)
+
+    assert _restart_train_config_identity(first) == _restart_train_config_identity(
+        second
+    )
+
+
 def test_convergence_audit_compares_only_fully_weighted_epochs() -> None:
     history = []
     for epoch in range(1, 81):
@@ -237,3 +285,96 @@ def test_convergence_audit_compares_only_fully_weighted_epochs() -> None:
     assert audit["converged"] is True
     assert audit["comparable_start_epoch"] == 20
     assert audit["best_epoch"] == 80
+
+
+def test_all_history_warm_start_appends_2025_states() -> None:
+    env = BaseEnvironment(precision=64, device="cpu", debug=True)
+    config = JointDirectDynamicsConfig(
+        label="joint-direct-all-history-warm-start-test",
+        state_size=4,
+        geometry=_geometry(),
+    )
+    source = JointDirectDynamicsModel(env, num_days=2, config=config)
+    target = JointDirectDynamicsModel(env, num_days=3, config=config)
+    generator = torch.Generator(device="cpu").manual_seed(1931)
+    source_2025_states = torch.randn(
+        (1, config.state_size),
+        generator=generator,
+        dtype=env.fdtype,
+    )
+    source_sha256 = "a" * 64
+    installed = install_all_history_warm_start(
+        target,
+        source_joint_payload={
+            "schema": "flex-joint-direct-dynamics-v1",
+            "phase": "complete",
+            "model_state_dict": source.state_dict(),
+        },
+        source_joint_sha256=source_sha256,
+        source_2025_payload={
+            "schema": "flex-direct-2025-quote-capacity-states-v1",
+            "source_joint_checkpoint_sha256": source_sha256,
+            "validation_dates": ["2025-01-02"],
+            "quote_optimal_states": source_2025_states,
+        },
+        dates=(date(2024, 12, 30), date(2024, 12, 31), date(2025, 1, 2)),
+    )
+
+    expected_states = torch.cat((source.daily_states.detach(), source_2025_states), dim=0)
+    torch.testing.assert_close(target.daily_states, expected_states)
+    for name, value in target.state_dict().items():
+        if name != "daily_state_embedding.weight":
+            torch.testing.assert_close(value, source.state_dict()[name])
+    assert installed["num_2022_2024_states"] == 2
+    assert installed["num_2025_states"] == 1
+    assert installed["maximum_state_roundoff"] == 0.0
+
+
+def test_complete_direct_decoder_initializes_all_history_joint_model() -> None:
+    env = BaseEnvironment(precision=64, device="cpu", debug=True)
+    geometry = _geometry()
+    source = _source(env, num_days=8)
+    target = JointDirectDynamicsModel(
+        env,
+        num_days=8,
+        config=JointDirectDynamicsConfig(
+            label="joint-direct-complete-decoder-initialization-test",
+            state_size=4,
+            geometry=geometry,
+        ),
+    )
+    dates = tuple(date(2024, 11, 4) + timedelta(weeks=index) for index in range(8))
+    fingerprints = tuple(f"market-{index}" for index in range(8))
+    days = tuple(
+        SimpleNamespace(training_fingerprint=fingerprint)
+        for fingerprint in fingerprints
+    )
+    initialization = install_direct_decoder_initialization(
+        target,
+        source_payload={
+            "schema_version": 2,
+            "phase": "complete",
+            "training_audits": {
+                "supervised": {"converged": True},
+                "market": {"converged": True},
+            },
+            "market_fingerprints": fingerprints,
+            "model_identity": {"model_config": asdict(source.config)},
+            "model_state_dict": source.state_dict(),
+        },
+        geometry=geometry,
+        days=days,  # type: ignore[arg-type]
+        dates=dates,
+        env=env,
+    )
+
+    torch.testing.assert_close(
+        target.raw_states_from_states(target.daily_states),
+        source.raw_states_from_states(source.daily_states),
+        atol=1.0e-9,
+        rtol=1.0e-9,
+    )
+    assert initialization["mode"] == "complete_all_history_affine_direct_decoder"
+    assert torch.max(
+        torch.abs(torch.linalg.eigvals(target.weekly_transition()))
+    ) < 1.0

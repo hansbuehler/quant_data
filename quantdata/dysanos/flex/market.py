@@ -257,7 +257,6 @@ def market_day_from_payload(
     config: FlexMarketConfig = FlexMarketConfig(),
 ) -> FlexMarketDay | None:
     """Extract the exact-horizon, canonical-NMS FLEX universe from a payload."""
-    del config  # The payload already records its upstream filtering identity.
     if not payload:
         return None
     market = payload["market"]
@@ -286,7 +285,14 @@ def market_day_from_payload(
     nms_eligible_books = 0
 
     for expiry_index, expiry_y in enumerate(all_expiries_y):
+        business_dte = expiry_y * DAYS_PER_YEAR
+        excluded_business_dte = any(
+            abs(business_dte - excluded) <= 1.0e-4
+            for excluded in config.excluded_business_dtes
+        )
         within_horizon = (
+            not excluded_business_dte
+            and
             expiry_y >= 0.0
             and expiry_y <= geometry.model_expiries_y[-1] + 1.0e-12
         )
@@ -422,6 +428,11 @@ def market_day_from_payload(
     )
 
 
+_CANONICAL_MARKET_MAX_BUSINESS_DAYS_TO_EXPIRY = math.ceil(
+    FlexGeometryConfig().max_business_dte
+)
+
+
 def load_market_day(
     ticker: str,
     trading_date: date,
@@ -437,7 +448,14 @@ def load_market_day(
         smoothness=config.smoothness,
         options_filter=OptionsFilter(
             max_num_options=config.max_num_options,
-            max_business_days_to_expiry=math.ceil(geometry.max_business_dte),
+            # The smooth arbitrage-free market is canonical input data rather
+            # than part of a model geometry.  Reuse the fixed-weekly market
+            # cache for every shorter model and apply the model's exact
+            # floating horizon only in ``market_day_from_payload`` below.
+            max_business_days_to_expiry=max(
+                _CANONICAL_MARKET_MAX_BUSINESS_DAYS_TO_EXPIRY,
+                math.ceil(geometry.max_business_dte),
+            ),
             # The upstream NMS5 filter is deliberately non-binding. FLEX
             # applies its required canonical-NMS interval from the AF ATM curve.
             max_nms=(-100.0, 100.0),

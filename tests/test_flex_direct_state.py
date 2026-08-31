@@ -59,6 +59,7 @@ from quantdata.dysanos.flex.training import (
     fit_latent_states,
     fit_native_states,
     initialize_pca_decoder_,
+    install_weights_only_warm_start,
     market_native_raw_initial_states,
 )
 from quantdata.torch import BaseEnvironment
@@ -571,6 +572,130 @@ def test_market_adapter_uses_fit_targets_and_exact_flex_eligibility(monkeypatch)
         day.strikes
         <= day.strike_upper_bounds[day.expiry_index] + 1.0e-15
     )
+
+
+def test_market_adapter_excludes_configured_business_dte(monkeypatch) -> None:
+    monkeypatch.setattr(
+        flex_market.ArbFreePricer,
+        "from_dict",
+        lambda payload: _FakeArbFreePricer(),
+    )
+    unfiltered = market_day_from_payload(_market_payload())
+    day = market_day_from_payload(
+        _market_payload(),
+        config=flex_market.FlexMarketConfig(excluded_business_dtes=(0.2,)),
+    )
+    assert unfiltered is not None
+    assert day is not None
+    assert not np.any(np.isclose(day.business_dtes, 0.2, atol=1.0e-4))
+    excluded_quotes = np.sum(
+        np.isclose(unfiltered.quote_business_dtes, 0.2, atol=1.0e-4)
+    )
+    assert day.num_quotes == unfiltered.num_quotes - excluded_quotes
+
+
+def test_shorter_geometry_reuses_canonical_weekly_market_cache(monkeypatch) -> None:
+    geometry = FlexGeometryConfig(
+        num_model_expiries=9,
+        explicit_model_business_dtes=(
+            1.0,
+            3.0,
+            5.0,
+            10.0,
+            15.0,
+            20.0,
+            30.0,
+            40.0,
+            60.0,
+        ),
+    )
+    captured: dict[str, object] = {}
+    expected_payload = {"market": "weekly-cache"}
+    expected_day = object()
+
+    def smooth_interpolated_market(*args, **kwargs):
+        captured["options_filter"] = kwargs["options_filter"]
+        return expected_payload
+
+    def adapt(payload, **kwargs):
+        assert payload is expected_payload
+        assert kwargs["geometry"] is geometry
+        return expected_day
+
+    monkeypatch.setattr(
+        flex_market,
+        "smooth_interpolated_market",
+        smooth_interpolated_market,
+    )
+    monkeypatch.setattr(flex_market, "market_day_from_payload", adapt)
+
+    result = flex_market.load_market_day(
+        "SPX",
+        date(2024, 3, 5),
+        geometry=geometry,
+        verbose=None,
+    )
+
+    assert result is expected_day
+    options_filter = captured["options_filter"]
+    assert options_filter.max_business_days_to_expiry == 70
+
+
+def test_native_weights_warm_start_preserves_new_expiry_buffers(
+    tmp_path: Path,
+) -> None:
+    env = BaseEnvironment(precision=64, device="cpu", debug=True)
+    source_geometry = FlexGeometryConfig(
+        num_inner_strikes=5,
+        num_model_expiries=3,
+        explicit_model_business_dtes=(1.0, 3.0, 5.0),
+    )
+    target_geometry = FlexGeometryConfig(
+        num_inner_strikes=5,
+        num_model_expiries=3,
+        explicit_model_business_dtes=(0.8, 2.8, 4.8),
+    )
+    source = NativeStateSanosModel(
+        env,
+        num_days=2,
+        config=NativeStateConfig(label="source", geometry=source_geometry),
+    )
+    target = NativeStateSanosModel(
+        env,
+        num_days=2,
+        config=NativeStateConfig(label="target", geometry=target_geometry),
+    )
+    with torch.no_grad():
+        source.daily_raw_states.copy_(
+            torch.arange(
+                source.daily_raw_states.numel(),
+                dtype=env.fdtype,
+            ).reshape_as(source.daily_raw_states)
+        )
+    checkpoint = tmp_path / "source.pt"
+    torch.save(
+        {
+            "schema_version": 2,
+            "phase": "market",
+            "model_identity": {"source": True},
+            "model_state_dict": source.state_dict(),
+        },
+        checkpoint,
+    )
+
+    audit = install_weights_only_warm_start(target, checkpoint)
+
+    torch.testing.assert_close(target.daily_raw_states, source.daily_raw_states)
+    torch.testing.assert_close(
+        target.sanos_decoder.model_expiries_y,
+        torch.as_tensor(target_geometry.model_expiries_y, dtype=env.fdtype),
+    )
+    assert not torch.equal(
+        target.sanos_decoder.model_expiries_y,
+        source.sanos_decoder.model_expiries_y,
+    )
+    assert audit["source_phase"] == "market"
+    assert audit["parameter_names"] == ["daily_raw_embedding.weight"]
 
 
 def test_market_loader_records_an_isolated_bad_day(monkeypatch) -> None:
@@ -1890,9 +2015,14 @@ def test_native_checkpoint_resumes_the_exact_training_phase(
     assert payload["training_state"]["resume_signature"][
         "training_algorithm_version"
     ] == 9
+    assert "day_batch_size" not in payload["training_state"]["resume_signature"]
     assert not payload["training_state"]["resume_signature"][
         "compile_sanos_solver"
     ]
+    # Legacy schema-2 checkpoints included this operational field. It must not
+    # block restoration of optimizer, scheduler, history, and RNG state.
+    payload["training_state"]["resume_signature"]["day_batch_size"] = 1
+    torch.save(payload, checkpoint_path)
     assert len(payload["training_state"]["optimizer_state_dicts"]) == 1
     assert len(payload["training_state"]["scheduler_state_dicts"]) == 1
     assert set(payload["training_state"]["pre_training_score"]) == {
@@ -1976,7 +2106,7 @@ def test_native_checkpoint_resumes_the_exact_training_phase(
     resumed = fit_native_states(
         (day,),
         config=config,
-        train_config=train_config,
+        train_config=replace(train_config, day_batch_size=2),
         checkpoint_path=checkpoint_path,
     )
     assert [item["epoch"] for item in resumed.history] == [1.0, 2.0]

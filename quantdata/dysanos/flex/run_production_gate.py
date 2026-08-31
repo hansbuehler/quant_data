@@ -919,6 +919,7 @@ def run_production_gates(
     expiry_benchmark_variants: tuple[
         str, ...
     ] = _DEFAULT_EXPIRY_BENCHMARK_VARIANTS,
+    native_weights_warm_start_checkpoint: Path | None = None,
 ) -> dict[str, object]:
     """Serialize all report and checkpoint mutations for one logical run."""
     if not is_filename(label):
@@ -943,6 +944,9 @@ def run_production_gates(
             pca_decoder=pca_decoder,
             expiry_benchmark=expiry_benchmark,
             expiry_benchmark_variants=expiry_benchmark_variants,
+            native_weights_warm_start_checkpoint=(
+                native_weights_warm_start_checkpoint
+            ),
             training_lock=training_lock,
         )
 
@@ -967,6 +971,7 @@ def _run_production_gates_locked(
     expiry_benchmark_variants: tuple[
         str, ...
     ] = _DEFAULT_EXPIRY_BENCHMARK_VARIANTS,
+    native_weights_warm_start_checkpoint: Path | None,
     training_lock: FileLock,
 ) -> dict[str, object]:
     """Run fitting while the caller holds the logical checkpoint lock."""
@@ -981,6 +986,10 @@ def _run_production_gates_locked(
         raise ValueError(
             "Expiry benchmark requires compression and selects its own affine "
             "decoder variants"
+        )
+    if run_compression and native_weights_warm_start_checkpoint is not None:
+        raise ValueError(
+            "Native weights-only warm starts apply only to the native stage"
         )
     if (
         len(expiry_benchmark_variants) == 0
@@ -1078,6 +1087,11 @@ def _run_production_gates_locked(
         "native_state_size": geometry.native_state_size,
         "validation_holdout": False,
         "lp_warm_start": False,
+        "native_weights_warm_start": (
+            None
+            if native_weights_warm_start_checkpoint is None
+            else native_checkpoint_proof(native_weights_warm_start_checkpoint)
+        ),
         "mode": (
             "expiry_triangular_compression"
             if run_compression and expiry_benchmark
@@ -1196,6 +1210,9 @@ def _run_production_gates_locked(
                     else train_config
                 ),
                 checkpoint_path=native_checkpoint_path,
+                weights_only_warm_start_path=(
+                    native_weights_warm_start_checkpoint
+                ),
             )
         except TrainingConvergenceError as error:
             report["status"] = "native_failed"
@@ -1423,6 +1440,16 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--fit-weight", type=float, default=0.05)
     parser.add_argument(
+        "--exclude-market-business-dtes",
+        type=float,
+        nargs="+",
+        default=(),
+        help=(
+            "Exclude market expiries at these exact business-day maturities "
+            "before training and evaluation."
+        ),
+    )
+    parser.add_argument(
         "--fixed-eta",
         type=float,
         help=(
@@ -1446,6 +1473,15 @@ def _parse_args() -> argparse.Namespace:
             "daily floating strike support shared by all model expiries."
         ),
     )
+    parser.add_argument(
+        "--model-business-dtes",
+        type=float,
+        nargs="+",
+        help=(
+            "Use these explicit, strictly increasing business-day model "
+            "expiries instead of the default equally spaced grid."
+        ),
+    )
     parser.add_argument("--epochs", type=int, default=300)
     parser.add_argument("--supervised-epochs", type=int, default=300)
     parser.add_argument("--day-batch-size", type=int, default=16)
@@ -1462,6 +1498,15 @@ def _parse_args() -> argparse.Namespace:
         help=(
             "Load matching model weights but deliberately reset optimizer, "
             "scheduler, RNG, epoch, and history."
+        ),
+    )
+    parser.add_argument(
+        "--native-weights-warm-start-checkpoint",
+        type=Path,
+        help=(
+            "Initialize compatible learned native parameters from this "
+            "checkpoint while retaining the current geometry buffers and "
+            "starting a fresh optimizer and history."
         ),
     )
     parser.add_argument(
@@ -1571,16 +1616,25 @@ def main() -> None:
             "'--fixed-eta', '--forward-mu', and '--shared-strikes' are "
             "mutually exclusive"
         )
+    geometry_kwargs: dict[str, object] = {}
+    if args.model_business_dtes is not None:
+        model_business_dtes = tuple(args.model_business_dtes)
+        geometry_kwargs = {
+            "num_model_expiries": len(model_business_dtes),
+            "explicit_model_business_dtes": model_business_dtes,
+        }
     geometry = (
-        FixedEtaFlexGeometryConfig(fixed_eta=args.fixed_eta)
+        FixedEtaFlexGeometryConfig(fixed_eta=args.fixed_eta, **geometry_kwargs)
         if args.fixed_eta is not None
-        else SharedStrikeCappedUnboundedDlvFlexGeometryConfig()
+        else SharedStrikeCappedUnboundedDlvFlexGeometryConfig(**geometry_kwargs)
         if args.shared_strikes
-        else ForwardMuFlexGeometryConfig()
+        else ForwardMuFlexGeometryConfig(**geometry_kwargs)
         if args.forward_mu
-        else FlexGeometryConfig()
+        else FlexGeometryConfig(**geometry_kwargs)
     )
-    market_config = FlexMarketConfig()
+    market_config = FlexMarketConfig(
+        excluded_business_dtes=tuple(args.exclude_market_business_dtes),
+    )
     objective_config = FlexObjectiveConfig(fit_weight=args.fit_weight)
     if args.certify_native_only:
         if args.run_compression:
@@ -1655,6 +1709,9 @@ def main() -> None:
         pca_decoder=args.pca_decoder,
         expiry_benchmark=args.expiry_benchmark,
         expiry_benchmark_variants=tuple(args.expiry_benchmark_variants),
+        native_weights_warm_start_checkpoint=(
+            args.native_weights_warm_start_checkpoint
+        ),
     )
 
 

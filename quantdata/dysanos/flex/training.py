@@ -999,7 +999,6 @@ def _resume_signature(
     return {
         "training_algorithm_version": _TRAINING_ALGORITHM_VERSION,
         "num_epochs": train_config.num_epochs,
-        "day_batch_size": train_config.day_batch_size,
         "learning_rate": train_config.learning_rate,
         "learning_rate_schedule": train_config.learning_rate_schedule,
         "learning_rate_warmup_epochs": train_config.learning_rate_warmup_epochs,
@@ -1016,6 +1015,20 @@ def _resume_signature(
             None if objective_config is None else asdict(objective_config)
         ),
     }
+
+
+def _resume_signatures_match(
+    stored_signature: object,
+    current_signature: dict[str, object],
+) -> bool:
+    """Ignore legacy operational fields when validating a continuation."""
+    if not isinstance(stored_signature, dict):
+        return False
+    normalized_stored = dict(stored_signature)
+    # Older schema-2 checkpoints treated this throughput control as part of
+    # exact optimizer compatibility even though it changes no state topology.
+    normalized_stored.pop("day_batch_size", None)
+    return normalized_stored == current_signature
 
 
 def _market_training_phase(
@@ -1047,7 +1060,10 @@ def _market_training_phase(
                 "Expected a market-phase FLEX training state, found "
                 f"{resume_state.get('phase')!r}"
             )
-        if resume_state.get("resume_signature") != resume_signature:
+        if not _resume_signatures_match(
+            resume_state.get("resume_signature"),
+            resume_signature,
+        ):
             raise ValueError(
                 "FLEX market checkpoint resume signature mismatch; use an "
                 "explicit weights-only warm start for changed settings"
@@ -1162,6 +1178,7 @@ def _market_training_phase(
                 "date_weighted_quote_objective": quote_objective_sum / date_count,
                 "dlvsq_cap_penalty": cap_penalty_sum / date_count,
                 "learning_rate": used_learning_rate,
+                "day_batch_size": float(train_config.day_batch_size),
             }
         )
         if (epoch + 1) % train_config.report_every == 0 or epoch == 0:
@@ -1189,6 +1206,7 @@ def fit_native_states(
     objective_config: FlexObjectiveConfig = FlexObjectiveConfig(),
     train_config: FlexTrainConfig = FlexTrainConfig(),
     checkpoint_path: Path | None = None,
+    weights_only_warm_start_path: Path | None = None,
 ) -> NativeStateFitResult:
     """Fit one independent bounded raw state per day by batch descent."""
     if len(market_days) == 0:
@@ -1209,6 +1227,11 @@ def fit_native_states(
         config=config,
     )
     resumed = checkpoint_path is not None and checkpoint_path.exists()
+    if resumed and weights_only_warm_start_path is not None:
+        raise ValueError(
+            "A native target checkpoint and a weights-only warm start cannot "
+            "both be supplied"
+        )
     checkpoint_payload: TrainingState | None = None
     if resumed:
         assert checkpoint_path is not None
@@ -1218,6 +1241,8 @@ def fit_native_states(
             market_days=market_days,
             require_complete=train_config.just_load,
         )
+    elif weights_only_warm_start_path is not None:
+        install_weights_only_warm_start(model, weights_only_warm_start_path)
     else:
         with torch.no_grad():
             model.daily_raw_states.copy_(
@@ -1383,7 +1408,10 @@ def _supervised_decoder_phase(
                 "Expected a supervised FLEX training state, found "
                 f"{resume_state.get('phase')!r}"
             )
-        if resume_state.get("resume_signature") != resume_signature:
+        if not _resume_signatures_match(
+            resume_state.get("resume_signature"),
+            resume_signature,
+        ):
             raise ValueError(
                 "FLEX supervised checkpoint resume signature mismatch; use "
                 "an explicit weights-only warm start for changed settings"
@@ -1465,6 +1493,7 @@ def _supervised_decoder_phase(
             {
                 "epoch": float(epoch + 1),
                 "mse": squared_error / value_count,
+                "day_batch_size": float(train_config.day_batch_size),
             }
         )
         if (epoch + 1) % train_config.report_every == 0 or epoch == 0:
@@ -2183,3 +2212,43 @@ def load_model_checkpoint(
             "phase": "legacy_model",
         }
     return cast(TrainingState, payload)
+
+
+def install_weights_only_warm_start(
+    model: FlexTorchModel,
+    path: Path,
+) -> dict[str, object]:
+    """Copy compatible learned parameters without replacing geometry buffers."""
+    payload = torch.load(path, map_location="cpu", weights_only=False)
+    if payload.get("schema_version") not in {1, 2}:
+        raise ValueError(f"Unsupported FLEX warm-start checkpoint schema in {path}")
+    source_state = payload.get("model_state_dict")
+    if not isinstance(source_state, dict):
+        raise ValueError(f"FLEX warm-start checkpoint has no model state in {path}")
+    target_parameters = dict(model.named_parameters())
+    if not target_parameters:
+        raise ValueError("FLEX warm-start target has no learned parameters")
+    with torch.no_grad():
+        for name, target in target_parameters.items():
+            source = source_state.get(name)
+            if not isinstance(source, torch.Tensor):
+                raise ValueError(
+                    f"FLEX warm-start checkpoint has no parameter {name!r} in {path}"
+                )
+            if source.shape != target.shape:
+                raise ValueError(
+                    f"FLEX warm-start parameter {name!r} has shape "
+                    f"{tuple(source.shape)}, expected {tuple(target.shape)}"
+                )
+            if not torch.isfinite(source).all().item():
+                raise ValueError(
+                    f"FLEX warm-start parameter {name!r} is non-finite in {path}"
+                )
+            target.copy_(source.to(device=target.device, dtype=target.dtype))
+    return {
+        "source_phase": payload.get("phase"),
+        "source_model_identity": json.loads(
+            json.dumps(payload.get("model_identity"))
+        ),
+        "parameter_names": sorted(target_parameters),
+    }

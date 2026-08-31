@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import time
-from dataclasses import asdict
+from dataclasses import asdict, fields
 from datetime import date
 from pathlib import Path
 from typing import cast
@@ -15,7 +15,7 @@ import torch
 from filelock import FileLock
 
 from quantdata.dysanos.flex.config import (
-    CappedUnboundedDlvFlexGeometryConfig,
+    FlexGeometryConfig,
     FlexMarketConfig,
     FlexObjectiveConfig,
     SharedStrikeCappedUnboundedDlvFlexGeometryConfig,
@@ -50,6 +50,18 @@ from quantdata.torch import BaseEnvironment
 _TRAIN_END_DATE = date(2024, 12, 31)
 _VALIDATION_START_DATE = date(2025, 1, 2)
 _VALIDATION_END_DATE = date(2025, 8, 29)
+
+
+def _market_cache_geometry(
+    geometry: SharedStrikeCappedUnboundedDlvFlexGeometryConfig,
+) -> FlexGeometryConfig:
+    """Retain every field that defines the canonical market universe."""
+    return FlexGeometryConfig(
+        **{
+            field.name: getattr(geometry, field.name)
+            for field in fields(FlexGeometryConfig)
+        }
+    )
 
 
 def _parse_arguments() -> argparse.Namespace:
@@ -148,13 +160,11 @@ def _load_markets(
     workers: int,
 ) -> tuple[FlexMarketDay, ...]:
     """Reload exactly the completed native universe from the existing cache."""
-    # Market filtering is independent of the pricing support. Using the base
-    # geometry preserves the established market-cache identity.
-    cache_geometry = CappedUnboundedDlvFlexGeometryConfig(
-        num_model_expiries=geometry.num_model_expiries,
-        num_inner_strikes=geometry.num_inner_strikes,
-        nms_range=geometry.nms_range,
-    )
+    # Market filtering is independent of the pricing parameterization, but its
+    # horizon and NMS interval are part of the market identity.  Preserve every
+    # base-geometry field, including an explicit expiry grid, exactly as the
+    # production gate does when it creates the certified checkpoint.
+    cache_geometry = _market_cache_geometry(geometry)
     pool = PoolConfig(
         num_workers=market_process_count(workers),
         threading=False,
