@@ -8,9 +8,9 @@ The weekly and daily+weekly affine-200 model runs are complete. Their fit, dynam
 
 - Revised presentation: `paper/2026 09 02 SANOS ICCF.pptx`
 - Untouched pre-review backup: `paper/2026 09 02 SANOS ICCF.pre-codex-review.pptx`
-- Revised deck: 50 slides, 13,489,669 bytes
+- Revised deck: 50 slides, 13,489,671 bytes
 - Backup deck: 34 slides, 9,560,080 bytes
-- Revised deck SHA-256: `3f995b72c22cfba5668b268bbe490e632d7efba1f45f3142f094fa314bf528e3`
+- Revised deck SHA-256: `d20bdef65ba346f438f723486068ab622d4bba19b1170f540349fef613b1146e`
 - Backup SHA-256: `78593adec45dac5e8d1db0a713a92d88c46ddd1d7759bd8c9e826660337ac52a`
 
 The conditional-Q existence experiment is paused. Its checkpoints and progress data were preserved.
@@ -182,33 +182,39 @@ carry a blue `REPLACES N` badge.
 - Slide 20: hidden original weekly-model slide.
 - Slide 21: replacement market-fit summary and all-expiry line chart.
 - Slide 22: conditional-excess curves and compression interpretation.
-- Slide 23: weekly-native 1D–69D table.
-- Slide 24: weekly-affine-200 1D–69D table.
-- Slide 25: daily+weekly-native 1D–69D table.
-- Slide 26: daily+weekly-affine-200 1D–69D table.
+- Slide 23: example fit between model expiries.
 
 ### AR dynamics section
 
-- Slide 29: hidden original AR-statistics slide.
-- Slide 30: replacement stability and tail comparison.
-- Slide 31: weekly market/normal/resampling table at 1W, 2W, and 3W.
-- Slide 32: daily+weekly market/normal/resampling table at 1W, 2W, and 3W.
+- Slide 25: hidden original AR-statistics slide.
+- Slide 26: replacement stability and tail comparison.
+- Slide 27: weekly market/normal/resampling table at 1W, 2W, and 3W.
+- Slide 28: daily+weekly market/normal/resampling table at 1W, 2W, and 3W.
 
 ### PCA section
 
-- Slide 33: hidden original PCA slide.
-- Slide 34: replacement decoded-IV PCA spectrum comparison.
-- Slide 35: invariant-mean/base IV surfaces.
-- Slide 36: weekly PC1–8 surfaces on one slide.
-- Slide 37: daily+weekly PC1–8 surfaces on one slide.
+- Slide 29: hidden original PCA slide.
+- Slide 30: replacement decoded-IV PCA spectrum comparison.
+- Slide 31: invariant-mean/base IV surfaces.
+- Slide 32: weekly PC1–8 surfaces on one slide.
+- Slide 33: daily+weekly PC1–8 surfaces on one slide. This slide is visible
+  and immediately follows the weekly PCA slide.
 
 ### Simulation and conclusion
 
-- Slide 39: hidden original simulation slide.
-- Slide 40: replacement invariant ATM term-structure draws.
-- Slide 41: paired complete invariant-volatility surface draw (“gimmick”).
-- Slide 48: hidden original summary slide.
-- Slide 49: replacement summary.
+- Slide 35: hidden original simulation slide.
+- Slide 36: replacement invariant ATM term-structure draws.
+- Slide 37: paired complete invariant-volatility surface draw (“gimmick”).
+- Slide 44: hidden original summary slide.
+- Slide 45: replacement summary.
+
+### Appendix and contact
+
+- Slide 46: weekly-native 1D–69D table.
+- Slide 47: weekly-affine-200 1D–69D table.
+- Slide 48: daily+weekly-native 1D–69D table.
+- Slide 49: daily+weekly-affine-200 1D–69D table.
+- Slide 50: contact.
 
 Slides 18 and 19 also contain small visible review remarks clarifying affine coordinates versus IV PCs and weekly dynamics steps versus expiry-node grids.
 

@@ -1,375 +1,345 @@
-# FLEX handover
+# FLEX research handover
 
-## Purpose and snapshot
+Last updated: 2026-08-31 on Sommer WSL.
 
-This document transfers the FLEX fixed-weekly SANOS research project to a new
-machine or agent. Read [`FLEX.md`](FLEX.md) first: it is the authoritative
-model specification. This file records the implementation state, evidence,
-artifact dependencies, and next actions as of 2026-08-25.
+## Executive status
 
-The last pushed research implementation before this handover was
-`572f3e0be93cf8e0367f479318e64ea87afcae83` on `main`. Source and tests live in
-`quantdata/dysanos/flex` and `tests`. Large checkpoints and numerical reports
-do not belong in the Git worktree.
+FLEX has two distinct workstreams that must not be conflated:
 
-There was no active FLEX worker at handover. Old transient `systemd` services,
-monitor heartbeats, PIDs, and mount identities are machine-local and must not
-be treated as live after migration.
+1. **Historical-law (`P`) surface dynamics.** The all-history weekly and
+   daily-front/weekly-tail affine-200 models are complete. Both have stable
+   fitted weekly AR(1) dynamics and presentation-ready market-fit, PCA, and
+   invariant-distribution diagnostics.
+2. **Existence and learning of a risk-neutral law (`Q`).** This work deliberately
+   does not assume that `Q` is a reweighted or locally adjusted version of the
+   fitted historical law. It asks whether a sufficiently flexible conditional
+   transport can directly satisfy the finite collection of one-week option-roll
+   moment restrictions. Fixed-state and six-state experiments succeeded. A
+   single joint law over all 891 historical states has not yet passed independent
+   validation and confirmation simultaneously.
 
-## One-paragraph state of the research
+The latest all-state `Q` run is paused. Its checkpoint reports `status=training`
+because it was stopped between audits, but no worker is currently expected to
+be running. Do not interpret that field as evidence of a live process. Preserve
+the retained checkpoints until the next objective is agreed.
 
-The current surface uses 14 fixed weekly SANOS expiries and 200 shared
-spot-relative inner strikes per expiry. Full native calibration is rich enough,
-but market-to-state inference generalizes poorly from 2022--2024 into 2025.
-Both Direct-200 and expiry-triangular Hierarchical-200 retain most of the static
-native capacity when one state is optimized directly per held-out date. The
-Hierarchical-200 jointly learned matrix-exponential AR(1) is the selected
-historical `P` model because it is stable and forecasts better than Direct-200.
-An exact, non-collapsed, P-free native SANOS martingale transition now solves
-all roll lines W2 through W14. The open problem is not existence of a native
-`Q`; it is constructing a useful `Q` on a state shared with the historical
-process, preferably supported by or equivalent to `P`, without relaxing the
-option martingale equalities.
+All persistent artifacts are under `/home/hans/quantdata_data`; do not restore
+old `/mnt/storage/quantdata` paths. Generated W&B logs and obsolete failure
+snapshots were cleaned from the source repository. The completed `P` models and
+paused `Q` checkpoints were not deleted.
 
-## Machine and repository setup
+## Completed all-history `P` models
 
-The intended WSL checkout is:
+Both models use 891 dates from 2022 through 2025-08-29, exclude the 0.2-day/AM
+population, and use an affine SANOS decoder
 
-```text
-~/python/quant_data
-```
+`u_t = b + W h_t`, with `h_t in R^200`.
 
-Use the project Python environment, historically `~/vqdata/bin/python`, rather
-than the system interpreter. `quant_data` and `packages/cdxcore` are expected to
-be installed editable. Follow the repository `AGENTS.md` and `STYLE_GUIDE.md`.
+There is no additional nonlinear network on top of the affine decoder.
 
-If the checkout is exposed through CIFS/OneDrive and Git reports dubious
-ownership, verify the mount first and then add only this repository as a safe
-directory. A native WSL checkout owned by the current user should not require
-that exception.
+| Model | Expiry nodes (business days) | Option books | Native inside bid/ask | Affine-200 inside bid/ask |
+| --- | --- | ---: | ---: | ---: |
+| Weekly | 5, 10, ..., 70 | 3,566,742 | 73.2911% | 72.9744% |
+| Daily-front + weekly | 1, 2, 3, 4, 5, 10, ..., 70 | 3,566,258 | 81.8431% | 80.0141% |
 
-All persistent paths must come from `quantdata.env.locations`, initialized in
-`quantdata/__init__.py`. Do not add host literals to FLEX source. Configure
-either `QUANTDATA_ROOT` for a complete standard tree or the individual values:
+The weekly model extrapolates poorly before 5D. Adding explicit 1--4D nodes is
+the main improvement; the 200-state affine compression is a much smaller fit
+cost. The fitted dynamics are:
 
-```text
-QUANTDATA_RAW_DATA
-QUANTDATA_PROCESSING_DATA
-QUANTDATA_TRAINING_DATA
-QUANTDATA_EXPERIMENTS
-QUANTDATA_TEMP_DATA
-```
+| Model | `rho(A)` | Slowest half-life | Invariant covariance effective rank |
+| --- | ---: | ---: | ---: |
+| Weekly | 0.959735 | 16.87 weeks | 193.7/200 |
+| Daily-front + weekly | 0.953502 | 14.56 weeks | 193.7/200 |
 
-The canonical persistent local root on Sommer is
-`/home/hans/quantdata_data`. Prefer, for example,
-`/home/hans/quantdata_data/training` through `QUANTDATA_TRAINING_DATA`; code
-should still ask `quantdata.env.locations.training` for the resolved path. Raw
-market data may be on a separate mount and must be configured rather than
-guessed.
+Gaussian innovations are too thin-tailed relative to market state returns.
+Replaying independently sampled historical one-week innovations is exact at 1W
+by construction and is materially closer than the Gaussian law at 2W and 3W,
+but remains lighter-tailed than the market.
 
-Verify the resolved locations before importing or training models:
+Artifacts:
 
-```bash
-~/vqdata/bin/python -c "from quantdata import env; print(env.locations)"
-```
+- Weekly:
+  `/home/hans/quantdata_data/training/flex-shared-strikes/joint-direct/integer-weekly-no-am-all-history-v1`
+- Daily-front + weekly:
+  `/home/hans/quantdata_data/training/flex-shared-strikes/joint-direct/dte1-5-weekly-no-am-all-history-v1`
+- Presentation handover: [`paper/FLEX_PRESENTATION.md`](../../../paper/FLEX_PRESENTATION.md)
 
-Completion records intentionally retain original absolute paths for
-provenance. Active FLEX loaders rebase recognized logical artifact suffixes
-beneath the current `quantdata.env.locations.training` root and accept the
-rebased file only when its SHA-256 is unchanged.
+## Independent `Q` question
 
-## Data contract
+At an observed state `(s_0, h_0)`, the front-week spot distribution is sampled
+first. For each sampled future spot `s_t`, a law generates the next front
+surface state `h_t^1`. For each of 11 in-the-money call/put instruments, the
+one-week roll return is
 
-- Underlying: SPX option books from `quantdata/dysanos/market.py`, adapted by
-  `quantdata/dysanos/flex/market.py`.
-- Market value target: the smooth arbitrage-free `fit` already returned by the
-  market pipeline.
-- Observation uncertainty: real bid and ask; the main loss minimizes excess
-  outside that interval plus a weak linear pull toward `fit`.
-- Instruments: calls and puts, including ITM options. Zero-strike calls are a
-  simulator hedge instrument, not part of the Q-existence option audit.
-- Rates/forwards: removed after upstream spot normalization.
-- Eligibility: market expiry no later than the last model expiry and strike in
-  the per-expiry canonical NMS `[-3,2]` range.
-- Date weighting: mean over quotes within each date, then mean over dates.
-  Quote-rich dates do not receive more weight.
-- Training: 729 usable dates through 2024 for the current shared-strike stack.
-- Validation: 162 dates from 2025-01-02 through 2025-08-29.
-- 2026: never read or used.
+`R_j = next option value_j - current option value_j`.
 
-The shared-strike native universe has 891 dates and 3,569,180 eligible option
-books: 2,860,776 training books and 708,404 validation books.
+The target is a conditional law satisfying
 
-## Model contract
+`E_Q[R_j | s_0, h_0] = 0`, for all 11 instruments,
 
-For expiry `j` and date `t`:
+up to independently measured Monte Carlo error. This is an existence problem
+for *a* risk-neutral conditional law over the modeled finite set of instruments.
+It is not a claim of uniqueness, equivalence to the fitted `P` law, or a complete
+continuous-strike martingale measure.
 
-```text
-x[t,j] : 202 constrained SANOS parameters
-u[t,j] : 202 unconstrained real-support coordinates
-h[t,j] : compressed real-support state used by dynamics
-```
+The most flexible successful state-local law is a spot-conditional triangular
+transport. Let `z_s` be the standard-normal transform of the sampled spot's
+probability rank under the front-week mixture. Given the current front state,
+`z_s`, and independent Gaussian noise `epsilon`, the network generates
 
-Each `x[t,j]` contains 200 DLV-squared values, one forward volatility, and one
-forward `mu`. Across 14 expiries the native state has 2,828 coordinates.
-Current raw DLV-squared coordinates use
+`h_t^1 = T_theta(h_0^1, z_s, epsilon)`.
 
-```text
-DLVsq_raw = 0.01^2 + exp(z)
-DLVsq_pricing = min(DLVsq_raw, 3^2)
-```
+The triangular monotone transform has full continuous support and no artificial
+discrete branch. Its context network has depth 3 and width 256. A single-state
+law has its own parameters; the joint model shares one state-conditional
+transport across historical states.
 
-with a separate smooth cap penalty. The mechanical cap is not implemented with
-a saturating sigmoid.
+## Control variate and reported errors
 
-The active compressed allocation is:
+The spot return is a denoiser, not part of the risk-neutral constraint. For each
+historical state and each instrument, each dataset separately estimates
 
-```text
-(23, 27, 25, 22, 19, 14, 14, 14, 7, 7, 7, 7, 7, 7)
-```
+`beta_j = Cov(R_j, S_t / S_0 - 1) / Var(S_t / S_0 - 1)`.
 
-which sums to 200. Direct-200 uses one global affine decoder.
-Hierarchical-200 has raw block relation
+The reported adjusted sample mean is
 
-```text
-u[t,j] = Decoder_j(h[t,1], ..., h[t,j]).
-```
+`mu_hat_j = mean(R_j) - beta_j mean(S_t / S_0 - 1)`.
 
-The current common strike support nevertheless depends on terminal cumulative
-strike volatility. Therefore raw block hierarchy is not yet exact option-price
-hierarchy. This distinction is the main structural issue for sequential `Q`.
+`beta` and the spot mean are recomputed independently in training, validation,
+and confirmation. Their gradients are detached. The raw return mean and raw
+variance remain mandatory diagnostics. For the earlier pass/fail criterion,
+the reporting scale was
 
-## Verified static and historical-measure results
+`max(SE(R_j), abs(beta_j) SE(S_t / S_0 - 1))`.
 
-### Static representation
+Therefore the noise-scaled statistic is
 
-| result | all quotes inside bid/ask | interpretation |
-| --- | ---: | --- |
-| Shared-strike native calibration, all 891 dates | 73.4281% | Full representation ceiling across the complete sample. |
-| Native independent 2025 calibration | 70.8692% | Held-out-date native ceiling; no market encoder. |
-| Full 2,828-state market encoder, 2025 | 26.28% | Actual train-through-2024 market-to-state validation; weak. |
-| Direct-200 quote-optimal 2025 states | 65.8973% | Frozen decoder with one optimized state per date; oracle capacity. |
-| Hierarchical-200 quote-optimal 2025 states | 63.8836% | Frozen decoder with one optimized state per date; oracle capacity. |
+`z_j = mu_hat_j / max(SE(R_j), abs(beta_j) SE(spot return))`.
 
-The short end is poor even under independent native calibration. Do not blame
-0DTE--2DTE containment primarily on compression without a new controlled
-geometry experiment.
+This adjustment must not be described as changing the payoff, changing the
+sampled spot, or constructing a density. It only removes correlated Monte Carlo
+noise from the estimator.
 
-### Historical weekly dynamics under `P`
+## `Q` experiment history and measured results
 
-Both 200-state models were learned jointly with their decoder and quote states.
-They use stationary, non-diagonal matrix-exponential weekly laws. Spot remains
-a unit-root output and is not included in the stationary surface state.
+### 1. One fixed state and 11 instruments
 
-| model | weekly spectral radius | slowest half-life | 2025 1W/2W/4W RMSE | conclusion |
-| --- | ---: | ---: | --- | --- |
-| Direct-200 | 0.96377 | 18.78 weeks | 1.20384 / 1.20618 / 1.18662 | Stable and beats persistence, but worse than unconditional at 1W and 2W. |
-| Hierarchical-200 | 0.90282 | 6.78 weeks | 1.06585 / 1.05770 / 1.06156 | Selected `P` model; beats persistence at all horizons and is close to unconditional. |
+The fixed-state vector law converged and passed independent validation using
+24,000 paths. The independent raw worst absolute mean/MC-error statistic was
+`1.436`, below the target of 2. This established that the finite 11-instrument
+moment problem is feasible at at least one historical state.
 
-The principal Hierarchical-200 defect is under-dispersion in later-expiry
-one-week innovations. This is a measured limitation, not an instability.
+Artifact:
 
-### Execution cost
+- Root:
+  `/home/hans/quantdata_data/training/flex-shared-strikes/q-existence/vector-fixed-state-exact-pooled-v1`
+- Checkpoint SHA-256:
+  `77df36bc60ba5bd5e67b706f43466e52ac4de3144e6d0ae53ffd068fd58838f7`
 
-The selected cost model is a two-hidden-layer width-64 SiLU network predicting
-log normalized price half-spread from vega, square-root TTE, NMS, log strike,
-signed call/put delta, and log approximate dollar option price. A post-estimate
-SPX tick floor handles low-premium options. Frozen-2025 date-balanced MAE is
-`0.00013639`, RMSE `0.00025765`, and R-squared `0.49975`.
+### 2. Five additional independent states
 
-## Target-measure research status
+Five difficult states were fitted independently with the generic triangular
+transport. All five completed and passed their independent validation and
+confirmation gates, each using 24,000 fit, validation, and confirmation paths.
+Together with the original state, this supplied six state-local teachers.
 
-### 1. P-relative Gaussian line: valid control, not a solution
+Artifact:
 
-The first Gaussian W2-to-W1 kernel preserved full support and was trained with
-fresh antithetic Torch paths. Validation RMSE changed from 4.064 to 4.024 bps
-spot, an improvement of only 0.98%. The law was finite and non-degenerate but
-did not establish the required conditional martingale accuracy. Generic,
-cumulative-OCE, clipped-density, and iterated transport attempts did not yield
-a robust independent-path solution and must not be presented as accepted `Q`.
+- `/home/hans/quantdata_data/training/flex-shared-strikes/q-existence/generic-independent-five-v1`
 
-### 2. Arbitrary fixed-state ATM existence: successful but narrow
+### 3. One joint transport over six states
 
-`run_atm_q_existence.py` ignores the calibrated P transition. At the retained
-2025-04-04 state it draws spot from the front SANOS distribution and learns a
-full-support conditional law for next front state. The latest pooled fixed-
-stream experiment used 24,000 fit and 24,000 disjoint validation paths.
+A single shared conditional transport was initialized from the six state-local
+teachers and trained jointly. It passed:
 
-| metric | fit | independent validation |
+| Dataset | Worst absolute noise-scaled adjusted mean | Worst-10% mean |
 | --- | ---: | ---: |
-| adjusted ATM roll mean | +0.108 bps spot | -1.153 bps spot |
-| adjusted replication MC SE | 1.405 bps | 1.132 bps |
-| raw ATM roll mean | +2.184 bps spot | +0.188 bps spot |
-| raw replication MC SE | 1.421 bps | 1.599 bps |
-| return standard deviation | 286.65 bps | 283.70 bps |
+| Independent validation | 1.568 | 1.130 |
+| Independent confirmation | 1.261 | 0.680 |
 
-This passes its semantic gate and is not a zero-return construction. It proves
-only that one state and one ATM option admit a simple conditional law. It does
-not prove one law for multiple states, strikes, or expiries, and it does not
-establish equivalence to `P`.
+This is the clearest positive evidence that the state-local solutions can be
+represented by one network rather than requiring unrelated parameters for each
+state.
 
-### 3. Exact native SANOS Q: successful feasibility anchor
+Artifact:
 
-For adjacent native SANOS densities,
+- Root:
+  `/home/hans/quantdata_data/training/flex-shared-strikes/q-existence/generic-joint-six-v1`
+- Checkpoint SHA-256:
+  `e1a0c898f2595a136095e47fa937e293d6add3ed6e784fd54acce6a132571aa9`
+
+### 4. One joint generic transport over all 891 states
+
+The six-state network was distilled into an affine state initialization and
+extended to all historical states. After 571 sweeps it was close but failed the
+agreed simultaneous gate:
+
+| Dataset | Worst absolute noise-scaled adjusted mean | Worst-10% mean | Gate |
+| --- | ---: | ---: | --- |
+| Independent validation | 1.977 | 0.810 | pass |
+| Independent confirmation | 2.245 | 1.057 | fail |
+
+The independent confirmation failure is small in aggregate but decisive for
+the stated worst-constraint target. This result must be retained as a near miss,
+not reported as an all-state risk-neutral solution.
+
+Artifact:
+
+- Root:
+  `/home/hans/quantdata_data/training/flex-shared-strikes/q-existence/generic-joint-all-history-affine-init-v1`
+- Checkpoint SHA-256:
+  `bf7d0a91d071b360da884b100e1456732e6d301be9f86c256c541e9924039122`
+
+An earlier all-state common-random vector audit also failed: its independent raw
+worst statistic was `4.104`, while the raw worst-10% mean was `1.962`. The broad
+tail was acceptable, but one or a few states remained problematic.
+
+### 5. IID path redesign and smooth price-normalized objective
+
+The next experiment corrected the sampling design so that every path contains
+one genuinely paired spot draw and one surface-state draw. Each sweep uses
+10,000 fresh paths split into ten 1,000-path cuts. Fixed validation and
+confirmation datasets each use 100,000 paths split into ten non-overlapping
+10,000-path blocks.
+
+For block `b`, state `s`, and option `j`, let
+
+`q_bsj = mu_hat_bsj / current_option_price_sj`.
+
+The smooth objective is
+
+`L = LSE_tau((mean_b q_bsj)^2) + 0.25 sum_r w_r LSE_tau(q_(r),sj^2)`,
+
+where block losses are ordered from worst to best and
+`w_r` is proportional to `0.5^r`. The first completed run used `tau=0.05`.
+Training paths were fully refreshed each sweep. Validation and confirmation
+also report exact ten-block sign-flip tests and their mutual consistency.
+
+The loss converged numerically, but the martingale diagnostics did not:
+
+| Dataset | Worst noise-scaled adjusted mean | Worst-10% mean |
+| --- | ---: | ---: |
+| Validation | 30.742 | 3.011 |
+| Confirmation | 37.036 | 3.528 |
+
+The run completed 1,465 sweeps and achieved a best validation loss of
+`3.168e-6`. This is evidence that the smooth price-normalized loss can become
+small while still missing the desired simultaneous statistical statement. It
+is an objective-alignment/generalization problem, not evidence of arbitrage.
+
+Artifact:
+
+- Root:
+  `/home/hans/quantdata_data/training/flex-shared-strikes/q-existence/vector-all-history-iid10k-smooth-price-v2`
+- Best-validation checkpoint SHA-256:
+  `c0b273fbc9dca108399097e191db0758217c5788866a195fcdacea7829663caa`
+
+A sharper tail-focused continuation used `tau=0.0015`. It was paused after 273
+sweeps. Its latest training worst/worst-10% statistics were `9.072 / 1.336`, but
+fixed validation remained `29.717 / 3.032`. The discrepancy confirms that more
+epochs alone are not the current answer.
+
+Artifact:
+
+- Root:
+  `/home/hans/quantdata_data/training/flex-shared-strikes/q-existence/vector-all-history-iid10k-smooth-price-tail-v3`
+- Best-validation checkpoint SHA-256:
+  `eeabb22c4aee28a9b67f0abec0b65820af89e94e52364da9cf508aae455f8bbe`
+
+## What has and has not been established
+
+Established:
+
+- The finite 11-instrument conditional moment problem is solvable for multiple
+  individual historical states.
+- One shared generic network solves the six tested states.
+- A joint all-history network can get close to the two-MC-error target.
+- The generic transport does not need to be derived from `P`.
+- One-to-one spot/surface path sampling and independent large audits are now
+  implemented.
+
+Not established:
+
+- No all-891-state network has passed both validation and confirmation.
+- No continuous-strike or all-expiry risk-neutral measure has been proved.
+- The learned law has not yet passed equivalence, density-floor, innovation-rank,
+  long-horizon, or sequential-expiry gates.
+- A low price-normalized smooth loss is not itself a martingale validation.
+
+A finite collection of option moments usually leaves many stochastic degrees of
+freedom, so non-uniqueness is expected. Non-existence can still arise if the
+requested moments lie outside the convex hull generated by the allowed support,
+if the transport is too restricted, if positivity/integrability constraints
+exclude the needed law, or if the option quotes themselves imply incompatible
+conditional restrictions. The current near-miss does not diagnose any of these
+as a genuine arbitrage. The successful state-local fits argue against a simple
+pointwise feasibility obstruction; the present failure is at the shared-network
+and validation level.
+
+## Recommended next `Q` step
+
+Do not resume the paused tail run unchanged. First choose a training objective
+that is aligned with the final simultaneous statistical gate.
+
+Recommended sequence:
+
+1. Start from the retained all-history generic-transport checkpoint rather than
+   from the statewise affine-vector law.
+2. Keep the genuine one-spot/one-surface draw, 10,000 fresh training paths, and
+   fixed independent 100,000-path validation and confirmation sets.
+3. Keep raw return means, raw variances, adjusted means, and worst/worst-10%
+   statistics in every report.
+4. Optimize a smooth maximum of squared means using a detached but statistically
+   meaningful scale. Compare price normalization against a stabilized estimate
+   of `max(SE(R_j), abs(beta_j) SE(spot))`; do not silently change the reporting
+   criterion when changing the loss.
+5. Use gradient accumulation or larger effective training samples to reduce
+   sweep noise before increasing model width.
+6. Require validation and confirmation to agree blockwise. Stop only when both
+   independently pass the same predeclared gate.
+7. If a small set of states remains, inspect its option-payoff Jacobian and the
+   singular values of the moment map. That distinguishes insufficient network
+   sensitivity from a potentially incompatible moment system.
+
+## Source map and verification
+
+Key source files:
+
+- `run_state_generic_q_existence.py`: state-local generic triangular transport.
+- `run_all_state_joint_generic_q_existence.py`: one generic transport over many
+  historical states.
+- `run_all_state_vector_q_existence.py`: statewise affine-vector law and control
+  variate/statistical reporting.
+- `run_all_state_vector_smooth_q_existence.py`: IID all-state smooth-objective
+  trainer with fixed validation and confirmation blocks.
+- `smooth_q_objective.py`: price-normalized LSE loss, robust block aggregation,
+  sign-flip test, and validation/confirmation consistency statistic.
+- `run_all_history_joint_direct.py`: all-history affine-200 `P` models.
+
+Focused checks at the latest source commit:
 
 ```text
-A[j] q[j] = q[j-1]
-P[j] = A[j]^(-T)
-```
-
-and the tridiagonal M-matrix structure gives a row-stochastic discrete
-martingale transition. Together with the independent mean-one lognormal
-backbone increment, this reconstructs the full next-expiry call curve.
-
-The audit used all 162 quote-optimal 2025 states. W2-to-W1 through W14-to-W13
-all passed on 162/162 dates. Worst deterministic tower residual across the
-lines was below `1.3e-12`. Every one of the 32,724 intended fixed-state ITM
-option returns had positive variance; minimum relative-return standard
-deviation was 1.609%.
-
-This is the strongest result in the project. It proves a non-collapsed native
-martingale roll, but it is P-free and uses a revealed discrete node plus its
-natural shifted grid. It does not by itself define an equivalent change of
-measure from the continuous historical `h` process.
-
-## Artifact transfer
-
-The logical artifact root is:
-
-```text
-quantdata.env.locations.training / "flex-shared-strikes"
-```
-
-It is not part of the source repository. At handover the complete tree was
-about 485 MiB. Copying it preserves all experiments; retraining is possible but
-expensive. The minimum provenance-rich current chain is:
-
-| subtree below `flex-shared-strikes` | approximate size | purpose |
-| --- | ---: | --- |
-| `capacity/` | 21 MiB | Native shared-strike calibration. |
-| `compressed-encoders/` | 26 MiB | Direct/Hierarchical-200 decoder sources. |
-| `joint-direct/v1/` | 25 MiB | Direct-200 control and target history. |
-| `joint-hierarchical/v1/` | 19 MiB | Selected P model, quote-optimal validation states, and target history. |
-| `native-sanos-q/v1/` | 17 MiB | Exact W2--W14 audits and option-return variance audit. |
-| `q-existence/` | less than 1 MiB | Latest fixed-state ATM Q-existence result. |
-
-Selected immutable hashes are:
-
-| artifact | SHA-256 |
-| --- | --- |
-| Hierarchical-200 checkpoint | `000c328dfac95a1e19ac06fc746d13b8d73097e4b9aac294364ee535a445f1ec` |
-| Hierarchical target history | `b5a53a3a8f3001d56c9ca73975bbcb27a0f7260a75c4fa85139e5cff0fc7530f` |
-| Converged 2025 quote-optimal hierarchical states | `3ee5a11da966b5fcc54cc9ae3f6da2899b57e3594104ae4a79c25713369719b9` |
-| Exact native W2--W14 report | `c43897bb85dc438c00d926ce2adc283ed8fb0a92b4e028e884f9b02d3df3fdc2` |
-| Pooled ATM Q-existence checkpoint | `959d6936b5db1a6d8f9524997d053e912dd22c138c68b8f403fc861a011150cb` |
-| Pooled ATM Q-existence report | `dfba02690b14587bbddbcf9a81b265096cf85d96bd5da204bb0791930a347141` |
-
-Do not infer completion from a checkpoint or report filename alone. Validate
-the corresponding `*-complete.json`, its schema/status/generation, artifact
-hashes, finite tensors, and semantic completion fields. Historical failure
-records may coexist with a later successful completion proof; compare their
-timestamps and generations rather than treating a `latest.failure.json` name
-as authoritative forever.
-
-## Code map
-
-- `market.py`: FLEX market adaptation and eligibility.
-- `config.py`, `model.py`, `sanos.py`, `training.py`: core geometry, state
-  transforms, SANOS pricing, and static objectives.
-- `run_shared_strikes.py`, `run_shared_strikes_capacity.py`: shared-strike
-  construction and native calibration.
-- `market_encoder.py`, `run_shared_strikes_full_encoder.py`: full market-to-
-  native validation control.
-- `joint_direct.py`, `run_shared_strikes_joint_direct.py`: jointly learned
-  Direct-200 decoder and `P` law.
-- `joint_hierarchical.py`, `run_shared_strikes_joint_hierarchical.py`: selected
-  Hierarchical-200 decoder and `P` law.
-- `weekly_simulation.py`, `weekly_measure.py`,
-  `weekly_measure_training.py`: Torch-native weekly simulation and P-relative
-  target-kernel experiments.
-- `finite_martingale_transport.py`, `native_sanos_q.py`,
-  `run_native_sanos_q_audit.py`: exact native SANOS martingale law and audits.
-- `run_atm_q_existence.py`: narrow P-free fixed-state ATM existence control.
-- `spread_cost.py`, `run_spread_ffw.py`: differentiable execution cost.
-- `failure_reporting.py`, `pipeline_monitor.py`,
-  `pipeline_monitor_watchdog.py`, `monitor_services.py`: durable failure,
-  provenance, resource, and process supervision.
-
-## Verification after migration
-
-First verify source and environment without launching training:
-
-```bash
-cd ~/python/quant_data
-git status --short --branch
-~/vqdata/bin/python -c "from quantdata import env; print(env.locations)"
-~/vqdata/bin/python -m py_compile quantdata/dysanos/flex/*.py
-```
-
-Then run the focused structural suite:
-
-```bash
-~/vqdata/bin/python -m pytest -q \
+python -m pytest -q -p no:cacheprovider \
+  tests/test_flex_direct_state.py \
   tests/test_flex_joint_direct.py \
-  tests/test_flex_joint_hierarchical.py \
-  tests/test_flex_weekly_phase3.py \
-  tests/quantdata/dysanos/flex/test_artifact_locations.py \
-  tests/quantdata/dysanos/flex/test_atm_q_existence.py \
-  tests/quantdata/dysanos/flex/test_finite_martingale_transport.py \
-  tests/quantdata/dysanos/flex/test_native_sanos_q.py \
-  tests/quantdata/dysanos/flex/test_native_sanos_q_audit.py \
-  tests/test_flex_pipeline_monitor.py \
-  tests/test_flex_pipeline_monitor_watchdog.py
+  tests/quantdata/dysanos/flex/test_smooth_q_objective.py
 ```
 
-GPU policy at handover was physical GPU 0 only. Before a real run, verify that
-`cuda:0` means physical GPU 0 under the selected `CUDA_VISIBLE_DEVICES` and run
-the small Torch/native-Q GPU tests. Do not launch training merely because CUDA
-is visible.
+Result: `60 passed`.
 
-## Ordered next steps
+Ruff import checks and Python compilation checks passed for the changed FLEX
+modules. The presentation package contains 50 slides, opens with `python-pptx`,
+and passes `ZipFile.testzip()`.
 
-1. **Complete migration verification.** Resolve locations, copy the selected
-   artifact chain, validate completion proofs and hashes, run the focused CPU
-   tests, then run a GPU0 smoke test. Record any changed dependency versions.
-2. **Make shared strikes price-triangular.** Introduce root geometry state `g`
-   and add automatic Jacobian tests showing that later expiry blocks cannot
-   move earlier option prices while `g` is fixed. Preserve the current decoder
-   and its metrics as the control.
-3. **Define the common causal state.** Include `g`, revealed discrete node `I`,
-   backbone noise, and the hierarchical continuous states. Give `P` support in
-   the same coordinates before discussing entropy or equivalence.
-4. **Solve W2 with hard constraints.** Begin at exact native `Q`, whiten and
-   SVD-reduce redundant option returns, and move toward `P` by a constrained
-   homotopy or conditional minimum-entropy projection. Do not start from an
-   unconstrained P-relative objective that can trade away martingality.
-5. **Validate per state.** Use large fixed antithetic random numbers during the
-   inner solve and equally large fresh independent paths for validation.
-   Report each option's conditional mean in MC-standard-error units and verify
-   strictly positive return variance, full innovation rank, support/Jacobian
-   bounds, and absence of long-run explosion.
-6. **Extend only after W2 passes.** Freeze the accepted first line, solve W3
-   conditional on it, and continue. Stop on material degradation and retain
-   the last valid line. The far-end newly created expiry requires its own tail
-   rule.
-7. **Optional diagnostic.** Generalize the successful one-state ATM arbitrary
-   law to many states with one conditional network. This can diagnose
-   learnability, but it is secondary to the common-state exact-Q program and
-   cannot replace multi-strike martingale tests.
+## Repository and operational cautions
 
-## Claims that must remain separate
-
-- Quote-optimal held-out `h[t]` is a decoder-capacity oracle, not a market
-  encoder.
-- The full market encoder's weak 2025 fit is real and accepted only for
-  structural research.
-- Front implied-spot sampling makes spot and the current front option
-  consistent under that sampled law; it does not repair later expiries.
-- Exact native SANOS `Q` proves martingale feasibility in its own filtration;
-  it is not yet a P-equivalent law.
-- The fixed-state ATM control proves one local conditional moment, not a common
-  multi-option or multi-state measure.
-- Unconditional zero drift is weaker than conditional zero drift at each
-  current state.
-- A live PID, checkpoint filename, or absence of a process is not completion;
-  use the durable completion proof and semantic validator.
+- Repository: `/home/hans/python/quant_data`
+- Branch: `main`
+- Completed implementation/presentation commit: `c1e123b`
+- No push was performed.
+- Two unrelated modified notebooks remain outside the FLEX commits; preserve
+  them as user work.
+- `paper/2026 09 02 SANOS ICCF.pre-codex-review.pptx` is an intentionally
+  retained local backup and is not tracked.
+- Never delete the completed `P` roots or the retained `Q` checkpoints without a
+  new explicit decision about which research branches are abandoned.

@@ -885,7 +885,7 @@ Completed artifacts are stored outside the source tree at:
 
 The presentation-ready tables, factor surfaces, simulation figures, exact
 checkpoint hashes, and handover notes are in
-[`paper/2026 09 02 SANOS ICCF HANDOVER.md`](../../../paper/2026%2009%2002%20SANOS%20ICCF%20HANDOVER.md).
+[`paper/FLEX_PRESENTATION.md`](../../../paper/FLEX_PRESENTATION.md).
 
 ## Current phase and forward program
 
