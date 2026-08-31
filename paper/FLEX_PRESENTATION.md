@@ -6,14 +6,20 @@ Last updated: 2026-08-31 (Sommer WSL)
 
 The weekly and daily+weekly affine-200 model runs are complete. Their fit, dynamics, PCA, and invariant-distribution results have been added to the presentation.
 
-- Revised presentation: `paper/2026 09 02 SANOS ICCF.pptx`
+- Revised presentation: `paper/2026 09 02 SANOS ICCF FINAL.pptx`
 - Untouched pre-review backup: `paper/2026 09 02 SANOS ICCF.pre-codex-review.pptx`
 - Revised deck: 50 slides, 13,489,671 bytes
 - Backup deck: 34 slides, 9,560,080 bytes
-- Revised deck SHA-256: `d20bdef65ba346f438f723486068ab622d4bba19b1170f540349fef613b1146e`
+- Revised deck SHA-256: `4c12fbb6551cd6ab8a5d5a297e2c6fa067dd27cb173ef8188975bd8cc9bf09ca`
 - Backup SHA-256: `78593adec45dac5e8d1db0a713a92d88c46ddd1d7759bd8c9e826660337ac52a`
 
 The conditional-Q existence experiment is paused. Its checkpoints and progress data were preserved.
+
+The `FINAL` filename was introduced to force a fresh Files-inventory preview.
+The inventory had cached an older rendering in which market-fit panels appeared
+under the stationary-surface and Dynamic Arbitrage headings. Windows PowerPoint
+renders the final deck correctly: slide 37 contains the paired stationary 3D IV
+draws, and slides 38--43 contain the Dynamic Arbitrage argument.
 
 The task-related source, tests, configuration, documentation, and final deck
 are committed together. Nothing was pushed.
