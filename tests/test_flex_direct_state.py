@@ -17,6 +17,7 @@ from quantdata.dysanos.flex import run_production_gate, run_shared_strikes
 from quantdata.dysanos.flex import training as flex_training
 from quantdata.dysanos.flex.config import (
     CappedUnboundedDlvFlexGeometryConfig,
+    FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig,
     FlexGeometryConfig,
     FlexObjectiveConfig,
     FlexTrainConfig,
@@ -167,6 +168,44 @@ def test_shared_strikes_merge_half_front_half_last_and_float_only_by_day() -> No
     assert inner_log_strikes.shape == (geometry.num_inner_strikes,)
     assert np.sum(inner_log_strikes == 0.0) == 1
     assert np.all(np.diff(inner_log_strikes) > 0.0)
+
+
+def test_fixed_relative_strikes_do_not_move_with_state_or_expiry() -> None:
+    inner = (0.8, 0.9, 1.0, 1.1, 1.25)
+    geometry = FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig(
+        num_inner_strikes=len(inner),
+        num_model_expiries=4,
+        explicit_model_business_dtes=(5.0, 10.0, 15.0, 20.0),
+        inner_relative_strikes=inner,
+    )
+    total_vols_a = total_vols_from_forward_vols_numpy(
+        np.linspace(0.15, 0.25, 4),
+        geometry=geometry,
+    )
+    total_vols_b = total_vols_from_forward_vols_numpy(
+        np.linspace(0.35, 0.45, 4),
+        geometry=geometry,
+    )
+    expected = np.array((0.4, *inner, 1.875))
+    supports_a = make_supports_from_total_vols(total_vols_a, geometry=geometry)
+    supports_b = make_supports_from_total_vols(total_vols_b, geometry=geometry)
+    np.testing.assert_allclose(supports_a, np.broadcast_to(expected, (4, 7)))
+    np.testing.assert_allclose(supports_b, supports_a)
+
+    decoder = FlexSanosDecoder(
+        BaseEnvironment(precision=64, device="cpu", debug=True),
+        geometry=geometry,
+    )
+    _, supports = decoder._support_strikes_from_forward_vols(
+        torch.tensor(
+            ((0.15, 0.20, 0.25, 0.30), (0.35, 0.40, 0.45, 0.50)),
+            dtype=torch.float64,
+        )
+    )
+    torch.testing.assert_close(
+        supports,
+        torch.tensor(expected, dtype=torch.float64).view(1, 1, -1).expand(2, 4, -1),
+    )
 
     env = BaseEnvironment(precision=64, device="cpu", debug=True)
     decoder = FlexSanosDecoder(env, geometry=geometry)
@@ -855,6 +894,17 @@ def test_shared_strikes_strong_allocation_uses_200_states() -> None:
     assert config.state_sizes_by_expiry == allocation
 
 
+def test_four_week_fixed_grid_allocations_use_200_states() -> None:
+    allocations = run_production_gate._EXPIRY_TRIANGULAR_ALLOCATIONS
+    uniform = allocations["triangular-four-week-uniform-200"]
+    front_loaded = allocations["triangular-four-week-front-loaded-200"]
+
+    assert uniform == (50, 50, 50, 50)
+    assert front_loaded == (100, 50, 25, 25)
+    assert sum(uniform) == 200
+    assert sum(front_loaded) == 200
+
+
 def test_shared_geometry_uses_the_existing_nms_market_cache_identity() -> None:
     shared = SharedStrikeCappedUnboundedDlvFlexGeometryConfig()
     cached = run_production_gate._market_cache_geometry(shared)
@@ -1068,6 +1118,23 @@ def test_compression_preserves_only_a_matching_certified_native_payload() -> Non
                 mismatched,
                 {"native": certified_native},
             )
+
+
+def test_compression_reprices_native_with_certified_batch_size() -> None:
+    requested = FlexTrainConfig(
+        day_batch_size=128,
+        just_load=False,
+        warm_start=True,
+    )
+    effective = run_production_gate._certified_native_reprice_train_config(
+        requested,
+        completed_report={"train_config": {"day_batch_size": 16}},
+    )
+
+    assert requested.day_batch_size == 128
+    assert effective.day_batch_size == 16
+    assert effective.just_load is True
+    assert effective.warm_start is False
 
 
 def test_compression_uses_exact_completed_native_market_dates() -> None:

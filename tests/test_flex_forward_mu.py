@@ -171,3 +171,40 @@ def test_conditional_pca_recovers_exact_triangular_surface() -> None:
     assert diagnostics["mse"] < 1.0e-18
     assert diagnostics["explained_variance_fraction"] > 1.0 - 1.0e-12
 
+
+def test_conditional_pca_retains_requested_low_amplitude_float32_modes() -> None:
+    geometry = _small_geometry()
+    allocation = (3, 1, 1)
+    config = TriangularPcaDecoderConfig(
+        label="triangular-pca-low-amplitude",
+        geometry=geometry,
+        state_size=sum(allocation),
+        state_sizes_by_expiry=allocation,
+    )
+    env = BaseEnvironment(precision=32, device="cpu", debug=False)
+    model = LatentStateSanosModel(env, num_days=40, config=config)
+    generator = torch.Generator().manual_seed(1730)
+    orthogonal, _ = torch.linalg.qr(
+        torch.randn(40, 3, generator=generator, dtype=torch.float64)
+    )
+    front = orthogonal * torch.tensor(
+        [1.0, 1.0e-4, 1.0e-5], dtype=torch.float64
+    )
+    states = torch.cat(
+        (
+            front,
+            torch.randn(40, 2, generator=generator, dtype=torch.float64),
+        ),
+        dim=1,
+    ).float()
+    weight = torch.randn(21, 5, generator=generator, dtype=torch.float32)
+    weight = weight * model.decoder_weight_mask
+    target = states @ weight.transpose(0, 1)
+
+    initialize_triangular_pca_decoder_(model, target)
+
+    front_scales = torch.linalg.svdvals(
+        model.daily_states[:, :3].double()
+        - torch.mean(model.daily_states[:, :3].double(), dim=0)
+    )
+    assert torch.count_nonzero(front_scales > 1.0e-8) == 3

@@ -1606,30 +1606,38 @@ def _triangular_pca_components(
     if len(state_sizes_by_expiry) != T:
         raise ValueError("Triangular PCA requires one state block per expiry")
 
+    # The smaller conditional modes are economically meaningful even when the
+    # production model is float32.  A float32 LAPACK rank tolerance can discard
+    # requested modes that remain well resolved in the source history, leaving
+    # exact zero factor/decoder pairs that cannot subsequently train through
+    # their bilinear parameterization.  Perform the small PCA problems in
+    # float64, then cast the exact factorization back to the model dtype.
+    working_raw = target_raw.to(dtype=torch.float64)
+
     scores = torch.zeros(
         (num_days, total_state_size),
-        dtype=target_raw.dtype,
+        dtype=working_raw.dtype,
         device=target_raw.device,
     )
     weight = torch.zeros(
         (geometry.native_state_size, total_state_size),
-        dtype=target_raw.dtype,
+        dtype=working_raw.dtype,
         device=target_raw.device,
     )
     bias = torch.zeros(
         geometry.native_state_size,
-        dtype=target_raw.dtype,
+        dtype=working_raw.dtype,
         device=target_raw.device,
     )
     diagnostics: list[dict[str, float]] = []
     spectra: list[torch.Tensor] = []
     state_start = 0
-    eps = torch.finfo(target_raw.dtype).eps
+    eps = torch.finfo(working_raw.dtype).eps
 
     for expiry_index, requested_rank in enumerate(state_sizes_by_expiry):
         output_start = expiry_index * block_width
         output_stop = output_start + block_width
-        block = target_raw[:, output_start:output_stop]
+        block = working_raw[:, output_start:output_stop]
         block_mean = torch.mean(block, dim=0)
         centered = block - block_mean
         bias[output_start:output_stop] = block_mean
@@ -1672,8 +1680,8 @@ def _triangular_pca_components(
             component = torch.arange(rank, device=target_raw.device)
             signs = torch.where(
                 loadings[loading_anchor, component] < 0.0,
-                -torch.ones(rank, dtype=target_raw.dtype, device=target_raw.device),
-                torch.ones(rank, dtype=target_raw.dtype, device=target_raw.device),
+                -torch.ones(rank, dtype=working_raw.dtype, device=target_raw.device),
+                torch.ones(rank, dtype=working_raw.dtype, device=target_raw.device),
             )
             loadings = loadings * signs
             new_scores = new_scores * signs
@@ -1705,7 +1713,13 @@ def _triangular_pca_components(
         )
         state_start = state_stop
 
-    return scores, weight, bias, tuple(diagnostics), tuple(spectra)
+    return (
+        scores.to(dtype=target_raw.dtype),
+        weight.to(dtype=target_raw.dtype),
+        bias.to(dtype=target_raw.dtype),
+        tuple(diagnostics),
+        tuple(value.to(dtype=target_raw.dtype) for value in spectra),
+    )
 
 
 def initialize_triangular_pca_decoder_(

@@ -69,6 +69,8 @@ _EXPIRY_TRIANGULAR_ALLOCATIONS = {
         7,
         7,
     ),
+    "triangular-four-week-uniform-200": (50, 50, 50, 50),
+    "triangular-four-week-front-loaded-200": (100, 50, 25, 25),
 }
 _EXPIRY_BENCHMARK_VARIANTS = (
     "global",
@@ -226,8 +228,19 @@ def _fit_section(
 def _markdown_report(report: dict[str, object]) -> str:
     geometry = report["geometry"]
     native_state_size = int(report.get("native_state_size", 2_815))
+    model_dtes = geometry.get("explicit_model_business_dtes")
+    if model_dtes is None:
+        first_model_dte = geometry["first_model_business_dte"]
+        last_model_dte = first_model_dte + geometry[
+            "model_expiry_step_business_days"
+        ] * (geometry["num_model_expiries"] - 1)
+    else:
+        first_model_dte = model_dtes[0]
+        last_model_dte = model_dtes[-1]
     strike_description = (
-        "one daily floating support shared across expiries"
+        "one fixed relative-strike support shared across dates and expiries"
+        if "inner_relative_strikes" in geometry
+        else "one daily floating support shared across expiries"
         if "minimum_log_spacing_fraction" in geometry
         else "expiry-specific canonical-NMS supports"
     )
@@ -241,8 +254,10 @@ def _markdown_report(report: dict[str, object]) -> str:
         "",
         f"Status: **{report['status']}**.",
         "",
-        "Geometry: canonical NMS `(-3,2)` market range, 200 inner strikes, "
-        "14 weekly model expiries from 4.8 to 69.8 business days, "
+        "Geometry: canonical NMS `(-3,2)` market range, "
+        f"{geometry['num_inner_strikes']} inner strikes, "
+        f"{geometry['num_model_expiries']} model expiries from "
+        f"{first_model_dte} to {last_model_dte} business days, "
         f"{strike_description}, "
         f"{native_state_size:,} native parameters per market date, and "
         f"{backbone_description}.",
@@ -566,6 +581,27 @@ def _certified_native_payload(
             + ", ".join(mismatches)
         )
     return dict(certified_native)
+
+
+def _certified_native_reprice_train_config(
+    train_config: FlexTrainConfig,
+    completed_report: dict[str, object],
+) -> FlexTrainConfig:
+    """Reprice the immutable native target with its certified reduction order."""
+    certified_train_config = completed_report.get("train_config")
+    if not isinstance(certified_train_config, dict):
+        raise ValueError("Completed native report has no certified train config")
+    day_batch_size = certified_train_config.get("day_batch_size")
+    if not isinstance(day_batch_size, int) or day_batch_size <= 0:
+        raise ValueError(
+            "Completed native report has an invalid certified day batch size"
+        )
+    return replace(
+        train_config,
+        day_batch_size=day_batch_size,
+        just_load=True,
+        warm_start=False,
+    )
 
 
 def _native_history_audit(
@@ -1181,7 +1217,9 @@ def _run_production_gates_locked(
     _write_report(report, output_directory=output_directory, label=label)
 
     with training_lock:
+        native_reprice_train_config = train_config
         if run_compression:
+            assert completed_native_report is not None
             _require_completed_native_report(
                 ticker=ticker,
                 dates=dates,
@@ -1192,6 +1230,10 @@ def _run_production_gates_locked(
                 output_directory=output_directory,
                 label=label,
             )
+            native_reprice_train_config = _certified_native_reprice_train_config(
+                train_config,
+                completed_report=completed_native_report,
+            )
         try:
             native_fit = fit_native_states(
                 market_days,
@@ -1200,15 +1242,7 @@ def _run_production_gates_locked(
                     geometry=geometry,
                 ),
                 objective_config=objective_config,
-                train_config=(
-                    replace(
-                        train_config,
-                        just_load=True,
-                        warm_start=False,
-                    )
-                    if run_compression
-                    else train_config
-                ),
+                train_config=native_reprice_train_config,
                 checkpoint_path=native_checkpoint_path,
                 weights_only_warm_start_path=(
                     native_weights_warm_start_checkpoint

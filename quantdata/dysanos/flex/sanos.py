@@ -9,6 +9,7 @@ import torch
 
 from quantdata.biz_calendar import DAYS_PER_YEAR
 from quantdata.dysanos.flex.config import (
+    FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig,
     FlexGeometryConfig,
     SharedStrikeCappedUnboundedDlvFlexGeometryConfig,
 )
@@ -20,6 +21,14 @@ def uses_shared_strikes(geometry: FlexGeometryConfig) -> bool:
     return isinstance(
         geometry,
         SharedStrikeCappedUnboundedDlvFlexGeometryConfig,
+    )
+
+
+def uses_fixed_relative_strikes(geometry: FlexGeometryConfig) -> bool:
+    """Return whether the support is prescribed independently of state."""
+    return isinstance(
+        geometry,
+        FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig,
     )
 
 
@@ -168,7 +177,16 @@ def make_supports_from_total_vols(
         )
         / (1.0 + geometry.nms_epsilon_y)
     )
-    if uses_shared_strikes(geometry):
+    if uses_fixed_relative_strikes(geometry):
+        fixed_inner = np.asarray(
+            geometry.inner_relative_strikes,
+            dtype=np.float64,
+        )
+        inner = np.broadcast_to(
+            fixed_inner[None, :],
+            (T, geometry.num_inner_strikes),
+        )
+    elif uses_shared_strikes(geometry):
         first_nms, last_nms = make_shared_nms_node_sets(
             num_inner_strikes=geometry.num_inner_strikes,
             nms_range=geometry.nms_range,
@@ -322,6 +340,15 @@ class FlexSanosDecoder(BaseModel):
             self.shared_atm_index = int(
                 np.sum(first_nms < 0.0) + np.sum(last_nms < 0.0)
             )
+        if uses_fixed_relative_strikes(geometry):
+            self.register_buffer(
+                "fixed_inner_relative_strikes",
+                torch.tensor(
+                    geometry.inner_relative_strikes,
+                    dtype=env.fdtype,
+                    device=env.device,
+                ),
+            )
         self.register_buffer(
             "model_expiries_y",
             torch.tensor(
@@ -408,7 +435,13 @@ class FlexSanosDecoder(BaseModel):
             )
             / (1.0 + self.geometry.nms_epsilon_y)
         )
-        if uses_shared_strikes(self.geometry):
+        if uses_fixed_relative_strikes(self.geometry):
+            inner = self.fixed_inner_relative_strikes.view(1, 1, -1).expand(
+                len(forward_vols),
+                self.geometry.num_model_expiries,
+                -1,
+            )
+        elif uses_shared_strikes(self.geometry):
             merged_log_strikes = _space_merged_log_strikes_torch(
                 torch.cat(
                     (

@@ -249,6 +249,47 @@ class CappedUnboundedDlvFlexGeometryConfig(ForwardMuFlexGeometryConfig):
         return float(np.log(self.max_dlvsq - self.min_dlvsq))
 
 
+@version("1.0", dependencies=[CappedUnboundedDlvFlexGeometryConfig])
+@dataclass(frozen=True, kw_only=True)
+class FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig(
+    CappedUnboundedDlvFlexGeometryConfig
+):
+    """Use one prescribed spot-relative strike support for every surface.
+
+    The inner grid is part of the model identity.  It is independent of the
+    decoded forward-volatility state and is shared by every expiry, market
+    date, and simulated state.
+    """
+
+    inner_relative_strikes: tuple[float, ...] = ()
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        strikes = np.asarray(self.inner_relative_strikes, dtype=np.float64)
+        verify_inp(
+            strikes.shape == (self.num_inner_strikes,),
+            lambda: (
+                "'inner_relative_strikes' must contain exactly "
+                f"{self.num_inner_strikes} values, found {strikes.shape}"
+            ),
+        )
+        verify_inp(
+            np.all(np.isfinite(strikes) & (strikes > 0.0))
+            and np.all(np.diff(strikes) > 0.0),
+            lambda: (
+                "'inner_relative_strikes' must be finite, positive, and "
+                "strictly increasing"
+            ),
+        )
+        verify_inp(
+            np.sum(strikes == 1.0) == 1,
+            lambda: (
+                "'inner_relative_strikes' must contain exactly one exact ATM "
+                f"node, found {np.sum(strikes == 1.0)}"
+            ),
+        )
+
+
 @version(
     "1.0",
     dependencies=[CappedUnboundedDlvFlexGeometryConfig],
