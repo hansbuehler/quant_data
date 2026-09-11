@@ -52,7 +52,7 @@ def footer(axes: plt.Axes, number: int) -> None:
     """Add report date and page number."""
 
     axes.plot((0.065, 0.935), (0.047, 0.047), color=GRID, linewidth=0.8)
-    axes.text(0.065, 0.026, "DLV martingale simulation | 10 Sep 2026", fontsize=7.5, color=MUTED)
+    axes.text(0.065, 0.026, "DLV martingale simulation | revised 11 Sep 2026", fontsize=7.5, color=MUTED)
     axes.text(0.935, 0.026, str(number), fontsize=7.5, color=MUTED, ha="right")
 
 
@@ -107,7 +107,14 @@ def subhead(axes: plt.Axes, text: str, y: float) -> float:
     return y - 0.033
 
 
-def formula(axes: plt.Axes, expression: str, y: float, *, color: str = NAVY) -> float:
+def formula(
+    axes: plt.Axes,
+    expression: str,
+    y: float,
+    *,
+    color: str = NAVY,
+    fontsize: float = 12,
+) -> float:
     """Draw a highlighted mathematical identity."""
 
     axes.add_patch(
@@ -121,7 +128,15 @@ def formula(axes: plt.Axes, expression: str, y: float, *, color: str = NAVY) -> 
             linewidth=0.8,
         )
     )
-    axes.text(0.5, y - 0.022, expression, ha="center", va="center", fontsize=12, color=color)
+    axes.text(
+        0.5,
+        y - 0.022,
+        expression,
+        ha="center",
+        va="center",
+        fontsize=fontsize,
+        color=color,
+    )
     return y - 0.078
 
 
@@ -129,31 +144,31 @@ def draw_process(axes: plt.Axes) -> None:
     """Draw the one-week density-first transition."""
 
     items = [
-        (0.08, "Current surface", "densities q and DLVsq"),
-        (0.27, "Density branches", "q + sqrt(h) B epsilon"),
-        (0.46, "Reveal path", "surface b, front node i"),
-        (0.65, "Condition", "transition row r_ij"),
-        (0.84, "Re-grid", "x'_j = x_j / x_i"),
+        (0.08, "Current surface", "q and DLVsq"),
+        (0.27, "Density branches", "q_m^b\nbranch marginal"),
+        (0.46, "Draw path", "b ~ π; i ~ q_1\nindependently"),
+        (0.65, "Condition", "r_ij^(b,m)\npath density"),
+        (0.84, "Re-grid", "x_j / x_i\nrelative support"),
     ]
     for index, (x, title, body) in enumerate(items):
         axes.add_patch(
             FancyBboxPatch(
-                (x - 0.072, 0.64),
+                (x - 0.072, 0.535),
                 0.145,
-                0.12,
+                0.105,
                 boxstyle="round,pad=0.012,rounding_size=0.012",
                 facecolor=WHITE if index % 2 == 0 else PALE,
                 edgecolor=BLUE if index < 4 else TEAL,
                 linewidth=1.4,
             )
         )
-        axes.text(x, 0.718, title, ha="center", fontsize=9.0, color=NAVY, weight="bold")
-        axes.text(x, 0.676, body, ha="center", fontsize=7.5, color=MUTED, linespacing=1.25)
+        axes.text(x, 0.603, title, ha="center", fontsize=8.5, color=NAVY, weight="bold")
+        axes.text(x, 0.566, body, ha="center", fontsize=6.9, color=MUTED, linespacing=1.25)
         if index < len(items) - 1:
             axes.annotate(
                 "",
-                xy=(items[index + 1][0] - 0.082, 0.70),
-                xytext=(x + 0.082, 0.70),
+                xy=(items[index + 1][0] - 0.082, 0.586),
+                xytext=(x + 0.082, 0.586),
                 arrowprops={"arrowstyle": "->", "color": MUTED, "lw": 1.2},
             )
 
@@ -207,7 +222,7 @@ def matched_table(axes: plt.Axes, bbox: tuple[float, float, float, float]) -> No
 
 
 def build() -> None:
-    """Render the seven-page summary."""
+    """Render the eight-page summary."""
 
     with PdfPages(
         OUTPUT,
@@ -219,8 +234,8 @@ def build() -> None:
     ) as pdf:
         figure, axes = page("X-only finite-grid DLV martingale simulation", "Research summary")
         axes.text(0.075, 0.865, "WEEKLY RE-GRIDDING, EXACT TOWERS, AND MONTE CARLO EVIDENCE", fontsize=9, color=BLUE, weight="bold")
-        axes.text(0.075, 0.814, "A density-first risk-neutral law for the modeled finite option surface", fontsize=17, color=NAVY, weight="bold")
-        axes.text(0.075, 0.775, "Y ≡ 1  •  all 891 certified states  •  four 1W steps  •  fp64  •  antithetic paths", fontsize=9.5, color=MUTED)
+        axes.text(0.075, 0.814, "A density-first risk-neutral law for the modeled finite option surface", fontsize=14.5, color=NAVY, weight="bold")
+        axes.text(0.075, 0.775, "Y ≡ 1  •  all 891 certified states  •  four 1W steps  •  64-bit floats  •  antithetic paths", fontsize=9.5, color=MUTED)
         axes.add_patch(FancyBboxPatch((0.075, 0.56), 0.85, 0.16, boxstyle="round,pad=0.018,rounding_size=0.012", facecolor="#EAF2FF", edgecolor="#B8CFF5"))
         axes.text(0.10, 0.682, "BOTTOM LINE", fontsize=8.5, color=BLUE, weight="bold")
         axes.text(0.10, 0.640, "The finite-grid density tower is an exact martingale construction.", fontsize=13.5, color=NAVY, weight="bold")
@@ -239,71 +254,126 @@ def build() -> None:
         pdf.savefig(figure)
         plt.close(figure)
 
+        figure, axes = page("Indices and probability law", "Notation")
+        axes.text(
+            0.075,
+            0.858,
+            "The branch marginal and the pathwise conditional density are different objects.",
+            fontsize=11.5,
+            color=NAVY,
+            weight="bold",
+        )
+        index_items = [
+            (0.075, "m", "expiry", "m = 1,…,M; T_m = t + m h"),
+            (0.295, "i", "front node", "observed at T_1; S_(t+h) = s x_i"),
+            (0.515, "j", "later node", "possible node at surviving T_m"),
+            (0.735, "b", "branch", "one of 2^F surface-shock signs"),
+        ]
+        for x, symbol, title, body in index_items:
+            axes.add_patch(
+                FancyBboxPatch(
+                    (x, 0.715),
+                    0.19,
+                    0.105,
+                    boxstyle="round,pad=0.012,rounding_size=0.010",
+                    facecolor=PALE,
+                    edgecolor=GRID,
+                )
+            )
+            axes.text(x + 0.022, 0.782, symbol, fontsize=16, color=BLUE, weight="bold")
+            axes.text(x + 0.058, 0.785, title, fontsize=9.4, color=NAVY, weight="bold")
+            axes.text(x + 0.022, 0.738, body, fontsize=7.5, color=MUTED, wrap=True)
+        y = subhead(axes, "State and branch symbols", 0.675)
+        y = bullet(axes, "All formulas condition on one fixed current state; its state/batch index is suppressed. P_t and E_t mean probability and expectation given that state's current information.", y)
+        y = bullet(axes, "t is current calendar time; h is one week; M = 4. S_t = s is the X-only spot. Y ≡ 1, so there is no independent Black spot factor.", y)
+        y = bullet(axes, "There are N_x ordered support multipliers x_j. Node j represents the cash value s x_j. The indices i and j range from 0 to N_x−1 but play the distinct roles shown above.", y)
+        y = bullet(axes, "q_m(j) is the time-t risk-neutral probability mass at node j for expiry T_m. It has unit mass and unit mean: Σ_j q_m(j)=1 and Σ_j q_m(j)x_j=1.", y)
+        y = bullet(axes, "DLV means discrete local volatility; DLVsq is its square. F = 4 is the number of DLVsq shock factors; ε_b is branch b's vector of ±1 Rademacher signs; Γ_m maps those signs into expiry-m probability-mass shocks.", y)
+        y = bullet(axes, "π_b is the probability of branch b—not the circle constant. All 2^F = 16 branches are equally weighted here, so π_b = 2^(−F) = 1/16 and Σ_b π_b = 1.", y)
+        y = bullet(axes, "q_m^b(j) is the branch-conditioned marginal before front node i is observed. r_ij^(b,m) is the probability of later node j conditional on both branch b and observed front node i; that row is the actual pathwise survivor density.", y)
+        y = formula(axes, r"$P_t(B=b,I=i)=\pi_b q_1(i),\qquad q_1^b=q_1\;(\Gamma_1=0)$", y - 0.002)
+        y = paragraph(
+            axes,
+            "The implementation draws the branch B and front-node index I independently given current information. Conditioning and re-gridding then make the rolled surface depend on the realized spot. This exact law does not model contemporaneous correlation between the raw branch shock and the front-node draw.",
+            y - 0.004,
+            width=90,
+            fontsize=8.8,
+        )
+        footer(axes, 2)
+        pdf.savefig(figure)
+        plt.close(figure)
+
         figure, axes = page("One-week construction", "Method")
         draw_process(axes)
         y = 0.855
         y = paragraph(axes, "The method steps in density space, where the martingale restriction is linear, and only then recovers DLVsq coordinates. This replaces an approximate Euler drift calculation with an exact finite-step density mean.", y)
-        y = formula(axes, r"$q_m^b = q_m + \sqrt{h}\,B_m\epsilon_b,\qquad \sum_b \pi_b q_m^b = q_m$", y - 0.015)
-        y = subhead(axes, "Implementation sequence", 0.585)
+        y = formula(axes, r"$q_m^b(j)=q_m(j)+\sqrt{h}\,[\Gamma_m\varepsilon_b]_j,\qquad \sum_b\pi_b q_m^b(j)=q_m(j)$", y - 0.015)
+        y = subhead(axes, "Implementation sequence", 0.495)
         for text in (
             "Derive density diffusion from the fixed-contract DLVsq loadings and the discrete SANOS operator.",
             "Enumerate symmetric Rademacher branches; reject a step if a branch is materially negative.",
             "Recover branch DLVsq algebraically from adjacent-expiry call values, then verify the decoder reproduces the branch density.",
-            "Sample surface branch and front node; propagate the one-hot front density through the branch to obtain conditional survivor densities.",
+            "Draw branch b with probability π_b and, independently, front node i with probability q_1(i); propagate the point mass at i to obtain r_ij^(b,m).",
             "Re-center support around realized spot. Old 2W–4W expiries become floating 1W–3W; a separate AR boundary supplies the newly issued 4W DLVsq.",
         ):
             y = bullet(axes, text, y)
         y -= 0.004
         y = subhead(axes, "What is fitted?", y)
-        y = paragraph(axes, "Only the new-4W boundary law is fitted: 25 PCA factors and a weekly VAR(1), trained on 703 pairs and checked on 155 untouched 2025 pairs. The martingale transition itself is analytical.", y)
-        footer(axes, 2)
+        y = paragraph(axes, "Only the new-4W boundary law is fitted: 25 principal-component factors and a weekly vector autoregression of order one, trained on 703 pairs and checked on 155 untouched 2025 pairs. The martingale transition itself is analytical.", y)
+        footer(axes, 3)
         pdf.savefig(figure)
         plt.close(figure)
 
         figure, axes = page("Exact re-grid martingale identity", "Proof")
         y = 0.865
-        y = paragraph(axes, "Let s be current spot, x_j the inherited cash-support multipliers, b a surface branch, and i the revealed front node. The conditional transition r_ij^(b,m) obeys both the conditional mean restriction and the two density towers.", y)
-        y = formula(axes, r"$\sum_j r_{ij}^{b,m}x_j=x_i,\quad \sum_i q_1(i)r_{ij}^{b,m}=q_m^b(j),\quad \sum_b\pi_bq_m^b(j)=q_m(j)$", y - 0.01)
-        y = paragraph(axes, "For the pure DLV factor X, set next spot to s x_i and divide the inherited support by the same node.", y - 0.005)
-        y = formula(axes, r"$S_{t+1}=s x_i,\qquad x'_j=x_j/x_i,\qquad S_{t+1}x'_j=sx_j$", y - 0.01, color=TEAL)
-        y = paragraph(axes, "A surviving fixed-cash call therefore has the same conditional value on either coordinate system.", y - 0.005)
-        y = formula(axes, r"$C_{t+1}^{b,i}(K)=\sum_jr_{ij}^{b,m}(s x_j-K)^+$", y - 0.01)
-        y = paragraph(axes, "Averaging over front node and surface branch returns the current option price exactly.", y - 0.005)
-        y = formula(axes, r"$\mathbb{E}_t[C_{t+1}(K)]=\sum_jq_m(j)(s x_j-K)^+=C_t(K)$", y - 0.01, color=GREEN)
+        y = paragraph(axes, "For survivor expiry m ≥ 2, r_ij^(b,m) is the later-node probability after branch b and front node i are both known. It obeys a conditional martingale identity, an i-to-branch tower, and a branch-to-current tower.", y)
+        y = formula(axes, r"$\sum_jr_{ij}^{b,m}x_j=x_i,\quad\sum_iq_1(i)r_{ij}^{b,m}=q_m^b(j),\quad\sum_b\pi_bq_m^b(j)=q_m(j)$", y - 0.01)
+        y = paragraph(axes, "Here S_t=s, K is a fixed cash strike, and (a)^+=max(a,0). Re-gridding divides every inherited node by the same realized front multiplier.", y - 0.005)
+        y = formula(axes, r"$S_{t+h}=sx_i,\qquad x_j'{}^{(i)}=x_j/x_i,\qquad S_{t+h}x_j'{}^{(i)}=sx_j$", y - 0.01, color=TEAL)
+        y = paragraph(axes, "The conditional call value is therefore identical on the cash grid and the re-gridded relative grid.", y - 0.005)
+        y = formula(axes, r"$C_{t+h}^{b,i,m}(K)=\sum_jr_{ij}^{b,m}(sx_j-K)^+$", y - 0.01)
+        y = paragraph(axes, "E_t means risk-neutral expectation conditional on current information. Applying both towers returns the current expiry-m call price.", y - 0.005)
+        y = formula(
+            axes,
+            r"$E_t[C_{t+h}^{m}(K)]=\sum_b\pi_b\sum_iq_1(i)C_{t+h}^{b,i,m}(K)=\sum_jq_m(j)(sx_j-K)^+=C_t^m(K)$",
+            y - 0.01,
+            color=GREEN,
+            fontsize=10.2,
+        )
         y = subhead(axes, "Consequences", y - 0.005)
         y = bullet(axes, "The result holds for every strike and payoff represented on the finite support; puts follow by parity.", y)
         y = bullet(axes, "No survivor-density interpolation is used. Re-gridding cannot introduce drift because it changes coordinates, not cash payoffs.", y)
         y = bullet(axes, "This audit is pure X: the independent Black factor is identically one, so spot moves only when the front DLV node changes.", y)
-        footer(axes, 3)
+        footer(axes, 4)
         pdf.savefig(figure)
         plt.close(figure)
 
         figure, axes = page("How zero drift is tested", "Inference")
         y = 0.86
-        y = paragraph(axes, "Antithetic members are averaged first, leaving independent pair observations. Coordinate z-scores diagnose individual returns; the joint Wald statistic accounts for their covariance.", y)
+        y = paragraph(axes, "Index a=1,…,n labels independent antithetic pairs; k=1,…,d labels spot/option return coordinates. R_ak is pair a's mean return in coordinate k, R-bar is the d-vector of sample means, and sigma-hat_k is the sample standard deviation using denominator n−1.", y)
         y = formula(axes, r"$z_k=\sqrt{n}\,\bar R_k/\hat\sigma_k,\qquad J=n\,\bar R^T\hat\Sigma^+\bar R$", y - 0.01)
-        y = paragraph(axes, "Correlation eigenmodes at or below 0.01 are discarded. With retained rank r, the reported reference is J approximately chi-square(r), and p is its upper-tail probability.", y - 0.005)
-        axes.add_patch(FancyBboxPatch((0.075, 0.555), 0.40, 0.13, boxstyle="round,pad=0.014", facecolor="#FDECEC", edgecolor="#F3B4B4"))
-        axes.text(0.095, 0.65, "SMALL p", fontsize=9, color=RED, weight="bold")
-        axes.text(0.095, 0.616, "Evidence against zero drift", fontsize=11, color=INK, weight="bold")
-        axes.text(0.095, 0.582, "Reject per test if p < 0.05", fontsize=9, color=MUTED)
-        axes.add_patch(FancyBboxPatch((0.525, 0.555), 0.40, 0.13, boxstyle="round,pad=0.014", facecolor="#EAF7EF", edgecolor="#A9D9BB"))
-        axes.text(0.545, 0.65, "LARGE p", fontsize=9, color=GREEN, weight="bold")
-        axes.text(0.545, 0.616, "Compatible with MC noise", fontsize=11, color=INK, weight="bold")
-        axes.text(0.545, 0.582, "Not proof of exact equivalence", fontsize=9, color=MUTED)
-        y = 0.505
+        y = paragraph(axes, "Sigma-hat is the d × d sample covariance of pair observations. The superscript + denotes its truncated Moore–Penrose inverse: correlation eigenmodes at or below 0.01 are discarded. If ν modes remain, the reference is J approximately chi-square(ν); p is P(chi-square(ν) ≥ observed J) under zero population means.", y - 0.005, fontsize=8.8)
+        axes.add_patch(FancyBboxPatch((0.075, 0.405), 0.40, 0.105, boxstyle="round,pad=0.014", facecolor="#FDECEC", edgecolor="#F3B4B4"))
+        axes.text(0.095, 0.478, "SMALL p", fontsize=9, color=RED, weight="bold")
+        axes.text(0.095, 0.449, "Evidence against zero drift", fontsize=10.5, color=INK, weight="bold")
+        axes.text(0.095, 0.421, "Reject per test if p < 0.05", fontsize=8.7, color=MUTED)
+        axes.add_patch(FancyBboxPatch((0.525, 0.405), 0.40, 0.105, boxstyle="round,pad=0.014", facecolor="#EAF7EF", edgecolor="#A9D9BB"))
+        axes.text(0.545, 0.478, "LARGE p", fontsize=9, color=GREEN, weight="bold")
+        axes.text(0.545, 0.449, "Compatible with MC noise", fontsize=10.5, color=INK, weight="bold")
+        axes.text(0.545, 0.421, "Not proof of exact equivalence", fontsize=8.7, color=MUTED)
+        y = 0.355
         y = subhead(axes, "Decision thresholds", y)
         y = bullet(axes, "One test: 0.05. Four pre-specified weekly looks: Bonferroni 0.0125.", y)
         y = bullet(axes, "Worst |z| above two is not an automatic rejection across many correlated options.", y)
         y = subhead(axes, "Calibration caveat", y - 0.005)
         y = paragraph(axes, "The option returns are highly collinear, and the eigenmodes are selected from a sample covariance. The nominal chi-square p-value can therefore move with sample size and cutoff. Exact tower identities and matched direct/re-grid residuals carry more weight than an isolated low p-value.", y)
-        footer(axes, 4)
+        footer(axes, 5)
         pdf.savefig(figure)
         plt.close(figure)
 
         figure, axes = page("Surviving original contracts", "Results")
         result_table(axes, (0.075, 0.60, 0.85, 0.215))
-        axes.text(0.075, 0.856, "X-only • 100,000 paths • 50,000 independent antithetic pairs • all 891 states", fontsize=9, color=MUTED)
+        axes.text(0.075, 0.856, "X-only • 100,000 paths • 50,000 independent antithetic pairs • all 891 states • bp = 10⁻⁴", fontsize=8.6, color=MUTED)
         plot_p = figure.add_axes((0.09, 0.35, 0.38, 0.18))
         plot_z = figure.add_axes((0.55, 0.35, 0.38, 0.18))
         weeks = np.arange(1, 5)
@@ -329,7 +399,7 @@ def build() -> None:
         y = bullet(axes, "All four original-contract covariance-aware tests fail to reject at 5%; each is also clear of the 0.0125 four-look cutoff.", y)
         y = bullet(axes, "The maximum option mean is at most 1.245 basis points of initial spot.", y)
         y = bullet(axes, "Exact residuals are 1e-13 or smaller, separating numerical consistency from Monte Carlo fluctuation.", y)
-        footer(axes, 5)
+        footer(axes, 6)
         pdf.savefig(figure)
         plt.close(figure)
 
@@ -351,19 +421,19 @@ def build() -> None:
         axes.text(0.095, 0.169, "RESULT", fontsize=8.5, color=BLUE, weight="bold")
         axes.text(0.095, 0.146, "This is one matched process—not two independently specified models.", fontsize=9.4, color=INK, weight="bold")
         axes.text(0.095, 0.122, "Exact direct/re-grid equality rules out coordinate drift; the low p is covariance-mode sensitive.", fontsize=8.8, color=MUTED)
-        footer(axes, 6)
+        footer(axes, 7)
         pdf.savefig(figure)
         plt.close(figure)
 
         figure, axes = page("Boundary behavior and assessment", "Limitations")
         y = 0.86
         y = paragraph(axes, "At an extreme finite support node, a bounded martingale must stay there. If x_0 is the lowest node and the front draw selects it, every x_j is at least x_0.", y)
-        y = formula(axes, r"$\sum_j r_{0j}x_j=x_0\quad\Longrightarrow\quad r_{00}=1$", y - 0.01, color=RED)
+        y = formula(axes, r"$\sum_j r_{0j}^{b,m}x_j=x_0\quad\Longrightarrow\quad r_{00}^{b,m}=1$", y - 0.01, color=RED)
         y = paragraph(axes, "The conditional density becomes a point mass and survivor options become intrinsic. Interior DLVsq coordinates are then price-unidentified: the positive-density formula divides by q and ceases to apply. The implementation's fallback continuation is a numerical convention invisible to the absorbed X law.", y - 0.005)
         y = subhead(axes, "Observed in the X-only four-week run", y - 0.01)
         y = bullet(axes, "Boundary-node incidence: 0.003%, 0.003%, 0.003%, and 0.006% over weeks 1–4.", y)
         y = bullet(axes, "Median effective front nodes: 34.81 at week 1 and 38.75 at week 4.", y)
-        y = bullet(axes, "At week 4, p01 effective nodes = 7.44 and p99 largest atom = 27.45%.", y)
+        y = bullet(axes, "At week 4, the first-percentile effective-node count is 7.44 and the 99th-percentile largest atom is 27.45%.", y)
         y = subhead(axes, "What would remove the artifact?", y - 0.005)
         y = bullet(axes, "A genuine unbounded tail continuation or dynamic support expansion before the boundary is selected.", y)
         y = bullet(axes, "A tail atom with an internal conditional distribution, rather than treating it as one terminal point.", y)
@@ -371,7 +441,7 @@ def build() -> None:
         y = subhead(axes, "Assessment", y - 0.005)
         y = paragraph(axes, "The approach establishes an internally consistent X-only risk-neutral law for the modeled finite surface. It preserves survivor prices exactly and remains stable through four weekly rolls. It is not a uniqueness result or a continuous-strike, unbounded-support construction. The next research step is explicit tail/support modeling.", y, weight="bold")
         axes.text(0.075, 0.081, "Reviewed independently with QuantAgent: tower proof, re-grid identity, boundary degeneracy, and interpretation of z/J/p.", fontsize=8.2, color=MUTED)
-        footer(axes, 7)
+        footer(axes, 8)
         pdf.savefig(figure)
         plt.close(figure)
 
