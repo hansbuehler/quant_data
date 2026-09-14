@@ -1,4 +1,4 @@
-"""Train direct-utility policies at fixed notionals on one physical DLV tower."""
+"""Train direct-utility policies at fixed notionals on one DLV tower path law."""
 
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ from quantdata.dysanos.flex.fixed_expiry_ar1 import (
 from quantdata.dysanos.flex.fixed_grid_dlv_attempt2_triangular import (
     TriangularFixedGridState,
     triangular_fixed_grid_physical_roll,
+    triangular_fixed_grid_roll,
 )
 from quantdata.dysanos.flex.market_encoder import write_json_atomic
 from quantdata.dysanos.flex.model import bound_native_raw
@@ -90,6 +91,27 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--training-batch-size", type=int, default=10_000)
     parser.add_argument("--antithetic-pairs-per-block", type=int, default=50)
     parser.add_argument("--innovation-rank", type=int, default=25)
+    parser.add_argument(
+        "--path-law",
+        choices=("physical", "analytic"),
+        default="physical",
+        help="physical uses zero raw log-DLV drift; analytic uses the theoretical DLVsq drift",
+    )
+    parser.add_argument(
+        "--analytic-num-substeps",
+        type=int,
+        default=10,
+        help="stochastic-Heun substeps per week when --path-law=analytic",
+    )
+    parser.add_argument(
+        "--state-feature-mode",
+        choices=("density", "full"),
+        default="density",
+        help=(
+            "policy information: density is the legacy square-root density tower; "
+            "full additionally supplies live log-DLVsq slabs and log spot"
+        ),
+    )
     parser.add_argument("--hidden-width", type=int, default=1_024)
     parser.add_argument("--hidden-layers", type=int, default=2)
     parser.add_argument("--epochs", type=int, default=500)
@@ -106,6 +128,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--residual-adversary-notionals", default="4096")
     parser.add_argument("--residual-base-weights-checkpoint", type=Path)
     parser.add_argument("--residual-base-uniform", action="store_true")
+    parser.add_argument(
+        "--residual-raw-returns",
+        action="store_true",
+        help="train the residual adversary on the original option returns rather than beta/PCA factors",
+    )
     parser.add_argument("--residual-checkpoint", type=Path)
     parser.add_argument("--residual-adversary-learning-rate", type=float, default=1.0e-6)
     parser.add_argument(
@@ -192,6 +219,8 @@ def _validate_arguments(arguments: argparse.Namespace) -> tuple[float, ...]:
         <= 0
     ):
         raise ValueError("rank, architecture, epochs, monitoring, and bootstrap must be positive")
+    if arguments.analytic_num_substeps <= 0:
+        raise ValueError("analytic-num-substeps must be positive")
     if (
         not math.isfinite(arguments.learning_rate)
         or arguments.learning_rate <= 0.0
@@ -250,16 +279,44 @@ def _physical_tower_dataset(
     path_batch_size: int,
     pairs_per_block: int,
     seed: int,
+    state_feature_mode: str,
+    path_law: str,
+    analytic_num_substeps: int,
 ) -> PhysicalTowerDataset:
-    """Generate the specified zero-raw-drift physical shrinking tower."""
+    """Generate a physical or analytical-DLVsq shrinking tower."""
 
     device = parameters.dlvsqs.device
     dtype = parameters.dlvsqs.dtype
     rank = raw_log_loadings.shape[-1]
     generator = torch.Generator(device=device).manual_seed(seed)
-    feature_parts: list[list[torch.Tensor]] = [[] for _ in range(4)]
-    return_parts: list[list[torch.Tensor]] = [[] for _ in range(4)]
-    spot_return_parts: list[torch.Tensor] = []
+    if state_feature_mode not in {"density", "full"}:
+        raise ValueError(f"unsupported state feature mode: {state_feature_mode}")
+    if path_law not in {"physical", "analytic"}:
+        raise ValueError(f"unsupported path law: {path_law}")
+    if analytic_num_substeps <= 0:
+        raise ValueError("analytic_num_substeps must be positive")
+    num_nodes = surface.densities.shape[-1]
+    num_inner = parameters.dlvsqs.shape[-1]
+    feature_sizes = []
+    for trade_week in range(4):
+        live_expiries = 4 - trade_week
+        density_size = live_expiries * num_nodes
+        if state_feature_mode == "density":
+            feature_sizes.append(density_size)
+        else:
+            feature_sizes.append(density_size + live_expiries * num_inner + 1)
+    feature_values = tuple(
+        torch.empty((num_paths, size), dtype=torch.float32, device=device) for size in feature_sizes
+    )
+    return_values = tuple(
+        torch.empty(
+            (num_paths, (4 - trade_week) * len(fixed_cash_strikes)),
+            dtype=torch.float32,
+            device=device,
+        )
+        for trade_week in range(4)
+    )
+    spot_return_values = torch.empty((num_paths, 4), dtype=torch.float32, device=device)
     maximum_mass_residual = 0.0
     maximum_forward_residual = 0.0
     minimum_density = float("inf")
@@ -271,15 +328,32 @@ def _physical_tower_dataset(
     for start in range(0, num_paths, path_batch_size):
         paths = min(path_batch_size, num_paths - start)
         pairs = paths // 2
-        normal_half = torch.randn(
-            pairs,
-            4,
-            rank,
-            dtype=dtype,
-            device=device,
-            generator=generator,
-        )
-        normals = torch.stack((normal_half, -normal_half), dim=1).reshape(paths, 4, rank)
+        if path_law == "physical":
+            normal_half = torch.randn(
+                pairs,
+                4,
+                rank,
+                dtype=dtype,
+                device=device,
+                generator=generator,
+            )
+            normals = torch.stack((normal_half, -normal_half), dim=1).reshape(paths, 4, rank)
+        else:
+            normal_half = torch.randn(
+                pairs,
+                4,
+                analytic_num_substeps,
+                rank,
+                dtype=dtype,
+                device=device,
+                generator=generator,
+            )
+            normals = torch.stack((normal_half, -normal_half), dim=1).reshape(
+                paths,
+                4,
+                analytic_num_substeps,
+                rank,
+            )
         uniforms = _randomized_stratified_antithetic_uniforms(
             num_paths=paths,
             num_weeks=4,
@@ -297,44 +371,67 @@ def _physical_tower_dataset(
         batch_spot_returns: list[torch.Tensor] = []
         for trade_week in range(4):
             num_live_expiries = 4 - trade_week
-            feature_parts[trade_week].append(
-                torch.sqrt(torch.clamp_min(state.densities, 0.0)).reshape(paths, -1).float()
-            )
+            density_features = torch.sqrt(torch.clamp_min(state.densities, 0.0)).reshape(paths, -1)
+            if state_feature_mode == "density":
+                features = density_features
+            else:
+                # The full Markov state for this fixed-grid simulator consists
+                # of the conditional density tower, live local-variance tower,
+                # and current spot. The next Gaussian innovation is deliberately
+                # excluded because it is not known at the trading time.
+                log_dlvsqs = torch.log(state.dlvsqs - geometry.min_dlvsq).reshape(paths, -1)
+                log_spot = torch.log(current_spot)[:, None]
+                features = torch.cat((density_features, log_dlvsqs, log_spot), dim=1)
+            feature_values[trade_week][start : start + paths] = features.float()
             option_signs = torch.where(
                 fixed_cash_strikes[None] <= current_spot[:, None],
                 1.0,
                 -1.0,
             )
             live_loadings = raw_log_loadings[:num_live_expiries]
-            raw_innovation = calendar_time_increment_y**0.5 * torch.einsum(
-                "tif,bf->bti", live_loadings, normals[:, trade_week]
-            )
-            maximum_absolute_raw_innovation = max(
-                maximum_absolute_raw_innovation,
-                float(torch.max(torch.abs(raw_innovation))),
-            )
-            roll = triangular_fixed_grid_physical_roll(
-                model.sanos_decoder,
-                state,
-                raw_log_loadings=live_loadings,
-                minimum_dlvsq=geometry.min_dlvsq,
-                expiry_time_increment_y=model.sanos_decoder.model_dts_y[0],
-                calendar_time_increment_y=calendar_time_increment_y,
-                standard_normals=normals[:, trade_week],
-                uniforms=uniforms[:, trade_week],
-                fixed_cash_strikes=fixed_cash_strikes,
-                option_signs=option_signs,
-            )
+            if path_law == "physical":
+                raw_innovation = calendar_time_increment_y**0.5 * torch.einsum(
+                    "tif,bf->bti", live_loadings, normals[:, trade_week]
+                )
+                maximum_absolute_raw_innovation = max(
+                    maximum_absolute_raw_innovation,
+                    float(torch.max(torch.abs(raw_innovation))),
+                )
+                roll = triangular_fixed_grid_physical_roll(
+                    model.sanos_decoder,
+                    state,
+                    raw_log_loadings=live_loadings,
+                    minimum_dlvsq=geometry.min_dlvsq,
+                    expiry_time_increment_y=model.sanos_decoder.model_dts_y[0],
+                    calendar_time_increment_y=calendar_time_increment_y,
+                    standard_normals=normals[:, trade_week],
+                    uniforms=uniforms[:, trade_week],
+                    fixed_cash_strikes=fixed_cash_strikes,
+                    option_signs=option_signs,
+                )
+            else:
+                roll = triangular_fixed_grid_roll(
+                    model.sanos_decoder,
+                    state,
+                    raw_log_loadings=live_loadings,
+                    minimum_dlvsq=geometry.min_dlvsq,
+                    expiry_time_increment_y=model.sanos_decoder.model_dts_y[0],
+                    calendar_time_increment_y=calendar_time_increment_y,
+                    standard_normals=normals[:, trade_week],
+                    uniforms=uniforms[:, trade_week],
+                    fixed_cash_strikes=fixed_cash_strikes,
+                    option_signs=option_signs,
+                )
             prices = roll.initial_call_values
             if not bool(torch.all(torch.isfinite(prices) & (prices > 0.0))):
-                raise RuntimeError("physical tower produced a nonpositive ITM price")
+                raise RuntimeError("tower path law produced a nonpositive ITM price")
             minimum_itm_price = min(minimum_itm_price, float(torch.min(prices)))
             next_spot = roll.revealed_spot
             batch_spot_returns.append(next_spot / current_spot - 1.0)
             one_step_returns = (roll.final_call_values / prices - 1.0).reshape(paths, -1)
             if not bool(torch.all(torch.isfinite(one_step_returns))):
-                raise RuntimeError("physical tower produced a non-finite option return")
-            return_parts[trade_week].append(one_step_returns.float())
+                raise RuntimeError("tower path law produced a non-finite option return")
+            return_values[trade_week][start : start + paths] = one_step_returns.float()
             maximum_mass_residual = max(maximum_mass_residual, float(roll.maximum_mass_residual))
             maximum_forward_residual = max(
                 maximum_forward_residual, float(roll.maximum_forward_residual)
@@ -343,15 +440,15 @@ def _physical_tower_dataset(
             current_spot = next_spot
             if trade_week < 3:
                 if roll.next_state is None:
-                    raise RuntimeError("physical tower ended before the final expiry")
+                    raise RuntimeError("tower path law ended before the final expiry")
                 state = roll.next_state
 
-        spot_return_parts.append(torch.stack(batch_spot_returns, dim=1).float())
+        spot_return_values[start : start + paths] = torch.stack(batch_spot_returns, dim=1).float()
         print(f"generated {start + paths}/{num_paths} paths (seed {seed})", flush=True)
     return PhysicalTowerDataset(
-        features_by_time=tuple(torch.cat(parts, dim=0) for parts in feature_parts),
-        returns_by_time=tuple(torch.cat(parts, dim=0) for parts in return_parts),
-        spot_returns=torch.cat(spot_return_parts, dim=0),
+        features_by_time=feature_values,
+        returns_by_time=return_values,
+        spot_returns=spot_return_values,
         paths_per_independent_block=2 * pairs_per_block,
         diagnostics={
             "num_paths": num_paths,
@@ -362,6 +459,14 @@ def _physical_tower_dataset(
             "maximum_mass_residual": maximum_mass_residual,
             "maximum_forward_residual": maximum_forward_residual,
             "maximum_absolute_raw_log_dlv_innovation": (maximum_absolute_raw_innovation),
+            "state_feature_mode": state_feature_mode,
+            "state_feature_definition": (
+                "sqrt live conditional density tower"
+                if state_feature_mode == "density"
+                else "sqrt live conditional density tower, live log(DLVsq-minimum), and log spot"
+            ),
+            "path_law": path_law,
+            "analytic_num_substeps": (analytic_num_substeps if path_law == "analytic" else None),
         },
     )
 
@@ -1078,7 +1183,7 @@ def _residual_adversary_checkpoint(
     report: dict[str, object],
     base_checkpoint: Path | None,
     empirical_q_weights: torch.Tensor,
-    beta_whitening: BetaWhiteningTransform,
+    beta_whitening: BetaWhiteningTransform | None,
 ) -> dict[str, object]:
     """Return a self-contained certificate checkpoint without copying base Q."""
 
@@ -1089,18 +1194,24 @@ def _residual_adversary_checkpoint(
         "model_state_dict": policy.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
         "empirical_q_weights": empirical_q_weights.cpu(),
-        "beta_whitening": {
-            "beta_by_time": tuple(value.cpu() for value in beta_whitening.beta_by_time),
-            "spot_scale_by_time": tuple(value.cpu() for value in beta_whitening.spot_scale_by_time),
-            "eigenvectors_by_time": tuple(
-                value.cpu() for value in beta_whitening.eigenvectors_by_time
-            ),
-            "inverse_sqrt_eigenvalues_by_time": tuple(
-                value.cpu() for value in beta_whitening.inverse_sqrt_eigenvalues_by_time
-            ),
-            "noise_seed": beta_whitening.noise_seed,
-            "diagnostics": beta_whitening.diagnostics,
-        },
+        "beta_whitening": (
+            None
+            if beta_whitening is None
+            else {
+                "beta_by_time": tuple(value.cpu() for value in beta_whitening.beta_by_time),
+                "spot_scale_by_time": tuple(
+                    value.cpu() for value in beta_whitening.spot_scale_by_time
+                ),
+                "eigenvectors_by_time": tuple(
+                    value.cpu() for value in beta_whitening.eigenvectors_by_time
+                ),
+                "inverse_sqrt_eigenvalues_by_time": tuple(
+                    value.cpu() for value in beta_whitening.inverse_sqrt_eigenvalues_by_time
+                ),
+                "noise_seed": beta_whitening.noise_seed,
+                "diagnostics": beta_whitening.diagnostics,
+            }
+        ),
         "report": report,
     }
 
@@ -1586,6 +1697,9 @@ def run(arguments: argparse.Namespace) -> None:
             path_batch_size=arguments.path_generation_batch_size,
             pairs_per_block=arguments.antithetic_pairs_per_block,
             seed=arguments.training_seed,
+            state_feature_mode=arguments.state_feature_mode,
+            path_law=arguments.path_law,
+            analytic_num_substeps=arguments.analytic_num_substeps,
         )
         validation_data = None
         if arguments.validation_paths:
@@ -1600,6 +1714,9 @@ def run(arguments: argparse.Namespace) -> None:
                 path_batch_size=arguments.path_generation_batch_size,
                 pairs_per_block=arguments.antithetic_pairs_per_block,
                 seed=arguments.validation_seed,
+                state_feature_mode=arguments.state_feature_mode,
+                path_law=arguments.path_law,
+                analytic_num_substeps=arguments.analytic_num_substeps,
             )
     audit_data = training_data if validation_data is None else validation_data
     audit_seed = arguments.training_seed if validation_data is None else arguments.validation_seed
@@ -1629,6 +1746,9 @@ def run(arguments: argparse.Namespace) -> None:
             "validation_paths",
             "antithetic_pairs_per_block",
             "innovation_rank",
+            "path_law",
+            "analytic_num_substeps",
+            "state_feature_mode",
             "hidden_width",
             "hidden_layers",
             "action_penalty",
@@ -1901,11 +2021,15 @@ def run(arguments: argparse.Namespace) -> None:
             base_q_weights = base_q_weights / torch.mean(base_q_weights)
             base_q_label = str(arguments.residual_base_weights_checkpoint)
             residual_parent_checkpoint = arguments.residual_base_weights_checkpoint
-        factor_dataset, beta_whitening = _beta_whitened_dataset(
-            training_data,
-            maximum_condition_number=(arguments.residual_factor_maximum_condition_number),
-            noise_seed=arguments.residual_factor_noise_seed,
-        )
+        if arguments.residual_raw_returns:
+            factor_dataset = training_data
+            beta_whitening = None
+        else:
+            factor_dataset, beta_whitening = _beta_whitened_dataset(
+                training_data,
+                maximum_condition_number=(arguments.residual_factor_maximum_condition_number),
+                noise_seed=arguments.residual_factor_noise_seed,
+            )
         residual_started = perf_counter()
         (
             residual_adversary,
@@ -1938,31 +2062,35 @@ def run(arguments: argparse.Namespace) -> None:
             batch_size=arguments.training_batch_size,
         )
         residual_adversary["seconds"] = perf_counter() - residual_started
-        residual_adversary["beta_whitening"] = {
-            "definition": (
-                "spot/std(spot) plus full-rank PCA whitening of "
-                "raw option return - fixed physical beta*spot, with fixed-seed "
-                "antithetic Gaussian noise only below the eigenvalue floor; "
-                "no mean subtraction"
-            ),
-            "beta_scope": (
-                "computed once under the original equally weighted fixed paths; detached"
-            ),
-            "diagnostics": beta_whitening.diagnostics,
-            "noise_seed": beta_whitening.noise_seed,
-        }
+        if beta_whitening is None:
+            residual_adversary["trading_instruments"] = "raw option returns"
+        else:
+            residual_adversary["beta_whitening"] = {
+                "definition": (
+                    "spot/std(spot) plus full-rank PCA whitening of "
+                    "raw option return - fixed physical beta*spot, with fixed-seed "
+                    "antithetic Gaussian noise only below the eigenvalue floor; "
+                    "no mean subtraction"
+                ),
+                "beta_scope": (
+                    "computed once under the original equally weighted fixed paths; detached"
+                ),
+                "diagnostics": beta_whitening.diagnostics,
+                "noise_seed": beta_whitening.noise_seed,
+            }
         residual_adversary["candidate_raw_martingale_audit"] = _weighted_martingale_audit(
             training_data,
             residual_q_weights,
             bootstrap_samples=arguments.final_bootstrap_samples,
             bootstrap_seed=audit_seed + 2_000_000,
         )
-        residual_adversary["candidate_factor_martingale_audit"] = _weighted_martingale_audit(
-            factor_dataset,
-            residual_q_weights,
-            bootstrap_samples=arguments.final_bootstrap_samples,
-            bootstrap_seed=audit_seed + 3_000_000,
-        )
+        if beta_whitening is not None:
+            residual_adversary["candidate_factor_martingale_audit"] = _weighted_martingale_audit(
+                factor_dataset,
+                residual_q_weights,
+                bootstrap_samples=arguments.final_bootstrap_samples,
+                bootstrap_seed=audit_seed + 3_000_000,
+            )
         residual_checkpoint = arguments.residual_checkpoint
         if residual_checkpoint is None:
             residual_checkpoint = arguments.checkpoint.with_name(
@@ -2006,10 +2134,14 @@ def run(arguments: argparse.Namespace) -> None:
             if arguments.allow_last_notional_expansion
             else "initialization"
         ),
-        "physical_simulation": (
-            "X-only fixed cash grid; four-week shrinking tower; raw log-DLV "
-            "innovations from rank-truncated fixed-expiry AR residual covariance; "
-            "zero raw DLV drift; no re-gridding"
+        "path_simulation": (
+            "X-only fixed cash grid; four-week shrinking tower; no re-gridding; "
+            + (
+                "raw log-DLV innovations from rank-truncated fixed-expiry AR residual "
+                "covariance with zero raw DLV drift"
+                if arguments.path_law == "physical"
+                else "theoretical DLVsq drift with stochastic-Heun integration in log excess-DLV"
+            )
         ),
         "fixed_expiry_ar1": fixed_expiry_fit.diagnostics.to_dict(),
         "training_dataset": training_data.diagnostics,
