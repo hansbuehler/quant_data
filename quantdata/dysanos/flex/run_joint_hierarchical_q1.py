@@ -15,7 +15,10 @@ import torch
 from filelock import FileLock
 
 from quantdata import env as quantdata_env
-from quantdata.dysanos.flex.config import JointHierarchicalDynamicsConfig
+from quantdata.dysanos.flex.config import (
+    FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig,
+    JointHierarchicalDynamicsConfig,
+)
 from quantdata.dysanos.flex.failure_reporting import run_guarded_cli
 from quantdata.dysanos.flex.joint_spot_correlation import (
     evaluate_joint_spot_correlation_under_p,
@@ -136,11 +139,12 @@ def _load_inputs(
     dict[str, str],
 ]:
     completion = _load_json(completion_path)
-    if (
-        completion.get("schema")
-        != "flex-shared-strikes-joint-hierarchical-completion-v1"
-        or completion.get("status") != "complete"
-    ):
+    completion_schema = completion.get("schema")
+    supported_schemas = {
+        "flex-shared-strikes-joint-hierarchical-completion-v1",
+        "flex-fixed-grid-four-week-joint-hierarchical-completion-v1",
+    }
+    if completion_schema not in supported_schemas or completion.get("status") != "complete":
         raise ValueError("Joint hierarchical completion proof is not complete")
     report_path = _resolve_training_artifact(
         completion["report"],
@@ -169,45 +173,101 @@ def _load_inputs(
         report.get("target_history_sha256"),
     )
     history = torch.load(history_path, map_location="cpu", weights_only=False)
-    if (
-        not isinstance(history, Mapping)
-        or history.get("schema") != "flex-joint-hierarchical-target-history-v1"
-        or history.get("joint_checkpoint_sha256")
-        != completion.get("checkpoint_sha256")
-    ):
-        raise ValueError("Joint hierarchical target history has invalid provenance")
-    train_states = cast(torch.Tensor, history["train_states"]).detach().cpu().double()
-    validation_states = cast(
-        torch.Tensor, history["validation_quote_optimal_states"]
-    ).detach().cpu().double()
-    train_dates = tuple(date.fromisoformat(str(value)) for value in history["train_dates"])
-    validation_dates = tuple(
-        date.fromisoformat(str(value)) for value in history["validation_dates"]
-    )
-    spot_refs = cast(torch.Tensor, history["spot_refs"]).detach().cpu().double()
-    if (
-        train_states.ndim != 2
-        or validation_states.ndim != 2
-        or train_states.shape[1] != validation_states.shape[1]
-        or len(train_dates) != len(train_states)
-        or len(validation_dates) != len(validation_states)
-        or any(value.year >= 2025 for value in train_dates)
-        or any(value.year != 2025 for value in validation_dates)
-        or spot_refs.shape != (len(train_dates) + len(validation_dates),)
-        or not bool(torch.all(torch.isfinite(spot_refs) & (spot_refs > 0.0)))
-    ):
-        raise ValueError("Joint hierarchical train/validation history is malformed")
-    if _sha256_tensor(train_states) != report.get("train_state_sha256"):
-        raise ValueError("Training-state digest differs from the joint report")
-    if _sha256_tensor(validation_states) != report.get(
-        "validation_quote_optimal_state_sha256"
-    ):
-        raise ValueError("Validation-state digest differs from the joint report")
+    if not isinstance(history, Mapping):
+        raise ValueError("Joint hierarchical target history is not a mapping")
+    if completion_schema == "flex-fixed-grid-four-week-joint-hierarchical-completion-v1":
+        if (
+            history.get("schema")
+            != "flex-fixed-grid-four-week-target-history-v1"
+            or history.get("joint_checkpoint_sha256")
+            != completion.get("checkpoint_sha256")
+        ):
+            raise ValueError("Fixed-grid target history has invalid provenance")
+        train_states = cast(torch.Tensor, history["states"]).detach().cpu().double()
+        train_dates = tuple(date.fromisoformat(str(value)) for value in history["dates"])
+        validation_states = torch.empty((0, train_states.shape[1]), dtype=torch.float64)
+        validation_dates = ()
+        spot_refs = cast(torch.Tensor, history["spot_refs"]).detach().cpu().double()
+        if (
+            train_states.ndim != 2
+            or len(train_dates) != len(train_states)
+            or spot_refs.shape != (len(train_dates),)
+            or not bool(torch.all(torch.isfinite(spot_refs) & (spot_refs > 0.0)))
+        ):
+            raise ValueError("Fixed-grid all-history states are malformed")
+        if _sha256_tensor(train_states) != report.get("state_sha256"):
+            raise ValueError("Fixed-grid state digest differs from the joint report")
+    else:
+        if (
+            history.get("schema") != "flex-joint-hierarchical-target-history-v1"
+            or history.get("joint_checkpoint_sha256")
+            != completion.get("checkpoint_sha256")
+        ):
+            raise ValueError("Joint hierarchical target history has invalid provenance")
+        train_states = cast(torch.Tensor, history["train_states"]).detach().cpu().double()
+        validation_states = cast(
+            torch.Tensor, history["validation_quote_optimal_states"]
+        ).detach().cpu().double()
+        train_dates = tuple(
+            date.fromisoformat(str(value)) for value in history["train_dates"]
+        )
+        validation_dates = tuple(
+            date.fromisoformat(str(value)) for value in history["validation_dates"]
+        )
+        spot_refs = cast(torch.Tensor, history["spot_refs"]).detach().cpu().double()
+        if (
+            train_states.ndim != 2
+            or validation_states.ndim != 2
+            or train_states.shape[1] != validation_states.shape[1]
+            or len(train_dates) != len(train_states)
+            or len(validation_dates) != len(validation_states)
+            or any(value.year >= 2025 for value in train_dates)
+            or any(value.year != 2025 for value in validation_dates)
+            or spot_refs.shape != (len(train_dates) + len(validation_dates),)
+            or not bool(torch.all(torch.isfinite(spot_refs) & (spot_refs > 0.0)))
+        ):
+            raise ValueError("Joint hierarchical train/validation history is malformed")
+        if _sha256_tensor(train_states) != report.get("train_state_sha256"):
+            raise ValueError("Training-state digest differs from the joint report")
+        if _sha256_tensor(validation_states) != report.get(
+            "validation_quote_optimal_state_sha256"
+        ):
+            raise ValueError("Validation-state digest differs from the joint report")
 
     raw_config = checkpoint.get("model_config")
     if not isinstance(raw_config, Mapping) or not isinstance(raw_config.get("label"), str):
         raise ValueError("Joint checkpoint has no reconstructable model config")
-    model_config = JointHierarchicalDynamicsConfig(label=raw_config["label"])
+    if completion_schema == "flex-fixed-grid-four-week-joint-hierarchical-completion-v1":
+        raw_geometry = raw_config.get("geometry")
+        if not isinstance(raw_geometry, Mapping):
+            raise ValueError("Fixed-grid checkpoint has no geometry mapping")
+        geometry_values = dict(raw_geometry)
+        for key in (
+            "nms_range",
+            "explicit_model_business_dtes",
+            "inner_relative_strikes",
+        ):
+            if geometry_values.get(key) is not None:
+                geometry_values[key] = tuple(cast(list[float], geometry_values[key]))
+        geometry = FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig(
+            **geometry_values
+        )
+        model_config = JointHierarchicalDynamicsConfig(
+            label=cast(str, raw_config["label"]),
+            state_sizes_by_expiry=tuple(
+                cast(tuple[int, ...], raw_config["state_sizes_by_expiry"])
+            ),
+            state_size=int(raw_config["state_size"]),
+            group=cast(str, raw_config["group"]),
+            user_version=cast(str, raw_config["user_version"]),
+            geometry=geometry,  # type: ignore[arg-type]
+            minimum_mean_reversion_per_week=float(
+                raw_config["minimum_mean_reversion_per_week"]
+            ),
+            innovation_std_floor=float(raw_config["innovation_std_floor"]),
+        )
+    else:
+        model_config = JointHierarchicalDynamicsConfig(label=raw_config["label"])
     if asdict(model_config) != dict(raw_config):
         raise ValueError("Joint checkpoint geometry differs from current code")
     model = JointHierarchicalDynamicsModel(

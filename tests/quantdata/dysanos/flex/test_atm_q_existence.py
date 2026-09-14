@@ -468,6 +468,11 @@ def test_all_state_training_accumulates_one_optimizer_step(
         return {
             "adjusted_replication_means": replication_means,
             "raw_replication_means": replication_means,
+            "path_sum": torch.sum(replication_means, dim=0),
+            "path_cross_product_sum": torch.einsum(
+                "rsi,rsj->sij", replication_means, replication_means
+            ),
+            "num_paths": torch.tensor(3),
             "spot_replication_means": torch.tensor(
                 ((-0.1,), (0.0,), (0.1,)), dtype=dtype
             ).expand(-1, len(states)),
@@ -504,10 +509,92 @@ def test_all_state_training_accumulates_one_optimizer_step(
         inner_tail_weight=0.5,
         order=torch.tensor((2, 0, 1)),
         state_batch_size=2,
+        gradient_clip_norm=1.0e-6,
     )
 
     assert int(optimizer.state[law.weight]["step"]) == 1
     assert metrics["gradient_norm"] > 0.0
+    assert metrics["clipped_gradient_norm"] < metrics["gradient_norm"]
+    torch.testing.assert_close(
+        torch.tensor(metrics["clipped_gradient_norm"]),
+        torch.tensor(1.0e-6),
+    )
+    assert float(law.weight.detach()) != 0.25
+
+
+def test_cross_gmm_training_uses_independent_draw_halves_and_fixed_beta(
+    monkeypatch: Any,
+) -> None:
+    dtype = torch.float64
+    law = torch.nn.Linear(1, 1, bias=False, dtype=dtype)
+    law.weight.data.fill_(0.25)
+    optimizer = torch.optim.Adam(law.parameters(), lr=1.0e-2)
+    draws = [0, 1, 2, 3]
+    offsets = (-0.10, 0.00, 0.05, 0.10)
+    evaluations: list[tuple[tuple[int, ...], bool]] = []
+
+    def evaluate_joint(**kwargs: Any) -> dict[str, torch.Tensor]:
+        states = kwargs["current_states"]
+        group_draws = tuple(kwargs["draws"])
+        fixed_beta = kwargs["fixed_beta"]
+        evaluations.append((group_draws, fixed_beta is not None))
+        replication_means = torch.stack(
+            [law(states) + offsets[draw] for draw in group_draws]
+        )
+        return {
+            "adjusted_replication_means": replication_means,
+            "raw_replication_means": replication_means,
+            "beta": fixed_beta,
+        }
+
+    def roll_returns(**kwargs: Any) -> tuple[torch.Tensor, None, torch.Tensor]:
+        states = kwargs["current_states"]
+        draw = kwargs["draw"]
+        returns = (law(states) + offsets[draw])[:, None, :]
+        gross = torch.ones((len(states), 1), dtype=dtype)
+        return returns, None, gross
+
+    monkeypatch.setattr(all_state_joint, "_evaluate_joint", evaluate_joint)
+    monkeypatch.setattr(all_state_joint, "joint_roll_returns", roll_returns)
+    states = torch.tensor(((1.0,), (2.0,), (3.0,)), dtype=dtype)
+    placeholder = torch.zeros_like(states)
+
+    metrics = _train_state_batches(
+        model=None,
+        law=law,  # type: ignore[arg-type]
+        optimizer=optimizer,
+        current_states=states,
+        current_w2_calls=placeholder,
+        normalized_strikes=torch.ones(1, dtype=dtype),
+        option_is_call=torch.ones(1, dtype=torch.bool),
+        support=placeholder,
+        density=placeholder,
+        sqrt_variance=placeholder[:, 0],
+        draws=draws,  # type: ignore[arg-type]
+        z_target=100.0,
+        inner_tail_fraction=0.5,
+        outer_tail_fraction=1.0,
+        inner_tail_weight=0.5,
+        order=torch.tensor((2, 0, 1)),
+        state_batch_size=2,
+        frozen_gmm_precision=torch.ones((3, 1, 1), dtype=dtype),
+        fixed_training_beta=torch.zeros((3, 1), dtype=dtype),
+        cross_gmm_objective=True,
+        cross_gmm_bulk_weight=1.0,
+        cross_gmm_tail_weight=0.0,
+        cross_gmm_tail_fraction=0.5,
+        gradient_clip_norm=10.0,
+    )
+
+    assert evaluations == [
+        ((0, 1), True),
+        ((2, 3), True),
+        ((0, 1), True),
+        ((2, 3), True),
+    ]
+    assert int(optimizer.state[law.weight]["step"]) == 1
+    assert metrics["gradient_norm"] > 0.0
+    assert "detached_covariance_of_mean" not in metrics
     assert float(law.weight.detach()) != 0.25
 
 
@@ -724,6 +811,8 @@ def test_wandb_metrics_include_validation_blocks_and_stable_names() -> None:
         {
             "sweep": 12.0,
             "fit_global_loss": 3.5,
+            "fit_gradient_norm": 12.0,
+            "fit_clipped_gradient_norm": 10.0,
             "validation_block_loss_mean": 2.5,
             "validation_block_loss_median": 2.25,
             "validation_block_loss_mc_standard_error": 0.125,
@@ -734,6 +823,8 @@ def test_wandb_metrics_include_validation_blocks_and_stable_names() -> None:
 
     assert metrics["sweep"] == 12
     assert metrics["training/global_loss"] == 3.5
+    assert metrics["training/gradient_norm_pre_clip"] == 12.0
+    assert metrics["training/gradient_norm_post_clip"] == 10.0
     assert metrics["validation/block_loss_mean"] == 2.5
     assert metrics["validation/block_loss_median"] == 2.25
     assert metrics["validation/block_loss_mc_se"] == 0.125

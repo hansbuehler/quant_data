@@ -19,6 +19,17 @@ from quantdata.dysanos.flex.fixed_grid_dlv import (
     set_constant_backbone_volatility,
     strip_fixed_grid_black_backbone,
 )
+from quantdata.dysanos.flex.fixed_grid_dlv_attempt2 import (
+    fixed_grid_attempt2_conditional_densities,
+    fixed_grid_attempt2_sde_roll,
+    make_fixed_grid_attempt2_randoms,
+)
+from quantdata.dysanos.flex.fixed_grid_dlv_attempt2_triangular import (
+    TriangularFixedGridState,
+    regrid_triangular_state_to_revealed_spot,
+    triangular_fixed_grid_physical_roll,
+    triangular_fixed_grid_roll,
+)
 from quantdata.dysanos.flex.floating_grid_dlv import (
     build_floating_grid_dlv_kernel,
     floating_surface_from_regrid,
@@ -50,6 +61,10 @@ from quantdata.dysanos.flex.model import (
 )
 from quantdata.dysanos.flex.run_all_state_regrid_dlv_audit import (
     _direct_survivor_option_values,
+)
+from quantdata.dysanos.flex.run_fixed_grid_dlv_attempt2_triangular import (
+    _stratified_antithetic_uniforms,
+    _stratified_block_mean_observations,
 )
 from quantdata.dysanos.flex.sanos import FlexSanosDecoder
 from quantdata.torch import BaseEnvironment
@@ -152,6 +167,228 @@ def test_pdf_volatility_and_drift_equations_hold_in_direct_raw_state() -> None:
     assert bool(torch.all(raw_diffusion_blocks[:, 0] == 0.0))
     assert bool(torch.all(raw_drift_blocks[..., geometry.num_inner_strikes :] == 0.0))
     assert bool(torch.all(raw_diffusion_blocks[..., geometry.num_inner_strikes :, :] == 0.0))
+
+
+def test_attempt2_spot_reveal_and_expiry_roll_have_exact_density_towers() -> None:
+    _, geometry, decoder, raw, _ = _problem()
+    parameters = bound_native_raw(raw, geometry=geometry)
+    surface = decoder.forward_batch(
+        dlvsqs=parameters.dlvsqs,
+        forward_vols=parameters.forward_vols,
+        eta=parameters.eta,
+    )
+    support = surface.support_strikes[0, 0]
+    support_size = len(support)
+    conditional = fixed_grid_attempt2_conditional_densities(
+        decoder,
+        support=support.expand(support_size, -1),
+        endpoint_dlvsqs=parameters.dlvsqs.expand(support_size, -1, -1),
+        front_node_indices=torch.arange(support_size),
+    )
+
+    # Averaging the revealed q0 and rolled q1,...,q3 over S1 ~ q_t^1
+    # recovers the four old fixed-expiry densities q_t^1,...,q_t^4.
+    tower_mean = torch.einsum("r,rts->ts", surface.densities[0, 0], conditional)
+    torch.testing.assert_close(tower_mean, surface.densities[0], atol=2.0e-14, rtol=0.0)
+
+
+def test_attempt2_sde_roll_preserves_the_fixed_grid_and_pathwise_forwards() -> None:
+    env, _, decoder, raw, loadings = _problem()
+    generator = torch.Generator(device="cpu").manual_seed(20260911)
+    randoms = make_fixed_grid_attempt2_randoms(
+        num_states=1,
+        num_paths=8,
+        num_substeps=2,
+        num_factors=loadings.shape[-1],
+        dtype=env.fdtype,
+        device=env.device,
+        generator=generator,
+        antithetic=True,
+    )
+    result = fixed_grid_attempt2_sde_roll(
+        decoder,
+        raw,
+        raw_log_loadings=loadings,
+        calendar_time_increment_y=5.0 / 252.0,
+        randoms=randoms,
+        fixed_cash_strikes=torch.exp(
+            torch.linspace(-0.3, 0.3, 11, dtype=env.fdtype)
+        ),
+    )
+
+    assert result.aligned_conditional_densities.shape == (1, 8, 4, 8)
+    assert result.aligned_conditional_option_values.shape == (1, 8, 4, 11)
+    assert result.endpoint_unconditional_survivor_option_values.shape == (
+        1,
+        8,
+        3,
+        11,
+    )
+    assert result.maximum_fixed_grid_change == 0.0
+    assert result.maximum_frozen_coordinate_change == 0.0
+    assert result.maximum_conditional_mass_residual < 2.0e-14
+    assert result.maximum_conditional_forward_residual < 2.0e-14
+    assert result.minimum_density_during_sde > 0.0
+    assert result.minimum_raw_cap_margin > 0.0
+
+
+def test_attempt2_triangular_roll_removes_only_the_expired_fixed_expiry() -> None:
+    env, geometry, decoder, raw, loadings = _problem()
+    parameters = bound_native_raw(raw, geometry=geometry)
+    surface = decoder.forward_batch(
+        dlvsqs=parameters.dlvsqs,
+        forward_vols=parameters.forward_vols,
+        eta=parameters.eta,
+    )
+    state = TriangularFixedGridState(
+        support=surface.support_strikes[:, 0],
+        densities=surface.densities,
+        dlvsqs=parameters.dlvsqs,
+    )
+    roll = triangular_fixed_grid_roll(
+        decoder,
+        state,
+        raw_log_loadings=loadings,
+        minimum_dlvsq=geometry.min_dlvsq,
+        expiry_time_increment_y=decoder.model_dts_y[0],
+        calendar_time_increment_y=5.0 / 252.0,
+        standard_normals=torch.zeros((1, 2, 4), dtype=env.fdtype),
+        uniforms=torch.full((1,), 0.5, dtype=env.fdtype),
+        fixed_cash_strikes=surface.support_strikes[0, 0, 1:-1],
+    )
+
+    assert roll.next_state is not None
+    assert roll.initial_call_values.shape == (1, 4, 6)
+    assert roll.final_call_values.shape == (1, 4, 6)
+    assert roll.endpoint_unconditional_call_values.shape == (1, 4, 6)
+    assert roll.next_state.densities.shape == (1, 3, 8)
+    assert roll.next_state.dlvsqs.shape == (1, 3, 6)
+    assert roll.maximum_mass_residual < 2.0e-14
+    assert roll.maximum_forward_residual < 2.0e-14
+
+    regridded = regrid_triangular_state_to_revealed_spot(
+        roll.next_state, roll.revealed_spot
+    )
+    torch.testing.assert_close(
+        torch.sum(regridded.densities * regridded.support[:, None], dim=-1),
+        torch.ones((1, 3), dtype=env.fdtype),
+        atol=2.0e-14,
+        rtol=0.0,
+    )
+    cash_strikes = surface.support_strikes[0, 0, 1:-1]
+    old_payoffs = torch.relu(roll.next_state.support[:, :, None] - cash_strikes)
+    new_payoffs = torch.relu(
+        regridded.support[:, :, None]
+        - cash_strikes[None, None] / roll.revealed_spot[:, None, None]
+    )
+    old_prices = torch.einsum("bts,bsk->btk", roll.next_state.densities, old_payoffs)
+    new_prices = torch.einsum("bts,bsk->btk", regridded.densities, new_payoffs)
+    torch.testing.assert_close(
+        roll.revealed_spot[:, None, None] * new_prices,
+        old_prices,
+        atol=2.0e-14,
+        rtol=0.0,
+    )
+
+
+def test_physical_triangular_roll_applies_raw_innovation_without_analytic_drift() -> None:
+    env, geometry, decoder, raw, loadings = _problem()
+    parameters = bound_native_raw(raw, geometry=geometry)
+    surface = decoder.forward_batch(
+        dlvsqs=parameters.dlvsqs,
+        forward_vols=parameters.forward_vols,
+        eta=parameters.eta,
+    )
+    state = TriangularFixedGridState(
+        support=surface.support_strikes[:, 0],
+        densities=surface.densities,
+        dlvsqs=parameters.dlvsqs,
+    )
+    normals = torch.tensor([[0.2, -0.3, 0.1, 0.4]], dtype=env.fdtype)
+    result = triangular_fixed_grid_physical_roll(
+        decoder,
+        state,
+        raw_log_loadings=loadings,
+        minimum_dlvsq=geometry.min_dlvsq,
+        expiry_time_increment_y=decoder.model_dts_y[0],
+        calendar_time_increment_y=5.0 / 252.0,
+        standard_normals=normals,
+        uniforms=torch.full((1,), 0.5, dtype=env.fdtype),
+        fixed_cash_strikes=surface.support_strikes[0, 0, 1:-1],
+    )
+
+    expected_raw = torch.log(parameters.dlvsqs - geometry.min_dlvsq)
+    expected_raw = expected_raw + (5.0 / 252.0) ** 0.5 * torch.einsum(
+        "tif,bf->bti", loadings, normals
+    )
+    expected_dlvsqs = geometry.min_dlvsq + torch.exp(expected_raw)
+    assert result.next_state is not None
+    torch.testing.assert_close(
+        result.next_state.dlvsqs,
+        expected_dlvsqs[:, 1:],
+        atol=2.0e-14,
+        rtol=0.0,
+    )
+    torch.testing.assert_close(
+        result.endpoint_unconditional_call_values[:, 0],
+        result.initial_call_values[:, 0],
+        atol=2.0e-14,
+        rtol=0.0,
+    )
+    assert result.maximum_mass_residual < 2.0e-14
+    assert result.maximum_forward_residual < 2.0e-14
+
+
+def test_stratified_antithetic_uniforms_cover_each_block_and_pair() -> None:
+    pairs_per_block = 5
+    uniforms = _stratified_antithetic_uniforms(
+        num_states=2,
+        num_pairs=10,
+        num_weeks=3,
+        pairs_per_block=pairs_per_block,
+        dtype=torch.float64,
+        device="cpu",
+        generator=torch.Generator().manual_seed(20260912),
+    )
+    paired = uniforms.reshape(2, 10, 2, 3)
+    torch.testing.assert_close(
+        paired[:, :, 0] + paired[:, :, 1],
+        torch.ones((2, 10, 3), dtype=torch.float64),
+    )
+    base = paired[:, :, 0].reshape(2, 2, pairs_per_block, 3)
+    strata = torch.floor(base * pairs_per_block).to(torch.int64)
+    expected = torch.arange(pairs_per_block).reshape(1, 1, -1, 1).expand_as(strata)
+    torch.testing.assert_close(torch.sort(strata, dim=2).values, expected)
+
+    independent_spot = _stratified_antithetic_uniforms(
+        num_states=2,
+        num_pairs=10,
+        num_weeks=3,
+        pairs_per_block=pairs_per_block,
+        dtype=torch.float64,
+        device="cpu",
+        generator=torch.Generator().manual_seed(20260912),
+        complement_pairs=False,
+    ).reshape(2, 2, 2 * pairs_per_block, 3)
+    independent_strata = torch.floor(
+        independent_spot * (2 * pairs_per_block)
+    ).to(torch.int64)
+    independent_expected = torch.arange(2 * pairs_per_block).reshape(
+        1, 1, -1, 1
+    ).expand_as(independent_strata)
+    torch.testing.assert_close(
+        torch.sort(independent_strata, dim=2).values,
+        independent_expected,
+    )
+
+
+def test_stratified_inference_uses_independent_block_means() -> None:
+    values = np.arange(2 * 12 * 3, dtype=np.float64).reshape(2, 12, 3)
+    blocks = _stratified_block_mean_observations(values, pairs_per_block=3)
+
+    assert blocks.shape == (2, 2, 3)
+    np.testing.assert_allclose(blocks[:, 0], np.mean(values[:, :6], axis=1))
+    np.testing.assert_allclose(blocks[:, 1], np.mean(values[:, 6:], axis=1))
 
 
 def test_density_diffusion_matches_decoder_jvp() -> None:

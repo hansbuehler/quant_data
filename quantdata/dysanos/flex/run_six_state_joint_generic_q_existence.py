@@ -374,7 +374,7 @@ def _distill_teachers(
 def joint_roll_returns(
     *,
     model: Any,
-    law: JointGenericFrontTransport,
+    law: Any,
     current_states: torch.Tensor,
     current_w2_calls: torch.Tensor,
     normalized_strikes: torch.Tensor,
@@ -392,18 +392,29 @@ def joint_roll_returns(
         sqrt_variance=sqrt_variance,
         draw=draw,
     )
-    front_state_size = law.config.front_state_size
-    next_front = law(
-        current_front_states=current_states[:, :front_state_size],
-        spot_rank=spot_rank,
-        epsilon=draw.epsilon,
-    )
     num_states, paths = gross.shape
-    next_state = current_states[:, None].expand(-1, paths, -1).clone()
-    next_state[..., :front_state_size] = next_front
+    front_state_size = law.config.front_state_size
+    if bool(getattr(law, "generates_uncompressed_front_raw", False)):
+        current_raw = model.raw_states_from_states(current_states)
+        next_front = law(
+            current_raw_states=current_raw,
+            normalized_spot=gross,
+            epsilon=draw.epsilon,
+        )
+        next_raw = current_raw[:, None].expand(-1, paths, -1).clone()
+        next_raw[..., :front_state_size] = next_front
+        raw = next_raw.reshape(num_states * paths, -1)
+    else:
+        next_front = law(
+            current_front_states=current_states[:, :front_state_size],
+            spot_rank=spot_rank,
+            epsilon=draw.epsilon,
+        )
+        next_state = current_states[:, None].expand(-1, paths, -1).clone()
+        next_state[..., :front_state_size] = next_front
+        flat_state = next_state.reshape(num_states * paths, -1)
+        raw = model.raw_states_from_states(flat_state)
     next_strikes = normalized_strikes[None, None] / gross[..., None]
-    flat_state = next_state.reshape(num_states * paths, -1)
-    raw = model.raw_states_from_states(flat_state)
     parameters = bound_native_raw(raw, geometry=model.config.geometry)
     next_w1_calls = model.sanos_decoder.price_first_expiry_calls_from_parameters(
         dlvsqs=parameters.dlvsqs,
@@ -432,11 +443,13 @@ def _evaluate_joint(
     density: torch.Tensor,
     sqrt_variance: torch.Tensor,
     draws: list[CommonQDraw],
+    fixed_beta: torch.Tensor | None = None,
 ) -> dict[str, torch.Tensor]:
     raw_replication_means: list[torch.Tensor] = []
     spot_replication_means: list[torch.Tensor] = []
     path_sums: list[torch.Tensor] = []
     path_square_sums: list[torch.Tensor] = []
+    path_cross_product_sums: list[torch.Tensor] = []
     spot_sums: list[torch.Tensor] = []
     spot_square_sums: list[torch.Tensor] = []
     product_sums: list[torch.Tensor] = []
@@ -462,6 +475,9 @@ def _evaluate_joint(
         spots = spot_return.double()
         path_sums.append(torch.sum(values, dim=1))
         path_square_sums.append(torch.sum(values.square(), dim=1))
+        path_cross_product_sums.append(
+            torch.einsum("spi,spj->sij", values, values)
+        )
         spot_sums.append(torch.sum(spots, dim=1))
         spot_square_sums.append(torch.sum(spots.square(), dim=1))
         product_sums.append(torch.sum(spots[..., None] * values, dim=1))
@@ -479,7 +495,18 @@ def _evaluate_joint(
     numerator = (
         torch.sum(torch.stack(product_sums), dim=0) - spot_sum[:, None] * path_sum / num_paths
     )
-    beta = (numerator / denominator[:, None]).detach()
+    estimated_beta = (numerator / denominator[:, None]).detach()
+    if fixed_beta is None:
+        beta = estimated_beta
+        beta_source = torch.zeros((), dtype=torch.bool, device=estimated_beta.device)
+    else:
+        if fixed_beta.shape != estimated_beta.shape:
+            raise ValueError("fixed control-variate beta has incompatible shape")
+        beta = fixed_beta.to(
+            device=estimated_beta.device,
+            dtype=estimated_beta.dtype,
+        ).detach()
+        beta_source = torch.ones((), dtype=torch.bool, device=estimated_beta.device)
     raw_rep = torch.stack(raw_replication_means)
     spot_rep = torch.stack(spot_replication_means)
     adjusted_rep = raw_rep - spot_rep[..., None] * beta[None]
@@ -488,8 +515,13 @@ def _evaluate_joint(
         "spot_replication_means": spot_rep,
         "adjusted_replication_means": adjusted_rep,
         "beta": beta,
+        "estimated_beta": estimated_beta,
+        "beta_is_fixed": beta_source,
         "path_sums_by_replication": torch.stack(path_sums),
         "path_square_sums_by_replication": torch.stack(path_square_sums),
+        "path_cross_product_sums_by_replication": torch.stack(
+            path_cross_product_sums
+        ),
         "spot_sums_by_replication": torch.stack(spot_sums),
         "spot_square_sums_by_replication": torch.stack(spot_square_sums),
         "product_sums_by_replication": torch.stack(product_sums),
@@ -499,6 +531,12 @@ def _evaluate_joint(
         ),
         "path_sum": path_sum,
         "path_square_sum": torch.sum(torch.stack(path_square_sums), dim=0),
+        "path_cross_product_sum": torch.sum(
+            torch.stack(path_cross_product_sums), dim=0
+        ),
+        "spot_sum": spot_sum,
+        "spot_square_sum": torch.sum(torch.stack(spot_square_sums), dim=0),
+        "spot_return_product_sum": torch.sum(torch.stack(product_sums), dim=0),
         "cap_mean_square": torch.mean(torch.stack(cap_values), dim=0),
         "num_paths": torch.as_tensor(num_paths, device=raw_rep.device),
     }
