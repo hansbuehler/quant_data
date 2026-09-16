@@ -1,0 +1,144 @@
+\section{The drift restriction}\label{sec:drift}
+
+\begin{assumption}[Martingale property]\label{ass:mart}
+Under $\Q$ every gridded instrument price is a martingale in $t$. Since the
+gridded payoffs $\pi_i$ span $\R^{N+2}$, this is equivalent to each density
+vector being a martingale,
+\begin{equation}\label{eq:qdyn}
+  \dd q^j_t=\psi^j_t\,\dd W_t,\qquad \psi^j_t\in\R^{(N+2)\times d}.
+\end{equation}
+\end{assumption}
+
+This is the only assumption behind the drift restriction, and it carries no
+regularity. Each
+$q^j$ is a fixed linear combination of traded butterflies, so \eqref{eq:qdyn} is
+the martingale representation theorem applied to traded prices, and nothing has
+to commute with a stochastic integral. This is the substantive advantage of a
+discrete code-book over its continuum analogue, where the corresponding step
+requires differentiating a stochastic field in strike and maturity and must be
+licensed by standing regularity conditions. Theorem~\ref{thm:pointwise} below
+needs only $q^j>0$.
+
+\begin{theorem}[Drift restriction]\label{thm:drift}
+Let $\dd\dlv^j_t=\alpha^j_t\dd t+\beta^j_t\dd W_t$. Under
+Assumption~\ref{ass:mart}, for each $j=1,\dots,M$,
+\begin{align}
+  \text{(volatility)}\qquad
+  &A_j(\dlv^j)\,\psi^j\;=\;\psi^{j-1}-G_j(q^j)\,\beta^j,
+  \label{eq:volsolve}\\[4pt]
+  \text{(drift)}\qquad
+  &G_j(q^j)\,\alpha^j\;=\;-\sum_{f=1}^{d}G_j\bigl(\psi^{j,f}\bigr)\beta^{j,f},
+  \label{eq:driftsolve}
+\end{align}
+marched forward in $j$ from $\psi^0$, the volatility of the initial density,
+which is determined by the spot dynamics.
+\end{theorem}
+
+\begin{proof}
+Apply It\^o to $A_j(\dlv^j_t)q^j_t=q^{j-1}_t$, using \eqref{eq:affine} to write
+the left side as $q^j+G_j(q^j)\dlv^j$ and noting that $G_j$ is bilinear. The
+$\dd W$ terms give $\psi^j+G_j(\psi^j)\dlv^j+G_j(q^j)\beta^j=\psi^{j-1}$, which
+is \eqref{eq:volsolve} by \eqref{eq:affine}. The $\dd t$ terms give
+$G_j(q^j)\alpha^j+\sum_f G_j(\psi^{j,f})\beta^{j,f}=0$, since $q^{j-1}$ and
+$q^{j}$ are driftless by Assumption~\ref{ass:mart} and the only quadratic
+covariation is between $G_j(\cdot)$ and $\dlv^j$, both driven by $W$.
+\end{proof}
+
+Equation \eqref{eq:volsolve} is not ours. Compared with the pricing recursion
+$A_j(\dlv^j)q^j=q^{j-1}$ it is \emph{the same operator with one added source},
+the structure of Carmona and Nadtochiy \cite{CarmonaNadtochiy2008}. The drift
+restriction below is theirs in the continuum, and Wissel's \cite{Wissel2007} on
+this lattice; we claim no priority for either.
+
+What the fixed lattice changes is threefold. Their restriction carries a term in
+the derivative of the code-book along time to maturity; a lattice of fixed expiry
+dates has no such derivative, and here that term is absent. The relation is algebraic rather than
+differential, so neither the high-order regularity their statement requires nor
+the singular behaviour as time to maturity vanishes that it is built to
+accommodate can arise here, the front slab having positive width. And the
+discrete system is over-determined, $N+2$ conditions on $N$ unknowns, which is
+what the counting of Remark~\ref{cor:counting} squares; that counting is what
+turns a differential relation into an identity, and it has no continuum
+counterpart. Appendix~\ref{app:priority} carries both identifications in the
+original notation.
+
+\begin{theorem}[The drift is a pointwise covariance]\label{thm:pointwise}
+Define the relative density volatility
+\begin{equation}\label{eq:eta}
+  \eta^{j}_i\;:=\;\frac{\psi^{j}_i}{q^{j}_i},
+  \qquad i=0,\dots,N+1,
+\end{equation}
+that is, the relative volatility of $q^j_i$. Only the interior components enter
+\eqref{eq:pointwise}, since $\dlv$ lives on the interior nodes; the boundary
+components are needed in Section~\ref{sec:exist}. Then \eqref{eq:driftsolve} is solvable
+for every $\beta$ and every state, its solution is unique, and it is given
+componentwise by
+\begin{equation}\label{eq:pointwise}
+  \alpha^{j}_i\;=\;-\sum_{f=1}^{d}\eta^{j,f}_i\,\beta^{j,f}_i
+  \qquad\Longleftrightarrow\qquad
+  \dd\lambda^{j}_i=\Bigl[-\ip{\eta^{j}_i}{b^{j}_i}-\tfrac12\abs{b^{j}_i}^{2}\Bigr]\dd t
+   +b^{j}_i\,\dd W_t,
+\end{equation}
+where $\lambda=\log\dlv$ and $b=\beta/\dlv$.
+\end{theorem}
+
+\begin{proof}
+By Lemma~\ref{lem:factor} both sides of \eqref{eq:driftsolve} factor through the
+same fixed matrix:
+\[
+  \widehat G_j\,\mathrm{diag}(q^j)\,\alpha^j
+  \;=\;-\sum_f\widehat G_j\,\mathrm{diag}(\psi^{j,f})\,\beta^{j,f} .
+\]
+Since $\widehat G_j$ is injective it cancels, leaving
+$\mathrm{diag}(q^j)\alpha^j=-\sum_f\mathrm{diag}(\psi^{j,f})\beta^{j,f}$, which
+is \eqref{eq:pointwise} after dividing by $q^j_i>0$. Existence and uniqueness
+follow from the same cancellation. The logarithmic form is It\^o applied to
+$\lambda=\log\dlv$, using $\alpha/\dlv=-\ip{\eta}{b}$.
+\end{proof}
+
+Two features of \eqref{eq:pointwise} are worth drawing out. The first is its
+shape. It is the exact analogue of the HJM restriction $\alpha=\sigma\int\sigma$:
+the drift of the log local variance is minus the covariance of its own
+volatility with the volatility of the log density, plus an It\^o convexity term.
+Where HJM's derived object is an integral of the volatility across maturities,
+ours is $\eta$, obtained from $b$ by the single forward recursion
+\eqref{eq:volsolve}. The second is the cost. Once $\eta$ is known no matrix is inverted: no Jacobian
+of the pricing map is ever formed and no rank condition on it appears. And since
+$\psi$ is linear in $\beta$ and $\alpha$ is bilinear in $(\beta,\psi)$, the drift
+is an exact quadratic form in $\beta$, as in HJM; Theorem~\ref{thm:wing} is what
+rules out the corresponding finite-time explosion.
+
+The driftless point is the classical model: if $\beta\equiv0$ and $\psi^0=0$ then
+$\psi\equiv0$ and $\alpha\equiv0$, so the discrete local variance surface is
+frozen, and with $\psi^0\ne0$ the densities still move, driven by the spot alone,
+with $\alpha\equiv0$ persisting.
+
+\begin{proposition}[Spot consistency]\label{prop:spot}
+The spot is $S_t=x^{\!\top}q^{j}_t$, the same for every $j$ by
+Lemma~\ref{lem:null}. Since $x^{\!\top}A_j=x^{\!\top}$ and
+$x^{\!\top}\widehat G_j=0$, equation \eqref{eq:volsolve} gives
+\[
+  \one^{\!\top}\psi^{j}=\one^{\!\top}\psi^{0}=0
+  \qquad\text{and}\qquad
+  x^{\!\top}\psi^{j}=x^{\!\top}\psi^{0}=\sigma^{S}_tS_t
+  \quad\text{for every }j.
+\]
+So the spot's volatility is the single scalar $x^{\!\top}\psi^{0}$, it is
+automatically the same at every expiry, and no further condition links the spot
+to the surface. Taking $\psi^{0}=0$ freezes the spot and recovers
+$x^{\!\top}\psi^{j}=0$.
+\end{proposition}
+
+Proposition~\ref{prop:spot} is the discrete form of Carmona and Nadtochiy's spot
+consistency condition: the spot and its volatility are both \emph{read off} the
+surface rather than modelled, $S=x^{\!\top}q^j$ and $\sigma^SS=x^{\!\top}\psi^j$
+for any $j$.
+
+The drift restriction is used below through the following chain, which is what a
+model actually evaluates:
+\begin{equation}\label{eq:pipeline}
+  b\;\xrightarrow{\ \eqref{eq:volsolve}\ }\;\psi^1,\dots,\psi^M
+  \;\xrightarrow{\ \eta=\psi/q\ }\;\alpha ,
+\end{equation}
+a forward march of $d$ tridiagonal solves per expiry, $O(NMd)$ in total. The
+volatility structure is the only input; the drift is computed, never fitted.

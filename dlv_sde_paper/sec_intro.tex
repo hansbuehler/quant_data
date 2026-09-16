@@ -1,0 +1,121 @@
+\section{Introduction}\label{sec:intro}
+
+An option market model reverses the usual direction of construction: instead of
+specifying a process for the underlying and deriving option prices from it, one
+models the code-book of prices directly, so that a calibration is a change of
+coordinates rather than an inverse problem. Two conditions must then be
+maintained at once. The state must remain free of \emph{static} arbitrage, and
+its dynamics must admit one equivalent local martingale measure common to the
+underlying and to every traded option. The second is the option analogue of an
+HJM drift restriction: the volatility structure may be specified freely, and the
+drift is then determined. The lattice here is \emph{finite}, finitely many
+strikes and finitely many expiry dates, which is what is traded.
+
+\paragraph{What is already known.} Schweizer and Wissel treat the problem in the
+continuum in two companion papers, one in each direction of the surface:
+\cite{Schweizer2007} varies maturity at a single strike, and
+\cite{SchweizerWissel2008} varies strike at a single maturity. In each the
+code-book is chosen so that its positivity encodes absence of arbitrage, the
+drift restriction is derived, and existence is proved. The multi-strike
+multi-maturity case, which is ours, is stated as open in
+\cite{SchweizerWissel2008}, with the expectation that a new parametrisation will
+be needed. Carmona and Nadtochiy
+\cite{CarmonaNadtochiy2008} give a continuum local-volatility code-book with a
+drift restriction, but no existence theorem. On a finite lattice, and answering
+the multi-maturity question, stands Wissel \cite{Wissel2007}; his construction is
+the one this paper is closest to, and it is described separately below.
+
+\paragraph{Modern approaches.} The question was reopened from the data side, by
+the scarcity of option-market histories for training and evaluating hedging
+strategies \cite{BuehlerEtAl2019DeepHedging}. Cohen, Reisinger and Wang
+\cite{CohenReisingerWang2021} build neural stochastic differential equations on a
+floating lattice and penalise a least-squares residual in place of the drift
+restriction.
+\cite{WieseEtAl2019OptionMarkets} simulate an equity option book with a
+generative adversarial network whose state is the discrete local variance grid
+compressed by principal components, so that static arbitrage is absent by
+positivity of that grid; that is the code-book choice this paper inherits, and
+\cite{WieseEtAl2021MultiAsset} extend it to a multi-asset universe.
+\cite{DYSANOS2026} decode statically arbitrage-free surfaces from a
+low-dimensional code, fit a linear state process to it, and test for dynamic
+arbitrage after the fact, reporting it in $12.5\%$ of states at zero transaction
+cost.
+
+None of the four imposes a dynamic condition, and it is where this paper starts:
+the cross-sectional constraints govern each date's surface and its terminal
+payoff cone, and leave the transition of a fixed contract between two dates
+unconstrained. The choice of grid is part of the same point. All four index
+their nodes relative to the spot rather than in fixed cash terms, and on such a
+grid a node is not one contract through time, so there is no single instrument
+whose price is required to be a martingale and nothing for an HJM-type
+restriction to constrain. Fixing the strikes in cash is what buys the
+restriction here.
+
+\paragraph{The closest prior work.} Wissel \cite{Wissel2007} works on a finite lattice of fixed cash strikes and
+fixed expiry dates, parametrises it by a price level together with positive local
+implied volatilities, derives the no-arbitrage drift restrictions, and proves
+constructive strong existence and uniqueness for a class of coefficients. Behind
+the front expiry his local implied variance is \emph{exactly} the backward
+discrete local variance used here, an algebraic identity on the grid, and his
+drift restriction is, after a change
+of measure, exactly the one we state in Theorem~\ref{thm:pointwise}. We claim no
+priority for it; see Appendix~\ref{app:wissel}, which gives the identification in
+full. That working paper appears never to have been published in archival
+form.
+
+\subsection*{What this paper does}
+
+We keep the same lattice and change the chart: the state is the vector of
+gridded \emph{densities} together with the discrete local variances, rather than
+prices together with quantiles of digitals. Three consequences follow, and they
+are the contributions.
+
+\begin{enumerate}[leftmargin=1.8em,itemsep=0.45em]
+\item \textbf{The spot is a read-off, and it settles exactly.}
+The spot is $S_t=x^{\!\top}q^j_t$ at every expiry $j$ (Proposition~\ref{prop:spot}),
+an identity of the chart holding at all $t$. At the front
+expiry Proposition~\ref{prop:collapse} exhibits a family of front volatilities
+under which $q^1$ collapses onto a single node, so the spot lands on a strike
+and every gridded contract settles at its exact payoff
+(Section~\ref{sec:nonpinning}). That pinning is a property of the volatility
+chosen and not of the chart: by Remark~\ref{rem:bary} the terminal states
+the chart admits carry every spot in the grid range, whereas in
+\cite{Wissel2007} the pinning follows from the chart whatever the coefficients
+(Remark~\ref{rem:pinning}). We do not construct dynamics reaching an off-lattice
+terminal spot; that is left as future work.
+
+\item \textbf{Existence, with no condition on the wings.} The model has a
+unique global strong solution on $[0,T_1]$, positive by construction, for every
+bounded and locally Lipschitz volatility structure $b$ and any number of
+driving factors. The quantity that must be controlled is $\eta=\psi/q$, the
+density volatility relative to the density, and it is bounded by the grid alone:
+Theorem~\ref{thm:wing} gives $\Theta_j\le N+1$ uniformly in the state and in the
+volatility structure. \emph{Wissel \cite{Wissel2007} must assume a bound of this
+kind; here it is a theorem.} The front expiry costs one hypothesis, and it is a mild one: $\eta^1$
+must be integrable in $t$, not bounded, because $\eta^j$ is affine in $\eta^1$
+and an It\^o equation needs an integrable drift rather than a bounded one. The
+front volatility used here diverges at rate $(T_1-t)^{-p}$, and the two demands
+made of $p$ leave a window: $p<1$ is what Assumption~\ref{ass:F} asks, while
+$p\ge\tfrac12$ is what makes the front density collapse, so that every gridded
+contract settles at its exact payoff (Proposition~\ref{prop:collapse}).
+
+\item \textbf{The drift is pointwise, and the count works out.} In density
+coordinates the drift equation is $N+2$ conditions on $N$ unknowns, and is
+consistent because the left null space of the geometry matrix is exactly
+$\mathrm{span}\{\one,x\}$, conservation of mass and of the spot
+(Lemma~\ref{lem:null}). The state-independent factor then cancels from both
+sides and the drift is available nodewise,
+$\alpha^j_i=-\sum_f\eta^{j,f}_i\beta^{j,f}_i$, with no matrix inversion and no
+rank condition.
+\end{enumerate}
+
+\subsection*{Scope, and what is not claimed}
+
+The over-determination of the third contribution is not intrinsic: it is created
+by the choice of density coordinates and removed by the same choice, and in
+price coordinates the system is square and the question does not arise.
+
+The existence statement is for a fixed finite grid. The constant is
+$(M-1)(N+1)$ and depends on the grid. The one
+hypothesis, Assumption~\ref{ass:F}, is a condition on the front volatility and
+not on the state, and it is sufficient rather than necessary.

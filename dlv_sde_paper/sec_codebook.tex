@@ -1,0 +1,146 @@
+\section{The code-book}\label{sec:setup}
+
+Fix expiries $T_1<\dots<T_M$ with $\Delta_j:=T_j-T_{j-1}$ and $T_0:=0$, and a
+single strike grid $x_0<x_1<\dots<x_{N+1}$, held fixed in cash terms and common
+to all expiries. Let $q^j_t\in\R^{N+2}$ be the discrete risk-neutral density of
+$S_{T_j}$ on that grid as seen at calendar time $t$, and let
+$\dlv^j_t\in(0,\infty)^{N}$ be the discrete local variance on the interior
+nodes, with $\lambda=\log\dlv$ throughout. Prices are the linear functional
+$C_t(x_i,T_j)=\pi_i\cdot q^j_t$ with $\pi_i$ the discretised payoff
+$(x-x_i)^{+}$. Throughout, $r=q=0$.
+
+Propagating densities rather than prices, in Fokker--Planck form, is what
+makes the systems below tridiagonal. With the half-weights
+\begin{equation}\label{eq:weights}
+  \omega^j_k:=\frac{x_k^{2}\,\Delta_j}{x_{k+1}-x_{k-1}},\qquad
+  \iota^{j,-}_k:=\frac{\omega^j_k}{x_k-x_{k-1}},\qquad
+  \iota^{j,+}_k:=\frac{\omega^j_k}{x_{k+1}-x_k},
+  \qquad k=1,\dots,N,
+\end{equation}
+the recursion is $A_j(\dlv^j)\,q^j=q^{j-1}$, where $A_j(\dlv)$ is tridiagonal
+with rows
+\begin{equation}\label{eq:operator}
+  \bigl(A_j(\dlv)q\bigr)_i=
+  \begin{cases}
+    q_0-\dlv_1\iota^{j,-}_1q_1, & i=0,\\[2pt]
+    -\dlv_{i-1}\iota^{j,+}_{i-1}q_{i-1}
+     +\bigl(1+\dlv_i(\iota^{j,-}_i+\iota^{j,+}_i)\bigr)q_i
+     -\dlv_{i+1}\iota^{j,-}_{i+1}q_{i+1}, & 1\le i\le N,\\[2pt]
+    -\dlv_N\iota^{j,+}_Nq_N+q_{N+1}, & i=N+1 .
+  \end{cases}
+\end{equation}
+Up to notation this is the implicit forward operator of \cite{BuehlerRyskin2016}.
+Note that in \eqref{eq:operator} the entry multiplying $q_{i\pm1}$ carries
+$\dlv_{i\pm1}$ and not $\dlv_i$.
+
+Because \eqref{eq:operator} is affine in $\dlv$ we may write
+\begin{equation}\label{eq:affine}
+  A_j(\dlv)\,q\;=\;q+G_j(q)\,\dlv,\qquad G_j(q)\in\R^{(N+2)\times N},
+\end{equation}
+so that $G_j(q)$ collects the terms carrying $\dlv$. The map $G_j$ is linear in
+$q$ and $G_j(q)\dlv$ is linear in each argument separately; we use both
+readings. The following elementary observation is used constantly.
+
+\begin{lemma}[Factorisation]\label{lem:factor}
+Column $k$ of $G_j(q)$ involves $q$ only through $q_k$. Consequently
+\begin{equation}\label{eq:factor}
+  G_j(q)\;=\;\widehat G_j\,\mathrm{diag}(q_1,\dots,q_N),
+\end{equation}
+where $\widehat G_j\in\R^{(N+2)\times N}$ has $k$-th column
+$-\iota^{j,-}_k e_{k-1}+(\iota^{j,-}_k+\iota^{j,+}_k)e_k-\iota^{j,+}_k e_{k+1}$.
+Moreover $\widehat G_j$ has rank $N$, hence is injective.
+\end{lemma}
+
+\begin{proof}
+Immediate from \eqref{eq:operator}, whose terms carrying $\dlv_k$ are all
+proportional to $q_k$. For injectivity, suppose $\widehat G_jc=0$ and let $k$ be
+the smallest index with $c_k\neq0$. Row $k-1$ receives a contribution from column
+$k'$ only for $k'\in\{k-2,k-1,k\}$, and the first two carry $c_{k'}=0$. So row
+$k-1$ reads $-\iota^{j,-}_kc_k=0$, forcing $c_k=0$, a contradiction.
+\end{proof}
+
+Note that $\widehat G_j$ depends only on the grid and on $\Delta_j$, not on the
+state; the state enters \eqref{eq:factor} only through the diagonal factor.
+
+\begin{proposition}[The code-book]\label{prop:codebook}
+Fix $q^{0}$ a probability vector on the grid with mean $S_0$.
+\begin{enumerate}[label=(\roman*),leftmargin=2em]
+\item Given densities $q^{j-1}$ and $q^{j}$ with $q^j>0$, the discrete local
+volatility is uniquely determined by the tridiagonal system
+\begin{equation}\label{eq:bijection}
+  G_j(q^j)\,\dlv^j\;=\;q^{j-1}-q^{j}.
+\end{equation}
+\item Conversely, given $\dlv^j>0$, the vector $q^j:=A_j(\dlv^j)^{-1}q^{j-1}$
+is again a probability vector with mean $S_0$, and the gridded prices
+$\pi_i\cdot q^j$ admit no static arbitrage.
+\item A gridded surface is free of static arbitrage, butterflies and
+calendar spreads together, if and only if it arises as in \textup{(ii)} from
+some $\dlv\ge0$, and it lies in the \emph{interior} of the arbitrage-free set
+if and only if $\dlv>0$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+(i) is \eqref{eq:affine}, with uniqueness from Lemma~\ref{lem:factor}. For (ii),
+$A_j(\dlv^j)^{-1}$ is non-negative with unit column sums and inherits the
+martingale property \cite{BuehlerRyskin2016}, attributed there
+to Andreasen and Huge \cite{AndreasenHuge2011}; non-negativity excludes butterfly
+arbitrage, and $q^j$ is then a mean-preserving spread of $q^{j-1}$, so Jensen's
+inequality excludes calendar arbitrage. (iii) is \cite{BuehlerRyskin2016}, after
+\cite{Buehler2006}: absence of arbitrage
+is equivalent to non-negative Gamma and Backward-Theta at every node, and $\dlv$
+is their ratio. Both conditions are
+nodewise, and $\dlv^j_i=0$ exactly when one of them vanishes.
+\end{proof}
+
+What everything else rests on is that the admissible set is a product of
+half-lines, one per node, so it has no faces in the sense that a polytope does,
+and $\lambda=\log\dlv$ maps its interior diffeomorphically onto $\R^{NM}$.
+
+\subsection{Two conservation laws}\label{sec:conservation}
+
+The whole structure of the drift restriction follows from one observation about
+the left null space of $G_j$. Both identities below are used by \cite{BuehlerRyskin2016}, where they hold by
+construction for the backward operator. What is not there, because nothing in
+that paper needs it, is that $\mathrm{span}\{\one,x\}$ is the \emph{entire} left
+null space. That is a rank
+statement, and it is what makes the drift system of Section~\ref{sec:drift}
+square.
+
+\begin{lemma}[Left null space]\label{lem:null}
+For every $q$ and every $j$,
+\[
+  \one^{\!\top}G_j(q)=0
+  \qquad\text{and}\qquad
+  x^{\!\top}G_j(q)=0 ,
+\]
+where $\one=(1,\dots,1)$ and $x=(x_0,\dots,x_{N+1})$. Consequently $A_j(\dlv)$
+conserves both total mass and the spot, for any $\dlv$. Combined with
+Lemma~\ref{lem:factor}, the left null space of $\widehat G_j$ is exactly
+$\mathrm{span}\{\one,x\}$.
+\end{lemma}
+
+\begin{proof}
+Fix an interior index $k$ and collect the three entries of $G_j(q)$ in column
+$k$: from \eqref{eq:operator} they are $(\iota^{j,-}_k+\iota^{j,+}_k)q_k$ in row
+$k$, $-\iota^{j,+}_kq_k$ in row $k+1$, and $-\iota^{j,-}_kq_k$ in row $k-1$.
+Their sum is $0$, giving the first identity. Weighting by the node values,
+\[
+  q_k\Bigl[x_k\bigl(\iota^{j,-}_k+\iota^{j,+}_k\bigr)
+   -x_{k+1}\iota^{j,+}_k-x_{k-1}\iota^{j,-}_k\Bigr]
+  =q_k\Bigl[\iota^{j,-}_k(x_k-x_{k-1})-\iota^{j,+}_k(x_{k+1}-x_k)\Bigr]
+  =q_k\bigl[\omega^j_k-\omega^j_k\bigr]=0
+\]
+by \eqref{eq:weights}, giving the second. The conservation statements follow
+from \eqref{eq:affine}: $\one^{\!\top}A_j(\dlv)q=\one^{\!\top}q$ and
+$x^{\!\top}A_j(\dlv)q=x^{\!\top}q$. Since $\widehat G_j$ has rank $N$ and lives
+in $\R^{(N+2)\times N}$, its left null space is two-dimensional, hence exactly
+$\mathrm{span}\{\one,x\}$.
+\end{proof}
+
+\begin{remark}[Counting]\label{cor:counting}
+$G_j(q)$ has $N+2$ rows and $N$ columns and rank $N$. Hence the $N+2$ martingale
+conditions per expiry contain exactly two redundancies, conservation of mass
+and of the spot, and the remaining $N$ conditions match the $N$ unknowns
+of $\dlv^j$. The system is square on the quotient.
+\end{remark}

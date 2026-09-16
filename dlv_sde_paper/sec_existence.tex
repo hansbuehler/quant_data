@@ -1,0 +1,222 @@
+\section{The wing constant, and existence}\label{sec:exist}
+
+The log discrete local variance $\lambda=\log\dlv$ ranges over all of
+$\R^{NM}$, so positivity is automatic. By Theorem~\ref{thm:pointwise} the model
+is the stochastic differential equation
+\begin{equation}\label{eq:abstract}
+  \dd\lambda_t=\Bigl[-\ip{\eta_t}{b_t}-\tfrac12\abs{b_t}^{2}\Bigr]\dd t
+   +b_t\,\dd W_t ,
+\end{equation}
+whose only non-elementary coefficient is $\eta=\psi/q$ from \eqref{eq:volsolve}
+and \eqref{eq:eta}. Its denominator is small in the wings, and the question is
+whether $\eta$ can blow up there.
+
+The argument follows the route of Wissel's proof of his Theorem~3.5
+\cite{Wissel2007}: log coordinates (his (3.29)), induction over expiries, and an
+existence result for locally Lipschitz equations (his Proposition~3.7). Its one
+non-standard ingredient is an a priori bound, independent of the state, on the
+relative volatility of the calendar spread at the second expiry. Wissel could not
+obtain this bound in general and imposes his condition (3.24) instead (his
+Remark~1 following the proof, p.~18); in our coordinates the quantity is $\eta+b$
+(Appendix~\ref{app:wissel}). We obtain it from an exact identity for the
+volatility recursion and a known inequality for inverses of M-matrices.
+
+\subsection{The volatility recursion}\label{sec:walk}\label{sec:master}
+
+Write $P:=A_j(\dlv^j)^{-1}$, so that $q^j=Pq^{j-1}$.
+
+\begin{corollary}[Positivity, unit column sums, absorbing ends]\label{cor:pos}
+$P\ge0$ entrywise, $\one^{\!\top}P=\one^{\!\top}$, so $P_{im}\in[0,1]$, and the outer
+columns of $P$ are $e_0$ and $e_{N+1}$.
+\end{corollary}
+
+\begin{proof}
+By \eqref{eq:operator}, $A_j$ has non-positive off-diagonal entries, and in each
+column the diagonal entry exceeds the sum of the moduli of the off-diagonal ones by
+exactly one; so $A_j$ is a non-singular M-matrix and $P\ge0$
+\cite{BermanPlemmons1994}. The column sums follow from $\one^{\!\top}A_j=\one^{\!\top}$
+(Lemma~\ref{lem:null}), and the outer columns of $A_j$ are $e_0$ and $e_{N+1}$. The
+first two statements are also Theorem~3.3 of \cite{BuehlerRyskin2016}, attributed
+there to \cite{AndreasenHuge2011}.
+\end{proof}
+
+That is all that is needed about $P$ itself. What we want next is a recursion for
+$\eta$ alone: one step per expiry, each adding a controlled amount, so that the
+bound telescopes along the ladder. Dividing \eqref{eq:volsolve} by $q^j$ gives
+\begin{equation}\label{eq:divided}
+  \eta^{j}_i\;=\;\frac{(P\psi^{j-1})_i}{q^{j}_i}
+   \;-\;\frac{\bigl(P\,G_j(q^j)\beta^j\bigr)_i}{q^{j}_i} ,
+\end{equation}
+the first term carrying $\eta^{j-1}$ and the second carrying $b^j$.
+
+The first is an average. Writing $\psi^{j-1}=q^{j-1}\!\circ\eta^{j-1}$, its weights
+$P_{ik}q^{j-1}_k/q^{j}_i$ are non-negative because $P\ge0$ and sum to one because
+$q^j=Pq^{j-1}$, so it contributes at most $\lVert\eta^{j-1}\rVert_\infty$; they are
+the matrix $\mathcal A$ of \eqref{eq:mastercomp}.
+
+The source is the difficulty. Since $G_j$ is a second difference, row $i$ carries
+the neighbouring densities $q^j_{i\pm1}$ as well as $q^j_i$, so dividing by $q^j_i$
+leaves the ratios
+\begin{equation}\label{eq:nbr}
+  \frac{q^{j}_{i-1}}{q^{j}_i}
+  \qquad\text{and}\qquad
+  \frac{q^{j}_{i+1}}{q^{j}_i} ,
+\end{equation}
+which are unbounded in the wings, where the density decays fastest; nothing in
+\eqref{eq:volsolve} bounds them. Let $E\in\R^{N\times(N+2)}$ restrict to the
+interior nodes, so $EE^{\!\top}=I_N$, and recall
+$A_j=I+\Gh_j\,\mathrm{diag}(\dlv^j)E$.
+
+\begin{proposition}\label{prop:master}
+With $b^j=\beta^j/\dlv^j$ and $\circ$ the entrywise product,
+\begin{equation}\label{eq:master}
+  \psi^{j}\;=\;P\,\psi^{j-1}\;-\;(I-P)\,E^{\!\top}\bigl(q^{j}\!\circ b^{j}\bigr),
+\end{equation}
+equivalently, with the entrywise non-negative
+\[
+  \mathcal A:=\mathrm{diag}(q^{j})^{-1}P\,\mathrm{diag}(q^{j-1}),
+  \qquad
+  \mathcal B:=\mathrm{diag}(q^{j})^{-1}P\,E^{\!\top}\mathrm{diag}(Eq^{j}),
+\]
+\begin{equation}\label{eq:mastercomp}
+  \eta^{j}\;=\;\mathcal A\,\eta^{j-1}\;+\;\bigl(\mathcal B-E^{\!\top}\bigr)b^{j} ,
+\end{equation}
+where $\mathcal A\one=\one$, so the transport is an averaging operator, and the
+$i$-th row of $\mathcal B$ sums to
+$(Pq^{j})_i/q^{j}_i-\one_{\{i\in\{0,N+1\}\}}$.
+\end{proposition}
+
+\begin{proof}
+Multiplying $A_j=I+\Gh_j\mathrm{diag}(\dlv^j)E$ by $P$ on the left and $E^{\!\top}$
+on the right gives $P\Gh_j\mathrm{diag}(\dlv^j)=(I-P)E^{\!\top}$. By
+\eqref{eq:volsolve} and \eqref{eq:factor},
+$\psi^j=P\psi^{j-1}-P\Gh_j\mathrm{diag}(q^j)\beta^j$. Since $\beta^j=\dlv^j\!\circ b^j$
+and diagonal matrices commute,
+\[
+  \mathrm{diag}(q^j)\beta^j
+  =\mathrm{diag}(q^j)\mathrm{diag}(\dlv^j)\,b^j
+  =\mathrm{diag}(\dlv^j)\mathrm{diag}(q^j)\,b^j
+  =\mathrm{diag}(\dlv^j)\bigl(q^j\!\circ b^j\bigr),
+\]
+which is \eqref{eq:master}. Dividing it by $q^j_i$ gives \eqref{eq:mastercomp}: the rows of
+$\mathcal A$ sum to $(Pq^{j-1})_i/q^j_i=1$, and for $\mathcal B$ the terms
+$k\in\{0,N+1\}$ missing from $(Pq^j)_i$ vanish for interior $i$ and equal $q^j_i$
+at $k=i$ for outer $i$, by Corollary~\ref{cor:pos}.
+\end{proof}
+
+So $\eta^j$ is an average of $\eta^{j-1}$ plus a source in $b^j$, and the march
+across expiries is additive.
+
+\begin{remark}[Why the source is harmless]\label{rem:increment}
+The ratios \eqref{eq:nbr} disappear because the source is the operator's own
+increment: by \eqref{eq:affine}, $G_j(q)\dlv=A_j(\dlv)q-q$. The mechanism is
+clearest when $b^j\equiv c$, so that $\beta^j=c\,\dlv^j$:
+\[
+  G_j(q^j)\beta^j=c\bigl(A_jq^j-q^j\bigr)=c\bigl(q^{j-1}-q^j\bigr),
+  \qquad
+  P\,G_j(q^j)\beta^j=c\bigl(q^{j}-Pq^{j}\bigr),
+\]
+by $A_jq^j=q^{j-1}$ and $Pq^{j-1}=q^j$. Divided by $q^j_i$ this is
+$c\bigl(1-(Pq^j)_i/q^j_i\bigr)$: the two ratios of \eqref{eq:nbr} have collapsed
+to the single ratio $(Pq^j)_i/q^j_i$, whose size is what $\Theta_j$ measures in
+\eqref{eq:rows}. For general $b$ the factorisation \eqref{eq:factor} moves $b$ off
+$\dlv$ and onto $q$, diagonal matrices commuting, and the same computation applies
+to $q^j\!\circ b^j$. This is motivation only: the proof above reaches
+\eqref{eq:master} through $P\Gh_j\mathrm{diag}(\dlv^j)=(I-P)E^{\!\top}$ in one step.
+\end{remark}
+
+\subsection{The wing constant}\label{sec:bound}
+
+That single surviving ratio, $(Pq^j)_i/q^j_i$, is what has to be bounded. Write
+\begin{equation}\label{eq:rows}
+  R^j_i:=\one_{\{1\le i\le N\}}+\frac{(Pq^j)_i}{q^j_i}-\one_{\{i\in\{0,N+1\}\}},
+  \qquad
+  \Theta_j:=\max_i R^j_i,
+  \qquad
+  \Xi:=\sum_{r=1}^{N}P_{rr}\le N ,
+\end{equation}
+and $H_j:=\max_i\abs{\eta^j_i}$. Here $R^j_i$ is the row bound of
+\eqref{eq:mastercomp} at node $i$, and $\Theta_j$, the \emph{wing constant}, is its
+size across the slab. The theorem shows $\Theta_j$ is bounded by the grid alone,
+uniformly in the state; the bound rests on one inequality for inverses of
+M-matrices and its consequence for $P^{2}$.
+
+\begin{lemma}[Path product inequality]\label{lem:pathproduct}
+For all nodes $i,r,m$,
+\begin{equation}\label{eq:summand}
+  P_{ir}\,P_{rm}\;\le\;P_{im}\,P_{rr}.
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+$P$ is the inverse of an M-matrix by Corollary~\ref{cor:pos}, and every inverse
+M-matrix satisfies the path product conditions
+$a_{ij}a_{jk}\le a_{ik}a_{jj}$ for all $i,j,k$
+\cite{ZhuZhangLiu2011}, a result first noted by Willoughby
+\cite{Willoughby1977} and proved by Johnson and Smith \cite{JohnsonSmith1999}. Take
+$(i,j,k)=(i,r,m)$.
+\end{proof}
+
+\begin{corollary}[Squared propagator]\label{cor:p2p}
+For all $i,m$,
+\begin{equation}\label{eq:p2p}
+  \bigl(P^{2}\bigr)_{im}\le
+  \begin{cases}
+    \Xi\,P_{im}, & 1\le i\le N,\\
+    (1+\Xi)\,P_{im}, & i\in\{0,N+1\}.
+  \end{cases}
+\end{equation}
+\end{corollary}
+
+\begin{proof}
+Sum \eqref{eq:summand} over $r$. An outer $r$ contributes only if $r=i$, since
+column $r$ of $P$ is $e_r$, and then contributes $P_{im}$.
+\end{proof}
+
+\begin{theorem}\label{thm:wing}
+For every $\dlv\in(0,\infty)^N$,
+\begin{equation}\label{eq:step}
+  H_j\;\le\;H_{j-1}+\Theta_j\lVert b^j\rVert_\infty ,
+\end{equation}
+and
+\begin{equation}\label{eq:thetabound}
+  \Theta_j\le1+\Xi\le N+1,
+  \qquad
+  \Theta^{*}:=\sup_{\dlv}\sum_{j=2}^{M}\Theta_j\le(M-1)(N+1).
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Since $q^j=Pq^{j-1}\ge0$, Corollary~\ref{cor:p2p} gives
+$(Pq^j)_i=\sum_m(P^2)_{im}q^{j-1}_m\le\Xi\,q^j_i$ for interior $i$ and
+$\le(1+\Xi)q^j_i$ for outer $i$, so $R^j_i\le1+\Xi$ in both cases. Finally,
+$\mathcal A\ge0$ with $\mathcal A\one=\one$ gives
+$\lVert\mathcal A\eta^{j-1}\rVert_\infty\le H_{j-1}$, while row $i$ of
+$(\mathcal B-E^{\!\top})b^{j}$ has modulus at most $\lVert b^j\rVert_\infty R^j_i$
+by the row sums of Proposition~\ref{prop:master}.
+\end{proof}
+
+The bound is a property of the grid, not of $\dlv$, and it is far from tight on
+realistic states: on Heston surfaces with $N=40$ the measured $\Theta_j$ is at most
+$7.6$ against $41$.
+
+\subsection{Existence}\label{sec:existence}
+
+Iterating \eqref{eq:step} from the front slice,
+\begin{equation}\label{eq:apriori}
+  \sup_{j,i}\abs{\eta^j_{i,t}}
+  \;\le\;\lVert\eta^1_t\rVert_\infty+(M-1)(N+1)\,\lVert b\rVert_\infty ,
+\end{equation}
+and iterating \eqref{eq:master} shows that $\eta^j$ is affine in $\eta^1$, with
+coefficients depending on $\lambda$ only through $P_2,\dots,P_j$ and $q^2,\dots,q^j$.
+The only $t$ on the right of \eqref{eq:apriori} is inside $\eta^1_t$, which enters
+linearly, so it has to be integrable in time rather than bounded.
+
+\begin{assumption}[Integrable front volatility]\label{ass:F}
+For a horizon $T\le T_1$,
+\begin{equation}\label{eq:F}
+  \int_0^{T}\lVert\eta^{1}_t\rVert_\infty\,\dd t\;<\;\infty\qquad\text{almost surely.}
+\end{equation}
+\end{assumption}
+
+\emph{TBD.}
