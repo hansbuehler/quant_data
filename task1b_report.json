@@ -1,0 +1,486 @@
+{
+  "stage1_constant_bucket_reduction": {
+    "max_abs_price_diff": 1.4210854715202004e-14,
+    "tolerance": 1e-08,
+    "passed": true
+  },
+  "stage2_martingale_normalisation": {
+    "max_abs_error": 0.0,
+    "tolerance": 1e-10,
+    "passed": true
+  },
+  "stage3_independent_pricing": {
+    "max_abs_diff_lewis_vs_p1p2": 4.583856849649237e-09,
+    "tolerance": 1e-08,
+    "passed": true
+  },
+  "stage4_generator_identity": {
+    "max_abs_L_GB_C": 1.5210055437364645e-14,
+    "n_tested": 33,
+    "tolerance": 1e-07,
+    "passed": true
+  },
+  "stage5_jump_corrected_dlv_identity": {
+    "same_bucket_max_R": 9.282288479517398e-15,
+    "same_bucket_n": 57,
+    "tolerance": 1e-05,
+    "passed": true,
+    "cross_bucket_max_R": 0.11387171920029314,
+    "cross_bucket_median_R": 0.003941812082689902,
+    "cross_bucket_n": 152,
+    "cross_bucket_note": "Not a bug: cross_bucket_slab nodes straddle a jump-bucket boundary, so the back-slab theorem's shared-jump-law premise does not hold there; see generalized_bates.py docstring."
+  },
+  "generalized_bates_export_meta": {
+    "S0": 100.0,
+    "V0": 0.04,
+    "observation_times": [
+      0.0,
+      0.05,
+      0.1,
+      0.2
+    ],
+    "strikes_interior": [
+      65.0,
+      70.0,
+      75.0,
+      80.0,
+      85.0,
+      90.0,
+      95.0,
+      100.0,
+      105.0,
+      110.0,
+      115.0,
+      120.0,
+      125.0,
+      130.0,
+      135.0,
+      140.0,
+      145.0,
+      150.0,
+      155.0
+    ],
+    "back_slab_expiries": [
+      0.5,
+      1.0,
+      2.0
+    ],
+    "heston": {
+      "kappa": 2.0,
+      "theta": 0.04,
+      "xi": 0.35,
+      "rho": -0.7
+    },
+    "extension": {
+      "lambda_": 0.3,
+      "bucket_edges": [
+        0.0,
+        0.038356164383561646,
+        0.1643835616438356,
+        0.3287671232876712,
+        0.7397260273972602,
+        2.0
+      ],
+      "nu": [
+        -0.16,
+        -0.13,
+        -0.1,
+        -0.08,
+        -0.07
+      ],
+      "delta": [
+        0.22,
+        0.19,
+        0.15,
+        0.13,
+        0.12
+      ]
+    },
+    "dense_strikes": [
+      55.0,
+      62.0,
+      69.0,
+      76.0,
+      83.0,
+      90.0,
+      97.0,
+      104.0,
+      111.0,
+      118.0,
+      125.0,
+      132.0,
+      139.0,
+      146.0,
+      153.0,
+      160.0,
+      167.0,
+      174.0,
+      181.0,
+      188.0,
+      195.0
+    ],
+    "dense_tau_offsets": [
+      0.05,
+      0.125,
+      0.2,
+      0.27499999999999997,
+      0.35,
+      0.425,
+      0.49999999999999994,
+      0.5750000000000001,
+      0.65,
+      0.725,
+      0.8,
+      0.875,
+      0.95,
+      1.025,
+      1.1,
+      1.175,
+      1.25,
+      1.325,
+      1.4,
+      1.475,
+      1.55
+    ]
+  },
+  "stage6_crc_inverse": {
+    "success": true,
+    "cost": 0.00024384197547584828,
+    "n_calls_total": 123,
+    "best_start_index": 2,
+    "gamma": 0.001,
+    "rms_iv_error_bp_calibration_grid": 17.810360595044614,
+    "max_iv_error_bp_calibration_grid": 36.78791773173262,
+    "label": "restricted_crc_approximation"
+  },
+  "stage7_reset_diagnostics": {
+    "surface_preservation": {
+      "protected_grid": {
+        "e_C_max": 0.14202601283147942,
+        "rms_price_error": 0.05157183328490132,
+        "spot_normalized_price_error": 0.0014216810988099422,
+        "max_iv_error_bp": 64.39835278637729,
+        "rms_iv_error_bp": 34.75271362532576,
+        "n_points": 84,
+        "n_iv_points": 84
+      },
+      "withheld_dense_grid": {
+        "e_C_max": 0.13126250878515577,
+        "rms_price_error": 0.05703717409161059,
+        "spot_normalized_price_error": 0.0013139383694707786,
+        "max_iv_error_bp": 70.89458022632638,
+        "rms_iv_error_bp": 31.289313541654813,
+        "n_points": 54,
+        "n_iv_points": 54
+      }
+    },
+    "dlv_state_continuity": {
+      "n_nodes": 57,
+      "q_l2_diff": 0.011483971632360365,
+      "q_max_abs_diff": 0.005020620918824659,
+      "ell_l2_diff": 0.020354600416883098,
+      "ell_max_abs_diff": 0.00575284470229691,
+      "q_l2_norm_pre": 0.4669795593628014,
+      "ell_l2_norm_pre": 0.3429240624539033
+    },
+    "characteristic_changes": {
+      "heston_pre": {
+        "kappa": 2.0,
+        "theta": 0.04,
+        "xi": 0.35,
+        "rho": -0.7
+      },
+      "heston_post": {
+        "kappa": 2.0,
+        "theta": 0.042,
+        "xi": 0.33249999999999996,
+        "rho": -0.6649999999999999
+      },
+      "relative_changes": {
+        "theta": 0.05,
+        "xi": -0.05,
+        "rho": -0.05
+      },
+      "brownian_loadings_pre": {
+        "sigma_S": 0.2,
+        "sigma_V": 0.06999999999999999,
+        "rho": -0.7
+      },
+      "brownian_loadings_post": {
+        "sigma_S": 0.2,
+        "sigma_V": 0.06649999999999999,
+        "rho": -0.6649999999999999
+      },
+      "jump_bucket_edges": [
+        0.0,
+        0.038356164383561646,
+        0.1643835616438356,
+        0.3287671232876712,
+        0.7397260273972602,
+        2.0
+      ],
+      "nu_pre": [
+        -0.16,
+        -0.13,
+        -0.1,
+        -0.08,
+        -0.07
+      ],
+      "delta_pre": [
+        0.22,
+        0.19,
+        0.15,
+        0.13,
+        0.12
+      ],
+      "nu_post": [
+        -0.16026192030697178,
+        -0.14047630119323407,
+        -0.11498602117264813,
+        -0.06142244640503831,
+        -0.0393486407405644
+      ],
+      "delta_post": [
+        0.22008992326530294,
+        0.18287139065475697,
+        0.12901651399244046,
+        0.10723982354817077,
+        0.10831872790938131
+      ],
+      "kappa_J_pre": [
+        -0.12698278152676645,
+        -0.10591103916919375,
+        -0.08492568644084764,
+        -0.06905027105529205,
+        -0.06086871883600753
+      ],
+      "kappa_J_post": [
+        -0.12719414234219606,
+        -0.11640399474396923,
+        -0.10117182403017455,
+        -0.05415091904156544,
+        -0.03292784344625377
+      ],
+      "lambda_fixed": 0.3
+    },
+    "post_reset_dlv_residual": {
+      "same_bucket_max_R": 5.5429836068321414e-15,
+      "same_bucket_median_R": 1.5158230573519837e-15,
+      "same_bucket_n": 19,
+      "cross_bucket_max_R": 0.03750734725675767,
+      "cross_bucket_median_R": 0.0016812753021365327,
+      "cross_bucket_n": 38,
+      "same_bucket_nojump_median_R": 0.000587026265955437,
+      "jump_term_essential_ratio": 387265692462.1023
+    }
+  },
+  "stage8_withheld_dense_grid": {
+    "e_C_max": 0.13126250878515577,
+    "rms_price_error": 0.05703717409161059,
+    "spot_normalized_price_error": 0.0013139383694707786,
+    "max_iv_error_bp": 70.89458022632638,
+    "rms_iv_error_bp": 31.289313541654813,
+    "n_points": 54,
+    "n_iv_points": 54
+  },
+  "stage8_passed_withheld_evaluated": true,
+  "sec12_positive_controls": {
+    "control1_naive_no_recalibration": {
+      "e_C_max": 0.3036543652056878,
+      "rms_price_error": 0.11184298700473858,
+      "spot_normalized_price_error": 0.0030395817144869774,
+      "max_iv_error_bp": 81.55418935768766,
+      "rms_iv_error_bp": 40.68692554190757,
+      "n_points": 84,
+      "n_iv_points": 84
+    },
+    "control2_too_few_buckets": {
+      "e_C_max": 0.09920439995941877,
+      "rms_price_error": 0.03744591550861167,
+      "spot_normalized_price_error": 0.0009930365397811634,
+      "max_iv_error_bp": 95.03423051188842,
+      "rms_iv_error_bp": 29.438426341454758,
+      "n_points": 130,
+      "n_iv_points": 130,
+      "success": true,
+      "n_free_params": 4
+    },
+    "control3_stopped_early": {
+      "rms_iv_error_bp": 29.451034720440337,
+      "max_iv_error_bp": 66.21727650041959,
+      "success": false,
+      "n_calls_total": 1
+    },
+    "control4_jump_term_omitted": {
+      "same_bucket_median_R_full": 1.5158230573519837e-15,
+      "same_bucket_median_R_nojump": 0.000587026265955437,
+      "ratio": 387265692462.1023
+    },
+    "converged_rms_iv_error_bp_for_comparison": 17.810360595044614
+  },
+  "crc_pre_reset_export_meta": {
+    "t": 0.0,
+    "S": 100.0,
+    "V": 0.04,
+    "heston": {
+      "kappa": 2.0,
+      "theta": 0.04,
+      "xi": 0.35,
+      "rho": -0.7
+    },
+    "extension": {
+      "lambda_": 0.3,
+      "bucket_edges": [
+        0.0,
+        0.038356164383561646,
+        0.1643835616438356,
+        0.3287671232876712,
+        0.7397260273972602,
+        2.0
+      ],
+      "nu": [
+        -0.16,
+        -0.13,
+        -0.1,
+        -0.08,
+        -0.07
+      ],
+      "delta": [
+        0.22,
+        0.19,
+        0.15,
+        0.13,
+        0.12
+      ]
+    }
+  },
+  "crc_post_reset_export_meta": {
+    "t": 0.05,
+    "S": 99.90004998333751,
+    "V": 0.04,
+    "heston": {
+      "kappa": 2.0,
+      "theta": 0.042,
+      "xi": 0.33249999999999996,
+      "rho": -0.6649999999999999
+    },
+    "extension": {
+      "lambda_": 0.3,
+      "bucket_edges": [
+        0.0,
+        0.038356164383561646,
+        0.1643835616438356,
+        0.3287671232876712,
+        0.7397260273972602,
+        2.0
+      ],
+      "nu": [
+        -0.16026192030697178,
+        -0.14047630119323407,
+        -0.11498602117264813,
+        -0.06142244640503831,
+        -0.0393486407405644
+      ],
+      "delta": [
+        0.22008992326530294,
+        0.18287139065475697,
+        0.12901651399244046,
+        0.10723982354817077,
+        0.10831872790938131
+      ]
+    }
+  },
+  "crc_dense_hidden_export_meta": {
+    "t": 0.05,
+    "S": 99.90004998333751,
+    "V": 0.04
+  },
+  "stage9_export_reproducibility": {
+    "reload_succeeded": true,
+    "crc_post_reset_R_finite_count": 57,
+    "crc_post_reset_R_matches_in_memory": true,
+    "generalized_bates_visible_keys": 49,
+    "crc_dense_hidden_keys": 7
+  },
+  "state_step": {
+    "t_pre": 0.0,
+    "t_post": 0.05,
+    "dt": 0.05,
+    "S_pre": 100.0,
+    "V_pre": 0.04,
+    "S_post": 99.90004998333751,
+    "V_post": 0.04,
+    "method": "conditional_mean"
+  },
+  "tangent_update": {
+    "heston_pre": {
+      "kappa": 2.0,
+      "theta": 0.04,
+      "xi": 0.35,
+      "rho": -0.7
+    },
+    "heston_post": {
+      "kappa": 2.0,
+      "theta": 0.042,
+      "xi": 0.33249999999999996,
+      "rho": -0.6649999999999999
+    },
+    "relative_changes": {
+      "theta": 0.05,
+      "xi": -0.05,
+      "rho": -0.05
+    }
+  },
+  "extension_pre": {
+    "lambda_": 0.3,
+    "bucket_edges": [
+      0.0,
+      0.038356164383561646,
+      0.1643835616438356,
+      0.3287671232876712,
+      0.7397260273972602,
+      2.0
+    ],
+    "nu": [
+      -0.16,
+      -0.13,
+      -0.1,
+      -0.08,
+      -0.07
+    ],
+    "delta": [
+      0.22,
+      0.19,
+      0.15,
+      0.13,
+      0.12
+    ]
+  },
+  "extension_post": {
+    "lambda_": 0.3,
+    "bucket_edges": [
+      0.0,
+      0.038356164383561646,
+      0.1643835616438356,
+      0.3287671232876712,
+      0.7397260273972602,
+      2.0
+    ],
+    "nu": [
+      -0.16026192030697178,
+      -0.14047630119323407,
+      -0.11498602117264813,
+      -0.06142244640503831,
+      -0.0393486407405644
+    ],
+    "delta": [
+      0.22008992326530294,
+      0.18287139065475697,
+      0.12901651399244046,
+      0.10723982354817077,
+      0.10831872790938131
+    ]
+  },
+  "wall_clock_seconds": 541.5802028179169,
+  "ALL_STAGES_PASSED": true
+}
