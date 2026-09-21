@@ -370,10 +370,188 @@ def triangular_fixed_grid_physical_roll(
     )
 
 
+def triangular_fixed_grid_ar1_roll(
+    decoder: FlexSanosDecoder,
+    state: TriangularFixedGridState,
+    *,
+    raw_log_loadings: torch.Tensor,
+    conditional_intercept: torch.Tensor,
+    conditional_slope: torch.Tensor,
+    minimum_dlvsq: float,
+    expiry_time_increment_y: torch.Tensor,
+    calendar_time_increment_y: float,
+    standard_normals: torch.Tensor,
+    uniforms: torch.Tensor,
+    fixed_cash_strikes: torch.Tensor,
+    option_signs: torch.Tensor | None = None,
+) -> TriangularFixedGridRoll:
+    r"""Apply the fitted fixed-expiry AR(1) roll on the unchanged cash grid.
+
+    Each post-roll slab is predicted from the matching non-front slab before
+    the expiry shrink: ``z' = intercept + slope*z + L eps``.  After the
+    front slab is removed, this becomes the next shorter-expiry tower.  The
+    innovation loading ``L`` is shared exactly with the risk-neutral SDE; only
+    the conditional drift differs between these two path laws.
+    """
+
+    batch, num_expiries, num_inner = state.dlvsqs.shape
+    if raw_log_loadings.ndim != 3 or raw_log_loadings.shape[:2] != (
+        num_expiries,
+        num_inner,
+    ):
+        raise ValueError("raw_log_loadings must align with the live DLV tower")
+    if conditional_intercept.shape != (num_expiries - 1, num_inner) or (
+        conditional_slope.shape != conditional_intercept.shape
+    ):
+        raise ValueError("AR(1) coefficients must align with live non-front slabs")
+    if standard_normals.shape != (batch, raw_log_loadings.shape[-1]):
+        raise ValueError("standard_normals must provide one factor vector per path")
+    if not bool(torch.all(raw_log_loadings[0] == 0.0)):
+        raise ValueError("the expiring front DLV slab must have zero loading")
+    raw = torch.log(state.dlvsqs - minimum_dlvsq)
+    innovation = calendar_time_increment_y**0.5 * torch.einsum(
+        "tif,bf->bti", raw_log_loadings, standard_normals
+    )
+    endpoint_raw = raw.clone()
+    endpoint_raw[:, 1:] = (
+        conditional_intercept[None]
+        + conditional_slope[None] * raw[:, 1:]
+        + innovation[:, 1:]
+    )
+    endpoint_dlvsqs = minimum_dlvsq + torch.exp(endpoint_raw)
+    endpoint_densities = _densities_from_front(
+        decoder,
+        support=state.support,
+        front_density=state.densities[:, 0],
+        dlvsqs=endpoint_dlvsqs,
+        expiry_time_increment_y=expiry_time_increment_y,
+    )
+    if not bool(torch.all(torch.isfinite(endpoint_densities))):
+        raise RuntimeError("non-finite density in AR(1) fixed-grid DLV roll")
+    endpoint = TriangularFixedGridState(
+        support=state.support,
+        densities=endpoint_densities,
+        dlvsqs=endpoint_dlvsqs,
+    )
+    return _reveal_and_shrink_fixed_grid_roll(
+        decoder,
+        state,
+        endpoint,
+        expiry_time_increment_y=expiry_time_increment_y,
+        uniforms=uniforms,
+        fixed_cash_strikes=fixed_cash_strikes,
+        option_signs=option_signs,
+        minimum_density=torch.minimum(torch.min(state.densities), torch.min(endpoint_densities)),
+    )
+
+
+def triangular_fixed_grid_ar1_heun_roll(
+    decoder: FlexSanosDecoder,
+    state: TriangularFixedGridState,
+    *,
+    raw_log_loadings: torch.Tensor,
+    conditional_intercept: torch.Tensor,
+    conditional_slope: torch.Tensor,
+    minimum_dlvsq: float,
+    expiry_time_increment_y: torch.Tensor,
+    calendar_time_increment_y: float,
+    standard_normals: torch.Tensor,
+    uniforms: torch.Tensor,
+    fixed_cash_strikes: torch.Tensor,
+    option_signs: torch.Tensor | None = None,
+) -> TriangularFixedGridRoll:
+    r"""Use the AR(1) affine drift in the same stochastic-Heun scheme as Q.
+
+    The coordinatewise weekly AR(1) mean is ``alpha + beta*z``.  Its affine
+    drift extension is ``(alpha + (beta - 1)*z) / h``, whose one-week Euler
+    mean equals the fitted AR(1) mean.  The unconstrained empirical slopes can
+    be negative or above one, so this is intentionally an affine extension,
+    not a claim that every coordinate is a continuous mean-reverting OU.
+    """
+
+    batch, num_expiries, num_inner = state.dlvsqs.shape
+    if raw_log_loadings.ndim != 3 or raw_log_loadings.shape[:2] != (
+        num_expiries,
+        num_inner,
+    ):
+        raise ValueError("raw_log_loadings must align with the live DLV tower")
+    if conditional_intercept.shape != (num_expiries - 1, num_inner) or (
+        conditional_slope.shape != conditional_intercept.shape
+    ):
+        raise ValueError("AR(1) coefficients must align with live non-front slabs")
+    if (
+        standard_normals.ndim != 3
+        or standard_normals.shape[0] != batch
+        or standard_normals.shape[-1] != raw_log_loadings.shape[-1]
+    ):
+        raise ValueError("standard_normals must provide one factor vector per path and substep")
+    if not bool(torch.all(raw_log_loadings[0] == 0.0)):
+        raise ValueError("the expiring front DLV slab must have zero loading")
+
+    num_substeps = standard_normals.shape[1]
+    step_y = calendar_time_increment_y / num_substeps
+    current = state
+    minimum_density = torch.min(current.densities)
+
+    def ar1_drift(dlvsqs: torch.Tensor) -> torch.Tensor:
+        raw = torch.log(dlvsqs - minimum_dlvsq)
+        drift = torch.zeros_like(raw)
+        drift[:, 1:] = (
+            conditional_intercept[None]
+            + (conditional_slope[None] - 1.0) * raw[:, 1:]
+        ) / calendar_time_increment_y
+        return drift
+
+    for step_index in range(num_substeps):
+        raw = torch.log(current.dlvsqs - minimum_dlvsq)
+        drift = ar1_drift(current.dlvsqs)
+        noise = step_y**0.5 * torch.einsum(
+            "tif,bf->bti", raw_log_loadings, standard_normals[:, step_index]
+        )
+        proposal_raw = raw + step_y * drift + noise
+        proposal_dlvsqs = minimum_dlvsq + torch.exp(proposal_raw)
+        proposal_densities = _densities_from_front(
+            decoder,
+            support=current.support,
+            front_density=current.densities[:, 0],
+            dlvsqs=proposal_dlvsqs,
+            expiry_time_increment_y=expiry_time_increment_y,
+        )
+        proposal_drift = ar1_drift(proposal_dlvsqs)
+        raw = raw + 0.5 * step_y * (drift + proposal_drift) + noise
+        if not bool(torch.all(torch.isfinite(raw))):
+            raise RuntimeError(f"non-finite AR(1)-Heun log-DLV at substep {step_index}")
+        dlvsqs = minimum_dlvsq + torch.exp(raw)
+        densities = _densities_from_front(
+            decoder,
+            support=current.support,
+            front_density=current.densities[:, 0],
+            dlvsqs=dlvsqs,
+            expiry_time_increment_y=expiry_time_increment_y,
+        )
+        if not bool(torch.all(torch.isfinite(densities))):
+            raise RuntimeError(f"non-finite AR(1)-Heun density at substep {step_index}")
+        current = TriangularFixedGridState(current.support, densities, dlvsqs)
+        minimum_density = torch.minimum(minimum_density, torch.min(densities))
+
+    return _reveal_and_shrink_fixed_grid_roll(
+        decoder,
+        state,
+        current,
+        expiry_time_increment_y=expiry_time_increment_y,
+        uniforms=uniforms,
+        fixed_cash_strikes=fixed_cash_strikes,
+        option_signs=option_signs,
+        minimum_density=minimum_density,
+    )
+
+
 __all__ = [
     "TriangularFixedGridRoll",
     "TriangularFixedGridState",
     "regrid_triangular_state_to_revealed_spot",
+    "triangular_fixed_grid_ar1_roll",
+    "triangular_fixed_grid_ar1_heun_roll",
     "triangular_fixed_grid_physical_roll",
     "triangular_fixed_grid_roll",
 ]
