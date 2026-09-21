@@ -1,4 +1,4 @@
-"""Train direct-utility policies at fixed notionals on one physical DLV tower."""
+"""Train direct-utility policies at fixed notionals on one DLV tower path law."""
 
 from __future__ import annotations
 
@@ -30,7 +30,10 @@ from quantdata.dysanos.flex.fixed_expiry_ar1 import (
 )
 from quantdata.dysanos.flex.fixed_grid_dlv_attempt2_triangular import (
     TriangularFixedGridState,
+    triangular_fixed_grid_ar1_heun_roll,
+    triangular_fixed_grid_ar1_roll,
     triangular_fixed_grid_physical_roll,
+    triangular_fixed_grid_roll,
 )
 from quantdata.dysanos.flex.market_encoder import write_json_atomic
 from quantdata.dysanos.flex.model import bound_native_raw
@@ -88,8 +91,48 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--path-generation-batch-size", type=int, default=10_000)
     parser.add_argument("--training-batch-size", type=int, default=10_000)
+    parser.add_argument(
+        "--dataset-storage",
+        choices=("gpu", "cpu"),
+        default="gpu",
+        help=(
+            "where to retain the generated path table; cpu streams minibatches to the GPU "
+            "and leaves transition workspace available for analytical SDE generation"
+        ),
+    )
     parser.add_argument("--antithetic-pairs-per-block", type=int, default=50)
     parser.add_argument("--innovation-rank", type=int, default=25)
+    parser.add_argument(
+        "--bs-y-vol",
+        type=float,
+        default=0.0,
+        help="independent Black-Scholes volatility of Y in S=X*Y; zero retains X-only pricing",
+    )
+    parser.add_argument(
+        "--path-law",
+        choices=("physical", "ar1", "ar1-heun", "analytic"),
+        default="physical",
+        help=(
+            "physical uses zero raw log-DLV drift; ar1 uses the fitted weekly "
+            "AR(1) conditional drift; ar1-heun uses its ten-substep affine extension; "
+            "analytic uses the theoretical DLVsq drift"
+        ),
+    )
+    parser.add_argument(
+        "--analytic-num-substeps",
+        type=int,
+        default=10,
+        help="stochastic-Heun substeps per week for analytic or ar1-heun path laws",
+    )
+    parser.add_argument(
+        "--state-feature-mode",
+        choices=("density", "full"),
+        default="density",
+        help=(
+            "policy information: density is the legacy square-root density tower; "
+            "full additionally supplies live log-DLVsq slabs and log spot"
+        ),
+    )
     parser.add_argument("--hidden-width", type=int, default=1_024)
     parser.add_argument("--hidden-layers", type=int, default=2)
     parser.add_argument("--epochs", type=int, default=500)
@@ -103,11 +146,26 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--monitoring-bootstrap-samples", type=int, default=1_000)
     parser.add_argument("--final-bootstrap-samples", type=int, default=10_000)
     parser.add_argument("--residual-adversary-epochs", type=int, default=0)
+    parser.add_argument("--residual-adversary-min-epochs", type=int, default=0)
     parser.add_argument("--residual-adversary-notionals", default="4096")
     parser.add_argument("--residual-base-weights-checkpoint", type=Path)
     parser.add_argument("--residual-base-uniform", action="store_true")
+    parser.add_argument(
+        "--residual-raw-returns",
+        action="store_true",
+        help="train the residual adversary on the original option returns rather than beta/PCA factors",
+    )
     parser.add_argument("--residual-checkpoint", type=Path)
     parser.add_argument("--residual-adversary-learning-rate", type=float, default=1.0e-6)
+    parser.add_argument("--residual-adversary-min-learning-rate", type=float, default=1.0e-7)
+    parser.add_argument("--residual-adversary-lr-patience", type=int, default=0)
+    parser.add_argument("--residual-adversary-lr-decay", type=float, default=0.5)
+    parser.add_argument("--residual-adversary-gradient-rms-tolerance", type=float, default=0.0)
+    parser.add_argument(
+        "--residual-adversary-utility-ceiling",
+        type=float,
+        help="stop after a monitored residual utility reaches this ceiling",
+    )
     parser.add_argument(
         "--residual-optimizer",
         choices=("normalized-adam", "direct-lbfgs"),
@@ -192,6 +250,10 @@ def _validate_arguments(arguments: argparse.Namespace) -> tuple[float, ...]:
         <= 0
     ):
         raise ValueError("rank, architecture, epochs, monitoring, and bootstrap must be positive")
+    if arguments.analytic_num_substeps <= 0:
+        raise ValueError("analytic-num-substeps must be positive")
+    if arguments.residual_adversary_min_epochs > arguments.residual_adversary_epochs:
+        raise ValueError("residual-adversary-min-epochs cannot exceed residual-adversary-epochs")
     if (
         not math.isfinite(arguments.learning_rate)
         or arguments.learning_rate <= 0.0
@@ -203,8 +265,25 @@ def _validate_arguments(arguments: argparse.Namespace) -> tuple[float, ...]:
         or not math.isfinite(arguments.bias_natural_gradient_ridge)
         or arguments.bias_natural_gradient_ridge <= 0.0
         or arguments.residual_adversary_epochs < 0
+        or arguments.residual_adversary_min_epochs < 0
         or not math.isfinite(arguments.residual_adversary_learning_rate)
         or arguments.residual_adversary_learning_rate <= 0.0
+        or not math.isfinite(arguments.residual_adversary_min_learning_rate)
+        or arguments.residual_adversary_min_learning_rate <= 0.0
+        or arguments.residual_adversary_min_learning_rate
+        > arguments.residual_adversary_learning_rate
+        or arguments.residual_adversary_lr_patience < 0
+        or not math.isfinite(arguments.residual_adversary_lr_decay)
+        or not 0.0 < arguments.residual_adversary_lr_decay < 1.0
+        or not math.isfinite(arguments.residual_adversary_gradient_rms_tolerance)
+        or arguments.residual_adversary_gradient_rms_tolerance < 0.0
+        or (
+            arguments.residual_adversary_utility_ceiling is not None
+            and (
+                not math.isfinite(arguments.residual_adversary_utility_ceiling)
+                or not 0.0 < arguments.residual_adversary_utility_ceiling <= 1.0
+            )
+        )
         or arguments.residual_adversary_monitoring_interval <= 0
         or arguments.residual_lbfgs_iterations_per_epoch <= 0
         or arguments.residual_hidden_width < 0
@@ -217,6 +296,8 @@ def _validate_arguments(arguments: argparse.Namespace) -> tuple[float, ...]:
         or arguments.residual_final_bias_root_ridge <= 0.0
         or not math.isfinite(arguments.residual_factor_maximum_condition_number)
         or arguments.residual_factor_maximum_condition_number <= 1.0
+        or not math.isfinite(arguments.bs_y_vol)
+        or arguments.bs_y_vol < 0.0
     ):
         raise ValueError("optimizer scalars are invalid")
     return notionals
@@ -238,6 +319,48 @@ def _json_arguments(arguments: argparse.Namespace) -> dict[str, object]:
     }
 
 
+def _product_option_prices(
+    *,
+    support_x: torch.Tensor,
+    densities_x: torch.Tensor,
+    y: torch.Tensor,
+    fixed_cash_strikes: torch.Tensor,
+    option_signs: torch.Tensor,
+    expiries_y: torch.Tensor,
+    bs_y_vol: float,
+) -> torch.Tensor:
+    r"""Price calls or puts on S=XY by integrating conditional BS values over X.
+
+    ``densities_x[:, j]`` is the discrete conditional law of X at the j-th
+    live expiry.  Conditional on each X node, Y has its independent
+    Black--Scholes continuation from its currently realized level ``y``.
+    """
+
+    paths, expiries, nodes = densities_x.shape
+    if support_x.shape != (paths, nodes) or y.shape != (paths,):
+        raise ValueError("product option inputs must share path and X-node axes")
+    if option_signs.shape != (paths, len(fixed_cash_strikes)):
+        raise ValueError("option signs must align with paths and fixed cash strikes")
+    if expiries_y.shape != (expiries,):
+        raise ValueError("one residual Y expiry is required per live X density")
+    spot_nodes = support_x * y[:, None]
+    strike = fixed_cash_strikes[None, None, :]
+    spot = spot_nodes[:, :, None]
+    tau = expiries_y[None, :, None, None]
+    if bs_y_vol == 0.0:
+        call = torch.relu(spot[:, None] - strike).expand(-1, expiries, -1, -1)
+    else:
+        volatility_sqrt_time = bs_y_vol * torch.sqrt(tau)
+        log_moneyness = torch.log(spot[:, None] / strike)
+        d1 = log_moneyness / volatility_sqrt_time + 0.5 * volatility_sqrt_time
+        d2 = d1 - volatility_sqrt_time
+        normal = torch.special.ndtr
+        call = spot[:, None] * normal(d1) - strike * normal(d2)
+    put = call - spot[:, None] + strike
+    signed_value = torch.where(option_signs[:, None, None] > 0.0, call, put)
+    return torch.einsum("bts,btsk->btk", densities_x, signed_value)
+
+
 def _physical_tower_dataset(
     *,
     model: Any,
@@ -250,16 +373,58 @@ def _physical_tower_dataset(
     path_batch_size: int,
     pairs_per_block: int,
     seed: int,
+    state_feature_mode: str,
+    path_law: str,
+    analytic_num_substeps: int,
+    dataset_storage: str,
+    ar1_conditional_intercept: torch.Tensor | None = None,
+    ar1_conditional_slope: torch.Tensor | None = None,
+    bs_y_vol: float = 0.0,
 ) -> PhysicalTowerDataset:
-    """Generate the specified zero-raw-drift physical shrinking tower."""
+    """Generate a physical or analytical-DLVsq shrinking tower."""
 
     device = parameters.dlvsqs.device
+    storage_device = torch.device("cpu") if dataset_storage == "cpu" else device
     dtype = parameters.dlvsqs.dtype
     rank = raw_log_loadings.shape[-1]
     generator = torch.Generator(device=device).manual_seed(seed)
-    feature_parts: list[list[torch.Tensor]] = [[] for _ in range(4)]
-    return_parts: list[list[torch.Tensor]] = [[] for _ in range(4)]
-    spot_return_parts: list[torch.Tensor] = []
+    if state_feature_mode not in {"density", "full"}:
+        raise ValueError(f"unsupported state feature mode: {state_feature_mode}")
+    if path_law not in {"physical", "ar1", "ar1-heun", "analytic"}:
+        raise ValueError(f"unsupported path law: {path_law}")
+    if path_law in {"ar1", "ar1-heun"} and (
+        ar1_conditional_intercept is None or ar1_conditional_slope is None
+    ):
+        raise ValueError("AR(1) path law requires conditional intercept and slope")
+    if analytic_num_substeps <= 0:
+        raise ValueError("analytic_num_substeps must be positive")
+    if not math.isfinite(bs_y_vol) or bs_y_vol < 0.0:
+        raise ValueError("bs_y_vol must be finite and nonnegative")
+    num_nodes = surface.densities.shape[-1]
+    num_inner = parameters.dlvsqs.shape[-1]
+    feature_sizes = []
+    for trade_week in range(4):
+        live_expiries = 4 - trade_week
+        density_size = live_expiries * num_nodes
+        if state_feature_mode == "density":
+            feature_sizes.append(density_size)
+        else:
+            feature_sizes.append(density_size + live_expiries * num_inner + 1)
+    feature_values = tuple(
+        torch.empty((num_paths, size), dtype=torch.float32, device=storage_device)
+        for size in feature_sizes
+    )
+    return_values = tuple(
+        torch.empty(
+            (num_paths, (4 - trade_week) * len(fixed_cash_strikes)),
+            dtype=torch.float32,
+            device=storage_device,
+        )
+        for trade_week in range(4)
+    )
+    spot_return_values = torch.empty(
+        (num_paths, 4), dtype=torch.float32, device=storage_device
+    )
     maximum_mass_residual = 0.0
     maximum_forward_residual = 0.0
     minimum_density = float("inf")
@@ -271,15 +436,32 @@ def _physical_tower_dataset(
     for start in range(0, num_paths, path_batch_size):
         paths = min(path_batch_size, num_paths - start)
         pairs = paths // 2
-        normal_half = torch.randn(
-            pairs,
-            4,
-            rank,
-            dtype=dtype,
-            device=device,
-            generator=generator,
-        )
-        normals = torch.stack((normal_half, -normal_half), dim=1).reshape(paths, 4, rank)
+        if path_law in {"physical", "ar1"}:
+            normal_half = torch.randn(
+                pairs,
+                4,
+                rank,
+                dtype=dtype,
+                device=device,
+                generator=generator,
+            )
+            normals = torch.stack((normal_half, -normal_half), dim=1).reshape(paths, 4, rank)
+        else:
+            normal_half = torch.randn(
+                pairs,
+                4,
+                analytic_num_substeps,
+                rank,
+                dtype=dtype,
+                device=device,
+                generator=generator,
+            )
+            normals = torch.stack((normal_half, -normal_half), dim=1).reshape(
+                paths,
+                4,
+                analytic_num_substeps,
+                rank,
+            )
         uniforms = _randomized_stratified_antithetic_uniforms(
             num_paths=paths,
             num_weeks=4,
@@ -288,70 +470,173 @@ def _physical_tower_dataset(
             device=device,
             generator=generator,
         )
+        y_normal_half = torch.randn(
+            pairs,
+            4,
+            dtype=dtype,
+            device=device,
+            generator=generator,
+        )
+        y_normals = torch.stack((y_normal_half, -y_normal_half), dim=1).reshape(paths, 4)
         state = TriangularFixedGridState(
             support=base_support.expand(paths, -1),
             densities=surface.densities.expand(paths, -1, -1),
             dlvsqs=parameters.dlvsqs.expand(paths, -1, -1),
         )
-        current_spot = torch.ones(paths, dtype=dtype, device=device)
+        current_x = torch.ones(paths, dtype=dtype, device=device)
+        current_y = torch.ones(paths, dtype=dtype, device=device)
         batch_spot_returns: list[torch.Tensor] = []
         for trade_week in range(4):
             num_live_expiries = 4 - trade_week
-            feature_parts[trade_week].append(
-                torch.sqrt(torch.clamp_min(state.densities, 0.0)).reshape(paths, -1).float()
-            )
+            density_features = torch.sqrt(torch.clamp_min(state.densities, 0.0)).reshape(paths, -1)
+            if state_feature_mode == "density":
+                features = density_features
+            else:
+                # The full Markov state for this fixed-grid simulator consists
+                # of the conditional density tower, live local-variance tower,
+                # and current spot. The next Gaussian innovation is deliberately
+                # excluded because it is not known at the trading time.
+                log_dlvsqs = torch.log(state.dlvsqs - geometry.min_dlvsq).reshape(paths, -1)
+                log_spot = torch.log(current_x * current_y)[:, None]
+                features = torch.cat((density_features, log_dlvsqs, log_spot), dim=1)
+            feature_values[trade_week][start : start + paths] = features.float().to(storage_device)
             option_signs = torch.where(
-                fixed_cash_strikes[None] <= current_spot[:, None],
+                fixed_cash_strikes[None] <= (current_x * current_y)[:, None],
                 1.0,
                 -1.0,
             )
-            live_loadings = raw_log_loadings[:num_live_expiries]
-            raw_innovation = calendar_time_increment_y**0.5 * torch.einsum(
-                "tif,bf->bti", live_loadings, normals[:, trade_week]
-            )
-            maximum_absolute_raw_innovation = max(
-                maximum_absolute_raw_innovation,
-                float(torch.max(torch.abs(raw_innovation))),
-            )
-            roll = triangular_fixed_grid_physical_roll(
-                model.sanos_decoder,
-                state,
-                raw_log_loadings=live_loadings,
-                minimum_dlvsq=geometry.min_dlvsq,
-                expiry_time_increment_y=model.sanos_decoder.model_dts_y[0],
-                calendar_time_increment_y=calendar_time_increment_y,
-                standard_normals=normals[:, trade_week],
-                uniforms=uniforms[:, trade_week],
+            live_expiries_y = torch.arange(
+                1,
+                num_live_expiries + 1,
+                dtype=dtype,
+                device=device,
+            ) * calendar_time_increment_y
+            prices = _product_option_prices(
+                support_x=state.support,
+                densities_x=state.densities,
+                y=current_y,
                 fixed_cash_strikes=fixed_cash_strikes,
                 option_signs=option_signs,
+                expiries_y=live_expiries_y,
+                bs_y_vol=bs_y_vol,
             )
-            prices = roll.initial_call_values
+            live_loadings = raw_log_loadings[:num_live_expiries]
+            if path_law == "physical":
+                raw_innovation = calendar_time_increment_y**0.5 * torch.einsum(
+                    "tif,bf->bti", live_loadings, normals[:, trade_week]
+                )
+                maximum_absolute_raw_innovation = max(
+                    maximum_absolute_raw_innovation,
+                    float(torch.max(torch.abs(raw_innovation))),
+                )
+                roll = triangular_fixed_grid_physical_roll(
+                    model.sanos_decoder,
+                    state,
+                    raw_log_loadings=live_loadings,
+                    minimum_dlvsq=geometry.min_dlvsq,
+                    expiry_time_increment_y=model.sanos_decoder.model_dts_y[0],
+                    calendar_time_increment_y=calendar_time_increment_y,
+                    standard_normals=normals[:, trade_week],
+                    uniforms=uniforms[:, trade_week],
+                    fixed_cash_strikes=fixed_cash_strikes,
+                    option_signs=option_signs,
+                )
+            elif path_law == "ar1":
+                roll = triangular_fixed_grid_ar1_roll(
+                    model.sanos_decoder,
+                    state,
+                    raw_log_loadings=live_loadings,
+                    conditional_intercept=ar1_conditional_intercept[: num_live_expiries - 1],
+                    conditional_slope=ar1_conditional_slope[: num_live_expiries - 1],
+                    minimum_dlvsq=geometry.min_dlvsq,
+                    expiry_time_increment_y=model.sanos_decoder.model_dts_y[0],
+                    calendar_time_increment_y=calendar_time_increment_y,
+                    standard_normals=normals[:, trade_week],
+                    uniforms=uniforms[:, trade_week],
+                    fixed_cash_strikes=fixed_cash_strikes,
+                    option_signs=option_signs,
+                )
+            elif path_law == "ar1-heun":
+                roll = triangular_fixed_grid_ar1_heun_roll(
+                    model.sanos_decoder,
+                    state,
+                    raw_log_loadings=live_loadings,
+                    conditional_intercept=ar1_conditional_intercept[: num_live_expiries - 1],
+                    conditional_slope=ar1_conditional_slope[: num_live_expiries - 1],
+                    minimum_dlvsq=geometry.min_dlvsq,
+                    expiry_time_increment_y=model.sanos_decoder.model_dts_y[0],
+                    calendar_time_increment_y=calendar_time_increment_y,
+                    standard_normals=normals[:, trade_week],
+                    uniforms=uniforms[:, trade_week],
+                    fixed_cash_strikes=fixed_cash_strikes,
+                    option_signs=option_signs,
+                )
+            else:
+                roll = triangular_fixed_grid_roll(
+                    model.sanos_decoder,
+                    state,
+                    raw_log_loadings=live_loadings,
+                    minimum_dlvsq=geometry.min_dlvsq,
+                    expiry_time_increment_y=model.sanos_decoder.model_dts_y[0],
+                    calendar_time_increment_y=calendar_time_increment_y,
+                    standard_normals=normals[:, trade_week],
+                    uniforms=uniforms[:, trade_week],
+                    fixed_cash_strikes=fixed_cash_strikes,
+                    option_signs=option_signs,
+                )
             if not bool(torch.all(torch.isfinite(prices) & (prices > 0.0))):
-                raise RuntimeError("physical tower produced a nonpositive ITM price")
+                raise RuntimeError("tower path law produced a nonpositive ITM price")
             minimum_itm_price = min(minimum_itm_price, float(torch.min(prices)))
-            next_spot = roll.revealed_spot
-            batch_spot_returns.append(next_spot / current_spot - 1.0)
-            one_step_returns = (roll.final_call_values / prices - 1.0).reshape(paths, -1)
+            next_x = roll.revealed_spot
+            next_y = current_y * torch.exp(
+                -0.5 * bs_y_vol**2 * calendar_time_increment_y
+                + bs_y_vol * calendar_time_increment_y**0.5 * y_normals[:, trade_week]
+            )
+            batch_spot_returns.append(next_x * next_y / (current_x * current_y) - 1.0)
+            final_values = torch.empty_like(prices)
+            final_values[:, 0] = torch.where(
+                option_signs > 0.0,
+                torch.relu(next_x[:, None] * next_y[:, None] - fixed_cash_strikes[None]),
+                torch.relu(fixed_cash_strikes[None] - next_x[:, None] * next_y[:, None]),
+            )
+            if num_live_expiries > 1:
+                if roll.next_state is None:
+                    raise RuntimeError("product tower ended before its live expiry set")
+                final_values[:, 1:] = _product_option_prices(
+                    support_x=roll.next_state.support,
+                    densities_x=roll.next_state.densities,
+                    y=next_y,
+                    fixed_cash_strikes=fixed_cash_strikes,
+                    option_signs=option_signs,
+                    expiries_y=live_expiries_y[:-1],
+                    bs_y_vol=bs_y_vol,
+                )
+            one_step_returns = (final_values / prices - 1.0).reshape(paths, -1)
             if not bool(torch.all(torch.isfinite(one_step_returns))):
-                raise RuntimeError("physical tower produced a non-finite option return")
-            return_parts[trade_week].append(one_step_returns.float())
+                raise RuntimeError("tower path law produced a non-finite option return")
+            return_values[trade_week][start : start + paths] = one_step_returns.float().to(
+                storage_device
+            )
             maximum_mass_residual = max(maximum_mass_residual, float(roll.maximum_mass_residual))
             maximum_forward_residual = max(
                 maximum_forward_residual, float(roll.maximum_forward_residual)
             )
             minimum_density = min(minimum_density, float(roll.minimum_density))
-            current_spot = next_spot
+            current_x = next_x
+            current_y = next_y
             if trade_week < 3:
                 if roll.next_state is None:
-                    raise RuntimeError("physical tower ended before the final expiry")
+                    raise RuntimeError("tower path law ended before the final expiry")
                 state = roll.next_state
 
-        spot_return_parts.append(torch.stack(batch_spot_returns, dim=1).float())
+        spot_return_values[start : start + paths] = torch.stack(
+            batch_spot_returns, dim=1
+        ).float().to(storage_device)
         print(f"generated {start + paths}/{num_paths} paths (seed {seed})", flush=True)
     return PhysicalTowerDataset(
-        features_by_time=tuple(torch.cat(parts, dim=0) for parts in feature_parts),
-        returns_by_time=tuple(torch.cat(parts, dim=0) for parts in return_parts),
-        spot_returns=torch.cat(spot_return_parts, dim=0),
+        features_by_time=feature_values,
+        returns_by_time=return_values,
+        spot_returns=spot_return_values,
         paths_per_independent_block=2 * pairs_per_block,
         diagnostics={
             "num_paths": num_paths,
@@ -362,6 +647,18 @@ def _physical_tower_dataset(
             "maximum_mass_residual": maximum_mass_residual,
             "maximum_forward_residual": maximum_forward_residual,
             "maximum_absolute_raw_log_dlv_innovation": (maximum_absolute_raw_innovation),
+            "state_feature_mode": state_feature_mode,
+            "state_feature_definition": (
+                "sqrt live conditional density tower"
+                if state_feature_mode == "density"
+                else "sqrt live conditional density tower, live log(DLVsq-minimum), and log spot"
+            ),
+            "path_law": path_law,
+            "analytic_num_substeps": (
+                analytic_num_substeps if path_law in {"analytic", "ar1-heun"} else None
+            ),
+            "dataset_storage": dataset_storage,
+            "bs_y_vol": bs_y_vol,
         },
     )
 
@@ -387,10 +684,18 @@ def _feature_statistics(
 def _dataset_batch(
     dataset: PhysicalTowerDataset,
     indices: torch.Tensor,
+    *,
+    device: torch.device,
 ) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
+    """Gather a path batch and transfer it to the policy device if required."""
+
+    def gather(values: torch.Tensor) -> torch.Tensor:
+        source_indices = indices.to(values.device) if indices.device != values.device else indices
+        return values[source_indices].to(device, non_blocking=values.device.type == "cpu")
+
     return (
-        [values[indices] for values in dataset.features_by_time],
-        [values[indices] for values in dataset.returns_by_time],
+        [gather(values) for values in dataset.features_by_time],
+        [gather(values) for values in dataset.returns_by_time],
     )
 
 
@@ -523,7 +828,7 @@ def _full_path_policy_values(
         for start in range(0, dataset.num_paths, batch_size):
             stop = min(start + batch_size, dataset.num_paths)
             indices = torch.arange(start, stop, device=policy.notionals.device)
-            features, returns = _dataset_batch(dataset, indices)
+            features, returns = _dataset_batch(dataset, indices, device=policy.notionals.device)
             forward = policy(features, returns)
             leveraged_parts.append(forward.leveraged_pnl)
             normalized_parts.append(forward.normalized_pnl)
@@ -565,7 +870,7 @@ def _objective_gradient_audit(
     for start in range(0, dataset.num_paths, batch_size):
         stop = min(start + batch_size, dataset.num_paths)
         indices = torch.arange(start, stop, device=policy.notionals.device)
-        features, returns = _dataset_batch(dataset, indices)
+        features, returns = _dataset_batch(dataset, indices, device=policy.notionals.device)
         forward = policy(features, returns)
         normalized_loss_by_head = (
             -torch.sum(
@@ -693,7 +998,7 @@ def _residual_adversary_gradient(
     for start in range(0, dataset.num_paths, batch_size):
         stop = min(start + batch_size, dataset.num_paths)
         indices = torch.arange(start, stop, device=policy.notionals.device)
-        features, returns = _dataset_batch(dataset, indices)
+        features, returns = _dataset_batch(dataset, indices, device=policy.notionals.device)
         forward = policy(features, returns)
         loss = -torch.sum(combined_weights[:, start:stop].detach() * forward.normalized_pnl) / (
             dataset.num_paths * len(policy.notionals)
@@ -717,7 +1022,7 @@ def _direct_residual_objective_gradient(
     for start in range(0, dataset.num_paths, batch_size):
         stop = min(start + batch_size, dataset.num_paths)
         indices = torch.arange(start, stop, device=policy.notionals.device)
-        features, returns = _dataset_batch(dataset, indices)
+        features, returns = _dataset_batch(dataset, indices, device=policy.notionals.device)
         forward = policy(features, returns)
         loss = -torch.mean(
             torch.sum(
@@ -799,7 +1104,13 @@ def _run_residual_adversary(
     lbfgs_iterations_per_epoch: int,
     seed: int,
     epochs: int,
+    min_epochs: int,
     learning_rate: float,
+    min_learning_rate: float,
+    lr_patience: int,
+    lr_decay: float,
+    gradient_rms_tolerance: float,
+    utility_ceiling: float | None,
     action_penalty: float,
     gradient_clip_norm: float,
     monitoring_interval: int,
@@ -873,6 +1184,10 @@ def _run_residual_adversary(
             "gradient": initial_gradient,
         }
     ]
+    best_utility = float(initial["utility_under_q"][0])
+    epochs_without_improvement = 0
+    stopped_early = False
+    stop_reason = "maximum epochs reached"
     for epoch in range(1, epochs + 1):
         values = _residual_adversary_values(
             policy,
@@ -887,7 +1202,9 @@ def _run_residual_adversary(
             for start in range(0, dataset.num_paths, batch_size):
                 stop = min(start + batch_size, dataset.num_paths)
                 indices = torch.arange(start, stop, device=policy.notionals.device)
-                features, returns = _dataset_batch(dataset, indices)
+                features, returns = _dataset_batch(
+                    dataset, indices, device=policy.notionals.device
+                )
                 forward = policy(features, returns)
                 surrogate = (
                     -torch.sum(
@@ -917,7 +1234,9 @@ def _run_residual_adversary(
                 for start in range(0, dataset.num_paths, batch_size):
                     stop = min(start + batch_size, dataset.num_paths)
                     indices = torch.arange(start, stop, device=policy.notionals.device)
-                    features, returns = _dataset_batch(dataset, indices)
+                    features, returns = _dataset_batch(
+                        dataset, indices, device=policy.notionals.device
+                    )
                     forward = policy(features, returns)
                     batch_fraction = (stop - start) / dataset.num_paths
                     loss = -torch.mean(
@@ -970,19 +1289,61 @@ def _run_residual_adversary(
             record["combined_effective_sample_size"] = (
                 monitored["combined_effective_sample_size"].cpu().tolist()
             )
+            monitored_gradient = _residual_adversary_gradient(
+                policy,
+                dataset,
+                combined_weights=monitored["combined_weights"],
+                batch_size=batch_size,
+            )
+            record["normalized_gradient"] = monitored_gradient
+            maximum_gradient_rms = max(
+                value["rms_per_parameter"] for value in monitored_gradient
+            )
+            monitored_utility = float(monitored["utility_under_q"][0])
+            if monitored_utility > best_utility * (1.0 + 1.0e-5) + 1.0e-10:
+                best_utility = monitored_utility
+                epochs_without_improvement = 0
+            else:
+                epochs_without_improvement += monitoring_interval
+            learning_rate_before_decay = optimizer.param_groups[0]["lr"]
+            if (
+                optimizer_kind == "normalized-adam"
+                and lr_patience
+                and epochs_without_improvement >= lr_patience
+                and learning_rate_before_decay > min_learning_rate
+            ):
+                for group in optimizer.param_groups:
+                    group["lr"] = max(min_learning_rate, group["lr"] * lr_decay)
+                epochs_without_improvement = 0
+                record["learning_rate_decay"] = {
+                    "before": learning_rate_before_decay,
+                    "after": optimizer.param_groups[0]["lr"],
+                }
             print(
                 f"residual epoch {epoch}: "
                 + ", ".join(
-                    f"N={notional:g}:uQ={utility:.6g}"
-                    for notional, utility in zip(
+                    f"N={notional:g}:uQ={utility:.6g},grad_rms={gradient['rms_per_parameter']:.3g}"
+                    for notional, utility, gradient in zip(
                         notionals,
                         record["utility_under_q"],
+                        monitored_gradient,
                         strict=True,
                     )
                 ),
                 flush=True,
             )
+            if utility_ceiling is not None and monitored_utility >= utility_ceiling:
+                stopped_early = True
+                stop_reason = "direct utility ceiling reached"
+            elif epoch >= min_epochs and (
+                gradient_rms_tolerance > 0.0
+                and maximum_gradient_rms <= gradient_rms_tolerance
+            ):
+                stopped_early = True
+                stop_reason = "normalized gradient RMS tolerance reached"
         history.append(record)
+        if stopped_early:
+            break
     final_bias_root_history: list[dict[str, object]] = []
     for step in range(1, final_bias_root_steps + 1):
         diagnostics = _bias_natural_gradient_step(
@@ -1040,8 +1401,17 @@ def _run_residual_adversary(
                 if parameter.requires_grad
             ),
         },
-        "epochs": epochs,
+        "maximum_epochs": epochs,
+        "completed_epochs": history[-1]["epoch"],
+        "minimum_epochs": min_epochs,
+        "stopped_early": stopped_early,
+        "stop_reason": stop_reason,
         "learning_rate": learning_rate,
+        "minimum_learning_rate": min_learning_rate,
+        "lr_patience": lr_patience,
+        "lr_decay": lr_decay,
+        "gradient_rms_tolerance": gradient_rms_tolerance,
+        "utility_ceiling": utility_ceiling,
         "optimizer": optimizer_kind,
         "lbfgs_iterations_per_epoch": lbfgs_iterations_per_epoch,
         "initial_utility_under_q": initial["utility_under_q"].cpu().tolist(),
@@ -1078,7 +1448,7 @@ def _residual_adversary_checkpoint(
     report: dict[str, object],
     base_checkpoint: Path | None,
     empirical_q_weights: torch.Tensor,
-    beta_whitening: BetaWhiteningTransform,
+    beta_whitening: BetaWhiteningTransform | None,
 ) -> dict[str, object]:
     """Return a self-contained certificate checkpoint without copying base Q."""
 
@@ -1089,18 +1459,24 @@ def _residual_adversary_checkpoint(
         "model_state_dict": policy.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
         "empirical_q_weights": empirical_q_weights.cpu(),
-        "beta_whitening": {
-            "beta_by_time": tuple(value.cpu() for value in beta_whitening.beta_by_time),
-            "spot_scale_by_time": tuple(value.cpu() for value in beta_whitening.spot_scale_by_time),
-            "eigenvectors_by_time": tuple(
-                value.cpu() for value in beta_whitening.eigenvectors_by_time
-            ),
-            "inverse_sqrt_eigenvalues_by_time": tuple(
-                value.cpu() for value in beta_whitening.inverse_sqrt_eigenvalues_by_time
-            ),
-            "noise_seed": beta_whitening.noise_seed,
-            "diagnostics": beta_whitening.diagnostics,
-        },
+        "beta_whitening": (
+            None
+            if beta_whitening is None
+            else {
+                "beta_by_time": tuple(value.cpu() for value in beta_whitening.beta_by_time),
+                "spot_scale_by_time": tuple(
+                    value.cpu() for value in beta_whitening.spot_scale_by_time
+                ),
+                "eigenvectors_by_time": tuple(
+                    value.cpu() for value in beta_whitening.eigenvectors_by_time
+                ),
+                "inverse_sqrt_eigenvalues_by_time": tuple(
+                    value.cpu() for value in beta_whitening.inverse_sqrt_eigenvalues_by_time
+                ),
+                "noise_seed": beta_whitening.noise_seed,
+                "diagnostics": beta_whitening.diagnostics,
+            }
+        ),
         "report": report,
     }
 
@@ -1282,6 +1658,8 @@ def _weighted_martingale_audit(
     mass_residual = torch.abs(torch.mean(weights, dim=1) - 1.0)
     if bool(torch.any(mass_residual > 1.0e-4)):
         raise ValueError("empirical density weights must have sample mean one")
+    storage_device = dataset.returns_by_time[0].device
+    weights = weights.to(storage_device)
     paths_per_block = dataset.paths_per_independent_block
     num_blocks = dataset.num_paths // paths_per_block
     weight_blocks = weights.reshape(len(weights), num_blocks, paths_per_block)
@@ -1377,7 +1755,7 @@ def _evaluate(
         for start in range(0, dataset.num_paths, batch_size):
             stop = min(start + batch_size, dataset.num_paths)
             indices = torch.arange(start, stop, device=policy.notionals.device)
-            features, returns = _dataset_batch(dataset, indices)
+            features, returns = _dataset_batch(dataset, indices, device=policy.notionals.device)
             forward = policy(features, returns)
             leveraged_parts.append(forward.leveraged_pnl)
             normalized_parts.append(forward.normalized_pnl)
@@ -1394,7 +1772,8 @@ def _evaluate(
 
         paths_per_block = dataset.paths_per_independent_block
         num_blocks = dataset.num_paths // paths_per_block
-        weight_blocks = weights.reshape(len(weights), num_blocks, paths_per_block)
+        audit_weights = weights.to(dataset.returns_by_time[0].device)
+        weight_blocks = audit_weights.reshape(len(weights), num_blocks, paths_per_block)
         option_blocks_by_head: list[list[np.ndarray]] = [[] for _ in range(len(weights))]
         coordinate_summaries: list[list[dict[str, float | int]]] = [[] for _ in range(len(weights))]
         for time_index, returns in enumerate(dataset.returns_by_time):
@@ -1563,6 +1942,16 @@ def run(arguments: argparse.Namespace) -> None:
             dtype=env.fdtype,
             device=env.device,
         )
+        ar1_conditional_intercept = torch.as_tensor(
+            fixed_expiry_fit.conditional_intercept,
+            dtype=env.fdtype,
+            device=env.device,
+        )
+        ar1_conditional_slope = torch.as_tensor(
+            fixed_expiry_fit.conditional_slope,
+            dtype=env.fdtype,
+            device=env.device,
+        )
         selected_raw = all_raw[arguments.state_index : arguments.state_index + 1]
         parameters = bound_native_raw(selected_raw, geometry=geometry)
         surface = model.sanos_decoder.forward_batch(
@@ -1586,6 +1975,13 @@ def run(arguments: argparse.Namespace) -> None:
             path_batch_size=arguments.path_generation_batch_size,
             pairs_per_block=arguments.antithetic_pairs_per_block,
             seed=arguments.training_seed,
+            state_feature_mode=arguments.state_feature_mode,
+            path_law=arguments.path_law,
+            analytic_num_substeps=arguments.analytic_num_substeps,
+            dataset_storage=arguments.dataset_storage,
+            ar1_conditional_intercept=ar1_conditional_intercept,
+            ar1_conditional_slope=ar1_conditional_slope,
+            bs_y_vol=arguments.bs_y_vol,
         )
         validation_data = None
         if arguments.validation_paths:
@@ -1600,11 +1996,36 @@ def run(arguments: argparse.Namespace) -> None:
                 path_batch_size=arguments.path_generation_batch_size,
                 pairs_per_block=arguments.antithetic_pairs_per_block,
                 seed=arguments.validation_seed,
+                state_feature_mode=arguments.state_feature_mode,
+                path_law=arguments.path_law,
+                analytic_num_substeps=arguments.analytic_num_substeps,
+                dataset_storage=arguments.dataset_storage,
+                ar1_conditional_intercept=ar1_conditional_intercept,
+                ar1_conditional_slope=ar1_conditional_slope,
+                bs_y_vol=arguments.bs_y_vol,
             )
     audit_data = training_data if validation_data is None else validation_data
     audit_seed = arguments.training_seed if validation_data is None else arguments.validation_seed
     audit_scope = "fitted_path_set" if validation_data is None else "separate_path_set"
+    uniform_audit = _weighted_martingale_audit(
+        audit_data,
+        torch.ones(
+            (1, audit_data.num_paths),
+            dtype=audit_data.returns_by_time[0].dtype,
+            device=audit_data.returns_by_time[0].device,
+        ),
+        bootstrap_samples=arguments.final_bootstrap_samples,
+        bootstrap_seed=audit_seed + 500_000,
+    )
+    print(
+        "uniform-law audit: "
+        f"p={uniform_audit['heads'][0]['weighted_option_zero_drift']['combined_p_value']:.6g}, "
+        f"max|t|={uniform_audit['heads'][0]['weighted_option_zero_drift']['maximum_absolute_t']:.6g}",
+        flush=True,
+    )
     feature_means, feature_scales = _feature_statistics(training_data)
+    feature_means = tuple(value.to(env.device) for value in feature_means)
+    feature_scales = tuple(value.to(env.device) for value in feature_scales)
     policy = DirectUtilityTowerPolicy(
         notionals=notionals,
         feature_means=feature_means,
@@ -1629,6 +2050,9 @@ def run(arguments: argparse.Namespace) -> None:
             "validation_paths",
             "antithetic_pairs_per_block",
             "innovation_rank",
+            "path_law",
+            "analytic_num_substeps",
+            "state_feature_mode",
             "hidden_width",
             "hidden_layers",
             "action_penalty",
@@ -1714,7 +2138,9 @@ def run(arguments: argparse.Namespace) -> None:
         for start in range(0, training_data.num_paths, arguments.training_batch_size):
             stop = min(start + arguments.training_batch_size, training_data.num_paths)
             indices = torch.arange(start, stop, device=env.device)
-            features, returns = _dataset_batch(training_data, indices)
+            features, returns = _dataset_batch(
+                training_data, indices, device=policy.notionals.device
+            )
             forward = policy(features, returns)
             surrogate_by_head = (
                 -torch.sum(
@@ -1901,11 +2327,15 @@ def run(arguments: argparse.Namespace) -> None:
             base_q_weights = base_q_weights / torch.mean(base_q_weights)
             base_q_label = str(arguments.residual_base_weights_checkpoint)
             residual_parent_checkpoint = arguments.residual_base_weights_checkpoint
-        factor_dataset, beta_whitening = _beta_whitened_dataset(
-            training_data,
-            maximum_condition_number=(arguments.residual_factor_maximum_condition_number),
-            noise_seed=arguments.residual_factor_noise_seed,
-        )
+        if arguments.residual_raw_returns:
+            factor_dataset = training_data
+            beta_whitening = None
+        else:
+            factor_dataset, beta_whitening = _beta_whitened_dataset(
+                training_data,
+                maximum_condition_number=(arguments.residual_factor_maximum_condition_number),
+                noise_seed=arguments.residual_factor_noise_seed,
+            )
         residual_started = perf_counter()
         (
             residual_adversary,
@@ -1927,7 +2357,13 @@ def run(arguments: argparse.Namespace) -> None:
             lbfgs_iterations_per_epoch=arguments.residual_lbfgs_iterations_per_epoch,
             seed=arguments.residual_adversary_seed,
             epochs=arguments.residual_adversary_epochs,
+            min_epochs=arguments.residual_adversary_min_epochs,
             learning_rate=arguments.residual_adversary_learning_rate,
+            min_learning_rate=arguments.residual_adversary_min_learning_rate,
+            lr_patience=arguments.residual_adversary_lr_patience,
+            lr_decay=arguments.residual_adversary_lr_decay,
+            gradient_rms_tolerance=arguments.residual_adversary_gradient_rms_tolerance,
+            utility_ceiling=arguments.residual_adversary_utility_ceiling,
             action_penalty=arguments.action_penalty,
             gradient_clip_norm=arguments.gradient_clip_norm,
             monitoring_interval=arguments.residual_adversary_monitoring_interval,
@@ -1938,31 +2374,35 @@ def run(arguments: argparse.Namespace) -> None:
             batch_size=arguments.training_batch_size,
         )
         residual_adversary["seconds"] = perf_counter() - residual_started
-        residual_adversary["beta_whitening"] = {
-            "definition": (
-                "spot/std(spot) plus full-rank PCA whitening of "
-                "raw option return - fixed physical beta*spot, with fixed-seed "
-                "antithetic Gaussian noise only below the eigenvalue floor; "
-                "no mean subtraction"
-            ),
-            "beta_scope": (
-                "computed once under the original equally weighted fixed paths; detached"
-            ),
-            "diagnostics": beta_whitening.diagnostics,
-            "noise_seed": beta_whitening.noise_seed,
-        }
+        if beta_whitening is None:
+            residual_adversary["trading_instruments"] = "raw option returns"
+        else:
+            residual_adversary["beta_whitening"] = {
+                "definition": (
+                    "spot/std(spot) plus full-rank PCA whitening of "
+                    "raw option return - fixed physical beta*spot, with fixed-seed "
+                    "antithetic Gaussian noise only below the eigenvalue floor; "
+                    "no mean subtraction"
+                ),
+                "beta_scope": (
+                    "computed once under the original equally weighted fixed paths; detached"
+                ),
+                "diagnostics": beta_whitening.diagnostics,
+                "noise_seed": beta_whitening.noise_seed,
+            }
         residual_adversary["candidate_raw_martingale_audit"] = _weighted_martingale_audit(
             training_data,
             residual_q_weights,
             bootstrap_samples=arguments.final_bootstrap_samples,
             bootstrap_seed=audit_seed + 2_000_000,
         )
-        residual_adversary["candidate_factor_martingale_audit"] = _weighted_martingale_audit(
-            factor_dataset,
-            residual_q_weights,
-            bootstrap_samples=arguments.final_bootstrap_samples,
-            bootstrap_seed=audit_seed + 3_000_000,
-        )
+        if beta_whitening is not None:
+            residual_adversary["candidate_factor_martingale_audit"] = _weighted_martingale_audit(
+                factor_dataset,
+                residual_q_weights,
+                bootstrap_samples=arguments.final_bootstrap_samples,
+                bootstrap_seed=audit_seed + 3_000_000,
+            )
         residual_checkpoint = arguments.residual_checkpoint
         if residual_checkpoint is None:
             residual_checkpoint = arguments.checkpoint.with_name(
@@ -2006,14 +2446,29 @@ def run(arguments: argparse.Namespace) -> None:
             if arguments.allow_last_notional_expansion
             else "initialization"
         ),
-        "physical_simulation": (
-            "X-only fixed cash grid; four-week shrinking tower; raw log-DLV "
-            "innovations from rank-truncated fixed-expiry AR residual covariance; "
-            "zero raw DLV drift; no re-gridding"
+        "path_simulation": (
+            "X-only fixed cash grid; four-week shrinking tower; no re-gridding; "
+            + (
+                "raw log-DLV innovations from rank-truncated fixed-expiry AR residual "
+                "covariance with zero raw DLV drift"
+                if arguments.path_law == "physical"
+                else (
+                    "fitted fixed-expiry AR(1) conditional mean with the same "
+                    "rank-truncated AR residual loading"
+                    if arguments.path_law == "ar1"
+                    else (
+                        "fitted fixed-expiry AR(1) affine drift with stochastic-Heun "
+                        "integration in log excess-DLV"
+                        if arguments.path_law == "ar1-heun"
+                        else "theoretical DLVsq drift with stochastic-Heun integration in log excess-DLV"
+                    )
+                )
+            )
         ),
         "fixed_expiry_ar1": fixed_expiry_fit.diagnostics.to_dict(),
         "training_dataset": training_data.diagnostics,
         "audit_dataset": audit_data.diagnostics,
+        "uniform_path_law_martingale_audit": uniform_audit,
         "arguments": _json_arguments(arguments),
         "history": history,
         "final_path_set_audit": final_path_set_audit,
