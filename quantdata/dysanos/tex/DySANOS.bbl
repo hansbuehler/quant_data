@@ -1,0 +1,15 @@
+\newcommand{\etalchar}[1]{$^{#1}$}
+\begin{thebibliography}{BHK{\etalchar{+}}26}
+
+\bibitem[BHK{\etalchar{+}}26]{SANOS2026}
+Hans Buehler, Blanka Horvath, Anastais Kratsios, Yannick Limmer, and Raeid
+  Saqur.
+\newblock Sanos - smooth arbitrage-free non-parametric option surfaces.
+\newblock \url{https://arxiv.org/abs/2601.11209}, Februar 2026.
+
+\bibitem[BR15]{DLV}
+Hans Buehler and Evgeny Ryskin.
+\newblock Discrete local volatility for large time steps (extended version).
+\newblock \url{https://papers.ssrn.com/abstract=2642630}, 2015.
+
+\end{thebibliography}

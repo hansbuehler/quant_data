@@ -95,8 +95,8 @@ Our model is designed to generate entire paths of daily spot and option prices f
 in the future. 
 
 We present a robust and useful if somewhat simplistic baseline in the form of an AR(1) model.
-We discuss model setup, data pipeline, and training and investigate numerical
-presence of dynamic arbitrage. We illustrate model performance
+We discuss model setup, data pipeline, and training and investigate market
+reconstruction, stability, and tail behavior. We illustrate model performance
 on Option Metrics' IvyDB
 S\&P Index data from 2020 to~2025 and compare it to a pure implied-vol PCA model.
 \end{abstract}
@@ -260,8 +260,9 @@ will just be another representation of the same surface).
     We show how to implement and learn a coordinate transformation of
     our SANOS~\cite{SANOS2026} model 
     such that the state parameters $h_t$ live in
-    a~$\R^{n_h}$ for a low-dimensional $n_h\sim 20$. The call prices remain smooth and 
-    statically arbitrage free.
+    $\R^{200}$.  A depth-zero affine decoder maps this state into all native
+    DLV, forward-volatility, and forward smoothing coordinates. The call
+    prices remain smooth and statically arbitrage-free.
     
     This ``ML-SANOS'' is a natural decoder of a driving state process into an option surface
     of the form
@@ -273,40 +274,28 @@ will just be another representation of the same surface).
     The pre-processing step means that DYSANOS, via SANOS, is fitted to real market bid/ask prices.
     
 \subsubsection*{Generative Dynamics}
-    We show that most of the variance of daily changes to the joint space of spot\footnote{
-        In the current paper we assume, essentially, that interest rates and drifts
-        are deterministic and can therefore be assumed to be zero. This is not a real
-        restriction as extending the state space with forward rates and drifts
-        does not pose any practical hindrances.
-    } and
-    hidden state can be explained by essentially five parameters, in line with general PCA analysis of the implied vol surface, c.f.~\cite{ContVol}.    
-    We therefore present a simple baseline version of a generative
-    state space model based on a simple auto-regressive low-dimensional factor model which
-    has in spirit the form
-    \begin{equation}\label{eq:dh_intro}
-        d\tilde h_{t+1} =  \kappa(m-\tilde h_t)dt + \left( w \alpha'_t(\omega)  + \sqrt{1-w^2} A Y_t(\omega) \right)du_t\,\sqrt{dt} 
-    \end{equation}
-    where $m\in\R^{n_h}$ is the long-term mean, $\kappa \in \R^{n_h\times n_h}$
-    is the mean-reversion speed and 
-    $du_t\in\R^{n_\alpha, n_h}$ are the main PCA factors driving $d\tilde h_t$. The matrix~$A$ is the Cholesky
-    decomposition of the historic covariance of the factor loadings~$\alpha\in \R^{n_t,n_\alpha}$.
-    Moreover, $Y_t(\omega)\in \R^{n_\alpha}$ is normal and 
-    $\alpha_t(\omega)\in \R^{n_\alpha}$
-    is sampled from historic factor loadings $(\alpha_t)_{t\in\mathcal{T}}$. The
-    bandwidth parameter $w$ can be used to mix between purely historical sampling with $w=1$ 
-    and fully continuous state sampling~$w=0$. (The actual model
-    model in~\eqref{eq:exact-transition} uses the fitted surface state and
-    an exact large-step representation; the optional log-spot block is given
-    in~\eqref{eq:spot-block}.)
+    We fit a stable 200-dimensional weekly AR(1) directly to the learned
+    surface state. Its transition is parameterized as the matrix exponential
+    of a dissipative generator, and its full innovation covariance is learned
+    by a nonsingular Cholesky factor. The resulting stationary law permits
+    exact Gaussian transitions at daily, weekly, or longer horizons; as a
+    non-Gaussian alternative, fitted one-week innovations can be resampled.
+    Although the fitted state has 200 coordinates, decoded implied-volatility
+    variation is strongly concentrated: the first four decoded-IV principal
+    components explain 99.33\% for the weekly model and 98.88\% for the
+    daily+weekly model.
     
     We do not
     claim that this approach provides the most realistic dynamics; rather,
     we see this implementation as baseline to beat with more modern
     time series models.
 
-\subsubsection*{Absence of Dynamic Arbitrage}
+\subsubsection*{Static arbitrage and statistical dynamics}
 
-Every decoded SANOS surface is free of static arbitrage by construction. However, this cross-sectional property does not by itself imply the absence of dynamic arbitrage. Encoding dynamic no-arbitrage is particularly challenging for generated discrete data, since conditional means are typically estimated from noisy samples, making violations difficult to assess reliably. This issue is shared by several other state-of-the-art generative models in finance; see, e.g.,~\cite{VolGAN,na2023computing,wang2025controllable,bajalica2026latent}. We therefore focus on assessing how static no-arbitrage propagates through the dynamically evolving call surfaces.
+Every decoded SANOS surface is free of static arbitrage by construction.
+This cross-sectional property does not impose martingale restrictions on
+fixed-contract returns through simulated time. The present paper studies a
+historical statistical law and makes no additional dynamic pricing claim.
 
 The completed statistical dynamics and their empirical diagnostics are
 reported in Section~\ref{sec:dynamics}.
@@ -320,7 +309,7 @@ reported in Section~\ref{sec:dynamics}.
 
 
 We consider European call options on a single underlying
-for historic days $t\in \{t_1,\ldots,t_{n_t}\}$.
+for historic days $t\in \{t_1,\ldots,t_{n^t}\}$.
 For notational simplicity we assume forwards, discount factors, and default
 intensities are zero; the extension to non-zero rates and dividends is standard.
 We comment in remark~\ref{rem:driftreturnsa} on how to convert
@@ -332,18 +321,18 @@ We use $\bm{S}_t$ to denote the (positive) stock price at time~$t$ which we
 assume trades without cost (and therefore has no bid/ask spread).
 We assume we observe~$L_t\in\N$ 
 European call option prices with time-to-expiries $T_t^\ell \geq 0$ and
-relative strikes $K^\ell_t\geq 0$
+relative strikes $K_t^\ell\geq 0$
 for $\ell=1,\ldots,L_t$
 in the market. Their payoff is therefore
 $$
-   \left (\frac{\bm{S}_{t+T^\ell_t}}{\bm{S}_t} - K^\ell_t \right)^+ \ .
+   \left (\frac{\bm{S}_{t+T_t^\ell}}{\bm{S}_t} - K_t^\ell \right)^+ \ .
 $$
 We denote by $\bm{B}_t^{\ell}$ and $\bm{A}_t^\ell$ their bid and ask prices;
 mid-price and half-spread are defined (in vector notation) as
 $\bm{C}_t := \tfrac{1}{2}(\bm{A}_t + \bm{B}_t)$ and
 $\bm{\gamma}_t := \tfrac{1}{2}(\bm{A}_t - \bm{B}_t)$.
 We generally assume that $\bm{B}_t\succ0$ and $\bm{\gamma}_t\succ0$.\footnote{
-We define $x \succ y \Leftrightarrow \forall i: x_i > y_i$.} 
+We define $x \succ y \Leftrightarrow \forall i: x^i > y^i$.}
 Contrary to most derivative literature, we do not assume that bid/ask prices are in some way free of arbitrage; instead
 we will show how to handle arbitrage valuations gracefully.
 
@@ -461,18 +450,23 @@ In~\cite{SANOS2026} we introduced a  non-parametric family
 of call price functions which are all statically arbitrage-free. For clarity, let us briefly fix $t$ and drop it from the notation of market data
 and model parameters.
 
-Each call price function is given in terms of model expiries $0 = \hat T^0 < \hat T^1 < \cdots < \hat T^M$ and, for each model expory, $N_j>0$
-strikes $K^j = (K^{j,i})_{i=1}^{N_j}$ with $0 < \hat K^{j,1} < \cdots < 1 < \cdots < \hat K^{j,N_j }$.
+Each call price function is given in terms of model expiries
+$0 = \hat T^0 < \hat T^1 < \cdots < \hat T^M$ and, for each model expiry,
+$N^j>0$ inner strikes.  Including the two boundary strikes, write
+$\hat K^j = (\hat K^{j,i})_{i\in\mathcal I^j}$ with
+$\mathcal I^j:=\{0,\ldots,N^j+1\}$ and
+$0 < \hat K^{j,0} < \cdots < 1 < \cdots < \hat K^{j,N^j+1}$.
  It is recommended that the two outer strikes
 are far away from the inner strikes.\footnote{
-    In our experiments, the strikes $0<\hat K^{j,2}<\cdots<1<\cdots<\hat K^{j,N_j-1}$
-    where chosen first and then extended by $\hat K^{j,1}:=\hat K^{j,2}/2$ and
-    $\hat K^{j,N_j} = 1.5\,\hat K^{j,N_j-1}$.
+    In our experiments, the inner strikes
+    $0<\hat K^{j,1}<\cdots<1<\cdots<\hat K^{j,N^j}$
+    were chosen first and then extended by $\hat K^{j,0}:=\hat K^{j,1}/2$ and
+    $\hat K^{j,N^j+1} = 1.5\,\hat K^{j,N^j}$.
 }  Model strikes and expiries do not need to match
 market strikes or expiries.
-We also set $\hat K^0=(1)$; see~\cite{SANOS2026} for general comments on grid construction.
+We also set $\mathcal I^0=\{0\}$, $\hat K^{0,0}=1$, and $q^{0,0}=1$; see~\cite{SANOS2026} for general comments on grid construction.
 
-We say that $q=(q^1,\ldots,q^M)$ with $q^j\in\R^{N_j}$ is a \emph{martingale density} if
+We say that $q=(q^1,\ldots,q^M)$ with $q^j\in\R^{N^j+2}$ is a \emph{martingale density} if
 it satisfies the linear constraints
 \begin{equation}\label{eq:qocnd}
     \left\{
@@ -485,36 +479,37 @@ it satisfies the linear constraints
     \end{array}
     \right.
 \end{equation}
-where $c^i_j = {q^j}' (\hat K^j-\hat K^{j,i})^+$ is the $j$-call price of for $\hat K^{j,i}$,
-and $c^i_{j|j-1} := {q^{j-1}}' (\hat K^{j-1}-\hat K^{j,i})^+$ is the $(j-1)$-call price of for
+where $c^{j,i} = {q^j}' (\hat K^j-\hat K^{j,i})^+$ is the $j$-call price for $\hat K^{j,i}$,
+and $c^{j\mid j-1,i} := {q^{j-1}}' (\hat K^{j-1}-\hat K^{j,i})^+$ is the $(j-1)$-call price for
 $\hat K^{j,i}$.
 
 \begin{definition}[SANOS call price]
 \label{def:sanos}
 Let $q$ be a martingale density and $0<W^1< \cdots < W^M$
-increasing total volatilities.\footnote{In our experiments we used 50\% of square-roots of ATM variance.}
+be increasing smoothing total volatilities.\footnote{The linear-programming preprocessing uses 50\% of ATM total volatility. The trained ML-SANOS decoder instead learns the positive forward smoothing multipliers $\eta^j$.}
 The SANOS call price 
  for arbitrary $T\geq0 ,K\geq 0$ 
 is given by
 \begin{equation}
   \label{eq:sanos_interp}
-  C(T,K) := \left\{
-    \begin{array}{rll} \alpha_j(T) & \BSCall\!\bigl(\hat K^{j,i},\,K,\, W(T)\bigr)\,q^j_i  \\
-         + (1-\alpha_j(T)) & \BSCall\!\bigl(\hat K^{j,i},\,K,\, W(T)\bigr)\,q^j_ i. \ ,
-        \end{array}
-        \right.
-  \quad T \in (\hat T_{j-1}, \hat T_j],
+  \begin{aligned}
+  C(T,K):={}&\alpha^j(T)\sum_{i\in\mathcal I^j}
+       \BSCall\!\bigl(\hat K^{j,i},K,W(T)\bigr)q^{j,i}\\
+     &+(1-\alpha^j(T))\sum_{i\in\mathcal I^{j-1}}
+       \BSCall\!\bigl(\hat K^{j-1,i},K,W(T)\bigr)q^{j-1,i},
+       \qquad T \in (\hat T^{j-1},\hat T^j].
+  \end{aligned}
 \end{equation}
-with $\alpha_j(T) = (T - \hat T^{j-1})/(\hat T^j - \hat T^{j-1})$
-and total volatilities  $W(T) := \alpha_j(T) W^j + (1-\alpha_j(T)) W^{j-1}$.For $T>\hat T^M$ we
-set $\alpha_{M+1}(T)=0$ and $W(T):=W^M\sqrt{T / \hat T^M}$; however extrapolation beyond
+with $\alpha^j(T) = (T - \hat T^{j-1})/(\hat T^j - \hat T^{j-1})$
+and total volatility $W(T) := \alpha^j(T) W^j + (1-\alpha^j(T)) W^{j-1}$. For $T>\hat T^M$ we
+set $\alpha^{M+1}(T)=0$ and $W(T):=W^M\sqrt{T / \hat T^M}$; however extrapolation beyond
 the last model expiry is generally not recommended.
 \end{definition}
 
 
 \begin{theorem}
     The call price function $C$ is statically arbitrage-free.
-For $\mu > 0$ it is $C^\infty$ in $K$. The function is as smooth as~$\alpha$ in~$T$.
+For $W(T)>0$ it is $C^\infty$ in $K$. The function is as smooth as~$\alpha$ in~$T$.
 \end{theorem}
 
 \begin{remark}
@@ -541,8 +536,8 @@ to be linear in~$q$.
 The market-fitting problem is therefore the linear programme
 \begin{equation}
   \label{eq:lp}
-  \min_{q} \sum_\ell \frac{1}{\bm{\gamma}_\ell}\bigl[
-    (C_\ell - \bm{A}_\ell)^+ + (\bm{B}_\ell - C_\ell)^+ + \epsilon |C_\ell - \bm{M}_\ell|
+  \min_{q} \sum_\ell \frac{1}{\bm{\gamma}^\ell}\bigl[
+    (C^\ell - \bm{A}^\ell)^+ + (\bm{B}^\ell - C^\ell)^+ + \epsilon |C^\ell - \bm{M}^\ell|
   \bigr]
 \end{equation}
 subject to the linear constraints~\eqref{eq:qocnd} encoding non-negativity, normalisation, integration to~$1$, and the inter-expiry convex-order constraints that enforce absence of calendar-spread
@@ -572,29 +567,30 @@ parameters to a function space
 \end{equation}
 for which we naturally want to learn $q,W$ and, as we will see, $\hat K$ (as the right strike grid
 depends on the implied variance of the market).
-However, the density weights $q_j$ in particular are subject to the linear constraints~\eqref{eq:qocnd}
+However, the density weights $q^j$ in particular are subject to the linear constraints~\eqref{eq:qocnd}
 for which no exact methods exist to integrate them into standard batch gradient descent methods.
 In this section we therefore reparameterize the map~\eqref{eq:sanosmap} in terms
 of learnable parameters.
 
 To this end, recall the previously defined linear call prices
-$c^{j,i} := q_j'(\hat K_j - \hat K_j^i)^+$ and
-$c^{j|j-1,i} := q_{j-1}'(\hat K_{j-1} - \hat K_j^i)^+$.
-Given a martingale density~$q$ the squared discrete local volatilities (DLVs) $\Sigma^{j,i} \geq 0$ were then defined for $i=2,\ldots,N_{j-1}$ in~\cite{DLV}
+$c^{j,i} := (q^j)'(\hat K^j - \hat K^{j,i})^+$ and
+$c^{j\mid j-1,i} := (q^{j-1})'(\hat K^{j-1} - \hat K^{j,i})^+$.
+Given a martingale density~$q$ the squared discrete local volatilities (DLVs) $\Sigma^{j,i} \geq 0$ were then defined for the inner indices $i=1,\ldots,N^j$ in~\cite{DLV}
 via the discrete ``backward''
 Dupire formula\footnote{
-    This actually \emph{is} the Dupire formula applied to the implict foward-PDE of the density of a local volatility process, correctly computed
+    This actually \emph{is} the Dupire formula applied to the implicit forward PDE of the density of a local volatility process, correctly computed
     on an irregular strike grid; c.f.~\cite{DLV}.
 }
 \begin{equation}
   \label{eq:dlv_def}
-  \frac{ c^{j,i} - c^{j|j-1,i} }{\hat T^j-\hat T^{j-1} }
+  \frac{ c^{j,i} - c^{j\mid j-1,i} }{\hat T^j-\hat T^{j-1} }
   \;\equiv\;
   \Sigma^{j,i}\,
-  \frac{(\hat K^{j,i})^2 }{(\hat K^{j+1,i} - \hat K^{j,i})(\hat K^{j,i} - \hat K^{j-1,i})}
+  \frac{(\hat K^{j,i})^2 }{(\hat K^{j,i+1} - \hat K^{j,i})(\hat K^{j,i} - \hat K^{j,i-1})}
   \,q^{j,i} 
 \end{equation}
-with $\Sigma^{j,i} := 0$ for $i\in\{1,N_j\}$ or whenever $q^{j,i}= 0$.
+There is no DLV coordinate at the two boundary indices $i=0$ and $i=N^j+1$;
+we set $\Sigma^{j,i}=0$ whenever $q^{j,i}=0$.
 
 The key is that we can reverse this representation. We briefly recall the construction
 from~\cite{SANOS2026}: 
@@ -603,41 +599,43 @@ from~\cite{SANOS2026}:
     \item Start in $q^{0}:=(1)$ for $\hat K^0:=(1)$.
     \item 
         For $j>0$ 
-        if $\hat K^j=\hat K^{j-1}$; then $q^{j|j-1} = q^{j-1}$.
+        if $\hat K^j=\hat K^{j-1}$; then $q^{j\mid j-1} = q^{j-1}$.
 
-        If this is not the case we construct $q^{j|j-1}$ as follows:
-    let $c^{j|j-1,i} := \sum_{\ell=0}^{N_j+1} q^{\ell,j-1} ( \hat K^{\ell,j-1} - \hat K^{i,j} )^+$
-    as before, and define for $i=0,\ldots,N_j$
+        If this is not the case we construct $q^{j\mid j-1}$ as follows:
+    let $c^{j\mid j-1,i} := \sum_{\ell\in\mathcal I^{j-1}} q^{j-1,\ell} ( \hat K^{j-1,\ell} - \hat K^{j,i} )^+$
+    for $i\in\mathcal I^j$.  Augment these call values by
+    $\hat K^{j,-1}=0$ and $c^{j\mid j-1,-1}=1$, and define
     $$
-        dC^{j|j-1,i} := \frac{ c^{j|j-1,i} - c^{j|j-1,i-1} }
-                     { \hat K^{i,j} - \hat K^{i-1,j} } 
+        dC^{j\mid j-1,i} := \frac{ c^{j\mid j-1,i} - c^{j\mid j-1,i-1} }
+                     { \hat K^{j,i} - \hat K^{j,i-1} }
+        \qquad (i\in\mathcal I^j).
     $$
-    with $\hat K^{0,j}=0$, $c^{j|j-1,0}=1$. As a next step define for $i=1,\ldots,N_j$ with $dC^{j|j-1,N_j+1}=0$
+    With $dC^{j\mid j-1,N^j+2}=0$, define for $i\in\mathcal I^j$
     $$
-        q^{j|j-1,i} := dC^{j|j-1,i+1} - dC^{j|j-1,i} \ .
+        q^{j\mid j-1,i} := dC^{j\mid j-1,i+1} - dC^{j\mid j-1,i} \ .
     $$
-    Then $q^{j|j-1}$ is a density over $\hat K^j$, given by linear interpolation of
+    Then $q^{j\mid j-1}$ is a density over $\hat K^j$, given by linear interpolation of
     call prices at the previous expiry. In~\cite{SANOS2026} this operation
     was written as the linear expression
     $$
-        q^{j|j-1} = L^j q^{j-1} 
+        q^{j\mid j-1} = L^j q^{j-1}
     $$
-    in terms of the respective matrix~$L^j\in\R^{N_j,N_{j-1}}$.
+    in terms of the respective matrix~$L^j\in\R^{|\mathcal I^j|\times|\mathcal I^{j-1}|}$.
     
  
     \item Let now
         $$     
         \xi^{j,i\pm} := \pm    \frac{ (\hat K^{j,i})^2 }{ (\hat K^{j,i+1} - \hat K^{j,i-1})\,(\hat K^{j,i\pm 1} - \hat K^{j,i}) }\Sigma^{j,i} (\hat T^j-\hat T^{j-1} ) \geq 0
             $$
-        for $i=2,\ldots,N_j-1$ which we note is linear in $\Sigma^{j,i}$.
+        for $i=1,\ldots,N^j$ which we note is linear in $\Sigma^{j,i}$.
         The discrete local volatility transition operator is defined
-        by the (inverse of) the tri-band matrix~$\Xi^j\in\R^{N_j,N_j}$ with
+        by the (inverse of) the tri-band matrix~$\Xi^j\in\R^{(N^j+2)\times(N^j+2)}$ with
     \begin{itemize}
         \item     upper diagonal
-    $(\xi^{j,2-},\ldots,\xi^{j,(N_j-1)+},0)$,
-        \item  lower diagonal $(0,\xi^{j,2+},\ldots,\xi^{j,({N_j}-1)+})$, and
+    $(-\xi^{j,1-},\ldots,-\xi^{j,N^j-},0)$,
+        \item  lower diagonal $(0,-\xi^{j,1+},\ldots,-\xi^{j,N^j+})$, and
 
-        \item main diagonal $(1,1-\xi^{j,2+}-\xi^{j,2-},\ldots,1-\xi^{j,(N_j-1)+}-\xi^{j,(N_j-1)-},1)$.
+        \item main diagonal $(1,1+\xi^{j,1+}+\xi^{j,1-},\ldots,1+\xi^{j,N^j+}+\xi^{j,N^j-},1)$.
     \end{itemize}
     (We note that $\Xi^j$ is linear in the discrete local volatilities $\Sigma^{j,i}$.)
 
@@ -648,59 +646,59 @@ from~\cite{SANOS2026}:
     in the sense of~\cite{DLV}, and is used to define
     the linear operation
     $$
-        q^j := (\Xi^j)^{-1} q^{j|j-1} \ .
+        q^j := (\Xi^j)^{-1} q^{j\mid j-1} \ .
     $$
     The operator $\Xi^j$ is the in-homogeneous strike implicit transition operator of the PDE
     implied by~\eqref{eq:dlv_def}, and is based on ideas of~\cite{AndreasenHuge}.
 \end{enumerate}
-With the above we have stablished a map from much simpler non-negative discrete local vols squared to
+With the above we have established a map from much simpler non-negative discrete local vols squared to
 densities, and then to SANOS call prices:
 \begin{equation}\label{eq:sanosmap2}
     \big( \Sigma, W;\, \hat K,\hat T\big) \supstack{\mathrm{DLV}}\longmapsto
     \big( q, W;\, \hat K,\hat T\big) \supstack{\mathrm{SANOS}}\longmapsto C \ .
 \end{equation}
-That allows us to pass over to practially unconstrained parameter set, which we will call the ML-SANOS parametrization:
+That allows us to pass to a practically unconstrained parameter set, which we call the ML-SANOS parametrization.
+Recall function $\mathrm{sigmoid}(x)=(1+e^{-x})^{-1}$.
 
 \begin{definition}[ML-SANOS]
     Fix the normalized grid geometry for ML-SANOS with:
     \begin{itemize}
         \item Time-to-expiries (TTEs) $0=\hat T^0<\cdots<\hat T^M$ with
-        $d\hat T^j = \hat T^j-\hat T^{j-1}$;
+        $\Delta\hat T^j = \hat T^j-\hat T^{j-1}$;
         \item Normalized strikes $z^1<\cdots<0<\cdots<z^N$ which we assume contain zero;
         \item Minimum and maximum forward volatilities $\sigma_{\max} > \sigma_{\min} > 0$; 
         \item Minimum and maximum squared discrete local volatilities $\Sigma_{\max} > \Sigma_{\min} > 0$; and
         \item Minimum and maximum smoothing factors $1> \eta_{\max} > \eta_{\min} \geq 0$.
     \end{itemize}
-    We translate the new real-valued ML-SANOS parameters $u=(u^\Sigma,u^\sigma,u^\eta)\in  \R^{M,N}\times \R^N \times \R^N$ into SANOS parameters as follows:
+    We translate the new real-valued ML-SANOS parameters $u=(u^\Sigma,u^\sigma,u^\eta)\in  \R^{M\times N}\times \R^M \times \R^M$ into SANOS parameters as follows:
     \begin{itemize}
         \item Total volatilities: 
         define the \textbf{forward volatilities}
              \eqx
-                    \sigma^j := \sigma_{\min} +
-               +\mathrm{sigmoid}( u^{\sigma;j} ) ( \sigma_{\max} - \sigma_{\min} )
+                    \sigma^j := \sigma_{\min}
+               +\mathrm{sigmoid}( u^{\sigma,j} ) ( \sigma_{\max} - \sigma_{\min} )
             \eqend
             and the local smoothing factors\footnote{
-                These corresponds to the square root of the smoothing parameter~$\mu$ in SANOS~\cite{SANOS2026}.
+                Each $\eta^j$ multiplies the positive forward total-volatility increment on interval $j$; $(\eta^j)^2$ is the corresponding variance fraction.
             }
             \eqx
                 \eta^j := \eta_{\min} + 
-               \mathrm{sigmoid}( u^{\eta;j} ) ( \eta_{\max} - \eta_{\min} )
+               \mathrm{sigmoid}( u^{\eta,j} ) ( \eta_{\max} - \eta_{\min} )
             \eqend
                         and with them the \textbf{total volatilities}
              \begin{equation}\label{eq:totalW}
-             \tilde W^j := \sum_{\ell=1}^{j} \sigma^\ell \left( 
-             \sqrt{ \hat T^\ell  } - \sqrt{ \hat T^{\ell -1} } \right) \ \ \ \mbox{and} \ \ \
-             W^j := \sum_{\ell=1}^{j} \eta^\ell \sigma^\ell \left( 
-             \sqrt{ \hat T^\ell  } - \sqrt{ \hat T^{\ell -1} } \right) \ .                
+             \widetilde W^j := \sum_{\ell=1}^{j} \sigma^\ell \sqrt{\Delta\hat T^\ell}
+             \qquad\mbox{and}\qquad
+             W^j := \sum_{\ell=1}^{j} \eta^\ell \sigma^\ell \sqrt{\Delta\hat T^\ell}\ .
              \end{equation}
-        \item We use $\tilde W^j$ to define the \textbf{relative strikes}
+        \item We use $\widetilde W^j$ to define the \textbf{relative strikes}
               \begin{equation}\label{eq:constructK}
-                \hat K^{j,i} := \exp\left( z^i \tilde W^j \right)\ .                  
+                \hat K^{j,i} := \exp\left( z^i \widetilde W^j \right)\ .
               \end{equation}
-              with boundaries $\hat K^{0,i}:=\frac12 \hat K^{1,i}$ and $\hat K^{N+1,i} := \frac32 \hat K^{N,i}$.
+              with boundaries $\hat K^{j,0}:=\frac12 \hat K^{j,1}$ and $\hat K^{j,N+1} := \frac32 \hat K^{j,N}$.
         \item Finally, we use the new real-valued ML-SANOS parameters to define the \textbf{squared discrete local volatilities}:
               \begin{equation}\label{eq:defDLVdsq}
-                 \Sigma^{j,i} := \Sigma_{\min} + \mathrm{sigmoid}( u^{\Sigma;i,j} ) ( \Sigma_{\max} - \Sigma_{\min} )\ .
+                 \Sigma^{j,i} := \Sigma_{\min} + \mathrm{sigmoid}( u^{\Sigma,j,i} ) ( \Sigma_{\max} - \Sigma_{\min} )\ .
               \end{equation}
 
     \end{itemize}
@@ -716,8 +714,7 @@ That allows us to pass over to practially unconstrained parameter set, which we 
     \end{equation}
     In our new parametrization $u$ lives in an unrestricted space and is therefore
     particularly suited for ML/AI based learning.\footnote{
-        In our experiments we have not
-        tried to also learn~$\mu$ or the position of the expiries.}
+        The completed models learn $\eta^j$ for every forward interval but keep the expiry locations fixed.}
 \end{definition}
 
 \subsection{Learning ML-SANOS from real data}
@@ -734,8 +731,8 @@ the compression map deliberately transparent.  Let $N=200$ be the number of
 inner support strikes and $M$ the number of model expiries.  For each date the
 uncompressed state is stored expiry-major as
 \begin{equation}
-  u_t=\bigl(u_{t,j}^{\Sigma,1},\ldots,u_{t,j}^{\Sigma,N},
-            u_{t,j}^{\sigma},u_{t,j}^{\eta}\bigr)_{j=1}^M
+  u_t=\bigl(u_t^{\Sigma,j,1},\ldots,u_t^{\Sigma,j,N},
+            u_t^{\sigma,j},u_t^{\eta,j}\bigr)_{j=1}^M
   \in\R^{M(N+2)}.
   \label{eq:production-native-state}
 \end{equation}
@@ -752,32 +749,47 @@ $B\in\R^{M(N+2)\times200}$.  The weekly model has $M=14$ and therefore
 coordinates.  The 200 coordinates of $h_t$ are learned latent coordinates,
 not principal components of implied volatility.
 
-Writing $g(x)=(1+e^{-x})^{-1}$, the native coordinates are converted into the
+The native coordinates are converted into the
 positive SANOS parameters by
-\begin{align}
-  \Sigma_{t,j}^i
-    &=\min\!\left\{\overline\Sigma,
-       \underline\Sigma+e^{u_{t,j}^{\Sigma,i}}\right\},
-  \label{eq:production-dlv}\\
-  \sigma_{t,j}
-    &=\underline\sigma
-      +(\overline\sigma-\underline\sigma)g(u_{t,j}^{\sigma}),
-  &
-  \eta_{t,j}
-    &=\underline\eta
-      +(\overline\eta-\underline\eta)g(u_{t,j}^{\eta}).
-  \label{eq:production-forward}
-\end{align}
-Here $\Sigma_{t,j}^i$ is the squared DLV, $\sigma_{t,j}$ is the forward
-volatility, and $\eta_{t,j}$ is its smoothing-backbone multiplier.  The
+\begin{itemize}
+    \item $
+  \Sigma_t^{j,i}
+    =\min\!\left\{\Sigma_{\max},
+       \Sigma_{\min}+e^{u_t^{\Sigma,j,i}}\right\}$;
+
+\item $
+  \sigma_t^j
+    =\sigma_{\min}
+      +(\sigma_{\max}-\sigma_{\min})\mathrm{sigmoid}(u_t^{\sigma,j})
+      $; and
+
+\item $
+  \eta_t^j
+    =\eta_{\min}
+      +(\eta_{\max}-\eta_{\min})\mathrm{sigmoid}(u_t^{\eta,j})$.
+\end{itemize}
+Here $\Sigma_t^{j,i}$ is the squared DLV, $\sigma_t^j$ is the forward
+volatility, and $\eta_t^j$ is its smoothing-backbone multiplier.  The
 experiment uses
-$(\underline\Sigma,\overline\Sigma)=(0.01^2,3^2)$,
-$(\underline\sigma,\overline\sigma)=(0.01,1)$, and
-$(\underline\eta,\overline\eta)=(0.01,0.50)$.  A smooth cap penalty acts on
+$(\Sigma_{\min},\Sigma_{\max})=(0.01^2,3^2)$,
+$(\sigma_{\min},\sigma_{\max})=(0.01,1)$, and
+$(\eta_{\min},\eta_{\max})=(0.01,0.50)$.  A smooth cap penalty acts on
 the raw log-DLV coordinate without imposing a saturating upper sigmoid.
+The two cumulative total-volatility curves are exactly
+\begin{equation}
+  \widetilde W_t^j
+    =\sum_{\ell=1}^j\sigma_t^\ell\sqrt{\Delta\hat T^\ell},
+  \qquad
+  W_t^j
+    =\sum_{\ell=1}^j\eta_t^\ell\sigma_t^\ell
+       \sqrt{\Delta\hat T^\ell}.
+  \label{eq:production-total-vols}
+\end{equation}
+  Since both
+$\sigma_t^j$ and $\eta_t^j$ are positive, $W_t^j$ is increasing in expiry.
 
 Each date uses one floating relative-strike support shared across all model
-expiries.  Half of the 200 normalized-moneyness candidates cover the front
+expiries.  Half of the~200 normalized-moneyness candidates cover the front
 expiry and half the final expiry over $(-3,2)$; after conversion with the
 date's total-volatility curve they are merged, sorted, and separated by a
 minimum log-strike gap.  The outer support nodes are one half of the first
@@ -1002,10 +1014,10 @@ innovation law by construction.  At two and three weeks, independently drawn
 residuals are propagated through $A$ and summed; these are genuine convolution
 tests rather than replayed multi-week blocks.
 
-For an exact-horizon state return $r$ with fitted horizon covariance $Q_H$,
+For an exact-horizon state return $r$ with fitted horizon covariance $Q^H$,
 define its normalized squared radius
 \begin{equation}
-  \delta_H^2:=\frac{r'Q_H^{-1}r}{200}.
+  (\delta^H)^2:=\frac{r'(Q^H)^{-1}r}{200}.
   \label{eq:radius}
 \end{equation}
 Table~\ref{tab:tails} reports the probability of exceeding the empirical 95\%
@@ -1106,7 +1118,7 @@ spot path is required, log-spot $s_t=\log S_t$ is attached after the surface
 fit.  A simple conditional regression is
 \begin{equation}
   \Delta s_{n+1}
-  =\mu_s+\beta'Q^{-1/2}\varepsilon_{n+1}
+  =\mu^s+\beta'Q^{-1/2}\varepsilon_{n+1}
    +\varsigma\eta_{n+1},
   \qquad \eta_{n+1}\sim\mathcal N(0,1),
   \label{eq:spot-block}
@@ -1257,7 +1269,7 @@ The statistical DYSANOS simulator is summarized as follows.
         \eqref{eq:spot-block}.
   \item Form $u_t=b+B h_t$, map it to bounded SANOS parameters through
         \eqref{eq:production-dlv}--\eqref{eq:production-forward}, and apply
-        the density recursion of Section~\ref{sec:dlv}.
+        the density recursion of Section~\ref{sec:mlsanos}.
   \item Evaluate $C_t(T,K)$ at any desired strike and expiry.  For a fixed
         cash contract $(\tau,k)$ use $T=\tau-t$ and $K=k/S_t$.
 \end{enumerate}
@@ -1303,9 +1315,6 @@ option on each path given the ML-SANOS parameters for the respective sample and
 time step. Contrary to previous results, agents can therefore choose which
 options to trade at each time step.
 
-We have found 
-numerical indication that in this situation, DYSANOS admits dynamic arbitrage along its paths.
-
 \section{Thanks}
 
 We want to thank the team at Wharton for their WRDS \url{https://wrds-www.wharton.upenn.edu} portal and Option Metrics \url{https://optionmetrics.com/united-states} 
@@ -1317,7 +1326,7 @@ for providing their IvyDB data via this service. Without this data our work woul
 In the interest of full transparency we here discuss main elements of the data pipeline used
 in our experiments. \\
 
-The market-data pipeline constructs a standardized daily time series of SPX option surfaces. Raw option quotes are cleaned, normalized, filtered, made arbitrage-free, interpolated onto a fixed expiry--moneyness grid, and finally collected into tensors suitable for model training.
+The market-data pipeline constructs a standardized daily time series of SPX option surfaces. Raw option quotes are cleaned, normalized, filtered, checked against an arbitrage-free reference surface, and finally collected into irregular quote books suitable for direct model training.
 
 
 The pipeline processes SPX option data between January 2nd, 2020 and August 29th, 2025. The latter
@@ -1333,9 +1342,8 @@ The complete transformation can be summarized as
 &\longrightarrow \text{daily cleaning and enrichment} \\
 &\longrightarrow \text{arbitrage-free quote surface using linear SANOS} \\
 &\longrightarrow \text{liquidity and moneyness filters} \\
-&\longrightarrow \text{smooth SANOS surface} \\
-&\longrightarrow \text{interpolate to fixed expiry--moneyness grid} \\
-&\longrightarrow \text{daily ML-SANOS fit using Torch}.
+&\longrightarrow \text{shared 200-strike SANOS model geometry} \\
+&\longrightarrow \text{direct native and affine-200 quote fits}.
 \end{aligned}
 \]
 The key insight when working with Option Metrics IvyDB data is that the forward curves
@@ -1393,7 +1401,7 @@ An expiration is retained only if it satisfies the default liquidity and quality
     \item the discounted forward normalized spread must be at least \(10^{-6}\);
     \item implied volatility must lie in
     \[
-        0.01 \leq \sigma_{\mathrm{impl}} \leq 5.
+        0.01 \leq \sigma^{\mathrm{impl}} \leq 5.
     \]
 \end{itemize}
 
@@ -1458,17 +1466,17 @@ Price-like quantities are normalized by the current spot \(S_d\) to obtain
 variables of scale around~$1$. For example,
 %
 \[
-    \widetilde{K}_{d,i}
+    \widetilde{K}_d^i
     =
-    \frac{K_{d,i}}{S_d},
+    \frac{K_d^i}{S_d},
     \qquad
-    \widetilde{C}_{d,i}
+    \widetilde{C}_d^i
     =
-    \frac{C_{d,i}}{S_d},
+    \frac{C_d^i}{S_d},
     \qquad
-    \widetilde{F}_{d,i}
+    \widetilde{F}_d^i
     =
-    \frac{F_{d,i}}{S_d}.
+    \frac{F_d^i}{S_d}.
 \]
 The original spot is retained as
 $
@@ -1476,88 +1484,46 @@ $
 $
 (The normalized log-spot level is passed on as $h^0$ later.)
 
-\subsection{Smooth Interpolation to the Reference Grid}
+\subsection{Arbitrage-free preprocessing and model geometry}
 
-The previous steps, in the end, simply cleaned market data. All remaining options are market
-tradable instruments with market bid/ask spreads.
+The preceding steps produce tradable normalized calls and puts with their
+observed bid--ask intervals.  A per-date arbitrage-free SANOS fit supplies a
+smooth reference surface, an ATM-volatility curve, and an availability check
+for the retained quotes.  The completed Direct-200 experiments do
+\emph{not} resample this information onto a secondary reference grid.
+Instead, every eligible original quote enters the loss at its observed strike
+and expiry.
 
-The next step is now to interpolate from the cleaned market to a reference grid to which 
-we train ML-SANOS. To this end, for each day, the filtered pure (forward normalized) strikes, bids, and asks are sorted by strike and separated by expiry. A smooth arbitrage-free SANOS surface is then fitted to these irregularly spaced market quotes using linear programming~\cite{SANOS2026}.
-
-The grid-fitting configuration uses
-$
-    \mu=0.5
-$, $\mathrm{\Sigma}_{\min}=0.01$,
-$\mathrm{\Sigma}_{\max}=2$, $\sigma_{\min}=0.01$ and $\sigma_{\max}=2$.
-The step seeks an arbitrage-free representation consistent with the observed bid and ask intervals. 
-
-From that smooth interpolation we define
-the default target expiries, measured in years, as
-%
+The decoder uses the two model-expiry geometries stated in
+Section~\ref{sec:data}: 14 weekly expiries from 5D to 70D, or the same weekly
+grid augmented by 1D--4D for a total of 18 expiries.  On each date it builds
+one shared support with $N=200$ inner strikes. Half of the normalized-moneyness
+candidates cover the first model expiry and half cover the final model expiry
+over $z\in(-3,2)$.  The candidates are merged and spaced, and the two boundary
+strikes are
 \[
-    \left\{
-        \frac{2}{255},
-        \frac{5}{255},
-        \frac{10}{255},
-        \frac{20}{255},
-        \frac{40}{255},
-        \frac{1}{2},
-        1
-    \right\}.
+  \hat K_t^0=\tfrac12\hat K_t^1,
+  \qquad
+  \hat K_t^{N+1}=\tfrac32\hat K_t^N.
 \]
-
-Thus, the grid contains $
-    M=7
-$
-target expiries, corresponding approximately to \(2\), \(5\), \(10\), \(20\), \(40\), \(127.5\), and \(255\) business days.
-If the longest target expiry exceeds the longest observed market expiry on a given date, the implementation emits a warning and extrapolates the fitted surface.
-
-For every expiry, the surface is sampled at
-$
-   \tilde  N = 100
-$
-strike locations; the default normalized-moneyness range is
-$
-    \tilde  z \in [-2,1]
-$.
-The grid explicitly contains the ATM location at zero. Since the interval is asymmetric, more grid points are allocated below ATM than above ATM.
-
-Let \( \tilde W_j\) be the interpolated total volatility for expiry \(\hat T_j\). The normalized-moneyness coordinates are converted into spot-normalized strikes using
-the same formulas as ~\eqref{eq:totalW}
-\[
-    \tilde {K}^i_j
-    =
-    \exp\left( z^i
-        \tilde W_j
-    \right).
-\]
-
-The continuous surface is then evaluated at every pair
-$    \left(\hat T_j, \tilde {K}^i_j\right),
-$.
-Two artificial boundary strikes are appended:
-%
-\[
-    \tilde K^0_j
-    =
-    \frac{1}{2}\,\tilde K^1_j,
-    \qquad
-    \tilde K_j^{N+1}
-    =
-    \frac{3}{2} \tilde K_j^N
-\]
-Consequently, the extended strike dimension contains \(N+2\) points.
+The same support is used at every model expiry on that date; only the density
+and DLV coordinates carry an expiry superscript.
 
 \subsection{Fitting ML-SANOS}
 
-We now fit ML-SANOS to this data. Recall that ML-SANOS contains the network map 
-$NQ_\theta :  h \in \R^{n_h} \longmapsto x \in \R^{M+NM}$ defined in~\eqref{eq:NQ}
-and that its effective strikes $\hat K$ are dynamic as a function of learned total volatility.
-We train at the same grid expiries as introduced above, but this time with Torch.
-
-The ML-SANOS model then fits
-all $\tilde N$ smoothed strikes per expiry using $N=20$ model strikes. It uses the
-same normalized strike range $(-2,1)$. Weights are inverse BS vega divided by sqrt to expiry.
+The native control first fits one unrestricted vector
+$u_t\in\R^{M(N+2)}$ to each date's irregular quote book.  The completed
+affine model then uses the map
+\[
+  h_t\in\R^{200}
+  \longmapsto
+  u_t=b+Bh_t\in\R^{M(N+2)}
+\]
+from~\eqref{eq:affine-decoder}.  It is initialized from the native controls
+and then fitted jointly across all 891 dates together with the stable weekly
+state dynamics.  Prices are evaluated directly at every observed quote; the
+training weights and inside-spread objective are those in
+\eqref{eq:production-quote-loss}.
 
 
 
