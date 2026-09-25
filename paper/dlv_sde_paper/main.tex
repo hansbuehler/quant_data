@@ -23,6 +23,7 @@
 \newcommand{\Gh}{\widehat G}
 \newcommand{\Nh}{\widehat N}
 \newcommand{\Rt}{\widetilde R}
+\newcommand{\HB}[1]{{\color{blue}{#1}}}
 
 \theoremstyle{plain}
 \newtheorem{theorem}{Theorem}[section]
@@ -34,13 +35,28 @@
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Remark}
 
-\title{\textbf{A finite-lattice option market model with no conditions on the wings}\\[0.45em]
-\large Existence in discrete local variance, up to and including the first maturity}
+\title{
+    \HB{
+    Stochastic Discrete  Local Volatility}
+}
+
 \author{}
 \date{}
 
 \begin{document}
 \maketitle
+
+\begin{abstract}
+    \HB{
+    We present a fully arbitrage-free option market model using the SANOS~\cite{SANOS2026} framework
+    based in ideas of~\cite{Wissel2007}.
+
+    The model is the product of a risk-neutral discrete state martingale defined on a fixed grid with stochastic ``discrete local volatilities'',
+    and a simple SANOS-type Black~\&~Scholes smoothing process which allows smooth interpolation
+    of option prices between grid points.
+
+    We train the model on S\&P 500 Index options data.}
+\end{abstract}
 
 \begin{abstract}
 \noindent

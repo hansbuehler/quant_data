@@ -100,14 +100,12 @@ reconstruction, stability, and tail behavior. We illustrate model performance
 on 891 Option Metrics IvyDB S\&P Index surfaces from 2022 to~2025, drawn from
 an underlying archive beginning in 2020.
 With explicit 1D--4D expiry nodes, the two-$\eta$ affine-200 model places
-80.9\% of 3.57 million quotes inside bid--ask; replacing the earlier
-expiry-specific smoothing multipliers by one front and one term coordinate
-changes this rate by less than one percentage point.
-In a 158-date 2025 diagnostic for one-day ATM options, historical-scenario
-spot hedges reduce normalized root-mean-square P\&L by 45--48\%; mean--variance,
-entropy OCE, and power-exponential OCE hedges give similar results.
-A 159-date open-interest proxy gives a similar conclusion at portfolio scale,
-reducing RMS P\&L from 28.0 to about 14.4 basis points of gross open interest.
+80.9\% of 3.57 million quotes inside bid--ask.
+In a 158-date 2025 diagnostic for one-day ATM options, correlated front-law
+spot hedges reduce normalized root-mean-square P\&L by 42--45\%; criterion-matched
+OCE evidence is strongest for the buyer put.  A 159-date open-interest proxy
+reduces descriptive RMS P\&L from 27.9 to about 12.2 basis points of gross open
+interest, although its realized OCE improvements are not statistically significant.
 Finally, a no-replay scalar log-variance diffusion recovers much more of the
 observed tail mass and tail persistence than Gaussian innovations, although it
 still underproduces two- and three-week extremes.  Block-randomization tests of
@@ -780,23 +778,14 @@ where $b\in\R^{M(N+1)+2}$ and
 $B\in\R^{(M(N+1)+2)\times200}$.  The weekly model has $M=14$ and therefore
 2,816 native coordinates; the daily+weekly model has $M=18$ and 3,620 native
 coordinates.  The 200 coordinates of $h_t$ are learned latent coordinates,
-not principal components of implied volatility.
-
+not principal components of implied volatility.\footnote{
 The choice of 200 is an empirical capacity compromise rather than a structural
 claim about the intrinsic dimension of option surfaces.  It is large enough
 to preserve almost all of the direct native quote fit while remaining below
 the number of historical dates, so a full innovation covariance and stable
 joint state dynamics can still be estimated.  We report the native-versus-200
-fit loss explicitly below rather than treating this dimension as exact.  The
-dimension was fixed before, and was not selected using, the 2025 tail, path,
-or hedging diagnostics.
-
-For initialization from an expiry-specific smoothing curve, the front
-coordinate is copied directly.  The shared term coordinate is the
-forward-total-volatility-weighted mean of the later multipliers.  This choice
-preserves the final-expiry value of $W_t^M$ exactly before the two-coordinate
-model is re-optimized; it is an initialization identity, not a restriction on
-the subsequent fit.
+fit loss explicitly below rather than treating this dimension as exact.
+}
 
 The native coordinates are converted into the
 positive SANOS parameters according to definition~\ref{def:ml-sanos}.
@@ -873,9 +862,8 @@ excess statistics below are computed only over observations with $e>0$.
 \subsubsection{Market fit}
 \label{sec:fit}
 
-Table~\ref{tab:aggregate-fit} gives the complete quote-population results from
-the two-$\eta$ rerun.  The corresponding expiry-specific-$\eta$ presentation
-results are retained as a like-for-like reproducibility benchmark below.
+Table~\ref{tab:aggregate-fit} gives the complete quote-population results for
+the fitted two-$\eta$ models.
 
 \begin{table}[H]
 \centering
@@ -892,31 +880,6 @@ Daily+weekly affine-200 & 3,566,258 & \textbf{80.9211\%} & 0.3229 & 1.6924 & 0.6
 \end{tabular}
 \caption{Aggregate fit. Excess is defined by \eqref{eq:half-spread-excess}.}
 \label{tab:aggregate-fit}
-\end{table}
-
-Table~\ref{tab:eta-reproducibility} compares the rerun directly with the
-expiry-specific-$\eta$ artifacts used for the presentation.  The same quote
-population and objective are used in every row.  All inside-spread changes are
-below one percentage point and all changes in mean excess are below 3\%, so
-collapsing the weakly identified multiplier curve to a front and a term
-coordinate does not explain the model's fit.
-
-\begin{table}[H]
-\centering
-\small
-\begin{tabular}{llrrr}
-\toprule
-Geometry & Mode & Inside: old $\to$ two-$\eta$ & Change & Mean excess: old $\to$ two-$\eta$\\
-\midrule
-Weekly & Native & 73.2908\% $\to$ 73.2678\% & $-0.0230$ pp & 1.1091 $\to$ 1.1101\\
-Weekly & Affine-200 & 72.9723\% $\to$ 72.8728\% & $-0.0995$ pp & 1.0996 $\to$ 1.1017\\
-Daily+weekly & Native & 81.8429\% $\to$ 82.2809\% & $+0.4380$ pp & 0.3157 $\to$ 0.3120\\
-Daily+weekly & Affine-200 & 80.0138\% $\to$ 80.9211\% & $+0.9072$ pp & 0.3320 $\to$ 0.3229\\
-\bottomrule
-\end{tabular}
-\caption{Reproducibility of the two-$\eta$ rerun against the previously
-reported expiry-specific-$\eta$ fits.}
-\label{tab:eta-reproducibility}
 \end{table}
 
 Affine compression costs only 0.39 percentage points for the weekly geometry
@@ -1269,7 +1232,7 @@ Both laws are stable and retain almost full effective rank in state space.  A
 simulator can therefore start from an observed state or draw
 $h_0\sim\mathcal N(m,P)$ when a stationary initialization is appropriate.
 
-\subsection{Optional conditional spot block}
+\subsection{Conditional front-expiry spot block}
 
 
 \begin{remark}[Normalization with forwards and discount factors]
@@ -1288,20 +1251,46 @@ Option prices require no further drift adjustment here because the input
 surface has already been expressed in forward- and discount-normalized units.
 \end{remark}
 
-The normalized option surface can be simulated autonomously.  When a cash
-spot path is required, log-spot $s_t=\log S_t$ is attached after the surface
-fit.  A simple conditional regression is
+The normalized option surface can be simulated autonomously.  Cash spot is
+attached through the front-expiry SANOS distribution while preserving its
+observed contemporaneous dependence with surface innovations.  Let
+$F_t^1$ denote the CDF obtained from the first decoded SANOS density, including
+the lognormal backbone, and let $z_{t+1}$ be the whitened one-session state
+innovation.  Each observed gross spot return is transformed to its front-law
+Gaussian score
 \begin{equation}
-  \Delta s_{n+1}
-  =\mu^s+\beta'Q^{-1/2}\varepsilon_{n+1}
-   +\varsigma\eta_{n+1},
-  \qquad \eta_{n+1}\sim\mathcal N(0,1),
+  g_{t+1}=\Phi^{-1}\!\left[
+    F_t^1\!\left(\frac{S_{t+1}}{S_t}\right)
+  \right].
+  \label{eq:front-spot-score}
+\end{equation}
+On transitions preceding the evaluation window, we estimate a ridge loading
+$b$ by regressing the standardized $g_{t+1}$ on $z_{t+1}$.  Its penalty is
+selected by time-ordered validation.  If $\sigma_\perp$ is the fitted residual
+standard deviation, a joint scenario uses independent standard normals
+$Z\in\mathbb R^{200}$ and $\epsilon\in\mathbb R$ and sets
+\begin{equation}
+  G=\frac{b'Z+\sigma_\perp\epsilon}
+          {\sqrt{b'b+\sigma_\perp^2}},
+  \qquad
+  \frac{S_{t+1}}{S_t}
+    =(F_t^1)^{-1}\!\left(\Phi(G)\right).
   \label{eq:spot-block}
 \end{equation}
-with $\eta$ independent of the surface innovation.  This preserves the
-autonomous, stationary surface law while reproducing contemporaneous
-spot--surface dependence.  Log-spot itself is not included in the invariant
-surface distribution.
+The same $Z$ drives the next surface state.  Consequently the spot draw has
+the current front-expiry marginal and the fitted spot--surface copula rather
+than being independent of the surface shock.  For each date we tabulate
+$F_t^1$ on a fine log-return grid and invert it with a monotone PCHIP spline.
+This is an interpolation of the quantile function; it avoids a separate
+root solve for every scenario without sacrificing monotonicity.  Log-spot
+itself is not part of the invariant surface state.
+
+Because $F_t^1$ is the option-implied risk-neutral front-expiry marginal, this
+construction does not estimate or add a physical spot drift.  Its first moment
+is fixed by the observed front forward (and equals one in forward-normalized
+units), so spot carries the one-step risk-neutral drift implied by market
+carry.  The fitted copula changes only the dependence between spot and surface
+innovations; it does not change the spot marginal or its drift.
 
 \subsection{Decoded implied-volatility geometry}
 \label{sec:pca}
@@ -1445,7 +1434,7 @@ The statistical DYSANOS simulator is summarized as follows.
   \item If cash prices are required, propagate $s_t$ conditionally using
         \eqref{eq:spot-block}.
   \item Form $u_t=b+B h_t$, map it to bounded SANOS parameters through
-        \eqref{eq:defDLVdsq} and \eqref{eq:production-total-vols}, and apply
+        \eqref{eq:defDLVdsq} and \eqref{eq:totalW}, and apply
         the density recursion of Section~\ref{sec:mlsanos}.
   \item Evaluate $C_t(T,K)$ at any desired strike and expiry.  For a fixed
         cash contract $(\tau,k)$ use $T=\tau-t$ and $K=k/S_t$.
@@ -1491,11 +1480,13 @@ hedge.  Reported first-order conditions are evaluated on the same scenario
 set used for optimization.
 
 The first experiment hedges the closest-to-ATM European PM call and put with
-one business day to expiry.  At each close $t$, its scenario set contains all
-adjacent full-session spot returns whose endpoint is already observed by
-$t$; the forward changes are sample-centered during hedge estimation.  The
-next retained close is used as a settlement proxy.  We report buyer and
-seller positions separately because the OCE hedge need not be antisymmetric.
+one business day to expiry.  At each close $t$, its scenario set contains 512
+antithetic draws from the state and spot construction in
+\eqref{eq:spot-block}; spot changes are sample-centered during hedge
+estimation.  The next retained close is used as a settlement proxy.  A buyer
+pays the observed ask and a seller receives the observed bid.  We report the
+two positions separately because the entry prices differ and the OCE hedge
+need not be antisymmetric.
 
 The second experiment is an open-interest portfolio proxy.  We treat the
 date-$t$ open-interest field as an after-close observation and assign it only
@@ -1505,23 +1496,30 @@ Since open interest is unsigned, we transparently assume that a dealer is
 short every retained call and put and normalize the positions to one unit of
 gross open interest.  This is not an estimate of net dealer inventory.
 Only matched European PM contracts with 2--70 business days to expiry and
-$K/S_t\in[0.75,1.25]$ enter.  Scenario changes pair one-session state
-innovations whose endpoints are observed by close $t$
-(including the transition ending at $t$) with their contemporaneous spot
-returns, while realized portfolio changes use matched market mid-prices at
-the next close.  The 2025 window supplies 159 such close-to-next-close
+$K/S_t\in[0.75,1.25]$ enter.  The dealer-short proxy receives the observed
+bid at formation and surviving contracts are marked at the next close
+midpoint.  Its scenario set uses the same 512 antithetic joint state and
+front-expiry spot draws as the ATM experiment.  The 2025 window supplies 159
+such close-to-next-close
 observations without a missing-book failure.  Each proxy contains
 4,058--8,547 matched contracts (median 7,009); median gross open interest is
 2.82 million contracts.
 
-For both experiments we compare the chronological unhedged and hedged P\&Ls
-by root-mean-square loss, mean absolute loss, and lower-tail summaries.  A
-paired circular block bootstrap with five-session blocks reports 95\% percentile
-intervals.  A centered block-bootstrap null reports one-sided
-$p$-values for reductions in absolute and squared loss.
-Option marks are bid--ask midpoints and spot-hedge transaction costs are
-omitted, so these diagnostics isolate hedge quality rather than executable
-net profitability.
+The criterion-matched evaluation of mean--variance is realized variance.  For
+an OCE hedge it is the realized certainty equivalent
+\[
+  \widehat{\operatorname{CE}}_u(\Pi)
+  =\sup_y\left\{y+\frac1T\sum_{t=1}^T u(\Pi_t-y)\right\},
+\]
+and we report the hedged-minus-unhedged improvement.  RMS P\&L, mean absolute
+P\&L, and the lower 5\% mean are retained only as common descriptive scales.
+A paired circular block bootstrap with five-session blocks supplies 95\%
+intervals and one-sided $p$-values for the criterion-matched improvements.
+Spot-hedge transaction costs and next-close liquidation costs for surviving
+options are omitted, so these diagnostics are not claims of executable net
+profitability.  The spot copula is estimated from 710 transitions ending by
+December~31, 2024.  Its state-score correlation is 0.856 in estimation and
+0.758 over the 159 subsequent transitions.
 The fitted all-history decoder is not a frozen pre-2025 forecasting model, so
 these are historical hedge evaluations rather than claims of fully untouched
 out-of-sample performance.
@@ -1529,9 +1527,9 @@ out-of-sample performance.
 \paragraph{ATM one-day results.}
 Table~\ref{tab:atm-hedging} reports normalized root-mean-square P\&L in basis
 points of initial spot over 158 close-to-next-close observations in 2025.
-All three criteria reduce RMS P\&L by 45--48\%.  Their differences are small:
-entropy OCE is best for both buyer books, while mean--variance or
-power-exponential OCE is marginally better for the seller books.
+All three criteria reduce the descriptive RMS P\&L by approximately 42--45\%.
+For the mean--variance hedge, the criterion-matched variance-reduction test
+gives $p=0.078$ for calls and $p=0.038$ for puts.
 
 \begin{table}[H]
 \centering
@@ -1539,63 +1537,87 @@ power-exponential OCE is marginally better for the seller books.
 \toprule
 Signed ATM 1D position & Unhedged & Mean--variance & Entropy OCE & Power-exp OCE\\
 \midrule
-Buyer call  & 84.79 & 44.67 & \textbf{44.07} & 44.12\\
-Seller call & 84.79 & \textbf{44.67} & 45.41 & 44.72\\
-Buyer put   & 81.11 & 44.11 & \textbf{43.56} & 43.61\\
-Seller put  & 81.11 & \textbf{44.11} & 44.76 & 44.16\\
+Buyer call  & 84.76 & 47.54 & \textbf{46.70} & 46.77\\
+Seller call & 84.81 & \textbf{47.54} & 48.78 & 47.61\\
+Buyer put   & 81.13 & 46.96 & \textbf{46.14} & 46.21\\
+Seller put  & 81.09 & \textbf{47.00} & 48.21 & 47.06\\
 \bottomrule
 \end{tabular}
-\caption{RMS one-session P\&L in basis points of initial spot for the ATM
-one-day option experiment.  The paired five-session block-bootstrap
-$p$-value for absolute-loss improvement is $0.0001$ for every hedge.  For
-squared loss it is approximately $0.078$ for calls and $0.032$ for puts.
-Across methods, the 95\% block-bootstrap intervals for the mean absolute-loss
-reduction are 12.2--28.1 basis points for calls and 17.7--32.7 basis points
-for puts.}
+\caption{Descriptive RMS one-session P\&L in basis points of initial spot for
+the ATM one-day option experiment.  RMS is not the OCE objective.  The
+absolute-loss improvement has paired block-bootstrap $p=0.0001$ in every
+row.}
 \label{tab:atm-hedging}
+\end{table}
+
+Table~\ref{tab:atm-oce} therefore reports the OCE-aligned statistic.  Positive
+values mean that the realized certainty equivalent improved.  The buyer-put
+result is the clearest: both utilities improve certainty equivalent by about
+11.5 basis points with $p\simeq0.003$.  The other signed books have positive
+point estimates but substantially weaker evidence.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+& \multicolumn{2}{c}{Entropy OCE} & \multicolumn{2}{c}{Power-exp OCE}\\
+Signed ATM 1D position & $\Delta\mathrm{CE}$ & $p$ & $\Delta\mathrm{CE}$ & $p$\\
+\midrule
+Buyer call  & 3.44 & 0.186 & 3.22 & 0.198\\
+Seller call & 52.63 & 0.080 & 15.31 & 0.072\\
+Buyer put   & 11.62 & 0.003 & 11.41 & 0.003\\
+Seller put  & 15.26 & 0.169 & 6.49 & 0.241\\
+\bottomrule
+\end{tabular}
+\caption{Realized OCE certainty-equivalent improvement in basis points of
+initial spot, with one-sided paired five-session block-bootstrap $p$-values.}
+\label{tab:atm-oce}
 \end{table}
 
 Across the four signed books, all 1,896 hedge estimates are finite, no spot
 bound is active, and every numerical OCE optimization reports convergence.
-The maximum absolute first-order residual is $3.35\times10^{-7}$.  The
-chronological scenario sets use only transitions observed by close $t$;
-nevertheless, the option selection and evaluation period remain a historical
-diagnostic rather than a fully frozen model forecast.
+The maximum absolute first-order residual is $2.68\times10^{-7}$.  The copula
+is frozen before 2025, but the option selection and evaluation period remain
+a historical diagnostic rather than a fully frozen model forecast.
 
 \paragraph{Open-interest portfolio proxy.}
 Table~\ref{tab:oi-hedging} reports the same diagnostics for the 159 portfolio
 proxies.  The date-$t$ after-close OI field is used as a proxy for the book
 held from close $t$ to close $t+1$, exactly as stated above; this convention
 does not assert that the field was tradable information before the date-$t$
-close.  Mean--variance and both OCE criteria again produce nearly identical
-hedges.  RMS loss falls by about 49\% and mean absolute loss by about 54\%.
+close.  Mean--variance and both OCE criteria produce nearly identical spot
+positions.  Descriptive RMS loss falls by about 56\% and mean absolute loss
+by about 55\%.
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{lrrrrr}
+\begin{tabular}{lrrr}
 \toprule
-Method & RMS & Mean absolute & Lower 5\% mean & $p_{|\cdot|}$ & $p_{(\cdot)^2}$\\
+Method & RMS & Mean absolute & Lower 5\% mean\\
 \midrule
-Unhedged & 28.02 & 10.25 & $-65.35$ & -- & --\\
-Mean--variance & 14.35 & 4.71 & $-40.85$ & 0.0079 & 0.0820\\
-Entropy OCE & 14.43 & 4.72 & $-40.93$ & 0.0076 & 0.0822\\
-Power-exp OCE & 14.36 & 4.71 & $-40.85$ & 0.0078 & 0.0820\\
+Unhedged & 27.86 & 10.09 & $-66.94$\\
+Mean--variance & 12.20 & 4.54 & $-39.58$\\
+Entropy OCE & 12.44 & 4.54 & $-39.94$\\
+Power-exp OCE & 12.20 & 4.53 & $-39.58$\\
 \bottomrule
 \end{tabular}
-\caption{One-session P\&L of the open-interest portfolio proxy, in basis
-points of gross open interest.  The final two columns are one-sided centered
-five-session block-bootstrap $p$-values for reductions in absolute and
-squared loss relative to the unhedged proxy.}
+\caption{Common descriptive one-session P\&L statistics for the open-interest
+portfolio proxy, in basis points of gross open interest.}
 \label{tab:oi-hedging}
 \end{table}
 
-The 95\% block-bootstrap interval for the mean absolute-loss reduction is
-2.34--9.81 basis points across the three methods.  The squared-loss test is
-only borderline at conventional levels, so the reduction in RMS should not
-be described as statistically definitive.  All 477 fitted hedge problems are
-finite, no position bound is active, and no optimizer reports failure; the
-largest absolute first-order residual is $1.58\times10^{-7}$.  These results
+The mean--variance hedge reduces realized variance by $6.29\times10^{-6}$
+in squared normalized-P\&L units; the paired block-bootstrap test gives
+$p=0.093$.  The absolute-loss reduction has $p\simeq0.011$ for all three
+methods.  Under
+the criterion-matched OCE evaluation, however, the entropy certainty-equivalent
+gain is only 0.50 basis points ($p=0.344$), and the power-exponential gain is
+0.27 basis points ($p=0.394$).  Thus this experiment does not establish an OCE
+improvement even though conventional dispersion measures fall sharply.  All
+477 fitted hedge problems are finite, no position bound is active, and no
+optimizer reports failure; the largest absolute first-order residual is
+$1.74\times10^{-7}$.  These results
 measure the usefulness of the conditional scenario law for the stated proxy,
 not the performance of an observed dealer inventory.
 
@@ -1628,20 +1650,20 @@ pricing of any option on GPU. We have shown how
 to leverage our representation to build a simple, but already fairly powerful baseline
 model which can generate spot and option paths for many days in the future up to years.
 The surface-first AR(1) captures first-order level, skew, term, and leverage
-effects.  Replacing expiry-specific smoothing coordinates by a front and a
-term coordinate leaves the reported quote fit essentially unchanged, and the
-daily+weekly affine model places 80.92\% of the full quote population inside
-bid--ask.  A no-replay log-variance diffusion improves the deficient Gaussian
+effects.  Its front and term smoothing coordinates allow the short end to move
+separately from later expiries, and the daily+weekly affine model places
+80.92\% of the full quote population inside bid--ask.  A no-replay
+log-variance diffusion improves the deficient Gaussian
 tail law and reproduces tail persistence, although multi-week tail mass
 remains too low.  The one-session ATM and open-interest proxy experiments show
-that the fitted conditional distribution can materially reduce historical
-hedging loss under three different criteria.
+large reductions in conventional dispersion measures, while criterion-matched
+OCE evidence is mixed and is not significant for the open-interest proxy.
 
 We have provided a baseline model to generate long paths of daily spot and option prices.
 Each option surface is free of static arbitrage. Moreover, we can price~\emph{any}
 option on each path given the ML-SANOS parameters for the respective sample and
-time step. Contrary to previous results, agents can therefore choose which
-options to trade at each time step.
+time step.  Agents can therefore choose which options to trade at each time
+step rather than being restricted to a preselected finite hedge set.
 
 \section{Thanks}
 

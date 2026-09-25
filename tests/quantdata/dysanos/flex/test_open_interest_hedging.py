@@ -44,6 +44,6 @@ def test_after_close_open_interest_defines_next_session_proxy_weights() -> None:
     assert book["gross_open_interest"] == pytest.approx(100.0)
     expected_pnl = np.dot(
         (-0.10, -0.90),
-        ((3.0 - 2.0) / 100.0, (5.0 - 3.0) / 100.0),
+        ((3.0 - 1.0) / 100.0, (5.0 - 2.0) / 100.0),
     )
     assert book["realized_unhedged_pnl"] == pytest.approx(expected_pnl)

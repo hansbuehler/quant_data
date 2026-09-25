@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from quantdata.dysanos.flex.rolling_hedging import (
+    empirical_oce,
     mean_variance_hedge,
     oce_hedge,
     one_session_pairs,
     paired_block_bootstrap_improvement,
+    paired_block_bootstrap_oce_improvement,
     summarize_hedge_estimates,
     summarize_realized_pnl,
 )
@@ -94,3 +97,36 @@ def test_paired_block_bootstrap_detects_uniform_improvement() -> None:
     assert result["absolute"]["mean_loss_reduction"] > 0.0
     assert result["squared"]["bootstrap_95_percent_interval"][0] > 0.0
     assert result["squared"]["one_sided_p_no_improvement"] <= 0.002
+    assert result["variance"]["bootstrap_95_percent_interval"][0] > 0.0
+    assert result["variance"]["one_sided_p_no_improvement"] <= 0.002
+
+
+def test_empirical_oce_is_cash_invariant_and_normalized() -> None:
+    values = np.asarray((-0.03, -0.01, 0.02, 0.04), dtype=np.float64)
+    for utility in ("entropy", "power-exp"):
+        zero = empirical_oce(
+            np.zeros(4), utility=utility, risk_aversion=50.0
+        )
+        base = empirical_oce(values, utility=utility, risk_aversion=50.0)
+        shifted = empirical_oce(
+            values + 0.017, utility=utility, risk_aversion=50.0
+        )
+        assert zero["certainty_equivalent"] == pytest.approx(0.0, abs=1.0e-12)
+        assert shifted["certainty_equivalent"] == pytest.approx(
+            base["certainty_equivalent"] + 0.017,
+            abs=1.0e-12,
+        )
+
+
+def test_oce_bootstrap_detects_uniform_cash_improvement() -> None:
+    unhedged = np.linspace(-0.05, 0.05, 101)
+    result = paired_block_bootstrap_oce_improvement(
+        unhedged,
+        unhedged + 0.01,
+        utility="power-exp",
+        risk_aversion=50.0,
+        replications=999,
+    )
+    assert result["certainty_equivalent_improvement"] == pytest.approx(0.01)
+    assert result["bootstrap_95_percent_interval"][0] == pytest.approx(0.01)
+    assert result["one_sided_p_no_improvement"] <= 0.002

@@ -8,7 +8,8 @@ from datetime import date
 from typing import Sequence
 
 import numpy as np
-from scipy.optimize import minimize
+from scipy.optimize import brentq, minimize
+from scipy.special import logsumexp
 
 from quantdata.biz_calendar import get_business_days
 
@@ -120,14 +121,17 @@ def oce_hedge(
         utility=utility,
         risk_aversion=risk_aversion,
     )
+    cash_condition = 1.0 - float(np.mean(marginal))
+    hedge_condition = float(np.mean(marginal * x))
+    numerically_converged = max(abs(cash_condition), abs(hedge_condition)) <= 1.0e-6
     return HedgeEstimate(
         method=f"{utility}-oce",
         spot_position=delta,
         objective=-float(result.fun),
         cash_translation=cash,
-        first_order_condition_cash=1.0 - float(np.mean(marginal)),
-        first_order_condition_hedge=float(np.mean(marginal * x)),
-        optimizer_success=bool(result.success),
+        first_order_condition_cash=cash_condition,
+        first_order_condition_hedge=hedge_condition,
+        optimizer_success=bool(result.success) or numerically_converged,
         spot_bound_active=abs(delta) >= 19.999,
     )
 
@@ -150,6 +154,47 @@ def summarize_realized_pnl(values: np.ndarray) -> dict[str, float | int]:
         "q95": float(np.quantile(pnl, 0.95)),
         "q99": float(np.quantile(pnl, 0.99)),
         "lower_five_percent_mean": float(np.mean(pnl[pnl <= cutoff])),
+    }
+
+
+def empirical_oce(
+    values: np.ndarray,
+    *,
+    utility: str,
+    risk_aversion: float,
+) -> dict[str, float]:
+    r"""Evaluate the empirical OCE, normalized so a zero P&L has value zero."""
+    pnl = np.asarray(values, dtype=np.float64)
+    if pnl.ndim != 1 or len(pnl) == 0 or np.any(~np.isfinite(pnl)):
+        raise ValueError("OCE P&L must be a non-empty finite vector")
+    if utility not in {"entropy", "power-exp"}:
+        raise ValueError(f"unsupported utility {utility!r}")
+    if not math.isfinite(risk_aversion) or risk_aversion <= 0.0:
+        raise ValueError("risk_aversion must be finite and positive")
+    if utility == "entropy":
+        cash = -float(logsumexp(-risk_aversion * pnl) - math.log(len(pnl))) / risk_aversion
+        return {"certainty_equivalent": cash, "cash_translation": cash}
+
+    def cash_condition(cash: float) -> float:
+        marginal, _ = _utility_and_marginal(
+            pnl - cash,
+            utility=utility,
+            risk_aversion=risk_aversion,
+        )
+        return float(np.mean(marginal) - 1.0)
+
+    scale = max(float(np.ptp(pnl)), 1.0 / risk_aversion, np.finfo(np.float64).eps)
+    lower = float(np.min(pnl) - 10.0 * scale)
+    upper = float(np.max(pnl) + 10.0 * scale)
+    cash = float(brentq(cash_condition, lower, upper, xtol=1.0e-14, rtol=1.0e-14))
+    _, utility_values = _utility_and_marginal(
+        pnl - cash,
+        utility=utility,
+        risk_aversion=risk_aversion,
+    )
+    return {
+        "certainty_equivalent": cash + float(np.mean(utility_values)),
+        "cash_translation": cash,
     }
 
 
@@ -242,7 +287,89 @@ def paired_block_bootstrap_improvement(
                 (1 + np.sum(null_draws >= observed)) / (replications + 1)
             ),
         }
+    observed_variance = float(np.var(baseline) - np.var(candidate))
+    variance_draws = np.var(baseline[indices], axis=1) - np.var(
+        candidate[indices], axis=1
+    )
+    variance_null_draws = variance_draws - observed_variance
+    output["variance"] = {
+        "variance_reduction": observed_variance,
+        "bootstrap_95_percent_interval": [
+            float(np.quantile(variance_draws, 0.025)),
+            float(np.quantile(variance_draws, 0.975)),
+        ],
+        "one_sided_p_no_improvement": float(
+            (1 + np.sum(variance_null_draws >= observed_variance))
+            / (replications + 1)
+        ),
+    }
     return output
+
+
+def paired_block_bootstrap_oce_improvement(
+    unhedged: np.ndarray,
+    hedged: np.ndarray,
+    *,
+    utility: str,
+    risk_aversion: float,
+    block_length: int = 5,
+    replications: int = 9_999,
+    seed: int = 83_117,
+) -> dict[str, object]:
+    """Bootstrap the paired improvement in empirical OCE certainty equivalent."""
+    baseline, candidate = _aligned_vectors(unhedged, hedged)
+    if block_length <= 0 or replications <= 0:
+        raise ValueError("block_length and replications must be positive")
+    block_length = min(block_length, len(baseline))
+    generator = np.random.default_rng(seed)
+    starts = generator.integers(
+        0, len(baseline), size=(replications, math.ceil(len(baseline) / block_length))
+    )
+    offsets = np.arange(block_length)
+    indices = (starts[..., None] + offsets) % len(baseline)
+    indices = indices.reshape(replications, -1)[:, : len(baseline)]
+    baseline_oce = empirical_oce(
+        baseline,
+        utility=utility,
+        risk_aversion=risk_aversion,
+    )["certainty_equivalent"]
+    candidate_oce = empirical_oce(
+        candidate,
+        utility=utility,
+        risk_aversion=risk_aversion,
+    )["certainty_equivalent"]
+    observed = candidate_oce - baseline_oce
+    draws = np.empty(replications, dtype=np.float64)
+    for replication, sample in enumerate(indices):
+        draws[replication] = (
+            empirical_oce(
+                candidate[sample],
+                utility=utility,
+                risk_aversion=risk_aversion,
+            )["certainty_equivalent"]
+            - empirical_oce(
+                baseline[sample],
+                utility=utility,
+                risk_aversion=risk_aversion,
+            )["certainty_equivalent"]
+        )
+    null_draws = draws - observed
+    return {
+        "utility": utility,
+        "risk_aversion": risk_aversion,
+        "block_length": block_length,
+        "replications": replications,
+        "unhedged_certainty_equivalent": baseline_oce,
+        "hedged_certainty_equivalent": candidate_oce,
+        "certainty_equivalent_improvement": observed,
+        "bootstrap_95_percent_interval": [
+            float(np.quantile(draws, 0.025)),
+            float(np.quantile(draws, 0.975)),
+        ],
+        "one_sided_p_no_improvement": float(
+            (1 + np.sum(null_draws >= observed)) / (replications + 1)
+        ),
+    }
 
 
 def _aligned_vectors(
@@ -283,10 +410,12 @@ def _utility_and_marginal(
 
 __all__ = [
     "HedgeEstimate",
+    "empirical_oce",
     "mean_variance_hedge",
     "oce_hedge",
     "one_session_pairs",
     "paired_block_bootstrap_improvement",
+    "paired_block_bootstrap_oce_improvement",
     "summarize_hedge_estimates",
     "summarize_realized_pnl",
 ]
