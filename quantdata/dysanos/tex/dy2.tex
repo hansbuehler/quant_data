@@ -678,7 +678,7 @@ densities, and then to SANOS call prices:
 That allows us to pass to a practically unconstrained parameter set, which we call the ML-SANOS parametrization.
 Recall function $\mathrm{sigmoid}(x)=(1+e^{-x})^{-1}$.
 
-\begin{definition}[ML-SANOS]
+\begin{definition}[ML-SANOS]\label{def:ml-sanos}
     Fix the normalized grid geometry for ML-SANOS with:
     \begin{itemize}
         \item Time-to-expiries (TTEs) $0=\hat T^0<\cdots<\hat T^M$ with
@@ -699,39 +699,34 @@ Recall function $\mathrm{sigmoid}(x)=(1+e^{-x})^{-1}$.
                +\mathrm{sigmoid}( u^{\sigma,j} ) ( \sigma_{\max} - \sigma_{\min} )
             \eqend
             and two smoothing factors
-            \begin{align*}
-                \eta^{\mathrm f}&:=\eta_{\min}
+            \begin{equation}
+                \label{eq:etatrans}
+                \eta^{\mathrm f}:=\eta_{\min}
                   +(\eta_{\max}-\eta_{\min})
-                    \mathrm{sigmoid}(u^{\eta,\mathrm f}),\\
-                \eta^{\mathrm{term}}&:=\eta_{\min}
+                    \mathrm{sigmoid}(u^{\eta,\mathrm f}) \ \ \ \mbox{and} \ \ \
+                \eta^{\mathrm{term}}:=\eta_{\min}
                   +(\eta_{\max}-\eta_{\min})
-                    \mathrm{sigmoid}(u^{\eta,\mathrm{term}}),
-            \end{align*}
-            where the interval multiplier is
-            $\eta^1:=\eta^{\mathrm f}$ and
-            $\eta^j:=\eta^{\mathrm{term}}$ for $j=2,\ldots,M$.
-            Thus the front interval can set the short-end smoothing scale,
-            while a single term parameter controls every subsequent increment.
+                    \mathrm{sigmoid}(u^{\eta,\mathrm{term}}) \ .
+            \end{equation}
             With these quantities define the \textbf{total volatilities}
              \begin{equation}\label{eq:totalW}
              \widetilde W^j := \sum_{\ell=1}^{j} \sigma^\ell \sqrt{\Delta\hat T^\ell}
              \qquad\mbox{and}\qquad
-             W^j := \sum_{\ell=1}^{j} \eta^\ell \sigma^\ell \sqrt{\Delta\hat T^\ell}\ .
+             W^j := \eta^{\mathrm f} \sigma^1 \sqrt{\Delta\hat T^1}\ + \eta^{\mathrm{term}} \sum_{\ell=2}^{j}  \sigma^\ell \sqrt{\Delta\hat T^\ell}\ .
              \end{equation}
-        \item We use $\widetilde W^j$ to define the \textbf{relative strikes}
+        \item We use $\widetilde W^j$ to define a fixed grid as \textbf{relative strikes}
               \begin{equation}\label{eq:constructK}
-                \hat K^{j,i} := \exp\left( z^i \widetilde W^j \right)\ .
+                \hat K := \exp\left( z \widetilde W^1 \right) \bigcup \exp\left( z^i \widetilde W^M \right) \ ,
               \end{equation}
-              with boundaries $\hat K^{j,0}:=\frac12 \hat K^{j,1}$ and $\hat K^{j,N+1} := \frac32 \hat K^{j,N}$.
+              sufficiently sorted, 
+              with boundaries $\hat K^{0}:=\frac12 \hat K^{1}$ and $\hat K^{N+1} := \frac32 \hat K^{N}$.
         \item Finally, we use the new real-valued ML-SANOS parameters to define the \textbf{squared discrete local volatilities}:
               \begin{equation}\label{eq:defDLVdsq}
                  \Sigma^{j,i}
                  :=\min\!\left\{\Sigma_{\max},
                     \Sigma_{\min}+\exp(u^{\Sigma,j,i})\right\}\ .
               \end{equation}
-              The raw log-DLV coordinate therefore has no saturating upper
-              sigmoid.  During fitting, a smooth one-sided barrier supplies a
-              restoring gradient as it approaches the pricing cap
+              (This formulation avoid saturation of the sigmoid function as the raw log-DLV coordinate approaches the cap.)
               $\Sigma_{\max}$.
 
     \end{itemize}
@@ -765,13 +760,15 @@ uncompressed state is stored as an expiry-major DLV/forward-volatility block
 followed by the two smoothing coordinates:
 \begin{equation}
   u_t=\left(
-      \bigl(u_t^{\Sigma,j,1},\ldots,u_t^{\Sigma,j,N},
-            u_t^{\sigma,j}\bigr)_{j=1}^M,
-      u_t^{\eta,\mathrm f},u_t^{\eta,\mathrm{term}}
+u_t^{\Sigma},\,
+            u_t^{\sigma},\,
+      u_t^{\eta}
       \right)
   \in\R^{M(N+1)+2}.
   \label{eq:production-native-state}
 \end{equation}
+with $u_t^{\Sigma}=(u_t^{\Sigma;j,i})_{j=1,i=1}^{M,N}$, 
+            $u_t^{\sigma}=(u_t^{\sigma;j})_{j=1}^M$, $u_t^{\eta}=(u_t^{\eta,\mathrm f},u_t^{\eta,\mathrm{term}})$.
 The completed decoder has no hidden layers:
 \begin{equation}
   u_t=b+B h_t,
@@ -802,44 +799,13 @@ model is re-optimized; it is an initialization identity, not a restriction on
 the subsequent fit.
 
 The native coordinates are converted into the
-positive SANOS parameters by
-\begin{itemize}
-    \item $
-  \Sigma_t^{j,i}
-    =\min\!\left\{\Sigma_{\max},
-       \Sigma_{\min}+e^{u_t^{\Sigma,j,i}}\right\}$;
-
-\item $
-  \sigma_t^j
-    =\sigma_{\min}
-      +(\sigma_{\max}-\sigma_{\min})\mathrm{sigmoid}(u_t^{\sigma,j})
-      $; and
-
-\item
-  $\eta_t^{\mathrm f}$ and $\eta_t^{\mathrm{term}}$ are the bounded sigmoid
-  transforms above, with
-  $\eta_t^1=\eta_t^{\mathrm f}$ and
-  $\eta_t^j=\eta_t^{\mathrm{term}}$ for $j\geq2$.
-\end{itemize}
-Here $\Sigma_t^{j,i}$ is the squared DLV, $\sigma_t^j$ is the forward
-volatility, and $\eta_t^j$ is its smoothing-backbone multiplier.  The
+positive SANOS parameters according to definition~\ref{def:ml-sanos}.
+ The
 experiment uses
 $(\Sigma_{\min},\Sigma_{\max})=(0.01^2,3^2)$,
 $(\sigma_{\min},\sigma_{\max})=(0.01,1)$, and
 $(\eta_{\min},\eta_{\max})=(0.01,0.50)$.  A smooth cap penalty acts on
 the raw log-DLV coordinate without imposing a saturating upper sigmoid.
-The two cumulative total-volatility curves are exactly
-\begin{equation}
-  \widetilde W_t^j
-    =\sum_{\ell=1}^j\sigma_t^\ell\sqrt{\Delta\hat T^\ell},
-  \qquad
-  W_t^j
-    =\sum_{\ell=1}^j\eta_t^\ell\sigma_t^\ell
-       \sqrt{\Delta\hat T^\ell}.
-  \label{eq:production-total-vols}
-\end{equation}
-  Since both
-$\sigma_t^j$ and $\eta_t^j$ are positive, $W_t^j$ is increasing in expiry.
 
 Each date uses one floating relative-strike support shared across all model
 expiries.  Half of the~200 normalized-moneyness candidates cover the front
