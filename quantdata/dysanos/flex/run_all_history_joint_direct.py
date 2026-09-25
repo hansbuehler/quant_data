@@ -17,6 +17,7 @@ from filelock import FileLock
 from quantdata.dysanos.flex.config import (
     FlexMarketConfig,
     FlexObjectiveConfig,
+    FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig,
     JointDirectDynamicsConfig,
     PcaDecoderConfig,
     SharedStrikeCappedUnboundedDlvFlexGeometryConfig,
@@ -120,6 +121,37 @@ def _market_config_from_completion(
         raise ValueError("Native completion has invalid excluded business DTEs")
     values["excluded_business_dtes"] = tuple(float(value) for value in excluded)
     return FlexMarketConfig(**values)
+
+
+def _geometry_from_completion(
+    completion: dict[str, object],
+    *,
+    requested_model_business_dtes: tuple[float, ...] | None,
+) -> SharedStrikeCappedUnboundedDlvFlexGeometryConfig:
+    """Restore the exact completed geometry and validate any CLI assertion."""
+    geometry_payload = completion.get("geometry")
+    if not isinstance(geometry_payload, dict):
+        raise ValueError("Native completion has no geometry payload")
+    values = dict(geometry_payload)
+    for name in ("nms_range", "explicit_model_business_dtes"):
+        if values.get(name) is not None:
+            values[name] = tuple(values[name])
+    geometry_type = (
+        FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig
+        if values.get("front_term_eta") is True
+        else SharedStrikeCappedUnboundedDlvFlexGeometryConfig
+    )
+    geometry = geometry_type(**values)
+    if requested_model_business_dtes is not None and (
+        requested_model_business_dtes
+        != tuple(float(value) for value in geometry.model_business_dtes)
+    ):
+        raise ValueError(
+            "Requested model expiry grid differs from the completed native "
+            f"geometry: {requested_model_business_dtes} versus "
+            f"{tuple(float(value) for value in geometry.model_business_dtes)}"
+        )
+    return geometry
 
 
 def install_all_history_warm_start(
@@ -364,14 +396,14 @@ def run(arguments: argparse.Namespace) -> None:
         raise ValueError("Native shared-strikes completion proof is incomplete")
     market_config = _market_config_from_completion(completion)
 
-    geometry_kwargs: dict[str, object] = {}
-    if arguments.model_business_dtes is not None:
-        model_business_dtes = tuple(arguments.model_business_dtes)
-        geometry_kwargs = {
-            "num_model_expiries": len(model_business_dtes),
-            "explicit_model_business_dtes": model_business_dtes,
-        }
-    geometry = SharedStrikeCappedUnboundedDlvFlexGeometryConfig(**geometry_kwargs)
+    geometry = _geometry_from_completion(
+        completion,
+        requested_model_business_dtes=(
+            None
+            if arguments.model_business_dtes is None
+            else tuple(arguments.model_business_dtes)
+        ),
+    )
     objective_config = FlexObjectiveConfig(fit_weight=0.05)
     train_config = JointDirectTrainConfig(
         num_epochs=arguments.epochs,

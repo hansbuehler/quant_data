@@ -20,6 +20,7 @@ from quantdata.dysanos.flex.config import (
     FlexObjectiveConfig,
     FlexTrainConfig,
     ForwardMuFlexGeometryConfig,
+    FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig,
     LatentDecoderConfig,
     NativeStateConfig,
     PcaDecoderConfig,
@@ -41,6 +42,7 @@ from quantdata.dysanos.flex.model import (
     dlvsq_cap_penalty,
     forward_vols_from_total_vols,
     raw_from_native_parameters,
+    split_forward_mu_native_raw,
 )
 from quantdata.torch import BaseEnvironment
 
@@ -214,15 +216,21 @@ def native_checkpoint_state_audit(
         raise ValueError(f"Native checkpoint contains non-finite states in {path}")
     probability = torch.sigmoid(raw)
     if isinstance(geometry, ForwardMuFlexGeometryConfig):
-        expiry_blocks = probability.reshape(
-            raw.shape[0],
-            geometry.num_model_expiries,
-            geometry.expiry_block_state_size,
+        dlv_raw, forward_raw, eta_raw = split_forward_mu_native_raw(
+            raw,
+            geometry=geometry,
         )
-        dlv_probability = expiry_blocks[..., : geometry.num_inner_strikes]
-        forward_probability = expiry_blocks[..., geometry.num_inner_strikes]
-        eta_probability = expiry_blocks[..., geometry.num_inner_strikes + 1]
-        eta_name = "forward_mu"
+        dlv_probability = torch.sigmoid(dlv_raw)
+        forward_probability = torch.sigmoid(forward_raw)
+        eta_probability = torch.sigmoid(eta_raw)
+        eta_names = (
+            ("front_eta", "term_eta")
+            if isinstance(
+                geometry,
+                FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig,
+            )
+            else ("forward_mu",)
+        )
     else:
         dlv_stop = geometry.num_model_expiries * geometry.num_inner_strikes
         dlv_probability = probability[:, :dlv_stop]
@@ -239,13 +247,27 @@ def native_checkpoint_state_audit(
             if isinstance(geometry, FixedEtaFlexGeometryConfig)
             else probability[:, -1:]
         )
-        eta_name = "eta"
-    bounded = (
+        eta_names = ("eta",)
+    if isinstance(geometry, CappedUnboundedDlvFlexGeometryConfig):
+        maximum_log_dlvsq = torch.as_tensor(
+            geometry.maximum_log_dlvsq,
+            dtype=raw.dtype,
+            device=raw.device,
+        )
+        dlv_values = geometry.min_dlvsq + torch.exp(
+            torch.minimum(dlv_raw, maximum_log_dlvsq)
+        )
+        dlv_probability = (dlv_values - geometry.min_dlvsq) / (
+            geometry.max_dlvsq - geometry.min_dlvsq
+        )
+    else:
+        dlv_values = geometry.min_dlvsq + (
+            geometry.max_dlvsq - geometry.min_dlvsq
+        ) * dlv_probability
+    bounded: list[tuple[str, torch.Tensor, torch.Tensor]] = [
         (
             "dlvsq",
-            geometry.min_dlvsq
-            + (geometry.max_dlvsq - geometry.min_dlvsq)
-            * dlv_probability,
+            dlv_values,
             dlv_probability,
         ),
         (
@@ -255,13 +277,28 @@ def native_checkpoint_state_audit(
             * forward_probability,
             forward_probability,
         ),
-        (
-            eta_name,
-            geometry.min_eta
-            + (geometry.max_eta - geometry.min_eta) * eta_probability,
-            eta_probability,
-        ),
-    )
+    ]
+    if len(eta_names) == 1:
+        bounded.append(
+            (
+                eta_names[0],
+                geometry.min_eta
+                + (geometry.max_eta - geometry.min_eta) * eta_probability,
+                eta_probability,
+            )
+        )
+    else:
+        for eta_index, eta_name in enumerate(eta_names):
+            coordinate_probability = eta_probability[:, eta_index]
+            bounded.append(
+                (
+                    eta_name,
+                    geometry.min_eta
+                    + (geometry.max_eta - geometry.min_eta)
+                    * coordinate_probability,
+                    coordinate_probability,
+                )
+            )
     coordinate_statistics: dict[str, dict[str, float]] = {}
     for name, values, probabilities in bounded:
         coordinate_statistics[name] = {
@@ -953,7 +990,11 @@ def _market_optimizers(
         optimizers.append(
             torch.optim.Adam(
                 model.raw_decoder.parameters(),
-                lr=train_config.learning_rate,
+                lr=(
+                    train_config.learning_rate
+                    if train_config.decoder_learning_rate is None
+                    else train_config.decoder_learning_rate
+                ),
                 weight_decay=train_config.weight_decay,
             )
         )
@@ -1000,6 +1041,7 @@ def _resume_signature(
         "training_algorithm_version": _TRAINING_ALGORITHM_VERSION,
         "num_epochs": train_config.num_epochs,
         "learning_rate": train_config.learning_rate,
+        "decoder_learning_rate": train_config.decoder_learning_rate,
         "learning_rate_schedule": train_config.learning_rate_schedule,
         "learning_rate_warmup_epochs": train_config.learning_rate_warmup_epochs,
         "minimum_learning_rate_fraction": (
@@ -1126,6 +1168,11 @@ def _market_training_phase(
     model.train()
     for epoch in range(start_epoch, train_config.num_epochs):
         used_learning_rate = float(optimizers[0].param_groups[0]["lr"])
+        used_decoder_learning_rate = (
+            float(optimizers[1].param_groups[0]["lr"])
+            if len(optimizers) > 1
+            else used_learning_rate
+        )
         order = rng.permutation(len(days))
         objective_terms: list[torch.Tensor] = []
         quote_objective_terms: list[torch.Tensor] = []
@@ -1178,6 +1225,7 @@ def _market_training_phase(
                 "date_weighted_quote_objective": quote_objective_sum / date_count,
                 "dlvsq_cap_penalty": cap_penalty_sum / date_count,
                 "learning_rate": used_learning_rate,
+                "decoder_learning_rate": used_decoder_learning_rate,
                 "day_batch_size": float(train_config.day_batch_size),
             }
         )

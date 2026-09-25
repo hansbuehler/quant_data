@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -325,6 +326,51 @@ class SharedStrikeCappedUnboundedDlvFlexGeometryConfig(
                 "'minimum_log_spacing_fraction' must lie in (0,1], found "
                 f"{self.minimum_log_spacing_fraction}"
             ),
+        )
+
+
+@version(
+    "1.0",
+    dependencies=[SharedStrikeCappedUnboundedDlvFlexGeometryConfig],
+)
+@dataclass(frozen=True, kw_only=True)
+class FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig(
+    SharedStrikeCappedUnboundedDlvFlexGeometryConfig
+):
+    """Shared-strike geometry with one front and one later-term multiplier.
+
+    The expiry-major native core stores ``N`` log-DLV² coordinates and one
+    forward volatility for each model expiry.  Two trailing raw coordinates
+    then parameterize the first forward interval and every subsequent
+    interval, respectively.  This retains a distinct short-end backbone scale
+    while removing an otherwise weakly identified multiplier term structure.
+    """
+
+    front_term_eta: bool = True
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        verify_inp(
+            self.front_term_eta,
+            lambda: "'front_term_eta' must remain true for this geometry",
+        )
+
+    @property
+    def core_expiry_block_state_size(self) -> int:
+        """DLV coordinates and forward volatility stored for one expiry."""
+        return self.num_inner_strikes + 1
+
+    @property
+    def num_eta_coordinates(self) -> int:
+        """Number of separately learned backbone multipliers."""
+        return 2
+
+    @property
+    def native_state_size(self) -> int:
+        """Expiry-major native core plus front and later-term multipliers."""
+        return (
+            self.num_model_expiries * self.core_expiry_block_state_size
+            + self.num_eta_coordinates
         )
 
 
@@ -705,7 +751,7 @@ class TriangularPcaDecoderConfig:
         return named_unique_filename48_8(self.label, self)
 
 
-@version("1.4")
+@version("1.5")
 @dataclass(frozen=True, kw_only=True)
 class FlexTrainConfig:
     """Operational controls shared by the Torch calibration stages."""
@@ -713,6 +759,7 @@ class FlexTrainConfig:
     num_epochs: int = 300
     day_batch_size: int = 4
     learning_rate: float = 2.0e-2
+    decoder_learning_rate: float | None = None
     learning_rate_schedule: Literal["constant", "cosine"] = "cosine"
     learning_rate_warmup_epochs: int = 0
     minimum_learning_rate_fraction: float = 0.0
@@ -746,6 +793,17 @@ class FlexTrainConfig:
             lambda: (
                 "'learning_rate' must be positive, found "
                 f"{self.learning_rate}"
+            ),
+        )
+        verify_inp(
+            self.decoder_learning_rate is None
+            or (
+                math.isfinite(self.decoder_learning_rate)
+                and self.decoder_learning_rate > 0.0
+            ),
+            lambda: (
+                "'decoder_learning_rate' must be None or finite and positive, "
+                f"found {self.decoder_learning_rate}"
             ),
         )
         verify_inp(

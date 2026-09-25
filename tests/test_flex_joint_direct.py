@@ -11,6 +11,7 @@ import torch
 
 from quantdata.dysanos.flex.config import (
     FlexMarketConfig,
+    FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig,
     JointDirectDynamicsConfig,
     PcaDecoderConfig,
     SharedStrikeCappedUnboundedDlvFlexGeometryConfig,
@@ -31,6 +32,7 @@ from quantdata.dysanos.flex.model import (
     LatentStateSanosModel,
 )
 from quantdata.dysanos.flex.run_all_history_joint_direct import (
+    _geometry_from_completion,
     _market_config_from_completion,
     install_all_history_warm_start,
     install_direct_decoder_initialization,
@@ -91,6 +93,37 @@ def test_all_history_market_config_inherits_native_exclusions() -> None:
     )
 
     assert restored == expected
+
+
+def test_all_history_restores_exact_front_term_geometry() -> None:
+    expected = FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig(
+        num_inner_strikes=8,
+        num_model_expiries=4,
+        explicit_model_business_dtes=(1.0, 2.0, 5.0, 10.0),
+        min_eta=0.03,
+        max_eta=0.42,
+    )
+
+    restored = _geometry_from_completion(
+        {"geometry": asdict(expected)},
+        requested_model_business_dtes=(1.0, 2.0, 5.0, 10.0),
+    )
+
+    assert restored == expected
+
+
+def test_all_history_rejects_expiry_grid_different_from_completion() -> None:
+    expected = FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig(
+        num_inner_strikes=8,
+        num_model_expiries=4,
+        explicit_model_business_dtes=(1.0, 2.0, 5.0, 10.0),
+    )
+
+    with np.testing.assert_raises_regex(ValueError, "expiry grid differs"):
+        _geometry_from_completion(
+            {"geometry": asdict(expected)},
+            requested_model_business_dtes=(1.0, 3.0, 5.0, 10.0),
+        )
 
 
 def test_all_history_market_cache_retains_explicit_expiry_grid() -> None:

@@ -97,8 +97,22 @@ in the future.
 We present a robust and useful if somewhat simplistic baseline in the form of an AR(1) model.
 We discuss model setup, data pipeline, and training and investigate market
 reconstruction, stability, and tail behavior. We illustrate model performance
-on Option Metrics' IvyDB
-S\&P Index data from 2020 to~2025 and compare it to a pure implied-vol PCA model.
+on 891 Option Metrics IvyDB S\&P Index surfaces from 2022 to~2025, drawn from
+an underlying archive beginning in 2020.
+With explicit 1D--4D expiry nodes, the two-$\eta$ affine-200 model places
+80.9\% of 3.57 million quotes inside bid--ask; replacing the earlier
+expiry-specific smoothing multipliers by one front and one term coordinate
+changes this rate by less than one percentage point.
+In a 158-date 2025 diagnostic for one-day ATM options, historical-scenario
+spot hedges reduce normalized root-mean-square P\&L by 45--48\%; mean--variance,
+entropy OCE, and power-exponential OCE hedges give similar results.
+A 159-date open-interest proxy gives a similar conclusion at portfolio scale,
+reducing RMS P\&L from 28.0 to about 14.4 basis points of gross open interest.
+Finally, a no-replay scalar log-variance diffusion recovers much more of the
+observed tail mass and tail persistence than Gaussian innovations, although it
+still underproduces two- and three-week extremes.  Block-randomization tests of
+decoded 2025 surface paths do not reject Gaussian, heavy-tail, diffusion, or
+historical-replay candidates at the 5\% level.
 \end{abstract}
 
 \tableofcontents
@@ -230,7 +244,10 @@ $\sigma_t(T,K)$ for $(T,K)\in\R^2_{\geq 0}$ defined on some day~$t$
 we can define 
 a smooth, strictly arbitrage-free option surface 
 $C_t(T,K):=C^\mathrm{LV}(\sigma_t;T,K)$ 
-by solving the Dupire forward-PDE $\partial_T C^\mathrm{LV}(\sigma_t;T,K) = \mbox{$\frac12$} K^2 dT\, \partial^2_{KK} C^\mathrm{LV}(\sigma_t;T,K)$.
+by solving the Dupire forward-PDE
+$\partial_T C^\mathrm{LV}(\sigma_t;T,K)
+ = \mbox{$\frac12$}K^2\sigma_t^2(T,K)\,
+   \partial^2_{KK}C^\mathrm{LV}(\sigma_t;T,K)$.
 That means any statistical generative model of Dupire's local volatility gives rise
 to a dynamic model of option surfaces which are by construction free of static arbitrage.
 
@@ -278,11 +295,12 @@ will just be another representation of the same surface).
     surface state. Its transition is parameterized as the matrix exponential
     of a dissipative generator, and its full innovation covariance is learned
     by a nonsingular Cholesky factor. The resulting stationary law permits
-    exact Gaussian transitions at daily, weekly, or longer horizons; as a
-    non-Gaussian alternative, fitted one-week innovations can be resampled.
+    exact Gaussian transitions at daily, weekly, or longer horizons; as
+    non-Gaussian alternatives, a no-replay log-variance diffusion is fitted
+    and historical one-week innovations can be resampled.
     Although the fitted state has 200 coordinates, decoded implied-volatility
     variation is strongly concentrated: the first four decoded-IV principal
-    components explain 99.33\% for the weekly model and 98.88\% for the
+    components explain 95.63\% for the weekly model and 94.50\% for the
     daily+weekly model.
     
     We do not
@@ -670,7 +688,9 @@ Recall function $\mathrm{sigmoid}(x)=(1+e^{-x})^{-1}$.
         \item Minimum and maximum squared discrete local volatilities $\Sigma_{\max} > \Sigma_{\min} > 0$; and
         \item Minimum and maximum smoothing factors $1> \eta_{\max} > \eta_{\min} \geq 0$.
     \end{itemize}
-    We translate the new real-valued ML-SANOS parameters $u=(u^\Sigma,u^\sigma,u^\eta)\in  \R^{M\times N}\times \R^M \times \R^M$ into SANOS parameters as follows:
+    We translate the new real-valued ML-SANOS parameters
+    $u=(u^\Sigma,u^\sigma,u^{\eta,\mathrm f},u^{\eta,\mathrm{term}})
+    \in\R^{M\times N}\times\R^M\times\R^2$ into SANOS parameters as follows:
     \begin{itemize}
         \item Total volatilities: 
         define the \textbf{forward volatilities}
@@ -678,14 +698,21 @@ Recall function $\mathrm{sigmoid}(x)=(1+e^{-x})^{-1}$.
                     \sigma^j := \sigma_{\min}
                +\mathrm{sigmoid}( u^{\sigma,j} ) ( \sigma_{\max} - \sigma_{\min} )
             \eqend
-            and the local smoothing factors\footnote{
-                Each $\eta^j$ multiplies the positive forward total-volatility increment on interval $j$; $(\eta^j)^2$ is the corresponding variance fraction.
-            }
-            \eqx
-                \eta^j := \eta_{\min} + 
-               \mathrm{sigmoid}( u^{\eta,j} ) ( \eta_{\max} - \eta_{\min} )
-            \eqend
-                        and with them the \textbf{total volatilities}
+            and two smoothing factors
+            \begin{align*}
+                \eta^{\mathrm f}&:=\eta_{\min}
+                  +(\eta_{\max}-\eta_{\min})
+                    \mathrm{sigmoid}(u^{\eta,\mathrm f}),\\
+                \eta^{\mathrm{term}}&:=\eta_{\min}
+                  +(\eta_{\max}-\eta_{\min})
+                    \mathrm{sigmoid}(u^{\eta,\mathrm{term}}),
+            \end{align*}
+            where the interval multiplier is
+            $\eta^1:=\eta^{\mathrm f}$ and
+            $\eta^j:=\eta^{\mathrm{term}}$ for $j=2,\ldots,M$.
+            Thus the front interval can set the short-end smoothing scale,
+            while a single term parameter controls every subsequent increment.
+            With these quantities define the \textbf{total volatilities}
              \begin{equation}\label{eq:totalW}
              \widetilde W^j := \sum_{\ell=1}^{j} \sigma^\ell \sqrt{\Delta\hat T^\ell}
              \qquad\mbox{and}\qquad
@@ -698,8 +725,14 @@ Recall function $\mathrm{sigmoid}(x)=(1+e^{-x})^{-1}$.
               with boundaries $\hat K^{j,0}:=\frac12 \hat K^{j,1}$ and $\hat K^{j,N+1} := \frac32 \hat K^{j,N}$.
         \item Finally, we use the new real-valued ML-SANOS parameters to define the \textbf{squared discrete local volatilities}:
               \begin{equation}\label{eq:defDLVdsq}
-                 \Sigma^{j,i} := \Sigma_{\min} + \mathrm{sigmoid}( u^{\Sigma,j,i} ) ( \Sigma_{\max} - \Sigma_{\min} )\ .
+                 \Sigma^{j,i}
+                 :=\min\!\left\{\Sigma_{\max},
+                    \Sigma_{\min}+\exp(u^{\Sigma,j,i})\right\}\ .
               \end{equation}
+              The raw log-DLV coordinate therefore has no saturating upper
+              sigmoid.  During fitting, a smooth one-sided barrier supplies a
+              restoring gradient as it approaches the pricing cap
+              $\Sigma_{\max}$.
 
     \end{itemize}
     Put together, this process describes a map
@@ -713,8 +746,7 @@ Recall function $\mathrm{sigmoid}(x)=(1+e^{-x})^{-1}$.
         \supstack{\mathrm{DLV}}\longmapsto \big(\,q,W;\,\hat K,\hat T \big)  \supstack{\mathrm{SANOS}}\longmapsto C \ .
     \end{equation}
     In our new parametrization $u$ lives in an unrestricted space and is therefore
-    particularly suited for ML/AI based learning.\footnote{
-        The completed models learn $\eta^j$ for every forward interval but keep the expiry locations fixed.}
+    particularly suited for ML/AI based learning.  The expiry locations remain fixed.
 \end{definition}
 
 \subsection{Learning ML-SANOS from real data}
@@ -729,11 +761,15 @@ of the unrestricted ML-SANOS coordinates introduced above.
 The reported models retain the unrestricted-coordinate idea above but make
 the compression map deliberately transparent.  Let $N=200$ be the number of
 inner support strikes and $M$ the number of model expiries.  For each date the
-uncompressed state is stored expiry-major as
+uncompressed state is stored as an expiry-major DLV/forward-volatility block
+followed by the two smoothing coordinates:
 \begin{equation}
-  u_t=\bigl(u_t^{\Sigma,j,1},\ldots,u_t^{\Sigma,j,N},
-            u_t^{\sigma,j},u_t^{\eta,j}\bigr)_{j=1}^M
-  \in\R^{M(N+2)}.
+  u_t=\left(
+      \bigl(u_t^{\Sigma,j,1},\ldots,u_t^{\Sigma,j,N},
+            u_t^{\sigma,j}\bigr)_{j=1}^M,
+      u_t^{\eta,\mathrm f},u_t^{\eta,\mathrm{term}}
+      \right)
+  \in\R^{M(N+1)+2}.
   \label{eq:production-native-state}
 \end{equation}
 The completed decoder has no hidden layers:
@@ -743,11 +779,27 @@ The completed decoder has no hidden layers:
   \label{eq:affine-decoder}
 \end{equation}
 \label{eq:NQ}
-where $b\in\R^{M(N+2)}$ and
-$B\in\R^{M(N+2)\times200}$.  The weekly model has $M=14$ and therefore
-2,828 native coordinates; the daily+weekly model has $M=18$ and 3,636 native
+where $b\in\R^{M(N+1)+2}$ and
+$B\in\R^{(M(N+1)+2)\times200}$.  The weekly model has $M=14$ and therefore
+2,816 native coordinates; the daily+weekly model has $M=18$ and 3,620 native
 coordinates.  The 200 coordinates of $h_t$ are learned latent coordinates,
 not principal components of implied volatility.
+
+The choice of 200 is an empirical capacity compromise rather than a structural
+claim about the intrinsic dimension of option surfaces.  It is large enough
+to preserve almost all of the direct native quote fit while remaining below
+the number of historical dates, so a full innovation covariance and stable
+joint state dynamics can still be estimated.  We report the native-versus-200
+fit loss explicitly below rather than treating this dimension as exact.  The
+dimension was fixed before, and was not selected using, the 2025 tail, path,
+or hedging diagnostics.
+
+For initialization from an expiry-specific smoothing curve, the front
+coordinate is copied directly.  The shared term coordinate is the
+forward-total-volatility-weighted mean of the later multipliers.  This choice
+preserves the final-expiry value of $W_t^M$ exactly before the two-coordinate
+model is re-optimized; it is an initialization identity, not a restriction on
+the subsequent fit.
 
 The native coordinates are converted into the
 positive SANOS parameters by
@@ -763,10 +815,11 @@ positive SANOS parameters by
       +(\sigma_{\max}-\sigma_{\min})\mathrm{sigmoid}(u_t^{\sigma,j})
       $; and
 
-\item $
-  \eta_t^j
-    =\eta_{\min}
-      +(\eta_{\max}-\eta_{\min})\mathrm{sigmoid}(u_t^{\eta,j})$.
+\item
+  $\eta_t^{\mathrm f}$ and $\eta_t^{\mathrm{term}}$ are the bounded sigmoid
+  transforms above, with
+  $\eta_t^1=\eta_t^{\mathrm f}$ and
+  $\eta_t^j=\eta_t^{\mathrm{term}}$ for $j\geq2$.
 \end{itemize}
 Here $\Sigma_t^{j,i}$ is the squared DLV, $\sigma_t^j$ is the forward
 volatility, and $\eta_t^j$ is its smoothing-backbone multiplier.  The
@@ -854,8 +907,9 @@ excess statistics below are computed only over observations with $e>0$.
 \subsubsection{Market fit}
 \label{sec:fit}
 
-Table~\ref{tab:aggregate-fit} gives the complete quote-population results used
-in the September 2026 presentation.
+Table~\ref{tab:aggregate-fit} gives the complete quote-population results from
+the two-$\eta$ rerun.  The corresponding expiry-specific-$\eta$ presentation
+results are retained as a like-for-like reproducibility benchmark below.
 
 \begin{table}[H]
 \centering
@@ -864,19 +918,44 @@ in the September 2026 presentation.
 \toprule
 Model & Quotes & Inside bid--ask & Mean excess & Cond. mean & Cond. median\\
 \midrule
-Weekly native & 3,566,742 & 73.2911\% & 1.1091 & 4.1525 & 1.4238\\
-Weekly affine-200 & 3,566,742 & 72.9744\% & 1.0996 & 4.0689 & 1.3980\\
-Daily+weekly native & 3,566,258 & 81.8431\% & 0.3157 & 1.7387 & 0.6891\\
-Daily+weekly affine-200 & 3,566,258 & \textbf{80.0141\%} & 0.3320 & 1.6610 & 0.6806\\
+Weekly native & 3,566,742 & 73.2678\% & 1.1101 & 4.1525 & 1.4261\\
+Weekly affine-200 & 3,566,742 & 72.8728\% & 1.1017 & 4.0612 & 1.3925\\
+Daily+weekly native & 3,566,258 & 82.2809\% & 0.3120 & 1.7609 & 0.6920\\
+Daily+weekly affine-200 & 3,566,258 & \textbf{80.9211\%} & 0.3229 & 1.6924 & 0.6776\\
 \bottomrule
 \end{tabular}
 \caption{Aggregate fit. Excess is defined by \eqref{eq:half-spread-excess}.}
 \label{tab:aggregate-fit}
 \end{table}
 
-Affine compression costs only 0.32 percentage points for the weekly geometry
-and 1.83 percentage points for the daily+weekly geometry.  By contrast, adding
-the four short-end nodes improves affine-200 fit by 7.04 percentage points.
+Table~\ref{tab:eta-reproducibility} compares the rerun directly with the
+expiry-specific-$\eta$ artifacts used for the presentation.  The same quote
+population and objective are used in every row.  All inside-spread changes are
+below one percentage point and all changes in mean excess are below 3\%, so
+collapsing the weakly identified multiplier curve to a front and a term
+coordinate does not explain the model's fit.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{llrrr}
+\toprule
+Geometry & Mode & Inside: old $\to$ two-$\eta$ & Change & Mean excess: old $\to$ two-$\eta$\\
+\midrule
+Weekly & Native & 73.2908\% $\to$ 73.2678\% & $-0.0230$ pp & 1.1091 $\to$ 1.1101\\
+Weekly & Affine-200 & 72.9723\% $\to$ 72.8728\% & $-0.0995$ pp & 1.0996 $\to$ 1.1017\\
+Daily+weekly & Native & 81.8429\% $\to$ 82.2809\% & $+0.4380$ pp & 0.3157 $\to$ 0.3120\\
+Daily+weekly & Affine-200 & 80.0138\% $\to$ 80.9211\% & $+0.9072$ pp & 0.3320 $\to$ 0.3229\\
+\bottomrule
+\end{tabular}
+\caption{Reproducibility of the two-$\eta$ rerun against the previously
+reported expiry-specific-$\eta$ fits.}
+\label{tab:eta-reproducibility}
+\end{table}
+
+Affine compression costs only 0.39 percentage points for the weekly geometry
+and 1.36 percentage points for the daily+weekly geometry.  By contrast, adding
+the four short-end nodes improves affine-200 fit by 8.05 percentage points.
 Expiry geometry, not latent-state capacity, is therefore the main bottleneck.
 
 The mechanism is visible directly in table~\ref{tab:short-fit}.
@@ -887,10 +966,10 @@ The mechanism is visible directly in table~\ref{tab:short-fit}.
 \toprule
 Model & 1D & 2D & 3D & 4D & 5D\\
 \midrule
-Weekly native & 24.10\% & 32.46\% & 42.05\% & 55.71\% & 45.40\%\\
-Weekly affine-200 & 24.42\% & 32.65\% & 42.20\% & 55.02\% & 45.27\%\\
-Daily+weekly native & 93.55\% & 94.45\% & 94.94\% & 95.29\% & 68.41\%\\
-Daily+weekly affine-200 & 84.64\% & 89.59\% & 91.93\% & 92.61\% & 67.21\%\\
+Weekly native & 24.07\% & 32.47\% & 42.04\% & 55.66\% & 45.45\%\\
+Weekly affine-200 & 24.35\% & 32.65\% & 42.11\% & 55.26\% & 45.26\%\\
+Daily+weekly native & 94.56\% & 95.21\% & 95.57\% & 95.77\% & 68.43\%\\
+Daily+weekly affine-200 & 88.59\% & 91.98\% & 93.68\% & 94.13\% & 67.58\%\\
 \bottomrule
 \end{tabular}
 \caption{Inside-spread rates at the five shortest nominal expiries.}
@@ -903,7 +982,7 @@ explicitly.
 
 Figure~\ref{fig:fit-by-expiry} shows that this is a localized geometry effect,
 not a general loss of fit.  The explicit daily nodes lift the 1D--4D
-inside-spread rate from roughly 24--56\% to 85--93\% in the affine model.  Once
+inside-spread rate from roughly 24--55\% to 89--94\% in the affine model.  Once
 the market expiry is comfortably beyond the first weekly node, the two
 geometries converge and both approach near-complete containment at the longer
 end.  Within either geometry, the native and affine-200 curves remain close;
@@ -936,12 +1015,14 @@ half-spreads.  The gap narrows rapidly after the first week.
 \end{figure}
 
 Figure~\ref{fig:representative-fit} gives a cross-sectional view on
-2024-06-14.  At representative expiries of 10, 23, 42.2, and 66.2 business
-days, the independently fitted market SANOS surface and the completed weekly
-affine model lie almost on top of one another over the liquid strike range.
-This is consistent with the expiry-bucket diagnostics: the important defect
-of the weekly geometry lies before its first node rather than throughout the
-surface.
+2024-06-14.  At representative expiries of 10, 23, 43, and 67 business days,
+the independently fitted market SANOS surface and the completed weekly affine
+model track one another closely over the central liquid strike range.  The
+longer-expiry panels also expose a material discrepancy at the far-left
+boundary; the native-versus-affine IV RMSE is 5.30 and 6.87 volatility points
+there, compared with 0.12 and 0.30 at 10 and 23 days.  The example therefore
+supports the aggregate fit result while making clear that extrapolative wing
+coordinates remain a limitation.
 
 \begin{figure}[p]
   \centering
@@ -953,12 +1034,14 @@ surface.
 \end{figure}
 
 \paragraph{Interpretation of the 80\% number.}
-The 80.01\% headline is a quote-level reconstruction test over the full
-891-date population.  The final joint run used all dates and therefore has no
-strict temporal holdout.  As a chronological diagnostic, the separately
-reported 2025 slice contains 707,630 observations and has a 79.93\%
-inside-spread rate.  We therefore interpret the result as a robust description
-of fit across the sample, not as an untouched forecasting estimate.
+The 80.92\% headline is the affine-compression reconstruction test over the
+full 891-date population.  After joint fitting of the stable state dynamics,
+the simulation checkpoint places 81.48\% of all quotes inside bid--ask; its
+2025 slice contains 707,630 observations and has an 80.56\% inside-spread
+rate.  The shared decoder and dynamics used all dates, so the latter is a
+chronological slice rather than a strict temporal holdout.  We interpret it
+as evidence that the fit is not concentrated in the earlier sample, not as an
+untouched forecasting estimate.
 
 \section{Statistical option-surface state-space model}
 \label{sec:dynamics}
@@ -1005,14 +1088,13 @@ $A_\Delta=e^{-\kappa\Delta}$,
 This avoids Euler instability and permits daily, weekly, or longer Gaussian
 simulation steps from the same fitted weekly law.
 
-\subsection{Gaussian and historical innovations}
+\subsection{Innovation laws and tail dynamics}
 
-Gaussian innovations are a convenient baseline but miss market tails.  We
-therefore also simulate at weekly steps by independently resampling fitted
-historical one-week residuals.  At one week this reproduces the empirical
-innovation law by construction.  At two and three weeks, independently drawn
-residuals are propagated through $A$ and summed; these are genuine convolution
-tests rather than replayed multi-week blocks.
+Gaussian innovations are a convenient baseline but miss market tails.  As a
+non-parametric comparator we also simulate at weekly steps by independently
+resampling centered fitted one-week residuals whose endpoints precede 2025.
+At two and three weeks, independently drawn residuals are propagated through
+$A$ and summed; no multi-week block is replayed in this tail experiment.
 
 For an exact-horizon state return $r$ with fitted horizon covariance $Q^H$,
 define its normalized squared radius
@@ -1020,53 +1102,180 @@ define its normalized squared radius
   (\delta^H)^2:=\frac{r'(Q^H)^{-1}r}{200}.
   \label{eq:radius}
 \end{equation}
-Table~\ref{tab:tails} reports the probability of exceeding the empirical 95\%
-radius at each horizon. Simulation estimates use one million draws.
+The Gaussian reference would concentrate this quantity sharply around one in
+200 dimensions.  The observed radii are both heavier-tailed and serially
+dependent.
+
+\subsubsection{No-replay stochastic-volatility diffusion}
+
+We therefore add a scalar latent log-variance diffusion without replaying any
+historical residual.  Keeping the affine conditional mean and loading $G$
+from $Q=GG'$, the exact weekly transition is
+\begin{align}
+  \varepsilon_{n+1}
+    &=\sqrt{\rho\exp(g_n-v_g/2)}\,Gz_{n+1},
+      &z_{n+1}&\sim\mathcal N(0,I),\label{eq:sv-innovation}\\
+  g_{n+1}
+    &=\phi g_n+\sqrt{v_g(1-\phi^2)}\,\xi_{n+1},
+      &\xi_{n+1}&\sim\mathcal N(0,1),\label{eq:sv-logvariance}
+\end{align}
+with independent $z_{n+1}$ and $\xi_{n+1}$.  Stationarity gives
+$g_n\sim\mathcal N(0,v_g)$ and hence
+$\E[\rho\exp(g_n-v_g/2)]=\rho$.  Equation
+\eqref{eq:sv-logvariance} is the exact discrete transition of a stationary
+Ornstein--Uhlenbeck diffusion; it therefore permits fractional-time simulation
+without Euler discretization.
+
+The parameters $(\rho,\phi,v_g)$ are fitted on the 703 pre-2025 one-week
+innovations.  Since
+\begin{equation}
+  \log (\delta_n^2)
+  =\log\rho+g_n-v_g/2+\log(\chi^2_{200}/200),
+  \label{eq:sv-log-radius}
+\end{equation}
+we use a Kalman likelihood whose measurement mean and variance are the exact
+first two moments of $\log(\chi^2_{200}/200)$; only its Gaussian shape is an
+approximation.  The weekly fit gives $(\rho,\phi,v_g)=(0.872,0.249,0.0556)$,
+and the daily+weekly fit gives $(0.878,0.139,0.0649)$.  On the 158 2025
+innovations, log-radius negative log likelihood falls from 1.986 to 0.089 in
+the weekly model and from 2.453 to 0.125 in the daily+weekly model relative to
+a pre-2025-scaled Gaussian benchmark.
+
+For comparison we also fit variance-normalized multivariate Student-$t$
+innovations, either IID or with a persistent score-driven common scale.  The
+fitted degrees of freedom are 42.6 and 34.5.  On the same 2025 innovations the
+score-driven law reduces full-vector negative log likelihood per dimension
+from 1.377 to 1.364 in the weekly geometry and from 1.351 to 1.332 in the
+daily+weekly geometry; the improvement over IID Student-$t$ is negligible.
+
+Table~\ref{tab:tails} reports the probability of exceeding the pre-2025
+empirical 95\% radius at each horizon.  ``Market'' is the realized 2025 rate;
+every simulated estimate uses one million paths.
 
 \begin{table}[H]
 \centering
+\small
 \begin{tabular}{llrrr}
 \toprule
-Model & Horizon & Market & Gaussian & Historical replay\\
+Geometry & Innovation law & 1W & 2W & 3W\\
 \midrule
-Weekly & 1W & 4.99\% & 0.131\% & 4.99\%\\
-Weekly & 2W & 5.02\% & 0.000944\% & 2.37\%\\
-Weekly & 3W & 5.05\% & 0.000573\% & 2.08\%\\
+Weekly & 2025 market & 5.063\% & 5.696\% & 5.696\%\\
+ & Gaussian & 0.1470\% & 0.00439\% & 0.00539\%\\
+ & IID Student-$t$ & 4.350\% & 1.275\% & 1.164\%\\
+ & Score-driven Student-$t$ & 4.523\% & 1.542\% & 1.435\%\\
+ & Log-variance diffusion & 3.960\% & 1.153\% & 1.032\%\\
+ & Independent historical replay & 5.143\% & 2.444\% & 2.386\%\\
 \midrule
-Daily+weekly & 1W & 4.99\% & 0.0193\% & 5.13\%\\
-Daily+weekly & 2W & 5.02\% & 0.0000475\% & 2.61\%\\
-Daily+weekly & 3W & 5.05\% & 0.0000117\% & 2.24\%\\
+Daily+weekly & 2025 market & 6.329\% & 6.329\% & 5.696\%\\
+ & Gaussian & 0.0318\% & 0.000140\% & 0.000133\%\\
+ & IID Student-$t$ & 4.139\% & 0.986\% & 0.856\%\\
+ & Score-driven Student-$t$ & 4.119\% & 1.071\% & 0.931\%\\
+ & Log-variance diffusion & 3.751\% & 0.778\% & 0.659\%\\
+ & Independent historical replay & 5.150\% & 2.412\% & 2.318\%\\
 \bottomrule
 \end{tabular}
-\caption{Probability of exceeding the market 95\% radius.}
+\caption{Probability of exceeding the pre-2025 market 95\% normalized-radius
+threshold.  Market frequencies use 158 2025 transitions; simulation uses one
+million paths per law.}
 \label{tab:tails}
 \end{table}
-
-Figure~\ref{fig:tail-exceedance} makes the scale of the tail mismatch visible.
-The fitted Gaussian law assigns almost no mass beyond the market 95\% radius:
-for the daily+weekly model its probabilities are 0.0193\% at 1W and below
-$5\times10^{-5}$ at 2W and 3W, against market frequencies near 5\%.
-Independent historical replay matches the one-week marginal essentially by
-construction and retains 2.61\% and 2.24\% at 2W and 3W.  It is therefore much
-closer, but still loses roughly half of the observed multi-week tail mass.
 
 \begin{figure}[p]
   \centering
   \includegraphics[width=\textwidth]{generated/presentation_tail_exceedance.png}
-  \caption{Probability of exceeding the market 95\% normalized-radius
-  threshold.  Gaussian innovations are too light-tailed; independent replay
-  of fitted one-week innovations is exact at 1W by construction and remains
-  materially closer at 2W and 3W.}
+  \caption{Probability of exceeding the pre-2025 market 95\%
+  normalized-radius threshold, on a logarithmic scale.  Both no-replay
+  heavy-tail laws recover orders of magnitude more tail mass than Gaussian
+  innovations but remain too light at two and three weeks.}
   \label{fig:tail-exceedance}
 \end{figure}
 
-This comparison distinguishes marginal tail fit from temporal tail fit.  The
-one-week replay result says that the empirical innovation distribution has
-adequate cross-sectional support.  Its remaining 2W--3W shortfall says that
-independent innovations omit serial dependence, volatility clustering, or
-regime persistence.  Increasing decoder capacity cannot repair this: those
-are properties of the innovation law.  A block bootstrap, conditional scale
-model, or regime-dependent residual law is the natural next extension.
+The no-replay diffusion is therefore a meaningful improvement, not a complete
+tail model.  It also produces squared-radius serial correlations of 0.206 and
+0.116, compared with 0.133 and 0.091 in the weekly and daily+weekly market
+histories; Gaussian and IID laws have zero population correlation.  The 2025
+sample is small and overlapping: 15-origin circular-block bootstrap 95\%
+intervals for the market exceedance rates are approximately 0.6--14.6\%
+across the six geometry/horizon cells.  Differences of a percentage point
+should therefore not be over-interpreted.  Independent historical replay is
+still closest in marginal tail mass, while the diffusion is a fully
+parametric generator with fresh support and explicit persistence.
+
+\subsection{Chronological surface-path comparison}
+\label{sec:path-realism}
+
+Horizon radii test the latent innovation law but do not directly test paths
+of decoded option prices.  We therefore form every available sequence of four
+fitted market-state surfaces separated by one full trading week, giving three
+consecutive weekly changes.  Here ``observed'' means the date-specific latent
+state fitted to that day's irregular quote book and then passed through the
+common SANOS decoder; it is not a second interpolation of the raw quotes.
+Every candidate simulator starts from that fitted surface at the same origin
+date.  Its path features are changes in normalized call prices on
+the Cartesian panel of target locations
+\[
+  T\in\{1,5,10,20,40,70\}\text{ business days},
+  \qquad
+  K/S\in\{0.85,0.90,0.95,1.00,1.05,1.10,1.15\}.
+\]
+Each target expiry is mapped to the closest distinct model expiry.  The
+daily+weekly geometry therefore has $3\times6\times7=126$ features; in the
+weekly geometry the 1D and 5D targets both map to 5D, leaving
+$3\times5\times7=105$.  Coordinates are centered and scaled using pre-2025
+observed paths only.
+
+For this path-level test, the historical comparator replays an entire
+pre-2025 three-week sequence of fitted residuals, rather than drawing its
+three weekly residuals independently.  It is therefore a deliberately strong
+finite-sample benchmark that preserves short-run clustering, but it is not a
+new parametric law and cannot generate innovations outside the stored blocks.
+
+We report the standardized energy distance and an unbiased Gaussian-kernel
+maximum mean discrepancy (MMD) between observed and simulated 2025 paths.
+For the null distribution, entire paired chronological blocks of 15 origin
+dates swap their observed/simulated labels; the block length matches the
+three-week feature horizon and retains most overlap-induced dependence.
+1,999 random block swaps give a Monte Carlo $p$-value with minimum positive
+resolution $0.0005$.
+
+The 2025 split is a chronological holdout for fitting any auxiliary tail law,
+constructing a historical-residual pool, and estimating the feature
+standardization.  The shared affine decoder and the baseline Gaussian AR law
+are nevertheless taken from the all-history checkpoint.  The path comparison
+is therefore a holdout diagnostic for the innovation-law extensions
+conditional on the learned representation, not a fully frozen pre-2025 model
+forecast.
+
+Table~\ref{tab:path-realism} reports 144 paired 2025 paths for each geometry.
+The $p$-value is the block-swap test for MMD; energy distance is reported as a
+second scale-sensitive discrepancy.  None of the five candidates is rejected
+at 5\%.  This is evidence against a gross path-distribution failure, but not a
+ranking theorem: IID Student-$t$ has the smallest weekly energy distance,
+whereas Gaussian has the smallest daily+weekly energy and MMD.  The
+log-variance diffusion remains statistically plausible while improving the
+separate tail and persistence diagnostics above.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrrrrrr}
+\toprule
+& \multicolumn{3}{c}{Weekly} & \multicolumn{3}{c}{Daily+weekly}\\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+Innovation law & Energy & $10^3\!\times$MMD$^2$ & $p$ & Energy & $10^3\!\times$MMD$^2$ & $p$\\
+\midrule
+Gaussian & 0.572 & 4.602 & 0.550 & 0.810 & 1.594 & 0.704\\
+IID Student-$t$ & 0.540 & 5.016 & 0.344 & 0.854 & 3.788 & 0.457\\
+Score-driven Student-$t$ & 0.569 & 4.389 & 0.225 & 0.838 & 3.786 & 0.416\\
+Log-variance diffusion & 0.606 & 5.476 & 0.378 & 0.854 & 3.480 & 0.415\\
+Historical block replay & 0.592 & 6.671 & 0.328 & 0.857 & 6.968 & 0.345\\
+\bottomrule
+\end{tabular}
+\caption{Chronological decoded-surface path diagnostics on 144 paired 2025
+origins.  Each path contains three consecutive weekly changes; $p$ is based
+on 1,999 paired 15-origin block swaps.}
+\label{tab:path-realism}
+\end{table}
 
 \subsection{Stability diagnostics}
 
@@ -1079,11 +1288,11 @@ Statistic & Weekly & Daily+weekly\\
 State dimension & 200 & 200\\
 Dates & 891 & 891\\
 Exact 1W innovations & 861 & 861\\
-$\rho(A)$ & 0.9597 & 0.9535\\
-Slowest-mode half-life & 16.9 weeks & 14.6 weeks\\
-Minimum real eigenvalue of $\kappa$ & 0.0411 & 0.0476\\
-Invariant covariance condition number & 3.41 & 3.80\\
-Invariant covariance effective rank & 193.7 & 193.7\\
+$\rho(A)$ & 0.9577 & 0.9561\\
+Slowest-mode half-life & 16.1 weeks & 15.4 weeks\\
+Minimum real eigenvalue of $\kappa$ & 0.0432 & 0.0449\\
+Invariant covariance condition number & 3.51 & 3.64\\
+Invariant covariance effective rank & 196.5 & 196.4\\
 \bottomrule
 \end{tabular}
 \caption{Fitted state-law diagnostics.}
@@ -1143,10 +1352,10 @@ coordinates.
 \toprule
 Cumulative decoded-IV variance & Weekly & Daily+weekly\\
 \midrule
-PC1 & 95.11\% & 94.31\%\\
-PC1--2 & 97.79\% & 97.08\%\\
-PC1--4 & 99.33\% & 98.88\%\\
-PC1--8 & 99.76\% & 99.54\%\\
+PC1 & 74.85\% & 77.68\%\\
+PC1--2 & 86.97\% & 86.98\%\\
+PC1--4 & 95.63\% & 94.50\%\\
+PC1--8 & 99.46\% & 99.39\%\\
 \bottomrule
 \end{tabular}
 \caption{Decoded implied-volatility variance under the invariant state law.}
@@ -1154,9 +1363,9 @@ PC1--8 & 99.76\% & 99.54\%\\
 \end{table}
 
 Figure~\ref{fig:pca-spectrum} gives the full leading spectrum.  PC1 is a
-nearly parallel volatility-level move and explains 95.11\% of weekly decoded
-variance and 94.31\% of daily+weekly decoded variance.  Four decoded-IV
-factors explain 99.33\% and 98.88\%, respectively.  This does not imply that
+nearly parallel volatility-level move and explains 74.85\% of weekly decoded
+variance and 77.68\% of daily+weekly decoded variance.  Four decoded-IV
+factors explain 95.63\% and 94.50\%, respectively.  This does not imply that
 four latent coordinates would fit the quote book: the PCA is performed
 \emph{after} the 200-state model has been passed through the nonlinear SANOS
 decoder and weighted by its invariant covariance.
@@ -1263,12 +1472,14 @@ The statistical DYSANOS simulator is summarized as follows.
   \item Choose the daily+weekly geometry and initialize $h_0$ from an observed
         date or from the invariant state distribution.
   \item Propagate the state with the exact Gaussian transition
-        \eqref{eq:exact-transition}; alternatively, at weekly steps use
-        historical innovation replay in \eqref{eq:weekly-ar}.
+        \eqref{eq:exact-transition}, or use the no-replay log-variance
+        diffusion \eqref{eq:sv-innovation}--\eqref{eq:sv-logvariance} when
+        persistent tails are required.  Historical innovation replay remains
+        a non-parametric weekly benchmark.
   \item If cash prices are required, propagate $s_t$ conditionally using
         \eqref{eq:spot-block}.
   \item Form $u_t=b+B h_t$, map it to bounded SANOS parameters through
-        \eqref{eq:production-dlv}--\eqref{eq:production-forward}, and apply
+        \eqref{eq:defDLVdsq} and \eqref{eq:production-total-vols}, and apply
         the density recursion of Section~\ref{sec:mlsanos}.
   \item Evaluate $C_t(T,K)$ at any desired strike and expiry.  For a fixed
         cash contract $(\tau,k)$ use $T=\tau-t$ and $K=k/S_t$.
@@ -1279,18 +1490,163 @@ first supplies a coherent long-run statistical state process; the second
 guarantees a valid option cross-section for every realized state.  The
 combination is what we mean by consistent $\P$-simulation in this paper.
 
+\subsection{One-session hedging diagnostics}
+\label{sec:hedging-diagnostics}
+
+We assess whether the fitted conditional distributions are useful for a
+concrete downstream task.  Let $Z_{t+1}$ denote the normalized one-session
+change of a signed option position and let
+$X_{t+1}=S_{t+1}/S_t-1$.  At the close of date $t$ we choose one spot position
+$a_t$ by each of three criteria.  Mean--variance hedging solves
+\begin{equation}
+  \min_{a_t}\operatorname{Var}_t(Z_{t+1}+a_tX_{t+1}).
+  \label{eq:hedge-mean-variance}
+\end{equation}
+The two optimized-certainty-equivalent (OCE) hedges solve
+\begin{equation}
+  \sup_{a_t,y_t}\left\{
+    y_t+\E_t\left[u_\lambda
+      (Z_{t+1}+a_tX_{t+1}-y_t)\right]
+  \right\},
+  \label{eq:hedge-oce}
+\end{equation}
+using either entropy utility
+$u_\lambda(x)=-e^{-\lambda x}/\lambda$ or the power-exponential utility
+\begin{equation}
+  u_\lambda(x)=
+  \begin{cases}
+    (1-e^{-\lambda x})/\lambda,&x\geq0,\\
+    x-\lambda x^2/2,&x<0.
+  \end{cases}
+  \label{eq:hedge-power-exp}
+\end{equation}
+We use $\lambda=50$ and optimize the cash translation $y_t$ jointly with the
+hedge.  Reported first-order conditions are evaluated on the same scenario
+set used for optimization.
+
+The first experiment hedges the closest-to-ATM European PM call and put with
+one business day to expiry.  At each close $t$, its scenario set contains all
+adjacent full-session spot returns whose endpoint is already observed by
+$t$; the forward changes are sample-centered during hedge estimation.  The
+next retained close is used as a settlement proxy.  We report buyer and
+seller positions separately because the OCE hedge need not be antisymmetric.
+
+The second experiment is an open-interest portfolio proxy.  We treat the
+date-$t$ open-interest field as an after-close observation and assign it only
+to the next one-session experiment; its publication timing is not independently
+verified.
+Since open interest is unsigned, we transparently assume that a dealer is
+short every retained call and put and normalize the positions to one unit of
+gross open interest.  This is not an estimate of net dealer inventory.
+Only matched European PM contracts with 2--70 business days to expiry and
+$K/S_t\in[0.75,1.25]$ enter.  Scenario changes pair one-session state
+innovations whose endpoints are observed by close $t$
+(including the transition ending at $t$) with their contemporaneous spot
+returns, while realized portfolio changes use matched market mid-prices at
+the next close.  The 2025 window supplies 159 such close-to-next-close
+observations without a missing-book failure.  Each proxy contains
+4,058--8,547 matched contracts (median 7,009); median gross open interest is
+2.82 million contracts.
+
+For both experiments we compare the chronological unhedged and hedged P\&Ls
+by root-mean-square loss, mean absolute loss, and lower-tail summaries.  A
+paired circular block bootstrap with five-session blocks reports 95\% percentile
+intervals.  A centered block-bootstrap null reports one-sided
+$p$-values for reductions in absolute and squared loss.
+Option marks are bid--ask midpoints and spot-hedge transaction costs are
+omitted, so these diagnostics isolate hedge quality rather than executable
+net profitability.
+The fitted all-history decoder is not a frozen pre-2025 forecasting model, so
+these are historical hedge evaluations rather than claims of fully untouched
+out-of-sample performance.
+
+\paragraph{ATM one-day results.}
+Table~\ref{tab:atm-hedging} reports normalized root-mean-square P\&L in basis
+points of initial spot over 158 close-to-next-close observations in 2025.
+All three criteria reduce RMS P\&L by 45--48\%.  Their differences are small:
+entropy OCE is best for both buyer books, while mean--variance or
+power-exponential OCE is marginally better for the seller books.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+Signed ATM 1D position & Unhedged & Mean--variance & Entropy OCE & Power-exp OCE\\
+\midrule
+Buyer call  & 84.79 & 44.67 & \textbf{44.07} & 44.12\\
+Seller call & 84.79 & \textbf{44.67} & 45.41 & 44.72\\
+Buyer put   & 81.11 & 44.11 & \textbf{43.56} & 43.61\\
+Seller put  & 81.11 & \textbf{44.11} & 44.76 & 44.16\\
+\bottomrule
+\end{tabular}
+\caption{RMS one-session P\&L in basis points of initial spot for the ATM
+one-day option experiment.  The paired five-session block-bootstrap
+$p$-value for absolute-loss improvement is $0.0001$ for every hedge.  For
+squared loss it is approximately $0.078$ for calls and $0.032$ for puts.
+Across methods, the 95\% block-bootstrap intervals for the mean absolute-loss
+reduction are 12.2--28.1 basis points for calls and 17.7--32.7 basis points
+for puts.}
+\label{tab:atm-hedging}
+\end{table}
+
+Across the four signed books, all 1,896 hedge estimates are finite, no spot
+bound is active, and every numerical OCE optimization reports convergence.
+The maximum absolute first-order residual is $3.35\times10^{-7}$.  The
+chronological scenario sets use only transitions observed by close $t$;
+nevertheless, the option selection and evaluation period remain a historical
+diagnostic rather than a fully frozen model forecast.
+
+\paragraph{Open-interest portfolio proxy.}
+Table~\ref{tab:oi-hedging} reports the same diagnostics for the 159 portfolio
+proxies.  The date-$t$ after-close OI field is used as a proxy for the book
+held from close $t$ to close $t+1$, exactly as stated above; this convention
+does not assert that the field was tradable information before the date-$t$
+close.  Mean--variance and both OCE criteria again produce nearly identical
+hedges.  RMS loss falls by about 49\% and mean absolute loss by about 54\%.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+Method & RMS & Mean absolute & Lower 5\% mean & $p_{|\cdot|}$ & $p_{(\cdot)^2}$\\
+\midrule
+Unhedged & 28.02 & 10.25 & $-65.35$ & -- & --\\
+Mean--variance & 14.35 & 4.71 & $-40.85$ & 0.0079 & 0.0820\\
+Entropy OCE & 14.43 & 4.72 & $-40.93$ & 0.0076 & 0.0822\\
+Power-exp OCE & 14.36 & 4.71 & $-40.85$ & 0.0078 & 0.0820\\
+\bottomrule
+\end{tabular}
+\caption{One-session P\&L of the open-interest portfolio proxy, in basis
+points of gross open interest.  The final two columns are one-sided centered
+five-session block-bootstrap $p$-values for reductions in absolute and
+squared loss relative to the unhedged proxy.}
+\label{tab:oi-hedging}
+\end{table}
+
+The 95\% block-bootstrap interval for the mean absolute-loss reduction is
+2.34--9.81 basis points across the three methods.  The squared-loss test is
+only borderline at conventional levels, so the reduction in RMS should not
+be described as statistically definitive.  All 477 fitted hedge problems are
+finite, no position bound is active, and no optimizer reports failure; the
+largest absolute first-order residual is $1.58\times10^{-7}$.  These results
+measure the usefulness of the conditional scenario law for the stated proxy,
+not the performance of an observed dealer inventory.
+
 \subsection{Scope and limitations}
 
-The 80.01\% market-fit figure is computed on the population used to estimate
+The 80.92\% market-fit figure is computed on the population used to estimate
 the final all-history model.  It is not a claim of 80\% future forecast
 coverage.  A formal forecasting study should freeze the decoder and dynamics
 before the evaluation period.
 
-The Gaussian state law severely understates tail frequency.  Historical
-innovation replay fixes the one-week marginal mechanically and improves the
-two- and three-week comparisons, but independent replay does not reproduce
-volatility clustering completely.  A regime-dependent or conditional
-innovation law is the most direct next extension.
+The Gaussian state law severely understates tail frequency.  The no-replay
+log-variance diffusion improves likelihood, tail mass, and serial-tail
+dependence, but still underproduces two- and three-week extremes.  Historical
+innovation replay is closer in marginal tail mass, while the path-level tests
+have only 144 overlapping 2025 origins and do not distinguish the candidates
+sharply.  A richer multiscale or regime-dependent volatility law is the most
+direct next extension.
 
 Finally, static arbitrage-freedom is a property of each decoded surface.  It
 does not by itself impose restrictions on expected returns of fixed contracts
@@ -1306,8 +1662,14 @@ pricing of any option on GPU. We have shown how
 to leverage our representation to build a simple, but already fairly powerful baseline
 model which can generate spot and option paths for many days in the future up to years.
 The surface-first AR(1) captures first-order level, skew, term, and leverage
-effects, while the empirical diagnostics identify volatility clustering,
-crisis tails, and higher eigensurfaces as natural targets for future work.
+effects.  Replacing expiry-specific smoothing coordinates by a front and a
+term coordinate leaves the reported quote fit essentially unchanged, and the
+daily+weekly affine model places 80.92\% of the full quote population inside
+bid--ask.  A no-replay log-variance diffusion improves the deficient Gaussian
+tail law and reproduces tail persistence, although multi-week tail mass
+remains too low.  The one-session ATM and open-interest proxy experiments show
+that the fitted conditional distribution can materially reduce historical
+hedging loss under three different criteria.
 
 We have provided a baseline model to generate long paths of daily spot and option prices.
 Each option surface is free of static arbitrage. Moreover, we can price~\emph{any}
@@ -1512,12 +1874,12 @@ and DLV coordinates carry an expiry superscript.
 \subsection{Fitting ML-SANOS}
 
 The native control first fits one unrestricted vector
-$u_t\in\R^{M(N+2)}$ to each date's irregular quote book.  The completed
+$u_t\in\R^{M(N+1)+2}$ to each date's irregular quote book.  The completed
 affine model then uses the map
 \[
   h_t\in\R^{200}
   \longmapsto
-  u_t=b+Bh_t\in\R^{M(N+2)}
+  u_t=b+Bh_t\in\R^{M(N+1)+2}
 \]
 from~\eqref{eq:affine-decoder}.  It is initialized from the native controls
 and then fitted jointly across all 891 dates together with the stable weekly

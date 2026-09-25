@@ -12,7 +12,8 @@ H.~Buehler, L.~Gonon, J.~Teichmann, and B.~Wood.
 \newblock {\em Quantitative Finance}, 19(8):1271--1291, 2019.
 
 \bibitem[BHK{\etalchar{+}}26]{SANOS2026}
-Hans Buehler, Blanka Horvath, Anastais Kratsios, Yannick Limmer, and Raeid Saqur.
+Hans Buehler, Blanka Horvath, Anastais Kratsios, Yannick Limmer, and Raeid
+  Saqur.
 \newblock Sanos - smooth arbitrage-free non-parametric option surfaces.
 \newblock \url{https://arxiv.org/abs/2601.11209}, Februar 2026.
 
@@ -68,12 +69,14 @@ Julien Guyon and Pierre Henry-Labord{\`e}re.
 
 \bibitem[NJZB23]{vae_ning2023arbitrage}
 Brian Ning, Sebastian Jaimungal, Xiaorong Zhang, and Maxime Bergeron.
-\newblock Arbitrage-free implied volatility surface generation with variational autoencoders.
+\newblock Arbitrage-free implied volatility surface generation with variational
+  autoencoders.
 \newblock {\em SIAM Journal on Financial Mathematics}, 14(4):1004--1027, 2023.
 
 \bibitem[SW08]{Schweizer2008ArbitragefreeMM}
 Martin Schweizer and Johannes Wissel.
-\newblock Arbitrage-free market models for option prices: the multi-strike case.
+\newblock Arbitrage-free market models for option prices: the multi-strike
+  case.
 \newblock {\em Finance and Stochastics}, 12:469--505, 2008.
 
 \bibitem[WBWB19]{wiese2019simulate}
@@ -82,7 +85,8 @@ Magnus Wiese, Lianjun Bai, Ben Wood, and Hans Buehler.
 \newblock \url{https://arxiv.org/abs/1911.01700}, 2019.
 
 \bibitem[WWP{\etalchar{+}}21]{wiese2021multiassetspotoptionmarket}
-Magnus Wiese, Ben Wood, Alexandre Pachoud, Ralf Korn, Hans Buehler, Phillip Murray, and Lianjun Bai.
+Magnus Wiese, Ben Wood, Alexandre Pachoud, Ralf Korn, Hans Buehler, Phillip
+  Murray, and Lianjun Bai.
 \newblock Multi-asset spot and option market simulation.
 \newblock \url{https://arxiv.org/abs/2112.06823}, 2021.
 

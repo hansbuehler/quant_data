@@ -12,6 +12,7 @@ from scipy.linalg import solve_discrete_lyapunov
 
 from quantdata.biz_calendar import DAYS_PER_YEAR
 from quantdata.dysanos.flex.config import (
+    FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig,
     JointDirectDynamicsConfig,
     SharedStrikeCappedUnboundedDlvFlexGeometryConfig,
 )
@@ -77,7 +78,12 @@ def _checkpoint_config(payload: Mapping[str, Any]) -> JointDirectDynamicsConfig:
     for key in ("nms_range", "explicit_model_business_dtes"):
         if geometry_payload.get(key) is not None:
             geometry_payload[key] = tuple(geometry_payload[key])
-    geometry = SharedStrikeCappedUnboundedDlvFlexGeometryConfig(**geometry_payload)
+    geometry_type = (
+        FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig
+        if geometry_payload.get("front_term_eta") is True
+        else SharedStrikeCappedUnboundedDlvFlexGeometryConfig
+    )
+    geometry = geometry_type(**geometry_payload)
     return JointDirectDynamicsConfig(
         label=str(values["label"]),
         state_size=int(values["state_size"]),
