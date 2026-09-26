@@ -2,7 +2,7 @@
 
 \begin{assumption}[Martingale property]\label{ass:mart}
 Under $\Q$ every gridded instrument price is a martingale in $t$. Since the
-gridded payoffs $\pi_i$ span $\R^{N+2}$, this is equivalent to each density
+gridded payoffs $\pi^i$ span $\R^{N+2}$, this is equivalent to each density
 vector being a martingale,
 \begin{equation}\label{eq:qdyn}
   \dd q^j_t=\psi^j_t\,\dd W_t,\qquad \psi^j_t\in\R^{(N+2)\times d}.
@@ -65,19 +65,19 @@ original notation.
 \begin{theorem}[The drift is a pointwise covariance]\label{thm:pointwise}
 Define the relative density volatility
 \begin{equation}\label{eq:eta}
-  \eta^{j}_i\;:=\;\frac{\psi^{j}_i}{q^{j}_i},
+  \eta^{j,i}\;:=\;\frac{\psi^{j,i}}{q^{j,i}},
   \qquad i=0,\dots,N+1,
 \end{equation}
-that is, the relative volatility of $q^j_i$. Only the interior components enter
+that is, the relative volatility of $q^{j,i}$. Only the interior components enter
 \eqref{eq:pointwise}, since $\dlv$ lives on the interior nodes; the boundary
 components are needed in Section~\ref{sec:exist}. Then \eqref{eq:driftsolve} is solvable
 for every $\beta$ and every state, its solution is unique, and it is given
 componentwise by
 \begin{equation}\label{eq:pointwise}
-  \alpha^{j}_i\;=\;-\sum_{f=1}^{d}\eta^{j,f}_i\,\beta^{j,f}_i
+  \alpha^{j,i}\;=\;-\sum_{f=1}^{d}\eta^{j,i,f}\,\beta^{j,i,f}
   \qquad\Longleftrightarrow\qquad
-  \dd\lambda^{j}_i=\Bigl[-\ip{\eta^{j}_i}{b^{j}_i}-\tfrac12\abs{b^{j}_i}^{2}\Bigr]\dd t
-   +b^{j}_i\,\dd W_t,
+  \dd\lambda^{j}_i=\Bigl[-\ip{\eta^{j,i}}{b^{j,i}}-\tfrac12\abs{b^{j,i}}^{2}\Bigr]\dd t
+   +b^{j,i}\,\dd W_t,
 \end{equation}
 where $\lambda=\log\dlv$ and $b=\beta/\dlv$.
 \end{theorem}
@@ -91,7 +91,7 @@ same fixed matrix:
 \]
 Since $\widehat G_j$ is injective it cancels, leaving
 $\mathrm{diag}(q^j)\alpha^j=-\sum_f\mathrm{diag}(\psi^{j,f})\beta^{j,f}$, which
-is \eqref{eq:pointwise} after dividing by $q^j_i>0$. Existence and uniqueness
+is \eqref{eq:pointwise} after dividing by $q^{j,i}>0$. Existence and uniqueness
 follow from the same cancellation. The logarithmic form is It\^o applied to
 $\lambda=\log\dlv$, using $\alpha/\dlv=-\ip{\eta}{b}$.
 \end{proof}

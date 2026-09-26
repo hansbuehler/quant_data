@@ -44,28 +44,55 @@ That is all that is needed about $P$ itself. What we want next is a recursion fo
 $\eta$ alone: one step per expiry, each adding a controlled amount, so that the
 bound telescopes along the ladder. Dividing \eqref{eq:volsolve} by $q^j$ gives
 \begin{equation}\label{eq:divided}
-  \eta^{j}_i\;=\;\frac{(P\psi^{j-1})_i}{q^{j}_i}
-   \;-\;\frac{\bigl(P\,G_j(q^j)\beta^j\bigr)_i}{q^{j}_i} ,
+  \eta^{j,i}\;=\;\frac{(P\psi^{j-1})_i}{q^{j,i}}
+   \;-\;\frac{\bigl(P\,G_j(q^j)\beta^j\bigr)_i}{q^{j,i}} ,
 \end{equation}
 the first term carrying $\eta^{j-1}$ and the second carrying $b^j$.
 
 The first is an average. Writing $\psi^{j-1}=q^{j-1}\!\circ\eta^{j-1}$, its weights
-$P_{ik}q^{j-1}_k/q^{j}_i$ are non-negative because $P\ge0$ and sum to one because
+$P_{ik}q^{j-1,k}/q^{j,i}$ are non-negative because $P\ge0$ and sum to one because
 $q^j=Pq^{j-1}$, so it contributes at most $\lVert\eta^{j-1}\rVert_\infty$; they are
 the matrix $\mathcal A$ of \eqref{eq:mastercomp}.
 
 The source is the difficulty. Since $G_j$ is a second difference, row $i$ carries
-the neighbouring densities $q^j_{i\pm1}$ as well as $q^j_i$, so dividing by $q^j_i$
+the neighbouring densities $q^{j,i\pm1}$ as well as $q^{j,i}$, so dividing by $q^{j,i}$
 leaves the ratios
 \begin{equation}\label{eq:nbr}
-  \frac{q^{j}_{i-1}}{q^{j}_i}
+  \frac{q^{j,i-1}}{q^{j,i}}
   \qquad\text{and}\qquad
-  \frac{q^{j}_{i+1}}{q^{j}_i} ,
+  \frac{q^{j,i+1}}{q^{j,i}} ,
 \end{equation}
 which are unbounded in the wings, where the density decays fastest; nothing in
 \eqref{eq:volsolve} bounds them. Let $E\in\R^{N\times(N+2)}$ restrict to the
 interior nodes, so $EE^{\!\top}=I_N$, and recall
 $A_j=I+\Gh_j\,\mathrm{diag}(\dlv^j)E$.
+
+They are, however, an artefact of writing the row out. Since
+$\one^{\!\top}G_j(q)=0$ by Lemma~\ref{lem:null}, row $i$ of $G_j(q)\dlv^j$ is the
+net outflow of node $i$, and by \eqref{eq:affine} that net is
+\begin{equation}\label{eq:netknown}
+  G_j(q^j)\,\dlv^j\;=\;A_j(\dlv^j)q^j-q^j\;=\;q^{j-1}-q^{j},
+\end{equation}
+which carries no ratios at all: the individual fluxes are wing quantities, their
+net is not. For $b^j\equiv c$ this settles the matter, since $\beta^j=c\,\dlv^j$
+and $Pq^{j-1}=q^j$ give
+\[
+  \frac{\bigl(P\,G_j(q^j)\beta^j\bigr)_i}{q^{j,i}}
+  =c\,\frac{\bigl(q^{j}-Pq^{j}\bigr)_i}{q^{j,i}}
+  =c\Bigl(1-\frac{(Pq^{j})_i}{q^{j,i}}\Bigr),
+\]
+the two ratios of \eqref{eq:nbr} having collapsed into the single propagation
+ratio $(Pq^j)_i/q^{j,i}$. A general $b$ only modulates the density: writing
+$E^{\!\top}(q\circ b)$ for the vector equal to $q^ib^i$ at the interior nodes and
+zero at the outer ones, \eqref{eq:factor} and the commuting of diagonal matrices
+give
+\begin{equation}\label{eq:modulated}
+  G_j(q)\beta^j
+  =\Gh_j\,\mathrm{diag}(\dlv^j)E\,E^{\!\top}(q\circ b^j)
+  =\bigl(A_j(\dlv^j)-I\bigr)E^{\!\top}(q\circ b^j),
+\end{equation}
+again the operator's own increment, applied to $E^{\!\top}(q\circ b^j)$ in place of
+$q$. The proposition is what this amounts to.
 
 \begin{proposition}\label{prop:master}
 With $b^j=\beta^j/\dlv^j$ and $\circ$ the entrywise product,
@@ -83,82 +110,52 @@ equivalently, with the entrywise non-negative
 \end{equation}
 where $\mathcal A\one=\one$, so the transport is an averaging operator, and the
 $i$-th row of $\mathcal B$ sums to
-$(Pq^{j})_i/q^{j}_i-\one_{\{i\in\{0,N+1\}\}}$.
+$(Pq^{j})_i/q^{j,i}-\one_{\{i\in\{0,N+1\}\}}$.
 \end{proposition}
 
 \begin{proof}
-Multiplying $A_j=I+\Gh_j\mathrm{diag}(\dlv^j)E$ by $P$ on the left and $E^{\!\top}$
-on the right gives $P\Gh_j\mathrm{diag}(\dlv^j)=(I-P)E^{\!\top}$. By
-\eqref{eq:volsolve} and \eqref{eq:factor},
-$\psi^j=P\psi^{j-1}-P\Gh_j\mathrm{diag}(q^j)\beta^j$. Since $\beta^j=\dlv^j\!\circ b^j$
-and diagonal matrices commute,
-\[
-  \mathrm{diag}(q^j)\beta^j
-  =\mathrm{diag}(q^j)\mathrm{diag}(\dlv^j)\,b^j
-  =\mathrm{diag}(\dlv^j)\mathrm{diag}(q^j)\,b^j
-  =\mathrm{diag}(\dlv^j)\bigl(q^j\!\circ b^j\bigr),
-\]
-which is \eqref{eq:master}. Dividing it by $q^j_i$ gives \eqref{eq:mastercomp}: the rows of
-$\mathcal A$ sum to $(Pq^{j-1})_i/q^j_i=1$, and for $\mathcal B$ the terms
-$k\in\{0,N+1\}$ missing from $(Pq^j)_i$ vanish for interior $i$ and equal $q^j_i$
-at $k=i$ for outer $i$, by Corollary~\ref{cor:pos}.
+By \eqref{eq:volsolve}, $\psi^j=P\psi^{j-1}-P\,G_j(q^j)\beta^j$. Applying $P$ to
+\eqref{eq:modulated} at $q=q^j$ and using $PA_j=I$ gives
+$P\,G_j(q^j)\beta^j=(I-P)E^{\!\top}(q^j\!\circ b^j)$, which is \eqref{eq:master}.
+Dividing it by $q^{j,i}$ gives \eqref{eq:mastercomp}: the rows of $\mathcal A$ sum to
+$(Pq^{j-1})_i/q^{j,i}=1$, and for $\mathcal B$ the terms $k\in\{0,N+1\}$ missing from
+$(Pq^j)_i$ vanish for interior $i$ and equal $q^{j,i}$ at $k=i$ for outer $i$, by
+Corollary~\ref{cor:pos}.
 \end{proof}
 
 So $\eta^j$ is an average of $\eta^{j-1}$ plus a source in $b^j$, and the march
 across expiries is additive.
 
-\begin{remark}[Why the source is harmless]\label{rem:increment}
-The ratios \eqref{eq:nbr} disappear because the source is the operator's own
-increment: by \eqref{eq:affine}, $G_j(q)\dlv=A_j(\dlv)q-q$. The mechanism is
-clearest when $b^j\equiv c$, so that $\beta^j=c\,\dlv^j$:
-\[
-  G_j(q^j)\beta^j=c\bigl(A_jq^j-q^j\bigr)=c\bigl(q^{j-1}-q^j\bigr),
-  \qquad
-  P\,G_j(q^j)\beta^j=c\bigl(q^{j}-Pq^{j}\bigr),
-\]
-by $A_jq^j=q^{j-1}$ and $Pq^{j-1}=q^j$. Divided by $q^j_i$ this is
-$c\bigl(1-(Pq^j)_i/q^j_i\bigr)$: the two ratios of \eqref{eq:nbr} have collapsed
-to the single ratio $(Pq^j)_i/q^j_i$, whose size is what $\Theta_j$ measures in
-\eqref{eq:rows}. For general $b$ the factorisation \eqref{eq:factor} moves $b$ off
-$\dlv$ and onto $q$, diagonal matrices commuting, and the same computation applies
-to $q^j\!\circ b^j$. This is motivation only: the proof above reaches
-\eqref{eq:master} through $P\Gh_j\mathrm{diag}(\dlv^j)=(I-P)E^{\!\top}$ in one step.
-\end{remark}
-
 \subsection{The wing constant}\label{sec:bound}
 
-That single surviving ratio, $(Pq^j)_i/q^j_i$, is what has to be bounded. Write
+That single surviving ratio, $(Pq^j)_i/q^{j,i}$, is what has to be bounded. Since
+$q^j=Pq^{j-1}$ it is
+\begin{equation}\label{eq:P2ratio}
+  \frac{(Pq^{j})_i}{q^{j,i}}=\frac{(P^{2}q^{j-1})_i}{(Pq^{j-1})_i} ,
+\end{equation}
+so what is needed is how much larger than $P$ the square $P^{2}$ can be entrywise;
+and since both sides are linear and non-negative in $q^{j-1}$, the case
+$q^{j-1}=e_m$ shows that an entrywise bound is not merely sufficient but
+necessary. Write
 \begin{equation}\label{eq:rows}
-  R^j_i:=\one_{\{1\le i\le N\}}+\frac{(Pq^j)_i}{q^j_i}-\one_{\{i\in\{0,N+1\}\}},
+  R^{j,i}:=\one_{\{1\le i\le N\}}+\frac{(Pq^j)_i}{q^{j,i}}-\one_{\{i\in\{0,N+1\}\}},
   \qquad
-  \Theta_j:=\max_i R^j_i,
+  \Theta_j:=\max_i R^{j,i},
   \qquad
   \Xi:=\sum_{r=1}^{N}P_{rr}\le N ,
 \end{equation}
-and $H_j:=\max_i\abs{\eta^j_i}$. Here $R^j_i$ is the row bound of
+and $H_j:=\max_i\abs{\eta^{j,i}}$. Here $R^{j,i}$ is the row bound of
 \eqref{eq:mastercomp} at node $i$, and $\Theta_j$, the \emph{wing constant}, is its
 size across the slab. The theorem shows $\Theta_j$ is bounded by the grid alone,
-uniformly in the state; the bound rests on one inequality for inverses of
-M-matrices and its consequence for $P^{2}$.
+uniformly in the state; the bound rests on a single inequality for inverses of
+M-matrices.
 
-\begin{lemma}[Path product inequality]\label{lem:pathproduct}
+\begin{lemma}[Squared propagator]\label{lem:pathproduct}\label{cor:p2p}
 For all nodes $i,r,m$,
 \begin{equation}\label{eq:summand}
-  P_{ir}\,P_{rm}\;\le\;P_{im}\,P_{rr}.
+  P_{ir}\,P_{rm}\;\le\;P_{im}\,P_{rr},
 \end{equation}
-\end{lemma}
-
-\begin{proof}
-$P$ is the inverse of an M-matrix by Corollary~\ref{cor:pos}, and every inverse
-M-matrix satisfies the path product conditions
-$a_{ij}a_{jk}\le a_{ik}a_{jj}$ for all $i,j,k$
-\cite{ZhuZhangLiu2011}, a result first noted by Willoughby
-\cite{Willoughby1977} and proved by Johnson and Smith \cite{JohnsonSmith1999}. Take
-$(i,j,k)=(i,r,m)$.
-\end{proof}
-
-\begin{corollary}[Squared propagator]\label{cor:p2p}
-For all $i,m$,
+and consequently, for all $i,m$,
 \begin{equation}\label{eq:p2p}
   \bigl(P^{2}\bigr)_{im}\le
   \begin{cases}
@@ -166,11 +163,16 @@ For all $i,m$,
     (1+\Xi)\,P_{im}, & i\in\{0,N+1\}.
   \end{cases}
 \end{equation}
-\end{corollary}
+\end{lemma}
 
 \begin{proof}
-Sum \eqref{eq:summand} over $r$. An outer $r$ contributes only if $r=i$, since
-column $r$ of $P$ is $e_r$, and then contributes $P_{im}$.
+$P$ is the inverse of an M-matrix by Corollary~\ref{cor:pos}, and every inverse
+M-matrix satisfies the path product conditions $a_{ij}a_{jk}\le a_{ik}a_{jj}$ for
+all $i,j,k$, first noted by Willoughby \cite{Willoughby1977} and proved by
+Johnson and Smith \cite{JohnsonSmith1999}; \eqref{eq:summand} is the case
+$(i,j,k)=(i,r,m)$. Summing it over $r$ gives \eqref{eq:p2p}: an outer $r$
+contributes only if $r=i$, since column $r$ of $P$ is $e_r$, and then contributes
+$P_{im}$.
 \end{proof}
 
 \begin{theorem}\label{thm:wing}
@@ -187,12 +189,12 @@ and
 \end{theorem}
 
 \begin{proof}
-Since $q^j=Pq^{j-1}\ge0$, Corollary~\ref{cor:p2p} gives
-$(Pq^j)_i=\sum_m(P^2)_{im}q^{j-1}_m\le\Xi\,q^j_i$ for interior $i$ and
-$\le(1+\Xi)q^j_i$ for outer $i$, so $R^j_i\le1+\Xi$ in both cases. Finally,
+Since $q^j=Pq^{j-1}\ge0$, Lemma~\ref{lem:pathproduct} gives
+$(Pq^j)_i=\sum_m(P^2)_{im}q^{j-1,m}\le\Xi\,q^{j,i}$ for interior $i$ and
+$\le(1+\Xi)q^{j,i}$ for outer $i$, so $R^{j,i}\le1+\Xi$ in both cases. Finally,
 $\mathcal A\ge0$ with $\mathcal A\one=\one$ gives
 $\lVert\mathcal A\eta^{j-1}\rVert_\infty\le H_{j-1}$, while row $i$ of
-$(\mathcal B-E^{\!\top})b^{j}$ has modulus at most $\lVert b^j\rVert_\infty R^j_i$
+$(\mathcal B-E^{\!\top})b^{j}$ has modulus at most $\lVert b^j\rVert_\infty R^{j,i}$
 by the row sums of Proposition~\ref{prop:master}.
 \end{proof}
 
@@ -204,7 +206,7 @@ $7.6$ against $41$.
 
 Iterating \eqref{eq:step} from the front slice,
 \begin{equation}\label{eq:apriori}
-  \sup_{j,i}\abs{\eta^j_{i,t}}
+  \sup_{j,i}\abs{\eta^{j,i}_{t}}
   \;\le\;\lVert\eta^1_t\rVert_\infty+(M-1)(N+1)\,\lVert b\rVert_\infty ,
 \end{equation}
 and iterating \eqref{eq:master} shows that $\eta^j$ is affine in $\eta^1$, with
