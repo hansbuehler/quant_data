@@ -64,10 +64,10 @@ Damir Filipovi\'c, Lane~P. Hughston, and Andrea Macrina.
 \newblock {\em International Journal of Theoretical and Applied Finance},
   15(1):1250002, 2012.
 
-\bibitem{JohnsonSmith1999}
+\bibitem{JohnsonSmith2011}
 Charles~R. Johnson and Ronald~L. Smith.
-\newblock Path product matrices.
-\newblock {\em Linear and Multilinear Algebra}, 46:177--191, 1999.
+\newblock Inverse {M}-matrices, {II}.
+\newblock {\em Linear Algebra and its Applications}, 435(5):953--983, 2011.
 
 \bibitem{MertikopoulosMoustakas2010}
 Panayotis Mertikopoulos and Aris~L. Moustakas.
@@ -97,11 +97,6 @@ Magnus Wiese, Ben Wood, Alexandre Pachoud, Ralf Korn, Hans Buehler, Phillip
   Murray, and Lianjun Bai.
 \newblock Multi-asset spot and option market simulation, 2021.
 \newblock arXiv:2112.06823.
-
-\bibitem{Willoughby1977}
-R.~A. Willoughby.
-\newblock The inverse {M}-matrix problem.
-\newblock {\em Linear Algebra and its Applications}, 18:75--94, 1977.
 
 \bibitem{Wissel2007}
 Johannes Wissel.
