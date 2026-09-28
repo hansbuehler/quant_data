@@ -142,7 +142,7 @@ necessary. Write
   \qquad
   \Theta_j:=\max_i R^{j,i},
   \qquad
-  \Xi:=\sum_{r=1}^{N}P_{rr}\le N ,
+  \Xi_j:=\sum_{r=1}^{N}P_{rr}\le N ,
 \end{equation}
 and $H_j:=\max_i\abs{\eta^{j,i}}$. Here $R^{j,i}$ is the row bound of
 \eqref{eq:mastercomp} at node $i$, and $\Theta_j$, the \emph{wing constant}, is its
@@ -159,8 +159,8 @@ and consequently, for all $i,m$,
 \begin{equation}\label{eq:p2p}
   \bigl(P^{2}\bigr)_{im}\le
   \begin{cases}
-    \Xi\,P_{im}, & 1\le i\le N,\\
-    (1+\Xi)\,P_{im}, & i\in\{0,N+1\}.
+    \Xi_j\,P_{im}, & 1\le i\le N,\\
+    (1+\Xi_j)\,P_{im}, & i\in\{0,N+1\}.
   \end{cases}
 \end{equation}
 \end{lemma}
@@ -181,7 +181,7 @@ For every $\dlv\in(0,\infty)^N$,
 \end{equation}
 and
 \begin{equation}\label{eq:thetabound}
-  \Theta_j\le1+\Xi\le N+1,
+  \Theta_j\le1+\Xi_j\le N+1,
   \qquad
   \Theta^{*}:=\sup_{\dlv}\sum_{j=2}^{M}\Theta_j\le(M-1)(N+1).
 \end{equation}
@@ -189,8 +189,8 @@ and
 
 \begin{proof}
 Since $q^j=Pq^{j-1}\ge0$, Lemma~\ref{lem:pathproduct} gives
-$(Pq^j)_i=\sum_m(P^2)_{im}q^{j-1,m}\le\Xi\,q^{j,i}$ for interior $i$ and
-$\le(1+\Xi)q^{j,i}$ for outer $i$, so $R^{j,i}\le1+\Xi$ in both cases. Finally,
+$(Pq^j)_i=\sum_m(P^2)_{im}q^{j-1,m}\le\Xi_j\,q^{j,i}$ for interior $i$ and
+$\le(1+\Xi_j)q^{j,i}$ for outer $i$, so $R^{j,i}\le1+\Xi_j$ in both cases. Finally,
 $\mathcal A\ge0$ with $\mathcal A\one=\one$ gives
 $\lVert\mathcal A\eta^{j-1}\rVert_\infty\le H_{j-1}$, while row $i$ of
 $(\mathcal B-E^{\!\top})b^{j}$ has modulus at most $\lVert b^j\rVert_\infty R^{j,i}$
@@ -205,7 +205,7 @@ Iterating \eqref{eq:step} from the front slice,
   \;\le\;\lVert\eta^1_t\rVert_\infty+(M-1)(N+1)\,\lVert b\rVert_\infty ,
 \end{equation}
 and iterating \eqref{eq:master} shows that $\eta^j$ is affine in $\eta^1$, with
-coefficients depending on $\lambda$ only through $P_2,\dots,P_j$ and $q^2,\dots,q^j$.
+coefficients depending on $\lambda$ only through $P^{(2)},\dots,P^{(j)}$ and $q^2,\dots,q^j$.
 The only $t$ on the right of \eqref{eq:apriori} is inside $\eta^1_t$, which enters
 linearly, so it has to be integrable in time rather than bounded.
 
@@ -266,14 +266,14 @@ Proposition~\ref{prop:collapse} makes this switch clean: the spot sits on a node
 new front density is a column of the propagator. Indeed, if $q^l_{T_l}=e_k$ then the
 code-book $A_{l+1}(\dlv^{l+1})\,q^{l+1}=q^l$ gives
 \begin{equation}\label{eq:handover}
-  q^{l+1}_{T_l}=P_{l+1}\,e_k ,\qquad P_{l+1}:=A_{l+1}\bigl(\dlv^{l+1}_{T_l}\bigr)^{-1},
+  q^{l+1}_{T_l}=P^{(l+1)}\,e_k ,\qquad P^{(l+1)}:=A_{l+1}\bigl(\dlv^{l+1}_{T_l}\bigr)^{-1},
 \end{equation}
 the spread of a unit mass at the settled spot by one step of the code-book. To restart the
 front chart we need this density to be strictly positive.
 
 \begin{lemma}[The new front]\label{lem:newfront}
 Let $P=A_j(\dlv^j)^{-1}$ with $\dlv^j\in(0,\infty)^N$. If $k$ is an interior node, then
-$(Pe_k)^i>0$ for every node $i$ and $K^{\!\top}Pe_k=K^k$. If $k\in\{0,N+1\}$, then
+$(Pe_k)_i>0$ for every node $i$ and $K^{\!\top}Pe_k=K^k$. If $k\in\{0,N+1\}$, then
 $Pe_k=e_k$.
 \end{lemma}
 

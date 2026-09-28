@@ -18,7 +18,7 @@ We denote by $\dlv^{j,i}_t$ the discrete local variance (the squared discrete lo
 interior node $i=1,\dots,N$ and expiry $j$, as seen at calendar time $t$, and by
 $\dlv^j_t\in(0,\infty)^{N}$ the vector of them, with $\lambda=\log\dlv$
 throughout; it enters the code-book multiplied by the slab length $\Delta_j$. Prices are the linear functional
-$C_t(K^i,T_j)=(\pi^i)' q^j_t$ with $\pi^i$ the discretised payoff
+$C_t(K^i,T_j)=(\pi^i)^{\!\top} q^j_t$ with $\pi^i$ the discretised payoff
 $(s-K^i)^{+}$.
 
 {\color{blue} If it's the same for everyone I'd align the notation with DYSANOS, e.g. use $\hat T$ and $\hat K$ for
@@ -35,7 +35,7 @@ makes the systems below tridiagonal. With the half-weights
 \end{equation}
 
 the recursion is $A_j(\dlv^j)\,q^j=q^{j-1}$, where $A_j(\dlv)$ is tridiagonal
-with rows
+with rows (here $q^i$ denotes the $i$-th component of a generic $q\in\R^{N+2}$)
 \begin{equation}\label{eq:operator}
   \bigl(A_j(\dlv)q\bigr)_i=
   \begin{cases}
@@ -89,7 +89,7 @@ variance is uniquely determined by the linear system
 \end{equation}
 \item Conversely, given $\dlv^j>0$, the vector $q^j:=A_j(\dlv^j)^{-1}q^{j-1}$
 is again a probability vector with mean $S_0$, and the gridded prices
-$\pi^i\cdot q^j$ admit no static arbitrage.
+$(\pi^i)^{\!\top}q^j$ admit no static arbitrage.
 \item A gridded surface is free of static arbitrage, butterflies and
 calendar spreads together, if and only if it arises as in \textup{(ii)} from
 some $\dlv\ge0$, and it lies in the \emph{interior} of the arbitrage-free set

@@ -16,20 +16,21 @@ chart
 \end{equation}
 with $z\in\R^{N+2}$ unconstrained. The chart is invariant under $z\mapsto z+c\one$, so a
 shift of $\nu$ along $\one$ leaves $q^1$ unchanged and only the $q^1$-centred part of
-$\nu$ is identified; write $\mathrm{dev}^f:=\nu^f-\ip{q^1}{\nu^f}$ for it. The input
+$\nu$ is identified; write $\mathrm{dev}^f:=\nu^f-(q^1)^{\!\top}\nu^f\,\one$ for it. The input
 $\nu$ is free, and plays the role $b$ plays at $j\ge2$. It\^o's formula for a function
 of a vector process shows that each $q^{1,i}$ is a martingale exactly when
 \begin{equation}\label{eq:frontdrift}
-  m^i=-\tfrac12\sum_f\bigl(\mathrm{dev}^{f,i}\bigr)^2
+  m^i=-\tfrac12\sum_f\bigl(\mathrm{dev}^{i,f}\bigr)^2
 \end{equation}
 up to a multiple of $\one$. Furthermore we obtain
 \begin{equation}\label{eq:psi1}
-  \psi^{1,f}=q^1\odot\mathrm{dev}^f,
+  \psi^{1,f}=q^1\circ\mathrm{dev}^f,
   \qquad
   \eta^{1,f}=\mathrm{dev}^f,
   \qquad
-  \one^{\!\top}\psi^{1,f}=0 .
+  \one^{\!\top}\psi^{1,f}=0 ,
 \end{equation}
+with $\circ$ the entrywise product.
 The same computation appears in \cite{FilipovicHughstonMacrina2012} and as the
 stochastic replicator equation \cite{MertikopoulosMoustakas2010}.
 
@@ -66,7 +67,7 @@ $[0,T_1)$,
 \begin{equation}\label{eq:frontexplicit}
   q^{1,i}_{t}=q^{1,i}_{0}\exp\Bigl(\int_0^t\eta^{1,i}\,\dd W-\tfrac12\int_0^t(\eta^{1,i})^2\dd s\Bigr),
   \qquad
-  \lVert\eta^{1}_t\rVert_\infty\le c_t\,R/h,\quad R:=K^{N+1}-K^0 .
+  \lVert\eta^{1}_t\rVert_\infty\le c_t\,w/h,\quad w:=K^{N+1}-K^0 .
 \end{equation}
 
 \begin{proposition}[The front collapses onto a node, and settles exactly]\label{prop:collapse}
@@ -86,7 +87,7 @@ $\sum_iK^iq^{1,i}\eta^{1,i}=c_tV_t/h$ on $[T_1-\varepsilon,T_1)$. Since $S$ is a
 $[K^0,K^{N+1}]$,
 \[
   \E\int_{T_1-\varepsilon}^{T_1}\frac{c_t^2V_t^2}{h^2}\,\dd t
-  =\E\bigl[(S_{T_1}-S_{T_1-\varepsilon})^2\bigr]\le R^2 ,
+  =\E\bigl[(S_{T_1}-S_{T_1-\varepsilon})^2\bigr]\le w^2 ,
 \]
 so the integral is finite almost surely. On the event $\{V_{T_1}>0\}$ we would have
 $V_t\ge V_{T_1}/2$ near $T_1$, and the integral would diverge, because
@@ -95,7 +96,7 @@ $V_{T_1}=0$ almost surely: $q^1_{T_1}$ is a probability vector on distinct point
 zero variance, that is $e_k$ with $K^k=S_{T_1}$, and \eqref{eq:settle} reads
 $(K^k-K^n)^{+}=(S_{T_1}-K^n)^{+}$. Finally $\eta^1$ is bounded on $[0,T_1-\varepsilon]$ and
 $\int_{T_1-\varepsilon}^{T_1}\lVert\eta^1_t\rVert_\infty\dd t\le
-(R/h)\int_{T_1-\varepsilon}^{T_1}c_t\,\dd t<\infty$ when $p<1$, by
+(w/h)\int_{T_1-\varepsilon}^{T_1}c_t\,\dd t<\infty$ when $p<1$, by
 \eqref{eq:frontexplicit}.
 \end{proof}
 
