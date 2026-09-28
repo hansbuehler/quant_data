@@ -54,7 +54,9 @@ the front volatility proportional to the distance from the spot, in one factor,
   \eta^{1,i}_{t}=\frac{c_t\,(K^i-S_t)}{h},\qquad c_t=a_1\tau^{-p}\ \text{near }T_1,
   \quad\tau=T_1-t,\ a_1>0 .
 \end{equation}
-It is already centred, since $\sum_iq^{1,i}(K^i-S_t)=0$. Its coefficients are polynomial in
+Only the behaviour near $T_1$ matters: before any $T_1-\varepsilon$ the front
+volatility may be any bounded, locally Lipschitz choice, and \eqref{eq:nufront} need only
+hold on $[T_1-\varepsilon,T_1)$. It is already centred, since $\sum_iq^{1,i}(K^i-S_t)=0$. Its coefficients are polynomial in
 $q^1$ and bounded on $[0,T_1-\varepsilon]$, so there is a unique strong solution on
 $[0,T_1)$,
 \begin{equation}\label{eq:frontexplicit}
@@ -76,18 +78,21 @@ If $p<1$ then Assumption~\ref{ass:F} holds on $[0,T_1]$. The window $p\in[\tfrac
 Each $q^{1,i}$ is a bounded martingale, so $q^1_t\to q^1_{T_1}$ almost surely, and the
 variance $V_t:=\sum_iq^{1,i}_{t}(K^i-S_t)^2$ converges to that of $q^1_{T_1}$. By
 \eqref{eq:psi1} and \eqref{eq:nufront} the volatility of $S=K^{\!\top}q^1$ is
-$\sum_iK^iq^{1,i}\eta^{1,i}=c_tV_t/h$. Since $S$ is a martingale with values in
+$\sum_iK^iq^{1,i}\eta^{1,i}=c_tV_t/h$ on $[T_1-\varepsilon,T_1)$. Since $S$ is a martingale with values in
 $[K^0,K^{N+1}]$,
 \[
-  \E\int_0^{T_1}\frac{c_t^2V_t^2}{h^2}\,\dd t=\E\bigl[(S_{T_1}-S_0)^2\bigr]\le R^2 ,
+  \E\int_{T_1-\varepsilon}^{T_1}\frac{c_t^2V_t^2}{h^2}\,\dd t
+  =\E\bigl[(S_{T_1}-S_{T_1-\varepsilon})^2\bigr]\le R^2 ,
 \]
 so the integral is finite almost surely. On the event $\{V_{T_1}>0\}$ we would have
 $V_t\ge V_{T_1}/2$ near $T_1$, and the integral would diverge, because
 $\int^{T_1}c_t^2\,\dd t=a_1^2\int^{T_1}\tau^{-2p}\,\dd t=\infty$ for $2p\ge1$. Hence
 $V_{T_1}=0$ almost surely: $q^1_{T_1}$ is a probability vector on distinct points with
 zero variance, that is $e_k$ with $K^k=S_{T_1}$, and \eqref{eq:settle} reads
-$(K^k-K^n)^{+}=(S_{T_1}-K^n)^{+}$. Finally $\int_0^{T_1}\lVert\eta^1_t\rVert_\infty\dd t\le
-(R/h)\int_0^{T_1}c_t\,\dd t<\infty$ when $p<1$, by \eqref{eq:frontexplicit}.
+$(K^k-K^n)^{+}=(S_{T_1}-K^n)^{+}$. Finally $\eta^1$ is bounded on $[0,T_1-\varepsilon]$ and
+$\int_{T_1-\varepsilon}^{T_1}\lVert\eta^1_t\rVert_\infty\dd t\le
+(R/h)\int_{T_1-\varepsilon}^{T_1}c_t\,\dd t<\infty$ when $p<1$, by
+\eqref{eq:frontexplicit}.
 \end{proof}
 
 The terminal spot is therefore a grid point, as in \cite{Wissel2007}; the difference is
