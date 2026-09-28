@@ -142,12 +142,12 @@ Fix an interior index $k$ and collect the three entries of $G_j(q)$ in column
 $k$: from \eqref{eq:operator} they are $\Delta_j(\iota^{k,-}+\iota^{k,+})q^k$ in row
 $k$, $-\Delta_j\iota^{k,+}q^k$ in row $k+1$, and $-\Delta_j\iota^{k,-}q^k$ in row $k-1$.
 Their sum is $0$, giving the first identity. Weighting by the node values,
-\[
+\begin{align*}
   \Delta_jq^k\Bigl[K^k\bigl(\iota^{k,-}+\iota^{k,+}\bigr)
    -K^{k+1}\iota^{k,+}-K^{k-1}\iota^{k,-}\Bigr]
-  =\Delta_jq^k\Bigl[\iota^{k,-}(K^k-K^{k-1})-\iota^{k,+}(K^{k+1}-K^k)\Bigr]
-  =\Delta_jq^k\bigl[\omega^k-\omega^k\bigr]=0
-\]
+  &=\Delta_jq^k\Bigl[\iota^{k,-}(K^k-K^{k-1})-\iota^{k,+}(K^{k+1}-K^k)\Bigr]\\
+  &=\Delta_jq^k\bigl[\omega^k-\omega^k\bigr]=0
+\end{align*}
 by \eqref{eq:weights}, giving the second. The conservation statements follow
 from \eqref{eq:affine}: $\one^{\!\top}A_j(\dlv)q=\one^{\!\top}q$ and
 $K^{\!\top}A_j(\dlv)q=K^{\!\top}q$. Since $\widehat G_j$ has rank $N$ and lives
