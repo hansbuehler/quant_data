@@ -60,7 +60,7 @@ low-dimensional code, fit a linear state process to it, and test for dynamic
 arbitrage after the fact, reporting it in $12.5\%$ of states at zero transaction
 cost.
 
-None of the four imposes a dynamic condition, and it is where this paper starts:
+None of the four enforces the drift restriction exactly, and that is where this paper starts:
 the cross-sectional constraints govern each date's surface and its terminal
 payoff cone, and leave the transition of a fixed contract between two dates
 unconstrained. The choice of grid is part of the same point. All four index
@@ -104,7 +104,8 @@ the chart admits carry every spot in the grid range, whereas in
 terminal spot; that is left as future work.
 
 \item \textbf{Existence, with no condition on the wings.} The model has a
-unique global strong solution on $[0,T_1]$, positive by construction, for every
+unique global strong solution on $[0,T_1]$, and by restarting at each expiry on the
+whole ladder $[0,T_M]$ (Corollary~\ref{cor:patch}), positive by construction, for every
 bounded and locally Lipschitz volatility structure $b$ and any number of
 driving factors. The quantity that must be controlled is $\eta=\psi/q$, the
 density volatility relative to the density, and it is bounded by the grid alone:
@@ -120,7 +121,7 @@ contract settles at its exact payoff (Proposition~\ref{prop:collapse}).
 
 \item \textbf{The drift is pointwise, and the count works out.} In density
 coordinates the drift equation is $N+2$ conditions on $N$ unknowns, and is
-consistent because the left null space of the geometry matrix is exactly
+consistent because the left null space of $\widehat G_j$ is exactly
 $\mathrm{span}\{\one,K\}$, conservation of mass and of the spot
 (Lemma~\ref{lem:null}). The state-independent factor then cancels from both
 sides and the drift is available nodewise,

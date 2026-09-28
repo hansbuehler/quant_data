@@ -2,7 +2,8 @@
 
 \begin{assumption}[Martingale property]\label{ass:mart}
 Under $\Q$ every gridded instrument price is a martingale in $t$. Since the
-gridded payoffs $\pi^i$ span $\R^{N+2}$, this is equivalent to each density
+gridded payoffs $\pi^i$ together with the unit payoff span $\R^{N+2}$, and
+$\one^{\!\top}q^j=1$, this is equivalent to each density
 vector being a martingale,
 \begin{equation}\label{eq:qdyn}
   \dd q^j_t=\psi^j_t\,\dd W_t,\qquad \psi^j_t\in\R^{(N+2)\times d}.
@@ -36,18 +37,18 @@ is given by its chart (Section~\ref{sec:front}).
 
 \begin{proof}
 Apply It\^o to $A_j(\dlv^j_t)q^j_t=q^{j-1}_t$, using \eqref{eq:affine} to write
-the left side as $q^j+G_j(q^j)\dlv^j$ and noting that $G_j$ is bilinear. The
+the left side as $q^j+G_j(q^j)\dlv^j$ and noting that $(q,\dlv)\mapsto G_j(q)\dlv$ is bilinear. The
 $\dd W$ terms give $\psi^j+G_j(\psi^j)\dlv^j+G_j(q^j)\beta^j=\psi^{j-1}$, which
 is \eqref{eq:volsolve} by \eqref{eq:affine}. The $\dd t$ terms give
 $G_j(q^j)\alpha^j+\sum_f G_j(\psi^{j,f})\beta^{j,f}=0$, since $q^{j-1}$ and
 $q^{j}$ are driftless by Assumption~\ref{ass:mart} and the only quadratic
-covariation is between $G_j(\cdot)$ and $\dlv^j$, both driven by $W$.
+covariation is between $q^j$ and $\dlv^j$, both driven by $W$.
 \end{proof}
 
 Equation \eqref{eq:volsolve} is not ours. Compared with the pricing recursion
 $A_j(\dlv^j)q^j=q^{j-1}$ it is \emph{the same operator with one added source},
 the structure of Carmona and Nadtochiy \cite{CarmonaNadtochiy2008}. The drift
-restriction below is theirs in the continuum, and Wissel's \cite{Wissel2007} on
+restriction above is theirs in the continuum, and Wissel's \cite{Wissel2007} on
 this lattice; we claim no priority for either.
 
 What the fixed lattice changes is threefold. Their restriction carries a term in
@@ -57,9 +58,7 @@ differential, so neither the high-order regularity their statement requires nor
 the singular behaviour as time to maturity vanishes that it is built to
 accommodate can arise here, the front slab having positive width. And the
 discrete system is over-determined, $N+2$ conditions on $N$ unknowns, which is
-what the counting of Remark~\ref{cor:counting} squares; that counting is what
-turns a differential relation into an identity, and it has no continuum
-counterpart. Appendix~\ref{app:priority} carries both identifications in the
+what the counting of Remark~\ref{cor:counting} squares. Appendix~\ref{app:priority} carries both identifications in the
 original notation.
 
 \begin{theorem}[The drift is a pointwise covariance]\label{thm:pointwise}
@@ -104,8 +103,8 @@ Where HJM's derived object is an integral of the volatility across maturities,
 ours is $\eta$, obtained from $b$ by the single forward recursion
 \eqref{eq:volsolve}. The second is the cost. Once $\eta$ is known no matrix is inverted: no Jacobian
 of the pricing map is ever formed and no rank condition on it appears. And since
-$\psi$ is linear in $\beta$ and $\alpha$ is bilinear in $(\beta,\psi)$, the drift
-is an exact quadratic form in $\beta$, as in HJM; Theorem~\ref{thm:wing} is what
+$\psi$ is affine in $\beta$ and $\alpha$ is bilinear in $(\beta,\psi)$, the drift
+is a quadratic polynomial in $\beta$, as in HJM; Theorem~\ref{thm:wing} is what
 rules out the corresponding finite-time explosion.
 
 The driftless point is the classical model: if $\beta\equiv0$ and $\psi^1=0$ then

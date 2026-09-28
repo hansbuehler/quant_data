@@ -63,9 +63,7 @@ leaves the ratios
   \frac{q^{j,i+1}}{q^{j,i}} ,
 \end{equation}
 which are unbounded in the wings, where the density decays fastest; nothing in
-\eqref{eq:volsolve} bounds them. Let $E\in\R^{N\times(N+2)}$ restrict to the
-interior nodes, so $EE^{\!\top}=I_N$, and recall
-$A_j=I+\Gh_j\,\mathrm{diag}(\dlv^j)E$.
+\eqref{eq:volsolve} bounds them.
 
 They are, however, an artefact of writing the row out. Since
 $\one^{\!\top}G_j(q)=0$ by Lemma~\ref{lem:null}, row $i$ of $G_j(q)\dlv^j$ is the
@@ -82,7 +80,9 @@ and $Pq^{j-1}=q^j$ give
   =c\Bigl(1-\frac{(Pq^{j})_i}{q^{j,i}}\Bigr),
 \]
 the two ratios of \eqref{eq:nbr} having collapsed into the single propagation
-ratio $(Pq^j)_i/q^{j,i}$. A general $b$ only modulates the density: writing
+ratio $(Pq^j)_i/q^{j,i}$. A general $b$ only modulates the density. Let
+$E\in\R^{N\times(N+2)}$ restrict to the interior nodes, so $EE^{\!\top}=I_N$, and
+note that $A_j=I+\Gh_j\,\mathrm{diag}(\dlv^j)E$. Writing
 $E^{\!\top}(q\circ b)$ for the vector equal to $q^ib^i$ at the interior nodes and
 zero at the outer ones, \eqref{eq:factor} and the commuting of diagonal matrices
 give
@@ -320,8 +320,9 @@ positive new front, so $z=\log q^{l+1}_{T_l}$ is finite, and
 $K^{\!\top}q^{l+1}_{T_l}=K^k=S_{T_l}$, so the spot is continuous. On $[T_l,T_{l+1}]$ the
 ladder is that of Sections~\ref{sec:drift}--\ref{sec:exist} with front $q^{l+1}$ and
 expiries $T_{l+1}<\dots<T_M$, started from the $\mathcal F_{T_l}$-measurable state
-$(z,\lambda^{l+2},\dots,\lambda^M)$. Theorem~\ref{thm:exist} applies to it, since the
-solution of \cite[Theorem~V.38]{Protter2005} depends continuously on its starting point,
+$(z,\lambda^{l+2},\dots,\lambda^M)$. Theorem~\ref{thm:exist} applies with this
+$\mathcal F_{T_l}$-measurable initial condition, the solution of
+\cite[Theorem~V.38]{Protter2005} depending continuously on its starting point,
 and with Proposition~\ref{prop:collapse} and Remark~\ref{rem:horizon} gives a unique
 strong solution on $[T_l,T_{l+1}]$ that settles at $T_{l+1}$ with $\lambda_{T_{l+1}}$
 finite. The densities $q^j$, $j>l+1$, are given by the same recursion on both sides of

@@ -40,7 +40,11 @@ it, so
   \Var_{q^1}(K)\;\ge\;(S-K^i)(K^{i+1}-S),
   \qquad K^i\le S<K^{i+1},
 \end{equation}
-which is at most $\tfrac14h^{2}$, and the front implied volatility has a floor of order $h/(2S\sqrt{T_1-t})$. It vanishes when the spot sits on a node, which is
+which is at most $\tfrac14h^{2}$. The front implied volatility therefore has the floor
+\[
+  \frac{\sqrt{(S-K^i)(K^{i+1}-S)}}{S\sqrt{T_1-t}}\;\le\;\frac{h}{2S\sqrt{T_1-t}},
+\]
+largest at the midpoint of a cell and zero when the spot sits on a node, which is
 exactly what Proposition~\ref{prop:collapse} forces at $T_1$.
 \end{remark}
 
