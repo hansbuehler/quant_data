@@ -258,3 +258,79 @@ front has $\lVert\eta^1_t\rVert_\infty\le C(T_1-t)^{-p}$, integrable for $p<1$, 
 the code-book reaches its first expiry with every gridded contract settling at its
 payoff.
 \end{remark}
+
+\subsection{Beyond the first expiry}\label{sec:patching}
+
+At $T_1$ the front expires and the next expiry becomes the front. The settling of
+Proposition~\ref{prop:collapse} makes this switch clean: the spot sits on a node, and the
+new front density is a column of the propagator. Indeed, if $q^l_{T_l}=e_k$ then the
+code-book $A_{l+1}(\dlv^{l+1})\,q^{l+1}=q^l$ gives
+\begin{equation}\label{eq:handover}
+  q^{l+1}_{T_l}=P_{l+1}\,e_k ,\qquad P_{l+1}:=A_{l+1}\bigl(\dlv^{l+1}_{T_l}\bigr)^{-1},
+\end{equation}
+the spread of a unit mass at the settled spot by one step of the code-book. To restart the
+front chart we need this density to be strictly positive.
+
+\begin{lemma}[The new front]\label{lem:newfront}
+Let $P=A_j(\dlv^j)^{-1}$ with $\dlv^j\in(0,\infty)^N$. If $k$ is an interior node, then
+$(Pe_k)^i>0$ for every node $i$ and $K^{\!\top}Pe_k=K^k$. If $k\in\{0,N+1\}$, then
+$Pe_k=e_k$.
+\end{lemma}
+
+\begin{proof}
+Order the nodes with the interior first. The outer columns of $A_j$ are $e_0$ and
+$e_{N+1}$ (Corollary~\ref{cor:pos}), so
+\[
+  A_j=\begin{pmatrix}A_{II}&0\\A_{BI}&I\end{pmatrix},\qquad
+  P=\begin{pmatrix}A_{II}^{-1}&0\\-A_{BI}A_{II}^{-1}&I\end{pmatrix}.
+\]
+By \eqref{eq:operator}, $A_{II}$ is tridiagonal with strictly negative off-diagonal
+entries, hence an irreducible non-singular M-matrix, so $A_{II}^{-1}>0$ entrywise
+\cite{BermanPlemmons1994}. The block $-A_{BI}\ge0$ has a positive entry in the row of
+$K^0$ (column $K^1$) and in the row of $K^{N+1}$ (column $K^N$), so the outer entries of an
+interior column of $P$ are positive as well. The identity $K^{\!\top}P=K^{\!\top}$ follows
+from $K^{\!\top}A_j=K^{\!\top}$ (Lemma~\ref{lem:null}), and the outer columns are
+Corollary~\ref{cor:pos}.
+\end{proof}
+
+\begin{corollary}[Existence on the whole ladder]\label{cor:patch}
+Let $b$ be bounded and locally Lipschitz. On each interval $[T_{l-1},T_l]$,
+$l=1,\dots,M$, let the current front density $q^l$ follow the chart \eqref{eq:softmax}
+with the settling volatility \eqref{eq:nufront}, where $\tau=T_l-t$ and
+$p\in[\tfrac12,1)$. Then the model has a solution on $[0,T_M]$, unique given these
+choices, such that
+\begin{enumerate}[label=(\roman*),leftmargin=2em,itemsep=1pt]
+\item every gridded price is a continuous martingale up to its expiry;
+\item at every $T_l$ the spot sits on a node $K^{k_l}$ and every contract expiring at
+  $T_l$ settles at its payoff;
+\item if $k_l$ is interior, the model continues on $[T_l,T_{l+1}]$ from the finite state
+  $z=\log q^{l+1}_{T_l}$ and $\lambda^{l+2},\dots,\lambda^M$ at $T_l$; if $k_l$ is an
+  outer node, the spot is absorbed there: $q^j_t=e_{k_l}$ for all $j>l$ and $t\ge T_l$.
+\end{enumerate}
+\end{corollary}
+
+\begin{proof}
+By induction on $l$. On $[0,T_1]$ this is Proposition~\ref{prop:collapse} with
+Theorem~\ref{thm:exist} and Remark~\ref{rem:horizon}, which also give the limit
+$\lambda_{T_1}$, finite. Suppose the solution exists on $[0,T_l]$ with $\lambda_{T_l}$
+finite and $q^l_{T_l}=e_k$.
+
+If $k$ is interior, \eqref{eq:handover} and Lemma~\ref{lem:newfront} give a strictly
+positive new front, so $z=\log q^{l+1}_{T_l}$ is finite, and
+$K^{\!\top}q^{l+1}_{T_l}=K^k=S_{T_l}$, so the spot is continuous. On $[T_l,T_{l+1}]$ the
+ladder is that of Sections~\ref{sec:drift}--\ref{sec:exist} with front $q^{l+1}$ and
+expiries $T_{l+1}<\dots<T_M$, started from the $\mathcal F_{T_l}$-measurable state
+$(z,\lambda^{l+2},\dots,\lambda^M)$. Theorem~\ref{thm:exist} applies to it, since the
+solution of \cite[Theorem~V.38]{Protter2005} depends continuously on its starting point,
+and with Proposition~\ref{prop:collapse} and Remark~\ref{rem:horizon} gives a unique
+strong solution on $[T_l,T_{l+1}]$ that settles at $T_{l+1}$ with $\lambda_{T_{l+1}}$
+finite. The densities $q^j$, $j>l+1$, are given by the same recursion on both sides of
+$T_l$ with continuous inputs, so they are continuous at $T_l$.
+
+If $k$ is an outer node, Lemma~\ref{lem:newfront} gives $q^j_{T_l}=e_k$ for every $j>l$.
+The constant process $q^j_t\equiv e_k$ satisfies every recursion, since $A_je_k=e_k$, and
+is a martingale, so all prices are constant and settle at their payoffs; we freeze
+$\lambda$ at $\lambda_{T_l}$, on which no price then depends.
+
+Uniqueness on each interval gives uniqueness on $[0,T_M]$.
+\end{proof}
