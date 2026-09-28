@@ -1,7 +1,8 @@
 \section{The wing constant, and existence}\label{sec:exist}
 
-The log discrete local variance $\lambda=\log\dlv$ ranges over all of
-$\R^{NM}$, so positivity is automatic. By Theorem~\ref{thm:pointwise} the model
+The log discrete local variance $\lambda=(\lambda^2,\dots,\lambda^M)$,
+$\lambda^j=\log\dlv^j$, ranges over all of $\R^{N(M-1)}$, so positivity is
+automatic; the front density has its own chart \eqref{eq:softmax}. By Theorem~\ref{thm:pointwise} the model
 is the stochastic differential equation
 \begin{equation}\label{eq:abstract}
   \dd\lambda_t=\Bigl[-\ip{\eta_t}{b_t}-\tfrac12\abs{b_t}^{2}\Bigr]\dd t
@@ -11,10 +12,9 @@ whose only non-elementary coefficient is $\eta=\psi/q$ from \eqref{eq:volsolve}
 and \eqref{eq:eta}. Its denominator is small in the wings, and the question is
 whether $\eta$ can blow up there.
 
-The argument follows the route of Wissel's proof of his Theorem~3.5
-\cite{Wissel2007}: log coordinates (his (3.29)), induction over expiries, and an
-existence result for locally Lipschitz equations (his Proposition~3.7). Its one
-non-standard ingredient is an a priori bound, independent of the state, on the
+The argument has the structure of Wissel's proof of his Theorem~3.5
+\cite{Wissel2007}: log coordinates, induction over expiries, and local existence
+followed by a bound that rules out explosion. Its one non-standard ingredient is an a priori bound, independent of the state, on the
 relative volatility of the calendar spread at the second expiry. Wissel could not
 obtain this bound in general and imposes his condition (3.24) instead (his
 Remark~1 following the proof, p.~18); in our coordinates the quantity is $\eta+b$
@@ -216,4 +216,45 @@ For a horizon $T\le T_1$,
 \end{equation}
 \end{assumption}
 
-\emph{TBD.}
+\begin{theorem}[Existence]\label{thm:exist}
+Let $T<T_1$, and let the front volatility $\nu=\nu(t,z)$ in \eqref{eq:softmax} and
+the volatility $b=b(t,z,\lambda)$ be bounded, $\abs{\nu}\le B_\nu$,
+$\abs{b}\le B$, and locally Lipschitz in $(t,z,\lambda)$. Then the front chart
+\eqref{eq:softmax}--\eqref{eq:frontdrift} together with \eqref{eq:abstract} has a
+unique strong solution $(z,\lambda)$ on $[0,T]$, and
+\begin{equation}\label{eq:ellbounds}
+  0\;<\;\inf_{t\le T}\min_{j,i}\dlv^{j,i}_{t}
+  \;\le\;\sup_{t\le T}\max_{j,i}\dlv^{j,i}_{t}\;<\;\infty
+  \qquad\text{almost surely.}
+\end{equation}
+No condition is imposed on $\dlv$, on the wings, or on the number of factors.
+\end{theorem}
+
+\begin{proof}
+The coefficients are locally Lipschitz: $q^1=\mathrm{softmax}(z)$ and
+$\dlv=e^\lambda$ are positive, so each $A_j$ is a non-singular M-matrix and
+everything except $\nu$ and $b$ is smooth in $(z,\lambda)$. Adding time as a state
+variable to cover the time dependence, \cite[Theorem~V.38, p.~303]{Protter2005}
+gives a unique solution up to an explosion time $\zeta$, with
+$\limsup_{t\to\zeta}\lVert(z_t,\lambda_t)\rVert=\infty$ on $\{\zeta<\infty\}$.
+The drift of $\lambda$ is bounded by \eqref{eq:apriori}, since
+$\lVert\eta^1\rVert_\infty=\lVert\mathrm{dev}\rVert_\infty\le2B_\nu$, and the drift
+$m$ of $z$ is bounded by $2B_\nu^2$; let $D$ bound both. On $[0,\zeta\wedge T)$
+the drift part of $(z,\lambda)$ is therefore at most $DT$, and the noise part,
+having integrand bounded by $B_\nu+B$, is a martingale bounded in $L^2$, hence
+convergent as $t\to\zeta\wedge T$. So $(z,\lambda)$ stays bounded on
+$[0,\zeta\wedge T)$, which rules out $\zeta\le T$. The solution exists on $[0,T]$,
+$\lambda$ is bounded there, and \eqref{eq:ellbounds} follows from $\dlv=e^\lambda$.
+\end{proof}
+
+\begin{remark}[The front expiry is included]\label{rem:horizon}
+At $T_1$ the front settles on a node (Proposition~\ref{prop:collapse}), so $z$
+itself runs off and Theorem~\ref{thm:exist} does not apply on $[0,T_1]$ directly.
+It applies on every $[0,T']$ with $T'<T_1$, and the $\lambda$-part of the proof
+only needs the drift bound to be integrable in time, which is
+Assumption~\ref{ass:F} with $T=T_1$. Under it $\lambda$ stays bounded on $[0,T_1)$
+and has a limit at $T_1$, so \eqref{eq:ellbounds} holds with $T=T_1$. The settling
+front has $\lVert\eta^1_t\rVert_\infty\le C(T_1-t)^{-p}$, integrable for $p<1$, so
+the code-book reaches its first expiry with every gridded contract settling at its
+payoff.
+\end{remark}
