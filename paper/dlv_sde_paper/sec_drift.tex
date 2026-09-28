@@ -74,9 +74,9 @@ components are needed in Section~\ref{sec:exist}. Then \eqref{eq:driftsolve} is 
 for every $\beta$ and every state, its solution is unique, and it is given
 componentwise by
 \begin{equation}\label{eq:pointwise}
-  \alpha^{j,i}\;=\;-\sum_{f=1}^{d}\eta^{j,i,f}\,\beta^{j,i,f}
+  \alpha^{j,i}\;=\;-\ip{\eta^{j,i}}{\beta^{j,i}}
   \qquad\Longleftrightarrow\qquad
-  \dd\lambda^{j}_i=\Bigl[-\ip{\eta^{j,i}}{b^{j,i}}-\tfrac12\abs{b^{j,i}}^{2}\Bigr]\dd t
+  \dd\lambda^{j,i}=\Bigl[-\ip{\eta^{j,i}}{b^{j,i}}-\tfrac12\abs{b^{j,i}}^{2}\Bigr]\dd t
    +b^{j,i}\,\dd W_t,
 \end{equation}
 where $\lambda=\log\dlv$ and $b=\beta/\dlv$.
@@ -98,7 +98,7 @@ $\lambda=\log\dlv$, using $\alpha/\dlv=-\ip{\eta}{b}$.
 
 Two features of \eqref{eq:pointwise} are worth drawing out. The first is its
 shape. It is the exact analogue of the HJM restriction $\alpha=\sigma\int\sigma$:
-the drift of the log local variance is minus the covariance of its own
+the drift of the log discrete local variance is minus the covariance of its own
 volatility with the volatility of the log density, plus an It\^o convexity term.
 Where HJM's derived object is an integral of the volatility across maturities,
 ours is $\eta$, obtained from $b$ by the single forward recursion
@@ -114,24 +114,24 @@ frozen, and with $\psi^0\ne0$ the densities still move, driven by the spot alone
 with $\alpha\equiv0$ persisting.
 
 \begin{proposition}[Spot consistency]\label{prop:spot}
-The spot is $S_t=x^{\!\top}q^{j}_t$, the same for every $j$ by
-Lemma~\ref{lem:null}. Since $x^{\!\top}A_j=x^{\!\top}$ and
-$x^{\!\top}\widehat G_j=0$, equation \eqref{eq:volsolve} gives
+The spot is $S_t=K^{\!\top}q^{j}_t$, the same for every $j$ by
+Lemma~\ref{lem:null}. Since $K^{\!\top}A_j=K^{\!\top}$ and
+$K^{\!\top}\widehat G_j=0$, equation \eqref{eq:volsolve} gives
 \[
   \one^{\!\top}\psi^{j}=\one^{\!\top}\psi^{0}=0
   \qquad\text{and}\qquad
-  x^{\!\top}\psi^{j}=x^{\!\top}\psi^{0}=\sigma^{S}_tS_t
+  K^{\!\top}\psi^{j}=K^{\!\top}\psi^{0}=\sigma^{S}_tS_t
   \quad\text{for every }j.
 \]
-So the spot's volatility is the single scalar $x^{\!\top}\psi^{0}$, it is
+So the spot's volatility is the single scalar $K^{\!\top}\psi^{0}$, it is
 automatically the same at every expiry, and no further condition links the spot
 to the surface. Taking $\psi^{0}=0$ freezes the spot and recovers
-$x^{\!\top}\psi^{j}=0$.
+$K^{\!\top}\psi^{j}=0$.
 \end{proposition}
 
 Proposition~\ref{prop:spot} is the discrete form of Carmona and Nadtochiy's spot
 consistency condition: the spot and its volatility are both \emph{read off} the
-surface rather than modelled, $S=x^{\!\top}q^j$ and $\sigma^SS=x^{\!\top}\psi^j$
+surface rather than modelled, $S=K^{\!\top}q^j$ and $\sigma^SS=K^{\!\top}\psi^j$
 for any $j$.
 
 The drift restriction is used below through the following chain, which is what a

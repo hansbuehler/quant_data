@@ -1,7 +1,7 @@
 \section{The spot and the front expiry}\label{sec:front}
 
 The spot is not a state variable. By Proposition~\ref{prop:spot} it is the read-off
-$S_t=x^{\!\top}q^j_t$, the same scalar at every expiry. What has to be specified is
+$S_t=K^{\!\top}q^j_t$, the same scalar at every expiry. What has to be specified is
 the front density $q^{1}$, the initial condition of the recursion of
 Proposition~\ref{prop:codebook}; everything at $j\ge2$ follows from it and from the
 volatility structure.
@@ -37,8 +37,8 @@ stochastic replicator equation \cite{MertikopoulosMoustakas2010}.
 Among grid measures with mean $S$ the least dispersed is the pair of nodes straddling
 it, so
 \begin{equation}\label{eq:varfloor}
-  \Var_{q^1}(x)\;\ge\;(S-x^i)(x^{i+1}-S),
-  \qquad x^i\le S<x^{i+1},
+  \Var_{q^1}(K)\;\ge\;(S-K^i)(K^{i+1}-S),
+  \qquad K^i\le S<K^{i+1},
 \end{equation}
 which is at most $\tfrac14h^{2}$, and the front implied volatility has a floor of order $h/(2S\sqrt{T_1-t})$. It vanishes when the spot sits on a node, which is
 exactly what Proposition~\ref{prop:collapse} forces at $T_1$.
@@ -51,33 +51,33 @@ no terminal condition. Wissel's front parametrisation fixes the terminal state w
 the coefficients \cite{Wissel2007}; here the terminal state is a modelling choice. We take
 the front volatility proportional to the distance from the spot, in one factor,
 \begin{equation}\label{eq:nufront}
-  \eta^{1,i}_{t}=\frac{c_t\,(x^i-S_t)}{h},\qquad c_t=a_1\tau^{-p}\ \text{near }T_1,
+  \eta^{1,i}_{t}=\frac{c_t\,(K^i-S_t)}{h},\qquad c_t=a_1\tau^{-p}\ \text{near }T_1,
   \quad\tau=T_1-t,\ a_1>0 .
 \end{equation}
-It is already centred, since $\sum_iq^{1,i}(x^i-S_t)=0$. Its coefficients are polynomial in
+It is already centred, since $\sum_iq^{1,i}(K^i-S_t)=0$. Its coefficients are polynomial in
 $q^1$ and bounded on $[0,T_1-\varepsilon]$, so there is a unique strong solution on
 $[0,T_1)$,
 \begin{equation}\label{eq:frontexplicit}
   q^{1,i}_{t}=q^{1,i}_{0}\exp\Bigl(\int_0^t\eta^{1,i}\,\dd W-\tfrac12\int_0^t(\eta^{1,i})^2\dd s\Bigr),
   \qquad
-  \lVert\eta^{1}_t\rVert_\infty\le c_t\,R/h,\quad R:=x^{N+1}-x^0 .
+  \lVert\eta^{1}_t\rVert_\infty\le c_t\,R/h,\quad R:=K^{N+1}-K^0 .
 \end{equation}
 
 \begin{proposition}[The front collapses onto a node, and settles exactly]\label{prop:collapse}
 If $p\ge\tfrac12$ then $q^{1}_{T_1}:=\lim_{t\uparrow T_1}q^1_t=e_k$ for a random index $k$,
-almost surely, so $S_{T_1}=x^k$ and
+almost surely, so $S_{T_1}=K^k$ and
 \begin{equation}\label{eq:settle}
-  \sum_i q^{1,i}_{T_1}(x^i-x^n)^{+}=(S_{T_1}-x^n)^{+}\qquad\text{for every }n .
+  \sum_i q^{1,i}_{T_1}(K^i-K^n)^{+}=(S_{T_1}-K^n)^{+}\qquad\text{for every }n .
 \end{equation}
 If $p<1$ then Assumption~\ref{ass:F} holds on $[0,T_1]$. The window $p\in[\tfrac12,1)$ gives both.
 \end{proposition}
 
 \begin{proof}
 Each $q^{1,i}$ is a bounded martingale, so $q^1_t\to q^1_{T_1}$ almost surely, and the
-variance $V_t:=\sum_iq^{1,i}_{t}(x^i-S_t)^2$ converges to that of $q^1_{T_1}$. By
-\eqref{eq:psi1} and \eqref{eq:nufront} the volatility of $S=x^{\!\top}q^1$ is
-$\sum_ix^iq^{1,i}\eta^{1,i}=c_tV_t/h$. Since $S$ is a martingale with values in
-$[x^0,x^{N+1}]$,
+variance $V_t:=\sum_iq^{1,i}_{t}(K^i-S_t)^2$ converges to that of $q^1_{T_1}$. By
+\eqref{eq:psi1} and \eqref{eq:nufront} the volatility of $S=K^{\!\top}q^1$ is
+$\sum_iK^iq^{1,i}\eta^{1,i}=c_tV_t/h$. Since $S$ is a martingale with values in
+$[K^0,K^{N+1}]$,
 \[
   \E\int_0^{T_1}\frac{c_t^2V_t^2}{h^2}\,\dd t=\E\bigl[(S_{T_1}-S_0)^2\bigr]\le R^2 ,
 \]
@@ -85,8 +85,8 @@ so the integral is finite almost surely. On the event $\{V_{T_1}>0\}$ we would h
 $V_t\ge V_{T_1}/2$ near $T_1$, and the integral would diverge, because
 $\int^{T_1}c_t^2\,\dd t=a_1^2\int^{T_1}\tau^{-2p}\,\dd t=\infty$ for $2p\ge1$. Hence
 $V_{T_1}=0$ almost surely: $q^1_{T_1}$ is a probability vector on distinct points with
-zero variance, that is $e_k$ with $x^k=S_{T_1}$, and \eqref{eq:settle} reads
-$(x^k-x^n)^{+}=(S_{T_1}-x^n)^{+}$. Finally $\int_0^{T_1}\lVert\eta^1_t\rVert_\infty\dd t\le
+zero variance, that is $e_k$ with $K^k=S_{T_1}$, and \eqref{eq:settle} reads
+$(K^k-K^n)^{+}=(S_{T_1}-K^n)^{+}$. Finally $\int_0^{T_1}\lVert\eta^1_t\rVert_\infty\dd t\le
 (R/h)\int_0^{T_1}c_t\,\dd t<\infty$ when $p<1$, by \eqref{eq:frontexplicit}.
 \end{proof}
 
@@ -95,13 +95,13 @@ that here it is chosen, by \eqref{eq:nufront}, and there it is forced by the
 parametrisation. Appendix~\ref{app:wissel} sets the two charts side by side.
 
 \begin{remark}[What the lattice could carry, and does not]\label{rem:bary}
-At expiry each butterfly price $q^{j,i}$ is worth its payoff: for $S_{T_j}\in[x^k,x^{k+1}]$ the
+At expiry each butterfly price $q^{j,i}$ is worth its payoff: for $S_{T_j}\in[K^k,K^{k+1}]$ the
 second difference defining $q^{j,i}$ telescopes to $\varpi(S_{T_j})$, the barycentric
-weights of the spot on the two nodes straddling it. Since $u\mapsto(u-x^n)^{+}$ is affine
+weights of the spot on the two nodes straddling it. Since $u\mapsto(u-K^n)^{+}$ is affine
 between nodes,
 \begin{equation}\label{eq:barypayoff}
-  \sum_i \varpi^i(s)\,(x^i-x^n)^{+}\;=\;(s-x^n)^{+}
-  \qquad\text{for every }s\in[x^0,x^{N+1}]\text{ and every model strike }x^n ,
+  \sum_i \varpi^i(s)\,(K^i-K^n)^{+}\;=\;(s-K^n)^{+}
+  \qquad\text{for every }s\in[K^0,K^{N+1}]\text{ and every model strike }K^n ,
 \end{equation}
 so $\varpi(s)$ is an admissible terminal state that settles every gridded contract exactly,
 also for $s$ strictly inside a cell. The chart does not force the pinning; the choice

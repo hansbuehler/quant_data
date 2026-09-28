@@ -91,7 +91,7 @@ are the contributions.
 
 \begin{enumerate}[leftmargin=1.8em,itemsep=0.45em]
 \item \textbf{The spot is a read-off, and it settles exactly.}
-The spot is $S_t=x^{\!\top}q^j_t$ at every expiry $j$ (Proposition~\ref{prop:spot}),
+The spot is $S_t=K^{\!\top}q^j_t$ at every expiry $j$ (Proposition~\ref{prop:spot}),
 an identity of the chart holding at all $t$. At the front
 expiry Proposition~\ref{prop:collapse} exhibits a family of front volatilities
 under which $q^1$ collapses onto a single node, so the spot lands on a strike
@@ -121,10 +121,10 @@ contract settles at its exact payoff (Proposition~\ref{prop:collapse}).
 \item \textbf{The drift is pointwise, and the count works out.} In density
 coordinates the drift equation is $N+2$ conditions on $N$ unknowns, and is
 consistent because the left null space of the geometry matrix is exactly
-$\mathrm{span}\{\one,x\}$, conservation of mass and of the spot
+$\mathrm{span}\{\one,K\}$, conservation of mass and of the spot
 (Lemma~\ref{lem:null}). The state-independent factor then cancels from both
 sides and the drift is available nodewise,
-$\alpha^{j,i}=-\sum_f\eta^{j,i,f}\beta^{j,i,f}$, with no matrix inversion and no
+$\alpha^{j,i}=-\ip{\eta^{j,i}}{\beta^{j,i}}$, with no matrix inversion and no
 rank condition.
 \end{enumerate}
 

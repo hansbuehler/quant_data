@@ -68,7 +68,7 @@ an open orthant and $\lambda=\log\dlv$ ranges over a Euclidean space: a diffusio
 on the code-book is statically arbitrage-free by construction.
 
 Two results follow from the choice of chart. First, the spot is a read-off,
-$S_t=x^{\!\top}q^j_t$ at every expiry, an identity of the chart holding at all
+$S_t=K^{\!\top}q^j_t$ at every expiry, an identity of the chart holding at all
 $t$ with no limit taken. At the front expiry we exhibit a family of front
 volatilities under which the density collapses onto a single node, so the spot
 lands on a strike and every gridded contract settles at its exact payoff. That
@@ -88,7 +88,7 @@ The no-arbitrage drift restriction itself is not new. In the continuum it is
 \cite{CarmonaNadtochiy2008}, and on this lattice it is \cite{Wissel2007}, whose
 local implied variance coincides with the discrete local variance used here as
 an algebraic identity on the grid. What the density chart adds is that the drift
-becomes pointwise, $\alpha^{j,i}=-\sum_f\eta^{j,i,f}\beta^{j,i,f}$, with no matrix
+becomes pointwise, $\alpha^{j,i}=-\ip{\eta^{j,i}}{\beta^{j,i}}$, with no matrix
 inversion and no rank condition, the apparent over-determination being resolved
 by conservation of mass and of the spot.
 \end{abstract}

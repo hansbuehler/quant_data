@@ -5,21 +5,21 @@ are one, c.f.~\cite{BuehlerVolAndDivs}. Assume that spot is $S_0$ at time $t=0$.
 
 We follow the~\cite{SANOS2026} architecture for a time-homogeneous fixed strike grid:
 Fix model expiries $0=: T_0< T_1<\dots<T_M$ with $ \Delta_j:=T_j-T_{j-1}$ and $T_0:=0$, and a
-single strike grid $0\leq x^0< x^1<\dots<S_0<\dots x^N<x^{N+1}$, held fixed in cash terms and common
+single strike grid $0\leq K^0< K^1<\dots<S_0<\dots K^N<K^{N+1}$, held fixed in cash terms and common
 to all expiries. Let $q=(q^{j,i})$ with $q^j\in\R^{N+2}$ be a discrete risk-neutral density
 in the sense that
 \begin{enumerate}
   \item $q^{j,i} \geq 0$
   \item $\sum_{i=0}^{N+1} q^{j,i} = 1$
-  \item $\sum_{i=0}^{N+1} x^i q^{j,i} =: S_0$.
+  \item $\sum_{i=0}^{N+1} K^i q^{j,i} =: S_0$.
 \end{enumerate}
 
-We denote by $\dlv^{j,i}_t$ the discrete local volatility squared at the
+We denote by $\dlv^{j,i}_t$ the discrete local variance (the squared discrete local volatility) at the
 interior node $i=1,\dots,N$ and expiry $j$, as seen at calendar time $t$, and by
 $\dlv^j_t\in(0,\infty)^{N}$ the vector of them, with $\lambda=\log\dlv$
 throughout; it enters the code-book multiplied by the slab length $\Delta_j$. Prices are the linear functional
-$C_t(x^i,T_j)=(\pi^i)' q^j_t$ with $\pi^i$ the discretised payoff
-$(x-x^i)^{+}$.
+$C_t(K^i,T_j)=(\pi^i)' q^j_t$ with $\pi^i$ the discretised payoff
+$(s-K^i)^{+}$.
 
 {\color{blue} If it's the same for everyone I'd align the notation with DYSANOS, e.g. use $\hat T$ and $\hat K$ for
 relative model coordinates, and $T, K$ for the market. I'd generally use the same terms. I would also write everything
@@ -28,9 +28,9 @@ in discrete local vol-squared and specifically add the "$dt$" term because other
 Propagating densities rather than prices, in Fokker--Planck form, is what
 makes the systems below tridiagonal. With the half-weights
 \begin{equation}\label{eq:weights}
-  \omega^k:=\frac{(x^k)^{2}}{x^{k+1}-x^{k-1}},\qquad
-  \iota^{k,-}:=\frac{\omega^k}{x^k-x^{k-1}},\qquad
-  \iota^{k,+}:=\frac{\omega^k}{x^{k+1}-x^k},
+  \omega^k:=\frac{(K^k)^{2}}{K^{k+1}-K^{k-1}},\qquad
+  \iota^{k,-}:=\frac{\omega^k}{K^k-K^{k-1}},\qquad
+  \iota^{k,+}:=\frac{\omega^k}{K^{k+1}-K^k},
   \qquad k=1,\dots,N,
 \end{equation}
 
@@ -119,7 +119,7 @@ and $\lambda=\log\dlv$ maps its interior diffeomorphically onto $\R^{NM}$.
 The whole structure of the drift restriction follows from one observation about
 the left null space of $G_j$. Both identities below are used by \cite{BuehlerRyskin2016}, where they hold by
 construction for the backward operator. What is not there, because nothing in
-that paper needs it, is that $\mathrm{span}\{\one,x\}$ is the \emph{entire} left
+that paper needs it, is that $\mathrm{span}\{\one,K\}$ is the \emph{entire} left
 null space. That is a rank
 statement, and it is what makes the drift system of Section~\ref{sec:drift}
 square.
@@ -129,12 +129,12 @@ For every $q$ and every $j$,
 \[
   \one^{\!\top}G_j(q)=0
   \qquad\text{and}\qquad
-  x^{\!\top}G_j(q)=0 ,
+  K^{\!\top}G_j(q)=0 ,
 \]
-where $\one=(1,\dots,1)$ and $x=(x^0,\dots,x^{N+1})$. Consequently $A_j(\dlv)$
+where $\one=(1,\dots,1)$ and $K=(K^0,\dots,K^{N+1})$. Consequently $A_j(\dlv)$
 conserves both total mass and the spot, for any $\dlv$. Combined with
 Lemma~\ref{lem:factor}, the left null space of $\widehat G_j$ is exactly
-$\mathrm{span}\{\one,x\}$.
+$\mathrm{span}\{\one,K\}$.
 \end{lemma}
 
 \begin{proof}
@@ -143,16 +143,16 @@ $k$: from \eqref{eq:operator} they are $\Delta_j(\iota^{k,-}+\iota^{k,+})q^k$ in
 $k$, $-\Delta_j\iota^{k,+}q^k$ in row $k+1$, and $-\Delta_j\iota^{k,-}q^k$ in row $k-1$.
 Their sum is $0$, giving the first identity. Weighting by the node values,
 \[
-  \Delta_jq^k\Bigl[x^k\bigl(\iota^{k,-}+\iota^{k,+}\bigr)
-   -x^{k+1}\iota^{k,+}-x^{k-1}\iota^{k,-}\Bigr]
-  =\Delta_jq^k\Bigl[\iota^{k,-}(x^k-x^{k-1})-\iota^{k,+}(x^{k+1}-x^k)\Bigr]
+  \Delta_jq^k\Bigl[K^k\bigl(\iota^{k,-}+\iota^{k,+}\bigr)
+   -K^{k+1}\iota^{k,+}-K^{k-1}\iota^{k,-}\Bigr]
+  =\Delta_jq^k\Bigl[\iota^{k,-}(K^k-K^{k-1})-\iota^{k,+}(K^{k+1}-K^k)\Bigr]
   =\Delta_jq^k\bigl[\omega^k-\omega^k\bigr]=0
 \]
 by \eqref{eq:weights}, giving the second. The conservation statements follow
 from \eqref{eq:affine}: $\one^{\!\top}A_j(\dlv)q=\one^{\!\top}q$ and
-$x^{\!\top}A_j(\dlv)q=x^{\!\top}q$. Since $\widehat G_j$ has rank $N$ and lives
+$K^{\!\top}A_j(\dlv)q=K^{\!\top}q$. Since $\widehat G_j$ has rank $N$ and lives
 in $\R^{(N+2)\times N}$, its left null space is two-dimensional, hence exactly
-$\mathrm{span}\{\one,x\}$.
+$\mathrm{span}\{\one,K\}$.
 \end{proof}
 
 \begin{remark}[Counting]\label{cor:counting}
