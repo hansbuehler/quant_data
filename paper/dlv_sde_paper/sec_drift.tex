@@ -21,7 +21,7 @@ needs only $q^j>0$.
 
 \begin{theorem}[Drift restriction]\label{thm:drift}
 Let $\dd\dlv^j_t=\alpha^j_t\dd t+\beta^j_t\dd W_t$. Under
-Assumption~\ref{ass:mart}, for each $j=1,\dots,M$,
+Assumption~\ref{ass:mart}, for each $j=2,\dots,M$,
 \begin{align}
   \text{(volatility)}\qquad
   &A_j(\dlv^j)\,\psi^j\;=\;\psi^{j-1}-G_j(q^j)\,\beta^j,
@@ -30,8 +30,8 @@ Assumption~\ref{ass:mart}, for each $j=1,\dots,M$,
   &G_j(q^j)\,\alpha^j\;=\;-\sum_{f=1}^{d}G_j\bigl(\psi^{j,f}\bigr)\beta^{j,f},
   \label{eq:driftsolve}
 \end{align}
-marched forward in $j$ from $\psi^0$, the volatility of the initial density,
-which is determined by the spot dynamics.
+marched forward in $j$ from $\psi^1$, the volatility of the front density, which
+is given by its chart (Section~\ref{sec:front}).
 \end{theorem}
 
 \begin{proof}
@@ -108,9 +108,9 @@ $\psi$ is linear in $\beta$ and $\alpha$ is bilinear in $(\beta,\psi)$, the drif
 is an exact quadratic form in $\beta$, as in HJM; Theorem~\ref{thm:wing} is what
 rules out the corresponding finite-time explosion.
 
-The driftless point is the classical model: if $\beta\equiv0$ and $\psi^0=0$ then
+The driftless point is the classical model: if $\beta\equiv0$ and $\psi^1=0$ then
 $\psi\equiv0$ and $\alpha\equiv0$, so the discrete local variance surface is
-frozen, and with $\psi^0\ne0$ the densities still move, driven by the spot alone,
+frozen, and with $\psi^1\ne0$ the densities still move, driven by the front alone,
 with $\alpha\equiv0$ persisting.
 
 \begin{proposition}[Spot consistency]\label{prop:spot}
@@ -118,14 +118,14 @@ The spot is $S_t=K^{\!\top}q^{j}_t$, the same for every $j$ by
 Lemma~\ref{lem:null}. Since $K^{\!\top}A_j=K^{\!\top}$ and
 $K^{\!\top}\widehat G_j=0$, equation \eqref{eq:volsolve} gives
 \[
-  \one^{\!\top}\psi^{j}=\one^{\!\top}\psi^{0}=0
+  \one^{\!\top}\psi^{j}=\one^{\!\top}\psi^{1}=0
   \qquad\text{and}\qquad
-  K^{\!\top}\psi^{j}=K^{\!\top}\psi^{0}=\sigma^{S}_tS_t
+  K^{\!\top}\psi^{j}=K^{\!\top}\psi^{1}=\sigma^{S}_tS_t
   \quad\text{for every }j.
 \]
-So the spot's volatility is the single scalar $K^{\!\top}\psi^{0}$, it is
+So the spot's volatility is the single scalar $K^{\!\top}\psi^{1}$, it is
 automatically the same at every expiry, and no further condition links the spot
-to the surface. Taking $\psi^{0}=0$ freezes the spot and recovers
+to the surface. Taking $\psi^{1}=0$ freezes the spot and recovers
 $K^{\!\top}\psi^{j}=0$.
 \end{proposition}
 
@@ -137,7 +137,7 @@ for any $j$.
 The drift restriction is used below through the following chain, which is what a
 model actually evaluates:
 \begin{equation}\label{eq:pipeline}
-  b\;\xrightarrow{\ \eqref{eq:volsolve}\ }\;\psi^1,\dots,\psi^M
+  (\psi^1,b)\;\xrightarrow{\ \eqref{eq:volsolve}\ }\;\psi^2,\dots,\psi^M
   \;\xrightarrow{\ \eta=\psi/q\ }\;\alpha ,
 \end{equation}
 a forward march of $d$ tridiagonal solves per expiry, $O(NMd)$ in total. The

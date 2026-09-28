@@ -80,7 +80,7 @@ Note that $\widehat G_j$ depends only on the grid and on $\Delta_j$, not on the
 state; the state enters \eqref{eq:factor} only through the diagonal factor.
 
 \begin{proposition}[The code-book]\label{prop:codebook}
-Fix $q^{0}$ a probability vector on the grid with mean $S_0$.
+Fix the front density $q^{1}$, a probability vector on the grid with mean $S_0$, and let $j=2,\dots,M$.
 \begin{enumerate}[label=(\roman*),leftmargin=2em]
 \item Given densities $q^{j-1}$ and $q^{j}$ with $q^j>0$, the discrete local
 volatility is uniquely determined by the tridiagonal system
@@ -112,7 +112,7 @@ nodewise, and $\dlv^{j,i}=0$ exactly when one of them vanishes.
 
 What everything else rests on is that the admissible set is a product of
 half-lines, one per node, so it has no faces in the sense that a polytope does,
-and $\lambda=\log\dlv$ maps its interior diffeomorphically onto $\R^{NM}$.
+and $\lambda=\log\dlv$ maps its interior diffeomorphically onto $\R^{N(M-1)}$.
 
 \subsection{Two conservation laws}\label{sec:conservation}
 
