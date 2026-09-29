@@ -6,21 +6,11 @@ J.~Andreasen and B.~Huge.
 \newblock Volatility interpolation.
 \newblock {\em Risk}, pages 86--89, 2011.
 
-\bibitem[BGTW19]{DH}
-H.~Buehler, L.~Gonon, J.~Teichmann, and B.~Wood.
-\newblock Deep hedging.
-\newblock {\em Quantitative Finance}, 19(8):1271--1291, 2019.
-
 \bibitem[BHK{\etalchar{+}}26]{SANOS2026}
 Hans Buehler, Blanka Horvath, Anastais Kratsios, Yannick Limmer, and Raeid
   Saqur.
 \newblock Sanos - smooth arbitrage-free non-parametric option surfaces.
 \newblock \url{https://arxiv.org/abs/2601.11209}, Februar 2026.
-
-\bibitem[BPW22]{DBH}
-Hans Buehler, Murray Phillip, and Ben Wood.
-\newblock Deep bellman hedging.
-\newblock \url{https://ssrn.com/abstract=4151026}, June 2022.
 
 \bibitem[BR15]{DLV}
 Hans Buehler and Evgeny Ryskin.
@@ -31,16 +21,6 @@ Hans Buehler and Evgeny Ryskin.
 Hans Buehler.
 \newblock Expensive martingales.
 \newblock {\em Quantitative Finance}, 6(3):207--218, 2006.
-
-\bibitem[Bue17]{SH}
-Hans Buehler.
-\newblock Statistical hedging.
-\newblock \url{https://ssrn.com/abstract=2913250}, Feb 2017.
-
-\bibitem[Bue26]{SHlecture}
-Hans Buehler.
-\newblock Learning to trade i - greek, parameter and statistical hedging.
-\newblock \url{https://ssrn.com/abstract=7086398}, March 2026.
 
 \bibitem[CFD02]{ContVol}
 Rama Cont, Jose~da Fonseca, and Valdo Durrleman.

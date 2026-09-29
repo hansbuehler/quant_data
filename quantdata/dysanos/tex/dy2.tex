@@ -101,11 +101,6 @@ on 891 Option Metrics IvyDB S\&P Index surfaces from 2022 to~2025, drawn from
 an underlying archive beginning in 2020.
 With explicit 1D--4D expiry nodes, the two-$\eta$ affine-200 model places
 80.9\% of 3.57 million quotes inside bid--ask.
-In a 158-date 2025 diagnostic for one-day ATM options, correlated front-law
-spot hedges reduce normalized root-mean-square P\&L by 42--45\%; criterion-matched
-OCE evidence is strongest for the buyer put.  A 159-date open-interest proxy
-reduces descriptive RMS P\&L from 27.9 to about 12.2 basis points of gross open
-interest, although its realized OCE improvements are not statistically significant.
 Finally, a no-replay scalar log-variance diffusion recovers much more of the
 observed tail mass and tail persistence than Gaussian innovations, although it
 still underproduces two- and three-week extremes.  Block-randomization tests of
@@ -150,25 +145,10 @@ option surface.
 However, the restriction of the above models to a discrete set of floating option strikes and time-to-expiries
 means that the simulators do not have access to the daily returns $dC_t(\tau,k)$
 of an actual tradable instruments with cash strikes $k$ and calendar expiries~$\tau$ (because the
-contract terms change from one simulated day to another). 
-That means 
-\begin{itemize}
-    \item Hedging instruments chosen at simulation time determine the hedging instruments available
-          to any hedging algorithm.
-    \item For hedging algorithms such as Deep Hedging~\cite{DH} for which we solve optimal
-          trading along full paths, the calculation of the return of a hedging instrument requires the simulation of
-          the spot until the expiry of the farthest option. This limits the 
-          expiries of tradable instruments made available during simulation.
-    \item The approach is unsuitable for ``daily'' hedging algorithms such as Statistical
-            Hedging~\cite{SH}
-            (a generalization of local regression hedging)
-          or Deep Bellman Hedging~\cite{DBH}  (the ``actor critic'' version of Deep Hedging) which we wish to execute on a simulated
-          path to hedge
-          exotics to expiry
-          -- in both cases the P\&L of option
-          returns is central to the approach; see also the lecture
-          notes~\cite{SHlecture}.
-\end{itemize}
+contract terms change from one simulated day to another).  It therefore does
+not directly provide statistically consistent time series of fixed-contract
+returns, which are required to validate simulated dynamics against observed
+market returns.
 Of course, since the discrete option prices are free of arbitrage, one option would be 
 to interpolate option prices linearly, which means all options are free of static arbitrage.
 However, as shown in~\cite{buehler2006expensive} and illustrated in~\cite{SANOS2026}
@@ -389,10 +369,10 @@ The stricter condition~$\partial_K C(T,0)=-1$ applies if the stock price cannot 
 \end{theorem}
 
 This has been proven in \cite{DLV}. Here we give a practical
-guide on how to construct \emph{actionable} arbitrage strategies if any of the above 
+guide on how to construct \emph{actionable} arbitrage strategies if any of the above
 are violated. The simplicity of each of them illustrates the risk of admitting
-arbitrage in generative environments which are used to train agents to hedge: if such 
-opportunities exist, an optimal agent will try learning them.
+arbitrage in a statistical simulator: such opportunities contaminate the
+simulated return distribution.
 
 \begin{remark}[Actionable arbitrage if the conditions of theorem~\ref{th:arbfree} are not met]
 All of the below are meant as practical heuristics.
@@ -468,7 +448,7 @@ and model parameters.
 
 Each call price function is given in terms of model expiries
 $0 = \hat T^0 < \hat T^1 < \cdots < \hat T^M$ and, for each model expiry,
-$N^j>0$ inner strikes.  Including the two boundary strikes, write
+$N^j>0$ inner strikes.\footnote{Note that we changed notation slightly vs.~\cite{SANOS}.}  Including the two boundary strikes, write
 $\hat K^j = (\hat K^{j,i})_{i\in\mathcal I^j}$ with
 $\mathcal I^j:=\{0,\ldots,N^j+1\}$ and
 $0 < \hat K^{j,0} < \cdots < 1 < \cdots < \hat K^{j,N^j+1}$.
@@ -576,7 +556,7 @@ the quality of the fit. The example is from~\cite{SANOS2026}; refer to that work
 \section{ML-SANOS}
 \label{sec:mlsanos}
 
-We may view our call price operator as a map from the model
+We may view our  SANOS call price operator as a map from the model
 parameters to a function space
 \begin{equation}\label{eq:sanosmap}
     \big( q, W;\, \hat K,\hat T\big) \supstack{\mathrm{SANOS}}\longmapsto C    
@@ -588,10 +568,10 @@ for which no exact methods exist to integrate them into standard batch gradient 
 In this section we therefore reparameterize the map~\eqref{eq:sanosmap} in terms
 of learnable parameters.
 
-To this end, recall the previously defined linear call prices
-$c^{j,i} := (q^j)'(\hat K^j - \hat K^{j,i})^+$ and
-$c^{j\mid j-1,i} := (q^{j-1})'(\hat K^{j-1} - \hat K^{j,i})^+$.
-Given a martingale density~$q$ the squared discrete local volatilities (DLVs) $\Sigma^{j,i} \geq 0$ were then defined for the inner indices $i=1,\ldots,N^j$ in~\cite{DLV}
+As a first step we fix a common strike grid $\hat K$ with $0<\hat K^0<\cdots<1<\cdots<\hat K^{N+1}$ across expiries to simplify our model.
+The call price for strike $\hat K^i$ given the density $q^j$ is given as $c^{j,i} = (q^j)'(\hat K^i - \hat K)^+$.
+The convex order condition in~\eqref{eq:qocnd} therefore becomes simply $c^{j,i} \geq c^{j-1,i}$ for all $i$.
+Given a martingale density~$q$ the squared discrete local volatilities (DLVs) $\Sigma^{j,i} \geq 0$ were defined in~\cite{DLV} for the inner indices $i=1,\ldots,N^j$
 via the discrete ``backward''
 Dupire formula\footnote{
     This actually \emph{is} the Dupire formula applied to the implicit forward PDE of the density of a local volatility process, correctly computed
@@ -599,74 +579,66 @@ Dupire formula\footnote{
 }
 \begin{equation}
   \label{eq:dlv_def}
-  \frac{ c^{j,i} - c^{j\mid j-1,i} }{\hat T^j-\hat T^{j-1} }
+  \frac{ c^{j,i} - c^{j-1,i} }{\hat T^j-\hat T^{j-1} }
   \;\equiv\;
   \Sigma^{j,i}\,
-  \frac{(\hat K^{j,i})^2 }{(\hat K^{j,i+1} - \hat K^{j,i})(\hat K^{j,i} - \hat K^{j,i-1})}
+  \frac{(\hat K^{i})^2 }{(\hat K^{i+1} - \hat K^{i})(\hat K^{i} - \hat K^{i-1})}
   \,q^{j,i} 
 \end{equation}
-There is no DLV coordinate at the two boundary indices $i=0$ and $i=N^j+1$;
-we set $\Sigma^{j,i}=0$ whenever $q^{j,i}=0$.
+There is no DLV coordinate at the two boundary indices $i=0$ and $i=N+1$ which we set to zero (their density values
+are determined by the the requirement to add up to 1 and integrate to 1). 
+We also set $\Sigma^{j,i}=0$ whenever $q^{j,i}=0$.
 
 The key is that we can reverse this representation. We briefly recall the construction
-from~\cite{SANOS2026}: 
+from~\cite{SANOS2026}: define
+$$     
+    \omega^{i\pm} := \pm    \frac{ (\hat K^{i})^2 }{ (\hat K^{i+1} - \hat K^{i-1})\,(\hat K^{i\pm 1} - \hat K^{i}) }  \geq 0
+$$
+and with it the tridiagonal matrix~$\Omega$ with 
+\begin{itemize}
+    \item Upper diagonal $( -\omega^{1-}, \ldots, -\omega^{N-}, 0 )$,
+    \item Lower diagonal $( 0, -\omega^{1+}, \ldots, -\omega^{N^j+} )$, and
+    \item Main diagonal $( 0, +\omega^{1+}+\omega^{1-}, \ldots, 1+\omega^{N^j+}+\omega^{N^j-}, 0 )$.
+\end{itemize}
+i.e.
+\eqx
+    \Omega = \left(
+                \begin{array}{cccccccccc}
+                0 & -\omega^{1-} & 0 \\
+                0 & +\omega^{1+}+\omega^{1-} & -\omega^{2-} \\
+                0 & -\omega^{1+} & +\omega^{2+}+\omega^{2-} \\
+                & & & &  \ddots\\
+                & & & &  \ddots\\
+                & & & & & +\omega^{(N-1)+}+\omega^{(N-1)-} & -\omega^{N-} & 0 \\
+                & & & & & -\omega^{(N-1)+} & +\omega^{N+}+\omega^{N-} & 0 \\
+                & & & & & 0 & -\omega^{N+} & 
+                \end{array} 
+    \right) \ .
+\eqend
+Then for \emph{any} squared (discrete) local volatilities $\Sigma^j = ( 0, \Sigma^{j,1}, \ldots, \Sigma^{j,N^j}, 0 )$
+the operator
+\eqx
+            1 + \Omega\ \mathrm{diag}(\Sigma^j) (\hat T_j - \hat T_{j-1}) \in \R^{(N+2)\times(N+2)}
+\eqend
+is a tridiagonal operator with positive main diagonal and negative off diagonals. As show in~\cite{DLV}
+this operator is invertibe, and the inverse~$\Xi^j$ can be efficiently computed on GPU using a compiled
+Thomas' algorithm. It is also
+a martingale transition operator in
+ the sense of~\cite{DLV} which means that the densities $q^1,\ldots,q^M$ generated 
+ iteratively starting in $q^0=(1)$ by
+\begin{equation}\label{eq:densitytrans}
+    q^j = \Big( 1 + \Omega\ \mathrm{diag}(\Sigma^j) (\hat T_j - \hat T_{j-1}) \Big)^{-1} q^{j-1} 
+\end{equation}
+form a martingale density over~$\hat K$.
 
-\begin{enumerate}
-    \item Start in $q^{0}:=(1)$ for $\hat K^0:=(1)$.
-    \item 
-        For $j>0$ 
-        if $\hat K^j=\hat K^{j-1}$; then $q^{j\mid j-1} = q^{j-1}$.
-
-        If this is not the case we construct $q^{j\mid j-1}$ as follows:
-    let $c^{j\mid j-1,i} := \sum_{\ell\in\mathcal I^{j-1}} q^{j-1,\ell} ( \hat K^{j-1,\ell} - \hat K^{j,i} )^+$
-    for $i\in\mathcal I^j$.  Augment these call values by
-    $\hat K^{j,-1}=0$ and $c^{j\mid j-1,-1}=1$, and define
+    \begin{remark}
+    The operator $\Xi^j$ is the in-homogeneous strike implicit transition operator of the forward-PDE
+    of the continuous time SDE $dS_t = \sqrt{ \Sigma_t(K) } S_t\,dW_t$
     $$
-        dC^{j\mid j-1,i} := \frac{ c^{j\mid j-1,i} - c^{j\mid j-1,i-1} }
-                     { \hat K^{j,i} - \hat K^{j,i-1} }
-        \qquad (i\in\mathcal I^j).
+        \frac{ dp_t }{ dt } = \frac12 \partial_{KK}^2 \big( K^2 \Sigma_t p_t \big) \ .
     $$
-    With $dC^{j\mid j-1,N^j+2}=0$, define for $i\in\mathcal I^j$
-    $$
-        q^{j\mid j-1,i} := dC^{j\mid j-1,i+1} - dC^{j\mid j-1,i} \ .
-    $$
-    Then $q^{j\mid j-1}$ is a density over $\hat K^j$, given by linear interpolation of
-    call prices at the previous expiry. In~\cite{SANOS2026} this operation
-    was written as the linear expression
-    $$
-        q^{j\mid j-1} = L^j q^{j-1}
-    $$
-    in terms of the respective matrix~$L^j\in\R^{|\mathcal I^j|\times|\mathcal I^{j-1}|}$.
-    
- 
-    \item Let now
-        $$     
-        \xi^{j,i\pm} := \pm    \frac{ (\hat K^{j,i})^2 }{ (\hat K^{j,i+1} - \hat K^{j,i-1})\,(\hat K^{j,i\pm 1} - \hat K^{j,i}) }\Sigma^{j,i} (\hat T^j-\hat T^{j-1} ) \geq 0
-            $$
-        for $i=1,\ldots,N^j$ which we note is linear in $\Sigma^{j,i}$.
-        The discrete local volatility transition operator is defined
-        by the (inverse of) the tri-band matrix~$\Xi^j\in\R^{(N^j+2)\times(N^j+2)}$ with
-    \begin{itemize}
-        \item     upper diagonal
-    $(-\xi^{j,1-},\ldots,-\xi^{j,N^j-},0)$,
-        \item  lower diagonal $(0,-\xi^{j,1+},\ldots,-\xi^{j,N^j+})$, and
-
-        \item main diagonal $(1,1+\xi^{j,1+}+\xi^{j,1-},\ldots,1+\xi^{j,N^j+}+\xi^{j,N^j-},1)$.
-    \end{itemize}
-    (We note that $\Xi^j$ is linear in the discrete local volatilities $\Sigma^{j,i}$.)
-
-    As shown in~\cite{DLV} the inverse $(\Xi^j)^{-1}$ exists,
-    and can be efficiently computed on GPU using a compiled
-    Thomas' algorithm. It is also
-    a martingale transition operator
-    in the sense of~\cite{DLV}, and is used to define
-    the linear operation
-    $$
-        q^j := (\Xi^j)^{-1} q^{j\mid j-1} \ .
-    $$
-    The operator $\Xi^j$ is the in-homogeneous strike implicit transition operator of the PDE
-    implied by~\eqref{eq:dlv_def}, and is based on ideas of~\cite{AndreasenHuge}.
-\end{enumerate}
+    This approach is based on ideas of~\cite{AndreasenHuge}.
+    \end{remark}
 With the above we have established a map from much simpler non-negative discrete local vols squared to
 densities, and then to SANOS call prices:
 \begin{equation}\label{eq:sanosmap2}
@@ -674,7 +646,7 @@ densities, and then to SANOS call prices:
     \big( q, W;\, \hat K,\hat T\big) \supstack{\mathrm{SANOS}}\longmapsto C \ .
 \end{equation}
 That allows us to pass to a practically unconstrained parameter set, which we call the ML-SANOS parametrization.
-Recall function $\mathrm{sigmoid}(x)=(1+e^{-x})^{-1}$.
+Recall the 1function $\mathrm{sigmoid}(x)=(1+e^{-x})^{-1}$.
 
 \begin{definition}[ML-SANOS]\label{def:ml-sanos}
     Fix the normalized grid geometry for ML-SANOS with:
@@ -745,8 +717,54 @@ Recall function $\mathrm{sigmoid}(x)=(1+e^{-x})^{-1}$.
 \subsection{Learning ML-SANOS from real data}
 \label{sec:learning-ml-sanos}
 
-The completed experiments use the following transparent affine specialization
-of the unrestricted ML-SANOS coordinates introduced above.
+Our new parameterization allow the model to fit not only DLV's but also forward volatilities and, via~$u^\eta$ the size of the strike grid
+for a given set of market data. This extension means the model is no longer linear its parameters. We therefore fit it with 
+stochastic gradient descent methods.
+
+We apply this two two model specifications: one with weekly expiries and one with weekly expires and daily expiries in the front week. The puropose
+of this comparison is to assess whether a purely weekly model can capture front dynamics natively.
+
+In each case we assess whether an additional compression step on the form of a affine 200 state
+representation aids learning of dynamic features.\\
+
+In our
+experiments we use the bounds
+$(\Sigma_{\min},\Sigma_{\max})=(0.01^2,3^2)$,
+$(\sigma_{\min},\sigma_{\max})=(0.01,1)$, and
+$(\eta_{\min},\eta_{\max})=(0.01,0.50)$.  A smooth cap penalty acts on
+the raw log-DLV coordinate without imposing a saturating upper sigmoid.
+
+Each date uses one floating relative-strike support shared across all model
+expiries, c.f.~\eqref{eq:constructK}: half of the~200 normalized-moneyness candidates cover the front
+expiry and half the final expiry over $(-3,2)$; after conversion with the
+date's total-volatility curve they are merged, sorted, and separated by a
+minimum log-strike gap.  The outer support nodes are one half of the first
+inner strike and one and a half times the final inner strike.  The shared
+strikes means that when solving forward for $p$ we no longer need to regrid
+
+
+For quote $\ell$ on date $t$, let $\widehat C_t^\ell$ be the decoded option
+price, $M_t^\ell=(\bm A_t^\ell+\bm B_t^\ell)/2$, and
+$\gamma_t^\ell=(\bm A_t^\ell-\bm B_t^\ell)/2$.  Decoder fitting minimizes the
+equal-date-weighted objective
+\begin{equation}
+  \mathcal L_t^{\mathrm{quote}}
+  =\frac{1}{L_t}\sum_{\ell=1}^{L_t}
+  \frac1{\gamma_t^\ell} \left\{ (\widehat C_t^\ell-\bm A_t^\ell)^+
+    +(\bm B_t^\ell-\widehat C_t^\ell)^+
+    +0.05|\widehat C_t^\ell-M_t^\ell|   
+  \right\}  
+  \label{eq:production-quote-loss} 
+\end{equation}
+The native controls first fit an independent $u_t$ on every date.  The
+affine-200 model is initialized from those controls and jointly updates
+$b$, $B$, the historical states $h_t$, and the stable weekly dynamics in
+Section~\ref{sec:dynamics}.  A gauge penalty fixes the affine
+non-identifiability by keeping the fitted states at zero sample mean and unit
+sample covariance.
+
+
+
 
 \subsubsection{Affine-200 specialization}
 \label{sec:affine-specialization}
@@ -787,45 +805,6 @@ joint state dynamics can still be estimated.  We report the native-versus-200
 fit loss explicitly below rather than treating this dimension as exact.
 }
 
-The native coordinates are converted into the
-positive SANOS parameters according to definition~\ref{def:ml-sanos}.
- The
-experiment uses
-$(\Sigma_{\min},\Sigma_{\max})=(0.01^2,3^2)$,
-$(\sigma_{\min},\sigma_{\max})=(0.01,1)$, and
-$(\eta_{\min},\eta_{\max})=(0.01,0.50)$.  A smooth cap penalty acts on
-the raw log-DLV coordinate without imposing a saturating upper sigmoid.
-
-Each date uses one floating relative-strike support shared across all model
-expiries.  Half of the~200 normalized-moneyness candidates cover the front
-expiry and half the final expiry over $(-3,2)$; after conversion with the
-date's total-volatility curve they are merged, sorted, and separated by a
-minimum log-strike gap.  The outer support nodes are one half of the first
-inner strike and one and a half times the final inner strike.  The shared
-support makes the DLV recursion a sequence of differentiable tridiagonal
-solves without an expiry-to-expiry regridding operator.
-
-For quote $\ell$ on date $t$, let $\widehat C_t^\ell$ be the decoded option
-price, $M_t^\ell=(\bm A_t^\ell+\bm B_t^\ell)/2$, and
-$\gamma_t^\ell=(\bm A_t^\ell-\bm B_t^\ell)/2$.  Decoder fitting minimizes the
-equal-date-weighted objective
-\begin{equation}
-  \mathcal L_t^{\mathrm{quote}}
-  =\frac{1}{L_t}\sum_{\ell=1}^{L_t}
-  \frac1{\gamma_t^\ell} \left\{ (\widehat C_t^\ell-\bm A_t^\ell)^+
-    +(\bm B_t^\ell-\widehat C_t^\ell)^+
-    +0.05|\widehat C_t^\ell-M_t^\ell|   
-  \right\}  
-  \label{eq:production-quote-loss} 
-\end{equation}
-The native controls first fit an independent $u_t$ on every date.  The
-affine-200 model is initialized from those controls and jointly updates
-$b$, $B$, the historical states $h_t$, and the stable weekly dynamics in
-Section~\ref{sec:dynamics}.  A gauge penalty fixes the affine
-non-identifiability by keeping the fitted states at zero sample mean and unit
-sample covariance.
-
-
 \subsubsection{Data and model geometries}
 \label{sec:data}
 
@@ -833,7 +812,9 @@ The empirical population contains 891 SPX dates from 2022-01-03 through
 2025-08-29.  We exclude the 0.2-business-day AM-settled population and retain
 3,566,742 call or put quote observations for the weekly geometry and
 3,566,258 for the daily+weekly geometry.  Calls and puts at the same expiry and
-strike count as separate observations.
+strike count as separate observations.  The input quote population is retained
+over normalized moneyness $z\in[-3,2]$, where $z$ is computed from the
+arbitrage-free fitted ATM volatility for the corresponding expiry.
 
 Both models use 200 inner strikes over normalized moneyness $z\in(-3,2)$.
 They differ only in the internal expiry geometry:
@@ -1445,181 +1426,109 @@ first supplies a coherent long-run statistical state process; the second
 guarantees a valid option cross-section for every realized state.  The
 combination is what we mean by consistent $\P$-simulation in this paper.
 
-\subsection{One-session hedging diagnostics}
-\label{sec:hedging-diagnostics}
+\subsection{Fixed-sample to-expiry entropy projection}
+\label{sec:fixed-sample-entropy}
 
-We assess whether the fitted conditional distributions are useful for a
-concrete downstream task.  Let $Z_{t+1}$ denote the normalized one-session
-change of a signed option position and let
-$X_{t+1}=S_{t+1}/S_t-1$.  At the close of date $t$ we choose one spot position
-$a_t$ by each of three criteria.  Mean--variance hedging solves
+As a finite-sample diagnostic, we ask whether the simulated law can be
+reweighted so that a rolling option book has no expected return outside an
+explicit transaction-cost band.  Both experiments use one historical initial
+state (25 October 2023) and $N=1{,}000{,}000$ antithetic simulated paths.  Each
+option has a fixed cash strike set on its entry date and is held to its
+terminal payoff.  The admissible expected-return band is 1bp for spot and
+10bp for each option, representing symmetric entry costs.
+
+We considered two nested books.  The pilot book contains spot and, for each
+of 5D, 10D, 15D, and 20D, a call struck at $K/S_t=0.99$, an ATM call, and a
+put struck at $K/S_t=1.01$.  Repeating these 13 instruments on each of 25
+entry dates gives $25\times13=325$ return coordinates.
+
+The expanded book replaces those three options by 11 normalized-moneyness
+coordinates at every expiry,
 \begin{equation}
-  \min_{a_t}\operatorname{Var}_t(Z_{t+1}+a_tX_{t+1}).
-  \label{eq:hedge-mean-variance}
+  z\in\{-1.5,-1.3,-1.1,-0.9,-0.7,-0.5,-0.3,-0.1,
+          0.1,0.3,0.5\}.
+  \label{eq:entropy-book-nms}
 \end{equation}
-The two optimized-certainty-equivalent (OCE) hedges solve
+At entry time $t$, normalized moneyness $z$ is converted to the cash strike
 \begin{equation}
-  \sup_{a_t,y_t}\left\{
-    y_t+\E_t\left[u_\lambda
-      (Z_{t+1}+a_tX_{t+1}-y_t)\right]
-  \right\},
-  \label{eq:hedge-oce}
+  K=S_t\exp\!\bigl(z\,\nu_t(T)\bigr),\qquad
+  \nu_t(T)=\sqrt{\frac{\sigma_{t,\epsilon}^2\epsilon+
+                           \widetilde W_t(T)^2}
+                           {1+\epsilon}},
+  \label{eq:entropy-book-strike}
 \end{equation}
-using either entropy utility
-$u_\lambda(x)=-e^{-\lambda x}/\lambda$ or the power-exponential utility
+where $\widetilde W_t(T)$ is the strike-grid total volatility from
+\eqref{eq:totalW},
+$\sigma_{t,\epsilon}=\widetilde W_t(\hat T^1)/\sqrt{\hat T^1}$, and
+$\epsilon$ is the canonical small-time regularization.  Negative-$z$
+contracts are ITM calls and positive-$z$ contracts are ITM puts.  The grid in
+\eqref{eq:entropy-book-nms} deliberately does not contain zero, so this
+expanded book has no ATM option.  With spot and $4\times11$ options at each
+entry date it has $25\times45=1{,}125$ return coordinates.
+
+Let $R_n\in\mathbb R^d$ be the return vector on path $n$, where
+$d\in\{325,1{,}125\}$, let $c\in\mathbb R_+^d$ be the cost band, and let
+$w_n$ denote an empirical
+density relative to the uniformly weighted simulation sample.  We solve the
+convex information projection
 \begin{equation}
-  u_\lambda(x)=
-  \begin{cases}
-    (1-e^{-\lambda x})/\lambda,&x\geq0,\\
-    x-\lambda x^2/2,&x<0.
-  \end{cases}
-  \label{eq:hedge-power-exp}
+\begin{aligned}
+  \min_{w_1,\ldots,w_N>0}\quad
+    &\frac1N\sum_{n=1}^N w_n\log w_n,\\
+  \text{subject to}\quad
+    &\frac1N\sum_{n=1}^N w_n=1,\\
+    &-c\ \leq\ \frac1N\sum_{n=1}^N w_nR_n\ \leq\ c.
+\end{aligned}
+\label{eq:fixed-sample-entropy}
 \end{equation}
-We use $\lambda=50$ and optimize the cash translation $y_t$ jointly with the
-hedge.  Reported first-order conditions are evaluated on the same scenario
-set used for optimization.
-
-The first experiment hedges the closest-to-ATM European PM call and put with
-one business day to expiry.  At each close $t$, its scenario set contains 512
-antithetic draws from the state and spot construction in
-\eqref{eq:spot-block}; spot changes are sample-centered during hedge
-estimation.  The next retained close is used as a settlement proxy.  A buyer
-pays the observed ask and a seller receives the observed bid.  We report the
-two positions separately because the entry prices differ and the OCE hedge
-need not be antisymmetric.
-
-The second experiment is an open-interest portfolio proxy.  We treat the
-date-$t$ open-interest field as an after-close observation and assign it only
-to the next one-session experiment; its publication timing is not independently
-verified.
-Since open interest is unsigned, we transparently assume that a dealer is
-short every retained call and put and normalize the positions to one unit of
-gross open interest.  This is not an estimate of net dealer inventory.
-Only matched European PM contracts with 2--70 business days to expiry and
-$K/S_t\in[0.75,1.25]$ enter.  The dealer-short proxy receives the observed
-bid at formation and surviving contracts are marked at the next close
-midpoint.  Its scenario set uses the same 512 antithetic joint state and
-front-expiry spot draws as the ATM experiment.  The 2025 window supplies 159
-such close-to-next-close
-observations without a missing-book failure.  Each proxy contains
-4,058--8,547 matched contracts (median 7,009); median gross open interest is
-2.82 million contracts.
-
-The criterion-matched evaluation of mean--variance is realized variance.  For
-an OCE hedge it is the realized certainty equivalent
-\[
-  \widehat{\operatorname{CE}}_u(\Pi)
-  =\sup_y\left\{y+\frac1T\sum_{t=1}^T u(\Pi_t-y)\right\},
-\]
-and we report the hedged-minus-unhedged improvement.  RMS P\&L, mean absolute
-P\&L, and the lower 5\% mean are retained only as common descriptive scales.
-A paired circular block bootstrap with five-session blocks supplies 95\%
-intervals and one-sided $p$-values for the criterion-matched improvements.
-Spot-hedge transaction costs and next-close liquidation costs for surviving
-options are omitted, so these diagnostics are not claims of executable net
-profitability.  The spot copula is estimated from 710 transitions ending by
-December~31, 2024.  Its state-score correlation is 0.856 in estimation and
-0.758 over the 159 subsequent transitions.
-The fitted all-history decoder is not a frozen pre-2025 forecasting model, so
-these are historical hedge evaluations rather than claims of fully untouched
-out-of-sample performance.
-
-\paragraph{ATM one-day results.}
-Table~\ref{tab:atm-hedging} reports normalized root-mean-square P\&L in basis
-points of initial spot over 158 close-to-next-close observations in 2025.
-All three criteria reduce the descriptive RMS P\&L by approximately 42--45\%.
-For the mean--variance hedge, the criterion-matched variance-reduction test
-gives $p=0.078$ for calls and $p=0.038$ for puts.
-
-\begin{table}[H]
-\centering
-\begin{tabular}{lrrrr}
-\toprule
-Signed ATM 1D position & Unhedged & Mean--variance & Entropy OCE & Power-exp OCE\\
-\midrule
-Buyer call  & 84.76 & 47.54 & \textbf{46.70} & 46.77\\
-Seller call & 84.81 & \textbf{47.54} & 48.78 & 47.61\\
-Buyer put   & 81.13 & 46.96 & \textbf{46.14} & 46.21\\
-Seller put  & 81.09 & \textbf{47.00} & 48.21 & 47.06\\
-\bottomrule
-\end{tabular}
-\caption{Descriptive RMS one-session P\&L in basis points of initial spot for
-the ATM one-day option experiment.  RMS is not the OCE objective.  The
-absolute-loss improvement has paired block-bootstrap $p=0.0001$ in every
-row.}
-\label{tab:atm-hedging}
-\end{table}
-
-Table~\ref{tab:atm-oce} therefore reports the OCE-aligned statistic.  Positive
-values mean that the realized certainty equivalent improved.  The buyer-put
-result is the clearest: both utilities improve certainty equivalent by about
-11.5 basis points with $p\simeq0.003$.  The other signed books have positive
-point estimates but substantially weaker evidence.
-
-\begin{table}[H]
-\centering
-\begin{tabular}{lrrrr}
-\toprule
-& \multicolumn{2}{c}{Entropy OCE} & \multicolumn{2}{c}{Power-exp OCE}\\
-Signed ATM 1D position & $\Delta\mathrm{CE}$ & $p$ & $\Delta\mathrm{CE}$ & $p$\\
-\midrule
-Buyer call  & 3.44 & 0.186 & 3.22 & 0.198\\
-Seller call & 52.63 & 0.080 & 15.31 & 0.072\\
-Buyer put   & 11.62 & 0.003 & 11.41 & 0.003\\
-Seller put  & 15.26 & 0.169 & 6.49 & 0.241\\
-\bottomrule
-\end{tabular}
-\caption{Realized OCE certainty-equivalent improvement in basis points of
-initial spot, with one-sided paired five-session block-bootstrap $p$-values.}
-\label{tab:atm-oce}
-\end{table}
-
-Across the four signed books, all 1,896 hedge estimates are finite, no spot
-bound is active, and every numerical OCE optimization reports convergence.
-The maximum absolute first-order residual is $2.68\times10^{-7}$.  The copula
-is frozen before 2025, but the option selection and evaluation period remain
-a historical diagnostic rather than a fully frozen model forecast.
-
-\paragraph{Open-interest portfolio proxy.}
-Table~\ref{tab:oi-hedging} reports the same diagnostics for the 159 portfolio
-proxies.  The date-$t$ after-close OI field is used as a proxy for the book
-held from close $t$ to close $t+1$, exactly as stated above; this convention
-does not assert that the field was tradable information before the date-$t$
-close.  Mean--variance and both OCE criteria produce nearly identical spot
-positions.  Descriptive RMS loss falls by about 56\% and mean absolute loss
-by about 55\%.
+The dual is a signed entropic OCE objective.  We solve it with an active-set
+method and streamed log-sum-exp evaluations, so the complete million-path
+return matrix need not be copied into the optimizer.
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{lrrr}
+\begin{tabular}{lrr}
 \toprule
-Method & RMS & Mean absolute & Lower 5\% mean\\
+Diagnostic & Three-option pilot & 11-option NMS book\\
 \midrule
-Unhedged & 27.86 & 10.09 & $-66.94$\\
-Mean--variance & 12.20 & 4.54 & $-39.58$\\
-Entropy OCE & 12.44 & 4.54 & $-39.94$\\
-Power-exp OCE & 12.20 & 4.53 & $-39.58$\\
+Paths & 1,000,000 & 1,000,000\\
+Options per expiry & 3 & 11\\
+Return coordinates & 325 & 1,125\\
+Active coordinates & 207 & 336\\
+Relative entropy $N^{-1}\sum_n w_n\log w_n$
+  & 0.0619141 & 0.1130914\\
+Effective sample size & 877,973 (87.80\%) & 765,493 (76.55\%)\\
+Minimum density weight & 0.00880 & 0.00286\\
+Maximum density weight & 36.42 & 84.17\\
+Zero density weights & 0 & 0\\
+Maximum cost-band violation & $8.45\times10^{-8}$ & $3.15\times10^{-8}$\\
+Maximum KKT residual & $8.45\times10^{-8}$ & $3.53\times10^{-8}$\\
+Primal--dual gap & $7.14\times10^{-9}$ & $3.37\times10^{-9}$\\
 \bottomrule
 \end{tabular}
-\caption{Common descriptive one-session P\&L statistics for the open-interest
-portfolio proxy, in basis points of gross open interest.}
-\label{tab:oi-hedging}
+\caption{In-sample convex entropy projection for rolling to-expiry returns.
+Residuals are in return units.  The maximum cost-band violations are
+0.000845bp and 0.000315bp, respectively.}
+\label{tab:fixed-sample-entropy}
 \end{table}
 
-The mean--variance hedge reduces realized variance by $6.29\times10^{-6}$
-in squared normalized-P\&L units; the paired block-bootstrap test gives
-$p=0.093$.  The absolute-loss reduction has $p\simeq0.011$ for all three
-methods.  Under
-the criterion-matched OCE evaluation, however, the entropy certainty-equivalent
-gain is only 0.50 basis points ($p=0.344$), and the power-exponential gain is
-0.27 basis points ($p=0.394$).  Thus this experiment does not establish an OCE
-improvement even though conventional dispersion measures fall sharply.  All
-477 fitted hedge problems are finite, no position bound is active, and no
-optimizer reports failure; the largest absolute first-order residual is
-$1.74\times10^{-7}$.  These results
-measure the usefulness of the conditional scenario law for the stated proxy,
-not the performance of an observed dealer inventory.
+All fitted weights are strictly positive.  The expanded book retains 76.55\%
+of the original effective sample size despite imposing 1,125 moment bands.
+For both books the optimizer terminated during its final line search rather
+than returning its strict success flag.  The independently recomputed primal,
+KKT, and primal--dual residuals in Table~\ref{tab:fixed-sample-entropy} show
+that the economically relevant cost-band constraints are nevertheless
+satisfied to substantially less than one thousandth of a basis point.
+
+This is deliberately an \emph{in-sample, unconditional} statement.  The
+weights solve empirical moment constraints for this initial state and this
+fixed path population.  They do not prove the existence of a single
+state-conditional transition density, do not constitute an out-of-sample
+forecast, and do not alter the statistical dynamics used elsewhere in the
+paper.  The experiment nevertheless establishes that the selected finite
+book is compatible with a well-conditioned, absolutely continuous empirical
+reweighting when contracts are evaluated to expiry.
 
 \subsection{Scope and limitations}
 
@@ -1638,8 +1547,9 @@ direct next extension.
 
 Finally, static arbitrage-freedom is a property of each decoded surface.  It
 does not by itself impose restrictions on expected returns of fixed contracts
-through simulated time.  This paper deliberately evaluates a statistical
-historical law and makes no additional dynamic pricing assertion.
+through simulated time.  The fixed-sample entropy projection in
+Section~\ref{sec:fixed-sample-entropy} is an unconditional diagnostic for one
+finite simulated population, not an additional dynamic pricing assertion.
 
 \section{Conclusion}
 
@@ -1655,15 +1565,20 @@ separately from later expiries, and the daily+weekly affine model places
 80.92\% of the full quote population inside bid--ask.  A no-replay
 log-variance diffusion improves the deficient Gaussian
 tail law and reproduces tail persistence, although multi-week tail mass
-remains too low.  The one-session ATM and open-interest proxy experiments show
-large reductions in conventional dispersion measures, while criterion-matched
-OCE evidence is mixed and is not significant for the open-interest proxy.
+remains too low.  The decoded-surface path diagnostics do not reject any of
+the Gaussian, heavy-tail, diffusion, or replay candidates at the 5\% level,
+although their power is limited by the 144 available overlapping origins.
+For one million simulated paths from a representative initial state, a convex
+entropy projection of 1,125 rolling to-expiry return coordinates remains
+well-conditioned (76.55\% ESS), retains strictly positive weights, and
+satisfies the stated transaction-cost bands to less than 0.001bp in sample.
 
 We have provided a baseline model to generate long paths of daily spot and option prices.
 Each option surface is free of static arbitrage. Moreover, we can price~\emph{any}
 option on each path given the ML-SANOS parameters for the respective sample and
-time step.  Agents can therefore choose which options to trade at each time
-step rather than being restricted to a preselected finite hedge set.
+time step.  The resulting paths therefore provide statistically consistent
+prices for arbitrary fixed cash contracts rather than only for a preselected
+finite set.
 
 \section{Thanks}
 
@@ -1774,10 +1689,10 @@ At least five strikes per expiry are required. The default minimum fitted densit
 
 \subsection{Option Filtering}
 
-The default option filter retains observations satisfying
+The empirical analysis retains observations satisfying
 %
 \[
-    \operatorname{BDTE} \leq 3 \times 252 = 756,
+    \operatorname{BDTE} \leq 70,
 \]
 %
 where \(\operatorname{BDTE}\) denotes business days to expiry.
@@ -1785,10 +1700,11 @@ where \(\operatorname{BDTE}\) denotes business days to expiry.
 The normalized-moneyness filter is
 %
 \[
-    -5 \leq z_{\mathrm{ATM}} \leq 2,
+    -3 \leq z_{\mathrm{ATM}} \leq 2,
 \]
 %
-where \(z_{\mathrm{ATM}}\) is normalized moneyness computed using the ATM volatility.
+where \(z_{\mathrm{ATM}}\) is normalized moneyness computed using the
+arbitrage-free fitted ATM volatility for the corresponding expiry.
 
 Additional requirements are
 %
@@ -1803,7 +1719,7 @@ Additional requirements are
 Here, ``$\mathrm{VegaSqrtVar}$'' refers to Vega divided by sqrt of expiry. It is therefore
 the sensitivity to total volatility of the option.
 
-Each retained expiry must contain at least \(10\) options. At most \(1000\) options are kept per day. If more than \(1000\) observations survive, the filter first reserves observations around the money for every expiry and then fills the remaining capacity using increasing absolute normalized moneyness.
+Each retained expiry must contain at least \(10\) options.
 
 It should be noted that this filter removes many options post 1Y for the early years of the training period due to the minimum volume
 traded filter. We suspect that this information in IvyDB is not reliable in the past.
