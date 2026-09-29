@@ -103,14 +103,15 @@ the chart admits carry every spot in the grid range, whereas in
 (Remark~\ref{rem:pinning}). We do not construct dynamics reaching an off-lattice
 terminal spot; that is left as future work.
 
-\item \textbf{Existence, with no condition on the wings.} The model has a
-unique global strong solution on $[0,T_1]$, and by restarting at each expiry on the
-whole ladder $[0,T_M]$ (Corollary~\ref{cor:patch}), positive by construction, for every
-bounded and locally Lipschitz volatility structure $b$ and any number of
-driving factors. The quantity that must be controlled is $\eta=\psi/q$, the
-density volatility relative to the density, and it is bounded by the grid alone:
-Theorem~\ref{thm:wing} gives $\Theta_j\le N+1$ uniformly in the state and in the
-volatility structure. \emph{Wissel \cite{Wissel2007} must assume a bound of this
+\item \textbf{Existence, with no condition on the wings.} For every bounded and
+locally Lipschitz volatility structure $b$ and any number of driving factors, the
+model has a unique strong solution on $[0,T]$ for every $T<T_1$, positive by
+construction; it extends to $T_1$ (Remark~\ref{rem:horizon}) and, restarting at each
+expiry with the settling front, to the whole ladder $[0,T_M]$, unique given that
+front (Corollary~\ref{cor:patch}). The quantity that must be controlled is
+$\eta=\psi/q$, the density volatility relative to the density, and its growth across
+expiries is bounded by the grid alone: Theorem~\ref{thm:wing} gives $\Theta_j\le N+1$
+uniformly in the state and in the volatility structure. \emph{Wissel \cite{Wissel2007} must assume a bound of this
 kind; here it is a theorem.} The front expiry costs one hypothesis, and it is a mild one: $\eta^1$
 must be integrable in $t$, not bounded, because $\eta^j$ is affine in $\eta^1$
 and an It\^o equation needs an integrable drift rather than a bounded one. The

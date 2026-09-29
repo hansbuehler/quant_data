@@ -62,8 +62,8 @@ the front volatility proportional to the distance from the spot, in one factor,
 Only the behaviour near $T_1$ matters: before any $T_1-\varepsilon$ the front
 volatility may be any bounded, locally Lipschitz choice, and \eqref{eq:nufront} need only
 hold on $[T_1-\varepsilon,T_1)$. It is already centred, since $\sum_iq^{1,i}(K^i-S_t)=0$. Its coefficients are polynomial in
-$q^1$ and bounded on $[0,T_1-\varepsilon]$, so there is a unique strong solution on
-$[0,T_1)$,
+$q^1$ and bounded on $[0,T]$ for every $T<T_1$, so there is a unique strong solution
+on $[0,T_1)$,
 \begin{equation}\label{eq:frontexplicit}
   q^{1,i}_{t}=q^{1,i}_{0}\exp\Bigl(\int_0^t\eta^{1,i}\,\dd W-\tfrac12\int_0^t(\eta^{1,i})^2\dd s\Bigr),
   \qquad
