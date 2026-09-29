@@ -1,7 +1,7 @@
 \section{The code-book}\label{sec:setup}
 
-We are assuming deterministic forwards and discount factors, which reduces to the case of a driftless spot and discount factors
-equal to one, cf.~\cite{BuehlerVolAndDivs}. Assume that spot is $S_0$ at time $t=0$.
+We assume deterministic forwards and discount factors, which reduces to a driftless spot
+with unit discount factors, cf.~\cite{BuehlerVolAndDivs}. The spot at $t=0$ is $S_0$.
 
 We follow the~\cite{SANOS2026} architecture for a time-homogeneous fixed strike grid:
 Fix model expiries $0=: T_0< T_1<\dots<T_M$ with $ \Delta_j:=T_j-T_{j-1}$, and a
@@ -156,7 +156,7 @@ $\mathrm{span}\{\one,K\}$.
 \end{proof}
 
 \begin{remark}[Counting]\label{cor:counting}
-$G_j(q)$ has $N+2$ rows and $N$ columns and rank $N$. Hence the $N+2$ martingale
+For $q>0$, $G_j(q)$ has $N+2$ rows and $N$ columns and rank $N$. Hence the $N+2$ martingale
 conditions per expiry contain exactly two redundancies, conservation of mass
 and of the spot, and the remaining $N$ conditions match the $N$ unknowns
 of $\dlv^j$. The system is square on the quotient.

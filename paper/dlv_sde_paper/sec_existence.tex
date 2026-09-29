@@ -23,7 +23,7 @@ volatility recursion and a known inequality for inverses of M-matrices.
 
 \subsection{The volatility recursion}\label{sec:walk}\label{sec:master}
 
-Write $P:=A_j(\dlv^j)^{-1}$, so that $q^j=Pq^{j-1}$.
+Write $P_j:=A_j(\dlv^j)^{-1}$, so that $q^j=P_jq^{j-1}$, and $P$ when $j$ is fixed.
 
 \begin{corollary}[Positivity, unit column sums, absorbing ends]\label{cor:pos}
 $P\ge0$ entrywise, $\one^{\!\top}P=\one^{\!\top}$, so $P_{im}\in[0,1]$, and the outer
@@ -205,7 +205,7 @@ Iterating \eqref{eq:step} from the front slice,
   \;\le\;\lVert\eta^1_t\rVert_\infty+(M-1)(N+1)\,\lVert b\rVert_\infty ,
 \end{equation}
 and iterating \eqref{eq:master} shows that $\eta^j$ is affine in $\eta^1$, with
-coefficients depending on $\lambda$ only through $P^{(2)},\dots,P^{(j)}$ and $q^2,\dots,q^j$.
+coefficients depending on $\lambda$ only through $P_2,\dots,P_j$ and $q^2,\dots,q^j$.
 The only $t$ on the right of \eqref{eq:apriori} is inside $\eta^1_t$, which enters
 linearly, so it has to be integrable in time rather than bounded.
 
@@ -255,7 +255,7 @@ only needs the drift bound to be integrable in time, which is
 Assumption~\ref{ass:F} with $T=T_1$. Under it $\lambda$ stays bounded on $[0,T_1)$
 and has a limit at $T_1$, so \eqref{eq:ellbounds} holds with $T=T_1$. The settling
 front has $\lVert\eta^1_t\rVert_\infty\le C(T_1-t)^{-p}$, integrable for $p<1$, so
-the code-book reaches its first expiry with every gridded contract settling at its
+for $p\in[\tfrac12,1)$ the code-book reaches its first expiry with every gridded contract settling at its
 payoff.
 \end{remark}
 
@@ -266,7 +266,7 @@ Proposition~\ref{prop:collapse} makes this switch clean: the spot sits on a node
 new front density is a column of the propagator. Indeed, if $q^l_{T_l}=e_k$ then the
 code-book $A_{l+1}(\dlv^{l+1})\,q^{l+1}=q^l$ gives
 \begin{equation}\label{eq:handover}
-  q^{l+1}_{T_l}=P^{(l+1)}\,e_k ,\qquad P^{(l+1)}:=A_{l+1}\bigl(\dlv^{l+1}_{T_l}\bigr)^{-1},
+  q^{l+1}_{T_l}=P_{l+1}\,e_k ,\qquad P_{l+1}:=A_{l+1}\bigl(\dlv^{l+1}_{T_l}\bigr)^{-1},
 \end{equation}
 the spread of a unit mass at the settled spot by one step of the code-book. To restart the
 front chart we need this density to be strictly positive.
