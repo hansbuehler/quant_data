@@ -114,15 +114,15 @@ with $\alpha\equiv0$ persisting.
 
 \begin{proposition}[Spot consistency]\label{prop:spot}
 The spot is $S_t=K^{\!\top}q^{j}_t$, the same for every $j$ by
-Lemma~\ref{lem:null}. Since $K^{\!\top}A_j=K^{\!\top}$ and
-$K^{\!\top}\widehat G_j=0$, equation \eqref{eq:volsolve} gives
+Lemma~\ref{lem:null}. Since $\one^{\!\top}A_j=\one^{\!\top}$, $K^{\!\top}A_j=K^{\!\top}$ and
+$\one^{\!\top}\widehat G_j=K^{\!\top}\widehat G_j=0$, equation \eqref{eq:volsolve} gives
 \[
   \one^{\!\top}\psi^{j}=\one^{\!\top}\psi^{1}=0
   \qquad\text{and}\qquad
   K^{\!\top}\psi^{j}=K^{\!\top}\psi^{1}=\sigma^{S}_tS_t
   \quad\text{for every }j.
 \]
-So the spot's volatility is the single scalar $K^{\!\top}\psi^{1}$, it is
+So the spot's volatility is the single row $K^{\!\top}\psi^{1}\in\R^{1\times d}$, it is
 automatically the same at every expiry, and no further condition links the spot
 to the surface. Taking $\psi^{1}=0$ freezes the spot and recovers
 $K^{\!\top}\psi^{j}=0$.
