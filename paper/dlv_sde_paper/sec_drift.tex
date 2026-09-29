@@ -17,33 +17,62 @@ the martingale representation theorem applied to traded prices, and nothing has
 to commute with a stochastic integral. This is the substantive advantage of a
 discrete code-book over its continuum analogue, where the corresponding step
 requires differentiating a stochastic field in strike and maturity and must be
-licensed by standing regularity conditions. Theorem~\ref{thm:pointwise} below
+licensed by standing regularity conditions. Theorem~\ref{thm:drift} below
 needs only $q^j>0$.
 
 \begin{theorem}[Drift restriction]\label{thm:drift}
-Let $\dd\dlv^j_t=\alpha^j_t\dd t+\beta^j_t\dd W_t$. Under
+Let $\dd\dlv^j_t=\alpha^j_t\dd t+\beta^j_t\dd W_t$ and $q^j>0$. Under
 Assumption~\ref{ass:mart}, for each $j=2,\dots,M$,
-\begin{align}
-  \text{(volatility)}\qquad
-  &A_j(\dlv^j)\,\psi^j\;=\;\psi^{j-1}-G_j(q^j)\,\beta^j,
-  \label{eq:volsolve}\\[4pt]
-  \text{(drift)}\qquad
-  &G_j(q^j)\,\alpha^j\;=\;-\sum_{f=1}^{d}G_j\bigl(\psi^{j,f}\bigr)\beta^{j,f},
-  \label{eq:driftsolve}
-\end{align}
+\begin{equation}\label{eq:volsolve}
+  A_j(\dlv^j)\,\psi^j\;=\;\psi^{j-1}-G_j(q^j)\,\beta^j,
+\end{equation}
 marched forward in $j$ from $\psi^1$, the volatility of the front density, which
-is given by its chart (Section~\ref{sec:front}).
+is given by its chart (Section~\ref{sec:front}). With the relative density volatility
+\begin{equation}\label{eq:eta}
+  \eta^{j,i}\;:=\;\frac{\psi^{j,i}}{q^{j,i}},
+  \qquad i=0,\dots,N+1,
+\end{equation}
+the drift is determined node by node,
+\begin{equation}\label{eq:pointwise}
+  \alpha^{j,i}\;=\;-\ip{\eta^{j,i}}{\beta^{j,i}}
+  \qquad\Longleftrightarrow\qquad
+  \dd\lambda^{j,i}=\Bigl[-\ip{\eta^{j,i}}{b^{j,i}}-\tfrac12\abs{b^{j,i}}^{2}\Bigr]\dd t
+   +b^{j,i}\,\dd W_t,
+\end{equation}
+where $\lambda=\log\dlv$ and $b=\beta/\dlv$.
 \end{theorem}
 
 \begin{proof}
-Apply It\^o to $A_j(\dlv^j_t)q^j_t=q^{j-1}_t$, using \eqref{eq:affine} to write
-the left side as $q^j+G_j(q^j)\dlv^j$ and noting that $(q,\dlv)\mapsto G_j(q)\dlv$ is bilinear. The
-$\dd W$ terms give $\psi^j+G_j(\psi^j)\dlv^j+G_j(q^j)\beta^j=\psi^{j-1}$, which
-is \eqref{eq:volsolve} by \eqref{eq:affine}. The $\dd t$ terms give
-$G_j(q^j)\alpha^j+\sum_f G_j(\psi^{j,f})\beta^{j,f}=0$, since $q^{j-1}$ and
-$q^{j}$ are driftless by Assumption~\ref{ass:mart} and the only quadratic
-covariation is between $q^j$ and $\dlv^j$, both driven by $W$.
+By Lemma~\ref{lem:factor}, $G_j(q)\dlv=\widehat G_j(\dlv\circ q)$, where
+$\dlv\circ q:=(\dlv^iq^i)_{i=1}^{N}$ is the entrywise product on the interior nodes. The
+code-book therefore reads
+\[
+  q^j_t+\widehat G_j\,p^j_t=q^{j-1}_t,\qquad p^{j,i}:=\dlv^{j,i}q^{j,i},\quad i=1,\dots,N,
+\]
+with $\widehat G_j$ constant. It\^o's product rule for the scalar processes $\dlv^{j,i}$ and
+$q^{j,i}$ gives
+\begin{equation}\label{eq:dp}
+  \dd p^{j,i}
+  =\Bigl[q^{j,i}\alpha^{j,i}+\ip{\psi^{j,i}}{\beta^{j,i}}\Bigr]\dd t
+  +\bigl(\dlv^{j,i}\psi^{j,i}+q^{j,i}\beta^{j,i}\bigr)\dd W_t ,
+\end{equation}
+with $\psi^{j,i},\beta^{j,i}\in\R^{1\times d}$ the rows at node $i$. Hence
+$\dd q^j+\widehat G_j\,\dd p^j=\dd q^{j-1}$, and by uniqueness of the decomposition of a
+continuous semimartingale the $\dd W$ and $\dd t$ terms match separately. The $\dd W$
+terms give $\psi^j+\widehat G_j\bigl(\dlv^j\circ\psi^j+q^j\circ\beta^j\bigr)=\psi^{j-1}$,
+factor by factor, which is \eqref{eq:volsolve} by \eqref{eq:affine}. Since $q^j$ and
+$q^{j-1}$ are driftless by Assumption~\ref{ass:mart}, the $\dd t$ terms give
+\[
+  \widehat G_j\Bigl(q^j\circ\alpha^j+\textstyle\sum_f\psi^{j,f}\circ\beta^{j,f}\Bigr)=0 .
+\]
+Since $\widehat G_j$ is injective (Lemma~\ref{lem:factor}) the bracket vanishes,
+$q^{j,i}\alpha^{j,i}+\ip{\psi^{j,i}}{\beta^{j,i}}=0$ node by node, which is
+\eqref{eq:pointwise} after dividing by $q^{j,i}>0$. The logarithmic form is It\^o
+applied to $\lambda=\log\dlv$, using $\alpha/\dlv=-\ip{\eta}{b}$.
 \end{proof}
+
+Only the interior components of $\eta$ enter \eqref{eq:pointwise}, since $\dlv$ lives
+on the interior nodes; the boundary components are needed in Section~\ref{sec:exist}.
 
 Equation \eqref{eq:volsolve} is not ours. Compared with the pricing recursion
 $A_j(\dlv^j)q^j=q^{j-1}$ it is \emph{the same operator with one added source},
@@ -60,40 +89,6 @@ accommodate can arise here, the front slab having positive width. And the
 discrete system is over-determined, $N+2$ conditions on $N$ unknowns, which is
 what the counting of Remark~\ref{cor:counting} squares. Appendix~\ref{app:priority} carries both identifications in the
 original notation.
-
-\begin{theorem}[The drift is a pointwise covariance]\label{thm:pointwise}
-Define the relative density volatility
-\begin{equation}\label{eq:eta}
-  \eta^{j,i}\;:=\;\frac{\psi^{j,i}}{q^{j,i}},
-  \qquad i=0,\dots,N+1,
-\end{equation}
-that is, the relative volatility of $q^{j,i}$. Only the interior components enter
-\eqref{eq:pointwise}, since $\dlv$ lives on the interior nodes; the boundary
-components are needed in Section~\ref{sec:exist}. Then \eqref{eq:driftsolve} is solvable
-for every $\beta$ and every state, its solution is unique, and it is given
-componentwise by
-\begin{equation}\label{eq:pointwise}
-  \alpha^{j,i}\;=\;-\ip{\eta^{j,i}}{\beta^{j,i}}
-  \qquad\Longleftrightarrow\qquad
-  \dd\lambda^{j,i}=\Bigl[-\ip{\eta^{j,i}}{b^{j,i}}-\tfrac12\abs{b^{j,i}}^{2}\Bigr]\dd t
-   +b^{j,i}\,\dd W_t,
-\end{equation}
-where $\lambda=\log\dlv$ and $b=\beta/\dlv$.
-\end{theorem}
-
-\begin{proof}
-By Lemma~\ref{lem:factor} both sides of \eqref{eq:driftsolve} factor through the
-same fixed matrix:
-\[
-  \widehat G_j\,\mathrm{diag}(q^j)\,\alpha^j
-  \;=\;-\sum_f\widehat G_j\,\mathrm{diag}(\psi^{j,f})\,\beta^{j,f} .
-\]
-Since $\widehat G_j$ is injective it cancels, leaving
-$\mathrm{diag}(q^j)\alpha^j=-\sum_f\mathrm{diag}(\psi^{j,f})\beta^{j,f}$, which
-is \eqref{eq:pointwise} after dividing by $q^{j,i}>0$. Existence and uniqueness
-follow from the same cancellation. The logarithmic form is It\^o applied to
-$\lambda=\log\dlv$, using $\alpha/\dlv=-\ip{\eta}{b}$.
-\end{proof}
 
 Two features of \eqref{eq:pointwise} are worth drawing out. The first is its
 shape. It is the exact analogue of the HJM restriction $\alpha=\sigma\int\sigma$:
