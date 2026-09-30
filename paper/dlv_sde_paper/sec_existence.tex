@@ -217,47 +217,57 @@ For a horizon $T\le T_1$,
 \end{assumption}
 
 \begin{theorem}[Existence]\label{thm:exist}
-Let $T<T_1$, and let the front volatility $\nu=\nu(t,z)$ in \eqref{eq:softmax} and
-the volatility $b=b(t,z,\lambda)$ be bounded, $\abs{\nu}\le B_\nu$,
-$\abs{b}\le B$, and locally Lipschitz in $(t,z,\lambda)$. Then the front chart
-\eqref{eq:softmax}--\eqref{eq:frontdrift} together with \eqref{eq:abstract} has a
-unique strong solution $(z,\lambda)$ on $[0,T]$, and
-\begin{equation}\label{eq:ellbounds}
-  0\;<\;\inf_{t\le T}\min_{j,i}\dlv^{j,i}_{t}
-  \;\le\;\sup_{t\le T}\max_{j,i}\dlv^{j,i}_{t}\;<\;\infty
-  \qquad\text{almost surely.}
-\end{equation}
+Let the front volatility $\nu=\nu(t,z)$ in \eqref{eq:softmax} and the volatility
+$b=b(t,z,\lambda)$ be locally Lipschitz in $(t,z,\lambda)$ on $[0,T_1)$, with
+$\abs{b}\le B$, and $\nu$ bounded on $[0,T]$ for every $T<T_1$.
+\begin{enumerate}[label=(\roman*),leftmargin=2em,itemsep=1pt]
+\item For every $T<T_1$ the front chart \eqref{eq:softmax}--\eqref{eq:frontdrift}
+  together with \eqref{eq:abstract} has a unique strong solution $(z,\lambda)$ on
+  $[0,T]$, and
+  \begin{equation}\label{eq:ellbounds}
+    0\;<\;\inf_{t\le T}\min_{j,i}\dlv^{j,i}_{t}
+    \;\le\;\sup_{t\le T}\max_{j,i}\dlv^{j,i}_{t}\;<\;\infty
+    \qquad\text{almost surely.}
+  \end{equation}
+\item If moreover Assumption~\ref{ass:F} holds with $T=T_1$, then $\lambda_t$ has a
+  finite limit $\lambda_{T_1}$ as $t\uparrow T_1$, and \eqref{eq:ellbounds} holds with
+  $T=T_1$.
+\end{enumerate}
 No condition is imposed on $\dlv$, on the wings, or on the number of factors.
 \end{theorem}
 
 \begin{proof}
-The coefficients are locally Lipschitz: $q^1=\mathrm{softmax}(z)$ and
-$\dlv=e^\lambda$ are positive, so each $A_j$ is a non-singular M-matrix and
-everything except $\nu$ and $b$ is smooth in $(z,\lambda)$. Adding time as a state
-variable to cover the time dependence, \cite[Theorem~V.38, p.~303]{Protter2005}
-gives a unique solution up to an explosion time $\zeta$, with
-$\limsup_{t\to\zeta}\lVert(z_t,\lambda_t)\rVert=\infty$ on $\{\zeta<\infty\}$.
-The drift of $\lambda$ is bounded by \eqref{eq:apriori}, since
-$\lVert\eta^1\rVert_\infty=\lVert\mathrm{dev}\rVert_\infty\le2B_\nu$, and the drift
-$m$ of $z$ is bounded by $2B_\nu^2$; let $D$ bound both. On $[0,\zeta\wedge T)$
-the drift part of $(z,\lambda)$ is therefore at most $DT$, and the noise part,
-having integrand bounded by $B_\nu+B$, is a martingale bounded in $L^2$, hence
-convergent as $t\to\zeta\wedge T$. So $(z,\lambda)$ stays bounded on
-$[0,\zeta\wedge T)$, which rules out $\zeta\le T$. The solution exists on $[0,T]$,
-$\lambda$ is bounded there, and \eqref{eq:ellbounds} follows from $\dlv=e^\lambda$.
+(i) Fix $T<T_1$ and let $B_\nu$ bound $\abs{\nu}$ on $[0,T]$. The coefficients are
+locally Lipschitz: $q^1=\mathrm{softmax}(z)$ and $\dlv=e^\lambda$ are positive, so
+each $A_j$ is a non-singular M-matrix and everything except $\nu$ and $b$ is smooth
+in $(z,\lambda)$. Adding time as a state variable to cover the time dependence,
+\cite[Theorem~V.38, p.~303]{Protter2005} gives a unique solution up to an explosion
+time $\zeta$, with $\limsup_{t\to\zeta}\lVert(z_t,\lambda_t)\rVert=\infty$ on
+$\{\zeta<\infty\}$. The drift of $\lambda$ is bounded by \eqref{eq:apriori}, since
+$\lVert\eta^1\rVert_\infty=\lVert\mathrm{dev}\rVert_\infty\le2B_\nu$, and the drift $m$
+of $z$ is bounded by $2B_\nu^2$; let $D$ bound both. On $[0,\zeta\wedge T)$ the drift
+part of $(z,\lambda)$ is therefore at most $DT$, and the noise part, having integrand
+bounded by $B_\nu+B$, is a martingale bounded in $L^2$, hence convergent as
+$t\to\zeta\wedge T$. So $(z,\lambda)$ stays bounded on $[0,\zeta\wedge T)$, which
+rules out $\zeta\le T$. The solution exists on $[0,T]$, $\lambda$ is bounded there,
+and \eqref{eq:ellbounds} follows from $\dlv=e^\lambda$.
+
+(ii) By (i) the solution exists on $[0,T_1)$. By \eqref{eq:apriori} the drift of
+$\lambda$ is bounded by
+$g(t):=\bigl(\lVert\eta^1_t\rVert_\infty+(M-1)(N+1)B\bigr)B+\tfrac12B^2$, which is
+integrable on $[0,T_1)$ by Assumption~\ref{ass:F}, so the drift part of $\lambda$
+converges as $t\uparrow T_1$. The noise part $\int_0^tb\,\dd W$ has integrand bounded
+by $B$, so it is a martingale bounded in $L^2$ on $[0,T_1)$ and converges as well.
+Hence $\lambda_t$ has a finite limit, $\lambda$ is bounded on $[0,T_1]$, and
+\eqref{eq:ellbounds} holds with $T=T_1$. Nothing is claimed for $z$, which may run off
+at $T_1$ as the front collapses.
 \end{proof}
 
-\begin{remark}[The front expiry is included]\label{rem:horizon}
-At $T_1$ the front settles on a node (Proposition~\ref{prop:collapse}), so $z$
-itself runs off and Theorem~\ref{thm:exist} does not apply on $[0,T_1]$ directly.
-It applies on every $[0,T']$ with $T'<T_1$, and the $\lambda$-part of the proof
-only needs the drift bound to be integrable in time, which is
-Assumption~\ref{ass:F} with $T=T_1$. Under it $\lambda$ stays bounded on $[0,T_1)$
-and has a limit at $T_1$, so \eqref{eq:ellbounds} holds with $T=T_1$. The settling
-front has $\lVert\eta^1_t\rVert_\infty\le C(T_1-t)^{-p}$, integrable for $p<1$, so
-for $p\in[\tfrac12,1)$ the code-book reaches its first expiry with every gridded contract settling at its
-payoff.
-\end{remark}
+The settling front \eqref{eq:nufront} is bounded on every $[0,T]$ with $T<T_1$ by
+\eqref{eq:frontexplicit}, and satisfies Assumption~\ref{ass:F} with $T=T_1$ for $p<1$
+(Proposition~\ref{prop:collapse}). So for $p\in[\tfrac12,1)$ the code-book reaches its
+first expiry with $\dlv$ bounded away from $0$ and $\infty$ and every gridded contract
+settling at its payoff.
 
 \subsection{Beyond the first expiry}\label{sec:patching}
 
@@ -311,7 +321,7 @@ choices, such that
 
 \begin{proof}
 By induction on $l$. On $[0,T_1]$ this is Proposition~\ref{prop:collapse} with
-Theorem~\ref{thm:exist} and Remark~\ref{rem:horizon}, which also give the limit
+Theorem~\ref{thm:exist}, whose part (ii) also gives the limit
 $\lambda_{T_1}$, finite. Suppose the solution exists on $[0,T_l]$ with $\lambda_{T_l}$
 finite and $q^l_{T_l}=e_k$.
 
@@ -323,7 +333,7 @@ expiries $T_{l+1}<\dots<T_M$, started from the $\mathcal F_{T_l}$-measurable sta
 $(z,\lambda^{l+2},\dots,\lambda^M)$. Theorem~\ref{thm:exist} applies with this
 $\mathcal F_{T_l}$-measurable initial condition, the solution of
 \cite[Theorem~V.38]{Protter2005} depending continuously on its starting point,
-and with Proposition~\ref{prop:collapse} and Remark~\ref{rem:horizon} gives a unique
+and with Proposition~\ref{prop:collapse} and part (ii) of that theorem gives a unique
 strong solution on $[T_l,T_{l+1}]$ that settles at $T_{l+1}$ with $\lambda_{T_{l+1}}$
 finite. The densities $q^j$, $j>l+1$, are given by the same recursion on both sides of
 $T_l$ with continuous inputs, so they are continuous at $T_l$.
