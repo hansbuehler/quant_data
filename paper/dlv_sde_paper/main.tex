@@ -5,6 +5,7 @@
 \usepackage{microtype}
 \usepackage{booktabs}
 \usepackage{graphicx}
+\usepackage{xcolor}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
 \usepackage{enumitem}
@@ -15,14 +16,13 @@
 \newcommand{\Q}{\mathbb Q}
 \newcommand{\PP}{\mathbb P}
 \newcommand{\dd}{\mathrm d}
-\newcommand{\dlv}{\ell}
+\newcommand{\dlv}{\Sigma}
 \newcommand{\abs}[1]{\lvert #1\rvert}
 \newcommand{\ip}[2]{\langle #1,#2\rangle}
 \newcommand{\one}{\mathbf 1}
 \newcommand{\Var}{\operatorname{Var}}
 \newcommand{\Gh}{\widehat G}
 \newcommand{\Nh}{\widehat N}
-\newcommand{\Rt}{\widetilde R}
 \newcommand{\HB}[1]{{\color{blue}{#1}}}
 
 \theoremstyle{plain}
@@ -35,13 +35,11 @@
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Remark}
 
-\title{
-    \HB{
-    Stochastic Discrete  Local Volatility}
-}
+\title{\textbf{Stochastic Discrete Local Volatility}}
 
-\author{}
-\date{}
+\author{Magnus Wiese\qquad Hans Buehler$^{*}$\qquad Blanka Horvath$^{*}$\\[0.6em]
+  {\small $^{*}$Mathematical Institute and Oxford-Man Institute, University of Oxford}}
+\date{\today}
 
 \begin{document}
 \maketitle
@@ -60,37 +58,24 @@
 
 \begin{abstract}
 \noindent
-We study option market models on a fixed lattice of cash strikes and expiry
-dates whose state is the vector of gridded risk-neutral densities together with
-the discrete local variances. Positivity of the local variances is equivalent to
-absence of static arbitrage including calendar spreads, so the admissible set is
-an open orthant and $\lambda=\log\dlv$ ranges over a Euclidean space: a diffusion
-on the code-book is statically arbitrage-free by construction.
-
-Two results follow from the choice of chart. First, the spot is a read-off,
-$S_t=x^{\!\top}q^j_t$ at every expiry, an identity of the chart holding at all
-$t$ with no limit taken. At the front expiry we exhibit a family of front
-volatilities under which the density collapses onto a single node, so the spot
-lands on a strike and every gridded contract settles at its exact payoff. That
-pinning is a property of the chosen volatility and not of the chart, which
-represents every terminal spot in the grid range; in \cite{Wissel2007} it
-follows from the chart whatever the coefficients. Second, the model has a unique global
-strong solution on $[0,T_1]$, up to and including the first expiry, for every
-bounded and locally Lipschitz volatility structure and any number of driving
-factors, with no damping, no frozen wing, and no design rule. The only
-requirement is that the front volatility be integrable in time, which the
-natural collapse rate $(T_1-t)^{-1/2}$ satisfies. The quantity to be
-controlled is $\eta=\psi/q$, the density volatility relative to the density; it
-is bounded by the grid alone. Wissel \cite{Wissel2007} must assume a bound of
-this kind; here it is a theorem.
-
-The no-arbitrage drift restriction itself is not new. In the continuum it is
-\cite{CarmonaNadtochiy2008}, and on this lattice it is \cite{Wissel2007}, whose
-local implied variance coincides with the discrete local variance used here as
-an algebraic identity on the grid. What the density chart adds is that the drift
-becomes pointwise, $\alpha^j_i=-\sum_f\eta^{j,f}_i\beta^{j,f}_i$, with no matrix
-inversion and no rank condition, the apparent over-determination being resolved
-by conservation of mass and of the spot.
+We construct an option market model on a fixed lattice of cash strikes and expiries
+that is free of static and dynamic arbitrage by construction. The state is the vector
+of gridded risk-neutral densities, encoded by discrete local variances: their
+positivity is equivalent to the absence of static arbitrage, so in log coordinates the
+state space is Euclidean. Absence of dynamic arbitrage then fixes the drift node by
+node, as a covariance between the volatility of each discrete local variance and the
+relative volatility of the density at the same node. The restriction goes back to
+Carmona and Nadtochiy \cite{CarmonaNadtochiy2008} in the continuum and to Wissel
+\cite{Wissel2007} on this lattice; on a fixed lattice it becomes an algebraic
+identity, free of the regularity conditions and the maturity derivative of the
+continuum, and is computed by one tridiagonal solve per factor and expiry. The spot is read off
+the densities, and at each expiry the front density can be made to collapse onto a node, so every
+gridded contract settles at its exact payoff. Our main result is existence: for any
+bounded, locally Lipschitz volatility structure and any number of factors, the model
+has a unique strong solution up to the first expiry and, restarting at each expiry,
+across all expiries, with no conditions on the wings. The key estimate bounds the
+growth of the relative density volatility $\eta=\psi/q$ across expiries by a
+constant of the grid alone, turning an assumption of Wissel into a theorem.
 \end{abstract}
 
 \input{sec_intro}

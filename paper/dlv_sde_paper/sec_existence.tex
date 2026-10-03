@@ -1,7 +1,8 @@
 \section{The wing constant, and existence}\label{sec:exist}
 
-The log discrete local variance $\lambda=\log\dlv$ ranges over all of
-$\R^{NM}$, so positivity is automatic. By Theorem~\ref{thm:pointwise} the model
+The log discrete local variance $\lambda=(\lambda^2,\dots,\lambda^M)$,
+$\lambda^j=\log\dlv^j$, ranges over all of $\R^{N(M-1)}$, so positivity is
+automatic; the front density has its own chart \eqref{eq:softmax}. By Theorem~\ref{thm:drift} the model
 is the stochastic differential equation
 \begin{equation}\label{eq:abstract}
   \dd\lambda_t=\Bigl[-\ip{\eta_t}{b_t}-\tfrac12\abs{b_t}^{2}\Bigr]\dd t
@@ -11,10 +12,9 @@ whose only non-elementary coefficient is $\eta=\psi/q$ from \eqref{eq:volsolve}
 and \eqref{eq:eta}. Its denominator is small in the wings, and the question is
 whether $\eta$ can blow up there.
 
-The argument follows the route of Wissel's proof of his Theorem~3.5
-\cite{Wissel2007}: log coordinates (his (3.29)), induction over expiries, and an
-existence result for locally Lipschitz equations (his Proposition~3.7). Its one
-non-standard ingredient is an a priori bound, independent of the state, on the
+The argument has the structure of Wissel's proof of his Theorem~3.5
+\cite{Wissel2007}: log coordinates, induction over expiries, and local existence
+followed by a bound that rules out explosion. Its one non-standard ingredient is an a priori bound, independent of the state, on the
 relative volatility of the calendar spread at the second expiry. Wissel could not
 obtain this bound in general and imposes his condition (3.24) instead (his
 Remark~1 following the proof, p.~18); in our coordinates the quantity is $\eta+b$
@@ -23,7 +23,7 @@ volatility recursion and a known inequality for inverses of M-matrices.
 
 \subsection{The volatility recursion}\label{sec:walk}\label{sec:master}
 
-Write $P:=A_j(\dlv^j)^{-1}$, so that $q^j=Pq^{j-1}$.
+Write $P_j:=A_j(\dlv^j)^{-1}$, so that $q^j=P_jq^{j-1}$, and $P$ when $j$ is fixed.
 
 \begin{corollary}[Positivity, unit column sums, absorbing ends]\label{cor:pos}
 $P\ge0$ entrywise, $\one^{\!\top}P=\one^{\!\top}$, so $P_{im}\in[0,1]$, and the outer
@@ -44,28 +44,55 @@ That is all that is needed about $P$ itself. What we want next is a recursion fo
 $\eta$ alone: one step per expiry, each adding a controlled amount, so that the
 bound telescopes along the ladder. Dividing \eqref{eq:volsolve} by $q^j$ gives
 \begin{equation}\label{eq:divided}
-  \eta^{j}_i\;=\;\frac{(P\psi^{j-1})_i}{q^{j}_i}
-   \;-\;\frac{\bigl(P\,G_j(q^j)\beta^j\bigr)_i}{q^{j}_i} ,
+  \eta^{j,i}\;=\;\frac{(P\psi^{j-1})_i}{q^{j,i}}
+   \;-\;\frac{\bigl(P\,G_j(q^j)\beta^j\bigr)_i}{q^{j,i}} ,
 \end{equation}
 the first term carrying $\eta^{j-1}$ and the second carrying $b^j$.
 
 The first is an average. Writing $\psi^{j-1}=q^{j-1}\!\circ\eta^{j-1}$, its weights
-$P_{ik}q^{j-1}_k/q^{j}_i$ are non-negative because $P\ge0$ and sum to one because
+$P_{ik}q^{j-1,k}/q^{j,i}$ are non-negative because $P\ge0$ and sum to one because
 $q^j=Pq^{j-1}$, so it contributes at most $\lVert\eta^{j-1}\rVert_\infty$; they are
 the matrix $\mathcal A$ of \eqref{eq:mastercomp}.
 
 The source is the difficulty. Since $G_j$ is a second difference, row $i$ carries
-the neighbouring densities $q^j_{i\pm1}$ as well as $q^j_i$, so dividing by $q^j_i$
+the neighbouring densities $q^{j,i\pm1}$ as well as $q^{j,i}$, so dividing by $q^{j,i}$
 leaves the ratios
 \begin{equation}\label{eq:nbr}
-  \frac{q^{j}_{i-1}}{q^{j}_i}
+  \frac{q^{j,i-1}}{q^{j,i}}
   \qquad\text{and}\qquad
-  \frac{q^{j}_{i+1}}{q^{j}_i} ,
+  \frac{q^{j,i+1}}{q^{j,i}} ,
 \end{equation}
 which are unbounded in the wings, where the density decays fastest; nothing in
-\eqref{eq:volsolve} bounds them. Let $E\in\R^{N\times(N+2)}$ restrict to the
-interior nodes, so $EE^{\!\top}=I_N$, and recall
-$A_j=I+\Gh_j\,\mathrm{diag}(\dlv^j)E$.
+\eqref{eq:volsolve} bounds them.
+
+They are, however, an artefact of writing the row out. Since
+$\one^{\!\top}G_j(q)=0$ by Lemma~\ref{lem:null}, row $i$ of $G_j(q)\dlv^j$ is the
+net outflow of node $i$, and by \eqref{eq:affine} that net is
+\begin{equation}\label{eq:netknown}
+  G_j(q^j)\,\dlv^j\;=\;A_j(\dlv^j)q^j-q^j\;=\;q^{j-1}-q^{j},
+\end{equation}
+which carries no ratios at all: the individual fluxes are wing quantities, their
+net is not. For $b^j\equiv c$ this settles the matter, since $\beta^j=c\,\dlv^j$
+and $Pq^{j-1}=q^j$ give
+\[
+  \frac{\bigl(P\,G_j(q^j)\beta^j\bigr)_i}{q^{j,i}}
+  =c\,\frac{\bigl(q^{j}-Pq^{j}\bigr)_i}{q^{j,i}}
+  =c\Bigl(1-\frac{(Pq^{j})_i}{q^{j,i}}\Bigr),
+\]
+the two ratios of \eqref{eq:nbr} having collapsed into the single propagation
+ratio $(Pq^j)_i/q^{j,i}$. A general $b$ only modulates the density. Let
+$E\in\R^{N\times(N+2)}$ restrict to the interior nodes, so $EE^{\!\top}=I_N$, and
+note that $A_j=I+\Gh_j\,\mathrm{diag}(\dlv^j)E$. Writing
+$E^{\!\top}(q\circ b)$ for the vector equal to $q^ib^i$ at the interior nodes and
+zero at the outer ones, \eqref{eq:factor} and the commuting of diagonal matrices
+give
+\begin{equation}\label{eq:modulated}
+  G_j(q)\beta^j
+  =\Gh_j\,\mathrm{diag}(\dlv^j)E\,E^{\!\top}(q\circ b^j)
+  =\bigl(A_j(\dlv^j)-I\bigr)E^{\!\top}(q\circ b^j),
+\end{equation}
+again the operator's own increment, applied to $E^{\!\top}(q\circ b^j)$ in place of
+$q$. The proposition is what this amounts to.
 
 \begin{proposition}\label{prop:master}
 With $b^j=\beta^j/\dlv^j$ and $\circ$ the entrywise product,
@@ -83,94 +110,68 @@ equivalently, with the entrywise non-negative
 \end{equation}
 where $\mathcal A\one=\one$, so the transport is an averaging operator, and the
 $i$-th row of $\mathcal B$ sums to
-$(Pq^{j})_i/q^{j}_i-\one_{\{i\in\{0,N+1\}\}}$.
+$(Pq^{j})_i/q^{j,i}-\one_{\{i\in\{0,N+1\}\}}$.
 \end{proposition}
 
 \begin{proof}
-Multiplying $A_j=I+\Gh_j\mathrm{diag}(\dlv^j)E$ by $P$ on the left and $E^{\!\top}$
-on the right gives $P\Gh_j\mathrm{diag}(\dlv^j)=(I-P)E^{\!\top}$. By
-\eqref{eq:volsolve} and \eqref{eq:factor},
-$\psi^j=P\psi^{j-1}-P\Gh_j\mathrm{diag}(q^j)\beta^j$. Since $\beta^j=\dlv^j\!\circ b^j$
-and diagonal matrices commute,
-\[
-  \mathrm{diag}(q^j)\beta^j
-  =\mathrm{diag}(q^j)\mathrm{diag}(\dlv^j)\,b^j
-  =\mathrm{diag}(\dlv^j)\mathrm{diag}(q^j)\,b^j
-  =\mathrm{diag}(\dlv^j)\bigl(q^j\!\circ b^j\bigr),
-\]
-which is \eqref{eq:master}. Dividing it by $q^j_i$ gives \eqref{eq:mastercomp}: the rows of
-$\mathcal A$ sum to $(Pq^{j-1})_i/q^j_i=1$, and for $\mathcal B$ the terms
-$k\in\{0,N+1\}$ missing from $(Pq^j)_i$ vanish for interior $i$ and equal $q^j_i$
-at $k=i$ for outer $i$, by Corollary~\ref{cor:pos}.
+By \eqref{eq:volsolve}, $\psi^j=P\psi^{j-1}-P\,G_j(q^j)\beta^j$. Applying $P$ to
+\eqref{eq:modulated} at $q=q^j$ and using $PA_j=I$ gives
+$P\,G_j(q^j)\beta^j=(I-P)E^{\!\top}(q^j\!\circ b^j)$, which is \eqref{eq:master}.
+Dividing it by $q^{j,i}$ gives \eqref{eq:mastercomp}: the rows of $\mathcal A$ sum to
+$(Pq^{j-1})_i/q^{j,i}=1$, and for $\mathcal B$ the terms $k\in\{0,N+1\}$ missing from
+$(Pq^j)_i$ vanish for interior $i$ and equal $q^{j,i}$ at $k=i$ for outer $i$, by
+Corollary~\ref{cor:pos}.
 \end{proof}
 
 So $\eta^j$ is an average of $\eta^{j-1}$ plus a source in $b^j$, and the march
 across expiries is additive.
 
-\begin{remark}[Why the source is harmless]\label{rem:increment}
-The ratios \eqref{eq:nbr} disappear because the source is the operator's own
-increment: by \eqref{eq:affine}, $G_j(q)\dlv=A_j(\dlv)q-q$. The mechanism is
-clearest when $b^j\equiv c$, so that $\beta^j=c\,\dlv^j$:
-\[
-  G_j(q^j)\beta^j=c\bigl(A_jq^j-q^j\bigr)=c\bigl(q^{j-1}-q^j\bigr),
-  \qquad
-  P\,G_j(q^j)\beta^j=c\bigl(q^{j}-Pq^{j}\bigr),
-\]
-by $A_jq^j=q^{j-1}$ and $Pq^{j-1}=q^j$. Divided by $q^j_i$ this is
-$c\bigl(1-(Pq^j)_i/q^j_i\bigr)$: the two ratios of \eqref{eq:nbr} have collapsed
-to the single ratio $(Pq^j)_i/q^j_i$, whose size is what $\Theta_j$ measures in
-\eqref{eq:rows}. For general $b$ the factorisation \eqref{eq:factor} moves $b$ off
-$\dlv$ and onto $q$, diagonal matrices commuting, and the same computation applies
-to $q^j\!\circ b^j$. This is motivation only: the proof above reaches
-\eqref{eq:master} through $P\Gh_j\mathrm{diag}(\dlv^j)=(I-P)E^{\!\top}$ in one step.
-\end{remark}
-
 \subsection{The wing constant}\label{sec:bound}
 
-That single surviving ratio, $(Pq^j)_i/q^j_i$, is what has to be bounded. Write
-\begin{equation}\label{eq:rows}
-  R^j_i:=\one_{\{1\le i\le N\}}+\frac{(Pq^j)_i}{q^j_i}-\one_{\{i\in\{0,N+1\}\}},
-  \qquad
-  \Theta_j:=\max_i R^j_i,
-  \qquad
-  \Xi:=\sum_{r=1}^{N}P_{rr}\le N ,
+That single surviving ratio, $(Pq^j)_i/q^{j,i}$, is what has to be bounded. Since
+$q^j=Pq^{j-1}$ it is
+\begin{equation}\label{eq:P2ratio}
+  \frac{(Pq^{j})_i}{q^{j,i}}=\frac{(P^{2}q^{j-1})_i}{(Pq^{j-1})_i} ,
 \end{equation}
-and $H_j:=\max_i\abs{\eta^j_i}$. Here $R^j_i$ is the row bound of
+so what is needed is how much larger than $P$ the square $P^{2}$ can be entrywise;
+and since both sides are linear and non-negative in $q^{j-1}$, the case
+$q^{j-1}=e_m$ shows that an entrywise bound is not merely sufficient but
+necessary. Write
+\begin{equation}\label{eq:rows}
+  R^{j,i}:=\one_{\{1\le i\le N\}}+\frac{(Pq^j)_i}{q^{j,i}}-\one_{\{i\in\{0,N+1\}\}},
+  \qquad
+  \Theta_j:=\max_i R^{j,i},
+  \qquad
+  \Xi_j:=\sum_{r=1}^{N}P_{rr}\le N ,
+\end{equation}
+and $H_j:=\max_i\abs{\eta^{j,i}}$. Here $R^{j,i}$ is the row bound of
 \eqref{eq:mastercomp} at node $i$, and $\Theta_j$, the \emph{wing constant}, is its
 size across the slab. The theorem shows $\Theta_j$ is bounded by the grid alone,
-uniformly in the state; the bound rests on one inequality for inverses of
-M-matrices and its consequence for $P^{2}$.
+uniformly in the state; the bound rests on a single inequality for inverses of
+M-matrices.
 
-\begin{lemma}[Path product inequality]\label{lem:pathproduct}
+\begin{lemma}[Squared propagator]\label{lem:pathproduct}\label{cor:p2p}
 For all nodes $i,r,m$,
 \begin{equation}\label{eq:summand}
-  P_{ir}\,P_{rm}\;\le\;P_{im}\,P_{rr}.
+  P_{ir}\,P_{rm}\;\le\;P_{im}\,P_{rr},
+\end{equation}
+and consequently, for all $i,m$,
+\begin{equation}\label{eq:p2p}
+  \bigl(P^{2}\bigr)_{im}\le
+  \begin{cases}
+    \Xi_j\,P_{im}, & 1\le i\le N,\\
+    (1+\Xi_j)\,P_{im}, & i\in\{0,N+1\}.
+  \end{cases}
 \end{equation}
 \end{lemma}
 
 \begin{proof}
 $P$ is the inverse of an M-matrix by Corollary~\ref{cor:pos}, and every inverse
-M-matrix satisfies the path product conditions
-$a_{ij}a_{jk}\le a_{ik}a_{jj}$ for all $i,j,k$
-\cite{ZhuZhangLiu2011}, a result first noted by Willoughby
-\cite{Willoughby1977} and proved by Johnson and Smith \cite{JohnsonSmith1999}. Take
-$(i,j,k)=(i,r,m)$.
-\end{proof}
-
-\begin{corollary}[Squared propagator]\label{cor:p2p}
-For all $i,m$,
-\begin{equation}\label{eq:p2p}
-  \bigl(P^{2}\bigr)_{im}\le
-  \begin{cases}
-    \Xi\,P_{im}, & 1\le i\le N,\\
-    (1+\Xi)\,P_{im}, & i\in\{0,N+1\}.
-  \end{cases}
-\end{equation}
-\end{corollary}
-
-\begin{proof}
-Sum \eqref{eq:summand} over $r$. An outer $r$ contributes only if $r=i$, since
-column $r$ of $P$ is $e_r$, and then contributes $P_{im}$.
+M-matrix is a path product matrix, $a_{ij}a_{jk}\le a_{ik}a_{jj}$ for all
+$i,j,k$ \cite[Theorem~4.5]{JohnsonSmith2011}; \eqref{eq:summand} is the case
+$(i,j,k)=(i,r,m)$. Summing it over $r$ gives \eqref{eq:p2p}: an outer $r$
+contributes only if $r=i$, since column $r$ of $P$ is $e_r$, and then contributes
+$P_{im}$.
 \end{proof}
 
 \begin{theorem}\label{thm:wing}
@@ -180,31 +181,27 @@ For every $\dlv\in(0,\infty)^N$,
 \end{equation}
 and
 \begin{equation}\label{eq:thetabound}
-  \Theta_j\le1+\Xi\le N+1,
+  \Theta_j\le1+\Xi_j\le N+1,
   \qquad
   \Theta^{*}:=\sup_{\dlv}\sum_{j=2}^{M}\Theta_j\le(M-1)(N+1).
 \end{equation}
 \end{theorem}
 
 \begin{proof}
-Since $q^j=Pq^{j-1}\ge0$, Corollary~\ref{cor:p2p} gives
-$(Pq^j)_i=\sum_m(P^2)_{im}q^{j-1}_m\le\Xi\,q^j_i$ for interior $i$ and
-$\le(1+\Xi)q^j_i$ for outer $i$, so $R^j_i\le1+\Xi$ in both cases. Finally,
+Since $q^j=Pq^{j-1}\ge0$, Lemma~\ref{lem:pathproduct} gives
+$(Pq^j)_i=\sum_m(P^2)_{im}q^{j-1,m}\le\Xi_j\,q^{j,i}$ for interior $i$ and
+$\le(1+\Xi_j)q^{j,i}$ for outer $i$, so $R^{j,i}\le1+\Xi_j$ in both cases. Finally,
 $\mathcal A\ge0$ with $\mathcal A\one=\one$ gives
 $\lVert\mathcal A\eta^{j-1}\rVert_\infty\le H_{j-1}$, while row $i$ of
-$(\mathcal B-E^{\!\top})b^{j}$ has modulus at most $\lVert b^j\rVert_\infty R^j_i$
+$(\mathcal B-E^{\!\top})b^{j}$ has modulus at most $\lVert b^j\rVert_\infty R^{j,i}$
 by the row sums of Proposition~\ref{prop:master}.
 \end{proof}
-
-The bound is a property of the grid, not of $\dlv$, and it is far from tight on
-realistic states: on Heston surfaces with $N=40$ the measured $\Theta_j$ is at most
-$7.6$ against $41$.
 
 \subsection{Existence}\label{sec:existence}
 
 Iterating \eqref{eq:step} from the front slice,
 \begin{equation}\label{eq:apriori}
-  \sup_{j,i}\abs{\eta^j_{i,t}}
+  \sup_{j,i}\abs{\eta^{j,i}_{t}}
   \;\le\;\lVert\eta^1_t\rVert_\infty+(M-1)(N+1)\,\lVert b\rVert_\infty ,
 \end{equation}
 and iterating \eqref{eq:master} shows that $\eta^j$ is affine in $\eta^1$, with
@@ -219,4 +216,122 @@ For a horizon $T\le T_1$,
 \end{equation}
 \end{assumption}
 
-\emph{TBD.}
+\begin{theorem}[Existence]\label{thm:exist}
+Let $T<T_1$, and let the front volatility $\nu=\nu(t,z)$ in \eqref{eq:softmax} and
+the volatility $b=b(t,z,\lambda)$ be bounded, $\abs{\nu}\le B_\nu$,
+$\abs{b}\le B$, and locally Lipschitz in $(t,z,\lambda)$. Then the front chart
+\eqref{eq:softmax}--\eqref{eq:frontdrift} together with \eqref{eq:abstract} has a
+unique strong solution $(z,\lambda)$ on $[0,T]$, and
+\begin{equation}\label{eq:ellbounds}
+  0\;<\;\inf_{t\le T}\min_{j,i}\dlv^{j,i}_{t}
+  \;\le\;\sup_{t\le T}\max_{j,i}\dlv^{j,i}_{t}\;<\;\infty
+  \qquad\text{almost surely.}
+\end{equation}
+No condition is imposed on $\dlv$, on the wings, or on the number of factors.
+\end{theorem}
+
+\begin{proof}
+The coefficients are locally Lipschitz: $q^1=\mathrm{softmax}(z)$ and
+$\dlv=e^\lambda$ are positive, so each $A_j$ is a non-singular M-matrix and
+everything except $\nu$ and $b$ is smooth in $(z,\lambda)$. Adding time as a state
+variable to cover the time dependence, \cite[Theorem~V.38, p.~303]{Protter2005}
+gives a unique solution up to an explosion time $\zeta$, with
+$\limsup_{t\to\zeta}\lVert(z_t,\lambda_t)\rVert=\infty$ on $\{\zeta<\infty\}$.
+The drift of $\lambda$ is bounded by \eqref{eq:apriori}, since
+$\lVert\eta^1\rVert_\infty=\lVert\mathrm{dev}\rVert_\infty\le2B_\nu$, and the drift
+$m$ of $z$ is bounded by $2B_\nu^2$; let $D$ bound both. On $[0,\zeta\wedge T)$
+the drift part of $(z,\lambda)$ is therefore at most $DT$, and the noise part,
+having integrand bounded by $B_\nu+B$, is a martingale bounded in $L^2$, hence
+convergent as $t\to\zeta\wedge T$. So $(z,\lambda)$ stays bounded on
+$[0,\zeta\wedge T)$, which rules out $\zeta\le T$. The solution exists on $[0,T]$,
+$\lambda$ is bounded there, and \eqref{eq:ellbounds} follows from $\dlv=e^\lambda$.
+\end{proof}
+
+\begin{remark}[The front expiry is included]\label{rem:horizon}
+At $T_1$ the front settles on a node (Proposition~\ref{prop:collapse}), so $z$
+itself runs off and Theorem~\ref{thm:exist} does not apply on $[0,T_1]$ directly.
+It applies on every $[0,T']$ with $T'<T_1$, and the $\lambda$-part of the proof
+only needs the drift bound to be integrable in time, which is
+Assumption~\ref{ass:F} with $T=T_1$. Under it $\lambda$ stays bounded on $[0,T_1)$
+and has a limit at $T_1$, so \eqref{eq:ellbounds} holds with $T=T_1$. The settling
+front has $\lVert\eta^1_t\rVert_\infty\le C(T_1-t)^{-p}$, integrable for $p<1$, so
+for $p\in[\tfrac12,1)$ the code-book reaches its first expiry with every gridded contract settling at its
+payoff.
+\end{remark}
+
+\subsection{Beyond the first expiry}\label{sec:patching}
+
+At $T_1$ the front expires and the next expiry becomes the front. The settling of
+Proposition~\ref{prop:collapse} makes this switch clean: the spot sits on a node, and the
+new front density is a column of the propagator. Indeed, if $q^l_{T_l}=e_k$ then the
+code-book $A_{l+1}(\dlv^{l+1})\,q^{l+1}=q^l$ gives
+\begin{equation}\label{eq:handover}
+  q^{l+1}_{T_l}=P_{l+1}\,e_k ,\qquad P_{l+1}:=A_{l+1}\bigl(\dlv^{l+1}_{T_l}\bigr)^{-1},
+\end{equation}
+the spread of a unit mass at the settled spot by one step of the code-book. To restart the
+front chart we need this density to be strictly positive.
+
+\begin{lemma}[The new front]\label{lem:newfront}
+Let $P=A_j(\dlv^j)^{-1}$ with $\dlv^j\in(0,\infty)^N$. If $k$ is an interior node, then
+$(Pe_k)_i>0$ for every node $i$ and $K^{\!\top}Pe_k=K^k$. If $k\in\{0,N+1\}$, then
+$Pe_k=e_k$.
+\end{lemma}
+
+\begin{proof}
+Order the nodes with the interior first. The outer columns of $A_j$ are $e_0$ and
+$e_{N+1}$ (Corollary~\ref{cor:pos}), so
+\[
+  A_j=\begin{pmatrix}A_{II}&0\\A_{BI}&I\end{pmatrix},\qquad
+  P=\begin{pmatrix}A_{II}^{-1}&0\\-A_{BI}A_{II}^{-1}&I\end{pmatrix}.
+\]
+By \eqref{eq:operator}, $A_{II}$ is tridiagonal with strictly negative off-diagonal
+entries, hence an irreducible non-singular M-matrix, so $A_{II}^{-1}>0$ entrywise
+\cite{BermanPlemmons1994}. The block $-A_{BI}\ge0$ has a positive entry in the row of
+$K^0$ (column $K^1$) and in the row of $K^{N+1}$ (column $K^N$), so the outer entries of an
+interior column of $P$ are positive as well. The identity $K^{\!\top}P=K^{\!\top}$ follows
+from $K^{\!\top}A_j=K^{\!\top}$ (Lemma~\ref{lem:null}), and the outer columns are
+Corollary~\ref{cor:pos}.
+\end{proof}
+
+\begin{corollary}[Existence on the whole ladder]\label{cor:patch}
+Let $b$ be bounded and locally Lipschitz. On each interval $[T_{l-1},T_l]$,
+$l=1,\dots,M$, let the current front density $q^l$ follow the chart \eqref{eq:softmax}
+with the settling volatility \eqref{eq:nufront}, where $\tau=T_l-t$ and
+$p\in[\tfrac12,1)$. Then the model has a solution on $[0,T_M]$, unique given these
+choices, such that
+\begin{enumerate}[label=(\roman*),leftmargin=2em,itemsep=1pt]
+\item every gridded price is a continuous martingale up to its expiry;
+\item at every $T_l$ the spot sits on a node $K^{k_l}$ and every contract expiring at
+  $T_l$ settles at its payoff;
+\item if $k_l$ is interior, the model continues on $[T_l,T_{l+1}]$ from the finite state
+  $z=\log q^{l+1}_{T_l}$ and $\lambda^{l+2},\dots,\lambda^M$ at $T_l$; if $k_l$ is an
+  outer node, the spot is absorbed there: $q^j_t=e_{k_l}$ for all $j>l$ and $t\ge T_l$.
+\end{enumerate}
+\end{corollary}
+
+\begin{proof}
+By induction on $l$. On $[0,T_1]$ this is Proposition~\ref{prop:collapse} with
+Theorem~\ref{thm:exist} and Remark~\ref{rem:horizon}, which also give the limit
+$\lambda_{T_1}$, finite. Suppose the solution exists on $[0,T_l]$ with $\lambda_{T_l}$
+finite and $q^l_{T_l}=e_k$.
+
+If $k$ is interior, \eqref{eq:handover} and Lemma~\ref{lem:newfront} give a strictly
+positive new front, so $z=\log q^{l+1}_{T_l}$ is finite, and
+$K^{\!\top}q^{l+1}_{T_l}=K^k=S_{T_l}$, so the spot is continuous. On $[T_l,T_{l+1}]$ the
+ladder is that of Sections~\ref{sec:drift}--\ref{sec:exist} with front $q^{l+1}$ and
+expiries $T_{l+1}<\dots<T_M$, started from the $\mathcal F_{T_l}$-measurable state
+$(z,\lambda^{l+2},\dots,\lambda^M)$. Theorem~\ref{thm:exist} applies with this
+$\mathcal F_{T_l}$-measurable initial condition, the solution of
+\cite[Theorem~V.38]{Protter2005} depending continuously on its starting point,
+and with Proposition~\ref{prop:collapse} and Remark~\ref{rem:horizon} gives a unique
+strong solution on $[T_l,T_{l+1}]$ that settles at $T_{l+1}$ with $\lambda_{T_{l+1}}$
+finite. The densities $q^j$, $j>l+1$, are given by the same recursion on both sides of
+$T_l$ with continuous inputs, so they are continuous at $T_l$.
+
+If $k$ is an outer node, Lemma~\ref{lem:newfront} gives $q^j_{T_l}=e_k$ for every $j>l$.
+The constant process $q^j_t\equiv e_k$ satisfies every recursion, since $A_je_k=e_k$, and
+is a martingale, so all prices are constant and settle at their payoffs; we freeze
+$\lambda$ at $\lambda_{T_l}$, on which no price then depends.
+
+Uniqueness on each interval gives uniqueness on $[0,T_M]$.
+\end{proof}
