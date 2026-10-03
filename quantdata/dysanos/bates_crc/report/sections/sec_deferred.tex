@@ -1,0 +1,40 @@
+\section{Analytical guarantees, numerical errors, and unresolved assumptions}
+\label{sec:deferred}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{5.6cm}p{3.3cm}p{5.6cm}}
+\toprule
+Claim & Status & Basis / caveat \\
+\midrule
+$D(-i,\tau)=A(-i,\tau)=j_p(\pm\{0,-i\})=0$ &
+  \textbf{Analytical guarantee} & ODE uniqueness / compensator algebra; exact, not approximate. \\
+Full transform $\Phi(0)=\Phi(-i)=1$ &
+  Numerical error $<10^{-8}$ & Quadrature-limited (reserve integral's Gauss--Legendre order), not floating-point-limited. \\
+Reserve-term nonnegativity $\Rightarrow$ admissibility &
+  \textbf{Analytical guarantee} & Duffie--Filipovic--Schachermayer (2003) Thm.~2.7; enforced as a code invariant. \\
+Branching lemma positivity (fixed $r$, in $v$) &
+  \textbf{Analytical guarantee} & Sato (2013) Thm.~9.8 applied to the $v$-indexed semigroup; not a frequency sweep. \\
+Protected-option ($T<t_n$) invariance &
+  Numerical error $<10^{-8}$ (effectively exact) & Confirmed to be a real, non-vacuous property via the negative control. \\
+Off-grid generator residual &
+  Numerical error $<5\times10^{-4}$ & Finite-difference floor at $h=10^{-5}$; not evidence of a genuine defect. \\
+Independent MC pricing agreement &
+  Numerical, within $6$ s.e. & \textbf{Not} treated as proof; covers only the pre-first-reset window (no branching-type jump term simulated). \\
+$X$/$Y$ conditional independence &
+  \textbf{Unresolved assumption} & Modelling hypothesis of \texttt{thm:dlv-bates}; cannot be checked without data, none used in this task. \\
+Terminal settlement / full $S=XY$ martingality &
+  \textbf{Unresolved, partially reduced} & Reduces exactly to the independence assumption above given each factor's own verified martingale property (tower identity checked). \\
+Connection to a Wiese--Wissel-trained decoder &
+  \textbf{Out of scope for this task} & Explicitly deferred until the positivity/tower/settlement layer (Sec.~\ref{sec:dlv-product}) is in place -- which this task establishes. \\
+Moment-strip check at the exact $(\alpha,\tau)$ used by the Fourier pricer &
+  \textbf{Follow-up} & \texttt{moment\_strip\_report} exists and is tested for monotonicity, but not yet cross-referenced against every $(\alpha,\tau)$ pair the pricer actually uses. \\
+Validation against real market data &
+  \textbf{Out of scope, by instruction} & Task explicitly required to run without market data; \texttt{DATA\_STATUS.md} (prior task) already recorded none is available in this environment. \\
+\bottomrule
+\end{tabular}
+\caption{What is proven analytically, what is only numerically checked (with
+its error), and what remains an open or deliberately deferred assumption.}
+\label{tab:guarantees}
+\end{table}

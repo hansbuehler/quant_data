@@ -1,0 +1,172 @@
+[
+  {
+    "date_prev": "2005-11-21",
+    "date_next": "2010-07-07",
+    "gap_years": 4.6242299794661195,
+    "theta_prev": 0.022117495346739013,
+    "theta_next": 0.1208989717479003,
+    "delta_theta_realised": 0.09878147640116129,
+    "theta_band": [
+      -0.007882504653260985,
+      0.05211749534673901
+    ],
+    "band_ok": false,
+    "min_band_half_width_needed": 0.09878147640116129,
+    "jumps_prev": {
+      "lambda_J": 0.10078268591651876,
+      "m_J": -0.10657112329154476,
+      "delta_J": 0.15546813758921602
+    },
+    "jumps_next": {
+      "lambda_J": 0.6978917507688654,
+      "m_J": -0.12179168084233019,
+      "delta_J": 0.07353125063038687
+    },
+    "jump_box": {
+      "Lambda": 0.15117402887477815,
+      "M": 0.15985668493731714,
+      "delta_min": 0.10364542505947734,
+      "delta_max": 0.23320220638382402,
+      "s_star": 0.30316286829897127
+    },
+    "jumps_in_box": false,
+    "admissible": false,
+    "reason": "realised theta move +0.09878 exceeds the declared +/-0.03 operating band regardless of reserve budget (needs a band of at least +/-0.09878)"
+  },
+  {
+    "date_prev": "2010-07-07",
+    "date_next": "2011-07-07",
+    "gap_years": 0.999315537303217,
+    "theta_prev": 0.1208989717479003,
+    "theta_next": 0.06904666747114299,
+    "delta_theta_realised": -0.05185230427675731,
+    "theta_band": [
+      0.0908989717479003,
+      0.1508989717479003
+    ],
+    "band_ok": false,
+    "min_band_half_width_needed": 0.05185230427675731,
+    "jumps_prev": {
+      "lambda_J": 0.6978917507688654,
+      "m_J": -0.12179168084233019,
+      "delta_J": 0.07353125063038687
+    },
+    "jumps_next": {
+      "lambda_J": 0.3223428111871107,
+      "m_J": -0.10304846080735038,
+      "delta_J": 0.08531009243222216
+    },
+    "jump_box": {
+      "Lambda": 1.0468376261532981,
+      "M": 0.1826875212634953,
+      "delta_min": 0.04902083375359125,
+      "delta_max": 0.11029687594558031,
+      "s_star": 0.1433859387292544
+    },
+    "jumps_in_box": true,
+    "admissible": false,
+    "reason": "realised theta move -0.05185 exceeds the declared +/-0.03 operating band regardless of reserve budget (needs a band of at least +/-0.05185)"
+  },
+  {
+    "date_prev": "2011-07-07",
+    "date_next": "2024-03-05",
+    "gap_years": 12.66255989048597,
+    "theta_prev": 0.06904666747114299,
+    "theta_next": 0.09644428728046021,
+    "delta_theta_realised": 0.027397619809317222,
+    "theta_band": [
+      0.03904666747114299,
+      0.09904666747114299
+    ],
+    "band_ok": true,
+    "min_band_half_width_needed": 0.027397619809317222,
+    "jumps_prev": {
+      "lambda_J": 0.3223428111871107,
+      "m_J": -0.10304846080735038,
+      "delta_J": 0.08531009243222216
+    },
+    "jumps_next": {
+      "lambda_J": 4.999999865019054,
+      "m_J": 0.020519174979812264,
+      "delta_J": 0.010000000000008282
+    },
+    "jump_box": {
+      "Lambda": 0.4835142167806661,
+      "M": 0.15457269121102557,
+      "delta_min": 0.05687339495481478,
+      "delta_max": 0.12796513864833325,
+      "s_star": 0.16635468024283323
+    },
+    "jumps_in_box": false,
+    "admissible": false,
+    "reason": "realised jump parameters at 2024-03-05 fall outside the 1.5x-widened box"
+  },
+  {
+    "date_prev": "2024-03-05",
+    "date_next": "2024-12-26",
+    "gap_years": 0.810403832991102,
+    "theta_prev": 0.09644428728046021,
+    "theta_next": 0.03758964707303428,
+    "delta_theta_realised": -0.05885464020742594,
+    "theta_band": [
+      0.06644428728046022,
+      0.1264442872804602
+    ],
+    "band_ok": false,
+    "min_band_half_width_needed": 0.05885464020742594,
+    "jumps_prev": {
+      "lambda_J": 4.999999865019054,
+      "m_J": 0.020519174979812264,
+      "delta_J": 0.010000000000008282
+    },
+    "jumps_next": {
+      "lambda_J": 4.999999999999992,
+      "m_J": -0.012267829516434589,
+      "delta_J": 0.024123559788784523
+    },
+    "jump_box": {
+      "Lambda": 7.499999797528581,
+      "M": 0.030778762469718397,
+      "delta_min": 0.006666666666672188,
+      "delta_max": 0.015000000000012424,
+      "s_star": 0.01950000000001615
+    },
+    "jumps_in_box": false,
+    "admissible": false,
+    "reason": "realised theta move -0.05885 exceeds the declared +/-0.03 operating band regardless of reserve budget (needs a band of at least +/-0.05885)"
+  },
+  {
+    "date_prev": "2024-12-26",
+    "date_next": "2025-01-03",
+    "gap_years": 0.02190280629705681,
+    "theta_prev": 0.03758964707303428,
+    "theta_next": 0.0352570895193778,
+    "delta_theta_realised": -0.002332557553656474,
+    "theta_band": [
+      0.007589647073034278,
+      0.06758964707303428
+    ],
+    "band_ok": true,
+    "min_band_half_width_needed": 0.002332557553656474,
+    "jumps_prev": {
+      "lambda_J": 4.999999999999992,
+      "m_J": -0.012267829516434589,
+      "delta_J": 0.024123559788784523
+    },
+    "jumps_next": {
+      "lambda_J": 0.020529321531309968,
+      "m_J": -0.4999999999436344,
+      "delta_J": 0.010000000114931002
+    },
+    "jump_box": {
+      "Lambda": 7.499999999999988,
+      "M": 0.018401744274651882,
+      "delta_min": 0.016082373192523015,
+      "delta_max": 0.03618533968317678,
+      "s_star": 0.04704094158812982
+    },
+    "jumps_in_box": false,
+    "admissible": false,
+    "reason": "realised jump parameters at 2025-01-03 fall outside the 1.5x-widened box"
+  }
+]

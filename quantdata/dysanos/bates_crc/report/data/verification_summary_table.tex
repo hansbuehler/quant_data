@@ -1,0 +1,14 @@
+\begin{tabular}{lr}
+\toprule
+Check & Result \\
+\midrule
+Protected-option sweep, max $|\Phi_{\rm before}-\Phi_{\rm after}|$ & $4.34e-19$ \\
+Protected-option sweep, combinations tested & 48 \\
+Negative control, max $|\Phi_{\rm before}-\Phi_{\rm after}|$ & $7.65e-05$ \\
+Negative control fails as expected & Yes \\
+Independent MC: Fourier price ($K=1$, $T=t_1$) & $0.008309$ \\
+Independent MC: MC price $\pm$ 1 s.e. & $0.008284 \pm 0.000041$ \\
+Independent MC: $|$diff$|$ within 6 s.e. & Yes \\
+Independent MC: seed, $n_{\rm paths}$ & 7, 400,000 \\
+\bottomrule
+\end{tabular}

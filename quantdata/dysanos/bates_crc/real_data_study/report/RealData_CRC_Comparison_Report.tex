@@ -1,0 +1,92 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{float}
+\usepackage[htt]{hyphenat}
+\usepackage{enumitem}
+
+\emergencystretch=3em
+\sloppy
+\setlength{\tabcolsep}{4.5pt}
+
+\newcommand{\Q}{\mathbb Q}
+\newcommand{\Pp}{\mathbb P}
+\newcommand{\E}{\mathbb E}
+\newcommand{\R}{\mathbb R}
+
+\title{A real-data calibration comparison: can the coherent DLV\\
+$\times$ extended-Bates family fit actual option surfaces well,\\
+and what fit cost comes with useful CRC reserves?}
+\author{\texttt{quant\_data-main/quantdata/dysanos/bates\_crc/real\_data\_study}}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We run the audited DLV$\times$extended-Bates CRC construction from the
+prior task against real WRDS OptionMetrics option quotes (cached locally as
+WIDB fixtures: SPX and AAPL, six dates spanning 2005--2025, calm/stressed/
+thin-liquidity regimes), comparing it against the repository's dy2 static
+decoder, an independently-fitted unsmoothed SANOS snapshot baseline, and a
+coherent-chain$\times$Black variant, all on the same cleaned quotes and the
+same common evaluation contract set, with a model-selection/held-out date
+split fixed before any held-out calibration was run. Every DLV-chain model
+is calibrated by direct nonlinear least squares on the same spread-unit
+hinge-error convention this codebase's own SANOS fitting already uses,
+with documented bounds, multi-start diagnostics, and post-fit martingale
+verification -- never asserted, always re-checked numerically. The reserve
+extension's fit cost is measured directly, not inferred from the mere
+existence of an admissible parameter range, and turns out to be large: a
+195--276\% average price shift and a collapse to 0\% bid-ask coverage upon
+turning on even a modest reserve budget, of which recalibration recovers
+most but not all on two of three tested dates, and fails to converge at
+all on the third -- a genuine solver failure, reported as such.
+\end{abstract}
+
+\tableofcontents
+
+\section{Executive summary}
+\label{sec:exec}
+
+\begin{enumerate}
+\item \textbf{Real data, not synthetic}: 12 genuine single-day option
+  books (SPX/AAPL, 2005--2025) are available and used
+  (Sec.~\ref{sec:data}) -- a small, non-continuous fixture set, not
+  \texttt{dy2.pdf}'s full historical series, stated precisely rather than
+  overstated.
+\item \textbf{A calibration surprise, caught by the selection/held-out
+  discipline itself}: the originally-frozen anchor grid width was wrong
+  (Sec.~\ref{sec:selection-diagnostics}) -- caught on a SELECTION date, fixed
+  before any held-out date was touched, exactly as the split is meant to
+  prevent.
+\item \textbf{DLV$\times$Black cannot fit real SPX well}: a structural
+  limitation of a single scalar transition rate, not a bug.
+\item \textbf{DLV$\times$ordinary-Bates fits near-exactly on the older
+  dates (2005--2011: 94--100\% inside bid-ask) but collapses on the dense
+  modern held-out books (2024--2025: 13--27\%)} -- a genuine
+  generalisation gap the held-out split exists to catch, not something
+  tuned away: Fig.~\ref{fig:model-comparison-bars},
+  Table~\ref{tab:main-comparison}.
+\item \textbf{The reserve's fit cost is large, not small}: turning on even
+  a modest reserve budget shifts prices by 195--276\% on average and
+  collapses bid-ask coverage to 0\% before recalibration; refitting
+  recovers most, but not all, of this on two of three tested dates, and
+  fails to converge at all on the third (Sec.~\ref{sec:reserve-tradeoff}) --
+  exactly the kind of result the task's warning against equating
+  "admissible" with "small" is meant to surface.
+\end{enumerate}
+
+\input{sections/sec_data.tex}
+\input{sections/sec_models.tex}
+\input{sections/sec_main_comparison.tex}
+\input{sections/sec_reserve_tradeoff.tex}
+\input{sections/sec_outputs.tex}
+
+\end{document}

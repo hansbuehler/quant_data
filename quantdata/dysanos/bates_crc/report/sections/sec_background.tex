@@ -1,0 +1,70 @@
+\section{Background implementation: Riccati, jump exponent, continuation transform}
+\label{sec:background}
+
+\texttt{heston\_riccati.py} implements the closed-form Heston affine
+solution
+\[
+  b(u)=\kappa-i\rho\xi u,\qquad
+  d(u)=\sqrt{b(u)^2+\xi^2(u^2+iu)}\ \ (\operatorname{Re}d\ge0),\qquad
+  g(u)=\frac{b(u)-d(u)}{b(u)+d(u)},
+\]
+\[
+  D(u,\tau)=\frac{b-d}{\xi^2}\cdot\frac{1-e^{-d\tau}}{1-ge^{-d\tau}},\qquad
+  A(u,\tau)=\kappa\theta\!\int_0^\tau\! D(u,r)\,dr
+           =\frac{\kappa\theta}{\xi^2}\Big[(b-d)\tau-2\log\tfrac{1-ge^{-d\tau}}{1-g}\Big],
+\]
+and the Gaussian Bates jump exponent
+\[
+  j_p(u)=\lambda_J\Big[e^{ium_J-\tfrac12\delta_J^2u^2}-1-iu\kappa_J\Big],\qquad
+  \kappa_J=e^{m_J+\tfrac12\delta_J^2}-1.
+\]
+
+\paragraph{Martingale normalisation.} At $u=-i$, $u^2+iu=0$ identically, so
+the Riccati RHS vanishes whenever $D=0$; by ODE uniqueness $D(-i,\tau)\equiv0$
+for \emph{every} $\tau$, hence $A(-i,\tau)\equiv0$ too. $j_p(-i)=0$ by the same
+compensator algebra. Both are checked to $<10^{-13}$ in
+\texttt{test\_bates\_crc\_heston\_riccati.py}.
+
+\paragraph{Independent verification (Task~1's ``independent pricing
+check'').} The closed form is checked against a from-scratch RK4 integration
+of the defining Riccati ODE (\texttt{riccati\_D\_ode\_integration}), agreeing
+to $<10^{-10}$; the jump exponent is checked against an independent 80-node
+Gauss--Hermite quadrature of its defining expectation integral, agreeing to
+$<10^{-9}$.
+
+\subsection{The continuation transform}
+\label{sec:continuation-transform}
+
+\texttt{bates\_transform.py} assembles
+\[
+  \Phi_t(u,T)=\exp\Big\{V_tD(u,\tau)+A(u,\tau)+\tau j_{p_n}(u)
+              +\int_t^T\ell_s(u)\,ds\Big\},\qquad \tau=T-t,
+\]
+where $\ell_s(u)$ is the Section~12 reserve correction (Sec.~\ref{sec:reserve}).
+$\Phi_t(0,T)=\Phi_t(-i,T)=1$ is checked for the \emph{full assembled}
+transform (not just its individual pieces), at every one of the four states
+in the manuscript's synthetic sequence and every scheduled model expiry, to
+$<10^{-8}$.
+
+\paragraph{A non-obvious cancellation.} The $\tau j_{p_n}(u)$ term and the
+$-\int_t^T j_{p_n}(u)\,ds$ term inside $\ell_s$ cancel \emph{exactly}, for
+every $t,T$ (both use the same fixed snapshot $p_n$ throughout one
+evaluation). This is verified as a regression
+(\texttt{test\_jump\_parameters\_cancel\_exactly\_from\_the\_transform}):
+replacing $p_n$ with an arbitrary other admissible jump law, holding
+$(b_{\rm used},\theta_{\rm path})$ fixed, changes $\Phi_t(u,T)$ by
+$<10^{-9}$. Consequently $p_n$ never enters the priced $Q$-dynamics
+directly -- only the fixed dominating envelope $\bar\nu$ and the scheduled
+reserve corrections do. See AUDIT.md Sec.~8 for the full discussion.
+
+\paragraph{Fourier pricing.} A damped Carr--Madan inversion
+(\texttt{fourier\_call\_price}, direct Gauss--Legendre quadrature rather
+than FFT, since the contract book here is small) prices
+$G_t(x;T,K)=\E_Q[(xY_T-K)^+\mid\mathcal G_t]$. Before the first reset
+($T\le t_1$), the reserve sum contributes nothing, so by the cancellation
+above the priced dynamics reduce exactly to Heston diffusion + Gaussian
+jumps under the dominating envelope alone -- a from-scratch Monte Carlo
+simulation (QE-free Euler variance stepping, exact compound-Poisson-Gaussian
+jump sum, sharing no code with the Fourier pricer) agrees with the Fourier
+price to within 6 Monte Carlo standard errors at two independent
+strikes/seeds ($n_{\rm paths}=400{,}000$).

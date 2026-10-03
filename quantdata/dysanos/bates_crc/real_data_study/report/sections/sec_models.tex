@@ -1,0 +1,38 @@
+\section{Models compared}
+\label{sec:models}
+
+All models consume the SAME cleaned, pure-unit ($C/(DF{\cdot}F)$, $K/F$)
+book for a given day (\texttt{day\_loader.load\_day}), and are evaluated on
+the SAME common contract set (Sec.~\ref{sec:data}).
+
+\begin{enumerate}
+\item \textbf{dy2 static decoder}: \texttt{quantdata.dysanos.market.}\allowbreak
+  \texttt{smooth\_interpolated\_market(ticker,d,smoothness=0.25,}\allowbreak
+  \texttt{no\_arb\_mode="surface")} -- dy2.pdf's own production per-day SANOS
+  fit (\texttt{MkArbFree} $\to$ \texttt{ArbFreePricer}), no separate
+  calibration needed here.
+\item \textbf{Independently-fitted SANOS snapshot baseline}:
+  \texttt{MkArbFree(smoothness=None, no\_arb\_mode="expiry")} on the SAME
+  cleaned book -- an unsmoothed, per-expiry-only arbitrage-free fit,
+  isolating representation capacity (can SOME arbitrage-free curve fit
+  within bid/ask at all?) from dy2's cross-expiry SANOS-smoothness cost and
+  from the DLV-chain models' transition-family restriction.
+\item \textbf{Coherent DLV $\times$ Black}: the finite-state
+  nearest-neighbour absorbing chain (exact zero-drift martingale by
+  construction for any transition rate $\kappa$ and any anchor grid) times
+  an independent Black factor. Free parameters: $(\kappa,\sigma_Y,$ anchor
+  half-width$)$ -- Sec.~\ref{sec:selection-diagnostics} explains why the
+  half-width is fitted, not frozen.
+\item \textbf{Coherent DLV $\times$ ordinary Bates}: same chain, times a
+  Heston+Gaussian-jump background (no CRC reserve). Free parameters:
+  $(\kappa,V_t,$ Bates background (4+3 params)$,$ anchor half-width$)$ --
+  10 total.
+\item \textbf{Coherent DLV $\times$ extended-Bates, several reserve
+  budgets}: the Section-12 reserve-CRC construction from the prior task
+  (\texttt{reserve\_crc.py}, \texttt{bates\_transform.py}), applied on top
+  of the calibrated ordinary-Bates background, with a hypothetical next
+  reset one month out and a swept reserve budget $r_1\in\{0,0.01,0.03,0.06\}$
+  (variance units) -- Sec.~\ref{sec:reserve-tradeoff}.
+\end{enumerate}
+
+\input{sections/sec_calibration.tex}

@@ -1,0 +1,39 @@
+\section{Coherent latent DLV $\times$ extended-Bates product}
+\label{sec:dlv-product}
+
+\texttt{dlv\_bates\_product.py} connects the finite-state nearest-neighbour
+absorbing chain $X$ -- already built and independently verified to have
+exact zero generator residual, hence to be an exact martingale by
+construction (birth--death rates $\kappa/(\text{gap})$ give zero drift at
+every interior state) -- to the reserve-CRC Bates factor $Y$ of
+Sec.~\ref{sec:reserve}, via the manuscript's own finite-mixture pricing
+formula
+\[
+  C_t(T,K)=\sum_i q_i(t,T)\,G_t(x_i;T,K),\qquad
+  G_t(x;T,K)=\E_Q[(xY_T-K)^+\mid\mathcal G_t].
+\]
+
+Independence of $X$ and $Y$ is a \emph{modelling assumption} of
+\texttt{thm:dlv-bates}; it cannot be verified from code alone (no market
+data is used anywhere in this task). What \emph{is} verified are its
+algebraic consequences, before any statistical fitting is attempted:
+
+\begin{itemize}
+\item \textbf{Mass/positivity}: $q_i(t,T)\ge0$, $\sum_iq_i(t,T)=1$, at every
+  tested maturity.
+\item \textbf{Tower/forward identity}: $\E[S_T\mid\mathcal F_t]
+  =\E[X_T\mid\mathcal F_t]\,\E[Y_T\mid\mathcal F_t]=S_t$, checked using the
+  \emph{full} transform machinery (not a hardcoded value of $1$) for
+  $\E[Y_T\mid\mathcal F_t]$, at all four states and all four model
+  expiries -- agrees with $S_t=x_{i_0}$ to $<10^{-6}$.
+\item \textbf{Settlement}: zero-maturity price is exactly intrinsic; prices
+  are nonnegative, bounded by the forward, monotone decreasing and convex
+  in strike (checked on independent strike meshes for every state).
+\end{itemize}
+
+No jump-extended finite-coordinate drift identity was needed: the chain's
+own generator already has zero drift by construction, so that fallback
+(required only if the benchmark chain were not already an exact martingale)
+was not exercised. Connection to a Wiese--Wissel-trained decoder is
+correctly scoped as future work, contingent on this positivity/tower/
+settlement layer -- which is what this section establishes.

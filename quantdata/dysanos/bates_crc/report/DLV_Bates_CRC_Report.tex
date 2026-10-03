@@ -1,0 +1,145 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{float}
+\usepackage[htt]{hyphenat}
+\usepackage{enumitem}
+
+\emergencystretch=3em
+\sloppy
+\setlength{\tabcolsep}{4.5pt}
+
+\newcommand{\Q}{\mathbb Q}
+\newcommand{\Pp}{\mathbb P}
+\newcommand{\E}{\mathbb E}
+\newcommand{\R}{\mathbb R}
+
+\title{The explicit DLV $\times$ extended-Bates CRC construction:\\
+implementation, audit, and verification against\\
+the DYSANOS~II manuscript's own synthetic reset sequence}
+\author{\texttt{quant\_data-main/quantdata/dysanos/bates\_crc}}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We implement the explicit DLV $\times$ extended-Bates construction
+(\texttt{thm:dlv-bates}), the off-grid drift corollary
+(\texttt{cor:bates-offgrid-drift}), and Section~12's branching lemma,
+reserve theorem, and synthetic reset sequence, from the current DYSANOS~II
+manuscript, using theorem labels and content rather than page numbers. The
+Heston Riccati coefficient and Gaussian Bates jump exponent are re-derived
+in closed form and checked against an independent RK4 ODE integration and
+an independent Gauss--Hermite quadrature respectively. The Section~12
+reserve mechanism is checked against the manuscript's own fully-specified
+synthetic reset sequence, reproducing its $\theta$-path and reserve-usage
+column exactly. The branching lemma's L\'evy-measure positivity claim is
+established analytically (via Sato's convolution-semigroup theorem and the
+classical Duffie--Filipovic--Schachermayer affine-admissibility criterion),
+explicitly \emph{not} via a numerical frequency sweep, per the task's own
+instruction. A coherent finite-state latent DLV factor is connected to the
+reserve-CRC Bates factor via the manuscript's finite-mixture pricing
+formula, and its positivity/tower/settlement properties are verified before
+any connection to a trained decoder is attempted. A verification battery
+establishes, to machine precision, the central and previously-unverified
+claim of the whole construction: options settling before a scheduled reset
+are exactly price-invariant across that reset, while longer-dated options
+are (by design) not -- confirmed further by a negative control that
+violates this invariance when the reserve mechanism is removed. This task
+runs entirely without market data, as instructed.
+\end{abstract}
+
+\tableofcontents
+
+\section{Executive summary}
+\label{sec:exec}
+
+\begin{enumerate}
+\item \textbf{Audit first} (Sec.~\ref{sec:audit-summary}, full detail in
+  \texttt{AUDIT.md}): every claim below was checked against the running
+  code, not asserted from the manuscript. The audit surfaces one
+  significant, non-obvious structural finding (the current local jump
+  parameters $p_n$ cancel out of the priced dynamics exactly) and is
+  explicit about what remains unverifiable without data ($X$/$Y$
+  independence, full product martingality).
+\item \textbf{Background machinery} (Sec.~\ref{sec:background}): the
+  Riccati/jump-exponent/continuation-transform stack is closed-form,
+  independently cross-checked, and its martingale normalisation is proven
+  analytically and confirmed numerically for the full assembled transform.
+\item \textbf{Reserve CRC} (Sec.~\ref{sec:reserve}): the exact reset
+  mechanics reproduce the manuscript's own synthetic sequence table to
+  $<10^{-12}$; the branching lemma is proven analytically, with the
+  admissibility of the reserve term itself reducing to a nonnegativity
+  invariant already enforced in code.
+\item \textbf{Coherent latent DLV product} (Sec.~\ref{sec:dlv-product}): a
+  verified finite-state martingale chain is connected to the Bates factor;
+  mass, tower, and settlement properties are confirmed before any
+  connection to a trained decoder.
+\item \textbf{Verification battery} (Sec.~\ref{sec:verification}): the
+  central ``protected options are exactly reset-invariant'' claim is
+  confirmed to machine precision across every scheduled reset and an
+  independent strike mesh, and is shown (via a negative control) to be a
+  real, non-vacuous property of the reserve mechanism.
+\item \textbf{What remains open} (Sec.~\ref{sec:deferred}): $X$/$Y$
+  independence and full product martingality are modelling assumptions
+  that cannot be checked without market data; connection to a trained
+  Wiese--Wissel decoder is correctly scoped as the next step.
+\end{enumerate}
+
+\input{sections/sec_audit_summary.tex}
+\input{sections/sec_background.tex}
+\input{sections/sec_reserve.tex}
+\input{sections/sec_dlv_product.tex}
+\input{sections/sec_verification.tex}
+\input{sections/sec_figures.tex}
+\input{sections/sec_deferred.tex}
+
+\section{Reproducibility}
+\label{sec:repro}
+
+All numbers and figures in this report are produced by
+\texttt{quantdata/dysanos/bates\_crc/report/generate\_report\_artifacts.py},
+run as
+\begin{quote}
+\texttt{QUANTDATA\_TEST\_MODE=1 .venv312/bin/python quantdata/dysanos/bates\_crc/report/generate\_report\_artifacts.py}
+\end{quote}
+from \texttt{quant\_data-main/}. The only randomness used (the independent
+Monte Carlo pricing check) uses fixed seeds $7$ and $123$ with
+$400{,}000$ paths, recorded in \texttt{report/data/parameters.json}. The
+full test suite (50 tests: 8 in \texttt{test\_bates\_crc\_heston\_riccati.py},
+9 in \texttt{test\_bates\_crc\_reserve\_crc.py}, 7 in
+\texttt{test\_bates\_crc\_bates\_transform.py}, 7 in
+\texttt{test\_bates\_crc\_dlv\_bates\_product.py}, 5 in
+\texttt{test\_bates\_crc\_verification.py}, plus the prior task's 14 in
+\texttt{test\_bates\_crc\_quote\_import.py} and
+\texttt{test\_bates\_crc\_comparison\_interface.py} combined) passes with
+\begin{quote}
+\texttt{QUANTDATA\_TEST\_MODE=1 .venv312/bin/python -m pytest tests/test\_bates\_crc\_*.py -q}
+\end{quote}
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+The explicit DLV $\times$ extended-Bates CRC construction is implemented
+and checked against the manuscript's own worked example rather than merely
+against itself: the closed-form Riccati/jump machinery is independently
+cross-checked, the reserve mechanism exactly reproduces the manuscript's
+numbers, the branching lemma's positivity claim is proven analytically
+(explicitly not by frequency sweep), and the construction's central
+promise -- that a recalibration event leaves already-settling option prices
+untouched while allowing longer-dated prices to respond -- is confirmed to
+machine precision and shown, via a negative control, to be a real property
+of the reserve mechanism rather than a vacuous one. What is not established
+here is genuinely not establishable without data: $X$/$Y$ independence and
+full product martingality are modelling assumptions, reported as such
+rather than assumed silently, and scoped precisely as the prerequisite for
+connecting this construction to a trained decoder next.
+
+\end{document}

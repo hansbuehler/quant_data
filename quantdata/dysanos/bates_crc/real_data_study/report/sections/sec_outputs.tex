@@ -1,0 +1,37 @@
+\section{Outputs and reproducibility}
+\label{sec:outputs}
+
+\begin{itemize}
+\item \textbf{Data provenance and exclusions}: \texttt{DATA\_PROVENANCE.md}
+  and each day's \texttt{excluded} list in
+  \texttt{report/data/full\_study\_results.json}.
+\item \textbf{Per-quote predictions and errors}: every evaluated
+  contract's price, spread-unit fit error, and implied-vol error, per
+  model per day, are in \texttt{report/data/full\_study\_results.json}
+  (\texttt{by\_bucket} maturity/moneyness breakdowns) --- not just
+  aggregate statistics.
+\item \textbf{Fitted states, transition specifications, and reserve
+  arrays}: chain $\kappa$, anchor grid, Bates background, reserve
+  schedule/box/envelope, and every multi-start diagnostic (initial guess,
+  convergence flag, solver message, final cost) for every model/day, same
+  file.
+\item \textbf{Surface plots}: market quotes vs.\ dy2 vs.\ DLV$\times$Bates
+  (Fig.~\ref{fig:surface-comparison}); bid-ask coverage by model/date
+  (Fig.~\ref{fig:model-comparison-bars}).
+\item \textbf{Fit-vs-recalibration-freedom plot}:
+  Fig.~\ref{fig:fit-vs-recalibration}.
+\item \textbf{This PDF report and its \LaTeX{} source}:
+  \texttt{report/RealData\_CRC\_Comparison\_Report.\{tex,pdf\}}.
+\item \textbf{One-command reproduction}:
+\begin{quote}
+\texttt{QUANTDATA\_TEST\_MODE=generate\_tests .venv312/bin/python \textbackslash \\
+\ \ quantdata/dysanos/bates\_crc/real\_data\_study/run\_full\_study.py \&\& \textbackslash \\
+.venv312/bin/python quantdata/dysanos/bates\_crc/real\_data\_study/plots.py}
+\end{quote}
+run from \texttt{quant\_data-main/}. This creates/refreshes small derived-
+cache \texttt{.pdq} files under \texttt{tests/stored\_data/\{processing,training\}/}
+(consistent with this repository's existing convention of committing such
+caches for reproducibility, per \texttt{DATA\_PROVENANCE.md} Sec.~6).
+\end{itemize}
+
+\input{sections/sec_deferred_real_data.tex}

@@ -1,0 +1,12 @@
+\begin{tabular}{ll}
+\toprule
+Date & Status \\
+\midrule
+2011-07-07 & NOT RUN -- see note below \\
+2024-03-05 & NOT RUN -- see note below \\
+2024-12-26 & NOT RUN -- see note below \\
+2025-01-03 & NOT RUN -- see note below \\
+\bottomrule
+\end{tabular}
+
+\textbf{NOT RUN, exact reason}: every AAPL date failed with the identical error \texttt{`For live access to WIDB, set the environment variable WRDS\_USERNAME: currently not set.'}, raised inside \texttt{enrich\_day} (called from \texttt{mk\_arb\_free\_day} $\to$ \texttt{filter\_options\_day} $\to$ \texttt{smooth\_interpolated\_market}) -- a single-name dividend/borrow input is not present in the local fixture cache for this filter configuration (unlike SPX, an index with no dividend-forecast dependency), and its computation requires live WRDS access. \textbf{Exact fix}: a WRDS account with the Option Metrics entitlement, \texttt{WRDS\_USERNAME} set, and a \texttt{\textasciitilde/.pgpass} file (per \texttt{README.md}'s WRDS setup instructions) -- identical requirement already recorded in \texttt{DATA\_STATUS.md} from the prior task.

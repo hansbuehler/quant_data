@@ -1,0 +1,41 @@
+\subsection{Selection-date diagnostics that shaped the frozen configuration}
+\label{sec:selection-diagnostics}
+
+Full detail in \texttt{REAL\_DATA\_FINDINGS.md}. Three findings, each
+already substantive:
+
+\begin{enumerate}
+\item \textbf{A single frozen anchor grid width cannot work.} The
+  coherent-chain's anchor half-width was originally a fixed constant. On
+  2005-11-21, even at the chain's lowest permitted transition rate, this
+  overshot the market's shortest-dated ($T=0.068$y) at-the-money implied
+  vol by a factor of $\sim2.8$ ($26.8\%$ vs.\ $9.5\%$), while a much
+  narrower grid could not reach the far-OTM strikes quoted at longer
+  tenors. \textbf{Fix}: anchor half-width is now a FITTED parameter
+  (bounded $[0.03,0.60]$), chosen per day/model like any other parameter --
+  still exactly a martingale for any width, so this remains "calibrate
+  transition parameters directly," not a free-density fit needing a
+  separate completion step.
+\item \textbf{Even after that fix, DLV$\times$Black fits real SPX poorly.}
+  $10.4\%$ of contracts land inside bid-ask, median implied-vol error
+  $187.6$ bps. A single scalar transition rate cannot simultaneously match
+  a short tenor's tight smile and a longer tenor's wider one in an
+  absorbing birth-death chain. This is a genuine structural finding, not a
+  bug.
+\item \textbf{DLV$\times$ordinary-Bates fits essentially exactly -- by
+  making the chain nearly trivial.} $100\%$ inside bid-ask, median
+  implied-vol error $14.3$ bps, least-squares cost $\sim4\times10^{-13}$.
+  But the fitted anchor half-width lands AT its lower bound ($0.03$):
+  \emph{the calibrated chain component is nearly deterministic; almost all
+  explanatory power comes from the Bates factor, not from the DLV
+  mixture.} Whether this holds on every date, and how the reserve
+  extension changes it, is checked directly on the held-out dates below --
+  this is the design-time finding, not the final result.
+\end{enumerate}
+
+\paragraph{Runtime.} Full-precision ($n_{\rm quad}=200$) Bates calibration
+did not finish in over 10 minutes on a 48-contract set; a two-tier
+approach ($n_{\rm quad}=80$ during optimisation, full precision for the
+final reported numbers) took $\sim30$s. All production calibration uses
+this two-tier scheme, documented in \texttt{config.py}
+(\texttt{FOURIER\_N\_QUAD\_OPTIMIZATION}).

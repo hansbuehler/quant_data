@@ -1,0 +1,41 @@
+\section{Main comparison: performance on common coverage}
+\label{sec:main-comparison}
+
+Table~\ref{tab:main-comparison} reports, for every model and every date,
+bid-ask coverage and median absolute implied-vol error on the COMMON
+evaluation contract set (Sec.~\ref{sec:data}) -- SPX primary (all six
+dates), AAPL secondary (held-out dates only, Table~\ref{tab:aapl-comparison}).
+Each model's OWN additional coverage/exclusions beyond the common set are
+reported separately in \texttt{report/data/full\_study\_results.json}
+(dy2's \texttt{model\_masks}, solver convergence flags), never conflated
+with the common-set numbers above.
+
+\begin{table}[H]
+\centering
+\small
+\input{data/main_comparison_table.tex}
+\caption{SPX: bid-ask coverage and median absolute IV error by model and date. Held-out dates below the divider.}
+\label{tab:main-comparison}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\input{data/aapl_comparison_table.tex}
+\caption{AAPL (secondary robustness check, held-out dates only).}
+\label{tab:aapl-comparison}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/model_comparison_bars.png}
+\caption{SPX bid-ask coverage by model and date.}
+\label{fig:model-comparison-bars}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/surface_comparison_SPX_2011-07-07.png}
+\caption{Market quotes vs.\ dy2 vs.\ DLV$\times$Bates, a representative held-out date.}
+\label{fig:surface-comparison}
+\end{figure}

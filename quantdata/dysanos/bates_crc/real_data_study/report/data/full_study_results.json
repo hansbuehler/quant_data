@@ -1,0 +1,4975 @@
+[
+  {
+    "ticker": "SPX",
+    "date": "2005-11-21",
+    "n_raw_contracts": 91,
+    "n_evaluation_contracts": 48,
+    "n_excluded_target_points": 12,
+    "excluded": [
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 1.05,
+        "matched_expiry_years": 0.06825397163629532,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.06825397163629532,
+        "reason": "nearest sane quote 0.0692 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.06825397163629532,
+        "reason": "nearest sane quote 0.1136 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 1.05,
+        "matched_expiry_years": 0.06825397163629532,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.06825397163629532,
+        "reason": "nearest sane quote 0.0692 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.06825397163629532,
+        "reason": "nearest sane quote 0.1136 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.15555556118488312,
+        "reason": "nearest sane quote 0.0451 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.15555556118488312,
+        "reason": "nearest sane quote 0.0896 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.3103174567222595,
+        "reason": "nearest sane quote 0.0301 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.3103174567222595,
+        "reason": "nearest sane quote 0.0746 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.5,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.5603174567222595,
+        "reason": "nearest sane quote 0.0340 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 1.0,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.5603174567222595,
+        "reason": "nearest sane quote 0.0340 log-moneyness away (tol=0.03)"
+      }
+    ],
+    "models": {
+      "dy2": {
+        "model_name": "dy2",
+        "n_contracts": 48,
+        "pcnt_inside_bid_ask": 0.9583333333333334,
+        "median_fit_err": 0.4738041519534975,
+        "mean_fit_err": 0.4738041519534975,
+        "mean_iv_error_bps": -2.7135271048430494,
+        "median_abs_iv_error_bps": 0.7778332650079656,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.001713958103209734,
+        "peak_memory_bytes": 54095,
+        "by_bucket": {
+          "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 15.93047858376967
+          },
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 8,
+            "pcnt_inside_bid_ask": 0.75,
+            "median_fit_err": 0.4738041519534975,
+            "mean_abs_iv_error_bps": 11.707654521075222
+          },
+          "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+            "n": 7,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.8975137969946136
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 8,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 4.147971265943424
+          },
+          "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.28267575527818334
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 8,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 1.2829121624152728
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 3.3729663084486328
+          },
+          "long (>6m) / OTM call wing (K/F>1.05)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.877829632979707
+          }
+        },
+        "fit_result_median_err_half_spreads": 0.47375714002384123,
+        "fit_result_pcnt_fit": 0.01098901098901099
+      },
+      "sanos_snapshot": {
+        "model_name": "sanos_snapshot",
+        "n_contracts": 48,
+        "pcnt_inside_bid_ask": 0.9583333333333334,
+        "median_fit_err": 1.884103885201316,
+        "mean_fit_err": 1.884103885201316,
+        "mean_iv_error_bps": -0.5090845427352213,
+        "median_abs_iv_error_bps": 8.326672684688674e-13,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.00013958290219306946,
+        "peak_memory_bytes": 15216,
+        "by_bucket": {
+          "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 12.867469985064217
+          },
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 8,
+            "pcnt_inside_bid_ask": 0.75,
+            "median_fit_err": 1.884103885201316,
+            "mean_abs_iv_error_bps": 15.880108154842539
+          },
+          "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+            "n": 7,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.2906439911849151
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 8,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.1638132109074708
+          },
+          "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.282640640459908
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 8,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 4.163336342344337e-13
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.0
+          },
+          "long (>6m) / OTM call wing (K/F>1.05)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.0
+          }
+        },
+        "fit_time_seconds": 0.025838084053248167
+      },
+      "dlv_black": {
+        "model_name": "dlv_black",
+        "n_contracts": 48,
+        "pcnt_inside_bid_ask": 0.10416666666666667,
+        "median_fit_err": 4.047259665504732,
+        "mean_fit_err": 6.1771606186858214,
+        "mean_iv_error_bps": -99.56968899799261,
+        "median_abs_iv_error_bps": 187.62279736413424,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.0031739999540150166,
+        "peak_memory_bytes": 12738,
+        "by_bucket": {
+          "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 1.544109861846138,
+            "mean_abs_iv_error_bps": 263.40312212136104
+          },
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 8,
+            "pcnt_inside_bid_ask": 0.25,
+            "median_fit_err": 4.047259665504732,
+            "mean_abs_iv_error_bps": 119.96138328319014
+          },
+          "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+            "n": 7,
+            "pcnt_inside_bid_ask": 0.14285714285714285,
+            "median_fit_err": 5.5458354855096275,
+            "mean_abs_iv_error_bps": 232.61341297957316
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 8,
+            "pcnt_inside_bid_ask": 0.25,
+            "median_fit_err": 2.6398594600223255,
+            "mean_abs_iv_error_bps": 90.29476660210398
+          },
+          "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 20.348379174160183,
+            "mean_abs_iv_error_bps": 399.4355294690663
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 8,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 9.762139904257584,
+            "mean_abs_iv_error_bps": 356.8308933836587
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 3.3938802725887025,
+            "mean_abs_iv_error_bps": 119.11480343610054
+          },
+          "long (>6m) / OTM call wing (K/F>1.05)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 6.001057594383944,
+            "mean_abs_iv_error_bps": 165.3818278405536
+          }
+        },
+        "kappa": 0.05000000000000001,
+        "sigma_Y": 0.062232856926936884,
+        "anchors": [
+          0.744686613610007,
+          0.8215784352424702,
+          0.9064096398662529,
+          1.0,
+          1.1032539328989894,
+          1.2171692404570877,
+          1.3428467515379576
+        ],
+        "final_cost": 1416.657693101944,
+        "converged": true,
+        "chapman_kolmogorov_residual": 2.220446049250313e-16,
+        "generator_residual": 1.3984483462306518e-05,
+        "starts": [
+          {
+            "start_index": 0,
+            "x0": [
+              0.5313270239200273,
+              0.4582799722095138,
+              0.30639814654603076
+            ],
+            "x_final": [
+              0.05000000000000001,
+              0.062232856926936884,
+              0.29479180197429017
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 20,
+            "cost": 1416.657693101944
+          },
+          {
+            "start_index": 1,
+            "x0": [
+              4.410728222617067,
+              0.07061074988051592,
+              0.23551980503080328
+            ],
+            "x_final": [
+              0.05000000000000001,
+              0.06223203731538448,
+              0.2947940384754079
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 25,
+            "cost": 1416.6576934057698
+          },
+          {
+            "start_index": 2,
+            "x0": [
+              37.81584782860917,
+              0.22213509934172732,
+              0.14286411404233518
+            ],
+            "x_final": [
+              0.05000000000000001,
+              0.06223357592338786,
+              0.29479284065862815
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 19,
+            "cost": 1416.6576934989084
+          },
+          {
+            "start_index": 3,
+            "x0": [
+              272.01513451832784,
+              0.6275586535715932,
+              0.04675655620602559
+            ],
+            "x_final": [
+              0.05000000000000001,
+              0.06223114415430765,
+              0.2947981489230439
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 21,
+            "cost": 1416.6576941147136
+          }
+        ]
+      },
+      "dlv_bates": {
+        "model_name": "dlv_bates",
+        "n_contracts": 48,
+        "pcnt_inside_bid_ask": 1.0,
+        "median_fit_err": 0.0,
+        "mean_fit_err": 0.0,
+        "mean_iv_error_bps": -1.649479382016293,
+        "median_abs_iv_error_bps": 14.31281054728381,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.18784145917743444,
+        "peak_memory_bytes": 704610,
+        "by_bucket": {
+          "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 38.31977049747923
+          },
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 8,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 12.117868627508944
+          },
+          "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+            "n": 7,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 28.827077727204514
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 8,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 15.40542858760336
+          },
+          "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 20.04560283494397
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 8,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 12.425134786912887
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 10.78071439917755
+          },
+          "long (>6m) / OTM call wing (K/F>1.05)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 14.524473988034025
+          }
+        },
+        "heston": {
+          "kappa": 3.132602151442115,
+          "theta": 0.022117495346739013,
+          "xi": 0.43015385158122516,
+          "rho": -0.7535458204304956
+        },
+        "jumps": {
+          "lambda_J": 0.10078268591651876,
+          "m_J": -0.10657112329154476,
+          "delta_J": 0.15546813758921602
+        },
+        "V_t": 0.005000004057549945,
+        "chain_kappa": 0.09279758059015394,
+        "anchors": [
+          0.9704210894326237,
+          0.980182213382099,
+          0.9900415210394456,
+          1.0,
+          1.0100586477929723,
+          1.0202184719813678,
+          1.0304804902629128
+        ],
+        "final_cost": 3.8194814821948575e-13,
+        "converged": true,
+        "chapman_kolmogorov_residual": 4.440892098500626e-16,
+        "generator_residual": 1.1086706379337397e-08,
+        "starts": [
+          {
+            "start_index": 0,
+            "x0": [
+              10.0,
+              0.04,
+              7.55,
+              0.2525,
+              1.525,
+              0.0,
+              2.5,
+              0.0,
+              0.505,
+              0.15
+            ],
+            "x_final": [
+              0.09279758059015394,
+              0.005000004057549945,
+              3.132602151442115,
+              0.022117495346739013,
+              0.43015385158122516,
+              -0.7535458204304956,
+              0.10078268591651876,
+              -0.10657112329154476,
+              0.15546813758921602,
+              0.030025188867278462
+            ],
+            "success": true,
+            "status": 3,
+            "message": "`xtol` termination condition is satisfied.",
+            "nfev": 55,
+            "cost": 3.8194814821948575e-13
+          },
+          {
+            "start_index": 1,
+            "x0": [
+              10.684808436607272,
+              0.03539573427527741,
+              5.817175052859135,
+              0.1914616139854768,
+              1.7638685573902075,
+              0.0,
+              2.6332947197089753,
+              0.0,
+              0.5160153103450194,
+              0.18263043178408261
+            ],
+            "x_final": [
+              0.09987875036477192,
+              0.005029840535209835,
+              2.1342739664543613,
+              0.026968443991260478,
+              0.4279105070212052,
+              -0.7162270407816115,
+              0.10905056610012337,
+              -0.11459000997716591,
+              0.13568049873999666,
+              0.03191380753730468
+            ],
+            "success": true,
+            "status": 3,
+            "message": "`xtol` termination condition is satisfied.",
+            "nfev": 39,
+            "cost": 2.3104381460117088e-11
+          },
+          {
+            "start_index": 2,
+            "x0": [
+              11.579267770607661,
+              0.030054770003402963,
+              8.899201144118075,
+              0.1936151788823149,
+              1.7001122779028321,
+              0.0,
+              2.9539736529373584,
+              0.0,
+              0.45442725236068965,
+              0.14420154158982437
+            ],
+            "x_final": [
+              0.05000000000000001,
+              0.005000000000000001,
+              8.345378482698411,
+              0.01971812355227483,
+              0.9222037828049768,
+              -0.7393421459202797,
+              4.999999993606451,
+              0.007282157321918525,
+              0.010000000000000165,
+              0.03486916274006243
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 68,
+            "cost": 13.00931110091742
+          },
+          {
+            "start_index": 3,
+            "x0": [
+              7.641598355727314,
+              0.03248566552999128,
+              8.194107165468454,
+              0.27108267583624907,
+              1.612981147504456,
+              0.0,
+              3.121512419736514,
+              0.0,
+              0.5518493510813754,
+              0.1612844457200862
+            ],
+            "x_final": [
+              0.10148623775942459,
+              0.005069766723996268,
+              1.679721582551043,
+              0.0314366301260117,
+              0.42257504025265735,
+              -0.6961888861653059,
+              0.10959711992489994,
+              -0.12500989706640717,
+              0.12233081647254344,
+              0.03211515827366074
+            ],
+            "success": true,
+            "status": 3,
+            "message": "`xtol` termination condition is satisfied.",
+            "nfev": 40,
+            "cost": 1.2215572385535792e-12
+          }
+        ],
+        "martingale_completion": {
+          "chapman_kolmogorov_residual": 7.771561172376096e-16,
+          "generator_residual": 3.537738990644357e-10,
+          "mass_residual": 4.440892098500626e-16,
+          "mean_residual": 4.440892098500626e-16,
+          "variant_label": "coherent-chain DLV (direct transition-parameter calibration, NOT Wiese-Wissel)"
+        }
+      }
+    },
+    "wall_clock_seconds": 29.517514944076538,
+    "reserve_sweep": {
+      "budgets": {
+        "0.0": {
+          "reserve_size": 0.0,
+          "price_shift_before_recalibration": {
+            "mean_abs_shift": 0.0,
+            "max_abs_shift": 0.0,
+            "mean_relative_shift_pct": 0.0
+          },
+          "fit_before_recalibration": {
+            "model_name": "dlv_extbates_prerecalib_r0.0",
+            "n_contracts": 48,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_fit_err": 0.0,
+            "mean_iv_error_bps": -1.649479382016293,
+            "median_abs_iv_error_bps": 14.31281054728381,
+            "n_iv_inversions_failed": 0,
+            "runtime_seconds": 3.3294782042503357e-07,
+            "peak_memory_bytes": 0,
+            "by_bucket": {
+              "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 38.31977049747923
+              },
+              "short (<=1.5m) / near ATM (0.95-1.05)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 12.117868627508944
+              },
+              "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+                "n": 7,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 28.827077727204514
+              },
+              "medium (1.5-6m) / near ATM (0.95-1.05)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 15.40542858760336
+              },
+              "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+                "n": 1,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 20.04560283494397
+              },
+              "long (>6m) / OTM put wing (K/F<0.95)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 12.425134786912887
+              },
+              "long (>6m) / near ATM (0.95-1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 10.78071439917755
+              },
+              "long (>6m) / OTM call wing (K/F>1.05)": {
+                "n": 4,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 14.524473988034025
+              }
+            }
+          },
+          "wall_clock_seconds": 0.05353593826293945
+        },
+        "0.01": {
+          "reserve_size": 0.01,
+          "price_shift_before_recalibration": {
+            "mean_abs_shift": 0.014672217294058069,
+            "max_abs_shift": 0.03391974740690831,
+            "mean_relative_shift_pct": 194.78252991891992
+          },
+          "fit_before_recalibration": {
+            "model_name": "dlv_extbates_prerecalib_r0.01",
+            "n_contracts": 48,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 29.947844432249646,
+            "mean_fit_err": 39.70006011893628,
+            "mean_iv_error_bps": 868.6731046224709,
+            "median_abs_iv_error_bps": 889.7623251343176,
+            "n_iv_inversions_failed": 0,
+            "runtime_seconds": 2.076849341392517e-07,
+            "peak_memory_bytes": 0,
+            "by_bucket": {
+              "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 20.72493655834631,
+                "mean_abs_iv_error_bps": 818.4151080838907
+              },
+              "short (<=1.5m) / near ATM (0.95-1.05)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 24.244419514804562,
+                "mean_abs_iv_error_bps": 536.4702873501006
+              },
+              "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+                "n": 7,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 27.23187277185038,
+                "mean_abs_iv_error_bps": 831.953136624785
+              },
+              "medium (1.5-6m) / near ATM (0.95-1.05)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 23.967029898256428,
+                "mean_abs_iv_error_bps": 787.6231404985945
+              },
+              "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+                "n": 1,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 79.4156245518125,
+                "mean_abs_iv_error_bps": 1113.8842640456498
+              },
+              "long (>6m) / OTM put wing (K/F<0.95)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 34.649770209909846,
+                "mean_abs_iv_error_bps": 911.995340466504
+              },
+              "long (>6m) / near ATM (0.95-1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 39.214447666997785,
+                "mean_abs_iv_error_bps": 1034.1502717530655
+              },
+              "long (>6m) / OTM call wing (K/F>1.05)": {
+                "n": 4,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 99.71600405663719,
+                "mean_abs_iv_error_bps": 1438.6625939790317
+              }
+            }
+          },
+          "fit_after_recalibration": {
+            "model_name": "dlv_extbates_postrecalib_r0.01",
+            "n_contracts": 48,
+            "pcnt_inside_bid_ask": 0.625,
+            "median_fit_err": 0.34488509493457864,
+            "mean_fit_err": 0.5880106096773909,
+            "mean_iv_error_bps": -22.395934233543326,
+            "median_abs_iv_error_bps": 21.053538068552953,
+            "n_iv_inversions_failed": 0,
+            "runtime_seconds": 0.6894213329069316,
+            "peak_memory_bytes": 1062738,
+            "by_bucket": {
+              "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 1.0946624421073747,
+                "mean_abs_iv_error_bps": 182.01235552760912
+              },
+              "short (<=1.5m) / near ATM (0.95-1.05)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 0.25,
+                "median_fit_err": 0.22638729715652342,
+                "mean_abs_iv_error_bps": 28.200010365286474
+              },
+              "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+                "n": 7,
+                "pcnt_inside_bid_ask": 0.8571428571428571,
+                "median_fit_err": 0.18363917391711615,
+                "mean_abs_iv_error_bps": 19.78828849042368
+              },
+              "medium (1.5-6m) / near ATM (0.95-1.05)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 0.875,
+                "median_fit_err": 0.21806572574481867,
+                "mean_abs_iv_error_bps": 13.427420902629976
+              },
+              "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+                "n": 1,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 11.680424275585382
+              },
+              "long (>6m) / OTM put wing (K/F<0.95)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 11.543144371740228
+              },
+              "long (>6m) / near ATM (0.95-1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.6666666666666666,
+                "median_fit_err": 0.34488509493457864,
+                "mean_abs_iv_error_bps": 21.92089395622756
+              },
+              "long (>6m) / OTM call wing (K/F>1.05)": {
+                "n": 4,
+                "pcnt_inside_bid_ask": 0.5,
+                "median_fit_err": 0.32805632974159044,
+                "mean_abs_iv_error_bps": 32.53529858105335
+              }
+            }
+          },
+          "recalibration_converged": true,
+          "recalibration_final_cost": 5.458831674628125,
+          "mean_fit_err_before_recalibration": 39.70006011893628,
+          "mean_fit_err_after_recalibration": 0.5880106096773909,
+          "admissible_theta_interval": {
+            "lo": -0.03,
+            "hi": 0.01,
+            "theta_0": 0.022117495346739013
+          },
+          "surface_change_after_admissible_reset": {
+            "upward": {
+              "mean_abs_price_change": 0.001759936704978714,
+              "theta_after": 0.032117495346739015
+            },
+            "downward": {
+              "mean_abs_price_change": 0.004850728005141411,
+              "theta_after": -0.007882504653260985
+            }
+          },
+          "wall_clock_seconds": 28.822425842285156
+        },
+        "0.03": {
+          "reserve_size": 0.03,
+          "price_shift_before_recalibration": {
+            "mean_abs_shift": 0.017007127024270895,
+            "max_abs_shift": 0.039419680503898186,
+            "mean_relative_shift_pct": 210.5461092477556
+          },
+          "fit_before_recalibration": {
+            "model_name": "dlv_extbates_prerecalib_r0.03",
+            "n_contracts": 48,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 36.35277504453955,
+            "mean_fit_err": 44.26638810686895,
+            "mean_iv_error_bps": 961.6942205839225,
+            "median_abs_iv_error_bps": 927.1227400071194,
+            "n_iv_inversions_failed": 0,
+            "runtime_seconds": 6.668269634246826e-07,
+            "peak_memory_bytes": 0,
+            "by_bucket": {
+              "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 20.72493655834631,
+                "mean_abs_iv_error_bps": 818.4151080838907
+              },
+              "short (<=1.5m) / near ATM (0.95-1.05)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 24.244419514804562,
+                "mean_abs_iv_error_bps": 536.4702873501006
+              },
+              "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+                "n": 7,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 30.887412078843013,
+                "mean_abs_iv_error_bps": 888.8659186054438
+              },
+              "medium (1.5-6m) / near ATM (0.95-1.05)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 27.444277495875266,
+                "mean_abs_iv_error_bps": 873.6996460646102
+              },
+              "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+                "n": 1,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 80.9338803783919,
+                "mean_abs_iv_error_bps": 1130.158287585315
+              },
+              "long (>6m) / OTM put wing (K/F<0.95)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 42.14105037121627,
+                "mean_abs_iv_error_bps": 1095.6015776671954
+              },
+              "long (>6m) / near ATM (0.95-1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 47.357320760643994,
+                "mean_abs_iv_error_bps": 1256.9283732583272
+              },
+              "long (>6m) / OTM call wing (K/F>1.05)": {
+                "n": 4,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 109.619722120278,
+                "mean_abs_iv_error_bps": 1577.717473374078
+              }
+            }
+          },
+          "fit_after_recalibration": {
+            "model_name": "dlv_extbates_postrecalib_r0.03",
+            "n_contracts": 48,
+            "pcnt_inside_bid_ask": 0.4583333333333333,
+            "median_fit_err": 0.673557484930298,
+            "mean_fit_err": 0.7483633860012274,
+            "mean_iv_error_bps": -24.674558125440363,
+            "median_abs_iv_error_bps": 29.622177317386658,
+            "n_iv_inversions_failed": 0,
+            "runtime_seconds": 0.24816391617059708,
+            "peak_memory_bytes": 1062546,
+            "by_bucket": {
+              "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 1.5258832316192295,
+                "mean_abs_iv_error_bps": 224.44074790698443
+              },
+              "short (<=1.5m) / near ATM (0.95-1.05)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 0.5,
+                "median_fit_err": 0.6284429545343511,
+                "mean_abs_iv_error_bps": 23.825432940233032
+              },
+              "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+                "n": 7,
+                "pcnt_inside_bid_ask": 0.7142857142857143,
+                "median_fit_err": 0.6947521096170219,
+                "mean_abs_iv_error_bps": 21.03629914802979
+              },
+              "medium (1.5-6m) / near ATM (0.95-1.05)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 0.375,
+                "median_fit_err": 0.31792538248552776,
+                "mean_abs_iv_error_bps": 31.82534534692683
+              },
+              "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+                "n": 1,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 0.1125970601422455,
+                "mean_abs_iv_error_bps": 29.45361913569214
+              },
+              "long (>6m) / OTM put wing (K/F<0.95)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 0.25,
+                "median_fit_err": 0.5976639686363706,
+                "mean_abs_iv_error_bps": 42.788692420734286
+              },
+              "long (>6m) / near ATM (0.95-1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 6.7327411853102905
+              },
+              "long (>6m) / OTM call wing (K/F>1.05)": {
+                "n": 4,
+                "pcnt_inside_bid_ask": 0.5,
+                "median_fit_err": 0.7321941474641613,
+                "mean_abs_iv_error_bps": 31.363058348604365
+              }
+            }
+          },
+          "recalibration_converged": true,
+          "recalibration_final_cost": 10.854174216559011,
+          "mean_fit_err_before_recalibration": 44.26638810686895,
+          "mean_fit_err_after_recalibration": 0.7483633860012274,
+          "admissible_theta_interval": {
+            "lo": -0.03,
+            "hi": 0.03,
+            "theta_0": 0.022117495346739013
+          },
+          "surface_change_after_admissible_reset": {
+            "upward": {
+              "mean_abs_price_change": 0.00505627985351447,
+              "theta_after": 0.05211749534673901
+            },
+            "downward": {
+              "mean_abs_price_change": 0.004506833254294462,
+              "theta_after": -0.007882504653260985
+            }
+          },
+          "wall_clock_seconds": 18.914640188217163
+        },
+        "0.06": {
+          "reserve_size": 0.06,
+          "price_shift_before_recalibration": {
+            "mean_abs_shift": 0.020199467246062804,
+            "max_abs_shift": 0.047527805883695526,
+            "mean_relative_shift_pct": 237.34558235184423
+          },
+          "fit_before_recalibration": {
+            "model_name": "dlv_extbates_prerecalib_r0.06",
+            "n_contracts": 48,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 45.551286847982674,
+            "mean_fit_err": 50.83525206058986,
+            "mean_iv_error_bps": 1088.8668542151365,
+            "median_abs_iv_error_bps": 1043.2383058860546,
+            "n_iv_inversions_failed": 0,
+            "runtime_seconds": 2.50060111284256e-07,
+            "peak_memory_bytes": 0,
+            "by_bucket": {
+              "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 20.72493655834631,
+                "mean_abs_iv_error_bps": 818.4151080838907
+              },
+              "short (<=1.5m) / near ATM (0.95-1.05)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 24.244419514804562,
+                "mean_abs_iv_error_bps": 536.4702873501006
+              },
+              "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+                "n": 7,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 36.44210303146398,
+                "mean_abs_iv_error_bps": 972.0319591266895
+              },
+              "medium (1.5-6m) / near ATM (0.95-1.05)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 31.359944125973783,
+                "mean_abs_iv_error_bps": 991.9445919935275
+              },
+              "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+                "n": 1,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 83.56937012780845,
+                "mean_abs_iv_error_bps": 1158.2757155687211
+              },
+              "long (>6m) / OTM put wing (K/F<0.95)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 52.97677393071554,
+                "mean_abs_iv_error_bps": 1343.1622665569148
+              },
+              "long (>6m) / near ATM (0.95-1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 57.746559757020286,
+                "mean_abs_iv_error_bps": 1538.3200125126789
+              },
+              "long (>6m) / OTM call wing (K/F>1.05)": {
+                "n": 4,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 127.04654366703176,
+                "mean_abs_iv_error_bps": 1797.520420521813
+              }
+            }
+          },
+          "fit_after_recalibration": {
+            "model_name": "dlv_extbates_postrecalib_r0.06",
+            "n_contracts": 48,
+            "pcnt_inside_bid_ask": 0.5,
+            "median_fit_err": 0.8794421514114914,
+            "mean_fit_err": 1.0470330394885812,
+            "mean_iv_error_bps": -28.35476617510497,
+            "median_abs_iv_error_bps": 28.72793020622988,
+            "n_iv_inversions_failed": 0,
+            "runtime_seconds": 0.2491039582528174,
+            "peak_memory_bytes": 1062546,
+            "by_bucket": {
+              "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 1.769040179448872,
+                "mean_abs_iv_error_bps": 251.24951113761517
+              },
+              "short (<=1.5m) / near ATM (0.95-1.05)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 0.5,
+                "median_fit_err": 0.8285074404306962,
+                "mean_abs_iv_error_bps": 19.90995096341132
+              },
+              "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+                "n": 7,
+                "pcnt_inside_bid_ask": 0.7142857142857143,
+                "median_fit_err": 0.9490522879564167,
+                "mean_abs_iv_error_bps": 30.28244181704268
+              },
+              "medium (1.5-6m) / near ATM (0.95-1.05)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 0.625,
+                "median_fit_err": 0.7500152849355954,
+                "mean_abs_iv_error_bps": 27.19450909925281
+              },
+              "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+                "n": 1,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 0.8096955081400131,
+                "mean_abs_iv_error_bps": 46.91933340023033
+              },
+              "long (>6m) / OTM put wing (K/F<0.95)": {
+                "n": 8,
+                "pcnt_inside_bid_ask": 0.25,
+                "median_fit_err": 0.7039936054576803,
+                "mean_abs_iv_error_bps": 45.37965994281808
+              },
+              "long (>6m) / near ATM (0.95-1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 12.086720717337055
+              },
+              "long (>6m) / OTM call wing (K/F>1.05)": {
+                "n": 4,
+                "pcnt_inside_bid_ask": 0.5,
+                "median_fit_err": 0.9433702713664407,
+                "mean_abs_iv_error_bps": 41.091826303149006
+              }
+            }
+          },
+          "recalibration_converged": true,
+          "recalibration_final_cost": 15.646441814654217,
+          "mean_fit_err_before_recalibration": 50.83525206058986,
+          "mean_fit_err_after_recalibration": 1.0470330394885812,
+          "admissible_theta_interval": {
+            "lo": -0.03,
+            "hi": 0.03,
+            "theta_0": 0.022117495346739013
+          },
+          "surface_change_after_admissible_reset": {
+            "upward": {
+              "mean_abs_price_change": 0.004506833254294462,
+              "theta_after": 0.05211749534673901
+            },
+            "downward": {
+              "mean_abs_price_change": 0.00410483850621487,
+              "theta_after": -0.007882504653260985
+            }
+          },
+          "wall_clock_seconds": 39.86251711845398
+        }
+      }
+    }
+  },
+  {
+    "ticker": "SPX",
+    "date": "2010-07-07",
+    "n_raw_contracts": 199,
+    "n_evaluation_contracts": 57,
+    "n_excluded_target_points": 3,
+    "excluded": [
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.02460317313671112,
+        "reason": "nearest sane quote 0.0536 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.02460317313671112,
+        "reason": "nearest sane quote 0.0980 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.12380952388048172,
+        "reason": "nearest sane quote 0.0473 log-moneyness away (tol=0.03)"
+      }
+    ],
+    "models": {
+      "dy2": {
+        "model_name": "dy2",
+        "n_contracts": 57,
+        "pcnt_inside_bid_ask": 1.0,
+        "median_fit_err": 0.0,
+        "mean_fit_err": 0.0,
+        "mean_iv_error_bps": -0.3406099128842268,
+        "median_abs_iv_error_bps": 6.691372802357098,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.0012907921336591244,
+        "peak_memory_bytes": 93189,
+        "by_bucket": {
+          "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 31.912707734812056
+          },
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 14.174704971060825
+          },
+          "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+            "n": 17,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 8.857622914809888
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 21,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 6.338467020927451
+          },
+          "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+            "n": 11,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 19.522490625380346
+          }
+        },
+        "fit_result_median_err_half_spreads": 0.2360984952271759,
+        "fit_result_pcnt_fit": 0.035175879396984924
+      },
+      "sanos_snapshot": {
+        "model_name": "sanos_snapshot",
+        "n_contracts": 57,
+        "pcnt_inside_bid_ask": 1.0,
+        "median_fit_err": 0.0,
+        "mean_fit_err": 0.0,
+        "mean_iv_error_bps": -1.3971473008445763,
+        "median_abs_iv_error_bps": 0.693456347358179,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.00013620825484395027,
+        "peak_memory_bytes": 30033,
+        "by_bucket": {
+          "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 32.24215072769182
+          },
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 27.093836861312585
+          },
+          "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+            "n": 17,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 4.445771209204713
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 21,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 1.9821186922663614
+          },
+          "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+            "n": 11,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 3.709049178272967
+          }
+        },
+        "fit_time_seconds": 0.03585816640406847
+      },
+      "dlv_black": {
+        "model_name": "dlv_black",
+        "n_contracts": 57,
+        "pcnt_inside_bid_ask": 0.05263157894736842,
+        "median_fit_err": 3.8259807557839838,
+        "mean_fit_err": 4.899888288149759,
+        "mean_iv_error_bps": -105.2075561428156,
+        "median_abs_iv_error_bps": 310.02967423684305,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.0033129160292446613,
+        "peak_memory_bytes": 13069,
+        "by_bucket": {
+          "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 0.5,
+            "median_fit_err": 0.879965068592534,
+            "mean_abs_iv_error_bps": 225.3425444096549
+          },
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 0.25,
+            "median_fit_err": 4.9408781164661475,
+            "mean_abs_iv_error_bps": 582.3902830688503
+          },
+          "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+            "n": 17,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 6.9305965416444835,
+            "mean_abs_iv_error_bps": 504.63873834260045
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 21,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 2.040542738925296,
+            "mean_abs_iv_error_bps": 208.37369154426275
+          },
+          "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+            "n": 11,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 7.243111522631954,
+            "mean_abs_iv_error_bps": 515.3296529973961
+          }
+        },
+        "kappa": 0.28928358849148994,
+        "sigma_Y": 0.020547745014775787,
+        "anchors": [
+          0.712035052396171,
+          0.7973841202900274,
+          0.8929636724357981,
+          1.0,
+          1.11986638523853,
+          1.2541007207872117,
+          1.4044252409130096
+        ],
+        "final_cost": 1031.8542665843636,
+        "converged": true,
+        "chapman_kolmogorov_residual": 3.3306690738754696e-16,
+        "generator_residual": 0.00018386868441377935,
+        "starts": [
+          {
+            "start_index": 0,
+            "x0": [
+              0.5313270239200273,
+              0.4582799722095138,
+              0.30639814654603076
+            ],
+            "x_final": [
+              0.28928358849148994,
+              0.020547745014775787,
+              0.33962813788846324
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 34,
+            "cost": 1031.8542665843636
+          },
+          {
+            "start_index": 1,
+            "x0": [
+              4.410728222617067,
+              0.07061074988051592,
+              0.23551980503080328
+            ],
+            "x_final": [
+              0.2892840165503113,
+              0.020553474831912583,
+              0.3396260323932262
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 52,
+            "cost": 1031.8542676169773
+          },
+          {
+            "start_index": 2,
+            "x0": [
+              37.81584782860917,
+              0.22213509934172732,
+              0.14286411404233518
+            ],
+            "x_final": [
+              0.2893545188453104,
+              0.020583281117567284,
+              0.33953742310652457
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 51,
+            "cost": 1031.8544649963287
+          },
+          {
+            "start_index": 3,
+            "x0": [
+              272.01513451832784,
+              0.6275586535715932,
+              0.04675655620602559
+            ],
+            "x_final": [
+              0.2892862688460455,
+              0.02055149561353824,
+              0.33962350510600814
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 47,
+            "cost": 1031.854268700914
+          }
+        ]
+      },
+      "dlv_bates": {
+        "model_name": "dlv_bates",
+        "n_contracts": 57,
+        "pcnt_inside_bid_ask": 0.9824561403508771,
+        "median_fit_err": 0.005932343804875355,
+        "mean_fit_err": 0.005932343804875355,
+        "mean_iv_error_bps": -17.819798093968817,
+        "median_abs_iv_error_bps": 43.87584740190076,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.19196862494572997,
+        "peak_memory_bytes": 704787,
+        "by_bucket": {
+          "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 58.74743446047687
+          },
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 0.75,
+            "median_fit_err": 0.005932343804875355,
+            "mean_abs_iv_error_bps": 142.44190799411993
+          },
+          "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+            "n": 17,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 32.30765608297949
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 21,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 39.83126127921102
+          },
+          "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+            "n": 11,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 38.018715370482866
+          }
+        },
+        "heston": {
+          "kappa": 5.244490819076475,
+          "theta": 0.1208989717479003,
+          "xi": 2.0613743278698164,
+          "rho": -0.870221696171533
+        },
+        "jumps": {
+          "lambda_J": 0.6978917507688654,
+          "m_J": -0.12179168084233019,
+          "delta_J": 0.07353125063038687
+        },
+        "V_t": 0.020331659655763015,
+        "chain_kappa": 0.901869102168489,
+        "anchors": [
+          0.9593153388043766,
+          0.9726895700884435,
+          0.9862502573325107,
+          1.0,
+          1.0139414337945807,
+          1.02807723116541,
+          1.0424101018194183
+        ],
+        "final_cost": 6.398135165566745e-22,
+        "converged": true,
+        "chapman_kolmogorov_residual": 8.881784197001252e-16,
+        "generator_residual": 5.189776306202543e-07,
+        "starts": [
+          {
+            "start_index": 0,
+            "x0": [
+              10.0,
+              0.04,
+              7.55,
+              0.2525,
+              1.525,
+              0.0,
+              2.5,
+              0.0,
+              0.505,
+              0.15
+            ],
+            "x_final": [
+              0.8348233821288427,
+              0.024125445525997404,
+              3.5995755509068705,
+              0.13904380445093206,
+              1.846365347596831,
+              -0.852762223253729,
+              0.5960846606148767,
+              -0.1525614658459855,
+              0.04488347530702755,
+              0.040416873991647
+            ],
+            "success": true,
+            "status": 3,
+            "message": "`xtol` termination condition is satisfied.",
+            "nfev": 64,
+            "cost": 2.794826007625479e-15
+          },
+          {
+            "start_index": 1,
+            "x0": [
+              10.684808436607272,
+              0.03539573427527741,
+              5.817175052859135,
+              0.1914616139854768,
+              1.7638685573902075,
+              0.0,
+              2.6332947197089753,
+              0.0,
+              0.5160153103450194,
+              0.18263043178408261
+            ],
+            "x_final": [
+              0.8491530732481255,
+              0.02242963641134197,
+              4.044114646151944,
+              0.13786534517186314,
+              1.9445774869904446,
+              -0.8742033074641001,
+              0.7913594546410999,
+              -0.11060643227327238,
+              0.07478431402476916,
+              0.041728372535343415
+            ],
+            "success": true,
+            "status": 3,
+            "message": "`xtol` termination condition is satisfied.",
+            "nfev": 48,
+            "cost": 5.174572099787689e-14
+          },
+          {
+            "start_index": 2,
+            "x0": [
+              11.579267770607661,
+              0.030054770003402963,
+              8.899201144118075,
+              0.1936151788823149,
+              1.7001122779028321,
+              0.0,
+              2.9539736529373584,
+              0.0,
+              0.45442725236068965,
+              0.14420154158982437
+            ],
+            "x_final": [
+              0.901869102168489,
+              0.020331659655763015,
+              5.244490819076475,
+              0.1208989717479003,
+              2.0613743278698164,
+              -0.870221696171533,
+              0.6978917507688654,
+              -0.12179168084233019,
+              0.07353125063038687,
+              0.04153543770577255
+            ],
+            "success": true,
+            "status": 1,
+            "message": "`gtol` termination condition is satisfied.",
+            "nfev": 26,
+            "cost": 6.398135165566745e-22
+          },
+          {
+            "start_index": 3,
+            "x0": [
+              7.641598355727314,
+              0.03248566552999128,
+              8.194107165468454,
+              0.27108267583624907,
+              1.612981147504456,
+              0.0,
+              3.121512419736514,
+              0.0,
+              0.5518493510813754,
+              0.1612844457200862
+            ],
+            "x_final": [
+              0.8865854555067243,
+              0.0220210227180657,
+              4.163661115403301,
+              0.12888941486121405,
+              1.9583039285893273,
+              -0.8600302877199976,
+              0.7160365476628223,
+              -0.14136318776187312,
+              0.04879710245449467,
+              0.04061463385786011
+            ],
+            "success": true,
+            "status": 3,
+            "message": "`xtol` termination condition is satisfied.",
+            "nfev": 54,
+            "cost": 4.4637992046403865e-15
+          }
+        ],
+        "martingale_completion": {
+          "chapman_kolmogorov_residual": 1.4432899320127035e-15,
+          "generator_residual": 1.9431900810662484e-09,
+          "mass_residual": 1.3322676295501878e-15,
+          "mean_residual": 1.3322676295501878e-15,
+          "variant_label": "coherent-chain DLV (direct transition-parameter calibration, NOT Wiese-Wissel)"
+        }
+      }
+    },
+    "wall_clock_seconds": 29.10199213027954
+  },
+  {
+    "ticker": "SPX",
+    "date": "2011-07-07",
+    "n_raw_contracts": 220,
+    "n_evaluation_contracts": 51,
+    "n_excluded_target_points": 9,
+    "excluded": [
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 0.85,
+        "matched_expiry_years": 0.02063491940498352,
+        "reason": "nearest sane quote 0.0504 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 1.05,
+        "matched_expiry_years": 0.02063491940498352,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.02063491940498352,
+        "reason": "nearest sane quote 0.0759 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.02063491940498352,
+        "reason": "nearest sane quote 0.1204 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.11984127014875412,
+        "reason": "nearest sane quote 0.0422 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.11984127014875412,
+        "reason": "nearest sane quote 0.0867 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.19523809850215912,
+        "reason": "nearest sane quote 0.0614 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.2944444417953491,
+        "reason": "nearest sane quote 0.0502 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 1.0,
+        "target_moneyness": 1.025,
+        "matched_expiry_years": 0.6912698149681091,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      }
+    ],
+    "models": {
+      "dy2": {
+        "model_name": "dy2",
+        "n_contracts": 51,
+        "pcnt_inside_bid_ask": 0.9803921568627451,
+        "median_fit_err": 0.1255579306288009,
+        "mean_fit_err": 0.1255579306288009,
+        "mean_iv_error_bps": -1.5248011410466014,
+        "median_abs_iv_error_bps": 2.587710862388126,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.0019140830263495445,
+        "peak_memory_bytes": 46755,
+        "by_bucket": {
+          "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+            "n": 7,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 24.087055140199727
+          },
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 8.700676732960877
+          },
+          "short (<=1.5m) / OTM call wing (K/F>1.05)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 21.98549092639071
+          },
+          "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+            "n": 12,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 6.651229713411852
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 10,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 4.632414073980268
+          },
+          "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 15.82250193168891
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 3,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 3.4831089450252746
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 4.43509358361481
+          },
+          "long (>6m) / OTM call wing (K/F>1.05)": {
+            "n": 2,
+            "pcnt_inside_bid_ask": 0.5,
+            "median_fit_err": 0.1255579306288009,
+            "mean_abs_iv_error_bps": 36.80547804583545
+          }
+        },
+        "fit_result_median_err_half_spreads": 0.11077812365708278,
+        "fit_result_pcnt_fit": 0.02727272727272727
+      },
+      "sanos_snapshot": {
+        "model_name": "sanos_snapshot",
+        "n_contracts": 51,
+        "pcnt_inside_bid_ask": 1.0,
+        "median_fit_err": 0.0,
+        "mean_fit_err": 0.0,
+        "mean_iv_error_bps": -3.1501357444672373,
+        "median_abs_iv_error_bps": 0.46540392183075374,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.00017354218289256096,
+        "peak_memory_bytes": 15403,
+        "by_bucket": {
+          "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+            "n": 7,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 21.614865951207207
+          },
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 2.7598829113225736
+          },
+          "short (<=1.5m) / OTM call wing (K/F>1.05)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.5648411498594685
+          },
+          "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+            "n": 12,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 3.5980570625041937
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 10,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.8087847518707669
+          },
+          "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.3857764728742533
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 3,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.0
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 1.3877787807814457e-13
+          },
+          "long (>6m) / OTM call wing (K/F>1.05)": {
+            "n": 2,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.0
+          }
+        },
+        "fit_time_seconds": 0.03995279176160693
+      },
+      "dlv_black": {
+        "model_name": "dlv_black",
+        "n_contracts": 51,
+        "pcnt_inside_bid_ask": 0.11764705882352941,
+        "median_fit_err": 2.8131758778257856,
+        "mean_fit_err": 4.211867795724688,
+        "mean_iv_error_bps": -53.60917876165815,
+        "median_abs_iv_error_bps": 241.7734525823498,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.004900250118225813,
+        "peak_memory_bytes": 12621,
+        "by_bucket": {
+          "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+            "n": 7,
+            "pcnt_inside_bid_ask": 0.2857142857142857,
+            "median_fit_err": 1.4405418956379497,
+            "mean_abs_iv_error_bps": 175.76610996825124
+          },
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 0.16666666666666666,
+            "median_fit_err": 0.36241550988900595,
+            "mean_abs_iv_error_bps": 108.53434556049744
+          },
+          "short (<=1.5m) / OTM call wing (K/F>1.05)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 9.69535209902612,
+            "mean_abs_iv_error_bps": 470.3296716765738
+          },
+          "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+            "n": 12,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 3.0329003591789845,
+            "mean_abs_iv_error_bps": 311.6763118282459
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 10,
+            "pcnt_inside_bid_ask": 0.2,
+            "median_fit_err": 1.2738054348801477,
+            "mean_abs_iv_error_bps": 96.86830241234456
+          },
+          "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 10.072211368291104,
+            "mean_abs_iv_error_bps": 422.38816614175187
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 3,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 6.599069160626156,
+            "mean_abs_iv_error_bps": 479.35903625007717
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 0.25,
+            "median_fit_err": 5.019885760150654,
+            "mean_abs_iv_error_bps": 194.03102111849554
+          },
+          "long (>6m) / OTM call wing (K/F>1.05)": {
+            "n": 2,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 5.515446882129778,
+            "mean_abs_iv_error_bps": 303.39594478765304
+          }
+        },
+        "kappa": 0.05000000000007442,
+        "sigma_Y": 0.10417420702175613,
+        "anchors": [
+          0.5899976143852423,
+          0.7034504369518466,
+          0.8387195222193452,
+          1.0,
+          1.1922936971276032,
+          1.4215642602102088,
+          1.694922107510496
+        ],
+        "final_cost": 754.1827339963644,
+        "converged": true,
+        "chapman_kolmogorov_residual": 1.1102230246251565e-16,
+        "generator_residual": 5.356370601000693e-05,
+        "starts": [
+          {
+            "start_index": 0,
+            "x0": [
+              0.5313270239200273,
+              0.4582799722095138,
+              0.30639814654603076
+            ],
+            "x_final": [
+              0.1302806629810647,
+              0.0648696552774189,
+              0.2638313257788009
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 18,
+            "cost": 770.6404741147817
+          },
+          {
+            "start_index": 1,
+            "x0": [
+              4.410728222617067,
+              0.07061074988051592,
+              0.23551980503080328
+            ],
+            "x_final": [
+              0.13027893965321585,
+              0.06487207463547491,
+              0.2638306707315654
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 21,
+            "cost": 770.6404740329433
+          },
+          {
+            "start_index": 2,
+            "x0": [
+              37.81584782860917,
+              0.22213509934172732,
+              0.14286411404233518
+            ],
+            "x_final": [
+              0.05000000000007442,
+              0.10417420702175613,
+              0.52763678550539
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 19,
+            "cost": 754.1827339963644
+          },
+          {
+            "start_index": 3,
+            "x0": [
+              272.01513451832784,
+              0.6275586535715932,
+              0.04675655620602559
+            ],
+            "x_final": [
+              0.13028016648965965,
+              0.0648714713980592,
+              0.2638291224976457
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 28,
+            "cost": 770.6404740326275
+          }
+        ]
+      },
+      "dlv_bates": {
+        "model_name": "dlv_bates",
+        "n_contracts": 51,
+        "pcnt_inside_bid_ask": 0.9411764705882353,
+        "median_fit_err": 0.012011450418697715,
+        "mean_fit_err": 0.012146377205143876,
+        "mean_iv_error_bps": -0.03852900291188272,
+        "median_abs_iv_error_bps": 18.710006298671424,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.2898037089034915,
+        "peak_memory_bytes": 705021,
+        "by_bucket": {
+          "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+            "n": 7,
+            "pcnt_inside_bid_ask": 0.8571428571428571,
+            "median_fit_err": 0.012011450418697715,
+            "mean_abs_iv_error_bps": 41.034516395748575
+          },
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 0.8333333333333334,
+            "median_fit_err": 0.01762119194572926,
+            "mean_abs_iv_error_bps": 56.713208264850614
+          },
+          "short (<=1.5m) / OTM call wing (K/F>1.05)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 54.23612187841154
+          },
+          "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+            "n": 12,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 18.39384915739923
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 10,
+            "pcnt_inside_bid_ask": 0.9,
+            "median_fit_err": 0.006806489251004651,
+            "mean_abs_iv_error_bps": 18.58448489769185
+          },
+          "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 15.839072303267463
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 3,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 19.75133273222777
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 15.802026958086913
+          },
+          "long (>6m) / OTM call wing (K/F>1.05)": {
+            "n": 2,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 20.478259273861017
+          }
+        },
+        "heston": {
+          "kappa": 2.226357580491834,
+          "theta": 0.06904666747114299,
+          "xi": 0.9632077864543586,
+          "rho": -0.7889272391403992
+        },
+        "jumps": {
+          "lambda_J": 0.3223428111871107,
+          "m_J": -0.10304846080735038,
+          "delta_J": 0.08531009243222216
+        },
+        "V_t": 0.006240802765813894,
+        "chain_kappa": 0.3294135669517595,
+        "anchors": [
+          0.965585191242834,
+          0.9769231422807052,
+          0.9883942241235049,
+          1.0,
+          1.0117420514944702,
+          1.0236219787622391,
+          1.0356414007477368
+        ],
+        "final_cost": 1.2771946470976309e-14,
+        "converged": true,
+        "chapman_kolmogorov_residual": 5.551115123125783e-16,
+        "generator_residual": 4.2187240548163807e-07,
+        "starts": [
+          {
+            "start_index": 0,
+            "x0": [
+              10.0,
+              0.04,
+              7.55,
+              0.2525,
+              1.525,
+              0.0,
+              2.5,
+              0.0,
+              0.505,
+              0.15
+            ],
+            "x_final": [
+              0.329575880133917,
+              0.006245930455049289,
+              2.231244255623639,
+              0.06902481877746532,
+              0.9650597419261716,
+              -0.7879847626584229,
+              0.3199115594708578,
+              -0.10370364650140343,
+              0.08496374544352768,
+              0.03501082954368244
+            ],
+            "success": true,
+            "status": 3,
+            "message": "`xtol` termination condition is satisfied.",
+            "nfev": 114,
+            "cost": 1.6478433942672946e-12
+          },
+          {
+            "start_index": 1,
+            "x0": [
+              10.684808436607272,
+              0.03539573427527741,
+              5.817175052859135,
+              0.1914616139854768,
+              1.7638685573902075,
+              0.0,
+              2.6332947197089753,
+              0.0,
+              0.5160153103450194,
+              0.18263043178408261
+            ],
+            "x_final": [
+              0.337037663814098,
+              0.006225713710172648,
+              2.4425680555678624,
+              0.06592655247404619,
+              0.9901495660564733,
+              -0.7795704807269813,
+              0.3286612205227944,
+              -0.09879005230404883,
+              0.08611239848170188,
+              0.03410487478301801
+            ],
+            "success": true,
+            "status": 3,
+            "message": "`xtol` termination condition is satisfied.",
+            "nfev": 125,
+            "cost": 4.0689995770858154e-13
+          },
+          {
+            "start_index": 2,
+            "x0": [
+              11.579267770607661,
+              0.030054770003402963,
+              8.899201144118075,
+              0.1936151788823149,
+              1.7001122779028321,
+              0.0,
+              2.9539736529373584,
+              0.0,
+              0.45442725236068965,
+              0.14420154158982437
+            ],
+            "x_final": [
+              0.34689104075494226,
+              0.006070112801860379,
+              2.6971302365401106,
+              0.06224890265791966,
+              1.0032780196892357,
+              -0.7812893201025554,
+              0.36338511907795495,
+              -0.08743992954424559,
+              0.09026793566445979,
+              0.03305363087622251
+            ],
+            "success": true,
+            "status": 3,
+            "message": "`xtol` termination condition is satisfied.",
+            "nfev": 71,
+            "cost": 9.012962035453008e-12
+          },
+          {
+            "start_index": 3,
+            "x0": [
+              7.641598355727314,
+              0.03248566552999128,
+              8.194107165468454,
+              0.27108267583624907,
+              1.612981147504456,
+              0.0,
+              3.121512419736514,
+              0.0,
+              0.5518493510813754,
+              0.1612844457200862
+            ],
+            "x_final": [
+              0.3294135669517595,
+              0.006240802765813894,
+              2.226357580491834,
+              0.06904666747114299,
+              0.9632077864543586,
+              -0.7889272391403992,
+              0.3223428111871107,
+              -0.10304846080735038,
+              0.08531009243222216,
+              0.03502094564322617
+            ],
+            "success": true,
+            "status": 3,
+            "message": "`xtol` termination condition is satisfied.",
+            "nfev": 110,
+            "cost": 1.2771946470976309e-14
+          }
+        ],
+        "martingale_completion": {
+          "chapman_kolmogorov_residual": 1.4432899320127035e-15,
+          "generator_residual": 1.580120811972563e-09,
+          "mass_residual": 4.440892098500626e-16,
+          "mean_residual": 4.440892098500626e-16,
+          "variant_label": "coherent-chain DLV (direct transition-parameter calibration, NOT Wiese-Wissel)"
+        }
+      }
+    },
+    "wall_clock_seconds": 81.09423208236694,
+    "reserve_sweep": {
+      "budgets": {
+        "0.0": {
+          "reserve_size": 0.0,
+          "price_shift_before_recalibration": {
+            "mean_abs_shift": 0.0,
+            "max_abs_shift": 0.0,
+            "mean_relative_shift_pct": 0.0
+          },
+          "fit_before_recalibration": {
+            "model_name": "dlv_extbates_prerecalib_r0.0",
+            "n_contracts": 51,
+            "pcnt_inside_bid_ask": 0.9411764705882353,
+            "median_fit_err": 0.012011450418697715,
+            "mean_fit_err": 0.012146377205143876,
+            "mean_iv_error_bps": -0.03852900291188272,
+            "median_abs_iv_error_bps": 18.710006298671424,
+            "n_iv_inversions_failed": 0,
+            "runtime_seconds": 2.919696271419525e-07,
+            "peak_memory_bytes": 0,
+            "by_bucket": {
+              "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+                "n": 7,
+                "pcnt_inside_bid_ask": 0.8571428571428571,
+                "median_fit_err": 0.012011450418697715,
+                "mean_abs_iv_error_bps": 41.034516395748575
+              },
+              "short (<=1.5m) / near ATM (0.95-1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.8333333333333334,
+                "median_fit_err": 0.01762119194572926,
+                "mean_abs_iv_error_bps": 56.713208264850614
+              },
+              "short (<=1.5m) / OTM call wing (K/F>1.05)": {
+                "n": 1,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 54.23612187841154
+              },
+              "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+                "n": 12,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 18.39384915739923
+              },
+              "medium (1.5-6m) / near ATM (0.95-1.05)": {
+                "n": 10,
+                "pcnt_inside_bid_ask": 0.9,
+                "median_fit_err": 0.006806489251004651,
+                "mean_abs_iv_error_bps": 18.58448489769185
+              },
+              "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 15.839072303267463
+              },
+              "long (>6m) / OTM put wing (K/F<0.95)": {
+                "n": 3,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 19.75133273222777
+              },
+              "long (>6m) / near ATM (0.95-1.05)": {
+                "n": 4,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 15.802026958086913
+              },
+              "long (>6m) / OTM call wing (K/F>1.05)": {
+                "n": 2,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 20.478259273861017
+              }
+            }
+          },
+          "wall_clock_seconds": 0.07990312576293945
+        },
+        "0.01": {
+          "reserve_size": 0.01,
+          "price_shift_before_recalibration": {
+            "mean_abs_shift": 0.03185786113048765,
+            "max_abs_shift": 0.06842154100927689,
+            "mean_relative_shift_pct": 259.3681244423722
+          },
+          "fit_before_recalibration": {
+            "model_name": "dlv_extbates_prerecalib_r0.01",
+            "n_contracts": 51,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 35.78968456091754,
+            "mean_fit_err": 39.74243212304445,
+            "mean_iv_error_bps": 1697.0481926324746,
+            "median_abs_iv_error_bps": 1668.0721112730564,
+            "n_iv_inversions_failed": 0,
+            "runtime_seconds": 2.9103830456733704e-07,
+            "peak_memory_bytes": 0,
+            "by_bucket": {
+              "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+                "n": 7,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 21.53218158855635,
+                "mean_abs_iv_error_bps": 1395.5960102431566
+              },
+              "short (<=1.5m) / near ATM (0.95-1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 14.567684680191881,
+                "mean_abs_iv_error_bps": 1224.9021250047203
+              },
+              "short (<=1.5m) / OTM call wing (K/F>1.05)": {
+                "n": 1,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 61.1602589100223,
+                "mean_abs_iv_error_bps": 2033.9740294302094
+              },
+              "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+                "n": 12,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 26.680603213615434,
+                "mean_abs_iv_error_bps": 1521.6761906938957
+              },
+              "medium (1.5-6m) / near ATM (0.95-1.05)": {
+                "n": 10,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 37.74816772094651,
+                "mean_abs_iv_error_bps": 1828.5674203616823
+              },
+              "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 77.5376971559159,
+                "mean_abs_iv_error_bps": 2246.8598640491864
+              },
+              "long (>6m) / OTM put wing (K/F<0.95)": {
+                "n": 3,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 35.39783262429736,
+                "mean_abs_iv_error_bps": 1643.4198221438635
+              },
+              "long (>6m) / near ATM (0.95-1.05)": {
+                "n": 4,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 43.5180522216352,
+                "mean_abs_iv_error_bps": 1929.4526323898504
+              },
+              "long (>6m) / OTM call wing (K/F>1.05)": {
+                "n": 2,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 66.46269885426011,
+                "mean_abs_iv_error_bps": 2360.9406504329504
+              }
+            }
+          },
+          "fit_after_recalibration": {
+            "model_name": "dlv_extbates_postrecalib_r0.01",
+            "n_contracts": 51,
+            "pcnt_inside_bid_ask": 0.7843137254901961,
+            "median_fit_err": 0.2249996394133908,
+            "mean_fit_err": 0.3621261699524407,
+            "mean_iv_error_bps": -11.242380750892655,
+            "median_abs_iv_error_bps": 30.701941427098976,
+            "n_iv_inversions_failed": 0,
+            "runtime_seconds": 0.3770335423760116,
+            "peak_memory_bytes": 1063093,
+            "by_bucket": {
+              "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+                "n": 7,
+                "pcnt_inside_bid_ask": 0.42857142857142855,
+                "median_fit_err": 0.6610853133456124,
+                "mean_abs_iv_error_bps": 132.2219399857307
+              },
+              "short (<=1.5m) / near ATM (0.95-1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.6666666666666666,
+                "median_fit_err": 0.20334255177036942,
+                "mean_abs_iv_error_bps": 25.522755881062974
+              },
+              "short (<=1.5m) / OTM call wing (K/F>1.05)": {
+                "n": 1,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 0.21183275946456465,
+                "mean_abs_iv_error_bps": 65.40782343344598
+              },
+              "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+                "n": 12,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 23.440406125829135
+              },
+              "medium (1.5-6m) / near ATM (0.95-1.05)": {
+                "n": 10,
+                "pcnt_inside_bid_ask": 0.9,
+                "median_fit_err": 0.40692645149566703,
+                "mean_abs_iv_error_bps": 26.828703446190953
+              },
+              "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.6666666666666666,
+                "median_fit_err": 0.15001865402713657,
+                "mean_abs_iv_error_bps": 34.66256980134863
+              },
+              "long (>6m) / OTM put wing (K/F<0.95)": {
+                "n": 3,
+                "pcnt_inside_bid_ask": 0.6666666666666666,
+                "median_fit_err": 0.03393337214468984,
+                "mean_abs_iv_error_bps": 36.721253583784645
+              },
+              "long (>6m) / near ATM (0.95-1.05)": {
+                "n": 4,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 30.381499119794817
+              },
+              "long (>6m) / OTM call wing (K/F>1.05)": {
+                "n": 2,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 29.107374344271715
+              }
+            }
+          },
+          "recalibration_converged": true,
+          "recalibration_final_cost": 1.3560983408784861,
+          "mean_fit_err_before_recalibration": 39.74243212304445,
+          "mean_fit_err_after_recalibration": 0.3621261699524407,
+          "admissible_theta_interval": {
+            "lo": -0.03,
+            "hi": 0.01,
+            "theta_0": 0.06904666747114299
+          },
+          "surface_change_after_admissible_reset": {
+            "upward": {
+              "mean_abs_price_change": 0.00061987001856343,
+              "theta_after": 0.079046667471143
+            },
+            "downward": {
+              "mean_abs_price_change": 0.0018323857377597385,
+              "theta_after": 0.03904666747114299
+            }
+          },
+          "wall_clock_seconds": 135.73054313659668
+        },
+        "0.03": {
+          "reserve_size": 0.03,
+          "price_shift_before_recalibration": {
+            "mean_abs_shift": 0.032939710883636016,
+            "max_abs_shift": 0.07147863526476657,
+            "mean_relative_shift_pct": 264.58941102379123
+          },
+          "fit_before_recalibration": {
+            "model_name": "dlv_extbates_prerecalib_r0.03",
+            "n_contracts": 51,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 37.345077466266396,
+            "mean_fit_err": 40.84195266248733,
+            "mean_iv_error_bps": 1739.566510285325,
+            "median_abs_iv_error_bps": 1737.30443257476,
+            "n_iv_inversions_failed": 0,
+            "runtime_seconds": 3.7532299757003784e-07,
+            "peak_memory_bytes": 0,
+            "by_bucket": {
+              "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+                "n": 7,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 21.53218158855635,
+                "mean_abs_iv_error_bps": 1397.112385779606
+              },
+              "short (<=1.5m) / near ATM (0.95-1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 14.61894008702231,
+                "mean_abs_iv_error_bps": 1228.052998488002
+              },
+              "short (<=1.5m) / OTM call wing (K/F>1.05)": {
+                "n": 1,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 61.29943368514798,
+                "mean_abs_iv_error_bps": 2037.8076495884295
+              },
+              "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+                "n": 12,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 27.54630647137244,
+                "mean_abs_iv_error_bps": 1568.3374928465273
+              },
+              "medium (1.5-6m) / near ATM (0.95-1.05)": {
+                "n": 10,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 38.86368932021748,
+                "mean_abs_iv_error_bps": 1880.011790200537
+              },
+              "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 78.832016460984,
+                "mean_abs_iv_error_bps": 2280.816003542597
+              },
+              "long (>6m) / OTM put wing (K/F<0.95)": {
+                "n": 3,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 37.54637837525993,
+                "mean_abs_iv_error_bps": 1746.1799039734185
+              },
+              "long (>6m) / near ATM (0.95-1.05)": {
+                "n": 4,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 45.686947945410566,
+                "mean_abs_iv_error_bps": 2026.618514648319
+              },
+              "long (>6m) / OTM call wing (K/F>1.05)": {
+                "n": 2,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 69.08244874188796,
+                "mean_abs_iv_error_bps": 2440.951037822537
+              }
+            }
+          },
+          "fit_after_recalibration": {
+            "model_name": "dlv_extbates_postrecalib_r0.03",
+            "n_contracts": 51,
+            "pcnt_inside_bid_ask": 0.7254901960784313,
+            "median_fit_err": 0.2221915337545034,
+            "mean_fit_err": 0.29877491295232644,
+            "mean_iv_error_bps": -9.603566985397586,
+            "median_abs_iv_error_bps": 30.012265004409898,
+            "n_iv_inversions_failed": 0,
+            "runtime_seconds": 0.37675525015220046,
+            "peak_memory_bytes": 1062901,
+            "by_bucket": {
+              "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+                "n": 7,
+                "pcnt_inside_bid_ask": 0.2857142857142857,
+                "median_fit_err": 0.33328476383546907,
+                "mean_abs_iv_error_bps": 140.4712762990578
+              },
+              "short (<=1.5m) / near ATM (0.95-1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.8333333333333334,
+                "median_fit_err": 0.2771005832883765,
+                "mean_abs_iv_error_bps": 37.00313659006853
+              },
+              "short (<=1.5m) / OTM call wing (K/F>1.05)": {
+                "n": 1,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 50.27065190095617
+              },
+              "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+                "n": 12,
+                "pcnt_inside_bid_ask": 0.9166666666666666,
+                "median_fit_err": 0.07327390548419804,
+                "mean_abs_iv_error_bps": 22.995288350754553
+              },
+              "medium (1.5-6m) / near ATM (0.95-1.05)": {
+                "n": 10,
+                "pcnt_inside_bid_ask": 0.6,
+                "median_fit_err": 0.05142312508211265,
+                "mean_abs_iv_error_bps": 32.53953123472891
+              },
+              "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.5,
+                "median_fit_err": 0.199603665561954,
+                "mean_abs_iv_error_bps": 43.625690918462816
+              },
+              "long (>6m) / OTM put wing (K/F<0.95)": {
+                "n": 3,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 25.748058901703487
+              },
+              "long (>6m) / near ATM (0.95-1.05)": {
+                "n": 4,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 18.977572214143727
+              },
+              "long (>6m) / OTM call wing (K/F>1.05)": {
+                "n": 2,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 29.367597200350566
+              }
+            }
+          },
+          "recalibration_converged": true,
+          "recalibration_final_cost": 1.4511523165370745,
+          "mean_fit_err_before_recalibration": 40.84195266248733,
+          "mean_fit_err_after_recalibration": 0.29877491295232644,
+          "admissible_theta_interval": {
+            "lo": -0.03,
+            "hi": 0.03,
+            "theta_0": 0.06904666747114299
+          },
+          "surface_change_after_admissible_reset": {
+            "upward": {
+              "mean_abs_price_change": 0.0018459664054649133,
+              "theta_after": 0.09904666747114299
+            },
+            "downward": {
+              "mean_abs_price_change": 0.0018054366344549726,
+              "theta_after": 0.03904666747114299
+            }
+          },
+          "wall_clock_seconds": 30.79655885696411
+        },
+        "0.06": {
+          "reserve_size": 0.06,
+          "price_shift_before_recalibration": {
+            "mean_abs_shift": 0.03453274320815511,
+            "max_abs_shift": 0.07599245406456293,
+            "mean_relative_shift_pct": 272.5210638272273
+          },
+          "fit_before_recalibration": {
+            "model_name": "dlv_extbates_prerecalib_r0.06",
+            "n_contracts": 51,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 38.2616860069325,
+            "mean_fit_err": 42.47019784294538,
+            "mean_iv_error_bps": 1802.1284860865628,
+            "median_abs_iv_error_bps": 1803.0717337779818,
+            "n_iv_inversions_failed": 0,
+            "runtime_seconds": 4.1676685214042664e-07,
+            "peak_memory_bytes": 0,
+            "by_bucket": {
+              "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+                "n": 7,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 21.53218158855635,
+                "mean_abs_iv_error_bps": 1399.4029062347695
+              },
+              "short (<=1.5m) / near ATM (0.95-1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 14.695005835202636,
+                "mean_abs_iv_error_bps": 1232.7485559586887
+              },
+              "short (<=1.5m) / OTM call wing (K/F>1.05)": {
+                "n": 1,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 61.51030664500116,
+                "mean_abs_iv_error_bps": 2043.6144214664976
+              },
+              "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+                "n": 12,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 28.809613999161922,
+                "mean_abs_iv_error_bps": 1636.4293937814182
+              },
+              "medium (1.5-6m) / near ATM (0.95-1.05)": {
+                "n": 10,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 39.726631135288294,
+                "mean_abs_iv_error_bps": 1955.5465490643212
+              },
+              "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 80.85037990642184,
+                "mean_abs_iv_error_bps": 2333.0560531314736
+              },
+              "long (>6m) / OTM put wing (K/F<0.95)": {
+                "n": 3,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 40.659774075099385,
+                "mean_abs_iv_error_bps": 1894.7946093820792
+              },
+              "long (>6m) / near ATM (0.95-1.05)": {
+                "n": 4,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 48.86192952604263,
+                "mean_abs_iv_error_bps": 2168.458096099412
+              },
+              "long (>6m) / OTM call wing (K/F>1.05)": {
+                "n": 2,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 73.05649857496606,
+                "mean_abs_iv_error_bps": 2561.727971099856
+              }
+            }
+          },
+          "fit_after_recalibration": {
+            "model_name": "dlv_extbates_postrecalib_r0.06",
+            "n_contracts": 51,
+            "pcnt_inside_bid_ask": 0.7058823529411765,
+            "median_fit_err": 0.2501039710736834,
+            "mean_fit_err": 0.36282292621760465,
+            "mean_iv_error_bps": -9.157287348192332,
+            "median_abs_iv_error_bps": 36.30338997943322,
+            "n_iv_inversions_failed": 0,
+            "runtime_seconds": 0.3717595827765763,
+            "peak_memory_bytes": 1062901,
+            "by_bucket": {
+              "short (<=1.5m) / OTM put wing (K/F<0.95)": {
+                "n": 7,
+                "pcnt_inside_bid_ask": 0.42857142857142855,
+                "median_fit_err": 0.7552969404468994,
+                "mean_abs_iv_error_bps": 141.0335246763604
+              },
+              "short (<=1.5m) / near ATM (0.95-1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.8333333333333334,
+                "median_fit_err": 0.5831182414223915,
+                "mean_abs_iv_error_bps": 39.218222860287504
+              },
+              "short (<=1.5m) / OTM call wing (K/F>1.05)": {
+                "n": 1,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 50.59748919854473
+              },
+              "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+                "n": 12,
+                "pcnt_inside_bid_ask": 0.9166666666666666,
+                "median_fit_err": 0.12042350334357532,
+                "mean_abs_iv_error_bps": 24.351501547613
+              },
+              "medium (1.5-6m) / near ATM (0.95-1.05)": {
+                "n": 10,
+                "pcnt_inside_bid_ask": 0.6,
+                "median_fit_err": 0.21628370740310723,
+                "mean_abs_iv_error_bps": 35.902270037079354
+              },
+              "medium (1.5-6m) / OTM call wing (K/F>1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.5,
+                "median_fit_err": 0.21408852475402912,
+                "mean_abs_iv_error_bps": 53.153808204044566
+              },
+              "long (>6m) / OTM put wing (K/F<0.95)": {
+                "n": 3,
+                "pcnt_inside_bid_ask": 0.6666666666666666,
+                "median_fit_err": 0.13500816717300798,
+                "mean_abs_iv_error_bps": 52.83876673138278
+              },
+              "long (>6m) / near ATM (0.95-1.05)": {
+                "n": 4,
+                "pcnt_inside_bid_ask": 0.75,
+                "median_fit_err": 0.05445808793988264,
+                "mean_abs_iv_error_bps": 31.732492279939947
+              },
+              "long (>6m) / OTM call wing (K/F>1.05)": {
+                "n": 2,
+                "pcnt_inside_bid_ask": 1.0,
+                "median_fit_err": 0.0,
+                "mean_abs_iv_error_bps": 29.1597586850946
+              }
+            }
+          },
+          "recalibration_converged": true,
+          "recalibration_final_cost": 1.7460313031557413,
+          "mean_fit_err_before_recalibration": 42.47019784294538,
+          "mean_fit_err_after_recalibration": 0.36282292621760465,
+          "admissible_theta_interval": {
+            "lo": -0.03,
+            "hi": 0.03,
+            "theta_0": 0.06904666747114299
+          },
+          "surface_change_after_admissible_reset": {
+            "upward": {
+              "mean_abs_price_change": 0.0018054366344549726,
+              "theta_after": 0.09904666747114299
+            },
+            "downward": {
+              "mean_abs_price_change": 0.0017654960564661404,
+              "theta_after": 0.03904666747114299
+            }
+          },
+          "wall_clock_seconds": 46.039959192276
+        }
+      }
+    }
+  },
+  {
+    "ticker": "SPX",
+    "date": "2024-03-05",
+    "n_raw_contracts": 1000,
+    "n_evaluation_contracts": 25,
+    "n_excluded_target_points": 35,
+    "excluded": [
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 0.85,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.1517 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 0.9,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.0946 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 0.925,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.0672 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 0.95,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.0405 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 1.05,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.0379 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.0845 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.1289 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 0.85,
+        "matched_expiry_years": 0.0833333358168602,
+        "reason": "nearest sane quote 0.1476 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 0.9,
+        "matched_expiry_years": 0.0833333358168602,
+        "reason": "nearest sane quote 0.0905 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 0.925,
+        "matched_expiry_years": 0.0833333358168602,
+        "reason": "nearest sane quote 0.0631 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 0.95,
+        "matched_expiry_years": 0.0833333358168602,
+        "reason": "nearest sane quote 0.0364 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 1.05,
+        "matched_expiry_years": 0.0833333358168602,
+        "reason": "nearest sane quote 0.0391 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.0833333358168602,
+        "reason": "nearest sane quote 0.0856 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.0833333358168602,
+        "reason": "nearest sane quote 0.1301 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 0.85,
+        "matched_expiry_years": 0.1547619104385376,
+        "reason": "nearest sane quote 0.1413 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 0.9,
+        "matched_expiry_years": 0.1547619104385376,
+        "reason": "nearest sane quote 0.0842 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 0.925,
+        "matched_expiry_years": 0.1547619104385376,
+        "reason": "nearest sane quote 0.0568 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 0.95,
+        "matched_expiry_years": 0.1547619104385376,
+        "reason": "nearest sane quote 0.0301 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 1.05,
+        "matched_expiry_years": 0.1547619104385376,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.1547619104385376,
+        "reason": "nearest sane quote 0.0735 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.1547619104385376,
+        "reason": "nearest sane quote 0.1180 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 0.85,
+        "matched_expiry_years": 0.2420634925365448,
+        "reason": "nearest sane quote 0.1376 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 0.9,
+        "matched_expiry_years": 0.2420634925365448,
+        "reason": "nearest sane quote 0.0804 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 0.925,
+        "matched_expiry_years": 0.2420634925365448,
+        "reason": "nearest sane quote 0.0530 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 0.975,
+        "matched_expiry_years": 0.2420634925365448,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 1.05,
+        "matched_expiry_years": 0.2420634925365448,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.2420634925365448,
+        "reason": "nearest sane quote 0.0677 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.2420634925365448,
+        "reason": "nearest sane quote 0.1122 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.5,
+        "target_moneyness": 0.85,
+        "matched_expiry_years": 0.4920634925365448,
+        "reason": "nearest sane quote 0.0840 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.5,
+        "target_moneyness": 0.925,
+        "matched_expiry_years": 0.4920634925365448,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      },
+      {
+        "target_tenor": 0.5,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.4920634925365448,
+        "reason": "nearest sane quote 0.0468 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.5,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.4920634925365448,
+        "reason": "nearest sane quote 0.0913 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 1.0,
+        "target_moneyness": 0.85,
+        "matched_expiry_years": 1.0365079641342163,
+        "reason": "nearest sane quote 0.0526 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 1.0,
+        "target_moneyness": 1.05,
+        "matched_expiry_years": 1.0365079641342163,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      },
+      {
+        "target_tenor": 1.0,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 1.0365079641342163,
+        "reason": "nearest sane quote 0.0673 log-moneyness away (tol=0.03)"
+      }
+    ],
+    "models": {
+      "dy2": {
+        "model_name": "dy2",
+        "n_contracts": 25,
+        "pcnt_inside_bid_ask": 1.0,
+        "median_fit_err": 0.0,
+        "mean_fit_err": 0.0,
+        "mean_iv_error_bps": 0.10085966642593425,
+        "median_abs_iv_error_bps": 0.04362839562843668,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.0021437080577015877,
+        "peak_memory_bytes": 22909,
+        "by_bucket": {
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.4065181563701892
+          },
+          "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+            "n": 2,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.03266373373056464
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 10,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.21361701960032065
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 3,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.146433657297144
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 3,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.5393962886136398
+          },
+          "long (>6m) / OTM call wing (K/F>1.05)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.03077729627182224
+          }
+        },
+        "fit_result_median_err_half_spreads": 0.9750267535806527,
+        "fit_result_pcnt_fit": 0.01
+      },
+      "sanos_snapshot": {
+        "model_name": "sanos_snapshot",
+        "n_contracts": 25,
+        "pcnt_inside_bid_ask": 1.0,
+        "median_fit_err": 0.0,
+        "mean_fit_err": 0.0,
+        "mean_iv_error_bps": 0.001985597277343043,
+        "median_abs_iv_error_bps": 0.0,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.0001637912355363369,
+        "peak_memory_bytes": 5273,
+        "by_bucket": {
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.002065101504036826
+          },
+          "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+            "n": 2,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.0
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 10,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.010732584765985043
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 3,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.0
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 3,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 9.25185853854297e-14
+          },
+          "long (>6m) / OTM call wing (K/F>1.05)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.0
+          }
+        },
+        "fit_time_seconds": 0.16097437497228384
+      },
+      "dlv_black": {
+        "model_name": "dlv_black",
+        "n_contracts": 25,
+        "pcnt_inside_bid_ask": 0.0,
+        "median_fit_err": 16.07433017060317,
+        "mean_fit_err": 21.579696494837435,
+        "mean_iv_error_bps": -65.5066392045842,
+        "median_abs_iv_error_bps": 95.60251499944647,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.004829708952456713,
+        "peak_memory_bytes": 12048,
+        "by_bucket": {
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 15.143431810281946,
+            "mean_abs_iv_error_bps": 228.28931148831165
+          },
+          "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+            "n": 2,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 16.088175311664912,
+            "mean_abs_iv_error_bps": 76.01340083584998
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 10,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 11.054973141287807,
+            "mean_abs_iv_error_bps": 88.76822857694572
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 3,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 47.73489986645012,
+            "mean_abs_iv_error_bps": 200.40436271959607
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 3,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 18.373555207706072,
+            "mean_abs_iv_error_bps": 64.81044033141055
+          },
+          "long (>6m) / OTM call wing (K/F>1.05)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 65.7649279872842,
+            "mean_abs_iv_error_bps": 197.64551606872988
+          }
+        },
+        "kappa": 0.050708863405043596,
+        "sigma_Y": 0.07051170100883494,
+        "anchors": [
+          0.5488116360946239,
+          0.6703200460361258,
+          0.8187307530782789,
+          1.0,
+          1.2214027581597267,
+          1.4918246976401877,
+          1.8221188003885254
+        ],
+        "final_cost": 9441.010990849107,
+        "converged": true,
+        "chapman_kolmogorov_residual": 1.1102230246251565e-16,
+        "generator_residual": 8.370867026788464e-05,
+        "starts": [
+          {
+            "start_index": 0,
+            "x0": [
+              0.5313270239200273,
+              0.4582799722095138,
+              0.30639814654603076
+            ],
+            "x_final": [
+              0.050708863405043596,
+              0.07051170100883494,
+              0.5999999999989114
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 21,
+            "cost": 9441.010990849107
+          },
+          {
+            "start_index": 1,
+            "x0": [
+              4.410728222617067,
+              0.07061074988051592,
+              0.23551980503080328
+            ],
+            "x_final": [
+              0.05000000000000001,
+              0.1383166738842226,
+              0.03000000000000102
+            ],
+            "success": true,
+            "status": 4,
+            "message": "Both `ftol` and `xtol` termination conditions are satisfied.",
+            "nfev": 14,
+            "cost": 18800.254968455738
+          },
+          {
+            "start_index": 2,
+            "x0": [
+              37.81584782860917,
+              0.22213509934172732,
+              0.14286411404233518
+            ],
+            "x_final": [
+              0.05000000000405624,
+              0.13831667380521467,
+              0.030000000004592735
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 13,
+            "cost": 18800.254968556466
+          },
+          {
+            "start_index": 3,
+            "x0": [
+              272.01513451832784,
+              0.6275586535715932,
+              0.04675655620602559
+            ],
+            "x_final": [
+              0.050000000010501325,
+              0.13831667379895923,
+              0.030000000000045046
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 15,
+            "cost": 18800.254968679867
+          }
+        ]
+      },
+      "dlv_bates": {
+        "model_name": "dlv_bates",
+        "n_contracts": 25,
+        "pcnt_inside_bid_ask": 0.2,
+        "median_fit_err": 1.1351592743908883,
+        "mean_fit_err": 1.4271460279716843,
+        "mean_iv_error_bps": -9.6858910105872,
+        "median_abs_iv_error_bps": 7.27920641443891,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.28518283274024725,
+        "peak_memory_bytes": 704643,
+        "by_bucket": {
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 2.7047258653193706,
+            "mean_abs_iv_error_bps": 57.02377277999111
+          },
+          "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+            "n": 2,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 0.3610360503804311,
+            "mean_abs_iv_error_bps": 4.938456807119379
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 10,
+            "pcnt_inside_bid_ask": 0.2,
+            "median_fit_err": 0.4326516306114858,
+            "mean_abs_iv_error_bps": 7.002213356194734
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 3,
+            "pcnt_inside_bid_ask": 0.6666666666666666,
+            "median_fit_err": 0.679781874791731,
+            "mean_abs_iv_error_bps": 3.89652843293999
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 3,
+            "pcnt_inside_bid_ask": 0.3333333333333333,
+            "median_fit_err": 1.1606182403380294,
+            "mean_abs_iv_error_bps": 7.484297158792304
+          },
+          "long (>6m) / OTM call wing (K/F>1.05)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 1.0928033128270584,
+            "mean_abs_iv_error_bps": 6.307554323985998
+          }
+        },
+        "heston": {
+          "kappa": 0.5447927004350406,
+          "theta": 0.09644428728046021,
+          "xi": 0.5824814124055516,
+          "rho": -0.8192809365318968
+        },
+        "jumps": {
+          "lambda_J": 4.999999865019054,
+          "m_J": 0.020519174979812264,
+          "delta_J": 0.010000000000008282
+        },
+        "V_t": 0.0095214982972236,
+        "chain_kappa": 0.09563882353704399,
+        "anchors": [
+          0.9659654803661378,
+          0.9771796284451748,
+          0.9885239645275044,
+          1.0,
+          1.0116092637956238,
+          1.0233533025971238,
+          1.0352336810430967
+        ],
+        "final_cost": 40.28504266125818,
+        "converged": true,
+        "chapman_kolmogorov_residual": 3.885780586188048e-16,
+        "generator_residual": 3.8262276666478634e-08,
+        "starts": [
+          {
+            "start_index": 0,
+            "x0": [
+              10.0,
+              0.04,
+              7.55,
+              0.2525,
+              1.525,
+              0.0,
+              2.5,
+              0.0,
+              0.505,
+              0.15
+            ],
+            "x_final": [
+              0.09563882353704399,
+              0.0095214982972236,
+              0.5447927004350406,
+              0.09644428728046021,
+              0.5824814124055516,
+              -0.8192809365318968,
+              4.999999865019054,
+              0.020519174979812264,
+              0.010000000000008282,
+              0.034627180018738796
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 118,
+            "cost": 40.28504266125818
+          },
+          {
+            "start_index": 1,
+            "x0": [
+              10.684808436607272,
+              0.03539573427527741,
+              5.817175052859135,
+              0.1914616139854768,
+              1.7638685573902075,
+              0.0,
+              2.6332947197089753,
+              0.0,
+              0.5160153103450194,
+              0.18263043178408261
+            ],
+            "x_final": [
+              0.0956430649709916,
+              0.009521465719138254,
+              0.5448192300411676,
+              0.09644123417733011,
+              0.5824872386473358,
+              -0.8192765770812822,
+              4.999993180426515,
+              0.020518896588040986,
+              0.010000000000000002,
+              0.03462675691118828
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 137,
+            "cost": 40.28504539519603
+          },
+          {
+            "start_index": 2,
+            "x0": [
+              11.579267770607661,
+              0.030054770003402963,
+              8.899201144118075,
+              0.1936151788823149,
+              1.7001122779028321,
+              0.0,
+              2.9539736529373584,
+              0.0,
+              0.45442725236068965,
+              0.14420154158982437
+            ],
+            "x_final": [
+              0.09563601763803606,
+              0.009521519997183404,
+              0.544770227943555,
+              0.09644708602167391,
+              0.5824779375554078,
+              -0.8192825743009035,
+              4.9999998940786705,
+              0.020519139376432273,
+              0.010000000000000007,
+              0.03462807439608103
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 125,
+            "cost": 40.28504266962245
+          },
+          {
+            "start_index": 3,
+            "x0": [
+              7.641598355727314,
+              0.03248566552999128,
+              8.194107165468454,
+              0.27108267583624907,
+              1.612981147504456,
+              0.0,
+              3.121512419736514,
+              0.0,
+              0.5518493510813754,
+              0.1612844457200862
+            ],
+            "x_final": [
+              0.09564272725654753,
+              0.009521462860604903,
+              0.5448158861499112,
+              0.09644164717087605,
+              0.5824866340087006,
+              -0.8192772686434961,
+              4.999999759196168,
+              0.02051892386363979,
+              0.010000000000010502,
+              0.034626806433824354
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 134,
+            "cost": 40.28504268914328
+          }
+        ],
+        "martingale_completion": {
+          "chapman_kolmogorov_residual": 1.4432899320127035e-15,
+          "generator_residual": 4.044119067403429e-10,
+          "mass_residual": 4.440892098500626e-16,
+          "mean_residual": 4.440892098500626e-16,
+          "variant_label": "coherent-chain DLV (direct transition-parameter calibration, NOT Wiese-Wissel)"
+        }
+      }
+    },
+    "wall_clock_seconds": 117.76312184333801,
+    "reserve_sweep": {
+      "budgets": {
+        "0.0": {
+          "reserve_size": 0.0,
+          "price_shift_before_recalibration": {
+            "mean_abs_shift": 0.0,
+            "max_abs_shift": 0.0,
+            "mean_relative_shift_pct": 0.0
+          },
+          "fit_before_recalibration": {
+            "model_name": "dlv_extbates_prerecalib_r0.0",
+            "n_contracts": 25,
+            "pcnt_inside_bid_ask": 0.2,
+            "median_fit_err": 1.1351592743908883,
+            "mean_fit_err": 1.4271460279716843,
+            "mean_iv_error_bps": -9.6858910105872,
+            "median_abs_iv_error_bps": 7.27920641443891,
+            "n_iv_inversions_failed": 0,
+            "runtime_seconds": 2.4959444999694824e-07,
+            "peak_memory_bytes": 0,
+            "by_bucket": {
+              "short (<=1.5m) / near ATM (0.95-1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 2.7047258653193706,
+                "mean_abs_iv_error_bps": 57.02377277999111
+              },
+              "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+                "n": 2,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 0.3610360503804311,
+                "mean_abs_iv_error_bps": 4.938456807119379
+              },
+              "medium (1.5-6m) / near ATM (0.95-1.05)": {
+                "n": 10,
+                "pcnt_inside_bid_ask": 0.2,
+                "median_fit_err": 0.4326516306114858,
+                "mean_abs_iv_error_bps": 7.002213356194734
+              },
+              "long (>6m) / OTM put wing (K/F<0.95)": {
+                "n": 3,
+                "pcnt_inside_bid_ask": 0.6666666666666666,
+                "median_fit_err": 0.679781874791731,
+                "mean_abs_iv_error_bps": 3.89652843293999
+              },
+              "long (>6m) / near ATM (0.95-1.05)": {
+                "n": 3,
+                "pcnt_inside_bid_ask": 0.3333333333333333,
+                "median_fit_err": 1.1606182403380294,
+                "mean_abs_iv_error_bps": 7.484297158792304
+              },
+              "long (>6m) / OTM call wing (K/F>1.05)": {
+                "n": 1,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 1.0928033128270584,
+                "mean_abs_iv_error_bps": 6.307554323985998
+              }
+            }
+          },
+          "wall_clock_seconds": 0.07936620712280273
+        },
+        "0.01": {
+          "reserve_size": 0.01,
+          "price_shift_before_recalibration": {
+            "mean_abs_shift": 0.07092333173811743,
+            "max_abs_shift": 0.12681541798229687,
+            "mean_relative_shift_pct": 273.4222166700497
+          },
+          "fit_before_recalibration": {
+            "model_name": "dlv_extbates_prerecalib_r0.01",
+            "n_contracts": 25,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 636.6623371010559,
+            "mean_fit_err": 600.6583144017735,
+            "mean_iv_error_bps": 3051.690695652942,
+            "median_abs_iv_error_bps": 3073.6234514540297,
+            "n_iv_inversions_failed": 0,
+            "runtime_seconds": 2.50060111284256e-07,
+            "peak_memory_bytes": 0,
+            "by_bucket": {
+              "short (<=1.5m) / near ATM (0.95-1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 257.10044025129895,
+                "mean_abs_iv_error_bps": 3089.735171761619
+              },
+              "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+                "n": 2,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 717.2996002277273,
+                "mean_abs_iv_error_bps": 2854.6516989596093
+              },
+              "medium (1.5-6m) / near ATM (0.95-1.05)": {
+                "n": 10,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 616.0448626018333,
+                "mean_abs_iv_error_bps": 3143.8008245753012
+              },
+              "long (>6m) / OTM put wing (K/F<0.95)": {
+                "n": 3,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 685.2120968311176,
+                "mean_abs_iv_error_bps": 2783.0316612568686
+              },
+              "long (>6m) / near ATM (0.95-1.05)": {
+                "n": 3,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 690.4360296992475,
+                "mean_abs_iv_error_bps": 3024.095534758476
+              },
+              "long (>6m) / OTM call wing (K/F>1.05)": {
+                "n": 1,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 1158.483523377713,
+                "mean_abs_iv_error_bps": 3185.1631290355685
+              }
+            }
+          },
+          "recalibration_error": "all 2 multi-start refit attempts failed to converge at reserve_size=0.01",
+          "wall_clock_seconds": 5.035170078277588
+        },
+        "0.03": {
+          "reserve_size": 0.03,
+          "price_shift_before_recalibration": {
+            "mean_abs_shift": 0.0714880788702985,
+            "max_abs_shift": 0.1283482758444431,
+            "mean_relative_shift_pct": 274.62521378566055
+          },
+          "fit_before_recalibration": {
+            "model_name": "dlv_extbates_prerecalib_r0.03",
+            "n_contracts": 25,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 644.8172063342764,
+            "mean_fit_err": 604.905736676663,
+            "mean_iv_error_bps": 3068.0962885299828,
+            "median_abs_iv_error_bps": 3075.6571480849284,
+            "n_iv_inversions_failed": 0,
+            "runtime_seconds": 5.830079317092896e-07,
+            "peak_memory_bytes": 0,
+            "by_bucket": {
+              "short (<=1.5m) / near ATM (0.95-1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 257.10044025129895,
+                "mean_abs_iv_error_bps": 3089.735171761619
+              },
+              "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+                "n": 2,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 722.1949157720095,
+                "mean_abs_iv_error_bps": 2873.42525677258
+              },
+              "medium (1.5-6m) / near ATM (0.95-1.05)": {
+                "n": 10,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 617.2403751275962,
+                "mean_abs_iv_error_bps": 3153.4538531968496
+              },
+              "long (>6m) / OTM put wing (K/F<0.95)": {
+                "n": 3,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 695.8996663480365,
+                "mean_abs_iv_error_bps": 2823.49991158517
+              },
+              "long (>6m) / near ATM (0.95-1.05)": {
+                "n": 3,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 699.5305611977303,
+                "mean_abs_iv_error_bps": 3063.034675647621
+              },
+              "long (>6m) / OTM call wing (K/F>1.05)": {
+                "n": 1,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 1172.4732692071534,
+                "mean_abs_iv_error_bps": 3223.0033754678157
+              }
+            }
+          },
+          "recalibration_error": "all 2 multi-start refit attempts failed to converge at reserve_size=0.03",
+          "wall_clock_seconds": 4.664431810379028
+        },
+        "0.06": {
+          "reserve_size": 0.06,
+          "price_shift_before_recalibration": {
+            "mean_abs_shift": 0.07232905462254416,
+            "max_abs_shift": 0.13063239247933484,
+            "mean_relative_shift_pct": 276.4187322024444
+          },
+          "fit_before_recalibration": {
+            "model_name": "dlv_extbates_prerecalib_r0.06",
+            "n_contracts": 25,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 656.950743476043,
+            "mean_fit_err": 611.2329705375437,
+            "mean_iv_error_bps": 3092.5419680812533,
+            "median_abs_iv_error_bps": 3095.296306033428,
+            "n_iv_inversions_failed": 0,
+            "runtime_seconds": 4.577450454235077e-07,
+            "peak_memory_bytes": 0,
+            "by_bucket": {
+              "short (<=1.5m) / near ATM (0.95-1.05)": {
+                "n": 6,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 257.10044025129895,
+                "mean_abs_iv_error_bps": 3089.735171761619
+              },
+              "medium (1.5-6m) / OTM put wing (K/F<0.95)": {
+                "n": 2,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 729.5024643121582,
+                "mean_abs_iv_error_bps": 2901.446183689934
+              },
+              "medium (1.5-6m) / near ATM (0.95-1.05)": {
+                "n": 10,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 619.0307895071104,
+                "mean_abs_iv_error_bps": 3167.8851234785384
+              },
+              "long (>6m) / OTM put wing (K/F<0.95)": {
+                "n": 3,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 711.7771353302935,
+                "mean_abs_iv_error_bps": 2883.6523389537133
+              },
+              "long (>6m) / near ATM (0.95-1.05)": {
+                "n": 3,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 713.0577560724182,
+                "mean_abs_iv_error_bps": 3121.01044617639
+              },
+              "long (>6m) / OTM call wing (K/F>1.05)": {
+                "n": 1,
+                "pcnt_inside_bid_ask": 0.0,
+                "median_fit_err": 1193.3194363280832,
+                "mean_abs_iv_error_bps": 3279.406213906063
+              }
+            }
+          },
+          "recalibration_error": "all 2 multi-start refit attempts failed to converge at reserve_size=0.06",
+          "wall_clock_seconds": 4.673692941665649
+        }
+      }
+    }
+  },
+  {
+    "ticker": "SPX",
+    "date": "2024-12-26",
+    "n_raw_contracts": 1000,
+    "n_evaluation_contracts": 22,
+    "n_excluded_target_points": 38,
+    "excluded": [
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 0.85,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.1480 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 0.9,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.0909 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 0.925,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.0635 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 0.95,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.0368 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 1.05,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.0343 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.0808 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.1253 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 0.85,
+        "matched_expiry_years": 0.0833333358168602,
+        "reason": "nearest sane quote 0.1479 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 0.9,
+        "matched_expiry_years": 0.0833333358168602,
+        "reason": "nearest sane quote 0.0908 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 0.925,
+        "matched_expiry_years": 0.0833333358168602,
+        "reason": "nearest sane quote 0.0634 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 0.95,
+        "matched_expiry_years": 0.0833333358168602,
+        "reason": "nearest sane quote 0.0367 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 1.05,
+        "matched_expiry_years": 0.0833333358168602,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.0833333358168602,
+        "reason": "nearest sane quote 0.0649 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.0833333358168602,
+        "reason": "nearest sane quote 0.1093 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 0.85,
+        "matched_expiry_years": 0.1666666716337204,
+        "reason": "nearest sane quote 0.1319 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 0.9,
+        "matched_expiry_years": 0.1666666716337204,
+        "reason": "nearest sane quote 0.0748 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 0.925,
+        "matched_expiry_years": 0.1666666716337204,
+        "reason": "nearest sane quote 0.0474 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 0.975,
+        "matched_expiry_years": 0.1666666716337204,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 1.05,
+        "matched_expiry_years": 0.1666666716337204,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.1666666716337204,
+        "reason": "nearest sane quote 0.0715 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.1666666716337204,
+        "reason": "nearest sane quote 0.1159 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 0.85,
+        "matched_expiry_years": 0.25,
+        "reason": "nearest sane quote 0.1245 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 0.9,
+        "matched_expiry_years": 0.25,
+        "reason": "nearest sane quote 0.0673 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 0.925,
+        "matched_expiry_years": 0.25,
+        "reason": "nearest sane quote 0.0399 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.25,
+        "reason": "nearest sane quote 0.0587 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.25,
+        "reason": "nearest sane quote 0.1032 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.5,
+        "target_moneyness": 0.85,
+        "matched_expiry_years": 0.4960317313671112,
+        "reason": "nearest sane quote 0.1411 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.5,
+        "target_moneyness": 0.9,
+        "matched_expiry_years": 0.4960317313671112,
+        "reason": "nearest sane quote 0.0839 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.5,
+        "target_moneyness": 0.925,
+        "matched_expiry_years": 0.4960317313671112,
+        "reason": "nearest sane quote 0.0565 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.5,
+        "target_moneyness": 0.975,
+        "matched_expiry_years": 0.4960317313671112,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      },
+      {
+        "target_tenor": 0.5,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.4960317313671112,
+        "reason": "nearest sane quote 0.0533 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.5,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.4960317313671112,
+        "reason": "nearest sane quote 0.0978 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 1.0,
+        "target_moneyness": 0.85,
+        "matched_expiry_years": 1.0039682388305664,
+        "reason": "nearest sane quote 0.0835 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 1.0,
+        "target_moneyness": 0.925,
+        "matched_expiry_years": 1.0039682388305664,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      },
+      {
+        "target_tenor": 1.0,
+        "target_moneyness": 1.025,
+        "matched_expiry_years": 1.0039682388305664,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      },
+      {
+        "target_tenor": 1.0,
+        "target_moneyness": 1.05,
+        "matched_expiry_years": 1.0039682388305664,
+        "reason": "nearest sane quote 0.0333 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 1.0,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 1.0039682388305664,
+        "reason": "nearest sane quote 0.0798 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 1.0,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 1.0039682388305664,
+        "reason": "nearest sane quote 0.1243 log-moneyness away (tol=0.03)"
+      }
+    ],
+    "models": {
+      "dy2": {
+        "model_name": "dy2",
+        "n_contracts": 22,
+        "pcnt_inside_bid_ask": 0.9090909090909091,
+        "median_fit_err": 3.865854298525235,
+        "mean_fit_err": 3.865854298525235,
+        "mean_iv_error_bps": 0.8799447305293427,
+        "median_abs_iv_error_bps": 0.07647383722796108,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.0017701252363622189,
+        "peak_memory_bytes": 24898,
+        "by_bucket": {
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.27462718455921004
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 8,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.09492508480042627
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 7.312242586226836,
+            "mean_abs_iv_error_bps": 28.067392103504062
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 7,
+            "pcnt_inside_bid_ask": 0.8571428571428571,
+            "median_fit_err": 0.4194660108236338,
+            "mean_abs_iv_error_bps": 1.476163571299974
+          }
+        },
+        "fit_result_median_err_half_spreads": 0.8482210434779999,
+        "fit_result_pcnt_fit": 0.036
+      },
+      "sanos_snapshot": {
+        "model_name": "sanos_snapshot",
+        "n_contracts": 22,
+        "pcnt_inside_bid_ask": 1.0,
+        "median_fit_err": 0.0,
+        "mean_fit_err": 0.0,
+        "mean_iv_error_bps": 0.007181157445622239,
+        "median_abs_iv_error_bps": 5.551115123125783e-13,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.00015970831736922264,
+        "peak_memory_bytes": 5934,
+        "by_bucket": {
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.028476094871277002
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 8,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.009443568823146176
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 8.326672684688674e-13
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 7,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 1.9749211591487838e-05
+          }
+        },
+        "fit_time_seconds": 0.15178079158067703
+      },
+      "dlv_black": {
+        "model_name": "dlv_black",
+        "n_contracts": 22,
+        "pcnt_inside_bid_ask": 0.0,
+        "median_fit_err": 21.790010861660555,
+        "mean_fit_err": 22.641473167262475,
+        "mean_iv_error_bps": -5.858949819117543,
+        "median_abs_iv_error_bps": 144.1914199290787,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.004747957922518253,
+        "peak_memory_bytes": 11795,
+        "by_bucket": {
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 11.490931351620658,
+            "mean_abs_iv_error_bps": 197.30576699060242
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 8,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 23.98610238823543,
+            "mean_abs_iv_error_bps": 145.19448144126048
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 50.000926331706175,
+            "mean_abs_iv_error_bps": 174.3182236098015
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 7,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 21.146493027937307,
+            "mean_abs_iv_error_bps": 103.38126742471239
+          }
+        },
+        "kappa": 0.05688096382835595,
+        "sigma_Y": 0.06228662403261817,
+        "anchors": [
+          0.5488116360940272,
+          0.6703200460356399,
+          0.8187307530779823,
+          1.0,
+          1.2214027581601694,
+          1.4918246976412692,
+          1.8221188003905067
+        ],
+        "final_cost": 8151.092134323364,
+        "converged": true,
+        "chapman_kolmogorov_residual": 1.1102230246251565e-16,
+        "generator_residual": 9.454902084024552e-05,
+        "starts": [
+          {
+            "start_index": 0,
+            "x0": [
+              0.5313270239200273,
+              0.4582799722095138,
+              0.30639814654603076
+            ],
+            "x_final": [
+              0.05688096382835595,
+              0.06228662403261817,
+              0.5999999999999988
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 20,
+            "cost": 8151.092134323364
+          },
+          {
+            "start_index": 1,
+            "x0": [
+              4.410728222617067,
+              0.07061074988051592,
+              0.23551980503080328
+            ],
+            "x_final": [
+              0.05000000000000001,
+              0.13474977236252492,
+              0.030000000000389403
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 13,
+            "cost": 16783.046510418084
+          },
+          {
+            "start_index": 2,
+            "x0": [
+              37.81584782860917,
+              0.22213509934172732,
+              0.14286411404233518
+            ],
+            "x_final": [
+              0.050000000000007636,
+              0.13474977252414672,
+              0.030000000000000245
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 13,
+            "cost": 16783.046510417254
+          },
+          {
+            "start_index": 3,
+            "x0": [
+              272.01513451832784,
+              0.6275586535715932,
+              0.04675655620602559
+            ],
+            "x_final": [
+              0.05000000000000001,
+              0.13474977226693022,
+              0.030000000000000013
+            ],
+            "success": true,
+            "status": 4,
+            "message": "Both `ftol` and `xtol` termination conditions are satisfied.",
+            "nfev": 13,
+            "cost": 16783.046510417284
+          }
+        ]
+      },
+      "dlv_bates": {
+        "model_name": "dlv_bates",
+        "n_contracts": 22,
+        "pcnt_inside_bid_ask": 0.2727272727272727,
+        "median_fit_err": 1.2218319713602375,
+        "mean_fit_err": 1.3812138309233064,
+        "mean_iv_error_bps": 5.5196807062433715,
+        "median_abs_iv_error_bps": 7.4066227172102375,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.28849979070946574,
+        "peak_memory_bytes": 704520,
+        "by_bucket": {
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 1.8839045208221061,
+            "mean_abs_iv_error_bps": 43.5119578423501
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 8,
+            "pcnt_inside_bid_ask": 0.375,
+            "median_fit_err": 1.0676579322801276,
+            "mean_abs_iv_error_bps": 7.083877864224892
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 0.38993744871852504,
+            "mean_abs_iv_error_bps": 4.701636582908897
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 7,
+            "pcnt_inside_bid_ask": 0.42857142857142855,
+            "median_fit_err": 0.5877773901245836,
+            "mean_abs_iv_error_bps": 4.593024194684349
+          }
+        },
+        "heston": {
+          "kappa": 8.881799416328233,
+          "theta": 0.03758964707303428,
+          "xi": 2.9999999999999996,
+          "rho": -0.9588968144429555
+        },
+        "jumps": {
+          "lambda_J": 4.999999999999992,
+          "m_J": -0.012267829516434589,
+          "delta_J": 0.024123559788784523
+        },
+        "V_t": 0.005000000000000001,
+        "chain_kappa": 0.17387194346361698,
+        "anchors": [
+          0.9704455335485082,
+          0.9801986733067553,
+          0.9900498337491681,
+          1.0,
+          1.010050167084168,
+          1.0202013400267558,
+          1.030454533953517
+        ],
+        "final_cost": 23.63327381656614,
+        "converged": true,
+        "chapman_kolmogorov_residual": 3.3306690738754696e-16,
+        "generator_residual": 1.7274445222870138e-07,
+        "starts": [
+          {
+            "start_index": 0,
+            "x0": [
+              10.0,
+              0.04,
+              7.55,
+              0.2525,
+              1.525,
+              0.0,
+              2.5,
+              0.0,
+              0.505,
+              0.15
+            ],
+            "x_final": [
+              0.17387492394357362,
+              0.005000000000000001,
+              8.881805675985019,
+              0.03758971439858803,
+              2.9999999999999996,
+              -0.9588818410106724,
+              4.999999999989116,
+              -0.012268898370600537,
+              0.024122083720193494,
+              0.030000000000000002
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 101,
+            "cost": 23.633274046077364
+          },
+          {
+            "start_index": 1,
+            "x0": [
+              10.684808436607272,
+              0.03539573427527741,
+              5.817175052859135,
+              0.1914616139854768,
+              1.7638685573902075,
+              0.0,
+              2.6332947197089753,
+              0.0,
+              0.5160153103450194,
+              0.18263043178408261
+            ],
+            "x_final": [
+              0.17387235488111433,
+              0.005000000000000001,
+              8.881800484010814,
+              0.037589655989701105,
+              2.9999999999999996,
+              -0.9588947825022575,
+              4.999999999954129,
+              -0.012267972602781976,
+              0.024123359773304136,
+              0.030000000000000002
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 103,
+            "cost": 23.633273822039047
+          },
+          {
+            "start_index": 2,
+            "x0": [
+              11.579267770607661,
+              0.030054770003402963,
+              8.899201144118075,
+              0.1936151788823149,
+              1.7001122779028321,
+              0.0,
+              2.9539736529373584,
+              0.0,
+              0.45442725236068965,
+              0.14420154158982437
+            ],
+            "x_final": [
+              0.17386871658958303,
+              0.005000000000000001,
+              8.881814364054518,
+              0.03758953465008043,
+              2.9999999999999996,
+              -0.9589137039886788,
+              4.999999999999999,
+              -0.012266588997028724,
+              0.02412520383913734,
+              0.030000000000000002
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 89,
+            "cost": 23.633274086646466
+          },
+          {
+            "start_index": 3,
+            "x0": [
+              7.641598355727314,
+              0.03248566552999128,
+              8.194107165468454,
+              0.27108267583624907,
+              1.612981147504456,
+              0.0,
+              3.121512419736514,
+              0.0,
+              0.5518493510813754,
+              0.1612844457200862
+            ],
+            "x_final": [
+              0.17387194346361698,
+              0.005000000000000001,
+              8.881799416328233,
+              0.03758964707303428,
+              2.9999999999999996,
+              -0.9588968144429555,
+              4.999999999999992,
+              -0.012267829516434589,
+              0.024123559788784523,
+              0.030000000000000002
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 94,
+            "cost": 23.63327381656614
+          }
+        ],
+        "martingale_completion": {
+          "chapman_kolmogorov_residual": 1.4432899320127035e-15,
+          "generator_residual": 6.738694047214722e-10,
+          "mass_residual": 1.7763568394002505e-15,
+          "mean_residual": 1.7763568394002505e-15,
+          "variant_label": "coherent-chain DLV (direct transition-parameter calibration, NOT Wiese-Wissel)"
+        }
+      }
+    },
+    "wall_clock_seconds": 109.87799119949341
+  },
+  {
+    "ticker": "SPX",
+    "date": "2025-01-03",
+    "n_raw_contracts": 1000,
+    "n_evaluation_contracts": 23,
+    "n_excluded_target_points": 37,
+    "excluded": [
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 0.85,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.1507 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 0.9,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.0935 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 0.925,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.0661 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 0.95,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.0395 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 1.05,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.0371 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.0836 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.019164955509924708,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.01984127052128315,
+        "reason": "nearest sane quote 0.1280 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 0.85,
+        "matched_expiry_years": 0.075396828353405,
+        "reason": "nearest sane quote 0.1440 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 0.9,
+        "matched_expiry_years": 0.075396828353405,
+        "reason": "nearest sane quote 0.0869 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 0.925,
+        "matched_expiry_years": 0.075396828353405,
+        "reason": "nearest sane quote 0.0595 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 0.95,
+        "matched_expiry_years": 0.075396828353405,
+        "reason": "nearest sane quote 0.0328 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 1.05,
+        "matched_expiry_years": 0.075396828353405,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.075396828353405,
+        "reason": "nearest sane quote 0.0761 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.08333333333333333,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.075396828353405,
+        "reason": "nearest sane quote 0.1205 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 0.85,
+        "matched_expiry_years": 0.1468254029750824,
+        "reason": "nearest sane quote 0.1371 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 0.9,
+        "matched_expiry_years": 0.1468254029750824,
+        "reason": "nearest sane quote 0.0800 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 0.925,
+        "matched_expiry_years": 0.1468254029750824,
+        "reason": "nearest sane quote 0.0526 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 0.975,
+        "matched_expiry_years": 0.1468254029750824,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 1.05,
+        "matched_expiry_years": 0.1468254029750824,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.1468254029750824,
+        "reason": "nearest sane quote 0.0746 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.16666666666666666,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.1468254029750824,
+        "reason": "nearest sane quote 0.1190 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 0.85,
+        "matched_expiry_years": 0.230158731341362,
+        "reason": "nearest sane quote 0.1324 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 0.9,
+        "matched_expiry_years": 0.230158731341362,
+        "reason": "nearest sane quote 0.0753 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 0.925,
+        "matched_expiry_years": 0.230158731341362,
+        "reason": "nearest sane quote 0.0479 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.230158731341362,
+        "reason": "nearest sane quote 0.0653 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.25,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.230158731341362,
+        "reason": "nearest sane quote 0.1098 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.5,
+        "target_moneyness": 0.85,
+        "matched_expiry_years": 0.4761904776096344,
+        "reason": "nearest sane quote 0.1223 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.5,
+        "target_moneyness": 0.9,
+        "matched_expiry_years": 0.4761904776096344,
+        "reason": "nearest sane quote 0.0651 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.5,
+        "target_moneyness": 0.925,
+        "matched_expiry_years": 0.4761904776096344,
+        "reason": "nearest sane quote 0.0377 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.5,
+        "target_moneyness": 1.05,
+        "matched_expiry_years": 0.4761904776096344,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      },
+      {
+        "target_tenor": 0.5,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.4761904776096344,
+        "reason": "nearest sane quote 0.0625 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 0.5,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.4761904776096344,
+        "reason": "nearest sane quote 0.1070 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 1.0,
+        "target_moneyness": 0.85,
+        "matched_expiry_years": 0.9841269850730896,
+        "reason": "nearest sane quote 0.1022 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 1.0,
+        "target_moneyness": 0.9,
+        "matched_expiry_years": 0.9841269850730896,
+        "reason": "nearest sane quote 0.0451 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 1.0,
+        "target_moneyness": 1.05,
+        "matched_expiry_years": 0.9841269850730896,
+        "reason": "duplicate: same real quote already matched to a nearer target moneyness"
+      },
+      {
+        "target_tenor": 1.0,
+        "target_moneyness": 1.1,
+        "matched_expiry_years": 0.9841269850730896,
+        "reason": "nearest sane quote 0.0729 log-moneyness away (tol=0.03)"
+      },
+      {
+        "target_tenor": 1.0,
+        "target_moneyness": 1.15,
+        "matched_expiry_years": 0.9841269850730896,
+        "reason": "nearest sane quote 0.1174 log-moneyness away (tol=0.03)"
+      }
+    ],
+    "models": {
+      "dy2": {
+        "model_name": "dy2",
+        "n_contracts": 23,
+        "pcnt_inside_bid_ask": 0.8695652173913043,
+        "median_fit_err": 2.497217650009285,
+        "mean_fit_err": 3.7285174042100167,
+        "mean_iv_error_bps": 1.8543592883423126,
+        "median_abs_iv_error_bps": 0.2602302187687533,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.0019435002468526363,
+        "peak_memory_bytes": 28447,
+        "by_bucket": {
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.3371702423137871
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 12,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.2942885714635422
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 0.7998977341157878,
+            "mean_abs_iv_error_bps": 6.390360820840158
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 0.5,
+            "median_fit_err": 5.192827239257131,
+            "mean_abs_iv_error_bps": 11.224871622392204
+          }
+        },
+        "fit_result_median_err_half_spreads": 0.9877222416931272,
+        "fit_result_pcnt_fit": 0.041
+      },
+      "sanos_snapshot": {
+        "model_name": "sanos_snapshot",
+        "n_contracts": 23,
+        "pcnt_inside_bid_ask": 1.0,
+        "median_fit_err": 0.0,
+        "mean_fit_err": 0.0,
+        "mean_iv_error_bps": 0.0001464324470375019,
+        "median_abs_iv_error_bps": 0.023612208171763793,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.00017187511548399925,
+        "peak_memory_bytes": 7543,
+        "by_bucket": {
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 4.625929269271485e-14
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 12,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.029623129671821347
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.0
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 0.0
+          }
+        },
+        "fit_time_seconds": 0.15235816687345505
+      },
+      "dlv_black": {
+        "model_name": "dlv_black",
+        "n_contracts": 23,
+        "pcnt_inside_bid_ask": 0.043478260869565216,
+        "median_fit_err": 21.494790799958515,
+        "mean_fit_err": 22.65094453478809,
+        "mean_iv_error_bps": -47.81180352743472,
+        "median_abs_iv_error_bps": 126.23856948042855,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.004934541881084442,
+        "peak_memory_bytes": 11804,
+        "by_bucket": {
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 15.479925216477653,
+            "mean_abs_iv_error_bps": 203.43403536561112
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 12,
+            "pcnt_inside_bid_ask": 0.08333333333333333,
+            "median_fit_err": 24.49211270714485,
+            "mean_abs_iv_error_bps": 121.86772231739828
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 39.52986607171002,
+            "mean_abs_iv_error_bps": 144.7096530781006
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 24.432389400042887,
+            "mean_abs_iv_error_bps": 92.22613975265297
+          }
+        },
+        "kappa": 0.05000000000000001,
+        "sigma_Y": 0.08713879899722926,
+        "anchors": [
+          0.5632151108183936,
+          0.6819976300532644,
+          0.8258314779985468,
+          1.0,
+          1.2109008031802821,
+          1.4662807551426524,
+          1.7755205440900288
+        ],
+        "final_cost": 7558.192440985747,
+        "converged": true,
+        "chapman_kolmogorov_residual": 2.220446049250313e-16,
+        "generator_residual": 6.786240241088426e-05,
+        "starts": [
+          {
+            "start_index": 0,
+            "x0": [
+              0.5313270239200273,
+              0.4582799722095138,
+              0.30639814654603076
+            ],
+            "x_final": [
+              0.05000000000000001,
+              0.08713879899722926,
+              0.5740936442098893
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 22,
+            "cost": 7558.192440985747
+          },
+          {
+            "start_index": 1,
+            "x0": [
+              4.410728222617067,
+              0.07061074988051592,
+              0.23551980503080328
+            ],
+            "x_final": [
+              0.05000000000000001,
+              0.1445149391570814,
+              0.030000000000001536
+            ],
+            "success": true,
+            "status": 4,
+            "message": "Both `ftol` and `xtol` termination conditions are satisfied.",
+            "nfev": 15,
+            "cost": 11693.798472180168
+          },
+          {
+            "start_index": 2,
+            "x0": [
+              37.81584782860917,
+              0.22213509934172732,
+              0.14286411404233518
+            ],
+            "x_final": [
+              0.05000000000000001,
+              0.14451493919763986,
+              0.030000000000000002
+            ],
+            "success": true,
+            "status": 4,
+            "message": "Both `ftol` and `xtol` termination conditions are satisfied.",
+            "nfev": 14,
+            "cost": 11693.798472180164
+          },
+          {
+            "start_index": 3,
+            "x0": [
+              272.01513451832784,
+              0.6275586535715932,
+              0.04675655620602559
+            ],
+            "x_final": [
+              0.05000000000000001,
+              0.14451493922140213,
+              0.030000000000000002
+            ],
+            "success": true,
+            "status": 4,
+            "message": "Both `ftol` and `xtol` termination conditions are satisfied.",
+            "nfev": 13,
+            "cost": 11693.798472180228
+          }
+        ]
+      },
+      "dlv_bates": {
+        "model_name": "dlv_bates",
+        "n_contracts": 23,
+        "pcnt_inside_bid_ask": 0.13043478260869565,
+        "median_fit_err": 0.560590976637302,
+        "mean_fit_err": 0.519706024981384,
+        "mean_iv_error_bps": -0.01872471748614191,
+        "median_abs_iv_error_bps": 6.420152854946515,
+        "n_iv_inversions_failed": 0,
+        "runtime_seconds": 0.2866885829716921,
+        "peak_memory_bytes": 704529,
+        "by_bucket": {
+          "short (<=1.5m) / near ATM (0.95-1.05)": {
+            "n": 6,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 0.3904752108369546,
+            "mean_abs_iv_error_bps": 10.506556456483494
+          },
+          "medium (1.5-6m) / near ATM (0.95-1.05)": {
+            "n": 12,
+            "pcnt_inside_bid_ask": 0.0,
+            "median_fit_err": 0.5952603663322495,
+            "mean_abs_iv_error_bps": 6.011121361998127
+          },
+          "long (>6m) / OTM put wing (K/F<0.95)": {
+            "n": 1,
+            "pcnt_inside_bid_ask": 1.0,
+            "median_fit_err": 0.0,
+            "mean_abs_iv_error_bps": 3.39393769269003
+          },
+          "long (>6m) / near ATM (0.95-1.05)": {
+            "n": 4,
+            "pcnt_inside_bid_ask": 0.5,
+            "median_fit_err": 0.4648633788907397,
+            "mean_abs_iv_error_bps": 4.200936771773245
+          }
+        },
+        "heston": {
+          "kappa": 1.9760444592570239,
+          "theta": 0.0352570895193778,
+          "xi": 0.5930846641659734,
+          "rho": -0.978520471589443
+        },
+        "jumps": {
+          "lambda_J": 0.020529321531309968,
+          "m_J": -0.4999999999436344,
+          "delta_J": 0.010000000114931002
+        },
+        "V_t": 0.013589140618893882,
+        "chain_kappa": 0.10455123968028676,
+        "anchors": [
+          0.9457752298607727,
+          0.9635153184612955,
+          0.9815881613290247,
+          1.0,
+          1.0187571930839574,
+          1.0378662184603038,
+          1.0573336755152805
+        ],
+        "final_cost": 4.279956441788626,
+        "converged": true,
+        "chapman_kolmogorov_residual": 3.3306690738754696e-16,
+        "generator_residual": 2.2893771170484634e-08,
+        "starts": [
+          {
+            "start_index": 0,
+            "x0": [
+              10.0,
+              0.04,
+              7.55,
+              0.2525,
+              1.525,
+              0.0,
+              2.5,
+              0.0,
+              0.505,
+              0.15
+            ],
+            "x_final": [
+              0.10455342722857809,
+              0.013589115951073939,
+              1.976137213685747,
+              0.03525697519494485,
+              0.5930871270602489,
+              -0.9785332683683206,
+              0.020527512452745894,
+              -0.49999999999999956,
+              0.010000000000000564,
+              0.05574996254850195
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 82,
+            "cost": 4.279956446935393
+          },
+          {
+            "start_index": 1,
+            "x0": [
+              10.684808436607272,
+              0.03539573427527741,
+              5.817175052859135,
+              0.1914616139854768,
+              1.7638685573902075,
+              0.0,
+              2.6332947197089753,
+              0.0,
+              0.5160153103450194,
+              0.18263043178408261
+            ],
+            "x_final": [
+              0.10455340977876638,
+              0.01358911519639215,
+              1.9761348894151916,
+              0.035257002307757815,
+              0.5930869817842123,
+              -0.978533450096253,
+              0.020527488137080073,
+              -0.4999999999999834,
+              0.010000000000210186,
+              0.055749989394356166
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 102,
+            "cost": 4.279956447338914
+          },
+          {
+            "start_index": 2,
+            "x0": [
+              11.579267770607661,
+              0.030054770003402963,
+              8.899201144118075,
+              0.1936151788823149,
+              1.7001122779028321,
+              0.0,
+              2.9539736529373584,
+              0.0,
+              0.45442725236068965,
+              0.14420154158982437
+            ],
+            "x_final": [
+              0.10455123968028676,
+              0.013589140618893882,
+              1.9760444592570239,
+              0.0352570895193778,
+              0.5930846641659734,
+              -0.978520471589443,
+              0.020529321531309968,
+              -0.4999999999436344,
+              0.010000000114931002,
+              0.05575033873175394
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 93,
+            "cost": 4.279956441788626
+          },
+          {
+            "start_index": 3,
+            "x0": [
+              7.641598355727314,
+              0.03248566552999128,
+              8.194107165468454,
+              0.27108267583624907,
+              1.612981147504456,
+              0.0,
+              3.121512419736514,
+              0.0,
+              0.5518493510813754,
+              0.1612844457200862
+            ],
+            "x_final": [
+              0.10455394775720202,
+              0.013589111386014728,
+              1.9761589995060882,
+              0.035256943076280724,
+              0.5930878750124264,
+              -0.9785359661843095,
+              0.02052711386450274,
+              -0.49999999999997297,
+              0.010000000000153856,
+              0.05574985366102162
+            ],
+            "success": true,
+            "status": 2,
+            "message": "`ftol` termination condition is satisfied.",
+            "nfev": 88,
+            "cost": 4.279956457226375
+          }
+        ],
+        "martingale_completion": {
+          "chapman_kolmogorov_residual": 8.881784197001252e-16,
+          "generator_residual": 6.664386958954438e-10,
+          "mass_residual": 4.440892098500626e-16,
+          "mean_residual": 4.440892098500626e-16,
+          "variant_label": "coherent-chain DLV (direct transition-parameter calibration, NOT Wiese-Wissel)"
+        }
+      }
+    },
+    "wall_clock_seconds": 98.0304319858551
+  },
+  {
+    "ticker": "AAPL",
+    "date": "2011-07-07",
+    "load_error": "For live access to WIDB, set the environment variable WRDS_USERNAME: currently not set.\nTraceback (most recent call last):\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/dysanos/bates_crc/real_data_study/run_full_study.py\", line 89, in run_one_day\n    book = load_day(ticker, d)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/dysanos/bates_crc/real_data_study/day_loader.py\", line 72, in load_day\n    raw = smooth_interpolated_market(ticker, d, smoothness=smoothness)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/dysanos/market.py\", line 107, in smooth_interpolated_market\n    data = filter_options_day(\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/options_filter.py\", line 268, in filter_options_day\n    data = mk_arb_free_day(\n           ^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/arbfree.py\", line 140, in mk_arb_free_day\n    data = enrich_day(\n           ^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/day.py\", line 687, in enrich_day\n    data = collect_raw_day(ticker, d, raw_day_filter, verbose=verbose, override_cache_mode=override_cache_mode, raise_if_bad_day = raise_if_bad_day)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/day.py\", line 219, in collect_raw_day\n    spot_d  = conn.spot_price(secid, prev_d, verbose=verbose(1))\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/client.py\", line 460, in spot_price\n    conn = self.connect()\n           ^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/client.py\", line 173, in connect\n    credentials = WIDBClient.credentials()\n                  ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/client.py\", line 156, in credentials\n    WIDBClient._credentials = WRDSCredentials.create()\n                              ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/client.py\", line 99, in create\n    raise RuntimeError(\"For live access to WIDB, set the environment variable WRDS_USERNAME: currently \" + (\"not set\" if username is None else f\"'{username}'\")+\".\")\nRuntimeError: For live access to WIDB, set the environment variable WRDS_USERNAME: currently not set.\n"
+  },
+  {
+    "ticker": "AAPL",
+    "date": "2024-03-05",
+    "load_error": "For live access to WIDB, set the environment variable WRDS_USERNAME: currently not set.\nTraceback (most recent call last):\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/dysanos/bates_crc/real_data_study/run_full_study.py\", line 89, in run_one_day\n    book = load_day(ticker, d)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/dysanos/bates_crc/real_data_study/day_loader.py\", line 72, in load_day\n    raw = smooth_interpolated_market(ticker, d, smoothness=smoothness)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/dysanos/market.py\", line 107, in smooth_interpolated_market\n    data = filter_options_day(\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/options_filter.py\", line 268, in filter_options_day\n    data = mk_arb_free_day(\n           ^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/arbfree.py\", line 140, in mk_arb_free_day\n    data = enrich_day(\n           ^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/day.py\", line 687, in enrich_day\n    data = collect_raw_day(ticker, d, raw_day_filter, verbose=verbose, override_cache_mode=override_cache_mode, raise_if_bad_day = raise_if_bad_day)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/day.py\", line 219, in collect_raw_day\n    spot_d  = conn.spot_price(secid, prev_d, verbose=verbose(1))\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/client.py\", line 460, in spot_price\n    conn = self.connect()\n           ^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/client.py\", line 173, in connect\n    credentials = WIDBClient.credentials()\n                  ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/client.py\", line 156, in credentials\n    WIDBClient._credentials = WRDSCredentials.create()\n                              ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/client.py\", line 99, in create\n    raise RuntimeError(\"For live access to WIDB, set the environment variable WRDS_USERNAME: currently \" + (\"not set\" if username is None else f\"'{username}'\")+\".\")\nRuntimeError: For live access to WIDB, set the environment variable WRDS_USERNAME: currently not set.\n"
+  },
+  {
+    "ticker": "AAPL",
+    "date": "2024-12-26",
+    "load_error": "For live access to WIDB, set the environment variable WRDS_USERNAME: currently not set.\nTraceback (most recent call last):\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/dysanos/bates_crc/real_data_study/run_full_study.py\", line 89, in run_one_day\n    book = load_day(ticker, d)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/dysanos/bates_crc/real_data_study/day_loader.py\", line 72, in load_day\n    raw = smooth_interpolated_market(ticker, d, smoothness=smoothness)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/dysanos/market.py\", line 107, in smooth_interpolated_market\n    data = filter_options_day(\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/options_filter.py\", line 268, in filter_options_day\n    data = mk_arb_free_day(\n           ^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/arbfree.py\", line 140, in mk_arb_free_day\n    data = enrich_day(\n           ^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/day.py\", line 687, in enrich_day\n    data = collect_raw_day(ticker, d, raw_day_filter, verbose=verbose, override_cache_mode=override_cache_mode, raise_if_bad_day = raise_if_bad_day)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/day.py\", line 219, in collect_raw_day\n    spot_d  = conn.spot_price(secid, prev_d, verbose=verbose(1))\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/client.py\", line 460, in spot_price\n    conn = self.connect()\n           ^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/client.py\", line 173, in connect\n    credentials = WIDBClient.credentials()\n                  ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/client.py\", line 156, in credentials\n    WIDBClient._credentials = WRDSCredentials.create()\n                              ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/client.py\", line 99, in create\n    raise RuntimeError(\"For live access to WIDB, set the environment variable WRDS_USERNAME: currently \" + (\"not set\" if username is None else f\"'{username}'\")+\".\")\nRuntimeError: For live access to WIDB, set the environment variable WRDS_USERNAME: currently not set.\n"
+  },
+  {
+    "ticker": "AAPL",
+    "date": "2025-01-03",
+    "load_error": "For live access to WIDB, set the environment variable WRDS_USERNAME: currently not set.\nTraceback (most recent call last):\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/dysanos/bates_crc/real_data_study/run_full_study.py\", line 89, in run_one_day\n    book = load_day(ticker, d)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/dysanos/bates_crc/real_data_study/day_loader.py\", line 72, in load_day\n    raw = smooth_interpolated_market(ticker, d, smoothness=smoothness)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/dysanos/market.py\", line 107, in smooth_interpolated_market\n    data = filter_options_day(\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/options_filter.py\", line 268, in filter_options_day\n    data = mk_arb_free_day(\n           ^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/arbfree.py\", line 140, in mk_arb_free_day\n    data = enrich_day(\n           ^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/day.py\", line 687, in enrich_day\n    data = collect_raw_day(ticker, d, raw_day_filter, verbose=verbose, override_cache_mode=override_cache_mode, raise_if_bad_day = raise_if_bad_day)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/day.py\", line 219, in collect_raw_day\n    spot_d  = conn.spot_price(secid, prev_d, verbose=verbose(1))\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/.venv312/lib/python3.12/site-packages/cdxcore/subdir.py\", line 4586, in execute\n    r = self._F(*args, **kwargs)\n        ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/client.py\", line 460, in spot_price\n    conn = self.connect()\n           ^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/client.py\", line 173, in connect\n    credentials = WIDBClient.credentials()\n                  ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/client.py\", line 156, in credentials\n    WIDBClient._credentials = WRDSCredentials.create()\n                              ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/blanka/Agentic/quant_data-main/quantdata/widb/client.py\", line 99, in create\n    raise RuntimeError(\"For live access to WIDB, set the environment variable WRDS_USERNAME: currently \" + (\"not set\" if username is None else f\"'{username}'\")+\".\")\nRuntimeError: For live access to WIDB, set the environment variable WRDS_USERNAME: currently not set.\n"
+  }
+]

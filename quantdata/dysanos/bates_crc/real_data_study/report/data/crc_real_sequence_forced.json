@@ -1,0 +1,91 @@
+[
+  {
+    "date_prev": "2005-11-21",
+    "date_next": "2010-07-07",
+    "gap_years": 4.6242299794661195,
+    "delta_theta_realised": 0.09878147640116129,
+    "theta_band_half_width_required": 0.10372155022121936,
+    "theta_band_widening_vs_standard": 3.4573850073739787,
+    "jump_box_widen_factor_required": 1.5,
+    "jump_box_widening_vs_standard": 1.0,
+    "reserve_budget_used": 0.10372055022121936,
+    "projection_free": true,
+    "b_used_n": 0.004939073820058065,
+    "protected_option_check": {
+      "n_protected_contracts": 48,
+      "max_abs_price_diff": 0.0,
+      "mean_abs_price_diff": 0.0
+    }
+  },
+  {
+    "date_prev": "2010-07-07",
+    "date_next": "2011-07-07",
+    "gap_years": 0.999315537303217,
+    "delta_theta_realised": -0.05185230427675731,
+    "theta_band_half_width_required": 0.054445919490595185,
+    "theta_band_widening_vs_standard": 1.8148639830198396,
+    "jump_box_widen_factor_required": 1.5,
+    "jump_box_widening_vs_standard": 1.0,
+    "reserve_budget_used": 0.0001,
+    "projection_free": true,
+    "b_used_n": 0.051952304276757316,
+    "protected_option_check": {
+      "n_protected_contracts": 57,
+      "max_abs_price_diff": 0.0,
+      "mean_abs_price_diff": 0.0
+    }
+  },
+  {
+    "date_prev": "2011-07-07",
+    "date_next": "2024-03-05",
+    "gap_years": 12.66255989048597,
+    "delta_theta_realised": 0.027397619809317222,
+    "theta_band_half_width_required": 0.028768500799783086,
+    "theta_band_widening_vs_standard": 0.9589500266594362,
+    "jump_box_widen_factor_required": 1.5,
+    "jump_box_widening_vs_standard": 1.0,
+    "reserve_budget_used": 0.028767500799783085,
+    "projection_free": true,
+    "b_used_n": 0.0013698809904658625,
+    "protected_option_check": {
+      "n_protected_contracts": 51,
+      "max_abs_price_diff": 0.0,
+      "mean_abs_price_diff": 0.0
+    }
+  },
+  {
+    "date_prev": "2024-03-05",
+    "date_next": "2024-12-26",
+    "gap_years": 0.810403832991102,
+    "delta_theta_realised": -0.05885464020742594,
+    "theta_band_half_width_required": 0.061798372217797236,
+    "theta_band_widening_vs_standard": 2.0599457405932413,
+    "jump_box_widen_factor_required": 1.5,
+    "jump_box_widening_vs_standard": 1.0,
+    "reserve_budget_used": 0.0001,
+    "projection_free": true,
+    "b_used_n": 0.05895464020742594,
+    "protected_option_check": {
+      "n_protected_contracts": 18,
+      "max_abs_price_diff": 0.0,
+      "mean_abs_price_diff": 0.0
+    }
+  },
+  {
+    "date_prev": "2024-12-26",
+    "date_next": "2025-01-03",
+    "gap_years": 0.02190280629705681,
+    "delta_theta_realised": -0.002332557553656474,
+    "theta_band_half_width_required": 0.0024501854313392977,
+    "theta_band_widening_vs_standard": 0.08167284771130993,
+    "jump_box_widen_factor_required": 1.5,
+    "jump_box_widening_vs_standard": 1.0,
+    "reserve_budget_used": 0.0001,
+    "projection_free": true,
+    "b_used_n": 0.0024325575536564737,
+    "protected_option_check": {
+      "n_protected_contracts": 3,
+      "numerical_failure": "Carr-Madan Fourier pricing overflowed (overflow encountered in exp) -- the dominating envelope forced this wide (delta_J=1.654, lambda_J=1.96e+03) exceeds the standard damped-contour method's stable range; not resolved by reducing n_quad/u_max"
+    }
+  }
+]

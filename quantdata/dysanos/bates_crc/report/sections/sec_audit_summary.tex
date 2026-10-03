@@ -1,0 +1,33 @@
+\section{Audit before claiming exactness}
+\label{sec:audit-summary}
+
+The full audit (true martingality, conditional independence, terminal
+settlement, finite horizon, L\'evy integrability, jump-compensation
+convention, the Heston branching argument, and a non-obvious structural
+finding about how $p_n$ enters the priced dynamics) is written up in full
+in \texttt{AUDIT.md}, produced \emph{before} any exactness claim was made
+elsewhere in this report. Its summary table is reproduced here.
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+Item & Status \\
+\midrule
+$D(-i,\tau)=A(-i,\tau)=0$ for all $\tau$ & PROVEN + VERIFIED \\
+$j_p(0)=j_p(-i)=0$ & PROVEN + VERIFIED (incl.\ independent quadrature) \\
+Full transform $\Phi(0)=\Phi(-i)=1$ & VERIFIED ($<10^{-8}$) \\
+Manuscript's synthetic reset sequence reproduced & VERIFIED ($<10^{-12}$, exact table match) \\
+Envelope dominates every box member & VERIFIED (grid + closed-form bound) \\
+Branching lemma $D(u,r)$ positivity & PROVEN analytically (Sato) -- not by sweep \\
+Reserve-term admissibility ($\kappa b_{\rm used}\ge0$) & PROVEN (DFS 2003) + enforced as code invariant \\
+$p_n$ cancels out of priced dynamics & VERIFIED, non-obvious, documented \\
+Independent MC pricing check & VERIFIED, pre-first-reset window \\
+Protected-option ($T<t_n$) exact invariance & VERIFIED ($<10^{-8}$, 48 combinations) \\
+Negative control violates invariance & VERIFIED ($\sim\!8\times10^{-5}$) \\
+Off-grid generator residual & VERIFIED ($<5\times10^{-4}$) \\
+Chain Chapman--Kolmogorov composition & VERIFIED ($<10^{-8}$) \\
+$X$/$Y$ independence, full $S=XY$ martingality & \textbf{NOT VERIFIABLE FROM CODE ALONE} \\
+\bottomrule
+\end{tabular}
+\end{center}

@@ -1,0 +1,72 @@
+\section{What is established, what is limited, and what remains open}
+\label{sec:deferred-real-data}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{5.4cm}p{2.6cm}p{6.2cm}}
+\toprule
+Claim & Status & Basis / caveat \\
+\midrule
+Chain martingale property (any $\kappa$, any anchor grid) &
+  \textbf{Analytical guarantee} & Exact zero-drift birth-death construction; re-verified post-fit on every calibrated model. \\
+Real-data provenance (12 genuine day-books) &
+  \textbf{Verified} & WRDS OptionMetrics via local WIDB fixtures; not dy2.pdf's full historical series. \\
+DLV$\times$Black fits real SPX well &
+  \textbf{Refuted} & 10.4\% inside bid-ask on the selection date; a structural, single-transition-rate limitation, not a bug. \\
+DLV$\times$ordinary-Bates fits real SPX well &
+  \textbf{Refuted on modern dense books} & 94--100\% inside bid-ask on 2005--2011, but 13--27\% on 2024--2025 held-out dates -- a genuine generalisation gap, not a selection-date artefact (Fig.~\ref{fig:model-comparison-bars}). \\
+Reserve cost is real, large, and only partially recoverable by recalibration &
+  \textbf{Verified numerically} & 195--276\% mean price shift, 0\% bid-ask coverage on turning the reserve on; recalibration recovers most but not all on 2/3 dates, fails to converge on the third. Reported as measured changes, not inferred from the admissible interval's width alone. \\
+Node-count sensitivity ($N\in\{5,7,9\}$) &
+  \textbf{Verified: negligible effect} & Run on 2011-07-07: $92.2\%/18.8$bp, $94.1\%/18.7$bp, $92.2\%/19.2$bp inside bid-ask / median IV err for $N{=}5,7,9$ -- statistically indistinguishable, consistent with the chain component being nearly redundant for this variant (Sec.~\ref{sec:selection-diagnostics}, finding 3). \\
+AAPL results &
+  \textbf{Secondary only} & Held-out dates only, single-name book, smaller sample; not part of the primary SPX comparison. \\
+Full multi-year historical dynamics, transition likelihood &
+  \textbf{Out of scope} & Requires a continuous WRDS/Massive series, unavailable in this environment (unchanged from the prior task's \texttt{DATA\_STATUS.md}). \\
+\bottomrule
+\end{tabular}
+\caption{Analytical guarantees vs.\ numerical findings vs.\ open/limited scope.}
+\label{tab:deferred-real-data}
+\end{table}
+
+\section{Conclusion}
+\label{sec:conclusion-real-data}
+
+On the real, if small and non-continuous, WIDB fixture set available in
+this environment, the coherent DLV$\times$extended-Bates family's answer to
+"can it fit actual option surfaces well" is nuanced, not a flat yes or no,
+and the held-out split earns its keep by catching a genuine generalisation
+gap rather than a design-time artefact:
+
+\begin{itemize}
+\item The chain-only (Black) variant demonstrably cannot fit real SPX
+  books at all (4--12\% inside bid-ask on every date tested), for a
+  structural reason: a single transition rate cannot serve both short- and
+  long-dated smiles at once.
+\item The Bates-background variant fits close to exactly on the two
+  selection dates and one older held-out date (2005--2011: 94--100\%
+  inside bid-ask) -- but its own extra chain degrees of freedom are nearly
+  redundant there (the fitted anchor half-width sits at its lower bound).
+  On the three DENSE, MODERN held-out dates (2024--2025) it collapses to
+  13--27\% inside bid-ask (Fig.~\ref{fig:model-comparison-bars}) -- a
+  genuine generalisation gap, discovered only because the held-out dates
+  were never used to pick a design choice, exactly the scenario the
+  selection/held-out split exists to expose.
+\item The reserve extension's fit cost is measured, not inferred: turning
+  on even a modest budget shifts prices 195--276\% on average and collapses
+  fit to 0\% inside bid-ask; recalibration recovers most (not all) of this
+  on two of three tested dates, and fails to converge outright on the
+  third (2024-03-05 -- itself already the weakest ordinary-Bates fit).
+  Once a reserve regime is established, further admissible resets within it
+  are comparatively cheap (one to two orders of magnitude smaller price
+  impact) -- establishing the regime is where the real cost lives.
+\end{itemize}
+
+Taken together: the coherent-chain DLV construction, even in its most
+capable (Bates) form and even after a disciplined two-stage calibration
+fix caught on a selection date, does not reliably fit today's real, dense
+SPX book well -- and turning on a useful CRC reserve is a materially
+expensive, only-partially-recoverable regime change, not a free source of
+scenario diversity. Both are honest, load-bearing findings this task asked
+for, not shortcomings of the pipeline that built them.

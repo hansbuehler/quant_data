@@ -1,0 +1,134 @@
+{
+  "heston": {
+    "kappa": 2.0,
+    "theta": 0.04,
+    "xi": 0.3,
+    "rho": -0.7
+  },
+  "jump_box": {
+    "Lambda": 0.5,
+    "M": 0.05,
+    "delta_min": 0.08,
+    "delta_max": 0.15,
+    "s_star": 0.25
+  },
+  "schedule": {
+    "reset_times": [
+      0.007936507936507936,
+      0.027777777777777776,
+      0.047619047619047616
+    ],
+    "reserve_sizes": [
+      0.006,
+      0.006,
+      0.006
+    ],
+    "theta_min": 0.025,
+    "theta_max": 0.055
+  },
+  "model_expiries": [
+    0.01984126984126984,
+    0.03968253968253968,
+    0.05952380952380952,
+    0.07936507936507936
+  ],
+  "V_0": 0.04,
+  "chain_anchors": [
+    0.7,
+    0.85,
+    1.0,
+    1.15,
+    1.3
+  ],
+  "chain_initial_index": 2,
+  "chain_kappa": 8.0,
+  "jump_params_path": [
+    {
+      "lambda_J": 0.2,
+      "m_J": -0.03,
+      "delta_J": 0.1
+    },
+    {
+      "lambda_J": 0.35,
+      "m_J": -0.02,
+      "delta_J": 0.12
+    },
+    {
+      "lambda_J": 0.15,
+      "m_J": 0.01,
+      "delta_J": 0.09
+    },
+    {
+      "lambda_J": 0.4,
+      "m_J": -0.04,
+      "delta_J": 0.14
+    }
+  ],
+  "proposed_deltas": [
+    0.004,
+    -0.007,
+    0.005
+  ],
+  "theta_path": [
+    0.04,
+    0.044,
+    0.037,
+    0.041999999999999996
+  ],
+  "b_used_final": [
+    0.002,
+    0.013000000000000001,
+    0.001
+  ],
+  "reset_diagnostics": [
+    {
+      "reset_index": 1,
+      "theta_prev": 0.04,
+      "theta_n": 0.044,
+      "delta_n": 0.004,
+      "proposed_delta_n": 0.004,
+      "projected": false,
+      "admissible_interval": [
+        -0.015,
+        0.006
+      ],
+      "r_n": 0.006,
+      "b_used_n": 0.002
+    },
+    {
+      "reset_index": 2,
+      "theta_prev": 0.044,
+      "theta_n": 0.037,
+      "delta_n": -0.007,
+      "proposed_delta_n": -0.007,
+      "projected": false,
+      "admissible_interval": [
+        -0.018999999999999996,
+        0.006
+      ],
+      "r_n": 0.006,
+      "b_used_n": 0.013000000000000001
+    },
+    {
+      "reset_index": 3,
+      "theta_prev": 0.037,
+      "theta_n": 0.041999999999999996,
+      "delta_n": 0.005,
+      "proposed_delta_n": 0.005,
+      "projected": false,
+      "admissible_interval": [
+        -0.011999999999999997,
+        0.006
+      ],
+      "r_n": 0.006,
+      "b_used_n": 0.001
+    }
+  ],
+  "reproduction_command": "QUANTDATA_TEST_MODE=1 .venv312/bin/python quantdata/dysanos/bates_crc/report/generate_report_artifacts.py",
+  "monte_carlo_seeds": {
+    "primary": 7,
+    "secondary": 123,
+    "n_paths": 400000,
+    "n_var_substeps": 100
+  }
+}

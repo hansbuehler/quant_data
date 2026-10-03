@@ -1,0 +1,40 @@
+\section{Data provenance and evaluation contracts}
+\label{sec:data}
+
+Full detail in \texttt{DATA\_PROVENANCE.md}. In summary: this study uses
+the only real option-quote data authorised and available in this
+environment -- WRDS OptionMetrics snapshots cached locally as WIDB
+fixtures, six dates $\times$ two underlyings (SPX secid 108105, AAPL secid
+101594): 2005-11-21, 2010-07-07, 2011-07-07, 2024-03-05, 2024-12-26,
+2025-01-03. This is \emph{not} \texttt{dy2.pdf}'s full multi-year WRDS
+series (unavailable here -- no WRDS/Massive credentials,
+\texttt{QUANTDATA\_ROOT}, or \texttt{.pgpass} exist in this checkout); it
+is a small, non-continuous, but genuinely real fixture set, loaded via
+\texttt{QUANTDATA\_TEST\_MODE=generate\_tests} (compute-and-persist against
+the local cache only, zero network calls).
+
+\paragraph{Date-selection rule.} Use every date present in the authorised
+local cache -- no cherry-picking. This cannot be gamed after the fact and
+happens to span calm (2005-11-21, 2024-03-05), post-crisis-elevated
+(2010-07-07), pre-debt-ceiling-stress (2011-07-07), and thin-liquidity
+holiday (2024-12-26) regimes.
+
+\paragraph{Model-selection vs.\ held-out split, fixed before any
+calibration.} Selection dates 2005-11-21 and 2010-07-07 were used ONLY to
+choose \texttt{config.py}'s bounds, anchor-width treatment, and solver
+settings (Sec.~\ref{sec:selection-diagnostics}). Held-out dates 2011-07-07,
+2024-03-05, 2024-12-26, 2025-01-03 provide the numbers reported as the
+primary comparison (Table~\ref{tab:main-comparison}); no design choice was
+made after seeing their numbers.
+
+\paragraph{Common evaluation contract set.} A fixed target grid of tenor
+$\times$ moneyness pairs (tenors $\{$1w, 1m, 2m, 3m, 6m, 1y$\}$, moneyness
+$K/F\in\{0.85,\dots,1.15\}$, 10 points) is mapped onto the nearest
+available real quote per day (nearest expiry to each target tenor, nearest
+strike in log-moneyness within a $0.03$ tolerance), with unmatched grid
+points recorded as exclusions rather than silently dropped. Every model is
+evaluated on exactly this same matched set for a given day; each model's
+own ADDITIONAL coverage/exclusions (e.g.\ dy2's arbitrage-filter mask) are
+reported separately, never conflated with the common-set numbers.
+
+\input{sections/sec_selection_diagnostics.tex}

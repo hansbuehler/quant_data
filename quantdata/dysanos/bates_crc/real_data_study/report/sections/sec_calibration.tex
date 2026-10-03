@@ -1,0 +1,44 @@
+\subsection{Calibration method}
+\label{sec:calibration-method}
+
+Every DLV-chain model is fit by \texttt{scipy.optimize.least\_squares}
+(\texttt{method="trf"}, box-bounded) on the SAME spread-unit hinge-error
+residual this codebase's own SANOS fitting already uses
+(\texttt{quantdata/sanos/sanos\_tools.py::\_compute\_market\_fit}, floor
+\texttt{min\_half\_spread=1e-4}):
+\[
+  \text{fit\_err}_i = \frac{\max(0,\text{price}_i-\text{ask}_i) + \max(0,\text{bid}_i-\text{price}_i)}
+                            {\max(0.5(\text{ask}_i-\text{bid}_i),\,10^{-4})}.
+\]
+Bounds, initial guesses, and the multi-start count ($N=4$) are fixed in
+\texttt{config.py} \emph{before} any held-out-date calibration was run
+(Sec.~\ref{sec:selection-diagnostics}). Every start's initial guess, final
+parameters, convergence flag, solver status/message, function-evaluation
+count, and final cost are recorded (\texttt{starts} field of each
+calibration result) -- solver failures are recorded, not hidden, and an
+all-starts-failed day raises a typed error rather than silently returning a
+bad fit.
+
+\paragraph{Two-tier precision.} Optimisation iterations use a reduced
+Fourier quadrature ($n_{\rm quad}=80$); the converged parameters are
+re-priced once at full precision ($n_{\rm quad}=200$) for all reported
+numbers.
+
+\paragraph{Post-fit martingale verification (Section B).} Because the
+chain's birth-death rates $\kappa/(\text{gap})$ give an EXACT zero-drift
+martingale for \emph{any} $\kappa$ and \emph{any} anchor grid (verified in
+a prior task: exact Chapman--Kolmogorov composition, exact zero generator
+residual), calibrating $\kappa$ (and the anchor width) directly IS
+"calibrating coherent latent transition parameters directly" in the
+precise sense Section B asks for -- every parameter value the optimizer
+visits is automatically an exact martingale; there is no separate
+completion step, because non-martingale values do not exist in this
+family. This is re-verified numerically after every single fit (not
+assumed): \texttt{martingale\_completion.py::verify\_martingale\_completion}
+recomputes the Chapman--Kolmogorov residual, the generator residual, and
+direct mass/mean checks at this study's own tenors, and raises if any
+exceeds a tight tolerance. \textbf{Explicit label, per the task's
+instruction}: this chain is NOT the Wiese--Wissel dynamics referenced
+elsewhere in this research programme; every "coherent DLV" model in this
+report is this simpler, exactly-verified finite birth-death chain,
+labelled the "coherent-chain DLV" variant.

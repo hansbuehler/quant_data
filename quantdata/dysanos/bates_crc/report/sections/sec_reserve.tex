@@ -1,0 +1,69 @@
+\section{Exact reserve CRC: envelope, branching lemma, reset mechanics}
+\label{sec:reserve}
+
+\texttt{reserve\_crc.py} implements Section~12's ``two-sided admissible
+region with scheduled L\'evy reserves,'' Theorem \texttt{thm:bcrc-reserve}.
+
+\subsection{The dominating envelope}
+The jump box $\mathcal B=(\Lambda,M,\delta_{\min},\delta_{\max},s_*)$
+constrains every admissible Gaussian jump law $(\lambda_J,m_J,\delta_J)$;
+the dominating envelope is $\bar\nu(dz)=\Lambda R_*\,\varphi_{0,s_*}(z)\,dz$
+with
+\[
+  R_*=\frac{s_*}{\delta_{\min}}\exp\!\Big(\frac{M^2}{2(s_*^2-\delta_{\max}^2)}\Big).
+\]
+\texttt{verify\_envelope\_dominates} checks
+$\sup_z\varphi_{m,\delta}(z)/\varphi_{0,s_*}(z)\le R_*$ both on a dense grid
+and via the closed-form bound -- an ordinary calculus ratio bound, not a
+characteristic-function positivity claim.
+
+\subsection{Reset mechanics}
+At reset $t_n$: the admissible interval is
+$\Delta_n\in[\theta_{\min}-\theta_{n-1},\,\min(r_n,\theta_{\max}-\theta_{n-1})]$;
+the reserve coefficient becomes $b_n=r_n-\Delta_n\ge0$; the reset-corrected
+exponent is
+\[
+  \ell_s^{(n)}(u)=\bar j(u)-j_{p_n}(u)+\kappa\sum_{k\le n} b_k\,\mathbf 1\{s\ge t_k\}\,D(u,s-t_k).
+\]
+\texttt{apply\_reset} \emph{projects} an infeasible proposed $\Delta_n$ into
+the admissible interval (never silently accepts it) and raises if the
+proposed jump parameters lie outside $\mathcal B$ or if $b_n<0$ beyond
+floating-point tolerance.
+
+\paragraph{Exact manuscript reproduction.} Running the manuscript's own
+fully-specified synthetic sequence (Table~\ref{tab:params}) reproduces its
+$\theta$-path $(0.040,0.044,0.037,0.042)$ and its ``used $r_n-\Delta_n$''
+column $(0.002,0.013,0.001)$ to $<10^{-12}$
+(\texttt{test\_reproduces\_manuscript\_theta\_path\_exactly},
+\texttt{test\_reproduces\_manuscript\_used\_reserve\_column\_exactly}).
+
+\subsection{The branching lemma: proof status}
+\label{sec:branching}
+
+\textbf{Proven analytically, not by frequency sweep} (per the task's
+explicit instruction). Two classical results, cited not re-derived:
+
+\begin{enumerate}
+\item For $\theta=0$ (zero immigration), $\E[\exp(iuZ_r^{(v,0)})]=\exp(vD(u,r))$
+  for the \emph{actual} zero-immigration Heston log-return random variable
+  (Duffie--Pan--Singleton 2000, standard affine theory, following from
+  well-posedness of the CIR SDE). So $v\mapsto\exp(vD(u,r))$ is a genuine
+  characteristic function at every $v\ge0$, forming a continuous convolution
+  semigroup in $v$; by Sato (\emph{L\'evy Processes and Infinitely Divisible
+  Distributions}, Thm.~9.8) this semigroup has a L\'evy--Khintchine
+  representation with a \emph{nonnegative} triplet.
+\item The reserve term $\kappa b_k\int D(u,s-t_k)\,ds$ is algebraically
+  identical in form to the ordinary Heston immigration term $\kappa\theta\int
+  D\,dr$. The classical affine-admissibility criterion (Duffie--Filipovic--
+  Schachermayer 2003, Thm.~2.7) requires exactly that such a rate be
+  nonnegative -- $\kappa\theta\ge0$ and $\kappa b_k\ge0$ are both enforced as
+  hard code invariants (\texttt{HestonParams} rejects $\theta<0$;
+  \texttt{apply\_reset} rejects $b_n<0$), so admissibility of the reserve
+  term reduces to an invariant already enforced, not merely hoped for.
+\end{enumerate}
+
+\texttt{branching\_lemma\_sanity\_check} additionally checks the
+\emph{necessary} condition $|\exp(vD(u,r))|\le1+\varepsilon$ at a finite
+grid -- its docstring and return value both state explicitly that this is
+\textbf{not} a proof of L\'evy-measure positivity, per the task's
+instruction not to treat a numerical frequency sweep as one.
