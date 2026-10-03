@@ -5,21 +5,22 @@ SANOS
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+import math
 import warnings as warnings
+from dataclasses import asdict, dataclass, field
+from typing import Literal
 
-import numpy as np
 import cvxpy as cp
-from cvxpy.error import SolverError
-from dataclasses import dataclass, field
+import numpy as np
+from cdxcore.bs import bs
 from cdxcore.err import verify, verify_inp
+from cdxcore.pretty import PrettyObject
 from cdxcore.verbose import Context
 from cdxcore.version import version
-from cdxcore.bs import bs
-from cdxcore.pretty import PrettyObject
-from quantdata.sanos.tridiag import solve_sanos_tridiagonal
+from cvxpy.error import SolverError
+
 from quantdata.biz_calendar import DAYS_PER_YEAR, ONE_MINUTE
-import math
+from quantdata.sanos.tridiag import solve_sanos_tridiagonal
 
 
 @version("0.8")
@@ -410,7 +411,22 @@ class SanosPricer:
 @dataclass(frozen=True)
 class SanosLPSolver:
     timeout_seconds      : float = 60*5. # timeout in seconds
+    algorithm            : Literal["simplex", "ipm", "clarabel"] = "simplex"
+    simplex_strategy     : int = 1
     _debug_verbose_cvxpy : set[str] | bool | None = None  # Turn 'verbose' on for cvxpy, optionally scoped by solver mode
+
+    def __post_init__(self) -> None:
+        verify_inp(
+            self.algorithm in {"simplex", "ipm", "clarabel"},
+            lambda: f"Unsupported HiGHS algorithm {self.algorithm!r}",
+        )
+        verify_inp(
+            0 <= self.simplex_strategy <= 4,
+            lambda: (
+                "HiGHS simplex strategy must lie in [0,4], found "
+                f"{self.simplex_strategy}"
+            ),
+        )
 
     def __call__(self,
              objective: cp.Expression,
@@ -438,13 +454,15 @@ class SanosLPSolver:
                 msg = str(message_context)
             return (msg + ": ") if msg != "" else ""
 
-        # initialize
-        for v, val in variables:
-            if not val is None:
-                assert v.shape == val.shape, f"Internal error: variable shape {v.shape} does not match provided value shape {val.shape}"
-                v.value = val
-            else:
-                v.value = np.zeros(v.shape, dtype=np.float64)
+        # Preserve the primary solver's final iterate when the fallback is
+        # entered after a limit or solver failure.
+        if not is_fallback:
+            for v, val in variables:
+                if not val is None:
+                    assert v.shape == val.shape, f"Internal error: variable shape {v.shape} does not match provided value shape {val.shape}"
+                    v.value = val
+                else:
+                    v.value = np.zeros(v.shape, dtype=np.float64)
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore",message=r"Solution may be inaccurate.*",category=UserWarning)
@@ -456,7 +474,7 @@ class SanosLPSolver:
                 prob.solve( solver=slv, **opt )
                 prob_status  = str(prob.status)
             except SolverError as e:
-                if not is_fallback:
+                if not is_fallback and self.algorithm != "clarabel":
                     warnings.warn(f"{message()}Solver error: {str(e)}. Attempting to solve with fallback solver.")
                     return self( objective=objective, constraints=constraints, variables=variables, message_context=message_context, for_expiry=for_expiry, is_fallback=True, verbose=verbose )
                 raise type(e)(f"{message()}Solver error: {str(e)}.") from e
@@ -469,6 +487,24 @@ class SanosLPSolver:
                         return self( objective=objective, constraints=constraints, variables=variables, message_context=message_context, for_expiry=for_expiry, is_fallback=True, verbose=verbose )
                 raise type(e)(f"{message()}Unexpected error: {str(e)}.") from e
 
+            if (
+                prob_status == "user_limit"
+                and not is_fallback
+                and self.algorithm != "clarabel"
+            ):
+                warnings.warn(
+                    f"{message()}Primary solver reached its limit. "
+                    "Attempting to solve with fallback solver."
+                )
+                return self(
+                    objective=objective,
+                    constraints=constraints,
+                    variables=variables,
+                    message_context=message_context,
+                    for_expiry=for_expiry,
+                    is_fallback=True,
+                    verbose=verbose,
+                )
             success = prob_status in ["optimal", "optimal_inaccurate"]
         return success, prob_status, is_fallback
 
@@ -481,18 +517,21 @@ class SanosLPSolver:
         else:
             verbose = ('expiry' if for_expiry else 'surface') in self._debug_verbose_cvxpy
 
-        if not is_fallback:
+        if not is_fallback and self.algorithm != "clarabel":
+            highs_options = {
+                "solver": self.algorithm,
+                "presolve": "on",
+                "threads": 0,
+                "kkt_tolerance": 1e-7,
+                "time_limit": self.timeout_seconds,
+            }
+            if self.algorithm == "simplex":
+                # Preserve SANOS's established serial dual-simplex default.
+                highs_options["simplex_strategy"] = self.simplex_strategy
             solver = "HIGHS"
             options = dict( warm_start=True,
-                            highs_options={
-                            "solver": "simplex",# if for_expiry else "ipm",
-                            "presolve": "on",
-                            "threads": 0,
-                            "simplex_strategy": 1,   # dual simplex, serial; HiGHS default
-                            "kkt_tolerance": 1e-7,
-                            "time_limit": self.timeout_seconds
-                            },
-                            verbose=verbose                 
+                            highs_options=highs_options,
+                            verbose=verbose
                             )
         else:
             solver = "CLARABEL"

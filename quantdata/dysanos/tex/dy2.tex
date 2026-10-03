@@ -106,6 +106,10 @@ observed tail mass and tail persistence than Gaussian innovations, although it
 still underproduces two- and three-week extremes.  Block-randomization tests of
 decoded 2025 surface paths do not reject Gaussian, heavy-tail, diffusion, or
 historical-replay candidates at the 5\% level.
+For a reduced, 45-instrument tradable universe we further construct, via
+Deep Hedging, a near-martingale measure whose empirically re-solved objective
+value is statistically indistinguishable from zero, a first, deliberately
+scoped step towards a risk-neutral DYSANOS.
 \end{abstract}
 
 \tableofcontents
@@ -158,10 +162,7 @@ also means that the implied probability density is piecewise constant and zero b
 In other words
 the spot price can only only take values at the model strikes for each expiry to avoid dynamic
 arbitrage.
-This is the reason
-for the very restrictive and unnatural dynamics in~\cite{Schweizer2008ArbitragefreeMM}.
 
-\noindent
 This article presents a model framework for
 \begin{itemize}
     \item  \textbf{(i) realistic generative dynamics} of
@@ -169,6 +170,7 @@ This article presents a model framework for
     \item  \textbf{(iii) free of static arbitrage}.
 \end{itemize}
 %
+We also comment on finding a risk-neutral measure for a subset of traded options.
 This article is a refinement of material presented at The XIII Bachelier World Congress in Bologna.\footnote{\url{https://quantitative-research.de/dl/DYSANOS.pdf}}
 
 \subsection*{Historic Context and Literature Review}
@@ -186,7 +188,7 @@ This approach is both impractical for large-scale simulation and structurally in
 with the goal of generating realistic implied volatility or option price
 paths.
 
-\paragraph{Why simulating directly in implied-volatility space fails.}
+\paragraph{Simulating Implied Volatility.}
 A natural data-driven alternative is to treat the implied volatility surface itself
 as the simulation object, much as implied in~\cite{ContVol}.
 The fundamental difficulty is that there is no known parametrization  of
@@ -1530,6 +1532,9 @@ paper.  The experiment nevertheless establishes that the selected finite
 book is compatible with a well-conditioned, absolutely continuous empirical
 reweighting when contracts are evaluated to expiry.
 
+Section~\ref{sec:risk-neutral} builds on this reweighting with a genuinely
+state-conditional construction.
+
 \subsection{Scope and limitations}
 
 The 80.92\% market-fit figure is computed on the population used to estimate
@@ -1550,6 +1555,127 @@ does not by itself impose restrictions on expected returns of fixed contracts
 through simulated time.  The fixed-sample entropy projection in
 Section~\ref{sec:fixed-sample-entropy} is an unconditional diagnostic for one
 finite simulated population, not an additional dynamic pricing assertion.
+Section~\ref{sec:risk-neutral} reports a first, explicitly reduced attempt at
+a genuine dynamic construction.
+
+\section{Risk-Neutral DYSANOS}
+\label{sec:risk-neutral}
+
+Static arbitrage-freedom of each decoded surface does not by itself impose a
+martingale restriction on the returns of fixed contracts through simulated
+time (Section~\ref{sec:fixed-sample-entropy}).  We here report a first,
+deliberately reduced demonstration that a genuine \emph{near-martingale}
+measure can nevertheless be constructed for a subset of tradable contracts by
+applying the Deep Hedging drift-removal method of
+\cite{removedrift,removelong} directly to simulated DYSANOS paths.  We do not
+claim risk-neutrality of the full surface; extending the construction to
+\emph{all} options is ongoing work.
+
+\subsection{Universe and pre-conditioning}
+\label{sec:risk-neutral-universe}
+
+We trade spot and, at each of 25 fixed trading dates, floating options at the
+four expiries $5D,10D,15D,20D$ struck on the same 11-point normalized-moneyness
+grid~\eqref{eq:entropy-book-nms} via~\eqref{eq:entropy-book-strike}; once
+entered, each option is a fixed contract $(\tau,k)$ held to its own expiry.
+This is the same $44+1=45$-dimensional ``expanded book'' and the same
+$N=1{,}000{,}000$ fixed simulated paths used for the 11-option NMS entropy
+projection in Table~\ref{tab:fixed-sample-entropy}.  Writing $C_t^i$ for the
+entry price and $V_t^i$ for the (spot or option) expiry value of instrument
+$i$, returns are expressed as fractional gains,
+\begin{equation}
+  R_t^i=\frac{V_t^i}{C_t^i}-1,
+  \qquad i=1,\ldots,45,
+  \label{eq:rn-returns}
+\end{equation}
+and entry costs are $c^{\mathrm{spot}}=1$bp and $c^{\mathrm{opt}}=10$bp of
+traded dollar notional.\footnote{For numerical stability the Deep Hedging
+training in this section uses one tenth of these costs.}
+
+As a pre-condition we reuse the convex projection~\eqref{eq:fixed-sample-entropy}:
+its solution $w$ defines a reweighted measure $\P^w$ via
+$d\P^w/d\P|_{\{\omega_n\}}=w_n$, under which every return in the book has zero
+unconditional drift up to its cost band,
+$\bigl|\E^{\P^w}[R_t^i]\bigr|\leq c^i$.
+
+\subsection{A near-martingale measure via Deep Hedging}
+
+Let $u$ be a smooth, strictly increasing, concave utility with
+$u(0)=0$, $u'(0)=1$, $\lim_{x\to-\infty}u'(x)=\infty$, $\lim_{x\to\infty}u'(x)=0$;
+our experiments use the entropy utility $u(x)=(1-e^{-\lambda x})/\lambda$.
+Following~\cite{OCE}, the associated OCE monetary utility
+\begin{equation}
+  U(X):=\sup_{y\in\R}\;\E^{w}\bigl[u(y+X)-y\bigr]
+  \label{eq:rn-oce}
+\end{equation}
+is increasing, concave, and cash-invariant,
+$U(X+c)=U(X)+c$ for $c\in\R$; for the entropy utility it reduces to the
+entropic certainty equivalent
+$U(X)=-\lambda^{-1}\log\E^w[\exp(-\lambda X)]$.
+
+Trading actions are parameterized directly on the state $x_t=(s_t,h_t)$
+already used for $\P$-simulation (Section~\ref{sec:simulation}),
+\begin{equation}
+  a_\theta(x_t)=W_\theta x_t+F_\theta(x_t)+b_\theta\ \in\R^{45},
+  \label{eq:rn-action}
+\end{equation}
+where $W_\theta$ is a matrix, $b_\theta$ a vector, and $F_\theta$ a
+three-layer SeLU network with 128 inner nodes per layer.
+
+We solve the empty-portfolio Deep Hedging problem under $\P^w$,
+\begin{equation}
+  \sup_{\theta,\,y\in\R}\;
+  \E^{\P^w}\Bigl[
+    u\Bigl(y+\textstyle\sum_t a_\theta(x_t)'R_t-\bigl|a_\theta(x_t)\bigr|'c\Bigr)-y
+  \Bigr]
+  \;\longrightarrow\;\theta^*,y^*,
+  \label{eq:rn-deephedge}
+\end{equation}
+and define the candidate density
+\begin{equation}
+  \frac{d\Q}{d\P^w}:=
+  u'\Bigl(y^*+\textstyle\sum_t a_{\theta^*}(x_t)'R_t-\bigl|a_{\theta^*}(x_t)\bigr|'c\Bigr).
+  \label{eq:rn-density}
+\end{equation}
+By the theorem of~\cite{removelong}, for $a$ ranging over all measurable
+strategies $\Q$ is a \emph{near-martingale measure}: every conditional
+expected return is bounded by its own transaction cost,
+$\bigl|\E_t^\Q[R_t^i]\bigr|\leq c^i$.  For the network class
+\eqref{eq:rn-action} the statement holds within that strategy class rather
+than over all measurable strategies.
+
+\subsection{Empirical confirmation}
+
+If $\Q$ is indeed a near-martingale measure, a Deep Hedging agent solving the
+same empty-portfolio problem under $\Q$, within the same action class but
+with an independently re-optimized $\tilde\theta,\tilde y$,
+\begin{equation}
+  U_\Q^*(0):=\sup_{\tilde\theta,\,\tilde y\in\R}\;
+  \E^{\Q}\Bigl[
+    u\Bigl(\tilde y+\textstyle\sum_t a_{\tilde\theta}(x_t)'R_t-\bigl|a_{\tilde\theta}(x_t)\bigr|'c\Bigr)-\tilde y
+  \Bigr],
+  \label{eq:rn-confirm}
+\end{equation}
+should be unable to extract a positive objective value.  For our reduced
+45-instrument, 25-date, $N=1{,}000{,}000$-path universe we obtain
+$U_\Q^*(0)=-0.000695\pm0.000414$ at the 95\% level, statistically
+indistinguishable from zero and consistent with $\Q$ being a near-martingale
+measure for this book.
+
+\subsection{Scope and limitations}
+\label{sec:risk-neutral-scope}
+
+This is a reduced, ``V1.0'' demonstration rather than a general construction.
+The experiment is numerically heavy (roughly 10 hours for $N=1{,}000{,}000$
+paths and 25 trading dates) and, despite the theoretical guarantee, not very
+stable numerically; both runs use full-batch training on the complete
+simulated set with no held-out validation split.  The resulting $\Q$ is a
+near-martingale measure for the stated 45-instrument book and strategy class
+only; it provides no risk-neutrality statement for other strikes, expiries,
+or trading frequencies, and the model-free reweighting step relies on having
+many more simulated paths than tradable instruments.  Reducing the method to
+a form that achieves risk-neutrality for the \emph{full} DYSANOS surface is
+the natural next step.
 
 \section{Conclusion}
 
@@ -1572,6 +1698,13 @@ For one million simulated paths from a representative initial state, a convex
 entropy projection of 1,125 rolling to-expiry return coordinates remains
 well-conditioned (76.55\% ESS), retains strictly positive weights, and
 satisfies the stated transaction-cost bands to less than 0.001bp in sample.
+For a reduced 45-instrument book on the same simulated paths, a Deep Hedging
+construction (Section~\ref{sec:risk-neutral}) goes further and builds a
+state-conditional near-martingale measure~$\Q$: an independently re-optimized
+hedging agent cannot extract a positive objective value under $\Q$
+($U_\Q^*(0)=-0.000695\pm0.000414$ at the 95\% level).  This is a reduced,
+computationally heavy first demonstration rather than a full-surface
+risk-neutral construction, which remains future work.
 
 We have provided a baseline model to generate long paths of daily spot and option prices.
 Each option surface is free of static arbitrage. Moreover, we can price~\emph{any}

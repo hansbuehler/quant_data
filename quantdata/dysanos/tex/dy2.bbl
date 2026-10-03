@@ -1,5 +1,5 @@
 \newcommand{\etalchar}[1]{$^{#1}$}
-\begin{thebibliography}{WWP{\etalchar{+}}21}
+\begin{thebibliography}{BMPW22b}
 
 \bibitem[AH11]{AndreasenHuge}
 J.~Andreasen and B.~Huge.
@@ -12,10 +12,27 @@ Hans Buehler, Blanka Horvath, Anastais Kratsios, Yannick Limmer, and Raeid
 \newblock Sanos - smooth arbitrage-free non-parametric option surfaces.
 \newblock \url{https://arxiv.org/abs/2601.11209}, Februar 2026.
 
+\bibitem[BMPW22a]{removedrift}
+Hans Buehler, Phillip Murray, Mikko~S. Pakkanen, and Ben Wood.
+\newblock Deep hedging: learning to remove the drift.
+\newblock {\em Risk}, February 2022.
+
+\bibitem[BMPW22b]{removelong}
+Hans Buehler, Phillip Murray, Mikko~S. Pakkanen, and Ben Wood.
+\newblock Deep hedging: Learning to remove the drift under trading frictions
+  with minimal equivalent near-martingale measures.
+\newblock \url{https://arxiv.org/abs/2111.07844}, 2022.
+
 \bibitem[BR15]{DLV}
 Hans Buehler and Evgeny Ryskin.
 \newblock Discrete local volatility for large time steps (extended version).
 \newblock \url{https://papers.ssrn.com/abstract=2642630}, 2015.
+
+\bibitem[BTT07]{OCE}
+Aharon Ben-Tal and Marc Teboulle.
+\newblock An old-new concept of convex risk measures: The optimized certainty
+  equivalent.
+\newblock {\em Mathematical Finance}, 17(3):449--476, 2007.
 
 \bibitem[Bue06]{buehler2006expensive}
 Hans Buehler.

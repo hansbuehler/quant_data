@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import math
 import os
@@ -26,6 +27,7 @@ from quantdata.dysanos.flex.front_spot_copula import (
 from quantdata.dysanos.flex.market_encoder import checkpoint_digest, write_json_atomic
 from quantdata.dysanos.flex.model import bound_native_raw
 from quantdata.dysanos.flex.network_oce import l1_capped_action
+from quantdata.dysanos.flex.oce_curvature_optimizers import Kfac, Shampoo
 from quantdata.dysanos.flex.presentation_hedging import (
     exact_daily_transition,
     load_presentation_model,
@@ -57,18 +59,20 @@ _NORMALIZED_MONEYNESS = (
 )
 
 
-@version("1.0", dependencies=[FeedForwardConfig])
+@version("1.2", dependencies=[FeedForwardConfig])
 @dataclass(frozen=True, kw_only=True)
 class SharedExpiryOceConfig:
     """Architecture and action geometry of the conditional OCE policy."""
 
     label: str
     group: str = "flex/convex-q-conditional-oce"
-    user_version: str = "1.0"
+    user_version: str = "1.2"
     state_size: int = 200
     num_expiries: int = 4
     num_strikes: int = 11
     maximum_action_l1: float = 16.0
+    expiry_specific_linear_skip: bool = False
+    action_parameterization: str = "signed"
     network: FeedForwardConfig = FeedForwardConfig(
         activation="SiLU",
         num_depth=2,
@@ -89,20 +93,80 @@ class SharedExpiryOceConfig:
             math.isfinite(self.maximum_action_l1) and self.maximum_action_l1 > 0.0,
             lambda: "policy L1 cap must be finite-positive",
         )
+        verify_inp(
+            self.action_parameterization in ("signed", "long-short"),
+            lambda: (
+                "policy action parameterization must be 'signed' or 'long-short', "
+                f"found {self.action_parameterization!r}"
+            ),
+        )
+
+
+def _assemble_expiry_slice_action_details(
+    raw_heads: torch.Tensor,
+    *,
+    maximum_l1: float,
+    action_parameterization: str,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Return net action, transaction-cost basis, and uncapped gross exposure."""
+
+    if raw_heads.ndim != 3 or raw_heads.shape[-1] < 2:
+        raise ValueError("raw expiry heads must have shape (paths,expiries,heads)")
+    if action_parameterization == "signed":
+        spot = torch.sum(raw_heads[..., :1], dim=1)
+        options = raw_heads[..., 1:].reshape(len(raw_heads), -1)
+        raw_action = torch.cat((spot, options), dim=1)
+        action = l1_capped_action(raw_action, maximum_l1)
+        return action, torch.abs(action), torch.sum(torch.abs(raw_action), dim=1)
+    if action_parameterization != "long-short" or raw_heads.shape[-1] % 2:
+        raise ValueError("long-short expiry heads must contain equal long and short logits")
+
+    head_size = raw_heads.shape[-1] // 2
+    if head_size < 2:
+        raise ValueError("long-short expiry heads require spot plus at least one option")
+    long_logits = raw_heads[..., :head_size]
+    short_logits = raw_heads[..., head_size:]
+    long_action = torch.cat(
+        (
+            torch.relu(torch.sum(long_logits[..., :1], dim=1)),
+            torch.relu(long_logits[..., 1:]).reshape(len(raw_heads), -1),
+        ),
+        dim=1,
+    )
+    short_action = torch.cat(
+        (
+            torch.relu(torch.sum(short_logits[..., :1], dim=1)),
+            torch.relu(short_logits[..., 1:]).reshape(len(raw_heads), -1),
+        ),
+        dim=1,
+    )
+    uncapped_gross = torch.sum(long_action + short_action, dim=1)
+    scale = maximum_l1 / torch.maximum(
+        uncapped_gross,
+        torch.as_tensor(
+            maximum_l1,
+            dtype=raw_heads.dtype,
+            device=raw_heads.device,
+        ),
+    )
+    scaled_long = long_action * scale[:, None]
+    scaled_short = short_action * scale[:, None]
+    return scaled_long - scaled_short, scaled_long + scaled_short, uncapped_gross
 
 
 def assemble_expiry_slice_actions(
     raw_heads: torch.Tensor,
     *,
     maximum_l1: float,
+    action_parameterization: str = "signed",
 ) -> torch.Tensor:
     """Aggregate four spot heads and retain every expiry-specific option head."""
 
-    if raw_heads.ndim != 3 or raw_heads.shape[-1] < 2:
-        raise ValueError("raw expiry heads must have shape (paths,expiries,1+strikes)")
-    spot = torch.sum(raw_heads[..., :1], dim=1)
-    options = raw_heads[..., 1:].reshape(len(raw_heads), -1)
-    return l1_capped_action(torch.cat((spot, options), dim=1), maximum_l1)
+    return _assemble_expiry_slice_action_details(
+        raw_heads,
+        maximum_l1=maximum_l1,
+        action_parameterization=action_parameterization,
+    )[0]
 
 
 class SharedExpiryOcePolicy(BaseModel):
@@ -132,17 +196,36 @@ class SharedExpiryOcePolicy(BaseModel):
         self.register_buffer("state_scale", state_scale.detach().clone())
         self.register_buffer("log_price_mean", log_price_mean.detach().clone())
         self.register_buffer("log_price_scale", log_price_scale.detach().clone())
+        head_size = config.num_strikes + 1
+        output_size = (
+            head_size if config.action_parameterization == "signed" else 2 * head_size
+        )
         self.network = FeedForward(
             env,
             config.state_size + config.num_strikes,
-            config.num_strikes + 1,
+            output_size,
             config.network,
         )
+        feature_size = config.state_size + config.num_strikes
+        self.linear_skip = torch.nn.ModuleList(
+            torch.nn.Linear(
+                feature_size,
+                output_size,
+                bias=True,
+                device=env.device,
+                dtype=env.fdtype,
+            )
+            for _ in range(config.num_expiries)
+        ) if config.expiry_specific_linear_skip else None
         final_layer = self.network.I0 if len(self.network.In) == 0 else self.network.In[-1]
         with torch.no_grad():
             final_layer.weight.zero_()
             if final_layer.bias is not None:
                 final_layer.bias.zero_()
+            if self.linear_skip is not None:
+                for layer in self.linear_skip:
+                    layer.weight.zero_()
+                    layer.bias.zero_()
 
     def forward(
         self,
@@ -171,9 +254,18 @@ class SharedExpiryOcePolicy(BaseModel):
         )
         features = torch.cat((state_block, normalized_prices), dim=-1)
         raw_heads = self.network(features)
+        if self.linear_skip is not None:
+            raw_heads = raw_heads + torch.stack(
+                tuple(
+                    layer(features[:, expiry])
+                    for expiry, layer in enumerate(self.linear_skip)
+                ),
+                dim=1,
+            )
         action = assemble_expiry_slice_actions(
             raw_heads,
             maximum_l1=self.config.maximum_action_l1,
+            action_parameterization=self.config.action_parameterization,
         )
         return action, raw_heads
 
@@ -279,21 +371,18 @@ def _simulate_expiry_policy_batch(
                 num_paths, num_expiries, policy.config.num_strikes
             )
             action, raw_heads = policy(states.detach(), prices_by_expiry.detach())
-            raw_action = torch.cat(
-                (
-                    torch.sum(raw_heads[..., :1], dim=1),
-                    raw_heads[..., 1:].reshape(num_paths, -1),
-                ),
-                dim=1,
+            action, cost_basis, uncapped_gross = _assemble_expiry_slice_action_details(
+                raw_heads,
+                maximum_l1=policy.config.maximum_action_l1,
+                action_parameterization=policy.config.action_parameterization,
             )
-            raw_l1 = torch.sum(torch.abs(raw_action), dim=1)
-            action_l1_sum += torch.sum(torch.sum(torch.abs(action), dim=1).double())
+            action_l1_sum += torch.sum(torch.sum(cost_basis, dim=1).double())
             maximum_absolute_action = torch.maximum(
                 maximum_absolute_action,
                 torch.amax(torch.abs(action)).double(),
             )
             cap_active_sum += torch.sum(
-                (raw_l1 >= policy.config.maximum_action_l1).double()
+                (uncapped_gross >= policy.config.maximum_action_l1).double()
             )
             action_count += num_paths
 
@@ -301,7 +390,7 @@ def _simulate_expiry_policy_batch(
             entry_prices.append(issue_values.detach())
             entry_strikes.append(issue_strikes.detach())
             entry_option_actions.append(action[:, 1:])
-            pnl = pnl - torch.sum(transaction_cost[None] * torch.abs(action), dim=1)
+            pnl = pnl - torch.sum(transaction_cost[None] * cost_basis, dim=1)
 
         with torch.no_grad():
             half_state = torch.randn(
@@ -382,6 +471,25 @@ def weighted_log_oce(pnl: torch.Tensor, density: torch.Tensor) -> torch.Tensor:
     return torch.logsumexp(log_probability - pnl, dim=0)
 
 
+def _full_population_oce_probabilities(
+    objective_pnl: np.ndarray,
+    density: np.ndarray,
+) -> tuple[float, np.ndarray]:
+    """Return the exact empirical OCE loss and normalized tilted probabilities."""
+
+    if objective_pnl.ndim != 1 or density.shape != objective_pnl.shape or len(density) == 0:
+        raise ValueError("objective PnL and density must be matching nonempty vectors")
+    if np.any(~np.isfinite(objective_pnl)):
+        raise ValueError("objective PnL must be finite")
+    if np.any(~np.isfinite(density) | (density <= 0.0)):
+        raise ValueError("density weights must be finite-positive")
+    log_terms = np.log(density) - objective_pnl
+    denominator_log = float(logsumexp(log_terms))
+    probabilities = np.exp(log_terms - denominator_log)
+    probabilities /= np.sum(probabilities, dtype=np.float64)
+    return denominator_log - math.log(np.sum(density, dtype=np.float64)), probabilities
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", type=Path, required=True)
@@ -402,13 +510,91 @@ def _parser() -> argparse.ArgumentParser:
         help="Optional cache of exact hidden states and current option prices.",
     )
     parser.add_argument("--optimization-batch-size", type=int, default=32_768)
+    parser.add_argument(
+        "--full-population-gradient",
+        action="store_true",
+        help=(
+            "Use every fixed path to form one exact empirical OCE gradient before "
+            "each optimizer update."
+        ),
+    )
+    parser.add_argument("--full-gradient-rms-tolerance", type=float, default=0.0)
+    parser.add_argument("--full-gradient-maximum-tolerance", type=float, default=0.0)
+    parser.add_argument("--full-gradient-scale-foc-tolerance", type=float, default=0.0)
+    parser.add_argument("--full-gradient-patience", type=int, default=1)
     parser.add_argument("--prepare-features-only", action="store_true")
+    parser.add_argument(
+        "--initialize-policy-checkpoint",
+        type=Path,
+        default=None,
+        help="Warm-start only the policy weights; optimizer and schedule restart.",
+    )
+    parser.add_argument(
+        "--valuation-only",
+        action="store_true",
+        help="Audit the initialized policy without changing its weights.",
+    )
+    parser.add_argument(
+        "--frozen-policy-checkpoints",
+        type=Path,
+        nargs="*",
+        default=(),
+        help="Frozen additive policy components evaluated before the trainable residual.",
+    )
+    parser.add_argument(
+        "--baseline-pnl",
+        type=Path,
+        default=None,
+        help="Prior cumulative PnL subtracted from the new cumulative PnL objective.",
+    )
+    parser.add_argument(
+        "--claim-pnl",
+        type=Path,
+        default=None,
+        help="Optional fixed pathwise claim added to the entropy-hedging objective.",
+    )
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--hidden-width", type=int, default=128)
     parser.add_argument("--hidden-layers", type=int, default=2)
+    parser.add_argument("--linear-action-skip", action="store_true")
+    parser.add_argument(
+        "--long-short-actions",
+        action="store_true",
+        help=(
+            "Learn separate nonnegative long and short legs; transaction costs and "
+            "the action cap apply to their gross sum."
+        ),
+    )
+    parser.add_argument(
+        "--optimizer",
+        choices=("adam", "lbfgs", "newton-cg", "kfac", "shampoo"),
+        default="adam",
+    )
     parser.add_argument("--learning-rate", type=float, default=2.0e-3)
     parser.add_argument("--minimum-learning-rate", type=float, default=2.0e-5)
     parser.add_argument("--warmup-updates", type=int, default=20)
+    parser.add_argument("--lbfgs-history-size", type=int, default=20)
+    parser.add_argument("--lbfgs-max-iterations", type=int, default=4)
+    parser.add_argument("--lbfgs-max-evaluations", type=int, default=10)
+    parser.add_argument("--lbfgs-tolerance-grad", type=float, default=1.0e-7)
+    parser.add_argument("--lbfgs-tolerance-change", type=float, default=1.0e-10)
+    parser.add_argument("--newton-hvp-relative-step", type=float, default=1.0e-3)
+    parser.add_argument("--newton-cg-max-iterations", type=int, default=8)
+    parser.add_argument("--newton-cg-relative-tolerance", type=float, default=0.1)
+    parser.add_argument("--newton-initial-trust-radius", type=float, default=0.05)
+    parser.add_argument("--newton-maximum-trust-radius", type=float, default=1.0)
+    parser.add_argument("--newton-acceptance-eta", type=float, default=0.15)
+    parser.add_argument("--newton-damping", type=float, default=1.0e-4)
+    parser.add_argument("--kfac-factor-decay", type=float, default=0.9)
+    parser.add_argument("--kfac-damping", type=float, default=1.0e-3)
+    parser.add_argument("--kfac-momentum", type=float, default=0.0)
+    parser.add_argument("--kfac-kl-clip", type=float, default=1.0e-2)
+    parser.add_argument("--kfac-factor-update-frequency", type=int, default=1)
+    parser.add_argument("--shampoo-beta2", type=float, default=0.9)
+    parser.add_argument("--shampoo-momentum", type=float, default=0.0)
+    parser.add_argument("--shampoo-damping", type=float, default=1.0e-4)
+    parser.add_argument("--shampoo-precondition-frequency", type=int, default=1)
+    parser.add_argument("--shampoo-maximum-parameter-step", type=float, default=0.05)
     parser.add_argument("--action-l1-cap", type=float, default=16.0)
     parser.add_argument("--spot-cost-bps", type=float, default=1.0)
     parser.add_argument("--option-cost-bps", type=float, default=10.0)
@@ -435,6 +621,13 @@ def _validate_arguments(arguments: argparse.Namespace) -> None:
         arguments.hidden_width,
         arguments.hidden_layers,
         arguments.checkpoint_every_updates,
+        arguments.full_gradient_patience,
+        arguments.lbfgs_history_size,
+        arguments.lbfgs_max_iterations,
+        arguments.lbfgs_max_evaluations,
+        arguments.kfac_factor_update_frequency,
+        arguments.shampoo_precondition_frequency,
+        arguments.newton_cg_max_iterations,
     )
     if any(value <= 0 for value in integer_values):
         raise ValueError("conditional OCE integer controls must be positive")
@@ -444,22 +637,82 @@ def _validate_arguments(arguments: argparse.Namespace) -> None:
         raise ValueError("conditional OCE optimization batches must be even")
     if arguments.prepare_features_only and arguments.fixed_feature_cache is None:
         raise ValueError("feature-only mode requires --fixed-feature-cache")
+    if arguments.full_population_gradient and arguments.fixed_feature_cache is None:
+        raise ValueError("full-population gradients require --fixed-feature-cache")
+    if arguments.optimizer != "adam" and not arguments.full_population_gradient:
+        raise ValueError(
+            f"{arguments.optimizer} requires exact full-population gradients"
+        )
+    if arguments.long_short_actions and arguments.frozen_policy_checkpoints:
+        raise ValueError(
+            "long-short actions require one cumulative trainable policy, not frozen additives"
+        )
+    if arguments.resume and arguments.initialize_policy_checkpoint is not None:
+        raise ValueError("resume and policy-only warm start are mutually exclusive")
+    if arguments.valuation_only and arguments.initialize_policy_checkpoint is None:
+        raise ValueError("valuation-only mode requires an initialized policy")
+    if arguments.valuation_only and arguments.resume:
+        raise ValueError("valuation-only mode cannot resume optimizer state")
+    if (
+        arguments.frozen_policy_checkpoints
+        or arguments.baseline_pnl is not None
+        or arguments.claim_pnl is not None
+    ) and arguments.fixed_feature_cache is None:
+        raise ValueError("additive policies and fixed claims require the feature cache")
+    # A frozen policy can either be a baseline for an incremental density tilt
+    # or a fixed component of the cumulative hedge. In the latter case the
+    # trainable residual is optimized around zero without subtracting its PnL.
     if arguments.num_steps != 25:
         raise ValueError("the fitted convex density has exactly 25 entry dates")
     positive_values = (
         arguments.learning_rate,
         arguments.minimum_learning_rate,
         arguments.action_l1_cap,
-        arguments.spot_cost_bps,
-        arguments.option_cost_bps,
         arguments.gradient_clip_norm,
+        arguments.lbfgs_tolerance_grad,
+        arguments.lbfgs_tolerance_change,
+        arguments.newton_hvp_relative_step,
+        arguments.newton_cg_relative_tolerance,
+        arguments.newton_initial_trust_radius,
+        arguments.newton_maximum_trust_radius,
+        arguments.newton_damping,
+        arguments.kfac_damping,
+        arguments.kfac_kl_clip,
+        arguments.shampoo_damping,
+        arguments.shampoo_maximum_parameter_step,
     )
     if any(not math.isfinite(value) or value <= 0.0 for value in positive_values):
         raise ValueError("conditional OCE scalar controls must be finite-positive")
     if arguments.minimum_learning_rate > arguments.learning_rate:
         raise ValueError("minimum learning rate exceeds the peak learning rate")
+    if arguments.newton_initial_trust_radius > arguments.newton_maximum_trust_radius:
+        raise ValueError("initial Newton trust radius exceeds its maximum")
+    if not 0.0 < arguments.newton_cg_relative_tolerance < 1.0:
+        raise ValueError("Newton CG relative tolerance must be in (0,1)")
+    if not 0.0 <= arguments.newton_acceptance_eta < 0.25:
+        raise ValueError("Newton trust-region acceptance eta must be in [0,0.25)")
+    unit_interval_values = (
+        arguments.kfac_factor_decay,
+        arguments.kfac_momentum,
+        arguments.shampoo_beta2,
+        arguments.shampoo_momentum,
+    )
+    if any(not math.isfinite(value) or not 0.0 <= value < 1.0 for value in unit_interval_values):
+        raise ValueError("curvature optimizer decay, momentum, and eta must be in [0,1)")
+    if any(
+        not math.isfinite(value) or value < 0.0
+        for value in (arguments.spot_cost_bps, arguments.option_cost_bps)
+    ):
+        raise ValueError("conditional OCE transaction costs must be finite-nonnegative")
     if arguments.warmup_updates < 0:
         raise ValueError("warmup updates cannot be negative")
+    full_gradient_tolerances = (
+        arguments.full_gradient_rms_tolerance,
+        arguments.full_gradient_maximum_tolerance,
+        arguments.full_gradient_scale_foc_tolerance,
+    )
+    if any(not math.isfinite(value) or value < 0.0 for value in full_gradient_tolerances):
+        raise ValueError("full-population convergence tolerances must be finite-nonnegative")
 
 
 def _learning_rate(arguments: argparse.Namespace, update: int, total_updates: int) -> float:
@@ -473,6 +726,17 @@ def _learning_rate(arguments: argparse.Namespace, update: int, total_updates: in
     return arguments.minimum_learning_rate + (
         arguments.learning_rate - arguments.minimum_learning_rate
     ) * cosine
+
+
+def _serialized_arguments(arguments: argparse.Namespace) -> dict[str, Any]:
+    def serialize(value: Any) -> Any:
+        if isinstance(value, (Path, date)):
+            return str(value)
+        if isinstance(value, (tuple, list)):
+            return [serialize(item) for item in value]
+        return value
+
+    return {key: serialize(value) for key, value in vars(arguments).items()}
 
 
 def _atomic_torch_save(value: Mapping[str, Any], path: Path) -> None:
@@ -569,9 +833,21 @@ def _setup(arguments: argparse.Namespace) -> dict[str, Any]:
     )
     normalizers = _normalization(model, historical_states, book)
     policy_config = SharedExpiryOceConfig(
-        label="convex-q-shared-expiry-11plus1-v1",
+        label=(
+            "convex-q-shared-expiry-11plus1-long-short-linear-skip-v1"
+            if arguments.linear_action_skip and arguments.long_short_actions
+            else (
+                "convex-q-shared-expiry-11plus1-linear-skip-v1"
+                if arguments.linear_action_skip
+                else "convex-q-shared-expiry-11plus1-v1"
+            )
+        ),
         state_size=initial_state.shape[0],
         maximum_action_l1=arguments.action_l1_cap,
+        expiry_specific_linear_skip=arguments.linear_action_skip,
+        action_parameterization=(
+            "long-short" if arguments.long_short_actions else "signed"
+        ),
         network=FeedForwardConfig(
             activation="SiLU",
             num_depth=arguments.hidden_layers,
@@ -808,8 +1084,9 @@ def _fixed_feature_pnl(
     option_prices: torch.Tensor,
     returns: torch.Tensor,
     transaction_cost: torch.Tensor,
+    frozen_policies: tuple[SharedExpiryOcePolicy, ...] = (),
 ) -> tuple[torch.Tensor, _SimulationDiagnostics]:
-    """Evaluate a policy on cached states, prices, and fixed returns."""
+    """Evaluate the globally capped policy on cached states and returns."""
 
     if states.ndim != 3 or option_prices.ndim != 4 or returns.ndim != 3:
         raise ValueError("cached policy tensors have invalid ranks")
@@ -822,25 +1099,35 @@ def _fixed_feature_pnl(
     maximum_action = torch.zeros((), dtype=torch.float64, device=states.device)
     cap_active_sum = torch.zeros((), dtype=torch.float64, device=states.device)
     for day in range(states.shape[1]):
-        action, raw_heads = policy(states[:, day], option_prices[:, day])
-        raw_action = torch.cat(
-            (
-                torch.sum(raw_heads[..., :1], dim=1),
-                raw_heads[..., 1:].reshape(len(states), -1),
-            ),
-            dim=1,
+        _, raw_heads = policy(states[:, day], option_prices[:, day])
+        if frozen_policies:
+            if policy.config.action_parameterization != "signed":
+                raise ValueError(
+                    "frozen additive policies are unsupported for long-short actions"
+                )
+            frozen_raw_sum = torch.zeros_like(raw_heads)
+            with torch.no_grad():
+                for frozen_policy in frozen_policies:
+                    _, frozen_raw_heads = frozen_policy(
+                        states[:, day], option_prices[:, day]
+                    )
+                    frozen_raw_sum = frozen_raw_sum + frozen_raw_heads
+            raw_heads = raw_heads + frozen_raw_sum
+        action, cost_basis, uncapped_gross = _assemble_expiry_slice_action_details(
+            raw_heads,
+            maximum_l1=policy.config.maximum_action_l1,
+            action_parameterization=policy.config.action_parameterization,
         )
         pnl = pnl + torch.sum(action * returns[:, day], dim=1)
-        pnl = pnl - torch.sum(transaction_cost[None] * torch.abs(action), dim=1)
-        action_l1_sum += torch.sum(torch.sum(torch.abs(action), dim=1).double())
+        pnl = pnl - torch.sum(transaction_cost[None] * cost_basis, dim=1)
+        action_l1_sum += torch.sum(torch.sum(cost_basis, dim=1).double())
         maximum_action = torch.maximum(
             maximum_action,
             torch.amax(torch.abs(action)).double(),
         )
         cap_active_sum += torch.sum(
             (
-                torch.sum(torch.abs(raw_action), dim=1)
-                >= policy.config.maximum_action_l1
+                uncapped_gross >= policy.config.maximum_action_l1
             ).double()
         )
     observations = len(states) * states.shape[1]
@@ -866,6 +1153,427 @@ def _cached_batch(
         torch.as_tensor(np.array(prices[first:last], copy=True), dtype=dtype, device=device),
         torch.as_tensor(np.array(returns[first:last], copy=True), dtype=dtype, device=device),
     )
+
+
+def _full_population_training_update(
+    setup: Mapping[str, Any],
+    arguments: argparse.Namespace,
+    optimizer: torch.optim.Optimizer,
+    *,
+    states: np.ndarray,
+    prices: np.ndarray,
+    returns: np.ndarray,
+    density: np.ndarray,
+    baseline_pnl: np.ndarray | None,
+    claim_pnl: np.ndarray | None,
+    perform_step: bool = True,
+    clip_gradient: bool = True,
+) -> dict[str, float | int]:
+    """Take one optimizer step using the exact fixed-population OCE gradient.
+
+    The first pass evaluates the population normalizer without retaining an
+    autograd graph. The second pass recomputes each chunk and accumulates its
+    contribution to the same normalized population gradient. Consequently the
+    chunk size affects memory and speed, but not the objective being optimized.
+    """
+
+    policy: SharedExpiryOcePolicy = setup["policy"]
+    num_paths = arguments.num_paths
+    batch_size = arguments.optimization_batch_size
+    objective_values = np.empty(num_paths, dtype=np.float64)
+    network_pnl_values = np.empty(num_paths, dtype=np.float64)
+    action_l1_sum = 0.0
+    cap_sum = 0.0
+    maximum_action = 0.0
+    started = time.monotonic()
+    with torch.no_grad():
+        for first in range(0, num_paths, batch_size):
+            last = min(first + batch_size, num_paths)
+            batch = _cached_batch(
+                states=states,
+                prices=prices,
+                returns=returns,
+                first=first,
+                last=last,
+                dtype=setup["env"].fdtype,
+                device=setup["env"].device,
+            )
+            pnl, diagnostics = _fixed_feature_pnl(
+                policy,
+                states=batch[0],
+                option_prices=batch[1],
+                returns=batch[2],
+                transaction_cost=setup["transaction_cost"],
+                frozen_policies=setup["frozen_policies"],
+            )
+            network_pnl_values[first:last] = pnl.detach().cpu().double().numpy()
+            objective_values[first:last] = network_pnl_values[first:last]
+            if claim_pnl is not None:
+                objective_values[first:last] += np.asarray(claim_pnl[first:last])
+            if baseline_pnl is not None:
+                objective_values[first:last] -= np.asarray(baseline_pnl[first:last])
+            count = last - first
+            action_l1_sum += float(diagnostics.mean_action_l1) * count
+            cap_sum += float(diagnostics.cap_active_fraction) * count
+            maximum_action = max(
+                maximum_action,
+                float(diagnostics.maximum_absolute_action),
+            )
+
+    log_loss, tilted_probabilities = _full_population_oce_probabilities(
+        objective_values,
+        density,
+    )
+    tilted_expected_objective = float(
+        np.sum(tilted_probabilities * objective_values, dtype=np.float64)
+    )
+    tilted_expected_network_pnl = float(
+        np.sum(tilted_probabilities * network_pnl_values, dtype=np.float64)
+    )
+    effective_sample_size = float(
+        1.0 / np.sum(np.square(tilted_probabilities), dtype=np.float64)
+    )
+
+    optimizer.zero_grad(set_to_none=True)
+    if hasattr(optimizer, "begin_full_batch"):
+        optimizer.begin_full_batch()
+    for first in range(0, num_paths, batch_size):
+        last = min(first + batch_size, num_paths)
+        probability = torch.as_tensor(
+            tilted_probabilities[first:last],
+            dtype=torch.float64,
+            device=setup["env"].device,
+        )
+        if hasattr(optimizer, "set_batch_probabilities"):
+            optimizer.set_batch_probabilities(probability)
+        batch = _cached_batch(
+            states=states,
+            prices=prices,
+            returns=returns,
+            first=first,
+            last=last,
+            dtype=setup["env"].fdtype,
+            device=setup["env"].device,
+        )
+        pnl, _ = _fixed_feature_pnl(
+            policy,
+            states=batch[0],
+            option_prices=batch[1],
+            returns=batch[2],
+            transaction_cost=setup["transaction_cost"],
+            frozen_policies=setup["frozen_policies"],
+        )
+        (-torch.sum(probability.detach() * pnl.double())).backward()
+
+    gradient_rms, gradient_maximum, parameter_count = _gradient_statistics(policy)
+    gradient_norm = torch.linalg.vector_norm(
+        torch.stack(
+            tuple(
+                torch.linalg.vector_norm(parameter.grad.detach())
+                for parameter in policy.parameters()
+                if parameter.grad is not None
+            )
+        )
+    )
+    if clip_gradient:
+        torch.nn.utils.clip_grad_norm_(policy.parameters(), arguments.gradient_clip_norm)
+    if perform_step:
+        optimizer.step()
+    result: dict[str, float | int] = {
+        "full_population_oce": -log_loss,
+        "full_population_log_loss": log_loss,
+        "tilted_expected_objective_pnl": tilted_expected_objective,
+        "tilted_expected_network_pnl": tilted_expected_network_pnl,
+        "effective_sample_size_after_adversary": effective_sample_size,
+        "gradient_rms": gradient_rms,
+        "gradient_maximum_absolute": gradient_maximum,
+        "gradient_norm_before_clip": float(gradient_norm),
+        "network_parameter_count": parameter_count,
+        "mean_action_l1": action_l1_sum / num_paths,
+        "maximum_absolute_action": maximum_action,
+        "cap_active_fraction": cap_sum / num_paths,
+        "seconds": time.monotonic() - started,
+    }
+    for group in optimizer.param_groups:
+        for key in (
+            "last_fisher_inner_product",
+            "last_kl_scale",
+            "last_preconditioned_direction_norm",
+            "last_parameter_step_scale",
+        ):
+            if key in group:
+                result[key] = float(group[key])
+    return result
+
+
+def _trainable_parameter_vector(policy: torch.nn.Module) -> np.ndarray:
+    """Copy all trainable policy parameters into one float64 CPU vector."""
+
+    values = [
+        parameter.detach().reshape(-1).cpu().double().numpy()
+        for parameter in policy.parameters()
+        if parameter.requires_grad
+    ]
+    if not values:
+        raise RuntimeError("policy has no trainable parameters")
+    return np.concatenate(values)
+
+
+def _set_trainable_parameter_vector(
+    policy: torch.nn.Module,
+    values: np.ndarray,
+) -> None:
+    """Load one CPU vector into the trainable policy parameters."""
+
+    offset = 0
+    with torch.no_grad():
+        for parameter in policy.parameters():
+            if not parameter.requires_grad:
+                continue
+            count = parameter.numel()
+            if offset + count > len(values):
+                raise ValueError("parameter vector is shorter than the policy")
+            parameter.copy_(
+                torch.as_tensor(
+                    values[offset : offset + count],
+                    dtype=parameter.dtype,
+                    device=parameter.device,
+                ).reshape_as(parameter)
+            )
+            offset += count
+    if offset != len(values):
+        raise ValueError("parameter vector is longer than the policy")
+
+
+def _trainable_gradient_vector(policy: torch.nn.Module) -> np.ndarray:
+    """Copy the current exact policy gradient into one float64 CPU vector."""
+
+    values: list[np.ndarray] = []
+    for parameter in policy.parameters():
+        if not parameter.requires_grad:
+            continue
+        if parameter.grad is None:
+            raise RuntimeError("trainable policy parameter is missing its gradient")
+        values.append(parameter.grad.detach().reshape(-1).cpu().double().numpy())
+    return np.concatenate(values)
+
+
+def _trust_region_boundary_distance(
+    step: np.ndarray,
+    direction: np.ndarray,
+    radius: float,
+) -> float:
+    """Return positive tau such that ``||step + tau direction|| == radius``."""
+
+    direction_square = float(np.dot(direction, direction))
+    step_direction = float(np.dot(step, direction))
+    discriminant = step_direction**2 + direction_square * (
+        radius**2 - float(np.dot(step, step))
+    )
+    return (-step_direction + math.sqrt(max(discriminant, 0.0))) / max(
+        direction_square,
+        np.finfo(np.float64).tiny,
+    )
+
+
+def _run_trust_region_newton_cg(
+    setup: Mapping[str, Any],
+    arguments: argparse.Namespace,
+    optimizer: torch.optim.Optimizer,
+    generator: torch.Generator,
+    *,
+    states: np.ndarray,
+    prices: np.ndarray,
+    returns: np.ndarray,
+    density: np.ndarray,
+    baseline_pnl: np.ndarray | None,
+    claim_pnl: np.ndarray | None,
+    checkpoint_path: Path,
+    epoch: int,
+    updates: int,
+    history: list[dict[str, float | int]],
+) -> tuple[int, int, list[dict[str, float | int]], str]:
+    """Minimize exact empirical log-OCE with trust-region Newton-CG.
+
+    Hessian-vector products use centered differences of exact full-population
+    gradients. This includes the derivative of the normalized OCE density,
+    unlike differentiating the detached first-gradient path weights. The
+    finite difference also provides a generalized local curvature estimate at
+    the positive-part transaction-cost kinks.
+    """
+
+    policy: SharedExpiryOcePolicy = setup["policy"]
+    radius = arguments.newton_initial_trust_radius
+    function_evaluations = 0
+    hvp_evaluations = 0
+
+    def evaluate(values: np.ndarray) -> tuple[float, np.ndarray, dict[str, float | int]]:
+        nonlocal function_evaluations
+        _set_trainable_parameter_vector(policy, values)
+        record = _full_population_training_update(
+            setup,
+            arguments,
+            optimizer,
+            states=states,
+            prices=prices,
+            returns=returns,
+            density=density,
+            baseline_pnl=baseline_pnl,
+            claim_pnl=claim_pnl,
+            perform_step=False,
+            clip_gradient=False,
+        )
+        function_evaluations += 1
+        return (
+            float(record["full_population_log_loss"]),
+            _trainable_gradient_vector(policy),
+            record,
+        )
+
+    values = _trainable_parameter_vector(policy)
+    loss, gradient, base_record = evaluate(values)
+    while epoch < arguments.epochs:
+        base_values = values.copy()
+        base_loss = loss
+        base_gradient = gradient.copy()
+        gradient_norm = float(np.linalg.norm(base_gradient))
+        if gradient_norm == 0.0:
+            break
+
+        def hessian_vector_product(direction: np.ndarray) -> np.ndarray:
+            nonlocal hvp_evaluations
+            direction_norm = float(np.linalg.norm(direction))
+            difference = arguments.newton_hvp_relative_step * max(
+                1.0, float(np.linalg.norm(base_values))
+            ) / max(direction_norm, np.finfo(np.float64).tiny)
+            _, plus_gradient, _ = evaluate(base_values + difference * direction)
+            _, minus_gradient, _ = evaluate(base_values - difference * direction)
+            _set_trainable_parameter_vector(policy, base_values)
+            hvp_evaluations += 1
+            return (
+                (plus_gradient - minus_gradient) / (2.0 * difference)
+                + arguments.newton_damping * direction
+            )
+
+        step = np.zeros_like(base_gradient)
+        hessian_step = np.zeros_like(base_gradient)
+        residual = base_gradient.copy()
+        direction = -residual
+        residual_square = float(np.dot(residual, residual))
+        hit_boundary = False
+        negative_curvature = False
+        cg_iterations = 0
+        for cg_iterations in range(1, arguments.newton_cg_max_iterations + 1):
+            hessian_direction = hessian_vector_product(direction)
+            curvature = float(np.dot(direction, hessian_direction))
+            if curvature <= 0.0:
+                tau = _trust_region_boundary_distance(step, direction, radius)
+                step += tau * direction
+                hessian_step += tau * hessian_direction
+                hit_boundary = True
+                negative_curvature = True
+                break
+            alpha = residual_square / curvature
+            candidate_step = step + alpha * direction
+            if float(np.linalg.norm(candidate_step)) >= radius:
+                tau = _trust_region_boundary_distance(step, direction, radius)
+                step += tau * direction
+                hessian_step += tau * hessian_direction
+                hit_boundary = True
+                break
+            step = candidate_step
+            hessian_step += alpha * hessian_direction
+            next_residual = residual + alpha * hessian_direction
+            next_square = float(np.dot(next_residual, next_residual))
+            if math.sqrt(next_square) <= (
+                arguments.newton_cg_relative_tolerance * gradient_norm
+            ):
+                residual = next_residual
+                residual_square = next_square
+                break
+            beta = next_square / max(residual_square, np.finfo(np.float64).tiny)
+            direction = -next_residual + beta * direction
+            residual = next_residual
+            residual_square = next_square
+
+        predicted_reduction = -float(
+            np.dot(base_gradient, step) + 0.5 * np.dot(step, hessian_step)
+        )
+        candidate_values = base_values + step
+        candidate_loss, candidate_gradient, candidate_record = evaluate(candidate_values)
+        actual_reduction = base_loss - candidate_loss
+        ratio = actual_reduction / max(
+            predicted_reduction,
+            np.finfo(np.float64).tiny,
+        )
+        if ratio < 0.25:
+            radius *= 0.25
+        elif ratio > 0.75 and hit_boundary:
+            radius = min(2.0 * radius, arguments.newton_maximum_trust_radius)
+        accepted = bool(
+            actual_reduction > 0.0 and ratio > arguments.newton_acceptance_eta
+        )
+        if accepted:
+            values = candidate_values
+            loss = candidate_loss
+            gradient = candidate_gradient
+            record = dict(candidate_record)
+        else:
+            values = base_values
+            loss = base_loss
+            gradient = base_gradient
+            record = dict(base_record)
+            _set_trainable_parameter_vector(policy, values)
+        epoch += 1
+        updates += 1
+        record.update(
+            {
+                "epoch": epoch,
+                "update": updates,
+                "processed_paths_in_epoch": arguments.num_paths,
+                "optimizer": "trust-region-newton-cg",
+                "newton_accepted": int(accepted),
+                "newton_actual_reduction": actual_reduction,
+                "newton_predicted_reduction": predicted_reduction,
+                "newton_reduction_ratio": ratio,
+                "newton_trust_radius": radius,
+                "newton_step_norm": float(np.linalg.norm(step)),
+                "newton_cg_iterations": cg_iterations,
+                "newton_negative_curvature": int(negative_curvature),
+                "newton_hvp_evaluations": hvp_evaluations,
+                "newton_function_gradient_evaluations": function_evaluations,
+            }
+        )
+        # Keep a private copy because the history entry is subsequently retained
+        # as an immutable audit of this outer iteration.
+        base_record = dict(record)
+        history.append(record)
+        print(json.dumps(record), flush=True)
+        _atomic_torch_save(
+            _checkpoint_payload(
+                setup=setup,
+                arguments=arguments,
+                optimizer=optimizer,
+                generator=generator,
+                epoch=epoch,
+                path_offset=0,
+                updates=updates,
+                history=history,
+                phase="trained" if epoch == arguments.epochs else "training",
+            ),
+            checkpoint_path,
+        )
+        if (
+            float(record["gradient_rms"])
+            <= arguments.full_gradient_rms_tolerance
+            and float(record["gradient_maximum_absolute"])
+            <= arguments.full_gradient_maximum_tolerance
+            and abs(float(record["tilted_expected_network_pnl"]))
+            <= arguments.full_gradient_scale_foc_tolerance
+        ):
+            break
+    _set_trainable_parameter_vector(policy, values)
+    return epoch, updates, history, "trained"
 
 
 def _alignment_check(
@@ -914,10 +1622,7 @@ def _checkpoint_payload(
         "schema": "dysanos-convex-q-conditional-oce-v1",
         "phase": phase,
         "created_at_utc": datetime.now(UTC).isoformat(),
-        "arguments": {
-            key: str(value) if isinstance(value, (Path, date)) else value
-            for key, value in vars(arguments).items()
-        },
+        "arguments": _serialized_arguments(arguments),
         "policy_config": asdict(setup["policy_config"]),
         "policy_state_dict": setup["policy"].state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
@@ -954,6 +1659,71 @@ def _load_checkpoint(
     )
 
 
+def _load_policy_state(
+    path: Path,
+    *,
+    target_policy: SharedExpiryOcePolicy | None = None,
+) -> Mapping[str, torch.Tensor]:
+    payload = torch.load(path, map_location="cpu", weights_only=False)
+    if (
+        not isinstance(payload, Mapping)
+        or payload.get("schema") != "dysanos-convex-q-conditional-oce-v1"
+    ):
+        raise ValueError(f"conditional OCE policy checkpoint is invalid: {path}")
+    source = payload["policy_state_dict"]
+    if target_policy is None:
+        return source
+
+    target = target_policy.state_dict()
+    if source.keys() != target.keys():
+        raise ValueError(f"policy checkpoint keys do not match the target policy: {path}")
+    converted: dict[str, torch.Tensor] = {}
+    doubled_outputs: list[str] = []
+    for key, target_value in target.items():
+        source_value = source[key]
+        if source_value.shape == target_value.shape:
+            converted[key] = source_value
+            continue
+        if (
+            source_value.ndim >= 1
+            and target_value.shape[0] == 2 * source_value.shape[0]
+            and target_value.shape[1:] == source_value.shape[1:]
+        ):
+            # A signed logit x is represented exactly by the two nonnegative
+            # legs relu(x)-relu(-x), with gross exposure |x|.
+            converted[key] = torch.cat((source_value, -source_value), dim=0)
+            doubled_outputs.append(key)
+            continue
+        raise ValueError(
+            f"policy checkpoint tensor {key!r} has shape {tuple(source_value.shape)}; "
+            f"target shape is {tuple(target_value.shape)}"
+        )
+    if doubled_outputs:
+        print(
+            "converted signed policy outputs to exact long-short legs: "
+            + ", ".join(doubled_outputs),
+            flush=True,
+        )
+    return converted
+
+
+def _load_frozen_policies(
+    setup: Mapping[str, Any],
+    checkpoints: tuple[Path, ...] | list[Path],
+) -> tuple[SharedExpiryOcePolicy, ...]:
+    policies: list[SharedExpiryOcePolicy] = []
+    for checkpoint in checkpoints:
+        frozen_policy = copy.deepcopy(setup["policy"])
+        frozen_policy.load_state_dict(
+            _load_policy_state(checkpoint, target_policy=frozen_policy)
+        )
+        frozen_policy.eval()
+        frozen_policy.requires_grad_(False)
+        policies.append(frozen_policy)
+        print(f"loaded frozen additive policy from {checkpoint}", flush=True)
+    return tuple(policies)
+
+
 def _audit_cached(
     setup: Mapping[str, Any],
     arguments: argparse.Namespace,
@@ -962,8 +1732,10 @@ def _audit_cached(
     *,
     feature_directory: Path,
     output_directory: Path,
+    baseline_pnl: np.ndarray | None = None,
+    claim_pnl: np.ndarray | None = None,
 ) -> dict[str, Any]:
-    """Compute the exact fixed-population OCE and gradient from cached inputs."""
+    """Audit a cumulative policy and its incremental density tilt."""
 
     state_path, price_path, _ = _feature_cache_paths(feature_directory)
     states = np.load(state_path, mmap_mode="r", allow_pickle=False)
@@ -1001,6 +1773,7 @@ def _audit_cached(
                 option_prices=batch[1],
                 returns=batch[2],
                 transaction_cost=setup["transaction_cost"],
+                frozen_policies=setup["frozen_policies"],
             )
             pnl_memmap[first:last] = pnl.cpu().double().numpy()
             action_l1_sum += float(diagnostics.mean_action_l1) * (last - first)
@@ -1016,22 +1789,63 @@ def _audit_cached(
     del pnl_memmap
     os.replace(temporary_pnl, pnl_path)
     pnl = np.load(pnl_path, mmap_mode="r", allow_pickle=False)
+    objective_pnl: np.ndarray = pnl
+    if baseline_pnl is not None or claim_pnl is not None:
+        objective_path = output_directory / (
+            "incremental-pnl.npy" if claim_pnl is None else "objective-pnl.npy"
+        )
+        temporary_objective = objective_path.with_name(
+            f".{objective_path.name}.tmp"
+        )
+        objective_memmap = np.lib.format.open_memmap(
+            temporary_objective,
+            mode="w+",
+            dtype=np.float64,
+            shape=(arguments.num_paths,),
+        )
+        objective_memmap[:] = np.asarray(pnl)
+        if claim_pnl is not None:
+            objective_memmap[:] += np.asarray(claim_pnl[: arguments.num_paths])
+        if baseline_pnl is not None:
+            objective_memmap[:] -= np.asarray(baseline_pnl[: arguments.num_paths])
+        objective_memmap.flush()
+        del objective_memmap
+        os.replace(temporary_objective, objective_path)
+        objective_pnl = np.load(objective_path, mmap_mode="r", allow_pickle=False)
     selected_weights = np.array(
         weights[: arguments.num_paths], dtype=np.float64, copy=True
     )
-    log_terms = np.log(selected_weights) - np.asarray(pnl)
+    log_terms = np.log(selected_weights) - np.asarray(objective_pnl)
     denominator_log = logsumexp(log_terms)
     log_normalizer = float(denominator_log - math.log(np.sum(selected_weights)))
     combined_density = np.exp(
         log_terms - denominator_log + math.log(arguments.num_paths)
     )
-    expected_net_pnl = float(
+    expected_incremental_pnl = float(
+        np.sum(selected_weights * np.asarray(objective_pnl), dtype=np.float64)
+        / np.sum(selected_weights)
+    )
+    incremental_second_moment = float(
+        np.sum(
+            selected_weights * np.square(np.asarray(objective_pnl)),
+            dtype=np.float64,
+        )
+        / np.sum(selected_weights)
+    )
+    expected_total_pnl = float(
         np.sum(selected_weights * np.asarray(pnl), dtype=np.float64)
         / np.sum(selected_weights)
     )
-    pnl_second_moment = float(
-        np.sum(selected_weights * np.square(np.asarray(pnl)), dtype=np.float64)
-        / np.sum(selected_weights)
+    expected_claim_pnl = (
+        float(
+            np.sum(
+                selected_weights * np.asarray(claim_pnl[: arguments.num_paths]),
+                dtype=np.float64,
+            )
+            / np.sum(selected_weights)
+        )
+        if claim_pnl is not None
+        else 0.0
     )
 
     policy.zero_grad(set_to_none=True)
@@ -1053,11 +1867,12 @@ def _audit_cached(
             option_prices=batch[1],
             returns=batch[2],
             transaction_cost=setup["transaction_cost"],
+            frozen_policies=setup["frozen_policies"],
         )
         probability = torch.as_tensor(
             np.exp(
                 np.log(selected_weights[first:last])
-                - np.asarray(pnl[first:last])
+                - np.asarray(objective_pnl[first:last])
                 - denominator_log
             ),
             dtype=pnl_batch.dtype,
@@ -1083,11 +1898,19 @@ def _audit_cached(
             arguments.num_paths**2
             / np.sum(np.square(combined_density), dtype=np.float64)
         ),
-        "expected_net_pnl_under_q": expected_net_pnl,
+        "expected_net_pnl_under_q": expected_incremental_pnl,
+        "expected_incremental_net_pnl_under_q": expected_incremental_pnl,
+        "expected_total_net_pnl_under_q": expected_total_pnl,
+        "expected_claim_pnl_under_q": expected_claim_pnl,
+        "expected_hedged_claim_pnl_under_q": expected_incremental_pnl,
         "net_pnl_standard_deviation_under_q": math.sqrt(
-            max(pnl_second_moment - expected_net_pnl**2, 0.0)
+            max(
+                incremental_second_moment - expected_incremental_pnl**2,
+                0.0,
+            )
         ),
         "mean_action_l1_per_state": action_l1_sum / arguments.num_paths,
+        "mean_action_gross_l1_per_state": action_l1_sum / arguments.num_paths,
         "maximum_absolute_action": maximum_action,
         "cap_active_fraction": cap_sum / arguments.num_paths,
         "gradient_rms": gradient_rms,
@@ -1246,6 +2069,21 @@ def _run_locked(arguments: argparse.Namespace) -> None:
         raise ValueError("requested path count exceeds the convex calibration population")
 
     setup = _setup(arguments)
+    setup["frozen_policies"] = _load_frozen_policies(
+        setup,
+        arguments.frozen_policy_checkpoints,
+    )
+    if arguments.initialize_policy_checkpoint is not None:
+        setup["policy"].load_state_dict(
+            _load_policy_state(
+                arguments.initialize_policy_checkpoint,
+                target_policy=setup["policy"],
+            )
+        )
+        print(
+            f"warm-started policy from {arguments.initialize_policy_checkpoint}",
+            flush=True,
+        )
     checkpoint_path = arguments.output_directory / "conditional-oce.pt"
     report_path = arguments.output_directory / "conditional-oce-report.json"
     alignment_error = _alignment_check(setup, arguments, returns)
@@ -1286,7 +2124,45 @@ def _run_locked(arguments: argparse.Namespace) -> None:
         cached_prices = np.load(price_path, mmap_mode="r", allow_pickle=False)
 
     policy: SharedExpiryOcePolicy = setup["policy"]
-    optimizer = torch.optim.Adam(policy.parameters(), lr=arguments.learning_rate)
+    if arguments.optimizer == "adam":
+        optimizer: torch.optim.Optimizer = torch.optim.Adam(
+            policy.parameters(), lr=arguments.learning_rate
+        )
+    elif arguments.optimizer == "lbfgs":
+        optimizer = torch.optim.LBFGS(
+            policy.parameters(),
+            lr=arguments.learning_rate,
+            max_iter=arguments.lbfgs_max_iterations,
+            max_eval=arguments.lbfgs_max_evaluations,
+            tolerance_grad=arguments.lbfgs_tolerance_grad,
+            tolerance_change=arguments.lbfgs_tolerance_change,
+            history_size=arguments.lbfgs_history_size,
+            line_search_fn="strong_wolfe",
+        )
+    elif arguments.optimizer == "kfac":
+        optimizer = Kfac(
+            policy,
+            lr=arguments.learning_rate,
+            factor_decay=arguments.kfac_factor_decay,
+            damping=arguments.kfac_damping,
+            momentum=arguments.kfac_momentum,
+            kl_clip=arguments.kfac_kl_clip,
+            factor_update_frequency=arguments.kfac_factor_update_frequency,
+        )
+    elif arguments.optimizer == "shampoo":
+        optimizer = Shampoo(
+            policy.parameters(),
+            lr=arguments.learning_rate,
+            beta2=arguments.shampoo_beta2,
+            momentum=arguments.shampoo_momentum,
+            damping=arguments.shampoo_damping,
+            precondition_frequency=arguments.shampoo_precondition_frequency,
+            maximum_parameter_step=arguments.shampoo_maximum_parameter_step,
+        )
+    else:
+        # Newton-CG uses the same full-gradient evaluator but controls parameter
+        # updates itself. This optimizer only supplies zero_grad/checkpoint state.
+        optimizer = torch.optim.SGD(policy.parameters(), lr=0.0)
     generator = torch.Generator(device=setup["env"].device).manual_seed(arguments.seed)
     epoch = 0
     path_offset = 0
@@ -1304,17 +2180,198 @@ def _run_locked(arguments: argparse.Namespace) -> None:
             f"resumed conditional OCE phase={phase} epoch={epoch} path={path_offset}",
             flush=True,
         )
+    if arguments.valuation_only:
+        phase = "trained"
     training_batch_size = (
         arguments.optimization_batch_size
         if cached_states is not None
         else arguments.batch_size
     )
     batches_per_epoch = math.ceil(arguments.num_paths / training_batch_size)
-    total_updates = arguments.epochs * batches_per_epoch
+    total_updates = (
+        arguments.epochs
+        if arguments.full_population_gradient
+        else arguments.epochs * batches_per_epoch
+    )
     selected_weights = np.array(
         weights[: arguments.num_paths], dtype=np.float64, copy=True
     )
     selected_weights *= arguments.num_paths / np.sum(selected_weights)
+    baseline_pnl: np.ndarray | None = None
+    if arguments.baseline_pnl is not None:
+        baseline_pnl = np.load(arguments.baseline_pnl, mmap_mode="r", allow_pickle=False)
+        if baseline_pnl.shape != (1_000_000,) or np.any(
+            ~np.isfinite(baseline_pnl[: arguments.num_paths])
+        ):
+            raise ValueError("baseline PnL must contain one million finite values")
+    claim_pnl: np.ndarray | None = None
+    if arguments.claim_pnl is not None:
+        claim_pnl = np.load(arguments.claim_pnl, mmap_mode="r", allow_pickle=False)
+        if claim_pnl.shape != (1_000_000,) or np.any(
+            ~np.isfinite(claim_pnl[: arguments.num_paths])
+        ):
+            raise ValueError("claim PnL must contain one million finite values")
+
+    if (
+        phase == "training"
+        and arguments.full_population_gradient
+        and arguments.optimizer == "newton-cg"
+    ):
+        if cached_states is None or cached_prices is None:
+            raise RuntimeError("Newton-CG requires cached full-population features")
+        policy.train()
+        epoch, updates, history, phase = _run_trust_region_newton_cg(
+            setup,
+            arguments,
+            optimizer,
+            generator,
+            states=cached_states,
+            prices=cached_prices,
+            returns=returns,
+            density=selected_weights,
+            baseline_pnl=baseline_pnl,
+            claim_pnl=claim_pnl,
+            checkpoint_path=checkpoint_path,
+            epoch=epoch,
+            updates=updates,
+            history=history,
+        )
+
+    if phase == "training" and arguments.full_population_gradient:
+        if cached_states is None or cached_prices is None:
+            raise RuntimeError("full-population training requires cached policy features")
+        if path_offset != 0:
+            raise RuntimeError(
+                "a full-population checkpoint cannot resume inside a population pass"
+            )
+        policy.train()
+        convergence_count = 0
+        while epoch < arguments.epochs:
+            learning_rate = _learning_rate(arguments, updates, total_updates)
+            for group in optimizer.param_groups:
+                group["lr"] = learning_rate
+            if arguments.optimizer in ("adam", "kfac", "shampoo"):
+                record = _full_population_training_update(
+                    setup,
+                    arguments,
+                    optimizer,
+                    states=cached_states,
+                    prices=cached_prices,
+                    returns=returns,
+                    density=selected_weights,
+                    baseline_pnl=baseline_pnl,
+                    claim_pnl=claim_pnl,
+                )
+            elif arguments.optimizer == "lbfgs":
+                closure_evaluations = 0
+
+                def closure() -> torch.Tensor:
+                    nonlocal closure_evaluations
+                    closure_evaluations += 1
+                    closure_record = _full_population_training_update(
+                        setup,
+                        arguments,
+                        optimizer,
+                        states=cached_states,
+                        prices=cached_prices,
+                        returns=returns,
+                        density=selected_weights,
+                        baseline_pnl=baseline_pnl,
+                        claim_pnl=claim_pnl,
+                        perform_step=False,
+                        clip_gradient=False,
+                    )
+                    return torch.tensor(
+                        closure_record["full_population_log_loss"],
+                        dtype=torch.float64,
+                        device=setup["env"].device,
+                    )
+
+                optimizer.step(closure)
+                record = _full_population_training_update(
+                    setup,
+                    arguments,
+                    optimizer,
+                    states=cached_states,
+                    prices=cached_prices,
+                    returns=returns,
+                    density=selected_weights,
+                    baseline_pnl=baseline_pnl,
+                    claim_pnl=claim_pnl,
+                    perform_step=False,
+                    clip_gradient=False,
+                )
+                record["lbfgs_closure_evaluations"] = closure_evaluations + 1
+            else:
+                raise RuntimeError(
+                    "Newton-CG must be dispatched before the standard optimizer loop"
+                )
+            epoch += 1
+            updates += 1
+            record.update(
+                {
+                    "epoch": epoch,
+                    "update": updates,
+                    "processed_paths_in_epoch": arguments.num_paths,
+                    "learning_rate": learning_rate,
+                }
+            )
+            convergence_checks: list[bool] = []
+            if arguments.full_gradient_rms_tolerance > 0.0:
+                convergence_checks.append(
+                    float(record["gradient_rms"])
+                    <= arguments.full_gradient_rms_tolerance
+                )
+            if arguments.full_gradient_maximum_tolerance > 0.0:
+                convergence_checks.append(
+                    float(record["gradient_maximum_absolute"])
+                    <= arguments.full_gradient_maximum_tolerance
+                )
+            if arguments.full_gradient_scale_foc_tolerance > 0.0:
+                convergence_checks.append(
+                    abs(float(record["tilted_expected_network_pnl"]))
+                    <= arguments.full_gradient_scale_foc_tolerance
+                )
+            convergence_count = (
+                convergence_count + 1
+                if convergence_checks and all(convergence_checks)
+                else 0
+            )
+            record["convergence_patience_count"] = convergence_count
+            history.append(record)
+            print(json.dumps(record), flush=True)
+            converged = convergence_count >= arguments.full_gradient_patience
+            if (
+                updates % arguments.checkpoint_every_updates == 0
+                or epoch == arguments.epochs
+                or converged
+            ):
+                _atomic_torch_save(
+                    _checkpoint_payload(
+                        setup=setup,
+                        arguments=arguments,
+                        optimizer=optimizer,
+                        generator=generator,
+                        epoch=epoch,
+                        path_offset=0,
+                        updates=updates,
+                        history=history,
+                        phase=(
+                            "trained"
+                            if epoch == arguments.epochs or converged
+                            else "training"
+                        ),
+                    ),
+                    checkpoint_path,
+                )
+            if converged:
+                print(
+                    f"full-population gradient converged for {convergence_count} "
+                    "consecutive updates",
+                    flush=True,
+                )
+                break
+        phase = "trained"
 
     if phase == "training":
         policy.train()
@@ -1352,13 +2409,27 @@ def _run_locked(arguments: argparse.Namespace) -> None:
                         option_prices=batch[1],
                         returns=batch[2],
                         transaction_cost=setup["transaction_cost"],
+                        frozen_policies=setup["frozen_policies"],
+                    )
+                objective_pnl = pnl
+                if baseline_pnl is not None:
+                    objective_pnl = pnl - torch.as_tensor(
+                        np.array(baseline_pnl[path_offset:last], copy=True),
+                        dtype=pnl.dtype,
+                        device=pnl.device,
+                    )
+                if claim_pnl is not None:
+                    objective_pnl = objective_pnl + torch.as_tensor(
+                        np.array(claim_pnl[path_offset:last], copy=True),
+                        dtype=pnl.dtype,
+                        device=pnl.device,
                     )
                 density = torch.as_tensor(
                     selected_weights[path_offset:last],
                     dtype=torch.float64,
                     device=pnl.device,
                 )
-                loss = weighted_log_oce(pnl.double(), density)
+                loss = weighted_log_oce(objective_pnl.double(), density)
                 loss.backward()
                 gradient_rms, gradient_maximum, parameter_count = _gradient_statistics(policy)
                 gradient_norm = torch.nn.utils.clip_grad_norm_(
@@ -1436,6 +2507,8 @@ def _run_locked(arguments: argparse.Namespace) -> None:
             returns,
             feature_directory=arguments.fixed_feature_cache,
             output_directory=arguments.output_directory,
+            baseline_pnl=baseline_pnl,
+            claim_pnl=claim_pnl,
         )
     phase = "complete"
     _atomic_torch_save(
@@ -1457,16 +2530,32 @@ def _run_locked(arguments: argparse.Namespace) -> None:
         "status": "complete",
         "created_at_utc": datetime.now(UTC).isoformat(),
         "definition": {
-            "reference_measure": "the fitted convex empirical Q on the same one-million paths",
+            "reference_measure": "the supplied normalized empirical weights on the fixed one-million paths",
             "policy_input": "current Direct-200 hidden state h and eleven current option prices for one expiry",
-            "policy_output": "shared 11 option actions plus one spot action per expiry; four spot heads are summed",
-            "objective": "sup_theta -log E_Q exp(-sum_t[a_theta(h_t,prices_t)'R_t-cost'abs(a_theta)])",
-            "scope": "in-sample conditional-strategy stress test of the fixed empirical Q",
+            "policy_output": (
+                "separate nonnegative long and short legs for 11 options plus spot "
+                "per expiry; spot logits are aggregated before the positive-part "
+                "map, net action is long minus short, and costs/cap use gross legs"
+                if arguments.long_short_actions
+                else "shared 11 option actions plus one spot action per expiry; four spot heads are summed"
+            ),
+            "objective": (
+                "fixed-policy -log E_Q exp(-net PnL); policy weights unchanged"
+                if arguments.valuation_only
+                else (
+                    "sup_theta -log E_Q exp(-(claim PnL + sum_t["
+                    "a_theta(h_t,prices_t)'R_t-cost'abs(a_theta)]))"
+                    if arguments.claim_pnl is not None
+                    else "sup_theta -log E_Q exp(-sum_t[a_theta(h_t,prices_t)'R_t-cost'abs(a_theta)])"
+                )
+            ),
+            "scope": (
+                "in-sample valuation of a supplied fixed policy"
+                if arguments.valuation_only
+                else "in-sample conditional-strategy stress test of the fixed empirical Q"
+            ),
         },
-        "arguments": {
-            key: str(value) if isinstance(value, (Path, date)) else value
-            for key, value in vars(arguments).items()
-        },
+        "arguments": _serialized_arguments(arguments),
         "policy_config": asdict(setup["policy_config"]),
         "fixed_path_alignment_maximum_error": alignment_error,
         "state_index": setup["state_index"],

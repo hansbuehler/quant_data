@@ -1597,6 +1597,85 @@ def test_density_slack_lp_reprices_a_synthetic_sanos_surface() -> None:
     np.testing.assert_allclose(torch_reprice, result.fits, atol=2.0e-7)
 
 
+def test_lp_fixed_backbone_annual_vol_uses_calendar_total_vols() -> None:
+    geometry, day, _ = _synthetic_market_and_surface()
+    config = FlexLpConfig(
+        backbone_mu=None,
+        fixed_backbone_annual_vol=0.05,
+    )
+
+    np.testing.assert_allclose(
+        config.backbone_total_vols(day, geometry=geometry),
+        0.05 * np.sqrt(geometry.model_expiries_y),
+    )
+
+
+def test_lp_allows_zero_fixed_backbone_smoothing() -> None:
+    geometry, day, _ = _synthetic_market_and_surface()
+    config = FlexLpConfig(
+        backbone_mu=None,
+        fixed_backbone_annual_vol=0.0,
+    )
+
+    np.testing.assert_array_equal(
+        config.backbone_total_vols(day, geometry=geometry),
+        np.zeros(geometry.num_model_expiries),
+    )
+
+
+def test_lp_book_mid_target_ignores_smooth_reference_prices() -> None:
+    geometry, day, _ = _synthetic_market_and_surface()
+    shifted_day = replace(
+        day,
+        fit_prices=np.minimum(day.asks, day.fit_prices + 5.0e-5),
+    )
+    config = FlexLpConfig(
+        central_fit_target="book_mid",
+        timeout_seconds=30.0,
+    )
+
+    base = fit_flex_density_lp(day, geometry=geometry, config=config)
+    shifted = fit_flex_density_lp(
+        shifted_day,
+        geometry=geometry,
+        config=config,
+    )
+
+    np.testing.assert_allclose(base.fits, shifted.fits, atol=1.0e-10)
+
+
+def test_direct_highs_lp_matches_cvxpy_lp() -> None:
+    geometry, day, _ = _synthetic_market_and_surface()
+    common = dict(
+        backbone_mu=None,
+        fixed_backbone_annual_vol=0.05,
+        central_fit_target="book_mid",
+        enforce_dlv_bounds=False,
+        timeout_seconds=30.0,
+    )
+    reference = fit_flex_density_lp(
+        day,
+        geometry=geometry,
+        config=FlexLpConfig(**common, solver_algorithm="simplex"),
+    )
+    direct = fit_flex_density_lp(
+        day,
+        geometry=geometry,
+        config=FlexLpConfig(**common, solver_algorithm="direct-simplex"),
+        initial_densities=reference.densities,
+    )
+
+    assert direct.status == "optimal"
+    assert direct.objective == pytest.approx(reference.objective, abs=1.0e-8)
+    np.testing.assert_allclose(direct.fits, reference.fits, atol=2.0e-7)
+    np.testing.assert_allclose(direct.densities.sum(axis=1), 1.0, atol=1.0e-8)
+    np.testing.assert_allclose(
+        np.sum(direct.densities * direct.support_strikes, axis=1),
+        1.0,
+        atol=1.0e-8,
+    )
+
+
 def test_shared_strikes_report_renders_a_partial_geometry_stage() -> None:
     report = {
         "status": "direct_running",

@@ -1,6 +1,13 @@
 \section{The drift restriction}\label{sec:drift}
 
-\begin{assumption}[Martingale property]\label{ass:mart}
+\begin{theorem}[Martingale property]\label{ass:mart}
+Assume that there is a measure $\Q$ such that each $q_t^{j,i}$ is a martingale.
+Then $X_t$ and all options written on it are martingales.
+\end{theorem}
+
+
+
+
 Under $\Q$ every gridded instrument price is a martingale in $t$. Since the
 gridded payoffs $\pi^i$ together with the unit payoff span $\R^{N+2}$, and
 $\one^{\!\top}q^j=1$, this is equivalent to each density
@@ -8,7 +15,6 @@ vector being a martingale,
 \begin{equation}\label{eq:qdyn}
   \dd q^j_t=\psi^j_t\,\dd W_t,\qquad \psi^j_t\in\R^{(N+2)\times d}.
 \end{equation}
-\end{assumption}
 
 This is the only assumption behind the drift restriction, and it carries no
 regularity. Each

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from time import perf_counter
+from typing import Literal
 
 import cvxpy as cp
+import highspy
 import numpy as np
 import torch
 from cdxcore.verbose import Context
@@ -35,33 +37,96 @@ from quantdata.torch import BaseEnvironment
 
 
 @version(
-    "1.0",
+    "1.6",
     dependencies=[FlexGeometryConfig, FlexObjectiveConfig],
 )
 @dataclass(frozen=True, kw_only=True)
 class FlexLpConfig:
     """Numerical controls for the fixed-geometry density LP."""
 
-    backbone_mu: float = 0.5
+    backbone_mu: float | None = 0.5
+    fixed_backbone_annual_vol: float | None = None
+    solver_algorithm: Literal[
+        "simplex",
+        "ipm",
+        "clarabel",
+        "direct-simplex",
+        "direct-ipm",
+    ] = "simplex"
+    solver_simplex_strategy: int = 1
+    central_fit_target: Literal["smooth_reference", "book_mid"] = (
+        "smooth_reference"
+    )
+    enforce_dlv_bounds: bool = True
     timeout_seconds: float = 600.0
     density_mass_floor: float = 1.0e-7
 
     def __post_init__(self) -> None:
-        if not 0.0 < self.backbone_mu <= 1.0:
+        if (self.backbone_mu is None) == (
+            self.fixed_backbone_annual_vol is None
+        ):
             raise ValueError(
-                "'backbone_mu' must lie in (0,1], found "
+                "Exactly one of 'backbone_mu' and "
+                "'fixed_backbone_annual_vol' must be supplied"
+            )
+        if self.backbone_mu is not None and not 0.0 <= self.backbone_mu <= 1.0:
+            raise ValueError(
+                "'backbone_mu' must lie in [0,1], found "
                 f"{self.backbone_mu}"
+            )
+        if self.fixed_backbone_annual_vol is not None and not (
+            np.isfinite(self.fixed_backbone_annual_vol)
+            and self.fixed_backbone_annual_vol >= 0.0
+        ):
+            raise ValueError(
+                "'fixed_backbone_annual_vol' must be finite and non-negative, "
+                f"found {self.fixed_backbone_annual_vol}"
             )
         if self.timeout_seconds <= 0.0:
             raise ValueError(
                 "'timeout_seconds' must be positive, found "
                 f"{self.timeout_seconds}"
             )
+        if self.solver_algorithm not in {
+            "simplex",
+            "ipm",
+            "clarabel",
+            "direct-simplex",
+            "direct-ipm",
+        }:
+            raise ValueError(
+                "Unsupported 'solver_algorithm', found "
+                f"{self.solver_algorithm!r}"
+            )
+        if not 0 <= self.solver_simplex_strategy <= 4:
+            raise ValueError(
+                "'solver_simplex_strategy' must lie in [0,4], found "
+                f"{self.solver_simplex_strategy}"
+            )
+        if self.central_fit_target not in {"smooth_reference", "book_mid"}:
+            raise ValueError(
+                "'central_fit_target' must be 'smooth_reference' or "
+                f"'book_mid', found {self.central_fit_target!r}"
+            )
         if not 0.0 < self.density_mass_floor < 1.0:
             raise ValueError(
                 "'density_mass_floor' must lie in (0,1), found "
                 f"{self.density_mass_floor}"
             )
+
+    def backbone_total_vols(
+        self,
+        day: FlexMarketDay,
+        *,
+        geometry: FlexGeometryConfig,
+    ) -> np.ndarray:
+        """Return the configured Black-backbone total volatility curve."""
+        if self.fixed_backbone_annual_vol is not None:
+            return self.fixed_backbone_annual_vol * np.sqrt(
+                geometry.model_expiries_y
+            )
+        assert self.backbone_mu is not None
+        return self.backbone_mu * day.model_atm_total_vols
 
 
 @dataclass(frozen=True)
@@ -121,15 +186,24 @@ def reprice_dlvsqs_with_torch(
         day.model_atm_total_vols,
         prepend=0.0,
     ) / np.sqrt(model_dts)
-    eta = (
-        torch.full(
-            (1, geometry.num_model_expiries),
-            config.backbone_mu,
-            dtype=env.fdtype,
-        )
-        if isinstance(geometry, ForwardMuFlexGeometryConfig)
-        else torch.full((1,), config.backbone_mu, dtype=env.fdtype)
+    backbone_total_vols = config.backbone_total_vols(
+        day,
+        geometry=geometry,
     )
+    backbone_forward_vols = np.diff(
+        backbone_total_vols,
+        prepend=0.0,
+    ) / np.sqrt(model_dts)
+    eta_values = backbone_forward_vols / forward_vols
+    if isinstance(geometry, ForwardMuFlexGeometryConfig):
+        eta = torch.as_tensor(eta_values[None, :], dtype=env.fdtype)
+    else:
+        if not np.allclose(eta_values, eta_values[0], rtol=1.0e-10):
+            raise ValueError(
+                "A non-forward-mu geometry cannot represent this fixed "
+                "backbone total-volatility curve"
+            )
+        eta = torch.full((1,), float(eta_values[0]), dtype=env.fdtype)
     with torch.no_grad():
         surface = decoder.forward_batch(
             dlvsqs=torch.as_tensor(
@@ -300,7 +374,204 @@ def _pricing_matrix(
         dtype=np.float64,
     ).tocsr()
     matrix.sum_duplicates()
+    matrix.eliminate_zeros()
     return matrix, constant
+
+
+def _solve_density_lp_highs_direct(
+    *,
+    supports: np.ndarray,
+    pricing_matrix: sparse.csr_matrix,
+    pricing_constant: np.ndarray,
+    call_bids: np.ndarray,
+    call_asks: np.ndarray,
+    call_fits: np.ndarray,
+    half_spreads: np.ndarray,
+    fit_weight: float,
+    initial_densities: np.ndarray | None,
+    algorithm: Literal["direct-simplex", "direct-ipm"],
+    simplex_strategy: int,
+    timeout_seconds: float,
+) -> tuple[np.ndarray, str]:
+    """Solve the density/slack LP through a scaled sparse HiGHS model."""
+    supports = np.asarray(supports, dtype=np.float64)
+    num_expiries, support_size = supports.shape
+    num_inner = support_size - 2
+    num_quotes = len(call_bids)
+    density_count = num_expiries * support_size
+    variable_count = density_count + 2 * num_quotes
+    outside_slice = slice(density_count, density_count + num_quotes)
+    central_slice = slice(density_count + num_quotes, variable_count)
+
+    # Unit mass and centered first moment are equivalent to mass=mean=1,
+    # while avoiding two nearly collinear rows on a narrow relative grid.
+    equality_rows: list[int] = []
+    equality_columns: list[int] = []
+    equality_values: list[float] = []
+    for expiry_index, support in enumerate(supports):
+        column_offset = expiry_index * support_size
+        columns = column_offset + np.arange(support_size)
+        equality_rows.extend(np.full(support_size, 2 * expiry_index))
+        equality_columns.extend(columns)
+        equality_values.extend(np.ones(support_size))
+        equality_rows.extend(np.full(support_size, 2 * expiry_index + 1))
+        equality_columns.extend(columns)
+        equality_values.extend(support - 1.0)
+    equality = sparse.coo_matrix(
+        (equality_values, (equality_rows, equality_columns)),
+        shape=(2 * num_expiries, density_count),
+    ).tocsr()
+    equality_lower = np.tile(np.asarray((1.0, 0.0)), num_expiries)
+    equality_upper = equality_lower.copy()
+
+    # Convex-order increments are the linear DLV positivity constraints.
+    calendar_rows: list[np.ndarray] = []
+    calendar_columns: list[np.ndarray] = []
+    calendar_values: list[np.ndarray] = []
+    calendar_lower = np.zeros(num_expiries * num_inner, dtype=np.float64)
+    for expiry_index, support in enumerate(supports):
+        row_offset = expiry_index * num_inner
+        current = sparse.coo_matrix(
+            np.maximum(
+                support[None, :] - support[1:-1, None],
+                0.0,
+            )
+        )
+        calendar_rows.append(row_offset + current.row)
+        calendar_columns.append(expiry_index * support_size + current.col)
+        calendar_values.append(current.data)
+        if expiry_index == 0:
+            calendar_lower[:num_inner] = np.maximum(
+                1.0 - support[1:-1],
+                0.0,
+            )
+        else:
+            previous = sparse.coo_matrix(
+                np.maximum(
+                    supports[expiry_index - 1][None, :]
+                    - support[1:-1, None],
+                    0.0,
+                )
+            )
+            calendar_rows.append(row_offset + previous.row)
+            calendar_columns.append(
+                (expiry_index - 1) * support_size + previous.col
+            )
+            calendar_values.append(-previous.data)
+    calendar = sparse.coo_matrix(
+        (
+            np.concatenate(calendar_values),
+            (np.concatenate(calendar_rows), np.concatenate(calendar_columns)),
+        ),
+        shape=(num_expiries * num_inner, density_count),
+    ).tocsr()
+    calendar.eliminate_zeros()
+    calendar_upper = np.full(len(calendar_lower), highspy.kHighsInf)
+
+    # Quote slacks are measured in half-spreads. This is exactly the same
+    # objective as price-unit slacks weighted by inverse half-spread.
+    inverse_half_spreads = 1.0 / np.asarray(half_spreads, dtype=np.float64)
+    normalized_pricing = pricing_matrix.multiply(
+        inverse_half_spreads[:, None]
+    ).tocsr()
+    identity = sparse.eye(num_quotes, format="csr")
+    quote_zero = sparse.csr_matrix((num_quotes, num_quotes))
+    quote_rows = sparse.vstack(
+        (
+            sparse.hstack((normalized_pricing, -identity, quote_zero)),
+            sparse.hstack((-normalized_pricing, -identity, quote_zero)),
+            sparse.hstack((normalized_pricing, quote_zero, -identity)),
+            sparse.hstack((-normalized_pricing, quote_zero, -identity)),
+        ),
+        format="csr",
+    )
+    normalized_constant = pricing_constant * inverse_half_spreads
+    quote_upper = np.concatenate(
+        (
+            call_asks * inverse_half_spreads - normalized_constant,
+            -call_bids * inverse_half_spreads + normalized_constant,
+            call_fits * inverse_half_spreads - normalized_constant,
+            -call_fits * inverse_half_spreads + normalized_constant,
+        )
+    )
+    quote_lower = np.full(len(quote_upper), -highspy.kHighsInf)
+
+    density_slack_zeros = sparse.csr_matrix(
+        (equality.shape[0] + calendar.shape[0], 2 * num_quotes)
+    )
+    matrix = sparse.vstack(
+        (
+            sparse.hstack((equality, density_slack_zeros[: equality.shape[0]])),
+            sparse.hstack((calendar, density_slack_zeros[equality.shape[0] :])),
+            quote_rows,
+        ),
+        format="csr",
+    )
+    matrix.sum_duplicates()
+    matrix.eliminate_zeros()
+    row_lower = np.concatenate(
+        (equality_lower, calendar_lower, quote_lower)
+    )
+    row_upper = np.concatenate(
+        (equality_upper, calendar_upper, quote_upper)
+    )
+
+    column_lower = np.zeros(variable_count, dtype=np.float64)
+    column_upper = np.full(variable_count, highspy.kHighsInf)
+    column_upper[:density_count] = 1.0
+    costs = np.zeros(variable_count, dtype=np.float64)
+    # Scaling the complete objective by the positive quote count leaves the
+    # optimizer unchanged and keeps HiGHS away from its small-cost tolerance.
+    costs[outside_slice] = 1.0
+    costs[central_slice] = fit_weight
+
+    solver = highspy.Highs()
+    solver.setOptionValue("output_flag", False)
+    solver.setOptionValue("time_limit", timeout_seconds)
+    solver.setOptionValue(
+        "solver",
+        "simplex" if algorithm == "direct-simplex" else "ipm",
+    )
+    solver.setOptionValue("presolve", "on")
+    if algorithm == "direct-simplex":
+        solver.setOptionValue("simplex_strategy", simplex_strategy)
+    indices = np.arange(variable_count, dtype=np.int32)
+    solver.addVars(variable_count, column_lower, column_upper)
+    solver.changeColsCost(variable_count, indices, costs)
+    solver.addRows(
+        matrix.shape[0],
+        row_lower,
+        row_upper,
+        matrix.nnz,
+        np.asarray(matrix.indptr, dtype=np.int32),
+        np.asarray(matrix.indices, dtype=np.int32),
+        matrix.data,
+    )
+
+    if initial_densities is not None:
+        initial = np.zeros(variable_count, dtype=np.float64)
+        initial[:density_count] = initial_densities.reshape(-1)
+        initial_calls = pricing_matrix @ initial[:density_count] + pricing_constant
+        initial[outside_slice] = np.maximum.reduce(
+            (
+                initial_calls - call_asks,
+                call_bids - initial_calls,
+                np.zeros(num_quotes),
+            )
+        ) * inverse_half_spreads
+        initial[central_slice] = (
+            np.abs(initial_calls - call_fits) * inverse_half_spreads
+        )
+        solver.setSolution(variable_count, indices, initial)
+
+    solver.run()
+    model_status = solver.getModelStatus()
+    status = solver.modelStatusToString(model_status).lower().replace(" ", "_")
+    if model_status != highspy.HighsModelStatus.kOptimal:
+        raise RuntimeError(f"Direct HiGHS density LP failed: {status}")
+    solution = np.asarray(solver.getSolution().col_value, dtype=np.float64)
+    densities = solution[:density_count].reshape(num_expiries, support_size)
+    return densities, status
 
 
 def _recover_dlvsqs(
@@ -310,6 +581,7 @@ def _recover_dlvsqs(
     geometry: FlexGeometryConfig,
     density_mass_floor: float,
     fallback_dlvsqs: np.ndarray,
+    enforce_dlv_bounds: bool,
 ) -> np.ndarray:
     """Recover the DLV state from the LP densities on all defined nodes."""
     num_expiries = geometry.num_model_expiries
@@ -353,9 +625,14 @@ def _recover_dlvsqs(
             out=result[expiry_index].copy(),
             where=defined,
         )
+        bounded_raw = (
+            np.clip(raw, geometry.min_dlvsq, geometry.max_dlvsq)
+            if enforce_dlv_bounds
+            else np.maximum(raw, 0.0)
+        )
         result[expiry_index] = np.where(
             defined,
-            np.clip(raw, geometry.min_dlvsq, geometry.max_dlvsq),
+            bounded_raw,
             result[expiry_index],
         )
     if not np.all(np.isfinite(result)):
@@ -487,6 +764,7 @@ def fit_flex_density_lp(
     geometry: FlexGeometryConfig,
     objective_config: FlexObjectiveConfig = FlexObjectiveConfig(),
     config: FlexLpConfig = FlexLpConfig(),
+    initial_densities: np.ndarray | None = None,
     verbose: Context = Context.quiet,
 ) -> FlexLpFitResult:
     """Fit one day's density state with SANOS DLV and martingale constraints."""
@@ -497,7 +775,10 @@ def fit_flex_density_lp(
         day.model_atm_total_vols,
         geometry=geometry,
     )
-    backbone_total_vols = config.backbone_mu * day.model_atm_total_vols
+    backbone_total_vols = config.backbone_total_vols(
+        day,
+        geometry=geometry,
+    )
     pricing_matrix, pricing_constant = _pricing_matrix(
         day,
         supports=supports,
@@ -506,6 +787,16 @@ def fit_flex_density_lp(
     )
 
     densities = [cp.Variable(support_size, nonneg=True) for _ in range(num_expiries)]
+    if initial_densities is not None:
+        initial_densities = np.asarray(initial_densities, dtype=np.float64)
+        expected_shape = (num_expiries, support_size)
+        if initial_densities.shape != expected_shape:
+            raise ValueError(
+                "Expected initial densities of shape "
+                f"{expected_shape}, found {initial_densities.shape}"
+            )
+        if not np.all(np.isfinite(initial_densities)):
+            raise ValueError("Initial densities must be finite")
     constraints: list[cp.Constraint] = []
     model_dts = np.diff(geometry.model_expiries_y, prepend=0.0)
     for expiry_index, density in enumerate(densities):
@@ -542,55 +833,94 @@ def fit_flex_density_lp(
             / (support[2:] - support[:-2])
         )
         density_box = cp.multiply(box, density[1:-1])
-        constraints.extend(
-            (
-                call_increment >= geometry.min_dlvsq * density_box,
-                call_increment <= geometry.max_dlvsq * density_box,
+        if config.enforce_dlv_bounds:
+            constraints.extend(
+                (
+                    call_increment >= geometry.min_dlvsq * density_box,
+                    call_increment <= geometry.max_dlvsq * density_box,
+                )
             )
-        )
+        else:
+            constraints.append(call_increment >= 0.0)
 
     flat_density = cp.hstack(densities)
     call_prices = pricing_matrix @ flat_density + pricing_constant
     parity_adjustment = np.where(day.is_call, 0.0, 1.0 - day.strikes)
     call_bids = day.bids + parity_adjustment
     call_asks = day.asks + parity_adjustment
-    call_fits = day.fit_prices + parity_adjustment
-    outside_slack = cp.Variable(day.num_quotes, nonneg=True)
-    central_slack = cp.Variable(day.num_quotes, nonneg=True)
-    constraints.extend(
-        (
-            outside_slack >= call_prices - call_asks,
-            outside_slack >= call_bids - call_prices,
-            central_slack >= call_prices - call_fits,
-            central_slack >= call_fits - call_prices,
-        )
+    central_fit_prices = (
+        0.5 * (day.bids + day.asks)
+        if config.central_fit_target == "book_mid"
+        else day.fit_prices
     )
-    quote_objective = (
-        cp.sum(
-            cp.multiply(
-                1.0 / day.half_spreads,
-                outside_slack + objective_config.fit_weight * central_slack,
+    call_fits = central_fit_prices + parity_adjustment
+    if config.solver_algorithm.startswith("direct-"):
+        if config.enforce_dlv_bounds:
+            raise ValueError(
+                "Direct HiGHS currently supports DLV positivity without "
+                "finite upper/lower DLV bounds"
+            )
+        density_values, status = _solve_density_lp_highs_direct(
+            supports=supports,
+            pricing_matrix=pricing_matrix,
+            pricing_constant=pricing_constant,
+            call_bids=call_bids,
+            call_asks=call_asks,
+            call_fits=call_fits,
+            half_spreads=day.half_spreads,
+            fit_weight=objective_config.fit_weight,
+            initial_densities=initial_densities,
+            algorithm=config.solver_algorithm,
+            simplex_strategy=config.solver_simplex_strategy,
+            timeout_seconds=config.timeout_seconds,
+        )
+        fell_back = False
+    else:
+        outside_slack = cp.Variable(day.num_quotes, nonneg=True)
+        central_slack = cp.Variable(day.num_quotes, nonneg=True)
+        constraints.extend(
+            (
+                outside_slack >= call_prices - call_asks,
+                outside_slack >= call_bids - call_prices,
+                central_slack >= call_prices - call_fits,
+                central_slack >= call_fits - call_prices,
             )
         )
-        / day.num_quotes
-    )
-    success, status, fell_back = SanosLPSolver(
-        timeout_seconds=config.timeout_seconds
-    )(
-        objective=quote_objective,
-        constraints=constraints,
-        variables=[],
-        message_context=f"FLEX {day.trading_date.isoformat()} density LP",
-        verbose=verbose,
-    )
-    if not success:
-        raise RuntimeError(
-            f"FLEX density LP failed for {day.trading_date}: {status}"
+        quote_objective = (
+            cp.sum(
+                cp.multiply(
+                    1.0 / day.half_spreads,
+                    outside_slack + objective_config.fit_weight * central_slack,
+                )
+            )
+            / day.num_quotes
         )
-
-    density_values = np.stack(
-        [np.asarray(density.value, dtype=np.float64) for density in densities]
-    )
+        success, status, fell_back = SanosLPSolver(
+            timeout_seconds=config.timeout_seconds,
+            algorithm=config.solver_algorithm,
+            simplex_strategy=config.solver_simplex_strategy,
+        )(
+            objective=quote_objective,
+            constraints=constraints,
+            variables=[
+                (
+                    density,
+                    None
+                    if initial_densities is None
+                    else initial_densities[expiry_index],
+                )
+                for expiry_index, density in enumerate(densities)
+            ],
+            message_context=f"FLEX {day.trading_date.isoformat()} density LP",
+            verbose=verbose,
+        )
+        if not success:
+            raise RuntimeError(
+                f"FLEX density LP failed for {day.trading_date}: {status}"
+            )
+        density_values = np.stack(
+            [np.asarray(density.value, dtype=np.float64) for density in densities]
+        )
     if not np.all(np.isfinite(density_values)):
         raise FloatingPointError("FLEX density LP returned non-finite densities")
     density_values = np.maximum(density_values, 0.0)
@@ -613,6 +943,7 @@ def fit_flex_density_lp(
         geometry=geometry,
         density_mass_floor=config.density_mass_floor,
         fallback_dlvsqs=fallback_dlvsqs,
+        enforce_dlv_bounds=config.enforce_dlv_bounds,
     )
     call_fit_values = (
         pricing_matrix @ density_values.reshape(-1) + pricing_constant

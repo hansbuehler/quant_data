@@ -3,39 +3,29 @@
 We assume deterministic forwards and discount factors, which reduces to a driftless spot
 with unit discount factors, cf.~\cite{BuehlerVolAndDivs}. The spot at $t=0$ is $S_0$.
 
-We follow the~\cite{SANOS2026} architecture for a time-homogeneous fixed strike grid:
-Fix model expiries $0=: T_0< T_1<\dots<T_M$ with $ \Delta_j:=T_j-T_{j-1}$, and a
-single strike grid $0\leq K^0< K^1<\dots<S_0<\dots<K^N<K^{N+1}$, held fixed in cash terms and common
-to all expiries, with largest spacing $h:=\max_i(K^{i+1}-K^i)$; the grid need not be uniform. Let $q=(q^{j,i})$ with $q^j\in\R^{N+2}$ be a discrete risk-neutral density
-in the sense that
-\begin{enumerate}
-  \item $q^{j,i} \geq 0$
-  \item $\sum_{i=0}^{N+1} q^{j,i} = 1$
-  \item $\sum_{i=0}^{N+1} K^i q^{j,i} = S_0$.
-\end{enumerate}
+The approach we are presenting relies on a combination of a time-and-state 
+backbone process~$X$ and an additional smoothing process $Y$, following the~\cite{SANOS2026} approach to smoothing. However, contrary
+to that model here we present a full stochastic local volatility model. The weight of the model is carried
+by the former and echos ideas of~\cite{Wissel2007}.
 
-We denote by $\dlv^{j,i}_t$ the discrete local variance (the squared discrete local volatility) at the
-interior node $i=1,\dots,N$ and expiry $j$, as seen at calendar time $t$, and by
-$\dlv^j_t\in(0,\infty)^{N}$ the vector of them, with $\lambda=\log\dlv$
-throughout; it enters the code-book multiplied by the slab length $\Delta_j$. Prices are the linear functional
-$C_t(K^i,T_j)=(\pi^i)^{\!\top} q^j_t$ with $\pi^i$ the discretised payoff
-$(s-K^i)^{+}$.
+We will define the backbone process on a grid of fixed expiries $0=T_0< T_1<\dots<T_M$ and strikes $0< K^0< K^1<\dots<S_0<\dots<K^N<K^{N+1}$.
+We will use two time indices: $t$ will denote model time and $j$ will index fixed expires. We will use $i$ to index strikes
+Contrary to~\cite{SANOS2026} and similar to~\cite{Wissel2007} expiries and strikes are not floating; they are fixed. The model will evolve
+along the grid. Specifically, at time $t$ the future expiries in the model are those $T_j$ such that $T_j>t$. We assume that 
+the largest strike spacing is $h:=\max_i(K^{i+1}-K^i)$.
 
-{\color{blue} If it's the same for everyone I'd align the notation with DYSANOS, e.g. use $\hat T$ and $\hat K$ for
-relative model coordinates, and $T, K$ for the market. I'd generally use the same terms. I would also write everything
-in discrete local vol-squared and specifically add the "$dt$" term because otherwise the numbers have quite different dimensionality.}
+\subsection{Discrete Local Volatility Backbone}
 
-Propagating densities rather than prices, in Fokker--Planck form, is what
-makes the systems below tridiagonal. With the half-weights
+At time~$t$ we denote by $\dlv^j_t= (\dlv^{j,i}_t)_{i=1,\dots,N}$ the squared discrete local volatility at the
+interior nodes $i=1,\dots,N$ for expiry $T_j > t$. We let $\lambda=\log\dlv$
+throughout. Define
 \begin{equation}\label{eq:weights}
   \omega^k:=\frac{(K^k)^{2}}{K^{k+1}-K^{k-1}},\qquad
   \iota^{k,-}:=\frac{\omega^k}{K^k-K^{k-1}},\qquad
   \iota^{k,+}:=\frac{\omega^k}{K^{k+1}-K^k},
   \qquad k=1,\dots,N,
 \end{equation}
-
-the recursion is $A_j(\dlv^j)\,q^j=q^{j-1}$, where $A_j(\dlv)$ is tridiagonal
-with rows (here $q^i$ denotes the $i$-th component of a generic $q\in\R^{N+2}$)
+and then the tridiagonal matrix $A_j(\dlv)$ with rows
 \begin{equation}\label{eq:operator}
   \bigl(A_j(\dlv)q\bigr)_i=
   \begin{cases}
@@ -46,9 +36,46 @@ with rows (here $q^i$ denotes the $i$-th component of a generic $q\in\R^{N+2}$)
     -\Delta_j\dlv^N\iota^{N,+}q^N+q^{N+1}, & i=N+1 .
   \end{cases}
 \end{equation}
+(here $q^i$ denotes the $i$-th component of a generic $q\in\R^{N+2}$).
 Up to notation this is the implicit forward operator of \cite{BuehlerRyskin2016}.
-Note that in \eqref{eq:operator} the entry multiplying $q^{i\pm1}$ carries
-$\dlv^{i\pm1}$ and not $\dlv^i$.
+
+Let now $X_t$ be the current spot price at time~$t$ for the backbone process $X$ and let $q_t^0\in\R^{N+2}$
+the density
+$$
+  q^{0,i}_t = \frac{  ( X_t - K^{i-1} )^+ - ( X_t - K^{i} )^+ }{ K^{i} - K^{i-1} } - \frac{ ( X_t - K^i )^+ - ( X_t - K^{i+1} )^+   }{ K^{i+1} - K^{i} } 
+$$
+
+
+Then, the family $q_t=(q_t^j)_{j=0,\dots,M}$ starting in $q_t^0$ is then given iteratively as
+\begin{equation}
+A_j(\dlv^j_t)\,q^j_t=q^{j-1}_t
+\end{equation}
+Note that in \eqref{eq:operator} the entry multiplying $q^{i\pm1}_t$ carries
+$\dlv^{i\pm1}_t$ and not $\dlv^i_t$. The following was shown in~\cite{BuehlerRyskin2016}:
+
+\begin{theorem}
+The family is then $q=(q^{j,i}_t)$ with $q^j_t\in\R^{N+2}$ us a discrete risk-neutral density on the grid $(T,K)$
+in the sense that
+\begin{enumerate}
+  \item $q^{j,i}_t \geq 0$
+  \item $\sum_{i=0}^{N+1} q^{j,i}_t = 1$
+  \item $\sum_{i=0}^{N+1} K^i q^{j,i}_t = X_0$.
+\end{enumerate}
+This means there is a discrete time-and-space process $X_t=(X_t^j)_{j=0,\dots,M}$ which takes values only in $(T,K)$. Note that
+the model-time index here is~$j$.
+Call prices for $X_t$ for arbitrary $(\tau,k)\in\R_{\geq 0}^2$ are given by the linear functional
+\begin{equation}\label{eq:Xcall}
+  C_t(k,\tau)=\mathbb{E}\left[ \left( X_t^j - k \right)^+ \right] = \sum_{i=0}^{N+1} ( K^i - k )^+ q^{j,i}_t \ .
+\end{equation}
+with $j=\max\{j: T_j\leq \tau\}$.
+\end{theorem}
+
+
+
+
+
+
+
 
 Because \eqref{eq:operator} is affine in $\dlv$ we may write
 \begin{equation}\label{eq:affine}
@@ -113,6 +140,7 @@ nodewise, and $\dlv^{j,i}=0$ exactly when Backward-Theta vanishes.
 What everything else rests on is that the admissible set is a product of
 half-lines, one per node, so it has no faces in the sense that a polytope does,
 and $\lambda=\log\dlv$ maps its interior diffeomorphically onto $\R^{N(M-1)}$.
+
 
 \subsection{Two conservation laws}\label{sec:conservation}
 
