@@ -1,0 +1,86 @@
+\section{The discrete-time pricing identity: derived, tested, and ranked for feasibility}
+\label{sec:sec23}
+
+\subsection{The identity}
+
+For the normalised decoder, $H(t,S_t,h_t;T,K)=S_t\cdot c(h_t;T-t,K/S_t)$.
+Dividing $\E_\Q[H(t+\Delta,Z_{\text{next}};T,K)\mid Z_t]=H(t,Z_t;T,K)$ by $S_t$
+and writing $R=S_{t+\Delta}/S_t$ gives, in normalised units,
+\[
+\E_\Q\bigl[R\cdot c(h_{\text{next}};T-t-\Delta,K/(S_tR))\bigr]=c(h_t;T-t,K/S_t).
+\]
+This is \emph{exactly} what \texttt{hjm\_roll\_residuals} computes pathwise --
+confirmed by direct derivation from the identity above, not by trusting the
+existing docstring: for a non-front model-expiry slab $m\geq2$ the tower rolls
+one week, so the $(t,K)$ contract at index $m$ becomes the $(t+\Delta,K)$
+contract at index $m-1$ next week, giving
+\texttt{R*c\_next[m-1](k/R) - c\_current[m](k)}; at the front expiry
+($m=1$) the correct terminal payoff \texttt{relu(R-k)} replaces
+\texttt{c\_next[0]}. FLEX is a discrete-time simulator by construction, so
+this discrete identity \emph{is} the operative pricing restriction, not a
+discretisation of a separate continuous-time one.
+
+\textbf{Scope}: only a declared finite protected book (3 model expiries
+$\times$ 5 strikes $=15$ contracts) is tested below -- concept (a) of the
+assignment. No claim is made, or should be inferred, about the entire smooth
+surface (concept (b)).
+
+\subsection{Tested, well-powered, on synthetic-but-structurally-valid data}
+
+\begin{center}
+\begin{tabular}{p{0.42\textwidth}rl}
+\toprule
+Law & $\max|t\text{-stat}|$ & mean $|$residual$|$ by expiry \\
+\midrule
+Raw fitted P (AR(1), untouched) & \textbf{16.9} & $[0.00056,\,0.0052,\,0.0067]$ \\
+Trained target-measure kernel (600 ep., converged) & \textbf{8.9} & $[0.00045,\,0.0043,\,0.0053]$ \\
+\bottomrule
+\end{tabular}
+\par\vspace{2pt}\noindent\footnotesize 15 contracts (3 expiries $\times$ 5 strikes), 100{,}000 paths, one weekly step.
+\end{center}
+
+The raw P law decisively fails martingality -- consistent with, and now
+numerically verified rather than merely asserted by, the codebase's own
+\texttt{hjm\_roll\_moment\_loss} docstring (``Phase 3 does not claim that its
+historical identity measure already satisfies risk-neutral HJM
+conditions''). The existing trained target-measure kernel, trained to loss
+convergence, \emph{reduces but does not eliminate} the residual.
+
+\subsection{Drift feasibility: rank, conditioning, residual}
+
+Linearised discrete-time analogue of the continuous-time tangent-space
+feasibility test used throughout this research programme: does an additive
+mean-shift $\mu\in\R^{8}$ (state dimension) to the P-law's next-period state
+cancel the mean roll residual across all 15 tested contracts simultaneously,
+to first order? Jacobian computed via autograd at $\mu=0$ (60{,}000-path
+Monte Carlo mean):
+\[
+\text{residual\_dim}=15,\quad \text{mu\_dim}=8,\quad
+\boxed{\text{rank}=6},\quad \text{cond}=\infty,\quad
+\boxed{\text{reduction fraction}=0.691}.
+\]
+The Jacobian is \textbf{rank-deficient} (the longest-dated expiry block's 2
+coordinates have exactly zero first-order effect on the tested residual
+within one week -- confirmed directly: the corresponding two components of
+the least-squares solution are exactly $0$, not merely small), and even
+restricted to its own 6-dimensional reachable subspace, an additive mean-shift
+cannot fully cancel a 15-dimensional residual target ($69\%$ reduction, not
+$100\%$).
+
+\textbf{This is not evidence that no richer family can work} -- a full
+covariance tilt, a larger instrument set, or a structural product
+construction (Route~B in the sense of this research programme's other
+notes) are untested here -- it is precise evidence that \emph{this specific,
+simple linear-in-mean family} is insufficient, reported as such rather than
+rounded to a verdict either way, mirroring the family-by-family honesty
+standard used throughout this research programme's other existence
+certifications.
+
+\subsection{Answering ``does the existing decoder admit the required \texorpdfstring{$\Q$}{Q}-dynamics''}
+
+Not established by either family tested here (the existing trained
+target-measure kernel, or a first-order additive mean-shift). Sec.~\ref{sec:sec5}
+proceeds with the CRC sequence regardless: its own step (E), the constrained
+inverse under exact price preservation, is a different, more tractable
+object than a global dynamic no-arbitrage guarantee, and is the concrete
+engineering gap the audit identified.

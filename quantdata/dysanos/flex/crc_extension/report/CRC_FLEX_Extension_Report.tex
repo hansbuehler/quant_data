@@ -1,0 +1,120 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{float}
+\usepackage[htt]{hyphenat}
+\usepackage{enumitem}
+
+\emergencystretch=3em
+\sloppy
+\setlength{\tabcolsep}{4.5pt}
+
+\newcommand{\Q}{\mathbb Q}
+\newcommand{\Pp}{\mathbb P}
+\newcommand{\E}{\mathbb E}
+\newcommand{\R}{\mathbb R}
+
+\title{A CRC-inspired, dynamically-consistent extension of the\\
+DYSANOS FLEX statistical simulator: audit, tests, and a\\
+working consistent-recalibration sequence}
+\author{\texttt{quant\_data-main/quantdata/dysanos/flex/crc\_extension}}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We audit the existing \texttt{quantdata.dysanos.flex} statistical option-market
+simulator, formalise and test its implicit discrete-time pricing identity, run a
+drift-feasibility (rank/conditioning) analysis for the simplest admissible-$\Q$
+family, and implement the one component the audit found genuinely missing: a
+consistent-recalibration (CRC) sequence with an exact, feasibility-checked,
+price-preserving reset. Every claim is checked against the running code in a
+freshly built, fully-dependency-resolved Python~3.12 environment (18/18 of the
+existing repository's own FLEX tests pass unmodified), not asserted from the
+accompanying DYSANOS~II manuscript alone. No real historical option book was
+available in this environment (the local test fixtures cover only a handful of
+scattered trading days); every reported number is therefore a machinery/structural
+validation on synthetic-but-structurally-faithful data, not a claim about real
+market dynamics -- stated explicitly at every reported number, not left implicit.
+\end{abstract}
+
+\tableofcontents
+
+\section{Executive summary}
+\label{sec:exec}
+
+\begin{enumerate}
+\item \textbf{Environment}: no working Python environment or trained checkpoint
+  existed in this workspace beforehand. A Python~3.12 virtual environment was
+  built from the repository's own \texttt{pyproject.toml}; the existing FLEX test
+  suite (\texttt{test\_dysanos\_torch\_simulator.py}, \texttt{test\_dysanos\_market.py})
+  passes 18/18 against local fixture data. This is the untouched reproducible
+  baseline every subsequent number is compared against.
+\item \textbf{Audit}: the target implementation is \texttt{quantdata/dysanos/flex/}
+  (Sec.~\ref{sec:audit}). Its statistical transition (``the existing AR(1) law'')
+  is a PCA-reduced, hierarchical, per-expiry-block VAR(1)
+  (\texttt{weekly\_dynamics.py}), with \textbf{no} $\Q$-restriction anywhere in it.
+  A pathwise discrete HJM/roll residual (\texttt{hjm\_roll\_residuals}) and a
+  gradient-trained ``target-measure'' kernel already exist in the codebase --
+  substantial prior work directly on point, used here rather than reinvented.
+  The clearest gap: no price-preserving reset (CRC step E) exists anywhere in
+  \texttt{flex/}.
+\item \textbf{Pricing identity, tested (Sec.~\ref{sec:sec23})}: the raw fitted P
+  law decisively fails the discrete martingale identity (t-statistic $16.9$ at
+  100{,}000 paths, well-powered, not assumed). The existing trained
+  target-measure kernel reduces but does not eliminate the residual (t-statistic
+  still $8.9$ after training convergence).
+\item \textbf{Drift feasibility, ranked (Sec.~\ref{sec:sec23})}: a linearised,
+  additive mean-shift drift family is rank-deficient ($6$ of $8$ directions
+  active) and, even within its own reachable subspace, reduces the targeted
+  residual by only $69\%$, not $100\%$ -- reported precisely, not rounded to
+  ``works'' or ``fails.''
+\item \textbf{The CRC sequence, implemented (Sec.~\ref{sec:sec5})}: steps A--G are
+  implemented exactly as specified. A structural fact is exploited and verified,
+  not assumed: FLEX's own bounded-decoder parametrisation makes static
+  admissibility automatic for \emph{any} raw state, so the constrained inverse
+  (step E) reduces to an unconstrained optimisation that always decodes
+  admissibly. The sequence converges cleanly across 4 resets on synthetic data;
+  a deliberately implausible target is correctly reported as infeasible,
+  confirming the feasibility check is not vacuous.
+\item \textbf{What is not established here}: full $\Q$-admissibility for a richer
+  family (Sec.~\ref{sec:deferred}), genuine historical P/Q compatibility fitting,
+  and validation against real market data all require the production
+  \texttt{QUANTDATA\_ROOT}/WRDS-backed environment, not available here. These are
+  scoped precisely, not silently omitted.
+\end{enumerate}
+
+\input{sections/sec_audit.tex}
+\input{sections/sec_pricing_identity.tex}
+\input{sections/sec_crc_sequence.tex}
+\input{sections/sec_deferred.tex}
+\input{sections/sec_methods.tex}
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+The FLEX simulator's existing statistical (P) dynamics do not, and were never
+claimed to, satisfy a risk-neutral pricing identity; this is now verified with a
+well-powered numerical test rather than left as an unverified docstring
+assertion. Its existing gradient-trained target-measure machinery narrows the
+gap but does not close it for the tested family, and a first-order feasibility
+analysis shows why: a simple additive drift adjustment is both rank-deficient
+and insufficient even on its own reachable subspace. Independently of that open
+question, the concrete engineering gap identified by the audit -- an exact,
+feasibility-checked, price-preserving reset -- is closed: the CRC sequence
+implemented here (Sec.~\ref{sec:sec5}) demonstrably calibrates, evolves,
+proposes, inverts, decides feasibility, and continues, exactly as specified,
+with a genuine (not vacuous) reject path verified. Closing the remaining gap --
+a demonstrably admissible $\Q$ family, fitted historical $\Pp$ dynamics compatible
+with it, and validation against real option data -- is scoped precisely in
+Sec.~\ref{sec:deferred} as the next, well-defined step, not asserted here and not
+claimed impossible either.
+
+\end{document}

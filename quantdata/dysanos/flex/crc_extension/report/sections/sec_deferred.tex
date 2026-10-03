@@ -1,0 +1,56 @@
+\section{What is deferred, and why -- precisely scoped}
+\label{sec:deferred}
+
+\subsection{Data honesty, stated once more explicitly}
+
+This environment's local \texttt{QUANTDATA\_TEST\_MODE=1} fixture data
+(\texttt{tests/stored\_data/}) covers only a handful of scattered single
+trading days per identifier (2005, 2010--2011, 2024, early 2025) -- not a
+continuous multi-year weekly series. The original assignment's own train/
+validation split (2022--2024 / 2025) requires the production
+\texttt{QUANTDATA\_ROOT}/WRDS-backed history, which was not configured here.
+Every number in Secs.~\ref{sec:sec23}--\ref{sec:sec5} therefore validates
+\emph{machinery} (does the pricing identity hold, is the drift feasible, does
+the reset converge and correctly detect infeasibility) on synthetic-but-
+structurally-faithful data -- the same standard the repository's own unit
+tests already use -- not real market performance.
+
+\subsection{Not attempted here, and what would be required}
+
+\begin{itemize}[leftmargin=1.4em]
+\item \textbf{A demonstrably admissible $\Q$ family for FLEX.}
+  Sec.~\ref{sec:sec23} rules out (for the tested instrument set) two
+  specific families -- the existing trained target-measure kernel and a
+  first-order additive mean-shift -- without ruling out richer ones (a full
+  covariance tilt with a larger instrument set; an independent-product
+  construction with a genuine conditional pricing kernel for a stochastic-
+  volatility $Y$, per this research programme's other notes; a structural
+  regridding of the smoothing/anchor coordinates themselves). Establishing
+  or ruling out a richer family is the natural next step and was out of
+  reach within this engagement's time budget once the audit, the pricing-
+  identity formalisation, the feasibility ranking, and the CRC sequence were
+  each done properly rather than superficially.
+\item \textbf{Fitted, compatible $\Pp$ dynamics via risk premia}
+  ($b_\Pp=b_\Q+\Sigma\lambda$, or a discrete positive-tilt kernel with valid
+  density ratios). This presupposes an admissible $\Q$ family to tilt away
+  from, which is not yet established (above); attempting it before that
+  would risk exactly the error the assignment warns against -- reporting
+  joint estimation as though it were CRC.
+\item \textbf{Historical performance validation} (chronological train/
+  validation split, quote fit, transition likelihood, covariance/
+  autocorrelation/tail diagnostics, spot--surface dependence, OCE/hedging
+  diagnostics) against real option data. Requires the production data
+  environment.
+\item \textbf{Reading the existing \texttt{run\_*\_q\_existence.py} result
+  artefacts.} Their training-cache outputs are not present in this checkout.
+  Flagged explicitly in the audit (Sec.~\ref{sec:audit}) rather than silently
+  bypassed; reading them before extending the $\Q$-family search further is
+  the responsible next step, per the assignment's own instruction not to
+  silently duplicate or contradict unread prior work.
+\end{itemize}
+
+This is not reported as a universal impossibility result for any of the above
+-- consistent with the assignment's own explicit instruction not to turn the
+failure of one parametrisation, or the absence of one numerical search, into
+such a claim. Each item above is a well-defined, scoped next step, not an
+open-ended one.

@@ -1,0 +1,87 @@
+\section{Audit of the existing implementation}
+\label{sec:audit}
+
+\subsection{Target identified, and why}
+
+\texttt{quantdata/dysanos/} contains several largely independent DYSANOS
+subsystems: \texttt{flex/}, \texttt{grid/gendysanos}, \texttt{grid/rndysanos},
+\texttt{implied/}, \texttt{localvolbysanos/}, \texttt{tangent\_levy/}. This
+report targets \texttt{flex/}, the only subsystem whose language (``AR(1)'',
+weekly, joint DLV+grid+smoothing+dynamics estimation) matches the assignment's
+description exactly, and the only one with an explicit, already-present
+pathwise HJM/roll-residual diagnostic directly on point for the pricing
+identity (Sec.~\ref{sec:sec23}). No trained checkpoint exists in this
+repository checkout; numbers below fit fresh against local fixture/synthetic
+data, stated as such throughout.
+
+\subsection{Latent state and decoder}
+
+\texttt{bound\_native\_raw} maps an unconstrained raw torch tensor to
+\texttt{NativeParameters(dlvsqs, forward\_vols, eta)}: \texttt{dlvsqs}
+$(T{\times}N)$ bounded to $[0.01^2,3.0^2]$, \texttt{forward\_vols} $(T,)$
+bounded to $[0.01,1.0]$, \texttt{eta} (fixed or bounded $[0.01,0.50]$) via
+sigmoid/interval transforms. \texttt{FlexSanosDecoder} then runs the
+Wissel/Magnus finite-grid recursion directly on \texttt{dlvsqs} (confirmed
+from the weight construction \texttt{w\_plus}/\texttt{w\_minus}, not assumed
+from naming).
+
+\subsection{Two term structures, and the variance/std convention}
+
+\textbf{Grid geometry} (\texttt{num\_inner\_strikes}, \texttt{nms\_range},
+\texttt{num\_model\_expiries}, the calendar roll schedule) is fixed per run.
+\textbf{Smoothing} (\texttt{eta}, \texttt{forward\_vols}) is, materially,
+\emph{part of the fitted state} -- \texttt{forward\_vols} is jointly
+estimated, not a fixed side channel. Traced directly through
+\texttt{price\_first\_expiry\_calls\_from\_parameters} $\to$
+\texttt{\_black\_call}: the kernel dispersion is
+\texttt{forward\_vol*eta*sqrt(dt)}, passed to the argument literally named
+\texttt{sqrt\_variance} and used directly (not squared) in $d_1$ -- a standard
+deviation, with \texttt{eta} itself a \emph{dimensionless multiplier} on
+\texttt{forward\_vol}, not a standard deviation on its own. This differs
+materially from other SANOS conventions in this research programme (where
+$\eta$ \emph{is} the smoothing standard deviation directly) and must be
+preserved exactly when porting any restriction between them.
+
+\subsection{Statistical transition, front-expiry law, roll conventions}
+
+\texttt{weekly\_dynamics.py}: a PCA-reduced, per-expiry-block, hierarchical
+VAR(1) (\texttt{HierarchicalBlockFit(intercept, own\_lag, previous\_lag)}) at
+a fixed 5-business-day stride, ridge-regularised, with a joint innovation
+covariance and a spot process that loads on the surface innovation via
+\texttt{weekly\_spot\_front\_beta} plus an orthogonal residual. A
+continuous-time generator $K=-\log(A)/\Delta t$ is computed and \emph{gated}
+(condition-number ceiling, exponential round-trip check) -- a P-side
+stability diagnostic only; $\Q$ does not appear anywhere in this file.
+\texttt{fixed\_expiry\_ar1.py}/\texttt{last\_expiry\_ar1.py} handle the DLV
+tower's calendar-exact roll; the front-expiry settlement payoff used in the
+codebase's own audit is the ordinary intrinsic value
+(\texttt{relu(R-k)}), not a grid-pinned substitute.
+
+\subsection{Existing pricing-drift infrastructure (the central prior-work finding)}
+
+\texttt{WeeklySanosSimulator.hjm\_roll\_residuals} already computes, pathwise,
+exactly the discrete martingale/roll residual Sec.~\ref{sec:sec23} formalises
+and tests: \texttt{R*c\_next[m-1](k/R) - c\_current[m](k)} for non-front
+expiries, with the correct terminal payoff at the front. Its only caller,
+\texttt{weekly\_measure\_training.py}, already implements a sequential-Monte-
+Carlo/gradient-based fit of a ``target-measure'' kernel
+(\texttt{NormalWeeklyMeasureKernel}/\texttt{GenericWeeklyMeasureKernel}) via
+\texttt{hjm\_roll\_moment\_loss} with instrumented conditioning -- a
+substantial prior attempt at $\Pp\to\Q$ construction, used directly in
+Sec.~\ref{sec:sec23} rather than reinvented. A family of
+\texttt{run\_*\_q\_existence.py} scripts investigates the same admissibility
+question via Wasserstein-2 roll conditions against real historical fits; their
+result artefacts live in a training cache not present in this checkout and
+were not read here -- flagged explicitly rather than silently worked around.
+
+\textbf{The clearest gap}: no price-preserving reset (an exact constrained
+inverse under admissibility constraints, CRC step E) exists anywhere in
+\texttt{flex/}. This is what Sec.~\ref{sec:sec5} builds.
+
+\subsection{Reproducible baseline}
+
+Python~3.12, fresh \texttt{.venv312} built from \texttt{pyproject.toml},
+\texttt{QUANTDATA\_TEST\_MODE=1}: \texttt{pytest
+tests/test\_dysanos\_torch\_simulator.py tests/test\_dysanos\_market.py} --
+\textbf{18/18 pass}. No file outside \texttt{flex/crc\_extension/} was
+modified.

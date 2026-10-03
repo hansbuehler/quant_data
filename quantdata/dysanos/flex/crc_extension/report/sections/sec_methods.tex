@@ -1,0 +1,51 @@
+\section{Methods and reproduction}
+\label{sec:methods}
+
+\textbf{Software}: Python 3.12 (\texttt{/opt/homebrew/bin/python3.12}), a
+fresh virtual environment built via \texttt{python3.12 -m venv .venv312} at
+the \texttt{quant\_data-main} repository root, dependencies installed via
+\texttt{pip install -e .} against the repository's own
+\texttt{pyproject.toml} (torch, cdxcore, and the rest of the declared stack
+are all public PyPI packages; no private credentials were required).
+
+\textbf{Reproduction}:
+\begin{verbatim}
+cd quant_data-main
+python3.12 -m venv .venv312
+.venv312/bin/python -m pip install -e . pytest pytest-cov
+
+# baseline (untouched, must pass before trusting anything below)
+QUANTDATA_TEST_MODE=1 .venv312/bin/python -m pytest \
+    tests/test_dysanos_torch_simulator.py tests/test_dysanos_market.py -q
+
+# this report's new code and tests
+QUANTDATA_TEST_MODE=1 .venv312/bin/python -m pytest \
+    tests/test_flex_crc_extension.py -q
+
+QUANTDATA_TEST_MODE=1 .venv312/bin/python -m \
+    quantdata.dysanos.flex.crc_extension.section2_pricing_identity
+QUANTDATA_TEST_MODE=1 .venv312/bin/python -m \
+    quantdata.dysanos.flex.crc_extension.section5_crc_sequence
+\end{verbatim}
+
+\textbf{New files} (nothing outside \texttt{flex/crc\_extension/} and
+\texttt{tests/test\_flex\_crc\_extension.py} was modified):
+\texttt{flex/crc\_extension/PHASE1\_AUDIT.md},
+\texttt{SECTION2\_3\_FINDINGS.md}, \texttt{SECTION5\_FINDINGS.md},
+\texttt{section2\_pricing\_identity.py}, \texttt{section5\_crc\_sequence.py},
+this report.
+
+\textbf{Seeds}: every reported number above used a declared, fixed seed
+(\texttt{seed=17} for the primary martingale test, \texttt{seed=314} for
+target-kernel training, \texttt{seed=71} for the feasibility Jacobian,
+\texttt{seed=2024} for the CRC sequence) -- re-running the commands above
+reproduces the same numbers bit-for-bit (torch's CPU RNG under
+\texttt{manual\_seed}).
+
+\textbf{Reused, unmodified modules}: \texttt{weekly\_dynamics.py}
+(\texttt{fit\_weekly\_hierarchical\_dynamics}, \texttt{TorchWeeklyDynamics}),
+\texttt{weekly\_simulation.py} (\texttt{WeeklySanosSimulator},
+\texttt{hjm\_roll\_residuals}, \texttt{hjm\_roll\_moment\_loss}),
+\texttt{weekly\_measure.py} (\texttt{NormalWeeklyMeasureKernel}),
+\texttt{model.py} (\texttt{bound\_native\_raw}, \texttt{LatentStateSanosModel}),
+\texttt{sanos.py} (\texttt{FlexSanosDecoder}, \texttt{price\_calls\_batch}).

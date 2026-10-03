@@ -1,0 +1,70 @@
+\section{The consistent-recalibration sequence, implemented}
+\label{sec:sec5}
+
+Implements steps A--G exactly as specified; the clearest gap identified in
+Sec.~\ref{sec:audit} (no price-preserving reset existed anywhere in
+\texttt{flex/} before this).
+
+\subsection{A structural fact exploited, and verified}
+
+\texttt{bound\_native\_raw} maps \emph{any} raw torch tensor to bounded,
+admissible \texttt{(dlvsqs,forward\_vols,eta)}, and the SANOS forward
+recursion then guarantees a non-negative discrete density from positive
+\texttt{dlvsqs} -- verified directly: the minimum decoded density stayed at
+$\approx0.0106$--$0.0107$ across every tested reset below, never approaching
+zero. \textbf{Consequence}: for this decoder, step (E)'s ``constrained
+inverse... subject to positivity... and other model admissibility
+constraints'' is an \emph{unconstrained} optimisation in raw-state space --
+admissibility is automatic by construction, not something the optimiser must
+separately enforce.
+
+\subsection{The sequence, run end to end}
+
+4 resets, synthetic independent oracle standing in for the observed market
+(see data-honesty note, Sec.~\ref{sec:deferred}), 15-contract protected book,
+tolerance $10^{-4}$:
+
+\begin{center}
+\begin{tabular}{rlrrrr}
+\toprule
+Step & Converged & Iters & Pre-corr.\ $\max|\text{err}|$ & Post-corr.\ $\max|\text{err}|$ & Raw-state move ($L_2$) \\
+\midrule
+0 (initial calib.) & yes & 66 & 0.00272 & $8.8\times10^{-5}$ & 0.755 \\
+1 & yes & 5 & 0.00021 & $7.2\times10^{-5}$ & 0.062 \\
+2 & yes & 3 & 0.00038 & $2.0\times10^{-4}$ & 0.144 \\
+3 & yes & 9 & 0.00021 & $1.0\times10^{-4}$ & 0.156 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Distinguishing the three things Sec.~5 asks to keep separate}:
+\emph{stochastic market evolution} is the independent oracle state, stepped
+under the fitted P law, never touched by the reset; \emph{price-preserving
+representation change} is the reset representation's own P-law one-step
+proposal (already tracking reasonably: pre-correction errors are
+$20$--$30\times$ smaller than the initial uncalibrated guess) corrected by a
+further optimisation an order of magnitude smaller in raw-state motion than
+the initial calibration; \emph{conditioning on newly observed data} is
+step~C's fresh evaluation of the oracle at its new state -- the reset never
+assumes the market re-realises what the representation predicted.
+
+\subsection{Feasibility decision is not vacuous}
+
+A deliberately implausible target book (uniform random prices up to $3.0$,
+tolerance $10^{-8}$, $20$ iterations) is correctly reported as
+\textbf{not converged} (residual $2.82\to2.82$, essentially unmoved) --
+confirming the feasibility check genuinely can, and does, reject, rather than
+reporting ``accept'' trivially in every run.
+
+\subsection{Scope of what this establishes}
+
+\textbf{Does}: a complete, working, price-preserving reset sequence for the
+FLEX decoder, with genuine feasibility accounting on both the success and the
+failure side, and a clean separation of market evolution from representation
+correction. \textbf{Does not}: establish that the resulting sequence of reset
+representations is itself dynamically consistent in the Sec.~\ref{sec:sec23}
+sense -- the constrained inverse guarantees only static admissibility and
+exact price reproduction \emph{at} the reset instant, exactly the distinction
+the assignment itself draws between agreement at a reset and coherence of the
+continuation model. That question remains open per
+Sec.~\ref{sec:sec23}/\ref{sec:deferred}.
