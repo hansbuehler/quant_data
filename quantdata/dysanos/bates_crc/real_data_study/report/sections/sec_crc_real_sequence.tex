@@ -1,0 +1,94 @@
+\section{A mechanical CRC-routine check on the real 6-date parameter path}
+\label{sec:crc-real-sequence}
+
+Beyond the static, per-day comparison above, a narrower, purely
+CONSTRUCTIVE question was checked directly on real numbers -- not a
+statistical estimation, so it needs no forecasting power to be meaningful:
+chaining the 6 real SPX dates' already-calibrated DLV$\times$Bates
+backgrounds chronologically, does the REALISED change in $\theta$ and jump
+parameters from one date to the next fall inside the reserve-CRC's
+admissible ("permissible drift") region, and does \texttt{apply\_reset}
+preserve protected-option prices exactly on these real numbers? Code:
+\texttt{real\_data\_study/crc\_real\_sequence.py} (5/5 tests passing).
+
+\paragraph{Within the standard region, 0 of 5 real transitions are
+admissible.} Using the same conventions as the reserve-sweep study
+($\pm0.03$ theta band, $1.5\times$-widened jump box): three transitions
+fail because the realised $\theta$ move is 1.7--3.3$\times$ too large for
+the declared band (all involve multi-year gaps); two fail because the
+TARGET date's own jump-parameter calibration landed exactly on an
+optimizer bound ($\lambda_J=5.0$ on 2024-03-05 and 2024-12-26;
+$m_J=-0.4999$ on 2025-01-03) -- itself a flag that those specific fits are
+poorly identified, not simply "large."
+
+\paragraph{The mechanism is verified exactly correct on real numbers.} A
+separate sensitivity pass widens each transition's region just enough to
+admit the realised move (not a claim that this wider region is reasonable
+-- a mechanism check only). Result: \texttt{apply\_reset} used the exact
+realised $\Delta\theta$ with zero projection in every case, and protected-
+option prices matched exactly (to floating-point zero) before vs.\ after
+the reset on 4 of 5 transitions (Table~\ref{tab:crc-real-sequence}). The
+5th hit a genuine numerical wall: admitting the bound-hitting $m_J=-0.4999$
+forces a dominating envelope with $\delta_J\approx1.65$ (jump log-returns
+with $\sim$165\% std), which overflows the Carr--Madan damped-contour
+Fourier pricer at every quadrature setting tested -- a real fragility of
+that pricing method for extremely wide envelopes, reported explicitly
+rather than silently producing NaN.
+
+\begin{table}[H]
+\centering
+\small
+\input{data/crc_real_sequence_table.tex}
+\caption{The 5 real chronological transitions: realised move, admissibility
+under the standard region, and the forced-admissible mechanism check.}
+\label{tab:crc-real-sequence}
+\end{table}
+
+\subsection{More data is needed for this to become a genuine historical-dynamics result}
+\label{sec:more-data-needed}
+
+This check is deliberately mechanical, not statistical, and that is both
+its strength and its limit. It required no forecasting power to be
+informative -- but it also cannot, by itself, establish whether a
+\emph{properly fitted} physical law and reset-proposal policy would track
+real SPX dynamics well, because:
+
+\begin{itemize}
+\item \textbf{The theta-band failures look like a time-spacing artefact,
+  fixable by denser data.} The shortest real gap available (2024-12-26 to
+  2025-01-03, $\sim$1 week) produced by far the smallest realised
+  $\Delta\theta$ ($-0.0023$, comfortably inside the band on its own),
+  consistent with $\theta$ moving roughly in proportion to elapsed time.
+  Weekly or monthly real data would very plausibly bring most transitions
+  inside a modestly-sized band.
+\item \textbf{The jump-box failures are NOT primarily a spacing issue.}
+  All three bound-hitting calibrations (2024-03-05, 2024-12-26,
+  2025-01-03) are exactly the dense, modern dates where
+  Sec.~\ref{sec:main-comparison} already found DLV$\times$Bates fit quality
+  collapsing (13--27\% inside bid-ask) -- the same underlying model-
+  capacity problem surfacing twice. Sampling MORE modern dates would
+  likely surface more of the same degenerate fits, not fewer. Fixing this
+  needs model/calibration changes (looser or better-justified bounds, more
+  model flexibility, or a joint/warm-started sequential fit across the
+  path instead of independent day-by-day re-calibration), not denser
+  sampling alone.
+\end{itemize}
+
+\textbf{This environment has only 6 real, non-adjacent option-quote dates}
+(2005--2025, gaps from 7 days to 13 years; see
+DATA\_PROVENANCE.md). That is enough for the cross-sectional comparison
+above and for the mechanical check in this section, but not enough to fit
+or validate a genuine historical transition law, physical risk premia, or
+an OCE/hedging challenger test with any statistical power -- at most one
+real training transition and one held-out forecast point exist in the
+closest-spaced real subsequence. A full historical-dynamics estimation
+(latent-state filtering, an explicit $P$/$Q$ relation with
+$b^P-b^Q=\Sigma\lambda$, admissible $\theta$-reset proposal dynamics fit
+jointly across the path, chronological train/validation/held-out testing,
+and held-out OCE/hedging tests) is specified and ready to run as soon as a
+denser real series is available -- see
+\texttt{real\_data\_study/HISTORICAL\_SIMULATOR\_READY\_PROMPT.md} for the
+exact task specification to resume verbatim, and
+\texttt{DATA\_PROVENANCE.md}/\texttt{DATA\_STATUS.md} for exactly what
+data access (WRDS credentials or a denser pre-populated
+\texttt{QUANTDATA\_ROOT}) would unblock it.

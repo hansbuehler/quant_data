@@ -22,8 +22,12 @@ Node-count sensitivity ($N\in\{5,7,9\}$) &
   \textbf{Verified: negligible effect} & Run on 2011-07-07: $92.2\%/18.8$bp, $94.1\%/18.7$bp, $92.2\%/19.2$bp inside bid-ask / median IV err for $N{=}5,7,9$ -- statistically indistinguishable, consistent with the chain component being nearly redundant for this variant (Sec.~\ref{sec:selection-diagnostics}, finding 3). \\
 AAPL results &
   \textbf{Secondary only} & Held-out dates only, single-name book, smaller sample; not part of the primary SPX comparison. \\
-Full multi-year historical dynamics, transition likelihood &
-  \textbf{Out of scope} & Requires a continuous WRDS/Massive series, unavailable in this environment (unchanged from the prior task's \texttt{DATA\_STATUS.md}). \\
+CRC reset mechanism correctness on real parameter values &
+  \textbf{Verified exactly} & Forced-admissible sensitivity pass: zero projection, exact (0.0) protected-option price preservation on 4/5 real transitions; 5th hits a reported numerical limit, not a bug (Sec.~\ref{sec:crc-real-sequence}). \\
+Real historical transitions admissible in a realistic drift region &
+  \textbf{Refuted: 0 of 5} & 3/5 blocked by theta-band size (plausibly fixable with denser data); 2/5 blocked by bound-hitting jump calibrations on the same dense-modern dates already found to fit poorly -- not fixable by denser sampling alone (Sec.~\ref{sec:more-data-needed}). \\
+Full multi-year historical dynamics, transition likelihood, physical risk premia &
+  \textbf{Out of scope, blocking requirement identified precisely} & Requires a continuous, chronologically regular WRDS/Massive series, unavailable in this environment. Exact resumption task specified in \texttt{HISTORICAL\_SIMULATOR\_READY\_PROMPT.md}, ready to paste in as soon as such data is available. \\
 \bottomrule
 \end{tabular}
 \caption{Analytical guarantees vs.\ numerical findings vs.\ open/limited scope.}
@@ -70,3 +74,21 @@ SPX book well -- and turning on a useful CRC reserve is a materially
 expensive, only-partially-recoverable regime change, not a free source of
 scenario diversity. Both are honest, load-bearing findings this task asked
 for, not shortcomings of the pipeline that built them.
+
+\paragraph{The next bottleneck is data, not methodology, and it is precisely
+characterised.} The CRC reset mechanism itself is exactly correct on real
+calibrated numbers (Sec.~\ref{sec:crc-real-sequence}) -- the open question
+is not "does the construction work" but "is the available real option
+history dense and regular enough to fit and validate it as a historical
+simulator." This environment's 6 non-adjacent real dates answer that
+question precisely: no. Denser (weekly-or-better) real data would likely
+resolve the theta-band admissibility failures directly; it would NOT by
+itself resolve the jump-parameter identifiability failures, which trace to
+the same modern-book model-capacity gap documented above. A full historical-
+dynamics estimation (latent-state filtering, an explicit $P$/$Q$ relation,
+admissible $\theta$-reset proposal dynamics fit jointly across the path,
+chronological train/validation/held-out testing, held-out OCE/hedging
+tests) is specified in full and ready to resume verbatim --
+\texttt{real\_data\_study/HISTORICAL\_SIMULATOR\_READY\_PROMPT.md} -- as
+soon as either live WRDS access or a denser pre-populated
+\texttt{QUANTDATA\_ROOT} becomes available.

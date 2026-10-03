@@ -47,7 +47,14 @@ existence of an admissible parameter range, and turns out to be large: a
 195--276\% average price shift and a collapse to 0\% bid-ask coverage upon
 turning on even a modest reserve budget, of which recalibration recovers
 most but not all on two of three tested dates, and fails to converge at
-all on the third -- a genuine solver failure, reported as such.
+all on the third -- a genuine solver failure, reported as such. A final,
+purely mechanical check chains the 6 real dates' calibrated backgrounds
+chronologically and finds the reset mechanism exactly correct on real
+numbers, but 0 of 5 real historical transitions admissible within a
+realistic drift region -- pinpointing \textbf{more and more chronologically
+regular real data} as the single largest limitation on everything in this
+report beyond the static per-day comparison, with the exact next task
+specified and ready to resume once such data is available.
 \end{abstract}
 
 \tableofcontents
@@ -81,12 +88,22 @@ all on the third -- a genuine solver failure, reported as such.
   fails to converge at all on the third (Sec.~\ref{sec:reserve-tradeoff}) --
   exactly the kind of result the task's warning against equating
   "admissible" with "small" is meant to surface.
+\item \textbf{A mechanical check of the CRC reset routine on the real
+  6-date parameter path} (Sec.~\ref{sec:crc-real-sequence}) confirms the
+  reset mechanism itself is exactly correct on real numbers, but finds
+  0 of 5 real historical transitions admissible within a realistic
+  drift region -- and identifies precisely which failure mode (band size
+  vs.\ jump-parameter identifiability) denser real data would and would
+  not fix. \textbf{More, and more chronologically regular, real data is
+  the single largest limitation on everything in this report beyond the
+  static per-day comparison} -- see Sec.~\ref{sec:more-data-needed}.
 \end{enumerate}
 
 \input{sections/sec_data.tex}
 \input{sections/sec_models.tex}
 \input{sections/sec_main_comparison.tex}
 \input{sections/sec_reserve_tradeoff.tex}
+\input{sections/sec_crc_real_sequence.tex}
 \input{sections/sec_outputs.tex}
 
 \end{document}

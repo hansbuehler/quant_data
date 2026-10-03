@@ -1,0 +1,15 @@
+\begin{tabular}{llrrll}
+\toprule
+Transition & Gap & $\Delta\theta$ & $\theta$-widen$^\dagger$ & Blocked by (standard region) & Protected-price diff$^\ddagger$ \\
+\midrule
+2005-11-21 $\to$ 2010-07-07 & 4.62y & $+0.0988$ & 3.5x & $\theta$ move too large & $0.0$ (n=48) \\
+2010-07-07 $\to$ 2011-07-07 & 1.00y & $-0.0519$ & 1.8x & $\theta$ move too large & $0.0$ (n=57) \\
+2011-07-07 $\to$ 2024-03-05 & 12.66y & $+0.0274$ & 1.0x & jump params (target $\lambda_J$ at bound) & $0.0$ (n=51) \\
+2024-03-05 $\to$ 2024-12-26 & 0.81y & $-0.0589$ & 2.1x & $\theta$ move too large & $0.0$ (n=18) \\
+2024-12-26 $\to$ 2025-01-03 & 0.02y & $-0.0023$ & 0.1x & jump params (target $m_J$ at bound) & numerical failure$^\S$ (n=3) \\
+\bottomrule
+\end{tabular}
+
+\vspace{2mm}
+\footnotesize
+$^\dagger$ Factor by which the $\pm0.03$ theta band would need to widen for admissibility (forced-admissible sensitivity pass; jump-box widening required was $1.0$x the standard $1.5$x factor in every case, i.e.\ no extra widening beyond the construction's own target-containment margin). $^\ddagger$ Maximum absolute price difference on protected contracts (expiry $<$ gap) before vs.\ after \texttt{apply\_reset}, once the region was forced wide enough to admit the realised move -- $0.0$ confirms exact price preservation on real numbers. $^\S$ Carr-Madan Fourier pricing overflowed for every quadrature setting tested; a genuine numerical limit of the dominating-envelope construction when forced to contain an extreme (bound-hitting) target jump mean, not resolved by tuning.
