@@ -1,24 +1,4 @@
 % !TEX root = main.tex
-\section{Introduction}\label{sec:intro}
-
-\HB{
-This article presents an arbitrage-free market model for for smooth surfaces of European option prices.
-
-The core architecture follows the SANOS approach~\cite{SANOS2026} which models the stock price as the product
-of a time-and-state discrete process~$X$ and a smoothing process~$Y$, in our case Black~\&~Scholes.
-The former is used to encode the option market using a discrete form of local volatilities as code book. That does not mean
-that the model is a local volatility model -- we merely use the (discrete) local volatilities as a convenient representation of the option surface.
-Compared to using implied volatilities the advantage is that mere positivity of the local volatilities is sufficient to ensure
-the the option market is free of static arbitrage at all times. We have shown in~\cite{SANOS2026} that this representation
-can be fitted to real life market data very efficiently using linear programming.
-
-In~\cite{DYSANOS2026} we have shown how to estimate the dynamics such (discrete) local volatilities of such a model under the
-statistical measure~$\mathbb{P}$ which fit very well to real-life observed option bid/asks.
-
-The key
-contribution in this paper is showing how to construct a corresponding risk-neutral measure~$\mathbb{Q}$ or, equivalently,
-the risk-neutral drift of the model. Our approach is closely related to the seminal but unpublished work~\cite{Wissel2007}.
-}
 
 An option market model reverses the usual direction of construction: instead of
 specifying a process for the underlying and deriving option prices from it, one
