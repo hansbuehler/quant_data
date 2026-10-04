@@ -11,9 +11,6 @@
 
 - Use the existing ``~/vqdata`` repository on Linux and the conda ``%VENV%\vqdata`` environment on Windows.
 - We have a linux box "aestas" and a Windows box "sommer" with WSL.
-- The linux ``~/python/`` directory on both the linux box and under WSL is mapped onto the Windows ``%HOME%\OneDrive\Python3`` directory. Contents are the same files. Under WSL the same files
-  are also visible under a separate ``/mnt/c/Users/hans/OneDrive/Python3``.
-
 - Directories: all three are imported with ``-e .``:
   - ``quant_data`` is a git directory.
   - ``quant_data/dysanos`` is a separate git directory.

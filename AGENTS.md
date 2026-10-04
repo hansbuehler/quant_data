@@ -32,13 +32,9 @@ Read and follow `STYLE_GUIDE.md` before making code changes in this repository. 
   checkpoints and status, and immediately raise an alert in the active user
   conversation. Do not restart until safe headroom is restored.
 - Treat Git working trees under ``~/python``, including this repository, as
-  source repositories currently hosted on a OneDrive share, not as data or
-  artifact storage. Regularly inspect repository status, total footprint,
-  untracked files, and unusually large files. Keep only relevant source,
-  configuration, specifications, tests, and deliberately retained small key
-  results in Git roots. Temporary files, generated reports, bulk numerical
-  outputs, datasets, model checkpoints, and other large persistent artifacts
-  belong in the appropriate cache or storage layer outside ``~/python``. Avoid
-  high-churn generated files in the OneDrive tree, and never remove user files
-  merely because they are large without first identifying ownership and
-  obtaining any required approval.
+  source repositories rather than general-purpose data or artifact storage.
+  Regularly inspect repository status, total footprint, untracked files, and
+  unusually large files. Keep only relevant source, configuration,
+  specifications, tests, and deliberately retained project artifacts in Git
+  roots. Never remove user files merely because they are large without first
+  identifying ownership and obtaining any required approval.
