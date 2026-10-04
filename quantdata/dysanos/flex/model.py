@@ -12,6 +12,7 @@ from quantdata.dysanos.flex.config import (
     FixedEtaFlexGeometryConfig,
     FlexGeometryConfig,
     ForwardMuFlexGeometryConfig,
+    FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig,
     JointDirectDynamicsConfig,
     JointHierarchicalDynamicsConfig,
     LatentDecoderConfig,
@@ -33,6 +34,116 @@ class NativeParameters:
     eta: torch.Tensor
 
 
+def split_forward_mu_native_raw(
+    raw: torch.Tensor,
+    *,
+    geometry: ForwardMuFlexGeometryConfig,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Split raw DLV, forward-volatility, and eta coordinates.
+
+    Legacy forward-mu states use one expiry-major ``(N+2)`` block per model
+    expiry.  The front/term geometry instead uses expiry-major ``(N+1)`` core
+    blocks followed by its two eta coordinates.
+    """
+    T = geometry.num_model_expiries
+    N = geometry.num_inner_strikes
+    if raw.shape[-1] != geometry.native_state_size:
+        raise ValueError(
+            "Expected native raw state ending in "
+            f"{geometry.native_state_size}, found {raw.shape}"
+        )
+    if isinstance(
+        geometry,
+        FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig,
+    ):
+        core_stop = T * geometry.core_expiry_block_state_size
+        expiry_blocks = raw[..., :core_stop].reshape(
+            *raw.shape[:-1],
+            T,
+            geometry.core_expiry_block_state_size,
+        )
+        return (
+            expiry_blocks[..., :N],
+            expiry_blocks[..., N],
+            raw[..., core_stop:],
+        )
+    expiry_blocks = raw.reshape(*raw.shape[:-1], T, N + 2)
+    return (
+        expiry_blocks[..., :N],
+        expiry_blocks[..., N],
+        expiry_blocks[..., N + 1],
+    )
+
+
+def pack_forward_mu_native_raw(
+    dlvsq_raw: torch.Tensor,
+    forward_raw: torch.Tensor,
+    eta_raw: torch.Tensor,
+    *,
+    geometry: ForwardMuFlexGeometryConfig,
+) -> torch.Tensor:
+    """Pack raw forward-mu coordinates in the geometry's versioned layout."""
+    T = geometry.num_model_expiries
+    N = geometry.num_inner_strikes
+    if dlvsq_raw.shape[-2:] != (T, N):
+        raise ValueError(f"Expected raw DLV shape ending in {(T, N)}")
+    if forward_raw.shape != dlvsq_raw.shape[:-2] + (T,):
+        raise ValueError("Raw forward-volatility shape does not match DLV shape")
+    if isinstance(
+        geometry,
+        FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig,
+    ):
+        expected_eta_shape = dlvsq_raw.shape[:-2] + (2,)
+        if eta_raw.shape != expected_eta_shape:
+            raise ValueError(
+                f"Expected front/term eta raw shape {expected_eta_shape}, "
+                f"found {eta_raw.shape}"
+            )
+        core = torch.cat((dlvsq_raw, forward_raw.unsqueeze(-1)), dim=-1)
+        return torch.cat((core.flatten(start_dim=-2), eta_raw), dim=-1)
+    expected_eta_shape = dlvsq_raw.shape[:-2] + (T,)
+    if eta_raw.shape != expected_eta_shape:
+        raise ValueError(
+            f"Expected expiry eta raw shape {expected_eta_shape}, found {eta_raw.shape}"
+        )
+    return torch.cat(
+        (dlvsq_raw, forward_raw.unsqueeze(-1), eta_raw.unsqueeze(-1)),
+        dim=-1,
+    ).flatten(start_dim=-2)
+
+
+def front_term_eta_coordinates(
+    eta: torch.Tensor,
+    forward_vols: torch.Tensor,
+    *,
+    geometry: FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig,
+) -> torch.Tensor:
+    """Project expiry eta values onto front and terminal-total-vol scales.
+
+    The later-term coordinate is forward-total-volatility weighted.  It
+    therefore preserves the final backbone total volatility exactly when a
+    legacy expiry-specific eta curve is projected into the two-eta geometry.
+    """
+    T = geometry.num_model_expiries
+    expected_shape = forward_vols.shape[:-1] + (T,)
+    if eta.shape != expected_shape or forward_vols.shape != expected_shape:
+        raise ValueError("Eta and forward-volatility shapes must end in all expiries")
+    model_expiries = torch.as_tensor(
+        geometry.model_expiries_y,
+        dtype=forward_vols.dtype,
+        device=forward_vols.device,
+    )
+    sqrt_dts = torch.sqrt(
+        torch.diff(model_expiries, prepend=torch.zeros_like(model_expiries[:1]))
+    )
+    later_weights = forward_vols[..., 1:] * sqrt_dts[1:]
+    later_weight_sum = torch.sum(later_weights, dim=-1)
+    if bool(torch.any(later_weight_sum <= 0.0)):
+        raise ValueError("Later-term forward-total-volatility weight must be positive")
+    term_eta = torch.sum(eta[..., 1:] * later_weights, dim=-1) / later_weight_sum
+    return torch.stack((eta[..., 0], term_eta), dim=-1)
+
+
 def bound_native_raw(
     raw: torch.Tensor,
     *,
@@ -47,10 +158,12 @@ def bound_native_raw(
             f"{geometry.native_state_size}, found {raw.shape}"
         )
     if isinstance(geometry, ForwardMuFlexGeometryConfig):
-        expiry_blocks = raw.reshape(*raw.shape[:-1], T, N + 2)
-        dlvsq_raw = expiry_blocks[..., :N]
-        forward_probability = torch.sigmoid(expiry_blocks[..., N])
-        eta_probability = torch.sigmoid(expiry_blocks[..., N + 1])
+        dlvsq_raw, forward_raw, eta_raw = split_forward_mu_native_raw(
+            raw,
+            geometry=geometry,
+        )
+        forward_probability = torch.sigmoid(forward_raw)
+        eta_probability = torch.sigmoid(eta_raw)
     else:
         probability = torch.sigmoid(raw)
         dlv_stop = T * N
@@ -90,6 +203,17 @@ def bound_native_raw(
         else geometry.min_eta
         + (geometry.max_eta - geometry.min_eta) * eta_probability
     )
+    if isinstance(
+        geometry,
+        FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig,
+    ):
+        eta = torch.cat(
+            (
+                eta[..., :1],
+                eta[..., 1:2].expand(*eta.shape[:-1], T - 1),
+            ),
+            dim=-1,
+        )
     return NativeParameters(
         dlvsqs=dlvsqs,
         forward_vols=forward_vols,
@@ -110,7 +234,7 @@ def dlvsq_cap_barrier(
             "Expected native raw state ending in "
             f"{geometry.native_state_size}, found {raw.shape}"
         )
-    dlvsq_raw = raw.reshape(*raw.shape[:-1], T, N + 2)[..., :N]
+    dlvsq_raw, _, _ = split_forward_mu_native_raw(raw, geometry=geometry)
     scaled = (
         dlvsq_raw - geometry.maximum_log_dlvsq
     ) / geometry.dlv_cap_barrier_log_width
@@ -182,19 +306,35 @@ def raw_from_native_parameters(
         / (geometry.max_eta - geometry.min_eta)
     )
     if isinstance(geometry, ForwardMuFlexGeometryConfig):
-        bounded_probability = torch.cat(
-            (
-                forward_probability.unsqueeze(-1),
-                eta_probability.unsqueeze(-1),
-            ),
-            dim=-1,
+        eta_coordinates = (
+            front_term_eta_coordinates(
+                parameters.eta,
+                parameters.forward_vols,
+                geometry=geometry,
+            )
+            if isinstance(
+                geometry,
+                FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig,
+            )
+            else parameters.eta
         )
-        bounded_probability = torch.clamp(
-            bounded_probability,
-            min=probability_floor,
-            max=1.0 - probability_floor,
+        eta_coordinate_probability = (
+            eta_coordinates - geometry.min_eta
+        ) / (geometry.max_eta - geometry.min_eta)
+        forward_raw = torch.logit(
+            torch.clamp(
+                forward_probability,
+                min=probability_floor,
+                max=1.0 - probability_floor,
+            )
         )
-        bounded_raw = torch.logit(bounded_probability)
+        eta_raw = torch.logit(
+            torch.clamp(
+                eta_coordinate_probability,
+                min=probability_floor,
+                max=1.0 - probability_floor,
+            )
+        )
         if isinstance(geometry, CappedUnboundedDlvFlexGeometryConfig):
             # The upper endpoint is finite in the log-DLV² coordinate.  Only
             # the strictly positive distance from the lower endpoint needs a
@@ -212,7 +352,12 @@ def raw_from_native_parameters(
                 max=1.0 - probability_floor,
             )
             dlv_raw = torch.logit(dlv_probability)
-        return torch.cat((dlv_raw, bounded_raw), dim=-1).flatten(start_dim=-2)
+        return pack_forward_mu_native_raw(
+            dlv_raw,
+            forward_raw,
+            eta_raw,
+            geometry=geometry,
+        )
     else:
         probability = torch.cat(
             (

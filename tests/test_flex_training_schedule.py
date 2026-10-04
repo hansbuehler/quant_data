@@ -63,6 +63,16 @@ def test_lambda_scheduler_uses_the_expected_rate_each_epoch() -> None:
     )
 
 
+def test_decoder_learning_rate_can_be_scaled_separately() -> None:
+    config = FlexTrainConfig(
+        learning_rate=2.0e-2,
+        decoder_learning_rate=2.0e-4,
+    )
+
+    assert config.learning_rate == pytest.approx(2.0e-2)
+    assert config.decoder_learning_rate == pytest.approx(2.0e-4)
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -70,6 +80,7 @@ def test_lambda_scheduler_uses_the_expected_rate_each_epoch() -> None:
         {"num_epochs": 5, "learning_rate_warmup_epochs": 5},
         {"minimum_learning_rate_fraction": -0.1},
         {"minimum_learning_rate_fraction": 1.1},
+        {"decoder_learning_rate": 0.0},
     ],
 )
 def test_invalid_learning_rate_schedule_is_rejected(kwargs: dict[str, object]) -> None:

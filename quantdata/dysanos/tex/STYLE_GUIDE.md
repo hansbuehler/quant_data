@@ -5,7 +5,7 @@
 - Keep the paper concise, mathematical, and direct. Preserve the existing authorial voice.
 - Present DYSANOS as the first generative market model built from smooth, statically arbitrage-free SANOS surfaces. The paper establishes a simple, useful baseline; it does not claim an optimal SANOS geometry or an optimal state driver.
 - State empirical limitations next to empirical successes. Do not add tangential implementation history, failed experiments, or speculative claims.
-- Do not discuss constructing or estimating a risk-neutral measure for the dynamic DYSANOS process.
+- Do not claim or imply a risk-neutral (equivalent-martingale) measure for the full dynamic DYSANOS surface process. A narrowly scoped *near*-martingale measure, constructed via Deep Hedging drift-removal for a stated reduced subset of tradable contracts and a stated strategy class, may be discussed only in the Risk-Neutral DYSANOS section; keep its "V1.0", reduced-universe, and numerical-stability caveats next to the result.
 - Distinguish exact mathematical guarantees from empirical diagnostics. SANOS guarantees static arbitrage-freedom of each decoded surface. It does not by itself guarantee dynamic no-arbitrage of the generated price process.
 
 ## Strike and expiry notation

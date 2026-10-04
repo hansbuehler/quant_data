@@ -1,0 +1,314 @@
+% !TEX root = main.tex
+\section{Finite-step simulation and numerical evidence}\label{sec:numerics}
+
+The drift restriction of Section~\ref{sec:drift} admits two numerically distinct
+implementations.  The first integrates the log-DLV SDE directly.  It is the
+closest implementation of the continuous-time model, but a finite time step is
+only approximately martingale preserving.  The second advances the probability
+density itself through a finite set of symmetric branches.  It is an exact
+one-step martingale construction on the modeled finite support, although it is
+not a claim about a continuous-strike or unbounded-support limit.  We report
+both because their numerical guarantees differ.
+
+All experiments in this section use four weekly expiries and fixed cash strikes
+within each weekly transition.  ``DLVsq'' denotes the positive discrete local
+variance $\dlv$.  The final density-branch audit uses the discrete factor $X$
+alone.  Earlier development and long-horizon audits also multiply $X$ by an
+independent mean-one Black factor $Y$ with annual volatility 10\%; the
+conditioning identities below apply to both, using the Black semigroup for
+$Y$.
+
+\subsection{Direct integration of the DLV diffusion}\label{sec:numerics-sde}
+
+For the direct SDE experiment we work in log excess-DLV coordinates
+\[
+  z^{j,i}=\log(\dlv^{j,i}-\dlv_{\min}).
+\]
+The volatility of $z$ is the rank-25 residual covariance estimated from 703
+weekly historical transitions through 31 December 2024.  At every substep the
+density volatility is obtained from \eqref{eq:volsolve}, and the drift of
+$\dlv$ is then computed from \eqref{eq:pointwise}, including the It\^o term in
+log coordinates.  Each week is integrated by ten stochastic-Heun substeps,
+using the same Gaussian increment in predictor and corrector.  At the weekly
+endpoint spot is drawn from the front density and the expired slab is removed.
+
+The audit starts from historical state 44 (8 March 2022), uses 200 interior
+strikes, 100,000 paths arranged as 50,000 antithetic pairs, and follows a
+shrinking tower for four weeks without re-gridding.  Fifty antithetic pairs are
+aggregated into each of 1,000 independent randomized-stratification blocks.
+There are 800, 600, 400, and 200 live fixed-contract option returns at the four
+trade dates, hence 2,000 coordinates in the joint test.
+
+For this experiment the blockwise coordinate statistics are supplemented by a
+10,000-draw shared-sign multiplier bootstrap.  If $t_k$ is the usual block
+t-statistic, the two simultaneous statistics are
+\[
+  T_{\max}=\max_k|t_k|,
+  \qquad
+  T_{\mathrm{RMS}}=\left(d^{-1}\sum_{k=1}^{d}t_k^2\right)^{1/2}.
+\]
+The reported decision value is
+$p_{\mathrm{comb}}=\min\{1,2\min(p_{\max},p_{\mathrm{RMS}})\}$.
+The shared multiplier for all coordinates of a block preserves their observed
+cross-option dependence.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lrrrrl}
+\toprule
+Audit & Active & $\max|t|$ & RMS $t$ & $p_{\mathrm{comb}}$ & 5\% decision\\
+\midrule
+One-step option returns       & 2,000 & 3.334 & 1.109 & 0.2746 & do not reject\\
+Terminal option returns       & 2,000 & 3.334 & 1.044 & 0.3210 & do not reject\\
+Terminal option price changes & 2,000 & 2.934 & 1.156 & 0.3500 & do not reject\\
+Integrated-DLV control        & 1,200 & 1.950 & 0.878 & 1.0000 & do not reject\\
+Weekly spot returns           & 4     & 2.431 & 1.561 & 0.0876 & do not reject\\
+\bottomrule
+\end{tabular}
+\caption{Martingale diagnostics for the ten-substep Heun implementation.  The
+800 omitted integrated-DLV coordinates have effectively zero block variance.
+The primary one-step audit has separate multiplier-bootstrap values
+$p_{\max}=0.1373$ and $p_{\mathrm{RMS}}=0.2465$; its simultaneous 5\% max-$t$
+cutoff is 4.235.}
+\label{tab:sde-martingale}
+\end{table}
+
+The largest density-mass residual was $9.33\times10^{-14}$ and the largest
+conditional-forward residual was $8.93\times10^{-14}$.  The minimum density was
+zero, due to finite-support point masses rather than a negative density.  The
+simulation took 72.1 seconds, or approximately 1,388 paths per second.  These
+results support the discretization, but they do not turn an infinitesimal drift
+restriction into an exact one-week transition.
+
+\subsection{An exact finite-step density construction}\label{sec:density-step}
+
+We next construct the one-week law in density coordinates.  Let
+$\varepsilon_b\in\{-1,+1\}^{d}$ be the $b$-th Rademacher branch and let
+$\pi_b=2^{-d}$, with $d=4$ in the experiment.  Write $\Gamma^j$ for the
+state-dependent loading of density $q^j$ implied by the chosen DLVsq loading.
+The branch marginal is
+\begin{equation}\label{eq:density-branch}
+  q^{j,b}=q^j+\sqrt h\,\Gamma^j\varepsilon_b,
+  \qquad b=1,\ldots,2^d .
+\end{equation}
+Since
+$\sum_b\pi_b\varepsilon_b=0$ and
+$\sum_b\pi_b\varepsilon_b\varepsilon_b^{\!\top}=I_d$,
+\begin{equation}\label{eq:density-branch-mean}
+  \sum_b\pi_bq^{j,b}=q^j
+\end{equation}
+holds exactly, before Monte Carlo sampling.  DLVsq is then recovered
+algebraically from each $q^{j,b}$ by Proposition~\ref{prop:codebook}; it is not
+advanced by an Euler step or fitted by a nonlinear optimizer.  A branch is
+accepted only if its masses are non-negative and the recovered DLVsq lies in
+its configured open bounds.  The implementation checks mass, mean, decoder
+consistency, and DLV bounds at every step.
+
+In the implemented weekly law the front density is branch invariant,
+$q^{1,b}=q^1$.  Independently of $b$, a front node $I=i$ is drawn with
+probability $q^1_i$.  For every surviving expiry $j\ge2$, let
+$R^{b,j}_{ir}$ be the conditional probability of node $r$ given branch $b$ and
+front node $i$.  The SANOS transition supplies rows satisfying
+\begin{align}
+  \sum_rR^{b,j}_{ir}&=1,
+  &\sum_rx_rR^{b,j}_{ir}&=x_i,
+  &\sum_iq^1_iR^{b,j}_{ir}&=q^{j,b}_r .
+  \label{eq:conditional-density-identities}
+\end{align}
+The first two identities make every row a martingale transition; the third
+recovers the branch marginal.  Together with
+\eqref{eq:density-branch-mean}, they imply the tower property for every payoff
+represented on the finite support.
+
+This construction is exact on the finite model grid.  It is not asserted to be
+the unique risk-neutral law, and the particular independent sampling of $b$
+and $I$ does not generate contemporaneous correlation between the raw surface
+branch and front-node innovation.  Realized density-weighted factor covariance
+nevertheless matched the intended empirical covariance closely: in the
+independent all-state confirmation the largest relative error was 1.87\% and
+the RMS error was 0.55\%.
+
+\subsection{Conditioning and re-gridding}\label{sec:numerics-regrid}
+
+Suppose current cash spot is $s$ and the revealed front node is $x_i$, so the
+next $X$ spot is $s x_i$.  Define the next relative support by
+\begin{equation}\label{eq:exact-regrid}
+  x_r^{\prime(i)}=\frac{x_r}{x_i}.
+\end{equation}
+Then $(s x_i)x_r^{\prime(i)}=s x_r$ path by path.  Consequently the price of a
+surviving fixed-cash call is identical on the inherited and re-gridded
+coordinates,
+\[
+  C_{t+h}^{b,i,j}(K)
+  =\sum_rR^{b,j}_{ir}(s x_r-K)^+.
+\]
+Averaging first over $i$ and then over $b$ gives
+\begin{align*}
+  \E_t[C_{t+h}^{j}(K)]
+  &=\sum_b\pi_b\sum_iq^1_i\sum_rR^{b,j}_{ir}(s x_r-K)^+\\
+  &=\sum_rq^j_r(sx_r-K)^+=C_t^j(K).
+\end{align*}
+Thus re-gridding is an exact coordinate change for all surviving fixed-cash
+claims, not an interpolation.  With an independent Black factor $Y$, the same
+proof conditions on $Y$ and then applies its mean-one Black semigroup.  A newly
+issued far expiry is different: there is no pre-existing fifth-week claim whose
+price it must preserve.
+
+At each weekly roll, the old 2W--4W densities become the new floating 1W--3W
+densities through \eqref{eq:conditional-density-identities} and
+\eqref{eq:exact-regrid}.  Only the new 4W DLVsq curve is supplied statistically.
+The retained boundary model is a 25-factor PCA followed by an unrestricted
+weekly VAR(1) in factor scores.  It uses 703 training pairs through 2024,
+explains 99.9912\% of the 4W curve variation, and has spectral radius 0.9089.
+On 155 untouched 2025 pairs its raw-coordinate RMSE is 0.5902, against 0.6526
+for persistence, a 9.56\% improvement.  SANOS constructs the new 4W density as
+a static martingale extension of the inherited 3W density.
+
+\subsection{Martingale audit for the exact density step}\label{sec:density-tests}
+
+Adjacent simulated paths form an antithetic pair.  For pair $a=1,\ldots,n$ and
+audited return coordinate $k$, let $R_{ak}$ be the pair mean, $\bar R$ the
+vector of sample means, and $\widehat\Sigma$ their sample covariance.  We
+report
+\begin{equation}\label{eq:density-wald}
+  z_k=\frac{\sqrt n\,\bar R_k}{\widehat\sigma_k},
+  \qquad
+  J=n\bar R^{\!\top}\widehat\Sigma^{+}\bar R .
+\end{equation}
+The pseudo-inverse is formed in correlation space after discarding eigenmodes
+at or below 0.01.  If $\nu$ modes remain, the reference value is
+$J\sim\chi^2_\nu$ under the joint zero-mean null.  A small upper-tail $p$-value
+rejects zero drift; a large value means only that the observed drift is
+compatible with Monte Carlo noise.  We use 0.05 for one look, 0.0125 for four
+weekly looks, and 0.003125 for 16 looks.  Because the options are highly
+collinear and the retained modes are estimated from the sample, the exact
+density-tower identities and matched cash/re-grid prices are stronger
+structural diagnostics than an isolated asymptotic $p$-value.
+
+The canonical X-only audit used all 891 certified historical states, 100,000
+paths (50,000 independent antithetic pairs), 11 ITM call/put strikes per
+expiry, four one-week steps, 64-bit arithmetic, and 10\% annualized log-DLVsq
+volatility.  Each state received 56 or 57 independent pairs.  The audited book
+contains spot and the surviving original fixed-cash claims.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{rrrrrr}
+\toprule
+Week & Worst $|z|$ & Max option mean (bp) & $J$ & $\nu$ & $p$\\
+\midrule
+1 & 1.796 & 0.497 & 10.980 & 7 & 0.139\\
+2 & 2.143 & 0.863 &  7.228 & 7 & 0.406\\
+3 & 1.371 & 0.696 &  5.858 & 6 & 0.439\\
+4 & 2.057 & 1.245 &  5.506 & 5 & 0.357\\
+\bottomrule
+\end{tabular}
+\caption{All-state X-only martingale audit for the surviving original
+fixed-cash book plus spot.  Option means are basis points of initial spot.  No
+horizon rejects the joint zero-mean null at 5\%.}
+\label{tab:density-all-state}
+\end{table}
+
+The deterministic checks close much more tightly than Monte Carlo sampling:
+the maximum density-tower residual is $6.49\times10^{-15}$, option-tower
+residual $1.67\times10^{-16}$, spot-mean residual $2.60\times10^{-14}$,
+four-roll decoder residual $1.77\times10^{-13}$, and first re-grid cash-price
+residual $3.33\times10^{-16}$.
+
+A matched run decomposed every weekly change into the fixed-expiry surface
+branch and the spot-conditioning/re-grid component, using identical random
+draws.  Direct inherited-cash and re-gridded valuations agree pathwise to at
+most $2.22\times10^{-16}$ and have identical $z/J/p$ statistics.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{rrrrr}
+\toprule
+Week & Fixed-expiry $p$ & Full first-member $p$ & Full pair $p$ & Max price difference\\
+\midrule
+1 & 0.366 & 0.684  & 0.139  & 0\\
+2 & 0.538 & 0.163  & 0.128  & $2.22\times10^{-16}$\\
+3 & 0.911 & 0.414  & 0.0208 & $2.22\times10^{-16}$\\
+4 & 0.945 & 0.0808 & 0.546  & $2.22\times10^{-16}$\\
+\bottomrule
+\end{tabular}
+\caption{Matched fixed-support and floating-coordinate decomposition.  The
+first two $p$-value columns use one independent member of each pair; the third
+uses antithetic pair means.}
+\label{tab:density-regrid}
+\end{table}
+
+The week-3 pair-mean value is a nominal rejection at 5\%, but not at the
+pre-specified four-look cutoff 0.0125.  It is also visibly sensitive to the
+correlation eigenvalue cutoff: its $p$-value is 0.0429, 0.0208, 0.0879, and
+0.295 at cutoffs 0.005, 0.01, 0.02, and 0.05.  Estimating covariance and the
+mean on opposite half-samples gives 0.214 and 0.338.  No coordinate has
+$|z|>2$ and the largest mean is 0.363bp.  Since the direct and re-gridded path
+matrices are identical, this fluctuation cannot be caused by re-gridding.
+The fixed-expiry branch alone has maximum option means of only 0.0046, 0.0056,
+0.0013, and 0.0050bp over weeks 1--4.
+
+Earlier development audits reached the same conclusion under a nonzero Black
+backbone.  On 21 states with 10,000 paths per state, the four weekly maximum
+coordinate $|z|$ values were 2.400, 3.203, 2.871, and 2.968, while the
+covariance-aware Fisher-combined state-test $p$-values were 0.871, 0.672,
+0.852, and 0.522.  A heterogeneous 10,000-path confirmation covering all 891
+states gave unconditional maximum $|z|$ values 1.575, 1.970, 1.878, and 1.040
+and $p$-values 0.702, 0.414, 0.067, and 0.317.  Its high-dimensional
+state-feature-weighted values were 0.027, 0.759, 0.251, and 0.0089; they are
+reported because they expose the poor calibration of hard spectral cutoffs in
+small per-state samples, rather than being hidden behind the aggregate result.
+
+\subsection{Repeated rolls, speed, and finite-support behavior}
+
+A 16-week audit with the independent 10\% Black backbone used 10,000 paths and
+all 891 states.  Across all rolls the largest decoder residual was
+$2.35\times10^{-13}$, conditional mass and mean errors stayed below
+$6.6\times10^{-14}$, and DLVsq remained strictly inside $(10^{-4},9)$.  The
+maximum spot $|z|$ over 16 horizons was 2.126, the maximum rolling-option
+$|z|$ was 2.417, and every rolling-option joint $p$-value was at least 0.0839.
+With the last-expiry AR boundary, median cross-expiry dispersion of
+$\sqrt{\mathrm{DLVsq}}$ was 0.0459 after week 1 and 0.0569 after week 16, so
+the term structure did not collapse.  The corresponding implementation ran
+160,000 path-week steps in 14.6 seconds.
+
+The exact branch method is materially faster than a nonlinear finite-step
+solve.  In the heterogeneous 10,000-path benchmark it processed 40,000
+path-week steps in 8.84 seconds (4,527 per second), including 7.36 seconds to
+construct 5,000 distinct initial kernels.  This was about 23 times faster than
+the earlier finite-$h$ Newton transition (195 per second), but about 5.7 times
+slower than the local SDE transition (25,649 per second).  The final X-only
+audit, with more extensive all-state diagnostics, processed 400,000 path-week
+steps in 169.8 seconds.  These timings are indicative rather than a controlled
+hardware benchmark.
+
+The remaining limitation is economic rather than a floating-point failure.  If
+the lowest support node $x_0$ is revealed, then
+\[
+  \sum_rR^{b,j}_{0r}x_r=x_0,
+  \qquad x_r\ge x_0,
+\]
+forces $R^{b,j}_{00}=1$.  The upper endpoint is analogous.  The $X$ law is then
+absorbing, all surviving options are intrinsic, and interior DLVsq coordinates
+are price-unidentified.  The positive-density formula $\eta=\psi/q$ no longer
+applies at zero-mass nodes; any continued DLV coordinates there are an
+economically invisible numerical convention.
+
+In the four-week X-only run, boundary incidence was 0.003\%, 0.003\%, 0.003\%,
+and 0.006\%.  In the 16-week run, the fully collapsed fraction grew from
+0.01\% to 0.48\%; the median week-16 front density retained 23.44 effective
+nodes, while its first percentile retained 1.15.  Avoiding this absorbing tail
+requires dynamic support expansion, an explicit tail continuation, or a
+boundary state carrying a conditional tail.  Re-gridding alone cannot create
+support beyond an extreme node while preserving the inherited option surface.
+
+The numerical evidence therefore supports three distinct statements: the
+Heun implementation is a credible approximation to the continuous density
+drift; the symmetric density construction is exactly martingale consistent on
+the finite support; and weekly re-gridding preserves every surviving
+fixed-cash price path by path.  It does not establish uniqueness, an
+unbounded-support model, or the absence of boundary bias at horizons much
+longer than those tested.

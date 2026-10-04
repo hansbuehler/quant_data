@@ -18,11 +18,23 @@ Hans Buehler.
 \newblock Expensive martingales.
 \newblock {\em Quantitative Finance}, 6(3):207--218, 2006.
 
+\bibitem{BuehlerVolAndDivs}
+Hans Buehler.
+\newblock Volatility and dividends - volatility modelling with cash dividends
+  and simple credit risk.
+\newblock \url{https://papers.ssrn.com/abstract=1141877}, 2008.
+
 \bibitem{BuehlerEtAl2019DeepHedging}
 Hans Buehler, Lukas Gonon, Josef Teichmann, and Ben Wood.
 \newblock Deep hedging.
 \newblock {\em Quantitative Finance}, 19:1271--1291, 2019.
 \newblock SSRN working paper version: doi:10.2139/ssrn.3120710 (2018).
+
+\bibitem{SANOS2026}
+Hans Buehler, Blanka Horvath, Anastais Kratsios, Yannick Limmer, and Raeid
+  Saqur.
+\newblock Sanos - smooth arbitrage-free non-parametric option surfaces.
+\newblock \url{https://arxiv.org/abs/2601.11209}, Februar 2026.
 
 \bibitem{DYSANOS2026}
 Hans Buehler, Blanka Horvath, and Anastasis Kratsios.
@@ -52,16 +64,21 @@ Damir Filipovi\'c, Lane~P. Hughston, and Andrea Macrina.
 \newblock {\em International Journal of Theoretical and Applied Finance},
   15(1):1250002, 2012.
 
-\bibitem{JohnsonSmith1999}
+\bibitem{JohnsonSmith2011}
 Charles~R. Johnson and Ronald~L. Smith.
-\newblock Path product matrices.
-\newblock {\em Linear and Multilinear Algebra}, 46:177--191, 1999.
+\newblock Inverse {M}-matrices, {II}.
+\newblock {\em Linear Algebra and its Applications}, 435(5):953--983, 2011.
 
 \bibitem{MertikopoulosMoustakas2010}
 Panayotis Mertikopoulos and Aris~L. Moustakas.
 \newblock The emergence of rational behavior in the presence of stochastic
   perturbations.
 \newblock {\em The Annals of Applied Probability}, 20(4):1359--1388, 2010.
+
+\bibitem{Protter2005}
+P.~E. Protter.
+\newblock {\em Stochastic Integration and Differential Equations}.
+\newblock Springer, 2 edition, 2005.
 
 \bibitem{SchweizerWissel2008}
 Martin Schweizer and Johannes Wissel.
@@ -86,19 +103,9 @@ Magnus Wiese, Ben Wood, Alexandre Pachoud, Ralf Korn, Hans Buehler, Phillip
 \newblock Multi-asset spot and option market simulation, 2021.
 \newblock arXiv:2112.06823.
 
-\bibitem{Willoughby1977}
-R.~A. Willoughby.
-\newblock The inverse {M}-matrix problem.
-\newblock {\em Linear Algebra and its Applications}, 18:75--94, 1977.
-
 \bibitem{Wissel2007}
 Johannes Wissel.
 \newblock Arbitrage-free market models for option prices.
 \newblock NCCR FINRISK Working Paper 428, NCCR FINRISK, ETH Z\"urich, 2007.
-
-\bibitem{ZhuZhangLiu2011}
-Yan Zhu, Cheng-Yi Zhang, and Jun Liu.
-\newblock Path product and inverse {M}-matrices.
-\newblock {\em Electronic Journal of Linear Algebra}, 22:644--652, 2011.
 
 \end{thebibliography}

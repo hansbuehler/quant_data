@@ -199,3 +199,44 @@ def expiry_excess_statistics(
         dte_1=bucket(1),
         dte_2=bucket(2),
     )
+
+
+def nominal_expiry_excess_statistics(
+    fit: np.ndarray,
+    bid: np.ndarray,
+    ask: np.ndarray,
+    business_dtes: np.ndarray,
+    *,
+    dte_tolerance: float = 1.0e-4,
+) -> tuple[dict[str, int | float], ...]:
+    """Summarize every represented nominal market DTE.
+
+    AM expiries use the repository's fractional-day convention, so the
+    nominal expiry is the completed integer business-day count, consistently
+    with :func:`expiry_excess_statistics`. Empty maturities are omitted.
+    """
+    business_dtes = np.asarray(business_dtes, dtype=np.float64).reshape(-1)
+    excess = normalized_excess(fit, bid, ask).reshape(-1)
+    if business_dtes.shape != excess.shape:
+        raise ValueError(
+            "'business_dtes' must have one value per option, found "
+            f"{business_dtes.shape} and {excess.shape}"
+        )
+    if not np.all(np.isfinite(business_dtes) & (business_dtes >= 0.0)):
+        raise ValueError("'business_dtes' must be finite and non-negative")
+
+    nominal_dtes = np.floor(business_dtes + dte_tolerance).astype(np.int64)
+    rows: list[dict[str, int | float]] = []
+    for nominal_dte in np.unique(nominal_dtes):
+        statistics = excess_statistics(excess[nominal_dtes == nominal_dte])
+        rows.append(
+            {
+                "nominal_market_dte": int(nominal_dte),
+                "num_quotes": statistics.num_options,
+                "percent_inside_bid_ask": statistics.percent_zero,
+                "mean_excess": statistics.surface_mean,
+                "conditional_mean_excess": statistics.positive_mean,
+                "conditional_median_excess": statistics.positive_median,
+            }
+        )
+    return tuple(rows)

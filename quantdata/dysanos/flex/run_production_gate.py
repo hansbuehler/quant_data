@@ -22,6 +22,7 @@ from quantdata.dysanos.flex.config import (
     FlexObjectiveConfig,
     FlexTrainConfig,
     ForwardMuFlexGeometryConfig,
+    FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig,
     LatentDecoderConfig,
     NativeStateConfig,
     PcaDecoderConfig,
@@ -245,7 +246,9 @@ def _markdown_report(report: dict[str, object]) -> str:
         else "expiry-specific canonical-NMS supports"
     )
     backbone_description = (
-        "one forward-mu coordinate per expiry interval"
+        "one front and one shared later-term eta coordinate"
+        if geometry.get("front_term_eta")
+        else "one forward-mu coordinate per expiry interval"
         if geometry.get("forward_mu_backbone")
         else "one surface-wide eta coordinate"
     )
@@ -295,8 +298,12 @@ def _markdown_report(report: dict[str, object]) -> str:
                 "",
                 f"- supervised decoder learning rate: "
                 f"`{supervised_train_config['learning_rate']}`;",
-                f"- quote-objective learning rate: "
+                f"- quote-objective daily-state learning rate: "
                 f"`{market_train_config['learning_rate']}`;",
+                f"- quote-objective shared-decoder learning rate: "
+                f"`{market_train_config.get('decoder_learning_rate') or market_train_config['learning_rate']}`;",
+                f"- learning-rate warmup epochs: "
+                f"`{market_train_config.get('learning_rate_warmup_epochs', 0)}`;",
                 f"- compiled SANOS optimizer steps: "
                 f"`{market_train_config['compile_sanos_solver']}`;",
                 "- final candidate and reported metrics: eager SANOS pricing;",
@@ -1508,6 +1515,14 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--front-term-eta",
+        action="store_true",
+        help=(
+            "Use the shared-strikes geometry with one eta for the front "
+            "forward interval and one eta shared by all later intervals."
+        ),
+    )
+    parser.add_argument(
         "--model-business-dtes",
         type=float,
         nargs="+",
@@ -1521,6 +1536,29 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--day-batch-size", type=int, default=16)
     parser.add_argument("--supervised-day-batch-size", type=int, default=128)
     parser.add_argument("--learning-rate", type=float, default=2.0e-2)
+    parser.add_argument(
+        "--decoder-learning-rate",
+        type=float,
+        help=(
+            "Optional market-phase learning rate for the shared latent "
+            "decoder; the main learning rate continues to control daily states."
+        ),
+    )
+    parser.add_argument(
+        "--learning-rate-warmup-epochs",
+        type=int,
+        default=0,
+        help=(
+            "Linearly warm the market-phase learning rate to its configured "
+            "peak over this many epochs before cosine decay."
+        ),
+    )
+    parser.add_argument(
+        "--minimum-learning-rate-fraction",
+        type=float,
+        default=0.0,
+        help="Floor as a fraction of the configured market learning rate.",
+    )
     parser.add_argument("--supervised-learning-rate", type=float, default=2.0e-3)
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--precision", type=int, default=32)
@@ -1643,12 +1681,13 @@ def main() -> None:
             args.fixed_eta is not None,
             args.forward_mu,
             args.shared_strikes,
+            args.front_term_eta,
         )
     )
     if selected_geometries > 1:
         raise ValueError(
-            "'--fixed-eta', '--forward-mu', and '--shared-strikes' are "
-            "mutually exclusive"
+            "'--fixed-eta', '--forward-mu', '--shared-strikes', and "
+            "'--front-term-eta' are mutually exclusive"
         )
     geometry_kwargs: dict[str, object] = {}
     if args.model_business_dtes is not None:
@@ -1660,6 +1699,10 @@ def main() -> None:
     geometry = (
         FixedEtaFlexGeometryConfig(fixed_eta=args.fixed_eta, **geometry_kwargs)
         if args.fixed_eta is not None
+        else FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig(
+            **geometry_kwargs
+        )
+        if args.front_term_eta
         else SharedStrikeCappedUnboundedDlvFlexGeometryConfig(**geometry_kwargs)
         if args.shared_strikes
         else ForwardMuFlexGeometryConfig(**geometry_kwargs)
@@ -1720,6 +1763,9 @@ def main() -> None:
             num_epochs=args.epochs,
             day_batch_size=args.day_batch_size,
             learning_rate=args.learning_rate,
+            decoder_learning_rate=args.decoder_learning_rate,
+            learning_rate_warmup_epochs=args.learning_rate_warmup_epochs,
+            minimum_learning_rate_fraction=args.minimum_learning_rate_fraction,
             device=args.device,
             precision=args.precision,
             compile_sanos_solver=args.compile_sanos_solver,

@@ -1,4 +1,24 @@
+% !TEX root = main.tex
 \section{Introduction}\label{sec:intro}
+
+\HB{
+This article presents an arbitrage-free market model for for smooth surfaces of European option prices.
+
+The core architecture follows the SANOS approach~\cite{SANOS2026} which models the stock price as the product
+of a time-and-state discrete process~$X$ and a smoothing process~$Y$, in our case Black~\&~Scholes.
+The former is used to encode the option market using a discrete form of local volatilities as code book. That does not mean
+that the model is a local volatility model -- we merely use the (discrete) local volatilities as a convenient representation of the option surface.
+Compared to using implied volatilities the advantage is that mere positivity of the local volatilities is sufficient to ensure
+the the option market is free of static arbitrage at all times. We have shown in~\cite{SANOS2026} that this representation
+can be fitted to real life market data very efficiently using linear programming.
+
+In~\cite{DYSANOS2026} we have shown how to estimate the dynamics such (discrete) local volatilities of such a model under the
+statistical measure~$\mathbb{P}$ which fit very well to real-life observed option bid/asks.
+
+The key
+contribution in this paper is showing how to construct a corresponding risk-neutral measure~$\mathbb{Q}$ or, equivalently,
+the risk-neutral drift of the model. Our approach is closely related to the seminal but unpublished work~\cite{Wissel2007}.
+}
 
 An option market model reverses the usual direction of construction: instead of
 specifying a process for the underlying and deriving option prices from it, one
@@ -41,7 +61,7 @@ low-dimensional code, fit a linear state process to it, and test for dynamic
 arbitrage after the fact, reporting it in $12.5\%$ of states at zero transaction
 cost.
 
-None of the four imposes a dynamic condition, and it is where this paper starts:
+None of the four enforces the drift restriction exactly, and that is where this paper starts:
 the cross-sectional constraints govern each date's surface and its terminal
 payoff cone, and leave the transition of a fixed contract between two dates
 unconstrained. The choice of grid is part of the same point. All four index
@@ -58,9 +78,8 @@ constructive strong existence and uniqueness for a class of coefficients. Behind
 the front expiry his local implied variance is \emph{exactly} the backward
 discrete local variance used here, an algebraic identity on the grid, and his
 drift restriction is, after a change
-of measure, exactly the one we state in Theorem~\ref{thm:pointwise}. We claim no
-priority for it; see Appendix~\ref{app:wissel}, which gives the identification in
-full. That working paper appears never to have been published in archival
+of measure, exactly the one we state in Theorem~\ref{thm:drift}. We claim no
+priority for it. That working paper appears never to have been published in archival
 form.
 
 \subsection*{What this paper does}
@@ -72,7 +91,7 @@ are the contributions.
 
 \begin{enumerate}[leftmargin=1.8em,itemsep=0.45em]
 \item \textbf{The spot is a read-off, and it settles exactly.}
-The spot is $S_t=x^{\!\top}q^j_t$ at every expiry $j$ (Proposition~\ref{prop:spot}),
+The spot is $S_t=K^{\!\top}q^j_t$ at every expiry $j$ (Proposition~\ref{prop:spot}),
 an identity of the chart holding at all $t$. At the front
 expiry Proposition~\ref{prop:collapse} exhibits a family of front volatilities
 under which $q^1$ collapses onto a single node, so the spot lands on a strike
@@ -80,17 +99,19 @@ and every gridded contract settles at its exact payoff
 (Section~\ref{sec:nonpinning}). That pinning is a property of the volatility
 chosen and not of the chart: by Remark~\ref{rem:bary} the terminal states
 the chart admits carry every spot in the grid range, whereas in
-\cite{Wissel2007} the pinning follows from the chart whatever the coefficients
-(Remark~\ref{rem:pinning}). We do not construct dynamics reaching an off-lattice
+\cite{Wissel2007} the pinning follows from the chart whatever the coefficients.
+We do not construct dynamics reaching an off-lattice
 terminal spot; that is left as future work.
 
-\item \textbf{Existence, with no condition on the wings.} The model has a
-unique global strong solution on $[0,T_1]$, positive by construction, for every
-bounded and locally Lipschitz volatility structure $b$ and any number of
-driving factors. The quantity that must be controlled is $\eta=\psi/q$, the
-density volatility relative to the density, and it is bounded by the grid alone:
-Theorem~\ref{thm:wing} gives $\Theta_j\le N+1$ uniformly in the state and in the
-volatility structure. \emph{Wissel \cite{Wissel2007} must assume a bound of this
+\item \textbf{Existence, with no condition on the wings.} For every bounded and
+locally Lipschitz volatility structure $b$ and any number of driving factors, the
+model has a unique strong solution on $[0,T]$ for every $T<T_1$, positive by
+construction; it extends to $T_1$ (Theorem~\ref{thm:exist}(ii)) and, restarting at each
+expiry with the settling front, to the whole ladder $[0,T_M]$, unique given that
+front (Corollary~\ref{cor:patch}). The quantity that must be controlled is
+$\eta=\psi/q$, the density volatility relative to the density, and its growth across
+expiries is bounded by the grid alone: Theorem~\ref{thm:wing} gives $\Theta_j\le N+1$
+uniformly in the state and in the volatility structure. \emph{Wissel \cite{Wissel2007} must assume a bound of this
 kind; here it is a theorem.} The front expiry costs one hypothesis, and it is a mild one: $\eta^1$
 must be integrable in $t$, not bounded, because $\eta^j$ is affine in $\eta^1$
 and an It\^o equation needs an integrable drift rather than a bounded one. The
@@ -101,11 +122,11 @@ contract settles at its exact payoff (Proposition~\ref{prop:collapse}).
 
 \item \textbf{The drift is pointwise, and the count works out.} In density
 coordinates the drift equation is $N+2$ conditions on $N$ unknowns, and is
-consistent because the left null space of the geometry matrix is exactly
-$\mathrm{span}\{\one,x\}$, conservation of mass and of the spot
+consistent because the left null space of $\widehat G_j$ is exactly
+$\mathrm{span}\{\one,K\}$, conservation of mass and of the spot
 (Lemma~\ref{lem:null}). The state-independent factor then cancels from both
 sides and the drift is available nodewise,
-$\alpha^j_i=-\sum_f\eta^{j,f}_i\beta^{j,f}_i$, with no matrix inversion and no
+$\alpha^{j,i}=-\ip{\eta^{j,i}}{\beta^{j,i}}$, with no matrix inversion and no
 rank condition.
 \end{enumerate}
 

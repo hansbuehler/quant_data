@@ -15,8 +15,10 @@ import torch
 from filelock import FileLock
 
 from quantdata.dysanos.flex.config import (
+    FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig,
     FlexMarketConfig,
     FlexObjectiveConfig,
+    FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig,
     JointDirectDynamicsConfig,
     PcaDecoderConfig,
     SharedStrikeCappedUnboundedDlvFlexGeometryConfig,
@@ -122,6 +124,45 @@ def _market_config_from_completion(
     return FlexMarketConfig(**values)
 
 
+def _geometry_from_completion(
+    completion: dict[str, object],
+    *,
+    requested_model_business_dtes: tuple[float, ...] | None,
+) -> (
+    SharedStrikeCappedUnboundedDlvFlexGeometryConfig
+    | FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig
+):
+    """Restore the exact completed geometry and validate any CLI assertion."""
+    geometry_payload = completion.get("geometry")
+    if not isinstance(geometry_payload, dict):
+        raise ValueError("Native completion has no geometry payload")
+    values = dict(geometry_payload)
+    for name in (
+        "nms_range",
+        "explicit_model_business_dtes",
+        "inner_relative_strikes",
+    ):
+        if values.get(name) is not None:
+            values[name] = tuple(values[name])
+    if "inner_relative_strikes" in values:
+        geometry_type = FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig
+    elif values.get("front_term_eta") is True:
+        geometry_type = FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig
+    else:
+        geometry_type = SharedStrikeCappedUnboundedDlvFlexGeometryConfig
+    geometry = geometry_type(**values)
+    if requested_model_business_dtes is not None and (
+        requested_model_business_dtes
+        != tuple(float(value) for value in geometry.model_business_dtes)
+    ):
+        raise ValueError(
+            "Requested model expiry grid differs from the completed native "
+            f"geometry: {requested_model_business_dtes} versus "
+            f"{tuple(float(value) for value in geometry.model_business_dtes)}"
+        )
+    return geometry
+
+
 def install_all_history_warm_start(
     model: JointDirectDynamicsModel,
     *,
@@ -205,7 +246,10 @@ def install_direct_decoder_initialization(
     model: JointDirectDynamicsModel,
     *,
     source_payload: dict[str, object],
-    geometry: SharedStrikeCappedUnboundedDlvFlexGeometryConfig,
+    geometry: (
+        SharedStrikeCappedUnboundedDlvFlexGeometryConfig
+        | FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig
+    ),
     days: tuple[FlexMarketDay, ...],
     dates: tuple[date, ...],
     env: BaseEnvironment,
@@ -297,7 +341,10 @@ def interpolation_region_excess_statistics(
     evaluation: FitEvaluation,
     days: tuple[FlexMarketDay, ...],
     *,
-    geometry: SharedStrikeCappedUnboundedDlvFlexGeometryConfig,
+    geometry: (
+        SharedStrikeCappedUnboundedDlvFlexGeometryConfig
+        | FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig
+    ),
 ) -> dict[str, int | float]:
     """Summarize spread excess only between the first and last model expiries."""
     if len(evaluation.fits) != len(days):
@@ -364,14 +411,14 @@ def run(arguments: argparse.Namespace) -> None:
         raise ValueError("Native shared-strikes completion proof is incomplete")
     market_config = _market_config_from_completion(completion)
 
-    geometry_kwargs: dict[str, object] = {}
-    if arguments.model_business_dtes is not None:
-        model_business_dtes = tuple(arguments.model_business_dtes)
-        geometry_kwargs = {
-            "num_model_expiries": len(model_business_dtes),
-            "explicit_model_business_dtes": model_business_dtes,
-        }
-    geometry = SharedStrikeCappedUnboundedDlvFlexGeometryConfig(**geometry_kwargs)
+    geometry = _geometry_from_completion(
+        completion,
+        requested_model_business_dtes=(
+            None
+            if arguments.model_business_dtes is None
+            else tuple(arguments.model_business_dtes)
+        ),
+    )
     objective_config = FlexObjectiveConfig(fit_weight=0.05)
     train_config = JointDirectTrainConfig(
         num_epochs=arguments.epochs,
@@ -385,14 +432,19 @@ def run(arguments: argparse.Namespace) -> None:
         dynamics_ramp_epochs=arguments.dynamics_ramp_epochs,
         seed=9281,
     )
+    if isinstance(
+        geometry,
+        FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig,
+    ):
+        model_label = "fixed-relative-custom-through-2025-joint-direct-200"
+    elif arguments.model_business_dtes is not None:
+        model_label = "shared-strikes-custom-through-2025-joint-direct-200"
+    else:
+        model_label = "shared-strikes-through-2025-joint-direct-200"
     model_config = JointDirectDynamicsConfig(
-        label=(
-            "shared-strikes-custom-through-2025-joint-direct-200"
-            if arguments.model_business_dtes is not None
-            else "shared-strikes-through-2025-joint-direct-200"
-        ),
+        label=model_label,
         state_size=200,
-        geometry=geometry,
+        geometry=geometry,  # type: ignore[arg-type]
     )
     dates = _market_dates_from_completion(arguments.native_completion)
     days = _load_markets(

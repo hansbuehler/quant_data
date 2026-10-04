@@ -187,6 +187,26 @@ def _front_mixture_log_cdf(
     return torch.sum(density * torch.special.ndtr(z), dim=-1)
 
 
+def _normalized_front_sampling_components(
+    support: torch.Tensor,
+    density: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Normalize front mixture mass and mean for spot-distribution sampling."""
+    sampling_density = torch.clamp_min(density, 0.0)
+    sampling_mass = torch.sum(sampling_density, dim=-1, keepdim=True)
+    if torch.any(~torch.isfinite(sampling_mass)) or torch.any(sampling_mass <= 0.0):
+        raise ValueError("front SANOS sampling density has no positive finite mass")
+    sampling_density = sampling_density / sampling_mass
+    sampling_mean = torch.sum(
+        sampling_density * support,
+        dim=-1,
+        keepdim=True,
+    )
+    if torch.any(~torch.isfinite(sampling_mean)) or torch.any(sampling_mean <= 0.0):
+        raise ValueError("front SANOS sampling density has no positive finite mean")
+    return support / sampling_mean, sampling_density
+
+
 def front_week_sanos_inverse_cdf(
     surface: SanosSurface,
     gaussian_coordinate: torch.Tensor,
@@ -233,19 +253,10 @@ def front_week_inverse_cdf_components(
     # near-zero density.  Remove only numerical negative mass, then normalize
     # both mass and mean.  This produces the closest simple martingale mixture
     # used for spot sampling without changing the calibrated pricing surface.
-    sampling_density = torch.clamp_min(density, 0.0)
-    sampling_mass = torch.sum(sampling_density, dim=-1, keepdim=True)
-    if torch.any(~torch.isfinite(sampling_mass)) or torch.any(sampling_mass <= 0.0):
-        raise ValueError("front SANOS sampling density has no positive finite mass")
-    sampling_density = sampling_density / sampling_mass
-    sampling_mean = torch.sum(
-        sampling_density * support,
-        dim=-1,
-        keepdim=True,
+    sampling_support, sampling_density = _normalized_front_sampling_components(
+        support,
+        density,
     )
-    if torch.any(~torch.isfinite(sampling_mean)) or torch.any(sampling_mean <= 0.0):
-        raise ValueError("front SANOS sampling density has no positive finite mean")
-    sampling_support = support / sampling_mean
     eps = 32.0 * torch.finfo(gaussian_coordinate.dtype).eps
     probability = torch.clamp(torch.special.ndtr(gaussian_coordinate), eps, 1.0 - eps)
     lower = torch.log(sampling_support[:, 0]) - 10.0 * sqrt_variance
@@ -287,6 +298,35 @@ def front_week_inverse_cdf_components(
         root + implicit_correction - implicit_correction.detach()
     )
     return torch.exp(differentiable_root)
+
+
+def front_week_sanos_gaussian_score(
+    surface: SanosSurface,
+    gross_return: torch.Tensor,
+) -> torch.Tensor:
+    """Map observed gross returns to Gaussian scores under the front SANOS law."""
+    support = surface.support_strikes[:, 0]
+    density = surface.densities[:, 0]
+    sqrt_variance = surface.backbone_total_vols[:, 0]
+    if gross_return.shape != support.shape[:-1]:
+        raise ValueError(
+            "Gross return must have one value per surface; got "
+            f"{tuple(gross_return.shape)} versus {tuple(support.shape[:-1])}"
+        )
+    if torch.any(gross_return <= 0.0) or torch.any(sqrt_variance <= 0.0):
+        raise ValueError("front SANOS score requires positive returns and variance")
+    sampling_support, sampling_density = _normalized_front_sampling_components(
+        support,
+        density,
+    )
+    probability = _front_mixture_log_cdf(
+        torch.log(gross_return),
+        support=sampling_support,
+        density=sampling_density,
+        sqrt_variance=sqrt_variance,
+    )
+    eps = 32.0 * torch.finfo(gross_return.dtype).eps
+    return torch.special.ndtri(torch.clamp(probability, eps, 1.0 - eps))
 
 
 def load_strong_calibrated_model(
@@ -1108,6 +1148,7 @@ __all__ = [
     "WeeklyOptionReturnBatch",
     "WeeklyPathBatch",
     "WeeklySanosSimulator",
+    "front_week_sanos_gaussian_score",
     "front_week_sanos_inverse_cdf",
     "front_week_inverse_cdf_components",
     "hjm_roll_moment_loss",

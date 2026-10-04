@@ -30,6 +30,8 @@ from quantdata.dysanos.flex.fixed_expiry_ar1 import (
 )
 from quantdata.dysanos.flex.fixed_grid_dlv_attempt2_triangular import (
     TriangularFixedGridState,
+    triangular_fixed_grid_achievable_heun_roll,
+    triangular_fixed_grid_achievable_traded_density_roll,
     triangular_fixed_grid_ar1_heun_roll,
     triangular_fixed_grid_ar1_roll,
     triangular_fixed_grid_physical_roll,
@@ -53,6 +55,8 @@ class PhysicalTowerDataset:
     spot_returns: torch.Tensor
     paths_per_independent_block: int
     diagnostics: dict[str, float | int]
+    theoretical_log_density_by_time: torch.Tensor | None = None
+    theoretical_integrated_squared_factor_shift_by_time: torch.Tensor | None = None
 
     @property
     def num_paths(self) -> int:
@@ -110,11 +114,13 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--path-law",
-        choices=("physical", "ar1", "ar1-heun", "analytic"),
+        choices=("physical", "ar1", "ar1-heun", "achievable-heun", "analytic"),
         default="physical",
         help=(
             "physical uses zero raw log-DLV drift; ar1 uses the fitted weekly "
             "AR(1) conditional drift; ar1-heun uses its ten-substep affine extension; "
+            "achievable-heun projects that affine drift difference onto the fitted "
+            "Brownian loading span; "
             "analytic uses the theoretical DLVsq drift"
         ),
     )
@@ -122,7 +128,10 @@ def _parser() -> argparse.ArgumentParser:
         "--analytic-num-substeps",
         type=int,
         default=10,
-        help="stochastic-Heun substeps per week for analytic or ar1-heun path laws",
+        help=(
+            "stochastic-Heun substeps per week for analytic, ar1-heun, or "
+            "achievable-heun path laws"
+        ),
     )
     parser.add_argument(
         "--state-feature-mode",
@@ -380,6 +389,9 @@ def _physical_tower_dataset(
     ar1_conditional_intercept: torch.Tensor | None = None,
     ar1_conditional_slope: torch.Tensor | None = None,
     bs_y_vol: float = 0.0,
+    traded_density_ridge_ratio: float = 0.0,
+    traded_density_maximum_factor_shift_norm: float = float("inf"),
+    traded_density_maximum_action_l1: float = float("inf"),
 ) -> PhysicalTowerDataset:
     """Generate a physical or analytical-DLVsq shrinking tower."""
 
@@ -390,9 +402,21 @@ def _physical_tower_dataset(
     generator = torch.Generator(device=device).manual_seed(seed)
     if state_feature_mode not in {"density", "full"}:
         raise ValueError(f"unsupported state feature mode: {state_feature_mode}")
-    if path_law not in {"physical", "ar1", "ar1-heun", "analytic"}:
+    if path_law not in {
+        "physical",
+        "ar1",
+        "ar1-heun",
+        "achievable-heun",
+        "achievable-traded-density",
+        "analytic",
+    }:
         raise ValueError(f"unsupported path law: {path_law}")
-    if path_law in {"ar1", "ar1-heun"} and (
+    if path_law in {
+        "ar1",
+        "ar1-heun",
+        "achievable-heun",
+        "achievable-traded-density",
+    } and (
         ar1_conditional_intercept is None or ar1_conditional_slope is None
     ):
         raise ValueError("AR(1) path law requires conditional intercept and slope")
@@ -425,11 +449,28 @@ def _physical_tower_dataset(
     spot_return_values = torch.empty(
         (num_paths, 4), dtype=torch.float32, device=storage_device
     )
+    log_density_values = (
+        torch.empty((num_paths, 4), dtype=dtype, device=storage_device)
+        if path_law == "achievable-traded-density"
+        else None
+    )
+    integrated_factor_shift_values = (
+        torch.empty((num_paths, 4), dtype=dtype, device=storage_device)
+        if path_law == "achievable-traded-density"
+        else None
+    )
     maximum_mass_residual = 0.0
     maximum_forward_residual = 0.0
     minimum_density = float("inf")
     minimum_itm_price = float("inf")
     maximum_absolute_raw_innovation = 0.0
+    maximum_factor_replication_residual = 0.0
+    maximum_theoretical_action_l1 = 0.0
+    minimum_traded_factor_rank = raw_log_loadings.shape[-1]
+    maximum_requested_factor_norm = 0.0
+    maximum_viable_factor_norm = 0.0
+    minimum_factor_retention_fraction = 1.0
+    maximum_unscaled_action_l1 = 0.0
     base_support = surface.support_strikes[:, 0]
     calendar_time_increment_y = 5.0 / DAYS_PER_YEAR
     started = perf_counter()
@@ -485,6 +526,8 @@ def _physical_tower_dataset(
         )
         current_x = torch.ones(paths, dtype=dtype, device=device)
         current_y = torch.ones(paths, dtype=dtype, device=device)
+        cumulative_log_density = torch.zeros(paths, dtype=dtype, device=device)
+        cumulative_integrated_factor_shift = torch.zeros(paths, dtype=dtype, device=device)
         batch_spot_returns: list[torch.Tensor] = []
         for trade_week in range(4):
             num_live_expiries = 4 - trade_week
@@ -571,6 +614,82 @@ def _physical_tower_dataset(
                     fixed_cash_strikes=fixed_cash_strikes,
                     option_signs=option_signs,
                 )
+            elif path_law == "achievable-heun":
+                roll = triangular_fixed_grid_achievable_heun_roll(
+                    model.sanos_decoder,
+                    state,
+                    raw_log_loadings=live_loadings,
+                    conditional_intercept=ar1_conditional_intercept[: num_live_expiries - 1],
+                    conditional_slope=ar1_conditional_slope[: num_live_expiries - 1],
+                    minimum_dlvsq=geometry.min_dlvsq,
+                    expiry_time_increment_y=model.sanos_decoder.model_dts_y[0],
+                    calendar_time_increment_y=calendar_time_increment_y,
+                    standard_normals=normals[:, trade_week],
+                    uniforms=uniforms[:, trade_week],
+                    fixed_cash_strikes=fixed_cash_strikes,
+                    option_signs=option_signs,
+                )
+            elif path_law == "achievable-traded-density":
+                density_roll = triangular_fixed_grid_achievable_traded_density_roll(
+                    model.sanos_decoder,
+                    state,
+                    raw_log_loadings=live_loadings,
+                    conditional_intercept=ar1_conditional_intercept[: num_live_expiries - 1],
+                    conditional_slope=ar1_conditional_slope[: num_live_expiries - 1],
+                    minimum_dlvsq=geometry.min_dlvsq,
+                    expiry_time_increment_y=model.sanos_decoder.model_dts_y[0],
+                    calendar_time_increment_y=calendar_time_increment_y,
+                    standard_normals=normals[:, trade_week],
+                    uniforms=uniforms[:, trade_week],
+                    fixed_cash_strikes=fixed_cash_strikes,
+                    option_signs=option_signs,
+                    traded_ridge_ratio=traded_density_ridge_ratio,
+                    maximum_factor_shift_norm=(
+                        traded_density_maximum_factor_shift_norm
+                    ),
+                    maximum_action_l1=traded_density_maximum_action_l1,
+                )
+                cumulative_log_density += density_roll.log_marginal_utility
+                cumulative_integrated_factor_shift += (
+                    density_roll.integrated_squared_factor_shift
+                )
+                assert log_density_values is not None
+                assert integrated_factor_shift_values is not None
+                log_density_values[start : start + paths, trade_week] = (
+                    cumulative_log_density.to(storage_device)
+                )
+                integrated_factor_shift_values[start : start + paths, trade_week] = (
+                    cumulative_integrated_factor_shift.to(storage_device)
+                )
+                maximum_factor_replication_residual = max(
+                    maximum_factor_replication_residual,
+                    float(density_roll.maximum_factor_replication_residual),
+                )
+                maximum_theoretical_action_l1 = max(
+                    maximum_theoretical_action_l1,
+                    float(density_roll.maximum_action_l1),
+                )
+                minimum_traded_factor_rank = min(
+                    minimum_traded_factor_rank,
+                    int(density_roll.minimum_traded_factor_rank),
+                )
+                maximum_requested_factor_norm = max(
+                    maximum_requested_factor_norm,
+                    float(density_roll.maximum_requested_factor_norm),
+                )
+                maximum_viable_factor_norm = max(
+                    maximum_viable_factor_norm,
+                    float(density_roll.maximum_viable_factor_norm),
+                )
+                minimum_factor_retention_fraction = min(
+                    minimum_factor_retention_fraction,
+                    float(density_roll.minimum_factor_retention_fraction),
+                )
+                maximum_unscaled_action_l1 = max(
+                    maximum_unscaled_action_l1,
+                    float(density_roll.maximum_unscaled_action_l1),
+                )
+                roll = density_roll.roll
             else:
                 roll = triangular_fixed_grid_roll(
                     model.sanos_decoder,
@@ -655,11 +774,39 @@ def _physical_tower_dataset(
             ),
             "path_law": path_law,
             "analytic_num_substeps": (
-                analytic_num_substeps if path_law in {"analytic", "ar1-heun"} else None
+                analytic_num_substeps
+                if path_law
+                in {
+                    "analytic",
+                    "ar1-heun",
+                    "achievable-heun",
+                    "achievable-traded-density",
+                }
+                else None
             ),
             "dataset_storage": dataset_storage,
             "bs_y_vol": bs_y_vol,
+            "maximum_factor_replication_residual": maximum_factor_replication_residual,
+            "maximum_theoretical_action_l1": maximum_theoretical_action_l1,
+            "minimum_traded_factor_rank": (
+                minimum_traded_factor_rank
+                if path_law == "achievable-traded-density"
+                else None
+            ),
+            "maximum_requested_factor_norm": maximum_requested_factor_norm,
+            "maximum_viable_factor_norm": maximum_viable_factor_norm,
+            "minimum_factor_retention_fraction": minimum_factor_retention_fraction,
+            "maximum_unscaled_action_l1": maximum_unscaled_action_l1,
+            "traded_density_ridge_ratio": traded_density_ridge_ratio,
+            "traded_density_maximum_factor_shift_norm": (
+                traded_density_maximum_factor_shift_norm
+            ),
+            "traded_density_maximum_action_l1": traded_density_maximum_action_l1,
         },
+        theoretical_log_density_by_time=log_density_values,
+        theoretical_integrated_squared_factor_shift_by_time=(
+            integrated_factor_shift_values
+        ),
     )
 
 
@@ -1608,7 +1755,36 @@ def _correlation_aware_multiplier_test(
     blocks, coordinates = observations.shape
     mean = np.mean(observations, axis=0)
     standard_deviation = np.std(observations, axis=0, ddof=1)
-    active = standard_deviation > max(1.0e-14, 1.0e-10 * float(np.max(standard_deviation)))
+    activity_floor = max(1.0e-14, 1.0e-10 * float(np.max(standard_deviation)))
+    active = standard_deviation > activity_floor
+    deterministic_nonzero = (~active) & (np.abs(mean) > activity_floor)
+    if np.any(deterministic_nonzero):
+        minimum_p = 1.0 / (samples + 1)
+        return {
+            "num_independent_blocks": blocks,
+            "num_coordinates": coordinates,
+            "num_active_coordinates": int(np.sum(active)),
+            "num_deterministic_nonzero_coordinates": int(np.sum(deterministic_nonzero)),
+            "maximum_absolute_t": float("inf"),
+            "root_mean_square_t": float("inf"),
+            "maximum_absolute_t_p_value": minimum_p,
+            "root_mean_square_t_p_value": minimum_p,
+            "combined_p_value": min(1.0, 2.0 * minimum_p),
+            "zero_mean_not_rejected_at_five_percent": False,
+        }
+    if not np.any(active):
+        return {
+            "num_independent_blocks": blocks,
+            "num_coordinates": coordinates,
+            "num_active_coordinates": 0,
+            "num_deterministic_nonzero_coordinates": 0,
+            "maximum_absolute_t": 0.0,
+            "root_mean_square_t": 0.0,
+            "maximum_absolute_t_p_value": 1.0,
+            "root_mean_square_t_p_value": 1.0,
+            "combined_p_value": 1.0,
+            "zero_mean_not_rejected_at_five_percent": True,
+        }
     observed_t = np.sqrt(blocks) * mean[active] / standard_deviation[active]
     maximum = float(np.max(np.abs(observed_t)))
     rms = float(np.sqrt(np.mean(np.square(observed_t))))
@@ -1633,6 +1809,7 @@ def _correlation_aware_multiplier_test(
         "num_independent_blocks": blocks,
         "num_coordinates": coordinates,
         "num_active_coordinates": int(np.sum(active)),
+        "num_deterministic_nonzero_coordinates": 0,
         "maximum_absolute_t": maximum,
         "root_mean_square_t": rms,
         "maximum_absolute_t_p_value": maximum_p,
@@ -1680,17 +1857,28 @@ def _weighted_martingale_audit(
                 torch.nan,
             )
             for head in range(len(weights)):
+                head_active = active[head]
+                deterministic_nonzero = (~head_active) & (torch.abs(mean[head]) > 1.0e-14)
+                if bool(torch.any(deterministic_nonzero)):
+                    maximum_absolute_t = float("inf")
+                    root_mean_square_t = float("inf")
+                elif bool(torch.any(head_active)):
+                    active_t = coordinate_t[head][head_active]
+                    maximum_absolute_t = float(torch.max(torch.abs(active_t)))
+                    root_mean_square_t = float(torch.sqrt(torch.mean(active_t.square())))
+                else:
+                    maximum_absolute_t = 0.0
+                    root_mean_square_t = 0.0
                 option_blocks_by_head[head].append(block_means[head].cpu().double().numpy())
                 coordinate_summaries[head].append(
                     {
                         "trade_week": time_index,
                         "num_coordinates": returns.shape[1],
                         "maximum_absolute_weighted_mean": float(torch.max(torch.abs(mean[head]))),
-                        "maximum_absolute_t": float(
-                            torch.max(torch.abs(coordinate_t[head][active[head]]))
-                        ),
-                        "root_mean_square_t": float(
-                            torch.sqrt(torch.mean(coordinate_t[head][active[head]].square()))
+                        "maximum_absolute_t": maximum_absolute_t,
+                        "root_mean_square_t": root_mean_square_t,
+                        "num_deterministic_nonzero_coordinates": int(
+                            torch.sum(deterministic_nonzero)
                         ),
                         "num_absolute_t_above_2": int(
                             torch.sum(torch.abs(coordinate_t[head]) > 2.0)
@@ -2460,7 +2648,14 @@ def run(arguments: argparse.Namespace) -> None:
                         "fitted fixed-expiry AR(1) affine drift with stochastic-Heun "
                         "integration in log excess-DLV"
                         if arguments.path_law == "ar1-heun"
-                        else "theoretical DLVsq drift with stochastic-Heun integration in log excess-DLV"
+                        else (
+                            "state-dependent projection of the fitted AR(1)-to-Q drift "
+                            "difference onto the Brownian loading span, with stochastic-Heun "
+                            "integration in log excess-DLV"
+                            if arguments.path_law == "achievable-heun"
+                            else "theoretical DLVsq drift with stochastic-Heun integration "
+                            "in log excess-DLV"
+                        )
                     )
                 )
             )

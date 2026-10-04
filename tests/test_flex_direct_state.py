@@ -22,6 +22,7 @@ from quantdata.dysanos.flex.config import (
     FlexObjectiveConfig,
     FlexTrainConfig,
     ForwardMuFlexGeometryConfig,
+    FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig,
     LatentDecoderConfig,
     NativeStateConfig,
     PcaDecoderConfig,
@@ -47,6 +48,7 @@ from quantdata.dysanos.flex.model import (
     NativeStateSanosModel,
     bound_native_raw,
     dlvsq_cap_penalty,
+    front_term_eta_coordinates,
     raw_from_native_parameters,
 )
 from quantdata.dysanos.flex.sanos import (
@@ -168,6 +170,106 @@ def test_shared_strikes_merge_half_front_half_last_and_float_only_by_day() -> No
     assert inner_log_strikes.shape == (geometry.num_inner_strikes,)
     assert np.sum(inner_log_strikes == 0.0) == 1
     assert np.all(np.diff(inner_log_strikes) > 0.0)
+
+
+def test_front_term_eta_geometry_has_two_coordinates_and_exact_raw_round_trip() -> None:
+    geometry = FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig(
+        num_inner_strikes=6,
+        num_model_expiries=4,
+        explicit_model_business_dtes=(1.0, 2.0, 5.0, 10.0),
+    )
+    assert geometry.native_state_size == 4 * 7 + 2
+
+    dlvsqs = torch.linspace(0.03, 0.10, 24, dtype=torch.float64).reshape(1, 4, 6)
+    forward_vols = torch.tensor(
+        ((0.18, 0.20, 0.22, 0.24),),
+        dtype=torch.float64,
+    )
+    eta = torch.tensor(
+        ((0.31, 0.43, 0.43, 0.43),),
+        dtype=torch.float64,
+    )
+    raw = raw_from_native_parameters(
+        NativeParameters(dlvsqs=dlvsqs, forward_vols=forward_vols, eta=eta),
+        geometry=geometry,
+    )
+    parameters = bound_native_raw(raw, geometry=geometry)
+
+    assert raw.shape == (1, geometry.native_state_size)
+    torch.testing.assert_close(parameters.dlvsqs, dlvsqs)
+    torch.testing.assert_close(parameters.forward_vols, forward_vols)
+    torch.testing.assert_close(parameters.eta, eta)
+
+
+def test_front_term_eta_projection_preserves_final_backbone_total_volatility() -> None:
+    geometry = FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig(
+        num_inner_strikes=6,
+        num_model_expiries=4,
+        explicit_model_business_dtes=(1.0, 2.0, 5.0, 10.0),
+    )
+    forward_vols = torch.tensor(
+        ((0.18, 0.20, 0.22, 0.24),),
+        dtype=torch.float64,
+    )
+    eta = torch.tensor(
+        ((0.31, 0.35, 0.42, 0.47),),
+        dtype=torch.float64,
+    )
+    coordinates = front_term_eta_coordinates(
+        eta,
+        forward_vols,
+        geometry=geometry,
+    )
+    projected_eta = torch.cat(
+        (coordinates[..., :1], coordinates[..., 1:].expand(-1, 3)),
+        dim=-1,
+    )
+    expiries = torch.as_tensor(geometry.model_expiries_y, dtype=torch.float64)
+    sqrt_dts = torch.sqrt(torch.diff(expiries, prepend=torch.zeros(1)))
+
+    torch.testing.assert_close(
+        torch.sum(projected_eta * forward_vols * sqrt_dts, dim=-1),
+        torch.sum(eta * forward_vols * sqrt_dts, dim=-1),
+    )
+
+
+def test_front_term_native_audit_reports_exponential_dlv_values(tmp_path: Path) -> None:
+    geometry = FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig(
+        num_inner_strikes=6,
+        num_model_expiries=2,
+        explicit_model_business_dtes=(1.0, 5.0),
+    )
+    dlvsqs = torch.tensor(
+        (
+            (
+                (0.02, 0.03, 0.04, 0.05, 0.06, 0.07),
+                (0.08, 0.09, 0.10, 0.11, 0.12, 0.13),
+            ),
+        ),
+        dtype=torch.float64,
+    )
+    raw = raw_from_native_parameters(
+        NativeParameters(
+            dlvsqs=dlvsqs,
+            forward_vols=torch.tensor(((0.20, 0.24),), dtype=torch.float64),
+            eta=torch.tensor(((0.25, 0.35),), dtype=torch.float64),
+        ),
+        geometry=geometry,
+    )
+    checkpoint = tmp_path / "native.pt"
+    torch.save(
+        {"model_state_dict": {"daily_raw_embedding.weight": raw}},
+        checkpoint,
+    )
+
+    audit = flex_training.native_checkpoint_state_audit(
+        checkpoint,
+        geometry=geometry,
+    )
+
+    assert audit["coordinates"]["dlvsq"]["minimum"] == pytest.approx(0.02)
+    assert audit["coordinates"]["dlvsq"]["median"] == pytest.approx(0.075)
+    assert audit["coordinates"]["dlvsq"]["maximum"] == pytest.approx(0.13)
 
 
 def test_fixed_relative_strikes_do_not_move_with_state_or_expiry() -> None:
@@ -1493,6 +1595,85 @@ def test_density_slack_lp_reprices_a_synthetic_sanos_surface() -> None:
         config=FlexLpConfig(timeout_seconds=30.0),
     )
     np.testing.assert_allclose(torch_reprice, result.fits, atol=2.0e-7)
+
+
+def test_lp_fixed_backbone_annual_vol_uses_calendar_total_vols() -> None:
+    geometry, day, _ = _synthetic_market_and_surface()
+    config = FlexLpConfig(
+        backbone_mu=None,
+        fixed_backbone_annual_vol=0.05,
+    )
+
+    np.testing.assert_allclose(
+        config.backbone_total_vols(day, geometry=geometry),
+        0.05 * np.sqrt(geometry.model_expiries_y),
+    )
+
+
+def test_lp_allows_zero_fixed_backbone_smoothing() -> None:
+    geometry, day, _ = _synthetic_market_and_surface()
+    config = FlexLpConfig(
+        backbone_mu=None,
+        fixed_backbone_annual_vol=0.0,
+    )
+
+    np.testing.assert_array_equal(
+        config.backbone_total_vols(day, geometry=geometry),
+        np.zeros(geometry.num_model_expiries),
+    )
+
+
+def test_lp_book_mid_target_ignores_smooth_reference_prices() -> None:
+    geometry, day, _ = _synthetic_market_and_surface()
+    shifted_day = replace(
+        day,
+        fit_prices=np.minimum(day.asks, day.fit_prices + 5.0e-5),
+    )
+    config = FlexLpConfig(
+        central_fit_target="book_mid",
+        timeout_seconds=30.0,
+    )
+
+    base = fit_flex_density_lp(day, geometry=geometry, config=config)
+    shifted = fit_flex_density_lp(
+        shifted_day,
+        geometry=geometry,
+        config=config,
+    )
+
+    np.testing.assert_allclose(base.fits, shifted.fits, atol=1.0e-10)
+
+
+def test_direct_highs_lp_matches_cvxpy_lp() -> None:
+    geometry, day, _ = _synthetic_market_and_surface()
+    common = dict(
+        backbone_mu=None,
+        fixed_backbone_annual_vol=0.05,
+        central_fit_target="book_mid",
+        enforce_dlv_bounds=False,
+        timeout_seconds=30.0,
+    )
+    reference = fit_flex_density_lp(
+        day,
+        geometry=geometry,
+        config=FlexLpConfig(**common, solver_algorithm="simplex"),
+    )
+    direct = fit_flex_density_lp(
+        day,
+        geometry=geometry,
+        config=FlexLpConfig(**common, solver_algorithm="direct-simplex"),
+        initial_densities=reference.densities,
+    )
+
+    assert direct.status == "optimal"
+    assert direct.objective == pytest.approx(reference.objective, abs=1.0e-8)
+    np.testing.assert_allclose(direct.fits, reference.fits, atol=2.0e-7)
+    np.testing.assert_allclose(direct.densities.sum(axis=1), 1.0, atol=1.0e-8)
+    np.testing.assert_allclose(
+        np.sum(direct.densities * direct.support_strikes, axis=1),
+        1.0,
+        atol=1.0e-8,
+    )
 
 
 def test_shared_strikes_report_renders_a_partial_geometry_stage() -> None:
