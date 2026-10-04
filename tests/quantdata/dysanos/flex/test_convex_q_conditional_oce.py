@@ -199,6 +199,45 @@ def test_expiry_specific_linear_skip_directly_spans_normalized_features() -> Non
     assert policy.linear_skip[1].weight.grad is not None
 
 
+def test_calendar_time_is_an_explicit_policy_feature() -> None:
+    env = BaseEnvironment(precision=64, device="cpu")
+    config = SharedExpiryOceConfig(
+        label="test-time-policy",
+        state_size=3,
+        num_expiries=2,
+        num_strikes=2,
+        maximum_action_l1=100.0,
+        expiry_specific_linear_skip=True,
+        include_calendar_time=True,
+        network=FeedForwardConfig(activation="SiLU", num_depth=1, num_width=4),
+    )
+    policy = SharedExpiryOcePolicy(
+        env,
+        config=config,
+        state_mean=torch.zeros(3, dtype=torch.float64),
+        state_scale=torch.ones(3, dtype=torch.float64),
+        log_price_mean=torch.zeros(2, dtype=torch.float64),
+        log_price_scale=torch.ones(2, dtype=torch.float64),
+    )
+    assert policy.linear_skip is not None
+    with torch.no_grad():
+        policy.linear_skip[0].weight[0, -1] = 2.0
+
+    _, raw_heads = policy(
+        torch.zeros((1, 3), dtype=torch.float64),
+        torch.ones((1, 2, 2), dtype=torch.float64),
+        calendar_time=0.25,
+    )
+
+    assert float(raw_heads[0, 0, 0].detach()) == pytest.approx(0.5)
+    assert torch.count_nonzero(raw_heads) == 1
+    with pytest.raises(ValueError, match="calendar time is required"):
+        policy(
+            torch.zeros((1, 3), dtype=torch.float64),
+            torch.ones((1, 2, 2), dtype=torch.float64),
+        )
+
+
 def test_fixed_feature_pnl_matches_daywise_returns_and_costs() -> None:
     env = BaseEnvironment(precision=64, device="cpu")
     config = SharedExpiryOceConfig(

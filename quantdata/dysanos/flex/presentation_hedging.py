@@ -102,6 +102,7 @@ def load_presentation_model(
     checkpoint_path: Path,
     *,
     device: torch.device | str,
+    precision: int = 32,
 ) -> tuple[BaseEnvironment, JointDirectDynamicsModel]:
     """Load the exact affine Direct-200 checkpoint used by the presentation."""
     payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
@@ -118,7 +119,7 @@ def load_presentation_model(
     daily_state = state_dict.get("daily_state_embedding.weight")
     if not isinstance(daily_state, torch.Tensor) or daily_state.ndim != 2:
         raise ValueError("Direct-200 checkpoint has no daily state history")
-    env = BaseEnvironment(precision=32, device=device, debug=False)
+    env = BaseEnvironment(precision=precision, device=device, debug=False)
     model = JointDirectDynamicsModel(
         env,
         num_days=daily_state.shape[0],

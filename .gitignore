@@ -222,3 +222,4 @@ __marimo__/
 
 # Local generated notebook exceeds GitHub's per-file size limit.
 /quantdata/ncde/implied/notebooks/viz_day_detail.ipynb
+.vscode/settings.json

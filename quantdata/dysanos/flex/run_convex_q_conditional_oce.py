@@ -59,7 +59,7 @@ _NORMALIZED_MONEYNESS = (
 )
 
 
-@version("1.2", dependencies=[FeedForwardConfig])
+@version("1.3", dependencies=[FeedForwardConfig])
 @dataclass(frozen=True, kw_only=True)
 class SharedExpiryOceConfig:
     """Architecture and action geometry of the conditional OCE policy."""
@@ -72,6 +72,7 @@ class SharedExpiryOceConfig:
     num_strikes: int = 11
     maximum_action_l1: float = 16.0
     expiry_specific_linear_skip: bool = False
+    include_calendar_time: bool = False
     action_parameterization: str = "signed"
     network: FeedForwardConfig = FeedForwardConfig(
         activation="SiLU",
@@ -170,7 +171,7 @@ def assemble_expiry_slice_actions(
 
 
 class SharedExpiryOcePolicy(BaseModel):
-    """One shared 11+1 network applied separately to each expiry slice."""
+    """One shared spot-plus-strikes network applied to each expiry slice."""
 
     def __init__(
         self,
@@ -200,13 +201,17 @@ class SharedExpiryOcePolicy(BaseModel):
         output_size = (
             head_size if config.action_parameterization == "signed" else 2 * head_size
         )
+        feature_size = (
+            config.state_size
+            + config.num_strikes
+            + int(config.include_calendar_time)
+        )
         self.network = FeedForward(
             env,
-            config.state_size + config.num_strikes,
+            feature_size,
             output_size,
             config.network,
         )
-        feature_size = config.state_size + config.num_strikes
         self.linear_skip = torch.nn.ModuleList(
             torch.nn.Linear(
                 feature_size,
@@ -231,6 +236,8 @@ class SharedExpiryOcePolicy(BaseModel):
         self,
         states: torch.Tensor,
         option_prices: torch.Tensor,
+        *,
+        calendar_time: torch.Tensor | float | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         expected_prices = (
             len(states),
@@ -252,7 +259,29 @@ class SharedExpiryOcePolicy(BaseModel):
         state_block = normalized_state[:, None, :].expand(
             -1, self.config.num_expiries, -1
         )
-        features = torch.cat((state_block, normalized_prices), dim=-1)
+        feature_blocks = [state_block, normalized_prices]
+        if self.config.include_calendar_time:
+            if calendar_time is None:
+                raise ValueError("calendar time is required by this policy")
+            time_value = torch.as_tensor(
+                calendar_time,
+                dtype=states.dtype,
+                device=states.device,
+            )
+            if time_value.ndim == 0:
+                time_value = time_value.expand(len(states))
+            if time_value.shape == (len(states),):
+                time_value = time_value[:, None]
+            if time_value.shape != (len(states), 1):
+                raise ValueError(
+                    "calendar time must be scalar or have one value per path"
+                )
+            feature_blocks.append(
+                time_value[:, None, :].expand(-1, self.config.num_expiries, -1)
+            )
+        elif calendar_time is not None:
+            raise ValueError("calendar time was supplied to a time-homogeneous policy")
+        features = torch.cat(feature_blocks, dim=-1)
         raw_heads = self.network(features)
         if self.linear_skip is not None:
             raw_heads = raw_heads + torch.stack(
@@ -370,7 +399,15 @@ def _simulate_expiry_policy_batch(
             prices_by_expiry = issue_values.reshape(
                 num_paths, num_expiries, policy.config.num_strikes
             )
-            action, raw_heads = policy(states.detach(), prices_by_expiry.detach())
+            action, raw_heads = policy(
+                states.detach(),
+                prices_by_expiry.detach(),
+                calendar_time=(
+                    day / max(num_steps - 1, 1)
+                    if policy.config.include_calendar_time
+                    else None
+                ),
+            )
             action, cost_basis, uncapped_gross = _assemble_expiry_slice_action_details(
                 raw_heads,
                 maximum_l1=policy.config.maximum_action_l1,
@@ -558,6 +595,18 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--hidden-layers", type=int, default=2)
     parser.add_argument("--linear-action-skip", action="store_true")
     parser.add_argument(
+        "--include-calendar-time",
+        action="store_true",
+        help="Append the normalized entry day t/(num_steps-1) to every action input.",
+    )
+    parser.add_argument(
+        "--normalized-moneyness",
+        type=float,
+        nargs="+",
+        default=list(_NORMALIZED_MONEYNESS),
+        help="Increasing normalized-moneyness coordinates for every expiry slice.",
+    )
+    parser.add_argument(
         "--long-short-actions",
         action="store_true",
         help=(
@@ -612,6 +661,10 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _validate_arguments(arguments: argparse.Namespace) -> None:
+    _nms_book(
+        _EXPIRY_DAYS,
+        normalized_moneyness=tuple(arguments.normalized_moneyness),
+    )
     integer_values = (
         arguments.num_paths,
         arguments.num_steps,
@@ -767,14 +820,17 @@ def _normalization(
     )
     calls = _price_calls(model, surface, days=initial_days, strikes=strikes)
     prices = torch.where(is_put[None], calls - 1.0 + strikes, calls)
+    num_strikes = len(book.labels[1:]) // len(book.expiry_days)
     log_prices = torch.log(torch.clamp_min(prices, torch.finfo(dtype).tiny)).reshape(
-        len(historical_states), len(book.expiry_days), len(_NORMALIZED_MONEYNESS)
+        len(historical_states), len(book.expiry_days), num_strikes
     )
     state_mean = torch.mean(historical_states, dim=0)
     state_std = torch.std(historical_states, dim=0, correction=0)
     state_scale = torch.where(state_std > 1.0e-5, state_std, torch.ones_like(state_std))
     log_price_mean = torch.mean(log_prices, dim=(0, 1))
-    log_price_std = torch.std(log_prices.reshape(-1, len(_NORMALIZED_MONEYNESS)), dim=0, correction=0)
+    log_price_std = torch.std(
+        log_prices.reshape(-1, num_strikes), dim=0, correction=0
+    )
     log_price_scale = torch.where(
         log_price_std > 1.0e-5,
         log_price_std,
@@ -798,9 +854,10 @@ def _gradient_statistics(model: BaseModel) -> tuple[float, float, int]:
 
 
 def _setup(arguments: argparse.Namespace) -> dict[str, Any]:
+    normalized_moneyness = tuple(arguments.normalized_moneyness)
     book = _nms_book(
         _EXPIRY_DAYS,
-        normalized_moneyness=_NORMALIZED_MONEYNESS,
+        normalized_moneyness=normalized_moneyness,
     )
     env, model = load_presentation_model(arguments.checkpoint, device=arguments.device)
     payload = torch.load(arguments.target_history, map_location="cpu", weights_only=False)
@@ -832,19 +889,22 @@ def _setup(arguments: argparse.Namespace) -> dict[str, Any]:
         copula_fit.state_loading, dtype=env.fdtype, device=env.device
     )
     normalizers = _normalization(model, historical_states, book)
+    num_strikes = len(normalized_moneyness)
+    label_parts = ["convex-q-shared-expiry", f"{num_strikes}plus1"]
+    if arguments.long_short_actions:
+        label_parts.append("long-short")
+    if arguments.linear_action_skip:
+        label_parts.append("linear-skip")
+    if arguments.include_calendar_time:
+        label_parts.append("time")
+    label_parts.append("v1")
     policy_config = SharedExpiryOceConfig(
-        label=(
-            "convex-q-shared-expiry-11plus1-long-short-linear-skip-v1"
-            if arguments.linear_action_skip and arguments.long_short_actions
-            else (
-                "convex-q-shared-expiry-11plus1-linear-skip-v1"
-                if arguments.linear_action_skip
-                else "convex-q-shared-expiry-11plus1-v1"
-            )
-        ),
+        label="-".join(label_parts),
         state_size=initial_state.shape[0],
+        num_strikes=num_strikes,
         maximum_action_l1=arguments.action_l1_cap,
         expiry_specific_linear_skip=arguments.linear_action_skip,
+        include_calendar_time=arguments.include_calendar_time,
         action_parameterization=(
             "long-short" if arguments.long_short_actions else "signed"
         ),
@@ -944,6 +1004,7 @@ def _prepare_feature_cache(
         "state_size": setup["policy_config"].state_size,
         "num_expiries": setup["policy_config"].num_expiries,
         "num_strikes": setup["policy_config"].num_strikes,
+        "normalized_moneyness": list(arguments.normalized_moneyness),
     }
     if metadata_path.exists() and state_path.exists() and price_path.exists():
         metadata = json.loads(metadata_path.read_text())
@@ -1099,7 +1160,16 @@ def _fixed_feature_pnl(
     maximum_action = torch.zeros((), dtype=torch.float64, device=states.device)
     cap_active_sum = torch.zeros((), dtype=torch.float64, device=states.device)
     for day in range(states.shape[1]):
-        _, raw_heads = policy(states[:, day], option_prices[:, day])
+        calendar_time = (
+            day / max(states.shape[1] - 1, 1)
+            if policy.config.include_calendar_time
+            else None
+        )
+        _, raw_heads = policy(
+            states[:, day],
+            option_prices[:, day],
+            calendar_time=calendar_time,
+        )
         if frozen_policies:
             if policy.config.action_parameterization != "signed":
                 raise ValueError(
@@ -1109,7 +1179,9 @@ def _fixed_feature_pnl(
             with torch.no_grad():
                 for frozen_policy in frozen_policies:
                     _, frozen_raw_heads = frozen_policy(
-                        states[:, day], option_prices[:, day]
+                        states[:, day],
+                        option_prices[:, day],
+                        calendar_time=calendar_time,
                     )
                     frozen_raw_sum = frozen_raw_sum + frozen_raw_heads
             raw_heads = raw_heads + frozen_raw_sum
@@ -2061,8 +2133,13 @@ def _run_locked(arguments: argparse.Namespace) -> None:
     returns = np.load(arguments.returns, mmap_mode="r", allow_pickle=False)
     weights = np.load(arguments.weights, mmap_mode="r", allow_pickle=False)
     convex_report = json.loads(arguments.convex_report.read_text())
-    if returns.shape != (1_000_000, 25, 45):
-        raise ValueError(f"expected the fitted 1000000x25x45 return matrix, found {returns.shape}")
+    expected_instruments = 1 + len(_EXPIRY_DAYS) * len(arguments.normalized_moneyness)
+    expected_shape = (1_000_000, 25, expected_instruments)
+    if returns.shape != expected_shape:
+        raise ValueError(
+            f"expected the fitted return matrix with shape {expected_shape}, "
+            f"found {returns.shape}"
+        )
     if weights.shape != (1_000_000,) or np.any(~np.isfinite(weights) | (weights <= 0.0)):
         raise ValueError("convex density weights must be one million finite-positive values")
     if not 0 < arguments.num_paths <= len(returns):

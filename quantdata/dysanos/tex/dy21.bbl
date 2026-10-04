@@ -1,0 +1,100 @@
+\newcommand{\etalchar}[1]{$^{#1}$}
+\begin{thebibliography}{WWP{\etalchar{+}}21}
+
+\bibitem[AH11]{AndreasenHuge}
+J.~Andreasen and B.~Huge.
+\newblock Volatility interpolation.
+\newblock {\em Risk}, pages 86--89, 2011.
+
+\bibitem[BGTW19]{DH}
+H.~Buehler, L.~Gonon, J.~Teichmann, and B.~Wood.
+\newblock Deep hedging.
+\newblock {\em Quantitative Finance}, 19(8):1271--1291, 2019.
+
+\bibitem[BHK{\etalchar{+}}26]{SANOS2026}
+Hans Buehler, Blanka Horvath, Anastais Kratsios, Yannick Limmer, and Raeid
+  Saqur.
+\newblock Sanos - smooth arbitrage-free non-parametric option surfaces.
+\newblock \url{https://arxiv.org/abs/2601.11209}, Februar 2026.
+
+\bibitem[BMPW22]{removedrift}
+Hans Buehler, Phillip Murray, Mikko~S. Pakkanen, and Ben Wood.
+\newblock Deep hedging: learning to remove the drift.
+\newblock {\em Risk}, February 2022.
+
+\bibitem[BR15]{DLV}
+Hans Buehler and Evgeny Ryskin.
+\newblock Discrete local volatility for large time steps (extended version).
+\newblock \url{https://papers.ssrn.com/abstract=2642630}, 2015.
+
+\bibitem[BTT07]{OCE}
+Aharon Ben-Tal and Marc Teboulle.
+\newblock An old-new concept of convex risk measures: The optimized certainty
+  equivalent.
+\newblock {\em Mathematical Finance}, 17(3):449--476, 2007.
+
+\bibitem[Bue06]{buehler2006expensive}
+Hans Buehler.
+\newblock Expensive martingales.
+\newblock {\em Quantitative Finance}, 6(3):207--218, 2006.
+
+\bibitem[Bue08]{BuehlerVolAndDivs}
+Hans Buehler.
+\newblock Volatility and dividends - volatility modelling with cash dividends
+  and simple credit risk.
+\newblock \url{https://papers.ssrn.com/abstract=1141877}, 2008.
+
+\bibitem[CFD02]{ContVol}
+Rama Cont, Jose~da Fonseca, and Valdo Durrleman.
+\newblock Stochastic models of implied volatility surfaces.
+\newblock {\em Economic Notes}, 31(2):361--377, 2002.
+
+\bibitem[CM99]{carrmadan1999}
+Peter~P. Carr and Dilip~B. Madan.
+\newblock Option valuation using the fast fourier transform.
+\newblock {\em Journal of Computational Finance}, 2(4):61--73, 1999.
+
+\bibitem[CN12]{TangentLevy}
+R.~Carmona and S.~Nadtochiy.
+\newblock Tangent levy market models.
+\newblock {\em Finance and Stochastics}, 16:63–104, 2012.
+
+\bibitem[CRW23]{Cohen02012023}
+Samuel~N. Cohen, Christoph Reisinger, and Sheng Wang.
+\newblock Arbitrage-free neural-sde market models.
+\newblock {\em Applied Mathematical Finance}, 30(1):1--46, 2023.
+
+\bibitem[Fen09]{fengler2009}
+Matthias~R. Fengler.
+\newblock Arbitrage-free smoothing of the implied volatility surface.
+\newblock {\em Quantitative Finance}, 9(4):417--428, 2009.
+
+\bibitem[Fri00]{MEMM}
+Marco Frittelli.
+\newblock The minimal entropy martingale measure and the valuation problem in
+  incomplete markets.
+\newblock {\em Mathematical Finance}, 10(1):39--52, 2000.
+
+\bibitem[GHL12]{Guyon2011TheSC}
+Julien Guyon and Pierre Henry-Labord{\`e}re.
+\newblock Being particular about calibration.
+\newblock {\em Risk}, January 2012.
+
+\bibitem[NJZB23]{vae_ning2023arbitrage}
+Brian Ning, Sebastian Jaimungal, Xiaorong Zhang, and Maxime Bergeron.
+\newblock Arbitrage-free implied volatility surface generation with variational
+  autoencoders.
+\newblock {\em SIAM Journal on Financial Mathematics}, 14(4):1004--1027, 2023.
+
+\bibitem[WBWB19]{wiese2019simulate}
+Magnus Wiese, Lianjun Bai, Ben Wood, and Hans Buehler.
+\newblock Deep hedging: Learning to simulate equity option markets.
+\newblock \url{https://arxiv.org/abs/1911.01700}, 2019.
+
+\bibitem[WWP{\etalchar{+}}21]{wiese2021multiassetspotoptionmarket}
+Magnus Wiese, Ben Wood, Alexandre Pachoud, Ralf Korn, Hans Buehler, Phillip
+  Murray, and Lianjun Bai.
+\newblock Multi-asset spot and option market simulation.
+\newblock \url{https://arxiv.org/abs/2112.06823}, 2021.
+
+\end{thebibliography}

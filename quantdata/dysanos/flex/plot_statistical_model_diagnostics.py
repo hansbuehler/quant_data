@@ -15,6 +15,7 @@ from cdxcore.bs import bs
 from cdxcore.verbose import Context
 from matplotlib import pyplot as plt
 from matplotlib.colors import TwoSlopeNorm
+from matplotlib.ticker import FuncFormatter
 from scipy.linalg import solve_discrete_lyapunov
 
 from quantdata.biz_calendar import DAYS_PER_YEAR, NMS
@@ -33,6 +34,19 @@ from quantdata.torch import BaseEnvironment
 from quantdata.widb.day import enrich_day
 
 plt.switch_backend("Agg")
+
+_COMPACT_FIGURE_SCALE = 0.5
+_COMPACT_SUPTITLE_FONTSIZE = 13
+_PCA_SPECTRUM_TITLE_FONTSIZE = 0.75 * _COMPACT_SUPTITLE_FONTSIZE
+_PCA_SPECTRUM_TEXT_FONTSIZE = 7.5
+_SURFACE_SUPTITLE_FONTSIZE = 11
+_SURFACE_AXES_TITLE_FONTSIZE = 10
+_SURFACE_LABEL_FONTSIZE = 9
+_SURFACE_TICK_FONTSIZE = 8
+_PCA_FACTOR_SUPTITLE_FONTSIZE = 13.75
+_PCA_FACTOR_AXES_TITLE_FONTSIZE = 11.25
+_PCA_FACTOR_LABEL_FONTSIZE = 10
+_PCA_FACTOR_TICK_FONTSIZE = 8.75
 
 
 @dataclass(frozen=True)
@@ -92,13 +106,21 @@ def stationary_state_covariance(
 
 def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--daily-only", action="store_true")
     for geometry in ("weekly", "daily"):
-        parser.add_argument(f"--{geometry}-checkpoint", type=Path, required=True)
-        parser.add_argument(f"--{geometry}-target-history", type=Path, required=True)
-        parser.add_argument(f"--{geometry}-student-report", type=Path, required=True)
-        parser.add_argument(f"--{geometry}-diffusion-report", type=Path, required=True)
-    parser.add_argument("--weekly-native-checkpoint", type=Path, required=True)
-    parser.add_argument("--weekly-native-completion", type=Path, required=True)
+        required = geometry == "daily"
+        parser.add_argument(
+            f"--{geometry}-checkpoint", type=Path, required=required
+        )
+        parser.add_argument(f"--{geometry}-target-history", type=Path)
+        parser.add_argument(
+            f"--{geometry}-student-report", type=Path, required=required
+        )
+        parser.add_argument(
+            f"--{geometry}-diffusion-report", type=Path, required=required
+        )
+    parser.add_argument("--weekly-native-checkpoint", type=Path)
+    parser.add_argument("--weekly-native-completion", type=Path)
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--device", default="cuda:0")
@@ -339,23 +361,38 @@ def _plot_pca_spectrum(
     *,
     output: Path,
 ) -> None:
-    figure, axes = plt.subplots(1, 2, figsize=(15.8, 6.9))
+    names = tuple(pcas)
+    figure, axes = plt.subplots(
+        1,
+        len(names),
+        figsize=(
+            _COMPACT_FIGURE_SCALE * 7.9 * len(names),
+            _COMPACT_FIGURE_SCALE * 6.9,
+        ),
+        squeeze=False,
+    )
     colors = {"weekly": "#5b83c4", "daily": "#f28e45"}
-    titles = {"weekly": "Weekly model", "daily": "Daily + weekly model"}
-    for axis, name in zip(axes, ("weekly", "daily"), strict=True):
+    for axis, name in zip(axes[0], names, strict=True):
         explained = 100.0 * pcas[name].explained_variance
         shown = min(20, len(explained))
         locations = np.arange(1, shown + 1)
         axis.bar(locations, explained[:shown], color=colors[name], alpha=0.9)
-        axis.set_xlabel("Stationary IV principal component")
-        axis.set_ylabel("Individual IV variance (%)")
-        axis.set_title(titles[name])
+        axis.set_xlabel("PCA Components", fontsize=_PCA_SPECTRUM_TEXT_FONTSIZE)
+        axis.set_ylabel(
+            "Individual IV variance (%)",
+            fontsize=_PCA_SPECTRUM_TEXT_FONTSIZE,
+        )
+        axis.tick_params(labelsize=_PCA_SPECTRUM_TEXT_FONTSIZE)
         axis.grid(axis="y", alpha=0.25)
         twin = axis.twinx()
         cumulative = 100.0 * np.cumsum(pcas[name].explained_variance[:shown])
-        twin.plot(locations, cumulative, color="#333333", marker="o", linewidth=2)
+        twin.plot(locations, cumulative, color="#d62728", linestyle="-", linewidth=2)
         twin.set_ylim(90.0, 100.15)
-        twin.set_ylabel("Cumulative IV variance (%)")
+        twin.set_ylabel(
+            "Cumulative IV variance (%)",
+            fontsize=_PCA_SPECTRUM_TEXT_FONTSIZE,
+        )
+        twin.tick_params(labelsize=_PCA_SPECTRUM_TEXT_FONTSIZE)
         text = (
             f"PC1 {explained[0]:.1f}%\n"
             f"PC1–4 {np.sum(explained[:4]):.1f}%\n"
@@ -368,9 +405,13 @@ def _plot_pca_spectrum(
             transform=axis.transAxes,
             ha="right",
             va="bottom",
+            fontsize=_PCA_SPECTRUM_TEXT_FONTSIZE,
             bbox={"facecolor": "white", "edgecolor": "#aaaaaa", "alpha": 0.9},
         )
-    figure.suptitle("Decoded two-eta models retain low-dimensional IV variation", fontsize=19)
+    figure.suptitle(
+        "Explained Implied Volatility Variance",
+        fontsize=_PCA_SPECTRUM_TITLE_FONTSIZE,
+    )
     figure.tight_layout()
     _save_figure(figure, output)
 
@@ -380,9 +421,18 @@ def _plot_tail_exceedance(
     *,
     output: Path,
 ) -> None:
-    figure, axes = plt.subplots(1, 2, figsize=(16.1, 7.0), sharey=True)
+    names = tuple(probabilities)
+    figure, axes = plt.subplots(
+        1,
+        len(names),
+        figsize=(8.05 * len(names), 7.0),
+        sharey=True,
+        squeeze=False,
+    )
     locations = np.arange(3)
     titles = {"weekly": "Weekly", "daily": "Daily + weekly"}
+    if names == ("daily",):
+        titles["daily"] = "DYSANOS model"
     colors = {
         "market_2025": "#c81e1e",
         "gaussian": "#a8a8a8",
@@ -407,7 +457,7 @@ def _plot_tail_exceedance(
         "stochastic_volatility": ("s", "-", 2.0),
         "historical_replay": ("v", "-.", 2.0),
     }
-    for axis, name in zip(axes, ("weekly", "daily"), strict=True):
+    for axis, name in zip(axes[0], names, strict=True):
         values = probabilities[name]
         for method in labels:
             marker, linestyle, linewidth = styles[method]
@@ -425,8 +475,8 @@ def _plot_tail_exceedance(
         axis.set_xlabel("Return horizon")
         axis.set_title(titles[name])
         axis.grid(axis="y", which="both", alpha=0.25)
-    axes[0].set_ylabel("Probability above pre-2025 market 95% radius (%)")
-    handles, legend_labels = axes[0].get_legend_handles_labels()
+    axes[0, 0].set_ylabel("Probability above pre-2025 market 95% radius (%)")
+    handles, legend_labels = axes[0, 0].get_legend_handles_labels()
     figure.legend(handles, legend_labels, loc="lower center", ncol=3)
     figure.suptitle(
         "No-replay heavy-tail laws recover far more market-tail mass than Gaussian dynamics",
@@ -453,18 +503,32 @@ def _plot_two_surfaces(
     *,
     title: str,
     output: Path,
+    font_scale: float = 1.0,
+    show_panel_titles: bool = True,
 ) -> None:
-    figure = plt.figure(figsize=(15.4, 7.1))
-    axes = [figure.add_subplot(1, 2, index + 1, projection="3d") for index in range(2)]
+    names = tuple(grids)
+    figure = plt.figure(
+        figsize=(
+            _COMPACT_FIGURE_SCALE * 7.7 * len(names),
+            _COMPACT_FIGURE_SCALE * 7.1,
+        )
+    )
+    axes = [
+        figure.add_subplot(1, len(names), index + 1, projection="3d")
+        for index in range(len(names))
+    ]
     minimum = min(float(np.min(item[2])) for item in grids.values()) * 100.0
     maximum = max(float(np.max(item[2])) for item in grids.values()) * 100.0
     titles = {"weekly": "Weekly nodes", "daily": "Daily + weekly nodes"}
+    if names == ("daily",):
+        titles["daily"] = "DYSANOS model"
     last_surface = None
-    for axis, name in zip(axes, ("weekly", "daily"), strict=True):
+    for axis, name in zip(axes, names, strict=True):
         expiry_days, nms, iv = grids[name]
         xx, yy = np.meshgrid(np.sqrt(expiry_days / DAYS_PER_YEAR), nms, indexing="ij")
+        x_axis_total = float(np.min(xx) + np.max(xx))
         last_surface = axis.plot_surface(
-            xx,
+            x_axis_total - xx,
             yy,
             100.0 * iv,
             cmap="viridis",
@@ -473,13 +537,47 @@ def _plot_two_surfaces(
             linewidth=0.15,
             antialiased=True,
         )
-        axis.set_title(titles[name])
-        axis.set_xlabel("sqrt(TTE)")
-        axis.set_ylabel("NMS")
-        axis.set_zlabel("Implied vol (%)")
+        axis.view_init(elev=25.0, azim=60.0)
+        axis.xaxis.set_major_formatter(
+            FuncFormatter(
+                lambda value, _position, total=x_axis_total: f"{total - value:.1f}"
+            )
+        )
+        if show_panel_titles:
+            axis.set_title(
+                titles[name],
+                fontsize=font_scale * _SURFACE_AXES_TITLE_FONTSIZE,
+            )
+        # A 3D x-label is placed outside compact canvases by Matplotlib's
+        # projected-axis layout. Anchor it in axes coordinates so it remains
+        # fully visible at presentation size.
+        axis.set_xlabel("")
+        axis.text2D(
+            0.72,
+            -0.10,
+            r"$\sqrt{\mathrm{TTE}}$",
+            transform=axis.transAxes,
+            ha="center",
+            va="bottom",
+            fontsize=font_scale * _SURFACE_LABEL_FONTSIZE,
+        )
+        axis.set_ylabel("NMS", fontsize=font_scale * _SURFACE_LABEL_FONTSIZE)
+        axis.tick_params(labelsize=font_scale * _SURFACE_TICK_FONTSIZE)
+    figure.subplots_adjust(bottom=0.18, top=0.88)
     if last_surface is not None:
-        figure.colorbar(last_surface, ax=axes, shrink=0.65, pad=0.06, label="Implied vol (%)")
-    figure.suptitle(title, fontsize=19)
+        # The colorbar carries the vertical-axis label in the compact layout.
+        colorbar = figure.colorbar(
+            last_surface,
+            ax=axes,
+            shrink=0.65,
+            pad=0.10,
+        )
+        colorbar.set_label(
+            "Implied vol (%)",
+            fontsize=font_scale * _SURFACE_LABEL_FONTSIZE,
+        )
+        colorbar.ax.tick_params(labelsize=font_scale * _SURFACE_TICK_FONTSIZE)
+    figure.suptitle(title, fontsize=font_scale * _SURFACE_SUPTITLE_FONTSIZE)
     _save_figure(figure, output)
 
 
@@ -490,29 +588,49 @@ def _plot_pca_factors(pca: DecodedIvPca, *, title: str, output: Path) -> None:
         pca.nms,
         indexing="ij",
     )
+    x_axis_total = float(np.min(xx) + np.max(xx))
     explained = 100.0 * pca.explained_variance
+    values_by_component = 100.0 * pca.one_standard_deviation_surfaces[:8]
     for index in range(8):
         axis = figure.add_subplot(2, 4, index + 1, projection="3d")
-        values = 100.0 * pca.one_standard_deviation_surfaces[index]
-        maximum = max(float(np.max(np.abs(values))), 1.0e-8)
+        values = values_by_component[index]
+        component_maximum = max(float(np.max(np.abs(values))), 1.0e-8)
         axis.plot_surface(
-            xx,
+            x_axis_total - xx,
             yy,
             values,
-            cmap="coolwarm",
-            norm=TwoSlopeNorm(vmin=-maximum, vcenter=0.0, vmax=maximum),
+            cmap="viridis",
+            norm=TwoSlopeNorm(
+                vmin=-component_maximum,
+                vcenter=0.0,
+                vmax=component_maximum,
+            ),
             linewidth=0.0,
             antialiased=True,
         )
-        axis.set_title(
-            f"PC {index + 1}: {explained[index]:.2f}%\nscale ±{maximum:.2f} vol pts",
-            fontsize=9,
+        axis.view_init(elev=25.0, azim=60.0)
+        axis.xaxis.set_major_formatter(
+            FuncFormatter(
+                lambda value, _position, total=x_axis_total: f"{total - value:.1f}"
+            )
         )
-        axis.set_xlabel("sqrt(TTE)", fontsize=8)
-        axis.set_ylabel("NMS", fontsize=8)
-        axis.set_zlabel("Δ IV", fontsize=8)
-        axis.tick_params(labelsize=7)
-    figure.suptitle(title, fontsize=17)
+        axis.set_zlim(-component_maximum, component_maximum)
+        axis.set_title(
+            f"PC {index + 1}: {explained[index]:.2f}%\n"
+            f"scale ±{component_maximum:.2f} vol pts",
+            fontsize=_PCA_FACTOR_AXES_TITLE_FONTSIZE,
+        )
+        axis.xaxis.set_rotate_label(False)
+        axis.set_xlabel(
+            r"$\sqrt{\mathrm{TTE}}$",
+            fontsize=_PCA_FACTOR_LABEL_FONTSIZE,
+            labelpad=10,
+            rotation=0,
+        )
+        axis.set_ylabel("NMS", fontsize=_PCA_FACTOR_LABEL_FONTSIZE)
+        axis.set_zlabel(r"$\Delta$ IV", fontsize=_PCA_FACTOR_LABEL_FONTSIZE)
+        axis.tick_params(labelsize=_PCA_FACTOR_TICK_FONTSIZE)
+    figure.suptitle(title, fontsize=_PCA_FACTOR_SUPTITLE_FONTSIZE)
     figure.tight_layout()
     _save_figure(figure, output)
 
@@ -528,12 +646,24 @@ def _plot_invariant_atm_draws(
     expiry_days = np.asarray((1.0, 2.0, 3.0, 5.0, 10.0, 15.0, 20.0))
     nms = np.asarray((0.0,))
     grids: dict[str, np.ndarray] = {}
-    figure, axes = plt.subplots(1, 2, figsize=(16.1, 7.2), sharey=True)
+    names = tuple(models)
+    figure, axes = plt.subplots(
+        1,
+        len(names),
+        figsize=(
+            _COMPACT_FIGURE_SCALE * 8.05 * len(names),
+            _COMPACT_FIGURE_SCALE * 7.2,
+        ),
+        sharey=True,
+        squeeze=False,
+    )
     titles = {
         "weekly": "Weekly nodes (5D, 10D, …)",
         "daily": "Daily front nodes (1D–5D) + weekly",
     }
-    for axis, name in zip(axes, ("weekly", "daily"), strict=True):
+    if names == ("daily",):
+        titles["daily"] = "DYSANOS model"
+    for axis, name in zip(axes[0], names, strict=True):
         model = models[name]
         mean, invariant, _ = _stationary_model_quantities(model)
         factor = np.linalg.cholesky(invariant)
@@ -558,7 +688,10 @@ def _plot_invariant_atm_draws(
         axis.set_xlabel("Expiry (business days)")
         axis.set_ylabel("ATM implied volatility (%)")
         axis.grid(alpha=0.25)
-    figure.suptitle("Six draws from each fitted invariant distribution", fontsize=19)
+    figure.suptitle(
+        "Six draws from the fitted invariant distribution",
+        fontsize=_COMPACT_SUPTITLE_FONTSIZE,
+    )
     figure.tight_layout()
     _save_figure(figure, output)
     return grids
@@ -720,11 +853,25 @@ def _plot_representative_fit(
             alpha=0.55,
             label="Observed OTM bid–ask IV interval",
         )
-        axis.plot(strike, 100.0 * native_iv, "--", color="#d97706", linewidth=2.0, label="Per-date direct SANOS")
-        axis.plot(strike, 100.0 * joint_iv, color="#2563eb", linewidth=2.2, label="Two-eta affine-200")
+        axis.plot(
+            strike,
+            100.0 * native_iv,
+            "--",
+            color="#d97706",
+            linewidth=2.0,
+            label="Per-date direct SANOS",
+        )
+        axis.plot(
+            strike,
+            100.0 * joint_iv,
+            color="#2563eb",
+            linewidth=2.2,
+            label="Two-eta affine-200",
+        )
         first = group.iloc[0]
         axis.set_title(
-            f"{first.expiry:%Y-%m-%d}  •  {float(first.bdte):.1f} business DTE  •  {len(group)} books"
+            f"{first.expiry:%Y-%m-%d}  •  {float(first.bdte):.1f} business DTE"
+            f"  •  {len(group)} books"
         )
         axis.set_xlabel("Normalized strike K/F")
         axis.set_ylabel("Annualized Black IV (%)")
@@ -783,12 +930,43 @@ def main() -> None:
     arguments = _arguments()
     arguments.output_directory.mkdir(parents=True, exist_ok=True)
     models: dict[str, Any] = {}
-    checkpoint_paths = {
-        "weekly": arguments.weekly_checkpoint,
-        "daily": arguments.daily_checkpoint,
-    }
+    checkpoint_paths = {"daily": arguments.daily_checkpoint}
+    student_paths = {"daily": arguments.daily_student_report}
+    diffusion_paths = {"daily": arguments.daily_diffusion_report}
+    if not arguments.daily_only:
+        required_weekly = {
+            "weekly checkpoint": arguments.weekly_checkpoint,
+            "weekly target history": arguments.weekly_target_history,
+            "weekly Student-t report": arguments.weekly_student_report,
+            "weekly diffusion report": arguments.weekly_diffusion_report,
+            "weekly native checkpoint": arguments.weekly_native_checkpoint,
+            "weekly native completion": arguments.weekly_native_completion,
+        }
+        missing = [name for name, path in required_weekly.items() if path is None]
+        if missing:
+            raise ValueError(
+                "the two-geometry report requires " + ", ".join(missing)
+            )
+        checkpoint_paths = {
+            "weekly": cast(Path, arguments.weekly_checkpoint),
+            **checkpoint_paths,
+        }
+        student_paths = {
+            "weekly": cast(Path, arguments.weekly_student_report),
+            **student_paths,
+        }
+        diffusion_paths = {
+            "weekly": cast(Path, arguments.weekly_diffusion_report),
+            **diffusion_paths,
+        }
     for name, checkpoint in checkpoint_paths.items():
-        _, models[name] = load_presentation_model(checkpoint, device=arguments.device)
+        # The IV Jacobian is a central difference of nearby nonlinear decodes.
+        # Float64 avoids cancellation that materially distorted its PCA spectrum.
+        _, models[name] = load_presentation_model(
+            checkpoint,
+            device=arguments.device,
+            precision=64,
+        )
         if not isinstance(
             models[name].config.geometry,
             FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig,
@@ -796,14 +974,6 @@ def main() -> None:
             raise ValueError(f"{name} checkpoint is not the two-eta geometry")
 
     pcas = {name: decoded_iv_pca(model) for name, model in models.items()}
-    student_paths = {
-        "weekly": arguments.weekly_student_report,
-        "daily": arguments.daily_student_report,
-    }
-    diffusion_paths = {
-        "weekly": arguments.weekly_diffusion_report,
-        "daily": arguments.daily_diffusion_report,
-    }
     tail_probabilities = {
         name: extract_tail_probabilities(
             json.loads(path.read_text()),
@@ -819,15 +989,20 @@ def main() -> None:
         pcas,
         output=arguments.output_directory / "presentation_decoded_iv_pca_spectrum.png",
     )
-    _plot_pca_factors(
-        pcas["weekly"],
-        title="Weekly geometry: decoded IV principal components",
-        output=arguments.output_directory / "presentation_weekly_iv_pca_factors.png",
-    )
+    if "weekly" in pcas:
+        _plot_pca_factors(
+            pcas["weekly"],
+            title="Weekly geometry: decoded IV principal components",
+            output=arguments.output_directory / "presentation_weekly_iv_pca_factors.png",
+        )
     _plot_pca_factors(
         pcas["daily"],
-        title="Daily + weekly geometry: decoded IV principal components",
-        output=arguments.output_directory / "presentation_daily_weekly_iv_pca_factors.png",
+        title=(
+            "DYSANOS decoded IV principal components"
+            if arguments.daily_only
+            else "Daily + weekly geometry: decoded IV principal components"
+        ),
+        output=arguments.output_directory / "presentation_iv_pca_factors.png",
     )
     mean_grids: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
     draw_grids: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
@@ -839,12 +1014,14 @@ def main() -> None:
         draw_grids[name] = _base_surface_grid(model, draw)
     _plot_two_surfaces(
         mean_grids,
-        title="Decoded two-eta IV surface at the fitted invariant mean",
+        title="Mean Implied Volatility",
         output=arguments.output_directory / "presentation_invariant_mean_iv_surfaces.png",
+        font_scale=0.75,
+        show_panel_titles=False,
     )
     _plot_two_surfaces(
         draw_grids,
-        title="Illustrative invariant IV draw (common standard-normal seed)",
+        title="Illustrative invariant IV draw",
         output=arguments.output_directory / "presentation_invariant_surface_draws.png",
     )
     _plot_invariant_atm_draws(
@@ -853,22 +1030,29 @@ def main() -> None:
         output=arguments.output_directory / "presentation_invariant_atm_draws.png",
     )
 
-    _, native_model = _load_native_model(
-        arguments.weekly_native_checkpoint,
-        device=arguments.device,
-    )
-    native_completion = json.loads(arguments.weekly_native_completion.read_text())
-    native_dates = native_completion.get("market_dates")
-    if not isinstance(native_dates, list):
-        raise ValueError("weekly native completion has no market dates")
-    representative = _plot_representative_fit(
-        joint_model=models["weekly"],
-        joint_target_history=arguments.weekly_target_history,
-        native_model=native_model,
-        native_dates=native_dates,
-        representative_date=arguments.representative_date,
-        output=arguments.output_directory / "presentation_representative_surface_fit.png",
-    )
+    representative: dict[str, object] | None = None
+    if not arguments.daily_only:
+        _, native_model = _load_native_model(
+            cast(Path, arguments.weekly_native_checkpoint),
+            device=arguments.device,
+        )
+        native_completion = json.loads(
+            cast(Path, arguments.weekly_native_completion).read_text()
+        )
+        native_dates = native_completion.get("market_dates")
+        if not isinstance(native_dates, list):
+            raise ValueError("weekly native completion has no market dates")
+        representative = _plot_representative_fit(
+            joint_model=models["weekly"],
+            joint_target_history=cast(Path, arguments.weekly_target_history),
+            native_model=native_model,
+            native_dates=native_dates,
+            representative_date=arguments.representative_date,
+            output=(
+                arguments.output_directory
+                / "presentation_representative_surface_fit.png"
+            ),
+        )
     report = {
         "schema": "dysanos-two-eta-statistical-figures-v1",
         "status": "complete",
@@ -881,7 +1065,6 @@ def main() -> None:
             }
             for name, path in checkpoint_paths.items()
         },
-        "representative_fit": representative,
         "tail_probabilities": tail_probabilities,
         "tail_reports": {
             name: {
@@ -896,8 +1079,13 @@ def main() -> None:
             }
             for name, path in student_paths.items()
         },
-        "figures": sorted(str(path) for path in arguments.output_directory.glob("presentation_*.png")),
+        "figures": sorted(
+            str(path)
+            for path in arguments.output_directory.glob("presentation_*.png")
+        ),
     }
+    if representative is not None:
+        report["representative_fit"] = representative
     write_json_atomic(report, arguments.report)
     print(json.dumps(report, indent=2))
 
