@@ -1,0 +1,361 @@
+{
+  "schema": "daily25-jax-fit-diagnostics-v1",
+  "checkpoint": "/home/hans/quantdata_data/training/flex-shared-strikes/daily-25-jax/end-to-end-fixed5-v1/direct/checkpoint.npz",
+  "mode": "direct",
+  "rank": 0,
+  "source": "direct market calibration; no LP artifacts used",
+  "diagnostics": {
+    "overall": {
+      "num_quotes": 2192458,
+      "percent_inside_bid_ask": 93.11726838096784,
+      "mean_excess_half_spreads": 0.06565772742033005,
+      "conditional_mean_excess_half_spreads": 0.9539486169815063,
+      "conditional_median_excess_half_spreads": 0.36921578645706177,
+      "midpoint_mae_half_spreads": 0.40235626697540283
+    },
+    "by_business_dte": {
+      "1D": {
+        "num_quotes": 69022,
+        "percent_inside_bid_ask": 84.83526991394048,
+        "mean_excess_half_spreads": 0.41677811626897027,
+        "conditional_mean_excess_half_spreads": 2.748338505886774,
+        "midpoint_bias_half_spreads": -0.28650814149686854,
+        "percent_below_bid": 9.273854712990062,
+        "percent_above_ask": 5.8908753730694565
+      },
+      "2D": {
+        "num_quotes": 92866,
+        "percent_inside_bid_ask": 89.08319514138651,
+        "mean_excess_half_spreads": 0.19695227560974776,
+        "conditional_mean_excess_half_spreads": 1.8041201446808872,
+        "midpoint_bias_half_spreads": -0.1368809946326717,
+        "percent_below_bid": 6.5642969439838055,
+        "percent_above_ask": 4.3525079146296815
+      },
+      "3-5D": {
+        "num_quotes": 364738,
+        "percent_inside_bid_ask": 91.50979607279746,
+        "mean_excess_half_spreads": 0.0972609995518034,
+        "conditional_mean_excess_half_spreads": 1.1455672959771908,
+        "midpoint_bias_half_spreads": -0.040753582531373254,
+        "percent_below_bid": 4.720648794477132,
+        "percent_above_ask": 3.7695551327254084
+      },
+      "6-10D": {
+        "num_quotes": 600554,
+        "percent_inside_bid_ask": 93.38760544430642,
+        "mean_excess_half_spreads": 0.04685124127708054,
+        "conditional_mean_excess_half_spreads": 0.7085366864071877,
+        "midpoint_bias_half_spreads": -0.015234909568310598,
+        "percent_below_bid": 3.6576227949526605,
+        "percent_above_ask": 2.954771760740916
+      },
+      "11-15D": {
+        "num_quotes": 460620,
+        "percent_inside_bid_ask": 93.96986670140247,
+        "mean_excess_half_spreads": 0.03230666518896732,
+        "conditional_mean_excess_half_spreads": 0.5357537485362229,
+        "midpoint_bias_half_spreads": -0.019400034804844198,
+        "percent_below_bid": 3.237592809691286,
+        "percent_above_ask": 2.7925404889062566
+      },
+      "16-25D": {
+        "num_quotes": 604658,
+        "percent_inside_bid_ask": 94.73388262455802,
+        "mean_excess_half_spreads": 0.030434051549763926,
+        "conditional_mean_excess_half_spreads": 0.5779220131265987,
+        "midpoint_bias_half_spreads": -0.01894358997129641,
+        "percent_below_bid": 2.758418808648856,
+        "percent_above_ask": 2.5076985667931293
+      }
+    },
+    "by_standardized_log_moneyness": {
+      "<=-1.5": {
+        "num_quotes": 418164,
+        "percent_inside_bid_ask": 91.26180158980686,
+        "mean_excess_half_spreads": 0.08425573211020496,
+        "conditional_mean_excess_half_spreads": 0.964223151673009,
+        "midpoint_bias_half_spreads": 0.024062859002104864,
+        "percent_below_bid": 4.572607876335601,
+        "percent_above_ask": 4.16559053385753
+      },
+      "-1.5:-0.75": {
+        "num_quotes": 411342,
+        "percent_inside_bid_ask": 94.91809734965065,
+        "mean_excess_half_spreads": 0.05053946246706982,
+        "conditional_mean_excess_half_spreads": 0.9944988313303402,
+        "midpoint_bias_half_spreads": -0.09795765954833942,
+        "percent_below_bid": 3.133645482348022,
+        "percent_above_ask": 1.9482571680013223
+      },
+      "-0.75:-0.25": {
+        "num_quotes": 339576,
+        "percent_inside_bid_ask": 94.72283082432209,
+        "mean_excess_half_spreads": 0.04897944194873617,
+        "conditional_mean_excess_half_spreads": 0.9281385591062519,
+        "midpoint_bias_half_spreads": -0.04995805308338086,
+        "percent_below_bid": 3.072949796216458,
+        "percent_above_ask": 2.204219379461446
+      },
+      "-0.25:0.25": {
+        "num_quotes": 392954,
+        "percent_inside_bid_ask": 94.02983555327087,
+        "mean_excess_half_spreads": 0.052531134427286144,
+        "conditional_mean_excess_half_spreads": 0.8798942624782522,
+        "midpoint_bias_half_spreads": -0.054942868987181454,
+        "percent_below_bid": 3.7403869155168286,
+        "percent_above_ask": 2.2297775312123047
+      },
+      "0.25:0.75": {
+        "num_quotes": 343240,
+        "percent_inside_bid_ask": 93.56135648525813,
+        "mean_excess_half_spreads": 0.05017482196637752,
+        "conditional_mean_excess_half_spreads": 0.7792762846940914,
+        "midpoint_bias_half_spreads": -0.0807283357863675,
+        "percent_below_bid": 3.869595618226314,
+        "percent_above_ask": 2.5690478965155576
+      },
+      "0.75:1.5": {
+        "num_quotes": 285526,
+        "percent_inside_bid_ask": 89.61880879499591,
+        "mean_excess_half_spreads": 0.11513309248536684,
+        "conditional_mean_excess_half_spreads": 1.1090547338138677,
+        "midpoint_bias_half_spreads": 0.06811067094770154,
+        "percent_below_bid": 4.448281417454102,
+        "percent_above_ask": 5.932909787549995
+      },
+      ">1.5": {
+        "num_quotes": 1656,
+        "percent_inside_bid_ask": 79.71014492753623,
+        "mean_excess_half_spreads": 0.3381785457434847,
+        "conditional_mean_excess_half_spreads": 1.6667371183071746,
+        "midpoint_bias_half_spreads": 0.09488045016062045,
+        "percent_below_bid": 8.816425120772948,
+        "percent_above_ask": 11.473429951690822
+      }
+    },
+    "by_option_type": {
+      "call": {
+        "num_quotes": 1096229,
+        "percent_inside_bid_ask": 94.03007948156818,
+        "mean_excess_half_spreads": 0.05701037657543731,
+        "conditional_mean_excess_half_spreads": 0.9549603951915389,
+        "midpoint_bias_half_spreads": -0.01600178398004336,
+        "percent_below_bid": 3.1602885893367167,
+        "percent_above_ask": 2.809631929095107
+      },
+      "put": {
+        "num_quotes": 1096229,
+        "percent_inside_bid_ask": 92.2044572803675,
+        "mean_excess_half_spreads": 0.0743050701402147,
+        "conditional_mean_excess_half_spreads": 0.9531737919039683,
+        "midpoint_bias_half_spreads": -0.054139727248761246,
+        "percent_below_bid": 4.436025684414479,
+        "percent_above_ask": 3.359517035218006
+      }
+    },
+    "worst_dates": [
+      {
+        "date": "2025-06-17",
+        "num_quotes": 2884,
+        "percent_inside_bid_ask": 89.56310679611651,
+        "mean_excess_half_spreads": 0.795050225942159,
+        "conditional_mean_excess_half_spreads": 7.617690536934176,
+        "midpoint_bias_half_spreads": -0.8368848152825332,
+        "percent_below_bid": 7.073509015256588,
+        "percent_above_ask": 3.363384188626907
+      },
+      {
+        "date": "2024-06-11",
+        "num_quotes": 2102,
+        "percent_inside_bid_ask": 78.06850618458611,
+        "mean_excess_half_spreads": 0.7245894849325909,
+        "conditional_mean_excess_half_spreads": 3.3038765668726806,
+        "midpoint_bias_half_spreads": -0.12688387970850393,
+        "percent_below_bid": 10.846812559467175,
+        "percent_above_ask": 11.084681255946718
+      },
+      {
+        "date": "2025-06-16",
+        "num_quotes": 2640,
+        "percent_inside_bid_ask": 89.6590909090909,
+        "mean_excess_half_spreads": 0.6360118442211959,
+        "conditional_mean_excess_half_spreads": 6.150444207853323,
+        "midpoint_bias_half_spreads": -0.6568392347802603,
+        "percent_below_bid": 6.893939393939394,
+        "percent_above_ask": 3.446969696969697
+      },
+      {
+        "date": "2023-01-11",
+        "num_quotes": 2484,
+        "percent_inside_bid_ask": 83.93719806763285,
+        "mean_excess_half_spreads": 0.6220747202012995,
+        "conditional_mean_excess_half_spreads": 3.87276592726824,
+        "midpoint_bias_half_spreads": -0.3801670931074443,
+        "percent_below_bid": 9.178743961352657,
+        "percent_above_ask": 6.884057971014493
+      },
+      {
+        "date": "2022-12-12",
+        "num_quotes": 2990,
+        "percent_inside_bid_ask": 79.1638795986622,
+        "mean_excess_half_spreads": 0.5319747861586607,
+        "conditional_mean_excess_half_spreads": 2.5531374167165253,
+        "midpoint_bias_half_spreads": -0.07116048698464092,
+        "percent_below_bid": 10.903010033444815,
+        "percent_above_ask": 9.933110367892976
+      },
+      {
+        "date": "2024-12-17",
+        "num_quotes": 2244,
+        "percent_inside_bid_ask": 75.22281639928698,
+        "mean_excess_half_spreads": 0.47988225632300535,
+        "conditional_mean_excess_half_spreads": 1.9367909769583167,
+        "midpoint_bias_half_spreads": -0.24074761581313703,
+        "percent_below_bid": 13.591800356506239,
+        "percent_above_ask": 11.185383244206774
+      },
+      {
+        "date": "2025-06-12",
+        "num_quotes": 2522,
+        "percent_inside_bid_ask": 89.69072164948454,
+        "mean_excess_half_spreads": 0.43154751150667536,
+        "conditional_mean_excess_half_spreads": 4.1860108616147516,
+        "midpoint_bias_half_spreads": -0.43495685734657813,
+        "percent_below_bid": 6.463124504361619,
+        "percent_above_ask": 3.8461538461538463
+      },
+      {
+        "date": "2024-12-16",
+        "num_quotes": 2144,
+        "percent_inside_bid_ask": 78.31156716417911,
+        "mean_excess_half_spreads": 0.38343108279020494,
+        "conditional_mean_excess_half_spreads": 1.7679058957036544,
+        "midpoint_bias_half_spreads": -0.10904847949823163,
+        "percent_below_bid": 11.100746268656717,
+        "percent_above_ask": 10.587686567164178
+      },
+      {
+        "date": "2023-02-13",
+        "num_quotes": 2988,
+        "percent_inside_bid_ask": 87.61713520749666,
+        "mean_excess_half_spreads": 0.3729232906641293,
+        "conditional_mean_excess_half_spreads": 3.0116075473092394,
+        "midpoint_bias_half_spreads": -0.24003947983176113,
+        "percent_below_bid": 6.927710843373494,
+        "percent_above_ask": 5.455153949129852
+      },
+      {
+        "date": "2024-05-14",
+        "num_quotes": 2000,
+        "percent_inside_bid_ask": 83.89999999999999,
+        "mean_excess_half_spreads": 0.353375434593135,
+        "conditional_mean_excess_half_spreads": 2.1948784757337574,
+        "midpoint_bias_half_spreads": -0.11898579052319687,
+        "percent_below_bid": 8.649999999999999,
+        "percent_above_ask": 7.449999999999999
+      },
+      {
+        "date": "2024-10-14",
+        "num_quotes": 2514,
+        "percent_inside_bid_ask": 83.2140015910899,
+        "mean_excess_half_spreads": 0.34731433267260037,
+        "conditional_mean_excess_half_spreads": 2.069071640613548,
+        "midpoint_bias_half_spreads": -0.17643855068116218,
+        "percent_below_bid": 9.745425616547335,
+        "percent_above_ask": 7.040572792362769
+      },
+      {
+        "date": "2025-06-13",
+        "num_quotes": 3228,
+        "percent_inside_bid_ask": 91.14002478314745,
+        "mean_excess_half_spreads": 0.3373703976447004,
+        "conditional_mean_excess_half_spreads": 3.807802949640185,
+        "midpoint_bias_half_spreads": -0.29751247401702746,
+        "percent_below_bid": 5.452292441140025,
+        "percent_above_ask": 3.407682775712516
+      },
+      {
+        "date": "2022-11-09",
+        "num_quotes": 2640,
+        "percent_inside_bid_ask": 85.11363636363637,
+        "mean_excess_half_spreads": 0.3334976743367019,
+        "conditional_mean_excess_half_spreads": 2.240289720735097,
+        "midpoint_bias_half_spreads": -0.19705674583711125,
+        "percent_below_bid": 8.636363636363637,
+        "percent_above_ask": 6.25
+      },
+      {
+        "date": "2024-12-13",
+        "num_quotes": 2056,
+        "percent_inside_bid_ask": 75.63229571984435,
+        "mean_excess_half_spreads": 0.3202939668541949,
+        "conditional_mean_excess_half_spreads": 1.314419951800848,
+        "midpoint_bias_half_spreads": -0.10759994581276683,
+        "percent_below_bid": 12.743190661478598,
+        "percent_above_ask": 11.624513618677042
+      },
+      {
+        "date": "2025-02-10",
+        "num_quotes": 2006,
+        "percent_inside_bid_ask": 80.45862412761716,
+        "mean_excess_half_spreads": 0.30291162716358583,
+        "conditional_mean_excess_half_spreads": 1.5501038879850846,
+        "midpoint_bias_half_spreads": 0.08606203288402739,
+        "percent_below_bid": 10.568295114656031,
+        "percent_above_ask": 8.97308075772682
+      },
+      {
+        "date": "2024-09-16",
+        "num_quotes": 2430,
+        "percent_inside_bid_ask": 83.62139917695474,
+        "mean_excess_half_spreads": 0.29472385512860655,
+        "conditional_mean_excess_half_spreads": 1.7994446431218944,
+        "midpoint_bias_half_spreads": -0.12854609026268968,
+        "percent_below_bid": 8.518518518518519,
+        "percent_above_ask": 7.860082304526748
+      },
+      {
+        "date": "2024-10-16",
+        "num_quotes": 2196,
+        "percent_inside_bid_ask": 86.47540983606558,
+        "mean_excess_half_spreads": 0.28756544118465,
+        "conditional_mean_excess_half_spreads": 2.1262414439107453,
+        "midpoint_bias_half_spreads": -0.23706865255277684,
+        "percent_below_bid": 7.832422586520947,
+        "percent_above_ask": 5.692167577413479
+      },
+      {
+        "date": "2025-02-12",
+        "num_quotes": 2120,
+        "percent_inside_bid_ask": 81.69811320754718,
+        "mean_excess_half_spreads": 0.2744457333480699,
+        "conditional_mean_excess_half_spreads": 1.499548852314196,
+        "midpoint_bias_half_spreads": -0.029738632891207022,
+        "percent_below_bid": 9.811320754716983,
+        "percent_above_ask": 8.49056603773585
+      },
+      {
+        "date": "2025-06-10",
+        "num_quotes": 2156,
+        "percent_inside_bid_ask": 89.28571428571429,
+        "mean_excess_half_spreads": 0.2720368747676423,
+        "conditional_mean_excess_half_spreads": 2.5390108311646618,
+        "midpoint_bias_half_spreads": -0.25147188873528115,
+        "percent_below_bid": 6.910946196660482,
+        "percent_above_ask": 3.803339517625232
+      },
+      {
+        "date": "2025-02-19",
+        "num_quotes": 2284,
+        "percent_inside_bid_ask": 83.0122591943958,
+        "mean_excess_half_spreads": 0.27016102359238126,
+        "conditional_mean_excess_half_spreads": 1.5903293244458732,
+        "midpoint_bias_half_spreads": -0.16150449447602333,
+        "percent_below_bid": 9.019264448336251,
+        "percent_above_ask": 7.968476357267951
+      }
+    ],
+    "standardized_log_moneyness_definition": "log(strike) divided by interpolated day-specific ATM total volatility"
+  }
+}
