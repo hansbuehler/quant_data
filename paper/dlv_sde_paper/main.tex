@@ -78,6 +78,337 @@ growth of the relative density volatility $\eta=\psi/q$ across expiries by a
 constant of the grid alone, turning an assumption of Wissel into a theorem.
 \end{abstract}
 
+\HB{
+  Maybe it's worth to state what we each think where we are and what the gaps are.
+  For me, I think:
+  \begin{enumerate}
+    \item \textbf{DLV risk neutral diffusion and future densitioes} given a front density volatility: I think we are all clear in principle. I also noted you managed to prove existence which is really good. One quesition is what happens if $q\downarrow 0$... do we have an answer to that?
+    \item \textbf{Sampling spot} I suppose I was thinking we can sample from the front; that does not mean full step. See below. I think this way front density diffusion and spot are exactly in line. It does mean spot end ups at grid points; I suspect
+    we can't get around that without a guanrateed arb-free call price interpolator.
+    \item \textbf{Sampling strategy} to preserve martingale property -- testing that.
+    \item \textbf{Increasing grid} I think works but I need to write it down properly ... Magnus?
+  \end{enumerate}
+
+
+Assume fixed expiry dates are $0=T_0<T_1<\dots<T_M$.
+  Assume $K$ are the strikes and that $q_t^j$ is the density for $T_j$ at time $t\le T_j$.
+  I think the core arguments are as follows:
+
+  \subsection*{Future Densities}
+
+  \emph{Nothing new in this section}\\
+
+      Let $T_k$ be the front expiry, so $T_{k-1}\leq t<T_k$, and suppose that
+      $q_t^k$ is known. For $j=k+1,\ldots,M$, let
+      $\Sigma_t^j\in\mathbb R^N$ be the vector of discrete local variances into
+      $T_j$, extend it by zero at the two boundary nodes, and set
+      \[
+        S_t^j:=\operatorname{diag}(0,\Sigma_t^{j,1},\ldots,
+        \Sigma_t^{j,N},0).
+      \]
+      The future densities satisfy
+      \begin{equation}
+        q_t^{j-1}=M_t^jq_t^j,
+        \qquad
+        M_t^j:=I-\Omega_jS_t^j,
+        \label{eq:hb_dlv}
+      \end{equation}
+      where $\Omega_j\in\mathbb R^{(N+2)\times(N+2)}$ is the fixed
+      strike-grid operator for the interval $T_j-T_{j-1}$. The matrix $M_t^j$ is an invertible
+      tridiagonal M-matrix for every non-negative $S_t^j$.
+
+      Let $W$ be a $d$-dimensional Brownian motion, and designate $W^1$ as the
+      spot factor: spot is always driven by $dW_t^1$. Each density coordinate
+      is a martingale. We specify the front-density diffusion as
+      \[
+        dq_t^k=E_t^{k;1}\,dW_t^1,
+        \qquad
+        E_t^{k;1}:=\operatorname{diag}(q_t^k)\eta_t^{k;1},
+        \qquad E_t^{k;f}:=0\quad(f=2,\ldots,d),
+      \]
+      where $E_t^{k;1}\in\mathbb R^{N+2}$ must satisfy
+      $\one^{\!\top}E_t^{k;1}=0$, so that $q_t^k$ retains unit mass. The
+      remaining Brownian factors do not directly move the front density. They
+      drive the stochastic DLV surface, while $\xi_t^{j,\cdot,1}$ determines
+      its leverage with spot. We do not specify $\eta_t^j$ for $j>k$; the
+      future density volatilities will be obtained recursively.
+
+      For future expiries $T_j$ with $j>k$, assume the discrete local volatity squared is given as
+      \[
+        \frac{ d\Sigma_t^{j} }{ \Sigma_t^{j} }
+          = \mu^j_t\,dt
+          + \xi^j_t\,dW_t,
+      \]
+      where $\xi_t^j\in\mathbb R^{N\times d}$ is given and
+      $\mu_t^j\in\mathbb R^N$ is the unknown risk-neutral drift. We write this as
+      \[
+        dS_t^j=A_t^j\,dt+\sum_{f=1}^dB_t^{j;f}\,dW_t^f,
+      \]
+      with
+        $A_t^j
+        :=\operatorname{diag}(0,\Sigma_t^{j,1}\mu_t^{j,1},\ldots,
+            \Sigma_t^{j,N}\mu_t^{j,N},0)$ and $B_t^{j;f}
+        :=\operatorname{diag}(0,\Sigma_t^{j,1}\xi_t^{j,1;f},\ldots,
+            \Sigma_t^{j,N}\xi_t^{j,N;f},0).$
+      With the above
+      \[
+        dM_t^j=-\Omega_j\,dS_t^j
+        =-\Omega_jA_t^j\,dt
+        -\sum_{f=1}^d\Omega_jB_t^{j;f}\,dW_t^f.
+      \]
+      Setting $dq_t^j=\sum_fE_t^{j;f}\,dW_t^f$ for an unknown $E_t^{j;f}$ yields
+      \begin{eqnarray}
+        dq_t^{j-1}
+        & = & M_t^j\,dq_t^j+(dM_t^j)q_t^j+d[M^j,q^j]_t\\
+        & = & \sum_{f=1}^d
+          \left(M_t^jE_t^{j;f}-\Omega_jB_t^{j;f}q_t^j\right)dW_t^f
+          -\Omega_j\left(A_t^jq_t^j
+          +\sum_{f=1}^dB_t^{j;f}E_t^{j;f}\right)dt \ .
+      \end{eqnarray}
+      Matching the diffusion coefficients gives
+      \begin{equation}
+        \label{eq:vol_hb}
+        E_t^{j;f}
+        =(M_t^j)^{-1}
+          \left(E_t^{j-1;f}+\Omega_jB_t^{j;f}q_t^j\right)
+        \in\mathbb R^{N+2} \ \ \ \mbox{and} \ \ \ \eta_t^{j,i;f}=\frac{ E_t^{j,i;f} }{ q_t^{j,i} } \ .
+      \end{equation}
+      The drift must vanish, hence
+      \[
+        \Omega_j\left(A_t^jq_t^j
+        +\sum_{f=1}^dB_t^{j;f}E_t^{j;f}\right)=0.
+      \]
+      The restriction of $\Omega_j$ to vectors supported on the interior nodes
+      is injective. Therefore the bracket vanishes node by node, giving
+      \begin{equation}
+        \label{eq:drift_hb}
+        \mu_t^{j,i}
+        =-\sum_{f=1}^d\xi_t^{j,i;f}
+          \frac{E_t^{j,i;f}}{q_t^{j,i}}
+        =-\sum_{f=1}^d\xi_t^{j,i;f}\eta_t^{j,i;f},
+        \qquad i=1,\ldots,N.
+      \end{equation}
+      Thus the prescribed front-density volatility and the prescribed DLV
+      volatilities determine all future density volatilities and the
+      risk-neutral DLV drifts by forward induction over the expiries.
+
+  \subsection*{Front density}
+
+  The remaining task is to specify both spot dynamics consistent with the front density and the respective front density volatilities.
+
+  \subsubsection*{Case $t=T_k-dt$}
+
+  Assume we are at $t=T_k-dt$ and observe the front density $q_{t}^k$. Current spot is given as $S_t = K^\top q_t^k$.
+  In order to sample a spot consistent with the discrete set of strikes, we can either draw a discrete sample or fit some other distribution exactly to the observed option prices (fitting to densities or probabilities will not work in general).
+
+  The simplest method is to draw spot from this discrete distribution using
+  the spot factor $W^1$. Let $F_t^k$ denote the conditional CDF which assigns
+  probability $q_t^{k,i}$ to strike $K_i$, and let $\Phi$ denote the standard
+  normal CDF. Then
+  \[
+    S_{T_k}=(F_t^k)^{-1}\!\left(\Phi(Z)\right),
+    \qquad
+    Z:=\frac{W_{T_k}^1-W_t^1}{\sqrt{dt}}\sim N(0,1).
+  \]
+  Correlation between spot and a future DLV coordinate is specified by that
+  coordinate's loading $\xi_t^{j,i;1}$ on $W^1$.
+
+  Conditional on this definition of terminal spot, the front-density
+  diffusion is exact if the Brownian increment is revealed progressively:
+  define
+  \[
+    Q_i:=\sum_{\ell=0}^i q_t^{k,\ell},
+    \qquad
+    a_i:=\Phi^{-1}(Q_i),
+    \qquad
+    a_{-1}:=-\infty,\quad a_{N+1}:=+\infty,
+  \]
+  and let $\phi$ be the standard normal density. For $t\leq s<T_k$, set
+  \[
+    z_i(s):=
+      \frac{\sqrt{dt}\,a_i-(W_s^1-W_t^1)}{\sqrt{T_k-s}}.
+  \]
+  The time-$s$ front density is the conditional probability
+  \begin{equation}
+    q_s^{k,i}
+      :=\mathbb P\!\left(S_{T_k}=K_i\mid\mathcal F_s\right)
+      =\Phi\!\left(z_i(s)\right)
+       -\Phi\!\left(z_{i-1}(s)\right).
+  \end{equation}
+  It is therefore a martingale. Applying It\^o's formula gives the exact
+  diffusion
+  \begin{equation}
+    dq_s^{k,i}=E_s^{k,i;1}\,dW_s^1,
+    \qquad
+    E_s^{k,i;1}
+      =\frac{\phi(z_{i-1}(s))-\phi(z_i(s))}{\sqrt{T_k-s}},
+    \qquad t\leq s<T_k,
+  \end{equation}
+  with zero drift. Since $z_i(t)=a_i$, its initial value is
+  \begin{equation}
+    E_t^{k,i;1}
+      =\frac{\phi(a_{i-1})-\phi(a_i)}{\sqrt{dt}} \ \ \ \mbox{hence} \ \ \
+    \eta_t^{k,i;1}
+      =\frac{\phi(a_{i-1})-\phi(a_i)}{q_t^{k,i}\sqrt{dt}}
+      \ \ \ \mbox{for $i=0,\ldots,N+1$.}
+  \end{equation}
+  while $E_t^{k,i;f}=\eta_t^{k,i;f}=0$ for $f=2,\ldots,d$.
+  More generally, $\eta_s^{k,i;1}=E_s^{k,i;1}/q_s^{k,i}$ and the other
+  factor loadings remain zero. Consequently,
+  \[
+    S_s=K^\top q_s^k
+      =\mathbb E\!\left[S_{T_k}\mid\mathcal F_s\right],
+    \qquad
+    dS_s=K^\top E_s^{k;1}\,dW_s^1,
+  \]
+  so spot and the front density are driven by the same Brownian factor. At
+  expiry, $q_s^k$ converges to the point mass associated with the sampled
+  strike. The displayed coefficient $E_t^{k,i;1}$ is only the initial value
+  of the exact, state- and time-dependent coefficient $E_s^{k,i;1}$; holding
+  it constant over the whole interval would instead be an Euler
+  approximation. Likewise, sampling $S_{T_k}$ all at once without
+  progressively revealing $W^1$ produces a direct jump to the terminal point
+  mass rather than a continuous density diffusion.
+
+
+
+
+
+
+  \subsubsection*{Case $t\ll T_k$}
+
+  The same construction gives a natural exact transition over any step which
+  does not cross the front expiry. Let
+  \[
+    h:=T_k-t,
+    \qquad 0<\delta\leq h,
+    \qquad \Delta W_t^1:=W_{t+\delta}^1-W_t^1.
+  \]
+  Starting from $q_t^k$, define $Q_i$ and $a_i$ as above. After drawing
+  $\Delta W_t^1\sim N(0,\delta)$, set
+  \begin{equation}
+    \label{eq:front-exact-step}
+    q_{t+\delta}^{k,i}
+      =\Phi\!\left(
+          \frac{\sqrt h\,a_i-\Delta W_t^1}{\sqrt{h-\delta}}
+        \right)
+       -\Phi\!\left(
+          \frac{\sqrt h\,a_{i-1}-\Delta W_t^1}{\sqrt{h-\delta}}
+        \right),
+    \qquad \delta<h.
+  \end{equation}
+  The corresponding spot is not sampled independently but is defined by
+  \begin{equation}
+    \label{eq:spot-exact-step}
+    S_{t+\delta}:=K^\top q_{t+\delta}^k
+      =\mathbb E\!\left[S_{T_k}\mid\mathcal F_{t+\delta}\right].
+  \end{equation}
+  Consequently
+  \[
+    \mathbb E_t[q_{t+\delta}^k]=q_t^k,
+    \qquad
+    \mathbb E_t[S_{t+\delta}]=S_t
+  \]
+  exactly. In general $S_{t+\delta}$ is not a grid strike; only at $T_k$ does
+  the density collapse to a unit vector and spot become the corresponding
+  strike.
+
+  This update is recursively consistent. Indeed, the Gaussian boundaries
+  calculated from the cumulative probabilities of $q_{t+\delta}^k$ are
+  precisely the residual boundaries appearing in
+  \eqref{eq:front-exact-step}. The construction may therefore be restarted
+  from $q_{t+\delta}^k$ without changing the joint law. It is a
+  simplex-valued information bridge: conditional on the exact terminal
+  Gaussian variable, $W^1$ is a Brownian bridge; conditional only on the
+  terminal strike, it is Brownian motion conditioned to terminate in an
+  interval, or equivalently a mixture of Brownian bridges.
+
+\subsection*{Sampling}
+
+  A stable simulation should not advance spot, the front density and the
+  future densities as separate Euler equations. On a time grid
+  $t_n<t_{n+1}$ with $\delta_n=t_{n+1}-t_n$, one may proceed as follows.
+
+  First draw one Brownian vector $\Delta W_n\in\mathbb R^d$, using its first
+  coordinate both in \eqref{eq:front-exact-step} and in every DLV coordinate
+  with a non-zero loading $\xi^{j,i;1}$. This preserves the specified leverage.
+  Update the front density by \eqref{eq:front-exact-step}, and calculate spot
+  from \eqref{eq:spot-exact-step}. This part of the update has no time-step
+  bias, preserves positivity and unit mass, and is exactly martingale
+  preserving.
+
+  For the DLV squared it is useful to work with
+  $X_t^{j,i}:=\log\Sigma_t^{j,i}$. Its It\^o dynamics are
+  \[
+    dX_t^{j,i}
+      =\left(\mu_t^{j,i}
+        -\frac12\sum_{f=1}^d(\xi_t^{j,i;f})^2\right)dt
+       +\sum_{f=1}^d\xi_t^{j,i;f}\,dW_t^f.
+  \]
+  Even the frozen-coefficient exponential update
+  \begin{equation}
+    \label{eq:dlv-log-euler}
+    \Sigma_{n+1}^{j,i}
+      =\Sigma_n^{j,i}\exp\!\left\{
+        \left(\mu_n^{j,i}
+          -\frac12\sum_f(\xi_n^{j,i;f})^2\right)\delta_n
+        +\sum_f\xi_n^{j,i;f}\Delta W_n^f
+      \right\}
+  \end{equation}
+  is preferable to Euler integration of $\Sigma$: it cannot create a negative
+  local variance. For state-dependent coefficients, a genuine It\^o
+  weak-order-two stochastic Runge--Kutta method in the log variables reduces
+  the remaining time-step bias.
+
+  After updating $\Sigma^{j}$ reconstruct the densities expiry by expiry by
+  solving the tridiagonal systems
+  \begin{equation}
+    \label{eq:density-algebraic-step}
+    q_{n+1}^{j}
+      =\left(I-\Omega_jS_{n+1}^{j}\right)^{-1}q_{n+1}^{j-1},
+    \qquad j=k+1,\ldots,M.
+  \end{equation}
+  This enforces the DLV relation at every simulated state. Because the matrix
+  is an M-matrix for non-negative $\Sigma$, the solve preserves positivity.
+
+  The drift condition \eqref{eq:drift_hb} removes the infinitesimal drift of
+  every density coordinate. It does not, by itself, make a generic finite-step
+  discretisation exactly unbiased, since the map
+  $\Sigma^j\mapsto(M^j)^{-1}q^{j-1}$ is nonlinear. Thus
+  \eqref{eq:dlv-log-euler}, or any ordinary higher-order SDE scheme, retains a
+  time-discretisation bias which should vanish under step refinement.
+
+\subsubsection*{Discrete Sampling}
+
+  If exact martingality under a chosen finite-step simulation law is required,
+  it can instead be imposed directly. Choose symmetric discrete shock branches
+  $\Delta W_{n,b}$ with probabilities $w_b$ and construct the front-density
+  branches so that
+  \[
+    \sum_b w_bq_{n+1,b}^k=q_n^k \ .
+  \]
+  Parameterise each positive DLV update with an unknown drift correction
+  $c_n^j\in\mathbb R^N$. For example, replace the log drift in
+  \eqref{eq:dlv-log-euler} by $c_n^{j,i}$. For each expiry in turn, solve the
+  nonlinear system
+  \begin{equation}
+    \label{eq:finite-step-drift-correction}
+    \sum_b w_b q_{n+1,b}^j(c_n^j)=q_n^j,
+    \qquad
+    q_{n+1,b}^j(c_n^j)
+      =\left(I-\Omega_jS_{n+1,b}^j(c_n^j)\right)^{-1}
+        q_{n+1,b}^{j-1}.
+  \end{equation}
+  Only $N$ coordinates are independent because mass and first moment are
+  already preserved, matching the $N$ drift corrections. Initialising the
+  nonlinear solver with the continuous-time drift
+  \eqref{eq:drift_hb} gives
+  a stable finite-step correction. Equation
+  \eqref{eq:finite-step-drift-correction} makes the densities exactly
+  martingales under the discrete branch law; symmetric or antithetic branches
+  reduce variance but do not replace this condition.
+  }
+
 \input{sec_intro}
 \input{sec_codebook}
 \input{sec_drift}

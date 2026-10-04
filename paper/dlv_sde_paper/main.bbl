@@ -8,8 +8,7 @@ Jesper Andreasen and Brian~Norsk Huge.
 
 \bibitem{BermanPlemmons1994}
 Abraham Berman and Robert~J. Plemmons.
-\newblock {\em Nonnegative Matrices in the Mathematical Sciences}, volume~9 of
-  {\em Classics in Applied Mathematics}.
+\newblock {\em Nonnegative Matrices in the Mathematical Sciences}, volume~9 of {\em Classics in Applied Mathematics}.
 \newblock SIAM, 1994.
 \newblock Reprint of the 1979 Academic Press edition.
 
@@ -20,8 +19,7 @@ Hans Buehler.
 
 \bibitem{BuehlerVolAndDivs}
 Hans Buehler.
-\newblock Volatility and dividends - volatility modelling with cash dividends
-  and simple credit risk.
+\newblock Volatility and dividends - volatility modelling with cash dividends and simple credit risk.
 \newblock \url{https://papers.ssrn.com/abstract=1141877}, 2008.
 
 \bibitem{BuehlerEtAl2019DeepHedging}
@@ -31,22 +29,19 @@ Hans Buehler, Lukas Gonon, Josef Teichmann, and Ben Wood.
 \newblock SSRN working paper version: doi:10.2139/ssrn.3120710 (2018).
 
 \bibitem{SANOS2026}
-Hans Buehler, Blanka Horvath, Anastais Kratsios, Yannick Limmer, and Raeid
-  Saqur.
+Hans Buehler, Blanka Horvath, Anastais Kratsios, Yannick Limmer, and Raeid Saqur.
 \newblock Sanos - smooth arbitrage-free non-parametric option surfaces.
 \newblock \url{https://arxiv.org/abs/2601.11209}, Februar 2026.
 
 \bibitem{DYSANOS2026}
 Hans Buehler, Blanka Horvath, and Anastasis Kratsios.
-\newblock Dysanos generative dynamic smooth arbitrage-free non-parametric
-  option surfaces, 2026.
+\newblock Dysanos generative dynamic smooth arbitrage-free non-parametric option surfaces, 2026.
 
 \bibitem{BuehlerRyskin2016}
 Hans Buehler and Evgenii Ryskin.
 \newblock Discrete local volatility for large time steps (short version).
 \newblock Technical report, SSRN, 2016.
-\newblock Short version. An extended version also exists: SSRN 2642630 (2015),
-  doi:10.2139/ssrn.2642630.
+\newblock Short version. An extended version also exists: SSRN 2642630 (2015), doi:10.2139/ssrn.2642630.
 
 \bibitem{CarmonaNadtochiy2008}
 Ren{\'e} Carmona and Sergey Nadtochiy.
@@ -61,8 +56,7 @@ Samuel~N. Cohen, Christoph Reisinger, and Sheng Wang.
 \bibitem{FilipovicHughstonMacrina2012}
 Damir Filipovi\'c, Lane~P. Hughston, and Andrea Macrina.
 \newblock Conditional density models for asset pricing.
-\newblock {\em International Journal of Theoretical and Applied Finance},
-  15(1):1250002, 2012.
+\newblock {\em International Journal of Theoretical and Applied Finance}, 15(1):1250002, 2012.
 
 \bibitem{JohnsonSmith2011}
 Charles~R. Johnson and Ronald~L. Smith.
@@ -71,8 +65,7 @@ Charles~R. Johnson and Ronald~L. Smith.
 
 \bibitem{MertikopoulosMoustakas2010}
 Panayotis Mertikopoulos and Aris~L. Moustakas.
-\newblock The emergence of rational behavior in the presence of stochastic
-  perturbations.
+\newblock The emergence of rational behavior in the presence of stochastic perturbations.
 \newblock {\em The Annals of Applied Probability}, 20(4):1359--1388, 2010.
 
 \bibitem{Protter2005}
@@ -82,14 +75,12 @@ P.~E. Protter.
 
 \bibitem{SchweizerWissel2008}
 Martin Schweizer and Johannes Wissel.
-\newblock Arbitrage-free market models for option prices: The multi-strike
-  case.
+\newblock Arbitrage-free market models for option prices: The multi-strike case.
 \newblock {\em Finance and Stochastics}, 12:469--505, 2008.
 
 \bibitem{Schweizer2007}
 Martin Schweizer and Johannes Wissel.
-\newblock Term structures of implied volatilities: Absence of arbitrage and
-  existence results.
+\newblock Term structures of implied volatilities: Absence of arbitrage and existence results.
 \newblock {\em Mathematical Finance}, 18:77--114, 2008.
 
 \bibitem{WieseEtAl2019OptionMarkets}
@@ -98,8 +89,7 @@ Magnus Wiese, Lianjun Bai, Ben Wood, and Hans Buehler.
 \newblock NeurIPS 2019 Workshop on Robust AI in Financial Services.
 
 \bibitem{WieseEtAl2021MultiAsset}
-Magnus Wiese, Ben Wood, Alexandre Pachoud, Ralf Korn, Hans Buehler, Phillip
-  Murray, and Lianjun Bai.
+Magnus Wiese, Ben Wood, Alexandre Pachoud, Ralf Korn, Hans Buehler, Phillip Murray, and Lianjun Bai.
 \newblock Multi-asset spot and option market simulation, 2021.
 \newblock arXiv:2112.06823.
 
