@@ -24,6 +24,7 @@
 \newcommand{\Gh}{\widehat G}
 \newcommand{\Nh}{\widehat N}
 \newcommand{\HB}[1]{{\color{blue}{#1}}}
+\newcommand{\removeblock}[1]{}
 
 \theoremstyle{plain}
 \newtheorem{theorem}{Theorem}[section]
@@ -35,7 +36,7 @@
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Remark}
 
-\title{\textbf{Stochastic Discrete Local Volatility}}
+\title{\textbf{Stochastic Smooth Discrete Local Volatility}}
 
 \author{Magnus Wiese\qquad Hans Buehler$^{*}$\qquad Blanka Horvath$^{*}$\\[0.6em]
   {\small $^{*}$Mathematical Institute and Oxford-Man Institute, University of Oxford}}
@@ -46,16 +47,47 @@
 
 \begin{abstract}
     \HB{
-    We present a fully arbitrage-free option market model using the SANOS~\cite{SANOS2026} framework
-    based in ideas of~\cite{Wissel2007}.
+    We present a statically and dynamically arbitrage-free European option market model with smooth
+    interpolation between call prices, based on the SANOS~\cite{SANOS2026} framework.
 
-    The model is the product of a risk-neutral discrete state martingale defined on a fixed grid with stochastic ``discrete local volatilities'',
-    and a simple SANOS-type Black~\&~Scholes smoothing process which allows smooth interpolation
-    of option prices between grid points.
+    In spirit,
+    it is a stocastic model for local volatility when used as a representation of a European option price surface.
 
-    We train the model on S\&P 500 Index options data.}
+  We illustrate the strength of our approach on S\&P Index Option data from January 2022 to August 2025.
+  We show that the model's initial state fits with in bid/ask for 95\% of relevant market option prices.\footnote{
+        The model presented was trained for daily expiries for 25 business days and strikes between $[\exp(-3 \sigma_{atm} \sqrt{t}), \exp(+2 \sigma_{atm} \sqrt{t})]$.}
+    We then train the model dynamics under~$\PP$ and~$\Q$ and show that the model is indeed free of arbitrage
+    while fitting the dynamics of the market well.
+    }
 \end{abstract}
 
+\section{Introduction}\label{sec:intro}
+
+\HB{
+This article presents an arbitrage-free market model for for smooth surfaces of European option prices.
+
+The core architecture follows the SANOS approach~\cite{SANOS2026} which models the stock price as the product
+of a time-and-state discrete process~$X$ and a smoothing process~$Y$, in our case Black~\&~Scholes.
+The former is used to encode the option market using a discrete form of local volatilities as code book. That does not mean
+that the model is a local volatility model -- we merely use the (discrete) local volatilities as a convenient representation of the option surface.
+Compared to using implied volatilities the advantage is that mere positivity of the local volatilities is sufficient to ensure
+the the option market is free of static arbitrage at all times. We have shown in~\cite{SANOS2026} that this representation
+can be fitted to real life market data very efficiently using linear programming.
+
+The key
+contribution in this paper is showing how to construct a dynamic model of SANOS option call prices which are not only statically but
+also dynamically free of arbitrage. We show the theoretical construction of the corresponding risk-neutral measure~$\mathbb{Q}$. We then discuss implementation
+and estimate our model on S\&P Index Option data from January 2022 to August 2025. We estimate both $\Q$ and its drift under $\PP$.
+
+Our approach is closely related to the seminal but unpublished work~\cite{Wissel2007}. In~\cite{CarmonaNadtochiy2008}
+the authors derive related conditions for continuous time local volatility models, but without a tangible implementation strategy. Our results
+can be seen as a joint extension of the two papers, plus the smoothing from our SANOS~\cite{SANOS2026}. Other related with is~\cite{TANGET}
+where the authors solve the problem of finding a dynamically arbitrage-free evolution of the option surface via products of indepdent Levy processes. While structurally
+very elegant such products do not typically fit well to equity index European option surfaces. Our approach also has the advantage of being numerically efficient.
+In particular, our model state can be fit very efficiently within observed bid/ask data using linear programming using the SANOS~\cite{SANOS2026} approach.
+}
+
+\removeblock{
 \begin{abstract}
 \noindent
 We construct an option market model on a fixed lattice of cash strikes and expiries
@@ -77,16 +109,26 @@ across all expiries, with no conditions on the wings. The key estimate bounds th
 growth of the relative density volatility $\eta=\psi/q$ across expiries by a
 constant of the grid alone, turning an assumption of Wissel into a theorem.
 \end{abstract}
+}
+
+\section*{Hans comments}
 
 \HB{
   Maybe it's worth to state what we each think where we are and what the gaps are.
   For me, I think:
   \begin{enumerate}
     \item \textbf{DLV risk neutral diffusion and future densitioes} given a front density volatility: I think we are all clear in principle. I also noted you managed to prove existence which is really good. One quesition is what happens if $q\downarrow 0$... do we have an answer to that?
-    \item \textbf{Sampling spot} I suppose I was thinking we can sample from the front; that does not mean full step. See below. I think this way front density diffusion and spot are exactly in line. It does mean spot end ups at grid points; I suspect
+    \item \textbf{DLV sampling spot} I suppose I was thinking we can sample from the front; that does not mean full step. See below. I think this way front density diffusion and spot are exactly in line. It does mean spot end ups at grid points; I suspect
     we can't get around that without a guanrateed arb-free call price interpolator.
-    \item \textbf{Sampling strategy} to preserve martingale property -- testing that.
-    \item \textbf{Increasing grid} I think works but I need to write it down properly ... Magnus?
+    \item \textbf{DLV sampling strategy} to preserve martingale property -- testing that.
+    \item \textbf{DLV Increasing grid} I think works but I need to write it down properly ... \textbf{Magnus} ?
+    \item \textbf{$\PP$ estimation} I have some ChatGPT code but nothing uber-smart. The main thing is that I think we can actually estime at the DLV vol-of-vols indepdenently of spot. Since we know its volatility $\xi$
+    we know that the $\P$ drift needs to be in $(\xi'\xi)^{-1} \xi$ times some vector of appropriate dimension.
+
+    \item \textbf{DLV Smoothing} I am in the cheap camp: if $X$ (the DLV process with all its option prices) is a margingale, then  $XY$ for $Y$ an independent martingale is also martingale.
+    If $Y$ is (extended) Black~\&~Scholes then I think it needs to be the same under $\P$ and $\Q$. In general we can simply use a $\Q$ martingale and estimate the $\P$ drift through $X$ alone.
+    Note that products with independent
+     martingales create more of a ``U'' shape. I think \textbf{Blanka} you said you found a way to correlate $X$ with $Y$?
   \end{enumerate}
 
 
