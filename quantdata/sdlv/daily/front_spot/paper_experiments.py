@@ -277,7 +277,7 @@ def plot_implied_volatility_shocks(
         surfaces.expiry_days,
         100.0 * surfaces.base_iv,
         shading="auto",
-        cmap="viridis",
+        cmap="coolwarm",
     )
     flat_axes[0].set_title("Base implied volatility (%)")
     shock_limit = max(
@@ -303,7 +303,7 @@ def plot_implied_volatility_shocks(
         axis.set_visible(False)
     for axis in flat_axes[:panel_count]:
         axis.set_xlabel("Log-moneyness")
-        axis.set_ylabel("Remaining business days")
+        axis.set_ylabel("Business days to expiry")
     figure.colorbar(base_image, ax=flat_axes[0], label="Annualized volatility (%)")
     figure.colorbar(
         shock_images[0],
@@ -333,22 +333,22 @@ def plot_baseline_implied_volatility_3d(
         expiry_days,
         log_moneyness,
         base_iv_percent,
-        cmap="viridis",
+        cmap="coolwarm",
         linewidth=0.0,
         antialiased=True,
         rcount=len(surfaces.expiry_days),
         ccount=len(surfaces.log_moneyness),
     )
-    axis.set_xlabel("Remaining business days", fontsize=15, labelpad=8)
+    axis.set_xlabel("Business days to expiry", fontsize=15, labelpad=8)
     axis.set_ylabel("Log-moneyness", fontsize=15, labelpad=8)
-    axis.set_zlabel("Annualized implied volatility (%)", fontsize=15, labelpad=9)
+    axis.set_zlabel("")
     axis.set_title(
         "Baseline risk-neutral implied-volatility surface",
         fontsize=19,
         pad=16,
     )
     axis.tick_params(labelsize=12, pad=2)
-    axis.view_init(elev=27.0, azim=-128.0)
+    axis.view_init(elev=27.0, azim=52.0)
     axis.set_box_aspect((1.35, 1.0, 0.75))
     colorbar = figure.colorbar(
         plotted_surface,
@@ -433,7 +433,7 @@ def plot_factor_responses_3d(
         f"Rank-{factor_rank} risk-neutral daily PCA responses in IV coordinates",
         fontsize=25,
     )
-    figure.supxlabel("Remaining business days", fontsize=20)
+    figure.supxlabel("Business days to expiry", fontsize=20)
     figure.supylabel("Log-moneyness", fontsize=20)
     figure.savefig(output_path, dpi=180, bbox_inches="tight", pad_inches=0.08)
     plt.close(figure)
@@ -722,8 +722,9 @@ def run_paper_diagnostics(
     calibrations = {8: rank_eight_calibration, selected_rank: selected_calibration}
     configurations = (
         PaperConfiguration("rank8_one_step", 8, 1),
-        PaperConfiguration(f"rank{selected_rank}_eight_step", selected_rank, 8),
         PaperConfiguration(f"rank{selected_rank}_one_step", selected_rank, 1),
+        PaperConfiguration("rank8_eight_step", 8, 8),
+        PaperConfiguration(f"rank{selected_rank}_eight_step", selected_rank, 8),
     )
 
     plot_factor_power(

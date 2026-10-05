@@ -59,7 +59,7 @@ simulation.
   \includegraphics[width=0.72\textwidth]
     {figures/front_spot/baseline_implied_volatility_3d.png}
   \caption{Baseline annualized implied-volatility surface in log-moneyness and
-  remaining-business-day coordinates.}
+  business-days-to-expiry coordinates.}
   \label{fig:numerics-baseline-iv-3d}
 \end{figure}
 
@@ -226,13 +226,42 @@ For a zero-cost return $R_k$, the reported coordinate statistic is
   z_k=\frac{\overline R_k}{\widehat{\operatorname{se}}(\overline R_k)}.
 \end{equation}
 A coordinate enters the Gaussian screen only if it has at least 20 expected
-effective observations.  Front-density variances use their known conditional
+effective observations.\footnote{Here ``effective observations'' means expected
+informative outcomes under the initial model, not an adjustment for serial
+dependence: the simulated paths are independent.  For a node indicator with
+probability $p$ and $P$ paths, both the expected number of hits $Pp$ and misses
+$P(1-p)$ must be at least 20.  For a call, the expected exercise count
+$P\,\Q(\text{payoff}>0)$ must be at least 20.}  Front-density variances use their known conditional
 Bernoulli variance, front-option variances use their known conditional payoff
-variance, and terminal $Z$-call variances use analytic Black-mixture second
+variance, and to-expiry $Z$-call variances use analytic Black-mixture second
 moments.  The denominator in~\eqref{eq:numerics-z-score} is the larger of the
 predictable and empirical standard errors.  This avoids spuriously large
 Gaussian scores from a single rare payoff.  The five-standard-error threshold
 is a conservative diagnostic screen, not a finite-sample joint test.
+
+For a single pre-specified scalar discounted return $R$, let
+$R^{(1)},\ldots,R^{(P)}$ be its independent simulated realizations.  Its
+unconditional expected return can be tested directly against any specified
+value $r_0$ using
+\begin{equation}\label{eq:numerics-scalar-return-test}
+  \widehat m_R=\frac1P\sum_{p=1}^P R^{(p)},
+  \qquad
+  \widehat{\operatorname{se}}(\widehat m_R)
+  =\left[
+    \frac{1}{P(P-1)}
+    \sum_{p=1}^P\left(R^{(p)}-\widehat m_R\right)^2
+  \right]^{1/2},
+  \qquad
+  z_R=\frac{\widehat m_R-r_0}
+  {\widehat{\operatorname{se}}(\widehat m_R)}.
+\end{equation}
+For a zero-cost risk-neutral return, $r_0=0$.  This is a test of the
+unconditional mean only; the variance is a nuisance quantity used to estimate
+the standard error, not a second null hypothesis.  If an analytic or
+predictable variance is available, the audit can use it conservatively in the
+same manner as for the coordinate tests.  A single pre-specified $R$ also has
+no multiple-coordinate selection issue, although a rare-event-dominated $R$
+still requires enough informative realizations for the Gaussian approximation.
 
 All paths share the same initial market state.  Hence the expiry tests are
 Monte Carlo tests conditional on that initial state.  The later daily tests
@@ -241,6 +270,14 @@ simulated law.  They do not estimate
 $\E[R_{n+1}\mid\mathcal F_n]$ separately at every high-dimensional simulated
 intermediate state.  Passing them is necessary evidence for martingality, not a
 proof of the complete conditional statement.
+
+The audit results are reported by discretisation in
+Tables~\ref{tab:numerics-rank8-one}, \ref{tab:numerics-rank16-one},
+\ref{tab:numerics-rank8-eight}, and~\ref{tab:numerics-rank16-eight}.
+Orange entries mark slight departures from the Gaussian benchmark; red entries
+mark clear violations of the risk-neutral no-arbitrage screen.  Model~D, with
+rank 16 and eight Brownian substeps, passes all five screens.  The other models
+have the violations quantified in their tables and the text following them.
 
 \subsection{Model A: rank 8 and one Brownian step per day}
 \label{sec:numerics-rank8-one}
@@ -281,14 +318,14 @@ risk-neutral path quantities.
 \toprule
 Claim family & Total & Tested & Max. $\abs{z}$ & 99\% $\abs{z}$ & $\abs{z}>5$\\
 \midrule
-Daily $X$ density & 65,650 & 63,723 & 14.272 & 3.891 & 263\\
-Daily $X$ calls   & 65,000 & 63,810 &  5.741 & 2.246 &   4\\
+Daily $X$ density & 65,650 & 63,723 & 14.272 & {\color{red}3.891} & {\color{red}263}\\
+Daily $X$ calls   & 65,000 & 63,810 &  5.741 & {\color{orange}2.246} & {\color{red}4}\\
 $X$ density to expiry & 5,050 & 4,673 & 4.220 & 2.591 & 0\\
 $Z$ calls to expiry   & 5,000 & 4,879 & 1.991 & 1.558 & 0\\
 Daily $Z$ spot        &    25 &    25 & 2.035 & 1.982 & 0\\
 \bottomrule
 \end{tabular}
-\caption{Rank-eight, one-step, 100,000-path risk-neutral audit.}
+\caption{Rank-eight, one-step, 100,000-path risk-neutral audit. A mean-zero normal would have $99\%\abs{z} = 2.576$.}
 \label{tab:numerics-rank8-one}
 \end{table}
 
@@ -301,15 +338,15 @@ $1.15\times10^{-5}$.  Thus one full-day DLV step is not adequate for the daily
 martingale conditions, even though its terminal checks appear acceptable.  The
 CPU runtime was 9 minutes 55 seconds.
 
-\subsection{Model B: rank 16 and eight Brownian steps per day}
-\label{sec:numerics-rank16-eight}
+\subsection{Model B: rank 16 and one Brownian step per day}
+\label{sec:numerics-rank16-one}
 
-The second model uses 16 factors, explaining 84.40\% of the smoothed innovation
-variance, and resolves every business day with eight independent Brownian
-subincrements.  The factor shocks are shown in
-Figure~\ref{fig:numerics-rank16-shocks-3d}; the additional factors primarily add
-short-expiry level, skew, and curvature directions.  The coupled path examples
-are in Figure~\ref{fig:numerics-rank16-eight-paths}.
+The second model increases the diffusion rank to 16, explaining 84.40\% of the
+smoothed innovation variance, but retains one Brownian increment per day.  The
+additional factors primarily add short-expiry level, skew, and curvature
+directions.  Their shocks are shown in
+Figure~\ref{fig:numerics-rank16-shocks-3d}, and the coupled paths in
+Figure~\ref{fig:numerics-rank16-one-paths}.
 
 \begin{figure}[H]
   \centering
@@ -322,50 +359,6 @@ are in Figure~\ref{fig:numerics-rank16-eight-paths}.
   drift.}
   \label{fig:numerics-rank16-shocks-3d}
 \end{figure}
-
-\begin{figure}[H]
-  \centering
-  \includegraphics[height=0.88\textheight]
-    {figures/front_spot/paths_rank16_eight_step.png}
-  \caption{Four coupled $\PP/\Q$ path illustrations for rank 16 with eight
-  Brownian substeps per day.}
-  \label{fig:numerics-rank16-eight-paths}
-\end{figure}
-
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{lrrrrr}
-\toprule
-Claim family & Total & Tested & Max. $\abs{z}$ & 99\% $\abs{z}$ & $\abs{z}>5$\\
-\midrule
-Daily $X$ density & 65,650 & 63,723 & 4.068 & 2.765 & 0\\
-Daily $X$ calls   & 65,000 & 63,810 & 4.349 & 2.786 & 0\\
-$X$ density to expiry & 5,050 & 4,673 & 3.935 & 2.428 & 0\\
-$Z$ calls to expiry   & 5,000 & 4,879 & 2.626 & 2.483 & 0\\
-Daily $Z$ spot        &    25 &    25 & 1.741 & 1.706 & 0\\
-\bottomrule
-\end{tabular}
-\caption{Rank-16, eight-substep, 100,000-path risk-neutral audit.}
-\label{tab:numerics-rank16-eight}
-\end{table}
-
-No coordinate exceeds five standard errors.  There were no non-finite values;
-maximum mass and conditional-forward errors were
-$2.40\times10^{-13}$ and $2.38\times10^{-13}$.  The mean corresponding to the
-largest daily $X$-call statistic was $-8.01\times10^{-7}$ in units of initial
-spot.  The CPU
-runtime was 1 hour 3 minutes 30 seconds.  Among the three tested configurations,
-this is the only one that passes every daily and terminal screen.
-
-\subsection{Model C: rank 16 and one Brownian step per day}
-\label{sec:numerics-rank16-one}
-
-The third model keeps exactly the rank-16 diffusion of Model~B but replaces its
-eight Brownian subincrements by one daily Brownian increment.  Thus the
-comparison isolates time discretisation rather than factor coverage.  The
-factor-power and shock figures are unchanged; the resulting coupled paths are
-shown in Figure~\ref{fig:numerics-rank16-one-paths}.
 
 \begin{figure}[H]
   \centering
@@ -383,34 +376,117 @@ shown in Figure~\ref{fig:numerics-rank16-one-paths}.
 \toprule
 Claim family & Total & Tested & Max. $\abs{z}$ & 99\% $\abs{z}$ & $\abs{z}>5$\\
 \midrule
-Daily $X$ density & 65,650 & 63,723 & 15.630 & 4.000 & 159\\
-Daily $X$ calls   & 65,000 & 63,810 &  7.083 & 2.778 &   5\\
-$X$ density to expiry & 5,050 & 4,673 & 3.770 & 2.649 & 0\\
-$Z$ calls to expiry   & 5,000 & 4,879 & 3.480 & 3.084 & 0\\
+Daily $X$ density & 65,650 & 63,723 & 15.630 & {\color{red}4.000} & {\color{red}159}\\
+Daily $X$ calls   & 65,000 & 63,810 &  7.083 & {\color{orange}2.778} & {\color{red}5}\\
+$X$ density to expiry & 5,050 & 4,673 & 3.770 & {\color{orange}2.649} & 0\\
+$Z$ calls to expiry   & 5,000 & 4,879 & 3.480 & {\color{red}3.084} & 0\\
 Daily $Z$ spot        &    25 &    25 & 1.329 & 1.316 & 0\\
 \bottomrule
 \end{tabular}
-\caption{Rank-16, one-step, 100,000-path risk-neutral audit.}
+\caption{Rank-16, one-step, 100,000-path risk-neutral audit. A mean-zero normal
+would have $99\%\abs{z}=2.576$.}
 \label{tab:numerics-rank16-one}
 \end{table}
 
 The run had no non-finite values; maximum mass and conditional-forward errors
 were $2.24\times10^{-13}$ and $2.22\times10^{-13}$.  Nevertheless, 159 daily
 density and five daily $X$-call coordinates exceed five standard errors.  The
-largest daily-density and daily-call statistics are 15.63 and 7.08.  Their
-corresponding means are only $1.32\times10^{-5}$ and
-$-1.67\times10^{-6}$, but at 100,000 paths the bias is statistically visible.
-The CPU runtime was 12 minutes 26 seconds.
+largest corresponding means are only $1.32\times10^{-5}$ and
+$-1.67\times10^{-6}$, but the bias is statistically visible.  The CPU runtime
+was 12 minutes 26 seconds.
+
+\subsection{Model C: rank 8 and eight Brownian steps per day}
+\label{sec:numerics-rank8-eight}
+
+The third model keeps the rank-eight diffusion of Model~A but resolves each day
+with eight independent Brownian subincrements.  The factor shocks are unchanged
+from Figure~\ref{fig:numerics-rank8-shocks-3d}; the coupled paths are shown in
+Figure~\ref{fig:numerics-rank8-eight-paths}.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[height=0.88\textheight]
+    {figures/front_spot/paths_rank8_eight_step.png}
+  \caption{Four coupled $\PP/\Q$ path illustrations for rank 8 with eight
+  Brownian substeps per day.}
+  \label{fig:numerics-rank8-eight-paths}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+Claim family & Total & Tested & Max. $\abs{z}$ & 99\% $\abs{z}$ & $\abs{z}>5$\\
+\midrule
+Daily $X$ density & 65,650 & 63,723 & 3.814 & {\color{orange}2.803} & 0\\
+Daily $X$ calls   & 65,000 & 63,810 & 5.655 & {\color{orange}2.412} & {\color{red}1}\\
+$X$ density to expiry & 5,050 & 4,673 & 3.348 & 2.465 & 0\\
+$Z$ calls to expiry   & 5,000 & 4,879 & 2.622 & 1.698 & 0\\
+Daily $Z$ spot        &    25 &    25 & 2.255 & 2.224 & 0\\
+\bottomrule
+\end{tabular}
+\caption{Rank-eight, eight-substep, 100,000-path risk-neutral audit. A
+mean-zero normal would have $99\%\abs{z}=2.576$.}
+\label{tab:numerics-rank8-eight}
+\end{table}
+
+There were no non-finite values; maximum mass and conditional-forward errors
+were $2.36\times10^{-13}$ and $2.34\times10^{-13}$.  No density, expiry-call,
+or spot coordinate exceeds five standard errors.  One daily $X$-call coordinate
+does, with $z=-5.655$ and mean $-1.32\times10^{-6}$ in units of initial spot.
+The CPU runtime was 58 minutes 41 seconds.
+
+\subsection{Model D: rank 16 and eight Brownian steps per day}
+\label{sec:numerics-rank16-eight}
+
+The fourth model combines 16 factors with eight independent Brownian
+subincrements per day.  Its coupled paths are shown in
+Figure~\ref{fig:numerics-rank16-eight-paths}.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[height=0.88\textheight]
+    {figures/front_spot/paths_rank16_eight_step.png}
+  \caption{Four coupled $\PP/\Q$ path illustrations for rank 16 with eight
+  Brownian substeps per day.}
+  \label{fig:numerics-rank16-eight-paths}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+Claim family & Total & Tested & Max. $\abs{z}$ & 99\% $\abs{z}$ & $\abs{z}>5$\\
+\midrule
+Daily $X$ density & 65,650 & 63,723 & 4.068 & {\color{orange}2.765} & 0\\
+Daily $X$ calls   & 65,000 & 63,810 & 4.349 & {\color{orange}2.786} & 0\\
+$X$ density to expiry & 5,050 & 4,673 & 3.935 & 2.428 & 0\\
+$Z$ calls to expiry   & 5,000 & 4,879 & 2.626 & 2.483 & 0\\
+Daily $Z$ spot        &    25 &    25 & 1.741 & 1.706 & 0\\
+\bottomrule
+\end{tabular}
+\caption{Rank-16, eight-substep, 100,000-path risk-neutral audit. A mean-zero
+normal would have $99\%\abs{z}=2.576$.}
+\label{tab:numerics-rank16-eight}
+\end{table}
+
+No coordinate exceeds five standard errors.  There were no non-finite values;
+maximum mass and conditional-forward errors were $2.40\times10^{-13}$ and
+$2.38\times10^{-13}$.  The mean corresponding to the largest daily $X$-call
+statistic was $-8.01\times10^{-7}$ in units of initial spot.  The CPU runtime
+was 1 hour 3 minutes 30 seconds.
 
 \subsection{Interpretation}\label{sec:numerics-interpretation}
 
-The two one-step experiments show that one daily Brownian increment is not
-sufficient for the nonlinear DLV/SANOS discretisation: increasing factor rank
-from 8 to 16 does not remove the daily density bias.  Conversely, the rank-16
-eight-step model passes every reported martingale screen while maintaining mass
-and forward constraints at numerical precision.  The difference between
-Models~B and~C identifies intraday time resolution, rather than factor rank, as
-the relevant numerical correction in this experiment.
+Models~A and~B show that one daily Brownian increment is not sufficient for the
+nonlinear DLV/SANOS discretisation: increasing factor rank from 8 to 16 does not
+remove the daily density bias.  Eight substeps remove every density violation:
+Model~C retains one daily-call exceedance, whereas Model~D passes every screen.
+The paired comparisons A--C and B--D identify intraday time resolution as the
+dominant numerical correction, with the higher factor rank removing the final
+detectable call remainder in this experiment.
 
 This remains numerical evidence for the continuous-time construction, not a
 claim of exact finite-step martingality.  Exact martingality for a specified
