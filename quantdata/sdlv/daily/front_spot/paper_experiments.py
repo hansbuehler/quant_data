@@ -55,6 +55,16 @@ class PaperConfiguration:
     dlv_substeps: int
 
 
+@dataclass(frozen=True)
+class ImpliedVolatilityFactorSurfaces:
+    """Base IV surface and central daily factor responses on the paper grid."""
+
+    log_moneyness: NDArray[np.float64]
+    expiry_days: NDArray[np.int64]
+    base_iv: NDArray[np.float64]
+    factor_responses_bp: NDArray[np.float64]
+
+
 def factor_spectrum(innovations: JointInnovationFit) -> FactorSpectrum:
     """Recover individual and cumulative variance fractions from a fit."""
     factor_rank = innovations.factor_rank
@@ -179,14 +189,13 @@ def plot_factor_power(
     plt.close(figure)
 
 
-def plot_implied_volatility_shocks(
+def _implied_volatility_factor_surfaces(
     calibration: FrontSpotCalibration,
-    output_path: Path,
     *,
     fit_label: str = "full",
     date_index: int = -1,
-) -> None:
-    """Plot base implied volatility and signed one-daily-sigma factor shocks."""
+) -> ImpliedVolatilityFactorSurfaces:
+    """Compute base IV and central one-daily-sigma factor responses."""
     initial = load_initial_model_state(fit_label=fit_label, date_index=date_index)
     support = initial.support
     log_strikes = np.log(support[1:-1])
@@ -222,6 +231,35 @@ def plot_implied_volatility_shocks(
         minus_iv = _call_implied_vol_surface(support, minus_tower, strikes)
         factor_shocks.append(5_000.0 * (plus_iv - minus_iv))
 
+    factor_responses = np.stack(factor_shocks)
+    if not np.all(np.isfinite(base_iv)) or not np.all(np.isfinite(factor_responses)):
+        raise RuntimeError("Implied-volatility factor surfaces contain non-finite values")
+    return ImpliedVolatilityFactorSurfaces(
+        log_moneyness=plotted_log_strikes,
+        expiry_days=np.arange(1, initial.density_tower.shape[0] + 1),
+        base_iv=base_iv,
+        factor_responses_bp=factor_responses,
+    )
+
+
+def plot_implied_volatility_shocks(
+    calibration: FrontSpotCalibration,
+    output_path: Path,
+    *,
+    fit_label: str = "full",
+    date_index: int = -1,
+    surfaces: ImpliedVolatilityFactorSurfaces | None = None,
+) -> None:
+    """Plot base implied volatility and signed one-daily-sigma factor shocks."""
+    if surfaces is None:
+        surfaces = _implied_volatility_factor_surfaces(
+            calibration,
+            fit_label=fit_label,
+            date_index=date_index,
+        )
+    factor_responses = surfaces.factor_responses_bp
+    factor_rank = factor_responses.shape[0]
+
     panel_count = factor_rank + 1
     column_count = 4
     row_count = int(np.ceil(panel_count / column_count))
@@ -234,25 +272,24 @@ def plot_implied_volatility_shocks(
         constrained_layout=True,
     )
     flat_axes = np.asarray(axes).reshape(-1)
-    expiry_days = np.arange(1, initial.density_tower.shape[0] + 1)
     base_image = flat_axes[0].pcolormesh(
-        plotted_log_strikes,
-        expiry_days,
-        100.0 * base_iv,
+        surfaces.log_moneyness,
+        surfaces.expiry_days,
+        100.0 * surfaces.base_iv,
         shading="auto",
         cmap="viridis",
     )
     flat_axes[0].set_title("Base implied volatility (%)")
     shock_limit = max(
-        float(np.nanquantile(np.abs(np.stack(factor_shocks)), 0.99)),
+        float(np.nanquantile(np.abs(factor_responses), 0.99)),
         1.0,
     )
     shock_images = []
-    for factor_index, shock in enumerate(factor_shocks):
+    for factor_index, shock in enumerate(factor_responses):
         axis = flat_axes[factor_index + 1]
         image = axis.pcolormesh(
-            plotted_log_strikes,
-            expiry_days,
+            surfaces.log_moneyness,
+            surfaces.expiry_days,
             shock,
             shading="auto",
             cmap="coolwarm",
@@ -275,6 +312,110 @@ def plot_implied_volatility_shocks(
     )
     figure.suptitle(
         "Risk-neutral daily DLV diffusion shocks in implied-volatility coordinates"
+    )
+    figure.savefig(output_path, dpi=180)
+    plt.close(figure)
+
+
+def plot_baseline_implied_volatility_3d(
+    surfaces: ImpliedVolatilityFactorSurfaces,
+    output_path: Path,
+) -> None:
+    """Plot the baseline implied-volatility surface in three dimensions."""
+    log_moneyness, expiry_days = np.meshgrid(
+        surfaces.log_moneyness,
+        surfaces.expiry_days,
+    )
+    base_iv_percent = 100.0 * surfaces.base_iv
+    figure = plt.figure(figsize=(10.0, 7.2), constrained_layout=True)
+    axis = figure.add_subplot(111, projection="3d")
+    plotted_surface = axis.plot_surface(
+        log_moneyness,
+        expiry_days,
+        base_iv_percent,
+        cmap="viridis",
+        linewidth=0.0,
+        antialiased=True,
+        rcount=len(surfaces.expiry_days),
+        ccount=len(surfaces.log_moneyness),
+    )
+    axis.set_xlabel("Log-moneyness")
+    axis.set_ylabel("Remaining business days")
+    axis.set_zlabel("Annualized implied volatility (%)")
+    axis.set_title("Baseline risk-neutral implied-volatility surface")
+    axis.view_init(elev=27.0, azim=-128.0)
+    axis.set_box_aspect((1.35, 1.0, 0.75))
+    figure.colorbar(
+        plotted_surface,
+        ax=axis,
+        shrink=0.68,
+        pad=0.08,
+        label="Annualized implied volatility (%)",
+    )
+    figure.savefig(output_path, dpi=180)
+    plt.close(figure)
+
+
+def plot_factor_responses_3d(
+    surfaces: ImpliedVolatilityFactorSurfaces,
+    output_path: Path,
+) -> None:
+    """Plot central daily PCA-factor IV responses as 3D surfaces."""
+    factor_responses = surfaces.factor_responses_bp
+    factor_rank = factor_responses.shape[0]
+    column_count = 4
+    row_count = int(np.ceil(factor_rank / column_count))
+    log_moneyness, expiry_days = np.meshgrid(
+        surfaces.log_moneyness,
+        surfaces.expiry_days,
+    )
+    response_limit = max(float(np.max(np.abs(factor_responses))), 1.0)
+    figure = plt.figure(
+        figsize=(4.5 * column_count, 3.8 * row_count),
+        constrained_layout=True,
+    )
+    axes = []
+    plotted_surface = None
+    for factor_index, response in enumerate(factor_responses):
+        axis = figure.add_subplot(
+            row_count,
+            column_count,
+            factor_index + 1,
+            projection="3d",
+        )
+        plotted_surface = axis.plot_surface(
+            log_moneyness,
+            expiry_days,
+            response,
+            cmap="coolwarm",
+            vmin=-response_limit,
+            vmax=response_limit,
+            linewidth=0.0,
+            antialiased=True,
+            rcount=len(surfaces.expiry_days),
+            ccount=len(surfaces.log_moneyness),
+        )
+        qualifier = "spot-aligned" if factor_index == 0 else "orthogonal"
+        axis.set_title(f"Factor {factor_index + 1} ({qualifier})", fontsize=10)
+        axis.set_xlabel("Log-moneyness", fontsize=8, labelpad=2)
+        axis.set_ylabel("Days", fontsize=8, labelpad=2)
+        axis.set_zlabel("IV response (bp)", fontsize=8, labelpad=2)
+        axis.set_zlim(-response_limit, response_limit)
+        axis.tick_params(labelsize=7, pad=0)
+        axis.view_init(elev=25.0, azim=-128.0)
+        axis.set_box_aspect((1.25, 1.0, 0.75))
+        axes.append(axis)
+    if plotted_surface is None:
+        raise RuntimeError("At least one factor response is required")
+    figure.colorbar(
+        plotted_surface,
+        ax=axes,
+        shrink=0.55,
+        pad=0.02,
+        label=r"Central $\pm1\sigma$ implied-volatility response (bp)",
+    )
+    figure.suptitle(
+        f"Rank-{factor_rank} risk-neutral daily PCA responses in IV coordinates"
     )
     figure.savefig(output_path, dpi=180)
     plt.close(figure)
@@ -572,10 +713,23 @@ def run_paper_diagnostics(
         output_dir / "pca_explained_variance.png",
         model_rank_cap=max_factor_rank,
     )
+    factor_surfaces = {
+        rank: _implied_volatility_factor_surfaces(calibration)
+        for rank, calibration in calibrations.items()
+    }
+    plot_baseline_implied_volatility_3d(
+        factor_surfaces[selected_rank],
+        output_dir / "baseline_implied_volatility_3d.png",
+    )
     for rank, calibration in calibrations.items():
         plot_implied_volatility_shocks(
             calibration,
             output_dir / f"pca_implied_vol_shocks_rank{rank}.png",
+            surfaces=factor_surfaces[rank],
+        )
+        plot_factor_responses_3d(
+            factor_surfaces[rank],
+            output_dir / f"pca_factor_responses_3d_rank{rank}.png",
         )
 
     path_outputs: dict[str, Any] = {}

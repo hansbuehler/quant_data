@@ -49,6 +49,20 @@ than claiming to reach 90\%.
   \label{fig:numerics-factor-power}
 \end{figure}
 
+Figure~\ref{fig:numerics-baseline-iv-3d} shows the baseline risk-neutral
+implied-volatility surface used for the factor illustrations.  It is computed
+from the final fitted state on the same 25-expiry, 200-strike grid used by the
+simulation.
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.94\textwidth]
+    {figures/front_spot/baseline_implied_volatility_3d.png}
+  \caption{Baseline annualized implied-volatility surface in log-moneyness and
+  remaining-business-day coordinates.}
+  \label{fig:numerics-baseline-iv-3d}
+\end{figure}
+
 Let $F_t^1$ denote the fitted one-day distribution, including the independent
 Black factor with annual volatility 5\%.  The historical spot score is
 \begin{equation}\label{eq:numerics-spot-score}
@@ -235,7 +249,8 @@ The first model uses the original rank-eight diffusion, which explains 72.88\%
 of smoothed DLV innovation variance, and one full-day Brownian increment.  The
 base implied-volatility surface and the eight risk-neutral one-standard-
 deviation factor shocks are shown in
-Figure~\ref{fig:numerics-rank8-shocks}.  Figure~\ref{fig:numerics-rank8-paths}
+Figures~\ref{fig:numerics-rank8-shocks}
+and~\ref{fig:numerics-rank8-shocks-3d}.  Figure~\ref{fig:numerics-rank8-paths}
 shows the matched physical and risk-neutral path quantities.
 
 \begin{figure}[p]
@@ -246,6 +261,17 @@ shows the matched physical and risk-neutral path quantities.
   to each rank-eight DLV diffusion factor.  Factor 1 is spot-oriented; the
   remaining factors are orthogonal residual components.}
   \label{fig:numerics-rank8-shocks}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=\textwidth]
+    {figures/front_spot/pca_factor_responses_3d_rank8.png}
+  \caption{Three-dimensional view of the rank-eight central
+  $\pm1\sigma$ daily implied-volatility responses.  Every panel uses the same
+  vertical and colour scale, so the declining magnitude of the later principal
+  components is retained rather than normalised away.}
+  \label{fig:numerics-rank8-shocks-3d}
 \end{figure}
 
 \begin{figure}[p]
@@ -291,7 +317,8 @@ CPU runtime was 9 minutes 55 seconds.
 The second model uses 16 factors, explaining 84.40\% of the smoothed innovation
 variance, and resolves every business day with eight independent Brownian
 subincrements.  The factor shocks are shown in
-Figure~\ref{fig:numerics-rank16-shocks}; the additional factors primarily add
+Figures~\ref{fig:numerics-rank16-shocks}
+and~\ref{fig:numerics-rank16-shocks-3d}; the additional factors primarily add
 short-expiry level, skew, and curvature directions.  The coupled path examples
 are in Figure~\ref{fig:numerics-rank16-eight-paths}.
 
@@ -303,6 +330,16 @@ are in Figure~\ref{fig:numerics-rank16-eight-paths}.
   the rank-16 DLV diffusion.  These diffusion shocks are common to~$\PP$ and
   $\Q$; the measures differ through drift.}
   \label{fig:numerics-rank16-shocks}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=\textwidth]
+    {figures/front_spot/pca_factor_responses_3d_rank16.png}
+  \caption{Three-dimensional view of the rank-16 central
+  $\pm1\sigma$ daily implied-volatility responses, shown on one common vertical
+  and colour scale across all factors.}
+  \label{fig:numerics-rank16-shocks-3d}
 \end{figure}
 
 \begin{figure}[p]
