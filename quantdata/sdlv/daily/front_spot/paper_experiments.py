@@ -330,8 +330,8 @@ def plot_baseline_implied_volatility_3d(
     figure = plt.figure(figsize=(10.0, 7.2), constrained_layout=True)
     axis = figure.add_subplot(111, projection="3d")
     plotted_surface = axis.plot_surface(
-        log_moneyness,
         expiry_days,
+        log_moneyness,
         base_iv_percent,
         cmap="viridis",
         linewidth=0.0,
@@ -339,8 +339,8 @@ def plot_baseline_implied_volatility_3d(
         rcount=len(surfaces.expiry_days),
         ccount=len(surfaces.log_moneyness),
     )
-    axis.set_xlabel("Log-moneyness", fontsize=15, labelpad=8)
-    axis.set_ylabel("Remaining business days", fontsize=15, labelpad=8)
+    axis.set_xlabel("Remaining business days", fontsize=15, labelpad=8)
+    axis.set_ylabel("Log-moneyness", fontsize=15, labelpad=8)
     axis.set_zlabel("Annualized implied volatility (%)", fontsize=15, labelpad=9)
     axis.set_title(
         "Baseline risk-neutral implied-volatility surface",
@@ -397,8 +397,8 @@ def plot_factor_responses_3d(
             projection="3d",
         )
         plotted_surface = axis.plot_surface(
-            log_moneyness,
             expiry_days,
+            log_moneyness,
             response,
             cmap="coolwarm",
             norm=response_norm,
@@ -408,20 +408,10 @@ def plot_factor_responses_3d(
             ccount=len(surfaces.log_moneyness),
         )
         title = "PC 1 (spot-aligned)" if factor_index == 0 else f"PC {factor_index + 1}"
-        row_index, column_index = divmod(factor_index, column_count)
         axis.set_title(title, fontsize=22, pad=8)
-        axis.set_xlabel(
-            "Log-moneyness" if row_index == row_count - 1 else "",
-            fontsize=18,
-            labelpad=4,
-        )
-        axis.set_ylabel(
-            "Days" if column_index == 0 else "",
-            fontsize=18,
-            labelpad=4,
-        )
+        axis.set_xlabel("")
+        axis.set_ylabel("")
         axis.set_zlabel("")
-        axis.set_zlim(-response_limit, response_limit)
         axis.tick_params(labelsize=15, pad=0)
         axis.view_init(elev=25.0, azim=-128.0)
         axis.set_box_aspect((1.25, 1.0, 0.75))
@@ -435,7 +425,7 @@ def plot_factor_responses_3d(
         pad=0.02,
     )
     colorbar.set_label(
-        r"Central $\pm1\sigma$ IV response (bp; symmetric-log colour scale)",
+        r"Central $\pm1\sigma$ IV response (bp)",
         fontsize=17,
     )
     colorbar.ax.tick_params(labelsize=14)
@@ -443,6 +433,8 @@ def plot_factor_responses_3d(
         f"Rank-{factor_rank} risk-neutral daily PCA responses in IV coordinates",
         fontsize=25,
     )
+    figure.supxlabel("Remaining business days", fontsize=20)
+    figure.supylabel("Log-moneyness", fontsize=20)
     figure.savefig(output_path, dpi=180, bbox_inches="tight", pad_inches=0.08)
     plt.close(figure)
 
