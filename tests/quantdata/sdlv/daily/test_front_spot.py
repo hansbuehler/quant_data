@@ -31,6 +31,9 @@ from quantdata.sdlv.daily.front_spot.jax_model import (
     stabilized_relative_drift_increment,
     substep_brownian_weights,
 )
+from quantdata.sdlv.daily.front_spot.paper_experiments import (
+    implied_volatility_from_calls,
+)
 
 
 def _small_surface() -> tuple[jax.Array, jax.Array]:
@@ -449,3 +452,24 @@ def test_stabilized_relative_drift_is_exact_locally_and_finite_in_tails() -> Non
     )
     assert bool(jnp.all(jnp.isfinite(multiplier)))
     assert bool(jnp.all(multiplier > 0.0))
+
+
+def test_paper_implied_volatility_inverts_black_calls() -> None:
+    forward = np.asarray([[1.0], [1.0]])
+    strikes = np.asarray([[0.98, 1.0, 1.02]])
+    maturity = np.asarray([[1.0 / 252.0], [5.0 / 252.0]])
+    volatility = np.asarray(0.24)
+    total_volatility = volatility * np.sqrt(maturity)
+    log_moneyness = np.log(forward / strikes)
+    d1 = log_moneyness / total_volatility + 0.5 * total_volatility
+    d2 = d1 - total_volatility
+    calls = forward * np.asarray(jax.scipy.special.ndtr(d1)) - strikes * np.asarray(
+        jax.scipy.special.ndtr(d2)
+    )
+    recovered = implied_volatility_from_calls(
+        forward,
+        strikes,
+        maturity,
+        calls,
+    )
+    np.testing.assert_allclose(recovered, volatility, atol=1.0e-10)

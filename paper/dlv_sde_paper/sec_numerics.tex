@@ -148,12 +148,14 @@ clipping.
 The final audit starts from the fitted surface on 29~August~2025 and simulates
 100,000 independent paths for 25 daily steps on CPU in 64-bit arithmetic.  It
 uses the full 200-strike option grid and the independent 5\% Black smoothing
-factor.  Five claim families are tested:
+factor.  Write $Z:=XY$ for the tradable underlying, where $X$ is the discrete
+SANOS factor and $Y$ is the independent Black factor.  Five claim families are
+tested:
 \begin{enumerate}[label=(\roman*)]
   \item every live daily latent-density coordinate;
   \item every live daily latent-call price;
   \item every density coordinate from the initial date to its expiry;
-  \item every smoothed call payoff from the initial date to its expiry; and
+  \item every $Z$-call payoff from the initial date to its expiry; and
   \item every daily spot increment.
 \end{enumerate}
 Testing all daily density coordinates is a test of the complete finite latent
@@ -167,7 +169,7 @@ For a simulated zero-cost return $R_k$, we report
 A coordinate is included in the Gaussian screen only if it has at least 20
 expected effective observations.  Front-density variances use their known
 conditional Bernoulli variance, front-option variances use their known
-conditional payoff variance, and terminal smoothed-call variances use analytic
+conditional payoff variance, and terminal $Z$-call variances use analytic
 Black-mixture second moments.  To protect the rare-payoff diagnostics from a
 poor Gaussian approximation, the denominator in
 \eqref{eq:numerics-z-score} is the larger of the predictable and empirical
