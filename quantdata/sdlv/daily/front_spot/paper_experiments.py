@@ -20,6 +20,10 @@ from quantdata.sdlv.daily.front_spot.calibration import (
     FrontSpotCalibration,
     calibrate_front_spot_model,
 )
+from quantdata.sdlv.daily.front_spot.estimation import (
+    JointInnovationFit,
+    fit_joint_innovations,
+)
 from quantdata.sdlv.daily.front_spot.jax_model import (
     RiskNeutralState,
     black_mixture_call_prices,
@@ -51,18 +55,16 @@ class PaperConfiguration:
     dlv_substeps: int
 
 
-def factor_spectrum(calibration: FrontSpotCalibration) -> FactorSpectrum:
+def factor_spectrum(innovations: JointInnovationFit) -> FactorSpectrum:
     """Recover individual and cumulative variance fractions from a fit."""
-    factor_rank = calibration.innovations.factor_rank
-    daily_loadings = (
-        calibration.innovations.annualized_loadings / np.sqrt(DAYS_PER_YEAR)
-    )
+    factor_rank = innovations.factor_rank
+    daily_loadings = innovations.annualized_loadings / np.sqrt(DAYS_PER_YEAR)
     factor_variance = np.sum(
         daily_loadings.reshape(-1, factor_rank) ** 2,
         axis=0,
     )
     retained_variance = float(np.sum(factor_variance))
-    explained = calibration.innovations.explained_variance_fraction
+    explained = innovations.explained_variance_fraction
     total_variance = retained_variance / explained
     individual = factor_variance / total_variance
     cumulative = np.cumsum(individual)
@@ -135,6 +137,8 @@ def _call_implied_vol_surface(
 def plot_factor_power(
     spectrum: FactorSpectrum,
     output_path: Path,
+    *,
+    model_rank_cap: int,
 ) -> None:
     """Plot individual and cumulative explained variance by factor."""
     ranks = np.arange(1, len(spectrum.individual_fraction) + 1)
@@ -158,6 +162,13 @@ def plot_factor_power(
         label="cumulative",
     )
     cumulative_axis.axhline(90.0, color="black", linestyle="--", linewidth=1.0)
+    cumulative_axis.axvline(
+        model_rank_cap,
+        color="#54A24B",
+        linestyle=":",
+        linewidth=1.5,
+        label=f"model cap = {model_rank_cap}",
+    )
     cumulative_axis.set_ylabel("Cumulative variance explained (%)")
     cumulative_axis.set_ylim(0.0, 100.0)
     handles = axis.get_legend_handles_labels()[0] + cumulative_axis.get_legend_handles_labels()[0]
@@ -512,6 +523,7 @@ def run_paper_diagnostics(
     output_dir: Path,
     *,
     max_factor_rank: int = 16,
+    spectrum_factor_rank: int = 32,
     path_count: int = 4,
     path_days: int = 10,
     seed: int = 20261005,
@@ -519,10 +531,25 @@ def run_paper_diagnostics(
     """Generate spectrum, IV-shock, and coupled-path paper artifacts."""
     if not 8 <= max_factor_rank <= 16:
         raise ValueError("max_factor_rank must lie in [8,16]")
+    if not max_factor_rank <= spectrum_factor_rank < 710:
+        raise ValueError("spectrum_factor_rank must lie in [max_factor_rank,709]")
     output_dir.mkdir(parents=True, exist_ok=True)
     maximum_calibration = calibrate_front_spot_model(factor_rank=max_factor_rank)
-    spectrum = factor_spectrum(maximum_calibration)
-    selected_rank = spectrum.first_rank_above_90 or max_factor_rank
+    spectrum_innovations = fit_joint_innovations(
+        maximum_calibration.history,
+        factor_rank=spectrum_factor_rank,
+        smoothing_sigma=(1.0, 2.0),
+    )
+    spectrum = factor_spectrum(spectrum_innovations)
+    selected_rank = (
+        spectrum.first_rank_above_90
+        if spectrum.first_rank_above_90 is not None
+        and spectrum.first_rank_above_90 <= max_factor_rank
+        else max_factor_rank
+    )
+    reaches_90_by_max_rank = bool(
+        spectrum.cumulative_fraction[max_factor_rank - 1] >= 0.9
+    )
     selected_calibration = (
         maximum_calibration
         if selected_rank == max_factor_rank
@@ -540,7 +567,11 @@ def run_paper_diagnostics(
         PaperConfiguration(f"rank{selected_rank}_one_step", selected_rank, 1),
     )
 
-    plot_factor_power(spectrum, output_dir / "pca_explained_variance.png")
+    plot_factor_power(
+        spectrum,
+        output_dir / "pca_explained_variance.png",
+        model_rank_cap=max_factor_rank,
+    )
     for rank, calibration in calibrations.items():
         plot_implied_volatility_shocks(
             calibration,
@@ -569,8 +600,13 @@ def run_paper_diagnostics(
     output = {
         "schema": "front-spot-paper-diagnostics-v1",
         "max_factor_rank": max_factor_rank,
+        "spectrum_factor_rank": spectrum_factor_rank,
         "selected_factor_rank": selected_rank,
-        "reaches_90_percent_by_max_rank": spectrum.first_rank_above_90 is not None,
+        "first_rank_above_90_percent": spectrum.first_rank_above_90,
+        "reaches_90_percent_by_max_rank": reaches_90_by_max_rank,
+        "selected_explained_variance_fraction": float(
+            spectrum.cumulative_fraction[selected_rank - 1]
+        ),
         "individual_variance_fraction": spectrum.individual_fraction,
         "cumulative_variance_fraction": spectrum.cumulative_fraction,
         "configurations": [configuration.__dict__ for configuration in configurations],
@@ -586,6 +622,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--max-factor-rank", type=int, default=16)
+    parser.add_argument("--spectrum-factor-rank", type=int, default=32)
     parser.add_argument("--path-count", type=int, default=4)
     parser.add_argument("--path-days", type=int, default=10)
     parser.add_argument("--seed", type=int, default=20261005)
@@ -598,6 +635,7 @@ def main() -> None:
     output = run_paper_diagnostics(
         arguments.output_dir,
         max_factor_rank=arguments.max_factor_rank,
+        spectrum_factor_rank=arguments.spectrum_factor_rank,
         path_count=arguments.path_count,
         path_days=arguments.path_days,
         seed=arguments.seed,
@@ -609,9 +647,12 @@ def main() -> None:
                 "reaches_90_percent_by_max_rank": output[
                     "reaches_90_percent_by_max_rank"
                 ],
-                "rank_max_explained_fraction": output[
-                    "cumulative_variance_fraction"
-                ][-1],
+                "first_rank_above_90_percent": output[
+                    "first_rank_above_90_percent"
+                ],
+                "selected_explained_variance_fraction": output[
+                    "selected_explained_variance_fraction"
+                ],
                 "output_dir": str(arguments.output_dir),
             },
             indent=2,

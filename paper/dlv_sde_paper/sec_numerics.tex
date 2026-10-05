@@ -3,41 +3,56 @@
 \section{Finite-step simulation and numerical evidence}\label{sec:numerics}
 
 We implement the continuous-time construction on the daily SANOS grid used for
-the empirical study.  The experiment in this section uses 25 daily expiries and
-200 interior strikes.  It is therefore a direct numerical study of the model
-developed in the preceding sections.  The front density is evolved by its exact Gaussian
-information bridge, DLV squared is evolved in log coordinates, and all later
-densities are reconstructed from the SANOS systems.  The risk-neutral drift is
-the drift in~\eqref{eq:drift_hb}; no empirical drift is substituted under~$\Q$.
+the empirical study.  Every experiment uses 25 daily expiries and 200 interior
+strikes.  The front density is evolved by its exact Gaussian information
+bridge, DLV squared is evolved in log coordinates, and all later densities are
+reconstructed from the SANOS systems.  The risk-neutral drift is always the
+drift in~\eqref{eq:drift_hb}; no empirical drift is substituted under~$\Q$.
 
-The Gaussian bridge gives the exact
-conditional law of the front density and its settlement node under the chosen
-finite-step construction. However, an ordinary time discretisation of the
-stochastic DLV equation need not preserve the martingale property exactly over
-a full day.  The tests below consequently separate algebraic invariants from
+The Gaussian bridge gives the exact conditional law of the front density and
+its settlement node over a finite time interval.  In contrast, an ordinary
+time discretisation of the stochastic DLV equation need not preserve its
+martingale condition exactly over a full day.  We therefore compare one and
+eight Brownian steps per day, and distinguish algebraic invariants from
 statistical martingale diagnostics.
 
-\subsection{Data and estimation}\label{sec:numerics-estimation}
+\subsection{Data, factor rank, and measure change}
+\label{sec:numerics-estimation}
 
 The fitted sample contains S\&P 500 index-option surfaces from 2022 through
 29~August~2025.  Dynamic parameters are estimated from 710 adjacent market-day
 pairs whose origin date is no later than 31~December~2024.  Within each pair,
 DLV-squared changes are aligned at fixed cash strike and fixed expiry.  Across
-pairs, the relative-strike grid is allowed to float with the contemporaneous
-spot and option surface.
+pairs, the relative-strike grid floats with the contemporaneous spot and option
+surface.
 
 We use the full 25-by-200 DLV representation.  On the held-out 2025 sample its
 residual root mean square is 0.256, compared with 0.423 for the affine-$x$ 200
 representation.  Before estimating the covariance, fixed-contract residuals
 are smoothed by a Gaussian filter with widths one expiry and two strike nodes.
-A rank-eight functional principal-component representation explains 72.882\%
-of the resulting innovation variance.
+The first factor is oriented to the observed front-spot score and the remaining
+factors are principal components of the orthogonal residual.
+
+Figure~\ref{fig:numerics-factor-power} shows the resulting factor power.  Eight
+factors explain 72.88\% of the smoothed innovation variance and 16 factors
+explain 84.40\%.  The first rank above 90\% is 26, at 90.25\%.  Since the
+experiment was capped at 16 factors, the two expanded models use rank 16 rather
+than claiming to reach 90\%.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.88\textwidth]
+    {figures/front_spot/pca_explained_variance.png}
+  \caption{Individual and cumulative variance explained by the spot-oriented
+  DLV factor system.  The dotted vertical line is the rank-16 model cap; 26
+  factors are required to cross the horizontal 90\% line.}
+  \label{fig:numerics-factor-power}
+\end{figure}
 
 Let $F_t^1$ denote the fitted one-day distribution, including the independent
-Black smoothing factor with annual volatility 5\%.  The historical spot score
-is
+Black factor with annual volatility 5\%.  The historical spot score is
 \begin{equation}\label{eq:numerics-spot-score}
-  Z_t=\Phi^{-1}\!\left(F_t^1(S_{t+1}/S_t)\right).
+  U_t=\Phi^{-1}\!\left(F_t^1(S_{t+1}/S_t)\right).
 \end{equation}
 Its fitted mean and standard deviation are 0.0290 and 1.0026.  The first DLV
 factor is oriented to this score, so the same Brownian coordinate drives the
@@ -49,8 +64,8 @@ $\dd W^{\Q}=\dd W^{\PP}+\lambda\,\dd t$, the attainable physical drift is
 \begin{equation}\label{eq:numerics-p-drift}
   \mu^{\PP}=\mu^{\Q}+\xi\lambda.
 \end{equation}
-Consequently, at each historical state $t$ we estimate the state-dependent
-market price of risk by
+At each historical state $t$, the state-dependent market price of risk is
+estimated by
 \begin{equation}\label{eq:numerics-statewise-lambda}
   \lambda_t^\star
   =\arg\min_{\lambda\in\R^d}
@@ -61,9 +76,9 @@ market price of risk by
     \right]^2.
 \end{equation}
 The weights $w_t^{j,i}$ are proportional to the interior density within each
-expiry and are normalised to give every expiry equal total importance.  Thus
-economically negligible tail coordinates do not dominate the fit.  The
-attainable fraction reported below is
+expiry and are normalised so that every expiry has equal total importance.
+Thus economically negligible tail coordinates do not dominate the fit.  The
+attainable fraction is
 \begin{equation}\label{eq:numerics-attainable-fraction}
   R_{\mathrm{att}}^2
   =1-
@@ -76,105 +91,172 @@ attainable fraction reported below is
     }{
       \displaystyle\sum_{t,j,i}w_t^{j,i}
       \left(\mu_t^{\mathrm{emp},j,i}-\mu_t^{\Q,j,i}\right)^2
-    }
-  =62.20\%.
+    }.
 \end{equation}
-Hence 62.20\% of the density-weighted squared difference between the empirical
-physical drift and the risk-neutral drift lies in the span of the fitted DLV
-volatility factors.  A single constant $\lambda$, used in the physical
-simulation, explains 42.15\%.  The independent 5\% Black factor is assigned
-zero risk premium and therefore has the same law under~$\PP$ and~$\Q$.
+It is the fraction of the density-weighted squared empirical $\PP$--$\Q$ drift
+difference lying in the span of the fitted DLV volatility factors.  A single
+constant $\lambda$ is used for the physical path illustrations below.  The
+independent 5\% Black factor is assigned zero risk premium and therefore has
+the same law under~$\PP$ and~$\Q$.
 
 \begin{table}[htbp]
 \centering
 \small
-\begin{tabular}{lr}
+\begin{tabular}{lrr}
 \toprule
-Calibration quantity & Estimate\\
+Calibration quantity & Rank 8 & Rank 16\\
 \midrule
-Training day pairs & 710\\
-DLV factor rank & 8\\
-Smoothed variance explained & 72.882\%\\
-Full-state 2025 residual RMS & 0.256\\
-Affine-$x$ 200 residual RMS & 0.423\\
-Statewise attainable $\PP$-drift energy & 62.20\%\\
-Constant-$\lambda$ attainable $\PP$-drift energy & 42.15\%\\
+Smoothed variance explained & 72.88\% & 84.40\%\\
+Statewise attainable $\PP$--$\Q$ drift energy & 62.20\% & 71.95\%\\
+Constant-$\lambda$ attainable drift energy & 42.15\% & 47.24\%\\
 \bottomrule
 \end{tabular}
-\caption{Inputs and fitted quantities used by the current daily front-spot
-experiment.}
+\caption{Factor coverage and attainable physical drift for the two fitted
+diffusion ranks.}
 \label{tab:numerics-calibration}
 \end{table}
 
-\subsection{Finite-step implementation}\label{sec:numerics-scheme}
+\subsection{Brownian simulation and displayed path quantities}
+\label{sec:numerics-scheme}
 
-One business day is divided into eight uniform DLV substeps.  Over each
-substep, the front density is advanced by the exact Gaussian information
-bridge.  At the daily endpoint the expired front node is sampled directly from
-the density at the beginning of that day using the aggregate first-factor
+Let $m\in\{1,8\}$ be the number of DLV steps per business day and set
+$\delta=\Delta t/m$.  For every day, substep, and factor we draw independent
+standard normal vectors $\varepsilon_{n,s}\in\R^d$ and use the genuine
+Brownian increments
+\begin{equation}\label{eq:numerics-brownian-substeps}
+  \Delta W_{n,s}=\sqrt{\delta}\,\varepsilon_{n,s},
+  \qquad
+  \sum_{s=1}^{m}\Delta W_{n,s}\sim
+  N\!\left(0,\Delta t I_d\right).
+\end{equation}
+At each substep, the state-dependent risk-neutral drift is recomputed and DLV
+squared is advanced in log coordinates,
+\begin{equation}\label{eq:numerics-log-step}
+  \Delta\log\Sigma
+  =\left(\mu^{\Q}-\tfrac12\lVert\xi\rVert^2\right)\delta
+   +\xi\Delta W_{n,s}.
+\end{equation}
+The front Gaussian bridge is advanced with the first component of the same
+Brownian increment.  The independent Black factor $Y$ uses one daily Gaussian
+increment because its constant-volatility GBM transition is exact over the
+full day.  At the daily endpoint, the expired front node is sampled directly
+from the density at the beginning of that day using the aggregate first-factor
 increment.  This has the same settlement law as recursively revealing the
-bridge but avoids the accumulation of round-off error in very small interval
-probabilities.  Gaussian interval masses in the upper tail are evaluated as
-differences of survival probabilities rather than as differences of two CDF
-values close to one.
+bridge while avoiding accumulation of round-off error.  Upper-tail Gaussian
+interval masses are evaluated as differences of survival probabilities.
 
-At every substep, the DLV volatility and risk-neutral drift are recomputed at
-the current state.  If $\delta$ is the substep length and
-$x=\mu^{\Q}\delta$ is the relative-drift increment, the ordinary frozen
-log-Euler update is used whenever $\abs{x}\leq0.5$.  An unquoted tail node in a
-development run reached density of order $10^{-24}$, at which freezing the
-relative drift produced $x\simeq2490$ and overflow.  Only for such exceptional
-increments we use the first-order-consistent safeguard
+The ordinary frozen log-Euler drift is retained whenever the relative-drift
+increment $x=\mu^{\Q}\delta$ satisfies $\abs{x}\leq0.5$.  An unquoted tail
+node in a development run reached density of order $10^{-24}$, at which
+freezing the relative drift produced $x\simeq2490$ and overflow.  Only for such
+exceptional increments we use the first-order-consistent safeguard
 \begin{equation}\label{eq:numerics-tail-safeguard}
   x\longmapsto
   \operatorname{sgn}(x)
   \left(0.5+\log\!\left(1+\abs{x}-0.5\right)\right).
 \end{equation}
-The stochastic exponential is unchanged.  After each update, all later
+The stochastic Brownian increment is unchanged.  After each update, all later
 densities are reconstructed with~\eqref{eq:density-algebraic-step}.  We do not
 clip DLV squared or replace the SANOS recursion by an additive density update.
 
-The physical simulation uses the same scheme with the drift adjustment in
-\eqref{eq:numerics-p-drift}.  A coupled 512-path, 25-day $\PP/\Q$ pilot had no
-non-finite values.  Maximum mass and conditional-forward errors were
-$1.22\times10^{-13}$ and $1.21\times10^{-13}$.  Raw nodewise DLV squared over
-this pilot ranged from $3.61\times10^{-18}$ to $2.22\times10^4$ under~$\Q$ and
-from $5.98\times10^{-19}$ to $1.75\times10^4$ under~$\PP$.  These extremes
-occur at very low-probability tail nodes and are reported rather than hidden by
-clipping.
+Write $Z:=XY$ for the tradable underlying, where $X$ is the discrete SANOS
+factor and $Y$ is the independent Black factor.  The path figures below use
+four matched sets of Brownian draws under~$\PP$ and~$\Q$.  They display spot,
+ATM one- and five-day implied volatility, and the corresponding finite-
+difference skew
+\begin{equation}\label{eq:numerics-atm-skew}
+  \operatorname{Skew}_{\tau}
+  =\frac{
+    \sigma_{\mathrm{imp}}(K=Z_t e^{h},\tau)
+    -\sigma_{\mathrm{imp}}(K=Z_t e^{-h},\tau)
+  }{2h},
+  \qquad h=0.01.
+\end{equation}
+The path figures illustrate the fitted measure change; four paths are not a
+statistical validation of the physical model.
 
-\subsection{Risk-neutral martingale audit}\label{sec:numerics-audit}
+For the factor figures, a one-standard-deviation shock means the diffusion-only
+log-DLV displacement $\pm\xi_f\sqrt{\Delta t}$.  Each panel reports the central
+implied-volatility response
+\begin{equation}\label{eq:numerics-iv-factor-shock}
+  \frac12\left(
+    \sigma_{\mathrm{imp}}(\log\Sigma+\xi_f\sqrt{\Delta t})
+    -\sigma_{\mathrm{imp}}(\log\Sigma-\xi_f\sqrt{\Delta t})
+  \right).
+\end{equation}
+These are also the risk-neutral shock directions because an equivalent measure
+change alters drift, not diffusion.
 
-The final audit starts from the fitted surface on 29~August~2025 and simulates
+\subsection{What the risk-neutral audit tests}
+\label{sec:numerics-audit-definition}
+
+Each audit starts from the fitted surface on 29~August~2025 and simulates
 100,000 independent paths for 25 daily steps on CPU in 64-bit arithmetic.  It
-uses the full 200-strike option grid and the independent 5\% Black smoothing
-factor.  Write $Z:=XY$ for the tradable underlying, where $X$ is the discrete
-SANOS factor and $Y$ is the independent Black factor.  Five claim families are
-tested:
+uses all 200 strikes and five claim families.
 \begin{enumerate}[label=(\roman*)]
-  \item every live daily latent-density coordinate;
-  \item every live daily latent-call price;
-  \item every density coordinate from the initial date to its expiry;
-  \item every $Z$-call payoff from the initial date to its expiry; and
-  \item every daily spot increment.
+  \item For every day, surviving expiry, and node, the daily density return is
+    $q_{n+1}^{j,i}-q_n^{j,i}$.  For the settling front density,
+    $q_{n+1}^{j,i}$ is the realised node indicator.  These coordinates span all
+    payoffs of the finite $X$ state.
+  \item For every day, surviving expiry, and strike, the daily $X$-call return
+    is $C_{n+1}^{X,j}(K)-C_n^{X,j}(K)$.
+  \item For every initial expiry and node, the expiry-density return is
+    $\mathbf1_{\{X_{T_j}=x_i\}}-q_0^{j,i}$.
+  \item For every initial expiry and strike, the $Z$-call-to-expiry return is
+    $(Z_{T_j}-K)^+-C_0^{Z,j}(K)$.  This test includes the independent Black
+    factor $Y$.
+  \item For every simulated day, the spot return is $Z_{n+1}-Z_n$.
 \end{enumerate}
-Testing all daily density coordinates is a test of the complete finite latent
-payoff basis.  The option tests are retained separately because they are
-economically interpretable and, at expiry, include the Black smoothing factor.
-
-For a simulated zero-cost return $R_k$, we report
+For a zero-cost return $R_k$, the reported coordinate statistic is
 \begin{equation}\label{eq:numerics-z-score}
   z_k=\frac{\overline R_k}{\widehat{\operatorname{se}}(\overline R_k)}.
 \end{equation}
-A coordinate is included in the Gaussian screen only if it has at least 20
-expected effective observations.  Front-density variances use their known
-conditional Bernoulli variance, front-option variances use their known
-conditional payoff variance, and terminal $Z$-call variances use analytic
-Black-mixture second moments.  To protect the rare-payoff diagnostics from a
-poor Gaussian approximation, the denominator in
-\eqref{eq:numerics-z-score} is the larger of the predictable and empirical
-standard errors.  The five-standard-error threshold is a conservative
-diagnostic screen, not a finite-sample joint test.
+A coordinate enters the Gaussian screen only if it has at least 20 expected
+effective observations.  Front-density variances use their known conditional
+Bernoulli variance, front-option variances use their known conditional payoff
+variance, and terminal $Z$-call variances use analytic Black-mixture second
+moments.  The denominator in~\eqref{eq:numerics-z-score} is the larger of the
+predictable and empirical standard errors.  This avoids spuriously large
+Gaussian scores from a single rare payoff.  The five-standard-error threshold
+is a conservative diagnostic screen, not a finite-sample joint test.
+
+All paths share the same initial market state.  Hence the expiry tests are
+Monte Carlo tests conditional on that initial state.  The later daily tests
+check the unconditional zero means implied by the tower property along the
+simulated law.  They do not estimate
+$\E[R_{n+1}\mid\mathcal F_n]$ separately at every high-dimensional simulated
+intermediate state.  Passing them is necessary evidence for martingality, not a
+proof of the complete conditional statement.
+
+\subsection{Model A: rank 8 and one Brownian step per day}
+\label{sec:numerics-rank8-one}
+
+The first model uses the original rank-eight diffusion, which explains 72.88\%
+of smoothed DLV innovation variance, and one full-day Brownian increment.  The
+base implied-volatility surface and the eight risk-neutral one-standard-
+deviation factor shocks are shown in
+Figure~\ref{fig:numerics-rank8-shocks}.  Figure~\ref{fig:numerics-rank8-paths}
+shows the matched physical and risk-neutral path quantities.
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=\textwidth]
+    {figures/front_spot/pca_implied_vol_shocks_rank8.png}
+  \caption{Base implied volatility and the central $\pm1\sigma$ daily response
+  to each rank-eight DLV diffusion factor.  Factor 1 is spot-oriented; the
+  remaining factors are orthogonal residual components.}
+  \label{fig:numerics-rank8-shocks}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[height=0.88\textheight]
+    {figures/front_spot/paths_rank8_one_step.png}
+  \caption{Four coupled $\PP/\Q$ path illustrations for rank 8 with one
+  Brownian step per day.  Solid and dashed lines of the same colour use the same
+  Gaussian draws under~$\Q$ and~$\PP$, respectively.}
+  \label{fig:numerics-rank8-paths}
+\end{figure}
 
 \begin{table}[htbp]
 \centering
@@ -183,52 +265,141 @@ diagnostic screen, not a finite-sample joint test.
 \toprule
 Claim family & Total & Tested & Max. $\abs{z}$ & 99\% $\abs{z}$ & $\abs{z}>5$\\
 \midrule
-Daily latent density & 65,650 & 63,723 & 3.827 & 2.345 & 0\\
-Daily latent calls   & 65,000 & 63,810 & 6.207 & 1.896 & 2\\
-Density to expiry    &  5,050 &  4,673 & 3.527 & 2.445 & 0\\
-Calls to expiry      &  5,000 &  4,879 & 2.828 & 2.111 & 0\\
-Daily spot           &     25 &     25 & 2.273 & 2.143 & 0\\
+Daily $X$ density & 65,650 & 63,723 & 14.272 & 3.891 & 263\\
+Daily $X$ calls   & 65,000 & 63,810 &  5.741 & 2.246 &   4\\
+$X$ density to expiry & 5,050 & 4,673 & 4.220 & 2.591 & 0\\
+$Z$ calls to expiry   & 5,000 & 4,879 & 1.991 & 1.558 & 0\\
+Daily $Z$ spot        &    25 &    25 & 2.035 & 1.982 & 0\\
 \bottomrule
 \end{tabular}
-\caption{The 100,000-path risk-neutral martingale audit.  ``Tested'' counts
-coordinates meeting the expected-observation criterion.}
-\label{tab:numerics-martingale-audit}
+\caption{Rank-eight, one-step, 100,000-path risk-neutral audit.}
+\label{tab:numerics-rank8-one}
 \end{table}
 
-There were no non-finite values.  Across the complete simulation, the maximum
-density-mass and conditional-forward residuals were
-$2.60\times10^{-13}$ and $2.58\times10^{-13}$.  Thus the static-arbitrage and
-forward constraints imposed by the SANOS solves remained at numerical
-precision.  All density-to-expiry, call-to-expiry, daily-density, and
-daily-spot coordinates remained below five standard errors.
+The run had no non-finite values; maximum mass and conditional-forward errors
+were $2.28\times10^{-13}$ and $2.26\times10^{-13}$.  The expiry-density,
+$Z$-call, and daily-spot tests pass the screen, but 263 daily density and four
+daily $X$-call coordinates exceed five standard errors.  The mean corresponding
+to the largest daily-density statistic is
+$1.15\times10^{-5}$.  Thus one full-day DLV step is not adequate for the daily
+martingale conditions, even though its terminal checks appear acceptable.  The
+CPU runtime was 9 minutes 55 seconds.
 
-Two of the 63,810 statistically identifiable daily latent-call coordinates
-exceeded the screen.  The largest statistic was 6.207, but its mean return was
-only $-5.27\times10^{-8}$ in units of initial spot.  The 99th percentile and
-root mean square of the daily-call $\abs{z}$ statistics were 1.896 and 0.813,
-respectively.  A separate rare-call diagnostic illustrates why predictable
-variance alone is insufficient: 96 exercises were observed against 96.44
-expected, yet one large payoff generated a predictable-variance score of 9.18
-while the empirical studentised score was 0.98.  This motivates the
-conservative standard-error rule used in Table~\ref{tab:numerics-martingale-audit}.
+\subsection{Model B: rank 16 and eight Brownian steps per day}
+\label{sec:numerics-rank16-eight}
+
+The second model uses 16 factors, explaining 84.40\% of the smoothed innovation
+variance, and resolves every business day with eight independent Brownian
+subincrements.  The factor shocks are shown in
+Figure~\ref{fig:numerics-rank16-shocks}; the additional factors primarily add
+short-expiry level, skew, and curvature directions.  The coupled path examples
+are in Figure~\ref{fig:numerics-rank16-eight-paths}.
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=\textwidth]
+    {figures/front_spot/pca_implied_vol_shocks_rank16.png}
+  \caption{Base implied volatility and central $\pm1\sigma$ daily responses for
+  the rank-16 DLV diffusion.  These diffusion shocks are common to~$\PP$ and
+  $\Q$; the measures differ through drift.}
+  \label{fig:numerics-rank16-shocks}
+\end{figure}
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[height=0.88\textheight]
+    {figures/front_spot/paths_rank16_eight_step.png}
+  \caption{Four coupled $\PP/\Q$ path illustrations for rank 16 with eight
+  Brownian substeps per day.}
+  \label{fig:numerics-rank16-eight-paths}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+Claim family & Total & Tested & Max. $\abs{z}$ & 99\% $\abs{z}$ & $\abs{z}>5$\\
+\midrule
+Daily $X$ density & 65,650 & 63,723 & 4.068 & 2.765 & 0\\
+Daily $X$ calls   & 65,000 & 63,810 & 4.349 & 2.786 & 0\\
+$X$ density to expiry & 5,050 & 4,673 & 3.935 & 2.428 & 0\\
+$Z$ calls to expiry   & 5,000 & 4,879 & 2.626 & 2.483 & 0\\
+Daily $Z$ spot        &    25 &    25 & 1.741 & 1.706 & 0\\
+\bottomrule
+\end{tabular}
+\caption{Rank-16, eight-substep, 100,000-path risk-neutral audit.}
+\label{tab:numerics-rank16-eight}
+\end{table}
+
+No coordinate exceeds five standard errors.  There were no non-finite values;
+maximum mass and conditional-forward errors were
+$2.40\times10^{-13}$ and $2.38\times10^{-13}$.  The mean corresponding to the
+largest daily $X$-call statistic was $-8.01\times10^{-7}$ in units of initial
+spot.  The CPU
+runtime was 1 hour 3 minutes 30 seconds.  Among the three tested configurations,
+this is the only one that passes every daily and terminal screen.
+
+\subsection{Model C: rank 16 and one Brownian step per day}
+\label{sec:numerics-rank16-one}
+
+The third model keeps exactly the rank-16 diffusion of Model~B but replaces its
+eight Brownian subincrements by one daily Brownian increment.  Thus the
+comparison isolates time discretisation rather than factor coverage.  The
+factor-power and shock figures are unchanged; the resulting coupled paths are
+shown in Figure~\ref{fig:numerics-rank16-one-paths}.
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[height=0.88\textheight]
+    {figures/front_spot/paths_rank16_one_step.png}
+  \caption{Four coupled $\PP/\Q$ path illustrations for rank 16 with one
+  Brownian step per day.}
+  \label{fig:numerics-rank16-one-paths}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+Claim family & Total & Tested & Max. $\abs{z}$ & 99\% $\abs{z}$ & $\abs{z}>5$\\
+\midrule
+Daily $X$ density & 65,650 & 63,723 & 15.630 & 4.000 & 159\\
+Daily $X$ calls   & 65,000 & 63,810 &  7.083 & 2.778 &   5\\
+$X$ density to expiry & 5,050 & 4,673 & 3.770 & 2.649 & 0\\
+$Z$ calls to expiry   & 5,000 & 4,879 & 3.480 & 3.084 & 0\\
+Daily $Z$ spot        &    25 &    25 & 1.329 & 1.316 & 0\\
+\bottomrule
+\end{tabular}
+\caption{Rank-16, one-step, 100,000-path risk-neutral audit.}
+\label{tab:numerics-rank16-one}
+\end{table}
+
+The run had no non-finite values; maximum mass and conditional-forward errors
+were $2.24\times10^{-13}$ and $2.22\times10^{-13}$.  Nevertheless, 159 daily
+density and five daily $X$-call coordinates exceed five standard errors.  The
+largest daily-density and daily-call statistics are 15.63 and 7.08.  Their
+corresponding means are only $1.32\times10^{-5}$ and
+$-1.67\times10^{-6}$, but at 100,000 paths the bias is statistically visible.
+The CPU runtime was 12 minutes 26 seconds.
 
 \subsection{Interpretation}\label{sec:numerics-interpretation}
 
-The experiment supports three conclusions.  First, the exact front bridge and
-the SANOS reconstruction can be combined stably over the full 25-day shrinking
-expiry tower.  Second, mass and forward constraints hold to numerical
-precision under both physical and risk-neutral pilot dynamics.  Third, the
-continuous-time risk-neutral drift produces economically negligible
-finite-step bias at the implemented resolution, but it does not make a generic
-log-Euler DLV step exactly martingale preserving.
+The two one-step experiments show that one daily Brownian increment is not
+sufficient for the nonlinear DLV/SANOS discretisation: increasing factor rank
+from 8 to 16 does not remove the daily density bias.  Conversely, the rank-16
+eight-step model passes every reported martingale screen while maintaining mass
+and forward constraints at numerical precision.  The difference between
+Models~B and~C identifies intraday time resolution, rather than factor rank, as
+the relevant numerical correction in this experiment.
 
-The two daily-call exceedances are therefore reported as finite-step
-remainders, not reclassified as sampling noise.  Exact martingality for a
-specified discrete shock law would require solving the nonlinear branch drift
-correction in~\eqref{eq:finite-step-drift-correction}.  Conversely, the current
-results do not motivate replacing the model dynamics by an ad hoc additive
-density scheme: such schemes tested during development left the positive
-convex-order cone.  The present implementation keeps the stated continuous-time
-model, preserves positivity by evolving DLV squared in log coordinates, and
-states explicitly where the finite-step approximation remains visible.
+This remains numerical evidence for the continuous-time construction, not a
+claim of exact finite-step martingality.  Exact martingality for a specified
+discrete shock law would require solving the nonlinear branch correction in
+\eqref{eq:finite-step-drift-correction}.  Nor do the physical path figures
+constitute an out-of-sample validation of~$\PP$; they visualize the attainable
+drift and its difference from~$\Q$.  The implementation retains the stated
+continuous-time dynamics, evolves positive DLV squared in log coordinates, and
+reports explicitly where a coarse finite-step approximation fails.
 }
