@@ -339,20 +339,26 @@ def plot_baseline_implied_volatility_3d(
         rcount=len(surfaces.expiry_days),
         ccount=len(surfaces.log_moneyness),
     )
-    axis.set_xlabel("Log-moneyness")
-    axis.set_ylabel("Remaining business days")
-    axis.set_zlabel("Annualized implied volatility (%)")
-    axis.set_title("Baseline risk-neutral implied-volatility surface")
+    axis.set_xlabel("Log-moneyness", fontsize=15, labelpad=8)
+    axis.set_ylabel("Remaining business days", fontsize=15, labelpad=8)
+    axis.set_zlabel("Annualized implied volatility (%)", fontsize=15, labelpad=9)
+    axis.set_title(
+        "Baseline risk-neutral implied-volatility surface",
+        fontsize=19,
+        pad=16,
+    )
+    axis.tick_params(labelsize=12, pad=2)
     axis.view_init(elev=27.0, azim=-128.0)
     axis.set_box_aspect((1.35, 1.0, 0.75))
-    figure.colorbar(
+    colorbar = figure.colorbar(
         plotted_surface,
         ax=axis,
         shrink=0.68,
         pad=0.08,
-        label="Annualized implied volatility (%)",
     )
-    figure.savefig(output_path, dpi=180)
+    colorbar.set_label("Annualized implied volatility (%)", fontsize=14)
+    colorbar.ax.tick_params(labelsize=12)
+    figure.savefig(output_path, dpi=180, bbox_inches="tight", pad_inches=0.08)
     plt.close(figure)
 
 
@@ -370,8 +376,15 @@ def plot_factor_responses_3d(
         surfaces.expiry_days,
     )
     response_limit = max(float(np.max(np.abs(factor_responses))), 1.0)
+    response_norm = matplotlib.colors.SymLogNorm(
+        linthresh=max(0.02 * response_limit, 1.0),
+        linscale=1.0,
+        vmin=-response_limit,
+        vmax=response_limit,
+        base=10.0,
+    )
     figure = plt.figure(
-        figsize=(4.5 * column_count, 3.8 * row_count),
+        figsize=(14.5, 3.5 * row_count),
         constrained_layout=True,
     )
     axes = []
@@ -388,36 +401,49 @@ def plot_factor_responses_3d(
             expiry_days,
             response,
             cmap="coolwarm",
-            vmin=-response_limit,
-            vmax=response_limit,
+            norm=response_norm,
             linewidth=0.0,
             antialiased=True,
             rcount=len(surfaces.expiry_days),
             ccount=len(surfaces.log_moneyness),
         )
-        qualifier = "spot-aligned" if factor_index == 0 else "orthogonal"
-        axis.set_title(f"Factor {factor_index + 1} ({qualifier})", fontsize=10)
-        axis.set_xlabel("Log-moneyness", fontsize=8, labelpad=2)
-        axis.set_ylabel("Days", fontsize=8, labelpad=2)
-        axis.set_zlabel("IV response (bp)", fontsize=8, labelpad=2)
+        title = "PC 1 (spot-aligned)" if factor_index == 0 else f"PC {factor_index + 1}"
+        row_index, column_index = divmod(factor_index, column_count)
+        axis.set_title(title, fontsize=22, pad=8)
+        axis.set_xlabel(
+            "Log-moneyness" if row_index == row_count - 1 else "",
+            fontsize=18,
+            labelpad=4,
+        )
+        axis.set_ylabel(
+            "Days" if column_index == 0 else "",
+            fontsize=18,
+            labelpad=4,
+        )
+        axis.set_zlabel("")
         axis.set_zlim(-response_limit, response_limit)
-        axis.tick_params(labelsize=7, pad=0)
+        axis.tick_params(labelsize=15, pad=0)
         axis.view_init(elev=25.0, azim=-128.0)
         axis.set_box_aspect((1.25, 1.0, 0.75))
         axes.append(axis)
     if plotted_surface is None:
         raise RuntimeError("At least one factor response is required")
-    figure.colorbar(
+    colorbar = figure.colorbar(
         plotted_surface,
         ax=axes,
         shrink=0.55,
         pad=0.02,
-        label=r"Central $\pm1\sigma$ implied-volatility response (bp)",
     )
+    colorbar.set_label(
+        r"Central $\pm1\sigma$ IV response (bp; symmetric-log colour scale)",
+        fontsize=17,
+    )
+    colorbar.ax.tick_params(labelsize=14)
     figure.suptitle(
-        f"Rank-{factor_rank} risk-neutral daily PCA responses in IV coordinates"
+        f"Rank-{factor_rank} risk-neutral daily PCA responses in IV coordinates",
+        fontsize=25,
     )
-    figure.savefig(output_path, dpi=180)
+    figure.savefig(output_path, dpi=180, bbox_inches="tight", pad_inches=0.08)
     plt.close(figure)
 
 
@@ -721,12 +747,7 @@ def run_paper_diagnostics(
         factor_surfaces[selected_rank],
         output_dir / "baseline_implied_volatility_3d.png",
     )
-    for rank, calibration in calibrations.items():
-        plot_implied_volatility_shocks(
-            calibration,
-            output_dir / f"pca_implied_vol_shocks_rank{rank}.png",
-            surfaces=factor_surfaces[rank],
-        )
+    for rank in calibrations:
         plot_factor_responses_3d(
             factor_surfaces[rank],
             output_dir / f"pca_factor_responses_3d_rank{rank}.png",
