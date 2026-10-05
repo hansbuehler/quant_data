@@ -1,0 +1,95 @@
+{
+  "schema": "front-spot-cpu-validation-v1",
+  "fit_label": "full",
+  "initial_date": "2025-08-29",
+  "training_end": "2024-12-31",
+  "training_pair_count": 710,
+  "factor_rank": 8,
+  "smoothing_sigma": [1.0, 2.0],
+  "full_out_of_sample_residual_rms": 0.256,
+  "affine_200_out_of_sample_residual_rms": 0.423,
+  "smoothed_explained_variance_fraction": 0.7288245885974401,
+  "spot_score_mean": 0.028982144727321336,
+  "spot_score_std": 1.0026312107443744,
+  "statewise_achievable_fraction": 0.6220442469184125,
+  "constant_achievable_fraction": 0.42148822434397315,
+  "constant_market_price_of_risk": [
+    -0.9192188038767344,
+    -13.853603547796798,
+    -0.5747457327174995,
+    -6.912825701027424,
+    -10.317386698659009,
+    4.429156226829747,
+    7.896622353417477,
+    -7.903786357083336
+  ],
+  "pilot": {
+    "path_count": 512,
+    "dlv_substeps": 8,
+    "seed": 20261005,
+    "nonfinite_count": 0,
+    "max_mass_error": 1.2212453270876722e-13,
+    "max_forward_error": 1.212363542890671e-13,
+    "q_dlvsq_range": [3.6082248302511246e-18, 22218.99997930257],
+    "p_dlvsq_range": [5.9791768564717705e-19, 17503.4031434338],
+    "q_spot_range": [0.442531770494363, 1.0883086826067312],
+    "p_spot_range": [0.4473503921152787, 1.079465680514354]
+  },
+  "martingale_audit": {
+    "path_count": 100000,
+    "batch_size": 4096,
+    "dlv_substeps": 8,
+    "time_power": 1.0,
+    "seed": 20261005,
+    "nonfinite_count": 0,
+    "max_mass_error": 2.604583215770617e-13,
+    "max_forward_error": 2.582378755278114e-13,
+    "daily_density": {
+      "tested_count": 63723,
+      "total_count": 65650,
+      "max_abs_z": 3.8265748744583568,
+      "p99_abs_z": 2.345008924797317,
+      "rms_z": 0.8841228162909678,
+      "count_above_five": 0,
+      "max_abs_mean": 0.0015948061200706184
+    },
+    "daily_latent_options": {
+      "tested_count": 63810,
+      "total_count": 65000,
+      "max_abs_z": 6.206561738306156,
+      "p99_abs_z": 1.8955604344531496,
+      "rms_z": 0.8132346753698844,
+      "count_above_five": 2,
+      "max_abs_mean": 5.337502489017405e-05,
+      "worst_tested_mean": -5.26505519607157e-08
+    },
+    "expiry_density": {
+      "tested_count": 4673,
+      "total_count": 5050,
+      "max_abs_z": 3.5270348952860116,
+      "p99_abs_z": 2.445404128516855,
+      "rms_z": 0.9785773061798819,
+      "count_above_five": 0,
+      "max_abs_mean": 0.0018094674652052623
+    },
+    "expiry_options": {
+      "tested_count": 4879,
+      "total_count": 5000,
+      "max_abs_z": 2.827728365297462,
+      "p99_abs_z": 2.111060921105079,
+      "rms_z": 1.0583734609951394,
+      "count_above_five": 0,
+      "max_abs_mean": 0.00018341489384738694
+    },
+    "daily_spot": {
+      "tested_count": 25,
+      "total_count": 25,
+      "max_abs_z": 2.273242192750183,
+      "p99_abs_z": 2.1427109341436297,
+      "rms_z": 1.0573810628072473,
+      "count_above_five": 0,
+      "max_abs_mean": 7.483053559223522e-05
+    }
+  },
+  "conclusion": "Stable under P and Q. Expiry densities, expiry options, daily densities and daily spot pass the five-standard-error screen. Two economically tiny daily latent-call coordinates retain finite-step bias; exact daily martingality requires the nonlinear branch drift correction described in the paper."
+}

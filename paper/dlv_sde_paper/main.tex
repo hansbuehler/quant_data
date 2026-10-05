@@ -483,6 +483,102 @@ Assume fixed expiry dates are $0=T_0<T_1<\dots<T_M$.
 \input{sec_numerics}
 \input{sec_open}
 
+\section{Implementation Commets}
+
+\paragraph{Data and estimation.}
+The implementation uses the daily $25$-expiry by $200$-strike data set.  The
+historical DLV-squared innovations are aligned locally at fixed cash strike and
+fixed expiry over each one-day pair.  Across different day pairs the surface
+and its support are allowed to float with the market.  There are $710$ training
+pairs through 31 December 2024.  We use the full DLV state rather than the
+affine-$200$ state: the respective 2025 out-of-sample residual root mean
+squares are $0.256$ and $0.423$.  Gaussian smoothing with widths one expiry and
+two strike nodes is applied before a rank-eight functional principal-component
+fit; the retained factors explain $72.88\%$ of the smoothed innovation
+variance.
+
+The historical spot shock is calculated exactly as proposed above,
+\[
+  Z_t=\Phi^{-1}\!\left(F_t^1(S_{t+1}/S_t)\right),
+\]
+where $F_t^1$ is the fitted one-day front distribution including the independent
+$5\%$ Black smoothing process.  Its fitted mean and standard deviation are
+$0.0290$ and $1.0026$.  The first DLV factor is oriented to this score.  Under
+$\Q$ the DLV drift is recomputed from \eqref{eq:drift_hb} at every numerical
+substep.  Under $\PP$ we impose
+\[
+  \mu^{\PP}=\mu^{\Q}+\xi\lambda
+\]
+and project the empirical conditional DLV drift onto this attainable subspace.
+The statewise projection explains $62.20\%$ of the weighted drift energy; a
+single constant $\lambda$ used for simulation explains $42.15\%$.  The
+independent $5\%$ Black process is assigned zero risk premium and is therefore
+identical under $\PP$ and $\Q$.
+
+\paragraph{Numerical update.}
+The front density is advanced with the exact Gaussian information bridge and
+the same first Brownian factor that drives spot leverage.  Gaussian interval
+probabilities in the upper tail are evaluated as differences of survival
+probabilities, avoiding subtraction of two CDF values close to one.  At the end
+of a day the expired front is sampled directly from the density at the start of
+that day using the aggregate first-factor increment.  This is algebraically
+equivalent to recursively revealing the bridge, while avoiding accumulation of
+floating-point error in the settlement law.
+
+DLV squared is evolved in log coordinates with eight uniform intraday
+substeps.  The drift and front-density volatility are recomputed at each
+substep and the future density tower is reconstructed with
+\eqref{eq:density-algebraic-step}.  The ordinary frozen log-Euler drift
+increment $x=\mu\delta$ is used whenever $\abs{x}\leq 0.5$.  One simulation
+path exposed a density of order $10^{-24}$ for which freezing the relative
+drift produced $x\simeq2490$ and numerical overflow.  Only for such exceptional
+increments we use the tail safeguard
+\[
+  x\longmapsto
+  \operatorname{sgn}(x)\left(0.5+\log(1+\abs{x}-0.5)\right).
+\]
+It leaves ordinary steps unchanged and has the same infinitesimal limit as the
+stated SDE.  We do not clip DLV squared or alter the SANOS density recursion.
+
+Several alternatives were rejected during implementation.  An additive Euler
+update of the densities can leave the positive convex-order cone, and a simple
+antithetic recentering has the same problem.  A balanced explicit--implicit
+DLV drift multiplier removed the overflow but introduced measurable bias on
+ordinary paths.  A grid refined in squared remaining time did not improve a
+matched experiment.  These failures are numerical rather than changes to the
+continuous-time drift identity.
+
+\paragraph{CPU validation.}
+A coupled $512$-path, $25$-day $\PP/\Q$ pilot produced no non-finite values.
+Mass and forward errors were below $1.3\times10^{-13}$.  The final risk-neutral
+audit used $100{,}000$ paths, eight substeps and all $200$ strikes.  It tested
+$65{,}650$ daily density returns, $65{,}000$ daily latent-option returns,
+$5{,}050$ density-to-expiry returns, $5{,}000$ option-to-expiry returns
+including the Black smoothing process, and all $25$ daily spot returns.  The
+run had no non-finite values; its maximum mass and forward errors were
+$2.61\times10^{-13}$ and $2.58\times10^{-13}$.
+
+For rare claims, a Gaussian statistic based only on predictable variance can
+be misleading.  In one reproduced example the exercise count was $96$ against
+$96.44$ expected, but one exceptionally large payoff gave a predictable-
+variance score of $9.18$ while the realised studentised score was $0.98$.
+Accordingly, the audit retains the analytically known conditional variance but
+uses the larger of predictable and empirical standard errors for inference.
+All expiry-density, expiry-option, daily-density and daily-spot statistics were
+below five standard errors, with maxima $3.53$, $2.83$, $3.83$ and $2.27$.
+
+Two of the $63{,}810$ statistically identifiable daily latent-option
+coordinates remained above five standard errors.  Their worst statistic was
+$6.21$, but the corresponding mean return was only $-5.27\times10^{-8}$.
+Thus the implementation is stable and the residual bias is economically tiny,
+but this experiment does not claim exact martingality for an arbitrary finite
+time step.  This is consistent with the discussion following
+\eqref{eq:density-algebraic-step}: the continuous-time drift condition removes
+the infinitesimal drift, not the nonlinear finite-step bias.  Exact
+martingality under a specified discrete shock law would require solving the
+branchwise nonlinear correction
+\eqref{eq:finite-step-drift-correction}.
+
 \bibliographystyle{plain}
 \bibliography{refs}
 
