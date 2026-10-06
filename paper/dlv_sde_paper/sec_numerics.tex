@@ -529,7 +529,7 @@ one-day return is
 Each model uses 100,000 paths arranged as 50,000 independent antithetic pairs;
 the pair mean is the sampling unit.  The 20 spot and 550 option
 day--instrument coordinates are tested separately.  The final column below is
-the out-of-fold $z$-score of the frozen affine-plus-deep action strategy,
+the out-of-fold standardized statistic of the frozen affine-plus-deep action strategy,
 evaluated on the opposite half of the paths.
 
 \begin{table}[H]
@@ -537,7 +537,7 @@ evaluated on the opposite half of the paths.
 \small
 \begin{tabular}{lrrrrrr}
 \toprule
-Model & Tested & Max. $\abs{z}$ & 99\% $\abs{z}$ & $\abs{z}>2.576$ & $\abs{z}>5$ & Action $z$\\
+Model & Tested & Max. $\abs{z}$ & 99\% $\abs{z}$ & $\abs{z}>2.576$ & $\abs{z}>5$ & Action statistic\\
 \midrule
 A: rank 8, one step   & 570 & 2.716 & 2.464 &  3 & 0 & 1.401\\
 B: rank 16, one step  & 570 & {\color{orange}3.663} & {\color{orange}3.618} & {\color{orange}10} & 0 & 1.040\\

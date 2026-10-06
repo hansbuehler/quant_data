@@ -70,17 +70,30 @@ def _substep_name(dlv_substeps: int) -> str:
     return names.get(dlv_substeps, f"{dlv_substeps}_step")
 
 
-def _artifact_stem(factor_rank: int, dlv_substeps: int) -> str:
-    return f"rank{factor_rank}_{_substep_name(dlv_substeps)}_local_oce"
+def _artifact_stem(
+    factor_rank: int,
+    dlv_substeps: int,
+    instrument_universe: str = "restricted",
+) -> str:
+    suffix = "" if instrument_universe == "restricted" else f"_{instrument_universe}"
+    return f"rank{factor_rank}_{_substep_name(dlv_substeps)}{suffix}_local_oce"
 
 
-def _population_cache_schema(factor_rank: int, dlv_substeps: int) -> str:
-    if factor_rank == 8 and dlv_substeps == 8:
+def _population_cache_schema(
+    factor_rank: int,
+    dlv_substeps: int,
+    instrument_universe: str = "restricted",
+) -> str:
+    if (
+        factor_rank == 8
+        and dlv_substeps == 8
+        and instrument_universe == "restricted"
+    ):
         return "front-spot-rank8-eight-step-antithetic-spot-scaled-population-v2"
     step_name = _substep_name(dlv_substeps).replace("_", "-")
     return (
-        f"front-spot-rank{factor_rank}-{step_name}-antithetic-"
-        "spot-scaled-population-v2"
+        f"front-spot-rank{factor_rank}-{step_name}-{instrument_universe}-"
+        "antithetic-spot-scaled-population-v3"
     )
 
 
@@ -137,6 +150,7 @@ class FrontSpotOcePopulation:
     active_mask: NDArray[np.bool_]
     strikes: NDArray[np.float64]
     instrument_labels: tuple[str, ...]
+    instrument_universe: str
     initial_date: str
     generation_seconds: float
 
@@ -147,6 +161,7 @@ def _save_population_cache(
     *,
     factor_rank: int,
     dlv_substeps: int,
+    instrument_universe: str,
     seed: int,
 ) -> None:
     """Save the reproducible large population in ephemeral local storage."""
@@ -166,10 +181,15 @@ def _save_population_cache(
         os.replace(temporary, final_path)
     _atomic_json(
         {
-            "schema": _population_cache_schema(factor_rank, dlv_substeps),
+            "schema": _population_cache_schema(
+                factor_rank,
+                dlv_substeps,
+                instrument_universe,
+            ),
             "path_count": len(population.features),
             "factor_rank": factor_rank,
             "dlv_substeps": dlv_substeps,
+            "instrument_universe": instrument_universe,
             "seed": seed,
             "initial_date": population.initial_date,
             "generation_seconds": population.generation_seconds,
@@ -184,6 +204,7 @@ def _load_population_cache(
     path_count: int,
     factor_rank: int,
     dlv_substeps: int,
+    instrument_universe: str,
     seed: int,
 ) -> FrontSpotOcePopulation | None:
     """Load a complete compatible ephemeral population cache if present."""
@@ -193,10 +214,15 @@ def _load_population_cache(
         return None
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     expected = {
-        "schema": _population_cache_schema(factor_rank, dlv_substeps),
+        "schema": _population_cache_schema(
+            factor_rank,
+            dlv_substeps,
+            instrument_universe,
+        ),
         "path_count": path_count,
         "factor_rank": factor_rank,
         "dlv_substeps": dlv_substeps,
+        "instrument_universe": instrument_universe,
         "seed": seed,
     }
     if any(metadata.get(key) != value for key, value in expected.items()):
@@ -231,6 +257,7 @@ def _load_population_cache(
         active_mask=active_mask,
         strikes=strikes,
         instrument_labels=labels,
+        instrument_universe=instrument_universe,
         initial_date=str(metadata["initial_date"]),
         generation_seconds=float(metadata["generation_seconds"]),
     )
@@ -301,23 +328,34 @@ def _option_values_from_calls(
     return np.maximum(values, np.finfo(np.float64).tiny)
 
 
-def _instrument_labels() -> tuple[str, ...]:
+def _instrument_labels(
+    strike_count: int,
+    *,
+    instrument_universe: str,
+) -> tuple[str, ...]:
     labels = ["spot"]
     for expiry in EXPIRY_DAYS:
-        for score in NORMALIZED_MONEYNESS:
-            option_type = "put" if score > 0.0 else "call"
-            labels.append(f"{expiry}D NMS {score:g} {option_type}")
+        if instrument_universe == "restricted":
+            for score in NORMALIZED_MONEYNESS:
+                option_type = "put" if score > 0.0 else "call"
+                labels.append(f"{expiry}D NMS {score:g} {option_type}")
+        elif instrument_universe == "all_nodes":
+            labels.extend(
+                f"{expiry}D interior node {node_index} call"
+                for node_index in range(strike_count)
+            )
+        else:
+            raise ValueError(f"unknown instrument universe {instrument_universe!r}")
     return tuple(labels)
 
 
-def _active_mask() -> NDArray[np.bool_]:
+def _active_mask(strike_count: int) -> NDArray[np.bool_]:
     horizon = max(EXPIRY_DAYS)
     mask = np.zeros(
-        (horizon, 1 + len(EXPIRY_DAYS) * len(NORMALIZED_MONEYNESS)),
+        (horizon, 1 + len(EXPIRY_DAYS) * strike_count),
         dtype=np.bool_,
     )
     mask[:, 0] = True
-    strike_count = len(NORMALIZED_MONEYNESS)
     for expiry_index, expiry in enumerate(EXPIRY_DAYS):
         option_slice = slice(
             1 + expiry_index * strike_count,
@@ -456,6 +494,7 @@ def generate_front_spot_oce_population(
     dlv_substeps: int = 8,
     time_power: float = 1.0,
     seed: int = 20261004,
+    instrument_universe: str = "restricted",
 ) -> FrontSpotOcePopulation:
     """Generate the rank-specific Q population used by the OCE experiment."""
 
@@ -469,20 +508,27 @@ def generate_front_spot_oce_population(
     initial = load_initial_model_state(fit_label=fit_label, date_index=date_index)
     factor_rank = calibration.innovations.factor_rank
     horizon = max(EXPIRY_DAYS)
-    strike_count = len(NORMALIZED_MONEYNESS)
-    instrument_count = 1 + len(EXPIRY_DAYS) * strike_count
-    feature_count = factor_rank + 1 + len(EXPIRY_DAYS) * strike_count + 1 + len(EXPIRY_DAYS)
-    features = np.empty((path_count, horizon, feature_count), dtype=np.float32)
-    returns = np.empty((path_count, horizon, instrument_count), dtype=np.float32)
-    active_mask = _active_mask()
-
     support = jnp.asarray(initial.support, dtype=jnp.float64)
     initial_tower = jnp.asarray(initial.density_tower, dtype=jnp.float64)
     loadings = jnp.asarray(
         calibration.innovations.annualized_loadings,
         dtype=jnp.float64,
     )
-    strikes = _initial_nms_strikes(support, initial_tower)
+    if instrument_universe == "restricted":
+        strikes = _initial_nms_strikes(support, initial_tower)
+    elif instrument_universe == "all_nodes":
+        strikes = np.broadcast_to(
+            np.asarray(initial.support[1:-1], dtype=np.float64),
+            (len(EXPIRY_DAYS), initial.support.size - 2),
+        ).copy()
+    else:
+        raise ValueError(f"unknown instrument universe {instrument_universe!r}")
+    strike_count = strikes.shape[1]
+    instrument_count = 1 + len(EXPIRY_DAYS) * strike_count
+    feature_count = factor_rank + 1 + instrument_count - 1 + 1 + len(EXPIRY_DAYS)
+    features = np.empty((path_count, horizon, feature_count), dtype=np.float32)
+    returns = np.empty((path_count, horizon, instrument_count), dtype=np.float32)
+    active_mask = _active_mask(strike_count)
     selected_initial_tower = initial_tower[np.asarray(EXPIRY_DAYS) - 1]
     initial_calls = np.asarray(
         black_mixture_call_prices(
@@ -493,7 +539,10 @@ def generate_front_spot_oce_population(
             jnp.asarray(EXPIRY_DAYS, dtype=jnp.float64),
         )
     )
-    initial_options = _option_values_from_calls(initial_calls, 1.0, strikes)
+    if instrument_universe == "restricted":
+        initial_options = _option_values_from_calls(initial_calls, 1.0, strikes)
+    else:
+        initial_options = initial_calls
     daily_step = jax.jit(
         one_day_risk_neutral_substepped,
         static_argnames=("expiry_dt", "time_power"),
@@ -586,16 +635,19 @@ def generate_front_spot_oce_population(
                     next_spot[:, None, None] - settlement_strikes[None],
                     0.0,
                 )
-                put_payoff = np.maximum(
-                    settlement_strikes[None] - next_spot[:, None, None],
-                    0.0,
-                )
-                put_mask = np.asarray(NORMALIZED_MONEYNESS) > 0.0
-                next_options[:, settlement] = np.where(
-                    put_mask[None, None, :],
-                    put_payoff,
-                    call_payoff,
-                )
+                if instrument_universe == "restricted":
+                    put_payoff = np.maximum(
+                        settlement_strikes[None] - next_spot[:, None, None],
+                        0.0,
+                    )
+                    put_mask = np.asarray(NORMALIZED_MONEYNESS) > 0.0
+                    next_options[:, settlement] = np.where(
+                        put_mask[None, None, :],
+                        put_payoff,
+                        call_payoff,
+                    )
+                else:
+                    next_options[:, settlement] = call_payoff
             live = np.asarray(EXPIRY_DAYS) > day_index + 1
             if np.any(live):
                 live_expiries = np.asarray(EXPIRY_DAYS)[live]
@@ -609,11 +661,14 @@ def generate_front_spot_oce_population(
                         jnp.asarray(live_expiries - day_index - 1, dtype=jnp.float64),
                     )
                 )
-                next_options[:, live] = _option_values_from_calls(
-                    live_calls,
-                    next_spot,
-                    strikes[live],
-                )
+                if instrument_universe == "restricted":
+                    next_options[:, live] = _option_values_from_calls(
+                        live_calls,
+                        next_spot,
+                        strikes[live],
+                    )
+                else:
+                    next_options[:, live] = live_calls
 
             batch_returns = _spot_normalized_price_increments(
                 current_spot,
@@ -660,7 +715,11 @@ def generate_front_spot_oce_population(
         returns=returns,
         active_mask=active_mask,
         strikes=strikes,
-        instrument_labels=_instrument_labels(),
+        instrument_labels=_instrument_labels(
+            strike_count,
+            instrument_universe=instrument_universe,
+        ),
+        instrument_universe=instrument_universe,
         initial_date=initial.date,
         generation_seconds=time.perf_counter() - started,
     )
@@ -1078,6 +1137,7 @@ def run(arguments: argparse.Namespace) -> None:
     artifact_stem = _artifact_stem(
         arguments.factor_rank,
         arguments.dlv_substeps,
+        arguments.instrument_universe,
     )
     policy_label = artifact_stem.replace("_", "-")
     lock = FileLock(output / f"{policy_label}.lock")
@@ -1087,6 +1147,7 @@ def run(arguments: argparse.Namespace) -> None:
             path_count=arguments.paths,
             factor_rank=arguments.factor_rank,
             dlv_substeps=arguments.dlv_substeps,
+            instrument_universe=arguments.instrument_universe,
             seed=arguments.seed,
         )
         if population is None:
@@ -1105,12 +1166,14 @@ def run(arguments: argparse.Namespace) -> None:
                 dlv_substeps=arguments.dlv_substeps,
                 time_power=arguments.time_power,
                 seed=arguments.seed,
+                instrument_universe=arguments.instrument_universe,
             )
             _save_population_cache(
                 population,
                 arguments.population_cache,
                 factor_rank=arguments.factor_rank,
                 dlv_substeps=arguments.dlv_substeps,
+                instrument_universe=arguments.instrument_universe,
                 seed=arguments.seed,
             )
         else:
@@ -1356,8 +1419,8 @@ def run(arguments: argparse.Namespace) -> None:
                 "horizon_days": population.features.shape[1],
                 "feature_count": population.features.shape[2],
                 "instrument_count": population.returns.shape[2],
+                "instrument_universe": population.instrument_universe,
                 "book_expiry_days": list(EXPIRY_DAYS),
-                "normalized_moneyness": list(NORMALIZED_MONEYNESS),
                 "fixed_cash_strikes": population.strikes.tolist(),
                 "instrument_labels": list(population.instrument_labels),
                 "return_definition": (
@@ -1367,7 +1430,7 @@ def run(arguments: argparse.Namespace) -> None:
                 ),
                 "policy_features": (
                     f"{arguments.factor_rank} cumulative Brownian factor histories, "
-                    "log spot, 44 live log option-price/spot ratios, calendar time, "
+                    "log spot, live log option-price/spot ratios, calendar time, "
                     "and four times to expiry"
                 ),
                 "split": (
@@ -1466,6 +1529,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--date-index", type=int, default=-1)
     parser.add_argument("--paths", type=int, default=100_000)
     parser.add_argument("--factor-rank", type=int, default=8)
+    parser.add_argument(
+        "--instrument-universe",
+        choices=("restricted", "all_nodes"),
+        default="restricted",
+    )
     parser.add_argument("--dlv-substeps", type=int, default=8)
     parser.add_argument("--time-power", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=20261004)

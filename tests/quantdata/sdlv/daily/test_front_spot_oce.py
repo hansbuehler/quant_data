@@ -17,9 +17,11 @@ from quantdata.sdlv.daily.front_spot.oce import (
 )
 from quantdata.sdlv.daily.front_spot.run_oce import (
     FrontSpotOceTrainConfig,
+    _active_mask,
     _artifact_stem,
     _evaluate_policy,
     _fit_policy,
+    _instrument_labels,
     _population_cache_schema,
     _spot_normalized_price_increments,
     unconditional_spot_scaled_martingale_audit,
@@ -167,6 +169,23 @@ def test_model_artifacts_distinguish_one_and_eight_substeps() -> None:
     assert _artifact_stem(8, 1) == "rank8_one_step_local_oce"
     assert _artifact_stem(8, 8) == "rank8_eight_step_local_oce"
     assert _population_cache_schema(8, 1) != _population_cache_schema(8, 8)
+    assert _artifact_stem(8, 1, "all_nodes") == "rank8_one_step_all_nodes_local_oce"
+    assert _population_cache_schema(8, 1, "all_nodes") != _population_cache_schema(
+        8,
+        1,
+    )
+
+
+def test_all_node_universe_has_one_spot_and_four_full_strips() -> None:
+    strike_count = 200
+    labels = _instrument_labels(strike_count, instrument_universe="all_nodes")
+    active_mask = _active_mask(strike_count)
+    assert len(labels) == 1 + 4 * strike_count
+    assert labels[0] == "spot"
+    assert labels[1] == "5D interior node 0 call"
+    assert labels[-1] == "20D interior node 199 call"
+    assert active_mask.shape == (20, 1 + 4 * strike_count)
+    assert int(np.sum(active_mask)) == 20 + strike_count * (5 + 10 + 15 + 20)
 
 
 def test_unconditional_audit_uses_antithetic_pair_sampling_units() -> None:
