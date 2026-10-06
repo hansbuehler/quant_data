@@ -352,6 +352,100 @@ def _spot_normalized_price_increments(
     return returns
 
 
+def _unconditional_coordinate_summary(
+    pair_returns: NDArray[np.float64],
+    coordinate_mask: NDArray[np.bool_],
+    instrument_labels: tuple[str, ...],
+) -> dict[str, Any]:
+    """Summarize unconditional zero-mean tests using antithetic pairs."""
+
+    pair_count = len(pair_returns)
+    mean = np.mean(pair_returns, axis=0, dtype=np.float64)
+    standard_error = np.std(pair_returns, axis=0, ddof=1) / math.sqrt(pair_count)
+    active = coordinate_mask & (standard_error > 1.0e-15)
+    z_score = np.zeros_like(mean)
+    np.divide(mean, standard_error, out=z_score, where=active)
+    absolute_z = np.abs(z_score[active])
+    flat_active = np.flatnonzero(active)
+    top_count = min(10, len(flat_active))
+    top_order = np.argsort(absolute_z)[-top_count:][::-1]
+    top_coordinates = []
+    for active_index in top_order:
+        flat_index = int(flat_active[active_index])
+        day_index, instrument_index = np.unravel_index(flat_index, mean.shape)
+        top_coordinates.append(
+            {
+                "day_index": int(day_index),
+                "instrument_index": int(instrument_index),
+                "instrument_label": instrument_labels[instrument_index],
+                "mean": float(mean[day_index, instrument_index]),
+                "pair_based_standard_error": float(
+                    standard_error[day_index, instrument_index]
+                ),
+                "z_score": float(z_score[day_index, instrument_index]),
+            }
+        )
+    return {
+        "tested_coordinate_count": int(np.sum(active)),
+        "max_absolute_z": float(np.max(absolute_z)) if absolute_z.size else 0.0,
+        "p99_absolute_z": (
+            float(np.quantile(absolute_z, 0.99)) if absolute_z.size else 0.0
+        ),
+        "rms_z": (
+            float(np.sqrt(np.mean(absolute_z**2))) if absolute_z.size else 0.0
+        ),
+        "count_above_2_576": int(np.sum(absolute_z > 2.576)),
+        "count_above_3": int(np.sum(absolute_z > 3.0)),
+        "count_above_5": int(np.sum(absolute_z > 5.0)),
+        "top_absolute_z_coordinates": top_coordinates,
+    }
+
+
+def unconditional_spot_scaled_martingale_audit(
+    returns: NDArray[np.float32],
+    active_mask: NDArray[np.bool_],
+    instrument_labels: tuple[str, ...],
+) -> dict[str, Any]:
+    """Test unconditional means of spot-scaled increments coordinate by coordinate."""
+
+    if len(returns) < 4 or len(returns) % 2:
+        raise ValueError("unconditional audit requires an even number of paths")
+    if returns.shape[1:] != active_mask.shape:
+        raise ValueError("return and active-mask geometries do not match")
+    pair_returns = 0.5 * (
+        np.asarray(returns[0::2], dtype=np.float64)
+        + np.asarray(returns[1::2], dtype=np.float64)
+    )
+    spot_mask = np.zeros_like(active_mask)
+    spot_mask[:, 0] = active_mask[:, 0]
+    option_mask = active_mask.copy()
+    option_mask[:, 0] = False
+    return {
+        "null_hypothesis": "E_Q[(V_{t+1}^i-V_t^i)/S_t]=0 for every day and instrument",
+        "path_count": len(returns),
+        "antithetic_pair_count": len(pair_returns),
+        "sampling_unit": (
+            "complete antithetic path pair; each day-instrument coordinate is "
+            "tested separately"
+        ),
+        "all_instruments": _unconditional_coordinate_summary(
+            pair_returns,
+            active_mask,
+            instrument_labels,
+        ),
+        "spot": _unconditional_coordinate_summary(
+            pair_returns,
+            spot_mask,
+            instrument_labels,
+        ),
+        "options": _unconditional_coordinate_summary(
+            pair_returns,
+            option_mask,
+            instrument_labels,
+        ),
+    }
+
+
 def generate_front_spot_oce_population(
     calibration: FrontSpotCalibration,
     *,
@@ -974,8 +1068,8 @@ def run(arguments: argparse.Namespace) -> None:
 
     if arguments.paths != 100_000:
         raise ValueError("this requested experiment is defined on exactly 100,000 paths")
-    if arguments.factor_rank != 8:
-        raise ValueError("this conditional-drift experiment requires factor rank 8")
+    if arguments.factor_rank not in (8, 16):
+        raise ValueError("this conditional-drift experiment requires rank 8 or 16")
     if arguments.dlv_substeps < 1:
         raise ValueError("at least one DLV substep is required")
     torch.set_num_threads(arguments.torch_threads)
@@ -1225,6 +1319,11 @@ def run(arguments: argparse.Namespace) -> None:
             }
         matrix_path = output / f"{artifact_stem}_action_moments.npz"
         np.savez_compressed(matrix_path, **matrix_values)
+        unconditional_audit = unconditional_spot_scaled_martingale_audit(
+            population.returns,
+            population.active_mask,
+            population.instrument_labels,
+        )
         report = {
             "schema": (
                 f"front-spot-rank{arguments.factor_rank}-"
@@ -1340,6 +1439,7 @@ def run(arguments: argparse.Namespace) -> None:
                     "maximum_log_payoff"
                 ],
             },
+            "unconditional_spot_scaled_martingale_audit": unconditional_audit,
             "reverse_crossfit": crossfit_report,
             "action_outer_moment": {
                 "definition": "E_{path,time}[a_t a_t'] with expired coordinates zero",

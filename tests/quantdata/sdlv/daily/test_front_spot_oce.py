@@ -22,6 +22,7 @@ from quantdata.sdlv.daily.front_spot.run_oce import (
     _fit_policy,
     _population_cache_schema,
     _spot_normalized_price_increments,
+    unconditional_spot_scaled_martingale_audit,
 )
 from quantdata.torch import BaseEnvironment
 from quantdata.torch.ffw import FeedForwardConfig
@@ -166,6 +167,31 @@ def test_model_artifacts_distinguish_one_and_eight_substeps() -> None:
     assert _artifact_stem(8, 1) == "rank8_one_step_local_oce"
     assert _artifact_stem(8, 8) == "rank8_eight_step_local_oce"
     assert _population_cache_schema(8, 1) != _population_cache_schema(8, 8)
+
+
+def test_unconditional_audit_uses_antithetic_pair_sampling_units() -> None:
+    returns = np.asarray(
+        [
+            [[3.0, 2.0]],
+            [[-1.0, 0.0]],
+            [[5.0, 4.0]],
+            [[-1.0, 0.0]],
+        ],
+        dtype=np.float32,
+    )
+    audit = unconditional_spot_scaled_martingale_audit(
+        returns,
+        np.ones((1, 2), dtype=np.bool_),
+        ("spot", "option"),
+    )
+    assert audit["antithetic_pair_count"] == 2
+    assert audit["spot"]["top_absolute_z_coordinates"][0]["mean"] == pytest.approx(
+        1.5
+    )
+    assert audit["spot"]["top_absolute_z_coordinates"][0][
+        "pair_based_standard_error"
+    ] == pytest.approx(0.5)
+    assert audit["spot"]["max_absolute_z"] == pytest.approx(3.0)
 
 
 def test_exact_line_search_update_strictly_decreases_local_loss(tmp_path) -> None:

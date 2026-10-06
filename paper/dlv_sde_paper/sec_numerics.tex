@@ -516,6 +516,43 @@ $2.38\times10^{-13}$.  The mean corresponding to the largest daily $X$-call
 statistic was $-8.01\times10^{-7}$ in units of initial spot.  The CPU runtime
 was 1 hour 3 minutes 30 seconds.
 
+\subsection{Spot-scaled tradable returns}
+\label{sec:numerics-spot-scaled-audit}
+
+We additionally test a fixed tradable set consisting of spot and 44 options:
+eleven OTM options at each of 5, 10, 15, and 20 business days.  Their cash
+strikes are fixed at the initial date.  For every live instrument the tested
+one-day return is
+\begin{equation}\label{eq:numerics-spot-scaled-return}
+  R_n^i=\frac{V_{n+1}^i-V_n^i}{Z_n}.
+\end{equation}
+Each model uses 100,000 paths arranged as 50,000 independent antithetic pairs;
+the pair mean is the sampling unit.  The 20 spot and 550 option
+day--instrument coordinates are tested separately.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+Model & Tested & Max. $\abs{z}$ & 99\% $\abs{z}$ & $\abs{z}>2.576$ & $\abs{z}>5$\\
+\midrule
+A: rank 8, one step   & 570 & 2.716 & 2.464 &  3 & 0\\
+B: rank 16, one step  & 570 & {\color{orange}3.663} & {\color{orange}3.618} & {\color{orange}10} & 0\\
+C: rank 8, eight steps & 570 & 2.793 & 2.373 &  4 & 0\\
+D: rank 16, eight steps & 570 & 2.996 & {\color{orange}2.967} & {\color{orange}22} & 0\\
+\bottomrule
+\end{tabular}
+\caption{Unconditional 100,000-path audit of the spot-scaled tradable returns
+in~\eqref{eq:numerics-spot-scaled-return}.}
+\label{tab:numerics-spot-scaled-audit}
+\end{table}
+
+No coordinate exceeds five standard errors.  Model~B has ten coordinates above
+three standard errors, concentrated in the eighth daily transition.  Model~D
+has no coordinate above three standard errors; its upper tail is concentrated
+just below that level in the third daily transition.
+
 \subsection{Interpretation}\label{sec:numerics-interpretation}
 
 Models~A and~B show that one daily Brownian increment is not sufficient for the

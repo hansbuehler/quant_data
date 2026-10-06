@@ -1,0 +1,1124 @@
+{
+  "schema": "front-spot-four-model-spot-scaled-unconditional-audit-v1",
+  "return_definition": "(V_{t+1}^i-V_t^i)/S_t",
+  "path_count_per_model": 100000,
+  "antithetic_pair_count_per_model": 50000,
+  "models": {
+    "rank8_one_step": {
+      "null_hypothesis": "E_Q[(V_{t+1}^i-V_t^i)/S_t]=0 for every day and instrument",
+      "path_count": 100000,
+      "antithetic_pair_count": 50000,
+      "sampling_unit": "complete antithetic path pair; each day-instrument coordinate is tested separately",
+      "all_instruments": {
+        "tested_coordinate_count": 570,
+        "max_absolute_z": 2.7162145629505567,
+        "p99_absolute_z": 2.464100489259049,
+        "rms_z": 1.035691885068594,
+        "count_above_2_576": 3,
+        "count_above_3": 0,
+        "count_above_5": 0,
+        "top_absolute_z_coordinates": [
+          {
+            "day_index": 4,
+            "instrument_index": 4,
+            "instrument_label": "5D NMS -0.9 call",
+            "mean": 2.043414376653493e-05,
+            "pair_based_standard_error": 7.523022682102781e-06,
+            "z_score": 2.7162145629505567
+          },
+          {
+            "day_index": 12,
+            "instrument_index": 26,
+            "instrument_label": "15D NMS -0.9 call",
+            "mean": -2.47604311565553e-05,
+            "pair_based_standard_error": 9.357939229412691e-06,
+            "z_score": -2.6459277571210813
+          },
+          {
+            "day_index": 12,
+            "instrument_index": 27,
+            "instrument_label": "15D NMS -0.7 call",
+            "mean": -2.393330318208064e-05,
+            "pair_based_standard_error": 9.266753164257353e-06,
+            "z_score": -2.5827064515318487
+          },
+          {
+            "day_index": 12,
+            "instrument_index": 25,
+            "instrument_label": "15D NMS -1.1 call",
+            "mean": -2.4810909906691573e-05,
+            "pair_based_standard_error": 9.709525696769119e-06,
+            "z_score": -2.555316364727012
+          },
+          {
+            "day_index": 4,
+            "instrument_index": 3,
+            "instrument_label": "5D NMS -1.1 call",
+            "mean": 1.976437356596809e-05,
+            "pair_based_standard_error": 7.829842283898316e-06,
+            "z_score": 2.5242364851476697
+          },
+          {
+            "day_index": 12,
+            "instrument_index": 38,
+            "instrument_label": "20D NMS -0.7 call",
+            "mean": -1.93316923879432e-05,
+            "pair_based_standard_error": 7.772974002383409e-06,
+            "z_score": -2.4870393728340745
+          },
+          {
+            "day_index": 12,
+            "instrument_index": 37,
+            "instrument_label": "20D NMS -0.9 call",
+            "mean": -1.9527578778900255e-05,
+            "pair_based_standard_error": 7.958114614503739e-06,
+            "z_score": -2.4537946140296922
+          },
+          {
+            "day_index": 13,
+            "instrument_index": 23,
+            "instrument_label": "15D NMS -1.5 call",
+            "mean": 2.2254570197739665e-05,
+            "pair_based_standard_error": 9.205033047492801e-06,
+            "z_score": 2.4176523954795797
+          },
+          {
+            "day_index": 12,
+            "instrument_index": 39,
+            "instrument_label": "20D NMS -0.5 call",
+            "mean": -1.889224922971552e-05,
+            "pair_based_standard_error": 7.874995399840523e-06,
+            "z_score": -2.399017176581222
+          },
+          {
+            "day_index": 12,
+            "instrument_index": 24,
+            "instrument_label": "15D NMS -1.3 call",
+            "mean": -2.4263057097197346e-05,
+            "pair_based_standard_error": 1.0248183286950268e-05,
+            "z_score": -2.3675471464384525
+          }
+        ]
+      },
+      "spot": {
+        "tested_coordinate_count": 20,
+        "max_absolute_z": 1.671005902293186,
+        "p99_absolute_z": 1.670900166401555,
+        "rms_z": 0.880262937648971,
+        "count_above_2_576": 0,
+        "count_above_3": 0,
+        "count_above_5": 0,
+        "top_absolute_z_coordinates": [
+          {
+            "day_index": 17,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 4.626825339211178e-05,
+            "pair_based_standard_error": 2.7688862934963944e-05,
+            "z_score": 1.671005902293186
+          },
+          {
+            "day_index": 8,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": -4.268180636318185e-05,
+            "pair_based_standard_error": 2.5551092074081666e-05,
+            "z_score": -1.6704493976003911
+          },
+          {
+            "day_index": 0,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": -1.448334337995803e-05,
+            "pair_based_standard_error": 8.807450546272471e-06,
+            "z_score": -1.6444422030944852
+          },
+          {
+            "day_index": 18,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 3.5244501613595174e-05,
+            "pair_based_standard_error": 3.0214310495464486e-05,
+            "z_score": 1.166483730247155
+          },
+          {
+            "day_index": 19,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 3.554566989735306e-05,
+            "pair_based_standard_error": 3.0809424784662695e-05,
+            "z_score": 1.1537271515386462
+          },
+          {
+            "day_index": 16,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 3.052650258538336e-05,
+            "pair_based_standard_error": 2.8020475222632885e-05,
+            "z_score": 1.0894355767644615
+          },
+          {
+            "day_index": 3,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": -1.4689052693284878e-05,
+            "pair_based_standard_error": 1.6618016018644357e-05,
+            "z_score": -0.8839233682772176
+          },
+          {
+            "day_index": 15,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": -2.183823633228414e-05,
+            "pair_based_standard_error": 3.0255647066436254e-05,
+            "z_score": -0.7217904242580265
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": -7.919139808788671e-06,
+            "pair_based_standard_error": 1.1893776029102694e-05,
+            "z_score": -0.6658221736655754
+          },
+          {
+            "day_index": 12,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 1.8075320419201475e-05,
+            "pair_based_standard_error": 3.179294220591164e-05,
+            "z_score": 0.5685324844153781
+          }
+        ]
+      },
+      "options": {
+        "tested_coordinate_count": 550,
+        "max_absolute_z": 2.7162145629505567,
+        "p99_absolute_z": 2.470749441019927,
+        "rms_z": 1.040906616426527,
+        "count_above_2_576": 3,
+        "count_above_3": 0,
+        "count_above_5": 0,
+        "top_absolute_z_coordinates": [
+          {
+            "day_index": 4,
+            "instrument_index": 4,
+            "instrument_label": "5D NMS -0.9 call",
+            "mean": 2.043414376653493e-05,
+            "pair_based_standard_error": 7.523022682102781e-06,
+            "z_score": 2.7162145629505567
+          },
+          {
+            "day_index": 12,
+            "instrument_index": 26,
+            "instrument_label": "15D NMS -0.9 call",
+            "mean": -2.47604311565553e-05,
+            "pair_based_standard_error": 9.357939229412691e-06,
+            "z_score": -2.6459277571210813
+          },
+          {
+            "day_index": 12,
+            "instrument_index": 27,
+            "instrument_label": "15D NMS -0.7 call",
+            "mean": -2.393330318208064e-05,
+            "pair_based_standard_error": 9.266753164257353e-06,
+            "z_score": -2.5827064515318487
+          },
+          {
+            "day_index": 12,
+            "instrument_index": 25,
+            "instrument_label": "15D NMS -1.1 call",
+            "mean": -2.4810909906691573e-05,
+            "pair_based_standard_error": 9.709525696769119e-06,
+            "z_score": -2.555316364727012
+          },
+          {
+            "day_index": 4,
+            "instrument_index": 3,
+            "instrument_label": "5D NMS -1.1 call",
+            "mean": 1.976437356596809e-05,
+            "pair_based_standard_error": 7.829842283898316e-06,
+            "z_score": 2.5242364851476697
+          },
+          {
+            "day_index": 12,
+            "instrument_index": 38,
+            "instrument_label": "20D NMS -0.7 call",
+            "mean": -1.93316923879432e-05,
+            "pair_based_standard_error": 7.772974002383409e-06,
+            "z_score": -2.4870393728340745
+          },
+          {
+            "day_index": 12,
+            "instrument_index": 37,
+            "instrument_label": "20D NMS -0.9 call",
+            "mean": -1.9527578778900255e-05,
+            "pair_based_standard_error": 7.958114614503739e-06,
+            "z_score": -2.4537946140296922
+          },
+          {
+            "day_index": 13,
+            "instrument_index": 23,
+            "instrument_label": "15D NMS -1.5 call",
+            "mean": 2.2254570197739665e-05,
+            "pair_based_standard_error": 9.205033047492801e-06,
+            "z_score": 2.4176523954795797
+          },
+          {
+            "day_index": 12,
+            "instrument_index": 39,
+            "instrument_label": "20D NMS -0.5 call",
+            "mean": -1.889224922971552e-05,
+            "pair_based_standard_error": 7.874995399840523e-06,
+            "z_score": -2.399017176581222
+          },
+          {
+            "day_index": 12,
+            "instrument_index": 24,
+            "instrument_label": "15D NMS -1.3 call",
+            "mean": -2.4263057097197346e-05,
+            "pair_based_standard_error": 1.0248183286950268e-05,
+            "z_score": -2.3675471464384525
+          }
+        ]
+      }
+    },
+    "rank8_eight_step": {
+      "null_hypothesis": "E_Q[(V_{t+1}^i-V_t^i)/S_t]=0 for every day and instrument",
+      "path_count": 100000,
+      "antithetic_pair_count": 50000,
+      "sampling_unit": "complete antithetic path pair; each day-instrument coordinate is tested separately",
+      "all_instruments": {
+        "tested_coordinate_count": 570,
+        "max_absolute_z": 2.792753593437169,
+        "p99_absolute_z": 2.3727439394022993,
+        "rms_z": 0.9402256764220988,
+        "count_above_2_576": 4,
+        "count_above_3": 0,
+        "count_above_5": 0,
+        "top_absolute_z_coordinates": [
+          {
+            "day_index": 9,
+            "instrument_index": 23,
+            "instrument_label": "15D NMS -1.5 call",
+            "mean": 2.3778369410127876e-05,
+            "pair_based_standard_error": 8.514309843161907e-06,
+            "z_score": 2.792753593437169
+          },
+          {
+            "day_index": 9,
+            "instrument_index": 34,
+            "instrument_label": "20D NMS -1.5 call",
+            "mean": 2.3529086302005267e-05,
+            "pair_based_standard_error": 8.694842888393105e-06,
+            "z_score": 2.7060967752982226
+          },
+          {
+            "day_index": 9,
+            "instrument_index": 35,
+            "instrument_label": "20D NMS -1.3 call",
+            "mean": 2.1043631327487015e-05,
+            "pair_based_standard_error": 7.921822016188197e-06,
+            "z_score": 2.656413042919227
+          },
+          {
+            "day_index": 9,
+            "instrument_index": 24,
+            "instrument_label": "15D NMS -1.3 call",
+            "mean": 2.0765234724047275e-05,
+            "pair_based_standard_error": 7.843499109131528e-06,
+            "z_score": 2.647445283683663
+          },
+          {
+            "day_index": 9,
+            "instrument_index": 36,
+            "instrument_label": "20D NMS -1.1 call",
+            "mean": 1.825558329018099e-05,
+            "pair_based_standard_error": 7.162406969560612e-06,
+            "z_score": 2.5488056414226494
+          },
+          {
+            "day_index": 9,
+            "instrument_index": 25,
+            "instrument_label": "15D NMS -1.1 call",
+            "mean": 1.7413224410413833e-05,
+            "pair_based_standard_error": 7.206507542933336e-06,
+            "z_score": 2.416319459415421
+          },
+          {
+            "day_index": 9,
+            "instrument_index": 37,
+            "instrument_label": "20D NMS -0.9 call",
+            "mean": 1.5194739360346204e-05,
+            "pair_based_standard_error": 6.4571457882901165e-06,
+            "z_score": 2.353166531860177
+          },
+          {
+            "day_index": 6,
+            "instrument_index": 36,
+            "instrument_label": "20D NMS -1.1 call",
+            "mean": -1.6059788008824042e-05,
+            "pair_based_standard_error": 6.979796671253559e-06,
+            "z_score": -2.3008962531769184
+          },
+          {
+            "day_index": 6,
+            "instrument_index": 35,
+            "instrument_label": "20D NMS -1.3 call",
+            "mean": -1.7849798393691997e-05,
+            "pair_based_standard_error": 7.766574891980971e-06,
+            "z_score": -2.298284461548424
+          },
+          {
+            "day_index": 6,
+            "instrument_index": 34,
+            "instrument_label": "20D NMS -1.5 call",
+            "mean": -1.9518678278520056e-05,
+            "pair_based_standard_error": 8.53665889473365e-06,
+            "z_score": -2.2864540470934505
+          }
+        ]
+      },
+      "spot": {
+        "tested_coordinate_count": 20,
+        "max_absolute_z": 2.1318682472770485,
+        "p99_absolute_z": 2.077347632510232,
+        "rms_z": 1.0783704235089355,
+        "count_above_2_576": 0,
+        "count_above_3": 0,
+        "count_above_5": 0,
+        "top_absolute_z_coordinates": [
+          {
+            "day_index": 18,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": -7.846579389617816e-05,
+            "pair_based_standard_error": 3.6806117824776194e-05,
+            "z_score": -2.1318682472770485
+          },
+          {
+            "day_index": 9,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 4.733500953818492e-05,
+            "pair_based_standard_error": 2.5656976999269314e-05,
+            "z_score": 1.8449176432411727
+          },
+          {
+            "day_index": 8,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": -3.859115679059649e-05,
+            "pair_based_standard_error": 2.4040416257899674e-05,
+            "z_score": -1.6052615885099513
+          },
+          {
+            "day_index": 6,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": -2.845319375862594e-05,
+            "pair_based_standard_error": 1.8921007886750254e-05,
+            "z_score": -1.503788483622522
+          },
+          {
+            "day_index": 16,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": -5.407457640267026e-05,
+            "pair_based_standard_error": 3.64225732425215e-05,
+            "z_score": -1.4846445923140033
+          },
+          {
+            "day_index": 17,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": -4.515725046402828e-05,
+            "pair_based_standard_error": 3.3223956320595843e-05,
+            "z_score": -1.359177396824197
+          },
+          {
+            "day_index": 5,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 2.1072681753999717e-05,
+            "pair_based_standard_error": 1.5911939454008985e-05,
+            "z_score": 1.3243314440019751
+          },
+          {
+            "day_index": 3,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": -2.164463268252092e-05,
+            "pair_based_standard_error": 1.666705293750748e-05,
+            "z_score": -1.2986478631631337
+          },
+          {
+            "day_index": 1,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": -8.48774146850168e-06,
+            "pair_based_standard_error": 1.1113708840390944e-05,
+            "z_score": -0.7637181781885793
+          },
+          {
+            "day_index": 14,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": -2.162535230611688e-05,
+            "pair_based_standard_error": 3.338949992865605e-05,
+            "z_score": -0.6476692478870352
+          }
+        ]
+      },
+      "options": {
+        "tested_coordinate_count": 550,
+        "max_absolute_z": 2.792753593437169,
+        "p99_absolute_z": 2.3853745249133507,
+        "rms_z": 0.9348176375178572,
+        "count_above_2_576": 4,
+        "count_above_3": 0,
+        "count_above_5": 0,
+        "top_absolute_z_coordinates": [
+          {
+            "day_index": 9,
+            "instrument_index": 23,
+            "instrument_label": "15D NMS -1.5 call",
+            "mean": 2.3778369410127876e-05,
+            "pair_based_standard_error": 8.514309843161907e-06,
+            "z_score": 2.792753593437169
+          },
+          {
+            "day_index": 9,
+            "instrument_index": 34,
+            "instrument_label": "20D NMS -1.5 call",
+            "mean": 2.3529086302005267e-05,
+            "pair_based_standard_error": 8.694842888393105e-06,
+            "z_score": 2.7060967752982226
+          },
+          {
+            "day_index": 9,
+            "instrument_index": 35,
+            "instrument_label": "20D NMS -1.3 call",
+            "mean": 2.1043631327487015e-05,
+            "pair_based_standard_error": 7.921822016188197e-06,
+            "z_score": 2.656413042919227
+          },
+          {
+            "day_index": 9,
+            "instrument_index": 24,
+            "instrument_label": "15D NMS -1.3 call",
+            "mean": 2.0765234724047275e-05,
+            "pair_based_standard_error": 7.843499109131528e-06,
+            "z_score": 2.647445283683663
+          },
+          {
+            "day_index": 9,
+            "instrument_index": 36,
+            "instrument_label": "20D NMS -1.1 call",
+            "mean": 1.825558329018099e-05,
+            "pair_based_standard_error": 7.162406969560612e-06,
+            "z_score": 2.5488056414226494
+          },
+          {
+            "day_index": 9,
+            "instrument_index": 25,
+            "instrument_label": "15D NMS -1.1 call",
+            "mean": 1.7413224410413833e-05,
+            "pair_based_standard_error": 7.206507542933336e-06,
+            "z_score": 2.416319459415421
+          },
+          {
+            "day_index": 9,
+            "instrument_index": 37,
+            "instrument_label": "20D NMS -0.9 call",
+            "mean": 1.5194739360346204e-05,
+            "pair_based_standard_error": 6.4571457882901165e-06,
+            "z_score": 2.353166531860177
+          },
+          {
+            "day_index": 6,
+            "instrument_index": 36,
+            "instrument_label": "20D NMS -1.1 call",
+            "mean": -1.6059788008824042e-05,
+            "pair_based_standard_error": 6.979796671253559e-06,
+            "z_score": -2.3008962531769184
+          },
+          {
+            "day_index": 6,
+            "instrument_index": 35,
+            "instrument_label": "20D NMS -1.3 call",
+            "mean": -1.7849798393691997e-05,
+            "pair_based_standard_error": 7.766574891980971e-06,
+            "z_score": -2.298284461548424
+          },
+          {
+            "day_index": 6,
+            "instrument_index": 34,
+            "instrument_label": "20D NMS -1.5 call",
+            "mean": -1.9518678278520056e-05,
+            "pair_based_standard_error": 8.53665889473365e-06,
+            "z_score": -2.2864540470934505
+          }
+        ]
+      }
+    },
+    "rank16_one_step": {
+      "null_hypothesis": "E_Q[(V_{t+1}^i-V_t^i)/S_t]=0 for every day and instrument",
+      "path_count": 100000,
+      "antithetic_pair_count": 50000,
+      "sampling_unit": "complete antithetic path pair; each day-instrument coordinate is tested separately",
+      "all_instruments": {
+        "tested_coordinate_count": 570,
+        "max_absolute_z": 3.66297951943901,
+        "p99_absolute_z": 3.6177323826876684,
+        "rms_z": 0.9680413720918235,
+        "count_above_2_576": 10,
+        "count_above_3": 10,
+        "count_above_5": 0,
+        "top_absolute_z_coordinates": [
+          {
+            "day_index": 7,
+            "instrument_index": 22,
+            "instrument_label": "10D NMS 0.5 put",
+            "mean": -9.151050179676195e-05,
+            "pair_based_standard_error": 2.4982531655207535e-05,
+            "z_score": -3.66297951943901
+          },
+          {
+            "day_index": 7,
+            "instrument_index": 31,
+            "instrument_label": "15D NMS 0.1 put",
+            "mean": -8.468025005496962e-05,
+            "pair_based_standard_error": 2.3240747328878636e-05,
+            "z_score": -3.643611320094991
+          },
+          {
+            "day_index": 7,
+            "instrument_index": 32,
+            "instrument_label": "15D NMS 0.3 put",
+            "mean": -8.553769054918059e-05,
+            "pair_based_standard_error": 2.3494213017345664e-05,
+            "z_score": -3.6407982887542785
+          },
+          {
+            "day_index": 7,
+            "instrument_index": 42,
+            "instrument_label": "20D NMS 0.1 put",
+            "mean": -8.150429677796007e-05,
+            "pair_based_standard_error": 2.2432349904173332e-05,
+            "z_score": -3.6333374401759375
+          },
+          {
+            "day_index": 7,
+            "instrument_index": 33,
+            "instrument_label": "15D NMS 0.5 put",
+            "mean": -8.483293637994138e-05,
+            "pair_based_standard_error": 2.3403827846199902e-05,
+            "z_score": -3.624746214056423
+          },
+          {
+            "day_index": 7,
+            "instrument_index": 21,
+            "instrument_label": "10D NMS 0.3 put",
+            "mean": -9.187781086808215e-05,
+            "pair_based_standard_error": 2.5375882930787487e-05,
+            "z_score": -3.6206744458381266
+          },
+          {
+            "day_index": 7,
+            "instrument_index": 43,
+            "instrument_label": "20D NMS 0.3 put",
+            "mean": -8.242039693290586e-05,
+            "pair_based_standard_error": 2.2790663551152623e-05,
+            "z_score": -3.6164105861997817
+          },
+          {
+            "day_index": 7,
+            "instrument_index": 44,
+            "instrument_label": "20D NMS 0.5 put",
+            "mean": -8.193441273923891e-05,
+            "pair_based_standard_error": 2.2843739861897887e-05,
+            "z_score": -3.5867337500152963
+          },
+          {
+            "day_index": 7,
+            "instrument_index": 20,
+            "instrument_label": "10D NMS 0.1 put",
+            "mean": -9.012106891374433e-05,
+            "pair_based_standard_error": 2.526754972009892e-05,
+            "z_score": -3.5666722698504505
+          },
+          {
+            "day_index": 7,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 7.082752605294715e-05,
+            "pair_based_standard_error": 2.1859670182902557e-05,
+            "z_score": 3.24010039768782
+          }
+        ]
+      },
+      "spot": {
+        "tested_coordinate_count": 20,
+        "max_absolute_z": 3.24010039768782,
+        "p99_absolute_z": 2.9755124643602895,
+        "rms_z": 1.1118894748994101,
+        "count_above_2_576": 1,
+        "count_above_3": 1,
+        "count_above_5": 0,
+        "top_absolute_z_coordinates": [
+          {
+            "day_index": 7,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 7.082752605294715e-05,
+            "pair_based_standard_error": 2.1859670182902557e-05,
+            "z_score": 3.24010039768782
+          },
+          {
+            "day_index": 11,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 5.4211246962841636e-05,
+            "pair_based_standard_error": 2.934251604405657e-05,
+            "z_score": 1.8475323275429312
+          },
+          {
+            "day_index": 10,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 3.2966479498574516e-05,
+            "pair_based_standard_error": 2.3999520024110126e-05,
+            "z_score": 1.3736307836763446
+          },
+          {
+            "day_index": 13,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 3.470474812422381e-05,
+            "pair_based_standard_error": 2.68061756371753e-05,
+            "z_score": 1.2946549554086568
+          },
+          {
+            "day_index": 4,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": -1.8045650117641898e-05,
+            "pair_based_standard_error": 1.562696676630593e-05,
+            "z_score": -1.1547762523275478
+          },
+          {
+            "day_index": 8,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": -2.744099395053851e-05,
+            "pair_based_standard_error": 2.5203115826712614e-05,
+            "z_score": -1.0887937086514512
+          },
+          {
+            "day_index": 3,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 1.7171772159710343e-05,
+            "pair_based_standard_error": 1.6491643044453442e-05,
+            "z_score": 1.0412408341257209
+          },
+          {
+            "day_index": 16,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 2.7282409717117205e-05,
+            "pair_based_standard_error": 2.891900956726119e-05,
+            "z_score": 0.9434074722947373
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 9.095123701209214e-06,
+            "pair_based_standard_error": 1.1696431979197709e-05,
+            "z_score": 0.7775981356865954
+          },
+          {
+            "day_index": 18,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 2.2846552491332945e-05,
+            "pair_based_standard_error": 3.063958742609357e-05,
+            "z_score": 0.7456547039493147
+          }
+        ]
+      },
+      "options": {
+        "tested_coordinate_count": 550,
+        "max_absolute_z": 3.66297951943901,
+        "p99_absolute_z": 3.6185851546153374,
+        "rms_z": 0.9624054823188591,
+        "count_above_2_576": 9,
+        "count_above_3": 9,
+        "count_above_5": 0,
+        "top_absolute_z_coordinates": [
+          {
+            "day_index": 7,
+            "instrument_index": 22,
+            "instrument_label": "10D NMS 0.5 put",
+            "mean": -9.151050179676195e-05,
+            "pair_based_standard_error": 2.4982531655207535e-05,
+            "z_score": -3.66297951943901
+          },
+          {
+            "day_index": 7,
+            "instrument_index": 31,
+            "instrument_label": "15D NMS 0.1 put",
+            "mean": -8.468025005496962e-05,
+            "pair_based_standard_error": 2.3240747328878636e-05,
+            "z_score": -3.643611320094991
+          },
+          {
+            "day_index": 7,
+            "instrument_index": 32,
+            "instrument_label": "15D NMS 0.3 put",
+            "mean": -8.553769054918059e-05,
+            "pair_based_standard_error": 2.3494213017345664e-05,
+            "z_score": -3.6407982887542785
+          },
+          {
+            "day_index": 7,
+            "instrument_index": 42,
+            "instrument_label": "20D NMS 0.1 put",
+            "mean": -8.150429677796007e-05,
+            "pair_based_standard_error": 2.2432349904173332e-05,
+            "z_score": -3.6333374401759375
+          },
+          {
+            "day_index": 7,
+            "instrument_index": 33,
+            "instrument_label": "15D NMS 0.5 put",
+            "mean": -8.483293637994138e-05,
+            "pair_based_standard_error": 2.3403827846199902e-05,
+            "z_score": -3.624746214056423
+          },
+          {
+            "day_index": 7,
+            "instrument_index": 21,
+            "instrument_label": "10D NMS 0.3 put",
+            "mean": -9.187781086808215e-05,
+            "pair_based_standard_error": 2.5375882930787487e-05,
+            "z_score": -3.6206744458381266
+          },
+          {
+            "day_index": 7,
+            "instrument_index": 43,
+            "instrument_label": "20D NMS 0.3 put",
+            "mean": -8.242039693290586e-05,
+            "pair_based_standard_error": 2.2790663551152623e-05,
+            "z_score": -3.6164105861997817
+          },
+          {
+            "day_index": 7,
+            "instrument_index": 44,
+            "instrument_label": "20D NMS 0.5 put",
+            "mean": -8.193441273923891e-05,
+            "pair_based_standard_error": 2.2843739861897887e-05,
+            "z_score": -3.5867337500152963
+          },
+          {
+            "day_index": 7,
+            "instrument_index": 20,
+            "instrument_label": "10D NMS 0.1 put",
+            "mean": -9.012106891374433e-05,
+            "pair_based_standard_error": 2.526754972009892e-05,
+            "z_score": -3.5666722698504505
+          },
+          {
+            "day_index": 3,
+            "instrument_index": 41,
+            "instrument_label": "20D NMS -0.1 call",
+            "mean": 8.635980452498763e-06,
+            "pair_based_standard_error": 4.316520259451355e-06,
+            "z_score": 2.000681088798232
+          }
+        ]
+      }
+    },
+    "rank16_eight_step": {
+      "null_hypothesis": "E_Q[(V_{t+1}^i-V_t^i)/S_t]=0 for every day and instrument",
+      "path_count": 100000,
+      "antithetic_pair_count": 50000,
+      "sampling_unit": "complete antithetic path pair; each day-instrument coordinate is tested separately",
+      "all_instruments": {
+        "tested_coordinate_count": 570,
+        "max_absolute_z": 2.996122666999547,
+        "p99_absolute_z": 2.9666360088266894,
+        "rms_z": 1.2010427117971605,
+        "count_above_2_576": 22,
+        "count_above_3": 0,
+        "count_above_5": 0,
+        "top_absolute_z_coordinates": [
+          {
+            "day_index": 2,
+            "instrument_index": 42,
+            "instrument_label": "20D NMS 0.1 put",
+            "mean": 3.170177528636366e-05,
+            "pair_based_standard_error": 1.0580933696587013e-05,
+            "z_score": 2.996122666999547
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 43,
+            "instrument_label": "20D NMS 0.3 put",
+            "mean": 3.3280879352595846e-05,
+            "pair_based_standard_error": 1.1139689942184821e-05,
+            "z_score": 2.9875947647846726
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 31,
+            "instrument_label": "15D NMS 0.1 put",
+            "mean": 3.21994522060803e-05,
+            "pair_based_standard_error": 1.0804922611394908e-05,
+            "z_score": 2.9800724506923033
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 32,
+            "instrument_label": "15D NMS 0.3 put",
+            "mean": 3.376597574507279e-05,
+            "pair_based_standard_error": 1.1332945450446874e-05,
+            "z_score": 2.9794527726894997
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 44,
+            "instrument_label": "20D NMS 0.5 put",
+            "mean": 3.426194577316995e-05,
+            "pair_based_standard_error": 1.1519782099395254e-05,
+            "z_score": 2.9741834938847127
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 33,
+            "instrument_label": "15D NMS 0.5 put",
+            "mean": 3.473032252803527e-05,
+            "pair_based_standard_error": 1.1678430233178863e-05,
+            "z_score": 2.9738862017058687
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 22,
+            "instrument_label": "10D NMS 0.5 put",
+            "mean": 3.566811672686747e-05,
+            "pair_based_standard_error": 1.2036300665256848e-05,
+            "z_score": 2.9633786757940155
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 21,
+            "instrument_label": "10D NMS 0.3 put",
+            "mean": 3.476942534269112e-05,
+            "pair_based_standard_error": 1.1788592831949438e-05,
+            "z_score": 2.949412693978118
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 20,
+            "instrument_label": "10D NMS 0.1 put",
+            "mean": 3.325287031005292e-05,
+            "pair_based_standard_error": 1.1346758182849065e-05,
+            "z_score": 2.930605356542765
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 11,
+            "instrument_label": "5D NMS 0.5 put",
+            "mean": 3.788963672183662e-05,
+            "pair_based_standard_error": 1.3031567121929893e-05,
+            "z_score": 2.907527265701978
+          }
+        ]
+      },
+      "spot": {
+        "tested_coordinate_count": 20,
+        "max_absolute_z": 2.869217833918525,
+        "p99_absolute_z": 2.847737305788084,
+        "rms_z": 1.1845382248129857,
+        "count_above_2_576": 2,
+        "count_above_3": 0,
+        "count_above_5": 0,
+        "top_absolute_z_coordinates": [
+          {
+            "day_index": 2,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": -3.437163599964613e-05,
+            "pair_based_standard_error": 1.197944456963882e-05,
+            "z_score": -2.869217833918525
+          },
+          {
+            "day_index": 12,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 8.487373141167965e-05,
+            "pair_based_standard_error": 3.079416899108598e-05,
+            "z_score": 2.7561624227056796
+          },
+          {
+            "day_index": 0,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 1.565873440253599e-05,
+            "pair_based_standard_error": 8.747906009294685e-06,
+            "z_score": 1.7899980161993647
+          },
+          {
+            "day_index": 6,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 2.8156345266760853e-05,
+            "pair_based_standard_error": 1.8025036966883233e-05,
+            "z_score": 1.562068655864147
+          },
+          {
+            "day_index": 11,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": -4.5182946651727034e-05,
+            "pair_based_standard_error": 3.461659221986918e-05,
+            "z_score": -1.3052395904468317
+          },
+          {
+            "day_index": 15,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 3.480957180454468e-05,
+            "pair_based_standard_error": 3.011568123839802e-05,
+            "z_score": 1.1558620085326798
+          },
+          {
+            "day_index": 1,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 1.1612652240118067e-05,
+            "pair_based_standard_error": 1.102606679841944e-05,
+            "z_score": 1.0531998810113061
+          },
+          {
+            "day_index": 4,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 1.2204033140905395e-05,
+            "pair_based_standard_error": 1.5898419277769807e-05,
+            "z_score": 0.7676255687865686
+          },
+          {
+            "day_index": 17,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 2.0699882112056044e-05,
+            "pair_based_standard_error": 2.9093206260450042e-05,
+            "z_score": 0.7115022636812611
+          },
+          {
+            "day_index": 13,
+            "instrument_index": 0,
+            "instrument_label": "spot",
+            "mean": 1.9168165608752576e-05,
+            "pair_based_standard_error": 2.9385600741601244e-05,
+            "z_score": 0.6522978984607305
+          }
+        ]
+      },
+      "options": {
+        "tested_coordinate_count": 550,
+        "max_absolute_z": 2.996122666999547,
+        "p99_absolute_z": 2.9687375140090606,
+        "rms_z": 1.2016386034751592,
+        "count_above_2_576": 20,
+        "count_above_3": 0,
+        "count_above_5": 0,
+        "top_absolute_z_coordinates": [
+          {
+            "day_index": 2,
+            "instrument_index": 42,
+            "instrument_label": "20D NMS 0.1 put",
+            "mean": 3.170177528636366e-05,
+            "pair_based_standard_error": 1.0580933696587013e-05,
+            "z_score": 2.996122666999547
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 43,
+            "instrument_label": "20D NMS 0.3 put",
+            "mean": 3.3280879352595846e-05,
+            "pair_based_standard_error": 1.1139689942184821e-05,
+            "z_score": 2.9875947647846726
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 31,
+            "instrument_label": "15D NMS 0.1 put",
+            "mean": 3.21994522060803e-05,
+            "pair_based_standard_error": 1.0804922611394908e-05,
+            "z_score": 2.9800724506923033
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 32,
+            "instrument_label": "15D NMS 0.3 put",
+            "mean": 3.376597574507279e-05,
+            "pair_based_standard_error": 1.1332945450446874e-05,
+            "z_score": 2.9794527726894997
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 44,
+            "instrument_label": "20D NMS 0.5 put",
+            "mean": 3.426194577316995e-05,
+            "pair_based_standard_error": 1.1519782099395254e-05,
+            "z_score": 2.9741834938847127
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 33,
+            "instrument_label": "15D NMS 0.5 put",
+            "mean": 3.473032252803527e-05,
+            "pair_based_standard_error": 1.1678430233178863e-05,
+            "z_score": 2.9738862017058687
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 22,
+            "instrument_label": "10D NMS 0.5 put",
+            "mean": 3.566811672686747e-05,
+            "pair_based_standard_error": 1.2036300665256848e-05,
+            "z_score": 2.9633786757940155
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 21,
+            "instrument_label": "10D NMS 0.3 put",
+            "mean": 3.476942534269112e-05,
+            "pair_based_standard_error": 1.1788592831949438e-05,
+            "z_score": 2.949412693978118
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 20,
+            "instrument_label": "10D NMS 0.1 put",
+            "mean": 3.325287031005292e-05,
+            "pair_based_standard_error": 1.1346758182849065e-05,
+            "z_score": 2.930605356542765
+          },
+          {
+            "day_index": 2,
+            "instrument_index": 11,
+            "instrument_label": "5D NMS 0.5 put",
+            "mean": 3.788963672183662e-05,
+            "pair_based_standard_error": 1.3031567121929893e-05,
+            "z_score": 2.907527265701978
+          }
+        ]
+      }
+    }
+  }
+}
