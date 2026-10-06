@@ -528,23 +528,26 @@ one-day return is
 \end{equation}
 Each model uses 100,000 paths arranged as 50,000 independent antithetic pairs;
 the pair mean is the sampling unit.  The 20 spot and 550 option
-day--instrument coordinates are tested separately.
+day--instrument coordinates are tested separately.  The final column below is
+the out-of-fold $z$-score of the frozen affine-plus-deep action strategy,
+evaluated on the opposite half of the paths.
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{lrrrrr}
+\begin{tabular}{lrrrrrr}
 \toprule
-Model & Tested & Max. $\abs{z}$ & 99\% $\abs{z}$ & $\abs{z}>2.576$ & $\abs{z}>5$\\
+Model & Tested & Max. $\abs{z}$ & 99\% $\abs{z}$ & $\abs{z}>2.576$ & $\abs{z}>5$ & Action $z$\\
 \midrule
-A: rank 8, one step   & 570 & 2.716 & 2.464 &  3 & 0\\
-B: rank 16, one step  & 570 & {\color{orange}3.663} & {\color{orange}3.618} & {\color{orange}10} & 0\\
-C: rank 8, eight steps & 570 & 2.793 & 2.373 &  4 & 0\\
-D: rank 16, eight steps & 570 & 2.996 & {\color{orange}2.967} & {\color{orange}22} & 0\\
+A: rank 8, one step   & 570 & 2.716 & 2.464 &  3 & 0 & 1.401\\
+B: rank 16, one step  & 570 & {\color{orange}3.663} & {\color{orange}3.618} & {\color{orange}10} & 0 & 1.040\\
+C: rank 8, eight steps & 570 & 2.793 & 2.373 &  4 & 0 & 1.753\\
+D: rank 16, eight steps & 570 & 2.996 & {\color{orange}2.967} & {\color{orange}22} & 0 & 0.040\\
 \bottomrule
 \end{tabular}
 \caption{Unconditional 100,000-path audit of the spot-scaled tradable returns
-in~\eqref{eq:numerics-spot-scaled-return}.}
+in~\eqref{eq:numerics-spot-scaled-return}, with the out-of-fold conditional
+action statistic in the final column.}
 \label{tab:numerics-spot-scaled-audit}
 \end{table}
 
