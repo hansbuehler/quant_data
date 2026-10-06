@@ -65,6 +65,25 @@ NORMALIZED_MONEYNESS = (
 )
 
 
+def _substep_name(dlv_substeps: int) -> str:
+    names = {1: "one_step", 8: "eight_step"}
+    return names.get(dlv_substeps, f"{dlv_substeps}_step")
+
+
+def _artifact_stem(factor_rank: int, dlv_substeps: int) -> str:
+    return f"rank{factor_rank}_{_substep_name(dlv_substeps)}_local_oce"
+
+
+def _population_cache_schema(factor_rank: int, dlv_substeps: int) -> str:
+    if factor_rank == 8 and dlv_substeps == 8:
+        return "front-spot-rank8-eight-step-antithetic-spot-scaled-population-v2"
+    step_name = _substep_name(dlv_substeps).replace("_", "-")
+    return (
+        f"front-spot-rank{factor_rank}-{step_name}-antithetic-"
+        "spot-scaled-population-v2"
+    )
+
+
 @version("1.0")
 @dataclass(frozen=True, kw_only=True)
 class FrontSpotOceTrainConfig:
@@ -147,7 +166,7 @@ def _save_population_cache(
         os.replace(temporary, final_path)
     _atomic_json(
         {
-            "schema": "front-spot-rank8-eight-step-antithetic-spot-scaled-population-v2",
+            "schema": _population_cache_schema(factor_rank, dlv_substeps),
             "path_count": len(population.features),
             "factor_rank": factor_rank,
             "dlv_substeps": dlv_substeps,
@@ -174,7 +193,7 @@ def _load_population_cache(
         return None
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     expected = {
-        "schema": "front-spot-rank8-eight-step-antithetic-spot-scaled-population-v2",
+        "schema": _population_cache_schema(factor_rank, dlv_substeps),
         "path_count": path_count,
         "factor_rank": factor_rank,
         "dlv_substeps": dlv_substeps,
@@ -955,12 +974,19 @@ def run(arguments: argparse.Namespace) -> None:
 
     if arguments.paths != 100_000:
         raise ValueError("this requested experiment is defined on exactly 100,000 paths")
-    if arguments.factor_rank != 8 or arguments.dlv_substeps != 8:
-        raise ValueError("this requested experiment is the rank-8, eight-substep model")
+    if arguments.factor_rank != 8:
+        raise ValueError("this conditional-drift experiment requires factor rank 8")
+    if arguments.dlv_substeps < 1:
+        raise ValueError("at least one DLV substep is required")
     torch.set_num_threads(arguments.torch_threads)
     output = arguments.output
     output.mkdir(parents=True, exist_ok=True)
-    lock = FileLock(output / "rank8-eight-step-oce.lock")
+    artifact_stem = _artifact_stem(
+        arguments.factor_rank,
+        arguments.dlv_substeps,
+    )
+    policy_label = artifact_stem.replace("_", "-")
+    lock = FileLock(output / f"{policy_label}.lock")
     with lock:
         population = _load_population_cache(
             arguments.population_cache,
@@ -1014,8 +1040,8 @@ def run(arguments: argparse.Namespace) -> None:
             seed=arguments.policy_seed,
         )
         split = arguments.paths // 2
-        affine_A_path = output / "rank8_eight_step_local_oce_affine_A.pt"
-        policy_A_path = output / "rank8_eight_step_local_oce_A.pt"
+        affine_A_path = output / f"{artifact_stem}_affine_A.pt"
+        policy_A_path = output / f"{artifact_stem}_A.pt"
         if arguments.reuse_forward_checkpoints:
             affine_policy, affine_checkpoint = _load_policy_checkpoint(
                 affine_A_path,
@@ -1035,7 +1061,7 @@ def run(arguments: argparse.Namespace) -> None:
                 population.features[:split],
                 population.returns[:split],
                 population.active_mask,
-                label="rank8-eight-step-local-oce-affine-A",
+                label=f"{policy_label}-affine-A",
                 train_config=train_config,
                 output_path=affine_A_path,
                 device=arguments.device,
@@ -1049,7 +1075,7 @@ def run(arguments: argparse.Namespace) -> None:
                 population.features[:split],
                 population.returns[:split],
                 population.active_mask,
-                label="rank8-eight-step-local-oce-A",
+                label=f"{policy_label}-A",
                 train_config=train_config,
                 output_path=policy_A_path,
                 device=arguments.device,
@@ -1099,9 +1125,9 @@ def run(arguments: argparse.Namespace) -> None:
                 population.features[split:],
                 population.returns[split:],
                 population.active_mask,
-                label="rank8-eight-step-local-oce-affine-B",
+                label=f"{policy_label}-affine-B",
                 train_config=train_config,
-                output_path=output / "rank8_eight_step_local_oce_affine_B.pt",
+                output_path=output / f"{artifact_stem}_affine_B.pt",
                 device=arguments.device,
                 affine_only=True,
             )
@@ -1129,9 +1155,9 @@ def run(arguments: argparse.Namespace) -> None:
                 population.features[split:],
                 population.returns[split:],
                 population.active_mask,
-                label="rank8-eight-step-local-oce-B",
+                label=f"{policy_label}-B",
                 train_config=train_config,
-                output_path=output / "rank8_eight_step_local_oce_B.pt",
+                output_path=output / f"{artifact_stem}_B.pt",
                 device=arguments.device,
                 initial_state_dict=affine_B_initial_state,
             )
@@ -1197,10 +1223,14 @@ def run(arguments: argparse.Namespace) -> None:
                     "out_of_fold_pair_count": arguments.paths // 2,
                 },
             }
-        matrix_path = output / "rank8_eight_step_local_oce_action_moments.npz"
+        matrix_path = output / f"{artifact_stem}_action_moments.npz"
         np.savez_compressed(matrix_path, **matrix_values)
         report = {
-            "schema": "front-spot-rank8-eight-step-spot-scaled-local-oce-v2",
+            "schema": (
+                f"front-spot-rank{arguments.factor_rank}-"
+                f"{_substep_name(arguments.dlv_substeps).replace('_', '-')}-"
+                "spot-scaled-local-oce-v2"
+            ),
             "objective": {
                 "requested": "sup_theta -E[exp(-a(theta)'R+0.5*a(theta)'a(theta))]",
                 "pooled_transition_form": (
@@ -1237,8 +1267,9 @@ def run(arguments: argparse.Namespace) -> None:
                     "settlement payoff"
                 ),
                 "policy_features": (
-                    "eight cumulative Brownian factor histories, log spot, 44 live "
-                    "log option-price/spot ratios, calendar time, and four times to expiry"
+                    f"{arguments.factor_rank} cumulative Brownian factor histories, "
+                    "log spot, 44 live log option-price/spot ratios, calendar time, "
+                    "and four times to expiry"
                 ),
                 "split": (
                     "adjacent paths are antithetic pairs; complete pairs [0,25000) "
@@ -1317,7 +1348,7 @@ def run(arguments: argparse.Namespace) -> None:
                 "keys": list(matrix_values),
             },
         }
-        _atomic_json(report, output / "rank8_eight_step_local_oce.json")
+        _atomic_json(report, output / f"{artifact_stem}.json")
         print(json.dumps(report, indent=2), flush=True)
 
 

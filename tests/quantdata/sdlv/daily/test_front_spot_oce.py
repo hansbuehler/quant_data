@@ -17,8 +17,10 @@ from quantdata.sdlv.daily.front_spot.oce import (
 )
 from quantdata.sdlv.daily.front_spot.run_oce import (
     FrontSpotOceTrainConfig,
+    _artifact_stem,
     _evaluate_policy,
     _fit_policy,
+    _population_cache_schema,
     _spot_normalized_price_increments,
 )
 from quantdata.torch import BaseEnvironment
@@ -158,6 +160,12 @@ def test_option_returns_are_price_increments_scaled_by_pre_step_spot() -> None:
         ]
     )
     assert np.allclose(returns, expected)
+
+
+def test_model_artifacts_distinguish_one_and_eight_substeps() -> None:
+    assert _artifact_stem(8, 1) == "rank8_one_step_local_oce"
+    assert _artifact_stem(8, 8) == "rank8_eight_step_local_oce"
+    assert _population_cache_schema(8, 1) != _population_cache_schema(8, 8)
 
 
 def test_exact_line_search_update_strictly_decreases_local_loss(tmp_path) -> None:
