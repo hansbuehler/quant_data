@@ -111,7 +111,7 @@ class FrontSpotOceTrainConfig:
 
 @dataclass(frozen=True)
 class FrontSpotOcePopulation:
-    """Observable policy features and one-day tradable returns on Q paths."""
+    """Observable features and spot-normalized price increments on Q paths."""
 
     features: NDArray[np.float32]
     returns: NDArray[np.float32]
@@ -147,7 +147,7 @@ def _save_population_cache(
         os.replace(temporary, final_path)
     _atomic_json(
         {
-            "schema": "front-spot-rank8-eight-step-antithetic-population-v1",
+            "schema": "front-spot-rank8-eight-step-antithetic-spot-scaled-population-v2",
             "path_count": len(population.features),
             "factor_rank": factor_rank,
             "dlv_substeps": dlv_substeps,
@@ -174,7 +174,7 @@ def _load_population_cache(
         return None
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     expected = {
-        "schema": "front-spot-rank8-eight-step-antithetic-population-v1",
+        "schema": "front-spot-rank8-eight-step-antithetic-spot-scaled-population-v2",
         "path_count": path_count,
         "factor_rank": factor_rank,
         "dlv_substeps": dlv_substeps,
@@ -306,6 +306,31 @@ def _active_mask() -> NDArray[np.bool_]:
         )
         mask[:expiry, option_slice] = True
     return mask
+
+
+def _spot_normalized_price_increments(
+    current_spot: NDArray[np.float64],
+    next_spot: NDArray[np.float64],
+    current_options: NDArray[np.float64],
+    next_options: NDArray[np.float64],
+    valid_option_mask: NDArray[np.bool_],
+) -> NDArray[np.float64]:
+    """Return one-day price increments divided by the pre-step spot."""
+
+    path_count = len(current_spot)
+    instrument_count = 1 + current_options.shape[1] * current_options.shape[2]
+    returns = np.zeros((path_count, instrument_count), dtype=np.float64)
+    returns[:, 0] = (next_spot - current_spot) / current_spot
+    option_increments = np.zeros_like(current_options)
+    np.subtract(
+        next_options,
+        current_options,
+        out=option_increments,
+        where=valid_option_mask[None, :, None],
+    )
+    option_increments /= current_spot[:, None, None]
+    returns[:, 1:] = option_increments.reshape(path_count, -1)
+    return returns
 
 
 def generate_front_spot_oce_population(
@@ -477,17 +502,13 @@ def generate_front_spot_oce_population(
                     strikes[live],
                 )
 
-            batch_returns = np.zeros((batch_size, instrument_count), dtype=np.float64)
-            batch_returns[:, 0] = next_spot / current_spot - 1.0
-            option_gross_return = np.ones_like(next_options)
-            np.divide(
-                next_options,
+            batch_returns = _spot_normalized_price_increments(
+                current_spot,
+                next_spot,
                 current_options,
-                out=option_gross_return,
-                where=valid_option_mask[None, :, None],
+                next_options,
+                valid_option_mask,
             )
-            option_returns = option_gross_return - 1.0
-            batch_returns[:, 1:] = option_returns.reshape(batch_size, -1)
             if np.any(~np.isfinite(batch_returns)):
                 raise FloatingPointError("front-spot OCE returns are non-finite")
             returns[completed : completed + valid_count, day_index] = batch_returns[
@@ -1179,7 +1200,7 @@ def run(arguments: argparse.Namespace) -> None:
         matrix_path = output / "rank8_eight_step_local_oce_action_moments.npz"
         np.savez_compressed(matrix_path, **matrix_values)
         report = {
-            "schema": "front-spot-rank8-eight-step-local-oce-v1",
+            "schema": "front-spot-rank8-eight-step-spot-scaled-local-oce-v2",
             "objective": {
                 "requested": "sup_theta -E[exp(-a(theta)'R+0.5*a(theta)'a(theta))]",
                 "pooled_transition_form": (
@@ -1211,8 +1232,9 @@ def run(arguments: argparse.Namespace) -> None:
                 "fixed_cash_strikes": population.strikes.tolist(),
                 "instrument_labels": list(population.instrument_labels),
                 "return_definition": (
-                    "one-day gross spot and fixed-cash-strike option returns; "
-                    "expiry-day option returns use settlement payoff"
+                    "one-day spot and fixed-cash-strike option price increments "
+                    "divided by pre-step spot; expiry-day option increments use "
+                    "settlement payoff"
                 ),
                 "policy_features": (
                     "eight cumulative Brownian factor histories, log spot, 44 live "
@@ -1270,10 +1292,9 @@ def run(arguments: argparse.Namespace) -> None:
             },
             "heldout_tail_diagnostic": {
                 "interpretation": (
-                    "The raw pair-based drift and the exponential criterion answer "
-                    "different questions. A positive held-out drift is not robust "
-                    "entropic evidence when a few uncapped relative option returns "
-                    "dominate exp(-a'R+||a||^2/2)."
+                    "Spot-normalized increments avoid dividing by tiny option "
+                    "prices. Tilted effective sample size and maximum log payoff "
+                    "diagnose any remaining concentration in the exponential loss."
                 ),
                 "training_tilted_effective_sample_size": training_summary[
                     "tilted_effective_sample_size"
@@ -1305,7 +1326,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("quantdata/sdlv/daily/front_spot/results/oce_rank8_eight_step"),
+        default=Path(
+            "quantdata/sdlv/daily/front_spot/results/"
+            "oce_rank8_eight_step_spot_scaled"
+        ),
     )
     parser.add_argument("--fit-label", default="full")
     parser.add_argument("--date-index", type=int, default=-1)
@@ -1332,7 +1356,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--population-cache",
         type=Path,
-        default=Path("/tmp/front_spot_rank8_eight_step_antithetic_100k"),
+        default=Path(
+            "/tmp/front_spot_rank8_eight_step_antithetic_spot_scaled_100k"
+        ),
     )
     return parser
 

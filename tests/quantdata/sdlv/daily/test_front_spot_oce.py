@@ -19,6 +19,7 @@ from quantdata.sdlv.daily.front_spot.run_oce import (
     FrontSpotOceTrainConfig,
     _evaluate_policy,
     _fit_policy,
+    _spot_normalized_price_increments,
 )
 from quantdata.torch import BaseEnvironment
 from quantdata.torch.ffw import FeedForwardConfig
@@ -126,6 +127,37 @@ def test_conditional_drift_inference_uses_antithetic_pairs() -> None:
     assert summary["mean_daily_conditional_drift"] == pytest.approx(1.0)
     assert summary["pair_based_standard_error"] == pytest.approx(0.5)
     assert summary["z_score"] == pytest.approx(2.0)
+
+
+def test_option_returns_are_price_increments_scaled_by_pre_step_spot() -> None:
+    current_spot = np.asarray([1.0, 2.0])
+    next_spot = np.asarray([1.1, 1.8])
+    current_options = np.asarray(
+        [
+            [[1.0e-6, 0.2], [0.3, 0.4]],
+            [[0.1, 0.2], [0.3, 0.4]],
+        ]
+    )
+    next_options = np.asarray(
+        [
+            [[0.003, 0.1], [9.0, 9.0]],
+            [[0.2, 0.1], [9.0, 9.0]],
+        ]
+    )
+    returns = _spot_normalized_price_increments(
+        current_spot,
+        next_spot,
+        current_options,
+        next_options,
+        np.asarray([True, False]),
+    )
+    expected = np.asarray(
+        [
+            [0.1, 0.002999, -0.1, 0.0, 0.0],
+            [-0.1, 0.05, -0.05, 0.0, 0.0],
+        ]
+    )
+    assert np.allclose(returns, expected)
 
 
 def test_exact_line_search_update_strictly_decreases_local_loss(tmp_path) -> None:
