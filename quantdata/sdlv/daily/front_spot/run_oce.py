@@ -33,6 +33,7 @@ from quantdata.sdlv.daily.front_spot.calibration import (  # noqa: E402
 from quantdata.sdlv.daily.front_spot.jax_model import (  # noqa: E402
     RiskNeutralState,
     black_mixture_call_prices,
+    one_day_physical_substepped,
     one_day_risk_neutral_substepped,
     substep_brownian_weights,
 )
@@ -74,8 +75,11 @@ def _artifact_stem(
     factor_rank: int,
     dlv_substeps: int,
     instrument_universe: str = "restricted",
+    measure: str = "Q",
 ) -> str:
     suffix = "" if instrument_universe == "restricted" else f"_{instrument_universe}"
+    if measure != "Q":
+        suffix += f"_{measure.lower()}"
     return f"rank{factor_rank}_{_substep_name(dlv_substeps)}{suffix}_local_oce"
 
 
@@ -83,16 +87,18 @@ def _population_cache_schema(
     factor_rank: int,
     dlv_substeps: int,
     instrument_universe: str = "restricted",
+    measure: str = "Q",
 ) -> str:
     if (
         factor_rank == 8
         and dlv_substeps == 8
         and instrument_universe == "restricted"
+        and measure == "Q"
     ):
         return "front-spot-rank8-eight-step-antithetic-spot-scaled-population-v2"
     step_name = _substep_name(dlv_substeps).replace("_", "-")
     return (
-        f"front-spot-rank{factor_rank}-{step_name}-{instrument_universe}-"
+        f"front-spot-{measure.lower()}-rank{factor_rank}-{step_name}-{instrument_universe}-"
         "antithetic-spot-scaled-population-v3"
     )
 
@@ -162,6 +168,7 @@ def _save_population_cache(
     factor_rank: int,
     dlv_substeps: int,
     instrument_universe: str,
+    measure: str,
     seed: int,
 ) -> None:
     """Save the reproducible large population in ephemeral local storage."""
@@ -185,11 +192,13 @@ def _save_population_cache(
                 factor_rank,
                 dlv_substeps,
                 instrument_universe,
+                measure,
             ),
             "path_count": len(population.features),
             "factor_rank": factor_rank,
             "dlv_substeps": dlv_substeps,
             "instrument_universe": instrument_universe,
+            "measure": measure,
             "seed": seed,
             "initial_date": population.initial_date,
             "generation_seconds": population.generation_seconds,
@@ -205,6 +214,7 @@ def _load_population_cache(
     factor_rank: int,
     dlv_substeps: int,
     instrument_universe: str,
+    measure: str,
     seed: int,
 ) -> FrontSpotOcePopulation | None:
     """Load a complete compatible ephemeral population cache if present."""
@@ -218,11 +228,13 @@ def _load_population_cache(
             factor_rank,
             dlv_substeps,
             instrument_universe,
+            measure,
         ),
         "path_count": path_count,
         "factor_rank": factor_rank,
         "dlv_substeps": dlv_substeps,
         "instrument_universe": instrument_universe,
+        "measure": measure,
         "seed": seed,
     }
     if any(metadata.get(key) != value for key, value in expected.items()):
@@ -495,6 +507,7 @@ def generate_front_spot_oce_population(
     time_power: float = 1.0,
     seed: int = 20261004,
     instrument_universe: str = "restricted",
+    measure: str = "Q",
 ) -> FrontSpotOcePopulation:
     """Generate the rank-specific Q population used by the OCE experiment."""
 
@@ -504,6 +517,8 @@ def generate_front_spot_oce_population(
         )
     if dlv_substeps < 1:
         raise ValueError("at least one DLV substep is required")
+    if measure not in {"P", "Q"}:
+        raise ValueError(f"measure must be P or Q, found {measure!r}")
     started = time.perf_counter()
     initial = load_initial_model_state(fit_label=fit_label, date_index=date_index)
     factor_rank = calibration.innovations.factor_rank
@@ -543,10 +558,20 @@ def generate_front_spot_oce_population(
         initial_options = _option_values_from_calls(initial_calls, 1.0, strikes)
     else:
         initial_options = initial_calls
-    daily_step = jax.jit(
-        one_day_risk_neutral_substepped,
-        static_argnames=("expiry_dt", "time_power"),
-    )
+    if measure == "Q":
+        daily_step = jax.jit(
+            one_day_risk_neutral_substepped,
+            static_argnames=("expiry_dt", "time_power"),
+        )
+    else:
+        daily_step = jax.jit(
+            one_day_physical_substepped,
+            static_argnames=("expiry_dt", "time_power"),
+        )
+        market_price_of_risk = jnp.asarray(
+            calibration.physical.constant_market_price_of_risk,
+            dtype=jnp.float64,
+        )
     selected_pricer = jax.jit(black_mixture_call_prices)
     brownian_weights = np.asarray(
         substep_brownian_weights(
@@ -617,15 +642,27 @@ def generate_front_spot_oce_population(
             ]
 
             future_count = q_state.future_dlvsq.shape[-2]
-            result = daily_step(
-                support,
-                q_state,
-                loadings[:future_count],
-                jnp.asarray(factor_normals[day_index], dtype=jnp.float64),
-                jnp.asarray(background_normals[day_index], dtype=jnp.float64),
-                expiry_dt=dt,
-                time_power=time_power,
-            )
+            if measure == "Q":
+                result = daily_step(
+                    support,
+                    q_state,
+                    loadings[:future_count],
+                    jnp.asarray(factor_normals[day_index], dtype=jnp.float64),
+                    jnp.asarray(background_normals[day_index], dtype=jnp.float64),
+                    expiry_dt=dt,
+                    time_power=time_power,
+                )
+            else:
+                result = daily_step(
+                    support,
+                    q_state,
+                    loadings[:future_count],
+                    market_price_of_risk,
+                    jnp.asarray(factor_normals[day_index], dtype=jnp.float64),
+                    jnp.asarray(background_normals[day_index], dtype=jnp.float64),
+                    expiry_dt=dt,
+                    time_power=time_power,
+                )
             next_spot = np.asarray(result.spot)
             next_options = current_options.copy()
             settlement = np.asarray(EXPIRY_DAYS) == day_index + 1
@@ -1138,6 +1175,7 @@ def run(arguments: argparse.Namespace) -> None:
         arguments.factor_rank,
         arguments.dlv_substeps,
         arguments.instrument_universe,
+        arguments.measure,
     )
     policy_label = artifact_stem.replace("_", "-")
     lock = FileLock(output / f"{policy_label}.lock")
@@ -1148,6 +1186,7 @@ def run(arguments: argparse.Namespace) -> None:
             factor_rank=arguments.factor_rank,
             dlv_substeps=arguments.dlv_substeps,
             instrument_universe=arguments.instrument_universe,
+            measure=arguments.measure,
             seed=arguments.seed,
         )
         if population is None:
@@ -1167,6 +1206,7 @@ def run(arguments: argparse.Namespace) -> None:
                 time_power=arguments.time_power,
                 seed=arguments.seed,
                 instrument_universe=arguments.instrument_universe,
+                measure=arguments.measure,
             )
             _save_population_cache(
                 population,
@@ -1174,6 +1214,7 @@ def run(arguments: argparse.Namespace) -> None:
                 factor_rank=arguments.factor_rank,
                 dlv_substeps=arguments.dlv_substeps,
                 instrument_universe=arguments.instrument_universe,
+                measure=arguments.measure,
                 seed=arguments.seed,
             )
         else:
@@ -1391,6 +1432,7 @@ def run(arguments: argparse.Namespace) -> None:
             "schema": (
                 f"front-spot-rank{arguments.factor_rank}-"
                 f"{_substep_name(arguments.dlv_substeps).replace('_', '-')}-"
+                f"{arguments.measure.lower()}-"
                 "spot-scaled-local-oce-v2"
             ),
             "objective": {
@@ -1411,7 +1453,7 @@ def run(arguments: argparse.Namespace) -> None:
             },
             "population": {
                 "initial_date": population.initial_date,
-                "measure": "Q",
+                "measure": arguments.measure,
                 "path_count": arguments.paths,
                 "antithetic_pair_count": arguments.paths // 2,
                 "factor_rank": arguments.factor_rank,
@@ -1529,6 +1571,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--date-index", type=int, default=-1)
     parser.add_argument("--paths", type=int, default=100_000)
     parser.add_argument("--factor-rank", type=int, default=8)
+    parser.add_argument("--measure", choices=("P", "Q"), default="Q")
     parser.add_argument(
         "--instrument-universe",
         choices=("restricted", "all_nodes"),
