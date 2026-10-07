@@ -1,0 +1,211 @@
+{
+  "schema": "dysanos-dynamic-oce-toy-sample-manifest-v2",
+  "source_archive": "/home/hans/quantdata_data/experiments/dysanos-small-book-oce/toy-dynamic-path-oce-16x10k-epsilon1-v1/toy-samples.pt",
+  "source_archive_sha256": "aef6c57cafbe1d158fbcb7752d03778f24fb34907f4b4a4e79be354b3f8386d9",
+  "geometry": {
+    "members": 16,
+    "paths_per_member": 10000,
+    "steps": 3,
+    "features": 3,
+    "instruments": 4,
+    "initial_state": [
+      0.75,
+      -0.5
+    ],
+    "only_initial_state_repeats": true
+  },
+  "members": [
+    {
+      "member_index": 0,
+      "seed": 20261006,
+      "file": "toy_sample_00.pt",
+      "bytes": 1322625,
+      "sha256": "a3f5939ba1a2fb816dbe7f053c70d88847a5bd1d5cc93cd7ee11828372d5f24e",
+      "initial_state_repetitions": 10000,
+      "unique_later_states": [
+        10000,
+        10000
+      ]
+    },
+    {
+      "member_index": 1,
+      "seed": 20271009,
+      "file": "toy_sample_01.pt",
+      "bytes": 1322625,
+      "sha256": "b567890502e8a72cf3de64f2bfb0a79fb1c295ec7082cff3bb3612d92850852f",
+      "initial_state_repetitions": 10000,
+      "unique_later_states": [
+        10000,
+        10000
+      ]
+    },
+    {
+      "member_index": 2,
+      "seed": 20281012,
+      "file": "toy_sample_02.pt",
+      "bytes": 1322625,
+      "sha256": "c754f4e7f7b0dde3eca4efdde82bd309145bf4c615da340fefec3550a5ba17e0",
+      "initial_state_repetitions": 10000,
+      "unique_later_states": [
+        10000,
+        10000
+      ]
+    },
+    {
+      "member_index": 3,
+      "seed": 20291015,
+      "file": "toy_sample_03.pt",
+      "bytes": 1322625,
+      "sha256": "97c37c128c294c02f1a3f21f3d2e79ce1d4cef7a4dcc5234df02d8cf6cf09db8",
+      "initial_state_repetitions": 10000,
+      "unique_later_states": [
+        10000,
+        10000
+      ]
+    },
+    {
+      "member_index": 4,
+      "seed": 20301018,
+      "file": "toy_sample_04.pt",
+      "bytes": 1322625,
+      "sha256": "91ef4f7b204084ae5cf58f84f97ac15b7cd18916892e070f293d870554549396",
+      "initial_state_repetitions": 10000,
+      "unique_later_states": [
+        10000,
+        10000
+      ]
+    },
+    {
+      "member_index": 5,
+      "seed": 20311021,
+      "file": "toy_sample_05.pt",
+      "bytes": 1322625,
+      "sha256": "23c3b3ae9469477af09bdafd94915371527087a752d79a8c217539095e841a52",
+      "initial_state_repetitions": 10000,
+      "unique_later_states": [
+        10000,
+        10000
+      ]
+    },
+    {
+      "member_index": 6,
+      "seed": 20321024,
+      "file": "toy_sample_06.pt",
+      "bytes": 1322625,
+      "sha256": "8adca59ac59c4d1d84658f5e60dd807f142f35ed10593b298aa50184cb6b7ead",
+      "initial_state_repetitions": 10000,
+      "unique_later_states": [
+        10000,
+        10000
+      ]
+    },
+    {
+      "member_index": 7,
+      "seed": 20331027,
+      "file": "toy_sample_07.pt",
+      "bytes": 1322625,
+      "sha256": "5f471816f31bb216078bd9a4463547eb8ba255c42353b128752f16b025d86722",
+      "initial_state_repetitions": 10000,
+      "unique_later_states": [
+        10000,
+        10000
+      ]
+    },
+    {
+      "member_index": 8,
+      "seed": 20341030,
+      "file": "toy_sample_08.pt",
+      "bytes": 1322625,
+      "sha256": "55f82c66af60e7e4aa08f37396f2b5e8f89dffcf72eff12d3a833fed86512de2",
+      "initial_state_repetitions": 10000,
+      "unique_later_states": [
+        10000,
+        10000
+      ]
+    },
+    {
+      "member_index": 9,
+      "seed": 20351033,
+      "file": "toy_sample_09.pt",
+      "bytes": 1322625,
+      "sha256": "cd8b088d6f9b9ea0e7f9d659e4ce47fc2ad9e121ea2860b488a4a534a9d2b8eb",
+      "initial_state_repetitions": 10000,
+      "unique_later_states": [
+        10000,
+        10000
+      ]
+    },
+    {
+      "member_index": 10,
+      "seed": 20361036,
+      "file": "toy_sample_10.pt",
+      "bytes": 1322625,
+      "sha256": "f96b2ad3d6595b172eb7fedb6a9df036f4e4f040110f542426968c66522fb6b4",
+      "initial_state_repetitions": 10000,
+      "unique_later_states": [
+        10000,
+        10000
+      ]
+    },
+    {
+      "member_index": 11,
+      "seed": 20371039,
+      "file": "toy_sample_11.pt",
+      "bytes": 1322625,
+      "sha256": "04b3029f692204abbfd1a95fda1e120e537f10c8a4d7f16e70d2d18ef728741e",
+      "initial_state_repetitions": 10000,
+      "unique_later_states": [
+        10000,
+        10000
+      ]
+    },
+    {
+      "member_index": 12,
+      "seed": 20381042,
+      "file": "toy_sample_12.pt",
+      "bytes": 1322625,
+      "sha256": "0a7691328475e06a5ca0a00cb8ed297b60175fef11c93c4ff7bd7fb0b0d578fa",
+      "initial_state_repetitions": 10000,
+      "unique_later_states": [
+        10000,
+        10000
+      ]
+    },
+    {
+      "member_index": 13,
+      "seed": 20391045,
+      "file": "toy_sample_13.pt",
+      "bytes": 1322625,
+      "sha256": "54ae29eb136ef96cd0fc8c57e9494ec54df36247a9afbef197f8dabec68e54c5",
+      "initial_state_repetitions": 10000,
+      "unique_later_states": [
+        10000,
+        10000
+      ]
+    },
+    {
+      "member_index": 14,
+      "seed": 20401048,
+      "file": "toy_sample_14.pt",
+      "bytes": 1322625,
+      "sha256": "7a13c2e3974db6c3b3b05a2500222f3851c21b3c107756825ddbe9d1bd096acb",
+      "initial_state_repetitions": 10000,
+      "unique_later_states": [
+        10000,
+        10000
+      ]
+    },
+    {
+      "member_index": 15,
+      "seed": 20411051,
+      "file": "toy_sample_15.pt",
+      "bytes": 1322625,
+      "sha256": "227b815d8dbe648436becdb1f1e5c9a67f3b0f904bb33a09ef3dc78dd6dcdb94",
+      "initial_state_repetitions": 10000,
+      "unique_later_states": [
+        10000,
+        10000
+      ]
+    }
+  ]
+}

@@ -6,11 +6,6 @@ J.~Andreasen and B.~Huge.
 \newblock Volatility interpolation.
 \newblock {\em Risk}, pages 86--89, 2011.
 
-\bibitem[BGTW19]{DH}
-H.~Buehler, L.~Gonon, J.~Teichmann, and B.~Wood.
-\newblock Deep hedging.
-\newblock {\em Quantitative Finance}, 19(8):1271--1291, 2019.
-
 \bibitem[BHK{\etalchar{+}}26]{SANOS2026}
 Hans Buehler, Blanka Horvath, Anastais Kratsios, Yannick Limmer, and Raeid
   Saqur.
@@ -26,12 +21,6 @@ Hans Buehler, Phillip Murray, Mikko~S. Pakkanen, and Ben Wood.
 Hans Buehler and Evgeny Ryskin.
 \newblock Discrete local volatility for large time steps (extended version).
 \newblock \url{https://papers.ssrn.com/abstract=2642630}, 2015.
-
-\bibitem[BTT07]{OCE}
-Aharon Ben-Tal and Marc Teboulle.
-\newblock An old-new concept of convex risk measures: The optimized certainty
-  equivalent.
-\newblock {\em Mathematical Finance}, 17(3):449--476, 2007.
 
 \bibitem[Bue06]{buehler2006expensive}
 Hans Buehler.

@@ -55,6 +55,21 @@ def test_expiry_slice_actions_apply_one_global_l1_cap() -> None:
     assert action == pytest.approx(torch.tensor([[2.0, 1.0, 2.0]]))
 
 
+def test_expiry_slice_actions_apply_coordinate_cap() -> None:
+    raw = torch.tensor([[[2.0, -3.0], [4.0, 1.0]]])
+
+    action, cost_basis, uncapped_maximum = _assemble_expiry_slice_action_details(
+        raw,
+        maximum_l1=2.0,
+        action_parameterization="signed",
+        action_cap_mode="coordinate",
+    )
+
+    assert action == pytest.approx(torch.tensor([[2.0, -2.0, 1.0]]))
+    assert cost_basis == pytest.approx(torch.tensor([[2.0, 2.0, 1.0]]))
+    assert uncapped_maximum == pytest.approx(torch.tensor([6.0]))
+
+
 def test_long_short_actions_charge_gross_legs_and_apply_gross_cap() -> None:
     # Per expiry the heads are [long spot, long option, short spot, short option].
     raw = torch.tensor([[[2.0, 3.0, 1.0, 0.0], [4.0, 0.0, 2.0, 5.0]]])

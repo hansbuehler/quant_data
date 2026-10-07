@@ -59,7 +59,7 @@ _NORMALIZED_MONEYNESS = (
 )
 
 
-@version("1.3", dependencies=[FeedForwardConfig])
+@version("1.4", dependencies=[FeedForwardConfig])
 @dataclass(frozen=True, kw_only=True)
 class SharedExpiryOceConfig:
     """Architecture and action geometry of the conditional OCE policy."""
@@ -71,6 +71,7 @@ class SharedExpiryOceConfig:
     num_expiries: int = 4
     num_strikes: int = 11
     maximum_action_l1: float = 16.0
+    action_cap_mode: str = "global-l1"
     expiry_specific_linear_skip: bool = False
     include_calendar_time: bool = False
     action_parameterization: str = "signed"
@@ -92,7 +93,11 @@ class SharedExpiryOceConfig:
         )
         verify_inp(
             math.isfinite(self.maximum_action_l1) and self.maximum_action_l1 > 0.0,
-            lambda: "policy L1 cap must be finite-positive",
+            lambda: "policy action cap must be finite-positive",
+        )
+        verify_inp(
+            self.action_cap_mode in ("global-l1", "coordinate"),
+            lambda: "policy action cap mode must be 'global-l1' or 'coordinate'",
         )
         verify_inp(
             self.action_parameterization in ("signed", "long-short"),
@@ -108,8 +113,9 @@ def _assemble_expiry_slice_action_details(
     *,
     maximum_l1: float,
     action_parameterization: str,
+    action_cap_mode: str = "global-l1",
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Return net action, transaction-cost basis, and uncapped gross exposure."""
+    """Return capped net action, cost basis, and pre-cap constraint statistic."""
 
     if raw_heads.ndim != 3 or raw_heads.shape[-1] < 2:
         raise ValueError("raw expiry heads must have shape (paths,expiries,heads)")
@@ -117,10 +123,19 @@ def _assemble_expiry_slice_action_details(
         spot = torch.sum(raw_heads[..., :1], dim=1)
         options = raw_heads[..., 1:].reshape(len(raw_heads), -1)
         raw_action = torch.cat((spot, options), dim=1)
-        action = l1_capped_action(raw_action, maximum_l1)
-        return action, torch.abs(action), torch.sum(torch.abs(raw_action), dim=1)
+        if action_cap_mode == "global-l1":
+            action = l1_capped_action(raw_action, maximum_l1)
+            pre_cap_statistic = torch.sum(torch.abs(raw_action), dim=1)
+        elif action_cap_mode == "coordinate":
+            action = torch.clamp(raw_action, min=-maximum_l1, max=maximum_l1)
+            pre_cap_statistic = torch.amax(torch.abs(raw_action), dim=1)
+        else:
+            raise ValueError(f"unknown action cap mode {action_cap_mode!r}")
+        return action, torch.abs(action), pre_cap_statistic
     if action_parameterization != "long-short" or raw_heads.shape[-1] % 2:
         raise ValueError("long-short expiry heads must contain equal long and short logits")
+    if action_cap_mode != "global-l1":
+        raise ValueError("coordinate action caps require signed action parameterization")
 
     head_size = raw_heads.shape[-1] // 2
     if head_size < 2:
@@ -159,6 +174,7 @@ def assemble_expiry_slice_actions(
     raw_heads: torch.Tensor,
     *,
     maximum_l1: float,
+    action_cap_mode: str = "global-l1",
     action_parameterization: str = "signed",
 ) -> torch.Tensor:
     """Aggregate four spot heads and retain every expiry-specific option head."""
@@ -166,6 +182,7 @@ def assemble_expiry_slice_actions(
     return _assemble_expiry_slice_action_details(
         raw_heads,
         maximum_l1=maximum_l1,
+        action_cap_mode=action_cap_mode,
         action_parameterization=action_parameterization,
     )[0]
 
@@ -294,6 +311,7 @@ class SharedExpiryOcePolicy(BaseModel):
         action = assemble_expiry_slice_actions(
             raw_heads,
             maximum_l1=self.config.maximum_action_l1,
+            action_cap_mode=self.config.action_cap_mode,
             action_parameterization=self.config.action_parameterization,
         )
         return action, raw_heads
@@ -411,6 +429,7 @@ def _simulate_expiry_policy_batch(
             action, cost_basis, uncapped_gross = _assemble_expiry_slice_action_details(
                 raw_heads,
                 maximum_l1=policy.config.maximum_action_l1,
+                action_cap_mode=policy.config.action_cap_mode,
                 action_parameterization=policy.config.action_parameterization,
             )
             action_l1_sum += torch.sum(torch.sum(cost_basis, dim=1).double())
@@ -559,6 +578,19 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--full-gradient-maximum-tolerance", type=float, default=0.0)
     parser.add_argument("--full-gradient-scale-foc-tolerance", type=float, default=0.0)
     parser.add_argument("--full-gradient-patience", type=int, default=1)
+    parser.add_argument(
+        "--full-cost-audit-every-epochs",
+        type=int,
+        default=0,
+        help="Evaluate the fixed full-cost OCE and derivative every N training epochs.",
+    )
+    parser.add_argument("--full-cost-audit-spot-cost-bps", type=float, default=1.0)
+    parser.add_argument("--full-cost-audit-option-cost-bps", type=float, default=10.0)
+    parser.add_argument(
+        "--stop-on-full-cost-audit",
+        action="store_true",
+        help="Stop when the audited full-cost RMS derivative meets the training RMS tolerance.",
+    )
     parser.add_argument("--prepare-features-only", action="store_true")
     parser.add_argument(
         "--initialize-policy-checkpoint",
@@ -577,6 +609,15 @@ def _parser() -> argparse.ArgumentParser:
         nargs="*",
         default=(),
         help="Frozen additive policy components evaluated before the trainable residual.",
+    )
+    parser.add_argument(
+        "--residual-reference-policy-checkpoint",
+        type=Path,
+        default=None,
+        help=(
+            "Frozen a2 policy for the stop-gradient residual "
+            "cap(a_theta)-stop_gradient(a2)."
+        ),
     )
     parser.add_argument(
         "--baseline-pnl",
@@ -645,12 +686,26 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--shampoo-precondition-frequency", type=int, default=1)
     parser.add_argument("--shampoo-maximum-parameter-step", type=float, default=0.05)
     parser.add_argument("--action-l1-cap", type=float, default=16.0)
+    parser.add_argument(
+        "--action-cap-mode",
+        choices=("global-l1", "coordinate"),
+        default="global-l1",
+        help="Apply the cap globally in L1 or independently to every signed instrument.",
+    )
     parser.add_argument("--spot-cost-bps", type=float, default=1.0)
     parser.add_argument("--option-cost-bps", type=float, default=10.0)
     parser.add_argument("--gradient-clip-norm", type=float, default=100.0)
     parser.add_argument("--checkpoint-every-updates", type=int, default=20)
     parser.add_argument("--seed", type=int, default=2_026_093_0)
     parser.add_argument("--alignment-only", action="store_true")
+    parser.add_argument(
+        "--skip-alignment-check",
+        action="store_true",
+        help=(
+            "Skip regenerated-path alignment only when consuming an existing fixed "
+            "feature cache on a device with different numerical kernels."
+        ),
+    )
     parser.add_argument("--resume", action="store_true")
     parser.add_argument(
         "--copula-fit-before",
@@ -684,19 +739,30 @@ def _validate_arguments(arguments: argparse.Namespace) -> None:
     )
     if any(value <= 0 for value in integer_values):
         raise ValueError("conditional OCE integer controls must be positive")
+    if arguments.full_cost_audit_every_epochs < 0:
+        raise ValueError("full-cost audit cadence must be nonnegative")
+    if arguments.stop_on_full_cost_audit and arguments.full_cost_audit_every_epochs == 0:
+        raise ValueError("full-cost audit stopping requires a positive audit cadence")
     if arguments.num_paths % 2 or arguments.batch_size % 2:
         raise ValueError("conditional OCE paths and batches must be even")
     if arguments.optimization_batch_size % 2:
         raise ValueError("conditional OCE optimization batches must be even")
     if arguments.prepare_features_only and arguments.fixed_feature_cache is None:
         raise ValueError("feature-only mode requires --fixed-feature-cache")
+    if arguments.skip_alignment_check and arguments.fixed_feature_cache is None:
+        raise ValueError("skipping alignment requires an existing fixed feature cache")
+    if arguments.skip_alignment_check and arguments.alignment_only:
+        raise ValueError("alignment-only and skip-alignment-check are mutually exclusive")
     if arguments.full_population_gradient and arguments.fixed_feature_cache is None:
         raise ValueError("full-population gradients require --fixed-feature-cache")
     if arguments.optimizer != "adam" and not arguments.full_population_gradient:
         raise ValueError(
             f"{arguments.optimizer} requires exact full-population gradients"
         )
-    if arguments.long_short_actions and arguments.frozen_policy_checkpoints:
+    if arguments.long_short_actions and (
+        arguments.frozen_policy_checkpoints
+        or arguments.residual_reference_policy_checkpoint is not None
+    ):
         raise ValueError(
             "long-short actions require one cumulative trainable policy, not frozen additives"
         )
@@ -710,8 +776,16 @@ def _validate_arguments(arguments: argparse.Namespace) -> None:
         arguments.frozen_policy_checkpoints
         or arguments.baseline_pnl is not None
         or arguments.claim_pnl is not None
+        or arguments.residual_reference_policy_checkpoint is not None
     ) and arguments.fixed_feature_cache is None:
         raise ValueError("additive policies and fixed claims require the feature cache")
+    if (
+        arguments.frozen_policy_checkpoints
+        and arguments.residual_reference_policy_checkpoint is not None
+    ):
+        raise ValueError("additive frozen policies and a residual reference are mutually exclusive")
+    if arguments.action_cap_mode == "coordinate" and arguments.long_short_actions:
+        raise ValueError("coordinate action caps require signed action parameterization")
     # A frozen policy can either be a baseline for an incremental density tilt
     # or a fixed component of the cumulative hedge. In the latter case the
     # trainable residual is optimized around zero without subtracting its PnL.
@@ -733,6 +807,8 @@ def _validate_arguments(arguments: argparse.Namespace) -> None:
         arguments.kfac_kl_clip,
         arguments.shampoo_damping,
         arguments.shampoo_maximum_parameter_step,
+        arguments.full_cost_audit_spot_cost_bps,
+        arguments.full_cost_audit_option_cost_bps,
     )
     if any(not math.isfinite(value) or value <= 0.0 for value in positive_values):
         raise ValueError("conditional OCE scalar controls must be finite-positive")
@@ -903,6 +979,7 @@ def _setup(arguments: argparse.Namespace) -> dict[str, Any]:
         state_size=initial_state.shape[0],
         num_strikes=num_strikes,
         maximum_action_l1=arguments.action_l1_cap,
+        action_cap_mode=arguments.action_cap_mode,
         expiry_specific_linear_skip=arguments.linear_action_skip,
         include_calendar_time=arguments.include_calendar_time,
         action_parameterization=(
@@ -1146,8 +1223,9 @@ def _fixed_feature_pnl(
     returns: torch.Tensor,
     transaction_cost: torch.Tensor,
     frozen_policies: tuple[SharedExpiryOcePolicy, ...] = (),
+    residual_reference_policy: SharedExpiryOcePolicy | None = None,
 ) -> tuple[torch.Tensor, _SimulationDiagnostics]:
-    """Evaluate the globally capped policy on cached states and returns."""
+    """Evaluate a capped policy, optionally as a trade residual to frozen a2."""
 
     if states.ndim != 3 or option_prices.ndim != 4 or returns.ndim != 3:
         raise ValueError("cached policy tensors have invalid ranks")
@@ -1188,8 +1266,28 @@ def _fixed_feature_pnl(
         action, cost_basis, uncapped_gross = _assemble_expiry_slice_action_details(
             raw_heads,
             maximum_l1=policy.config.maximum_action_l1,
+            action_cap_mode=policy.config.action_cap_mode,
             action_parameterization=policy.config.action_parameterization,
         )
+        if residual_reference_policy is not None:
+            with torch.no_grad():
+                _, reference_raw_heads = residual_reference_policy(
+                    states[:, day],
+                    option_prices[:, day],
+                    calendar_time=calendar_time,
+                )
+                reference_action, _, _ = _assemble_expiry_slice_action_details(
+                    reference_raw_heads,
+                    maximum_l1=residual_reference_policy.config.maximum_action_l1,
+                    action_cap_mode=residual_reference_policy.config.action_cap_mode,
+                    action_parameterization=(
+                        residual_reference_policy.config.action_parameterization
+                    ),
+                )
+            # The Q2 test trades only the incremental position. The combined
+            # exposure is exactly cap(a_theta), while costs apply to this trade.
+            action = action - reference_action
+            cost_basis = torch.abs(action)
         pnl = pnl + torch.sum(action * returns[:, day], dim=1)
         pnl = pnl - torch.sum(transaction_cost[None] * cost_basis, dim=1)
         action_l1_sum += torch.sum(torch.sum(cost_basis, dim=1).double())
@@ -1238,6 +1336,7 @@ def _full_population_training_update(
     density: np.ndarray,
     baseline_pnl: np.ndarray | None,
     claim_pnl: np.ndarray | None,
+    transaction_cost: torch.Tensor | None = None,
     perform_step: bool = True,
     clip_gradient: bool = True,
 ) -> dict[str, float | int]:
@@ -1250,6 +1349,9 @@ def _full_population_training_update(
     """
 
     policy: SharedExpiryOcePolicy = setup["policy"]
+    evaluation_transaction_cost = (
+        setup["transaction_cost"] if transaction_cost is None else transaction_cost
+    )
     num_paths = arguments.num_paths
     batch_size = arguments.optimization_batch_size
     objective_values = np.empty(num_paths, dtype=np.float64)
@@ -1275,8 +1377,9 @@ def _full_population_training_update(
                 states=batch[0],
                 option_prices=batch[1],
                 returns=batch[2],
-                transaction_cost=setup["transaction_cost"],
+                transaction_cost=evaluation_transaction_cost,
                 frozen_policies=setup["frozen_policies"],
+                residual_reference_policy=setup["residual_reference_policy"],
             )
             network_pnl_values[first:last] = pnl.detach().cpu().double().numpy()
             objective_values[first:last] = network_pnl_values[first:last]
@@ -1332,8 +1435,9 @@ def _full_population_training_update(
             states=batch[0],
             option_prices=batch[1],
             returns=batch[2],
-            transaction_cost=setup["transaction_cost"],
+            transaction_cost=evaluation_transaction_cost,
             frozen_policies=setup["frozen_policies"],
+            residual_reference_policy=setup["residual_reference_policy"],
         )
         (-torch.sum(probability.detach() * pnl.double())).backward()
 
@@ -1796,6 +1900,22 @@ def _load_frozen_policies(
     return tuple(policies)
 
 
+def _load_residual_reference_policy(
+    setup: Mapping[str, Any],
+    checkpoint: Path | None,
+) -> SharedExpiryOcePolicy | None:
+    """Load a2 once and keep it outside autograd during the Q2 residual test."""
+
+    if checkpoint is None:
+        return None
+    policy = copy.deepcopy(setup["policy"])
+    policy.load_state_dict(_load_policy_state(checkpoint, target_policy=policy))
+    policy.eval()
+    policy.requires_grad_(False)
+    print(f"loaded residual reference a2 policy from {checkpoint}", flush=True)
+    return policy
+
+
 def _audit_cached(
     setup: Mapping[str, Any],
     arguments: argparse.Namespace,
@@ -1846,6 +1966,7 @@ def _audit_cached(
                 returns=batch[2],
                 transaction_cost=setup["transaction_cost"],
                 frozen_policies=setup["frozen_policies"],
+                residual_reference_policy=setup["residual_reference_policy"],
             )
             pnl_memmap[first:last] = pnl.cpu().double().numpy()
             action_l1_sum += float(diagnostics.mean_action_l1) * (last - first)
@@ -1940,6 +2061,7 @@ def _audit_cached(
             returns=batch[2],
             transaction_cost=setup["transaction_cost"],
             frozen_policies=setup["frozen_policies"],
+            residual_reference_policy=setup["residual_reference_policy"],
         )
         probability = torch.as_tensor(
             np.exp(
@@ -2150,6 +2272,10 @@ def _run_locked(arguments: argparse.Namespace) -> None:
         setup,
         arguments.frozen_policy_checkpoints,
     )
+    setup["residual_reference_policy"] = _load_residual_reference_policy(
+        setup,
+        arguments.residual_reference_policy_checkpoint,
+    )
     if arguments.initialize_policy_checkpoint is not None:
         setup["policy"].load_state_dict(
             _load_policy_state(
@@ -2163,8 +2289,12 @@ def _run_locked(arguments: argparse.Namespace) -> None:
         )
     checkpoint_path = arguments.output_directory / "conditional-oce.pt"
     report_path = arguments.output_directory / "conditional-oce-report.json"
-    alignment_error = _alignment_check(setup, arguments, returns)
-    print(f"fixed-path alignment maximum error={alignment_error:.6g}", flush=True)
+    alignment_error: float | None = None
+    if not arguments.skip_alignment_check:
+        alignment_error = _alignment_check(setup, arguments, returns)
+        print(f"fixed-path alignment maximum error={alignment_error:.6g}", flush=True)
+    else:
+        print("skipped regenerated-path alignment; using existing fixed feature cache", flush=True)
     if arguments.alignment_only:
         write_json_atomic(
             {
@@ -2274,6 +2404,17 @@ def _run_locked(arguments: argparse.Namespace) -> None:
         weights[: arguments.num_paths], dtype=np.float64, copy=True
     )
     selected_weights *= arguments.num_paths / np.sum(selected_weights)
+    full_cost_audit_cost = torch.tensor(
+        (
+            arguments.full_cost_audit_spot_cost_bps,
+            *(
+                arguments.full_cost_audit_option_cost_bps
+                for _ in range(len(setup["book"].labels) - 1)
+            ),
+        ),
+        dtype=setup["env"].fdtype,
+        device=setup["env"].device,
+    ) / 1.0e4
     baseline_pnl: np.ndarray | None = None
     if arguments.baseline_pnl is not None:
         baseline_pnl = np.load(arguments.baseline_pnl, mmap_mode="r", allow_pickle=False)
@@ -2393,6 +2534,39 @@ def _run_locked(arguments: argparse.Namespace) -> None:
                     "learning_rate": learning_rate,
                 }
             )
+            full_cost_audit_converged = False
+            if (
+                arguments.full_cost_audit_every_epochs > 0
+                and epoch % arguments.full_cost_audit_every_epochs == 0
+            ):
+                audit_record = _full_population_training_update(
+                    setup,
+                    arguments,
+                    optimizer,
+                    states=cached_states,
+                    prices=cached_prices,
+                    returns=returns,
+                    density=selected_weights,
+                    baseline_pnl=baseline_pnl,
+                    claim_pnl=claim_pnl,
+                    transaction_cost=full_cost_audit_cost,
+                    perform_step=False,
+                    clip_gradient=False,
+                )
+                record.update(
+                    {
+                        "full_cost_audit_oce": audit_record["full_population_oce"],
+                        "full_cost_audit_gradient_rms": audit_record["gradient_rms"],
+                        "full_cost_audit_gradient_maximum_absolute": audit_record[
+                            "gradient_maximum_absolute"
+                        ],
+                    }
+                )
+                full_cost_audit_converged = (
+                    float(audit_record["gradient_rms"])
+                    <= arguments.full_gradient_rms_tolerance
+                )
+                record["full_cost_audit_stationary"] = full_cost_audit_converged
             convergence_checks: list[bool] = []
             if arguments.full_gradient_rms_tolerance > 0.0:
                 convergence_checks.append(
@@ -2417,7 +2591,13 @@ def _run_locked(arguments: argparse.Namespace) -> None:
             record["convergence_patience_count"] = convergence_count
             history.append(record)
             print(json.dumps(record), flush=True)
-            converged = convergence_count >= arguments.full_gradient_patience
+            converged = (
+                convergence_count >= arguments.full_gradient_patience
+                or (
+                    arguments.stop_on_full_cost_audit
+                    and full_cost_audit_converged
+                )
+            )
             if (
                 updates % arguments.checkpoint_every_updates == 0
                 or epoch == arguments.epochs
@@ -2487,6 +2667,7 @@ def _run_locked(arguments: argparse.Namespace) -> None:
                         returns=batch[2],
                         transaction_cost=setup["transaction_cost"],
                         frozen_policies=setup["frozen_policies"],
+                        residual_reference_policy=setup["residual_reference_policy"],
                     )
                 objective_pnl = pnl
                 if baseline_pnl is not None:
