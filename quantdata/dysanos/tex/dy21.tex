@@ -109,7 +109,8 @@ a trading universe of 48 options and spot is free of dynamic arbitrage numerical
 \end{abstract}
 
 \tableofcontents
-\bigskip\hrule\bigskip
+%\bigskip\hrule\bigskip
+\pagebreak
 
 %% ============================================================
 
@@ -167,7 +168,7 @@ This article presents a model framework for
     \item  \textbf{(iv) a risk-neutral density}.
 \end{itemize}
 %
-This article is a refinement of material presented at The XIII Bachelier World Congress in Bologna.\footnote{\url{https://quantitative-research.de/dl/DYSANOS.pdf}}
+This article is a refinement of material presented at The XIII Bachelier World Congress in Bologna,~2026.\footnote{\url{https://quantitative-research.de/dl/DYSANOS.pdf}}
 
 \subsection*{Historic Context and Literature Review}
 
@@ -1576,6 +1577,32 @@ standard normal.
   \end{tabular}
   \caption{Conditional zero test, confirming that $\Q_2$ is numerically a martingale measure.}
   \label{tab:rn-q2-conditional}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrrrrrr}
+\toprule
+Measure & Max. $|z|$ & 99\% $|z|$ & $N_5$
+  & Max. $|s^{(\varepsilon)}|$
+  & 99\% $|s^{(\varepsilon)}|$ & $T_{\mathrm{act}}$\\
+\cmidrule(lr){2-6}
+ & \multicolumn{5}{c}{Unconditional} & \\
+\midrule
+$\Q_1$ & 2.205 & 2.032 & 0 & 2.205 & 2.032
+  & {\color{red}41.365}\\
+$\Q_2$ & {\color{orange}2.646} & 1.833 & 0
+  & {\color{orange}2.646} & 1.833 & $-0.454$\\
+\bottomrule
+\end{tabular}
+\caption{Compact 100,000-path DYSANOS diagnostics.  The five unconditional
+columns summarize the 1,225 day--instrument coordinates, with
+$N_5=\#\{|z|>5\}$ and $\varepsilon=10^{-8}$; the last column is the two-fold
+out-of-fold conditional action statistic.  The materiality floor is negligible
+at the reported coordinates, so $z$ and $s^{(\varepsilon)}$ agree to three
+decimal places.}
+\label{tab:rn-q-summary}
 \end{table}
 
 The conditional mean test fails clearly for $\P$ and $\Q_1$, but passes comfortably for $\Q_2$. The combined out-of-fold mean is
