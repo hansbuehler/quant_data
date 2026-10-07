@@ -365,12 +365,25 @@ def plot_baseline_implied_volatility_3d(
 def plot_factor_responses_3d(
     surfaces: ImpliedVolatilityFactorSurfaces,
     output_path: Path,
+    *,
+    factor_start: int = 0,
+    factor_stop: int | None = None,
+    title: str | None = None,
 ) -> None:
     """Plot central daily PCA-factor IV responses as 3D surfaces."""
-    factor_responses = surfaces.factor_responses_bp
-    factor_rank = factor_responses.shape[0]
+    all_factor_responses = surfaces.factor_responses_bp
+    full_factor_rank = all_factor_responses.shape[0]
+    if factor_stop is None:
+        factor_stop = full_factor_rank
+    if not 0 <= factor_start < factor_stop <= full_factor_rank:
+        raise ValueError(
+            "factor range must be non-empty and lie within the fitted rank, "
+            f"found [{factor_start},{factor_stop}) for rank {full_factor_rank}"
+        )
+    factor_responses = all_factor_responses[factor_start:factor_stop]
+    panel_count = len(factor_responses)
     column_count = 4
-    row_count = int(np.ceil(factor_rank / column_count))
+    row_count = int(np.ceil(panel_count / column_count))
     log_moneyness, expiry_days = np.meshgrid(
         surfaces.log_moneyness,
         surfaces.expiry_days,
@@ -389,11 +402,12 @@ def plot_factor_responses_3d(
     )
     axes = []
     plotted_surface = None
-    for factor_index, response in enumerate(factor_responses):
+    for panel_index, response in enumerate(factor_responses):
+        factor_index = factor_start + panel_index
         axis = figure.add_subplot(
             row_count,
             column_count,
-            factor_index + 1,
+            panel_index + 1,
             projection="3d",
         )
         plotted_surface = axis.plot_surface(
@@ -407,8 +421,10 @@ def plot_factor_responses_3d(
             rcount=len(surfaces.expiry_days),
             ccount=len(surfaces.log_moneyness),
         )
-        title = "PC 1 (spot-aligned)" if factor_index == 0 else f"PC {factor_index + 1}"
-        axis.set_title(title, fontsize=22, pad=8)
+        panel_title = (
+            "PC 1 (spot-aligned)" if factor_index == 0 else f"PC {factor_index + 1}"
+        )
+        axis.set_title(panel_title, fontsize=22, pad=8)
         axis.set_xlabel("")
         axis.set_ylabel("")
         axis.set_zlabel("")
@@ -430,7 +446,11 @@ def plot_factor_responses_3d(
     )
     colorbar.ax.tick_params(labelsize=14)
     figure.suptitle(
-        f"Rank-{factor_rank} risk-neutral daily PCA responses in IV coordinates",
+        title
+        or (
+            f"Rank-{full_factor_rank} risk-neutral daily PCA responses "
+            "in IV coordinates"
+        ),
         fontsize=25,
     )
     figure.supxlabel("Business days to expiry", fontsize=20)
@@ -740,10 +760,31 @@ def run_paper_diagnostics(
         factor_surfaces[selected_rank],
         output_dir / "baseline_implied_volatility_3d.png",
     )
-    for rank in calibrations:
+    if selected_rank == 8:
         plot_factor_responses_3d(
-            factor_surfaces[rank],
-            output_dir / f"pca_factor_responses_3d_rank{rank}.png",
+            factor_surfaces[selected_rank],
+            output_dir / "pca_factor_responses_3d_pc1_8.png",
+            title="Risk-neutral daily PCA responses: PCs 1-8",
+        )
+    else:
+        first_eight_loadings = rank_eight_calibration.innovations.annualized_loadings
+        selected_first_eight = (
+            selected_calibration.innovations.annualized_loadings[..., :8]
+        )
+        if not np.array_equal(first_eight_loadings, selected_first_eight):
+            raise RuntimeError("The rank-16 factor fit is not nested in the rank-8 fit")
+        plot_factor_responses_3d(
+            factor_surfaces[selected_rank],
+            output_dir / "pca_factor_responses_3d_pc1_8.png",
+            factor_stop=8,
+            title="Risk-neutral daily PCA responses: PCs 1--8",
+        )
+        plot_factor_responses_3d(
+            factor_surfaces[selected_rank],
+            output_dir / f"pca_factor_responses_3d_pc9_{selected_rank}.png",
+            factor_start=8,
+            factor_stop=selected_rank,
+            title=f"Risk-neutral daily PCA responses: PCs 9--{selected_rank}",
         )
 
     path_outputs: dict[str, Any] = {}

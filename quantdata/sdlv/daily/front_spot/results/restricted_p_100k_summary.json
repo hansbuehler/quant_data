@@ -1,0 +1,55 @@
+{
+  "schema": "front-spot-restricted-p-summary-v1",
+  "measure": "P",
+  "path_count": 100000,
+  "antithetic_pair_count": 50000,
+  "horizon_business_days": 20,
+  "instrument_universe": "spot plus 44 fixed-cash-strike options",
+  "return_definition": "(V_{t+1}-V_t)/S_t",
+  "models": {
+    "A": {
+      "factor_rank": 8,
+      "dlv_substeps": 1,
+      "tested_coordinate_count": 570,
+      "maximum_absolute_z": 62.137681403293186,
+      "p99_absolute_z": 59.779589300235116,
+      "count_above_2_576": 570,
+      "count_above_5": 570,
+      "out_of_fold_action_statistic": 90.03781019334919,
+      "mean_daily_action_return": 5.118328036605055e-7
+    },
+    "B": {
+      "factor_rank": 16,
+      "dlv_substeps": 1,
+      "tested_coordinate_count": 570,
+      "maximum_absolute_z": 342.46996082012953,
+      "p99_absolute_z": 328.8109275046629,
+      "count_above_2_576": 570,
+      "count_above_5": 570,
+      "out_of_fold_action_statistic": 646.6453109863423,
+      "mean_daily_action_return": 2.646647595357255e-5
+    },
+    "C": {
+      "factor_rank": 8,
+      "dlv_substeps": 8,
+      "tested_coordinate_count": 570,
+      "maximum_absolute_z": 61.00215833071883,
+      "p99_absolute_z": 58.397902092496935,
+      "count_above_2_576": 570,
+      "count_above_5": 570,
+      "out_of_fold_action_statistic": 89.20490312709262,
+      "mean_daily_action_return": 5.076420648168277e-7
+    },
+    "D": {
+      "factor_rank": 16,
+      "dlv_substeps": 8,
+      "tested_coordinate_count": 570,
+      "maximum_absolute_z": 336.81875069395716,
+      "p99_absolute_z": 325.0383359831711,
+      "count_above_2_576": 570,
+      "count_above_5": 570,
+      "out_of_fold_action_statistic": 624.5600437641212,
+      "mean_daily_action_return": 2.6350352377677666e-5
+    }
+  }
+}
