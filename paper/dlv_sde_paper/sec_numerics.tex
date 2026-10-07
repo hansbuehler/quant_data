@@ -16,6 +16,50 @@ martingale condition exactly over a full day.  We therefore compare one and
 eight Brownian steps per day, and distinguish algebraic invariants from
 statistical martingale diagnostics.
 
+\subsection{All-node risk-neutral performance summary}
+\label{sec:numerics-all-node-summary}
+
+Table~\ref{tab:numerics-all-node-summary} gives the leading finite-step
+comparison.  It trades spot and all 200 interior fixed-strike calls at each of
+5, 10, 15, and 20 business days, giving 801 instruments at the initial date
+and 10,020 live day--instrument coordinates over the 20-day horizon.  Each
+return is the one-day price increment divided by the pre-step spot.  The raw
+columns are the ordinary pair-based mean-zero tests.  They intentionally retain
+the extreme upper-tail calls, whose prices and sampling errors can both be
+microscopic.  To report materiality as well, write \(\widehat m_i\) and
+\(\widehat{\mathrm{SE}}_i\) for the pair-based mean and standard error and set
+\begin{equation}\label{eq:numerics-materiality-score}
+  s_i^{(\varepsilon)}=
+  \frac{\widehat m_i}
+  {\sqrt{\widehat{\mathrm{SE}}_i^2+\varepsilon^2}},
+  \qquad \varepsilon=10^{-8}.
+\end{equation}
+This is a materiality-regularized score, not a \(z\)-statistic.  The last
+column is the two-fold, out-of-fold standardized statistic of the frozen
+affine-plus-deep conditional action.  It tests whether the chosen state and
+strategy class can detect predictable one-day return under~\(\Q\).
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrrrrrr}
+\toprule
+Model & Raw 99\% $\abs{z}$ & Raw $\abs{z}>5$ & Max. $\abs{s^{(\varepsilon)}}$
+  & 99\% $\abs{s^{(\varepsilon)}}$ & Action statistic\\
+\midrule
+A: rank 8, one step    & 2.357 & {\color{red}13} & {\color{orange}2.738} & 2.283 & $-0.218$\\
+B: rank 16, one step   & 2.243 & {\color{red}26} & {\color{orange}3.240} & 2.133 &  0.051\\
+C: rank 8, eight steps & {\color{orange}2.631} & {\color{red}13} & {\color{orange}4.481} & {\color{orange}2.578} & 2.175\\
+D: rank 16, eight steps& {\color{orange}2.761} & {\color{red}19} & {\color{orange}4.784} & {\color{orange}2.759} & $-0.562$\\
+\bottomrule
+\end{tabular}
+\caption{All-node, 100,000-path \(\Q\)-measure audit.  Each configuration
+uses 50,000 antithetic pairs.  Red entries are raw five-standard-error tail
+violations; orange entries are moderate unregularized or materiality-score
+deviations.  No materiality-regularized score exceeds five.}
+\label{tab:numerics-all-node-summary}
+\end{table}
+
 \subsection{Data, factor rank, and measure change}
 \label{sec:numerics-estimation}
 

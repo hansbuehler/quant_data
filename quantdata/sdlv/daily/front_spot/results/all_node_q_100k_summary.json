@@ -1,0 +1,46 @@
+{
+  "schema": "front-spot-all-node-q-summary-v1",
+  "return_definition": "one-day fixed-cash-strike call or spot price increment divided by pre-step spot",
+  "path_count": 100000,
+  "antithetic_pair_count": 50000,
+  "instrument_count_at_initial_date": 801,
+  "live_day_instrument_coordinate_count": 10020,
+  "materiality_score": {
+    "definition": "mean / sqrt(pair_standard_error^2 + epsilon^2)",
+    "epsilon": 1e-08
+  },
+  "models": {
+    "rank8_one_step": {
+      "raw_max_absolute_z": 19.180704473478258,
+      "raw_p99_absolute_z": 2.35696022874172,
+      "raw_count_absolute_z_above_5": 13,
+      "materiality_max_absolute_score": 2.7376784136978864,
+      "materiality_p99_absolute_score": 2.283425378607342,
+      "conditional_action_statistic": -0.21800386113118544
+    },
+    "rank16_one_step": {
+      "raw_max_absolute_z": 13.359876505437622,
+      "raw_p99_absolute_z": 2.2425401202790534,
+      "raw_count_absolute_z_above_5": 26,
+      "materiality_max_absolute_score": 3.2401000586554334,
+      "materiality_p99_absolute_score": 2.133435535602815,
+      "conditional_action_statistic": 0.05132583898415192
+    },
+    "rank8_eight_step": {
+      "raw_max_absolute_z": 13.318073159677422,
+      "raw_p99_absolute_z": 2.6309336332219804,
+      "raw_count_absolute_z_above_5": 13,
+      "materiality_max_absolute_score": 4.48061833360878,
+      "materiality_p99_absolute_score": 2.578123763217657,
+      "conditional_action_statistic": 2.174923859839635
+    },
+    "rank16_eight_step": {
+      "raw_max_absolute_z": 9.043219356281288,
+      "raw_p99_absolute_z": 2.761381846931711,
+      "raw_count_absolute_z_above_5": 19,
+      "materiality_max_absolute_score": 4.783638508916158,
+      "materiality_p99_absolute_score": 2.758863128711065,
+      "conditional_action_statistic": -0.5621132732298264
+    }
+  }
+}
