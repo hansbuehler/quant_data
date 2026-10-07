@@ -73,6 +73,15 @@ def test_unconditional_diagnostics_match_direct_ratio_calculation() -> None:
     assert result["percentile_99_absolute_materiality_score"] == pytest.approx(
         np.percentile(absolute_materiality, 99.0)
     )
+    assert result[
+        "coordinates_absolute_materiality_score_above_1_96"
+    ] == np.sum(absolute_materiality > 1.96)
+    assert result[
+        "coordinates_absolute_materiality_score_above_2_576"
+    ] == np.sum(absolute_materiality > 2.576)
+    assert result["coordinates_absolute_materiality_score_above_5"] == np.sum(
+        absolute_materiality > 5.0
+    )
 
 
 def test_unconditional_diagnostics_reconstruct_half_block_pairs() -> None:

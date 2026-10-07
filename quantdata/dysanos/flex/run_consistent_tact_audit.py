@@ -677,6 +677,12 @@ def unconditional_coordinate_diagnostics(
         "percentile_99_absolute_materiality_score": float(
             np.nanpercentile(absolute_materiality, 99.0)
         ),
+        "coordinates_absolute_materiality_score_above_1_96": int(
+            np.sum(absolute_materiality > 1.96)
+        ),
+        "coordinates_absolute_materiality_score_above_2_576": int(
+            np.sum(absolute_materiality > 2.576)
+        ),
         "coordinates_absolute_materiality_score_above_5": int(
             np.sum(absolute_materiality > 5.0)
         ),
