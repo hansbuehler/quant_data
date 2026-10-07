@@ -51,6 +51,7 @@
 \newcommand{\diag}{\mathrm{diag}}
 \renewcommand{\P}{\mathbb{P}}
 \renewcommand{\Q}{\mathbb{Q}}
+\newcommand{\removeblock}[1]{}
 \DeclareRobustCommand{\supstack}[2]{\stackrel{\mbox{{\scriptsize ${#1}$}}}{ {#2} }}     % symbol over another
 \DeclareRobustCommand{\eqlabel}[1]{\label{eq:#1}}                                     % an equation label
 \DeclareRobustCommand{\eq}[1]{\begin{equation}\eqlabel{#1}}                           % start an equation
@@ -1579,6 +1580,7 @@ standard normal.
   \label{tab:rn-q2-conditional}
 \end{table}
 
+\removeblock{
 \begin{table}[H]
 \centering
 \small
@@ -1604,10 +1606,31 @@ at the reported coordinates, so $z$ and $s^{(\varepsilon)}$ agree to three
 decimal places.}
 \label{tab:rn-q-summary}
 \end{table}
+}
 
-The conditional mean test fails clearly for $\P$ and $\Q_1$, but passes comfortably for $\Q_2$. The combined out-of-fold mean is
-$-0.000095\pm0.000209$, giving $T_{\mathrm{act}}=-0.454$ and a two-sided
-$p$-value of $0.650$.
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrrrrrr}
+\toprule
+Measure & $N$ & Max. $|z|$ & 99\% $|z|$
+  & $N_{2.576}$ & $N_5$ & $T_{\mathrm{act}}$\\
+\cmidrule(lr){3-6}
+ & & \multicolumn{4}{c}{Unconditional} & \\
+\midrule
+$\Q_1$ & $1{,}225$ & 2.205 & 2.032 & 0 & 0
+  & {\color{red}41.365}\\
+$\Q_2$ & $1{,}225$ & {\color{orange}2.646} & 1.833 & 1 & 0
+  & $-0.454$\\
+\bottomrule
+\end{tabular}
+\caption{Threshold-count summary of the 100,000-path DYSANOS diagnostics.
+Here $N$ is the number of day--instrument coordinates and
+$N_c=\#\{|z|>c\}$. Further confirmation that~$\Q_2$ is a martingale measure.}
+\label{tab:rn-q-threshold-summary}
+\end{table}
+
+The conditional mean test fails clearly for $\P$ and $\Q_1$, but passes comfortably for $\Q_2$.
 
 \begin{remark}
 	Solving~\eqref{eq:rn-oce-q2-fit} is \emph{slow}. In our examples took several hours on an RTX~5090 to find a measure~$\Q_2$ which still
