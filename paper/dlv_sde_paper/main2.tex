@@ -523,17 +523,28 @@ Each daily state has 25 model expiries at one-business-day intervals and 200
 interior strike nodes, together with two artificial boundary nodes. The 200
 inner nodes are generated from fixed standardized log-moneyness templates on
 $[-2.5,1.5]$.\footnote{The expiry grid is fixed at $T_j=j/252$,
-$j=1,\ldots,25$.  The strike construction uses 100 fixed normalized-moneyness
-coordinates for the one-day ATM scale and 100 for the 25-day ATM scale, both on
-$[-2.5,1.5]$.  On each calibration date these coordinates are mapped to
-log-relative-strike candidates using that date's two regularized ATM
-total-volatility scales, merged and sorted, and given a minimum gap equal to
-5\% of the average log-strike spacing.  Exponentiation gives one 200-node
-relative-strike grid shared by all 25 expiries; the boundary strikes are one
-half of the lowest and one and a half times the highest inner strike.  Thus the
-expiry and normalized-moneyness templates are fixed, and the resulting cash
-strikes are fixed along each simulated path.  For historical calibration the
-relative-strike grid floats between dates because the ATM scales change.}
+$j=1,\ldots,25$.  A normalized-moneyness coordinate $z$ at expiry $\tau$ is
+mapped to the forward-relative strike
+\[
+  k(z,\tau)=\exp\!\left[z\sqrt{
+    \frac{\sigma_{\epsilon}^2\epsilon+
+    \sigma_{\mathrm{ATM}}(\tau)^2\tau}{1+\epsilon}}
+  \right],
+  \qquad \epsilon=\frac{1}{8\times252},
+\]
+where $\sigma_{\epsilon}=\sigma_{\mathrm{ATM}}(1/252)$ and
+$\sigma_{\mathrm{ATM}}(\tau)$ is the regularized annual ATM Black volatility.
+The cash strike is $K=F_0(\tau)k$; in the normalized simulations $F_0(\tau)=1$.
+The strike construction uses 100 fixed coordinates for the one-day ATM scale
+and 100 for the 25-day ATM scale, both on $[-2.5,1.5]$.  On each calibration
+date the resulting log-relative-strike candidates are merged and sorted, and
+given a minimum gap equal to 5\% of the average log-strike spacing.
+Exponentiation gives one 200-node relative-strike grid shared by all 25
+expiries; the boundary strikes are one-half of the lowest and one and a half
+times the highest inner strike.  Thus the expiry and normalized-moneyness
+templates are fixed, and the resulting cash strikes are fixed along each
+simulated path.  For historical calibration the relative-strike grid floats
+between dates because the ATM scales change.}
 They therefore share one strike support across the 25 expiries on a given
 date, while that support floats between dates with the observed ATM term
 structure. A fixed 5\% annual Black volatility supplies the independent SANOS

@@ -7,13 +7,15 @@ Alan Brace, Dariusz Gatarek, and Marek Musiela.
 \newblock {\em Mathematical Finance}, 7(2):127--155, 1997.
 
 \bibitem[BHK{\etalchar{+}}26a]{SANOS2026}
-Hans Buehler, Blanka Horvath, Anastais Kratsios, Yannick Limmer, and Raeid Saqur.
+Hans Buehler, Blanka Horvath, Anastais Kratsios, Yannick Limmer, and Raeid
+  Saqur.
 \newblock Sanos - smooth arbitrage-free non-parametric option surfaces.
 \newblock \url{https://arxiv.org/abs/2601.11209}, Februar 2026.
 
 \bibitem[BHK26b]{DYSANOS2026}
 Hans Buehler, Blanka Horvath, and Anastasis Kratsios.
-\newblock Dysanos generative dynamic smooth arbitrage-free non-parametric option surfaces, 2026.
+\newblock Dysanos generative dynamic smooth arbitrage-free non-parametric
+  option surfaces, 2026.
 
 \bibitem[BMPW22]{removedrift}
 Hans Buehler, Phillip Murray, Mikko~S. Pakkanen, and Ben Wood.
@@ -24,7 +26,8 @@ Hans Buehler, Phillip Murray, Mikko~S. Pakkanen, and Ben Wood.
 Hans Buehler and Evgenii Ryskin.
 \newblock Discrete local volatility for large time steps (short version).
 \newblock Technical report, SSRN, 2016.
-\newblock Short version. An extended version also exists: SSRN 2642630 (2015), doi:10.2139/ssrn.2642630.
+\newblock Short version. An extended version also exists: SSRN 2642630 (2015),
+  doi:10.2139/ssrn.2642630.
 
 \bibitem[CN09]{CarmonaNadtochiy2008}
 Ren{\'e} Carmona and Sergey Nadtochiy.
@@ -38,12 +41,14 @@ Ren{\'e} Carmona and Sergey Nadtochiy.
 
 \bibitem[SW08a]{SchweizerWissel2008}
 Martin Schweizer and Johannes Wissel.
-\newblock Arbitrage-free market models for option prices: The multi-strike case.
+\newblock Arbitrage-free market models for option prices: The multi-strike
+  case.
 \newblock {\em Finance and Stochastics}, 12:469--505, 2008.
 
 \bibitem[SW08b]{Schweizer2007}
 Martin Schweizer and Johannes Wissel.
-\newblock Term structures of implied volatilities: Absence of arbitrage and existence results.
+\newblock Term structures of implied volatilities: Absence of arbitrage and
+  existence results.
 \newblock {\em Mathematical Finance}, 18:77--114, 2008.
 
 \bibitem[WBWB19]{WieseEtAl2019OptionMarkets}
@@ -57,7 +62,8 @@ Johannes Wissel.
 \newblock NCCR FINRISK Working Paper 428, NCCR FINRISK, ETH Z\"urich, 2007.
 
 \bibitem[WWP{\etalchar{+}}21]{WieseEtAl2021MultiAsset}
-Magnus Wiese, Ben Wood, Alexandre Pachoud, Ralf Korn, Hans Buehler, Phillip Murray, and Lianjun Bai.
+Magnus Wiese, Ben Wood, Alexandre Pachoud, Ralf Korn, Hans Buehler, Phillip
+  Murray, and Lianjun Bai.
 \newblock Multi-asset spot and option market simulation, 2021.
 \newblock arXiv:2112.06823.
 

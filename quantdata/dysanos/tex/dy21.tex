@@ -662,7 +662,7 @@ i.e.
 Then for \emph{any} squared (discrete) local volatilities $\Sigma^j = ( 0, \Sigma^{j,1}, \ldots, \Sigma^{j,N}, 0 )$
 the operator
 \eqx
-            1 + \Omega\ \mathrm{diag}(\Sigma^j) (\hat T_j - \hat T_{j-1}) \in \R^{(N+2)\times(N+2)}
+            1 - \Omega\ \mathrm{diag}(\Sigma^j) (\hat T_j - \hat T_{j-1}) \in \R^{(N+2)\times(N+2)}
 \eqend
 is a tridiagonal operator with positive main diagonal and negative off diagonals. 
 It is basically the discrete implicit scheme for the forward equation of the continuous time Dupire SDE.
@@ -673,7 +673,7 @@ a martingale transition operator in
  the sense of~\cite{DLV} which means that the densities $q^1,\ldots,q^M$ generated 
  iteratively starting in $q^0=(1)$ by
 \begin{equation}\label{eq:densitytrans}
-    q^j = \Big( 1 + \Omega\ \mathrm{diag}(\Sigma^j) (\hat T_j - \hat T_{j-1}) \Big)^{-1} q^{j-1} 
+    q^j = \Big( 1 - \Omega\ \mathrm{diag}(\Sigma^j) (\hat T_j - \hat T_{j-1}) \Big)^{-1} q^{j-1} 
 \end{equation}
 form a martingale density over~$\hat K$.
 
