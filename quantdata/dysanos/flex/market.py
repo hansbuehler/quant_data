@@ -11,6 +11,7 @@ from functools import cached_property
 
 import numpy as np
 from cdxcore.err import verify_inp
+from cdxcore.subdir import CacheMode
 from cdxcore.verbose import Context
 
 from quantdata.biz_calendar import DAYS_PER_YEAR, NMS
@@ -439,6 +440,7 @@ def load_market_day(
     *,
     geometry: FlexGeometryConfig = FlexGeometryConfig(),
     config: FlexMarketConfig = FlexMarketConfig(),
+    override_cache_mode: CacheMode | str | None = None,
     verbose: Context | None = Context.all,
 ) -> FlexMarketDay | None:
     """Load one market and apply FLEX's exact floating horizon and NMS range."""
@@ -460,6 +462,7 @@ def load_market_day(
             # applies its required canonical-NMS interval from the AF ATM curve.
             max_nms=(-100.0, 100.0),
         ),
+        override_cache_mode=override_cache_mode,
         verbose=verbose,
     )
     return market_day_from_payload(
