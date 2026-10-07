@@ -35,6 +35,7 @@ from quantdata.sdlv.daily.front_spot.simulation import load_initial_model_state
 
 matplotlib.use("Agg")
 from matplotlib import pyplot as plt  # noqa: E402
+from matplotlib.ticker import MaxNLocator  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -382,8 +383,6 @@ def plot_factor_responses_3d(
         )
     factor_responses = all_factor_responses[factor_start:factor_stop]
     panel_count = len(factor_responses)
-    column_count = 4
-    row_count = int(np.ceil(panel_count / column_count))
     log_moneyness, expiry_days = np.meshgrid(
         surfaces.log_moneyness,
         surfaces.expiry_days,
@@ -396,10 +395,22 @@ def plot_factor_responses_3d(
         vmax=response_limit,
         base=10.0,
     )
+    # The figure is always included at full text width in the paper, so the
+    # *printed* size of any text scales with (text width) / (figure native
+    # width), not with the number of panels. A moderately narrower native
+    # figure prints with visibly larger, less crowded tick labels than the
+    # original full-width layout, while staying within one page's height.
+    # mplot3d tick labels are drawn outside each axes' bounding box, so
+    # constrained_layout alone is not enough once panels get narrower; we
+    # also widen wspace/hspace explicitly to stop adjacent panels' tick
+    # labels from colliding with each other.
+    column_count = 4
+    row_count = int(np.ceil(panel_count / column_count))
     figure = plt.figure(
-        figsize=(14.5, 3.5 * row_count),
+        figsize=(11.5, 4.6 * row_count),
         constrained_layout=True,
     )
+    figure.set_constrained_layout_pads(wspace=0.25, hspace=0.2)
     axes = []
     plotted_surface = None
     for panel_index, response in enumerate(factor_responses):
@@ -424,11 +435,16 @@ def plot_factor_responses_3d(
         panel_title = (
             "PC 1 (spot-aligned)" if factor_index == 0 else f"PC {factor_index + 1}"
         )
-        axis.set_title(panel_title, fontsize=22, pad=8)
+        axis.set_title(panel_title, fontsize=15, pad=6)
         axis.set_xlabel("")
         axis.set_ylabel("")
         axis.set_zlabel("")
-        axis.tick_params(labelsize=15, pad=0)
+        # Fewer, better-padded ticks avoid the z=0 / corner-tick collisions
+        # that occur when every axis crowds labels into the same corner.
+        axis.xaxis.set_major_locator(MaxNLocator(nbins=4))
+        axis.yaxis.set_major_locator(MaxNLocator(nbins=4))
+        axis.zaxis.set_major_locator(MaxNLocator(nbins=4))
+        axis.tick_params(labelsize=15, pad=5)
         axis.view_init(elev=25.0, azim=-128.0)
         axis.set_box_aspect((1.25, 1.0, 0.75))
         axes.append(axis)
@@ -442,19 +458,19 @@ def plot_factor_responses_3d(
     )
     colorbar.set_label(
         r"Central $\pm1\sigma$ IV response (bp)",
-        fontsize=17,
+        fontsize=12,
     )
-    colorbar.ax.tick_params(labelsize=14)
+    colorbar.ax.tick_params(labelsize=10)
     figure.suptitle(
         title
         or (
             f"Rank-{full_factor_rank} risk-neutral daily PCA responses "
             "in IV coordinates"
         ),
-        fontsize=25,
+        fontsize=17,
     )
-    figure.supxlabel("Business days to expiry", fontsize=20)
-    figure.supylabel("Log-moneyness", fontsize=20)
+    figure.supxlabel("Business days to expiry", fontsize=14)
+    figure.supylabel("Log-moneyness", fontsize=14)
     figure.savefig(output_path, dpi=180, bbox_inches="tight", pad_inches=0.08)
     plt.close(figure)
 
@@ -655,12 +671,16 @@ def plot_coupled_path_metrics(
         "Spot / initial spot",
         "ATM 1D implied vol (%)",
         "ATM 5D implied vol (%)",
-        "ATM 1D skew (vol points / log-strike)",
-        "ATM 5D skew (vol points / log-strike)",
+        "ATM 1D skew\n(vol points / log-strike)",
+        "ATM 5D skew\n(vol points / log-strike)",
     )
     scales = (1.0, 100.0, 100.0, 100.0, 100.0)
     days = np.arange(metrics["day_count"] + 1)
-    figure, axes = plt.subplots(5, 1, figsize=(10.0, 13.0), sharex=True, constrained_layout=True)
+    # Each row needs enough height that a rotated two-line y-label cannot
+    # bleed into the neighbouring subplot; constrained_layout only reserves
+    # horizontal space for axis labels, not the vertical span of long
+    # rotated text, so the per-row height is set generously by hand.
+    figure, axes = plt.subplots(5, 1, figsize=(10.0, 17.0), sharex=True, constrained_layout=True)
     colors = plt.get_cmap("tab10").colors
     for axis, key, label, scale in zip(axes, keys, labels, scales, strict=True):
         q_values = np.asarray(metrics["q"][key])
@@ -675,14 +695,15 @@ def plot_coupled_path_metrics(
                 linewidth=1.3,
                 linestyle="--",
             )
-        axis.set_ylabel(label)
+        axis.set_ylabel(label, fontsize=11, labelpad=8)
         axis.grid(alpha=0.25)
     axes[0].plot([], [], color="black", linewidth=1.6, label=r"$\mathbb{Q}$")
     axes[0].plot([], [], color="black", linewidth=1.3, linestyle="--", label=r"$\mathbb{P}$")
     axes[0].legend(loc="best")
     axes[-1].set_xlabel("Business-day step")
+    figure.align_ylabels(axes)
     figure.suptitle(title)
-    figure.savefig(output_path, dpi=180)
+    figure.savefig(output_path, dpi=180, bbox_inches="tight", pad_inches=0.08)
     plt.close(figure)
 
 

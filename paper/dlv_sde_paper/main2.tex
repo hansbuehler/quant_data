@@ -63,7 +63,7 @@
 
 This article presents an arbitrage-free market model for for smooth surfaces of European option prices. While not strictly the first of is kind,
 it is the first model with an industy-grade ability to fit the current market, allow for smooth interpolation of the entire option surface at each time,
-and provides an explicit construction of the continuous time risk-neutral drift for both (discrete local) volatilities and spot. It also has a natural
+and provide an explicit construction of the continuous time risk-neutral drift for both (discrete local) volatilities and spot. It also has a natural
 estimation strategy for its parameter space.
 
 The core architecture follows the SANOS approach~\cite{SANOS2026} which models the stock price as the product
@@ -105,34 +105,32 @@ restricted to making only a fairly limited number of the overall tradable instru
 dynamically arbitrage-free.\footnote{In~\cite{DYSANOS2026} we used 49 instruments per simulated date.} In the current work we cover all options with
 an explicit construction of the risk-neutral drift, which is far more efficient than the numerical near-martingale measure approach.
 
-Assume fixed expiry dates are $0=T_0<T_1<\dots<T_M$.
-  Assume $K$ are the strikes and that $q_t^j$ is the density for $T_j$ at time $t\le T_j$.
-  I think the core arguments are as follows:
+\section{Stochastic Smooth Discrete Local Volatility}
 
-\section{Stochastic Smooth Discrete Local volatility}
-
-In this section we introduce the core model architecture for our \emph{Stochastic Smooth Discrete Local Volatility (DLV) model}, SDLV.
+In this section we introduce the core model architecture for our \emph{Stochastic
+Smooth Discrete Local Volatility model}.
 We follow the core SANOS~\cite{SANOS2026} idea of writing our equity process $S$ as product
 \begin{equation}
  \label{eq:S}
   S_t = X_t Y_t
 \end{equation}
-of a stochastic discrete local volatility (SDLV) process $X$ which is used to fit to current market condition and
-whose state parameters will have consistent $\PP$ and $\Q$ dynamics, and an independent\footnote{Under both $\PP$ and $\Q$.} and rather trivial smoothing processs $Y$ whose dynamics under $\PP$ and $\Q$ are the same.
+of a \emph{Stochastic Discrete Local Volatility (SDLV)} process $X$ which is used to fit to current market condition and
+whose state parameters will have consistent $\PP$ and $\Q$ dynamics, and an independent\footnote{Under both $\PP$ and $\Q$.} and rather trivial smoothing process $Y$ whose dynamics under $\PP$ and $\Q$ are the same.
 
 The process $Y$ will just be a Black~\&~Scholes process with fixed volatility~5\%. Given observed bid/ask market data it was shown in~\cite{SANOS2026} how to fit
 a discrete local volatility surface in the presence of such process.
 
-In the remainder of this section we focus on the SLDV process itself.
+In the remainder of this section we focus on the SDLV process itself.
 
-\subsection{SDLV}
+\subsection{Stochastic Discrete Local Volatility (SDLV)}
 
-The SLDV process will be defined on a \emph{fixed} expiry and cash strike grid. It will not use a floating grid in its option market dynamics.\footnote{This is not to be confused to
-how the model parameters are estimated using historic market data. We explain estimation section~\ref{sec:estimation}.} We will use ``$t$'' to refer to model time. We assume initial
-spot $X_0=1$.
+Our \emph{Stochastic Discrete Local Volatility (SDLV)} risk-neutral model will be defined on a \emph{fixed} expiry and cash strike grid. It will not use a floating grid in its option market dynamics.\footnote{This is not to be confused to
+how the model parameters are estimated using historic market data. We explain estimation section~\ref{sec:estimation}.} We will use ``$t$'' to refer to
+model time. Denote initial spot by~$X_0>0$.
 
-For now let $0=T_0<T_1<\dots<T_M$ be the fixed model expiry dates, and assume that $K_0<K_1<\cdots<1<\cdots<K_{N+1}$ are the fixed model cash strikes, where $K^0$ and $K^{N+1}$
-are boundary strike which are far away from the inner strikes, c.f.~\cite{SANOS2026}.\footnote{In our experiments the inner strikes are given as range of strikes
+For now let $0=T_0<T_1<\dots<T_M$ be the fixed model expiry dates, and assume that $K_0<K_1<\cdots<X_0<\cdots<K_{N+1}$ are the fixed model cash strikes, where
+$K^0$ and $K^{N+1}$
+are boundary strikes which are far away from the inner strikes, c.f.~\cite{SANOS2026}.\footnote{In our experiments the inner strikes are given as range of strikes
 in from $K^1=\exp(-2.5 \sigma_{atm}(T_M) \sqrt{T_M})$ to $K^N=\exp(+1.5 \sigma_{atm}(T_M) \sqrt{T_M})$ with boundaries set to $K^0=K^1/2$ and $K^{N+1}=3 K^N / 2$; see
 section~\ref{sec:numerics} for specifics.
 }
@@ -192,8 +190,7 @@ Assume that $W$ is a $d$-dimensional Brownian motion. We designate $W^1$ as the
       $\one^{\!\top}E_t^{k;1}=0$, so that $q_t^k$ retains unit mass. The
       remaining Brownian factors do not directly move the front density. They
       drive the stochastic DLV surface, while $\xi_t^{j,\cdot,1}$ determines
-      its leverage with spot. We do not specify $\eta_t^j$ for $j>k$; the
-      future density volatilities will be obtained recursively.
+      Future density volatilities $\eta_t^j$ for $j>k$ will be obtained recursively.
 
       For future expiries $T_j$ with $j>k$, assume the discrete local volatity squared is given as
       \[
@@ -780,6 +777,9 @@ exactly.  In particular, the confidence intervals in the last two rows do not
 include zero; the compatible drift remains measurably different from the raw
 unconditional estimate.
 
+Appendix~\ref{app:drift} visualizes the effect of the drift change
+with four matched Model~D paths.
+
 \section{Implementation}\label{sec:numerics}
 
 We implement a daily SANOS grid. The model state has 25 daily expiries and 200
@@ -949,23 +949,6 @@ specification, and the out-of-fold action statistics range from 89.205 to
 646.645.  Thus the same diagnostics that remain small under~$\Q$ recover both
 unconditional and state-predictable drift after the fitted change to~$\PP$.
 
-Write $Z:=XY$ for the tradable underlying, where $X$ is the discrete SANOS
-factor and $Y$ is the independent 5\% Black factor.
-Appendix~\ref{app:dlv-factor-figures} illustrates the fitted measure change
-with four matched Model~D paths.  Solid and dashed lines of the same colour use
-the same Gaussian draws under~$\Q$ and~$\PP$.  Besides spot, the illustration
-reports ATM one- and five-day implied volatility and the central log-strike skew
-\begin{equation}\label{eq:numerics-atm-skew}
-  \operatorname{Skew}_{\tau}
-  =\frac{
-    \sigma_{\mathrm{imp}}(K=Z_t e^h,\tau)
-    -\sigma_{\mathrm{imp}}(K=Z_t e^{-h},\tau)
-  }{2h},
-  \qquad h=0.01.
-\end{equation}
-The paths illustrate the fitted measure change; four paths are not a physical
-model validation.
-
 \subsection{Full-grid risk-neutral diagnostics}
 \label{sec:numerics-all-node-summary}
 
@@ -1031,7 +1014,28 @@ drift identity; see Section~\ref{sec:sampling}.
 
 \section{Conclusion}
 
-[TODO]
+We have given an explicit continuous-time construction of a risk-neutral measure for the SANOS
+discrete local volatility representation of European option markets, extending the static
+SANOS surface of~\cite{SANOS2026} to a dynamically arbitrage-free model. The resulting SDLV
+process admits a closed-form risk-neutral drift for every discrete local volatility coordinate
+and an exact front-density/spot diffusion, in place of the numerical near-martingale measure
+used in~\cite{DYSANOS2026}.
+
+Estimated on 891 trading days of S\&P~500 index option data, the model's static fit covers more
+than 95\% of quoted bid/ask intervals, and the restricted-universe $\Q$ diagnostics of
+Section~\ref{sec:numerics} confirm the theoretical martingale property up to time-discretisation
+error. On the full option grid, finite-step simulation retains statistically detectable but
+economically negligible tail defects, consistent with the discretisation bias discussed in
+Section~\ref{sec:sampling} rather than a failure of the continuous-time drift identity. We
+further estimate the physical dynamics and the implied market price of risk, recovering a
+stable low-rank factor structure for the DLV vol-of-vol.
+
+Natural next steps include a finer or higher-order time-stepping scheme to reduce the residual
+tail bias documented in Section~\ref{sec:numerics-all-node-summary} (c.f.\ the discrete-branch
+correction of Remark~\ref{rem:discrete-branch-sampling}), a formal existence and uniqueness
+argument for the risk-neutral SDE system of Section~\ref{sec:future-densities}, and extending
+the estimation beyond short-dated S\&P~500 index options to other asset classes and longer
+tenors.
 
 \section{Thanks}
 

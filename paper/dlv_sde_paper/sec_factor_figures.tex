@@ -1,10 +1,25 @@
 % !TEX root = main2.tex
 \section{Model and DLV factor visualizations}
-\label{app:dlv-factor-figures}
+
+\subsection{Consistent Drift}
+\label{app:drift}
 
 Figure~\ref{fig:numerics-best-paths} illustrates the fitted measure change
 using four matched Model~D paths.  Solid and dashed paths of the same colour
 use identical Gaussian draws under $\Q$ and $\PP$.
+Solid and dashed lines of the same colour use
+the same Gaussian draws under~$\Q$ and~$\PP$.  Besides spot, the illustration
+reports ATM one- and five-day implied volatility and the central log-strike skew
+\begin{equation}\label{eq:numerics-atm-skew}
+  \operatorname{Skew}_{\tau}
+  =\frac{
+    \sigma_{\mathrm{imp}}(K=Z_t e^h,\tau)
+    -\sigma_{\mathrm{imp}}(K=Z_t e^{-h},\tau)
+  }{2h},
+  \qquad h=0.01.
+\end{equation}
+The paths illustrate the fitted measure change; four paths are not a physical
+model validation.
 
 \begin{figure}[H]
   \centering
@@ -15,10 +30,14 @@ use identical Gaussian draws under $\Q$ and $\PP$.
   \label{fig:numerics-best-paths}
 \end{figure}
 
+\subsection{PCA Summary}
+\label{app:dlv-factor-figures}
+
 The remaining figures visualize the factor systems estimated in
 Section~\ref{sec:estimation-vol-of-vol}.  Figure~\ref{fig:numerics-baseline-iv-3d}
 is the baseline risk-neutral implied-volatility surface used for all factor
 illustrations.
+
 
 \begin{figure}[H]
   \centering
