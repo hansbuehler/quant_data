@@ -916,6 +916,21 @@ This is a conditional test relative to the state and strategy class
 in~\eqref{eq:numerics-action-map}, rather than a proof over all measurable
 strategies.
 
+For broad strike universes, raw $z$-scores can be dominated by tail calls whose
+prices and Monte Carlo standard errors are both microscopic.  To distinguish
+statistical from economic size, write $\widehat m_i$ and
+$\widehat{\operatorname{SE}}_i$ for the pair-based mean and standard error and
+define the materiality score
+\begin{equation}\label{eq:numerics-materiality-score}
+  s_i^{(\varepsilon)}
+  =\frac{\widehat m_i}
+  {\sqrt{\widehat{\operatorname{SE}}_i^2+\varepsilon^2}},
+  \qquad \varepsilon=10^{-8}.
+\end{equation}
+This is not a $z$-statistic: $\varepsilon$ places an absolute floor, in spot
+units, beneath economically negligible sampling errors.  We use this additional
+diagnostic only for the broad-grid extensions below.
+
 \subsection{Restricted Universe}
 
 Table~\ref{tab:numerics-restricted-q} shows the $\Q$ results for the restricted
@@ -990,19 +1005,8 @@ unconditional and state-predictable drift after the fitted change to~$\PP$.
 The preceding experiment deliberately trades few options.  We next include
 spot and all 200 interior fixed-strike calls at each of 5, 10, 15, and 20
 business days.  There are 801 instruments at the initial date and 10,020 live
-day--instrument coordinates.  The raw statistics retain far-tail calls whose
-prices and Monte Carlo standard errors can both be very small.  To separate
-statistical from economic size, write $\widehat m_i$ and
-$\widehat{\operatorname{SE}}_i$ for the pair-based mean and standard error and
-define the materiality score
-\begin{equation}\label{eq:numerics-materiality-score}
-  s_i^{(\varepsilon)}
-  =\frac{\widehat m_i}
-  {\sqrt{\widehat{\operatorname{SE}}_i^2+\varepsilon^2}},
-  \qquad \varepsilon=10^{-8}.
-\end{equation}
-This is not a $z$-statistic: $\varepsilon$ places an absolute floor, in spot
-units, beneath economically negligible sampling errors.
+day--instrument coordinates.  We therefore supplement the raw statistics with
+the materiality score in~\eqref{eq:numerics-materiality-score}.
 
 \begin{table}[H]
 \centering
