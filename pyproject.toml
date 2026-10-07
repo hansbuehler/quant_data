@@ -44,6 +44,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+gpu = [
+  "jax[cuda13]",
+]
 dev = [
   "build>=1.2",
   "pre-commit>=3.7",
