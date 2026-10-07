@@ -1,41 +1,64 @@
-\begin{thebibliography}{1}
+\newcommand{\etalchar}[1]{$^{#1}$}
+\begin{thebibliography}{WWP{\etalchar{+}}21}
 
-\bibitem{SANOS2026}
-Hans Buehler, Blanka Horvath, Anastais Kratsios, Yannick Limmer, and Raeid
-  Saqur.
+\bibitem[BGM97]{BGM}
+Alan Brace, Dariusz Gatarek, and Marek Musiela.
+\newblock The market model of interest rate dynamics.
+\newblock {\em Mathematical Finance}, 7(2):127--155, 1997.
+
+\bibitem[BHK{\etalchar{+}}26a]{SANOS2026}
+Hans Buehler, Blanka Horvath, Anastais Kratsios, Yannick Limmer, and Raeid Saqur.
 \newblock Sanos - smooth arbitrage-free non-parametric option surfaces.
 \newblock \url{https://arxiv.org/abs/2601.11209}, Februar 2026.
 
-\bibitem{DYSANOS2026}
+\bibitem[BHK26b]{DYSANOS2026}
 Hans Buehler, Blanka Horvath, and Anastasis Kratsios.
-\newblock Dysanos generative dynamic smooth arbitrage-free non-parametric
-  option surfaces, 2026.
+\newblock Dysanos generative dynamic smooth arbitrage-free non-parametric option surfaces, 2026.
 
-\bibitem{removedrift}
+\bibitem[BMPW22]{removedrift}
 Hans Buehler, Phillip Murray, Mikko~S. Pakkanen, and Ben Wood.
 \newblock Deep hedging: learning to remove the drift.
 \newblock {\em Risk}, February 2022.
 
-\bibitem{BuehlerRyskin2016}
+\bibitem[BR16]{BuehlerRyskin2016}
 Hans Buehler and Evgenii Ryskin.
 \newblock Discrete local volatility for large time steps (short version).
 \newblock Technical report, SSRN, 2016.
-\newblock Short version. An extended version also exists: SSRN 2642630 (2015),
-  doi:10.2139/ssrn.2642630.
+\newblock Short version. An extended version also exists: SSRN 2642630 (2015), doi:10.2139/ssrn.2642630.
 
-\bibitem{CarmonaNadtochiy2008}
+\bibitem[CN09]{CarmonaNadtochiy2008}
 Ren{\'e} Carmona and Sergey Nadtochiy.
 \newblock Local volatility dynamic models.
 \newblock {\em Finance and Stochastics}, 13:1--48, 2009.
 
-\bibitem{TANGET}
+\bibitem[CN12]{TANGET}
 Ren{\'e} Carmona and Sergey Nadtochiy.
 \newblock Tangent l{\'e}vy market models.
 \newblock {\em Finance and Stochastics}, 16(1):63--104, 2012.
 
-\bibitem{Wissel2007}
+\bibitem[SW08a]{SchweizerWissel2008}
+Martin Schweizer and Johannes Wissel.
+\newblock Arbitrage-free market models for option prices: The multi-strike case.
+\newblock {\em Finance and Stochastics}, 12:469--505, 2008.
+
+\bibitem[SW08b]{Schweizer2007}
+Martin Schweizer and Johannes Wissel.
+\newblock Term structures of implied volatilities: Absence of arbitrage and existence results.
+\newblock {\em Mathematical Finance}, 18:77--114, 2008.
+
+\bibitem[WBWB19]{WieseEtAl2019OptionMarkets}
+Magnus Wiese, Lianjun Bai, Ben Wood, and Hans Buehler.
+\newblock Deep hedging: Learning to simulate equity option markets, 2019.
+\newblock NeurIPS 2019 Workshop on Robust AI in Financial Services.
+
+\bibitem[Wis07]{Wissel2007}
 Johannes Wissel.
 \newblock Arbitrage-free market models for option prices.
 \newblock NCCR FINRISK Working Paper 428, NCCR FINRISK, ETH Z\"urich, 2007.
+
+\bibitem[WWP{\etalchar{+}}21]{WieseEtAl2021MultiAsset}
+Magnus Wiese, Ben Wood, Alexandre Pachoud, Ralf Korn, Hans Buehler, Phillip Murray, and Lianjun Bai.
+\newblock Multi-asset spot and option market simulation, 2021.
+\newblock arXiv:2112.06823.
 
 \end{thebibliography}

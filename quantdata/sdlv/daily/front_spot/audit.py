@@ -52,7 +52,7 @@ class TestSummary:
 
 @dataclass(frozen=True)
 class MartingaleAuditReport:
-    """Q-martingale audit covering daily densities, terminal calls and spot."""
+    """Q-martingale audit covering densities, all model calls and spot."""
 
     initial_date: str
     path_count: int
@@ -62,6 +62,7 @@ class MartingaleAuditReport:
     time_power: float
     daily_density: TestSummary
     daily_latent_options: TestSummary
+    daily_smoothed_options: TestSummary
     expiry_density: TestSummary
     expiry_options: TestSummary
     daily_spot: TestSummary
@@ -214,11 +215,13 @@ def run_risk_neutral_martingale_audit(
     seed: int = 20261004,
     dt: float = 1.0 / DAYS_PER_YEAR,
 ) -> MartingaleAuditReport:
-    """Audit all daily latent densities and all calls through expiry under Q.
+    """Audit all daily model densities and calls through expiry under Q.
 
     Daily density martingality tests every linear claim on the latent discrete
-    process.  The option-to-expiry test separately includes the independent 5%
-    Black background and all 200 interior model strikes.
+    process.  Daily smoothed-call tests value every live interior-strike call at
+    every remaining model expiry, including the independent 5% Black background.
+    The option-to-expiry test separately evaluates the same all-strike payoff
+    family at settlement.
     """
     if not jax.config.x64_enabled:
         raise RuntimeError("Martingale auditing requires JAX 64-bit mode")
@@ -292,6 +295,8 @@ def run_risk_neutral_martingale_audit(
         (expiry_count, expiry_count, strike_count), dtype=np.float64
     )
     daily_latent_option_square = np.zeros_like(daily_latent_option_sum)
+    daily_smoothed_option_sum = np.zeros_like(daily_latent_option_sum)
+    daily_smoothed_option_square = np.zeros_like(daily_latent_option_sum)
     daily_front_option_predictable_variance = np.zeros(
         (expiry_count, strike_count),
         dtype=np.float64,
@@ -314,6 +319,7 @@ def run_risk_neutral_martingale_audit(
         terminal_front_step,
         static_argnames=("dt",),
     )
+    smoothed_call_pricer = jax.jit(black_mixture_call_prices)
 
     completed = 0
     while completed < path_count:
@@ -334,6 +340,16 @@ def run_risk_neutral_martingale_audit(
         current_spot = np.ones(batch_size, dtype=np.float64)
 
         for day_index in range(expiry_count - 1):
+            remaining_count = expiry_count - day_index
+            current_smoothed_calls = np.asarray(
+                smoothed_call_pricer(
+                    support,
+                    jnp.asarray(current_tower, dtype=jnp.float64),
+                    strikes,
+                    q_state.background_level,
+                    jnp.arange(1, remaining_count + 1, dtype=jnp.float64),
+                )
+            )
             future_count = q_state.future_dlvsq.shape[-2]
             result = daily_step(
                 support,
@@ -356,7 +372,6 @@ def run_risk_neutral_martingale_audit(
                 (sampled_density[:, None, :], future_tower),
                 axis=1,
             )
-            remaining_count = expiry_count - day_index
             daily_increment = (
                 after_tower[:valid_count] - current_tower[:valid_count]
             )
@@ -394,6 +409,29 @@ def run_risk_neutral_martingale_audit(
                 daily_latent_option_square,
                 after_latent_calls - current_latent_calls,
                 (day_index, slice(0, remaining_count), slice(None)),
+            )
+            after_smoothed_calls = np.empty_like(current_smoothed_calls)
+            after_smoothed_calls[:, 0] = np.maximum(
+                np.asarray(result.spot)[:, None] - initial.support[None, 1:-1],
+                0.0,
+            )
+            after_smoothed_calls[:, 1:] = np.asarray(
+                smoothed_call_pricer(
+                    support,
+                    result.density_tower,
+                    strikes,
+                    result.state.background_level,
+                    jnp.arange(1, remaining_count, dtype=jnp.float64),
+                )
+            )
+            _accumulate(
+                daily_smoothed_option_sum,
+                daily_smoothed_option_square,
+                (
+                    after_smoothed_calls[:valid_count]
+                    - current_smoothed_calls[:valid_count]
+                ),
+                (day_index, slice(day_index, expiry_count), slice(None)),
             )
             terminal_density_error = (
                 sampled_density[:valid_count] - initial.density_tower[day_index]
@@ -465,6 +503,26 @@ def run_risk_neutral_martingale_audit(
                 node_count,
                 dtype=jnp.float64,
             )
+        )
+        terminal_current_smoothed_calls = np.asarray(
+            smoothed_call_pricer(
+                support,
+                jnp.asarray(current_tower, dtype=jnp.float64),
+                strikes,
+                q_state.background_level,
+                jnp.asarray([1.0], dtype=jnp.float64),
+            )
+        )
+        terminal_smoothed_calls = np.maximum(
+            np.asarray(terminal.spot)[:, None] - initial.support[None, 1:-1],
+            0.0,
+        )
+        _accumulate(
+            daily_smoothed_option_sum,
+            daily_smoothed_option_square,
+            terminal_smoothed_calls[:valid_count, None, :]
+            - terminal_current_smoothed_calls[:valid_count],
+            (expiry_count - 1, slice(expiry_count - 1, expiry_count), slice(None)),
         )
         daily_increment = sampled_density[:valid_count] - current_tower[:valid_count, 0]
         current_front = current_tower[:valid_count, 0]
@@ -538,6 +596,12 @@ def run_risk_neutral_martingale_audit(
     daily_latent_option_identifiable = np.zeros_like(
         daily_latent_option_mask,
     )
+    daily_smoothed_option_mask = np.zeros_like(
+        daily_latent_option_mask,
+    )
+    daily_smoothed_option_identifiable = np.zeros_like(
+        daily_latent_option_mask,
+    )
     initial_latent_exercise_probability = np.cumsum(
         initial.density_tower[..., ::-1],
         axis=-1,
@@ -553,6 +617,10 @@ def run_risk_neutral_martingale_audit(
         )
         daily_latent_option_identifiable[day_index, :remaining_count] = (
             initial_latent_exercise_probability[day_index:] * path_count >= 20.0
+        )
+        daily_smoothed_option_mask[day_index, day_index:] = True
+        daily_smoothed_option_identifiable[day_index, day_index:] = (
+            initial_call_exercise_probabilities[day_index:] * path_count >= 20.0
         )
     daily_density_standard_error = np.full_like(
         daily_density_sum,
@@ -610,6 +678,14 @@ def run_risk_neutral_martingale_audit(
             scale_floor=1.0e-7,
             standard_error_override=daily_latent_option_standard_error,
             identifiability_mask=daily_latent_option_identifiable,
+        ),
+        daily_smoothed_options=_summarize(
+            daily_smoothed_option_sum,
+            daily_smoothed_option_square,
+            path_count,
+            daily_smoothed_option_mask,
+            scale_floor=1.0e-8,
+            identifiability_mask=daily_smoothed_option_identifiable,
         ),
         expiry_density=_summarize(
             expiry_density_sum,

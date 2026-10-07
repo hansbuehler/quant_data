@@ -56,8 +56,8 @@
 
 
   We illustrate the strength of our approach on S\&P Index Option data from January 2022 to August 2025.
-  We show that the model's initial state fits with in bid/ask for 95\% of relevant market option prices.\footnote{
-        The model presented was trained for daily expiries for 25 business days and strikes between $[\exp(-3 \sigma_{atm} \sqrt{t}), \exp(+2 \sigma_{atm} \sqrt{t})]$.}
+  We show that the model's initial state fits within bid/ask for more than 95\% of relevant market option prices.\footnote{
+        The model presented was trained for daily expiries for 25 business days and strikes between $[\exp(-2.5 \sigma_{atm} \sqrt{t}), \exp(+1.5 \sigma_{atm} \sqrt{t})]$.}
     We then train the model dynamics under~$\PP$ and~$\Q$ and show that the model is indeed free of arbitrage
     while fitting the dynamics of the market well.
     }
@@ -159,36 +159,83 @@ Assume fixed expiry dates are $0=T_0<T_1<\dots<T_M$.
   Assume $K$ are the strikes and that $q_t^j$ is the density for $T_j$ at time $t\le T_j$.
   I think the core arguments are as follows:
 
-  \subsection*{Future Densities}
+\section{Stochastic Smooth Discrete Local volatility}
 
-  \emph{Nothing new in this section}\\
+In this section we introduce the core model architecture for our \emph{Stochastic Smooth Discrete Local Volatility (DLV) model}, SDLV.
+We follow the core SANOS~\cite{SANOS2026} idea of writing our equity process $S$ as product
+\begin{equation}
+ \label{eq:S} 
+  S_t = X_t Y_t 
+\end{equation}
+of a stochastic discrete local volatility (SDLV) process $X$ which is used to fit to current market condition and 
+whose state parameters will have consistent $\PP$ and $\Q$ dynamics, and an independent\footnote{Under both $\PP$ and $\Q$.} and rather trivial smoothing processs $Y$ whose dynamics under $\PP$ and $\Q$ are the same.
 
-      Let $T_k$ be the front expiry, so $T_{k-1}\leq t<T_k$, and suppose that
-      $q_t^k$ is known. For $j=k+1,\ldots,M$, let
-      $\Sigma_t^j\in\mathbb R^N$ be the vector of discrete local variances into
-      $T_j$, extend it by zero at the two boundary nodes, and set
+The process $Y$ will just be a Black~\&~Scholes process with fixed volatility~5\%. Given observed bid/ask market data it was shown in~\cite{SANOS2026} how to fit
+a discrete local volatility surface in the presence of such process. 
+
+In the remainder of this section we focus on the SLDV process itself.
+
+\subsection{SDLV}
+
+The SLDV process will be defined on a \emph{fixed} expiry and cash strike grid. It will not use a floating grid in its option market dynamics.\footnote{This is not to be confused to 
+how the model parameters are estimated using historic market data. We explain estimation section~\ref{sec:estimation}.} We will use ``$t$'' to refer to model time. We assume initial 
+spot $X_0=1$.
+
+For now let $0=T_0<T_1<\dots<T_M$ be the fixed model expiry dates, and assume that $K_0<K_1<\cdots<1<\cdots<K_{N+1}$ are the fixed model cash strikes, where $K^0$ and $K^{N+1}$
+are boundary strike which are far away from the inner strikes, c.f.~\cite{SANOS2026}.\footnote{In our experiments the inner strikes are given as range of strikes
+in from $K^1=\exp(-2.5 \sigma_{atm}(T_M) \sqrt{T_M})$ to $K^N=\exp(+1.5 \sigma_{atm}(T_M) \sqrt{T_M})$ with boundaries set to $K^0=K^1/2$ and $K^{N+1}=3 K^N / 2$; see
+section~\ref{sec:numerics} for specifics.
+}
+
+Assume that $t$ is the current model time and let $T_k$ be the front expiry such that $T_{k-1}\leq t<T_k$.
+Our model is given at any time~$t$
+by the current spot $X_t$ and future densities $q_t^j$, where $q_t^{j,i}$ represents the risk-neutral density of the $i$-th cash strike at future expiry $T_j$.
+
+Such discrete densities have been shown in~\cite{BuehlerRyskin2016} to admit an equivalent representation via (squared) \emph{discrete local volatilities} $\Sigma_t^{j,1},\ldots,\Sigma_t^{j,N}$ in the following form:
+there is a tridiagonal matrix~$\Omega_j$\footnote{
+  The matrix $\Omega_j\in\mathbb R^{(N+2)\times(N+2)}$ is given as follows: 
+  let $\gamma_t^{\pm i} := \pm (K^{i})^2 (T_j-T_{j-1}) / (K^{i+1}-K^{i-1}) / (K^{i\pm 1} - K^i) $ for $i=1,\ldots,N$.
+  Then $\Omega_j$ is the tridiagonal matrix with entries
+  \[
+    (\Omega_j)_{i,i-1} = \gamma_t^{-i},\quad
+    (\Omega_j)_{i,i} = -(\gamma_t^{-i}+\gamma_t^{+i}),\quad
+    (\Omega_j)_{i,i+1} = \gamma_t^{+i},\quad i=1,\ldots,N.
+  \]
+  c.f.~\cite{SANOS2026}.
+ } for each $j>k$ such that 
+    \begin{equation}
+      q_t^{j-1}=M_t^jq_t^j \ ,
+      \qquad
+      M_t^j:=I-\Omega_jS_t^j \ ,
+      \qquad
+      S_t^j:=\operatorname{diag}(0,\Sigma_t^{j,1},\ldots,
+        \Sigma_t^{j,N},0) 
+      \label{eq:hb_dlv}
+    \end{equation}
+where $M^j_t$ is an invertible tridiagonal M-matrix for every non-negative $S_t^j$. The key point is that $q_t^j$ for $j>k$ are uniquely determined martingale densities
+for any given initial density $q_t^k$ and the surface of non-negative (squared) discrete local vols.
+
+
+  \subsection{Risk-Neutral Dynamics}
+
+Under a risk-neutral measure~$\Q$ densities are martingales. We will now turn this property into conditions on dynamics of the (squared) discete local volatilities, and, 
+jointly the front density and spot. 
+      Our approach follows in spirit that of~\cite{Wissel2007} in the sense that we rely on the martingale property of a discrete set of tradable derivative assets.
+      However, we reframe it in a much more accessible coordinate system.
+
+Assume that $W$ is a $d$-dimensional Brownian motion. We designate $W^1$ as the
+      spot factor: spot is always driven by $dW_t^1$.
+
+
+      \subsubsection{Future Densities}
+  \label{sec:future-densities}
+
+       Each density coordinate
+      is a martingale. We therefore specify the front-density diffusion as
       \[
-        S_t^j:=\operatorname{diag}(0,\Sigma_t^{j,1},\ldots,
-        \Sigma_t^{j,N},0).
-      \]
-      The future densities satisfy
-      \begin{equation}
-        q_t^{j-1}=M_t^jq_t^j,
+        dq_t^k=E_t^{k;1}\,dW_t^1 \ ,
         \qquad
-        M_t^j:=I-\Omega_jS_t^j,
-        \label{eq:hb_dlv}
-      \end{equation}
-      where $\Omega_j\in\mathbb R^{(N+2)\times(N+2)}$ is the fixed
-      strike-grid operator for the interval $T_j-T_{j-1}$. The matrix $M_t^j$ is an invertible
-      tridiagonal M-matrix for every non-negative $S_t^j$.
-
-      Let $W$ be a $d$-dimensional Brownian motion, and designate $W^1$ as the
-      spot factor: spot is always driven by $dW_t^1$. Each density coordinate
-      is a martingale. We specify the front-density diffusion as
-      \[
-        dq_t^k=E_t^{k;1}\,dW_t^1,
-        \qquad
-        E_t^{k;1}:=\operatorname{diag}(q_t^k)\eta_t^{k;1},
+        E_t^{k;1}:=\operatorname{diag}(q_t^k)\eta_t^{k;1} \ ,
         \qquad E_t^{k;f}:=0\quad(f=2,\ldots,d),
       \]
       where $E_t^{k;1}\in\mathbb R^{N+2}$ must satisfy
@@ -257,7 +304,8 @@ Assume fixed expiry dates are $0=T_0<T_1<\dots<T_M$.
       volatilities determine all future density volatilities and the
       risk-neutral DLV drifts by forward induction over the expiries.
 
-  \subsection*{Front density}
+  \subsubsection{Front Density and Spot}
+  \label{sec:front-density}
 
   The remaining task is to specify both spot dynamics consistent with the front density and the respective front density volatilities.
 
@@ -388,10 +436,23 @@ Assume fixed expiry dates are $0=T_0<T_1<\dots<T_M$.
   terminal strike, it is Brownian motion conditioned to terminate in an
   interval, or equivalently a mixture of Brownian bridges.
 
-\subsection*{Sampling}
+\subsubsection{Existence [TODO]}
 
-  A stable simulation should not advance spot, the front density and the
-  future densities as separate Euler equations. On a time grid
+We have just described a set of risk-neutral model dynamics for a discrete process $X_t$ whose future densities themselves are martingales driven
+by stochastic discrete local volatilities. Our construction is concise and lends itself to efficient numerical implementation and model parameter
+estimation. 
+
+[TODO] Existience
+
+
+\subsection{Sampling}
+\label{sec:sampling}
+
+  In this section we discuss the sampling procedure for the discrete local volatility model. The final model is a product of this 
+  process and a simple Black \& Scholes process with, say, volatility of 5\%. It serves as a SANOS~\cite{SANOS2026} smoother and ensures
+  that the overall option price surface is smooth in strike.
+
+   On a time grid
   $t_n<t_{n+1}$ with $\delta_n=t_{n+1}-t_n$, one may proceed as follows.
 
   First draw one Brownian vector $\Delta W_n\in\mathbb R^d$, using its first
@@ -443,8 +504,10 @@ Assume fixed expiry dates are $0=T_0<T_1<\dots<T_M$.
   \eqref{eq:dlv-log-euler}, or any ordinary higher-order SDE scheme, retains a
   time-discretisation bias which should vanish under step refinement.
 
-\subsubsection*{Discrete Sampling}
+  Our experiments in~\ref{sec:numerics} use this sampling scheme with antithetically paired Brownian increments.
 
+\begin{remark}[Alternative discrete-branch construction]
+  \label{rem:discrete-branch-sampling}
   If exact martingality under a chosen finite-step simulation law is required,
   it can instead be imposed directly. Choose symmetric discrete shock branches
   $\Delta W_{n,b}$ with probabilities $w_b$ and construct the front-density
@@ -472,7 +535,12 @@ Assume fixed expiry dates are $0=T_0<T_1<\dots<T_M$.
   \eqref{eq:finite-step-drift-correction} makes the densities exactly
   martingales under the discrete branch law; symmetric or antithetic branches
   reduce variance but do not replace this condition.
+
+\end{remark}
   }
+
+  \input{sec_numerics}
+
 
   \pagebreak
 \input{sec_intro}
@@ -480,8 +548,8 @@ Assume fixed expiry dates are $0=T_0<T_1<\dots<T_M$.
 \input{sec_drift}
 \input{sec_front}
 \input{sec_existence}
-\input{sec_numerics}
 \input{sec_open}
+
 
 \section{Implementation Commets}
 
@@ -578,6 +646,12 @@ the infinitesimal drift, not the nonlinear finite-step bias.  Exact
 martingality under a specified discrete shock law would require solving the
 branchwise nonlinear correction
 \eqref{eq:finite-step-drift-correction}.
+
+\clearpage
+\appendix
+\input{sec_factor_figures}
+\clearpage
+\input{sec_pipeline}
 
 \bibliographystyle{plain}
 \bibliography{refs}

@@ -402,15 +402,15 @@ def plot_factor_responses_3d(
     # original full-width layout, while staying within one page's height.
     # mplot3d tick labels are drawn outside each axes' bounding box, so
     # constrained_layout alone is not enough once panels get narrower; we
-    # also widen wspace/hspace explicitly to stop adjacent panels' tick
-    # labels from colliding with each other.
+    # also widen wspace explicitly to stop adjacent panels' tick labels from
+    # colliding horizontally, while keeping hspace tight.
     column_count = 4
     row_count = int(np.ceil(panel_count / column_count))
     figure = plt.figure(
-        figsize=(11.5, 4.6 * row_count),
+        figsize=(11.5, 3.3 * row_count),
         constrained_layout=True,
     )
-    figure.set_constrained_layout_pads(wspace=0.25, hspace=0.2)
+    figure.set_constrained_layout_pads(w_pad=0.12, wspace=0.25, hspace=0.0)
     axes = []
     plotted_surface = None
     for panel_index, response in enumerate(factor_responses):
@@ -441,10 +441,13 @@ def plot_factor_responses_3d(
         axis.set_zlabel("")
         # Fewer, better-padded ticks avoid the z=0 / corner-tick collisions
         # that occur when every axis crowds labels into the same corner.
+        # The log-moneyness (y) axis recedes at a shallow viewing angle, so
+        # it gets one fewer tick than the other two to stop its own labels
+        # from overlapping each other.
         axis.xaxis.set_major_locator(MaxNLocator(nbins=4))
-        axis.yaxis.set_major_locator(MaxNLocator(nbins=4))
+        axis.yaxis.set_major_locator(MaxNLocator(nbins=3))
         axis.zaxis.set_major_locator(MaxNLocator(nbins=4))
-        axis.tick_params(labelsize=15, pad=5)
+        axis.tick_params(labelsize=13, pad=5)
         axis.view_init(elev=25.0, azim=-128.0)
         axis.set_box_aspect((1.25, 1.0, 0.75))
         axes.append(axis)

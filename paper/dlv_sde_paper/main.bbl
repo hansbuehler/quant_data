@@ -37,6 +37,11 @@ Hans Buehler, Blanka Horvath, Anastais Kratsios, Yannick Limmer, and Raeid Saqur
 Hans Buehler, Blanka Horvath, and Anastasis Kratsios.
 \newblock Dysanos generative dynamic smooth arbitrage-free non-parametric option surfaces, 2026.
 
+\bibitem{removedrift}
+Hans Buehler, Phillip Murray, Mikko~S. Pakkanen, and Ben Wood.
+\newblock Deep hedging: learning to remove the drift.
+\newblock {\em Risk}, February 2022.
+
 \bibitem{BuehlerRyskin2016}
 Hans Buehler and Evgenii Ryskin.
 \newblock Discrete local volatility for large time steps (short version).
@@ -47,6 +52,11 @@ Hans Buehler and Evgenii Ryskin.
 Ren{\'e} Carmona and Sergey Nadtochiy.
 \newblock Local volatility dynamic models.
 \newblock {\em Finance and Stochastics}, 13:1--48, 2009.
+
+\bibitem{TANGET}
+Ren{\'e} Carmona and Sergey Nadtochiy.
+\newblock Tangent l{\'e}vy market models.
+\newblock {\em Finance and Stochastics}, 16(1):63--104, 2012.
 
 \bibitem{CohenReisingerWang2021}
 Samuel~N. Cohen, Christoph Reisinger, and Sheng Wang.
