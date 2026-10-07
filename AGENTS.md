@@ -4,6 +4,13 @@ Read and follow `STYLE_GUIDE.md` before making code changes in this repository. 
 
 ## Host Resource Guardrails
 
+- Every project-owned GPU process that can run longer than a few minutes must
+  emit lightweight, flushed progress information at regular intervals.  At a
+  minimum report elapsed time, completed and total work units, and an estimated
+  remaining time when meaningful; write it to the persistent job log without
+  retaining large intermediate arrays or adding material synchronization cost.
+  This must make it possible to distinguish active computation from a stalled
+  process without attaching a profiler or restarting the job.
 - Check RAM and filesystem headroom before launching material work and during
   every regular background-process inspection. Resource-triggered termination
   applies only to jobs owned by the current project; never terminate unrelated
