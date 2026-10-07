@@ -90,11 +90,11 @@ model prices fit within observed market bid/ask spreads even with the simplistic
 The model presented here is distinct from our own DYSANOS~\cite{DYSANOS2026}. There, we focused on learning
 realistic market dynamics for smooth statically arbitrage-free SANOS
 surfaces under~$\PP$.
-We did also construct an equivalent risk-neutral measure~$\Q$ numerically using the \emph{near-martingale measure} approach introduced in~\cite{removedrift}.
+We did also construct an equivalent risk-neutral measure~$\Q$ numerically using the \emph{martingale measure} approach introduced in~\cite{removedrift}.
 While this method is model-free and can in theory be applied to any option market model under~$\PP$, it is numerically heavy and in practise
 restricted to making only a fairly limited number of the overall tradable instruments
 dynamically arbitrage-free.\footnote{In~\cite{DYSANOS2026} we used 49 instruments per simulated date.} In the current work we cover all options with
-an explicit construction of the risk-neutral drift, which is far more efficient than the numerical near-martingale measure approach.
+an explicit construction of the risk-neutral drift, which is far more efficient than the numerical martingale measure approach.
 
 \subsubsection*{Related Work}
 
@@ -1070,7 +1070,7 @@ We have given an explicit continuous-time construction of a risk-neutral measure
 discrete local volatility representation of European option markets, extending the static
 SANOS surface of~\cite{SANOS2026} to a dynamically arbitrage-free model. The resulting SDLV
 process admits a closed-form risk-neutral drift for every discrete local volatility coordinate
-and an exact front-density/spot diffusion, in place of the numerical near-martingale measure
+and an exact front-density/spot diffusion, in place of the numerical martingale measure
 used in~\cite{DYSANOS2026}.
 
 Estimated on 891 trading days of S\&P~500 index option data, the model's static fit covers more

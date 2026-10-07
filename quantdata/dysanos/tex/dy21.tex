@@ -106,7 +106,7 @@ on 891 Option Metrics IvyDB S\&P Index surfaces from 2022-01-03 through to
 We also demonstrate how to use the methods of~\cite{removedrift} to construct
 numerically a risk-neutral density. As part of this we develop a new test for zero conditional means under a given measure.
 We show that for 100,000 simulated paths
-a trading universe of 48 options and spot is free of dynamic arbitrage numerically.
+a trading universe of 48 options and spot is numerically free of dynamic arbitrage.
 \end{abstract}
 
 \tableofcontents
@@ -146,8 +146,8 @@ option surface.
 
 However, the restriction of the above models to a discrete set of floating option strikes and time-to-expiries
 means that the simulators do not have access to the daily returns $dC_t(\tau,k)$
-of an actual tradable instruments with cash strikes $k$ and calendar expiries~$\tau$ (because the
-contract terms change from one simulated day to another).  It therefore does
+of actual tradable instruments with cash strikes $k$ and calendar expiries~$\tau$ (because the
+contract terms change from one simulated day to another).  They therefore do
 not directly provide statistically consistent time series of fixed-contract
 returns, which are required to validate simulated dynamics against observed
 market returns.
@@ -194,7 +194,7 @@ A natural data-driven alternative is to treat the implied volatility surface its
 as the simulation object, much as implied in~\cite{ContVol}.
 The fundamental difficulty is that there is no known parametrization  of
 the implied volatility surface which is strictly free of static
-arbitrage. There exists numerous attempts to rectify this with classic (e.g.~\cite{fengler2009}) and machine learned
+arbitrage. There exist numerous attempts to rectify this with classic (e.g.~\cite{fengler2009}) and machine learned
 methods (e.g.~\cite{vae_ning2023arbitrage}) but to our knowledge none of them can strictly guarantee absence of static arbitrage.
 
 If a simulated surface admits a butterfly spread or calendar spread arbitrage,
@@ -207,12 +207,12 @@ Most published works also simplify the problem by only considering few strikes a
 
 \noindent
 \textbf{Constrained Parameter Spaces and Code Books:}
-The core challenge of any representation of an option prices surface is that no-static-arbitrage conditions are essentially
+The core challenge of any representation of an option price surface is that no-static-arbitrage conditions are essentially
 linear conditions on call prices, which are difficult to enforce directly in a generative machine learning model. 
 This challenge is shared by most representations including most parametrizations of implied volatility.
 
 The idea of a ``code book'' as introduced in~\cite{TangentLevy} is to find a representation of the option price surface
-which is numerically tractable for simulation and for which required parameter constraints are straight forward to enforce.
+which is numerically tractable for simulation and for which required parameter constraints are straightforward to enforce.
 Indeed, the seminal~\cite{TangentLevy} achieves that goal. In addition, the authors are able to also
 construct a risk-neutral measure consistent with the code book representation.
 They achieve this, essentially, by writing the spot price as a product of independent increments. That construction unfortunately also restricts
@@ -292,7 +292,7 @@ Every decoded SANOS surface is free of static arbitrage by construction.
 We show that we can ``remove the drift'' in the sense of~\cite{removedrift} for a subset of the (infinite) tradable instruments
 by finding a martingale measure~$\Q$ equivalent to the learned~$\P$.
 We test the resulting measure against two no-arbitrage criteria: zero
-unconditional mean and zero conditional expected return. To assess the later, we develop a novel ``no-arb'' test.
+unconditional mean and zero conditional expected return. To assess the latter, we develop a novel ``no-arb'' test.
 This is of independent interest.
 
 
@@ -307,7 +307,7 @@ We consider European call options on a single underlying
 for historic days $t\in \{t_1,\ldots,t_m\}\subset \N$
 which we will count in business days.
 We assume forwards, discount factors, and survival probabilities
-are deterministic. As described in remark~\ref{rem:driftless}.
+are deterministic. As described in remark~\ref{rem:driftless},
  we can therefore convert them at each point~$t$ to driftless equivalents
 where spot, forwards, discount factors and survival probabilities are all one, for every~$t$.
 
@@ -335,7 +335,7 @@ for a spot $S$, strike~$K$ and total volatility~$W$ as
 \begin{equation}\label{eq:bs}
     \BSCall(S,K,W) := S\,\mathcal{N}( d_+ ) - K\,\mathcal{N}(d_-)
     \ \ \ \mbox{for} \ \ \
-    d_\pm := \frac{ 1 }{ W } \log K/S \pm \frac12 W^2 
+    d_\pm := \frac{ 1 }{ W } \log \frac S K \pm \frac12 W
 \end{equation}
 where~$\mathcal{N}$ denotes the normal distribution function.
 
@@ -429,14 +429,14 @@ All of the below are meant as practical heuristics.
             Sell the call at $T_1$ and buy the call at $T_2$. This provides
             a positive cash flow $\pi_0>0$.
         \item 
-            In $T_1$ if the call expiries out of the money, then we have made money: both
+            In $T_1$ if the call expires out of the money, then we have made money: both
             $\pi_0$ and a potential positive payoff at $T_2$ in our favour.
 
             If the call expires in the money, then we deliver one share
             and receive $K$. We are now short that share.
-            In $T_2$, if the call expiries in the money, then we receive one share
+            In $T_2$, if the call expires in the money, then we receive one share
             to cover our short in return for $K$. Our total cashflow is $\pi_0$.
-            If the call expiries out of the money, then $S_T<K$. We can therefore
+            If the call expires out of the money, then $S_T<K$. We can therefore
             buy back the share and cover our short for less than $K$.
             Our profits are $\pi_0+(K-S_T)^+>0$.
     \end{enumerate}
@@ -456,7 +456,7 @@ All of the below are meant as practical heuristics.
     i.e.~existence of some~$K>0$ such that $C(T,K)=1$.
     In that case we sell the call and buy the equity for~$1$.
     If the call expires in the money, we deliver the share
-    and receive $K>0$. If the call expiries out of the money, then sell
+    and receive $K>0$. If the call expires out of the money, then sell
     the share for $S_T\geq 0$.
 
     \item $\lim_{K\uparrow \infty} C(T,K) = 0$ which means for all $c>0$
@@ -545,12 +545,7 @@ and total volatility $W(T) := \alpha^j(T) W^j + (1-\alpha^j(T)) W^{j-1}$.
 
 For $T>\hat T^M$ we
 set $\alpha^{M+1}(T)=0$ and $W(T):=W^M\sqrt{T / \hat T^M}$; however extrapolation beyond
-the last model expiry is generally not recommended.
-
-For $T<\hat T^1$ we
-set $\alpha^1(T)=0$ and $W(T):=W^1\sqrt{T / \hat T^1}$; however extrapolation before
-the first model expiry is generally not recommended.
-
+the last model expiry or before the front expiry is generally not recommended.
 \end{definition}
 
 
@@ -560,7 +555,7 @@ For $W(T)>0$ it is $C^\infty$ in $K$. The function is as smooth as~$\alpha$ in~$
 \end{theorem}
 
 \begin{remark}
-    Contrary to~\cite{SANOS2026} we interpolated the Black \& Scholes backbone in total volatility linearly, not variance.
+    Contrary to~\cite{SANOS2026} we interpolate the Black \& Scholes backbone in total volatility linearly, not variance.
     This is a mechanical choice to avoid taking square roots of variables during training
     which can lead to exploding gradients. If forward volatilities are bounded well away from
     zero, linear interpolation in variance is suitable, too.
@@ -588,12 +583,12 @@ The market-fitting problem can therefore be formulated as the linear programme
   }{ (A^\ell - B^\ell)/2}
 \end{equation}
 subject to the linear constraints~\eqref{eq:qocnd} encoding non-negativity, normalisation, integration to~$1$, and the inter-expiry convex-order constraints that enforce absence of calendar-spread
-arbitrage. We note that the model strikes and time-to-expires do not need to correspond
+arbitrage. We note that the model strikes and time-to-expiries do not need to correspond
 to market strikes or expiries.\\
 
-As discusssed in~\cite{SANOS2026} the primary application of this model is \emph{interpolation}: if the model strikes
-are are superset of \emph{all} strikes of relevant market instruments then the model can practically be fit to the
-vast majorty of options accross the entire surface from 1 day to expiries to several years. Stronger, if the model is
+As discussed in~\cite{SANOS2026} the primary application of this model is \emph{interpolation}: if the model strikes
+are a superset of \emph{all} strikes of relevant market instruments then the model can practically be fit to the
+vast majority of options across the entire surface from 1 day to expiries to several years. Stronger, if the model is
 linear ($W=0$) the existence of the densities $q$ is equivalent to absence of arbitrage with respect to the market bid/asks (usually
 this simply means our market data is not aligned correctly).
 
@@ -641,8 +636,8 @@ $$
 and with it the tridiagonal matrix~$\Omega$ with 
 \begin{itemize}
     \item Upper diagonal $( -\omega^{1-}, \ldots, -\omega^{N-}, 0 )$,
-    \item Lower diagonal $( 0, -\omega^{1+}, \ldots, -\omega^{N^j+} )$, and
-    \item Main diagonal $( 0, +\omega^{1+}+\omega^{1-}, \ldots, 1+\omega^{N^j+}+\omega^{N^j-}, 0 )$.
+    \item Lower diagonal $( 0, -\omega^{1+}, \ldots, -\omega^{N+} )$, and
+    \item Main diagonal $( 0, +\omega^{1+}+\omega^{1-}, \ldots, +\omega^{N+}+\omega^{N-}, 0 )$.
 \end{itemize}
 i.e.
 \eqx
@@ -662,7 +657,7 @@ i.e.
 Then for \emph{any} squared (discrete) local volatilities $\Sigma^j = ( 0, \Sigma^{j,1}, \ldots, \Sigma^{j,N}, 0 )$
 the operator
 \eqx
-            1 - \Omega\ \mathrm{diag}(\Sigma^j) (\hat T_j - \hat T_{j-1}) \in \R^{(N+2)\times(N+2)}
+            1 + \Omega\ \mathrm{diag}(\Sigma^j) (\hat T_j - \hat T_{j-1}) \in \R^{(N+2)\times(N+2)}
 \eqend
 is a tridiagonal operator with positive main diagonal and negative off diagonals. 
 It is basically the discrete implicit scheme for the forward equation of the continuous time Dupire SDE.
@@ -673,7 +668,7 @@ a martingale transition operator in
  the sense of~\cite{DLV} which means that the densities $q^1,\ldots,q^M$ generated 
  iteratively starting in $q^0=(1)$ by
 \begin{equation}\label{eq:densitytrans}
-    q^j = \Big( 1 - \Omega\ \mathrm{diag}(\Sigma^j) (\hat T_j - \hat T_{j-1}) \Big)^{-1} q^{j-1} 
+    q^j = \Big( 1+  \Omega\ \mathrm{diag}(\Sigma^j) (\hat T_j - \hat T_{j-1}) \Big)^{-1} q^{j-1} 
 \end{equation}
 form a martingale density over~$\hat K$.
 
@@ -736,7 +731,7 @@ We will use the sigmoid function $\mathrm{sigmoid}(x)=(1+e^{-x})^{-1}$.
                  :=\min\!\left\{\Sigma_{\max},
                     \Sigma_{\min}+\exp(u^{\Sigma,j,i})\right\}\ .
               \end{equation}
-              (This formulation avoid saturation of the sigmoid function as the raw log-DLV coordinate approaches the cap  $\Sigma_{\max}$;
+              (This formulation avoids saturation of the sigmoid function as the raw log-DLV coordinate approaches the cap  $\Sigma_{\max}$;
               it requires adding a penalty term to the loss function.)
 
     \end{itemize}
@@ -786,7 +781,7 @@ coordinates.  \\
 \textbf{Data and model geometries:}
 The empirical population sourced from WRDS' Option Metrics Ivy data base contains 891 S\&P~Index dates from 2022-01-03 through
 2025-08-29. See appendix~\ref{app:data-pipeline} for our baseline pipeline we use for all our research with this data set.
-In addition to the filters described there we here also exclude options ourside the model's strike range (which is effectively $(-3,2)$ NMS) and any options expiring
+In addition to the filters described there we here also exclude options outside the model's strike range (which is effectively $(-3,2)$ NMS) and any options expiring
 past the last model expiry of~70 business days. We also exclude tomorrow's AM-settled options. 
 
 We obtain 3,566,258 original call-or-put book observations for our model.
@@ -801,12 +796,12 @@ Our economic objective to minimize the normalized \emph{excess} outside the bid-
   :=\frac{(C-A)^+ +(B-C)^+}{(A-B)/2}.
   \label{eq:half-spread-excess-preview}
 \end{equation}
-We report the percentage of options inside the bid-ask spread $=\equiv 0$ and also the mean and conditional excess conditional
+We report the percentage of options inside the bid-ask spread ($e=0$) and also the mean and conditional excess conditional
 on not being within bid-ask.
 
 That means from economic perspective our objective is to minimize the normalized excess outside the bid-ask spread for each quote plus a small
 additional regularization term to pull the solution towards the mid. Concretely,
-for the $\ell$th quote on date $t$ let $C_t^\ell$ be the mode call price, $A^\ell_t$ the ask price, $B^\ell_t$ the bid price, and
+for the $\ell$th quote on date $t$ let $C_t^\ell$ be the model call price, $A^\ell_t$ the ask price, $B^\ell_t$ the bid price, and
 $M_t^\ell=(\ A_t^\ell+ B_t^\ell)/2$ the mid price.
 
 Then define our loss as
@@ -850,7 +845,7 @@ Full & 82.28\% & 0.31 & 1.76 & 0.69\\
 Affine-200 & 80.92\% & 0.32 & 1.69 & 0.68\\
 \bottomrule
 \end{tabular}
-\caption{Aggregate fit of the affine-200 vs the full model, measured by \emph{excess}~\eqref{eq:production-quote-loss}.}
+\caption{Aggregate fit of the affine-200 vs the full model, measured by \emph{excess}~\eqref{eq:half-spread-excess-preview}.}
 \label{tab:aggregate-fit-preview}
 \end{table}
 
@@ -960,9 +955,9 @@ matrix exponential supplies stable transitions at every simulation horizon,
 while joint estimation chooses a representation that remains accurate in
 quote space and is also statistically coherent through time.  
 
-The implementation minimizes~\eqref{eq:production-joint-objective} by
-alternating surface and transition updates, with the AR weight ramped from
-zero to its stated value over the first 50 epochs. Table~\ref{tab:aggregate-fit2}
+The implementation minimizes~\eqref{eq:production-joint-objective} over 300
+epochs by alternating surface and transition updates, with the AR weight
+ramped from zero to its stated value over the first 50 epochs. Table~\ref{tab:aggregate-fit2}
 shows that the expanded estimation does not impede overall fit.
 
 \begin{table}[H]
@@ -1006,9 +1001,9 @@ Assume that we have historic samples of daily driftless spot returns $S_{t+1}/S_
 Let
 $F_t^1$ denote the CDF obtained\footnote{For each date we tabulate
 $F_t^1$ on a fine log-return grid and invert it with a monotone PCHIP spline.} from the front one-day decoded SANOS density $q_t^1$ and use it 
-to transfrom the spot return into the Gaussian score
+to transform the spot return into the Gaussian score
 \begin{equation}
-  dg_t + 1 =\Phi^{-1}\!\left[
+  dg_t =\Phi^{-1}\!\left[
     F_t^1\!\left(\frac{S_{t+1}}{S_t}\right)
   \right].
   \label{eq:front-spot-score}
@@ -1041,7 +1036,7 @@ The basic statistical DYSANOS time series generator is summarized as follows:
   \item Form $u_t=b+B h_t$, map it to bounded SANOS parameters through
         \eqref{eq:totalW}--\eqref{eq:defDLVdsq}  and construct the marginal densities
         as described in section~\ref{sec:mlsanos}.
-  \item Evaluate $C_t(T,K)$ at any desired strike and expiry.For a fixed 
+  \item Evaluate $C_t(T,K)$ at any desired strike and expiry. For a fixed 
         cash contract $(\tau,k)$ use $T=\tau-t$ and $K=k/S_t$. Option  prices can  be pre-computed
         if their relative strikes and expiries are known in advance; otherwise 
         they can be evaluated on the path on the fly.\footnote{
@@ -1243,7 +1238,7 @@ independent antithetic pairs rather than $N$ independent paths.\footnote{The ant
 their Monte Carlo uncertainty.}
 
 At each date we can trade spot and 12 floating options
-at the  each of the
+at each of the
 four expiries $5D,10D,15D,20D$ struck on the  normalized-moneyness
 strikes $$
 z\in\{-1.5,-1.3,-1.1,-0.9,-0.7,-0.5,-0.3,-0.1,\;0.1,0.3,0.5,1\}\ .
@@ -1258,6 +1253,14 @@ $i$, returns are expressed as fractional gains:
 \end{equation}
 This normalizes our trading to unit \$ amounts invested in each tradable instrument. We only trade ITM options to avoid vanishing premia.
 
+\begin{remark}
+We are going to learn a measure for the \emph{fixed} 100,000 paths we have generated. It is not a general function of the state that would
+generalize to other generated paths. We are looking for an in-sample risk-neutral measure.
+Therefore, we do not split training and validation set for the below analysis.
+
+A different task is to find a generic risk-neutral measure for a trained DYSANOS model. This is not the focus of the current analysis.
+\end{remark}
+
 \subsection{Finding a Risk Neutral Measure}
 
 As a first step we find a pre-conditioning measure $\Q_1$ equivalent to $\P$ under which the unconditional expectation of all returns is numerically close to zero.
@@ -1271,8 +1274,9 @@ Let $D$ be the density of $\Q_1$ with respect to~$\P$ over $\R^N$. Then we solve
 \eqend
 subject to the linear constraints
 \eq{convexcond}
-  D > 0 \ , \ \ \ \E^\P\left[ D \right ] = 1 \ \ \ \mbox{and} \ \ \ \Big|\ \E^\P\left[ D\,R_t \right] \Big| \preceq 0.01\% \ .
+  D > 0 \ , \ \ \ \E^\P\left[ D \right ] = 1 \ \ \ \mbox{and} \ \ \ \Big|\ \E^\P\left[ D\,R_t \right] \Big| \preceq c_t 
 \eqend
+where~$c_t$ is 0.1bps for spot and 1bps for options.
 Table~\ref{tab:rn-precondition} shows summary results of this step.
 \begin{table}[H]
   \centering
@@ -1280,16 +1284,17 @@ Table~\ref{tab:rn-precondition} shows summary results of this step.
     \toprule
     Diagnostic & Reported value \\
     \midrule
-    Simulated paths & $1{,}000{,}000$ \\
+    Simulated paths & $ 100{,}000$ \\
     Returns & $1{,}225=25\times49$ \\
     Pre-conditioning bands & spot: $0.10$bp; options: $1.00$bp \\
-    Primal relative entropy & $0.16$ \\
-    Effective sample size & $686{,}252.40$ ($68.63\%$ of paths) \\
-    Minimum / maximum density & $0.0014$ / $81.25$ \\
-    Maximum constraint violation & $0.0014$bp \\
+    Sample relative entropy & $0.1565$ \\
+    Effective sample size & $71{,}175$ ($71.17\%$ of paths) \\
+    Minimum / maximum density & $0.0035$ / $34.40$ \\
+    Maximum unconditional $|z|$ & $2.205$ \\
     \bottomrule
   \end{tabular}
-  \caption{Entropy pre-conditioning under the $c/10$ unconditional bands.}
+  \caption{Entropy pre-conditioning,
+  evaluated on the 100,000-path sample used in the diagnostics below.}
   \label{tab:rn-precondition}
 \end{table}
 
@@ -1350,9 +1355,7 @@ The historical $\Q_2$ fit uses the capped action
    \min\!\left(1,\frac{32}{\lVert a_\theta(x_t)\rVert_1}\right) \ .
   \label{eq:rn-action-cap}
 \end{equation}
-We then solve\footnote{We use L-BFGS.} on the full 100,000 paths\footnote{
-We do not train on a training set and the validate on a validation set since here we are interested in an in-sample risk-neutral measure for the generated paths. This is different
-than generalizing the problem to finding such measure for any paths generated.}
+We then solve\footnote{We use L-BFGS.} on the full 100,000 paths
  the problem
 \begin{equation}
   \sup_{\theta\in\R^\Theta}: \
@@ -1382,9 +1385,9 @@ We deploy two types of tests for the no-arbitrage condition: unconditional and c
 Every unconditional day--instrument mean is compared with its Monte Carlo
 standard error.  We reconstruct the $\Q_1$ and terminal cap-32 $\Q_2$
 densities on the same 100,000 paths, split into sets~$A$ and~$B$ while keeping
-antithetic pairs together.  For the audit, set $\Q_0:=\P$.  For
-$j\in\{0,1,2\}$, write the self-normalised weights as
-$w_p=d\Q_j/d\P(p)$.  Their effective sample sizes are 100,000, 71,175, and
+antithetic pairs together. 
+For each $\Q\in\{\P,\Q_1,\Q_2\}$, write the self-normalised weights as
+$w_p=d\Q/d\P(p)$.  Their effective sample sizes are 100,000, 71,175, and
 33,380, respectively.  For each of the $25\times49=1{,}225$ coordinates define
 \begin{equation}
   \widehat m_{t,i}
@@ -1411,7 +1414,7 @@ the materiality-regularised score
   \small
   \begin{tabular}{@{}lrrr@{}}
     \toprule
-    Diagnostic & $\P$ audit & $\Q_1$ audit & $\Q_2$ audit \\
+    Diagnostic & $\P$  & $\Q_1$  & $\Q_2$  \\
     \midrule
     Paths / antithetic pairs
       & $100{,}000$ / $50{,}000$ & $100{,}000$ / $50{,}000$
@@ -1463,9 +1466,7 @@ transforms used below are finite and twice differentiable on a convex
 neighbourhood containing zero and the optimizer.  If
 $a^*=(a_0^*,\ldots,a_{m-1}^*)$ is a finite solution of
 \begin{equation}
-  \inf_{a\in\mathcal A} F(a),
-  \qquad
-  F(a):=\E^\Q\!\left[
+  \inf_{a\in\mathcal A}: \E^\Q\!\left[
     \sum_{t=0}^{m-1}
     \exp\!\left(-a_t'R_t+\frac12a_t'a_t\right)
   \right],
@@ -1488,8 +1489,9 @@ Accordingly, we first split our 100,000 paths into two sets $A$ and $B$, each co
 an action with the full affine-plus-deep architecture
 in~\eqref{eq:rn-expiry-action}, but with no action cap, by minimizing\footnote{
 Features are standardized using
-the weighted training fold only; both folds and measures use the same 30-epoch
-affine initialization followed by 30 full-network epochs.}
+the weighted training fold only; both folds and measures use the same
+60-epoch schedule: 30 affine-initialization epochs followed by 30
+full-network epochs.}
 \begin{equation}
   \widehat L_{A,\Q}(\phi)
   =\log\!\left\{
@@ -1633,10 +1635,8 @@ $N_c=\#\{|z|>c\}$. Further confirmation that~$\Q_2$ is a martingale measure.}
 The conditional mean test fails clearly for $\P$ and $\Q_1$, but passes comfortably for $\Q_2$.
 
 \begin{remark}
-	Solving~\eqref{eq:rn-oce-q2-fit} is \emph{slow}. In our examples took several hours on an RTX~5090 to find a measure~$\Q_2$ which still
-	had some minor statistical unconditional arbitrage concerns, c.f.~table~\ref{tab:rn-q2-unconditional}.
-
-	That means with the given L-BFGS solver this method is pratically useful if a result is required in minutes or less.
+	Solving~\eqref{eq:rn-oce-q2-fit} is \emph{slow}. In our examples took several hours on an RTX~5090 to find a measure~$\Q_2$.
+	That means with the given L-BFGS solver this method is not practically useful if a result is required in minutes or less.
 \end{remark}
 
 
@@ -1646,14 +1646,11 @@ The conditional mean test fails clearly for $\P$ and $\Q_1$, but passes comforta
 This is a reduced demonstration rather than a general construction.  The
 experiment is numerically heavy and the terminal $\Q_2$ policy and conditional
 actions did not meet strict full-parameter gradient stopping criteria within
-the fixed 30-epoch schedule.  The frozen-action test remains valid, but
-incomplete action optimization can reduce its power.  Moreover, $\Q_2$ was
-fitted on the enclosing one-million-path population, so the 100,000-path
-unconditional audit is not independent of the density fit.  Each path is held
-out from fitting its scored action, but not from fitting $\Q_2$ itself.
+the fixed 60-epoch two-stage schedule.  The frozen-action test remains valid, but
+incomplete action optimization can reduce its power. 
 
 The result is therefore evidence for zero drift within the stated
-49-instrument book and strategy class, not a risk-neutrality statement for
+49-instrument book and strategy class, but it is by construction not a risk-neutrality statement for
 other strikes, expiries, trading frequencies, or the full DYSANOS surface.
 The model-free reweighting step also relies on having many more simulated paths
 than tradable instruments.  Extending the construction to the full surface is
@@ -1679,7 +1676,7 @@ remains too low.
 
 For a reduced 49-instrument book on the same simulated paths, the MEMM
 construction in Section~\ref{sec:risk-neutral} builds a candidate
-martingale measure~$\Q_2$.  In the 100,000-path unconditional audit the
+martingale measure~$\Q_2$.  In the 100,000-path unconditional test the
 largest coordinate statistic is $|z|=2.646$, with no coordinate above five.
 The two-fold uncapped affine-plus-deep test gives $T_{\mathrm{act}}=41.365$
 under $\Q_1$ and $T_{\mathrm{act}}=-0.454$ ($p=0.650$) under $\Q_2$.  We
@@ -1925,10 +1922,10 @@ million paths per law.}
 \label{tab:tails}
 \end{table}
 
-The Tail Diffusion is  a meaningful improvement. 
+The Tail Diffusion is an improvement over the Gaussian law. 
  It produces a squared-radius serial correlation of 0.116,
 compared with 0.091 in the market history; Gaussian and IID laws have zero
-population correlation.\footnote{The 2025
+population correlation. It has, however, somewhat less tail mass than IID Student-$t$ at every horizon.\footnote{The 2025
 sample is small and overlapping: 15-origin circular-block bootstrap 95\%
 intervals for the market exceedance rates are approximately 0.6--14.6\%
 across the three horizons.  Differences of a percentage point
