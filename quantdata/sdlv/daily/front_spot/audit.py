@@ -8,6 +8,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import NDArray
+from scipy.special import ndtri
 
 from quantdata.biz_calendar import DAYS_PER_YEAR
 from quantdata.sdlv.daily.front_spot.calibration import FrontSpotCalibration
@@ -60,6 +61,9 @@ class MartingaleAuditReport:
     factor_rank: int
     dlv_substeps: int
     time_power: float
+    nms_annualized_atm_volatility: float
+    nms_lower_bound: float
+    nms_upper_bound: float
     daily_density: TestSummary
     daily_latent_options: TestSummary
     daily_smoothed_options: TestSummary
@@ -214,14 +218,18 @@ def run_risk_neutral_martingale_audit(
     time_power: float = 1.0,
     seed: int = 20261004,
     dt: float = 1.0 / DAYS_PER_YEAR,
+    nms_lower_bound: float = -2.0,
+    nms_upper_bound: float = 1.0,
 ) -> MartingaleAuditReport:
     """Audit all daily model densities and calls through expiry under Q.
 
     Daily density martingality tests every linear claim on the latent discrete
     process.  Daily smoothed-call tests value every live interior-strike call at
     every remaining model expiry, including the independent 5% Black background.
-    The option-to-expiry test separately evaluates the same all-strike payoff
-    family at settlement.
+    The daily tradable-call screen uses the predictable, path-dependent condition
+    ``nms_lower_bound < log(K / S_t) / (sigma_atm,0 sqrt(tau)) <
+    nms_upper_bound``.  The option-to-expiry test separately evaluates the same
+    all-strike payoff family at settlement.
     """
     if not jax.config.x64_enabled:
         raise RuntimeError("Martingale auditing requires JAX 64-bit mode")
@@ -233,6 +241,12 @@ def run_risk_neutral_martingale_audit(
         raise ValueError(f"dlv_substeps must be positive, found {dlv_substeps}")
     if time_power < 1.0 or not np.isfinite(time_power):
         raise ValueError(f"time_power must be finite and at least one, found {time_power}")
+    if not (
+        np.isfinite(nms_lower_bound)
+        and np.isfinite(nms_upper_bound)
+        and nms_lower_bound < nms_upper_bound
+    ):
+        raise ValueError("NMS bounds must be finite and strictly ordered")
 
     initial = load_initial_model_state(
         fit_label=fit_label,
@@ -282,6 +296,23 @@ def run_risk_neutral_martingale_audit(
     )
     if initial_calls.shape != (expiry_count, strike_count):
         raise RuntimeError(f"Unexpected initial call shape {initial_calls.shape!r}")
+    initial_front_atm_call = float(
+        np.asarray(
+            black_mixture_call_prices(
+                support,
+                initial_tower[:1],
+                jnp.ones((1, 1), dtype=jnp.float64),
+                jnp.asarray(1.0, dtype=jnp.float64),
+                jnp.ones(1, dtype=jnp.float64),
+            )
+        )[0, 0]
+    )
+    initial_front_total_volatility = 2.0 * ndtri(
+        np.clip(0.5 * (initial_front_atm_call + 1.0), 0.5, 1.0 - 1.0e-14)
+    )
+    nms_annualized_atm_volatility = initial_front_total_volatility / np.sqrt(dt)
+    if not np.isfinite(nms_annualized_atm_volatility) or nms_annualized_atm_volatility <= 0.0:
+        raise RuntimeError("could not recover a positive inception ATM volatility")
 
     daily_density_sum = np.zeros(
         (expiry_count, expiry_count, node_count), dtype=np.float64
@@ -297,6 +328,7 @@ def run_risk_neutral_martingale_audit(
     daily_latent_option_square = np.zeros_like(daily_latent_option_sum)
     daily_smoothed_option_sum = np.zeros_like(daily_latent_option_sum)
     daily_smoothed_option_square = np.zeros_like(daily_latent_option_sum)
+    daily_smoothed_option_eligible_count = np.zeros_like(daily_latent_option_sum)
     daily_front_option_predictable_variance = np.zeros(
         (expiry_count, strike_count),
         dtype=np.float64,
@@ -341,6 +373,16 @@ def run_risk_neutral_martingale_audit(
 
         for day_index in range(expiry_count - 1):
             remaining_count = expiry_count - day_index
+            remaining_days = np.arange(1, remaining_count + 1, dtype=np.float64)
+            nms_denominator = nms_annualized_atm_volatility * np.sqrt(
+                remaining_days / DAYS_PER_YEAR
+            )
+            current_nms = np.log(
+                initial.support[1:-1][None, None, :] / current_spot[:, None, None]
+            ) / nms_denominator[None, :, None]
+            current_smoothed_option_eligible = (
+                (current_nms > nms_lower_bound) & (current_nms < nms_upper_bound)
+            )
             current_smoothed_calls = np.asarray(
                 smoothed_call_pricer(
                     support,
@@ -430,9 +472,13 @@ def run_risk_neutral_martingale_audit(
                 (
                     after_smoothed_calls[:valid_count]
                     - current_smoothed_calls[:valid_count]
-                ),
+                )
+                * current_smoothed_option_eligible[:valid_count],
                 (day_index, slice(day_index, expiry_count), slice(None)),
             )
+            daily_smoothed_option_eligible_count[
+                day_index, day_index:expiry_count
+            ] += np.sum(current_smoothed_option_eligible[:valid_count], axis=0)
             terminal_density_error = (
                 sampled_density[:valid_count] - initial.density_tower[day_index]
             )
@@ -517,13 +563,27 @@ def run_risk_neutral_martingale_audit(
             np.asarray(terminal.spot)[:, None] - initial.support[None, 1:-1],
             0.0,
         )
+        terminal_nms = np.log(
+            initial.support[1:-1][None, :] / current_spot[:, None]
+        ) / (nms_annualized_atm_volatility * np.sqrt(dt))
+        terminal_smoothed_option_eligible = (
+            (terminal_nms > nms_lower_bound) & (terminal_nms < nms_upper_bound)
+        )
         _accumulate(
             daily_smoothed_option_sum,
             daily_smoothed_option_square,
-            terminal_smoothed_calls[:valid_count, None, :]
-            - terminal_current_smoothed_calls[:valid_count],
+            # The terminal-day signal is based on the pre-settlement spot.
+            # It therefore remains predictable even though the option settles.
+            (
+                terminal_smoothed_calls[:valid_count, None, :]
+                - terminal_current_smoothed_calls[:valid_count]
+            )
+            * terminal_smoothed_option_eligible[:valid_count, None, :],
             (expiry_count - 1, slice(expiry_count - 1, expiry_count), slice(None)),
         )
+        daily_smoothed_option_eligible_count[
+            expiry_count - 1, expiry_count - 1
+        ] += np.sum(terminal_smoothed_option_eligible[:valid_count], axis=0)
         daily_increment = sampled_density[:valid_count] - current_tower[:valid_count, 0]
         current_front = current_tower[:valid_count, 0]
         daily_front_predictable_variance[-1] += np.sum(
@@ -618,9 +678,11 @@ def run_risk_neutral_martingale_audit(
         daily_latent_option_identifiable[day_index, :remaining_count] = (
             initial_latent_exercise_probability[day_index:] * path_count >= 20.0
         )
-        daily_smoothed_option_mask[day_index, day_index:] = True
+        daily_smoothed_option_mask[day_index, day_index:] = (
+            daily_smoothed_option_eligible_count[day_index, day_index:] > 0.0
+        )
         daily_smoothed_option_identifiable[day_index, day_index:] = (
-            initial_call_exercise_probabilities[day_index:] * path_count >= 20.0
+            daily_smoothed_option_eligible_count[day_index, day_index:] >= 20.0
         )
     daily_density_standard_error = np.full_like(
         daily_density_sum,
@@ -661,6 +723,9 @@ def run_risk_neutral_martingale_audit(
         factor_rank=factor_rank,
         dlv_substeps=dlv_substeps,
         time_power=time_power,
+        nms_annualized_atm_volatility=float(nms_annualized_atm_volatility),
+        nms_lower_bound=nms_lower_bound,
+        nms_upper_bound=nms_upper_bound,
         daily_density=_summarize(
             daily_density_sum,
             daily_density_square,
