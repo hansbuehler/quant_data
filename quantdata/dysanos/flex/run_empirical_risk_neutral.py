@@ -161,6 +161,18 @@ def _report(
     paths = input_shape[0]
     coordinates = int(np.prod(input_shape[1:]))
     steps = coordinates // len(instrument_labels)
+    has_cost_band = bool(np.any(fit.cost_band))
+    primal_definition = (
+        "min mean(w*log(w)); mean(w)=1; w>=0; "
+        "abs(mean(w[:,None]*returns,axis=0))<=cost_band"
+        if has_cost_band
+        else "min mean(w*log(w)); mean(w)=1; w>0; mean(w[:,None]*returns,axis=0)=0"
+    )
+    dual_definition = (
+        "log(mean(exp(-returns@action))) + cost_band@abs(action)"
+        if has_cost_band
+        else "log(mean(exp(-returns@action)))"
+    )
     return {
         "schema": "dysanos-fixed-empirical-risk-neutral-v1",
         "status": "complete" if fit.optimizer_success else "optimizer_not_converged",
@@ -179,11 +191,9 @@ def _report(
         "definition": {
             "reference_measure": "uniform empirical measure on the supplied training paths",
             "density_normalization": "weights are dQ/dP with sample mean one",
-            "primal": (
-                "min mean(w*log(w)); mean(w)=1; w>=0; "
-                "abs(mean(w[:,None]*returns,axis=0))<=cost_band"
-            ),
-            "signed_dual": "log(mean(exp(-returns@action))) + cost_band@abs(action)",
+            "primal": primal_definition,
+            "signed_dual": dual_definition,
+            "transaction_cost_band": "nonzero" if has_cost_band else "none",
             "solver": solver_description,
             "scope": (
                 f"{coordinates} unconditional training-population return moments; "

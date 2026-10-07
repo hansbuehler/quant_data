@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from argparse import Namespace
 
 import numpy as np
@@ -227,3 +228,42 @@ def test_cli_loads_memmap_and_writes_report_and_density(tmp_path) -> None:
     assert report_path.is_file()
     assert np.load(weights_path) == pytest.approx(fit.weights)
     assert np.load(log_weights_path) == pytest.approx(fit.log_weights)
+
+
+def test_cli_zero_cost_report_describes_exact_moment_constraints(tmp_path) -> None:
+    returns = np.asarray(
+        (
+            (-0.02, -0.01, 0.00, 0.01, 0.02, 0.03, 0.04),
+            (0.02, 0.01, 0.00, -0.01, -0.02, -0.03, -0.04),
+        ),
+        dtype=np.float32,
+    )[:, None, :]
+    input_path = tmp_path / "returns.npy"
+    report_path = tmp_path / "report.json"
+    np.save(input_path, returns)
+    arguments = Namespace(
+        returns=input_path,
+        report=report_path,
+        weights=None,
+        log_weights=None,
+        array_key="returns",
+        book_expiry_days=[5, 10],
+        spot_cost_bps=0.0,
+        option_cost_bps=0.0,
+        chunk_size=2,
+        maximum_iterations=2_000,
+        maximum_active_set_iterations=50,
+        moment_tolerance=1.0e-8,
+        optimizer_gradient_tolerance=1.0e-10,
+        optimizer_function_tolerance=1.0e-15,
+    )
+
+    fit = run(arguments)
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+
+    assert fit.optimizer_success
+    assert report["definition"]["transaction_cost_band"] == "none"
+    assert report["definition"]["primal"].endswith(
+        "mean(w[:,None]*returns,axis=0)=0"
+    )
+    assert "cost_band" not in report["definition"]["signed_dual"]
