@@ -455,8 +455,13 @@ def unconditional_spot_scaled_martingale_audit(
     returns: NDArray[np.float32],
     active_mask: NDArray[np.bool_],
     instrument_labels: tuple[str, ...],
+    *,
+    measure: str = "Q",
 ) -> dict[str, Any]:
     """Test unconditional means of spot-scaled increments coordinate by coordinate."""
+
+    if measure not in {"P", "Q"}:
+        raise ValueError(f"measure must be P or Q, found {measure!r}")
 
     if len(returns) < 4 or len(returns) % 2:
         raise ValueError("unconditional audit requires an even number of paths")
@@ -471,7 +476,9 @@ def unconditional_spot_scaled_martingale_audit(
     option_mask = active_mask.copy()
     option_mask[:, 0] = False
     return {
-        "null_hypothesis": "E_Q[(V_{t+1}^i-V_t^i)/S_t]=0 for every day and instrument",
+        "null_hypothesis": (
+            f"E_{measure}[(V_{{t+1}}^i-V_t^i)/S_t]=0 for every day and instrument"
+        ),
         "path_count": len(returns),
         "antithetic_pair_count": len(pair_returns),
         "sampling_unit": (
@@ -1427,6 +1434,7 @@ def run(arguments: argparse.Namespace) -> None:
             population.returns,
             population.active_mask,
             population.instrument_labels,
+            measure=arguments.measure,
         )
         report = {
             "schema": (
