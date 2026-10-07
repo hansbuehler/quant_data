@@ -1,0 +1,131 @@
+% !TEX root = main2.tex
+\section{Market-data and calibration pipeline}
+\label{app:market-pipeline}
+
+This appendix records the data and numerical pipeline behind
+Section~\ref{sec:estimation}. It follows the broader SPX pipeline described in
+\cite{DYSANOS2026}, restricted here to the short-dated fixed-expiry SANOS
+experiment. The complete transformation is
+\[
+\begin{aligned}
+\text{raw IvyDB quotes}
+&\longrightarrow \text{daily cleaning and parity-forward enrichment}\\
+&\longrightarrow \text{arbitrage-free SANOS eligibility surface}\\
+&\longrightarrow \text{European short-horizon quote selection}\\
+&\longrightarrow \text{daily 25-by-200 calibration tensor}\\
+&\longrightarrow \text{direct or affine end-to-end fit}.
+\end{aligned}
+\]
+
+\subsection{Raw data and cleaning}
+\label{app:pipeline-raw}
+
+The source is OptionMetrics IvyDB US data accessed through WRDS. For each
+eligible SPX market date we load the index level and previous index level,
+option strikes and calendar expiries, call and put bid and ask quotes, volume,
+open interest, AM/PM settlement flags, and the zero curve. The retained sample
+runs from 3 January 2022 through 29 August 2025 and contains 891 valid full-day
+NYSE sessions.
+
+The raw cleaning step removes known bad ticker--date observations, missing or
+invalid quotes, invalid settlement flags, same-day expiries, irregular
+expiries, and quotes whose bid does not exceed $0.011$. Business days and year
+fractions to expiry are then computed; an AM-settled expiry is treated as
+$0.2$ of a business day earlier than its corresponding PM expiry.
+
+For each expiry we recompute the forward from put--call parity rather than use
+the delayed IvyDB forward table. With discount factor $D$, define the
+discounted-forward bounds at a strike $K$ by
+\[
+  G^{\mathrm{ask}}(K)=C^{\mathrm{ask}}(K)-P^{\mathrm{bid}}(K)+DK,
+  \qquad
+  G^{\mathrm{bid}}(K)=C^{\mathrm{bid}}(K)-P^{\mathrm{ask}}(K)+DK.
+\]
+Their midpoint is averaged across strikes with inverse-spread weights,
+\[
+  \widehat G
+  =\frac{\sum_K w_K\,[G^{\mathrm{ask}}(K)+G^{\mathrm{bid}}(K)]/2}
+         {\sum_K w_K},
+  \qquad
+  w_K=\frac1{\max\{G^{\mathrm{ask}}(K)-G^{\mathrm{bid}}(K),10^{-3}\}}.
+\]
+The resulting forward is used to construct the tightest call-equivalent quote,
+forward-normalized strikes and prices, implied volatilities, and Greeks. An
+expiry must contain at least ten strikes with a traded call or put and at least
+four strikes with both sides traded. The normalized spread must exceed
+$10^{-6}$ and retained implied volatilities must lie between $0.01$ and $5$.
+
+\subsection{Static preprocessing and quote selection}
+\label{app:pipeline-static}
+
+Before applying the model-specific horizon, the pipeline retains quotes with
+vega per unit total volatility of at least $10^{-3}$, log volume and log open
+interest of at least one, and at least ten surviving options per expiry. The
+nominal per-day quote cap is 100,000 and is therefore non-binding here.
+
+For data-quality control and to construct a stable ATM curve, every daily book
+is passed through the linear SANOS preprocessing of \cite{SANOS2026}. The
+strike grid is extended, each expiry is fitted inside the quoted bid--ask
+intervals, negligible-density redundant strikes are removed, and the joint
+surface fit enforces both butterfly and calendar-spread constraints. The
+smoothness parameter is $0.25$. Expiries and strikes for which this
+arbitrage-free auxiliary fit is unavailable are not passed to the final
+calibration.
+
+This auxiliary SANOS surface determines eligibility, the ATM term structure,
+and the floating model support. It is not the calibration target: the JAX fits
+in Section~\ref{sec:estimation-fit} use the original retained call and put
+bid--ask intervals. No linear-programming state or fitted midpoint is supplied
+as a target.
+
+The final selection keeps European quotes no farther than 25 business days
+from the observation date, excludes the $0.2$-business-day slice, and retains
+the standardized log-moneyness interval $[-2.5,1.5]$. This leaves 2,192,458
+quotes, between 1,590 and 5,096 per date.
+
+\subsection{Daily calibration tensor}
+\label{app:pipeline-tensor}
+
+The model expiry grid is
+\[
+  T_j=\frac{j}{252},\qquad j=1,\ldots,25.
+\]
+For each date, 100 interior-strike candidates are generated from the front
+ATM scale and 100 from the 25-day ATM scale. They are merged with a minimum
+log-spacing safeguard to form one 200-node support shared across all model
+expiries on that date. The support floats from date to date. Two boundary
+nodes, equal to one half of the lowest inner strike and one and a half times
+the highest inner strike, complete the 202-node density grid.
+
+Each retained market quote stores its call/put flag, normalized strike, bid,
+ask, midpoint, business days to expiry, adjacent model-expiry indices, and
+linear interpolation weight. The contemporaneous SPX level is retained as a
+reference spot. The immutable calibration tensor pads each date to a multiple
+of 128 quotes and carries a Boolean mask, so padding never contributes to the
+objective.
+
+At valuation time the DLV recursion produces the 25 discrete densities. The
+fixed 5\% Black factor convolves each discrete density into a smooth call-price
+curve, and the two adjacent expiry curves are linearly interpolated to the
+market quote's exact expiry. Puts follow from put--call parity.
+
+\subsection{Optimization and retained artifacts}
+\label{app:pipeline-optimization}
+
+The direct and affine parameterizations are those in
+Section~\ref{sec:estimation-fit}. Direct states are initialized from the
+date-specific ATM term structure and are constant across strike at
+initialization. Affine means use the average of these initial states; codes and
+loadings receive small centered Gaussian initial values. DLV squared is bounded
+between $10^{-4}$ and $9$, with a differentiable barrier near the upper bound.
+
+The loss in \eqref{eq:estimation-quote-objective} is differentiated over every
+retained quote. Quote blocks of size 128 are used only to limit accelerator
+memory: their gradients are summed before each Adam update, so this is an exact
+full-sample gradient rather than stochastic minibatching. Each fit uses 300
+initial epochs with a cosine learning-rate schedule from $2\times10^{-2}$ to
+$10^{-3}$, followed by a 700-epoch continuation from $5\times10^{-3}$ to
+$5\times10^{-5}$. Checkpoints store either all daily direct states or the
+affine mean, loadings, and daily codes. The retained reports recompute every
+quote from the final checkpoint and produce the statistics in
+Table~\ref{tab:numerics-static-market-fit}.
