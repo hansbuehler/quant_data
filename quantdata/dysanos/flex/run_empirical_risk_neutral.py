@@ -255,11 +255,18 @@ def run(arguments: argparse.Namespace) -> EmpiricalRiskNeutralFit:
             optimizer_function_tolerance=arguments.optimizer_function_tolerance,
             maximum_active_set_iterations=arguments.maximum_active_set_iterations,
         )
-        solver_description = (
-            "exact signed active-set dual; each smooth nonnegative orthant is "
-            "solved by CPU L-BFGS-B using streamed stable log-sum-exp and "
-            "analytic gradients"
-        )
+        if np.any(cost_band):
+            solver_description = (
+                "exact signed active-set dual; each smooth nonnegative orthant is "
+                "solved by CPU L-BFGS-B using streamed stable log-sum-exp and "
+                "analytic gradients"
+            )
+        else:
+            solver_description = (
+                "smooth unconstrained zero-cost entropy dual solved by streamed "
+                "CPU trust-region Newton-CG iterations using analytic gradients and "
+                "exact covariance Hessian-vector products"
+            )
     else:
         torch_dtype = (
             torch.float32
@@ -279,12 +286,21 @@ def run(arguments: argparse.Namespace) -> EmpiricalRiskNeutralFit:
             optimizer_function_tolerance=arguments.optimizer_function_tolerance,
             maximum_active_set_iterations=arguments.maximum_active_set_iterations,
         )
-        solver_description = (
-            "exact signed active-set dual; SciPy L-BFGS-B controls each orthant, "
-            f"while full-population objective and gradient evaluations use {device} "
-            f"in {str(torch_dtype).removeprefix('torch.')} arithmetic; final weights "
-            "and KKT diagnostics are recomputed by streamed CPU float64 arithmetic"
-        )
+        if np.any(cost_band):
+            solver_description = (
+                "exact signed active-set dual; SciPy L-BFGS-B controls each orthant, "
+                f"while full-population objective and gradient evaluations use {device} "
+                f"in {str(torch_dtype).removeprefix('torch.')} arithmetic; final weights "
+                "and KKT diagnostics are recomputed by streamed CPU float64 arithmetic"
+            )
+        else:
+            solver_description = (
+                "smooth unconstrained zero-cost entropy dual solved by SciPy "
+                f"trust-region Newton-CG iterations, with {device} "
+                f"{str(torch_dtype).removeprefix('torch.')} gradients and exact "
+                "covariance Hessian-vector products; final weights and KKT "
+                "diagnostics are recomputed by streamed CPU float64 arithmetic"
+            )
     if arguments.weights is not None:
         _atomic_save_npy(fit.weights, arguments.weights)
     if arguments.log_weights is not None:

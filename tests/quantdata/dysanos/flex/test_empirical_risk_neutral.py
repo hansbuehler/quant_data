@@ -94,6 +94,8 @@ def test_zero_cost_fit_enforces_zero_empirical_moments() -> None:
     assert fit.maximum_kkt_residual <= 1.0e-10
     assert fit.weighted_mean == pytest.approx(np.zeros(5), abs=1.0e-10)
     assert np.mean(fit.weights) == pytest.approx(1.0, abs=1.0e-14)
+    assert fit.active_set_iterations == 0
+    assert "unconstrained zero-cost" in fit.optimizer_message
 
 
 def test_torch_full_population_solver_matches_streamed_cpu_solver() -> None:
@@ -124,6 +126,33 @@ def test_torch_full_population_solver_matches_streamed_cpu_solver() -> None:
     assert torch_fit.effective_sample_fraction == pytest.approx(
         cpu_fit.effective_sample_fraction, abs=2.0e-9
     )
+
+
+def test_torch_zero_cost_solver_matches_streamed_cpu_solver() -> None:
+    generator = np.random.default_rng(23)
+    returns = generator.normal(size=(500, 6)) * 0.03
+    returns += np.asarray((0.01, -0.008, 0.006, -0.004, 0.002, -0.003))
+    cost = np.zeros(6)
+
+    cpu_fit = fit_empirical_risk_neutral_density(
+        returns,
+        cost,
+        chunk_size=79,
+        moment_tolerance=1.0e-9,
+    )
+    torch_fit = fit_empirical_risk_neutral_density_torch(
+        returns,
+        cost,
+        device="cpu",
+        upload_chunk_size=79,
+        final_chunk_size=79,
+        moment_tolerance=1.0e-9,
+    )
+
+    assert cpu_fit.optimizer_success
+    assert torch_fit.optimizer_success
+    assert torch_fit.action == pytest.approx(cpu_fit.action, abs=1.0e-8)
+    assert torch_fit.weighted_mean == pytest.approx(cpu_fit.weighted_mean, abs=1.0e-10)
 
 
 def test_active_set_drops_a_misleading_empirical_mean_coordinate() -> None:

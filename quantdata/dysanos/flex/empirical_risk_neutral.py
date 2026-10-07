@@ -286,6 +286,158 @@ class _TorchOrthantDual:
         return float(value.detach().cpu()), gradient.detach().cpu().double().numpy()
 
 
+class _ZeroCostDual:
+    """Streamed smooth entropy dual with exact covariance Hessian products."""
+
+    def __init__(
+        self,
+        returns: ReturnMatrix,
+        scale: np.ndarray,
+        *,
+        chunk_size: int,
+    ) -> None:
+        self.returns = returns
+        self.paths, self.coordinates = _matrix_shape(returns)
+        self.scale = scale
+        self.chunk_size = chunk_size
+        self.evaluations = 0
+        self.hessian_evaluations = 0
+        self._scaled_action: np.ndarray | None = None
+        self._probability = np.empty(self.paths, dtype=np.float64)
+        self._scaled_mean = np.empty(self.coordinates, dtype=np.float64)
+        self._value = math.nan
+
+    def __call__(self, scaled_action: np.ndarray) -> tuple[float, np.ndarray]:
+        scaled_action = np.asarray(scaled_action, dtype=np.float64)
+        if scaled_action.shape != (self.coordinates,) or not np.all(
+            np.isfinite(scaled_action)
+        ):
+            raise ValueError("scaled zero-cost action is invalid")
+        if self._scaled_action is not None and np.array_equal(
+            scaled_action,
+            self._scaled_action,
+        ):
+            return self._value, -self._scaled_mean
+
+        action = scaled_action / self.scale
+        scores = self._probability
+        for first in range(0, self.paths, self.chunk_size):
+            last = min(first + self.chunk_size, self.paths)
+            values = _return_chunk(self.returns, first, last, self.coordinates)
+            scores[first:last] = -(values @ action)
+        maximum = float(np.max(scores))
+        np.exp(scores - maximum, out=scores)
+        exponential_sum = float(np.sum(scores, dtype=np.float64))
+        scores /= exponential_sum
+
+        weighted_mean = np.zeros(self.coordinates, dtype=np.float64)
+        for first in range(0, self.paths, self.chunk_size):
+            last = min(first + self.chunk_size, self.paths)
+            values = _return_chunk(self.returns, first, last, self.coordinates)
+            weighted_mean += values.T @ scores[first:last]
+        self._scaled_mean = weighted_mean / self.scale
+        self._value = maximum + math.log(exponential_sum) - math.log(self.paths)
+        self._scaled_action = scaled_action.copy()
+        self.evaluations += 1
+        return self._value, -self._scaled_mean
+
+    def hessian_product(
+        self,
+        scaled_action: np.ndarray,
+        direction: np.ndarray,
+    ) -> np.ndarray:
+        self(scaled_action)
+        direction = np.asarray(direction, dtype=np.float64)
+        if direction.shape != (self.coordinates,) or not np.all(np.isfinite(direction)):
+            raise ValueError("zero-cost Hessian direction is invalid")
+        action_direction = direction / self.scale
+        result = np.zeros(self.coordinates, dtype=np.float64)
+        for first in range(0, self.paths, self.chunk_size):
+            last = min(first + self.chunk_size, self.paths)
+            values = _return_chunk(self.returns, first, last, self.coordinates)
+            projected = values @ action_direction
+            result += values.T @ (self._probability[first:last] * projected)
+        self.hessian_evaluations += 1
+        return (
+            result / self.scale
+            - self._scaled_mean * float(self._scaled_mean @ direction)
+            + 1.0e-10 * direction
+        )
+
+
+class _TorchZeroCostDual:
+    """Device-resident zero-cost dual and covariance Hessian products."""
+
+    def __init__(self, returns: torch.Tensor, scale: np.ndarray) -> None:
+        if returns.ndim != 2:
+            raise ValueError("Torch returns must be a path-by-coordinate matrix")
+        self.returns = returns
+        self.paths, self.coordinates = returns.shape
+        self.scale = torch.as_tensor(scale, dtype=returns.dtype, device=returns.device)
+        self.evaluations = 0
+        self.hessian_evaluations = 0
+        self._scaled_action: np.ndarray | None = None
+        self._probability = torch.empty(
+            self.paths,
+            dtype=returns.dtype,
+            device=returns.device,
+        )
+        self._scaled_mean = torch.empty(
+            self.coordinates,
+            dtype=returns.dtype,
+            device=returns.device,
+        )
+        self._value = math.nan
+
+    def __call__(self, scaled_action: np.ndarray) -> tuple[float, np.ndarray]:
+        scaled_action = np.asarray(scaled_action, dtype=np.float64)
+        if scaled_action.shape != (self.coordinates,) or not np.all(
+            np.isfinite(scaled_action)
+        ):
+            raise ValueError("scaled zero-cost action is invalid")
+        if self._scaled_action is not None and np.array_equal(
+            scaled_action,
+            self._scaled_action,
+        ):
+            return self._value, -self._scaled_mean.cpu().double().numpy()
+
+        scaled_action_tensor = torch.as_tensor(
+            scaled_action,
+            dtype=self.returns.dtype,
+            device=self.returns.device,
+        )
+        scores = -(self.returns @ (scaled_action_tensor / self.scale))
+        log_normalizer = torch.logsumexp(scores, dim=0) - math.log(self.paths)
+        self._probability = torch.softmax(scores, dim=0)
+        weighted_mean = self.returns.T @ self._probability
+        self._scaled_mean = weighted_mean / self.scale
+        self._value = float(log_normalizer.cpu())
+        self._scaled_action = scaled_action.copy()
+        self.evaluations += 1
+        return self._value, -self._scaled_mean.cpu().double().numpy()
+
+    def hessian_product(
+        self,
+        scaled_action: np.ndarray,
+        direction: np.ndarray,
+    ) -> np.ndarray:
+        self(scaled_action)
+        direction = np.asarray(direction, dtype=np.float64)
+        if direction.shape != (self.coordinates,) or not np.all(np.isfinite(direction)):
+            raise ValueError("zero-cost Hessian direction is invalid")
+        direction_tensor = torch.as_tensor(
+            direction,
+            dtype=self.returns.dtype,
+            device=self.returns.device,
+        )
+        projected = self.returns @ (direction_tensor / self.scale)
+        result = self.returns.T @ (self._probability * projected) / self.scale
+        result -= self._scaled_mean * torch.dot(self._scaled_mean, direction_tensor)
+        result += 1.0e-10 * direction_tensor
+        self.hessian_evaluations += 1
+        return result.cpu().double().numpy()
+
+
 def _upload_return_matrix(
     returns: ReturnMatrix,
     *,
@@ -349,6 +501,78 @@ def _weighted_mean(
         values = _return_chunk(returns, first, last, coordinates)
         total += values.T @ weights[first:last]
     return total / paths
+
+
+def _fit_zero_cost_dual(
+    returns: ReturnMatrix,
+    scale: np.ndarray,
+    dual: _ZeroCostDual | _TorchZeroCostDual,
+    *,
+    chunk_size: int,
+    maximum_iterations: int,
+    moment_tolerance: float,
+    optimizer_gradient_tolerance: float,
+    solver_label: str,
+) -> EmpiricalRiskNeutralFit:
+    """Solve the smooth equality-constrained entropy dual without orthants."""
+
+    paths, coordinates = _matrix_shape(returns)
+    optimizer: OptimizeResult = minimize(
+        dual,
+        np.zeros(coordinates, dtype=np.float64),
+        method="trust-ncg",
+        jac=True,
+        hessp=dual.hessian_product,
+        options={
+            "maxiter": maximum_iterations,
+            "gtol": optimizer_gradient_tolerance,
+        },
+    )
+    action = np.asarray(optimizer.x, dtype=np.float64) / scale
+    log_weights, weights, log_normalizer = _normalized_density(
+        returns,
+        action,
+        chunk_size=chunk_size,
+    )
+    weighted_mean = _weighted_mean(
+        returns,
+        weights,
+        chunk_size=chunk_size,
+    )
+    maximum_kkt_residual = float(np.max(np.abs(weighted_mean)))
+    dual_objective = log_normalizer
+    primal_relative_entropy = float(np.mean(weights * log_weights))
+    optimizer_success = maximum_kkt_residual <= moment_tolerance
+    optimizer_status = 0 if optimizer_success else int(optimizer.status)
+    optimizer_message = (
+        f"{solver_label} unconstrained zero-cost KKT conditions satisfied"
+        if optimizer_success
+        else str(optimizer.message)
+    )
+    effective_sample_size = float(
+        paths**2 / np.sum(np.square(weights), dtype=np.float64)
+    )
+    return EmpiricalRiskNeutralFit(
+        action=action,
+        weights=weights,
+        log_weights=log_weights,
+        weighted_mean=weighted_mean,
+        cost_band=np.zeros(coordinates, dtype=np.float64),
+        primal_relative_entropy=primal_relative_entropy,
+        dual_objective=dual_objective,
+        primal_dual_gap=primal_relative_entropy + dual_objective,
+        effective_sample_size=effective_sample_size,
+        effective_sample_fraction=effective_sample_size / paths,
+        maximum_constraint_violation=maximum_kkt_residual,
+        maximum_kkt_residual=maximum_kkt_residual,
+        optimizer_success=optimizer_success,
+        optimizer_status=optimizer_status,
+        optimizer_message=optimizer_message,
+        optimizer_iterations=int(optimizer.nit),
+        objective_evaluations=dual.evaluations,
+        active_coordinates=int(np.sum(np.abs(action) > 1.0e-12)),
+        active_set_iterations=0,
+    )
 
 
 def _orthant_kkt_residual(
@@ -447,6 +671,22 @@ def fit_empirical_risk_neutral_density(
             np.full(coordinates, 1.0e-8, dtype=np.float64),
         )
     )
+    if not np.any(cost_band):
+        dual = _ZeroCostDual(
+            returns,
+            scale,
+            chunk_size=chunk_size,
+        )
+        return _fit_zero_cost_dual(
+            returns,
+            scale,
+            dual,
+            chunk_size=chunk_size,
+            maximum_iterations=maximum_iterations,
+            moment_tolerance=moment_tolerance,
+            optimizer_gradient_tolerance=optimizer_gradient_tolerance,
+            solver_label="CPU trust-region Newton-CG",
+        )
     signs = np.zeros(coordinates, dtype=np.int8)
     signs[statistics.mean > cost_band] = 1
     signs[statistics.mean < -cost_band] = -1
@@ -679,6 +919,25 @@ def fit_empirical_risk_neutral_density_torch(
             np.full(coordinates, 1.0e-8, dtype=np.float64),
         )
     )
+    if not np.any(cost_band):
+        dual = _TorchZeroCostDual(
+            device_returns,
+            scale,
+        )
+        fit = _fit_zero_cost_dual(
+            returns,
+            scale,
+            dual,
+            chunk_size=final_chunk_size,
+            maximum_iterations=maximum_iterations,
+            moment_tolerance=moment_tolerance,
+            optimizer_gradient_tolerance=optimizer_gradient_tolerance,
+            solver_label=f"{torch_device} trust-region Newton-CG",
+        )
+        del device_returns
+        if torch_device.type == "cuda":
+            torch.cuda.empty_cache()
+        return fit
     signs = np.zeros(coordinates, dtype=np.int8)
     signs[statistics.mean > cost_band] = 1
     signs[statistics.mean < -cost_band] = -1
