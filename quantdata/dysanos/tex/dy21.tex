@@ -1241,7 +1241,7 @@ At each date we can trade spot and 12 floating options
 at each of the
 four expiries $5D,10D,15D,20D$ struck on the  normalized-moneyness
 strikes $$
-z\in\{-1.5,-1.3,-1.1,-0.9,-0.7,-0.5,-0.3,-0.1,\;0.1,0.3,0.5,1\}\ .
+z\in\{-1.5,-1.3,-1.1,-0.9,-0.7,-0.5,-0.3,-0.1,0,0.1,0.3,0.5\}\ .
 $$ 
 Once entered, each option is held to expiry.
 Writing $\Pi_t^i$ for the (spot or option) entry price and $X_t^i$ for the (spot or option) expiry value of instrument
@@ -1263,10 +1263,10 @@ A different task is to find a generic risk-neutral measure for a trained DYSANOS
 
 \subsection{Finding a Risk Neutral Measure}
 
-As a first step we find a pre-conditioning measure $\Q_1$ equivalent to $\P$ under which the unconditional expectation of all returns is numerically close to zero.
+As a first step we find a pre-conditioning measure $\Q_1$ equivalent to $\P$ under which the unconditional expectation of every return is zero to numerical tolerance.
 Let $D$ be the density of $\Q_1$ with respect to~$\P$ over $\R^N$. Then we solve\footnote{
-  Numerically, for the chosen band vector $\bar c$, we solve 
-  the dual $\inf_a\{\log[N^{-1}\sum_n\exp(-R_n'a)]+\bar c'|a|\}$ over active signed orthants using L-BFGS-B. 
+  Numerically, we solve the smooth unconstrained dual
+  $\inf_a\log[N^{-1}\sum_n\exp(-R_n'a)]$ using trust-region Newton--CG with analytic gradients and exact covariance Hessian--vector products.
   Float64 log-sum-exp stabilization is used for the objective and gradient, after which $D_n=\exp(-R_n'a)/[N^{-1}\sum_m\exp(-R_m'a)]$ is reconstructed;
   hence every weight is strictly positive and their sample mean is one.}
 \eq{convex}
@@ -1274,9 +1274,8 @@ Let $D$ be the density of $\Q_1$ with respect to~$\P$ over $\R^N$. Then we solve
 \eqend
 subject to the linear constraints
 \eq{convexcond}
-  D > 0 \ , \ \ \ \E^\P\left[ D \right ] = 1 \ \ \ \mbox{and} \ \ \ \Big|\ \E^\P\left[ D\,R_t \right] \Big| \preceq c_t 
+  D > 0 \ , \ \ \ \E^\P\left[ D \right ] = 1 \ \ \ \mbox{and} \ \ \ \E^\P\left[ D\,R_t \right] = 0
 \eqend
-where~$c_t$ is 0.1bps for spot and 1bps for options.
 Table~\ref{tab:rn-precondition} shows summary results of this step.
 \begin{table}[H]
   \centering
@@ -1286,7 +1285,7 @@ Table~\ref{tab:rn-precondition} shows summary results of this step.
     \midrule
     Simulated paths & $ 100{,}000$ \\
     Returns & $1{,}225=25\times49$ \\
-    Pre-conditioning bands & spot: $0.10$bp; options: $1.00$bp \\
+    Moment constraints & exact zero \\
     Sample relative entropy & $0.1565$ \\
     Effective sample size & $71{,}175$ ($71.17\%$ of paths) \\
     Minimum / maximum density & $0.0035$ / $34.40$ \\
@@ -1348,15 +1347,14 @@ $a_\theta(x_t)\in\R^{49}$ with $\Theta=56{,}709$ parameters.  Thus the
 strategy uses the full 200-dimensional state, all option entry prices, and
 calendar time.
 
-The historical $\Q_2$ fit uses the capped action
+The $\Q_2$ fit uses the capped action
 \begin{equation}
   \bar a_\theta(x_t)
   =a_\theta(x_t)
    \min\!\left(1,\frac{32}{\lVert a_\theta(x_t)\rVert_1}\right) \ .
   \label{eq:rn-action-cap}
 \end{equation}
-We then solve\footnote{We use L-BFGS.} on the full 100,000 paths
- the problem
+We then solve the problem
 \begin{equation}
   \sup_{\theta\in\R^\Theta}: \
   -\log\E^1\!\left[
@@ -1365,6 +1363,8 @@ We then solve\footnote{We use L-BFGS.} on the full 100,000 paths
   \;\longrightarrow\;\theta^0.
   \label{eq:rn-oce-q2-fit}
 \end{equation}
+on the full 100,000 paths, using an exact full-population Adam warm start
+followed by exact full-population L-BFGS.
 Our candidate martingale measure is therefore
 \begin{equation}
   \frac{d\Q_2}{d\Q_1}
@@ -1490,7 +1490,7 @@ an action with the full affine-plus-deep architecture
 in~\eqref{eq:rn-expiry-action}, but with no action cap, by minimizing\footnote{
 Features are standardized using
 the weighted training fold only; both folds and measures use the same
-60-epoch schedule: 30 affine-initialization epochs followed by 30
+300-epoch schedule: 100 affine-initialization epochs followed by 200
 full-network epochs.}
 \begin{equation}
   \widehat L_{A,\Q}(\phi)
@@ -1646,7 +1646,7 @@ The conditional mean test fails clearly for $\P$ and $\Q_1$, but passes comforta
 This is a reduced demonstration rather than a general construction.  The
 experiment is numerically heavy and the terminal $\Q_2$ policy and conditional
 actions did not meet strict full-parameter gradient stopping criteria within
-the fixed 60-epoch two-stage schedule.  The frozen-action test remains valid, but
+the fixed 300-epoch two-stage schedule.  The frozen-action test remains valid, but
 incomplete action optimization can reduce its power. 
 
 The result is therefore evidence for zero drift within the stated
