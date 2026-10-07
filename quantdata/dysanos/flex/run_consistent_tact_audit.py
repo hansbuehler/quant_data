@@ -548,14 +548,26 @@ def path_scores(
 def weighted_antithetic_test(
     values: np.ndarray,
     weights: np.ndarray,
+    *,
+    antithetic_block_size: int = 2,
 ) -> dict[str, float | int | list[float]]:
     if values.shape != weights.shape or len(values) % 2:
         raise ValueError("weighted antithetic test needs matching even vectors")
+    if antithetic_block_size <= 0 or antithetic_block_size % 2:
+        raise ValueError("antithetic block size must be positive and even")
+    if len(values) % antithetic_block_size:
+        raise ValueError("values do not contain complete antithetic blocks")
     weight_sum = float(np.sum(weights, dtype=np.float64))
     mean_weight = weight_sum / len(weights)
     mean = float(np.sum(weights * values, dtype=np.float64) / weight_sum)
     influence = weights * (values - mean) / mean_weight
-    pair_influence = influence.reshape(-1, 2).mean(axis=1)
+    influence_blocks = influence.reshape(-1, antithetic_block_size)
+    half_block = antithetic_block_size // 2
+    pair_influence = 0.5 * (
+        influence_blocks[:, :half_block]
+        + influence_blocks[:, half_block:]
+    )
+    pair_influence = pair_influence.reshape(-1)
     standard_error = float(
         np.std(pair_influence, ddof=1) / math.sqrt(len(pair_influence))
     )
@@ -582,17 +594,24 @@ def unconditional_coordinate_diagnostics(
     weights: np.ndarray,
     *,
     batch_size: int,
+    antithetic_block_size: int = 2,
     materiality_floor: float = 1.0e-8,
 ) -> dict[str, Any]:
-    """Compute ratio-estimator scores using adjacent antithetic pairs as units."""
+    """Compute ratio-estimator scores using the generated antithetic pairs."""
     if returns.ndim != 3 or weights.shape != (len(returns),):
         raise ValueError(
             f"unexpected unconditional audit shapes {returns.shape}, {weights.shape}"
         )
     if len(returns) < 4 or len(returns) % 2:
         raise ValueError("unconditional audit needs at least two antithetic pairs")
-    if batch_size <= 0 or batch_size % 2:
-        raise ValueError("unconditional audit batch size must be positive and even")
+    if antithetic_block_size <= 0 or antithetic_block_size % 2:
+        raise ValueError("antithetic block size must be positive and even")
+    if len(returns) % antithetic_block_size:
+        raise ValueError("returns do not contain complete antithetic blocks")
+    if batch_size <= 0 or batch_size % antithetic_block_size:
+        raise ValueError(
+            "unconditional audit batch size must contain complete antithetic blocks"
+        )
     weight_sum = float(np.sum(weights, dtype=np.float64))
     mean_weight = weight_sum / len(weights)
     weighted_return_sum = np.zeros(returns.shape[1:], dtype=np.float64)
@@ -613,7 +632,17 @@ def unconditional_coordinate_diagnostics(
         weight = np.asarray(weights[first:last], dtype=np.float64)
         value = np.asarray(returns[first:last], dtype=np.float64)
         influence = weight[:, None, None] * (value - mean) / mean_weight
-        pair_influence = influence.reshape(-1, 2, *mean.shape).mean(axis=1)
+        influence_blocks = influence.reshape(
+            -1,
+            antithetic_block_size,
+            *mean.shape,
+        )
+        half_block = antithetic_block_size // 2
+        pair_influence = 0.5 * (
+            influence_blocks[:, :half_block]
+            + influence_blocks[:, half_block:]
+        )
+        pair_influence = pair_influence.reshape(-1, *mean.shape)
         pair_square_sum += np.sum(np.square(pair_influence), axis=0)
     standard_error = np.sqrt(pair_square_sum / (pair_count - 1) / pair_count)
     z_score = np.divide(
@@ -744,27 +773,44 @@ def run_measure(
             returns,
             weights,
             batch_size=arguments.batch_size,
+            antithetic_block_size=arguments.antithetic_block_size,
         ),
         "fold_A_fit": fit_a,
         "fold_B_fit": fit_b,
         "A_to_B": {
-            "raw_return": weighted_antithetic_test(score_b, weights[b_slice]),
+            "raw_return": weighted_antithetic_test(
+                score_b,
+                weights[b_slice],
+                antithetic_block_size=arguments.antithetic_block_size,
+            ),
             "quadratic_score": weighted_antithetic_test(
-                quadratic_b, weights[b_slice]
+                quadratic_b,
+                weights[b_slice],
+                antithetic_block_size=arguments.antithetic_block_size,
             ),
         },
         "B_to_A": {
-            "raw_return": weighted_antithetic_test(score_a, weights[a_slice]),
+            "raw_return": weighted_antithetic_test(
+                score_a,
+                weights[a_slice],
+                antithetic_block_size=arguments.antithetic_block_size,
+            ),
             "quadratic_score": weighted_antithetic_test(
-                quadratic_a, weights[a_slice]
+                quadratic_a,
+                weights[a_slice],
+                antithetic_block_size=arguments.antithetic_block_size,
             ),
         },
         "combined_out_of_fold": {
             "T_act": weighted_antithetic_test(
-                out_of_fold_score, out_of_fold_weights
+                out_of_fold_score,
+                out_of_fold_weights,
+                antithetic_block_size=arguments.antithetic_block_size,
             ),
             "quadratic_score": weighted_antithetic_test(
-                out_of_fold_quadratic, out_of_fold_weights
+                out_of_fold_quadratic,
+                out_of_fold_weights,
+                antithetic_block_size=arguments.antithetic_block_size,
             ),
         },
     }
@@ -780,6 +826,12 @@ def run(arguments: argparse.Namespace) -> None:
             raise ValueError("paths per fold must lie in [1, 50000]")
         if arguments.paths_per_fold % 2:
             raise ValueError("paths per fold must preserve complete antithetic pairs")
+        if arguments.antithetic_block_size <= 0 or arguments.antithetic_block_size % 2:
+            raise ValueError("antithetic block size must be positive and even")
+        if arguments.paths_per_fold % arguments.antithetic_block_size:
+            raise ValueError(
+                "paths per fold must contain complete antithetic generation blocks"
+            )
         torch.set_num_threads(arguments.cpu_threads)
         torch.set_float32_matmul_precision("high")
         if arguments.device == "cuda":
@@ -829,7 +881,8 @@ def run(arguments: argparse.Namespace) -> None:
                 ),
                 "fold_assignment": (
                     f"first and second {arguments.paths_per_fold // 2:,} source "
-                    "antithetic pairs form A and B"
+                    "antithetic pairs form A and B; pairs are reconstructed within "
+                    f"generation blocks of {arguments.antithetic_block_size:,} paths"
                 ),
             },
             "arguments": {
@@ -888,6 +941,15 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--measures", default="Q2,Q1")
     result.add_argument("--paths-per-fold", type=int, default=50_000)
     result.add_argument("--batch-size", type=int, default=5_000)
+    result.add_argument(
+        "--antithetic-block-size",
+        type=int,
+        default=2,
+        help=(
+            "Path count in each simulator generation block; its first half is "
+            "paired in order with its second half. Use 2 for adjacent pairs."
+        ),
+    )
     result.add_argument("--affine-epochs", type=int, default=30)
     result.add_argument("--full-epochs", type=int, default=30)
     result.add_argument("--learning-rate", type=float, default=1.0e-3)

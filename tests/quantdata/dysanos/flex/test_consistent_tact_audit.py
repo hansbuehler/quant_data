@@ -25,6 +25,18 @@ def test_weighted_antithetic_test_uses_pairs_as_sampling_units() -> None:
     )
 
 
+def test_weighted_antithetic_test_reconstructs_half_block_pairs() -> None:
+    result = weighted_antithetic_test(
+        np.array([1.0, 10.0, 3.0, 14.0]),
+        np.ones(4),
+        antithetic_block_size=4,
+    )
+
+    assert result["mean_daily_captured_return"] == pytest.approx(7.0)
+    assert result["pair_based_standard_error"] == pytest.approx(5.0)
+    assert result["z_score"] == pytest.approx(1.4)
+
+
 def test_unconditional_diagnostics_match_direct_ratio_calculation() -> None:
     random = np.random.default_rng(781)
     returns = random.normal(size=(8, 2, 3))
@@ -60,6 +72,30 @@ def test_unconditional_diagnostics_match_direct_ratio_calculation() -> None:
     )
     assert result["percentile_99_absolute_materiality_score"] == pytest.approx(
         np.percentile(absolute_materiality, 99.0)
+    )
+
+
+def test_unconditional_diagnostics_reconstruct_half_block_pairs() -> None:
+    random = np.random.default_rng(782)
+    returns = random.normal(size=(8, 2, 3))
+    weights = np.array([0.7, 1.3, 0.9, 1.1, 1.2, 0.8, 0.6, 1.4])
+
+    result = unconditional_coordinate_diagnostics(
+        returns,
+        weights,
+        batch_size=4,
+        antithetic_block_size=4,
+    )
+
+    mean = np.einsum("p,pti->ti", weights, returns) / np.sum(weights)
+    influence = weights[:, None, None] * (returns - mean) / np.mean(weights)
+    blocks = influence.reshape(2, 4, 2, 3)
+    pair_influence = 0.5 * (blocks[:, :2] + blocks[:, 2:])
+    pair_influence = pair_influence.reshape(4, 2, 3)
+    standard_error = np.sqrt(np.sum(pair_influence**2, axis=0) / 3 / 4)
+
+    assert result["maximum_absolute_z"] == pytest.approx(
+        np.max(np.abs(mean / standard_error))
     )
 
 

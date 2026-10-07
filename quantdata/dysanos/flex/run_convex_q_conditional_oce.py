@@ -2255,15 +2255,24 @@ def _run_locked(arguments: argparse.Namespace) -> None:
     returns = np.load(arguments.returns, mmap_mode="r", allow_pickle=False)
     weights = np.load(arguments.weights, mmap_mode="r", allow_pickle=False)
     convex_report = json.loads(arguments.convex_report.read_text())
+    try:
+        calibration_paths = int(convex_report["input"]["num_paths"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError("convex report does not identify its calibration population") from error
     expected_instruments = 1 + len(_EXPIRY_DAYS) * len(arguments.normalized_moneyness)
-    expected_shape = (1_000_000, 25, expected_instruments)
+    expected_shape = (calibration_paths, arguments.num_steps, expected_instruments)
     if returns.shape != expected_shape:
         raise ValueError(
             f"expected the fitted return matrix with shape {expected_shape}, "
             f"found {returns.shape}"
         )
-    if weights.shape != (1_000_000,) or np.any(~np.isfinite(weights) | (weights <= 0.0)):
-        raise ValueError("convex density weights must be one million finite-positive values")
+    if weights.shape != (calibration_paths,) or np.any(
+        ~np.isfinite(weights) | (weights <= 0.0)
+    ):
+        raise ValueError(
+            "convex density weights must be a finite-positive vector with shape "
+            f"({calibration_paths},), found {weights.shape}"
+        )
     if not 0 < arguments.num_paths <= len(returns):
         raise ValueError("requested path count exceeds the convex calibration population")
 
@@ -2418,17 +2427,19 @@ def _run_locked(arguments: argparse.Namespace) -> None:
     baseline_pnl: np.ndarray | None = None
     if arguments.baseline_pnl is not None:
         baseline_pnl = np.load(arguments.baseline_pnl, mmap_mode="r", allow_pickle=False)
-        if baseline_pnl.shape != (1_000_000,) or np.any(
+        if baseline_pnl.shape != (len(returns),) or np.any(
             ~np.isfinite(baseline_pnl[: arguments.num_paths])
         ):
-            raise ValueError("baseline PnL must contain one million finite values")
+            raise ValueError(
+                f"baseline PnL must contain {len(returns):,} finite values"
+            )
     claim_pnl: np.ndarray | None = None
     if arguments.claim_pnl is not None:
         claim_pnl = np.load(arguments.claim_pnl, mmap_mode="r", allow_pickle=False)
-        if claim_pnl.shape != (1_000_000,) or np.any(
+        if claim_pnl.shape != (len(returns),) or np.any(
             ~np.isfinite(claim_pnl[: arguments.num_paths])
         ):
-            raise ValueError("claim PnL must contain one million finite values")
+            raise ValueError(f"claim PnL must contain {len(returns):,} finite values")
 
     if (
         phase == "training"
@@ -2788,14 +2799,25 @@ def _run_locked(arguments: argparse.Namespace) -> None:
         "status": "complete",
         "created_at_utc": datetime.now(UTC).isoformat(),
         "definition": {
-            "reference_measure": "the supplied normalized empirical weights on the fixed one-million paths",
-            "policy_input": "current Direct-200 hidden state h and eleven current option prices for one expiry",
+            "reference_measure": (
+                "the supplied normalized empirical weights on the fixed "
+                f"{arguments.num_paths:,}-path population"
+            ),
+            "policy_input": (
+                "current Direct-200 hidden state h and "
+                f"{setup['policy_config'].num_strikes} current option prices "
+                "for one expiry"
+            ),
             "policy_output": (
-                "separate nonnegative long and short legs for 11 options plus spot "
-                "per expiry; spot logits are aggregated before the positive-part "
-                "map, net action is long minus short, and costs/cap use gross legs"
+                "separate nonnegative long and short legs for "
+                f"{setup['policy_config'].num_strikes} options plus spot per expiry; "
+                "spot logits are aggregated before the positive-part map, net action "
+                "is long minus short, and costs/cap use gross legs"
                 if arguments.long_short_actions
-                else "shared 11 option actions plus one spot action per expiry; four spot heads are summed"
+                else (
+                    f"shared {setup['policy_config'].num_strikes} option actions "
+                    "plus one spot action per expiry; four spot heads are summed"
+                )
             ),
             "objective": (
                 "fixed-policy -log E_Q exp(-net PnL); policy weights unchanged"

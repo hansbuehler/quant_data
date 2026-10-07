@@ -78,6 +78,24 @@ def test_multivariate_fit_handles_opposite_active_signs_and_three_dimensions() -
     assert fit.weights.shape == (6,)
 
 
+def test_zero_cost_fit_enforces_zero_empirical_moments() -> None:
+    generator = np.random.default_rng(123)
+    returns = generator.normal(size=(500, 5)) * 0.03
+    returns += np.asarray((0.010, -0.008, 0.006, -0.004, 0.002))
+
+    fit = fit_empirical_risk_neutral_density(
+        returns,
+        np.zeros(5),
+        chunk_size=len(returns),
+        moment_tolerance=1.0e-10,
+    )
+
+    assert fit.optimizer_success
+    assert fit.maximum_kkt_residual <= 1.0e-10
+    assert fit.weighted_mean == pytest.approx(np.zeros(5), abs=1.0e-10)
+    assert np.mean(fit.weights) == pytest.approx(1.0, abs=1.0e-14)
+
+
 def test_torch_full_population_solver_matches_streamed_cpu_solver() -> None:
     generator = np.random.default_rng(17)
     returns = generator.normal(size=(400, 8)) * 0.03
