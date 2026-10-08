@@ -30,3 +30,17 @@ def test_oce_density_tilt_is_invariant_to_irrelevant_constants() -> None:
     shifted = fit_oce_density_tilt(7.0 * base_weights, pnl + 3.0)
 
     assert shifted.weights == pytest.approx(reference.weights)
+
+
+def test_oce_density_tilt_floors_float64_underflow_without_losing_mass() -> None:
+    base_weights = np.ones(3)
+    pnl = np.asarray((1_000.0, 0.0, 0.0))
+
+    fit = fit_oce_density_tilt(base_weights, pnl)
+
+    assert fit.float64_floor_count == 1
+    assert fit.minimum_exact_log_weight < np.log(np.finfo(np.float64).tiny)
+    assert np.all(np.isfinite(fit.weights))
+    assert np.all(fit.weights > 0.0)
+    assert np.mean(fit.weights) == pytest.approx(1.0, abs=1.0e-15)
+    assert np.exp(fit.log_weights) == pytest.approx(fit.weights)

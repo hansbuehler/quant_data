@@ -23,6 +23,8 @@ class OceDensityTilt:
     log_weights: np.ndarray
     log_normalizer: float
     effective_sample_size: float
+    float64_floor_count: int
+    minimum_exact_log_weight: float
 
 
 def fit_oce_density_tilt(
@@ -49,9 +51,17 @@ def fit_oce_density_tilt(
     # Remove the final floating-point normalization error before exponentiating.
     log_mass = float(logsumexp(log_weights) - math.log(len(log_weights)))
     log_weights -= log_mass
+    minimum_exact_log_weight = float(np.min(log_weights))
+    log_float64_floor = math.log(np.finfo(np.float64).tiny)
+    floor_mask = log_weights < log_float64_floor
+    float64_floor_count = int(np.sum(floor_mask))
+    if float64_floor_count:
+        log_weights = np.maximum(log_weights, log_float64_floor)
     weights = np.exp(log_weights)
+    weights *= len(weights) / np.sum(weights, dtype=np.float64)
     if np.any(~np.isfinite(weights) | (weights <= 0.0)):
         raise FloatingPointError("the OCE density underflowed or became non-finite")
+    log_weights = np.log(weights)
     effective_sample_size = float(
         np.sum(weights, dtype=np.float64) ** 2
         / np.sum(np.square(weights), dtype=np.float64)
@@ -61,6 +71,8 @@ def fit_oce_density_tilt(
         log_weights=log_weights,
         log_normalizer=log_normalizer + log_mass,
         effective_sample_size=effective_sample_size,
+        float64_floor_count=float64_floor_count,
+        minimum_exact_log_weight=minimum_exact_log_weight,
     )
 
 
@@ -107,6 +119,9 @@ def main() -> None:
         "density_mean": float(np.mean(fit.weights)),
         "density_minimum": float(np.min(fit.weights)),
         "density_maximum": float(np.max(fit.weights)),
+        "float64_density_floor": float(np.finfo(np.float64).tiny),
+        "float64_density_floor_count": fit.float64_floor_count,
+        "minimum_exact_log_weight": fit.minimum_exact_log_weight,
     }
     write_json_atomic(report, arguments.output_directory / "tilt-report.json")
     print(
