@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -12,6 +13,7 @@ from quantdata.dysanos.flex.run_convex_q_conditional_oce import (
     _assemble_expiry_slice_action_details,
     _fixed_feature_pnl,
     _full_population_oce_probabilities,
+    _load_checkpoint,
     _trust_region_boundary_distance,
     assemble_expiry_slice_actions,
     weighted_log_oce,
@@ -146,6 +148,47 @@ def test_chunked_full_population_gradient_matches_direct_oce() -> None:
     assert log_loss == pytest.approx(float(direct_loss.detach()))
     assert float(np.sum(probabilities)) == pytest.approx(1.0)
     assert float(chunked_parameter.grad) == pytest.approx(float(direct_parameter.grad))
+
+
+def test_checkpoint_can_skip_unused_generator_state_for_cross_device_resume(
+    tmp_path: Path,
+) -> None:
+    source = torch.nn.Linear(2, 1)
+    source_optimizer = torch.optim.Adam(source.parameters(), lr=1.0e-3)
+    checkpoint = tmp_path / "checkpoint.pt"
+    torch.save(
+        {
+            "schema": "dysanos-convex-q-conditional-oce-v1",
+            "phase": "training",
+            "policy_state_dict": source.state_dict(),
+            "optimizer_state_dict": source_optimizer.state_dict(),
+            "generator_state": torch.zeros(3, dtype=torch.uint8),
+            "epoch": 7,
+            "path_offset": 0,
+            "updates": 7,
+            "history": [{"epoch": 7}],
+        },
+        checkpoint,
+    )
+    target = torch.nn.Linear(2, 1)
+    target_optimizer = torch.optim.Adam(target.parameters(), lr=1.0e-3)
+    generator = torch.Generator(device="cpu").manual_seed(123)
+    generator_state = generator.get_state().clone()
+
+    restored = _load_checkpoint(
+        checkpoint,
+        setup={"policy": target},
+        optimizer=target_optimizer,
+        generator=generator,
+        restore_generator_state=False,
+    )
+
+    assert restored[:3] == (7, 0, 7)
+    assert torch.equal(generator.get_state(), generator_state)
+    for source_parameter, target_parameter in zip(
+        source.parameters(), target.parameters(), strict=True
+    ):
+        assert torch.equal(source_parameter, target_parameter)
 
 
 def test_zero_initialized_shared_policy_returns_zero_actions() -> None:

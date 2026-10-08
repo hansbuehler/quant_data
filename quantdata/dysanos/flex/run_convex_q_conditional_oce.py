@@ -1816,6 +1816,7 @@ def _load_checkpoint(
     setup: Mapping[str, Any],
     optimizer: torch.optim.Optimizer,
     generator: torch.Generator,
+    restore_generator_state: bool = True,
 ) -> tuple[int, int, int, list[dict[str, float | int]], str]:
     payload = torch.load(path, map_location="cpu", weights_only=False)
     if (
@@ -1825,7 +1826,8 @@ def _load_checkpoint(
         raise ValueError("conditional OCE checkpoint identity is invalid")
     setup["policy"].load_state_dict(payload["policy_state_dict"])
     optimizer.load_state_dict(payload["optimizer_state_dict"])
-    generator.set_state(payload["generator_state"])
+    if restore_generator_state:
+        generator.set_state(payload["generator_state"])
     return (
         int(payload["epoch"]),
         int(payload["path_offset"]),
@@ -2391,6 +2393,12 @@ def _run_locked(arguments: argparse.Namespace) -> None:
             setup=setup,
             optimizer=optimizer,
             generator=generator,
+            # Exact fixed-feature population training makes no random draws.
+            # Skipping this unused state permits deterministic CPU/GPU handoff,
+            # whose generator-state encodings are device-specific.
+            restore_generator_state=not (
+                arguments.full_population_gradient and cached_states is not None
+            ),
         )
         print(
             f"resumed conditional OCE phase={phase} epoch={epoch} path={path_offset}",
