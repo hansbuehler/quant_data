@@ -1837,6 +1837,32 @@ def _load_checkpoint(
     )
 
 
+def _configure_lbfgs_optimizer(
+    optimizer: torch.optim.Optimizer,
+    *,
+    learning_rate: float,
+    max_iterations: int,
+    max_evaluations: int,
+    tolerance_gradient: float,
+    tolerance_change: float,
+    history_size: int,
+) -> None:
+    """Apply run-time L-BFGS controls after restoring its curvature state."""
+
+    for group in optimizer.param_groups:
+        group.update(
+            {
+                "lr": learning_rate,
+                "max_iter": max_iterations,
+                "max_eval": max_evaluations,
+                "tolerance_grad": tolerance_gradient,
+                "tolerance_change": tolerance_change,
+                "history_size": history_size,
+                "line_search_fn": "strong_wolfe",
+            }
+        )
+
+
 def _load_policy_state(
     path: Path,
     *,
@@ -2400,6 +2426,18 @@ def _run_locked(arguments: argparse.Namespace) -> None:
                 arguments.full_population_gradient and cached_states is not None
             ),
         )
+        if arguments.optimizer == "lbfgs":
+            # Optimizer state carries the old parameter-group controls.  Keep
+            # its inverse-Hessian history but honor the current run settings.
+            _configure_lbfgs_optimizer(
+                optimizer,
+                learning_rate=arguments.learning_rate,
+                max_iterations=arguments.lbfgs_max_iterations,
+                max_evaluations=arguments.lbfgs_max_evaluations,
+                tolerance_gradient=arguments.lbfgs_tolerance_grad,
+                tolerance_change=arguments.lbfgs_tolerance_change,
+                history_size=arguments.lbfgs_history_size,
+            )
         print(
             f"resumed conditional OCE phase={phase} epoch={epoch} path={path_offset}",
             flush=True,

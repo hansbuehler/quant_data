@@ -11,6 +11,7 @@ from quantdata.dysanos.flex.run_convex_q_conditional_oce import (
     SharedExpiryOceConfig,
     SharedExpiryOcePolicy,
     _assemble_expiry_slice_action_details,
+    _configure_lbfgs_optimizer,
     _fixed_feature_pnl,
     _full_population_oce_probabilities,
     _load_checkpoint,
@@ -189,6 +190,72 @@ def test_checkpoint_can_skip_unused_generator_state_for_cross_device_resume(
         source.parameters(), target.parameters(), strict=True
     ):
         assert torch.equal(source_parameter, target_parameter)
+
+
+def test_lbfgs_resume_keeps_state_but_honors_current_run_controls(
+    tmp_path: Path,
+) -> None:
+    source = torch.nn.Linear(2, 1)
+    source_optimizer = torch.optim.LBFGS(
+        source.parameters(),
+        lr=0.5,
+        max_iter=4,
+        max_eval=10,
+        history_size=20,
+        line_search_fn="strong_wolfe",
+    )
+    checkpoint = tmp_path / "checkpoint.pt"
+    torch.save(
+        {
+            "schema": "dysanos-convex-q-conditional-oce-v1",
+            "phase": "training",
+            "policy_state_dict": source.state_dict(),
+            "optimizer_state_dict": source_optimizer.state_dict(),
+            "generator_state": torch.Generator().get_state(),
+            "epoch": 7,
+            "path_offset": 0,
+            "updates": 7,
+            "history": [{"epoch": 7}],
+        },
+        checkpoint,
+    )
+    target = torch.nn.Linear(2, 1)
+    target_optimizer = torch.optim.LBFGS(
+        target.parameters(),
+        lr=1.0,
+        max_iter=20,
+        max_eval=30,
+        history_size=50,
+        line_search_fn="strong_wolfe",
+    )
+    _load_checkpoint(
+        checkpoint,
+        setup={"policy": target},
+        optimizer=target_optimizer,
+        generator=torch.Generator(),
+        restore_generator_state=False,
+    )
+
+    # Loading retains the checkpoint's optimizer state and its old controls.
+    assert target_optimizer.param_groups[0]["max_iter"] == 4
+    _configure_lbfgs_optimizer(
+        target_optimizer,
+        learning_rate=1.0,
+        max_iterations=20,
+        max_evaluations=30,
+        tolerance_gradient=1.0e-9,
+        tolerance_change=1.0e-12,
+        history_size=50,
+    )
+
+    group = target_optimizer.param_groups[0]
+    assert group["lr"] == 1.0
+    assert group["max_iter"] == 20
+    assert group["max_eval"] == 30
+    assert group["tolerance_grad"] == 1.0e-9
+    assert group["tolerance_change"] == 1.0e-12
+    assert group["history_size"] == 50
+    assert group["line_search_fn"] == "strong_wolfe"
 
 
 def test_zero_initialized_shared_policy_returns_zero_actions() -> None:
