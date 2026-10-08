@@ -1010,53 +1010,59 @@ specification, and the out-of-fold action statistics range from 89.205 to
 646.645.  Thus the same diagnostics that remain small under~$\Q$ recover both
 unconditional and state-predictable drift after the fitted change to~$\PP$.
 
-\subsection{Full Eligible Surface}
+\subsection{Full Strike Grid}
 \label{sec:numerics-all-node-summary}
 
-The preceding experiment deliberately trades few options.  We now test the
-entire 25-expiry, 200-interior-strike surface.  Rather than trading options
-which are effectively worthless, a call is eligible at the start of a daily
-return only when its predictable normalized moneyness satisfies
-\[
- -2 < \frac{\log(K/S_t)}{\sigma_{\mathrm{ATM},0}\sqrt{\tau}} < 1,
-\]
-where $\sigma_{\mathrm{ATM},0}=9.52\%$ is the inception one-day ATM
-volatility and $\tau$ is the remaining business-day year fraction.  Thus the
-eligible contracts vary with spot and expiry, while the decision to trade is
-made before the one-day price change.  We run Model~C (rank~8 and eight DLV
-substeps per day) on 100,000 risk-neutral paths and test the resulting daily
-increments of the smooth option prices.
+The preceding experiment deliberately trades few options.  We next include
+spot and all 200 interior fixed-strike calls at each of 5, 10, 15, and 20
+business days.  There are 801 instruments at the initial date and 10,020 live
+day--instrument coordinates.  We therefore supplement the raw statistics with
+the materiality score in~\eqref{eq:numerics-materiality-score}.
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{lr}
+\begin{tabular}{lrrrrrr}
 \toprule
-Diagnostic & Value \\
+Model & Max. $\abs{z}$ & 99\% $\abs{z}$ & $N_5$
+  & Max. $\abs{s^{(\varepsilon)}}$
+  & 99\% $\abs{s^{(\varepsilon)}}$ & $T_{\mathrm{act}}$\\
+\cmidrule(lr){2-6}
+ & & \multicolumn{4}{c}{Unconditional} & \\
 \midrule
-Model & C: rank 8, eight steps \\
-Paths & $100{,}000$ \\
-Eligible day--expiry--strike coordinates & $62{,}574$ / $63{,}065$ \\
-Maximum $\abs{z}$ & {\color{red}4.037} \\
-99th percentile $\abs{z}$ & {\color{orange}2.267} \\
-Root-mean-square $z$ & $0.876$ \\
-$N_{\abs{z}>5}$ & $0$ \\
-Maximum absolute mean increment & $3.88\times10^{-5}$ \\
+A: rank 8, one step    & {\color{red}19.181} & 2.357 & {\color{red}13}
+  & {\color{orange}2.738} & 2.283 & $-0.218$\\
+B: rank 16, one step   & {\color{red}13.360} & 2.243 & {\color{red}26}
+  & {\color{orange}3.240} & 2.133 & 0.051\\
+C: rank 8, eight steps & {\color{red}13.318} & {\color{orange}2.631} & {\color{red}13}
+  & {\color{orange}4.481} & {\color{orange}2.578} & {\color{orange}2.175}\\
+D: rank 16, eight steps& {\color{red}9.043} & {\color{orange}2.761} & {\color{red}19}
+  & {\color{orange}4.784} & {\color{orange}2.759} & $-0.562$\\
 \bottomrule
 \end{tabular}
-\caption{Full eligible-surface, 100,000-path $\Q$ audit.  The daily
-unconditional statistic is the mean option-price increment divided by its
-Monte Carlo standard error.  The red and orange entries exceed the 99\% and
-95\% two-sided Gaussian thresholds, respectively.}
+\caption{Full-grid, 100,000-path $\Q$ diagnostics.  Red entries are raw
+five-standard-error tail violations; orange entries are moderate raw or
+materiality-score deviations.  No materiality score exceeds five.}
 \label{tab:numerics-all-node-summary}
 \end{table}
 
-The 25-expiry audit produces no five-standard-error daily violation.  Its
-largest statistic is a moderate four-standard-error deviation across more than
-sixty thousand correlated coordinates, and its 99th percentile is 2.267.  This
-is a much broader unconditional check than the restricted book.  A
-full-surface conditional-action test is a separate, substantially larger
-learning problem and is not claimed here.
+Thus the clean restricted-universe result does depend on excluding the most
+extreme strikes.  Every full-grid model has raw unconditional tail violations,
+although the conditional action statistics remain small and no
+materiality-regularized score exceeds five.  For example, the worst Model~A
+coordinate is the highest-strike five-day call: its initial value is
+$2.31\times10^{-9}$ spot units, its mean one-day increment is
+$4.48\times10^{-10}$, and only $0.056$ exercises are expected among 100,000
+paths.  The raw $z=19.18$ identifies a finite-step tail defect, while
+\eqref{eq:numerics-materiality-score} records its negligible absolute scale.
+
+\paragraph{Interpretation.}
+The restricted book produces acceptable $\Q$ diagnostics for every
+configuration, with Model~D closest to zero in the conditional action test.
+The full option grid gives the more demanding conclusion: all four finite-step
+schemes retain statistically detectable defects in  tail calls.
+These are numerical defects of the discretisation, not of the continuous-time
+drift identity; see Section~\ref{sec:sampling}.
 
 \section{Conclusion}
 
@@ -1070,15 +1076,15 @@ used in~\cite{DYSANOS2026}.
 Estimated on 891 trading days of S\&P~500 index option data, the model's static fit covers more
 than 95\% of quoted bid/ask intervals, and the restricted-universe $\Q$ diagnostics of
 Section~\ref{sec:numerics} confirm the theoretical martingale property up to time-discretisation
-error. The 25-expiry eligible-surface audit in
-Section~\ref{sec:numerics-all-node-summary} finds no five-standard-error daily
-violation in 100,000 paths. We
+error. On the full option grid, finite-step simulation retains statistically detectable but
+economically negligible tail defects, consistent with the discretisation bias discussed in
+Section~\ref{sec:sampling} rather than a failure of the continuous-time drift identity. We
 further estimate the physical dynamics and the implied market price of risk, recovering a
 stable low-rank factor structure for the DLV vol-of-vol.
 
-Natural next steps include a full-surface conditional-action audit, a finer or higher-order
-time-stepping scheme (c.f.\ the discrete-branch correction of
-Remark~\ref{rem:discrete-branch-sampling}), a formal existence and uniqueness
+Natural next steps include a finer or higher-order time-stepping scheme to reduce the residual
+tail bias documented in Section~\ref{sec:numerics-all-node-summary} (c.f.\ the discrete-branch
+correction of Remark~\ref{rem:discrete-branch-sampling}), a formal existence and uniqueness
 argument for the risk-neutral SDE system of Section~\ref{sec:future-densities}, and extending
 the estimation beyond short-dated S\&P~500 index options to other asset classes and longer
 tenors.
