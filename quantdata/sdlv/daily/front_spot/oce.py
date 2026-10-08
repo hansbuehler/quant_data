@@ -117,14 +117,22 @@ class FrontSpotOcePolicy(BaseModel):
                 "features must have shape (paths,steps,feature_count), found "
                 f"{tuple(features.shape)}"
             )
-        expected_mask = (features.shape[1], self.config.instrument_count)
-        if active_mask.shape != expected_mask:
+        static_mask_shape = (features.shape[1], self.config.instrument_count)
+        pathwise_mask_shape = (
+            features.shape[0],
+            features.shape[1],
+            self.config.instrument_count,
+        )
+        if active_mask.shape not in {static_mask_shape, pathwise_mask_shape}:
             raise ValueError(
-                f"active mask must have shape {expected_mask}, found {active_mask.shape}"
+                "active mask must have static shape "
+                f"{static_mask_shape} or pathwise shape {pathwise_mask_shape}, "
+                f"found {active_mask.shape}"
             )
         normalized = (features - self.feature_mean) / self.feature_scale
         action = self.affine(normalized) + self.deep(normalized)
-        action = torch.where(active_mask[None], action, torch.zeros_like(action))
+        broadcast_mask = active_mask[None] if active_mask.ndim == 2 else active_mask
+        action = torch.where(broadcast_mask, action, torch.zeros_like(action))
         self.verify(lambda: torch.isfinite(action), lambda: "policy action is not finite")
         return action
 

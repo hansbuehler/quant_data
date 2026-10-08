@@ -26,6 +26,11 @@ from quantdata.sdlv.daily.front_spot.run_oce import (
     _spot_normalized_price_increments,
     unconditional_spot_scaled_martingale_audit,
 )
+from quantdata.sdlv.daily.front_spot.run_surface_oce import (
+    SurfacePopulation,
+    _dynamic_active_mask,
+    _write_returns,
+)
 from quantdata.torch import BaseEnvironment
 from quantdata.torch.ffw import FeedForwardConfig
 
@@ -64,6 +69,70 @@ def test_policy_starts_at_zero_and_masks_inactive_coordinates() -> None:
     assert torch.all(action[:, 1, 0] == 2.0)
     assert torch.all(action[:, 1, 1] == 0.0)
     assert torch.all(action[:, 2] == 0.0)
+
+
+def test_policy_accepts_predictable_pathwise_instrument_masks() -> None:
+    policy = _policy()
+    features = torch.randn(2, 3, 3, dtype=torch.float64)
+    active = torch.tensor(
+        [
+            [[True, False], [True, True], [False, False]],
+            [[False, True], [True, False], [True, True]],
+        ],
+        dtype=torch.bool,
+    )
+    with torch.no_grad():
+        policy.affine.bias.fill_(2.0)
+    action = policy(features, active)
+    assert action.shape == active.shape
+    assert torch.all(action[active] == 2.0)
+    assert torch.all(action[~active] == 0.0)
+
+
+def test_full_surface_mask_is_pathwise_and_expires_strips() -> None:
+    features = np.zeros((2, 25, 2), dtype=np.float32)
+    features[1, :, 1] = math.log(1.1)
+    population = SurfacePopulation(
+        features=features,
+        returns=np.empty((2, 25, 76), dtype=np.float32),
+        strikes=np.asarray([0.9, 1.0, 1.1]),
+        factor_rank=1,
+        nms_annualized_atm_volatility=0.2,
+        nms_lower_bound=-2.0,
+        nms_upper_bound=1.0,
+        initial_date="2025-08-29",
+        generation_seconds=0.0,
+    )
+    mask = _dynamic_active_mask(features, population)
+    assert mask.shape == (2, 25, 76)
+    assert np.all(mask[..., 0])
+    assert not np.array_equal(mask[0, 0], mask[1, 0])
+    assert not np.any(mask[:, 24, 1 : 1 + 24 * 3])
+    assert np.any(mask[:, 24, 1 + 24 * 3 :])
+
+
+def test_full_surface_returns_apply_pre_step_eligibility_and_spot_scaling() -> None:
+    target = np.empty((2, 5), dtype=np.float32)
+    current_spot = np.asarray([1.0, 2.0])
+    next_spot = np.asarray([1.1, 1.8])
+    current_options = np.asarray([[[0.2, 0.3], [0.4, 0.5]]] * 2)
+    next_options = current_options + 0.1
+    eligible = np.asarray(
+        [
+            [[True, False], [False, True]],
+            [[False, True], [True, False]],
+        ]
+    )
+    _write_returns(
+        target,
+        current_spot=current_spot,
+        next_spot=next_spot,
+        current_options=current_options,
+        next_options=next_options,
+        eligible_options=eligible,
+    )
+    assert np.allclose(target[0], [0.1, 0.1, 0.0, 0.0, 0.1])
+    assert np.allclose(target[1], [-0.1, 0.0, 0.05, 0.05, 0.0])
 
 
 def test_local_regularized_objective_has_expected_deterministic_optimum() -> None:
