@@ -27,7 +27,9 @@ from quantdata.sdlv.daily.front_spot.run_oce import (
     unconditional_spot_scaled_martingale_audit,
 )
 from quantdata.sdlv.daily.front_spot.run_surface_oce import (
+    POLICY_SCHEMA,
     SurfacePopulation,
+    _checkpoint_metadata_mismatches,
     _dynamic_active_mask,
     _write_returns,
 )
@@ -87,6 +89,30 @@ def test_policy_accepts_predictable_pathwise_instrument_masks() -> None:
     assert action.shape == active.shape
     assert torch.all(action[active] == 2.0)
     assert torch.all(action[~active] == 0.0)
+
+
+def test_surface_policy_checkpoint_allows_extended_training_schedule() -> None:
+    checkpoint = {
+        "schema": POLICY_SCHEMA,
+        "policy_code_version": FrontSpotOcePolicyConfig.version.unique_id48,
+        "train_config": {"maximum_epochs": 30},
+        "fold_start": 0,
+        "fold_stop": 50_000,
+        "affine_only": True,
+    }
+    assert not _checkpoint_metadata_mismatches(
+        checkpoint,
+        start=0,
+        stop=50_000,
+        affine_only=True,
+    )
+    checkpoint["fold_stop"] = 49_998
+    assert _checkpoint_metadata_mismatches(
+        checkpoint,
+        start=0,
+        stop=50_000,
+        affine_only=True,
+    ) == ["fold_stop"]
 
 
 def test_full_surface_mask_is_pathwise_and_expires_strips() -> None:

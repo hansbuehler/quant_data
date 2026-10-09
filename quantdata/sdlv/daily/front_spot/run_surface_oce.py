@@ -757,6 +757,25 @@ def _checkpoint_payload(
     }
 
 
+def _checkpoint_metadata_mismatches(
+    checkpoint: dict[str, Any],
+    *,
+    start: int,
+    stop: int,
+    affine_only: bool,
+) -> list[str]:
+    expected = {
+        "schema": POLICY_SCHEMA,
+        "policy_code_version": FrontSpotOcePolicyConfig.version.unique_id48,
+        "fold_start": start,
+        "fold_stop": stop,
+        "affine_only": affine_only,
+    }
+    return [
+        key for key, value in expected.items() if checkpoint.get(key) != value
+    ]
+
+
 def _fit_policy(
     population: SurfacePopulation,
     start: int,
@@ -777,16 +796,17 @@ def _fit_policy(
     checkpoint: dict[str, Any] | None = None
     if checkpoint_path.is_file():
         checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-        expected = {
-            "schema": POLICY_SCHEMA,
-            "policy_code_version": FrontSpotOcePolicyConfig.version.unique_id48,
-            "train_config": asdict(train_config),
-            "fold_start": start,
-            "fold_stop": stop,
-            "affine_only": affine_only,
-        }
-        if any(checkpoint.get(key) != value for key, value in expected.items()):
-            raise RuntimeError(f"incompatible policy checkpoint {checkpoint_path}")
+        mismatches = _checkpoint_metadata_mismatches(
+            checkpoint,
+            start=start,
+            stop=stop,
+            affine_only=affine_only,
+        )
+        if mismatches:
+            raise RuntimeError(
+                f"incompatible policy checkpoint {checkpoint_path}: "
+                f"{', '.join(mismatches)}"
+            )
         state_dict = checkpoint["current_state"]
         feature_mean = state_dict["feature_mean"].numpy()
         feature_scale = state_dict["feature_scale"].numpy()
@@ -842,9 +862,29 @@ def _fit_policy(
         next_epoch = int(checkpoint["next_epoch"])
         best_loss = float(checkpoint["best_loss"])
         best_state = checkpoint["best_state"]
-        if checkpoint["complete"]:
+        if next_epoch > train_config.maximum_epochs:
+            raise ValueError(
+                f"checkpoint {checkpoint_path} has completed {next_epoch} epochs, "
+                f"more than the requested {train_config.maximum_epochs}"
+            )
+        if checkpoint["complete"] and next_epoch == train_config.maximum_epochs:
             policy.load_state_dict(best_state)
             return policy, history
+        if checkpoint["complete"]:
+            policy.load_state_dict(best_state)
+            print(
+                json.dumps(
+                    {
+                        "stage": "resume-extended-training",
+                        "label": label,
+                        "completed_epochs": next_epoch,
+                        "requested_epochs": train_config.maximum_epochs,
+                        "previous_train_config": checkpoint.get("train_config"),
+                        "current_train_config": asdict(train_config),
+                    }
+                ),
+                flush=True,
+            )
 
     training_started = time.perf_counter()
     for epoch in range(next_epoch, train_config.maximum_epochs):
@@ -1257,9 +1297,18 @@ def run(arguments: argparse.Namespace) -> None:
             nms_lower_bound=arguments.nms_lower_bound,
             nms_upper_bound=arguments.nms_upper_bound,
         )
-        train_config = FrontSpotOceTrainConfig(
+        affine_train_config = FrontSpotOceTrainConfig(
             batch_size=arguments.training_batch_size,
-            maximum_epochs=arguments.maximum_epochs,
+            maximum_epochs=arguments.affine_maximum_epochs,
+            learning_rate=arguments.learning_rate,
+            minimum_improvement=arguments.minimum_improvement,
+            maximum_gradient_norm=arguments.maximum_gradient_norm,
+            epsilon=arguments.epsilon,
+            seed=arguments.policy_seed,
+        )
+        full_train_config = FrontSpotOceTrainConfig(
+            batch_size=arguments.training_batch_size,
+            maximum_epochs=arguments.full_maximum_epochs,
             learning_rate=arguments.learning_rate,
             minimum_improvement=arguments.minimum_improvement,
             maximum_gradient_norm=arguments.maximum_gradient_norm,
@@ -1280,7 +1329,7 @@ def run(arguments: argparse.Namespace) -> None:
                 label=f"full-surface-affine-{fold_label}",
                 checkpoint_path=arguments.cache_dir
                 / f"affine_{fold_label}.checkpoint.pt",
-                train_config=train_config,
+                train_config=affine_train_config,
                 device=arguments.device,
                 affine_only=True,
             )
@@ -1294,7 +1343,7 @@ def run(arguments: argparse.Namespace) -> None:
                 fold_stop,
                 label=f"full-surface-{fold_label}",
                 checkpoint_path=arguments.cache_dir / f"policy_{fold_label}.checkpoint.pt",
-                train_config=train_config,
+                train_config=full_train_config,
                 device=arguments.device,
                 affine_only=False,
                 initial_state_dict=affine_state,
@@ -1401,7 +1450,8 @@ def run(arguments: argparse.Namespace) -> None:
                     "remain in one fold"
                 ),
                 "normalization": "fitted separately on each training fold only",
-                "hyperparameters": asdict(train_config),
+                "affine_hyperparameters": asdict(affine_train_config),
+                "full_hyperparameters": asdict(full_train_config),
             },
             "unconditional": unconditional,
             "conditional": {
@@ -1463,7 +1513,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--expiry-smoothing", type=float, default=1.0)
     parser.add_argument("--strike-smoothing", type=float, default=2.0)
     parser.add_argument("--training-batch-size", type=int, default=64)
-    parser.add_argument("--maximum-epochs", type=int, default=30)
+    parser.add_argument("--affine-maximum-epochs", type=int, default=100)
+    parser.add_argument("--full-maximum-epochs", type=int, default=200)
     parser.add_argument("--learning-rate", type=float, default=1.0e-3)
     parser.add_argument("--minimum-improvement", type=float, default=1.0e-7)
     parser.add_argument("--maximum-gradient-norm", type=float, default=10.0)
