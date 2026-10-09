@@ -196,9 +196,14 @@ def _optimization_starts(
         if initial:
             value.append(_logit(warm_start.positive_probability))
         starts.append(np.asarray(value, dtype=np.float64))
-    center = [float(np.mean(intensity_bounds)), float(np.mean(tail_bounds))]
+    # A moderate Kou process is a substantially better deterministic anchor
+    # than the geometric center of the deliberately broad numerical bounds.
+    center = [
+        float(np.clip(math.log(12.0), *intensity_bounds)),
+        float(np.clip(math.log(7.0), *tail_bounds)),
+    ]
     if initial:
-        center.append(0.0)
+        center.append(_logit(0.4))
     starts.append(np.asarray(center, dtype=np.float64))
     while len(starts) < config.num_starts:
         value = [
@@ -227,6 +232,8 @@ def fit_maturity(
     target_symmetry_index: float | None = None,
     warm_start: DoubleExponentialParameters | None = None,
     objective_weights: np.ndarray | None = None,
+    loss: str = "weighted_squared",
+    midpoint_weight: float = 0.05,
 ) -> MaturityFit:
     """Fit one maturity using equations (2.14), (2.20), or (2.21)."""
 
@@ -247,6 +254,18 @@ def fit_maturity(
     verify_inp(
         strikes.shape == target_calls.shape == bids.shape == asks.shape == mask.shape,
         lambda: "strike, price, interval, and mask arrays must have the same shape",
+    )
+    verify_inp(
+        loss in {"weighted_squared", "interval_excess"},
+        lambda: f"unknown maturity-fit loss {loss!r}",
+    )
+    verify_inp(
+        math.isfinite(midpoint_weight) and midpoint_weight >= 0.0,
+        lambda: f"midpoint weight must be finite and non-negative, got {midpoint_weight}",
+    )
+    verify_inp(
+        loss != "interval_excess" or weights is None,
+        "interval-excess fitting uses executable books, not objective weights",
     )
     verify_inp(
         weights is None or weights.shape == strikes.shape,
@@ -285,6 +304,21 @@ def fit_maturity(
     prepared = PreparedFourierPricer.create(x_fit, config=config.pricing)
     initial = target_symmetry_index is None
 
+    def price_parameters(parameters: DoubleExponentialParameters) -> np.ndarray:
+        atom_probability = math.exp(-tau * parameters.intensity)
+        atom_gross_return = math.exp(
+            -tau * parameters.intensity * parameters.exponential_jump_mean
+        )
+        atom_log_return = math.log(atom_gross_return)
+        continuous = prepared.price(
+            lambda z: characteristic_function(z, tau=tau, parameters=parameters)
+            - atom_probability * np.exp(1j * z * atom_log_return),
+            forward_moment=1.0 - atom_probability * atom_gross_return,
+        )
+        return continuous + atom_probability * np.maximum(
+            atom_gross_return - strikes_fit, 0.0
+        )
+
     def to_parameters(raw: np.ndarray) -> DoubleExponentialParameters:
         if initial:
             return _initial_parameters(raw)
@@ -296,12 +330,25 @@ def fit_maturity(
     def objective(raw: np.ndarray) -> float:
         try:
             parameters = to_parameters(raw)
-            model_calls = prepared.price(
-                lambda z: characteristic_function(z, tau=tau, parameters=parameters)
-            )
-            model_time_value = model_calls - intrinsic
-            residual = (model_time_value - target_time_value) * residual_multiplier
-            value = float(np.mean(np.square(residual)))
+            model_calls = price_parameters(parameters)
+            if loss == "interval_excess":
+                bid_fit = bids[active]
+                ask_fit = asks[active]
+                half_spread = np.maximum(
+                    0.5 * (ask_fit - bid_fit),
+                    config.half_spread_floor,
+                )
+                midpoint = 0.5 * (bid_fit + ask_fit)
+                excess = (
+                    np.maximum(model_calls - ask_fit, 0.0)
+                    + np.maximum(bid_fit - model_calls, 0.0)
+                    + midpoint_weight * np.abs(model_calls - midpoint)
+                ) / half_spread
+                value = float(np.mean(excess))
+            else:
+                model_time_value = model_calls - intrinsic
+                residual = (model_time_value - target_time_value) * residual_multiplier
+                value = float(np.mean(np.square(residual)))
             return value if math.isfinite(value) else 1.0e30
         except (FloatingPointError, OverflowError, ValueError):
             return 1.0e30
@@ -346,10 +393,11 @@ def fit_maturity(
         lambda: f"all maturity calibration starts failed: {start_objectives}",
     )
     parameters = to_parameters(np.asarray(best.x, dtype=np.float64))
-    model_calls = prepared.price(
-        lambda z: characteristic_function(z, tau=tau, parameters=parameters)
-    )
+    model_calls = price_parameters(parameters)
     errors = model_calls - target_fit
+    weighted_rmse = float(
+        np.sqrt(np.mean(np.square(errors * residual_multiplier)))
+    )
     return MaturityFit(
         tau=float(tau),
         parameters=parameters,
@@ -359,7 +407,7 @@ def fit_maturity(
         selected_start=selected,
         start_objectives=start_objectives,
         num_quotes=int(strikes_fit.size),
-        weighted_rmse=float(math.sqrt(best.fun)),
+        weighted_rmse=weighted_rmse,
         maximum_absolute_error=float(np.max(np.abs(errors))),
         message=str(best.message),
     )

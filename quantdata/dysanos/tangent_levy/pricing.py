@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
 from cdxcore.err import verify_inp
+from scipy.stats import poisson
 
 from .config import PricingConfig
 from .coordinates import normalized_call_intrinsic, trapezoid_weights
@@ -52,7 +54,12 @@ class PreparedFourierPricer:
             simpson_weights=weights,
         )
 
-    def price(self, characteristic_function: CharacteristicFunction) -> np.ndarray:
+    def price(
+        self,
+        characteristic_function: CharacteristicFunction,
+        *,
+        forward_moment: float = 1.0,
+    ) -> np.ndarray:
         """Evaluate calls using a new characteristic function."""
 
         shifted = self.u - 0.5j
@@ -65,7 +72,7 @@ class PreparedFourierPricer:
             ),
         )
         integral = np.real(self.kernel * phi[None, :]) @ self.simpson_weights
-        prices = 1.0 - np.exp(0.5 * self.log_strikes) * integral / np.pi
+        prices = forward_moment - np.exp(0.5 * self.log_strikes) * integral / np.pi
         verify_inp(
             np.all(np.isfinite(prices)),
             lambda: "Fourier integration produced non-finite call prices",
@@ -78,6 +85,7 @@ def fourier_call_prices(
     characteristic_function: CharacteristicFunction,
     *,
     config: PricingConfig = PricingConfig(),
+    forward_moment: float = 1.0,
 ) -> np.ndarray:
     """Price normalized calls with equation (2.36) of the paper.
 
@@ -88,7 +96,9 @@ def fourier_call_prices(
 
     original = np.asarray(log_strikes)
     prepared = PreparedFourierPricer.create(log_strikes, config=config)
-    prices = prepared.price(characteristic_function)
+    prices = prepared.price(
+        characteristic_function, forward_moment=forward_moment
+    )
     return prices[0] if original.ndim == 0 else prices
 
 
@@ -148,16 +158,115 @@ def density_call_prices(
     if tau == 0.0:
         strikes = np.exp(np.asarray(log_strikes, dtype=np.float64))
         return normalized_call_intrinsic(strikes)
+    spacing = np.diff(np.asarray(jump_x, dtype=np.float64))
+    if spacing.size and np.allclose(spacing, spacing[0], rtol=0.0, atol=1.0e-12):
+        return lattice_density_call_prices(
+            tau=tau,
+            log_strikes=log_strikes,
+            jump_x=jump_x,
+            average_density=average_density,
+        )
     characteristic = density_characteristic_function(
         tau=tau,
         jump_x=jump_x,
         average_density=average_density,
     )
-    return fourier_call_prices(
-        log_strikes,
-        characteristic,
-        config=config,
+    jump_x = np.asarray(jump_x, dtype=np.float64)
+    eta = np.asarray(average_density, dtype=np.float64)
+    weighted = trapezoid_weights(jump_x) * eta
+    intensity = float(np.sum(weighted))
+    compensator = float(weighted @ np.expm1(jump_x))
+    atom_probability = math.exp(-tau * intensity)
+    atom_gross_return = math.exp(-tau * compensator)
+    atom_log_return = math.log(atom_gross_return)
+    strikes = np.exp(np.asarray(log_strikes, dtype=np.float64))
+    prepared = PreparedFourierPricer.create(log_strikes, config=config)
+    continuous = prepared.price(
+        lambda z: characteristic(z)
+        - atom_probability * np.exp(1j * z * atom_log_return),
+        forward_moment=1.0 - atom_probability * atom_gross_return,
     )
+    atom = atom_probability * np.maximum(atom_gross_return - strikes, 0.0)
+    result = continuous + atom
+    return result.item() if np.asarray(log_strikes).ndim == 0 else result
+
+
+def lattice_density_call_prices(
+    *,
+    tau: float,
+    log_strikes: np.ndarray | float,
+    jump_x: np.ndarray,
+    average_density: np.ndarray,
+    fft_size: int = 16_384,
+) -> np.ndarray:
+    """Price the uniform-grid compound-Poisson law by cyclic convolution.
+
+    The 301-node v2 jump support lies on an exact lattice.  Embedding its jump
+    probabilities in a much wider FFT lattice evaluates the compound-Poisson
+    distribution, including the no-jump atom, without Fourier payoff-truncation
+    error.  The default support spans more than 80 log-return units.
+    """
+
+    jump = np.asarray(jump_x, dtype=np.float64)
+    eta = np.asarray(average_density, dtype=np.float64)
+    verify_inp(
+        fft_size >= 1024 and fft_size % 2 == 0,
+        lambda: "FFT lattice size must be an even integer of at least 1024",
+    )
+    spacing = float(jump[1] - jump[0])
+    offsets = np.rint(jump / spacing).astype(np.int64)
+    verify_inp(
+        np.allclose(jump, offsets * spacing, rtol=0.0, atol=1.0e-10)
+        and np.max(np.abs(offsets)) < fft_size // 2,
+        lambda: "jump grid is not representable on the requested FFT lattice",
+    )
+    weighted = trapezoid_weights(jump) * eta
+    intensity = float(np.sum(weighted))
+    verify_inp(intensity > 0.0, lambda: "Levy density must have positive mass")
+    jump_probability = np.zeros(fft_size, dtype=np.float64)
+    np.add.at(jump_probability, offsets % fft_size, weighted / intensity)
+    transform = np.fft.fft(jump_probability)
+    probabilities = np.fft.ifft(
+        np.exp(tau * intensity * (transform - 1.0))
+    ).real
+    probabilities = np.maximum(probabilities, 0.0)
+    probabilities /= np.sum(probabilities)
+    indices = np.arange(fft_size, dtype=np.int64)
+    signed = np.where(indices <= fft_size // 2, indices, indices - fft_size)
+    share_intensity = float(weighted @ np.exp(jump))
+    maximum_jumps = int(
+        max(
+            poisson.ppf(1.0 - 1.0e-14, tau * intensity),
+            poisson.ppf(1.0 - 1.0e-14, tau * share_intensity),
+        )
+    )
+    maximum_offset = maximum_jumps * int(np.max(np.abs(offsets)))
+    probabilities[np.abs(signed) > maximum_offset] = 0.0
+    # FFT roundoff leaves O(1e-18) positive dust across remote lattice cells.
+    # Multiplication by exp(x) can turn that dust into a material fake share-
+    # measure tail.  Values below this level are numerical noise in float64.
+    probabilities[probabilities < 1.0e-17] = 0.0
+    probabilities /= np.sum(probabilities)
+    compensator = float(weighted @ np.expm1(jump))
+    gross = np.exp(signed * spacing - tau * compensator)
+    log_strike_values = np.asarray(log_strikes, dtype=np.float64)
+    strike_shape = log_strike_values.shape
+    strikes = np.exp(np.atleast_1d(log_strike_values).reshape(-1))
+    order = np.argsort(gross)
+    sorted_gross = gross[order]
+    sorted_probability = probabilities[order]
+    tail_probability = np.cumsum(sorted_probability[::-1])[::-1]
+    tail_gross = np.cumsum((sorted_probability * sorted_gross)[::-1])[::-1]
+    first_in_money = np.searchsorted(sorted_gross, strikes, side="right")
+    calls = np.zeros_like(strikes)
+    active = first_in_money < len(sorted_gross)
+    calls[active] = (
+        tail_gross[first_in_money[active]]
+        - strikes[active] * tail_probability[first_in_money[active]]
+    )
+    if log_strike_values.ndim == 0:
+        return calls.item()
+    return calls.reshape(strike_shape)
 
 
 def average_density_from_forward(

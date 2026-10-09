@@ -10,7 +10,7 @@ from cdxcore.err import verify_inp
 
 from .config import PricingConfig
 from .coordinates import normalized_call_intrinsic
-from .pricing import fourier_call_prices
+from .pricing import PreparedFourierPricer
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -191,8 +191,19 @@ def call_prices(
 
     if tau == 0.0:
         return normalized_call_intrinsic(np.exp(np.asarray(log_strikes)))
-    return fourier_call_prices(
-        log_strikes,
-        lambda z: characteristic_function(z, tau=tau, parameters=parameters),
-        config=config,
+    atom_probability = math.exp(-tau * parameters.intensity)
+    atom_gross_return = math.exp(
+        -tau * parameters.intensity * parameters.exponential_jump_mean
     )
+    atom_log_return = math.log(atom_gross_return)
+    strikes = np.exp(np.asarray(log_strikes, dtype=np.float64))
+    prepared = PreparedFourierPricer.create(log_strikes, config=config)
+    continuous = prepared.price(
+        lambda z: characteristic_function(z, tau=tau, parameters=parameters)
+        - atom_probability * np.exp(1j * z * atom_log_return),
+        forward_moment=1.0 - atom_probability * atom_gross_return,
+    )
+    result = continuous + atom_probability * np.maximum(
+        atom_gross_return - strikes, 0.0
+    )
+    return result.item() if np.asarray(log_strikes).ndim == 0 else result

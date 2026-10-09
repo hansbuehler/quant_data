@@ -1,0 +1,134 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=24mm]{geometry}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+
+\definecolor{passgreen}{RGB}{20,110,60}
+\definecolor{warnred}{RGB}{160,40,35}
+\newcommand{\pass}{\textcolor{passgreen}{\textbf{PASS}}}
+\newcommand{\caution}{\textcolor{warnred}{\textbf{CAUTION}}}
+
+\title{Tangent L\'evy v2\\Risk-Neutral Drift Audit Summary}
+\author{quantdata / Dysanos}
+\date{9 October 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note records the final v2 audit of a reduced Tangent L\'evy construction under
+the risk-neutral measure $Q$.  The experiment uses the native Tangent L\'evy
+short-end spot compensator, a deterministic Musiela shift, and a restricted
+universe consisting of spot plus 44 fixed-cash-strike options.  The two
+conditional drift tests do not reject the $Q$ martingale restriction.  The
+literal coordinate-wise unconditional Gaussian diagnostic reports many extreme
+statistics, but those statistics are dominated by compound-Poisson coordinates
+whose compensating jumps are too rare to be sampled by 100,000 paths.  The
+result is therefore evidence about this reduced $Q$ construction, not a
+successful calibration of the full stochastic model in the paper.
+\end{abstract}
+
+\section{Scope and implementation}
+
+The population contains 100,000 simulated paths (50,000 antithetic pairs),
+initialized from the 1 June 2022 SPX surface.  The tested trading universe is
+spot plus 44 options: eleven normalized-moneyness instruments at each of 5, 10,
+15, and 20 business-day maturities.  Strikes remain fixed in cash units over
+each one-step return.  Spot is advanced with the Tangent L\'evy codebook's
+short-end compensator, while the codebook is transported by deterministic
+Musiela shift substeps.
+
+The implementation includes the finite-activity no-jump atom in transform
+pricing, lattice-consistent FFT pricing, removal of numerical FFT dust, tail
+cutoffs under both cash and share intensities, short-end midpoint evaluation in
+Musiela substeps, float64 audit returns, and exact fold-level entropy scoring.
+These details are necessary for the simulated spot and option prices to be
+internally consistent under $Q$.
+
+\section{Calibration limitation}
+
+The attempted historical reconstruction did not pass its mandatory gate on any
+of 335 dates.  Across the history the maximum relative $L^1$ error was 1.3817
+and the maximum repricing RMSE was 525 quoted half-spreads.  For the retained
+1 June 2022 initialization, the relative $L^1$ error is 0.9473, the repricing
+RMSE is 20.185 half-spreads, and the maximum absolute normalized price error is
+0.00977.  This confirms the expected poor fit.
+
+Because the reconstructed history supplied no positive covariance mode, the
+final audit uses zero stochastic factors.  It is a deterministic-codebook
+Tangent L\'evy model, not a fitted version of the paper's full stochastic
+factor/HJM specification.  The drift-test methodology is adapted from
+\texttt{paper/main2.tex}; that paper's underlying SDLV experiment uses a
+Gaussian/information-bridge spot construction and does not by itself calibrate
+the sampling distribution of a rare-event compound-Poisson diagnostic.
+
+\section{Final $Q$ results}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrrrl}
+\toprule
+Test & Mean score & Pair SE & $t$ statistic & 95\% interval & Result \\
+\midrule
+Conditional, squared
+  & $3.340\times10^{-8}$ & $7.299\times10^{-8}$ & 0.458
+  & $[-1.096,1.764]\times10^{-7}$ & \pass \\
+Conditional, entropy
+  & $1.702\times10^{-9}$ & $2.915\times10^{-9}$ & 0.584
+  & $[-4.012,7.415]\times10^{-9}$ & \pass \\
+\bottomrule
+\end{tabular}
+\caption{Cross-fitted conditional drift tests on the retained population.}
+\end{table}
+
+Both conditional confidence intervals contain zero and both absolute
+$t$ statistics are below 1.96.  Accordingly, neither conditional test rejects
+the null of zero predictable drift at the 5\% two-sided level.
+
+The literal unconditional report tests 570 time--instrument coordinates.  It
+finds a maximum absolute $z$ statistic of $1.485\times10^9$, a 99th percentile
+of $1.196\times10^8$, 204 coordinates above 1.96, 150 above 2.576, and 138
+above 5.  Read literally as Gaussian tests, these coordinates fail.
+
+That literal reading is not statistically valid for the problematic
+coordinates.  Some reconstructed annual intensities are approximately
+$1.5\times10^{-6}$, corresponding to a one-day jump probability near
+$5.95\times10^{-9}$.  A 100,000-path population is therefore overwhelmingly
+likely to contain no compensating jump.  The empirical variance collapses while
+the analytically compensated mean remains nonzero, producing enormous
+studentized ratios.  On the 432 coordinates with pair standard error exceeding
+$10^{-12}$, the maximum absolute statistic is 3.597, the 99th percentile is
+3.551, 66 exceed 1.96, 12 exceed 2.576, and none exceeds 5.  This filtered view
+is diagnostic only; it is not a replacement preregistered test.
+
+\section{Conclusion}
+
+The strongest defensible conclusion is narrow.  The two requested conditional
+tests find no detectable predictable drift under the reduced $Q$ simulation.
+The unconditional Gaussian coordinate test cannot confirm the same claim at
+this Monte Carlo size because the fitted finite-activity model contains events
+far rarer than the population can resolve.  Its extreme statistics are a
+rare-event resolution failure, not direct evidence of an exploitable
+arbitrage.  A definitive unconditional assessment would require analytic
+conditional moments, importance sampling, or a test explicitly designed for
+the compound-Poisson law.
+
+This audit does not validate the market fit, the physical-measure dynamics, or
+the omitted stochastic codebook factors.  It establishes that the implemented
+reduced construction uses the Tangent L\'evy compensator consistently and that
+its two cross-fitted conditional drift tests pass on the retained population.
+
+\section{Retained artifacts}
+
+The canonical result root is
+\path{/home/hans/quantdata_data/training/dysanos/tangent-levy/v2/spx-891-v2}.
+It retains the 1 June 2022 initialization checkpoint, the
+\texttt{q-reduced-population} arrays, the unconditional report
+\texttt{q-reduced-audit.json}, both conditional JSON reports, and their current
+cross-fit checkpoints.  Superseded daily reconstruction checkpoints and legacy
+aggregate calibration logs are intentionally excluded.
+
+\end{document}
