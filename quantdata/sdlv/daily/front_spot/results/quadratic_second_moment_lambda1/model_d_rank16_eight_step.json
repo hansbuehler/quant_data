@@ -1,0 +1,220 @@
+{
+  "schema": "front-spot-quadratic-second-moment-crossfit-v1",
+  "objective": {
+    "definition": "sup_a E[a(X)'R-|a(X)|^2/2-lambda*(a(X)'R)^2/2]",
+    "lambda_second_moment": 1.0,
+    "covariance_implementation": "sample portfolio-return square; no covariance matrix is formed"
+  },
+  "population": {
+    "label": "model_d_rank16_eight_step",
+    "measure": "Q",
+    "path_count": 100000,
+    "antithetic_pair_count": 50000,
+    "horizon_days": 20,
+    "feature_count": 66,
+    "instrument_count": 45,
+    "source": {
+      "schema": "front-spot-all-node-to-restricted-projection-v1",
+      "path_count": 100000,
+      "factor_rank": 16,
+      "dlv_substeps": 8,
+      "source_metadata_digest": "1f66019816f1263586a03a15b90cd607b0dc2d3e06030fe94d215850bb9bc37b",
+      "reference_result_digest": "064a6645cef8a9b6c79b73a814c7d5152b6efe322060421879680c592942dec6",
+      "feature_shape": [
+        100000,
+        20,
+        66
+      ],
+      "return_shape": [
+        100000,
+        20,
+        45
+      ],
+      "source_directory": "/home/hans/quantdata_data/experiments/sdlv/front-spot/oce-rank16-eight-step-all-nodes-100k",
+      "reference_result": "quantdata/sdlv/daily/front_spot/results/oce_rank16_eight_step_spot_scaled/rank16_eight_step_local_oce.json",
+      "completed_paths": 100000,
+      "complete": true
+    }
+  },
+  "policy": {
+    "architecture": "uncapped signed affine plus two-layer width-32 SiLU network",
+    "train_config": {
+      "batch_size": 8192,
+      "maximum_epochs": 30,
+      "learning_rate": 0.001,
+      "maximum_gradient_norm": 10.0,
+      "backtracking_factor": 0.2,
+      "maximum_line_search_steps": 20,
+      "lambda_second_moment": 1.0,
+      "seed": 20261009
+    },
+    "normalization": "fitted separately on each training fold",
+    "heldout_use": "frozen policy evaluated once on the opposite fold"
+  },
+  "training_A": {
+    "path_count": 50000,
+    "transition_count": 1000000,
+    "mean_quadratic_objective": 2.8128152191396404e-09,
+    "mean_raw_portfolio_return": 2.948401804503881e-09,
+    "expected_pointwise_action_energy": 2.7094609509179565e-10,
+    "expected_squared_portfolio_return": 2.27288766578035e-13,
+    "maximum_absolute_action": 7.878554606577381e-05,
+    "paired_conditional_drift": {
+      "path_count": 50000,
+      "antithetic_pair_count": 25000,
+      "mean_daily_conditional_drift": 2.9484018045038806e-09,
+      "pair_based_standard_error": 5.062412970862371e-10,
+      "z_score": 5.824103686273597,
+      "confidence_interval_95": [
+        1.9561870947280144e-09,
+        3.940616514279747e-09
+      ],
+      "path_average_standard_deviation": 1.0488213292133113e-07,
+      "pair_average_standard_deviation": 8.004217632997006e-08,
+      "minimum_pair_score": -2.032506387106281e-06,
+      "maximum_pair_score": 2.1708769665895742e-06,
+      "pair_score_quantiles": {
+        "0.01%": -1.6753579467494687e-06,
+        "0.1%": -7.583604255665928e-07,
+        "1%": -2.0805227357012514e-07,
+        "50%": 1.2960784498416977e-08,
+        "99%": 1.406836914038531e-07,
+        "99.9%": 3.4140366580703444e-07,
+        "99.99%": 1.3757849321786022e-06
+      }
+    }
+  },
+  "heldout_B": {
+    "path_count": 50000,
+    "transition_count": 1000000,
+    "mean_quadratic_objective": -1.0328792971663167e-10,
+    "mean_raw_portfolio_return": 3.130886738997654e-11,
+    "expected_pointwise_action_energy": 2.68942596990007e-10,
+    "expected_squared_portfolio_return": 2.512437966565321e-13,
+    "maximum_absolute_action": 7.852171256672591e-05,
+    "paired_conditional_drift": {
+      "path_count": 50000,
+      "antithetic_pair_count": 25000,
+      "mean_daily_conditional_drift": 3.1308867389976444e-11,
+      "pair_based_standard_error": 5.337973336836566e-10,
+      "z_score": 0.05865309812231277,
+      "confidence_interval_95": [
+        -1.0149146816735e-09,
+        1.077532416453453e-09
+      ],
+      "path_average_standard_deviation": 1.112172854048685e-07,
+      "pair_average_standard_deviation": 8.43990811359998e-08,
+      "minimum_pair_score": -2.150822934265939e-06,
+      "maximum_pair_score": 2.1460683484963995e-06,
+      "pair_score_quantiles": {
+        "0.01%": -1.7254481298878767e-06,
+        "0.1%": -8.554215504691598e-07,
+        "1%": -2.2076177238320585e-07,
+        "50%": 1.1310560994043372e-08,
+        "99%": 1.306265196281963e-07,
+        "99.9%": 2.5746207854898905e-07,
+        "99.99%": 1.441958649035297e-06
+      }
+    }
+  },
+  "training_B": {
+    "path_count": 50000,
+    "transition_count": 1000000,
+    "mean_quadratic_objective": 3.2861298296552745e-09,
+    "mean_raw_portfolio_return": 3.7862757753818925e-09,
+    "expected_pointwise_action_energy": 9.98034416188274e-10,
+    "expected_squared_portfolio_return": 2.2581251342008154e-12,
+    "maximum_absolute_action": 0.00018007516337092966,
+    "paired_conditional_drift": {
+      "path_count": 50000,
+      "antithetic_pair_count": 25000,
+      "mean_daily_conditional_drift": 3.786275775381893e-09,
+      "pair_based_standard_error": 1.5173076959688564e-09,
+      "z_score": 2.495390872557473,
+      "confidence_interval_95": [
+        8.124073378174846e-10,
+        6.760144212946302e-09
+      ],
+      "path_average_standard_deviation": 3.3645970827137393e-07,
+      "pair_average_standard_deviation": 2.399026133319805e-07,
+      "minimum_pair_score": -8.100425214052632e-06,
+      "maximum_pair_score": 1.094035367399382e-06,
+      "pair_score_quantiles": {
+        "0.01%": -7.822425597110004e-06,
+        "0.1%": -3.4186417110248862e-06,
+        "1%": -4.811109375142397e-07,
+        "50%": 2.9308893068850236e-08,
+        "99%": 2.836256184622904e-07,
+        "99.9%": 4.899244439991581e-07,
+        "99.99%": 8.45418515201138e-07
+      }
+    }
+  },
+  "heldout_A": {
+    "path_count": 50000,
+    "transition_count": 1000000,
+    "mean_quadratic_objective": -4.787750257615652e-10,
+    "mean_raw_portfolio_return": 3.369721025526444e-11,
+    "expected_pointwise_action_energy": 1.022549264792995e-09,
+    "expected_squared_portfolio_return": 2.3956787834771855e-12,
+    "maximum_absolute_action": 0.00017858132196124643,
+    "paired_conditional_drift": {
+      "path_count": 50000,
+      "antithetic_pair_count": 25000,
+      "mean_daily_conditional_drift": 3.3697210255264017e-11,
+      "pair_based_standard_error": 1.5617027279344153e-09,
+      "z_score": 0.021577224431075688,
+      "confidence_interval_95": [
+        -3.0271838910541445e-09,
+        3.0945783115646725e-09
+      ],
+      "path_average_standard_deviation": 3.455142068685055e-07,
+      "pair_average_standard_deviation": 2.469219438315162e-07,
+      "minimum_pair_score": -9.637882727511759e-06,
+      "maximum_pair_score": 7.898228980396383e-07,
+      "pair_score_quantiles": {
+        "0.01%": -6.965753780223354e-06,
+        "0.1%": -3.507194918089507e-06,
+        "1%": -5.129622391279106e-07,
+        "50%": 2.8081844059141273e-08,
+        "99%": 2.749738093144593e-07,
+        "99.9%": 4.775073007171005e-07,
+        "99.99%": 6.712318657113323e-07
+      }
+    }
+  },
+  "combined_out_of_fold": {
+    "path_count": 100000,
+    "antithetic_pair_count": 50000,
+    "mean_daily_conditional_drift": 3.250303882262023e-11,
+    "pair_based_standard_error": 8.251970258383783e-10,
+    "z_score": 0.03938821615310356,
+    "confidence_interval_95": [
+      -1.5848534119701697e-09,
+      1.6498594896154102e-09
+    ],
+    "path_average_standard_deviation": 2.5666062390212144e-07,
+    "pair_average_standard_deviation": 1.8451781925465573e-07,
+    "minimum_pair_score": -9.637882727511759e-06,
+    "maximum_pair_score": 2.1460683484963995e-06,
+    "pair_score_quantiles": {
+      "0.01%": -5.203373392111271e-06,
+      "0.1%": -2.78543542608084e-06,
+      "1%": -3.93313403348583e-07,
+      "50%": 1.8786128799797018e-08,
+      "99%": 2.2813445645407396e-07,
+      "99.9%": 4.402548448496677e-07,
+      "99.99%": 8.397147664718315e-07
+    }
+  },
+  "headline_statistic": 0.03938821615310356,
+  "training_epochs": {
+    "affine_A": 30,
+    "A": 30,
+    "affine_B": 30,
+    "B": 30
+  },
+  "artifacts": {
+    "out_of_fold_pair_scores": "/home/hans/python/quant_data/quantdata/sdlv/daily/front_spot/results/quadratic_second_moment_lambda1/model_d_rank16_eight_step_oof_pair_scores.npy"
+  }
+}
