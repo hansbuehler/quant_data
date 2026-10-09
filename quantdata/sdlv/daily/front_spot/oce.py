@@ -155,6 +155,30 @@ def regularized_transition_gain(
     )
 
 
+def quadratic_second_moment_reward(
+    actions: torch.Tensor,
+    returns: torch.Tensor,
+    *,
+    lambda_second_moment: float = 1.0,
+) -> torch.Tensor:
+    """Return ``a'R-|a|^2/2-lambda*(a'R)^2/2`` per path and step."""
+
+    if actions.shape != returns.shape or actions.ndim != 3:
+        raise ValueError("actions and returns must be matching path-step-instrument tensors")
+    if not math.isfinite(lambda_second_moment) or lambda_second_moment < 0.0:
+        raise ValueError(
+            "second-moment lambda must be finite and non-negative, "
+            f"found {lambda_second_moment}"
+        )
+    portfolio_return = torch.sum(actions * returns, dim=-1)
+    action_energy = torch.sum(actions.square(), dim=-1)
+    return (
+        portfolio_return
+        - 0.5 * action_energy
+        - 0.5 * lambda_second_moment * portfolio_return.square()
+    )
+
+
 def log_exponential_loss(transition_gain: torch.Tensor) -> torch.Tensor:
     """Return the pooled empirical ``log E[exp(-transition_gain)]``."""
 

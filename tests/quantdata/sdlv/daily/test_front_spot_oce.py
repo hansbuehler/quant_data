@@ -13,9 +13,12 @@ from quantdata.sdlv.daily.front_spot.oce import (
     log_exponential_loss,
     negative_exponential_statistics,
     paired_conditional_drift_statistics,
+    quadratic_second_moment_reward,
     regularized_transition_gain,
 )
 from quantdata.sdlv.daily.front_spot.run_oce import (
+    EXPIRY_DAYS,
+    NORMALIZED_MONEYNESS,
     FrontSpotOceTrainConfig,
     _active_mask,
     _artifact_stem,
@@ -25,6 +28,17 @@ from quantdata.sdlv.daily.front_spot.run_oce import (
     _population_cache_schema,
     _spot_normalized_price_increments,
     unconditional_spot_scaled_martingale_audit,
+)
+from quantdata.sdlv.daily.front_spot.run_quadratic_oce import (
+    QuadraticPopulation,
+    QuadraticSecondMomentTrainConfig,
+    _project_all_node_batch_to_restricted,
+)
+from quantdata.sdlv.daily.front_spot.run_quadratic_oce import (
+    _evaluate_policy as _evaluate_quadratic_policy,
+)
+from quantdata.sdlv.daily.front_spot.run_quadratic_oce import (
+    _fit_policy as _fit_quadratic_policy,
 )
 from quantdata.sdlv.daily.front_spot.run_surface_oce import (
     POLICY_SCHEMA,
@@ -89,6 +103,146 @@ def test_policy_accepts_predictable_pathwise_instrument_masks() -> None:
     assert action.shape == active.shape
     assert torch.all(action[active] == 2.0)
     assert torch.all(action[~active] == 0.0)
+
+
+def test_quadratic_second_moment_reward_uses_cross_instrument_portfolio() -> None:
+    actions = torch.tensor([[[2.0, -1.0]]], dtype=torch.float64, requires_grad=True)
+    returns = torch.tensor([[[0.3, 0.2]]], dtype=torch.float64)
+    reward = quadratic_second_moment_reward(
+        actions,
+        returns,
+        lambda_second_moment=4.0,
+    )
+    portfolio_return = 0.4
+    expected = portfolio_return - 0.5 * 5.0 - 2.0 * portfolio_return**2
+    assert reward.item() == pytest.approx(expected)
+    (-reward.sum()).backward()
+    expected_gradient = -returns + actions + 4.0 * portfolio_return * returns
+    assert torch.allclose(actions.grad, expected_gradient)
+
+
+def test_quadratic_second_moment_reward_allows_zero_lambda() -> None:
+    actions = torch.tensor([[[0.5]]], dtype=torch.float64)
+    returns = torch.tensor([[[0.2]]], dtype=torch.float64)
+    reward = quadratic_second_moment_reward(
+        actions,
+        returns,
+        lambda_second_moment=0.0,
+    )
+    assert reward.item() == pytest.approx(0.1 - 0.125)
+
+
+def test_all_node_projection_recovers_calls_puts_and_returns() -> None:
+    factor_rank = 1
+    step_count = max(EXPIRY_DAYS)
+    source_strike_count = 20
+    target_strike_count = len(NORMALIZED_MONEYNESS)
+    source_strikes = np.broadcast_to(
+        np.linspace(0.7, 1.3, source_strike_count),
+        (len(EXPIRY_DAYS), source_strike_count),
+    ).copy()
+    target_strikes = np.broadcast_to(
+        np.linspace(0.75, 1.25, target_strike_count),
+        (len(EXPIRY_DAYS), target_strike_count),
+    ).copy()
+    source_instrument_count = 1 + len(EXPIRY_DAYS) * source_strike_count
+    source_feature_count = factor_rank + source_instrument_count + 1 + len(EXPIRY_DAYS)
+    features = np.zeros((2, step_count, source_feature_count), dtype=np.float32)
+    returns = np.zeros((2, step_count, source_instrument_count), dtype=np.float32)
+    log_spot = math.log(1.04)
+    features[..., factor_rank] = log_spot
+    returns[..., 0] = 0.003
+    option_start = factor_rank + 1
+    for expiry_index, expiry_day in enumerate(EXPIRY_DAYS):
+        feature_slice = slice(
+            option_start + expiry_index * source_strike_count,
+            option_start + (expiry_index + 1) * source_strike_count,
+        )
+        return_slice = slice(
+            1 + expiry_index * source_strike_count,
+            1 + (expiry_index + 1) * source_strike_count,
+        )
+        call_ratio = 0.5 - 0.2 * source_strikes[expiry_index]
+        call_return = 0.01 + 0.02 * source_strikes[expiry_index]
+        features[:, :expiry_day, feature_slice] = np.log(call_ratio)
+        returns[:, :expiry_day, return_slice] = call_return
+
+    projected_features, projected_returns = _project_all_node_batch_to_restricted(
+        features,
+        returns,
+        factor_rank=factor_rank,
+        source_strikes=source_strikes,
+        target_strikes=target_strikes,
+    )
+    assert projected_features.shape == (
+        2,
+        step_count,
+        factor_rank + 1 + 4 * target_strike_count + 1 + 4,
+    )
+    put_mask = np.asarray(NORMALIZED_MONEYNESS) > 0.0
+    target_call_ratio = 0.5 - 0.2 * target_strikes[0]
+    expected_ratio = np.where(
+        put_mask,
+        target_call_ratio - 1.0 + target_strikes[0] / 1.04,
+        target_call_ratio,
+    )
+    assert np.allclose(
+        np.exp(projected_features[0, 0, factor_rank + 1 : factor_rank + 12]),
+        expected_ratio,
+        rtol=2.0e-6,
+    )
+    target_call_return = 0.01 + 0.02 * target_strikes[0]
+    expected_return = np.where(
+        put_mask,
+        target_call_return - 0.003,
+        target_call_return,
+    )
+    assert np.allclose(projected_returns[0, 0, 1:12], expected_return)
+    assert np.count_nonzero(projected_returns[:, EXPIRY_DAYS[0] :, 1:12]) == 0
+
+
+def test_quadratic_affine_fit_increases_empirical_objective(tmp_path) -> None:
+    generator = np.random.default_rng(101)
+    features = generator.standard_normal((64, 3, 1)).astype(np.float32)
+    returns = (0.08 * features + 0.01 * generator.standard_normal((64, 3, 1))).astype(
+        np.float32
+    )
+    population = QuadraticPopulation(
+        features=features,
+        returns=returns,
+        static_active_mask=np.ones((3, 1), dtype=np.bool_),
+        label="quadratic-synthetic",
+        source={"kind": "test"},
+    )
+    train_config = QuadraticSecondMomentTrainConfig(
+        batch_size=32,
+        maximum_epochs=4,
+        learning_rate=2.0e-2,
+        lambda_second_moment=1.0,
+        seed=13,
+    )
+    policy, history = _fit_quadratic_policy(
+        population,
+        0,
+        64,
+        label="quadratic-synthetic-affine",
+        checkpoint_path=tmp_path / "quadratic-affine.pt",
+        train_config=train_config,
+        device="cpu",
+        affine_only=True,
+    )
+    summary, _ = _evaluate_quadratic_policy(
+        policy,
+        population,
+        0,
+        64,
+        batch_size=32,
+        lambda_second_moment=1.0,
+        label="quadratic-synthetic-evaluation",
+    )
+    assert history[0]["accepted_step_size"] > 0.0
+    assert history[-1]["candidate_objective"] > history[0]["objective"]
+    assert summary["mean_quadratic_objective"] > 0.0
 
 
 def test_surface_policy_checkpoint_allows_extended_training_schedule() -> None:
