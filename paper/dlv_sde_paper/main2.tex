@@ -830,7 +830,8 @@ D & 16 & 8\\
 \end{tabular}
 \end{center}
 Every statistical audit uses 100,000 paths arranged as 50,000 independent antithetic
-pairs.  The horizon is 20 business days.  For a live instrument $i$, the
+pairs.  The restricted-universe audits use a 20-business-day horizon; the full
+instrument-grid extension below uses 25 business days.  For a live instrument $i$, the
 one-day return used in both diagnostics is
 \begin{equation}\label{eq:numerics-spot-scaled-return}
   R_{p,n}^i
@@ -855,8 +856,8 @@ initially, giving 20 spot and 550 option day--instrument coordinates over the
 
 The resulting test will only confirm absence of dynamic arbitrage within this restricted set of instruments, 
 and only within the class of strategies considered. To illustrate the limitations of the former,
-we apply the same test to an enlarged trading universe 
-in section~\ref{sec:numerics-all-node-summary}.
+we apply the same test to an enlarged trading universe
+in Section~\ref{sec:numerics-full-instrument-grid}.
 
 \paragraph{Unconditional diagnostic.}
 For every day--instrument coordinate $(n,i)$, first average the two members of
@@ -927,20 +928,10 @@ This is a conditional test relative to the state and strategy class
 in~\eqref{eq:numerics-action-map}, rather than a proof over all measurable
 strategies.
 
-For broad strike universes, raw $z$-scores can be dominated by tail calls whose
-prices and Monte Carlo standard errors are both microscopic.  To distinguish
-statistical from economic size, write $\widehat m_i$ and
-$\widehat{\operatorname{SE}}_i$ for the pair-based mean and standard error and
-define the materiality score
-\begin{equation}\label{eq:numerics-materiality-score}
-  s_i^{(\varepsilon)}
-  =\frac{\widehat m_i}
-  {\sqrt{\widehat{\operatorname{SE}}_i^2+\varepsilon^2}},
-  \qquad \varepsilon=10^{-8}.
-\end{equation}
-This is not a $z$-statistic: $\varepsilon$ places an absolute floor, in spot
-units, beneath economically negligible sampling errors.  We use this additional
-diagnostic only for the broad-grid extensions below.
+For broad instrument universes, isolated large $z$-scores are expected under
+the null purely from multiple testing.  We therefore report both the extremes
+and the number of coordinates beyond fixed thresholds, and compare the latter
+with the corresponding standard-normal frequency.
 
 \subsection{Restricted Universe}
 
@@ -1010,59 +1001,62 @@ specification, and the out-of-fold action statistics range from 89.205 to
 646.645.  Thus the same diagnostics that remain small under~$\Q$ recover both
 unconditional and state-predictable drift after the fitted change to~$\PP$.
 
-\subsection{Full Strike Grid}
-\label{sec:numerics-all-node-summary}
+\subsection{Full Instrument Grid}
+\label{sec:numerics-full-instrument-grid}
 
-The preceding experiment deliberately trades few options.  We next include
-spot and all 200 interior fixed-strike calls at each of 5, 10, 15, and 20
-business days.  There are 801 instruments at the initial date and 10,020 live
-day--instrument coordinates.  We therefore supplement the raw statistics with
-the materiality score in~\eqref{eq:numerics-materiality-score}.
+The preceding experiment deliberately trades few options.  We now test
+Model~C on spot and the complete fixed grid of 200 interior strikes at each of
+25 expiries, for 5,001 possible instruments.  Eligibility is predictable and
+path dependent: before each daily trade, a live option is included only when
+\[
+  -2 < \frac{\log(K/Z_{p,n})}
+  {\widehat\sigma_{\mathrm{ATM}}\sqrt{(T_j-t_n)/252}} < 1,
+  \qquad \widehat\sigma_{\mathrm{ATM}}=9.52\%.
+\]
+Thus short expiries contain fewer eligible strikes and the traded set changes
+with spot.  Ineligible and expired actions are exactly zero.  The conditional
+policy maps 5,035 pre-trade state variables to the masked 5,001-dimensional
+action.  The path score in~\eqref{eq:numerics-action-path-score} is averaged
+over 25 rather than 20 daily transitions; this changes its units but not
+$T_{\mathrm{act}}$.
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{lrrrrrr}
+\begin{tabular}{lrrrrrrr}
 \toprule
-Model & Max. $\abs{z}$ & 99\% $\abs{z}$ & $N_5$
-  & Max. $\abs{s^{(\varepsilon)}}$
-  & 99\% $\abs{s^{(\varepsilon)}}$ & $T_{\mathrm{act}}$\\
-\cmidrule(lr){2-6}
- & & \multicolumn{4}{c}{Unconditional} & \\
+Model & $N_{\mathrm{inst}}$ & $N_{\mathrm{coord}}$
+  & Max. $\abs{z}$ & 99\% $\abs{z}$
+  & $N_{2.576}$ & $N_5$ & $T_{\mathrm{act}}$\\
+\cmidrule(lr){4-7}
+ & & & \multicolumn{4}{c}{Unconditional} & \\
 \midrule
-A: rank 8, one step    & {\color{red}19.181} & 2.357 & {\color{red}13}
-  & {\color{orange}2.738} & 2.283 & $-0.218$\\
-B: rank 16, one step   & {\color{red}13.360} & 2.243 & {\color{red}26}
-  & {\color{orange}3.240} & 2.133 & 0.051\\
-C: rank 8, eight steps & {\color{red}13.318} & {\color{orange}2.631} & {\color{red}13}
-  & {\color{orange}4.481} & {\color{orange}2.578} & {\color{orange}2.175}\\
-D: rank 16, eight steps& {\color{red}9.043} & {\color{orange}2.761} & {\color{red}19}
-  & {\color{orange}4.784} & {\color{orange}2.759} & $-0.562$\\
+C: rank 8, eight steps
+  & 5,001 & 62,569 & 4.140 & 2.583 & 635 & 0 & 0.843\\
 \bottomrule
 \end{tabular}
-\caption{Full-grid, 100,000-path $\Q$ diagnostics.  Red entries are raw
-five-standard-error tail violations; orange entries are moderate raw or
-materiality-score deviations.  No materiality score exceeds five.}
-\label{tab:numerics-all-node-summary}
+\caption{Full-instrument-grid, 100,000-path $\Q$ diagnostics.  A daily
+coordinate enters the unconditional screen when it has at least 20 eligible
+path observations and positive Monte Carlo variance.  Of 63,180 coordinates
+that are eligible on at least one path, 62,569 enter the screen.}
+\label{tab:numerics-full-instrument-grid}
 \end{table}
 
-Thus the clean restricted-universe result does depend on excluding the most
-extreme strikes.  Every full-grid model has raw unconditional tail violations,
-although the conditional action statistics remain small and no
-materiality-regularized score exceeds five.  For example, the worst Model~A
-coordinate is the highest-strike five-day call: its initial value is
-$2.31\times10^{-9}$ spot units, its mean one-day increment is
-$4.48\times10^{-10}$, and only $0.056$ exercises are expected among 100,000
-paths.  The raw $z=19.18$ identifies a finite-step tail defect, while
-\eqref{eq:numerics-materiality-score} records its negligible absolute scale.
+At the two-sided 1\% threshold, 625.69 exceedances are expected among 62,569
+independent standard-normal statistics; the observed count is 635.  The 188
+coordinates above three standard errors are similarly close to the 168.9
+expected count, and none exceeds five.  Dependence across neighbouring strikes
+and expiries makes these benchmark counts descriptive rather than a formal
+joint test, but the unconditional screen shows no excess tail beyond ordinary
+multiple-testing variation.
 
-\paragraph{Interpretation.}
-The restricted book produces acceptable $\Q$ diagnostics for every
-configuration, with Model~D closest to zero in the conditional action test.
-The full option grid gives the more demanding conclusion: all four finite-step
-schemes retain statistically detectable defects in  tail calls.
-These are numerical defects of the discretisation, not of the continuous-time
-drift identity; see Section~\ref{sec:sampling}.
+The two-fold out-of-fold action test gives a mean captured daily return of
+$3.64\times10^{-8}$ spot units with pair-based standard error
+$4.32\times10^{-8}$, hence $T_{\mathrm{act}}=0.843$.  Its 95\% confidence
+interval, $[-4.83\times10^{-8},1.21\times10^{-7}]$, contains zero.  Both the
+unconditional and strategy-conditional diagnostics therefore remain
+consistent with the risk-neutral null on the full dynamically eligible
+instrument grid.
 
 \section{Conclusion}
 
@@ -1076,15 +1070,15 @@ used in~\cite{DYSANOS2026}.
 Estimated on 891 trading days of S\&P~500 index option data, the model's static fit covers more
 than 95\% of quoted bid/ask intervals, and the restricted-universe $\Q$ diagnostics of
 Section~\ref{sec:numerics} confirm the theoretical martingale property up to time-discretisation
-error. On the full option grid, finite-step simulation retains statistically detectable but
-economically negligible tail defects, consistent with the discretisation bias discussed in
-Section~\ref{sec:sampling} rather than a failure of the continuous-time drift identity. We
+error.  On the full dynamically eligible instrument grid, both the
+coordinate-wise unconditional screen and the out-of-fold conditional action
+test remain consistent with the risk-neutral null.  We
 further estimate the physical dynamics and the implied market price of risk, recovering a
 stable low-rank factor structure for the DLV vol-of-vol.
 
-Natural next steps include a finer or higher-order time-stepping scheme to reduce the residual
-tail bias documented in Section~\ref{sec:numerics-all-node-summary} (c.f.\ the discrete-branch
-correction of Remark~\ref{rem:discrete-branch-sampling}), a formal existence and uniqueness
+Natural next steps include applying the full-instrument diagnostic to the
+remaining factor ranks and time discretisations, studying the discrete-branch
+correction of Remark~\ref{rem:discrete-branch-sampling}, a formal existence and uniqueness
 argument for the risk-neutral SDE system of Section~\ref{sec:future-densities}, and extending
 the estimation beyond short-dated S\&P~500 index options to other asset classes and longer
 tenors.

@@ -1,0 +1,444 @@
+{
+  "schema": "front-spot-full-eligible-surface-oce-v1",
+  "population": {
+    "initial_date": "2025-08-29",
+    "measure": "Q",
+    "path_count": 100000,
+    "antithetic_pair_count": 50000,
+    "factor_rank": 8,
+    "dlv_substeps": 8,
+    "horizon_days": 25,
+    "strike_count_per_expiry": 200,
+    "instrument_count": 5001,
+    "feature_count": 5035,
+    "nms_annualized_atm_volatility": 0.09521352427267418,
+    "nms_bounds": [
+      -2.0,
+      1.0
+    ],
+    "return_definition": "predictably NMS-eligible daily spot and option price increments divided by pre-step spot",
+    "generation_seconds": 30224.766295782058
+  },
+  "objective": {
+    "local_loss": "log E[exp(-a_theta(X_t)'R_t + epsilon*a_theta(X_t)'a_theta(X_t)/2)]",
+    "epsilon": 1.0,
+    "action": "uncapped signed affine plus two-layer width-32 SiLU network",
+    "eligibility": "pathwise pre-step mask; ineligible and expired actions are exactly zero"
+  },
+  "split": {
+    "sample_A_paths": 50000,
+    "sample_B_paths": 50000,
+    "integrity": "complete paths and both members of each adjacent antithetic pair remain in one fold",
+    "normalization": "fitted separately on each training fold only",
+    "affine_hyperparameters": {
+      "batch_size": 1024,
+      "maximum_epochs": 30,
+      "learning_rate": 0.001,
+      "minimum_improvement": 1e-07,
+      "maximum_gradient_norm": 10.0,
+      "backtracking_factor": 0.2,
+      "maximum_line_search_steps": 20,
+      "epsilon": 1.0,
+      "seed": 20261008
+    },
+    "full_hyperparameters": {
+      "batch_size": 1024,
+      "maximum_epochs": 30,
+      "learning_rate": 0.001,
+      "minimum_improvement": 1e-07,
+      "maximum_gradient_norm": 10.0,
+      "backtracking_factor": 0.2,
+      "maximum_line_search_steps": 20,
+      "epsilon": 1.0,
+      "seed": 20261008
+    }
+  },
+  "unconditional": {
+    "null_hypothesis": "E_Q[I_t^i (V_{t+1}^i-V_t^i)/S_t]=0 for every daily coordinate, where I_t^i is the predictable NMS eligibility indicator",
+    "path_count": 100000,
+    "antithetic_pair_count": 50000,
+    "tested_coordinate_count": 62569,
+    "total_coordinate_count": 63180,
+    "max_absolute_z": 4.140116499641722,
+    "p99_absolute_z": 2.5826639269596208,
+    "rms_z": 1.0591996207657528,
+    "count_above_2_576": 635,
+    "count_above_3": 188,
+    "count_above_5": 0,
+    "top_absolute_z_coordinates": [
+      {
+        "day_index": 13,
+        "instrument_index": 4827,
+        "instrument_label": "25D interior node 26 call",
+        "mean": 3.650131533295081e-05,
+        "pair_based_standard_error": 8.816494737795319e-06,
+        "z_score": 4.140116499641722,
+        "eligible_path_count": 19348
+      },
+      {
+        "day_index": 13,
+        "instrument_index": 4629,
+        "instrument_label": "24D interior node 28 call",
+        "mean": 3.5614309388956825e-05,
+        "pair_based_standard_error": 8.757786201471333e-06,
+        "z_score": 4.066588127370992,
+        "eligible_path_count": 20282
+      },
+      {
+        "day_index": 13,
+        "instrument_index": 4628,
+        "instrument_label": "24D interior node 27 call",
+        "mean": 3.4928319037055714e-05,
+        "pair_based_standard_error": 8.625458252876056e-06,
+        "z_score": 4.049445028084077,
+        "eligible_path_count": 19008
+      },
+      {
+        "day_index": 13,
+        "instrument_index": 4429,
+        "instrument_label": "23D interior node 28 call",
+        "mean": 3.3363865217860396e-05,
+        "pair_based_standard_error": 8.419300650614036e-06,
+        "z_score": 3.9627834427586457,
+        "eligible_path_count": 18516
+      },
+      {
+        "day_index": 13,
+        "instrument_index": 4627,
+        "instrument_label": "24D interior node 26 call",
+        "mean": 3.3466208356086325e-05,
+        "pair_based_standard_error": 8.469547549586927e-06,
+        "z_score": 3.9513572785500832,
+        "eligible_path_count": 17808
+      },
+      {
+        "day_index": 13,
+        "instrument_index": 4428,
+        "instrument_label": "23D interior node 27 call",
+        "mean": 3.2426010140783034e-05,
+        "pair_based_standard_error": 8.274293465517958e-06,
+        "z_score": 3.918885675969098,
+        "eligible_path_count": 17382
+      },
+      {
+        "day_index": 13,
+        "instrument_index": 4227,
+        "instrument_label": "22D interior node 26 call",
+        "mean": 3.021109738483631e-05,
+        "pair_based_standard_error": 7.733950598650138e-06,
+        "z_score": 3.9062956246590543,
+        "eligible_path_count": 14842
+      },
+      {
+        "day_index": 13,
+        "instrument_index": 4229,
+        "instrument_label": "22D interior node 28 call",
+        "mean": 3.137241833083692e-05,
+        "pair_based_standard_error": 8.048316308830744e-06,
+        "z_score": 3.898010108824201,
+        "eligible_path_count": 16861
+      },
+      {
+        "day_index": 13,
+        "instrument_index": 4032,
+        "instrument_label": "21D interior node 31 call",
+        "mean": 3.1606182618118905e-05,
+        "pair_based_standard_error": 8.136481395336267e-06,
+        "z_score": 3.8845025364692884,
+        "eligible_path_count": 18477
+      },
+      {
+        "day_index": 13,
+        "instrument_index": 3833,
+        "instrument_label": "20D interior node 32 call",
+        "mean": 3.0649624035849854e-05,
+        "pair_based_standard_error": 7.893613906296038e-06,
+        "z_score": 3.88283800039971,
+        "eligible_path_count": 17627
+      }
+    ]
+  },
+  "conditional": {
+    "training_A": {
+      "negative_expectation": -0.9999996965736082,
+      "expectation": 0.9999996965736082,
+      "standard_error": 4.650537939208154e-08,
+      "log_expectation": -3.034264378326372e-07,
+      "maximum_log_payoff": 0.0020195378456264734,
+      "minimum_transition_gain": -0.0020195378456264734,
+      "maximum_transition_gain": 0.003005068749189377,
+      "tilted_effective_sample_size": 1249999.9966207033,
+      "largest_tilted_weight_share": 8.016175060204409e-07,
+      "top_10_tilted_weight_share": 8.010987249557697e-06,
+      "top_100_tilted_weight_share": 8.007930072860916e-05,
+      "log_payoff_quantiles": {
+        "50%": 5.202937103376826e-08,
+        "90%": 3.170866839354859e-05,
+        "99%": 0.00014185950698447414,
+        "99.9%": 0.00037210856986347895,
+        "99.99%": 0.0007694384920294631
+      },
+      "transition_gain_quantiles": {
+        "0.01%": -0.0007694384920294397,
+        "0.1%": -0.0003721085698634852,
+        "1%": -0.00014185950698447414,
+        "50%": -5.202937103376826e-08,
+        "99%": 0.0001474506259546616,
+        "99.9%": 0.000446450447780071,
+        "99.99%": 0.0011160346120945412
+      },
+      "mean_regularized_transition_gain": 3.04778302822682e-07,
+      "standard_deviation_regularized_transition_gain": 5.1998810992107094e-05,
+      "path_count": 50000,
+      "transition_count": 1250000,
+      "paired_conditional_drift": {
+        "path_count": 50000,
+        "antithetic_pair_count": 25000,
+        "mean_daily_conditional_drift": 4.3699314770708847e-07,
+        "pair_based_standard_error": 4.422554236106851e-08,
+        "z_score": 9.881012744611834,
+        "confidence_interval_95": [
+          3.503126774826437e-07,
+          5.236736179315332e-07
+        ],
+        "path_average_standard_deviation": 1.0199861648629957e-05,
+        "pair_average_standard_deviation": 6.992532376018684e-06,
+        "minimum_pair_score": -4.203428580839244e-05,
+        "maximum_pair_score": 5.563007835467081e-05,
+        "pair_score_quantiles": {
+          "0.01%": -3.862134894581112e-05,
+          "0.1%": -3.3662837969553505e-05,
+          "1%": -2.0667787186235006e-05,
+          "50%": 6.562376600343463e-07,
+          "99%": 1.96510562800328e-05,
+          "99.9%": 3.2875043921682046e-05,
+          "99.99%": 4.7790750705801465e-05
+        }
+      },
+      "mean_path_average_raw_action_return": 4.3699314770708847e-07,
+      "expected_path_action_energy": 6.610742270003655e-06,
+      "expected_pointwise_action_energy": 2.644296908001462e-07,
+      "maximum_absolute_action": 0.0009093720582313836,
+      "rms_action": 7.27154475248635e-06
+    },
+    "heldout_B": {
+      "negative_expectation": -1.000000099450403,
+      "expectation": 1.000000099450403,
+      "standard_error": 4.646411206983706e-08,
+      "log_expectation": 9.945039806144411e-08,
+      "maximum_log_payoff": 0.0014915021602064371,
+      "minimum_transition_gain": -0.0014915021602064371,
+      "maximum_transition_gain": 0.0021654986776411533,
+      "tilted_effective_sample_size": 1249999.9966267012,
+      "largest_tilted_weight_share": 8.011940123231355e-07,
+      "top_10_tilted_weight_share": 8.010679741995394e-06,
+      "top_100_tilted_weight_share": 8.00799750037543e-05,
+      "log_payoff_quantiles": {
+        "50%": 7.908247923182898e-08,
+        "90%": 3.2080202799988924e-05,
+        "99%": 0.00014483886276138948,
+        "99.9%": 0.0003816699433955336,
+        "99.99%": 0.0008015374476905163
+      },
+      "transition_gain_quantiles": {
+        "0.01%": -0.0008015374476904981,
+        "0.1%": -0.0003816699433955364,
+        "1%": -0.00014483886276138946,
+        "50%": -7.908247923182898e-08,
+        "99%": 0.00014453575480729343,
+        "99.9%": 0.0004407272684038484,
+        "99.99%": 0.0010660910904296023
+      },
+      "mean_regularized_transition_gain": -9.810096244180703e-08,
+      "standard_deviation_regularized_transition_gain": 5.1951775392557864e-05,
+      "path_count": 50000,
+      "transition_count": 1250000,
+      "paired_conditional_drift": {
+        "path_count": 50000,
+        "antithetic_pair_count": 25000,
+        "mean_daily_conditional_drift": 3.585570857891672e-08,
+        "pair_based_standard_error": 4.498811613094553e-08,
+        "z_score": 0.7970040015579359,
+        "confidence_interval_95": [
+          -5.231937877004196e-08,
+          1.240307959278754e-07
+        ],
+        "path_average_standard_deviation": 1.0459437404212787e-05,
+        "pair_average_standard_deviation": 7.113103464360197e-06,
+        "minimum_pair_score": -4.939669049745662e-05,
+        "maximum_pair_score": 4.6001011971577743e-05,
+        "pair_score_quantiles": {
+          "0.01%": -4.217939107835117e-05,
+          "0.1%": -3.2966181238803834e-05,
+          "1%": -2.2694178544378636e-05,
+          "50%": 3.8032195789622556e-07,
+          "99%": 1.9034337409956492e-05,
+          "99.9%": 3.2680503886535353e-05,
+          "99.99%": 4.168070211554531e-05
+        }
+      },
+      "mean_path_average_raw_action_return": 3.585570857891672e-08,
+      "expected_path_action_energy": 6.697833478795342e-06,
+      "expected_pointwise_action_energy": 2.6791333915181367e-07,
+      "maximum_absolute_action": 0.0009789594914764166,
+      "rms_action": 7.319286402353361e-06
+    },
+    "training_B": {
+      "negative_expectation": -0.9999996230857848,
+      "expectation": 0.9999996230857848,
+      "standard_error": 7.109970551513298e-08,
+      "log_expectation": -3.769142861605179e-07,
+      "maximum_log_payoff": 0.004653583280742168,
+      "minimum_transition_gain": -0.004653583280742168,
+      "maximum_transition_gain": 0.003813351271674037,
+      "tilted_effective_sample_size": 1249999.9921013007,
+      "largest_tilted_weight_share": 8.037318453501045e-07,
+      "top_10_tilted_weight_share": 8.032111441719143e-06,
+      "top_100_tilted_weight_share": 8.022311212840008e-05,
+      "log_payoff_quantiles": {
+        "50%": -6.787049500189823e-08,
+        "90%": 3.3731310395523906e-05,
+        "99%": 0.0001772827075910755,
+        "99.9%": 0.0006781013321596962,
+        "99.99%": 0.0019097786490693196
+      },
+      "transition_gain_quantiles": {
+        "0.01%": -0.001909778649068903,
+        "0.1%": -0.0006781013321597129,
+        "1%": -0.00017728270759107546,
+        "50%": 6.787049500189823e-08,
+        "99%": 0.00018884987715864568,
+        "99.9%": 0.0006968938150675944,
+        "99.99%": 0.0017278125573183104
+      },
+      "mean_regularized_transition_gain": 3.800734270213735e-07,
+      "standard_deviation_regularized_transition_gain": 7.948549761916887e-05,
+      "path_count": 50000,
+      "transition_count": 1250000,
+      "paired_conditional_drift": {
+        "path_count": 50000,
+        "antithetic_pair_count": 25000,
+        "mean_daily_conditional_drift": 5.556638827890886e-07,
+        "pair_based_standard_error": 7.685121715714935e-08,
+        "z_score": 7.23038493525533,
+        "confidence_interval_95": [
+          4.0503826499300916e-07,
+          7.06289500585168e-07
+        ],
+        "path_average_standard_deviation": 1.6198898232374974e-05,
+        "pair_average_standard_deviation": 1.2151001331322642e-05,
+        "minimum_pair_score": -8.499617124580589e-05,
+        "maximum_pair_score": 0.00011748735979105377,
+        "pair_score_quantiles": {
+          "0.01%": -7.333558007466747e-05,
+          "0.1%": -5.2489873818285604e-05,
+          "1%": -2.6579762148024342e-05,
+          "50%": -8.942417656169813e-07,
+          "99%": 5.058040772868501e-05,
+          "99.9%": 8.295997931628345e-05,
+          "99.99%": 0.00011251662132997691
+        }
+      },
+      "mean_path_average_raw_action_return": 5.556638827890886e-07,
+      "expected_path_action_energy": 8.779522837794455e-06,
+      "expected_pointwise_action_energy": 3.5118091351177824e-07,
+      "maximum_absolute_action": 0.000853195320814848,
+      "rms_action": 8.379865051103192e-06
+    },
+    "heldout_A": {
+      "negative_expectation": -1.0000001393797775,
+      "expectation": 1.0000001393797775,
+      "standard_error": 6.980848610214602e-08,
+      "log_expectation": 1.3937976788003237e-07,
+      "maximum_log_payoff": 0.005307285580784082,
+      "minimum_transition_gain": -0.005307285580784082,
+      "maximum_transition_gain": 0.0035696392878890038,
+      "tilted_effective_sample_size": 1249999.9923855949,
+      "largest_tilted_weight_share": 8.042570032382741e-07,
+      "top_10_tilted_weight_share": 8.035305418870697e-06,
+      "top_100_tilted_weight_share": 8.02209916502725e-05,
+      "log_payoff_quantiles": {
+        "50%": -4.4821348410550854e-08,
+        "90%": 3.418489322939423e-05,
+        "99%": 0.00018015394787653356,
+        "99.9%": 0.0007025555861182147,
+        "99.99%": 0.0018894122826868217
+      },
+      "transition_gain_quantiles": {
+        "0.01%": -0.0018894122826866805,
+        "0.1%": -0.000702555586118251,
+        "1%": -0.00018015394787653348,
+        "50%": 4.4821348410550854e-08,
+        "99%": 0.0001845732709625736,
+        "99.9%": 0.0006494765709503492,
+        "99.99%": 0.0016185860679486703
+      },
+      "mean_regularized_transition_gain": -1.363345796133331e-07,
+      "standard_deviation_regularized_transition_gain": 7.803719867098815e-05,
+      "path_count": 50000,
+      "transition_count": 1250000,
+      "paired_conditional_drift": {
+        "path_count": 50000,
+        "antithetic_pair_count": 25000,
+        "mean_daily_conditional_drift": 3.7002531396352885e-08,
+        "pair_based_standard_error": 7.381354709218477e-08,
+        "z_score": 0.5012972937087132,
+        "confidence_interval_95": [
+          -1.0766936247548049e-07,
+          1.8167442526818627e-07
+        ],
+        "path_average_standard_deviation": 1.5548570369641384e-05,
+        "pair_average_standard_deviation": 1.1670713128104904e-05,
+        "minimum_pair_score": -9.908241415856204e-05,
+        "maximum_pair_score": 0.0001017758540082371,
+        "pair_score_quantiles": {
+          "0.01%": -8.485259582163544e-05,
+          "0.1%": -5.583191707595131e-05,
+          "1%": -2.7223812695096885e-05,
+          "50%": -1.1451989214420803e-06,
+          "99%": 4.63849823734937e-05,
+          "99.9%": 7.750398621066339e-05,
+          "99.99%": 9.236084410779395e-05
+        }
+      },
+      "mean_path_average_raw_action_return": 3.700253139635287e-08,
+      "expected_path_action_energy": 8.666855576842334e-06,
+      "expected_pointwise_action_energy": 3.466742230736934e-07,
+      "maximum_absolute_action": 0.0008145084721036255,
+      "rms_action": 8.325922196288826e-06
+    },
+    "combined_out_of_fold": {
+      "path_count": 100000,
+      "antithetic_pair_count": 50000,
+      "mean_daily_conditional_drift": 3.64291199876348e-08,
+      "pair_based_standard_error": 4.3221004451686e-08,
+      "z_score": 0.8428568574420011,
+      "confidence_interval_95": [
+        -4.828249211331511e-08,
+        1.211407320885847e-07
+      ],
+      "path_average_standard_deviation": 1.3250620212086994e-05,
+      "pair_average_standard_deviation": 9.664413755391852e-06,
+      "minimum_pair_score": -9.908241415856204e-05,
+      "maximum_pair_score": 0.0001017758540082371,
+      "pair_score_quantiles": {
+        "0.01%": -8.141300824911146e-05,
+        "0.1%": -4.565671470130702e-05,
+        "1%": -2.506593953109416e-05,
+        "50%": -3.307628287384291e-07,
+        "99%": 3.382475281928301e-05,
+        "99.9%": 7.006950095683677e-05,
+        "99.99%": 9.044618737194395e-05
+      }
+    },
+    "headline_statistic": 0.8428568574420011,
+    "interpretation": "Under zero conditional drift, every frozen predictable action has zero expected held-out score; the statistic is conditional on the stated affine-plus-deep strategy class"
+  },
+  "training_epochs": {
+    "affine_A": 30,
+    "A": 30,
+    "affine_B": 30,
+    "B": 30
+  },
+  "checkpointing": "population resumes after the last completed generation batch and each policy resumes after the last completed training epoch"
+}
