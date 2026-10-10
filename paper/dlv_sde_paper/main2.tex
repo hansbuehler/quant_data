@@ -61,6 +61,7 @@
         The model presented was trained for daily expiries up to 25 business days and strikes between $[\exp(-2.5 \sigma_{atm} \sqrt{t}), \exp(+1.5 \sigma_{atm} \sqrt{t})]$.}
     We then train the model dynamics under~$\PP$ and~$\Q$ and show that the model is indeed free of arbitrage
     while fitting the dynamics of the market well.
+    We also propose a range of BHW-tests to test for absence of arbitrage.
 \end{abstract}
 
 \tableofcontents
@@ -817,7 +818,7 @@ unconditional estimate.
 Appendix~\ref{app:drift} visualizes the effect of the drift change
 with four matched Model~D paths.  
 
-\section{Absence of Dynamic Arbitrage}\label{sec:numerics}
+\section{BHW No Dynamic Arbitrage Test}\label{sec:numerics}
 
 In this section we assess whether the model is indeed free of dynamic arbitrage.
 We are not aware of an accessible benchmark for dynamic arbitrage in the literature, so
