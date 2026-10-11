@@ -7,8 +7,7 @@ J.~Andreasen and B.~Huge.
 \newblock {\em Risk}, pages 86--89, 2011.
 
 \bibitem[BHK{\etalchar{+}}26]{SANOS2026}
-Hans Buehler, Blanka Horvath, Anastais Kratsios, Yannick Limmer, and Raeid
-  Saqur.
+Hans Buehler, Blanka Horvath, Anastais Kratsios, Yannick Limmer, and Raeid Saqur.
 \newblock Sanos - smooth arbitrage-free non-parametric option surfaces.
 \newblock \url{https://arxiv.org/abs/2601.11209}, Februar 2026.
 
@@ -29,8 +28,7 @@ Hans Buehler.
 
 \bibitem[Bue08]{BuehlerVolAndDivs}
 Hans Buehler.
-\newblock Volatility and dividends - volatility modelling with cash dividends
-  and simple credit risk.
+\newblock Volatility and dividends - volatility modelling with cash dividends and simple credit risk.
 \newblock \url{https://papers.ssrn.com/abstract=1141877}, 2008.
 
 \bibitem[CFD02]{ContVol}
@@ -60,8 +58,7 @@ Matthias~R. Fengler.
 
 \bibitem[Fri00]{MEMM}
 Marco Frittelli.
-\newblock The minimal entropy martingale measure and the valuation problem in
-  incomplete markets.
+\newblock The minimal entropy martingale measure and the valuation problem in incomplete markets.
 \newblock {\em Mathematical Finance}, 10(1):39--52, 2000.
 
 \bibitem[GHL12]{Guyon2011TheSC}
@@ -71,8 +68,7 @@ Julien Guyon and Pierre Henry-Labord{\`e}re.
 
 \bibitem[NJZB23]{vae_ning2023arbitrage}
 Brian Ning, Sebastian Jaimungal, Xiaorong Zhang, and Maxime Bergeron.
-\newblock Arbitrage-free implied volatility surface generation with variational
-  autoencoders.
+\newblock Arbitrage-free implied volatility surface generation with variational autoencoders.
 \newblock {\em SIAM Journal on Financial Mathematics}, 14(4):1004--1027, 2023.
 
 \bibitem[WBWB19]{wiese2019simulate}
@@ -81,8 +77,7 @@ Magnus Wiese, Lianjun Bai, Ben Wood, and Hans Buehler.
 \newblock \url{https://arxiv.org/abs/1911.01700}, 2019.
 
 \bibitem[WWP{\etalchar{+}}21]{wiese2021multiassetspotoptionmarket}
-Magnus Wiese, Ben Wood, Alexandre Pachoud, Ralf Korn, Hans Buehler, Phillip
-  Murray, and Lianjun Bai.
+Magnus Wiese, Ben Wood, Alexandre Pachoud, Ralf Korn, Hans Buehler, Phillip Murray, and Lianjun Bai.
 \newblock Multi-asset spot and option market simulation.
 \newblock \url{https://arxiv.org/abs/2112.06823}, 2021.
 

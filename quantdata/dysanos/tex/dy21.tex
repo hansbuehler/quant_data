@@ -67,7 +67,7 @@ Generative Dynamic Smooth Arbitrage-free Non-parametric Option Surfaces
 }
 \author{%
   Hans Buehler\thanks{%
-    Mathematical Institute and Oxford-Man Institute,
+    Mathematical Institute,
     University of Oxford.
     \texttt{hans.buehler@maths.ox.ac.uk}}
   \and
@@ -82,7 +82,7 @@ Generative Dynamic Smooth Arbitrage-free Non-parametric Option Surfaces
     Mathematical Institute,
     University of Oxford. \texttt{magnus.wiese@maths.ox.ac.uk}}
 }
-\date{\today\\Version 2.0}
+\date{\today\\Version 2.1}
 
 %% ============================================================
 \begin{document}
@@ -95,7 +95,7 @@ This article presents with DYSANOS the first generative market model
 for smooth SANOS option surfaces for all strikes and expiries which are
 free of static arbitrage. 
 Our model is designed to generate entire paths of daily spot and option prices for years
-in the future. 
+in the future. By construction all its market shock scenarios are arbitrage-free.
 
 We present a robust and useful if somewhat simplistic baseline in the form of an AR(1) model.
 We discuss model setup, data pipeline, and training and investigate market
@@ -105,7 +105,7 @@ on 891 Option Metrics IvyDB S\&P Index surfaces from 2022-01-03 through to
 
 We also demonstrate how to use the methods of~\cite{removedrift} to construct
 numerically a risk-neutral density. As part of this we develop a new test for zero conditional means under a given measure.
-We show that for 100,000 simulated paths
+We show that for a set of 100,000 simulated paths
 a trading universe of 48 options and spot is numerically free of dynamic arbitrage.
 \end{abstract}
 
@@ -294,6 +294,11 @@ by finding a martingale measure~$\Q$ equivalent to the learned~$\P$.
 We test the resulting measure against two no-arbitrage criteria: zero
 unconditional mean and zero conditional expected return. To assess the latter, we develop a novel ``no-arb'' test.
 This is of independent interest.
+
+The ``remove the drift'' procedure deployed here is frittle: it is senstive to numerical instabilities,
+errors, overfitting and other numerical challenges. While we did manage to find a risk-neutral
+meausure for the paths we generate, it was an iterative process. As it is the method is not suitable
+for a production environment.
 
 
 %% ============================================================
@@ -1224,6 +1229,11 @@ applying the OCE drift-removal construction of
 claim risk-neutrality of the full surface; extending the construction to
 \emph{all} options is ongoing work.
 
+We also like to stress that the ``remove the drift'' procedure deployed here is frittle: it is senstive to numerical
+errors, overfitting and other numerical challenges. While we did manage to find a risk-neutral
+meausure for the paths we generate, it was an iterative process. As it is the method is not suitable
+for a production environment.
+
 \subsection{Universe}
 \label{sec:risk-neutral-universe}
 
@@ -1667,8 +1677,7 @@ The conditional mean test fails clearly for $\P$ and $\Q_1$, but passes comforta
 This is a reduced demonstration rather than a general construction.  The
 experiment is numerically heavy and the terminal $\Q_2$ policy and conditional
 actions did not meet strict full-parameter gradient stopping criteria within
-the fixed 300-epoch two-stage schedule.  The frozen-action test remains valid, but
-incomplete action optimization can reduce its power. 
+the fixed 300-epoch two-stage schedule.
 
 The result is therefore evidence for zero drift within the stated
 49-instrument book and strategy class, but it is by construction not a risk-neutrality statement for
@@ -1676,6 +1685,11 @@ other strikes, expiries, trading frequencies, or the full DYSANOS surface.
 The model-free reweighting step also relies on having many more simulated paths
 than tradable instruments.  Extending the construction to the full surface is
 the natural next step.
+
+As part of our implementatin work we had to manually intervene to adjust
+the optimization process to obtain the desired density. This means the method described
+here can serve as a research tool, but is not a practical method for production use. A more robust
+approach is subject to further research.
 
 \section{Conclusion}
 
