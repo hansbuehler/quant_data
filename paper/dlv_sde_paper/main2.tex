@@ -25,6 +25,9 @@
 \newcommand{\Gh}{\widehat G}
 \newcommand{\Nh}{\widehat N}
 \newcommand{\removeblock}[1]{}
+\newcommand{\MW}[1]{{\color{red}#1}}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\tr}{tr}
 
 \theoremstyle{plain}
 \newtheorem{theorem}{Theorem}[section]
@@ -54,7 +57,7 @@
     interpolation between option prices, based on the SANOS~\cite{SANOS2026} framework.
 
     In spirit,
-    it is a stocastic model for local volatility when the latter is used as a representation of a European option price surface, not as a pricing model.
+    it is a stochastic model for local volatility when the latter is used as a representation of a European option price surface, not as a pricing model.
 
   We illustrate the strength of our approach on S\&P Index Option data from January 2022 to August 2025.
   We show that the model's initial state fits within bid/ask for more than 95\% of relevant market option prices.\footnote{
@@ -69,8 +72,8 @@
 
 \section{Introduction}\label{sec:intro}
 
-This article presents an arbitrage-free market model for for smooth surfaces of European option prices. While not strictly the first of is kind,
-it is the first model with an industy-grade ability to fit the current market, allow for smooth interpolation of the entire option surface at each time,
+This article presents an arbitrage-free market model for smooth surfaces of European option prices. While not strictly the first of its kind,
+it is the first model with an industry-grade ability to fit the current market, allow for smooth interpolation of the entire option surface at each time,
 and provide an explicit construction of the continuous time risk-neutral drift for both (discrete local) volatilities and spot. It also has a natural
 estimation strategy for its parameter space.
 
@@ -79,7 +82,7 @@ of a time-and-state discrete process~$X$ and a smoothing process~$Y$, in our cas
 The former is used to encode the option market using a discrete form of local volatilities as code book. That does not mean
 that the model is a local volatility model -- we merely use the implied local volatilities as a convenient representation of the option surface.
 Compared to using implied volatilities the advantage is that mere positivity of the local volatilities is sufficient to ensure
-the the option market is free of static arbitrage at all times. We have shown in~\cite{SANOS2026} that this representation
+the option market is free of static arbitrage at all times. We have shown in~\cite{SANOS2026} that this representation
 can be fitted to real life market data very efficiently using linear programming.
 
 The key
@@ -88,7 +91,7 @@ also dynamically free of arbitrage. We show the theoretical construction of the 
 and discuss existence of the respective martingale processes. We then discuss implementation
 and estimate our model on S\&P Index Option data from January 2022 to August 2025. We fit our daily model parameters to observed bid/ask prices and then proceed to
 estimate both $\Q$ and its drift under $\PP$. We show that
-on this data set more than 90\% of calibrated
+on this data set more than 95\% of calibrated
 model prices fit within observed market bid/ask spreads even with the simplistic grid architecture we present here.
 
 We then show that model dynamics under the risk-neutral indeed have numerically zero conditional and unconditional drift. We test this first
@@ -100,14 +103,14 @@ The model presented here is distinct from our own DYSANOS~\cite{DYSANOS2026}. Th
 realistic market dynamics for smooth statically arbitrage-free SANOS
 surfaces under~$\PP$.
 We did also construct an equivalent risk-neutral measure~$\Q$ numerically using the \emph{martingale measure} approach introduced in~\cite{removedrift}.
-While this method is model-free and can in theory be applied to any option market model under~$\PP$, it is numerically heavy and in practise
+While this method is model-free and can in theory be applied to any option market model under~$\PP$, it is numerically heavy and in practice
 restricted to making only a fairly limited number of the overall tradable instruments
 dynamically arbitrage-free.\footnote{In~\cite{DYSANOS2026} we used 49 instruments per simulated date.} In the current work we cover all options with
 an explicit construction of the risk-neutral drift, which is far more efficient than the numerical martingale measure approach.
 
 \subsubsection*{Related Work}
 
-Our approach most closely related to the seminal but unpublished work~\cite{Wissel2007}
+Our approach is most closely related to the seminal but unpublished work~\cite{Wissel2007}
 which extends their earlier works~\cite{SchweizerWissel2008} and~\cite{Schweizer2007}. From a
 theoretical perspective, our approach is a version of~\cite{CarmonaNadtochiy2008} where
 the authors derive related risk-neutral drift conditions for continuous time local volatility models, 
@@ -115,20 +118,20 @@ but without a tangible implementation strategy. Our results
 can be seen as a joint extension of the two papers, plus  smoothing and market-fit from our SANOS~\cite{SANOS2026}. 
 
 In~\cite{TANGET} the 
-authors solve the problem of finding a dynamically arbitrage-free evolution of the full option surface via products of indepdent Levy processes. While structurally
+authors solve the problem of finding a dynamically arbitrage-free evolution of the full option surface via products of independent L\'evy processes. While structurally
 very elegant, option prices generated by products of independent increment processes do not typically fit well to equity index European option surfaces. 
 Our approach also has the advantage of being numerically accessible.
-In particular, our model prices can be fit very efficiently within nearly all\footnote{In below experiments, above 90\%.} of observed market bid/ask prices
+In particular, our model prices can be fit very efficiently within nearly all\footnote{In below experiments, above 95\%.} of observed market bid/ask prices
 using the  linear programming SANOS~\cite{SANOS2026} calibration method.
 
 There are a number of works on generative equity option market dynamics -- not least our
 own~2019 work \cite{WieseEtAl2019OptionMarkets} and the multi-asset version~\cite{WieseEtAl2021MultiAsset} -- which simulate
 discrete strictly arbitrage-free option surfaces. However, most other approaches
 are not strictly free of arbitrage and do not have analytical corresponding risk-neutral dynamics.
-To address the absence of an analytical risk-neutral measure, we presented in~ \cite{removedrift} 
+To address the absence of an analytical risk-neutral measure, we presented in~\cite{removedrift} 
 a model-free approach
-to learning such measure. However,  that method is numerically challenging
-for large number of tradable options as discussed in~\cite{DYSANOS2026}.
+to learning such a measure. However,  that method is numerically challenging
+for a large number of tradable options as discussed in~\cite{DYSANOS2026}.
 
 For interest rate option markets the reference model in the same class is the BGM Model~\cite{BGM}.
 
@@ -141,7 +144,7 @@ We follow the core SANOS~\cite{SANOS2026} idea of writing our equity process $S$
  \label{eq:S} 
   S_t = X_t Y_t 
 \end{equation}
-of a \emph{Stochastic Discrete Local Volatility (SDLV)} process $X$ which is used to fit to current market condition and 
+of a \emph{Stochastic Discrete Local Volatility (SDLV)} process $X$ which is used to fit to current market conditions and 
 whose state parameters will have consistent $\PP$ and $\Q$ dynamics, and an independent\footnote{Under both $\PP$ and $\Q$.} and rather trivial smoothing process $Y$ whose dynamics under $\PP$ and $\Q$ are the same.
 
 The process $Y$ will just be a Black~\&~Scholes process with fixed volatility~5\%. Given observed bid/ask market data it was shown in~\cite{SANOS2026} how to fit
@@ -151,15 +154,15 @@ In the remainder of this section we focus on the SDLV process itself.
 
 \subsection{Stochastic Discrete Local Volatility (SDLV)}
 
-Our \emph{Stochastic Discrete Local Volatility (SDLV)} risk-neutral model will be defined on a \emph{fixed} expiry and cash strike grid. It will not use a floating grid in its option market dynamics.\footnote{This is not to be confused to 
-how the model parameters are estimated using historic market data. We explain estimation section~\ref{sec:estimation}.} We will use ``$t$'' to refer to 
+Our \emph{Stochastic Discrete Local Volatility (SDLV)} risk-neutral model will be defined on a \emph{fixed} expiry and cash strike grid. It will not use a floating grid in its option market dynamics.\footnote{This is not to be confused with 
+how the model parameters are estimated using historic market data. We explain the estimation in section~\ref{sec:estimation}.} We will use ``$t$'' to refer to 
 model time. Denote initial spot by~$X_0>0$.
 
-For now let $0=T_0<T_1<\dots<T_M$ be the fixed model expiry dates, and assume that $K_0<K_1<\cdots<X_0<\cdots<K_{N+1}$ are the fixed model cash strikes, where 
+For now let $0=T_0<T_1<\dots<T_M$ be the fixed model expiry dates, and assume that $K^0<K^1<\cdots<X_0<\cdots<K^{N+1}$ are the fixed model cash strikes, where 
 $K^0$ and $K^{N+1}$
-are boundary strikes which are far away from the inner strikes, c.f.~\cite{SANOS2026}.\footnote{In our experiments the inner strikes are given as range of strikes
+are boundary strikes which are far away from the inner strikes, cf.~\cite{SANOS2026}.\footnote{In our experiments the inner strikes are given as range of strikes
 in from $K^1=\exp(-2.5 \sigma_{atm}(T_M) \sqrt{T_M})$ to $K^N=\exp(+1.5 \sigma_{atm}(T_M) \sqrt{T_M})$ with boundaries set to $K^0=K^1/2$ and $K^{N+1}=3 K^N / 2$; see
-section~\ref{sec:numerics} for specifics.
+section~\ref{sec:estimation-data} for specifics.
 }
 
 Assume that $t$ is the current model time and let $T_k$ be the front expiry such that $T_{k-1}\leq t<T_k$.
@@ -169,15 +172,16 @@ by the current spot $X_t$ and future densities $q_t^j$, where $q_t^{j,i}$ repres
 Such discrete densities have been shown in~\cite{BuehlerRyskin2016} to admit an equivalent representation via (squared) \emph{discrete local volatilities} $\Sigma_t^{j,1},\ldots,\Sigma_t^{j,N}$ in the following form:
 there is a tridiagonal matrix~$\Omega_j$\footnote{
   The matrix $\Omega_j\in\mathbb R^{(N+2)\times(N+2)}$ is given as follows: 
-  let $\gamma_t^{\pm i} := \pm (K^{i})^2 (T_j-T_{j-1}) / (K^{i+1}-K^{i-1}) / (K^{i\pm 1} - K^i) $ for $i=1,\ldots,N$.
-  Then $\Omega_j$ is the tridiagonal matrix with entries
+  let $\gamma^{\pm i} := \pm (K^{i})^2 (T_j-T_{j-1}) / (K^{i+1}-K^{i-1}) / (K^{i\pm 1} - K^i) $ for $i=1,\ldots,N$.
+  Then $\Omega_j$ is the tridiagonal matrix whose $i$-th column, $i=1,\ldots,N$, has the entries
   \[
-    (\Omega_j)_{i,i-1} = \gamma_t^{-i},\quad
-    (\Omega_j)_{i,i} = -(\gamma_t^{-i}+\gamma_t^{+i}),\quad
-    (\Omega_j)_{i,i+1} = \gamma_t^{+i},\quad i=1,\ldots,N.
+    (\Omega_j)_{i-1,i} = \gamma^{-i},\quad
+    (\Omega_j)_{i,i} = -(\gamma^{-i}+\gamma^{+i}),\quad
+    (\Omega_j)_{i+1,i} = \gamma^{+i},
   \]
-  c.f.~\cite{SANOS2026}.
- } for each $j>k$ such that 
+  and all other entries zero, so that $\one^{\!\top}\Omega_j=0$ and $K^{\!\top}\Omega_j=0$;
+  cf.~\cite{SANOS2026}.
+ } for each $j>k$ such that
     \begin{equation}
       q_t^{j-1}=M_t^jq_t^j \ ,
       \qquad
@@ -193,7 +197,7 @@ for any given initial density $q_t^k$ and the surface of non-negative (squared) 
 
   \subsection{Risk-Neutral Dynamics}
 
-Under a risk-neutral measure~$\Q$ densities are martingales. We will now turn this property into conditions on dynamics of the (squared) discete local volatilities, and, 
+Under a risk-neutral measure~$\Q$ densities are martingales. We will now turn this property into conditions on dynamics of the (squared) discrete local volatilities, and, 
 jointly the front density and spot. 
       Our approach follows in spirit that of~\cite{Wissel2007} in the sense that we rely on the martingale property of a discrete set of tradable derivative assets.
       However, we reframe it in a much more accessible coordinate system.
@@ -216,15 +220,16 @@ Assume that $W$ is a $d$-dimensional Brownian motion. We designate $W^1$ as the
       where $E_t^{k;1}\in\mathbb R^{N+2}$ must satisfy
       $\one^{\!\top}E_t^{k;1}=0$, so that $q_t^k$ retains unit mass. The
       remaining Brownian factors do not directly move the front density. They
-      drive the stochastic DLV surface, while $\xi_t^{j,\cdot,1}$ determines
+      drive the stochastic DLV surface, while $\xi_t^{j,\cdot;1}$ determines their correlation with spot.
       Future density volatilities $\eta_t^j$ for $j>k$ will be obtained recursively.
 
-      For future expiries $T_j$ with $j>k$, assume the discrete local volatity squared is given as
-      \[
+      For future expiries $T_j$ with $j>k$, assume the discrete local volatility squared is given as
+      \begin{equation}
+        \label{eq:dlv_sde_hb}
         \frac{ d\Sigma_t^{j} }{ \Sigma_t^{j} }
           = \mu^j_t\,dt
           + \xi^j_t\,dW_t,
-      \]
+      \end{equation}
       where $\xi_t^j\in\mathbb R^{N\times d}$ is given and
       $\mu_t^j\in\mathbb R^N$ is the unknown risk-neutral drift. We write this as
       \[
@@ -243,14 +248,14 @@ Assume that $W$ is a $d$-dimensional Brownian motion. We designate $W^1$ as the
         -\sum_{f=1}^d\Omega_jB_t^{j;f}\,dW_t^f.
       \]
       Setting $dq_t^j=\sum_fE_t^{j;f}\,dW_t^f$ for an unknown $E_t^{j;f}$ yields
-      \begin{eqnarray}
+      \begin{align}
         dq_t^{j-1}
-        & = & M_t^j\,dq_t^j+(dM_t^j)q_t^j+d[M^j,q^j]_t\\
-        & = & \sum_{f=1}^d
+        &= M_t^j\,dq_t^j+(dM_t^j)q_t^j+d[M^j,q^j]_t\\
+        &= \sum_{f=1}^d
           \left(M_t^jE_t^{j;f}-\Omega_jB_t^{j;f}q_t^j\right)dW_t^f
           -\Omega_j\left(A_t^jq_t^j
           +\sum_{f=1}^dB_t^{j;f}E_t^{j;f}\right)dt \ .
-      \end{eqnarray}
+      \end{align}
       Matching the diffusion coefficients gives
       \begin{equation}
         \label{eq:vol_hb}
@@ -285,15 +290,15 @@ Assume that $W$ is a $d$-dimensional Brownian motion. We designate $W^1$ as the
 
   \subsubsection*{Case $t=T_k-dt$}
 
-  Assume we are at $t=T_k-dt$ and observe the front density $q_{t}^k$. Current spot is given as $S_t = K^\top q_t^k$.
+  Assume we are at $t=T_k-dt$ and observe the front density $q_{t}^k$. Current spot is given as $X_t = K^\top q_t^k$.
   In order to sample a spot consistent with the discrete set of strikes, we can either draw a discrete sample or fit some other distribution exactly to the observed option prices (fitting to densities or probabilities will not work in general).
 
   The simplest method is to draw spot from this discrete distribution using
   the spot factor $W^1$. Let $F_t^k$ denote the conditional CDF which assigns
-  probability $q_t^{k,i}$ to strike $K_i$, and let $\Phi$ denote the standard
+  probability $q_t^{k,i}$ to strike $K^i$, and let $\Phi$ denote the standard
   normal CDF. Then
   \[
-    S_{T_k}=(F_t^k)^{-1}\!\left(\Phi(Z)\right),
+    X_{T_k}=(F_t^k)^{-1}\!\left(\Phi(Z)\right),
     \qquad
     Z:=\frac{W_{T_k}^1-W_t^1}{\sqrt{dt}}\sim N(0,1).
   \]
@@ -318,7 +323,7 @@ Assume that $W$ is a $d$-dimensional Brownian motion. We designate $W^1$ as the
   The time-$s$ front density is the conditional probability
   \begin{equation}
     q_s^{k,i}
-      :=\mathbb P\!\left(S_{T_k}=K_i\mid\mathcal F_s\right)
+      :=\mathbb P\!\left(X_{T_k}=K^i\mid\mathcal F_s\right)
       =\Phi\!\left(z_i(s)\right)
        -\Phi\!\left(z_{i-1}(s)\right).
   \end{equation}
@@ -337,14 +342,14 @@ Assume that $W$ is a $d$-dimensional Brownian motion. We designate $W^1$ as the
       =\frac{\phi(a_{i-1})-\phi(a_i)}{\sqrt{dt}} \ \ \ \mbox{hence} \ \ \
     \eta_t^{k,i;1}
       =\frac{\phi(a_{i-1})-\phi(a_i)}{q_t^{k,i}\sqrt{dt}}
-      \ \ \ \mbox{for $i=0,\ldots,N+1$.}
+      \ \ \ \mbox{for $i=0,\ldots,N+1$}
   \end{equation}
   while $E_t^{k,i;f}=\eta_t^{k,i;f}=0$ for $f=2,\ldots,d$.
   More generally, $\eta_s^{k,i;1}=E_s^{k,i;1}/q_s^{k,i}$ and the other
   factor loadings remain zero. Consequently,
   \[
-    S_s=K^\top q_s^k
-      =\mathbb E\!\left[S_{T_k}\mid\mathcal F_s\right],
+    X_s=K^\top q_s^k
+      =\mathbb E\!\left[X_{T_k}\mid\mathcal F_s\right],
     \qquad
     dS_s=K^\top E_s^{k;1}\,dW_s^1,
   \]
@@ -353,7 +358,7 @@ Assume that $W$ is a $d$-dimensional Brownian motion. We designate $W^1$ as the
   strike. The displayed coefficient $E_t^{k,i;1}$ is only the initial value
   of the exact, state- and time-dependent coefficient $E_s^{k,i;1}$; holding
   it constant over the whole interval would instead be an Euler
-  approximation. Likewise, sampling $S_{T_k}$ all at once without
+  approximation. Likewise, sampling $X_{T_k}$ all at once without
   progressively revealing $W^1$ produces a direct jump to the terminal point
   mass rather than a continuous density diffusion.
 
@@ -387,16 +392,16 @@ Assume that $W$ is a $d$-dimensional Brownian motion. We designate $W^1$ as the
   The corresponding spot is not sampled independently but is defined by
   \begin{equation}
     \label{eq:spot-exact-step}
-    S_{t+\delta}:=K^\top q_{t+\delta}^k
-      =\mathbb E\!\left[S_{T_k}\mid\mathcal F_{t+\delta}\right].
+    X_{t+\delta}:=K^\top q_{t+\delta}^k
+      =\mathbb E\!\left[X_{T_k}\mid\mathcal F_{t+\delta}\right].
   \end{equation}
   Consequently
   \[
     \mathbb E_t[q_{t+\delta}^k]=q_t^k,
     \qquad
-    \mathbb E_t[S_{t+\delta}]=S_t
+    \mathbb E_t[X_{t+\delta}]=X_t
   \]
-  exactly. In general $S_{t+\delta}$ is not a grid strike; only at $T_k$ does
+  exactly. In general $X_{t+\delta}$ is not a grid strike; only at $T_k$ does
   the density collapse to a unit vector and spot become the corresponding
   strike.
 
@@ -410,14 +415,86 @@ Assume that $W$ is a $d$-dimensional Brownian motion. We designate $W^1$ as the
   terminal strike, it is Brownian motion conditioned to terminate in an
   interval, or equivalently a mixture of Brownian bridges.
 
-\subsubsection{Existence [TODO]}
+\subsubsection{Existence}
 
-We have just described a set of risk-neutral model dynamics for a discrete process $X_t$ whose future densities themselves are martingales driven
-by stochastic discrete local volatilities. Our construction is concise and lends itself to efficient numerical implementation and model parameter
-estimation. 
+We have just described a set of risk-neutral model dynamics for a discrete process $X_t$ whose future densities themselves are martingales driven by stochastic discrete local volatilities. Our construction is concise and lends itself to efficient numerical implementation and model parameter estimation. 
 
-[TODO] Existience
+With $L_t^{j,i}\coloneqq\log\Sigma_t^{j,i}$, \eqref{eq:dlv_sde_hb} and the drift restriction \eqref{eq:drift_hb}, the Itô dynamics of the log of the DLV squared are governed by 
+\begin{equation}
+  \label{eq:log_dlv_sde_mw}
+  dL_t^{j,i}=\left(-\sum_{f=1}^d\xi_t^{j,i;f}\eta_t^{j,i;f}
+    -\frac12\sum_{f=1}^d(\xi_t^{j,i;f})^2\right)dt+\sum_{f=1}^d\xi_t^{j,i;f}\,dW_t^f .
+\end{equation}
+Thus, the only term that can blow up the drift is $\eta^{j, i; f} = E^{j, i; f} / q^{j, i}$, as the density entries at the wings become small. The subject of this subsection is to show that a unique strong solution on $[T_{k-1}, T_k]$ exists under weak assumptions. 
 
+\paragraph{Relative density volatility ($\eta$) recursion}
+Let $P^j = (M^j)^{-1}$. Fix a factor $f$ and suppress it for legibility. For clarity of this derivation, drop the dependence on $t$ from the notation. The volatility recursion \eqref{eq:vol_hb} links the previous relative density vol with the current by dividing \eqref{eq:vol_hb} by the current density component-wise: 
+\begin{equation}
+  \label{eq:eta_recursion_mw}
+  \eta^{j} = \frac{P^j E^{j-1}}{q^{j}} + \frac{P^j \Omega_j B^{j; f} q^{j}}{q^{j}}
+\end{equation}
+The first term is a weighted average of $\eta^{j-1}$: expand $E^{j-1} = \diag(q^{j-1}) \eta^{j-1}$ and observe that $(P^j E^{j-1})_{i, f} = \sum_{m=0}^{N+1} P^{j, i, m} q^{j-1, m} \eta^{j-1, m; f}$. We have $\sum_{m=0}^{N+1} P^{j, i,m} q^{j-1, m} = q^{j, i}$ and each term is non-negative. Hence, the first term of \eqref{eq:eta_recursion_mw} is a weighted average of $\eta^{j-1}$. The second term is seemingly more difficult as the operator $\Omega_j$ includes second differences: density ratios $q^{j, i \pm 1} /  q^{j, i}$ for neighbouring nodes are produced. Recall that $B^{j; f} = S^j \diag(\xi^{j;f})$ and write the numerator of the second term as $P^j \Omega_j S^j \diag(\xi^j) q^j $. Moreover, the code-book identity gives $P^j \Omega_j S^j = P^j - I $. Insert the identity into the numerator to obtain $ (P^j - I) \diag(\xi^j) q^j$. Now, divide as in \eqref{eq:eta_recursion_mw} the expression by $q^{j}$ and evaluate it component-wise 
+\begin{equation}
+  ((P^j - I) \diag(\xi^j) q^j)_i /  q^{j, i} =  \sum_{m=0}^{N+1} P^{j,i,m} \xi^{j,m} q^{j,m} / q^{j, i} - \xi^{j,i}
+\end{equation}
+Together with the first term we obtain the identity 
+\begin{equation}
+  \label{eq:eta_recursion_rewritten_mw}
+  \eta^j = \mathcal{A}^j \eta^{j-1}  + (\mathcal{B}^j - I) \xi^{j} 
+\end{equation}
+where $\mathcal{A}^{j, i, m} =  P^{j, i, m} q^{j-1, m} / q^{j, i}$ and $\mathcal{B}^{j, i, m} =  P^{j,i,m} q^{j,m} / q^{j, i}$ for $i, m = 0, \dots, N+1$. 
+
+\paragraph{Bounding the wings}
+Fix $j$ and write $P=P^j$. Having derived the relative density volatility recursion, we now derive a bound for $\eta^j$ that depends on the grid alone. In \eqref{eq:eta_recursion_rewritten_mw}, $\mathcal{A}^j$ is a weighted average since its entries are non-negative and its rows sum to one and therefore satisfies $\|A^j \eta^{j-1}\|_\infty \leq \|\eta^{j-1}\|_\infty$. For the second term, we obtain 
+\begin{equation*}
+  \left|((\mathcal{B}^j - I)\xi^j)_i\right|
+  \le \| \xi^j\|_\infty \left((Pq^j)_i/ q^{j,i} + 1\right),
+\end{equation*}
+and observe that a single ratio $(P q^{j})_i / q^{j, i}$ remains. Instead of bounding through neighbouring density nodes, we again employ the density recursion $q^j = Pq^{j-1}$ on this term and obtain $(P^2 q^{j-1})_i / (P q^{j-1})_i$. Thus, it is sufficient to compare the entries of $P^2$ and $P$. Since $P$ is the inverse of a non-singular M-matrix, it satisfies in particular the path-product property $P_{i,m}P_{m,l}\le P_{i,l}P_{m,m}$ for all nodes $i, l, m$ \cite[Theorem~4.5]{JohnsonSmith2011}. Thus, we bound $P^2$ entry-wise through its trace: 
+\begin{equation*}
+  (P^2)_{i,l} = \sum_{m=0}^{N+1} P_{i, m} P_{m, l} \leq \sum_{m=0}^{N+1} P_{i, l} P_{m, m} = \tr(P) \, P_{i, l}  \leq (N + 2) P_{i, l} \, 
+\end{equation*}
+where we used that the entries of $P$ are at most one. Since $q^{j-1}$ is non-negative, we obtain $(Pq^{j})_i / q^{j, i} \leq N+2$. 
+Combining both the first and second term, we obtain for every $L^j \in \R^{N}$ the bound 
+\begin{equation}
+  \label{eq:wing_step_mw}
+  \|\eta^j\|_\infty \le \|\eta^{j-1}\|_\infty + (N+3)\,\|\xi^j\|_\infty 
+\end{equation}
+which depends on the grid alone. Further, iterating \eqref{eq:wing_step_mw} from the front expiration $T_k$ up to any $T_j, \, j = k+1, \dots, M$ gives us the bound 
+\begin{equation}
+  \label{eq:iterated_bound_mw}
+  \| \eta^j \|_\infty
+  \le \| \eta^k \|_\infty + (N+3) \sum_{l=k+1}^{j} \|\xi^l\|_\infty .
+\end{equation}
+
+
+\paragraph{Existence proof}
+We now show that the SDE \eqref{eq:log_dlv_sde_mw} does not explode on $[T_{k-1}, T_{k}]$; $T_k$ being the front expiry. Throughout we assume that $\xi$ is locally Lipschitz in $(t, L)$, bounded $|\xi| \leq B$, and that the front density is strictly positive. For the solution to reach expiration we make an assumption on the asymptotic behaviour of $\eta$ near expiration. 
+\begin{theorem}[Existence]
+\label{thm:existence_mw} 
+Let $L_{T_{k-1}} $ be finite.  
+\begin{enumerate}[label=(\roman*)]
+  \item Let $T \in (T_{k-1}, T_k)$. Assume that $\eta^k_t$ is bounded on $[T_{k-1}, T]$. Then a unique strong solution for $L$ exists on $[T_{k-1}, T]$. 
+  \item Moreover, assume that $\|\eta_t^k\|_\infty \leq C(T_{k}- t)^{-p} $ for some constant $C > 0$ and $ p \in [0, 1)$. Then $L$ has a unique strong solution on $[T_{k-1}, T_k]$. 
+\end{enumerate}
+\end{theorem}
+\begin{proof}
+  \begin{enumerate}[label=(\roman*)]
+  \item Since $\Sigma = e^L > 0$, every $ M^j $ is a non-singular M-matrix and the coefficients of \eqref{eq:log_dlv_sde_mw} are locally Lipschitz. 
+  Since $|\xi| \leq B$, the iterated wing bound \eqref{eq:iterated_bound_mw} gives
+  \begin{equation*}
+    \|\eta^j\|_\infty \leq \| \eta^{k}\|_\infty + (N+3)(M - k) B. 
+  \end{equation*}
+  Denote by $\mu^{j, i} = -\sum_{f=1}^d \xi_t^{j, i; f} \eta^{j, i; f} $ component-wise the drift from \eqref{eq:log_dlv_sde_mw}. We obtain the bound 
+  \begin{equation}
+    \label{eq:drift_bound_mw}
+    |\mu_t^{j, i}| \leq d B ( \|\eta_t^k\|_\infty + (M-k)(N+3) B ) \eqqcolon g(t) . 
+  \end{equation}
+  Augment the state of the SDE by $t$ and the Brownian motion $W$. Since $g(t)$ is bounded on $[T_{k-1}, T]$ through $\eta_t^k$ by assumption, the drift is bounded. Moreover, the noise $\int \xi \, dW $ is an $L^2$-bounded martingale. Therefore $L$ does not explode on $[T_{k-1}, T]$ and by \cite[Theorem~V.38]{Protter2005}, $L$ has a unique strong solution on $[T_{k-1}, T]$.
+
+  \item By (i) the solution exists on the interval $[T_{k-1}, T_k)$. By assumption $\|\eta_t^k\|_\infty \leq C (T_k - t)^{-p}$ for $p<1$ and the bound $g(t)$ from \eqref{eq:drift_bound_mw} becomes integrable. Thus, the drift integral is finite up to $T_k$ and $\int \xi dW $ converges as in (i). Hence there exists a unique strong solution on the extended interval $[T_{k-1}, T_k]$. 
+  \end{enumerate}
+\end{proof}
 
 \subsection{Sampling}
 \label{sec:sampling}
@@ -438,13 +515,8 @@ estimation.
   preserving.
 
   For the DLV squared it is useful to work with
-  $X_t^{j,i}:=\log\Sigma_t^{j,i}$. Its It\^o dynamics are
-  \[
-    dX_t^{j,i}
-      =\left(\mu_t^{j,i}
-        -\frac12\sum_{f=1}^d(\xi_t^{j,i;f})^2\right)dt
-       +\sum_{f=1}^d\xi_t^{j,i;f}\,dW_t^f.
-  \]
+  $L_t^{j,i}\coloneqq\log\Sigma_t^{j,i}$, which follows \eqref{eq:log_dlv_sde_mw}. 
+
   Even the frozen-coefficient exponential update
   \begin{equation}
     \label{eq:dlv-log-euler}
@@ -514,7 +586,7 @@ estimation.
 
 \section{Estimation}\label{sec:estimation}
 
-We briefly describe out estimation strategy. There are two components: fitting daily the ``implied'' discrete densities and therefore discete local volatilities
+We briefly describe our estimation strategy. There are two components: fitting daily the ``implied'' discrete densities and therefore discrete local volatilities
 to observed bid/ask spreads, and then an estimation of the vol of those discrete local volatilities, and their statistical drift.
 
 The former represents today's fit of the model to the market, while the latter captures the evolution of the model parameters over time.
@@ -525,7 +597,7 @@ to DYSANOS~\cite{DYSANOS2026} for a comprehensive discussion on parameter mappin
 \subsection{Data and state representation}
 \label{sec:estimation-data}
 
-We estimate a family of models which has 25 expiries at one-business-day intervals. The model is aimed as S\&P~500 index options
+We estimate a family of models which has 25 expiries at one-business-day intervals. The model is aimed at S\&P~500 index options
 whose main trading activity occurs in the short-dated options segment.
 
 Each daily state has 25 model expiries at one-business-day intervals and 200
@@ -609,7 +681,7 @@ training objective is
       +0.05\frac{\abs{C_{d\ell}-m_{d\ell}}}{h_{d\ell}}
     \right],
 \end{equation}
-plus a soft barrier near the upper DLV-squared bound, c.f.~\cite{DYSANOS2026}. Thus a price within its
+plus a soft barrier near the upper DLV-squared bound, cf.~\cite{DYSANOS2026}. Thus a price within its
 quoted interval has zero excess, while the small midpoint term identifies a
 stable point inside the spread. We use the exact all-quote gradient, accumulated
 in memory-bounded quote blocks, and Adam for up to 1,000 epochs.
@@ -707,15 +779,15 @@ the rank-8 system.  Appendix~\ref{app:dlv-factor-figures} shows the baseline
 implied-volatility surface, the cumulative factor power, and the implied-
 volatility response to each retained factor.  On the held-out 2025 sample the
 full 25-by-200 representation has residual root mean square 0.256, compared
-with 0.423 for the affine-$x$ 200 representation.
+with 0.423 for the Affine-200 representation.
 
 This is a functional estimate in remaining-expiry and normalized-moneyness
 coordinates, not an estimate on one global historical cash-strike grid.  When
 a simulation is initialized, these loading surfaces are attached nodewise to
 that state's fixed cash-strike grid.  Pooling dates therefore assumes that the
-loading functions are stable in this moving coordinate chart.\\
+loading functions are stable in this moving coordinate chart.
 
-The empirical physical log-DLV drift implied by
+The empirical physical log-DLV-squared drift implied by
 regression~\eqref{eq:estimation-dlv-ar} is
 \begin{equation}
   \label{eq:estimation-empirical-p-drift}
@@ -735,7 +807,7 @@ We estimate the state-dependent market price of risk by
 \begin{equation}
   \label{eq:numerics-statewise-lambda}
   \widehat\lambda_d
-  =\arg\min_{\lambda\in\R^r}
+  =\arg\min_{\lambda\in\R^d}
     \sum_k w_{d,k}
     \left[
       \widehat\mu_{d,k}^{\PP,\mathrm{emp}}-\mu_{d,k}^{\Q}
@@ -816,7 +888,7 @@ include zero; the compatible drift remains measurably different from the raw
 unconditional estimate.
 
 Appendix~\ref{app:drift} visualizes the effect of the drift change
-with four matched Model~D paths.  
+with four matched Model~D paths (Section~\ref{sec:numerics}).  
 
 \section{BHW No Dynamic Arbitrage Test}\label{sec:numerics}
 
@@ -853,8 +925,8 @@ property under~$\Q$.
 \subsection{Risk-Neutral Diagnostics}
 \label{sec:numerics-audit-definition}
 
- Numerically, it is clear that as the number
-of instruments increases on a fixed set of paths, the likelihhood of a risk-free return
+Numerically, it is clear that as the number
+of instruments increases on a fixed set of paths, the likelihood of a risk-free return
 of a linear combination of instruments simply due to sampling error increases.
 
 We will therefore test absence of dynamic arbitrage on a reduced trading universe which consists of spot and
@@ -1135,14 +1207,13 @@ stable low-rank factor structure for the DLV vol-of-vol.
 
 Natural next steps include applying the full-instrument diagnostic to the
 remaining factor ranks and time discretisations, studying the discrete-branch
-correction of Remark~\ref{rem:discrete-branch-sampling}, a formal existence and uniqueness
-argument for the risk-neutral SDE system of Section~\ref{sec:future-densities}, and extending
+correction of Remark~\ref{rem:discrete-branch-sampling}, and extending
 the estimation beyond short-dated S\&P~500 index options to other asset classes and longer
 tenors.
 
 \section{Thanks}
 
-We want to thank the team at Wharton for their WRDS \url{https://wrds-www.wharton.upenn.edu} portal and Option Metrics \url{https://optionmetrics.com/united-states} 
+We want to thank the team at Wharton for their WRDS \url{https://wrds-www.wharton.upenn.edu} portal and OptionMetrics \url{https://optionmetrics.com/united-states} 
 for providing their IvyDB data via this service. Without this data our work would not have been possible.
 
 
