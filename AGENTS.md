@@ -2,46 +2,34 @@
 
 Read and follow `STYLE_GUIDE.md` before making code changes in this repository. More specific instructions in subdirectories supplement or override the repository baseline.
 
-## Host Resource Guardrails
+Host-wide guardrails that apply to every project on this machine — GPU
+allocation via `gpuctl`, resource-headroom handling, GPU progress-logging
+cadence, and launching detached jobs — are defined once in
+`~/.codex/AGENTS.md` and apply here too; this file only adds what's specific
+to quant_data.
 
-- Every project-owned GPU process that can run longer than a few minutes must
-  emit lightweight, flushed progress information at regular intervals.  At a
-  minimum report elapsed time, completed and total work units, and an estimated
-  remaining time when meaningful; write it to the persistent job log without
-  retaining large intermediate arrays or adding material synchronization cost.
-  This must make it possible to distinguish active computation from a stalled
-  process without attaching a profiler or restarting the job.
-- Check RAM and filesystem headroom before launching material work and during
-  every regular background-process inspection. Resource-triggered termination
-  applies only to jobs owned by the current project; never terminate unrelated
-  system or user activity.
-- Measure usable RAM with Linux ``MemAvailable`` from ``/proc/meminfo``
-  (equivalently the ``available`` column from ``free``), not raw ``MemFree``.
-  Define memory usage as ``1 - MemAvailable / MemTotal``. At 80% usage, warn the
-  user promptly and identify the largest owned processes and whether usage is
-  stable or increasing. At 90% usage, do not launch more work; gracefully
-  terminate active jobs owned by the current project after preserving their
-  checkpoints and status, and immediately raise an alert in the active user
-  conversation. Do not restart until the cause has been assessed and safe
-  headroom restored.
-- Monitor the filesystem device that hosts ``/media/storage`` using its capacity
-  and available bytes. If free space falls below 20%, warn the user promptly and
-  report current usage and trend. If free space is at or below 10%, do not
-  launch more work; gracefully terminate active project jobs after preserving
-  checkpoints and status, and immediately raise an alert in the active user
-  conversation. Do not restart until the space problem is resolved.
-- Monitor usage of the filesystem hosting ``/tmp``. At 70% usage, initiate a
-  safe cleanup and re-measure. Cleanup must be limited to identified stale or
-  reproducible temporary files owned by the current project; never
-  blanket-delete ``/tmp``, remove open or shared files, or delete reusable
-  caches. At 80% usage, warn the user promptly and report cleanup actions and
-  the usage trend. At 90% usage, cease project operation gracefully, preserve
-  checkpoints and status, and immediately raise an alert in the active user
-  conversation. Do not restart until safe headroom is restored.
-- Treat Git working trees under ``~/python``, including this repository, as
-  source repositories rather than general-purpose data or artifact storage.
-  Regularly inspect repository status, total footprint, untracked files, and
-  unusually large files. Keep only relevant source, configuration,
-  specifications, tests, and deliberately retained project artifacts in Git
-  roots. Never remove user files merely because they are large without first
-  identifying ownership and obtaining any required approval.
+## Shared directories
+
+When using any common directory, such as `/tmp` or a shared storage root,
+place every file this project generates under a `quant_data/` subdirectory
+of that root (e.g. `/tmp/quant_data/`). Do not scatter project outputs,
+logs, checkpoints, caches, or intermediate files directly across a common
+directory; keep them together so ownership and cleanup remain unambiguous.
+
+## Project environment
+
+Detached jobs and user services for this project must be launched with the
+explicit project interpreter and working directory, and must set
+`QUANTDATA_ROOT` and `PYTHONPATH` in the job definition. Before starting
+material work, validate imports and data-root discovery in the same
+detached environment that will run the job.
+
+## Git working tree hygiene
+
+Treat Git working trees under `~/python`, including this repository, as
+source repositories rather than general-purpose data or artifact storage.
+Regularly inspect repository status, total footprint, untracked files, and
+unusually large files. Keep only relevant source, configuration,
+specifications, tests, and deliberately retained project artifacts in Git
+roots. Never remove user files merely because they are large without first
+identifying ownership and obtaining any required approval.

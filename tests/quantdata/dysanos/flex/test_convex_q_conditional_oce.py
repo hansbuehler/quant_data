@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -13,6 +14,7 @@ from quantdata.dysanos.flex.run_convex_q_conditional_oce import (
     _assemble_expiry_slice_action_details,
     _configure_lbfgs_optimizer,
     _fixed_feature_pnl,
+    _full_population_evaluation,
     _full_population_oce_probabilities,
     _load_checkpoint,
     _trust_region_boundary_distance,
@@ -406,6 +408,68 @@ def test_fixed_feature_pnl_matches_daywise_returns_and_costs() -> None:
     assert float(diagnostics.cap_active_fraction) == 0.0
     pnl.sum().backward()
     assert final_layer.bias.grad is not None
+
+
+def test_full_population_evaluation_matches_direct_held_out_oce() -> None:
+    env = BaseEnvironment(precision=64, device="cpu")
+    config = SharedExpiryOceConfig(
+        label="test-held-out-oce",
+        state_size=3,
+        num_expiries=2,
+        num_strikes=2,
+        maximum_action_l1=100.0,
+        network=FeedForwardConfig(activation="SiLU", num_depth=1, num_width=4),
+    )
+    policy = SharedExpiryOcePolicy(
+        env,
+        config=config,
+        state_mean=torch.zeros(3, dtype=torch.float64),
+        state_scale=torch.ones(3, dtype=torch.float64),
+        log_price_mean=torch.zeros(2, dtype=torch.float64),
+        log_price_scale=torch.ones(2, dtype=torch.float64),
+    )
+    with torch.no_grad():
+        policy.network.In[-1].bias.copy_(
+            torch.tensor([1.0, 2.0, 3.0], dtype=torch.float64)
+        )
+    policy.train()
+    states = np.zeros((4, 2, 3), dtype=np.float64)
+    prices = np.ones((4, 2, 2, 2), dtype=np.float64)
+    returns = np.linspace(-0.2, 0.3, num=4 * 2 * 5).reshape(4, 2, 5)
+    density = np.array([1.0, 2.0, 0.5, 1.5], dtype=np.float64)
+    costs = torch.tensor([0.01, 0.02, 0.02, 0.02, 0.02], dtype=torch.float64)
+    setup = {
+        "policy": policy,
+        "env": env,
+        "transaction_cost": costs,
+        "frozen_policies": (),
+        "residual_reference_policy": None,
+    }
+
+    result = _full_population_evaluation(
+        setup,
+        SimpleNamespace(optimization_batch_size=2),
+        states=states,
+        prices=prices,
+        returns=returns,
+        density=density,
+    )
+    with torch.no_grad():
+        pnl, _ = _fixed_feature_pnl(
+            policy,
+            states=torch.as_tensor(states),
+            option_prices=torch.as_tensor(prices),
+            returns=torch.as_tensor(returns),
+            transaction_cost=costs,
+        )
+    expected_log_loss = math.log(
+        float(np.sum(density * np.exp(-pnl.numpy())) / np.sum(density))
+    )
+
+    assert result["log_loss"] == pytest.approx(expected_log_loss)
+    assert result["oce"] == pytest.approx(-expected_log_loss)
+    assert result["cap_active_fraction"] == 0.0
+    assert policy.training
 
 
 def test_fixed_feature_pnl_adds_old_policy_before_one_global_cap() -> None:

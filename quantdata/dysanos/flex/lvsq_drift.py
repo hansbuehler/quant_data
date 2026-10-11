@@ -17,7 +17,11 @@ from quantdata.dysanos.flex.config import (
     CappedUnboundedDlvFlexGeometryConfig,
     FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig,
 )
-from quantdata.dysanos.flex.model import bound_native_raw
+from quantdata.dysanos.flex.model import (
+    bound_native_raw,
+    pack_forward_mu_native_raw,
+    split_forward_mu_native_raw,
+)
 from quantdata.dysanos.flex.sanos import FlexSanosDecoder
 
 
@@ -336,9 +340,9 @@ def fixed_contract_lvsq_drift(
 ) -> FixedContractLvsqDrift:
     r"""Compute the PDF drift directly in the original native raw state.
 
-    Only DLV coordinates in expiry blocks 2,...,M receive a drift or diffusion.
-    The complete first block and both non-DLV coordinates in every block remain
-    fixed. The current decoder must use one fixed support at every expiry.
+    Only DLV coordinates at expiries 2,...,M receive a drift or diffusion. The
+    complete first-expiry DLV row and all non-DLV coordinates remain fixed. The
+    current decoder must use one fixed support at every expiry.
     """
 
     geometry = decoder.geometry
@@ -346,7 +350,6 @@ def fixed_contract_lvsq_drift(
         raise ValueError("direct raw LVsq drift requires capped log-DLV coordinates")
     num_expiries = geometry.num_model_expiries
     num_inner = geometry.num_inner_strikes
-    block_width = geometry.expiry_block_state_size
     if raw_states.ndim != 2 or raw_states.shape[-1] != geometry.native_state_size:
         raise ValueError("raw_states must be a batch of complete native states")
     if raw_log_loadings.ndim == 3:
@@ -364,8 +367,11 @@ def fixed_contract_lvsq_drift(
     if not bool(torch.all(loadings[:, 0] == 0.0)):
         raise ValueError("the first-expiry raw DLV loading must be exactly zero")
 
-    raw_blocks = raw_states.reshape(len(raw_states), num_expiries, block_width)
-    dynamic_raw_dlvsq = raw_blocks[:, 1:, :num_inner]
+    raw_dlvsq, raw_forward, raw_eta = split_forward_mu_native_raw(
+        raw_states,
+        geometry=geometry,
+    )
+    dynamic_raw_dlvsq = raw_dlvsq[:, 1:]
     minimum_cap_margin = torch.min(
         torch.as_tensor(
             geometry.maximum_log_dlvsq,
@@ -397,9 +403,9 @@ def fixed_contract_lvsq_drift(
         device=raw_states.device,
     )
     relative_density_diffusion = torch.zeros_like(density_diffusion)
-    raw_drift_blocks = torch.zeros_like(raw_blocks)
-    raw_diffusion_blocks = torch.zeros(
-        raw_blocks.shape + (num_factors,),
+    raw_dlvsq_drift = torch.zeros_like(raw_dlvsq)
+    raw_dlvsq_diffusion = torch.zeros(
+        raw_dlvsq.shape + (num_factors,),
         dtype=raw_states.dtype,
         device=raw_states.device,
     )
@@ -460,8 +466,8 @@ def fixed_contract_lvsq_drift(
             physical_drift / excess_dlvsq
             - 0.5 * torch.sum(raw_loading.square(), dim=-1)
         )
-        raw_drift_blocks[:, expiry_index, :num_inner] = raw_drift
-        raw_diffusion_blocks[:, expiry_index, :num_inner] = raw_loading
+        raw_dlvsq_drift[:, expiry_index] = raw_drift
+        raw_dlvsq_diffusion[:, expiry_index] = raw_loading
         dlvsq_drift[:, expiry_index] = physical_drift
         dlvsq_diffusion[:, expiry_index] = physical_diffusion
         density_diffusion[:, expiry_index] = current_density_diffusion
@@ -490,13 +496,21 @@ def fixed_contract_lvsq_drift(
     forward_diffusion_residual = torch.max(
         torch.abs(torch.sum(density_diffusion * support.unsqueeze(-1), dim=2))
     )
+    raw_drift = pack_forward_mu_native_raw(
+        raw_dlvsq_drift,
+        torch.zeros_like(raw_forward),
+        torch.zeros_like(raw_eta),
+        geometry=geometry,
+    )
+    raw_diffusion = pack_forward_mu_native_raw(
+        torch.movedim(raw_dlvsq_diffusion, -1, -3),
+        torch.zeros_like(raw_forward).unsqueeze(-2).expand(-1, num_factors, -1),
+        torch.zeros_like(raw_eta).unsqueeze(-2).expand(-1, num_factors, -1),
+        geometry=geometry,
+    ).movedim(-2, -1)
     return FixedContractLvsqDrift(
-        raw_drift=raw_drift_blocks.reshape_as(raw_states),
-        raw_diffusion=raw_diffusion_blocks.reshape(
-            len(raw_states),
-            geometry.native_state_size,
-            num_factors,
-        ),
+        raw_drift=raw_drift,
+        raw_diffusion=raw_diffusion,
         dlvsq_drift=dlvsq_drift,
         dlvsq_diffusion=dlvsq_diffusion,
         densities=surface.densities,
@@ -579,7 +593,6 @@ def fixed_horizon_lvsq_exponential_step(
     num_states = len(raw_states)
     num_expiries = geometry.num_model_expiries
     num_inner = geometry.num_inner_strikes
-    block_width = geometry.expiry_block_state_size
     if raw_states.ndim != 2 or raw_states.shape != (
         num_states,
         geometry.native_state_size,
@@ -661,8 +674,14 @@ def fixed_horizon_lvsq_exponential_step(
         raw_states,
         raw_log_loadings=loadings,
     )
-    raw_blocks = raw_states.reshape(num_states, num_expiries, block_width)
-    local_drift_blocks = local.raw_drift.reshape_as(raw_blocks)
+    raw_dlvsq, raw_forward, raw_eta = split_forward_mu_native_raw(
+        raw_states,
+        geometry=geometry,
+    )
+    local_raw_dlvsq_drift, _, _ = split_forward_mu_native_raw(
+        local.raw_drift,
+        geometry=geometry,
+    )
     parameters = bound_native_raw(raw_states, geometry=geometry)
     surface = decoder.forward_batch(
         dlvsqs=parameters.dlvsqs,
@@ -680,12 +699,12 @@ def fixed_horizon_lvsq_exponential_step(
         dtype=raw_states.dtype,
         device=raw_states.device,
     )
-    branch_raw_blocks = (
-        raw_blocks[:, None]
-        .expand(num_states, num_branches, num_expiries, block_width)
+    branch_raw_dlvsq = (
+        raw_dlvsq[:, None]
+        .expand(num_states, num_branches, num_expiries, num_inner)
         .clone()
     )
-    effective_drift_blocks = torch.zeros_like(raw_blocks)
+    effective_raw_dlvsq_drift = torch.zeros_like(raw_dlvsq)
     density_branches: list[torch.Tensor] = [
         surface.densities[:, None, 0].expand(num_states, num_branches, -1)
     ]
@@ -711,7 +730,7 @@ def fixed_horizon_lvsq_exponential_step(
         torch.Tensor,
         torch.Tensor,
     ]:
-        base_raw = raw_blocks[:, expiry_index, :num_inner]
+        base_raw = raw_dlvsq[:, expiry_index]
         base_excess = parameters.dlvsqs[:, expiry_index] - geometry.min_dlvsq
         shock = torch.einsum(
             "bnf,rf->brn",
@@ -822,7 +841,7 @@ def fixed_horizon_lvsq_exponential_step(
 
     previous_density = density_branches[0]
     for expiry_index in range(1, num_expiries):
-        effective_drift = local_drift_blocks[:, expiry_index, :num_inner].clone()
+        effective_drift = local_raw_dlvsq_drift[:, expiry_index].clone()
         converged = False
         final_values: tuple[
             torch.Tensor,
@@ -914,16 +933,25 @@ def fixed_horizon_lvsq_exponential_step(
             minimum_cap_margin,
             torch.min(cap_margin_by_state),
         )
-        effective_drift_blocks[:, expiry_index, :num_inner] = effective_drift
-        branch_raw_blocks[:, :, expiry_index, :num_inner] = branch_raw
+        effective_raw_dlvsq_drift[:, expiry_index] = effective_drift
+        branch_raw_dlvsq[:, :, expiry_index] = branch_raw
         density_branches.append(branch_density)
         dlvsq_branches.append(branch_dlvsq)
         previous_density = branch_density
 
-    raw_states_by_branch = branch_raw_blocks.reshape(
-        num_states,
-        num_branches,
-        geometry.native_state_size,
+    branch_forward = raw_forward[:, None].expand(num_states, num_branches, -1)
+    branch_eta = raw_eta[:, None].expand(num_states, num_branches, -1)
+    raw_states_by_branch = pack_forward_mu_native_raw(
+        branch_raw_dlvsq,
+        branch_forward,
+        branch_eta,
+        geometry=geometry,
+    )
+    effective_raw_drift = pack_forward_mu_native_raw(
+        effective_raw_dlvsq_drift,
+        torch.zeros_like(raw_forward),
+        torch.zeros_like(raw_eta),
+        geometry=geometry,
     )
     densities_by_branch = torch.stack(density_branches, dim=2)
     dlvsqs_by_branch = torch.stack(dlvsq_branches, dim=2)
@@ -949,17 +977,16 @@ def fixed_horizon_lvsq_exponential_step(
         dim=1,
     )
     target_density_dlvsq = surface.densities[..., 1:-1] * parameters.dlvsqs
-    front_change = branch_raw_blocks[:, :, :1] - raw_blocks[:, None, :1]
-    non_dlv_change = (
-        branch_raw_blocks[..., num_inner:] - raw_blocks[:, None, :, num_inner:]
-    )
+    front_change = branch_raw_dlvsq[:, :, :1] - raw_dlvsq[:, None, :1]
+    forward_change = branch_forward - raw_forward[:, None]
+    eta_change = branch_eta - raw_eta[:, None]
     return FixedHorizonLvsqStep(
         raw_states_by_branch=raw_states_by_branch,
         branch_probabilities=probabilities,
         standardized_innovations=innovations,
         densities_by_branch=densities_by_branch,
         dlvsqs_by_branch=dlvsqs_by_branch,
-        effective_raw_drift=effective_drift_blocks.reshape_as(raw_states),
+        effective_raw_drift=effective_raw_drift,
         local_raw_drift=local.raw_drift,
         newton_iterations_by_expiry=tuple(iterations_by_expiry),
         maximum_density_mean_residual=torch.max(
@@ -975,10 +1002,13 @@ def fixed_horizon_lvsq_exponential_step(
         ),
         maximum_frozen_coordinate_change=torch.maximum(
             torch.max(torch.abs(front_change)),
-            torch.max(torch.abs(non_dlv_change)),
+            torch.maximum(
+                torch.max(torch.abs(forward_change)),
+                torch.max(torch.abs(eta_change)),
+            ),
         ),
         maximum_effective_minus_local_raw_drift=torch.max(
-            torch.abs(effective_drift_blocks - local_drift_blocks)
+            torch.abs(effective_raw_drift - local.raw_drift)
         ),
         minimum_raw_cap_margin=minimum_cap_margin,
     )
@@ -1025,7 +1055,6 @@ def density_martingale_lvsq_step(
     num_states = len(raw_states)
     num_expiries = geometry.num_model_expiries
     num_inner = geometry.num_inner_strikes
-    block_width = geometry.expiry_block_state_size
     num_factors = local.raw_diffusion.shape[-1]
     if standardized_innovations is None:
         if branch_probabilities is not None:
@@ -1102,22 +1131,30 @@ def density_martingale_lvsq_step(
         )
     branch_densities = torch.clamp_min(branch_densities, 0.0)
     num_branches = len(innovations)
-    support_size = num_inner + 2
-    raw_blocks = raw_states.reshape(num_states, num_expiries, block_width)
-    local_raw_drift_blocks = local.raw_drift.reshape_as(raw_blocks)
-    local_raw_diffusion_blocks = local.raw_diffusion.reshape(
-        num_states,
-        num_expiries,
-        block_width,
-        num_factors,
+    raw_dlvsq, raw_forward, raw_eta = split_forward_mu_native_raw(
+        raw_states,
+        geometry=geometry,
     )
-    local_branch_raw = (
-        raw_blocks[:, None]
-        + calendar_time_increment_y * local_raw_drift_blocks[:, None]
+    local_raw_dlvsq_drift, _, _ = split_forward_mu_native_raw(
+        local.raw_drift,
+        geometry=geometry,
+    )
+    local_raw_dlvsq_diffusion, _, _ = split_forward_mu_native_raw(
+        torch.movedim(local.raw_diffusion, -1, -2),
+        geometry=geometry,
+    )
+    local_raw_dlvsq_diffusion = torch.movedim(
+        local_raw_dlvsq_diffusion,
+        -3,
+        -1,
+    )
+    local_branch_raw_dlvsq = (
+        raw_dlvsq[:, None]
+        + calendar_time_increment_y * local_raw_dlvsq_drift[:, None]
         + calendar_time_increment_y**0.5
         * torch.einsum(
             "btnf,rf->brtn",
-            local_raw_diffusion_blocks,
+            local_raw_dlvsq_diffusion,
             innovations,
         )
     )
@@ -1127,7 +1164,7 @@ def density_martingale_lvsq_step(
         device=raw_states.device,
     )
     if not bool(
-        torch.all(local_branch_raw[:, :, 1:, :num_inner] < maximum_log_dlvsq)
+        torch.all(local_branch_raw_dlvsq[:, :, 1:] < maximum_log_dlvsq)
     ):
         raise RuntimeError("local fallback DLV branch reaches the pricing cap")
     branch_dlvsqs = parameters.dlvsqs[:, None].expand(
@@ -1137,7 +1174,7 @@ def density_martingale_lvsq_step(
         num_inner,
     ).clone()
     branch_dlvsqs[:, :, 1:] = geometry.min_dlvsq + torch.exp(
-        local_branch_raw[:, :, 1:, :num_inner]
+        local_branch_raw_dlvsq[:, :, 1:]
     )
     fallback_coordinates = torch.zeros(
         (),
@@ -1189,19 +1226,20 @@ def density_martingale_lvsq_step(
             f"[{float(minimum_dlvsq.detach().cpu()):.6g}, "
             f"{float(maximum_dlvsq.detach().cpu()):.6g}]"
         )
-    branch_raw_blocks = raw_blocks[:, None].expand(
+    branch_raw_dlvsq = raw_dlvsq[:, None].expand(
         num_states,
         num_branches,
         num_expiries,
-        block_width,
+        num_inner,
     ).clone()
-    branch_raw_blocks[:, :, 1:, :num_inner] = torch.log(
+    branch_raw_dlvsq[:, :, 1:] = torch.log(
         dynamic_dlvsqs - geometry.min_dlvsq
     )
-    raw_states_by_branch = branch_raw_blocks.reshape(
-        num_states,
-        num_branches,
-        geometry.native_state_size,
+    raw_states_by_branch = pack_forward_mu_native_raw(
+        branch_raw_dlvsq,
+        raw_forward[:, None].expand(num_states, num_branches, -1),
+        raw_eta[:, None].expand(num_states, num_branches, -1),
+        geometry=geometry,
     )
     decoded = _decode_lvsq_branch_densities(
         decoder,
@@ -1261,7 +1299,7 @@ def density_martingale_lvsq_step(
         fallback_coordinate_fraction=fallback_coordinates / dynamic_coordinates,
         minimum_raw_cap_margin=torch.min(
             maximum_log_dlvsq
-            - branch_raw_blocks[:, :, 1:, :num_inner]
+            - branch_raw_dlvsq[:, :, 1:]
         ),
     )
 

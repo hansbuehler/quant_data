@@ -834,6 +834,12 @@ def run(arguments: argparse.Namespace) -> None:
             raise ValueError("paths per fold must preserve complete antithetic pairs")
         if arguments.antithetic_block_size <= 0 or arguments.antithetic_block_size % 2:
             raise ValueError("antithetic block size must be positive and even")
+        if arguments.batch_size <= 0 or (
+            arguments.batch_size % arguments.antithetic_block_size
+        ):
+            raise ValueError(
+                "batch size must contain complete antithetic generation blocks"
+            )
         if arguments.paths_per_fold % arguments.antithetic_block_size:
             raise ValueError(
                 "paths per fold must contain complete antithetic generation blocks"
@@ -852,8 +858,15 @@ def run(arguments: argparse.Namespace) -> None:
         returns = np.load(
             arguments.cache / "train-returns.npy", mmap_mode="r", allow_pickle=False
         )
+        population_paths = 2 * arguments.paths_per_fold
+        if states.shape != (population_paths, 25, 200):
+            raise ValueError(f"unexpected state shape {states.shape}")
+        if prices.shape != (population_paths, 25, 4, 12):
+            raise ValueError(f"unexpected price shape {prices.shape}")
+        if returns.shape != (population_paths, 25, 49):
+            raise ValueError(f"unexpected return shape {returns.shape}")
         measures = {
-            "P": np.ones(100_000, dtype=np.float64),
+            "P": np.ones(population_paths, dtype=np.float64),
             "Q1": np.load(
                 arguments.cache / "train-q1-weights.npy",
                 mmap_mode="r",
@@ -865,12 +878,12 @@ def run(arguments: argparse.Namespace) -> None:
                 allow_pickle=False,
             ),
         }
-        if states.shape != (100_000, 25, 200):
-            raise ValueError(f"unexpected state shape {states.shape}")
-        if prices.shape != (100_000, 25, 4, 12):
-            raise ValueError(f"unexpected price shape {prices.shape}")
-        if returns.shape != (100_000, 25, 49):
-            raise ValueError(f"unexpected return shape {returns.shape}")
+        for measure, weights in measures.items():
+            if weights.shape != (population_paths,):
+                raise ValueError(
+                    f"unexpected {measure} weight shape {weights.shape}; "
+                    f"expected ({population_paths},)"
+                )
 
         requested = [item.strip().upper() for item in arguments.measures.split(",")]
         report: dict[str, Any] = {
@@ -934,7 +947,10 @@ def parser() -> argparse.ArgumentParser:
         "--cache",
         type=Path,
         required=True,
-        help="directory containing the 100,000-path states, prices, returns, and Q1 weights",
+        help=(
+            "directory containing 2*paths-per-fold states, prices, returns, "
+            "and Q1 weights"
+        ),
     )
     result.add_argument(
         "--q2-audit",

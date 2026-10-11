@@ -574,6 +574,23 @@ def _parser() -> argparse.ArgumentParser:
             "each optimizer update."
         ),
     )
+    parser.add_argument("--validation-returns", type=Path, default=None)
+    parser.add_argument("--validation-weights", type=Path, default=None)
+    parser.add_argument("--validation-fixed-feature-cache", type=Path, default=None)
+    parser.add_argument(
+        "--validation-every-epochs",
+        type=int,
+        default=0,
+        help="Evaluate the fixed held-out population every N exact-gradient epochs.",
+    )
+    parser.add_argument(
+        "--validation-patience-evaluations",
+        type=int,
+        default=0,
+        help="Stop after this many held-out evaluations without an OCE improvement.",
+    )
+    parser.add_argument("--validation-minimum-epochs", type=int, default=0)
+    parser.add_argument("--validation-minimum-oce-improvement", type=float, default=0.0)
     parser.add_argument("--full-gradient-rms-tolerance", type=float, default=0.0)
     parser.add_argument("--full-gradient-maximum-tolerance", type=float, default=0.0)
     parser.add_argument("--full-gradient-scale-foc-tolerance", type=float, default=0.0)
@@ -741,6 +758,50 @@ def _validate_arguments(arguments: argparse.Namespace) -> None:
         raise ValueError("conditional OCE integer controls must be positive")
     if arguments.full_cost_audit_every_epochs < 0:
         raise ValueError("full-cost audit cadence must be nonnegative")
+    validation_paths = (
+        arguments.validation_returns,
+        arguments.validation_weights,
+        arguments.validation_fixed_feature_cache,
+    )
+    if any(path is not None for path in validation_paths) and not all(
+        path is not None for path in validation_paths
+    ):
+        raise ValueError(
+            "validation returns, weights, and fixed-feature cache must be supplied together"
+        )
+    if arguments.validation_every_epochs < 0:
+        raise ValueError("validation cadence must be nonnegative")
+    if arguments.validation_patience_evaluations < 0:
+        raise ValueError("validation patience must be nonnegative")
+    if arguments.validation_minimum_epochs < 0:
+        raise ValueError("validation minimum epochs must be nonnegative")
+    if (
+        not math.isfinite(arguments.validation_minimum_oce_improvement)
+        or arguments.validation_minimum_oce_improvement < 0.0
+    ):
+        raise ValueError("validation OCE improvement must be finite-nonnegative")
+    if arguments.validation_every_epochs > 0 and not all(
+        path is not None for path in validation_paths
+    ):
+        raise ValueError("a positive validation cadence requires held-out data")
+    if all(path is not None for path in validation_paths) and (
+        arguments.validation_every_epochs == 0
+        or not arguments.full_population_gradient
+    ):
+        raise ValueError(
+            "held-out validation requires exact population gradients and a positive cadence"
+        )
+    if all(path is not None for path in validation_paths) and (
+        arguments.baseline_pnl is not None or arguments.claim_pnl is not None
+    ):
+        raise ValueError(
+            "held-out validation does not yet support path-specific baseline or claim PnL"
+        )
+    if (
+        arguments.validation_patience_evaluations > 0
+        and arguments.validation_every_epochs == 0
+    ):
+        raise ValueError("validation early stopping requires a positive cadence")
     if arguments.stop_on_full_cost_audit and arguments.full_cost_audit_every_epochs == 0:
         raise ValueError("full-cost audit stopping requires a positive audit cadence")
     if arguments.num_paths % 2 or arguments.batch_size % 2:
@@ -1323,6 +1384,101 @@ def _cached_batch(
         torch.as_tensor(np.array(prices[first:last], copy=True), dtype=dtype, device=device),
         torch.as_tensor(np.array(returns[first:last], copy=True), dtype=dtype, device=device),
     )
+
+
+def _full_population_evaluation(
+    setup: Mapping[str, Any],
+    arguments: argparse.Namespace,
+    *,
+    states: np.ndarray,
+    prices: np.ndarray,
+    returns: np.ndarray,
+    density: np.ndarray,
+    baseline_pnl: np.ndarray | None = None,
+    claim_pnl: np.ndarray | None = None,
+    transaction_cost: torch.Tensor | None = None,
+) -> dict[str, float]:
+    """Evaluate an exact empirical OCE population without constructing gradients."""
+
+    num_paths = len(density)
+    if (
+        states.shape[0] != num_paths
+        or prices.shape[0] != num_paths
+        or returns.shape[0] != num_paths
+    ):
+        raise ValueError("held-out feature, return, and density populations must match")
+    policy: SharedExpiryOcePolicy = setup["policy"]
+    evaluation_transaction_cost = (
+        setup["transaction_cost"] if transaction_cost is None else transaction_cost
+    )
+    batch_size = arguments.optimization_batch_size
+    objective_values = np.empty(num_paths, dtype=np.float64)
+    network_pnl_values = np.empty(num_paths, dtype=np.float64)
+    action_l1_sum = 0.0
+    cap_sum = 0.0
+    maximum_action = 0.0
+    started = time.monotonic()
+    was_training = policy.training
+    policy.eval()
+    try:
+        with torch.no_grad():
+            for first in range(0, num_paths, batch_size):
+                last = min(first + batch_size, num_paths)
+                batch = _cached_batch(
+                    states=states,
+                    prices=prices,
+                    returns=returns,
+                    first=first,
+                    last=last,
+                    dtype=setup["env"].fdtype,
+                    device=setup["env"].device,
+                )
+                pnl, diagnostics = _fixed_feature_pnl(
+                    policy,
+                    states=batch[0],
+                    option_prices=batch[1],
+                    returns=batch[2],
+                    transaction_cost=evaluation_transaction_cost,
+                    frozen_policies=setup["frozen_policies"],
+                    residual_reference_policy=setup["residual_reference_policy"],
+                )
+                network_pnl_values[first:last] = pnl.cpu().double().numpy()
+                objective_values[first:last] = network_pnl_values[first:last]
+                if claim_pnl is not None:
+                    objective_values[first:last] += np.asarray(claim_pnl[first:last])
+                if baseline_pnl is not None:
+                    objective_values[first:last] -= np.asarray(baseline_pnl[first:last])
+                count = last - first
+                action_l1_sum += float(diagnostics.mean_action_l1) * count
+                cap_sum += float(diagnostics.cap_active_fraction) * count
+                maximum_action = max(
+                    maximum_action,
+                    float(diagnostics.maximum_absolute_action),
+                )
+    finally:
+        policy.train(was_training)
+
+    log_loss, tilted_probabilities = _full_population_oce_probabilities(
+        objective_values,
+        density,
+    )
+    return {
+        "oce": -log_loss,
+        "log_loss": log_loss,
+        "tilted_expected_objective_pnl": float(
+            np.sum(tilted_probabilities * objective_values, dtype=np.float64)
+        ),
+        "tilted_expected_network_pnl": float(
+            np.sum(tilted_probabilities * network_pnl_values, dtype=np.float64)
+        ),
+        "effective_sample_size_after_adversary": float(
+            1.0 / np.sum(np.square(tilted_probabilities), dtype=np.float64)
+        ),
+        "mean_action_l1": action_l1_sum / num_paths,
+        "maximum_absolute_action": maximum_action,
+        "cap_active_fraction": cap_sum / num_paths,
+        "seconds": time.monotonic() - started,
+    }
 
 
 def _full_population_training_update(
@@ -2280,6 +2436,7 @@ def run(arguments: argparse.Namespace) -> None:
 def _run_locked(arguments: argparse.Namespace) -> None:
     """Run while holding the logical model's training lock."""
 
+    torch.manual_seed(arguments.seed)
     returns = np.load(arguments.returns, mmap_mode="r", allow_pickle=False)
     weights = np.load(arguments.weights, mmap_mode="r", allow_pickle=False)
     convex_report = json.loads(arguments.convex_report.read_text())
@@ -2366,6 +2523,63 @@ def _run_locked(arguments: argparse.Namespace) -> None:
         state_path, price_path, _ = _feature_cache_paths(arguments.fixed_feature_cache)
         cached_states = np.load(state_path, mmap_mode="r", allow_pickle=False)
         cached_prices = np.load(price_path, mmap_mode="r", allow_pickle=False)
+
+    validation_returns: np.ndarray | None = None
+    validation_weights: np.ndarray | None = None
+    validation_states: np.ndarray | None = None
+    validation_prices: np.ndarray | None = None
+    if arguments.validation_returns is not None:
+        assert arguments.validation_weights is not None
+        assert arguments.validation_fixed_feature_cache is not None
+        validation_returns = np.load(
+            arguments.validation_returns,
+            mmap_mode="r",
+            allow_pickle=False,
+        )
+        validation_weights_source = np.load(
+            arguments.validation_weights,
+            mmap_mode="r",
+            allow_pickle=False,
+        )
+        if validation_returns.shape != expected_shape:
+            raise ValueError(
+                f"expected validation returns with shape {expected_shape}, "
+                f"found {validation_returns.shape}"
+            )
+        if validation_weights_source.shape != (arguments.num_paths,) or np.any(
+            ~np.isfinite(validation_weights_source)
+            | (validation_weights_source <= 0.0)
+        ):
+            raise ValueError(
+                "validation density weights must be a finite-positive vector with "
+                f"shape ({arguments.num_paths},)"
+            )
+        validation_weights = np.asarray(
+            validation_weights_source,
+            dtype=np.float64,
+        ).copy()
+        validation_weights *= arguments.num_paths / np.sum(
+            validation_weights,
+            dtype=np.float64,
+        )
+        _prepare_feature_cache(
+            setup,
+            arguments,
+            directory=arguments.validation_fixed_feature_cache,
+        )
+        validation_state_path, validation_price_path, _ = _feature_cache_paths(
+            arguments.validation_fixed_feature_cache
+        )
+        validation_states = np.load(
+            validation_state_path,
+            mmap_mode="r",
+            allow_pickle=False,
+        )
+        validation_prices = np.load(
+            validation_price_path,
+            mmap_mode="r",
+            allow_pickle=False,
+        )
 
     policy: SharedExpiryOcePolicy = setup["policy"]
     if arguments.optimizer == "adam":
@@ -2486,6 +2700,26 @@ def _run_locked(arguments: argparse.Namespace) -> None:
             ~np.isfinite(claim_pnl[: arguments.num_paths])
         ):
             raise ValueError(f"claim PnL must contain {len(returns):,} finite values")
+
+    validation_best_oce = -math.inf
+    validation_best_epoch = 0
+    validation_no_improvement_count = 0
+    validation_best_checkpoint = (
+        arguments.output_directory / "conditional-oce-best-validation.pt"
+    )
+    for historical_record in history:
+        if "validation_oce" not in historical_record:
+            continue
+        historical_oce = float(historical_record["validation_oce"])
+        if (
+            historical_oce
+            > validation_best_oce + arguments.validation_minimum_oce_improvement
+        ):
+            validation_best_oce = historical_oce
+            validation_best_epoch = int(historical_record["epoch"])
+            validation_no_improvement_count = 0
+        else:
+            validation_no_improvement_count += 1
 
     if (
         phase == "training"
@@ -2624,6 +2858,57 @@ def _run_locked(arguments: argparse.Namespace) -> None:
                     <= arguments.full_gradient_rms_tolerance
                 )
                 record["full_cost_audit_stationary"] = full_cost_audit_converged
+            validation_improved = False
+            validation_early_stop = False
+            if (
+                validation_returns is not None
+                and epoch % arguments.validation_every_epochs == 0
+            ):
+                assert validation_weights is not None
+                assert validation_states is not None
+                assert validation_prices is not None
+                validation_record = _full_population_evaluation(
+                    setup,
+                    arguments,
+                    states=validation_states,
+                    prices=validation_prices,
+                    returns=validation_returns,
+                    density=validation_weights,
+                )
+                record.update(
+                    {
+                        f"validation_{key}": value
+                        for key, value in validation_record.items()
+                    }
+                )
+                validation_oce = float(validation_record["oce"])
+                validation_improved = (
+                    validation_oce
+                    > validation_best_oce
+                    + arguments.validation_minimum_oce_improvement
+                )
+                if validation_improved:
+                    validation_best_oce = validation_oce
+                    validation_best_epoch = epoch
+                    validation_no_improvement_count = 0
+                else:
+                    validation_no_improvement_count += 1
+                record.update(
+                    {
+                        "validation_best_oce": validation_best_oce,
+                        "validation_best_epoch": validation_best_epoch,
+                        "validation_no_improvement_count": (
+                            validation_no_improvement_count
+                        ),
+                        "validation_improved": validation_improved,
+                    }
+                )
+                validation_early_stop = (
+                    arguments.validation_patience_evaluations > 0
+                    and epoch >= arguments.validation_minimum_epochs
+                    and validation_no_improvement_count
+                    >= arguments.validation_patience_evaluations
+                )
             convergence_checks: list[bool] = []
             if arguments.full_gradient_rms_tolerance > 0.0:
                 convergence_checks.append(
@@ -2648,12 +2933,28 @@ def _run_locked(arguments: argparse.Namespace) -> None:
             record["convergence_patience_count"] = convergence_count
             history.append(record)
             print(json.dumps(record), flush=True)
+            if validation_improved:
+                _atomic_torch_save(
+                    _checkpoint_payload(
+                        setup=setup,
+                        arguments=arguments,
+                        optimizer=optimizer,
+                        generator=generator,
+                        epoch=epoch,
+                        path_offset=0,
+                        updates=updates,
+                        history=history,
+                        phase="training",
+                    ),
+                    validation_best_checkpoint,
+                )
             converged = (
                 convergence_count >= arguments.full_gradient_patience
                 or (
                     arguments.stop_on_full_cost_audit
                     and full_cost_audit_converged
                 )
+                or validation_early_stop
             )
             if (
                 updates % arguments.checkpoint_every_updates == 0
@@ -2679,11 +2980,20 @@ def _run_locked(arguments: argparse.Namespace) -> None:
                     checkpoint_path,
                 )
             if converged:
-                print(
-                    f"full-population gradient converged for {convergence_count} "
-                    "consecutive updates",
-                    flush=True,
-                )
+                if validation_early_stop:
+                    print(
+                        "held-out OCE stopped improving: "
+                        f"best_epoch={validation_best_epoch} "
+                        f"best_oce={validation_best_oce:.12g} "
+                        f"patience={validation_no_improvement_count}",
+                        flush=True,
+                    )
+                else:
+                    print(
+                        f"full-population gradient converged for {convergence_count} "
+                        "consecutive updates",
+                        flush=True,
+                    )
                 break
         phase = "trained"
 
@@ -2890,6 +3200,16 @@ def _run_locked(arguments: argparse.Namespace) -> None:
         "target_history_sha256": checkpoint_digest(arguments.target_history),
         "convex_density_ess": convex_report["fit"]["effective_sample_size"],
         "training_history": history,
+        "validation_selection": (
+            {
+                "best_epoch": validation_best_epoch,
+                "best_oce": validation_best_oce,
+                "checkpoint": str(validation_best_checkpoint),
+                "no_improvement_count": validation_no_improvement_count,
+            }
+            if validation_returns is not None
+            else None
+        ),
         "audit": audit,
         "transition_diagnostics": setup["transition_diagnostics"],
         "spot_copula_fit": setup["copula_fit"].to_dict(),

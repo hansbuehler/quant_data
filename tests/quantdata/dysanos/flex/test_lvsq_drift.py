@@ -10,6 +10,7 @@ import torch
 from quantdata.biz_calendar import get_business_days
 from quantdata.dysanos.flex.config import (
     FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig,
+    FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig,
 )
 from quantdata.dysanos.flex.fixed_grid_dlv import (
     build_fixed_grid_dlv_kernel,
@@ -58,6 +59,7 @@ from quantdata.dysanos.flex.model import (
     NativeParameters,
     bound_native_raw,
     raw_from_native_parameters,
+    split_forward_mu_native_raw,
 )
 from quantdata.dysanos.flex.run_all_state_regrid_dlv_audit import (
     _direct_survivor_option_values,
@@ -114,6 +116,46 @@ def _problem() -> tuple[
     return env, geometry, decoder, raw, loadings
 
 
+def _front_term_eta_problem() -> tuple[
+    FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig,
+    FlexSanosDecoder,
+    torch.Tensor,
+    torch.Tensor,
+]:
+    env = BaseEnvironment(precision=64, device="cpu", debug=True)
+    geometry = FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig(
+        num_inner_strikes=6,
+        num_model_expiries=3,
+        explicit_model_business_dtes=(5.0, 10.0, 15.0),
+    )
+    decoder = FlexSanosDecoder(env, geometry=geometry)
+    parameters = NativeParameters(
+        dlvsqs=torch.tensor(
+            [[
+                [0.11, 0.09, 0.07, 0.08, 0.10, 0.13],
+                [0.12, 0.10, 0.08, 0.09, 0.11, 0.14],
+                [0.13, 0.11, 0.09, 0.10, 0.12, 0.15],
+            ]],
+            dtype=env.fdtype,
+        ),
+        forward_vols=torch.tensor([[0.20, 0.21, 0.22]], dtype=env.fdtype),
+        eta=torch.tensor([[0.30, 0.32, 0.32]], dtype=env.fdtype),
+    )
+    raw = raw_from_native_parameters(parameters, geometry=geometry)
+    bounded = bound_native_raw(raw, geometry=geometry)
+    surface = decoder.forward_batch(
+        dlvsqs=bounded.dlvsqs,
+        forward_vols=bounded.forward_vols,
+        eta=bounded.eta,
+    )
+    loadings = smooth_lvsq_log_loadings(
+        surface.support_strikes[0, 0],
+        num_model_expiries=geometry.num_model_expiries,
+        annualized_log_volatility=0.10,
+    )[..., :2]
+    return geometry, decoder, raw, loadings
+
+
 def test_grid_operator_has_mass_and_forward_null_vectors_and_full_rank() -> None:
     env, geometry, decoder, raw, _ = _problem()
     parameters = decoder.forward_batch(
@@ -167,6 +209,35 @@ def test_pdf_volatility_and_drift_equations_hold_in_direct_raw_state() -> None:
     assert bool(torch.all(raw_diffusion_blocks[:, 0] == 0.0))
     assert bool(torch.all(raw_drift_blocks[..., geometry.num_inner_strikes :] == 0.0))
     assert bool(torch.all(raw_diffusion_blocks[..., geometry.num_inner_strikes :, :] == 0.0))
+
+
+def test_front_term_eta_fixed_contract_drift_uses_native_layout() -> None:
+    geometry, decoder, raw, loadings = _front_term_eta_problem()
+    result = fixed_contract_lvsq_drift(
+        decoder,
+        raw,
+        raw_log_loadings=loadings,
+    )
+    raw_dlvsq_drift, raw_forward_drift, raw_eta_drift = (
+        split_forward_mu_native_raw(result.raw_drift, geometry=geometry)
+    )
+    raw_dlvsq_diffusion, raw_forward_diffusion, raw_eta_diffusion = (
+        split_forward_mu_native_raw(
+            torch.movedim(result.raw_diffusion, -1, -2),
+            geometry=geometry,
+        )
+    )
+
+    assert result.raw_drift.shape == raw.shape
+    assert result.raw_diffusion.shape == raw.shape + (loadings.shape[-1],)
+    assert bool(torch.all(raw_dlvsq_drift[:, 0] == 0.0))
+    assert bool(torch.all(raw_dlvsq_diffusion[:, :, 0] == 0.0))
+    assert bool(torch.all(raw_forward_drift == 0.0))
+    assert bool(torch.all(raw_forward_diffusion == 0.0))
+    assert bool(torch.all(raw_eta_drift == 0.0))
+    assert bool(torch.all(raw_eta_diffusion == 0.0))
+    assert float(result.maximum_volatility_equation_residual) < 2.0e-14
+    assert float(result.maximum_drift_equation_residual) < 2.0e-18
 
 
 def test_attempt2_spot_reveal_and_expiry_roll_have_exact_density_towers() -> None:
@@ -703,6 +774,60 @@ def test_density_martingale_step_recovers_valid_exact_mean_dlv_branches() -> Non
     assert float(result.minimum_dlvsq) > geometry.min_dlvsq
     assert float(result.maximum_dlvsq) < geometry.max_dlvsq
     assert float(result.fallback_coordinate_fraction) == 0.0
+
+
+def test_front_term_eta_finite_steps_preserve_non_dlv_coordinates() -> None:
+    geometry, decoder, raw, loadings = _front_term_eta_problem()
+    density_step = density_martingale_lvsq_step(
+        decoder,
+        raw,
+        raw_log_loadings=loadings,
+        calendar_time_increment_y=5.0 / 252.0,
+    )
+    exponential_step = fixed_horizon_lvsq_exponential_step(
+        decoder,
+        raw,
+        raw_log_loadings=loadings,
+        calendar_time_increment_y=5.0 / 252.0,
+        moment_tolerance=2.0e-13,
+    )
+    initial_dlvsq, initial_forward, initial_eta = split_forward_mu_native_raw(
+        raw,
+        geometry=geometry,
+    )
+
+    for raw_states_by_branch in (
+        density_step.raw_states_by_branch,
+        exponential_step.raw_states_by_branch,
+    ):
+        branch_dlvsq, branch_forward, branch_eta = split_forward_mu_native_raw(
+            raw_states_by_branch,
+            geometry=geometry,
+        )
+        torch.testing.assert_close(
+            branch_dlvsq[:, :, 0],
+            initial_dlvsq[:, None, 0].expand_as(branch_dlvsq[:, :, 0]),
+            atol=0.0,
+            rtol=0.0,
+        )
+        torch.testing.assert_close(
+            branch_forward,
+            initial_forward[:, None].expand_as(branch_forward),
+            atol=0.0,
+            rtol=0.0,
+        )
+        torch.testing.assert_close(
+            branch_eta,
+            initial_eta[:, None].expand_as(branch_eta),
+            atol=0.0,
+            rtol=0.0,
+        )
+
+    assert float(density_step.maximum_density_mean_residual) < 2.0e-14
+    assert float(density_step.maximum_decoder_density_residual) < 2.0e-13
+    assert float(exponential_step.maximum_density_mean_residual) < 2.0e-12
+    assert float(exponential_step.maximum_decoder_density_residual) < 2.0e-14
+    assert float(exponential_step.maximum_frozen_coordinate_change) == 0.0
 
 
 def test_fixed_grid_paths_condition_on_spot_and_surface_branch() -> None:
