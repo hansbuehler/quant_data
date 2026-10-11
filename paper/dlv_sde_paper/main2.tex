@@ -64,7 +64,7 @@
         The model presented was trained for daily expiries up to 25 business days and strikes between $[\exp(-2.5 \sigma_{atm} \sqrt{t}), \exp(+1.5 \sigma_{atm} \sqrt{t})]$.}
     We then train the model dynamics under~$\PP$ and~$\Q$ and show that the model is indeed free of arbitrage
     while fitting the dynamics of the market well.
-    We also propose a range of BHW-tests to test for absence of arbitrage.
+    We also propose a range of BHW-tests to test for absence of arbitrage. 
 \end{abstract}
 
 \tableofcontents
@@ -496,6 +496,14 @@ Let $L_{T_{k-1}} $ be finite.
   \end{enumerate}
 \end{proof}
 
+\begin{corollary}
+\label{cor:true_martingale_mw}
+Under the assumptions of Theorem~\ref{thm:existence_mw}, $q^j$ is a true martingale on $[T_{k-1},T_k]$ (resp.\ $[T_{k-1},T]$) for every $j\geq k$.
+\end{corollary}
+\begin{proof}
+By construction the drift of $q^j$ vanishes identically (the node-by-node cancellation in \eqref{eq:drift_hb}), so $q^j$ is a local martingale on the interval of existence furnished by Theorem~\ref{thm:existence_mw}. Each coordinate $q_t^{j,i}$ is a probability and therefore satisfies $0\leq q_t^{j,i}\leq 1$, i.e.\ $q^j$ is a bounded process. A bounded local martingale is uniformly integrable and closed by its terminal value, hence a true martingale; in particular $\mathbb E_t[q_s^j]=q_t^j$ for all $T_{k-1}\leq t\leq s$ in the interval, with no additional integrability condition required.
+\end{proof}
+
 \subsection{Sampling}
 \label{sec:sampling}
 
@@ -894,8 +902,7 @@ with four matched Model~D paths (Section~\ref{sec:numerics}).
 
 In this section we assess whether the model is indeed free of dynamic arbitrage.
 We are not aware of an accessible benchmark for dynamic arbitrage in the literature, so
-the methodology described here is a contribution in its own right.
-
+the methodology described here is a contribution in its own right, first presented in~\cite{DYSANOS2026}.
 
 We compare four model specifications:
 \begin{center}
@@ -933,7 +940,7 @@ We will therefore test absence of dynamic arbitrage on a reduced trading univers
 44 options with cash strikes fixed at the initial date: eleven OTM calls or
 puts at each of 5, 10, 15, and 20 business days.  Thus 45 instruments are live
 initially, giving 20 spot and 550 option day--instrument coordinates over the
-20-day horizon.
+20-day horizon. 
 
 The resulting test will only confirm absence of dynamic arbitrage within this restricted set of instruments, 
 and only within the class of strategies considered. To illustrate the limitations of the former,
