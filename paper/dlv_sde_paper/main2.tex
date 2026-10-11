@@ -351,7 +351,7 @@ Assume that $W$ is a $d$-dimensional Brownian motion. We designate $W^1$ as the
     X_s=K^\top q_s^k
       =\mathbb E\!\left[X_{T_k}\mid\mathcal F_s\right],
     \qquad
-    dS_s=K^\top E_s^{k;1}\,dW_s^1,
+    dX_s=K^\top E_s^{k;1}\,dW_s^1,
   \]
   so spot and the front density are driven by the same Brownian factor. At
   expiry, $q_s^k$ converges to the point mass associated with the sampled
@@ -445,7 +445,7 @@ Together with the first term we obtain the identity
 where $\mathcal{A}^{j, i, m} =  P^{j, i, m} q^{j-1, m} / q^{j, i}$ and $\mathcal{B}^{j, i, m} =  P^{j,i,m} q^{j,m} / q^{j, i}$ for $i, m = 0, \dots, N+1$. 
 
 \paragraph{Bounding the wings}
-Fix $j$ and write $P=P^j$. Having derived the relative density volatility recursion, we now derive a bound for $\eta^j$ that depends on the grid alone. In \eqref{eq:eta_recursion_rewritten_mw}, $\mathcal{A}^j$ is a weighted average since its entries are non-negative and its rows sum to one and therefore satisfies $\|A^j \eta^{j-1}\|_\infty \leq \|\eta^{j-1}\|_\infty$. For the second term, we obtain 
+Fix $j$ and write $P=P^j$. Having derived the relative density volatility recursion, we now derive a bound for $\eta^j$ that depends on the grid alone. In \eqref{eq:eta_recursion_rewritten_mw}, $\mathcal{A}^j$ is a weighted average since its entries are non-negative and its rows sum to one and therefore satisfies $\|\mathcal{A}^j \eta^{j-1}\|_\infty \leq \|\eta^{j-1}\|_\infty$. For the second term, we obtain 
 \begin{equation*}
   \left|((\mathcal{B}^j - I)\xi^j)_i\right|
   \le \| \xi^j\|_\infty \left((Pq^j)_i/ q^{j,i} + 1\right),
@@ -558,7 +558,7 @@ By construction the drift of $q^j$ vanishes identically (the node-by-node cancel
   \eqref{eq:dlv-log-euler}, or any ordinary higher-order SDE scheme, retains a
   time-discretisation bias which should vanish under step refinement.
 
-  Our experiments in~\ref{sec:numerics} use this sampling scheme with antithetically paired Brownian increments.
+  Our experiments in Section~\ref{sec:numerics} use this sampling scheme with antithetically paired Brownian increments.
 
 \begin{remark}[Alternative discrete-branch construction]
   \label{rem:discrete-branch-sampling}
@@ -803,8 +803,8 @@ regression~\eqref{eq:estimation-dlv-ar} is
   =252\left[a_k+(b_k-1)L_{d,k}\right],
 \end{equation}
 where $k$ denotes an aligned expiry--strike coordinate.  At the same
-historical state we compute $\mu_d^\Q$ from the martingale drift restriction
-in~\eqref{eq:drift_hb}.  Under the convention
+historical state we compute $\mu_d^\Q$ as the risk-neutral log drift
+in~\eqref{eq:log_dlv_sde_mw}.  Under the convention
 $\dd W^\Q=\dd W^\PP+\lambda\,\dd t$, a physical drift compatible with the
 fitted diffusion must have the form
 \begin{equation}
@@ -1144,7 +1144,7 @@ Model~C on spot and the complete fixed grid of 200 interior strikes at each of
 path dependent: before each daily trade, a live option is included only when
 \[
   -2 < \frac{\log(K/Z_{p,n})}
-  {\widehat\sigma_{\mathrm{ATM}}\sqrt{(T_j-t_n)/252}} < 1,
+  {\widehat\sigma_{\mathrm{ATM}}\sqrt{T_j-t_n}} < 1,
   \qquad \widehat\sigma_{\mathrm{ATM}}=9.52\%.
 \]
 Thus short expiries contain fewer eligible strikes and the traded set changes
@@ -1218,7 +1218,7 @@ correction of Remark~\ref{rem:discrete-branch-sampling}, and extending
 the estimation beyond short-dated S\&P~500 index options to other asset classes and longer
 tenors.
 
-\section{Thanks}
+\section{Acknowledgements}
 
 We want to thank the team at Wharton for their WRDS \url{https://wrds-www.wharton.upenn.edu} portal and OptionMetrics \url{https://optionmetrics.com/united-states} 
 for providing their IvyDB data via this service. Without this data our work would not have been possible.
