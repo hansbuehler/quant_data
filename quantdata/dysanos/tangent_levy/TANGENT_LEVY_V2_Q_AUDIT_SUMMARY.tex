@@ -13,7 +13,7 @@
 
 \title{Tangent L\'evy v2\\Risk-Neutral Drift Audit Summary}
 \author{quantdata / Dysanos}
-\date{9 October 2026}
+\date{11 October 2026}
 
 \begin{document}
 \maketitle
@@ -22,13 +22,15 @@
 This note records the final v2 audit of a reduced Tangent L\'evy construction under
 the risk-neutral measure $Q$.  The experiment uses the native Tangent L\'evy
 short-end spot compensator, a deterministic Musiela shift, and a restricted
-universe consisting of spot plus 44 fixed-cash-strike options.  The two
-conditional drift tests do not reject the $Q$ martingale restriction.  The
-literal coordinate-wise unconditional Gaussian diagnostic reports many extreme
-statistics, but those statistics are dominated by compound-Poisson coordinates
-whose compensating jumps are too rare to be sampled by 100,000 paths.  The
-result is therefore evidence about this reduced $Q$ construction, not a
-successful calibration of the full stochastic model in the paper.
+universe consisting of spot plus 44 fixed-cash-strike options.  An exact
+Musiela/compound-Poisson decomposition verifies the unconditional martingale
+restriction for all 570 active day--instrument coordinates, and the two
+conditional drift tests do not reject it.  The literal coordinate-wise
+Gaussian diagnostic reports extreme statistics because some compensating jumps
+are too rare to be sampled by 100,000 paths; it is retained as a Monte Carlo
+resolution diagnostic rather than used as the no-arbitrage decision.  The
+result concerns this reduced $Q$ construction, not a successful calibration of
+the full stochastic model in the paper.
 \end{abstract}
 
 \section{Scope and implementation}
@@ -65,10 +67,23 @@ factor/HJM specification.  The drift-test methodology is adapted from
 Gaussian/information-bridge spot construction and does not by itself calibrate
 the sampling distribution of a rare-event compound-Poisson diagnostic.
 
-\section{Final $Q$ results}
+\section{Final \texorpdfstring{$Q$}{Q} results}
+
+For the deterministic codebook, the unconditional restriction can be checked
+without simulation.  At every day and remaining maturity, the integrated
+L\'evy measure in today's option price must equal the one-day short-end measure
+plus tomorrow's shifted integrated measure.  Equality holds componentwise on
+the 301-node jump grid.  It therefore gives equality of the full characteristic
+exponents and establishes the one-step martingale identity for every European
+strike, not merely the 44 strikes retained in the audit.  Across the 50 active
+day--maturity decompositions, the maximum relative density error is
+$3.004\times10^{-16}$; the maximum spot first-moment error is
+$1.110\times10^{-16}$.  Both are below the $10^{-12}$ audit tolerance, so the
+exact unconditional audit is a \pass{} over all 570 active coordinates.
 
 \begin{table}[h]
 \centering
+\small
 \begin{tabular}{lrrrrl}
 \toprule
 Test & Mean score & Pair SE & $t$ statistic & 95\% interval & Result \\
@@ -106,15 +121,13 @@ is diagnostic only; it is not a replacement preregistered test.
 
 \section{Conclusion}
 
-The strongest defensible conclusion is narrow.  The two requested conditional
-tests find no detectable predictable drift under the reduced $Q$ simulation.
-The unconditional Gaussian coordinate test cannot confirm the same claim at
-this Monte Carlo size because the fitted finite-activity model contains events
-far rarer than the population can resolve.  Its extreme statistics are a
-rare-event resolution failure, not direct evidence of an exploitable
-arbitrage.  A definitive unconditional assessment would require analytic
-conditional moments, importance sampling, or a test explicitly designed for
-the compound-Poisson law.
+The exact unconditional audit confirms the $Q$ martingale restriction for the
+reduced deterministic-codebook construction, and the two requested conditional
+tests find no detectable predictable drift.  The Gaussian coordinate screen
+cannot reach the same conclusion at this Monte Carlo size because the fitted
+finite-activity model contains events far rarer than the population can
+resolve.  Its extreme statistics are a rare-event resolution failure, not
+evidence against the exact martingale identity.
 
 This audit does not validate the market fit, the physical-measure dynamics, or
 the omitted stochastic codebook factors.  It establishes that the implemented
@@ -125,10 +138,15 @@ its two cross-fitted conditional drift tests pass on the retained population.
 
 The canonical result root is
 \path{/home/hans/quantdata_data/training/dysanos/tangent-levy/v2/spx-891-v2}.
-It retains the 1 June 2022 initialization checkpoint, the
-\texttt{q-reduced-population} arrays, the unconditional report
-\texttt{q-reduced-audit.json}, both conditional JSON reports, and their current
-cross-fit checkpoints.  Superseded daily reconstruction checkpoints and legacy
-aggregate calibration logs are intentionally excluded.
+It retains the 1 June 2022 initialization checkpoint and these current result
+families:
+\begin{itemize}
+  \item \path{q-reduced-population/} arrays;
+  \item \path{q-reduced-audit.json} Monte Carlo diagnostics;
+  \item \path{q-reduced-analytic.json} exact unconditional audit; and
+  \item both conditional JSON reports and their cross-fit checkpoints.
+\end{itemize}
+Superseded daily reconstruction checkpoints and legacy aggregate calibration
+logs are intentionally excluded.
 
 \end{document}

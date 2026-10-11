@@ -18,7 +18,7 @@ from .physical_measure import PhysicalMeasureFit
 from .pricing import average_density_from_forward, density_call_prices
 from .v2_audit import RestrictedPopulation
 from .v2_config import TangentLevyV2AuditConfig
-from .v2_spot import sample_short_end_spot_step
+from .v2_spot import sample_short_end_spot_step, short_end_characteristics
 
 NORMALIZED_MONEYNESS = np.asarray(
     (-1.5, -1.3, -1.1, -0.9, -0.7, -0.5, -0.3, -0.1, 0.1, 0.3, 0.5),
@@ -45,6 +45,155 @@ class PopulationDiagnostics:
     minimum_gamma: float
     boundary_limited_substeps: int
     frozen_paths: int
+
+
+@dataclass(frozen=True)
+class DeterministicQAudit:
+    """Exact martingale identities for the reduced zero-factor Q model."""
+
+    tested_coordinates: int
+    maturity_decompositions: int
+    maximum_absolute_density_error: float
+    maximum_relative_density_error: float
+    maximum_spot_moment_error: float
+    tolerance: float
+    passed: bool
+
+
+def analytic_deterministic_q_audit(
+    initial_forward_density: np.ndarray,
+    dynamics: DynamicsFit,
+    *,
+    config: TangentLevyV2AuditConfig,
+    tolerance: float = 1.0e-12,
+) -> DeterministicQAudit:
+    """Verify the reduced Q martingale restrictions without Monte Carlo.
+
+    For a deterministic Musiela codebook, today's integrated Levy measure for
+    any remaining maturity must equal the one-day spot Levy measure plus
+    tomorrow's shifted integrated measure.  Equality of those measures gives
+    equality of the complete characteristic exponents, so it establishes the
+    one-step martingale identity for every European strike, including the 44
+    fixed-cash-strike contracts in the audit.  The spot moment is checked
+    separately at every simulated midpoint substep.
+    """
+
+    density = np.asarray(initial_forward_density, dtype=np.float64)
+    tau = np.asarray(dynamics.tau, dtype=np.float64)
+    verify_inp(
+        dynamics.num_factors == 0,
+        lambda: "the analytic reduced-Q audit requires a zero-factor codebook",
+    )
+    verify_inp(
+        density.shape == (tau.size, dynamics.jump_x.size)
+        and np.all(np.isfinite(density))
+        and np.all(density >= 0.0),
+        lambda: (
+            "initial forward density must be finite, non-negative, and match "
+            f"the dynamics grid; found {density.shape}"
+        ),
+    )
+    maturity_step = 1.0 / DAYS_PER_YEAR
+    verify_inp(
+        np.allclose(np.diff(tau), maturity_step, rtol=0.0, atol=1.0e-14),
+        lambda: "the deterministic audit requires the daily Musiela grid",
+    )
+    verify_inp(
+        config.horizon_days < tau.size
+        and max(config.option_expiry_days) < tau.size,
+        lambda: "the audit horizon or option maturities exceed the density grid",
+    )
+    verify_inp(
+        np.isfinite(tolerance) and tolerance > 0.0,
+        lambda: f"tolerance must be finite-positive, found {tolerance!r}",
+    )
+
+    maximum_absolute = 0.0
+    maximum_scale = 1.0
+    maximum_spot_moment_error = 0.0
+    maturity_decompositions = 0
+    substep_dt = maturity_step / config.steps_per_day
+    for day_index in range(config.horizon_days):
+        current = np.concatenate(
+            (
+                density[day_index:],
+                np.broadcast_to(
+                    density[-1], (day_index, density.shape[1])
+                ),
+            ),
+            axis=0,
+        )
+        tomorrow = np.concatenate((current[1:], current[-1:]), axis=0)
+        one_day_density = 0.5 * (current[0] + current[1]) * maturity_step
+
+        # The simulator samples the same trapezoidal one-day measure through
+        # midpoint substeps.  Each exponential compensator must give E[R]=1.
+        for substep in range(config.steps_per_day):
+            midpoint = (substep + 0.5) / config.steps_per_day
+            short_end = (1.0 - midpoint) * current[0] + midpoint * current[1]
+            intensity, compensator, probabilities = short_end_characteristics(
+                short_end,
+                jump_x=dynamics.jump_x,
+            )
+            expected_jump_exponential = probabilities @ np.exp(dynamics.jump_x)
+            expected_gross = np.exp(
+                -compensator * substep_dt
+                + intensity
+                * substep_dt
+                * (expected_jump_exponential - 1.0)
+            )
+            maximum_spot_moment_error = max(
+                maximum_spot_moment_error,
+                abs(float(expected_gross) - 1.0),
+            )
+
+        for expiry_day in config.option_expiry_days:
+            remaining = int(expiry_day) - day_index
+            if remaining <= 0:
+                continue
+            current_integrated = maturity_step * (
+                0.5 * current[0]
+                + np.sum(current[1:remaining], axis=0)
+                + 0.5 * current[remaining]
+            )
+            if remaining == 1:
+                tomorrow_integrated = np.zeros_like(one_day_density)
+            else:
+                tomorrow_integrated = maturity_step * (
+                    0.5 * tomorrow[0]
+                    + np.sum(tomorrow[1 : remaining - 1], axis=0)
+                    + 0.5 * tomorrow[remaining - 1]
+                )
+            error = current_integrated - (one_day_density + tomorrow_integrated)
+            maximum_absolute = max(maximum_absolute, float(np.max(np.abs(error))))
+            maximum_scale = max(
+                maximum_scale,
+                float(np.max(np.abs(current_integrated))),
+            )
+            maturity_decompositions += 1
+
+    maximum_relative = maximum_absolute / maximum_scale
+    active_option_days = sum(
+        min(config.horizon_days, expiry) for expiry in config.option_expiry_days
+    )
+    tested_coordinates = (
+        config.horizon_days + config.options_per_expiry * active_option_days
+    )
+    passed = (
+        maximum_relative <= tolerance
+        and maximum_spot_moment_error <= tolerance
+        and maturity_decompositions
+        == active_option_days
+    )
+    return DeterministicQAudit(
+        tested_coordinates=tested_coordinates,
+        maturity_decompositions=maturity_decompositions,
+        maximum_absolute_density_error=maximum_absolute,
+        maximum_relative_density_error=maximum_relative,
+        maximum_spot_moment_error=maximum_spot_moment_error,
+        tolerance=tolerance,
+        passed=passed,
+    )
 
 
 def _normalized_calls(

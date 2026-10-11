@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import numpy as np
 
+from quantdata.dysanos.tangent_levy.dynamics import DynamicsFit
 from quantdata.dysanos.tangent_levy.pricing import density_call_prices
 from quantdata.dysanos.tangent_levy.v2_audit import unconditional_coordinate_audit
 from quantdata.dysanos.tangent_levy.v2_config import (
     TangentLevyV2AuditConfig,
     TangentLevyV2DynamicsConfig,
     TangentLevyV2MarketConfig,
+)
+from quantdata.dysanos.tangent_levy.v2_population import (
+    analytic_deterministic_q_audit,
 )
 from quantdata.dysanos.tangent_levy.v2_spot import (
     sample_short_end_spot_step,
@@ -100,3 +104,33 @@ def test_unconditional_audit_uses_pair_averages() -> None:
     assert centered.tested_coordinates == 6
     assert shifted.maximum_absolute_z > centered.maximum_absolute_z
     assert shifted.count_above_5 == 6
+
+
+def test_analytic_reduced_q_audit_proves_all_coordinate_martingales() -> None:
+    config = TangentLevyV2AuditConfig()
+    tau = np.arange(71, dtype=np.float64) / 252.0
+    jump_x = np.linspace(-0.75, 0.75, 301)
+    maturity_shape = 1.0 + 0.4 * np.sin(np.arange(71)[:, None] / 9.0)
+    jump_shape = 4.0 * np.exp(-12.0 * np.abs(jump_x))[None]
+    density = maturity_shape * jump_shape
+
+    dynamics = DynamicsFit(
+        tau=tau,
+        jump_x=jump_x,
+        beta=np.zeros((0, len(tau), len(jump_x))),
+        eigenvalues_one_session=np.zeros(0),
+        explained_variance_ratio=np.zeros(0),
+        mean_change=np.zeros_like(density),
+        observations=0,
+        maximum_constraint_residual=0.0,
+        covariance_shrinkage=0.0,
+        dt=1.0 / 252.0,
+        active_mask=np.ones_like(density, dtype=bool),
+    )
+    result = analytic_deterministic_q_audit(density, dynamics, config=config)
+
+    assert result.tested_coordinates == 570
+    assert result.maturity_decompositions == 50
+    assert result.maximum_relative_density_error < 1.0e-15
+    assert result.maximum_spot_moment_error < 1.0e-15
+    assert result.passed

@@ -17,7 +17,10 @@ from .v2_audit import (
     unconditional_coordinate_audit,
 )
 from .v2_config import TangentLevyV2AuditConfig
-from .v2_population import simulate_restricted_population
+from .v2_population import (
+    analytic_deterministic_q_audit,
+    simulate_restricted_population,
+)
 
 INITIAL_DATE = "2022-06-01"
 
@@ -85,6 +88,28 @@ def generate(output: Path) -> None:
         },
         output / "q-reduced-audit.json",
     )
+    analytic(output)
+
+
+def analytic(output: Path) -> None:
+    """Write the exact zero-factor Q martingale audit."""
+
+    config = TangentLevyV2AuditConfig()
+    _, initial, _ = _load_day(output / "days" / f"{INITIAL_DATE}.npz")
+    result = analytic_deterministic_q_audit(
+        initial,
+        _zero_factor_dynamics(initial),
+        config=config,
+    )
+    _save_json(
+        {
+            "schema": "tangent-levy-v2-reduced-q-analytic-audit",
+            "model": "deterministic Musiela codebook, native short-end TL spot",
+            "initial_date": INITIAL_DATE,
+            **asdict(result),
+        },
+        output / "q-reduced-analytic.json",
+    )
 
 
 def conditional(output: Path, objective: str, device: str) -> None:
@@ -108,13 +133,15 @@ def conditional(output: Path, objective: str, device: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("stage", choices=("population", "conditional"))
+    parser.add_argument("stage", choices=("population", "analytic", "conditional"))
     parser.add_argument("--objective", choices=("squared", "entropy"))
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     arguments = parser.parse_args()
     if arguments.stage == "population":
         generate(arguments.output)
+    elif arguments.stage == "analytic":
+        analytic(arguments.output)
     else:
         if arguments.objective is None:
             parser.error("conditional stage requires --objective")
