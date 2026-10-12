@@ -54,7 +54,7 @@
 
 \begin{abstract}
     We present a statically and dynamically arbitrage-free European option market model with smooth
-    interpolation between option prices, based on the SANOS~\cite{SANOS2026} framework.
+    interpolation between option prices, based on the SANOS~\cite{SANOS2026} framework, and prove that its dynamics admit a unique strong solution. 
 
     In spirit,
     it is a stochastic model for local volatility when the latter is used as a representation of a European option price surface, not as a pricing model.
@@ -416,7 +416,7 @@ Assume that $W$ is a $d$-dimensional Brownian motion. We designate $W^1$ as the
   interval, or equivalently a mixture of Brownian bridges.
 
 \subsubsection{Existence}
-
+\label{sec:existence}
 We have just described a set of risk-neutral model dynamics for a discrete process $X_t$ whose future densities themselves are martingales driven by stochastic discrete local volatilities. Our construction is concise and lends itself to efficient numerical implementation and model parameter estimation. 
 
 With $L_t^{j,i}\coloneqq\log\Sigma_t^{j,i}$, \eqref{eq:dlv_sde_hb} and the drift restriction \eqref{eq:drift_hb}, the Itô dynamics of the log of the DLV squared are governed by 
@@ -425,76 +425,69 @@ With $L_t^{j,i}\coloneqq\log\Sigma_t^{j,i}$, \eqref{eq:dlv_sde_hb} and the drift
   dL_t^{j,i}=\left(-\sum_{f=1}^d\xi_t^{j,i;f}\eta_t^{j,i;f}
     -\frac12\sum_{f=1}^d(\xi_t^{j,i;f})^2\right)dt+\sum_{f=1}^d\xi_t^{j,i;f}\,dW_t^f .
 \end{equation}
-Thus, the only term that can blow up the drift is $\eta^{j, i; f} = E^{j, i; f} / q^{j, i}$, as the density entries at the wings become small. The subject of this subsection is to show that a unique strong solution on $[T_{k-1}, T_k]$ exists under weak assumptions. 
+Thus, the only term that can blow up the drift is $\eta^{j, i; f} = E^{j, i; f} / q^{j, i}$, as the density entries at the wings become small. 
+For the Gaussian bridge front (Section~\ref{sec:front-density}), $\eta_t$ grows asymptotically at the rate $(T_k - t)^{-1}$ on strikes it abandons. 
+Thus, we cannot derive bounds for $\Sigma$ directly, and instead investigate the relationship of the density $q$ and $R = \Sigma q$, which in turn will allow us to read off the DLV. 
 
-\paragraph{Relative density volatility ($\eta$) recursion}
-Let $P^j = (M^j)^{-1}$. Fix a factor $f$ and suppress it for legibility. For clarity of this derivation, drop the dependence on $t$ from the notation. The volatility recursion \eqref{eq:vol_hb} links the previous relative density vol with the current by dividing \eqref{eq:vol_hb} by the current density component-wise: 
-\begin{equation}
-  \label{eq:eta_recursion_mw}
-  \eta^{j} = \frac{P^j E^{j-1}}{q^{j}} + \frac{P^j \Omega_j B^{j; f} q^{j}}{q^{j}}
-\end{equation}
-The first term is a weighted average of $\eta^{j-1}$: expand $E^{j-1} = \diag(q^{j-1}) \eta^{j-1}$ and observe that $(P^j E^{j-1})_{i, f} = \sum_{m=0}^{N+1} P^{j, i, m} q^{j-1, m} \eta^{j-1, m; f}$. We have $\sum_{m=0}^{N+1} P^{j, i,m} q^{j-1, m} = q^{j, i}$ and each term is non-negative. Hence, the first term of \eqref{eq:eta_recursion_mw} is a weighted average of $\eta^{j-1}$. The second term is seemingly more difficult as the operator $\Omega_j$ includes second differences: density ratios $q^{j, i \pm 1} /  q^{j, i}$ for neighbouring nodes are produced. Recall that $B^{j; f} = S^j \diag(\xi^{j;f})$ and write the numerator of the second term as $P^j \Omega_j S^j \diag(\xi^j) q^j $. Moreover, the code-book identity gives $P^j \Omega_j S^j = P^j - I $. Insert the identity into the numerator to obtain $ (P^j - I) \diag(\xi^j) q^j$. Now, divide as in \eqref{eq:eta_recursion_mw} the expression by $q^{j}$ and evaluate it component-wise 
-\begin{equation}
-  ((P^j - I) \diag(\xi^j) q^j)_i /  q^{j, i} =  \sum_{m=0}^{N+1} P^{j,i,m} \xi^{j,m} q^{j,m} / q^{j, i} - \xi^{j,i}
-\end{equation}
-Together with the first term we obtain the identity 
-\begin{equation}
-  \label{eq:eta_recursion_rewritten_mw}
-  \eta^j = \mathcal{A}^j \eta^{j-1}  + (\mathcal{B}^j - I) \xi^{j} 
-\end{equation}
-where $\mathcal{A}^{j, i, m} =  P^{j, i, m} q^{j-1, m} / q^{j, i}$ and $\mathcal{B}^{j, i, m} =  P^{j,i,m} q^{j,m} / q^{j, i}$ for $i, m = 0, \dots, N+1$. 
+Throughout, fix $k$, $T_k$ being the front, and let $B_t = W_t^1 - W_{T_{k-1}}^1$ be the Brownian motion centered at the origin. We assume that the front follows the Gaussian construction from Section \ref{sec:front-density} with mass distributed along interior strikes, i.e. $\sum_{i=1}^N q_{T_{k-1}}^{k, i} > 0$, and that $\xi$ is locally Lipschitz in $(B, L)$ and bounded by a deterministic function $c(t)$ that is square-integrable, i.e. $\|\xi \|_\infty \leq c(t)$ with $\int_{T_{k-1}}^{T_k}c^2<\infty$. The constant loadings that are estimated in Section~\ref{sec:estimation} satisfy this. We will denote by $J$ the node at which the spot settles at time $T_k$, i.e. $X_{T_k} = K^J$. 
 
-\paragraph{Bounding the wings}
-Fix $j$ and write $P=P^j$. Having derived the relative density volatility recursion, we now derive a bound for $\eta^j$ that depends on the grid alone. In \eqref{eq:eta_recursion_rewritten_mw}, $\mathcal{A}^j$ is a weighted average since its entries are non-negative and its rows sum to one and therefore satisfies $\|\mathcal{A}^j \eta^{j-1}\|_\infty \leq \|\eta^{j-1}\|_\infty$. For the second term, we obtain 
-\begin{equation*}
-  \left|((\mathcal{B}^j - I)\xi^j)_i\right|
-  \le \| \xi^j\|_\infty \left((Pq^j)_i/ q^{j,i} + 1\right),
-\end{equation*}
-and observe that a single ratio $(P q^{j})_i / q^{j, i}$ remains. Instead of bounding through neighbouring density nodes, we again employ the density recursion $q^j = Pq^{j-1}$ on this term and obtain $(P^2 q^{j-1})_i / (P q^{j-1})_i$. Thus, it is sufficient to compare the entries of $P^2$ and $P$. Since $P$ is the inverse of a non-singular M-matrix, it satisfies in particular the path-product property $P_{i,m}P_{m,l}\le P_{i,l}P_{m,m}$ for all nodes $i, l, m$ \cite[Theorem~4.5]{JohnsonSmith2011}. Thus, we bound $P^2$ entry-wise through its trace: 
-\begin{equation*}
-  (P^2)_{i,l} = \sum_{m=0}^{N+1} P_{i, m} P_{m, l} \leq \sum_{m=0}^{N+1} P_{i, l} P_{m, m} = \tr(P) \, P_{i, l}  \leq (N + 2) P_{i, l} \, 
-\end{equation*}
-where we used that the entries of $P$ are at most one. Since $q^{j-1}$ is non-negative, we obtain $(Pq^{j})_i / q^{j, i} \leq N+2$. 
-Combining both the first and second term, we obtain for every $L^j \in \R^{N}$ the bound 
-\begin{equation}
-  \label{eq:wing_step_mw}
-  \|\eta^j\|_\infty \le \|\eta^{j-1}\|_\infty + (N+3)\,\|\xi^j\|_\infty 
-\end{equation}
-which depends on the grid alone. Further, iterating \eqref{eq:wing_step_mw} from the front expiration $T_k$ up to any $T_j, \, j = k+1, \dots, M$ gives us the bound 
-\begin{equation}
-  \label{eq:iterated_bound_mw}
-  \| \eta^j \|_\infty
-  \le \| \eta^k \|_\infty + (N+3) \sum_{l=k+1}^{j} \|\xi^l\|_\infty .
-\end{equation}
-
-
-\paragraph{Existence proof}
-We now show that the SDE \eqref{eq:log_dlv_sde_mw} does not explode on $[T_{k-1}, T_{k}]$; $T_k$ being the front expiry. Throughout we assume that $\xi$ is locally Lipschitz in $(t, L)$, bounded $|\xi| \leq B$, and that the front density is strictly positive. For the solution to reach expiration we make an assumption on the asymptotic behaviour of $\eta$ near expiration. 
 \begin{theorem}[Existence]
-\label{thm:existence_mw} 
-Let $L_{T_{k-1}} $ be finite.  
+\label{thm:existence_mw}
+Let $L_{T_{k-1}} = \log \Sigma_{T_{k-1}} $ be finite.
 \begin{enumerate}[label=(\roman*)]
-  \item Let $T \in (T_{k-1}, T_k)$. Assume that $\eta^k_t$ is bounded on $[T_{k-1}, T]$. Then a unique strong solution for $L$ exists on $[T_{k-1}, T]$. 
-  \item Moreover, assume that $\|\eta_t^k\|_\infty \leq C(T_{k}- t)^{-p} $ for some constant $C > 0$ and $ p \in [0, 1)$. Then $L$ has a unique strong solution on $[T_{k-1}, T_k]$. 
+  \item There is a unique strong solution for $L$ on $[T_{k-1},T_k)$, and every $\Sigma^{j,i}$ stays
+    finite and strictly positive.
+  \item If spot settles at an interior strike, $ J \in \lbrace 1, \dots, N \rbrace $, then $L$ extends continuously to $T_k$
+    with $L_{T_k}$ finite.
+  \item If spot settles at an extreme strike $ J \in \lbrace 0, N +1 \rbrace$, then $q^j_{T_k} = e_J$ for all $j > k$. Moreover, the remaining DLVs $\Sigma$ no longer affect the model. 
 \end{enumerate}
 \end{theorem}
-\begin{proof}
-  \begin{enumerate}[label=(\roman*)]
-  \item Since $\Sigma = e^L > 0$, every $ M^j $ is a non-singular M-matrix and the coefficients of \eqref{eq:log_dlv_sde_mw} are locally Lipschitz. 
-  Since $|\xi| \leq B$, the iterated wing bound \eqref{eq:iterated_bound_mw} gives
-  \begin{equation*}
-    \|\eta^j\|_\infty \leq \| \eta^{k}\|_\infty + (N+3)(M - k) B. 
-  \end{equation*}
-  Denote by $\mu^{j, i} = -\sum_{f=1}^d \xi_t^{j, i; f} \eta^{j, i; f} $ component-wise the drift from \eqref{eq:log_dlv_sde_mw}. We obtain the bound 
-  \begin{equation}
-    \label{eq:drift_bound_mw}
-    |\mu_t^{j, i}| \leq d B ( \|\eta_t^k\|_\infty + (M-k)(N+3) B ) \eqqcolon g(t) . 
-  \end{equation}
-  Augment the state of the SDE by $t$ and the Brownian motion $W$. Since $g(t)$ is bounded on $[T_{k-1}, T]$ through $\eta_t^k$ by assumption, the drift is bounded. Moreover, the noise $\int \xi \, dW $ is an $L^2$-bounded martingale. Therefore $L$ does not explode on $[T_{k-1}, T]$ and by \cite[Theorem~V.38]{Protter2005}, $L$ has a unique strong solution on $[T_{k-1}, T]$.
 
-  \item By (i) the solution exists on the interval $[T_{k-1}, T_k)$. By assumption $\|\eta_t^k\|_\infty \leq C (T_k - t)^{-p}$ for $p<1$ and the bound $g(t)$ from \eqref{eq:drift_bound_mw} becomes integrable. Thus, the drift integral is finite up to $T_k$ and $\int \xi dW $ converges as in (i). Hence there exists a unique strong solution on the extended interval $[T_{k-1}, T_k]$. 
+
+\begin{lemma}
+\label{lem:zero_sets_mw}  
+Let $\tau\le T_k$ be a stopping time and let $U, V$ be two positive continuous local martingales defined on the interval $[T_{k-1},\tau)$. Assume that $U, V$ have relative volatilities $u$ and $u+v$ respectively, i.e. $dU / U = u \,dW$ and $dV / V = (u+v) \, dW$. Following holds true: 
+\begin{enumerate}[label=(\alph*)]
+  \item The left limit $U_{\tau-}$ exists, and $U_{\tau-}$ is zero exactly when $\int_{T_{k-1}}^{\tau} \| u_t \|^2 dt = \infty $.
+  \item If $v$ is square integrable on the interval $[T_{k-1}, \tau)$, then $U_{\tau-}=0$ if and only if $V_{\tau-}=0$.
+\end{enumerate}
+\end{lemma}
+\begin{proof}
+  The idea is simple: $U$ is an exponential, and dies if the volatility grows too fast. 
+  \begin{enumerate}[label=(\alph*)]
+    \item Write $U_t = U_{T_{k-1}}\exp(M_t - \frac{1}{2}\langle M \rangle_t)$ where $M_t=\int_{T_{k-1}}^t u_s\,dW_s$ and $\langle M\rangle_t=\int\|u_s\|^2ds$. If the quadratic variation $\langle M \rangle_\tau$ is finite, then $M$ converges to a finite limit, hence $U_{\tau-}>0$. Otherwise $\langle M\rangle_\tau=\infty$, and by Dambis--Dubins--Schwarz $M_t = \beta_{\langle M \rangle_t}$ for some Brownian motion $\beta$ run on the clock $s = \langle M \rangle_t$. By the strong law of large numbers, $\beta_s/s\to0$, so $M_t-\frac12\langle M\rangle_t=s(\beta_s/s-\frac12)\to-\infty$ and $U_t \to U_{\tau-} = 0$. 
+    \item The same holds true for $V$, which has volatility $u+v$. Since $\int\|v\|^2<\infty$, $\int\|u+v\|^2$ is finite if and only if $\int\|u\|^2$ is, so by (a) $U_{\tau-}$ and $V_{\tau-}$ are either both zero or both positive. 
   \end{enumerate}
 \end{proof}
+
+\begin{proof}[Proof of Theorem \ref{thm:existence_mw}]
+\begin{enumerate}[label=(\roman*)]
+  \item Since $\Sigma = e^L > 0$, every $ M^j $ is a non-singular M-matrix, the coefficients of \eqref{eq:log_dlv_sde_mw} are locally Lipschitz and the densities are positive. Hence, there is a unique strong solution up to a maximal lifetime $\zeta \leq T_k$ \cite[Theorem~V.38]{Protter2005}. It remains to show $\zeta = T_k$.
+  
+  
+  Let $R^{j, i} \coloneqq \Sigma^{j, i} q^{j, i}$ and recall that the density $q^{j}$ is governed by $dq^{j, i} = q^{j, i} \eta^{j, i} \, dW$. We want to show that both processes fulfil the assumptions of Lemma \ref{lem:zero_sets_mw}. Applying the Itô product rule to $R^{j, i}$ we observe that it is a local martingale $dR^{j,i} = R^{j,i} ( \eta^{j,i}+\xi^{j,i} ) \, dW$. Moreover, we can show that $R^j$ is bounded by applying the call payoff matrix $\Pi$, where $\Pi_{l, m} = (K^m - K^l)^+$, to the code-book relation \eqref{eq:hb_dlv} expressed in terms of $R^j$
+  \begin{equation}
+    \label{eq:R_codebook_mw}
+    q^{j-1}=q^j - \Omega_jR^j 
+  \end{equation}
+  which gives $C^{j} - C^{j-1} = \Pi\Omega_j R^j $. Thus, $R^{j, i}$ is the calendar spread at $K^{i}$ from $T_{j-1}$ to $T_j$ up to a positive constant. Since $X \in [K^0, K^{N+1}]$, call prices lie in $[0, K^{N+1}]$, so $R^{j}$ must be bounded. Thus, both $q^j$ and $R^j$ are bounded martingales and therefore attain limits at $\zeta$ by the martingale convergence theorem. Apply Lemma \ref{lem:zero_sets_mw} (b) with $\tau=\zeta$ and $v=\xi$, then both $q^{j, i}$ and $R^{j, i}$ can only reach zero together. 
+
+  Next we show that a single zero-valued interior density node, determines that the all interior nodes must be zero-valued. Contrary, a single positive-valued interior node spreads to all interior nodes. Abbreviate $p=q^{j-1}$, $q=q^j$, $R=R^j$ at time $\zeta$ and write out row $i$ of \eqref{eq:R_codebook_mw}: 
+  \begin{equation*}
+    p_i = q_i+( \gamma^{-i} + \gamma^{+i} ) R_i - \gamma^{ +(i-1)} R_{i-1} - \gamma^{ -(i+1)} R_{i+1}.
+  \end{equation*}
+  From Lemma \ref{lem:zero_sets_mw} (b) we know that $q_i = 0$ iff $R_i = 0$. Hence, if $q_i = 0$, then also $R_i = 0$ and $p_i = - \gamma^{ +(i-1)} R_{i-1} - \gamma^{ -(i+1)} R_{i+1}$. The left-side, $p_i$, is non-negative and the right-side non-positive. Therefore $p_i = 0$ and $R_{i\pm1} = 0$ and again by Lemma \ref{lem:zero_sets_mw} (b) $q_{i\pm1} = 0$. This argument spreads across the grid such that all interior nodes have to be equal to zero. Mass can only be attained on an outer node. Conversely, if $q^{j-1}$ has interior mass then the chain above cannot start and all $q^{j, i}$, and thus $R^{j, i}$, are positive. 
+
+  Now, suppose that $\zeta < T_k$. Then the Brownian motion $B_\zeta$ is finite, and the front density $q^k_\zeta$ has still strictly positive interior entries. Applying the above inductive chain for $j = k+1, \dots, M$ we obtain that $\Sigma^{j, i}_{\zeta-} = R^{j, i}_{\zeta-} / q_{\zeta-}^{j, i} \in (0, \infty)$. Hence, $L$ has a finite limit at $\zeta$ which means it could be extended to $\zeta$, contradicting the maximality of $\zeta$. Therefore $\zeta = T_k$ demonstrating existence. 
+  
+
+  \item If $J \in \lbrace 1, \dots, N \rbrace $, the terminal front has interior mass and by the above inductive chain $q^{j,i}_{T_k},R^{j,i}_{T_k}>0$ for all $j > k$. Hence, $\Sigma^{j, i}_{T_k} = R^{j, i}_{T_k} / q^{j, i}_{T_k} \in (0, \infty)$ for all $j > k$, and therefore the solution of $L$ extends to $L_{T_k}$. 
+  
+  \item Since $K^\top \Omega_j = 0$, the code-book conserves the mean. Hence, for all $j > k$ we have $K^\top q^j_{T_k} = K^\top q^k_{T_k} = X_{T_k} = K^J$. A probability vector $q^{k}_{T_k}$ defined on $K^0, \dots, K^{N+1}$ with mean on the extreme end forces $q^j_{T_k} = e_J$, $J \in \lbrace 0, N+1 \rbrace$. Again recalling the code-book recursion $q^{j-1} = (I - \Omega_j S^j) q^j$ and that $S^j = \diag(0, \Sigma^{j, 1}, \dots, \Sigma^{j, N}, 0)$ it follows that for an exterior density $q^j = e_J$, we have $S^j e_J = 0$. Thus, $e_J = M^j e_J$ for all $\Sigma$ and by induction $ q^{j}_{T_k} = (M^j)^{-1} q^{j-1}_{T_k} = (M^j)^{-1} e_J = e_J$ for all $j > k$. Hence all future densities and therefore also all call option prices, are independent of $\Sigma$. 
+\end{enumerate}
+\end{proof}
+
+Whenever the spot settles on an interior strike, the next front shifts $k \rightarrow k +1 $ with density $(M^{k+1}_{T_k})^{-1}e_J$. The theorem then can be re-applied to the interval $[T_k, T_{k+1}]$. If the spot settles at an extreme strike, (iii) applies and the spot process is absorbed at this state. Since there are a finite amount of expirations, the existence theorem therefore gives the process on the full interval $[0, T_M]$. 
 
 \begin{corollary}
 \label{cor:true_martingale_mw}
