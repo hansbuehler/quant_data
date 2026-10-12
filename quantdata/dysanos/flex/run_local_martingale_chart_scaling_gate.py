@@ -296,10 +296,17 @@ def _successor_coordinates(
     """Subtract elapsed front variance and return the residual DYSANOS clock."""
 
     current_dtes = decoder.model_expiries_y * 252.0
-    if business_day_fraction >= 1.0 - 64.0 * torch.finfo(current_dtes.dtype).eps:
-        live = torch.arange(1, len(current_dtes), device=current_dtes.device)
-    else:
-        live = torch.arange(len(current_dtes), device=current_dtes.device)
+    expiry_tolerance = (
+        64.0
+        * torch.finfo(current_dtes.dtype).eps
+        * torch.clamp_min(torch.amax(current_dtes), 1.0)
+    )
+    live = torch.nonzero(
+        current_dtes > business_day_fraction + expiry_tolerance,
+        as_tuple=False,
+    ).flatten()
+    if len(live) == 0:
+        raise ValueError("calendar step must leave at least one retained expiry")
     residual_dtes = current_dtes[live] - business_day_fraction
     if not bool(torch.all(residual_dtes > 0.0)):
         raise ValueError("calendar step must leave every retained expiry positive")
@@ -325,6 +332,10 @@ def _successor_coordinates(
     backbone_elapsed_variance = (
         surface.backbone_total_vols[:, :1].square() * elapsed_fraction
     )
+    fixed_relative_grid = isinstance(
+        decoder.geometry,
+        FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig,
+    )
     support_total = torch.sqrt(
         torch.clamp_min(
             surface.total_vols[:, live].square() - support_elapsed_variance,
@@ -344,11 +355,16 @@ def _successor_coordinates(
             successor.model_expiries_y
         ).unsqueeze(0)
     sqrt_dts = torch.sqrt(successor.model_dts_y)
-    forward = torch.diff(
-        support_total,
-        dim=-1,
-        prepend=torch.zeros_like(support_total[:, :1]),
-    ) / sqrt_dts
+    forward = (
+        surface.forward_vols[:, live]
+        if fixed_relative_grid
+        else torch.diff(
+            support_total,
+            dim=-1,
+            prepend=torch.zeros_like(support_total[:, :1]),
+        )
+        / sqrt_dts
+    )
     backbone_forward = torch.diff(
         backbone_total,
         dim=-1,
