@@ -1,0 +1,19 @@
+{
+  "absolute_tolerance": 1e-09,
+  "expected": {
+    "actions": {
+      "spot": -38.30868559453466
+    },
+    "cap_hits": 0,
+    "converged": true,
+    "hedged_pnl": 0.0423763100299454,
+    "market_price": 0.5419907143863331,
+    "model_price": 0.5354354104649346,
+    "objective_value": 0.0,
+    "payoff": 0.0,
+    "pricing_difference": -0.00655530392139847,
+    "transaction_cost": 0.007601704347873724,
+    "unhedged_pnl": -0.5419907143863331
+  },
+  "relative_tolerance": 1e-09
+}

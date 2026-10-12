@@ -9,8 +9,6 @@ from enum import StrEnum
 
 import numpy as np
 
-from quantdata.biz_calendar import DAYS_PER_YEAR, NMS
-
 
 class OptionRight(StrEnum):
     """Cash-settled European option right."""
@@ -21,58 +19,69 @@ class OptionRight(StrEnum):
 
 @dataclass(frozen=True, kw_only=True)
 class OptionContract:
-    """One normalized cash-settled option contract."""
+    """One cash-settled option with strike fixed per unit episode-origin spot."""
 
     contract_id: str
     expiry_date: date
-    normalized_strike: float
+    fixed_strike: float
     right: OptionRight
     exterior_boundary: bool = False
 
     def __post_init__(self) -> None:
         if not self.contract_id.strip():
             raise ValueError("contract_id must be non-empty")
-        if not math.isfinite(self.normalized_strike) or self.normalized_strike <= 0.0:
-            raise ValueError("normalized_strike must be finite and positive")
+        if not math.isfinite(self.fixed_strike) or self.fixed_strike <= 0.0:
+            raise ValueError("fixed_strike must be finite and positive")
 
     def payoff(self, normalized_spot: float) -> float:
-        """Return the normalized cash settlement value."""
+        """Return settlement per unit episode-origin spot."""
         if not math.isfinite(normalized_spot) or normalized_spot <= 0.0:
             raise ValueError("normalized_spot must be finite and positive")
         if self.right is OptionRight.CALL:
-            return max(normalized_spot - self.normalized_strike, 0.0)
-        return max(self.normalized_strike - normalized_spot, 0.0)
+            return max(normalized_spot - self.fixed_strike, 0.0)
+        return max(self.fixed_strike - normalized_spot, 0.0)
 
 
 @dataclass(frozen=True, kw_only=True)
 class OptionQuote:
-    """Tradable normalized option book observed on one trading date."""
+    """Synthetic executable book around the common SANOS model mark.
+
+    Prices use spot-one units: the mark is ``C/S=DF*(F/S)*C/(DF*F)`` and the
+    half-spread is the published ``h/S``. They are fitted-model quantities and
+    execution costs, not an observed market midpoint and bid/ask pair.
+    """
 
     trading_date: date
     contract: OptionContract
     business_dte: float
     atm_annual_vol: float
-    bid: float
-    ask: float
+    strike_over_forward: float
+    standardized_log_moneyness: float
+    mark: float
+    half_spread: float
+    is_am_settlement: bool = False
     display_size: float | None = None
 
     def __post_init__(self) -> None:
         finite_positive = (
             self.business_dte > 0.0
             and self.atm_annual_vol > 0.0
-            and self.ask > self.bid >= 0.0
+            and self.strike_over_forward > 0.0
+            and self.mark >= self.half_spread > 0.0
             and all(
                 math.isfinite(value)
                 for value in (
                     self.business_dte,
                     self.atm_annual_vol,
-                    self.bid,
-                    self.ask,
+                    self.strike_over_forward,
+                    self.standardized_log_moneyness,
+                    self.mark,
+                    self.half_spread,
                 )
             )
         )
         if not finite_positive:
-            raise ValueError("option quote contains an invalid DTE, volatility, or book")
+            raise ValueError("option quote contains invalid geometry, mark, or spread")
         if self.contract.expiry_date <= self.trading_date:
             raise ValueError("a tradable option must expire after its quote date")
         if self.display_size is not None and not (
@@ -81,30 +90,24 @@ class OptionQuote:
             raise ValueError("display_size must be finite and positive when supplied")
 
     @property
-    def mid(self) -> float:
-        """Return the normalized book midpoint."""
-        return 0.5 * (self.bid + self.ask)
-
-    @property
-    def half_spread(self) -> float:
-        """Return the normalized book half-spread."""
-        return 0.5 * (self.ask - self.bid)
-
-    @property
     def nms(self) -> float:
-        """Return current normalized-moneyness units for this fixed contract."""
-        return float(
-            NMS.to_nms(
-                self.contract.normalized_strike,
-                self.business_dte / DAYS_PER_YEAR,
-                vol=self.atm_annual_vol,
-            )
-        )
+        """Return current standardized log-moneyness from the public geometry."""
+        return self.standardized_log_moneyness
+
+    @property
+    def synthetic_bid(self) -> float:
+        """Return the executable sale price around the common mark."""
+        return self.mark - self.half_spread
+
+    @property
+    def synthetic_ask(self) -> float:
+        """Return the executable purchase price around the common mark."""
+        return self.mark + self.half_spread
 
     @property
     def is_otm_book(self) -> bool:
         """Return the deterministic OTM representative convention."""
-        if self.contract.normalized_strike < 1.0:
+        if self.strike_over_forward < 1.0:
             return self.contract.right is OptionRight.PUT
         return self.contract.right is OptionRight.CALL
 
@@ -179,11 +182,15 @@ def eligible_option_quotes(
         )
         if not (at_or_before_horizon or is_first_later):
             continue
-        if quote.contract.exterior_boundary or not quote.is_otm_book:
+        if (
+            quote.is_am_settlement
+            or quote.contract.exterior_boundary
+            or not quote.is_otm_book
+        ):
             continue
         if not lower_nms < quote.nms < upper_nms:
             continue
-        key = (quote.contract.expiry_date, quote.contract.normalized_strike)
+        key = (quote.contract.expiry_date, quote.contract.fixed_strike)
         existing = candidates.get(key)
         if existing is None or _quote_priority(quote) < _quote_priority(existing):
             candidates[key] = quote
@@ -192,7 +199,7 @@ def eligible_option_quotes(
             candidates.values(),
             key=lambda quote: (
                 quote.contract.expiry_date,
-                quote.contract.normalized_strike,
+                quote.contract.fixed_strike,
                 quote.contract.contract_id,
             ),
         )

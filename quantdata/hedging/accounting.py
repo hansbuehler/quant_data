@@ -10,7 +10,7 @@ from quantdata.hedging.contracts import OptionQuote
 
 @dataclass(frozen=True, kw_only=True)
 class TradeExecution:
-    """One trade expressed relative to its frictionless midpoint."""
+    """One trade expressed relative to its common fitted-model mark."""
 
     instrument_id: str
     quantity_change: float
@@ -82,21 +82,21 @@ def execute_option_trade(
     quote: OptionQuote,
     quantity_change: float,
 ) -> TradeExecution:
-    """Execute an option trade at the observed bid or ask."""
+    """Execute around the SANOS mark using the normalized half-spread."""
     if not math.isfinite(quantity_change):
         raise ValueError("quantity_change must be finite")
     if quantity_change > 0.0:
-        execution_price = quote.ask
+        execution_price = quote.synthetic_ask
     elif quantity_change < 0.0:
-        execution_price = quote.bid
+        execution_price = quote.synthetic_bid
     else:
-        execution_price = quote.mid
+        execution_price = quote.mark
     transaction_cost = abs(quantity_change) * quote.half_spread
-    cashflow = -quantity_change * quote.mid - transaction_cost
+    cashflow = -quantity_change * quote.mark - transaction_cost
     return TradeExecution(
         instrument_id=quote.contract.contract_id,
         quantity_change=quantity_change,
-        reference_price=quote.mid,
+        reference_price=quote.mark,
         execution_price=execution_price,
         cashflow=cashflow,
         transaction_cost=transaction_cost,

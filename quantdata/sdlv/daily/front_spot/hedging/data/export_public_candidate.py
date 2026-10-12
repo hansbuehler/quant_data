@@ -616,8 +616,8 @@ must require five consecutive one-session intervals.
 
 ## Execution and frozen contracts
 
-The released quote-side population spans NMS `[-2.5,2]`, the union of the
-paper's retained calibration population `[-2.5,1.5]` and the benchmark's
+The released quote-side population spans NMS `[-2.5,2]`, a superset covering
+the paper's retained calibration population `[-2.5,1.5]` and the benchmark's
 recommended hedge screen `(-2,2)`. Instrument-level Boolean masks identify
 both populations. The hedge mask is only the contemporaneous NMS screen;
 expiry, settlement, OTM-side, and episode-specific eligibility remain dynamic.
@@ -633,9 +633,126 @@ replay and display-size limits are not public-dataset capabilities.
 
 The common fitted models can be reconstructed from the separate SANOS and DLV
 state/geometry files. `quantdata.hedging.data` supplies standalone decoders and
-deep schema and reconstruction validation.
+deep schema and reconstruction validation. See `DATA_DICTIONARY.md` for the
+field-by-field schema.
 
 Generated configuration: `{config}`.
+"""
+    path.write_text(content, encoding="utf-8")
+
+
+def _write_data_dictionary(path: Path) -> None:
+    content = """# Public-candidate data dictionary
+
+Every Parquet file has one row per retained observation date and is ordered by
+`date`. Rows at the same position across files refer to the same date. A list
+field in `expiries.parquet` has length `E[d]`, the number of retained expiries
+on date `d`. A list field in `instruments.parquet` has length `Q[d]`, the number
+of retained call/put quote-side books on that date. Calls and puts at one strike
+are separate books. `expiry_indices[q]` maps instrument `q` to its expiry row.
+
+## `observations.parquet`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `date` | date | Retained market observation date. |
+| `trading_session_is_half_day` | bool | Whether the observation date is an exchange half-day. |
+| `business_sessions_from_previous_observation` | nullable int16 | Number of exchange sessions since the previous retained row; null on the first row. |
+| `forward_carry_from_previous_observation` | nullable float64 | Previous-date `F(t_previous,date)/S(t_previous)`, log-linearly interpolated in business DTE; null on the first row. |
+| `discount_factor_from_previous_observation` | nullable float64 | Previous-date discount factor to this row's date under the same interpolation; null on the first row. |
+| `forward_adjusted_spot_return_into_date` | nullable float64 | `(S[d]/S[d-1])/forward_carry-1`; null on the first row. It contains no absolute spot level. |
+
+## `expiries.parquet`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `date` | date | Observation date. |
+| `expiry_dates` | list[date] | Calendar settlement date of each retained expiry. |
+| `expiries_y` | list[float64] | Time to expiry in repository business years (`252` days per year, with the configured AM convention). |
+| `business_dtes` | list[float64] | Business-day time to expiry. |
+| `calendar_dtes` | list[int16] | Calendar-day difference between observation and expiry dates. |
+| `is_am_settlement` | list[bool] | Whether the expiry uses opening/AM settlement. Primary public hedging excludes these rows. |
+| `forward_over_spot` | list[float64] | Normalized forward `F/S` for each expiry. |
+| `discount_factors` | list[float64] | Discount factor `DF` for each expiry. |
+| `book_selection_epsilon_annualized_atm_vol` | float64 | One-day epsilon ATM input used by the normalized-moneyness geometry. |
+| `book_selection_annualized_atm_vols` | list[float64] | ATM input curve used to define the released NMS population and reconstruct `K/F` from NMS. |
+| `sanos_annualized_atm_vols` | list[float64] | Black ATM implied volatility obtained from the fitted SANOS model at `K/F=1`. |
+| `dlv_annualized_atm_vols` | list[float64] | Black ATM implied volatility obtained from the fitted DLV model at `K/F=1`. |
+
+## `instruments.parquet`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `date` | date | Observation date. |
+| `expiry_indices` | list[int16] | Zero-based indices into every expiry-aligned list for the same date. |
+| `strikes_over_forward` | list[float64] | Normalized strike `K/F`. No absolute cash strike is retained. |
+| `standardized_log_moneyness` | list[float64] | Repository NMS coordinate computed from `K/F`, expiry time, and the book-selection ATM curve. |
+| `in_paper_retained_population` | list[bool] | Exact GROMM calibration-population mask, inclusive NMS `[-2.5,1.5]`. |
+| `in_recommended_hedge_nms_population` | list[bool] | Contemporaneous strict NMS `(-2,2)` mask. It does not apply expiry, AM/PM, OTM-side, or episode filters. |
+| `is_call` | list[bool] | `true` for a call book and `false` for a put book. |
+| `half_spreads_over_spot` | list[float64] | Released source half-spread normalized as `h/S`; it is not a bid, ask, or midpoint. |
+| `sanos_prices_over_discounted_forward` | list[float64] | Fitted SANOS model price `C/(DF*F)`, not a market midpoint. |
+| `dlv_prices_over_discounted_forward` | list[float64] | Fitted DLV model price `C/(DF*F)`, not a market midpoint. |
+| `sanos_annualized_implied_vols` | list[float64] | Annualized Black IV inverted from the SANOS model price with `cdxcore.bs`. |
+| `dlv_annualized_implied_vols` | list[float64] | Annualized Black IV inverted from the DLV model price with `cdxcore.bs`. |
+| `sanos_implied_vol_is_valid` | list[bool] | Whether the SANOS price is numerically interior to Black bounds and its stored IV is an ordinary inversion. |
+| `dlv_implied_vol_is_valid` | list[bool] | Corresponding numerical-interiority flag for the DLV price. |
+
+Convert a model price to spot-one units with
+`C/S = DF * (F/S) * C/(DF*F)`. Convert the half-spread to discounted-forward
+units with `h/(DF*F) = (h/S)/(DF*(F/S))`.
+
+## `sanos_geometry.parquet`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `date` | date | Observation date. |
+| `model_expiries_y` | list[float64] | SANOS model-node expiries in business years. |
+| `support_strikes` | list[list[float64]] | Per-model-expiry latent normalized support `X/F`; each inner list aligns with the same-index density. |
+
+## `sanos_state.parquet`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `date` | date | Observation date. |
+| `kernel_total_variances` | list[float64] | Unsmoothed ATM input total variance at each SANOS model expiry. The Black kernel uses `sanos_smoothness` times this value. |
+| `densities` | list[list[float64]] | Per-expiry non-negative latent probability masses. Each density has unit mass and unit forward mean on its support. |
+
+## `dlv_geometry.parquet`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `date` | date | Observation date. |
+| `model_expiries_y` | list[float64] | The 25 DLV model-node expiries in business years. |
+| `support_strikes` | list[float64] | Shared 202-node `K/F` support: 200 interior nodes plus two exterior boundary nodes. |
+
+## `dlv_state.parquet`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `date` | date | Observation date. |
+| `raw_log_excess_dlvsq` | list[float32] | Expiry-major flattened `[25,200]` state. Decode as `DLVsq = minimum_dlvsq + exp(min(raw, log(maximum_dlvsq-minimum_dlvsq)))`; boundary local variances are zero. |
+
+## Metadata files
+
+- `config.json` records the schema, ticker, retained affine fit, SANOS
+  smoothness, maximum business DTE, dataset name, excluded 0.2D population,
+  released/paper/hedge/DLV NMS ranges, and model business-DTE grid.
+- `geometry.json` records all units and reconstruction constants: DLV bounds,
+  state shape, 5% Black backbone, boundary and interpolation conventions,
+  SANOS smoothing and interpolation conventions, one-minute threshold, forward
+  interpolation, and population ranges.
+- `manifest.json` records distribution status and release-approval placeholders,
+  source and Git provenance, generator-source hashes and dirty status, date and
+  population counts, last eligible daily/weekly origins, return and execution
+  conventions, capability flags, and SHA-256 checksums for every payload file.
+- `README.md` gives the economic conventions, exclusions, units, return
+  construction, execution rule, and frozen-contract limitation.
+
+`distribution="public_candidate"` is a technical leakage classification. It
+does not grant redistribution rights. A `public` artifact additionally requires
+completed license, rights-basis, approver, approval-date, approval-reference,
+and clean-generator provenance fields.
 """
     path.write_text(content, encoding="utf-8")
 
@@ -785,6 +902,7 @@ def export_public_candidate(
         }
         _atomic_write_json(config_payload, staging / "config.json")
         _write_readme(staging / "README.md", config)
+        _write_data_dictionary(staging / "DATA_DICTIONARY.md")
         checksums = {
             path.name: _sha256(path)
             for path in sorted(staging.iterdir())
@@ -831,11 +949,11 @@ def export_public_candidate(
                 records["observations"],
                 horizon_sessions=5,
             ),
-            "num_instruments": int(
+            "num_quote_side_books": int(
                 sum(len(row["expiry_indices"]) for row in records["instruments"])
             ),
-            "num_paper_retained_instruments": int(paper_counts.sum()),
-            "num_observation_hedge_nms_instruments": int(
+            "num_paper_retained_quote_side_books": int(paper_counts.sum()),
+            "num_observation_hedge_nms_quote_side_books": int(
                 sum(
                     sum(row["in_recommended_hedge_nms_population"])
                     for row in records["instruments"]

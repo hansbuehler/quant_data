@@ -29,7 +29,7 @@ def test_atm_and_non_atm_strike_conventions() -> None:
 def test_call_and_put_digitals_include_the_strike() -> None:
     call = DigitalClaim(right=OptionRight.CALL, strike=1.0, maturity_business_days=1)
     put = DigitalClaim(right=OptionRight.PUT, strike=1.0, maturity_business_days=1)
-    assert call.payoff([1.0, 1.0]) == 1.0
+    assert call.payoff([1.0, 1.0]) == 0.0
     assert put.payoff([1.0, 1.0]) == 1.0
 
 

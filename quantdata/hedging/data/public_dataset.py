@@ -83,7 +83,12 @@ DATA_FILE_SCHEMAS: dict[str, dict[str, pl.DataType]] = {
 DATA_FILE_COLUMNS = {
     filename: tuple(schema) for filename, schema in DATA_FILE_SCHEMAS.items()
 }
-METADATA_FILES = ("config.json", "geometry.json", "README.md")
+METADATA_FILES = (
+    "config.json",
+    "geometry.json",
+    "README.md",
+    "DATA_DICTIONARY.md",
+)
 CHECKSUM_FILES = (*DATA_FILE_COLUMNS, *METADATA_FILES)
 PUBLIC_DATASET_FILES = (*CHECKSUM_FILES, "manifest.json")
 
@@ -146,6 +151,11 @@ class PublicHedgingDataset:
     def manifest(self) -> dict[str, object]:
         """Read the immutable dataset manifest."""
         return self.read_json("manifest.json")
+
+    @property
+    def manifest_sha256(self) -> str:
+        """Return the exact immutable manifest identity."""
+        return _sha256(self.directory / "manifest.json")
 
     @property
     def config(self) -> dict[str, object]:
@@ -657,11 +667,13 @@ def validate_public_dataset(
         )
     instrument_frame = frames["instruments.parquet"]
     population_counts = {
-        "num_instruments": sum(len(values) for values in instrument_frame["expiry_indices"]),
-        "num_paper_retained_instruments": sum(
+        "num_quote_side_books": sum(
+            len(values) for values in instrument_frame["expiry_indices"]
+        ),
+        "num_paper_retained_quote_side_books": sum(
             sum(values) for values in instrument_frame["in_paper_retained_population"]
         ),
-        "num_observation_hedge_nms_instruments": sum(
+        "num_observation_hedge_nms_quote_side_books": sum(
             sum(values)
             for values in instrument_frame["in_recommended_hedge_nms_population"]
         ),

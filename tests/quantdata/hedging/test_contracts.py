@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, timedelta
 
 from quantdata.hedging.contracts import (
@@ -25,14 +26,16 @@ def _quote(
         contract=OptionContract(
             contract_id=contract_id,
             expiry_date=trading_date + timedelta(days=max(1, round(business_dte))),
-            normalized_strike=strike,
+            fixed_strike=strike,
             right=right,
             exterior_boundary=exterior,
         ),
         business_dte=business_dte,
         atm_annual_vol=0.2,
-        bid=0.10 - 0.5 * spread,
-        ask=0.10 + 0.5 * spread,
+        strike_over_forward=strike,
+        standardized_log_moneyness=0.5 if strike > 1.0 else -0.5,
+        mark=0.10,
+        half_spread=0.5 * spread,
         display_size=10.0,
     )
 
@@ -92,3 +95,14 @@ def test_exact_five_day_expiry_excludes_later_expiry() -> None:
     )
     selected = eligible_option_quotes(quotes)
     assert [quote.contract.contract_id for quote in selected] == ["5d-call"]
+
+
+def test_am_settled_contract_is_not_publicly_eligible() -> None:
+    quote = _quote(
+        contract_id="am-call",
+        strike=1.01,
+        right=OptionRight.CALL,
+        business_dte=3.0,
+    )
+    quote = replace(quote, is_am_settlement=True)
+    assert eligible_option_quotes((quote,)) == ()

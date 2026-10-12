@@ -8,6 +8,7 @@ from collections.abc import Sequence
 import numpy as np
 from cdxcore.bs import bs
 from numpy.typing import NDArray
+from scipy.special import ndtr
 
 FloatArray = NDArray[np.float64]
 BoolArray = NDArray[np.bool_]
@@ -154,6 +155,126 @@ def price_sanos_surface(
     return _call_to_side_price(calls, strikes, is_call)
 
 
+def price_sanos_digitals(
+    *,
+    query_expiries_y: NDArray[np.floating],
+    query_strikes: NDArray[np.floating],
+    is_call: NDArray[np.bool_],
+    model_expiries_y: NDArray[np.floating],
+    atm_variances: NDArray[np.floating],
+    support_strikes: Sequence[NDArray[np.floating]],
+    densities: Sequence[NDArray[np.floating]],
+    smoothness: float,
+    one_minute_y: float,
+) -> FloatArray:
+    """Price unit-forward-cash digitals from the public SANOS state."""
+    expiries = _as_finite_vector(query_expiries_y, name="query_expiries_y")
+    strikes = _as_finite_vector(query_strikes, name="query_strikes")
+    sides = np.asarray(is_call, dtype=bool)
+    model_expiries = _as_finite_vector(model_expiries_y, name="model_expiries_y")
+    variances = _as_finite_vector(atm_variances, name="atm_variances")
+    if expiries.shape != strikes.shape or sides.shape != strikes.shape:
+        raise ValueError("SANOS digital query arrays must have equal shape")
+    if variances.shape != model_expiries.shape:
+        raise ValueError("SANOS digital variance and model-expiry arrays must align")
+    if len(support_strikes) != len(model_expiries) or len(densities) != len(
+        model_expiries
+    ):
+        raise ValueError("SANOS digital state must match model expiries")
+    if np.any(expiries < 0.0) or np.any(strikes <= 0.0):
+        raise ValueError("SANOS digital expiries must be non-negative and strikes positive")
+    if np.any(np.diff(model_expiries) <= 0.0) or np.any(variances <= 0.0):
+        raise ValueError("SANOS model expiries and variances must be strictly positive")
+    if smoothness < 0.0 or one_minute_y <= 0.0:
+        raise ValueError("SANOS smoothness must be non-negative and one_minute_y positive")
+
+    model_supports: list[FloatArray] = []
+    model_densities: list[FloatArray] = []
+    for index, (support_value, density_value) in enumerate(
+        zip(support_strikes, densities, strict=True)
+    ):
+        support = _as_finite_vector(np.asarray(support_value), name=f"support[{index}]")
+        density = _as_finite_vector(np.asarray(density_value), name=f"density[{index}]")
+        if support.shape != density.shape or np.any(np.diff(support) <= 0.0):
+            raise ValueError(f"Invalid SANOS support-density geometry at expiry {index}")
+        if np.min(density) < -1.0e-10:
+            raise ValueError(f"Negative SANOS density at expiry {index}")
+        if not np.isclose(np.sum(density), 1.0, rtol=0.0, atol=2.0e-6):
+            raise ValueError(f"SANOS density at expiry {index} does not have unit mass")
+        if not np.isclose(density @ support, 1.0, rtol=0.0, atol=2.0e-6):
+            raise ValueError(f"SANOS density at expiry {index} does not integrate to one")
+        model_supports.append(support)
+        model_densities.append(density)
+
+    def node_price(
+        node_index: int,
+        expiry_y: float,
+        query: FloatArray,
+        query_sides: BoolArray,
+    ) -> FloatArray:
+        support = model_supports[node_index]
+        if expiry_y < one_minute_y or smoothness == 0.0:
+            call_kernel = support[None, :] > query[:, None]
+            put_kernel = support[None, :] <= query[:, None]
+        else:
+            clipped_expiry = float(
+                np.clip(expiry_y, model_expiries[0], model_expiries[-1])
+            )
+            variance = float(np.interp(clipped_expiry, model_expiries, variances))
+            annual_volatility = math.sqrt(variance / clipped_expiry) * math.sqrt(
+                smoothness
+            )
+            standard_deviation = annual_volatility * math.sqrt(expiry_y)
+            d2 = (
+                np.log(support[None, :] / query[:, None])
+                - 0.5 * standard_deviation**2
+            ) / standard_deviation
+            call_kernel = ndtr(d2)
+            put_kernel = ndtr(-d2)
+        kernel = np.where(query_sides[:, None], call_kernel, put_kernel)
+        return np.asarray(kernel @ model_densities[node_index], dtype=np.float64)
+
+    prices = np.empty_like(strikes)
+    for expiry_y in np.unique(expiries):
+        selection = expiries == expiry_y
+        query = strikes[selection]
+        query_sides = sides[selection]
+        if expiry_y < one_minute_y:
+            prices[selection] = np.where(
+                query_sides,
+                (1.0 > query).astype(np.float64),
+                (1.0 <= query).astype(np.float64),
+            )
+            continue
+        upper = int(np.searchsorted(model_expiries, expiry_y, side="left"))
+        if upper == 0:
+            prices[selection] = node_price(0, float(expiry_y), query, query_sides)
+            continue
+        if upper == len(model_expiries):
+            prices[selection] = node_price(-1, float(expiry_y), query, query_sides)
+            continue
+        lower = upper - 1
+        lower_distance = abs(float(expiry_y) - float(model_expiries[lower]))
+        upper_distance = abs(float(model_expiries[upper]) - float(expiry_y))
+        if min(lower_distance, upper_distance) < one_minute_y:
+            node_index = upper if upper_distance < lower_distance else lower
+            prices[selection] = node_price(
+                node_index,
+                float(expiry_y),
+                query,
+                query_sides,
+            )
+            continue
+        lower_prices = node_price(lower, float(expiry_y), query, query_sides)
+        upper_prices = node_price(upper, float(expiry_y), query, query_sides)
+        interval = float(model_expiries[upper] - model_expiries[lower])
+        upper_weight = float(expiry_y - model_expiries[lower]) / interval
+        prices[selection] = (1.0 - upper_weight) * lower_prices + (
+            upper_weight * upper_prices
+        )
+    return prices
+
+
 def _density0_from_support(support: FloatArray) -> FloatArray:
     calls = np.maximum(1.0 - support, 0.0)
     slopes = np.diff(calls, prepend=1.0) / np.diff(support, prepend=0.0)
@@ -165,6 +286,14 @@ def _density0_from_support(support: FloatArray) -> FloatArray:
     if not np.isclose(density @ support, 1.0, rtol=0.0, atol=2.0e-12):
         raise ValueError("DLV initial density does not integrate to forward one")
     return density
+
+
+def dlv_initial_density(
+    support_strikes: NDArray[np.floating],
+) -> FloatArray:
+    """Return the exact unit-forward initial law on a DLV support."""
+    support = _as_finite_vector(support_strikes, name="support_strikes")
+    return _density0_from_support(support)
 
 
 def _solve_dlv_step(
@@ -245,6 +374,76 @@ def decode_dlv_density_tower(
     return tower
 
 
+def dlv_transition_matrices(
+    *,
+    support_strikes: NDArray[np.floating],
+    raw_log_excess_dlvsq: NDArray[np.floating],
+    model_expiries_y: NDArray[np.floating],
+    minimum_dlvsq: float,
+    maximum_dlvsq: float,
+    step_count: int | None = None,
+) -> FloatArray:
+    """Return column-stochastic martingale transitions for the discrete DLV grid.
+
+    Matrix ``j`` maps a column density at expiry ``j-1`` to expiry ``j``.
+    Thus ``transition[j] @ density`` advances the latent forward-normalized
+    state by one model interval.
+    """
+    support = _as_finite_vector(support_strikes, name="support_strikes")
+    expiries = _as_finite_vector(model_expiries_y, name="model_expiries_y")
+    raw = np.asarray(raw_log_excess_dlvsq, dtype=np.float64)
+    expected_shape = (len(expiries), len(support) - 2)
+    if raw.shape != expected_shape or not np.all(np.isfinite(raw)):
+        raise ValueError(f"raw DLV state must have finite shape {expected_shape}")
+    if np.any(np.diff(support) <= 0.0) or np.any(np.diff(expiries) <= 0.0):
+        raise ValueError("DLV support and expiries must be strictly increasing")
+    if not 0.0 < minimum_dlvsq < maximum_dlvsq:
+        raise ValueError("DLV bounds must satisfy 0 < minimum < maximum")
+    if step_count is None:
+        step_count = len(expiries)
+    if not 1 <= step_count <= len(expiries):
+        raise ValueError("step_count must lie within the DLV expiry grid")
+
+    maximum_raw = math.log(maximum_dlvsq - minimum_dlvsq)
+    dlvsq = minimum_dlvsq + np.exp(np.minimum(raw[:step_count], maximum_raw))
+    identity = np.eye(len(support), dtype=np.float64)
+    transitions = np.empty(
+        (step_count, len(support), len(support)), dtype=np.float64
+    )
+    previous_expiry = 0.0
+    for step in range(step_count):
+        interval = float(expiries[step]) - previous_expiry
+        transition = np.column_stack(
+            [
+                _solve_dlv_step(
+                    support,
+                    identity[:, state_index],
+                    dlvsq[step] * interval,
+                )
+                for state_index in range(len(support))
+            ]
+        )
+        if np.min(transition) < -1.0e-12:
+            raise FloatingPointError(f"DLV transition {step} contains negative mass")
+        if not np.allclose(
+            np.sum(transition, axis=0),
+            1.0,
+            rtol=0.0,
+            atol=2.0e-10,
+        ):
+            raise FloatingPointError(f"DLV transition {step} is not stochastic")
+        if not np.allclose(
+            support @ transition,
+            support,
+            rtol=0.0,
+            atol=2.0e-10,
+        ):
+            raise FloatingPointError(f"DLV transition {step} is not a martingale")
+        transitions[step] = transition
+        previous_expiry = float(expiries[step])
+    return transitions
+
+
 def price_dlv_surface(
     *,
     query_expiries_y: NDArray[np.floating],
@@ -308,6 +507,101 @@ def price_dlv_surface(
             + alpha * (kernel @ upper_density)
         )
     return _call_to_side_price(calls, query_strikes_array, is_call)
+
+
+def price_dlv_digitals(
+    *,
+    query_expiries_y: NDArray[np.floating],
+    query_strikes: NDArray[np.floating],
+    is_call: NDArray[np.bool_],
+    support_strikes: NDArray[np.floating],
+    raw_log_excess_dlvsq: NDArray[np.floating],
+    model_expiries_y: NDArray[np.floating],
+    minimum_dlvsq: float,
+    maximum_dlvsq: float,
+    backbone_annual_volatility: float,
+) -> FloatArray:
+    """Price unit-forward-cash digitals from the public DLV representation."""
+    query_expiries = _as_finite_vector(query_expiries_y, name="query_expiries_y")
+    query_strikes_array = _as_finite_vector(query_strikes, name="query_strikes")
+    sides = np.asarray(is_call, dtype=bool)
+    support = _as_finite_vector(support_strikes, name="support_strikes")
+    model_expiries = _as_finite_vector(model_expiries_y, name="model_expiries_y")
+    if (
+        query_expiries.shape != query_strikes_array.shape
+        or sides.shape != query_strikes_array.shape
+    ):
+        raise ValueError("DLV digital query arrays must have equal shape")
+    if np.any(query_expiries <= 0.0) or np.any(query_strikes_array <= 0.0):
+        raise ValueError("DLV digital expiries and strikes must be positive")
+    if backbone_annual_volatility < 0.0:
+        raise ValueError("DLV backbone volatility must be non-negative")
+    tower = decode_dlv_density_tower(
+        support_strikes=support,
+        raw_log_excess_dlvsq=raw_log_excess_dlvsq,
+        model_expiries_y=model_expiries,
+        minimum_dlvsq=minimum_dlvsq,
+        maximum_dlvsq=maximum_dlvsq,
+    )
+    density0 = _density0_from_support(support)
+    prices = np.empty_like(query_strikes_array)
+    for expiry_y in np.unique(query_expiries):
+        selection = query_expiries == expiry_y
+        strikes = query_strikes_array[selection]
+        query_sides = sides[selection]
+        raw_upper = int(np.searchsorted(model_expiries, expiry_y, side="left"))
+        if raw_upper >= len(model_expiries):
+            if expiry_y > model_expiries[-1] + 1.0e-12:
+                raise ValueError(
+                    f"DLV digital query expiry {expiry_y} exceeds the model horizon"
+                )
+            raw_upper = len(model_expiries) - 1
+        upper = raw_upper
+        before_first = upper == 0
+        lower = max(upper - 1, 0)
+        previous_expiry = 0.0 if before_first else float(model_expiries[lower])
+        interval = float(model_expiries[upper]) - previous_expiry
+        alpha = float(
+            np.clip((float(expiry_y) - previous_expiry) / interval, 0.0, 1.0)
+        )
+        lower_density = density0 if before_first else tower[lower]
+        upper_density = tower[upper]
+        background_time = (
+            (1.0 - alpha) * float(model_expiries[lower])
+            + alpha * float(model_expiries[upper])
+        )
+        kernel = _black_digital_kernel(
+            support,
+            strikes,
+            is_call=query_sides,
+            annual_volatility=backbone_annual_volatility,
+            expiry_y=background_time,
+        )
+        prices[selection] = (
+            (1.0 - alpha) * (kernel @ lower_density)
+            + alpha * (kernel @ upper_density)
+        )
+    return prices
+
+
+def _black_digital_kernel(
+    latent_spots: FloatArray,
+    strikes: FloatArray,
+    *,
+    is_call: BoolArray,
+    annual_volatility: float,
+    expiry_y: float,
+) -> FloatArray:
+    if expiry_y <= 0.0 or annual_volatility == 0.0:
+        calls = latent_spots[None, :] > strikes[:, None]
+        puts = latent_spots[None, :] <= strikes[:, None]
+        return np.where(is_call[:, None], calls, puts).astype(np.float64)
+    standard_deviation = annual_volatility * math.sqrt(expiry_y)
+    d2 = (
+        np.log(latent_spots[None, :] / strikes[:, None])
+        - 0.5 * standard_deviation**2
+    ) / standard_deviation
+    return np.where(is_call[:, None], ndtr(d2), ndtr(-d2))
 
 
 def implied_volatilities(

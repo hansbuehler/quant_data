@@ -19,13 +19,15 @@ def _quote() -> OptionQuote:
         contract=OptionContract(
             contract_id="SPX-2025-01-03-C-1.0",
             expiry_date=date(2025, 1, 3),
-            normalized_strike=1.0,
+            fixed_strike=1.0,
             right=OptionRight.CALL,
         ),
         business_dte=1.0,
         atm_annual_vol=0.2,
-        bid=0.04,
-        ask=0.06,
+        strike_over_forward=1.0,
+        standardized_log_moneyness=0.0,
+        mark=0.05,
+        half_spread=0.01,
         display_size=50.0,
     )
 

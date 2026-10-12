@@ -1,0 +1,29 @@
+{
+  "absolute_tolerance": 1e-06,
+  "expected": {
+    "actions": {
+      "spot": -15.97059900119611
+    },
+    "cap_hits": 0,
+    "claim": "digital-call-1d-atm",
+    "converged": true,
+    "diagnostics": {
+      "claim_best_epoch": 1233,
+      "dlv_substeps": 8,
+      "factor_rank": 16,
+      "objective": "mean-variance",
+      "risk_parameter": 10.0,
+      "scenario_paths": 128,
+      "zero_best_epoch": 48
+    },
+    "market_price": 0.5419907143863331,
+    "measure": "Q",
+    "model": "gromm",
+    "model_price": 0.5354354120133268,
+    "objective_value": 0.1419432667341842,
+    "origin_date": "2023-01-17",
+    "terminal_date": "2023-01-18",
+    "transaction_cost": 0.0757916941984958
+  },
+  "relative_tolerance": 1e-06
+}

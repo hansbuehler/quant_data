@@ -25,17 +25,33 @@ def normalized_strike_from_nms(
     nms: float,
     business_dte: float,
     atm_annual_vol: float,
+    epsilon_atm_annual_vol: float | None = None,
 ) -> float:
     """Convert inception NMS into a fixed normalized strike."""
-    if not all(math.isfinite(value) for value in (nms, business_dte, atm_annual_vol)):
+    if epsilon_atm_annual_vol is None:
+        epsilon_atm_annual_vol = atm_annual_vol
+    if not all(
+        math.isfinite(value)
+        for value in (
+            nms,
+            business_dte,
+            atm_annual_vol,
+            epsilon_atm_annual_vol,
+        )
+    ):
         raise ValueError("NMS conversion inputs must be finite")
-    if business_dte < 0.0 or atm_annual_vol <= 0.0:
-        raise ValueError("business_dte must be non-negative and volatility positive")
+    if (
+        business_dte < 0.0
+        or atm_annual_vol <= 0.0
+        or epsilon_atm_annual_vol <= 0.0
+    ):
+        raise ValueError("business_dte must be non-negative and volatilities positive")
     return float(
         NMS.from_nms(
             nms,
             business_dte / DAYS_PER_YEAR,
             vol=atm_annual_vol,
+            eps_vol=epsilon_atm_annual_vol,
         )
     )
 
@@ -62,7 +78,7 @@ class DigitalClaim:
         path = _validated_path(normalized_spot_path, self.maturity_business_days)
         terminal = float(path[-1])
         exercised = (
-            terminal >= self.strike
+            terminal > self.strike
             if self.right is OptionRight.CALL
             else terminal <= self.strike
         )

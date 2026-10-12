@@ -1,0 +1,38 @@
+{
+  "absolute_tolerance": 1e-09,
+  "expected": {
+    "actions": {
+      "spot": -45.23444148627977,
+      "synthetic:2023-01-17:2023-01-18:call:1.0010097603953625": 15.995490584059233,
+      "synthetic:2023-01-17:2023-01-18:call:1.0022625143385397": 34.13689614846359,
+      "synthetic:2023-01-17:2023-01-18:call:1.003515387478096": 38.35103678029872
+    },
+    "cap_hits": 0,
+    "converged": true,
+    "diagnostics": {
+      "instrument_count": 163,
+      "maximum_absolute_action": 56.3515213510445,
+      "maximum_absolute_mean_t": 3.8559791085342994,
+      "mean_hac_lags": 4,
+      "mean_z_threshold": 3.1917863966145235,
+      "objective": "mean-variance",
+      "pure_hedge_gross_exposure": 705.299021451579,
+      "pure_hedge_l2_exposure": 138.74068932935342,
+      "retained_mean_directions": 3,
+      "risk_parameter": 10.0,
+      "target_count": 20,
+      "training_last_endpoint": "2023-01-17",
+      "tyler_iterations": 49,
+      "tyler_shrinkage": 0.3927710843373494,
+      "zero_policy_gross_exposure": 0.0
+    },
+    "hedged_pnl": -0.10281147174385957,
+    "market_price": 0.5419907143863331,
+    "objective_value": 0.3374022517049079,
+    "payoff": 0.0,
+    "pricing_difference": 0.0,
+    "transaction_cost": 0.04697765963058503,
+    "unhedged_pnl": -0.5419907143863331
+  },
+  "relative_tolerance": 1e-09
+}

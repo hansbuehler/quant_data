@@ -4,12 +4,64 @@
 
 This document is the implementation plan for the hedging benchmark built around
 the daily front-spot SDLV/GROMM model. It records the agreed experimental design
-and implementation order. No model implementation is implied by this document.
+and implementation order.
+
+The distributable public-candidate data layer and CPU accounting vertical slice
+are implemented and passed independent quant review. The SANOS-LV Phase-2
+implementation has rolling 252-transition fixed-contract DLV factors, eight
+factor vegas, the complete 20-target daily digital family, stable next-date
+synthetic contract replay, minimum-predictable-option-cost factor hedges, and a
+residual spot-delta hedge. Its independent Phase-2 review and 160-target
+multi-date CPU pilot passed. The independent covariance baseline now uses an
+instrument-only shrinkage Tyler geometry, target-specific robust cross-moments,
+sample-mean/HAC drift screening, and exact mean-volatility recession checks;
+its Phase-3 implementation and independent re-review passed. The rolling
+rank-16 SDLV calibration, factor alignment, eight Greek factors, analytical Q
+drift, and compatible P-drift projection passed the Phase-4 remediation review.
+The Phase-8 weekly accounting engine now also passes its independent mechanical
+review. Common SANOS/DLV weekly claim prices, exact rolling fit identities,
+precommitted as-of information windows, and Hansen--Hodrick plus moving-block
+overlap inference passed their independent re-review. A resumable daily runner
+now pins dataset and model identities, enforces the complete 20-target book and
+numerical gates, and writes one atomic record per origin. Production evaluation
+of every model and model-specific weekly policies remain outstanding. The
+strictly-2022 target-sizing exercise now fixes each target to one
+maturity-matched ATM spot-risk unit; all 20 calibration hedges converged with
+no cap hit. Its atomic derived artifact is keyed by the public dataset manifest
+and complete sizing configuration, preventing repeated production runs from
+silently using different quantities. The same runner now supports VolGAN and
+AD-Seq-Vol with full
+training/scenario configuration identities. Abbreviated one-origin CPU/GPU
+integration runs passed all 20 target records with no cap hit; they are
+orchestration checks, not benchmark estimates. The completed-run results layer
+now validates immutable run/record identities and reports unhedged, economic,
+pure-hedging, and pricing losses overall, by year, by 2022-fixed target-maturity
+ATM-volatility regime, and by year/regime intersection. It also recomputes
+eligibility from the immutable run specification, revalidates every record,
+and reports normalized entry turnover/exposure, cap rates, and explicit HAC
+metadata; independent quant review passed. The first full SANOS-LV run exposed
+a small-coefficient linear-program equality-scaling failure. Row scaling fixes
+the numerical cause without relaxing the precommitted residual tolerance, and
+the clean versioned 2023--2025 CPU rerun is currently running resumably.
 
 The benchmark should ultimately provide a public, model-neutral methodology for
 comparing hedging systems. The first objective is the paper and a reproducible
 internal benchmark. A public extension API follows after the paper methodology
 and results are stable.
+
+### Runtime data boundary
+
+- The distributable `hedging-public-candidate-v1` dataset is the sole market
+  data input to every model fit, training job, scenario generator, valuation,
+  and benchmark run.
+- Runtime model and training code must not import the private dataset exporter,
+  WRDS/WIDB loaders, DySANOS research pipelines, or legacy raw SDLV arrays.
+- Stored SANOS states are the reference market interpolation whenever a price,
+  target mark, or fixed contract is required away from a released instrument
+  coordinate. Stored DLV states remain model inputs and are not substituted for
+  the common SANOS market mark.
+- The private-source exporter remains an offline construction tool only. It is
+  outside the runtime dependency graph and is not invoked by training.
 
 ## Objectives
 
@@ -77,6 +129,16 @@ The benchmark must:
   represented by the previous-date forward curve without discarding the cash
   discount factor needed for accounting.
 - Maintain one normalization and numeraire throughout each episode.
+- Maintain three explicit spot paths without mixing their roles. All weekly
+  targets settle on the inception-forward-normalized path
+  `X[n]=S(t_n)/F(t_0,t_n)`. ATM target strike and barriers are expressed
+  relative to `X[0]=1`; non-ATM digital strikes are the inception NMS-derived
+  `K/F`. The actual cumulative `S[n]/S[0]` path is used only to recover fixed
+  hedge-contract `K/F`, marks, settlements, and traded spot notional. The
+  compounded rolling one-session forward-adjusted path is retained only as a
+  carry-basis diagnostic: settling on it would make the claim depend on future
+  carry curves unknown at inception. All accounting paths are converted to the
+  same discounted episode-origin PV unit.
 - Charge one basis point per transaction on traded normalized spot notional.
 - Use the SANOS fitted model price as the common market mark. Execute a buy at
   the mark plus the published `h/S` and a sale at the mark minus `h/S`, after
@@ -144,7 +206,7 @@ Each digital pays one unit of normalized cash.
 - Include options strictly within `(-2, 2)` NMS, computed using the current
   expiry-specific ATM volatility.
 - Treat `(-2, 2)` as a dynamic hedge-eligibility rule, not as a storage filter.
-  The public candidate retains the union `[-2.5, 2]`, tags the paper's exact
+  The public candidate retains the superset `[-2.5, 2]`, tags the paper's exact
   `[-2.5, 1.5]` calibration population, and separately tags the contemporaneous
   `(-2, 2)` hedge screen.
 - Exclude AM-settled contracts from the primary hedge universe. The public
@@ -289,9 +351,15 @@ internals.
 - Estimate the compatible physical drift and risk-neutral drift separately.
 - Support mean-variance, mean-volatility, entropy, and power-exponential
   deep-hedging objectives under both `P` and `Q`.
-- Compute the hedge of the claim as the claim policy minus the zero-claim
-  policy. Under `Q`, the zero-claim policy should be zero in population and is
-  retained as a diagnostic and numerical control.
+- Fit claim, short-claim, and zero-claim policies separately for indifference
+  pricing. Retain the claim-minus-zero action as a diagnostic. Because absolute
+  turnover is nonlinear, train the executable pure hedge directly in net-action
+  coordinates on conditional Q-shadow gains. At every simulated state, reuse
+  the same Brownian shock under the unshifted Q transition and measure gains
+  from the model mark. This preserves local hedge shocks while removing both
+  state-dependent P drift and common-mark/model-mark basis positions, without
+  estimating a conditional mean from validation paths. Under `Q`, the
+  zero-claim policy should be zero in population.
 - Also provide conventional risk-neutral expectation plus eight-factor DLV-vega
   hedging.
 
@@ -361,38 +429,43 @@ lambda = 2 * kappa / sigma.
 ```
 
 Risk parameters and losses should be expressed in a documented episode risk
-unit. The proposed reference is inception ATM spot risk
+unit. The confirmed reference is inception ATM spot risk
 
 ```text
-sigma_ref(t, H) = sigma_atm(t) * sqrt(H / 252),
+sigma_ref(t, H) = sigma_atm(t) * sqrt(H / 252).
 ```
-
-but this convention must be confirmed before production evaluation.
 
 ## Target Notional and Position Caps
 
-Target notional materially affects the relevance of option half-spreads. Run a
-preliminary sizing experiment using 2022 only:
+Target notional materially affects the relevance of option half-spreads. The
+preliminary sizing experiment uses 2022 only:
 
 1. Normalize each target by its 2022 unhedged standard deviation.
 2. Use the independent robust covariance hedge with mean-volatility `kappa=1`.
 3. Measure transaction cost relative to the target's unhedged risk and gross
    option exposure.
-4. Select a common risk size that creates meaningful but non-dominating costs.
-5. Freeze target notionals for all tests after the 2022 sizing exercise.
+4. Set each target quantity so its scaled unhedged standard deviation equals
+   one maturity-matched ATM spot-risk unit.
+5. Freeze those target quantities for all out-of-sample tests.
+
+The 242-transition initialization run through 2022-12-30 converged for all 20
+targets with no cap hit. Median, 90th-percentile, and maximum transaction cost
+were respectively 1.69%, 3.78%, and 7.54% of the reference risk. A common
+rescaling cannot select a more attractive size here: under proportional costs
+and the homogeneous mean-volatility objective the cost-to-risk fraction is
+scale invariant except at a zero-action or cap boundary. The dated calibration
+report records the target quantities and diagnostics.
 
 An internal-data extension may additionally report display-size utilization,
 but it cannot determine the primary public benchmark notional because display
 size is deliberately absent from the distributable dataset.
 
-Run two cap regimes:
+Use the following cap regimes:
 
-- A loose numerical cap, with every cap hit treated as a diagnostic failure or
-  warning.
+- A loose numerical cap of 1,000 normalized action units, applied to spot and
+  option coordinates, with every cap hit treated as a failed numerical gate.
 - An internal-only display-size cap sensitivity when source size data are
   available.
-
-The spot cap convention remains open because spot display size is unavailable.
 
 ## CPU and GPU Work Split
 
@@ -556,14 +629,14 @@ weekly episodes.
 
 ## Implementation Phases and Gates
 
-### Phase 0: specification and schemas
+### Phase 0: specification and schemas (complete)
 
 Implement the versioned benchmark configuration, common artifact schema,
 contract identity, and episode timing definitions.
 
 Gate: protocol quant review passes.
 
-### Phase 1: accounting vertical slice
+### Phase 1: accounting vertical slice (complete)
 
 Implement market snapshots, one ATM digital, spot plus one option, SANOS-mark
 plus/minus-half-spread execution, settlement, and pricing/hedging decomposition.
@@ -572,21 +645,21 @@ Run a deterministic CPU test over a few dates.
 
 Gate: accounting quant review and accounting unit tests pass.
 
-### Phase 2: SANOS-LV daily baseline
+### Phase 2: SANOS-LV daily baseline (complete)
 
 Implement rolling market marks, delta, eight PCA-factor vegas, all daily target
 claims, and the common reporting record.
 
 Gate: standalone SANOS-LV smoke test passes.
 
-### Phase 3: independent covariance baseline
+### Phase 3: independent covariance baseline (complete)
 
 Implement same-contract historical returns, robust covariance, cost lasso,
 mean-variance, and mean-volatility.
 
 Gate: standalone covariance smoke test and model review pass.
 
-### Phase 4: rolling SDLV calibration
+### Phase 4: rolling SDLV calibration (complete)
 
 Implement the rolling 252-day innovation fit, 16-factor PCA alignment, eight
 Greek factors, compatible `P` drift, and `Q` drift.
@@ -596,8 +669,33 @@ Gate: CPU deterministic calibration test and factor-alignment tests pass.
 ### Phase 5: GROMM daily benchmark
 
 Implement GROMM scenario generation and the four hedge objectives under `Q`,
-then under `P`. Implement the four 2022 architecture candidates and freeze the
-selection rule.
+then under `P`. Use the currently specified `quantdata/gromm2` market model:
+the 200-strike JAX implementation with AR(1) DLV dynamics. Its greater-than-80%
+market fit is accepted for this benchmark iteration. Treat `quantdata/gromm2`
+as a read-only architecture reference and do not modify it from the hedging
+project.
+
+The market-model architecture is therefore fixed rather than selected inside
+the hedging benchmark. Dated rolling P/Q artifacts and exact benchmark-book
+output are separate from the four affine/deep/LSTM hedge-policy candidates;
+only the hedge-policy architecture is selected on the 2022 initialization set.
+
+The dated market-artifact contract, CPU preparation stage, daily P/Q
+benchmark-book output, and weekly recurrent-policy interface are implemented.
+A production artifact contains exactly 252 transitions ending on the declared
+origin, fixes the 200-strike geometry from that origin, hashes all inputs, and
+rejects full-panel or future-dated histories. A real 2023-01-10 preparation
+smoke completed from the public dataset. The five-session sampler recomputes
+the compatible P risk price pathwise and prices the frozen contract book
+without retaining full density histories. Every artifact is bound to the exact
+public manifest and the compatible P drift must pass projection and daily
+risk-price-norm gates. Generated books start at the common SANOS executable
+marks. Signed policies provide prices and diagnostics; the directly trained
+pure policy uses conditional Q-shadow gains, exact net turnover, free cash
+settlement, and terminal
+liquidation. Managed-GPU affine
+fitting, 2022 hedge-architecture selection, and the GPU-readiness gate remain
+outstanding.
 
 Gate: GROMM CPU smoke test, model review, and GPU-readiness review pass.
 
@@ -614,19 +712,74 @@ Run all daily targets and native baselines from 2023 through the dataset's last
 eligible origin. Resolve target notional and cap conventions using 2022 before
 starting this stage.
 
+The production results schema and all four agreed ex-post risk functionals are
+implemented. A completed run is rejected if any eligible origin, target,
+dataset identity, run identity, convergence gate, or cap count is missing or
+inconsistent. The failed SANOS-LV `production-v1` is retained as a numerical
+diagnostic; the row-scaled `production-v2` run completed all 611 eligible
+origins and wrote 12,220 target records. Covariance and historical-SANOS
+production runs are resumable and remain in progress. The versioned daily
+production matrix contains 53 unique cases: 21 runnable native CPU cases, two
+staged published-setting GPU cases awaiting the generated-model GPU-readiness
+gate, and 30 explicitly blocked rolling-generated or GROMM cases. No blocked
+case is silently emitted as a launch command.
+
 Gate: interim results quant review passes.
 
-### Phase 8: weekly engines
+### Phase 8: weekly engines (mechanical gate complete)
 
 Implement frozen-weekly and restarted-weekly episodes, fixed synthetic
 expiry-date/cash-strike books, daily rebalancing, variance, and barrier claims.
 
 Gate: timing, expiry, and overlapping-episode tests pass.
 
+The common five-session engine, target catalogue, frozen cash-strike replay,
+daily rebalancing, cash settlement, first-later-expiry liquidation, and
+overlapping-origin enumeration pass focused tests and independent quant review.
+The settlement convention has subsequently been hardened to use the inception
+forward curve represented by the SANOS and DLV states; the rolling-forward
+alternative remains a diagnostic. Frozen/restarted fit identities, exact
+rolling-window information facades, final SANOS-LV common-price review, and
+overlap-aware results inference now pass their focused gates. GROMM, SANOS-LV,
+historical SANOS, VolGAN, and diffusion weekly adapters are implemented at
+CPU-smoke level; production execution remains outstanding. The adapter supplies
+the predictable realized path prefix and prior positions to a restarted fit,
+so path-dependent prices cannot be computed from an information-incomplete
+fit call; frozen fits still occur only once at episode inception.
+
 ### Phase 9: historical and published baselines
 
 Add historical SANOS, VolGAN, and diffusion baselines. Reproduce public settings
 before rolling retraining.
+
+Historical SANOS now has a model-specific daily implementation; its
+mean-volatility cost-lasso is solved as an exact CLARABEL SOCP rather than by an
+unstable smooth line search. VolGAN and diffusion have exact within-fit restart
+checkpoints and a fixed-source rolling-update path. One immutable checkpoint
+trained strictly before evaluation initializes every rolling origin. Its file
+hash and training end date are checkpointed, source dates must be strictly
+earlier than current training dates, and current-window normalization is
+analytically rebased without changing the source model's economic mapping.
+Update epochs are selected from precommitted candidates on 2022-only validation
+origins with the one-standard-error rule. The independent generated rolling
+warm-start quant review passes with no correctness blockers. The production
+runs and managed-GPU VRAM, timing, batch-invariance, and restart evidence remain
+outstanding. The production matrix
+pins one immutable initializer hash across every rolling origin, while each
+fit verifies the warm-start and fine-tuning-base hashes before and after load.
+Diffusion base checkpoints additionally carry a shared semantic-geometry
+identity, preventing same-shaped but economically different transformer or
+surface configurations from loading silently.
+
+The first full-geometry managed-GPU readiness origin now passes. CPU preflight
+pins and authenticates the target-notional artifact before allocation; the
+2023-01-17 AD-Seq-Vol gate then produced all 20 target results from 4,096
+scenarios in 158.3 seconds with zero cap hits or nonconvergence and 2,636 MiB
+observed VRAM. An interrupted epoch checkpoint resumed successfully after the
+restart loader was corrected to restore CPU RNG state on CPU. The detailed
+evidence is recorded in
+`reports/2026-10-12-generated-gpu-readiness.md`. Production-scale generated
+runs and batch-invariance evidence remain outstanding.
 
 Gate: one model-specific review and standalone smoke test per baseline pass.
 
@@ -676,11 +829,10 @@ deep hedging, or GPU execution.
 The following do not block the CPU vertical slice but must be resolved before
 the full out-of-sample evaluation:
 
-1. Confirm the episode risk unit based on inception ATM spot volatility.
-2. Confirm the proposed target-notional utilization rule.
-3. Define the large numerical position cap.
-4. Define the spot-cap convention; display-size caps remain internal-only.
-5. Fix the four deep-hedging architecture candidates.
-6. Fix the precise eigenvalue tolerance for rolling PCA subspace alignment.
-7. Confirm the barrier reference level convention as normalized inception
-   spot/forward.
+1. Fix the four deep-hedging architecture candidates after reconciling the
+   hedging design with `quantdata/gromm2`.
+
+The episode risk unit, target-notional rule, 1,000-unit numerical position cap,
+common spot-cap convention, statistical PCA alignment tolerance, and
+inception-forward barrier reference are resolved in the implementation and
+their dated review or calibration reports.

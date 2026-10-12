@@ -167,6 +167,10 @@ def _write_minimal_dataset(directory: Path) -> None:
         json.dumps({"schema": HEDGING_PUBLIC_SCHEMA}), encoding="utf-8"
     )
     (directory / "README.md").write_text("fixture\n", encoding="utf-8")
+    (directory / "DATA_DICTIONARY.md").write_text(
+        "fixture dictionary\n",
+        encoding="utf-8",
+    )
     checksums = {filename: _sha256(directory / filename) for filename in CHECKSUM_FILES}
     (directory / "manifest.json").write_text(
         json.dumps(
@@ -174,9 +178,9 @@ def _write_minimal_dataset(directory: Path) -> None:
                 "schema": HEDGING_PUBLIC_SCHEMA,
                 "distribution": "public_candidate",
                 "num_dates": 1,
-                "num_instruments": 1,
-                "num_paper_retained_instruments": 1,
-                "num_observation_hedge_nms_instruments": 1,
+                "num_quote_side_books": 1,
+                "num_paper_retained_quote_side_books": 1,
+                "num_observation_hedge_nms_quote_side_books": 1,
                 "generator_code_sha256": {"fixture.py": "0" * 64},
                 "generator_worktree_dirty": True,
                 "checksums": checksums,
@@ -221,4 +225,19 @@ def test_public_dataset_detects_model_price_tampering(tmp_path: Path) -> None:
     )
     frame.write_parquet(path)
     with pytest.raises(AssertionError):
+        validate_public_dataset(tmp_path, verify_checksums=False)
+
+
+def test_public_dataset_detects_population_mask_tampering(tmp_path: Path) -> None:
+    _write_minimal_dataset(tmp_path)
+    path = tmp_path / "instruments.parquet"
+    frame = pl.read_parquet(path).with_columns(
+        pl.Series(
+            "in_paper_retained_population",
+            [[False]],
+            dtype=pl.List(pl.Boolean),
+        )
+    )
+    frame.write_parquet(path)
+    with pytest.raises(ValueError, match="num_paper_retained_quote_side_books"):
         validate_public_dataset(tmp_path, verify_checksums=False)
