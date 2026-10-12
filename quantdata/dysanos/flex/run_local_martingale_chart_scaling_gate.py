@@ -27,6 +27,7 @@ from pathlib import Path
 import torch
 
 from quantdata.dysanos.flex.config import (
+    FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig,
     FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig,
 )
 from quantdata.dysanos.flex.lvsq_drift import (
@@ -43,7 +44,7 @@ from quantdata.dysanos.flex.model import NativeParameters, raw_from_native_param
 from quantdata.dysanos.flex.sanos import FlexSanosDecoder, SanosSurface
 from quantdata.torch import BaseEnvironment
 
-SCHEMA = "dysanos-local-martingale-chart-scaling-gate-v1"
+SCHEMA = "dysanos-local-martingale-chart-scaling-gate-v2"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -58,6 +59,8 @@ class Config:
     annualized_forward_log_volatility: float = 0.05
     annualized_spot_volatility: float = 0.10
     derivative_step: float = 1.0e-3
+    fixed_relative_grid: bool = False
+    fixed_backbone_annualized_volatility: float | None = None
 
 
 def _arguments() -> Config:
@@ -73,6 +76,12 @@ def _arguments() -> Config:
     )
     parser.add_argument("--annualized-spot-volatility", type=float, default=0.10)
     parser.add_argument("--derivative-step", type=float, default=1.0e-3)
+    parser.add_argument("--fixed-relative-grid", action="store_true")
+    parser.add_argument(
+        "--fixed-backbone-annualized-volatility",
+        type=float,
+        default=None,
+    )
     arguments = parser.parse_args()
     return Config(
         output=arguments.output.resolve(),
@@ -86,6 +95,10 @@ def _arguments() -> Config:
         ),
         annualized_spot_volatility=arguments.annualized_spot_volatility,
         derivative_step=arguments.derivative_step,
+        fixed_relative_grid=arguments.fixed_relative_grid,
+        fixed_backbone_annualized_volatility=(
+            arguments.fixed_backbone_annualized_volatility
+        ),
     )
 
 
@@ -101,6 +114,14 @@ def _validate_config(config: Config) -> None:
     )
     if any(not math.isfinite(value) or value <= 0.0 for value in positive):
         raise ValueError("time steps, volatilities, and derivative step must be positive")
+    if (
+        config.fixed_backbone_annualized_volatility is not None
+        and (
+            not math.isfinite(config.fixed_backbone_annualized_volatility)
+            or config.fixed_backbone_annualized_volatility <= 0.0
+        )
+    ):
+        raise ValueError("fixed backbone annualized volatility must be positive")
     if config.num_inner_strikes != 6:
         raise ValueError("the v1 gate uses its explicit six-node reference state")
     if not 1 <= config.num_chart_strikes <= config.num_inner_strikes:
@@ -128,13 +149,12 @@ def _problem(
     # The gate reports excursions beyond the admissible chart instead of
     # stopping inside the decoder's debug assertions on the first excursion.
     env = BaseEnvironment(precision=64, device="cpu", debug=False)
-    geometry = FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig(
+    moving_geometry = FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig(
         num_inner_strikes=config.num_inner_strikes,
         num_model_expiries=3,
         explicit_model_business_dtes=(1.0, 5.0, 10.0),
         nms_range=(-1.5, 1.0),
     )
-    decoder = FlexSanosDecoder(env, geometry=geometry)
     parameters = NativeParameters(
         dlvsqs=torch.tensor(
             [[
@@ -147,6 +167,39 @@ def _problem(
         forward_vols=torch.tensor([[0.22, 0.24, 0.25]], dtype=env.fdtype),
         eta=torch.tensor([[0.18, 0.24, 0.24]], dtype=env.fdtype),
     )
+    if config.fixed_relative_grid:
+        moving_decoder = FlexSanosDecoder(env, geometry=moving_geometry)
+        moving_surface = moving_decoder.forward_batch(
+            dlvsqs=parameters.dlvsqs,
+            forward_vols=parameters.forward_vols,
+            eta=parameters.eta,
+        )
+        fixed_inner = tuple(
+            float(value)
+            for value in moving_surface.support_strikes[0, 0, 1:-1]
+        )
+        geometry = FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig(
+            num_inner_strikes=config.num_inner_strikes,
+            num_model_expiries=3,
+            explicit_model_business_dtes=(1.0, 5.0, 10.0),
+            nms_range=(-1.5, 1.0),
+            inner_relative_strikes=fixed_inner,
+        )
+    else:
+        geometry = moving_geometry
+    decoder = FlexSanosDecoder(env, geometry=geometry)
+    if config.fixed_backbone_annualized_volatility is not None:
+        parameters = NativeParameters(
+            dlvsqs=parameters.dlvsqs,
+            forward_vols=parameters.forward_vols,
+            eta=_fixed_backbone_eta(
+                decoder,
+                forward_vols=parameters.forward_vols,
+                annualized_volatility=(
+                    config.fixed_backbone_annualized_volatility
+                ),
+            ),
+        )
     raw = raw_from_native_parameters(parameters, geometry=geometry)
     surface = decoder.forward_batch(
         dlvsqs=parameters.dlvsqs,
@@ -177,17 +230,57 @@ def _forward_loadings(config: Config, *, dtype: torch.dtype) -> torch.Tensor:
     )
 
 
+def _fixed_backbone_eta(
+    decoder: FlexSanosDecoder,
+    *,
+    forward_vols: torch.Tensor,
+    annualized_volatility: float,
+) -> torch.Tensor:
+    """Return eta giving Black total vol ``sigma * sqrt(T)`` exactly."""
+
+    target_total = annualized_volatility * torch.sqrt(
+        decoder.model_expiries_y
+    )
+    backbone_forward = torch.diff(
+        target_total,
+        prepend=torch.zeros_like(target_total[:1]),
+    ) / torch.sqrt(decoder.model_dts_y)
+    eta = backbone_forward.unsqueeze(0) / forward_vols
+    geometry = decoder.geometry
+    if not bool(
+        torch.all(
+            (eta >= geometry.min_eta) & (eta <= geometry.max_eta)
+        )
+    ):
+        raise ValueError(
+            "fixed backbone requires eta outside the configured bounds: "
+            f"[{float(torch.amin(eta))}, {float(torch.amax(eta))}]"
+        )
+    return eta
+
+
 def _decoder(
     env: BaseEnvironment,
     *,
     num_inner_strikes: int,
     business_dtes: tuple[float, ...],
+    fixed_inner_relative_strikes: tuple[float, ...] | None,
 ) -> FlexSanosDecoder:
-    geometry = FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig(
-        num_inner_strikes=num_inner_strikes,
-        num_model_expiries=len(business_dtes),
-        explicit_model_business_dtes=business_dtes,
-        nms_range=(-1.5, 1.0),
+    geometry = (
+        FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig(
+            num_inner_strikes=num_inner_strikes,
+            num_model_expiries=len(business_dtes),
+            explicit_model_business_dtes=business_dtes,
+            nms_range=(-1.5, 1.0),
+            inner_relative_strikes=fixed_inner_relative_strikes,
+        )
+        if fixed_inner_relative_strikes is not None
+        else FrontTermEtaSharedStrikeCappedUnboundedDlvFlexGeometryConfig(
+            num_inner_strikes=num_inner_strikes,
+            num_model_expiries=len(business_dtes),
+            explicit_model_business_dtes=business_dtes,
+            nms_range=(-1.5, 1.0),
+        )
     )
     return FlexSanosDecoder(env, geometry=geometry)
 
@@ -198,6 +291,7 @@ def _successor_coordinates(
     surface: SanosSurface,
     *,
     business_day_fraction: float,
+    fixed_backbone_annualized_volatility: float | None = None,
 ) -> tuple[FlexSanosDecoder, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Subtract elapsed front variance and return the residual DYSANOS clock."""
 
@@ -213,6 +307,14 @@ def _successor_coordinates(
         env,
         num_inner_strikes=decoder.geometry.num_inner_strikes,
         business_dtes=tuple(float(value) for value in residual_dtes),
+        fixed_inner_relative_strikes=(
+            decoder.geometry.inner_relative_strikes
+            if isinstance(
+                decoder.geometry,
+                FixedRelativeStrikeCappedUnboundedDlvFlexGeometryConfig,
+            )
+            else None
+        ),
     )
     elapsed_fraction = torch.as_tensor(
         business_day_fraction,
@@ -229,13 +331,18 @@ def _successor_coordinates(
             0.0,
         )
     )
-    backbone_total = torch.sqrt(
-        torch.clamp_min(
-            surface.backbone_total_vols[:, live].square()
-            - backbone_elapsed_variance,
-            0.0,
+    if fixed_backbone_annualized_volatility is None:
+        backbone_total = torch.sqrt(
+            torch.clamp_min(
+                surface.backbone_total_vols[:, live].square()
+                - backbone_elapsed_variance,
+                0.0,
+            )
         )
-    )
+    else:
+        backbone_total = fixed_backbone_annualized_volatility * torch.sqrt(
+            successor.model_expiries_y
+        ).unsqueeze(0)
     sqrt_dts = torch.sqrt(successor.model_dts_y)
     forward = torch.diff(
         support_total,
@@ -593,6 +700,9 @@ def _run_step(
         decoder,
         surface,
         business_day_fraction=business_day_fraction,
+        fixed_backbone_annualized_volatility=(
+            config.fixed_backbone_annualized_volatility
+        ),
     )
     live_strikes = cash_strikes[:, live]
     live_base_calls = base_calls[:, live]
@@ -630,7 +740,13 @@ def _run_step(
         probabilities[:, None] * forward_vols / successor_forward,
         dim=0,
     )
-    eta = successor_eta.expand(branches, -1)
+    eta = (
+        (
+            successor_forward * successor_eta
+        ).expand(branches, -1) / forward_vols
+        if config.fixed_backbone_annualized_volatility is not None
+        else successor_eta.expand(branches, -1)
+    )
     fixed_call_shock = fixed_calls - base_calls
     spot_call_shock = cash_delta.expand(branches, -1, -1) * (
         sqrt_h * (innovations @ spot_loadings)[:, None, None]
@@ -828,6 +944,13 @@ def run(config: Config) -> dict[str, object]:
         cash_strikes=cash_strikes,
     )
     forward_loadings = _forward_loadings(config, dtype=surface.densities.dtype)
+    if (
+        config.fixed_relative_grid
+        and config.fixed_backbone_annualized_volatility is not None
+    ):
+        # Forward volatility only moves the support and Black backbone in this
+        # construction.  Once both are frozen it is a redundant coordinate.
+        forward_loadings = torch.zeros_like(forward_loadings)
     spot_loadings = _spot_loadings(config, dtype=surface.densities.dtype)
 
     implicit = _implicit_diagnostics(
@@ -883,7 +1006,12 @@ def run(config: Config) -> dict[str, object]:
             ),
             "spot_law": "exactly mean-one exponential Rademacher branch",
             "native_free_coordinates": (
-                "stochastic shared support and Black backbone through forward vols"
+                "fixed spot-relative support and deterministic Black backbone"
+                if (
+                    config.fixed_relative_grid
+                    and config.fixed_backbone_annualized_volatility is not None
+                )
+                else "stochastic shared support and Black backbone through forward vols"
             ),
             "inverse": (
                 "minimum-relative-change fixed-cash chart followed by "

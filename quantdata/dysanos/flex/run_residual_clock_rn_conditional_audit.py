@@ -28,6 +28,7 @@ _REPORT_SCHEMA = "dysanos-residual-clock-rn-conditional-audit-report-v2"
 _NUM_EXPIRIES = 4
 _NUM_STRIKES = 12
 _NUM_INSTRUMENTS = 1 + _NUM_EXPIRIES * _NUM_STRIKES
+_LINE_SEARCH_CANDIDATES_PER_PASS = 3
 
 
 @version("0.1", dependencies=[FeedForwardConfig])
@@ -134,6 +135,7 @@ class ResidualClockRnPolicy(BaseModel):
         option_prices: torch.Tensor,
         *,
         calendar_time: torch.Tensor,
+        include_deep: bool = True,
     ) -> torch.Tensor:
         """Return uncapped actions ordered as spot, then expiry-major options."""
 
@@ -152,20 +154,53 @@ class ResidualClockRnPolicy(BaseModel):
             option_prices,
             torch.finfo(option_prices.dtype).tiny,
         )
-        normalized_state = (states - self.state_mean) / self.state_scale
         normalized_prices = (torch.log(safe_prices) - self.log_price_mean) / (self.log_price_scale)
-        features = torch.cat(
-            (
-                normalized_state[:, None].expand(-1, self.config.num_expiries, -1),
+        state_stop = self.config.state_size
+        price_stop = state_stop + self.config.num_strikes
+        deep_heads: torch.Tensor | None = None
+        if include_deep:
+            first = self.network.I0
+            state_weight = first.weight[:, :state_stop]
+            normalized_state_weight = state_weight / self.state_scale
+            state_bias = first.bias - torch.mv(
+                state_weight,
+                self.state_mean / self.state_scale,
+            )
+            shared_projection = torch.nn.functional.linear(
+                states,
+                normalized_state_weight,
+                state_bias,
+            )
+            shared_projection = shared_projection + (calendar_time[:, None] * first.weight[:, -1])
+            price_projection = torch.nn.functional.linear(
                 normalized_prices,
-                calendar_time[:, None, None].expand(-1, self.config.num_expiries, 1),
-            ),
+                first.weight[:, state_stop:price_stop],
+                bias=None,
+            )
+            deep_heads = shared_projection[:, None] + price_projection
+            for layer in self.network.In:
+                deep_heads = layer(self.network.activation(deep_heads))
+
+        skip_weight = torch.stack(tuple(layer.weight for layer in self.linear_skip))
+        skip_bias = torch.stack(tuple(layer.bias for layer in self.linear_skip))
+        skip_state_weight = skip_weight[..., :state_stop]
+        normalized_skip_state_weight = skip_state_weight / self.state_scale
+        normalized_skip_state_bias = skip_bias - torch.sum(
+            skip_state_weight * (self.state_mean / self.state_scale),
             dim=-1,
         )
-        raw_heads = self.network(features) + torch.stack(
-            tuple(layer(features[:, expiry]) for expiry, layer in enumerate(self.linear_skip)),
-            dim=1,
+        skip_heads = torch.nn.functional.linear(
+            states,
+            normalized_skip_state_weight.flatten(0, 1),
+            normalized_skip_state_bias.flatten(),
+        ).reshape(observations, self.config.num_expiries, -1)
+        skip_heads = skip_heads + torch.einsum(
+            "bes,eos->beo",
+            normalized_prices,
+            skip_weight[..., state_stop:price_stop],
         )
+        skip_heads = skip_heads + calendar_time[:, None, None] * skip_weight[None, ..., -1]
+        raw_heads = skip_heads if deep_heads is None else deep_heads + skip_heads
         spot = torch.sum(raw_heads[..., :1], dim=1)
         options = raw_heads[..., 1:].reshape(observations, -1)
         return torch.cat((spot, options), dim=1)
@@ -227,9 +262,7 @@ def _resource_snapshot(output: Path) -> dict[str, Any]:
             "source": "gpuctl",
             "health": "WARN",
             "checks": [],
-            "error": (
-                f"gpuctl resources exited with status {process.returncode}: {detail}"
-            ),
+            "error": (f"gpuctl resources exited with status {process.returncode}: {detail}"),
         }
     try:
         payload = json.loads(process.stdout)
@@ -249,9 +282,7 @@ def _resource_snapshot(output: Path) -> dict[str, Any]:
             "error": "gpuctl resources JSON does not contain a checks list",
         }
     health_values = {
-        str(check.get("health", "ERROR"))
-        for check in checks
-        if isinstance(check, Mapping)
+        str(check.get("health", "ERROR")) for check in checks if isinstance(check, Mapping)
     }
     if health_values & {"STOP", "UNAVAILABLE", "ERROR"}:
         health = "STOP"
@@ -661,6 +692,8 @@ def _actions_for_path_batch(
     policy: ResidualClockRnPolicy,
     states: torch.Tensor,
     prices: torch.Tensor,
+    *,
+    affine_only: bool = False,
 ) -> torch.Tensor:
     paths, steps, state_size = states.shape
     if state_size != policy.config.state_size:
@@ -671,6 +704,7 @@ def _actions_for_path_batch(
         states.reshape(paths * steps, state_size),
         prices.reshape(paths * steps, _NUM_EXPIRIES, _NUM_STRIKES),
         calendar_time=calendar,
+        include_deep=not affine_only,
     )
     return action.reshape(paths, steps, _NUM_INSTRUMENTS)
 
@@ -680,8 +714,15 @@ def _daily_gain(
     states: torch.Tensor,
     prices: torch.Tensor,
     returns: torch.Tensor,
+    *,
+    affine_only: bool = False,
 ) -> torch.Tensor:
-    action = _actions_for_path_batch(policy, states, prices)
+    action = _actions_for_path_batch(
+        policy,
+        states,
+        prices,
+        affine_only=affine_only,
+    )
     return torch.sum(action * returns - 0.5 * action.square(), dim=-1)
 
 
@@ -713,8 +754,14 @@ def _daily_squared_reward(
     returns: torch.Tensor,
     *,
     lambda_second_moment: float,
+    affine_only: bool = False,
 ) -> torch.Tensor:
-    action = _actions_for_path_batch(policy, states, prices)
+    action = _actions_for_path_batch(
+        policy,
+        states,
+        prices,
+        affine_only=affine_only,
+    )
     return squared_second_moment_reward(
         action,
         returns,
@@ -762,15 +809,105 @@ def _write_objective_cache(
     path: Path,
     progress: _Progress,
     progress_payload: Mapping[str, Any],
+    backward_squared: bool = False,
+    affine_only: bool = False,
 ) -> np.ndarray:
     if diagnostic not in {"entropy", "squared"}:
         raise ValueError(f"unknown conditional diagnostic {diagnostic!r}")
+    if backward_squared and diagnostic != "squared":
+        raise ValueError("the fused backward pass is available only for squared reward")
     temporary = path.with_name(f".{path.name}.tmp")
     objective_map = np.lib.format.open_memmap(
         temporary,
         mode="w+",
         dtype=np.float64,
         shape=(stop - start, cache.num_steps),
+    )
+    policy.eval()
+    gradient_context = torch.enable_grad if backward_squared else torch.no_grad
+    observation_count = (stop - start) * cache.num_steps
+    with gradient_context():
+        for first in range(start, stop, batch_size):
+            last = min(first + batch_size, stop)
+            states, prices, returns = _load_batch(
+                cache,
+                first=first,
+                last=last,
+                device=policy.env.device,
+            )
+            if diagnostic == "entropy":
+                value = _daily_gain(
+                    policy,
+                    states,
+                    prices,
+                    returns,
+                    affine_only=affine_only,
+                )
+            else:
+                value = _daily_squared_reward(
+                    policy,
+                    states,
+                    prices,
+                    returns,
+                    lambda_second_moment=lambda_second_moment,
+                    affine_only=affine_only,
+                )
+            if backward_squared:
+                (-torch.sum(value) / observation_count).backward()
+            objective_map[first - start : last - start] = value.detach().double().cpu().numpy()
+            progress.emit(
+                {
+                    **progress_payload,
+                    "work": (
+                        "objective-forward-gradient" if backward_squared else "objective-forward"
+                    ),
+                    "completed_paths": last - start,
+                    "total_paths": stop - start,
+                }
+            )
+    objective_map.flush()
+    del objective_map
+    os.replace(temporary, path)
+    return np.load(path, mmap_mode="r", allow_pickle=False)
+
+
+def _write_line_search_objective_caches(
+    policy: ResidualClockRnPolicy,
+    cache: ResidualClockRnPathCache,
+    *,
+    diagnostic: str,
+    lambda_second_moment: float,
+    start: int,
+    stop: int,
+    batch_size: int,
+    path: Path,
+    parameters: tuple[torch.nn.Parameter, ...],
+    original_parameters: tuple[torch.Tensor, ...],
+    step_sizes: tuple[float, ...],
+    affine_only: bool,
+    progress: _Progress,
+    progress_payload: Mapping[str, Any],
+) -> tuple[np.ndarray, ...]:
+    """Evaluate ordered line-search candidates while each batch remains resident."""
+
+    if not step_sizes:
+        raise ValueError("line-search candidate group must not be empty")
+    candidate_paths = tuple(
+        path.with_name(f"{path.stem}-line-search-{index}{path.suffix}")
+        for index in range(len(step_sizes))
+    )
+    temporary_paths = tuple(
+        candidate_path.with_name(f".{candidate_path.name}.tmp")
+        for candidate_path in candidate_paths
+    )
+    objective_maps = tuple(
+        np.lib.format.open_memmap(
+            temporary_path,
+            mode="w+",
+            dtype=np.float64,
+            shape=(stop - start, cache.num_steps),
+        )
+        for temporary_path in temporary_paths
     )
     policy.eval()
     with torch.no_grad():
@@ -782,29 +919,62 @@ def _write_objective_cache(
                 last=last,
                 device=policy.env.device,
             )
-            if diagnostic == "entropy":
-                value = _daily_gain(policy, states, prices, returns)
-            else:
-                value = _daily_squared_reward(
-                    policy,
-                    states,
-                    prices,
-                    returns,
-                    lambda_second_moment=lambda_second_moment,
+            for candidate_index, (step_size, objective_map) in enumerate(
+                zip(step_sizes, objective_maps, strict=True)
+            ):
+                for parameter, original in zip(
+                    parameters,
+                    original_parameters,
+                    strict=True,
+                ):
+                    if parameter.grad is None:
+                        parameter.copy_(original)
+                    else:
+                        parameter.copy_(original - step_size * parameter.grad)
+                if diagnostic == "entropy":
+                    value = _daily_gain(
+                        policy,
+                        states,
+                        prices,
+                        returns,
+                        affine_only=affine_only,
+                    )
+                elif diagnostic == "squared":
+                    value = _daily_squared_reward(
+                        policy,
+                        states,
+                        prices,
+                        returns,
+                        lambda_second_moment=lambda_second_moment,
+                        affine_only=affine_only,
+                    )
+                else:
+                    raise ValueError(f"unknown conditional diagnostic {diagnostic!r}")
+                objective_map[first - start : last - start] = value.double().cpu().numpy()
+                progress.emit(
+                    {
+                        **progress_payload,
+                        "work": "line-search-objective-forward",
+                        "candidate_in_pass": candidate_index + 1,
+                        "candidates_in_pass": len(step_sizes),
+                        "step_size": step_size,
+                        "completed_paths": last - start,
+                        "total_paths": stop - start,
+                    }
                 )
-            objective_map[first - start : last - start] = value.double().cpu().numpy()
-            progress.emit(
-                {
-                    **progress_payload,
-                    "work": "objective-forward",
-                    "completed_paths": last - start,
-                    "total_paths": stop - start,
-                }
-            )
-    objective_map.flush()
-    del objective_map
-    os.replace(temporary, path)
-    return np.load(path, mmap_mode="r", allow_pickle=False)
+    for objective_map in objective_maps:
+        objective_map.flush()
+    del objective_maps
+    for temporary_path, candidate_path in zip(
+        temporary_paths,
+        candidate_paths,
+        strict=True,
+    ):
+        os.replace(temporary_path, candidate_path)
+    return tuple(
+        np.load(candidate_path, mmap_mode="r", allow_pickle=False)
+        for candidate_path in candidate_paths
+    )
 
 
 def _gradient_statistics(
@@ -936,26 +1106,43 @@ def _fit_stage(
             force=True,
         )
 
+    if affine_only:
+        final_layer = policy.network.I0 if len(policy.network.In) == 0 else policy.network.In[-1]
+        deep_final_is_zero = bool(torch.count_nonzero(final_layer.weight).item() == 0)
+        if final_layer.bias is not None:
+            deep_final_is_zero = deep_final_is_zero and bool(
+                torch.count_nonzero(final_layer.bias).item() == 0
+            )
+        if not deep_final_is_zero:
+            raise RuntimeError("affine training requires an identically zero deep head")
+
+    reusable_entropy_values: np.ndarray | None = None
     for epoch in range(first_epoch, epochs):
         epoch_started = time.monotonic()
-        objective_values = _write_objective_cache(
-            policy,
-            cache,
-            diagnostic=diagnostic,
-            lambda_second_moment=lambda_second_moment,
-            start=start,
-            stop=stop,
-            batch_size=batch_size,
-            path=objective_path,
-            progress=progress,
-            progress_payload={
-                "stage": "train",
-                "diagnostic": diagnostic,
-                "fit_stage": stage,
-                "epoch": epoch + 1,
-                "total_epochs": epochs,
-            },
-        )
+        policy.zero_grad(set_to_none=True)
+        if diagnostic == "entropy" and reusable_entropy_values is not None:
+            objective_values = reusable_entropy_values
+        else:
+            objective_values = _write_objective_cache(
+                policy,
+                cache,
+                diagnostic=diagnostic,
+                lambda_second_moment=lambda_second_moment,
+                start=start,
+                stop=stop,
+                batch_size=batch_size,
+                path=objective_path,
+                progress=progress,
+                progress_payload={
+                    "stage": "train",
+                    "diagnostic": diagnostic,
+                    "fit_stage": stage,
+                    "epoch": epoch + 1,
+                    "total_epochs": epochs,
+                },
+                backward_squared=diagnostic == "squared",
+                affine_only=affine_only,
+            )
         loss, tilt_ess = _objective_loss_and_ess(
             objective_values,
             diagnostic=diagnostic,
@@ -979,9 +1166,8 @@ def _fit_stage(
                         dtype=np.float64,
                     )
                 )
-        policy.zero_grad(set_to_none=True)
-        observation_count = (stop - start) * cache.num_steps
-        for first in range(start, stop, batch_size):
+        gradient_ranges = range(start, stop, batch_size) if diagnostic == "entropy" else ()
+        for first in gradient_ranges:
             last = min(first + batch_size, stop)
             states, prices, returns = _load_batch(
                 cache,
@@ -989,30 +1175,26 @@ def _fit_stage(
                 last=last,
                 device=policy.env.device,
             )
-            if diagnostic == "entropy":
-                gain_tensor = _daily_gain(policy, states, prices, returns)
-                stored_gain = np.asarray(
-                    objective_values[first - start : last - start],
-                    dtype=np.float64,
-                )
-                if maximum_score is None or exponential_sum is None:
-                    raise AssertionError("entropy normalization was not initialized")
-                probability = np.exp(-stored_gain - maximum_score) / exponential_sum
-                probability_tensor = torch.as_tensor(
-                    probability,
-                    dtype=gain_tensor.dtype,
-                    device=gain_tensor.device,
-                )
-                torch.sum(-probability_tensor * gain_tensor).backward()
-            else:
-                reward_tensor = _daily_squared_reward(
-                    policy,
-                    states,
-                    prices,
-                    returns,
-                    lambda_second_moment=lambda_second_moment,
-                )
-                (-torch.sum(reward_tensor) / observation_count).backward()
+            gain_tensor = _daily_gain(
+                policy,
+                states,
+                prices,
+                returns,
+                affine_only=affine_only,
+            )
+            stored_gain = np.asarray(
+                objective_values[first - start : last - start],
+                dtype=np.float64,
+            )
+            if maximum_score is None or exponential_sum is None:
+                raise AssertionError("entropy normalization was not initialized")
+            probability = np.exp(-stored_gain - maximum_score) / exponential_sum
+            probability_tensor = torch.as_tensor(
+                probability,
+                dtype=gain_tensor.dtype,
+                device=gain_tensor.device,
+            )
+            torch.sum(-probability_tensor * gain_tensor).backward()
             progress.emit(
                 {
                     "stage": "train",
@@ -1033,21 +1215,20 @@ def _fit_stage(
         accepted_step = 0.0
         candidate_loss = loss
         candidate_ess = tilt_ess
+        candidate_values = objective_values
         line_search_evaluations = 0
-        step_size = learning_rate
-        for line_search_index in range(maximum_line_search_steps):
-            line_search_evaluations = line_search_index + 1
-            with torch.no_grad():
-                for parameter, original in zip(
-                    parameters,
-                    original_parameters,
-                    strict=True,
-                ):
-                    if parameter.grad is None:
-                        parameter.copy_(original)
-                    else:
-                        parameter.copy_(original - step_size * parameter.grad)
-            candidate_values = _write_objective_cache(
+        step_sizes = tuple(
+            learning_rate * backtracking_factor**index for index in range(maximum_line_search_steps)
+        )
+        for group_first in range(
+            0,
+            maximum_line_search_steps,
+            _LINE_SEARCH_CANDIDATES_PER_PASS,
+        ):
+            group_step_sizes = step_sizes[
+                group_first : group_first + _LINE_SEARCH_CANDIDATES_PER_PASS
+            ]
+            group_values = _write_line_search_objective_caches(
                 policy,
                 cache,
                 diagnostic=diagnostic,
@@ -1056,6 +1237,10 @@ def _fit_stage(
                 stop=stop,
                 batch_size=batch_size,
                 path=objective_path,
+                parameters=parameters,
+                original_parameters=original_parameters,
+                step_sizes=group_step_sizes,
+                affine_only=affine_only,
                 progress=progress,
                 progress_payload={
                     "stage": "line-search",
@@ -1063,19 +1248,38 @@ def _fit_stage(
                     "fit_stage": stage,
                     "epoch": epoch + 1,
                     "total_epochs": epochs,
-                    "line_search_evaluation": line_search_evaluations,
-                    "step_size": step_size,
+                    "first_line_search_evaluation": group_first + 1,
                 },
             )
-            candidate_loss, candidate_ess = _objective_loss_and_ess(
-                candidate_values,
-                diagnostic=diagnostic,
-                batch_size=batch_size,
-            )
-            if candidate_loss < loss - minimum_improvement:
-                accepted_step = step_size
+            for step_size, trial_values in zip(
+                group_step_sizes,
+                group_values,
+                strict=True,
+            ):
+                line_search_evaluations += 1
+                trial_loss, trial_ess = _objective_loss_and_ess(
+                    trial_values,
+                    diagnostic=diagnostic,
+                    batch_size=batch_size,
+                )
+                candidate_loss = trial_loss
+                candidate_ess = trial_ess
+                if trial_loss < loss - minimum_improvement:
+                    accepted_step = step_size
+                    candidate_values = trial_values
+                    with torch.no_grad():
+                        for parameter, original in zip(
+                            parameters,
+                            original_parameters,
+                            strict=True,
+                        ):
+                            if parameter.grad is None:
+                                parameter.copy_(original)
+                            else:
+                                parameter.copy_(original - accepted_step * parameter.grad)
+                    break
+            if accepted_step != 0.0:
                 break
-            step_size *= backtracking_factor
         if accepted_step == 0.0:
             with torch.no_grad():
                 for parameter, original in zip(
@@ -1086,9 +1290,13 @@ def _fit_stage(
                     parameter.copy_(original)
             candidate_loss = loss
             candidate_ess = tilt_ess
+            if diagnostic == "entropy":
+                reusable_entropy_values = objective_values
         elif candidate_loss < best_loss:
             best_loss = candidate_loss
             best_state = _cpu_state_dict(policy)
+        if diagnostic == "entropy" and accepted_step != 0.0:
+            reusable_entropy_values = candidate_values
         record = {
             "epoch": epoch + 1,
             "objective_loss": loss,
@@ -1168,6 +1376,7 @@ def _fit_stage(
             "diagnostic": diagnostic,
             "fit_stage": stage,
         },
+        affine_only=affine_only,
     )
     final_loss, final_ess = _objective_loss_and_ess(
         final_values,

@@ -143,8 +143,15 @@ def test_policy_is_uncapped_shared_deep_plus_expiry_affine_skips() -> None:
         torch.ones(2, 4, 12),
         calendar_time=torch.tensor([0.0, 1.0]),
     )
+    affine_action = model(
+        torch.zeros(2, state_size),
+        torch.ones(2, 4, 12),
+        calendar_time=torch.tensor([0.0, 1.0]),
+        include_deep=False,
+    )
 
     assert action.shape == (2, 49)
+    torch.testing.assert_close(action, affine_action)
     torch.testing.assert_close(action[:, 0], torch.full((2,), 10.0))
     expected_options = torch.repeat_interleave(
         torch.arange(1.0, 5.0),
@@ -153,6 +160,64 @@ def test_policy_is_uncapped_shared_deep_plus_expiry_affine_skips() -> None:
     torch.testing.assert_close(action[:, 1:], expected_options[None].expand(2, -1))
     assert model.config.network.num_depth == 2
     assert model.config.network.num_width == 128
+
+
+def test_factorized_policy_forward_matches_materialized_feature_tensor() -> None:
+    generator = torch.Generator().manual_seed(47)
+    state_size = 7
+    env = BaseEnvironment(precision=64, device="cpu", debug=False)
+    model = ResidualClockRnPolicy(
+        env,
+        config=ResidualClockRnPolicyConfig(label="factorized-test", state_size=state_size),
+        state_mean=torch.randn(state_size, generator=generator, dtype=torch.float64),
+        state_scale=torch.rand(state_size, generator=generator, dtype=torch.float64) + 0.5,
+        log_price_mean=torch.randn(12, generator=generator, dtype=torch.float64),
+        log_price_scale=torch.rand(12, generator=generator, dtype=torch.float64) + 0.5,
+    )
+    with torch.no_grad():
+        for parameter in model.parameters():
+            parameter.normal_(generator=generator)
+    states = torch.randn(5, state_size, generator=generator, dtype=torch.float64)
+    prices = torch.exp(torch.randn(5, 4, 12, generator=generator, dtype=torch.float64))
+    calendar = torch.rand(5, generator=generator, dtype=torch.float64)
+    normalized_state = (states - model.state_mean) / model.state_scale
+    normalized_prices = (torch.log(prices) - model.log_price_mean) / model.log_price_scale
+    features = torch.cat(
+        (
+            normalized_state[:, None].expand(-1, 4, -1),
+            normalized_prices,
+            calendar[:, None, None].expand(-1, 4, 1),
+        ),
+        dim=-1,
+    )
+    raw_heads = model.network(features) + torch.stack(
+        tuple(layer(features[:, expiry]) for expiry, layer in enumerate(model.linear_skip)),
+        dim=1,
+    )
+    expected = torch.cat(
+        (
+            torch.sum(raw_heads[..., :1], dim=1),
+            raw_heads[..., 1:].reshape(5, -1),
+        ),
+        dim=1,
+    )
+
+    actual = model(states, prices, calendar_time=calendar)
+
+    torch.testing.assert_close(actual, expected, rtol=2.0e-12, atol=2.0e-12)
+    torch.sum(expected.square()).backward()
+    expected_gradients = {
+        name: parameter.grad.detach().clone() for name, parameter in model.named_parameters()
+    }
+    model.zero_grad(set_to_none=True)
+    torch.sum(model(states, prices, calendar_time=calendar).square()).backward()
+    for name, parameter in model.named_parameters():
+        torch.testing.assert_close(
+            parameter.grad,
+            expected_gradients[name],
+            rtol=5.0e-11,
+            atol=5.0e-11,
+        )
 
 
 def test_streaming_normalizers_match_direct_population_moments() -> None:
@@ -404,7 +469,10 @@ def test_one_epoch_smoke_run_writes_both_cross_fit_reports(tmp_path) -> None:
         }
 
 
-def test_backtracking_accepts_only_improving_steps_and_keys_checkpoint(tmp_path) -> None:
+def test_backtracking_accepts_only_improving_steps_and_keys_checkpoint(
+    tmp_path,
+    monkeypatch,
+) -> None:
     cache_path = tmp_path / "cache"
     output_path = tmp_path / "audit"
     cache_path.mkdir()
@@ -439,6 +507,35 @@ def test_backtracking_accepts_only_improving_steps_and_keys_checkpoint(tmp_path)
             assert record["line_search_evaluations"] > 1
             assert 0.0 < record["accepted_step_size"] < 100.0
             assert record["candidate_objective_loss"] < record["objective_loss"]
+
+    reference_output = tmp_path / "audit-single-candidate-pass"
+    monkeypatch.setattr(audit, "_LINE_SEARCH_CANDIDATES_PER_PASS", 1)
+    reference_arguments = parser().parse_args(
+        [
+            *base_arguments[:3],
+            str(reference_output),
+            *base_arguments[4:],
+        ]
+    )
+    run(reference_arguments)
+    reference = json.loads((reference_output / "report.json").read_text(encoding="utf-8"))
+    for diagnostic in ("squared", "entropy"):
+        for fold in ("fold_A_fit", "fold_B_fit"):
+            actual_record = report["conditional_diagnostics"][diagnostic][fold]["affine_final"]
+            reference_record = reference["conditional_diagnostics"][diagnostic][fold][
+                "affine_final"
+            ]
+            assert actual_record["accepted_step_size"] == reference_record["accepted_step_size"]
+            assert (
+                actual_record["line_search_evaluations"]
+                == reference_record["line_search_evaluations"]
+            )
+            assert actual_record["objective_loss"] == pytest.approx(
+                reference_record["objective_loss"]
+            )
+            assert actual_record["candidate_objective_loss"] == pytest.approx(
+                reference_record["candidate_objective_loss"]
+            )
 
     incompatible = parser().parse_args([*base_arguments, "--backtracking-factor", "0.5"])
     with pytest.raises(RuntimeError, match="checkpoint identity mismatch"):

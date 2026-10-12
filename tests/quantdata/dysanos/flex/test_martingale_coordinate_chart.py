@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import torch
 
 from quantdata.dysanos.flex.config import (
@@ -13,6 +15,15 @@ from quantdata.dysanos.flex.martingale_coordinate_chart import (
     decode_martingale_coordinates,
     implicit_linear_system_directional_derivatives,
     recover_density_from_cash_calls,
+)
+from quantdata.dysanos.flex.run_local_martingale_chart_scaling_gate import (
+    Config as ScalingGateConfig,
+)
+from quantdata.dysanos.flex.run_local_martingale_chart_scaling_gate import (
+    _problem as scaling_gate_problem,
+)
+from quantdata.dysanos.flex.run_local_martingale_chart_scaling_gate import (
+    _successor_coordinates,
 )
 from quantdata.dysanos.flex.sanos import FlexSanosDecoder
 from quantdata.torch import BaseEnvironment
@@ -172,3 +183,50 @@ def test_implicit_linear_system_derivatives_recover_known_solution_curve() -> No
     torch.testing.assert_close(result.second, solution_second)
     assert float(result.maximum_first_order_equation_residual) < 1.0e-14
     assert float(result.maximum_second_order_equation_residual) < 1.0e-14
+
+
+def test_fixed_grid_and_backbone_ablation_preserves_initial_support() -> None:
+    output = Path("/tmp/quant_data/test-local-martingale-chart")
+    moving_config = ScalingGateConfig(output=output)
+    fixed_config = ScalingGateConfig(
+        output=output,
+        fixed_relative_grid=True,
+        fixed_backbone_annualized_volatility=0.05,
+    )
+    _, moving_decoder, _, moving_parameters, _ = scaling_gate_problem(
+        moving_config
+    )
+    env, fixed_decoder, _, fixed_parameters, _ = scaling_gate_problem(
+        fixed_config
+    )
+    moving_surface = moving_decoder.forward_batch(
+        dlvsqs=moving_parameters.dlvsqs,
+        forward_vols=moving_parameters.forward_vols,
+        eta=moving_parameters.eta,
+    )
+    fixed_surface = fixed_decoder.forward_batch(
+        dlvsqs=fixed_parameters.dlvsqs,
+        forward_vols=fixed_parameters.forward_vols,
+        eta=fixed_parameters.eta,
+    )
+
+    torch.testing.assert_close(
+        fixed_surface.support_strikes,
+        moving_surface.support_strikes,
+    )
+    target_total = 0.05 * torch.sqrt(fixed_decoder.model_expiries_y)
+    torch.testing.assert_close(
+        fixed_surface.backbone_total_vols[0],
+        target_total,
+    )
+    successor, forward, eta, _ = _successor_coordinates(
+        env,
+        fixed_decoder,
+        fixed_surface,
+        business_day_fraction=0.5,
+        fixed_backbone_annualized_volatility=0.05,
+    )
+    torch.testing.assert_close(
+        successor._total_vols(forward * eta)[0],
+        0.05 * torch.sqrt(successor.model_expiries_y),
+    )
