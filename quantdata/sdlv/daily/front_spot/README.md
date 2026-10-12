@@ -1,7 +1,7 @@
 # Daily front-spot stochastic DLV
 
 This package estimates and simulates the 25-expiry by 200-strike model described
-in `paper/dlv_sde_paper/main.tex`.
+in `quantdata/sdlv/tex/main2.tex`.
 
 ## Estimation convention
 

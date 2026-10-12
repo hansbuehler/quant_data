@@ -1,7 +1,7 @@
 # Front-spot implementation notes
 
 These notes record numerical issues encountered while implementing the dynamics
-in `paper/dlv_sde_paper/main.tex`.  They are working notes for the append-only
+in `quantdata/sdlv/tex/main2.tex`.  They are working notes for the append-only
 `Implementation Commets` section requested for the completed paper.
 
 ## Normative dynamics
