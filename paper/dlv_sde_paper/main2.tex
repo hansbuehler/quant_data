@@ -85,10 +85,9 @@ Compared to using implied volatilities the advantage is that mere positivity of 
 the option market is free of static arbitrage at all times. We have shown in~\cite{SANOS2026} that this representation
 can be fitted to real life market data very efficiently using linear programming.
 
-The key
-contribution in this paper is showing how to construct a dynamic model of SANOS option call prices which are not only statically but
+The key contribution in this paper is showing how to construct a dynamic model of SANOS option call prices which are not only statically but
 also dynamically free of arbitrage. We show the theoretical construction of the corresponding risk-neutral measure~$\mathbb{Q}$
-and discuss existence of the respective martingale processes. We then discuss implementation
+and prove that its dynamics admit a unique strong solution. We then discuss implementation
 and estimate our model on S\&P Index Option data from January 2022 to August 2025. We fit our daily model parameters to observed bid/ask prices and then proceed to
 estimate both $\Q$ and its drift under $\PP$. We show that
 on this data set more than 95\% of calibrated
@@ -1194,7 +1193,7 @@ discrete local volatility representation of European option markets, extending t
 SANOS surface of~\cite{SANOS2026} to a dynamically arbitrage-free model. The resulting SDLV
 process admits a closed-form risk-neutral drift for every discrete local volatility coordinate
 and an exact front-density/spot diffusion, in place of the numerical martingale measure
-used in~\cite{DYSANOS2026}.
+used in~\cite{DYSANOS2026}. We further proved that the DLV dynamics admit a unique strong solution under the assumption of a square-integrable bound on the vol-of-vol (Theorem~\ref{thm:existence_bh}). 
 
 Estimated on 891 trading days of S\&P~500 index option data, the model's static fit covers more
 than 95\% of quoted bid/ask intervals, and the restricted-universe $\Q$ diagnostics of
