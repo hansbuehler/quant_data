@@ -432,7 +432,7 @@ Thus, we cannot derive bounds for $\Sigma$ directly, and instead investigate the
 Throughout, fix $k$, $T_k$ being the front, and let $B_t = W_t^1 - W_{T_{k-1}}^1$ be the Brownian motion centered at the origin. We assume that the front follows the Gaussian construction from Section \ref{sec:front-density} with mass distributed along interior strikes, i.e. $\sum_{i=1}^N q_{T_{k-1}}^{k, i} > 0$, and that $\xi$ is locally Lipschitz in $(B, L)$ and bounded by a deterministic function $c(t)$ that is square-integrable, i.e. $\|\xi \|_\infty \leq c(t)$ with $\int_{T_{k-1}}^{T_k}c^2<\infty$. The constant loadings that are estimated in Section~\ref{sec:estimation} satisfy this. We will denote by $J$ the node at which the spot settles at time $T_k$, i.e. $X_{T_k} = K^J$. 
 
 \begin{theorem}[Existence]
-\label{thm:existence_mw}
+\label{thm:existence_bh}
 Let $L_{T_{k-1}} = \log \Sigma_{T_{k-1}} $ be finite.
 \begin{enumerate}[label=(\roman*)]
   \item There is a unique strong solution for $L$ on $[T_{k-1},T_k)$, and every $\Sigma^{j,i}$ stays
@@ -445,7 +445,7 @@ Let $L_{T_{k-1}} = \log \Sigma_{T_{k-1}} $ be finite.
 
 
 \begin{lemma}
-\label{lem:zero_sets_mw}  
+\label{lem:zero_sets_bh}  
 Let $\tau\le T_k$ be a stopping time and let $U, V$ be two positive continuous local martingales defined on the interval $[T_{k-1},\tau)$. Assume that $U, V$ have relative volatilities $u$ and $u+v$ respectively, i.e. $dU / U = u \,dW$ and $dV / V = (u+v) \, dW$. Following holds true: 
 \begin{enumerate}[label=(\alph*)]
   \item The left limit $U_{\tau-}$ exists, and $U_{\tau-}$ is zero exactly when $\int_{T_{k-1}}^{\tau} \| u_t \|^2 dt = \infty $.
@@ -460,23 +460,23 @@ Let $\tau\le T_k$ be a stopping time and let $U, V$ be two positive continuous l
   \end{enumerate}
 \end{proof}
 
-\begin{proof}[Proof of Theorem \ref{thm:existence_mw}]
+\begin{proof}[Proof of Theorem \ref{thm:existence_bh}]
 \begin{enumerate}[label=(\roman*)]
   \item Since $\Sigma = e^L > 0$, every $ M^j $ is a non-singular M-matrix, the coefficients of \eqref{eq:log_dlv_sde_mw} are locally Lipschitz and the densities are positive. Hence, there is a unique strong solution up to a maximal lifetime $\zeta \leq T_k$ \cite[Theorem~V.38]{Protter2005}. It remains to show $\zeta = T_k$.
   
   
-  Let $R^{j, i} \coloneqq \Sigma^{j, i} q^{j, i}$ and recall that the density $q^{j}$ is governed by $dq^{j, i} = q^{j, i} \eta^{j, i} \, dW$. We want to show that both processes fulfil the assumptions of Lemma \ref{lem:zero_sets_mw}. Applying the Itô product rule to $R^{j, i}$ we observe that it is a local martingale $dR^{j,i} = R^{j,i} ( \eta^{j,i}+\xi^{j,i} ) \, dW$. Moreover, we can show that $R^j$ is bounded by applying the call payoff matrix $\Pi$, where $\Pi_{l, m} = (K^m - K^l)^+$, to the code-book relation \eqref{eq:hb_dlv} expressed in terms of $R^j$
+  Let $R^{j, i} \coloneqq \Sigma^{j, i} q^{j, i}$ and recall that the density $q^{j}$ is governed by $dq^{j, i} = q^{j, i} \eta^{j, i} \, dW$. We want to show that both processes fulfil the assumptions of Lemma \ref{lem:zero_sets_bh}. Applying the Itô product rule to $R^{j, i}$ we observe that it is a local martingale $dR^{j,i} = R^{j,i} ( \eta^{j,i}+\xi^{j,i} ) \, dW$. Moreover, we can show that $R^j$ is bounded by applying the call payoff matrix $\Pi$, where $\Pi_{l, m} = (K^m - K^l)^+$, to the code-book relation \eqref{eq:hb_dlv} expressed in terms of $R^j$
   \begin{equation}
     \label{eq:R_codebook_mw}
     q^{j-1}=q^j - \Omega_jR^j 
   \end{equation}
-  which gives $C^{j} - C^{j-1} = \Pi\Omega_j R^j $. Thus, $R^{j, i}$ is the calendar spread at $K^{i}$ from $T_{j-1}$ to $T_j$ up to a positive constant. Since $X \in [K^0, K^{N+1}]$, call prices lie in $[0, K^{N+1}]$, so $R^{j}$ must be bounded. Thus, both $q^j$ and $R^j$ are bounded martingales and therefore attain limits at $\zeta$ by the martingale convergence theorem. Apply Lemma \ref{lem:zero_sets_mw} (b) with $\tau=\zeta$ and $v=\xi$, then both $q^{j, i}$ and $R^{j, i}$ can only reach zero together. 
+  which gives $C^{j} - C^{j-1} = \Pi\Omega_j R^j $. Thus, $R^{j, i}$ is the calendar spread at $K^{i}$ from $T_{j-1}$ to $T_j$ up to a positive constant. Since $X \in [K^0, K^{N+1}]$, call prices lie in $[0, K^{N+1}]$, so $R^{j}$ must be bounded. Thus, both $q^j$ and $R^j$ are bounded martingales and therefore attain limits at $\zeta$ by the martingale convergence theorem. Apply Lemma \ref{lem:zero_sets_bh} (b) with $\tau=\zeta$ and $v=\xi$, then both $q^{j, i}$ and $R^{j, i}$ can only reach zero together. 
 
   Next we show that a single zero-valued interior density node, determines that the all interior nodes must be zero-valued. Contrary, a single positive-valued interior node spreads to all interior nodes. Abbreviate $p=q^{j-1}$, $q=q^j$, $R=R^j$ at time $\zeta$ and write out row $i$ of \eqref{eq:R_codebook_mw}: 
   \begin{equation*}
     p_i = q_i+( \gamma^{-i} + \gamma^{+i} ) R_i - \gamma^{ +(i-1)} R_{i-1} - \gamma^{ -(i+1)} R_{i+1}.
   \end{equation*}
-  From Lemma \ref{lem:zero_sets_mw} (b) we know that $q_i = 0$ iff $R_i = 0$. Hence, if $q_i = 0$, then also $R_i = 0$ and $p_i = - \gamma^{ +(i-1)} R_{i-1} - \gamma^{ -(i+1)} R_{i+1}$. The left-side, $p_i$, is non-negative and the right-side non-positive. Therefore $p_i = 0$ and $R_{i\pm1} = 0$ and again by Lemma \ref{lem:zero_sets_mw} (b) $q_{i\pm1} = 0$. This argument spreads across the grid such that all interior nodes have to be equal to zero. Mass can only be attained on an outer node. Conversely, if $q^{j-1}$ has interior mass then the chain above cannot start and all $q^{j, i}$, and thus $R^{j, i}$, are positive. 
+  From Lemma \ref{lem:zero_sets_bh} (b) we know that $q_i = 0$ iff $R_i = 0$. Hence, if $q_i = 0$, then also $R_i = 0$ and $p_i = - \gamma^{ +(i-1)} R_{i-1} - \gamma^{ -(i+1)} R_{i+1}$. The left-side, $p_i$, is non-negative and the right-side non-positive. Therefore $p_i = 0$ and $R_{i\pm1} = 0$ and again by Lemma \ref{lem:zero_sets_bh} (b) $q_{i\pm1} = 0$. This argument spreads across the grid such that all interior nodes have to be equal to zero. Mass can only be attained on an outer node. Conversely, if $q^{j-1}$ has interior mass then the chain above cannot start and all $q^{j, i}$, and thus $R^{j, i}$, are positive. 
 
   Now, suppose that $\zeta < T_k$. Then the Brownian motion $B_\zeta$ is finite, and the front density $q^k_\zeta$ has still strictly positive interior entries. Applying the above inductive chain for $j = k+1, \dots, M$ we obtain that $\Sigma^{j, i}_{\zeta-} = R^{j, i}_{\zeta-} / q_{\zeta-}^{j, i} \in (0, \infty)$. Hence, $L$ has a finite limit at $\zeta$ which means it could be extended to $\zeta$, contradicting the maximality of $\zeta$. Therefore $\zeta = T_k$ demonstrating existence. 
   
@@ -491,10 +491,10 @@ Whenever the spot settles on an interior strike, the next front shifts $k \right
 
 \begin{corollary}
 \label{cor:true_martingale_mw}
-Under the assumptions of Theorem~\ref{thm:existence_mw}, $q^j$ is a true martingale on $[T_{k-1},T_k]$ (resp.\ $[T_{k-1},T]$) for every $j\geq k$.
+Under the assumptions of Theorem~\ref{thm:existence_bh}, $q^j$ is a true martingale on $[T_{k-1},T_k]$ for every $j\geq k$.
 \end{corollary}
 \begin{proof}
-By construction the drift of $q^j$ vanishes identically (the node-by-node cancellation in \eqref{eq:drift_hb}), so $q^j$ is a local martingale on the interval of existence furnished by Theorem~\ref{thm:existence_mw}. Each coordinate $q_t^{j,i}$ is a probability and therefore satisfies $0\leq q_t^{j,i}\leq 1$, i.e.\ $q^j$ is a bounded process. A bounded local martingale is uniformly integrable and closed by its terminal value, hence a true martingale; in particular $\mathbb E_t[q_s^j]=q_t^j$ for all $T_{k-1}\leq t\leq s$ in the interval, with no additional integrability condition required.
+By construction the drift of $q^j$ vanishes identically (the node-by-node cancellation in \eqref{eq:drift_hb}), so $q^j$ is a local martingale on the interval of existence furnished by Theorem~\ref{thm:existence_bh}. Each coordinate $q_t^{j,i}$ is a probability and therefore satisfies $0\leq q_t^{j,i}\leq 1$, i.e.\ $q^j$ is a bounded process. A bounded local martingale is uniformly integrable and closed by its terminal value, hence a true martingale; in particular $\mathbb E_t[q_s^j]=q_t^j$ for all $T_{k-1}\leq t\leq s$ in the interval, with no additional integrability condition required.
 \end{proof}
 
 \subsection{Sampling}
