@@ -49,9 +49,12 @@ target-independent path and fixed-book geometry per decision state and one
 cold zero-claim pricing fit across targets. This reduces identical generated
 path and repricing work from 13 calls to one for a frozen origin and from 65 to
 five for a restarted origin without changing prices, actions, identities, or
-random numbers; independent review and the complete 305-test hedging suite
-pass. The
-strictly-2022 target-sizing exercise now fixes each target to one
+random numbers; independent review passed. The daily production-queue validator
+now also authenticates the immutable run and completion summary, reparses every
+dated result record, and reconciles target-book size, identities, cap hits, and
+nonconvergence before pinning the aggregate hash. The resulting complete hedging
+suite contains 307 passing tests. The strictly-2022 target-sizing exercise now
+fixes each target to one
 maturity-matched ATM spot-risk unit; all 20 calibration hedges converged with
 no cap hit. Its atomic derived artifact is keyed by the public dataset manifest
 and complete sizing configuration, preventing repeated production runs from
