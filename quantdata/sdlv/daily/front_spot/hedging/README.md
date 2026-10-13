@@ -381,6 +381,23 @@ final build; it rejects any matrix case marked ready whose complete results are
 still absent. Without `--daily-matrix`, the original explicit SANOS-LV plus
 Historical-SANOS two-policy interface remains available. A matrix whose bytes
 change after the queue is armed is rejected.
+
+The weekly report path applies the same rule to frozen and restarted schedules:
+
+```bash
+python -m quantdata.sdlv.daily.front_spot.hedging.reports.build_weekly_summary_metrics \
+  --weekly-matrix "$QUANTDATA_ROOT/experiments/hedging/weekly/production-matrix-v3/matrix-full-73a9626.json" \
+  --require-ready-complete
+```
+
+It authenticates the complete 528-origin, 6,864-record population for every
+included case, verifies the fitted objective against the immutable run
+snapshot, keeps frozen and restarted comparisons separate, and emits aggregate
+JSON, objective tables, and target-level appendix tables. It refuses to combine
+runs with different dataset manifests, target notionals, or schedule-specific
+unhedged claims. Model comparisons use paired equal-weighted 13-target episode
+books with Hansen--Hodrick and moving-block-bootstrap uncertainty.
+
 Legacy queue state without a matrix digest is rejected unless the operator
 explicitly supplies `--adopt-unpinned-state` after checking the matrix.
 For a parameter sweep, `--continue-after-failure` retains an already failed
