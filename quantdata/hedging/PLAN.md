@@ -922,6 +922,17 @@ it emits a persistent four-minute heartbeat and holds its GPU through
 `gpuctl`. Final readiness evidence and the model-specific results review remain
 required before generated production cases can launch.
 
+The first VolGAN frozen-weekly readiness attempt correctly failed the strict
+price gate after its mean--variance CLARABEL solve returned a negative
+indifference price; it is not accepted as readiness evidence. The weekly
+mean--variance quadratic program now uses OSQP, while mean--volatility retains
+CLARABEL for its conic problem. On a synthetic 4,096-path geometry matching the
+first production origin's 207 contracts and five decisions, the shared zero
+policy plus first complete target fit took 45.1 seconds and converged without a
+cap hit. A solver-reference test matches the CLARABEL optimum, and weekly runs
+now report target-level progress inside each origin. A fresh managed-GPU
+readiness run is required before the generated production gate can pass.
+
 Gate: one model-specific review and standalone smoke test per baseline pass.
 
 ### Phase 10: final benchmark and paper artifacts

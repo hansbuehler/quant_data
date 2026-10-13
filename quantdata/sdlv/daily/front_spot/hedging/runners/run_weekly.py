@@ -9,7 +9,7 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from quantdata.hedging.protocols import HedgeSchedule
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly import (
@@ -232,12 +232,27 @@ def main() -> None:
         require_no_cap_hits=not arguments.allow_cap_hits,
     )
     output = arguments.output or _default_output(arguments.model, spec)
+
+    def claim_progress(
+        origin_date: date,
+        index: int,
+        total: int,
+        target_label: str,
+    ) -> None:
+        print(
+            f"weekly target progress origin={origin_date} "
+            f"completed_work_units={index} total_work_units={total} "
+            f"target={target_label}",
+            flush=True,
+        )
+
     run_book = weekly_book_function(
         adapter=build.adapter,
         schedule=schedule,
         rolling_observations=build.rolling_observations,
         claim_quantities=claim_quantities,
         spot_cost_bps=arguments.spot_cost_bps,
+        claim_progress=claim_progress,
     )
     started = time.monotonic()
     origin_count = len(eligible_weekly_origins(panel, spec=spec))
@@ -306,6 +321,7 @@ def weekly_book_function(
     rolling_observations: int,
     claim_quantities: dict[str, float],
     spot_cost_bps: float,
+    claim_progress: Callable[[date, int, int, str], None] | None = None,
 ) -> WeeklyBookFunction:
     """Create one complete-book function with bounded cross-origin fit reuse."""
     common_price_config = SanosLvConfig(label="weekly-common-market-pricing")
@@ -327,19 +343,28 @@ def weekly_book_function(
         )
         policy_fit_cache = {}
         try:
-            runs = tuple(
-                run_weekly_model(
-                    panel,
-                    episode=episode,
-                    claim=claim,
-                    adapter=adapter,
-                    claim_quantity=claim_quantities[claim.target.label],
-                    spot_cost_bps=spot_cost_bps,
-                    market_fit_cache=market_fit_cache,
-                    policy_fit_cache=policy_fit_cache,
+            completed_runs: list[WeeklyModelRun] = []
+            for claim_index, claim in enumerate(claims, start=1):
+                completed_runs.append(
+                    run_weekly_model(
+                        panel,
+                        episode=episode,
+                        claim=claim,
+                        adapter=adapter,
+                        claim_quantity=claim_quantities[claim.target.label],
+                        spot_cost_bps=spot_cost_bps,
+                        market_fit_cache=market_fit_cache,
+                        policy_fit_cache=policy_fit_cache,
+                    )
                 )
-                for claim in claims
-            )
+                if claim_progress is not None:
+                    claim_progress(
+                        origin_date,
+                        claim_index,
+                        len(claims),
+                        claim.target.label,
+                    )
+            runs = tuple(completed_runs)
         finally:
             release_origin = getattr(adapter, "release_weekly_origin", None)
             if release_origin is not None:

@@ -540,14 +540,24 @@ class _WeeklyOpenLoopGeometry:
             dtype=np.float64,
         )
         try:
-            compiled.problem.solve(
-                solver=cp.CLARABEL,
-                warm_start=False,
-                max_iter=self.config.maximum_iterations,
-                tol_gap_abs=self.config.gradient_tolerance,
-                tol_gap_rel=self.config.gradient_tolerance,
-                tol_feas=self.config.gradient_tolerance,
-            )
+            if self.config.objective is HistoricalSanosObjective.MEAN_VARIANCE:
+                compiled.problem.solve(
+                    solver=cp.OSQP,
+                    warm_start=True,
+                    max_iter=max(10_000, self.config.maximum_iterations),
+                    eps_abs=self.config.gradient_tolerance,
+                    eps_rel=self.config.gradient_tolerance,
+                    polishing=True,
+                )
+            else:
+                compiled.problem.solve(
+                    solver=cp.CLARABEL,
+                    warm_start=False,
+                    max_iter=self.config.maximum_iterations,
+                    tol_gap_abs=self.config.gradient_tolerance,
+                    tol_gap_rel=self.config.gradient_tolerance,
+                    tol_feas=self.config.gradient_tolerance,
+                )
         except cp.error.SolverError as error:
             return OptimizeResult(
                 x=np.asarray(initial[: self.parameter_count], dtype=np.float64),

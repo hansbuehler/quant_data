@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import date, timedelta
 
+import cvxpy as cp
 import numpy as np
 import pytest
 
@@ -255,6 +256,55 @@ def test_weekly_shared_pricing_context_matches_fresh_target_fit() -> None:
     )
     assert shared.prices.buyer == pytest.approx(fresh.prices.buyer, abs=1.0e-9)
     assert shared.prices.seller == pytest.approx(fresh.prices.seller, abs=1.0e-9)
+
+
+def test_weekly_mean_variance_osqp_matches_clarabel_reference() -> None:
+    scenarios = _scenario_set().scenarios
+    config = HistoricalSanosConfig(
+        rolling_observations=80,
+        objective=HistoricalSanosObjective.MEAN_VARIANCE,
+        risk_parameter=3.0,
+        maximum_iterations=2_000,
+        gradient_tolerance=1.0e-8,
+    )
+    geometry = _WeeklyOpenLoopGeometry(
+        scenarios,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=config,
+    )
+    fit = geometry.fit_policy(signed_claim_quantity=1.0)
+
+    reference = _WeeklyOpenLoopGeometry(
+        scenarios,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=config,
+    )
+    indices = np.arange(scenarios.scenario_count, dtype=np.int64)
+    claim, instrument_gains = reference._linear_wealth_geometry(
+        indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
+    )
+    compiled = reference._convex_cost_lasso_problem(
+        indices,
+        instrument_gains=instrument_gains,
+    )
+    compiled.claim.value = claim
+    compiled.positions.value = np.zeros(reference.parameter_count)
+    compiled.problem.solve(
+        solver=cp.CLARABEL,
+        warm_start=False,
+        max_iter=config.maximum_iterations,
+        tol_gap_abs=config.gradient_tolerance,
+        tol_gap_rel=config.gradient_tolerance,
+        tol_feas=config.gradient_tolerance,
+    )
+
+    assert compiled.problem.status == cp.OPTIMAL
+    assert fit.converged
+    assert fit.training_loss == pytest.approx(compiled.problem.value, abs=1.0e-8)
 
 
 def test_weekly_shared_pricing_context_is_target_order_independent() -> None:

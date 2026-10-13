@@ -211,13 +211,19 @@ def test_weekly_book_releases_generated_origin_cache(
         "run_weekly_model",
         lambda *args, claim, **kwargs: claim.target.label,
     )
+    progress: list[tuple[date, int, int, str]] = []
     run_book = weekly_book_function(
         adapter=adapter,
         schedule=run_weekly.HedgeSchedule.FROZEN_WEEKLY,
         rolling_observations=252,
         claim_quantities={"first": 1.0, "second": 2.0},
         spot_cost_bps=1.0,
+        claim_progress=lambda *values: progress.append(values),
     )
 
     assert run_book(object(), date(2025, 1, 2)) == ("first", "second")
     assert adapter.release_count == 1
+    assert progress == [
+        (date(2025, 1, 2), 1, 2, "first"),
+        (date(2025, 1, 2), 2, 2, "second"),
+    ]
