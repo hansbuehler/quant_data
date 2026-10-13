@@ -1,0 +1,82 @@
+% !TEX root = main2.tex
+\documentclass[11pt]{article}
+\usepackage[margin=1.1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage[T1]{fontenc}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{enumitem}
+\usepackage[colorlinks=true,linkcolor=black,citecolor=black,urlcolor=black]{hyperref}
+
+\newcommand{\R}{\mathbb R}
+\newcommand{\E}{\mathbb E}
+\newcommand{\Q}{\mathbb Q}
+\newcommand{\PP}{\mathbb P}
+\newcommand{\dd}{\mathrm d}
+\newcommand{\dlv}{\Sigma}
+\newcommand{\abs}[1]{\lvert #1\rvert}
+\newcommand{\ip}[2]{\langle #1,#2\rangle}
+\newcommand{\one}{\mathbf 1}
+\newcommand{\Var}{\operatorname{Var}}
+\newcommand{\Gh}{\widehat G}
+\newcommand{\Nh}{\widehat N}
+\newcommand{\removeblock}[1]{}
+\newcommand{\MW}[1]{{\color{red}#1}}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\tr}{tr}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{assumption}[theorem]{Assumption}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\title{%
+  \textbf{GROMM goes Production}\\[6pt]
+  \large Generative Risk-neutral Option Market Models II - Production Grade
+}
+
+\author{Hans Buehler$^{*}$\qquad Blanka Horvath$^{*,\#}$\qquad Magnus Wiese$^{*}$\\[0.6em]
+  {\small $^{*}$Mathematical Institute, University of Oxford,
+  $^{\#}$Oxford-Man Institute, University of Oxford}}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+   We refine the GROMM model presented in~\cite{GROMM2026} such that it has an expanding strike and expory grid, and
+   its parameters can be estimated based on prevailing grid geometry. We train a Mamba3 model to drive its discrete local
+   volatility dynamics.
+
+   The resulting model has a near-perfect
+   fit to observed option prices and outperforms comparable models in $\PP$-measure simulations.
+
+   [need to decide what else to put in here]
+\end{abstract}
+
+\tableofcontents
+
+
+\section{Introduction}\label{sec:intro}
+
+\section{Acknowledgements}
+
+We want to thank the team at Wharton for their WRDS \url{https://wrds-www.wharton.upenn.edu} portal and OptionMetrics \url{https://optionmetrics.com/united-states}
+for providing their IvyDB data via this service. Without this data our work would not have been possible.
+
+
+\appendix
+
+\bibliographystyle{alpha}
+\bibliography{refs}
+
+\end{document}
