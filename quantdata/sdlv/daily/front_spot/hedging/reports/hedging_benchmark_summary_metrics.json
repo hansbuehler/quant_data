@@ -1,0 +1,113 @@
+{
+  "comparisons": {
+    "sanos_pure_rmse_reduction_vs_historical": 0.47318427210458636
+  },
+  "dataset_manifest_sha256": "58741552e0f6eea82378a5f26a61e1df04b9d14f3ab166883089812cf903007a",
+  "models": {
+    "historical-sanos": {
+      "measure": "historical-P",
+      "metrics": {
+        "all": {
+          "cap_hits": 0,
+          "claims": 20,
+          "economic_rmse": 0.013468722369909317,
+          "expected_shortfall_95": 0.02571033617606421,
+          "mean_absolute_loss": 0.005519449701106267,
+          "mean_entry_turnover_notional": 0.07383041446982176,
+          "mean_nonzero_actions": 181.5597381342062,
+          "mean_transaction_cost": 0.0010187988705818822,
+          "nonconverged_results": 0,
+          "observations_per_claim": 611,
+          "pure_rmse": 0.013468722369909317,
+          "pure_rmse_reduction": 0.17448642445906515,
+          "unhedged_rmse": 0.01631556738613736
+        },
+        "one_day": {
+          "cap_hits": 0,
+          "claims": 10,
+          "economic_rmse": 0.011159207346219531,
+          "expected_shortfall_95": 0.02233568619606218,
+          "mean_absolute_loss": 0.005041544180591911,
+          "mean_entry_turnover_notional": 0.08686388807055931,
+          "mean_nonzero_actions": 181.5597381342062,
+          "mean_transaction_cost": 0.0009669127879443302,
+          "nonconverged_results": 0,
+          "observations_per_claim": 611,
+          "pure_rmse": 0.011159207346219531,
+          "pure_rmse_reduction": 0.10293112581825681,
+          "unhedged_rmse": 0.012439632749936114
+        },
+        "three_day": {
+          "cap_hits": 0,
+          "claims": 10,
+          "economic_rmse": 0.015436484572579061,
+          "expected_shortfall_95": 0.029084986156066233,
+          "mean_absolute_loss": 0.005997355221620622,
+          "mean_entry_turnover_notional": 0.0607969408690842,
+          "mean_nonzero_actions": 181.5597381342062,
+          "mean_transaction_cost": 0.0010706849532194343,
+          "nonconverged_results": 0,
+          "observations_per_claim": 611,
+          "pure_rmse": 0.015436484572579061,
+          "pure_rmse_reduction": 0.20566614123391536,
+          "unhedged_rmse": 0.019433245104971405
+        }
+      },
+      "result_count": 12220,
+      "run_identity": "64adf168a213c3ce470e1e0604e15c1a2842de6d01bc3e140ae56a7b49e670c5"
+    },
+    "sanos-lv": {
+      "measure": "Q-price/historical-transition",
+      "metrics": {
+        "all": {
+          "cap_hits": 0,
+          "claims": 20,
+          "economic_rmse": 0.007098096139228246,
+          "expected_shortfall_95": 0.013506500910510966,
+          "mean_absolute_loss": 0.005388515300824843,
+          "mean_entry_turnover_notional": 2.6703612886187598,
+          "mean_nonzero_actions": 5.0,
+          "mean_transaction_cost": 0.001011478950931726,
+          "nonconverged_results": 0,
+          "observations_per_claim": 611,
+          "pure_rmse": 0.007095534779125018,
+          "pure_rmse_reduction": 0.5651064648138568,
+          "unhedged_rmse": 0.01631556738613736
+        },
+        "one_day": {
+          "cap_hits": 0,
+          "claims": 10,
+          "economic_rmse": 0.008621195205492949,
+          "expected_shortfall_95": 0.013286341404000169,
+          "mean_absolute_loss": 0.007242383008045604,
+          "mean_entry_turnover_notional": 1.2741019191004916,
+          "mean_nonzero_actions": 1.0,
+          "mean_transaction_cost": 0.0002548621606542161,
+          "nonconverged_results": 0,
+          "observations_per_claim": 611,
+          "pure_rmse": 0.008620288033279223,
+          "pure_rmse_reduction": 0.3070303435345795,
+          "unhedged_rmse": 0.012439632749936114
+        },
+        "three_day": {
+          "cap_hits": 0,
+          "claims": 10,
+          "economic_rmse": 0.005142074565021327,
+          "expected_shortfall_95": 0.013726660417021766,
+          "mean_absolute_loss": 0.0035346475936040836,
+          "mean_entry_turnover_notional": 4.066620658137028,
+          "mean_nonzero_actions": 9.0,
+          "mean_transaction_cost": 0.001768095741209236,
+          "nonconverged_results": 0,
+          "observations_per_claim": 611,
+          "pure_rmse": 0.005136522347546873,
+          "pure_rmse_reduction": 0.7356837563772172,
+          "unhedged_rmse": 0.019433245104971405
+        }
+      },
+      "result_count": 12220,
+      "run_identity": "2af7a4f64df465dde7314feab97752dbab5c386d05c1f0d80ab5c871214cbcd5"
+    }
+  },
+  "schema": "hedging-benchmark-summary-metrics-v1"
+}

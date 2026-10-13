@@ -53,6 +53,11 @@
 \newcommand{\statusready}{\colorbox{pale}{\strut\textbf{ready}}}
 \newcommand{\statuspending}{\colorbox{amber}{\strut\textbf{pending}}}
 \newcommand{\model}[1]{\textbf{#1}}
+\IfFileExists{hedging_benchmark_summary_metrics.tex}{
+  \input{hedging_benchmark_summary_metrics.tex}
+}{
+  \input{quantdata/sdlv/daily/front_spot/hedging/reports/hedging_benchmark_summary_metrics.tex}
+}
 
 \begin{document}
 
@@ -72,8 +77,9 @@
   original-data-free public-candidate panel. Two methods have complete
   out-of-sample results over all 611 eligible 2023--2025 origins and all 20
   daily digital targets. SANOS--LV reduces aggregate pure-hedge RMSE by
-  \textbf{56.5\%} versus the unhedged claims; historical statistical SANOS
-  reduces it by \textbf{17.4\%}. Robust covariance, GROMM, VolGAN, and
+  \textbf{\SanosVsUnhedgedReduction} versus the unhedged claims; historical
+  statistical SANOS reduces it by
+  \textbf{\HistoricalVsUnhedgedReduction}. Robust covariance, GROMM, VolGAN, and
   AD--Seq--Vol have passed their current implementation gates but do not yet
   have comparable full-production results. Weekly mechanics and pricing pass;
   weekly production evaluation remains outstanding.}}
@@ -150,21 +156,23 @@ expected shortfall.
 \toprule
 Model & Targets & Unhedged RMSE & Pure RMSE & Reduction & Economic RMSE & ES$_{95}$ \\
 \midrule
-SANOS--LV & all 20 & 0.01632 & 0.00710 & 56.5\% & 0.00710 & 0.01351 \\
-SANOS--LV & 1D & 0.01244 & 0.00862 & 30.7\% & 0.00862 & 0.01329 \\
-SANOS--LV & 3D & 0.01943 & 0.00514 & 73.6\% & 0.00514 & 0.01373 \\
+SANOS--LV & all 20 & \SanosAllUnhedgedRmse & \SanosAllPureRmse & \SanosAllReduction & \SanosAllEconomicRmse & \SanosAllEsNinetyFive \\
+SANOS--LV & 1D & \SanosOneDayUnhedgedRmse & \SanosOneDayPureRmse & \SanosOneDayReduction & \SanosOneDayEconomicRmse & \SanosOneDayEsNinetyFive \\
+SANOS--LV & 3D & \SanosThreeDayUnhedgedRmse & \SanosThreeDayPureRmse & \SanosThreeDayReduction & \SanosThreeDayEconomicRmse & \SanosThreeDayEsNinetyFive \\
 \addlinespace
-Historical SANOS & all 20 & 0.01632 & 0.01347 & 17.4\% & 0.01347 & 0.02571 \\
-Historical SANOS & 1D & 0.01244 & 0.01116 & 10.3\% & 0.01116 & 0.02234 \\
-Historical SANOS & 3D & 0.01943 & 0.01544 & 20.6\% & 0.01544 & 0.02908 \\
+Historical SANOS & all 20 & \HistoricalAllUnhedgedRmse & \HistoricalAllPureRmse & \HistoricalAllReduction & \HistoricalAllEconomicRmse & \HistoricalAllEsNinetyFive \\
+Historical SANOS & 1D & \HistoricalOneDayUnhedgedRmse & \HistoricalOneDayPureRmse & \HistoricalOneDayReduction & \HistoricalOneDayEconomicRmse & \HistoricalOneDayEsNinetyFive \\
+Historical SANOS & 3D & \HistoricalThreeDayUnhedgedRmse & \HistoricalThreeDayPureRmse & \HistoricalThreeDayReduction & \HistoricalThreeDayEconomicRmse & \HistoricalThreeDayEsNinetyFive \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 The SANOS--LV hedge is materially stronger on this first completed comparison,
-especially for the remaining-life 3D claims. Its aggregate pure RMSE is 47.3\%
-lower than historical SANOS. Pricing loss is negligible at aggregate scale:
-SANOS--LV economic RMSE is 0.007098 versus pure RMSE 0.007096; historical SANOS
+especially for the remaining-life 3D claims. Its aggregate pure RMSE is
+\SanosVsHistoricalReduction\ lower than historical SANOS. Pricing loss is
+negligible at aggregate scale:
+SANOS--LV economic RMSE is \SanosAllEconomicRmseSix\ versus pure RMSE
+\SanosAllPureRmseSix; historical SANOS
 uses the common price and therefore has zero pricing contribution by design.
 
 \begin{table}[H]
@@ -176,8 +184,8 @@ uses the common price and therefore has zero pricing contribution by design.
 \toprule
 Model & Mean cost & Entry turnover & Nonzero actions & Cap hits & Nonconverged & Records \\
 \midrule
-SANOS--LV & 0.001011 & 2.670 & 5.0 & 0 & 0 & 12,220 \\
-Historical SANOS & 0.001019 & 0.0738 & 181.6 & 0 & 0 & 12,220 \\
+SANOS--LV & \SanosAllMeanCost & \SanosAllTurnover & \SanosAllNonzero & \SanosAllCapHits & \SanosAllNonconverged & \SanosRecordCount \\
+Historical SANOS & \HistoricalAllMeanCost & \HistoricalAllTurnover & \HistoricalAllNonzero & \HistoricalAllCapHits & \HistoricalAllNonconverged & \HistoricalRecordCount \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -197,8 +205,8 @@ count therefore should not be read interchangeably.
 \toprule
 Model & Measure & Daily status & Evidence \\
 \midrule
-SANOS--LV & Q price / realized path & \statuscomplete & 611 origins, 12,220 records, zero cap hits and zero nonconvergence. \\
-Historical SANOS & P & \statuscomplete & 611 origins, 12,220 records, zero cap hits and zero nonconvergence. \\
+SANOS--LV & Q price / realized path & \statuscomplete & 611 origins, \SanosRecordCount\ records, zero cap hits and zero nonconvergence. \\
+Historical SANOS & P & \statuscomplete & 611 origins, \HistoricalRecordCount\ records, zero cap hits and zero nonconvergence. \\
 Robust covariance & P & \statusready & Full 20-target one-origin mean--volatility gate passed for $\kappa\in\{0.1,1,2,3\}$; production pending. \\
 GROMM & P and Q & \statusready & Rolling artifacts, daily/weekly scenarios, four objectives, direct Q-shadow pure hedge, and quant review pass; managed-GPU fit and production pending. \\
 VolGAN & P & \statusready & Public-architecture implementation, restartable rolling updates, daily/weekly adapters, and smoke tests pass; production pending. \\
@@ -304,9 +312,10 @@ versus-restarted weekly comparison with overlap-aware inference.
 {\footnotesize
 \textbf{Provenance.}
 The completed results use public dataset manifest SHA-256
-\texttt{58741552e0f6...12cf903007a}. SANOS--LV run identity begins
-\texttt{2af7a4f64df4}; historical-SANOS run identity begins
-\texttt{64adf168a213}. All headline numbers are derived from immutable
+\texttt{\DatasetManifestPrefix...}.\\
+SANOS--LV run identity begins \texttt{\SanosRunPrefix}; historical-SANOS run
+identity begins \texttt{\HistoricalRunPrefix}.\\
+All headline numbers are derived from immutable
 \texttt{hedging-daily-results-v2} artifacts. Readiness statements come from
 the dated reports and independent reviews alongside the implementation.}
 
