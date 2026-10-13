@@ -398,6 +398,26 @@ runs with different dataset manifests, target notionals, or schedule-specific
 unhedged claims. Model comparisons use paired equal-weighted 13-target episode
 books with Hansen--Hodrick and moving-block-bootstrap uncertainty.
 
+After both authenticated metric builders finish, render the standalone final
+document beside their generated tables:
+
+```bash
+python -m quantdata.sdlv.daily.front_spot.hedging.reports.build_summary_document \
+  --daily-metrics daily-metrics.json \
+  --weekly-metrics weekly-metrics.json \
+  --daily-objective-tables daily-objective-tables.tex \
+  --weekly-objective-tables weekly-objective-tables.tex \
+  --daily-target-appendix daily-target-appendix.tex \
+  --weekly-target-appendix weekly-target-appendix.tex \
+  --output hedging_benchmark_summary.tex \
+  --compile
+```
+
+The generated PDF contains a compact best-within-model descriptive headline,
+all precommitted objective grids, paired weekly uncertainty, every target-level
+appendix, model references, and immutable dataset/target provenance. The
+headline compression is explicitly not a tuning rule.
+
 Legacy queue state without a matrix digest is rejected unless the operator
 explicitly supplies `--adopt-unpinned-state` after checking the matrix.
 For a parameter sweep, `--continue-after-failure` retains an already failed

@@ -87,7 +87,7 @@ conflicting duplicate cases, and can require that every ready matrix case is
 complete. Its real current-cohort smoke automatically authenticated the SANOS-LV
 reference, three robust-covariance policies, and the completed Historical-SANOS
 policy and generated all four objective tables plus target appendices. The
-resulting complete hedging suite contains 325 passing tests. The
+resulting complete hedging suite contains 328 passing tests. The
 strictly-2022 target-sizing exercise now
 fixes each target to one
 maturity-matched ATM spot-risk unit; all 20 calibration hedges converged with
@@ -991,8 +991,12 @@ immutable run snapshot, keeps frozen and restarted schedules distinct, and
 generates aggregate objective and target-level appendix tables. Final
 weekly comparisons use equal-weighted 13-target episode books and report
 candidate-minus-SANOS paired differences with Hansen--Hodrick and moving-block
-bootstrap uncertainty. Final completed-case tables and figures, PDF
-regeneration, and the final results review remain outstanding.
+bootstrap uncertainty. A standalone final-document builder now renders compact
+best-within-model descriptive headlines, all daily and weekly objective grids,
+target-level appendices, model references, and immutable provenance directly
+from those authenticated inputs; its synthetic end-to-end PDF compile passes.
+Final completed-case figures, production-data PDF regeneration, and the final
+results review remain outstanding.
 
 ## Minimum Test Gates
 
