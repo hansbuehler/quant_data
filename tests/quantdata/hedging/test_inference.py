@@ -10,6 +10,7 @@ from quantdata.hedging.inference import (
     HacKernel,
     hac_long_run_variance,
     hac_standard_error_of_mean,
+    irregular_hac_long_run_variance,
     moving_block_bootstrap_mean_interval,
     paired_episode_differences,
     summarize_episode_losses,
@@ -117,6 +118,31 @@ def test_episode_summary_can_enforce_chronological_origin_dates() -> None:
                 bootstrap_samples=100,
             ),
         )
+
+
+def test_irregular_slice_retains_gaps_in_hac_and_bootstrap_domain() -> None:
+    losses = np.asarray([1.0, -1.0])
+    summary = summarize_episode_losses(
+        losses,
+        episode_indices=(0, 10),
+        full_episode_count=11,
+        config=EpisodeInferenceConfig(
+            hac_lags=4,
+            bootstrap_block_length=5,
+            bootstrap_samples=200,
+            bootstrap_seed=17,
+        ),
+    )
+
+    assert summary.inference.raw_hac_long_run_variance == pytest.approx(1.0)
+    assert irregular_hac_long_run_variance(
+        losses,
+        episode_indices=(0, 10),
+        full_episode_count=11,
+        lags=4,
+    ) == pytest.approx(1.0)
+    assert hac_long_run_variance(losses, lags=1) == pytest.approx(0.0)
+    assert all(np.isfinite(summary.inference.bootstrap_95))
 
 
 def test_moving_block_bootstrap_is_deterministic() -> None:

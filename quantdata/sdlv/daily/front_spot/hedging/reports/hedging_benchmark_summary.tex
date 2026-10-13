@@ -114,16 +114,19 @@ redistribution still requires a separate rights decision.
 
 \begin{itemize}
   \item Model initialization, architecture validation, and target sizing use
-  2022 only. Every rolling estimator uses the previous 252 exact one-session
-  transitions and no future observation.
+  2022 only. At each date $t$, every rolling estimator uses the current market
+  state and the trailing 252 exact one-session transitions available at $t$,
+  with no future observation.
   \item Daily evaluation runs from 17 January 2023 through 28 August 2025:
   611 eligible origins, 20 targets per origin, and 12,220 claim/origin records.
   \item The targets are cash digitals at 1D and 3D: ATM call and put plus OTM
   NMS levels $\pm0.25,\pm0.50,\pm0.75,\pm1.00$. Quantities are fixed from
   2022 so each target has one maturity-matched ATM spot-risk unit.
-  \item The hedge universe is normalized spot plus one OTM option per eligible
-  strike inside $(-2,2)$ NMS, using expiries up to five business days (or the
-  first later expiry when five days is absent).
+  \item The hedge universe is normalized spot plus every eligible released
+  market strike strictly inside $(-2,2)$ contemporaneous NMS, represented by
+  its OTM option (put below the forward and call at or above it). It uses every
+  expiry up to five business days, or the first later expiry when a five-day
+  expiry is absent.
   \item Weekly evaluation starts an overlapping five-session episode on every
   eligible date. Frozen weekly fits once and keeps its inception contract book;
   restarted weekly refits daily. Both may react to the realized state.

@@ -3,13 +3,162 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
 
+from quantdata.hedging.protocols import HedgeSchedule
+from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly import weekly_targets
 from quantdata.sdlv.daily.front_spot.hedging.runners import (
     execute_production_matrix,
 )
+from quantdata.sdlv.daily.front_spot.hedging.runners.weekly import (
+    WeeklyEvaluationSpec,
+    WeeklyEvaluationSummary,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners.weekly_results import (
+    WeeklyLossStatistics,
+    WeeklyResultsConfig,
+    WeeklyResultSlice,
+    WeeklyRunResults,
+)
+
+
+def _write_json(path: Path, payload: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _weekly_loss_statistics(
+    *,
+    observations: int,
+    config: WeeklyResultsConfig,
+) -> WeeklyLossStatistics:
+    return WeeklyLossStatistics(
+        observations=observations,
+        mean=0.0,
+        median=0.0,
+        sample_standard_deviation=0.0,
+        root_mean_square=0.0,
+        mean_absolute_loss=0.0,
+        quantile_95=0.0,
+        quantile_99=0.0,
+        expected_shortfall_95=0.0,
+        expected_shortfall_99=0.0,
+        hac_standard_error=0.0,
+        raw_hac_long_run_variance=0.0,
+        hac_long_run_variance=0.0,
+        hac_variance_was_floored=False,
+        hac_kernel=config.inference.hac_kernel.value,
+        hac_lags=1,
+        hac_confidence_interval_95=(0.0, 0.0),
+        hac_confidence_interval_99=(0.0, 0.0),
+        bootstrap_confidence_interval_95=(0.0, 0.0),
+        bootstrap_confidence_interval_99=(0.0, 0.0),
+        mean_variance={
+            f"{parameter:g}": 0.0 for parameter in config.mean_variance_parameters
+        },
+        mean_volatility={
+            f"{parameter:g}": 0.0
+            for parameter in config.mean_volatility_parameters
+        },
+        entropy={f"{parameter:g}": 0.0 for parameter in config.entropy_parameters},
+        power_exponential={
+            f"{parameter:g}": 0.0
+            for parameter in config.power_exponential_parameters
+        },
+    )
+
+
+def _write_authenticated_weekly_output(output: Path) -> WeeklyRunResults:
+    origins = ("2023-01-17", "2023-01-18")
+    targets = weekly_targets()
+    spec = WeeklyEvaluationSpec(
+        label="weekly-test",
+        model="sanos-lv",
+        measure="Q",
+        model_config_identity="model-test",
+        policy_config_identity="policy-test",
+        configuration_snapshot_json='{"test":true}',
+        dataset_manifest_sha256="d" * 64,
+        schedule=HedgeSchedule.FROZEN_WEEKLY,
+        evaluation_start=date.fromisoformat(origins[0]),
+        evaluation_end=date.fromisoformat(origins[-1]),
+        rolling_observations=252,
+        target_labels=tuple(target.label for target in targets),
+        target_quantities=tuple(1.0 for _ in targets),
+        target_notional_identity="notional-test",
+        position_cap=1_000.0,
+    )
+    run_path = output / "run.json"
+    _write_json(run_path, {**spec.to_dict(), "run_identity": spec.run_identity})
+    summary = WeeklyEvaluationSummary(
+        run_identity=spec.run_identity,
+        eligible_origins=origins,
+        completed_origins=origins,
+        reused_origins=(),
+        result_count=len(origins) * len(targets),
+        cap_hits=0,
+    )
+    summary_path = output / "summary.json"
+    _write_json(summary_path, summary.to_dict())
+    records = output / "records"
+    record_sha256_by_origin: dict[str, str] = {}
+    for origin in origins:
+        record_path = records / f"{origin}.json"
+        _write_json(record_path, {"origin": origin})
+        record_sha256_by_origin[origin] = _sha256(record_path)
+    config = WeeklyResultsConfig()
+    losses = _weekly_loss_statistics(observations=len(origins), config=config)
+    slices = tuple(
+        WeeklyResultSlice(
+            claim=target.label,
+            slice_label="overall",
+            year=None,
+            volatility_regime=None,
+            unhedged_loss=losses,
+            economic_loss=losses,
+            pure_hedge_loss=losses,
+            pricing_loss=losses,
+            mean_transaction_cost=0.0,
+            mean_spot_transaction_cost=0.0,
+            mean_option_transaction_cost=0.0,
+            mean_total_turnover_notional=0.0,
+            mean_entry_turnover_notional=0.0,
+            mean_gross_exposure=0.0,
+            mean_net_exposure=0.0,
+            mean_absolute_net_exposure=0.0,
+            mean_nonzero_actions_per_decision=0.0,
+            cap_hits=0,
+            numerical_cap_hit_result_rate=0.0,
+        )
+        for target in targets
+    )
+    results = WeeklyRunResults(
+        run_identity=spec.run_identity,
+        model=spec.model,
+        measure=spec.measure,
+        schedule=spec.schedule.value,
+        dataset_manifest_sha256=spec.dataset_manifest_sha256,
+        result_count=summary.result_count,
+        aggregation_config=config.to_dict(),
+        volatility_thresholds=(0.2, 0.3),
+        exposure_convention="test convention",
+        source_run_sha256=_sha256(run_path),
+        source_summary_sha256=_sha256(summary_path),
+        record_sha256_by_origin=record_sha256_by_origin,
+        slices=slices,
+    )
+    results.write_json(output / "results.json")
+    return results
 
 
 def test_execute_production_queue_runs_and_resumes(
@@ -399,30 +548,10 @@ def test_execute_weekly_production_queue_validates_complete_summary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     output = tmp_path / "weekly-output"
+    results = _write_authenticated_weekly_output(output)
     script = tmp_path / "write_weekly_result.py"
     script.write_text(
-        """
-import json
-from pathlib import Path
-import sys
-
-output = Path(sys.argv[1])
-output.mkdir(parents=True, exist_ok=True)
-(output / "run.json").write_text(json.dumps({
-    "schema": "hedging-weekly-evaluation-v1",
-    "model": "sanos-lv",
-    "run_identity": "weekly-test",
-}), encoding="utf-8")
-(output / "summary.json").write_text(json.dumps({
-    "schema": "hedging-weekly-evaluation-v1",
-    "eligible_origins": ["2023-01-17"],
-    "completed_origins": ["2023-01-17"],
-    "result_count": 13,
-    "cap_hits": 0,
-    "run_identity": "weekly-test",
-}), encoding="utf-8")
-""".strip()
-        + "\n",
+        'print("synthetic weekly production complete", flush=True)\n',
         encoding="utf-8",
     )
     matrix = tmp_path / "weekly-matrix.json"
@@ -439,7 +568,6 @@ output.mkdir(parents=True, exist_ok=True)
                         "command": [
                             "python",
                             str(script),
-                            str(output),
                             "--output",
                             str(output),
                         ],
@@ -458,8 +586,31 @@ output.mkdir(parents=True, exist_ok=True)
         case_ids=("frozen-weekly-sanos-lv-reference",),
         case_prefix=None,
         resource="cpu",
-        expected_result_count=13,
+        expected_result_count=26,
         heartbeat_seconds=1.0,
     )
 
     assert state["status"] == "complete"
+    results_path = output / "results.json"
+    payload = json.loads(results_path.read_text(encoding="utf-8"))
+    payload["measure"] = "P"
+    _write_json(results_path, payload)
+    with pytest.raises(ValueError, match="identity is not authentic"):
+        execute_production_matrix._validate_results(
+            results_path,
+            output=output,
+            matrix_schema="hedging-weekly-production-matrix-v1",
+            expected_model="sanos-lv",
+            expected_result_count=26,
+        )
+    results.write_json(results_path)
+    record_path = output / "records" / "2023-01-17.json"
+    record_path.write_text('{"tampered":true}\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="record hash changed"):
+        execute_production_matrix._validate_results(
+            results_path,
+            output=output,
+            matrix_schema="hedging-weekly-production-matrix-v1",
+            expected_model="sanos-lv",
+            expected_result_count=26,
+        )

@@ -146,6 +146,20 @@ def power_exponential_risk(losses: ArrayLike, *, risk_parameter: float) -> float
     return -float(translation + np.mean(utility))
 
 
+def maximum_drawdown_from_losses(losses: ArrayLike) -> float:
+    """Return maximum cumulative-P&L drawdown for chronological losses.
+
+    The account starts at zero, period P&L is minus loss, and the statistic is
+    expressed in the same units as one loss observation.
+    """
+    values = _finite_losses(losses)
+    cumulative_pnl = np.concatenate(
+        (np.zeros(1, dtype=np.float64), np.cumsum(-values, dtype=np.float64))
+    )
+    running_peak = np.maximum.accumulate(cumulative_pnl)
+    return float(np.max(running_peak - cumulative_pnl))
+
+
 def _finite_losses(losses: ArrayLike) -> FloatArray:
     values = np.asarray(losses, dtype=np.float64)
     if values.ndim != 1 or len(values) == 0 or not np.all(np.isfinite(values)):

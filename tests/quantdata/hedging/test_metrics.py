@@ -9,6 +9,7 @@ from quantdata.hedging.metrics import (
     HedgeSmokeResult,
     assert_smoke_fixture,
     entropy_risk,
+    maximum_drawdown_from_losses,
     mean_variance_risk,
     mean_volatility_risk,
     power_exponential_risk,
@@ -123,6 +124,16 @@ def test_power_exponential_risk_is_cash_invariant(risk_parameter: float) -> None
     )
     base = power_exponential_risk(losses, risk_parameter=risk_parameter)
     assert shifted == pytest.approx(base + shift)
+
+
+def test_maximum_drawdown_from_losses_uses_chronological_cumulative_pnl() -> None:
+    losses = np.asarray([-2.0, 1.0, 3.0, -1.0, 2.0])
+
+    assert maximum_drawdown_from_losses(losses) == pytest.approx(5.0)
+
+
+def test_maximum_drawdown_from_losses_includes_initial_zero_peak() -> None:
+    assert maximum_drawdown_from_losses([2.0, -1.0]) == pytest.approx(2.0)
 
 
 @pytest.mark.parametrize(

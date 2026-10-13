@@ -17,7 +17,8 @@ from typing import TextIO
 DAILY_MATRIX_SCHEMA = "hedging-daily-production-matrix-v1"
 WEEKLY_MATRIX_SCHEMA = "hedging-weekly-production-matrix-v1"
 DAILY_RESULTS_SCHEMA = "hedging-daily-results-v2"
-WEEKLY_RESULTS_SCHEMA = "hedging-weekly-evaluation-v1"
+WEEKLY_EVALUATION_SCHEMA = "hedging-weekly-evaluation-v1"
+WEEKLY_RESULTS_SCHEMA = "hedging-weekly-results-v1"
 QUEUE_SCHEMA = "hedging-production-queue-v1"
 LEGACY_DAILY_QUEUE_SCHEMA = "hedging-daily-production-queue-v1"
 DEFAULT_DAILY_RESULT_COUNT = 12_220
@@ -402,23 +403,56 @@ def _validate_results(
                 f"{payload.get('model')} != {expected_model}"
             )
     elif matrix_schema == WEEKLY_MATRIX_SCHEMA:
-        if payload.get("schema") != WEEKLY_RESULTS_SCHEMA:
-            raise ValueError(f"unexpected weekly-results schema: {path}")
         run = _read_json_object(output / "run.json")
-        if run.get("schema") != WEEKLY_RESULTS_SCHEMA:
-            raise ValueError("weekly run metadata has an unexpected schema")
-        if run.get("model") != expected_model:
+        summary = _read_json_object(output / "summary.json")
+        from quantdata.sdlv.daily.front_spot.hedging.runners.weekly import (
+            WeeklyEvaluationSpec,
+            WeeklyEvaluationSummary,
+        )
+        from quantdata.sdlv.daily.front_spot.hedging.runners.weekly_results import (
+            WeeklyRunResults,
+        )
+
+        spec = WeeklyEvaluationSpec.from_dict(run)
+        completion = WeeklyEvaluationSummary.from_dict(summary)
+        aggregate = WeeklyRunResults.from_dict(payload)
+        if spec.model != expected_model:
             raise ValueError(
-                f"weekly-results model mismatch: {run.get('model')} != {expected_model}"
+                f"weekly-results model mismatch: {spec.model} != {expected_model}"
             )
-        completed = payload.get("completed_origins")
-        eligible = payload.get("eligible_origins")
-        if completed != eligible:
+        if aggregate.model != expected_model:
+            raise ValueError(
+                f"weekly aggregate model mismatch: {aggregate.model} != "
+                f"{expected_model}"
+            )
+        if completion.completed_origins != completion.eligible_origins:
             raise ValueError("weekly-results origins are incomplete")
-        if payload.get("cap_hits") != 0:
+        if completion.result_count != aggregate.result_count:
+            raise ValueError("weekly summary and aggregate result counts differ")
+        if completion.cap_hits != 0:
             raise ValueError("weekly-results contain position-cap hits")
-        if run.get("run_identity") != payload.get("run_identity"):
-            raise ValueError("weekly run and summary identities do not match")
+        identities = {spec.run_identity, completion.run_identity, aggregate.run_identity}
+        if len(identities) != 1:
+            raise ValueError("weekly run, summary, and aggregate identities differ")
+        if (
+            aggregate.measure != spec.measure
+            or aggregate.schedule != spec.schedule.value
+            or aggregate.dataset_manifest_sha256
+            != spec.dataset_manifest_sha256
+        ):
+            raise ValueError("weekly aggregate scope does not match its run")
+        run_path = output / "run.json"
+        summary_path = output / "summary.json"
+        if aggregate.source_run_sha256 != _file_sha256(run_path):
+            raise ValueError("weekly aggregate run hash changed")
+        if aggregate.source_summary_sha256 != _file_sha256(summary_path):
+            raise ValueError("weekly aggregate summary hash changed")
+        if tuple(aggregate.record_sha256_by_origin) != completion.completed_origins:
+            raise ValueError("weekly aggregate source-record dates are incomplete")
+        for origin, expected_sha256 in aggregate.record_sha256_by_origin.items():
+            record_path = output / "records" / f"{origin}.json"
+            if expected_sha256 != _file_sha256(record_path):
+                raise ValueError(f"weekly aggregate record hash changed for {origin}")
     else:
         raise ValueError(f"unsupported production-matrix schema: {matrix_schema}")
     if payload.get("result_count") != expected_result_count:
@@ -434,7 +468,7 @@ def _results_path(output: Path, *, matrix_schema: str) -> Path:
     if matrix_schema == DAILY_MATRIX_SCHEMA:
         return output / "results.json"
     if matrix_schema == WEEKLY_MATRIX_SCHEMA:
-        return output / "summary.json"
+        return output / "results.json"
     raise ValueError(f"unsupported production-matrix schema: {matrix_schema}")
 
 
@@ -542,6 +576,14 @@ def _read_json_object_bytes(value: bytes, *, path: Path) -> dict[str, object]:
     if not isinstance(payload, dict):
         raise ValueError(f"JSON artifact must be an object: {path}")
     return payload
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def _write_json_atomic(path: Path, payload: dict[str, object]) -> None:

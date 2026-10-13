@@ -95,38 +95,49 @@ def summarize_episode_losses(
     losses: ArrayLike,
     *,
     episode_dates: Sequence[date] | None = None,
+    episode_indices: Sequence[int] | None = None,
+    full_episode_count: int | None = None,
     config: EpisodeInferenceConfig = EpisodeInferenceConfig(),
 ) -> EpisodeLossSummary:
     """Summarize ordered complete-episode losses with overlap-aware inference."""
     values = _finite_vector(losses, name="losses")
     if episode_dates is not None:
         _validate_chronological_dates(episode_dates, observations=len(values))
+    indices, full_count = _validated_episode_indices(
+        episode_indices,
+        observations=len(values),
+        full_episode_count=full_episode_count,
+    )
     if len(values) < 2:
         raise ValueError("at least two episode losses are required")
-    if config.hac_lags >= len(values):
-        raise ValueError("hac_lags must be smaller than the episode count")
-    if config.bootstrap_block_length > len(values):
-        raise ValueError("bootstrap block length cannot exceed the episode count")
+    effective_hac_lags = min(config.hac_lags, full_count - 1)
+    effective_block_length = min(config.bootstrap_block_length, full_count)
 
     mean = float(np.mean(values))
-    raw_long_run_variance = hac_long_run_variance(
+    raw_long_run_variance = irregular_hac_long_run_variance(
         values,
-        lags=config.hac_lags,
+        episode_indices=indices,
+        full_episode_count=full_count,
+        lags=effective_hac_lags,
         kernel=config.hac_kernel,
     )
     long_run_variance = max(raw_long_run_variance, 0.0)
     standard_error = math.sqrt(long_run_variance / len(values))
-    bootstrap_95 = moving_block_bootstrap_mean_interval(
+    bootstrap_95 = masked_moving_block_bootstrap_mean_interval(
         values,
+        episode_indices=indices,
+        full_episode_count=full_count,
         confidence_level=0.95,
-        block_length=config.bootstrap_block_length,
+        block_length=effective_block_length,
         samples=config.bootstrap_samples,
         seed=config.bootstrap_seed,
     )
-    bootstrap_99 = moving_block_bootstrap_mean_interval(
+    bootstrap_99 = masked_moving_block_bootstrap_mean_interval(
         values,
+        episode_indices=indices,
+        full_episode_count=full_count,
         confidence_level=0.99,
-        block_length=config.bootstrap_block_length,
+        block_length=effective_block_length,
         samples=config.bootstrap_samples,
         seed=config.bootstrap_seed,
     )
@@ -149,7 +160,7 @@ def summarize_episode_losses(
             hac_long_run_variance=long_run_variance,
             hac_variance_was_floored=raw_long_run_variance < 0.0,
             hac_kernel=config.hac_kernel,
-            hac_lags=config.hac_lags,
+            hac_lags=effective_hac_lags,
             hac_95=(
                 mean - _NORMAL_95 * standard_error,
                 mean + _NORMAL_95 * standard_error,
@@ -162,6 +173,110 @@ def summarize_episode_losses(
             bootstrap_99=bootstrap_99,
         ),
     )
+
+
+def irregular_hac_long_run_variance(
+    values: ArrayLike,
+    *,
+    episode_indices: Sequence[int],
+    full_episode_count: int,
+    lags: int,
+    kernel: HacKernel = HacKernel.HANSEN_HODRICK,
+) -> float:
+    """Return HAC variance while retaining gaps in the full episode sequence."""
+    sample = _finite_vector(values, name="values")
+    indices, full_count = _validated_episode_indices(
+        episode_indices,
+        observations=len(sample),
+        full_episode_count=full_episode_count,
+    )
+    if len(sample) < 2:
+        raise ValueError("at least two observations are required")
+    if not 0 <= lags < full_count:
+        raise ValueError("lags must lie in [0, full_episode_count)")
+    if not isinstance(kernel, HacKernel):
+        raise ValueError("kernel must be a HacKernel")
+    centered = sample - np.mean(sample)
+    full_centered = np.zeros(full_count, dtype=np.float64)
+    selected = np.zeros(full_count, dtype=bool)
+    full_centered[indices] = centered
+    selected[indices] = True
+    numerator = float(centered @ centered)
+    for lag in range(1, lags + 1):
+        paired = selected[lag:] & selected[:-lag]
+        covariance_sum = float(
+            full_centered[lag:][paired] @ full_centered[:-lag][paired]
+        )
+        weight = (
+            1.0
+            if kernel is HacKernel.HANSEN_HODRICK
+            else 1.0 - lag / (lags + 1.0)
+        )
+        numerator += 2.0 * weight * covariance_sum
+    return numerator / len(sample)
+
+
+def masked_moving_block_bootstrap_mean_interval(
+    values: ArrayLike,
+    *,
+    episode_indices: Sequence[int],
+    full_episode_count: int,
+    confidence_level: float,
+    block_length: int,
+    samples: int,
+    seed: int,
+) -> tuple[float, float]:
+    """Bootstrap full chronological blocks while retaining a slice's gaps."""
+    sample = _finite_vector(values, name="values")
+    indices, full_count = _validated_episode_indices(
+        episode_indices,
+        observations=len(sample),
+        full_episode_count=full_episode_count,
+    )
+    if not 0.0 < confidence_level < 1.0:
+        raise ValueError("confidence_level must lie strictly between zero and one")
+    if not 1 <= block_length <= full_count:
+        raise ValueError("block_length must lie in [1, full_episode_count]")
+    if samples < 100:
+        raise ValueError("samples must be at least 100")
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise ValueError("seed must be an integer")
+
+    full_values = np.full(full_count, np.nan, dtype=np.float64)
+    full_values[indices] = sample
+    generator = np.random.default_rng(seed)
+    blocks_per_sample = math.ceil(full_count / block_length)
+    bootstrap_means = np.empty(samples, dtype=np.float64)
+    completed = 0
+    while completed < samples:
+        requested = samples - completed
+        starts = generator.integers(
+            0,
+            full_count,
+            size=(requested, blocks_per_sample),
+        )
+        offsets = np.arange(block_length)
+        sampled_indices = (
+            starts[:, :, None] + offsets[None, None, :]
+        ) % full_count
+        sampled_indices = sampled_indices.reshape(requested, -1)[:, :full_count]
+        sampled = full_values[sampled_indices]
+        counts = np.sum(np.isfinite(sampled), axis=1)
+        usable = counts > 0
+        if not np.any(usable):
+            continue
+        sums = np.nansum(sampled[usable], axis=1)
+        current = sums / counts[usable]
+        take = min(len(current), samples - completed)
+        bootstrap_means[completed : completed + take] = current[:take]
+        completed += take
+    tail = 0.5 * (1.0 - confidence_level)
+    lower, upper = np.quantile(
+        bootstrap_means,
+        (tail, 1.0 - tail),
+        method="linear",
+    )
+    return float(lower), float(upper)
 
 
 def hac_standard_error_of_mean(
@@ -279,6 +394,35 @@ def _finite_vector(values: ArrayLike, *, name: str) -> FloatArray:
     if vector.ndim != 1 or len(vector) == 0 or not np.all(np.isfinite(vector)):
         raise ValueError(f"{name} must be a non-empty finite vector")
     return vector
+
+
+def _validated_episode_indices(
+    episode_indices: Sequence[int] | None,
+    *,
+    observations: int,
+    full_episode_count: int | None,
+) -> tuple[NDArray[np.int64], int]:
+    if episode_indices is None:
+        if full_episode_count not in {None, observations}:
+            raise ValueError(
+                "full_episode_count requires explicit episode_indices when it "
+                "differs from the observation count"
+            )
+        return np.arange(observations, dtype=np.int64), observations
+    indices = np.asarray(tuple(episode_indices), dtype=np.int64)
+    if indices.shape != (observations,):
+        raise ValueError("episode_indices must align with episode losses")
+    if full_episode_count is None or full_episode_count <= 0:
+        raise ValueError("full_episode_count must be positive with episode_indices")
+    if (
+        np.any(indices < 0)
+        or np.any(indices >= full_episode_count)
+        or np.any(np.diff(indices) <= 0)
+    ):
+        raise ValueError(
+            "episode_indices must be unique, increasing, and inside the full sequence"
+        )
+    return indices, full_episode_count
 
 
 def _validate_chronological_dates(

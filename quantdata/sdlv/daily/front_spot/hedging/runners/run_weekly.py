@@ -98,6 +98,9 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.weekly import (
     WeeklyEvaluationSpec,
     run_weekly_evaluation,
 )
+from quantdata.sdlv.daily.front_spot.hedging.runners.weekly_results import (
+    summarize_completed_weekly_run,
+)
 from quantdata.torch import BaseEnvironment
 
 
@@ -255,6 +258,31 @@ def main() -> None:
         progress=progress,
         stop_after=arguments.stop_after,
     )
+    if summary.completed_origins == summary.eligible_origins:
+        aggregation_started = time.monotonic()
+
+        def aggregation_progress(
+            index: int,
+            total: int,
+            origin_date: date,
+        ) -> None:
+            if index != total and index % arguments.progress_every != 0:
+                return
+            elapsed = time.monotonic() - aggregation_started
+            rate = index / elapsed if elapsed > 0.0 else 0.0
+            eta = (total - index) / rate if rate > 0.0 else float("nan")
+            print(
+                f"weekly aggregation {index}/{total} origin={origin_date} "
+                f"elapsed_s={elapsed:.1f} eta_s={eta:.1f}",
+                flush=True,
+            )
+
+        results = summarize_completed_weekly_run(
+            panel,
+            run_directory=output,
+            progress=aggregation_progress,
+        )
+        results.write_json(output / "results.json")
     print(json.dumps(summary.to_dict(), indent=2, sort_keys=True), flush=True)
 
 
