@@ -124,3 +124,19 @@ def test_execute_production_queue_rejects_unready_case(tmp_path: Path) -> None:
             resource="gpu",
             expected_result_count=2,
         )
+
+
+def test_resource_probe_warns_when_gpuctl_is_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        execute_production_matrix,
+        "GPUCTL_PATH",
+        tmp_path / "missing-gpuctl",
+    )
+
+    execute_production_matrix._check_resources()
+
+    assert "could not be launched" in capsys.readouterr().out

@@ -17,6 +17,7 @@ MATRIX_SCHEMA = "hedging-daily-production-matrix-v1"
 RESULTS_SCHEMA = "hedging-daily-results-v2"
 QUEUE_SCHEMA = "hedging-daily-production-queue-v1"
 DEFAULT_EXPECTED_RESULT_COUNT = 12_220
+GPUCTL_PATH = Path("/home/hans/.local/bin/gpuctl")
 
 
 def execute_production_queue(
@@ -250,12 +251,20 @@ def _child_environment() -> dict[str, str]:
 
 
 def _check_resources() -> None:
-    result = subprocess.run(
-        ("gpuctl", "resources", "--json"),
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            (str(GPUCTL_PATH), "resources", "--json"),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError as error:
+        print(
+            "queue resource warning: gpuctl resources could not be launched: "
+            f"{error}",
+            flush=True,
+        )
+        return
     if result.returncode != 0:
         print(
             "queue resource warning: gpuctl resources could not be read: "
