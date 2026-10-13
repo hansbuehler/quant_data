@@ -80,8 +80,8 @@
   it by \textbf{7.62\%--20.79\%}, while Historical-SANOS mean--variance at
   $\lambda=0.1$ reduces it by \textbf{38.19\%}. The remaining Historical-SANOS
   and covariance objectives are still running. The 611-origin GROMM preparation is complete
-  and its rolling Q fit is waiting for the managed GPU. VolGAN daily readiness
-  passes and frozen-weekly readiness is running; AD--Seq--Vol and its
+  and its rolling Q fit is running on the managed GPU. VolGAN daily readiness
+  passes and corrected frozen-weekly readiness is queued behind GROMM; AD--Seq--Vol and its
   fine-tuned variant remain behind the same authenticated readiness gate.
   Weekly mechanics and pricing pass, but full weekly production has not yet
   started.}}
@@ -197,8 +197,8 @@ Model & Measure & Daily status & Evidence \\
 SANOS--LV & Q price / realized path & \statuscomplete & Current cohort: 611 origins, 12,220 records, zero cap hits and zero nonconvergence. \\
 Historical SANOS & P & \statuspending & Mean--variance $\lambda=0.1$ is complete on the current cohort; the remaining objectives are running. Superseded-cohort results are excluded. \\
 Robust covariance & P & \statuspending & Mean--variance $\lambda\in\{0.1,1,10\}$ is complete on the current cohort; mean--volatility production is running. \\
-GROMM & Q only & \statusready & All 611 dated inputs are prepared; rolling Q fitting is waiting for the managed GPU. Compatible P remains rejected by its fixed gates. \\
-VolGAN & P & \statusready & Daily public readiness passes; frozen-weekly public readiness is running. Full production remains pending. \\
+GROMM & Q only & \statusready & All 611 dated inputs are prepared; rolling Q fitting is running on the managed GPU. Compatible P remains rejected by its fixed gates. \\
+VolGAN & P & \statusready & Daily public readiness passes; corrected frozen-weekly public readiness is queued behind GROMM. Full production remains pending. \\
 AD--Seq--Vol / FT & P & \statusready & Full-geometry managed-GPU origin: 4,096 scenarios, 20 targets, 158.3 seconds, 2,636 MiB VRAM, no cap hit or nonconvergence; production pending. \\
 \bottomrule
 \end{tabularx}
