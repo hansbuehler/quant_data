@@ -53,8 +53,13 @@ random numbers; independent review passed. The daily production-queue validator
 now authenticates the immutable run and completion summary, recomputes the true
 eligible-origin cohort from the public panel, reparses every dated result record,
 and rebuilds every aggregate statistic before requiring exact agreement with the
-persisted report. The resulting complete hedging suite contains 308 passing
-tests. The strictly-2022 target-sizing exercise now
+persisted report. The weekly production validator now applies the same rule: it
+reconstructs the overlapping-origin cohort from the validated public panel,
+reparses every dated weekly record, recomputes exposures, diagnostics,
+inference, and risk slices, and requires exact persisted-aggregate equality.
+Integrated tests reject both a forged eligible-origin summary and a tampered
+record. The resulting complete hedging suite contains 310 passing tests. The
+strictly-2022 target-sizing exercise now
 fixes each target to one
 maturity-matched ATM spot-risk unit; all 20 calibration hedges converged with
 no cap hit. Its atomic derived artifact is keyed by the public dataset manifest
@@ -845,6 +850,10 @@ its no-recompute restart check validates the exact five dated refits. These are
 orchestration checks, not benchmark estimates. The native SANOS-LV and
 historical-SANOS weekly cases are materialized and deferred behind the daily
 CPU production queues so they do not compete for the currently saturated host.
+Before accepting a completed production cell, the queue fully validates the
+released dataset, recomputes the true overlapping-origin cohort, reparses all
+weekly records, rebuilds every reported statistic, and requires exact aggregate
+equality; stored self-hashes alone are not treated as completion evidence.
 
 ### Phase 9: historical and published baselines
 

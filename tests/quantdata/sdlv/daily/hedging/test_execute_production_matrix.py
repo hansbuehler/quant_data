@@ -18,6 +18,7 @@ from quantdata.sdlv.daily.front_spot.hedging.data.public_view import (
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners import (
     execute_production_matrix,
+    weekly_results,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
     DAILY_RECORD_SCHEMA,
@@ -313,6 +314,34 @@ def _write_authenticated_weekly_output(
     return results
 
 
+def _stub_weekly_authentication(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    expected: WeeklyRunResults,
+) -> None:
+    monkeypatch.setattr(
+        execute_production_matrix,
+        "_load_daily_panel",
+        lambda _dataset: object(),
+    )
+
+    def authenticate(_panel, *, results_path: Path):
+        payload = json.loads(results_path.read_text(encoding="utf-8"))
+        expected_payload = json.loads(json.dumps(expected.to_dict()))
+        if payload != expected_payload:
+            raise ValueError("weekly aggregate does not match authenticated records")
+        for origin, digest in expected.record_sha256_by_origin.items():
+            if _sha256(results_path.parent / "records" / f"{origin}.json") != digest:
+                raise ValueError(f"weekly aggregate record hash changed for {origin}")
+        return expected
+
+    monkeypatch.setattr(
+        weekly_results,
+        "authenticate_completed_weekly_results",
+        authenticate,
+    )
+
+
 def test_daily_production_validation_reconciles_dated_records(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -353,6 +382,7 @@ def test_daily_production_validation_reconciles_dated_records(
 
 def test_weekly_production_validation_retains_precommitted_cap_hits(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     output = tmp_path / "weekly"
     results = _write_authenticated_weekly_output(
@@ -360,6 +390,9 @@ def test_weekly_production_validation_retains_precommitted_cap_hits(
         cap_hits=3,
         require_no_cap_hits=False,
     )
+    dataset = tmp_path / "dataset"
+    dataset.mkdir()
+    _stub_weekly_authentication(monkeypatch, expected=results)
 
     validated = execute_production_matrix._validate_results(
         output / "results.json",
@@ -367,6 +400,7 @@ def test_weekly_production_validation_retains_precommitted_cap_hits(
         matrix_schema="hedging-weekly-production-matrix-v1",
         expected_model="sanos-lv",
         expected_result_count=results.result_count,
+        dataset=dataset,
     )
 
     assert validated == _sha256(output / "results.json")
@@ -805,6 +839,9 @@ def test_execute_weekly_production_queue_validates_complete_summary(
 ) -> None:
     output = tmp_path / "weekly-output"
     results = _write_authenticated_weekly_output(output)
+    dataset = tmp_path / "dataset"
+    dataset.mkdir()
+    _stub_weekly_authentication(monkeypatch, expected=results)
     script = tmp_path / "write_weekly_result.py"
     script.write_text(
         'print("synthetic weekly production complete", flush=True)\n',
@@ -824,6 +861,8 @@ def test_execute_weekly_production_queue_validates_complete_summary(
                         "command": [
                             "python",
                             str(script),
+                            "--dataset",
+                            str(dataset),
                             "--output",
                             str(output),
                         ],
@@ -851,13 +890,14 @@ def test_execute_weekly_production_queue_validates_complete_summary(
     payload = json.loads(results_path.read_text(encoding="utf-8"))
     payload["measure"] = "P"
     _write_json(results_path, payload)
-    with pytest.raises(ValueError, match="identity is not authentic"):
+    with pytest.raises(ValueError, match="weekly aggregate does not match"):
         execute_production_matrix._validate_results(
             results_path,
             output=output,
             matrix_schema="hedging-weekly-production-matrix-v1",
             expected_model="sanos-lv",
             expected_result_count=26,
+            dataset=dataset,
         )
     results.write_json(results_path)
     record_path = output / "records" / "2023-01-17.json"
@@ -869,4 +909,5 @@ def test_execute_weekly_production_queue_validates_complete_summary(
             matrix_schema="hedging-weekly-production-matrix-v1",
             expected_model="sanos-lv",
             expected_result_count=26,
+            dataset=dataset,
         )

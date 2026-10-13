@@ -506,6 +506,35 @@ def summarize_completed_weekly_run(
     )
 
 
+def authenticate_completed_weekly_results(
+    panel: PublicHedgingPanel,
+    *,
+    results_path: Path,
+    config: WeeklyResultsConfig = WeeklyResultsConfig(),
+) -> WeeklyRunResults:
+    """Rebuild and authenticate a persisted weekly aggregate from source records."""
+    path = Path(results_path)
+    report = summarize_completed_weekly_run(
+        panel,
+        run_directory=path.parent,
+        config=config,
+    )
+    persisted = _read_json_object(path)
+    rebuilt = json.loads(
+        json.dumps(
+            report.to_dict(),
+            sort_keys=True,
+            allow_nan=False,
+        )
+    )
+    if persisted != rebuilt:
+        raise ValueError(
+            "weekly aggregate does not match the authenticated run, summary, "
+            "eligible origins, and dated records"
+        )
+    return report
+
+
 def initialization_weekly_volatility_thresholds(
     panel: PublicHedgingPanel,
     *,

@@ -133,11 +133,7 @@ def _execute_production_queue_locked(
             expected_result_count=expected_result_count,
         )
         output = _command_option_path(command, "--output")
-        dataset = (
-            _command_option_path(command, "--dataset")
-            if matrix_schema == DAILY_MATRIX_SCHEMA
-            else None
-        )
+        dataset = _command_option_path(command, "--dataset")
         results_path = _results_path(output, matrix_schema=str(matrix_schema))
         if case_id in completed:
             result_sha256 = _validate_results(
@@ -488,18 +484,20 @@ def _validate_results(
             )
     elif matrix_schema == WEEKLY_MATRIX_SCHEMA:
         run = _read_json_object(output / "run.json")
-        summary = _read_json_object(output / "summary.json")
         from quantdata.sdlv.daily.front_spot.hedging.runners.weekly import (
             WeeklyEvaluationSpec,
-            WeeklyEvaluationSummary,
         )
         from quantdata.sdlv.daily.front_spot.hedging.runners.weekly_results import (
-            WeeklyRunResults,
+            authenticate_completed_weekly_results,
         )
 
+        if dataset is None:
+            raise ValueError("weekly production validation requires its public dataset")
         spec = WeeklyEvaluationSpec.from_dict(run)
-        completion = WeeklyEvaluationSummary.from_dict(summary)
-        aggregate = WeeklyRunResults.from_dict(payload)
+        aggregate = authenticate_completed_weekly_results(
+            _load_daily_panel(dataset),
+            results_path=path,
+        )
         if spec.model != expected_model:
             raise ValueError(
                 f"weekly-results model mismatch: {spec.model} != {expected_model}"
@@ -509,24 +507,13 @@ def _validate_results(
                 f"weekly aggregate model mismatch: {aggregate.model} != "
                 f"{expected_model}"
             )
-        if completion.completed_origins != completion.eligible_origins:
-            raise ValueError("weekly-results origins are incomplete")
-        if completion.result_count != aggregate.result_count:
-            raise ValueError("weekly summary and aggregate result counts differ")
-        if spec.require_no_cap_hits and completion.cap_hits != 0:
+        if spec.require_no_cap_hits and aggregate.cap_hits != 0:
             raise ValueError("weekly-results contain position-cap hits")
-        if spec.require_no_cap_hits and completion.nonconverged_fits != 0:
+        if spec.require_no_cap_hits and aggregate.nonconverged_fits != 0:
             raise ValueError("weekly-results contain nonconverged policy fits")
-        if (
-            aggregate.fit_cap_hits != completion.fit_cap_hits
-            or aggregate.executed_cap_hits != completion.executed_cap_hits
-            or aggregate.nonconverged_fits != completion.nonconverged_fits
-            or aggregate.cap_hits != completion.cap_hits
-        ):
-            raise ValueError("weekly numerical diagnostics do not reconcile")
-        identities = {spec.run_identity, completion.run_identity, aggregate.run_identity}
+        identities = {spec.run_identity, aggregate.run_identity}
         if len(identities) != 1:
-            raise ValueError("weekly run, summary, and aggregate identities differ")
+            raise ValueError("weekly run and aggregate identities differ")
         if (
             aggregate.measure != spec.measure
             or aggregate.schedule != spec.schedule.value
@@ -534,18 +521,6 @@ def _validate_results(
             != spec.dataset_manifest_sha256
         ):
             raise ValueError("weekly aggregate scope does not match its run")
-        run_path = output / "run.json"
-        summary_path = output / "summary.json"
-        if aggregate.source_run_sha256 != _file_sha256(run_path):
-            raise ValueError("weekly aggregate run hash changed")
-        if aggregate.source_summary_sha256 != _file_sha256(summary_path):
-            raise ValueError("weekly aggregate summary hash changed")
-        if tuple(aggregate.record_sha256_by_origin) != completion.completed_origins:
-            raise ValueError("weekly aggregate source-record dates are incomplete")
-        for origin, expected_sha256 in aggregate.record_sha256_by_origin.items():
-            record_path = output / "records" / f"{origin}.json"
-            if expected_sha256 != _file_sha256(record_path):
-                raise ValueError(f"weekly aggregate record hash changed for {origin}")
     else:
         raise ValueError(f"unsupported production-matrix schema: {matrix_schema}")
     if payload.get("result_count") != expected_result_count:
