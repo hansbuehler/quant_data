@@ -56,11 +56,6 @@
 \newcommand{\statusready}{\colorbox{pale}{\strut\textbf{ready}}}
 \newcommand{\statuspending}{\colorbox{amber}{\strut\textbf{pending}}}
 \newcommand{\model}[1]{\textbf{#1}}
-\IfFileExists{hedging_benchmark_summary_metrics.tex}{
-  \input{hedging_benchmark_summary_metrics.tex}
-}{
-  \input{quantdata/sdlv/daily/front_spot/hedging/reports/hedging_benchmark_summary_metrics.tex}
-}
 
 \begin{document}
 
@@ -77,21 +72,18 @@
   \parbox{\dimexpr\textwidth-2\fboxsep\relax}{%
   \textbf{Executive status.}
   The model-neutral daily benchmark is operational on a normalized,
-  original-data-free public-candidate panel. Two methods have complete
-  out-of-sample results over all 611 eligible 2023--2025 origins and all 20
-  daily digital targets. SANOS--LV reduces aggregate pure-hedge RMSE by
-  \textbf{\SanosVsUnhedgedReduction} versus the unhedged claims; historical
-  statistical SANOS reduces it by
-  \textbf{\HistoricalVsUnhedgedReduction}. Robust-covariance production is in
-  progress. The first rolling GROMM market fit is complete under Q, but its
-  compatible-P drift is rejected; bounded normalization of float32 decode
-  roundoff now makes the authenticated Q artifact operational. VolGAN and
-  AD--Seq--Vol pass their current implementation gates but do not yet have
-  comparable full-production results. Weekly mechanics and pricing pass. The
-  94-case weekly matrix is materialized: 28 native CPU cases are ready and
-  deferred until the active daily queues finish, four generated-model cases
-  await their review gate, and 62 cases remain blocked on incomplete
-  authenticated artifacts.}}
+  original-data-free public-candidate panel. The current target-notional cohort
+  has complete out-of-sample results for SANOS--LV and the three
+  robust-covariance mean--variance policies over all 611 eligible 2023--2025
+  origins and all 20 daily digital targets. SANOS--LV reduces aggregate
+  pure-hedge RMSE by \textbf{56.61\%}; the completed covariance policies reduce
+  it by \textbf{7.62\%--20.79\%}. Historical-SANOS and the remaining covariance
+  objectives are still running. The 611-origin GROMM preparation is complete
+  and its rolling Q fit is waiting for the managed GPU. VolGAN daily readiness
+  passes and frozen-weekly readiness is running; AD--Seq--Vol and its
+  fine-tuned variant remain behind the same authenticated readiness gate.
+  Weekly mechanics and pricing pass, but full weekly production has not yet
+  started.}}
 
 \section{Approach}
 
@@ -152,83 +144,41 @@ net position rather than inferred from differences of absolute-policy costs.
 
 \section{Current Results}
 
-\subsection{Completed daily production runs}
+\subsection{Authenticated current cohort}
 
-The four objective tables evaluate each completed policy on its full 611-origin
-out-of-sample \emph{economic loss}, including transaction costs and the common
-market-price contribution. Risk functionals are evaluated before rescaling;
-only the final scalar is displayed in basis points of inception normalized
-spot. Each entry is the equal-weighted mean of the 20 target-level scores. The
-historical row is the single fitted mean--volatility $\kappa=1$ policy evaluated
-under all four functionals; it is not presented as four separately refitted
-policies. As the remaining authenticated production runs finish, they enter as
-additional fitted-policy rows.
-
-\IfFileExists{hedging_benchmark_summary_objective_tables.tex}{
-  \input{hedging_benchmark_summary_objective_tables.tex}
-}{
-  \input{quantdata/sdlv/daily/front_spot/hedging/reports/hedging_benchmark_summary_objective_tables.tex}
-}
-
-Table~\ref{tab:risk} gives complementary distributional diagnostics. Aggregate
-RMSE is the square root of the equally weighted mean claim-level MSE; every
-claim contributes 611 observations. ``Reduction'' is relative to the matching
-unhedged RMSE. Expected shortfall is the equal-weighted target-level 95\%
-expected shortfall. Book MDD is the maximum drawdown of the cumulative P\&L of
-an equal-weighted 20-target daily book; worst target MDD is the largest
-single-target drawdown. Drawdowns start from zero and are reported in basis
-points of inception normalized spot, not as percentages of an unspecified
-capital account.
+Table~\ref{tab:risk} contains only policies with the same public dataset
+manifest and fixed 2022 target-notional identity. Every row contains all 611
+eligible origins and 12,220 claim/origin records, with zero position-cap hits
+and zero nonconvergence. The common unhedged RMSE is 163.16 basis points.
+``Reduction'' is relative to that value. Pure ES$_{95}$ is the equal-weighted
+mean of target-level expected shortfalls. Economic book MDD is the maximum
+drawdown of the cumulative P\&L of an equal-weighted 20-target daily book.
+Losses, costs, and drawdowns are in basis points of inception normalized spot;
+gross exposure is normalized entry notional.
 
 \begin{table}[H]
 \centering
 \small
-\caption{Out-of-sample daily distributional risk, in basis points except reduction.}
+\caption{Authenticated current-cohort daily results.}
 \label{tab:risk}
-\begin{tabular}{llrrrrrr}
+\begin{tabular}{@{}lrrrrrr@{}}
 \toprule
-Model & Targets & Unhedged RMSE & Pure RMSE & Reduction & ES$_{95}$ & Book MDD & Worst MDD \\
+Policy & Pure RMSE & Reduction & Pure ES$_{95}$ & Mean cost & Gross exposure & Economic book MDD \\
 \midrule
-SANOS--LV & all 20 & \SanosAllUnhedgedRmse & \SanosAllPureRmse & \SanosAllReduction & \SanosAllEsNinetyFive & \SanosAllBookDrawdown & \SanosAllWorstDrawdown \\
-SANOS--LV & 1D & \SanosOneDayUnhedgedRmse & \SanosOneDayPureRmse & \SanosOneDayReduction & \SanosOneDayEsNinetyFive & \SanosOneDayBookDrawdown & \SanosOneDayWorstDrawdown \\
-SANOS--LV & 3D & \SanosThreeDayUnhedgedRmse & \SanosThreeDayPureRmse & \SanosThreeDayReduction & \SanosThreeDayEsNinetyFive & \SanosThreeDayBookDrawdown & \SanosThreeDayWorstDrawdown \\
-\addlinespace
-Historical SANOS & all 20 & \HistoricalAllUnhedgedRmse & \HistoricalAllPureRmse & \HistoricalAllReduction & \HistoricalAllEsNinetyFive & \HistoricalAllBookDrawdown & \HistoricalAllWorstDrawdown \\
-Historical SANOS & 1D & \HistoricalOneDayUnhedgedRmse & \HistoricalOneDayPureRmse & \HistoricalOneDayReduction & \HistoricalOneDayEsNinetyFive & \HistoricalOneDayBookDrawdown & \HistoricalOneDayWorstDrawdown \\
-Historical SANOS & 3D & \HistoricalThreeDayUnhedgedRmse & \HistoricalThreeDayPureRmse & \HistoricalThreeDayReduction & \HistoricalThreeDayEsNinetyFive & \HistoricalThreeDayBookDrawdown & \HistoricalThreeDayWorstDrawdown \\
+SANOS--LV reference & 70.80 & 56.61\% & 134.71 & 10.10 & 2.6640 & 6,779.67 \\
+Covariance MV, $\lambda=0.1$ & 150.73 & 7.62\% & 215.13 & 0.66 & 0.0048 & 1,723.98 \\
+Covariance MV, $\lambda=1$ & 135.85 & 16.74\% & 209.59 & 0.74 & 0.0062 & 1,720.29 \\
+Covariance MV, $\lambda=10$ & 129.25 & 20.79\% & 257.48 & 1.48 & 0.0518 & 1,754.14 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The SANOS--LV hedge is materially stronger on this first completed comparison,
-especially for the remaining-life 3D claims. Its aggregate pure RMSE is
-\SanosVsHistoricalReduction\ lower than historical SANOS. Pricing loss is
-negligible at aggregate scale:
-SANOS--LV economic RMSE is \SanosAllEconomicRmseSix\,bp versus pure RMSE
-\SanosAllPureRmseSix\,bp; historical SANOS
-uses the common price and therefore has zero pricing contribution by design.
-
-\begin{table}[H]
-\centering
-\small
-\caption{Average trading diagnostics across all 20 targets and 611 origins.}
-\label{tab:trading}
-\begin{tabular}{lrrrrr}
-\toprule
-Model & Mean cost (bp) & Gross marked exposure & Cap hits & Nonconverged & Records \\
-\midrule
-SANOS--LV & \SanosAllMeanCost & \SanosAllGrossExposure & \SanosAllCapHits & \SanosAllNonconverged & \SanosRecordCount \\
-Historical SANOS & \HistoricalAllMeanCost & \HistoricalAllGrossExposure & \HistoricalAllCapHits & \HistoricalAllNonconverged & \HistoricalRecordCount \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Raw support counts are deliberately omitted. Conic-solver residuals and the
-difference between claim and zero-claim policies make a numerical ``nonzero''
-threshold economically arbitrary. Table~\ref{tab:trading} instead reports the
-actual paid cost and the origin-marked gross executable position. SANOS--LV's
-larger marked exposure reflects its spot delta and exact factor hedge; the
-historical policy pays a similar average cost on a much smaller marked book.
+SANOS--LV gives the largest RMSE reduction in this completed subset, but it uses
+a materially larger marked book and pays more transaction cost. The covariance
+policies trade smaller books and have smaller cumulative book drawdown. The
+$\lambda=10$ covariance policy has its best RMSE, whereas its tail expected
+shortfall is worse than at $\lambda=1$. Historical-SANOS and the other fitted
+objectives must complete before this becomes a full model ranking.
 
 \subsection{Evidence level across models}
 
@@ -240,11 +190,11 @@ historical policy pays a similar average cost on a much smaller marked book.
 \toprule
 Model & Measure & Daily status & Evidence \\
 \midrule
-SANOS--LV & Q price / realized path & \statuscomplete & 611 origins, \SanosRecordCount\ records, zero cap hits and zero nonconvergence. \\
-Historical SANOS & P & \statuscomplete & 611 origins, \HistoricalRecordCount\ records, zero cap hits and zero nonconvergence. \\
-Robust covariance & P & \statuspending & Full 20-target one-origin mean--volatility gate passed for $\kappa\in\{0.1,1,2,3\}$; the 611-origin production run is in progress. \\
-GROMM & Q only & \statusready & First rolling Q calibration completed; compatible P failed its fixed gates, while authenticated real-artifact Q replay produces finite scenarios. \\
-VolGAN & P & \statusready & Public-architecture implementation, restartable rolling updates, daily/weekly adapters, and smoke tests pass; production pending. \\
+SANOS--LV & Q price / realized path & \statuscomplete & Current cohort: 611 origins, 12,220 records, zero cap hits and zero nonconvergence. \\
+Historical SANOS & P & \statuspending & Current-cohort rolling production is running; superseded-cohort results are excluded. \\
+Robust covariance & P & \statuspending & Mean--variance $\lambda\in\{0.1,1,10\}$ is complete on the current cohort; mean--volatility production is running. \\
+GROMM & Q only & \statusready & All 611 dated inputs are prepared; rolling Q fitting is waiting for the managed GPU. Compatible P remains rejected by its fixed gates. \\
+VolGAN & P & \statusready & Daily public readiness passes; frozen-weekly public readiness is running. Full production remains pending. \\
 AD--Seq--Vol / FT & P & \statusready & Full-geometry managed-GPU origin: 4,096 scenarios, 20 targets, 158.3 seconds, 2,636 MiB VRAM, no cap hit or nonconvergence; production pending. \\
 \bottomrule
 \end{tabularx}
@@ -361,31 +311,27 @@ The architecture and published comparison are due to \citet{HanEtAl2026}.
 \vspace{0.35em}
 {\footnotesize
 \textbf{Provenance.}
-The completed results use public dataset manifest SHA-256
-\texttt{\DatasetManifestPrefix...}.\\
-SANOS--LV run identity begins \texttt{\SanosRunPrefix}; historical-SANOS run
-identity begins \texttt{\HistoricalRunPrefix}.\\
-All headline numbers are derived from immutable
-\texttt{hedging-daily-results-v2} artifacts.}
+The current cohort's public dataset manifest begins \texttt{58741552e0f6};
+its target-notional identity begins \texttt{1.1:fd6839a0}. The SANOS--LV
+results SHA-256 begins \texttt{9e4252f60540}.
+The covariance results SHA-256 values are
+\texttt{5ec474dd...}, \texttt{17cfc415...}, and \texttt{47ff392b...} for
+$\lambda=0.1,1,10$, respectively. Every headline number is derived from an
+immutable \texttt{hedging-daily-results-v2} artifact and its fully reconciled
+dated records.}
 
 \clearpage
 \appendix
 \section{Target-Level Out-of-Sample Objectives}
 \label{app:target-objectives}
 
-Each table reports the complete 611-origin score for every target and completed
-policy. Objectives are evaluated on the original inception-spot-normalized
-economic loss, including transaction costs, and the final scalar alone is
-multiplied by $10^4$ for display in basis points. Pure RMSE and economic maximum
-drawdown use the same target notional. This preserves the risk-aversion
-parameters shown in the column headings; applying them after converting losses
-to basis points would be dimensionally incorrect.
-
-\IfFileExists{hedging_benchmark_summary_objective_appendix.tex}{
-  \input{hedging_benchmark_summary_objective_appendix.tex}
-}{
-  \input{quantdata/sdlv/daily/front_spot/hedging/reports/hedging_benchmark_summary_objective_appendix.tex}
-}
+The target-level appendix is intentionally withheld from this interim build.
+It will be generated only after the current-cohort historical-SANOS and
+remaining covariance policies complete, so the per-model, per-target, and
+per-objective tables cannot silently mix superseded target quantities with the
+current benchmark cohort. Objectives will be evaluated on unscaled
+inception-spot-normalized economic loss before the final scalar is converted to
+basis points.
 
 \clearpage
 \bibliographystyle{plainnat}
