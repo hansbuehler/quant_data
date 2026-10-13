@@ -37,6 +37,7 @@ def test_summary_metrics_pool_complete_claim_population(tmp_path: Path) -> None:
     )
 
     assert payload["schema"] == SUMMARY_SCHEMA
+    assert payload["target_notional_identity"] == "target-notional-test"
     models = payload["models"]
     assert isinstance(models, dict)
     sanos_all = models["sanos-lv"]["metrics"]["all"]
@@ -102,6 +103,33 @@ def test_summary_metrics_reject_different_dataset_manifests(tmp_path: Path) -> N
         )
 
 
+def test_summary_metrics_reject_different_target_notionals(tmp_path: Path) -> None:
+    sanos = tmp_path / "sanos" / "results.json"
+    historical = tmp_path / "historical" / "results.json"
+    _write_results(
+        sanos,
+        model="sanos-lv",
+        manifest="a" * 64,
+        one_day_pure_rmse=1.0,
+        three_day_pure_rmse=2.0,
+        target_notional_identity="target-notional-a",
+    )
+    _write_results(
+        historical,
+        model="historical-sanos",
+        manifest="a" * 64,
+        one_day_pure_rmse=1.5,
+        three_day_pure_rmse=3.0,
+        target_notional_identity="target-notional-b",
+    )
+
+    with pytest.raises(ValueError, match="different target notionals"):
+        build_summary_metrics(
+            sanos_results=sanos,
+            historical_results=historical,
+        )
+
+
 def _write_results(
     path: Path,
     *,
@@ -109,6 +137,7 @@ def _write_results(
     manifest: str,
     one_day_pure_rmse: float,
     three_day_pure_rmse: float,
+    target_notional_identity: str = "target-notional-test",
 ) -> None:
     path.parent.mkdir(parents=True)
     slices = []
@@ -154,6 +183,7 @@ def _write_results(
     )
     run = {
         "run_identity": run_identity,
+        "target_notional_identity": target_notional_identity,
         "model_config_snapshot": {
             "fields": {
                 "objective": "mean-volatility",

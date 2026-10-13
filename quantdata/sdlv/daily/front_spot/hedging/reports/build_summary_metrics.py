@@ -53,6 +53,11 @@ def build_summary_metrics(
     }
     if len(manifests) != 1:
         raise ValueError("completed summary runs use different dataset manifests")
+    target_notionals = {
+        _require_string(policy, "target_notional_identity") for policy in policies
+    }
+    if len(target_notionals) != 1:
+        raise ValueError("completed summary runs use different target notionals")
 
     models: JsonObject = {}
     for policy in policies:
@@ -83,6 +88,7 @@ def build_summary_metrics(
     return {
         "schema": SUMMARY_SCHEMA,
         "dataset_manifest_sha256": manifests.pop(),
+        "target_notional_identity": target_notionals.pop(),
         "display_scale": DISPLAY_SCALE,
         "display_units": "basis points of inception normalized spot",
         "objective_scaling": (
@@ -153,6 +159,10 @@ def _read_policy(
         "measure": _require_string(results, "measure"),
         "run_identity": _require_string(results, "run_identity"),
         "dataset_manifest_sha256": _require_string(results, "dataset_manifest_sha256"),
+        "target_notional_identity": _require_string(
+            run,
+            "target_notional_identity",
+        ),
         "result_count": _require_integer(results, "result_count"),
         "fitted_objective": fitted_objective,
         "fitted_parameter": fitted_parameter,
