@@ -9,10 +9,16 @@ from pathlib import Path
 import pytest
 from filelock import FileLock
 
+from quantdata.hedging.metrics import HedgeSmokeResult
 from quantdata.hedging.protocols import HedgeSchedule
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly import weekly_targets
 from quantdata.sdlv.daily.front_spot.hedging.runners import (
     execute_production_matrix,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
+    DAILY_RECORD_SCHEMA,
+    DailyEvaluationSpec,
+    DailyEvaluationSummary,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.weekly import (
     WeeklyEvaluationSpec,
@@ -36,6 +42,81 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _write_authenticated_daily_output(
+    output: Path,
+    *,
+    model: str = "historical-sanos",
+) -> str:
+    origins = ("2023-01-17", "2023-01-18")
+    target = "digital-put-1d-atm"
+    spec = DailyEvaluationSpec(
+        label="daily-test",
+        model=model,
+        measure="P",
+        model_config_identity="model-test",
+        model_config_snapshot_json='{"test":true}',
+        dataset_manifest_sha256="d" * 64,
+        evaluation_start=date.fromisoformat(origins[0]),
+        evaluation_end=date.fromisoformat(origins[-1]),
+        rolling_observations=252,
+        target_labels=(target,),
+        target_quantities=(1.0,),
+        target_notional_identity="notional-test",
+    )
+    _write_json(output / "run.json", {**spec.to_dict(), "run_identity": spec.run_identity})
+    for origin in origins:
+        result = HedgeSmokeResult(
+            model=model,
+            measure=spec.measure,
+            origin_date=origin,
+            terminal_date=origin,
+            claim=target,
+            market_price=0.5,
+            model_price=0.5,
+            payoff=0.0,
+            unhedged_pnl=-0.5,
+            hedged_pnl=-0.5,
+            transaction_cost=0.0,
+            actions={},
+            pricing_difference=0.0,
+            pure_hedge_error=-0.5,
+            objective_value=0.25,
+            converged=True,
+            cap_hits=0,
+        )
+        _write_json(
+            output / "records" / f"{origin}.json",
+            {
+                "schema": DAILY_RECORD_SCHEMA,
+                "run_identity": spec.run_identity,
+                "origin_date": origin,
+                "results": [result.to_dict()],
+            },
+        )
+    summary = DailyEvaluationSummary(
+        run_identity=spec.run_identity,
+        eligible_origins=origins,
+        completed_origins=origins,
+        reused_origins=(),
+        result_count=len(origins),
+        nonconverged_results=0,
+        cap_hits=0,
+    )
+    _write_json(output / "summary.json", summary.to_dict())
+    _write_json(
+        output / "results.json",
+        {
+            "schema": "hedging-daily-results-v2",
+            "run_identity": spec.run_identity,
+            "model": spec.model,
+            "measure": spec.measure,
+            "dataset_manifest_sha256": spec.dataset_manifest_sha256,
+            "result_count": summary.result_count,
+        },
+    )
+    return spec.run_identity
 
 
 def _weekly_loss_statistics(
@@ -175,6 +256,34 @@ def _write_authenticated_weekly_output(
     return results
 
 
+def test_daily_production_validation_reconciles_dated_records(tmp_path: Path) -> None:
+    output = tmp_path / "daily"
+    _write_authenticated_daily_output(output)
+    results_path = output / "results.json"
+
+    validated = execute_production_matrix._validate_results(
+        results_path,
+        output=output,
+        matrix_schema="hedging-daily-production-matrix-v1",
+        expected_model="historical-sanos",
+        expected_result_count=2,
+    )
+
+    assert validated == _sha256(results_path)
+    record_path = output / "records" / "2023-01-17.json"
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    record["results"][0]["claim"] = "tampered-claim"
+    _write_json(record_path, record)
+    with pytest.raises(ValueError, match="precommitted target book"):
+        execute_production_matrix._validate_results(
+            results_path,
+            output=output,
+            matrix_schema="hedging-daily-production-matrix-v1",
+            expected_model="historical-sanos",
+            expected_result_count=2,
+        )
+
+
 def test_weekly_production_validation_retains_precommitted_cap_hits(
     tmp_path: Path,
 ) -> None:
@@ -201,25 +310,10 @@ def test_execute_production_queue_runs_and_resumes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     output = tmp_path / "output"
+    _write_authenticated_daily_output(output)
     script = tmp_path / "write_result.py"
     script.write_text(
-        """
-import json
-from pathlib import Path
-import sys
-
-output = Path(sys.argv[1])
-results = output / "results.json"
-results.parent.mkdir(parents=True, exist_ok=True)
-results.write_text(json.dumps({
-    "schema": "hedging-daily-results-v2",
-    "model": "historical-sanos",
-    "result_count": 2,
-    "run_identity": "test-run",
-}), encoding="utf-8")
-print("synthetic production complete", flush=True)
-""".strip()
-        + "\n",
+        'print("synthetic production complete", flush=True)\n',
         encoding="utf-8",
     )
     matrix = tmp_path / "matrix.json"
@@ -285,7 +379,7 @@ print("synthetic production complete", flush=True)
     assert "synthetic production complete" in (output / "run.log").read_text()
 
     payload = json.loads((output / "results.json").read_text(encoding="utf-8"))
-    payload["run_identity"] = "tampered-run"
+    payload["tampered"] = True
     _write_json(output / "results.json", payload)
     with pytest.raises(ValueError, match="result hash changed"):
         execute_production_matrix.execute_production_queue(
@@ -370,26 +464,12 @@ def test_execute_production_queue_can_retain_failure_and_continue(
 ) -> None:
     failed_output = tmp_path / "failed"
     complete_output = tmp_path / "complete"
+    _write_authenticated_daily_output(complete_output)
     failed_script = tmp_path / "fail.py"
     failed_script.write_text("raise SystemExit(7)\n", encoding="utf-8")
     complete_script = tmp_path / "complete.py"
     complete_script.write_text(
-        """
-import json
-from pathlib import Path
-import sys
-
-output = Path(sys.argv[1])
-results = output / "results.json"
-results.parent.mkdir(parents=True, exist_ok=True)
-results.write_text(json.dumps({
-    "schema": "hedging-daily-results-v2",
-    "model": "historical-sanos",
-    "result_count": 2,
-    "run_identity": "continued-run",
-}), encoding="utf-8")
-""".strip()
-        + "\n",
+        'print("synthetic production complete", flush=True)\n',
         encoding="utf-8",
     )
     matrix = tmp_path / "matrix.json"
@@ -469,15 +549,7 @@ def test_execute_production_queue_requires_explicit_legacy_state_adoption(
     tmp_path: Path,
 ) -> None:
     output = tmp_path / "output"
-    _write_json(
-        output / "results.json",
-        {
-            "schema": "hedging-daily-results-v2",
-            "model": "historical-sanos",
-            "result_count": 2,
-            "run_identity": "legacy-run",
-        },
-    )
+    _write_authenticated_daily_output(output)
     matrix = tmp_path / "matrix.json"
     matrix.write_text(
         json.dumps(
