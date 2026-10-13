@@ -9,9 +9,13 @@ from pathlib import Path
 import pytest
 from filelock import FileLock
 
+from quantdata.hedging.data.public_dataset import HEDGING_PUBLIC_SCHEMA
 from quantdata.hedging.metrics import HedgeSmokeResult
 from quantdata.hedging.protocols import HedgeSchedule
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly import weekly_targets
+from quantdata.sdlv.daily.front_spot.hedging.data.public_view import (
+    PublicHedgingPanelView,
+)
 from quantdata.sdlv.daily.front_spot.hedging.runners import (
     execute_production_matrix,
 )
@@ -19,6 +23,9 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
     DAILY_RECORD_SCHEMA,
     DailyEvaluationSpec,
     DailyEvaluationSummary,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners.daily_results import (
+    summarize_completed_daily_run,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.weekly import (
     WeeklyEvaluationSpec,
@@ -44,23 +51,81 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+class _DailyDataset:
+    def __init__(self, directory: Path) -> None:
+        self.directory = directory
+
+
+class _DailySnapshot:
+    normalized_spot = 1.0
+
+    @staticmethod
+    def quote_by_id() -> dict[str, object]:
+        return {}
+
+
+class _DailyMarketDay:
+    @staticmethod
+    def atm_vol_at_business_dte(_business_dte: int) -> float:
+        return 0.2
+
+    @staticmethod
+    def hedge_snapshot() -> _DailySnapshot:
+        return _DailySnapshot()
+
+
+class _DailyPanel(PublicHedgingPanelView):
+    def __init__(self, directory: Path, *, manifest_sha256: str) -> None:
+        self.geometry = {"schema": HEDGING_PUBLIC_SCHEMA}
+        self.dataset = _DailyDataset(directory)
+        self.dataset_manifest_sha256 = manifest_sha256
+        self.dates = (
+            date(2022, 12, 28),
+            date(2022, 12, 29),
+            date(2023, 1, 17),
+            date(2023, 1, 18),
+            date(2023, 1, 19),
+        )
+
+    def prior_one_day_origins(self, origin_date: date, *, count: int):
+        index = self.dates.index(origin_date)
+        if index < count:
+            raise ValueError("insufficient history")
+        return self.dates[index - count : index]
+
+    def one_day_transition(self, origin_date: date) -> object:
+        index = self.dates.index(origin_date)
+        if index + 1 >= len(self.dates):
+            raise ValueError("no endpoint")
+        return object()
+
+    def market_day(self, _trading_date: date) -> _DailyMarketDay:
+        return _DailyMarketDay()
+
+
 def _write_authenticated_daily_output(
     output: Path,
     *,
     model: str = "historical-sanos",
-) -> str:
+) -> tuple[str, Path, _DailyPanel]:
     origins = ("2023-01-17", "2023-01-18")
     target = "digital-put-1d-atm"
+    dataset = output.parent / f"{output.name}-dataset"
+    dataset.mkdir(parents=True, exist_ok=True)
+    manifest_path = dataset / "manifest.json"
+    manifest_path.write_text("{}\n", encoding="utf-8")
+    manifest_sha256 = _sha256(manifest_path)
+    panel = _DailyPanel(dataset, manifest_sha256=manifest_sha256)
     spec = DailyEvaluationSpec(
         label="daily-test",
         model=model,
         measure="P",
         model_config_identity="model-test",
         model_config_snapshot_json='{"test":true}',
-        dataset_manifest_sha256="d" * 64,
+        dataset_manifest_sha256=manifest_sha256,
         evaluation_start=date.fromisoformat(origins[0]),
         evaluation_end=date.fromisoformat(origins[-1]),
-        rolling_observations=252,
+        rolling_observations=2,
         target_labels=(target,),
         target_quantities=(1.0,),
         target_notional_identity="notional-test",
@@ -105,18 +170,10 @@ def _write_authenticated_daily_output(
         cap_hits=0,
     )
     _write_json(output / "summary.json", summary.to_dict())
-    _write_json(
-        output / "results.json",
-        {
-            "schema": "hedging-daily-results-v2",
-            "run_identity": spec.run_identity,
-            "model": spec.model,
-            "measure": spec.measure,
-            "dataset_manifest_sha256": spec.dataset_manifest_sha256,
-            "result_count": summary.result_count,
-        },
+    summarize_completed_daily_run(panel, run_directory=output).write_json(
+        output / "results.json"
     )
-    return spec.run_identity
+    return spec.run_identity, dataset, panel
 
 
 def _weekly_loss_statistics(
@@ -256,9 +313,17 @@ def _write_authenticated_weekly_output(
     return results
 
 
-def test_daily_production_validation_reconciles_dated_records(tmp_path: Path) -> None:
+def test_daily_production_validation_reconciles_dated_records(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     output = tmp_path / "daily"
-    _write_authenticated_daily_output(output)
+    _, dataset, panel = _write_authenticated_daily_output(output)
+    monkeypatch.setattr(
+        execute_production_matrix,
+        "_load_daily_panel",
+        lambda _dataset: panel,
+    )
     results_path = output / "results.json"
 
     validated = execute_production_matrix._validate_results(
@@ -267,6 +332,7 @@ def test_daily_production_validation_reconciles_dated_records(tmp_path: Path) ->
         matrix_schema="hedging-daily-production-matrix-v1",
         expected_model="historical-sanos",
         expected_result_count=2,
+        dataset=dataset,
     )
 
     assert validated == _sha256(results_path)
@@ -281,6 +347,7 @@ def test_daily_production_validation_reconciles_dated_records(tmp_path: Path) ->
             matrix_schema="hedging-daily-production-matrix-v1",
             expected_model="historical-sanos",
             expected_result_count=2,
+            dataset=dataset,
         )
 
 
@@ -310,7 +377,7 @@ def test_execute_production_queue_runs_and_resumes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     output = tmp_path / "output"
-    _write_authenticated_daily_output(output)
+    _, dataset, panel = _write_authenticated_daily_output(output)
     script = tmp_path / "write_result.py"
     script.write_text(
         'print("synthetic production complete", flush=True)\n',
@@ -331,6 +398,8 @@ def test_execute_production_queue_runs_and_resumes(
                             "python",
                             str(script),
                             str(output),
+                            "--dataset",
+                            str(dataset),
                             "--output",
                             str(output),
                         ],
@@ -341,6 +410,11 @@ def test_execute_production_queue_runs_and_resumes(
         encoding="utf-8",
     )
     monkeypatch.setattr(execute_production_matrix, "_check_resources", lambda: None)
+    monkeypatch.setattr(
+        execute_production_matrix,
+        "_load_daily_panel",
+        lambda _dataset: panel,
+    )
     state_path = tmp_path / "queue.json"
 
     first = execute_production_matrix.execute_production_queue(
@@ -381,7 +455,7 @@ def test_execute_production_queue_runs_and_resumes(
     payload = json.loads((output / "results.json").read_text(encoding="utf-8"))
     payload["tampered"] = True
     _write_json(output / "results.json", payload)
-    with pytest.raises(ValueError, match="result hash changed"):
+    with pytest.raises(ValueError, match="daily aggregate does not match"):
         execute_production_matrix.execute_production_queue(
             matrix_path=matrix,
             state_path=state_path,
@@ -464,7 +538,7 @@ def test_execute_production_queue_can_retain_failure_and_continue(
 ) -> None:
     failed_output = tmp_path / "failed"
     complete_output = tmp_path / "complete"
-    _write_authenticated_daily_output(complete_output)
+    _, dataset, panel = _write_authenticated_daily_output(complete_output)
     failed_script = tmp_path / "fail.py"
     failed_script.write_text("raise SystemExit(7)\n", encoding="utf-8")
     complete_script = tmp_path / "complete.py"
@@ -486,6 +560,8 @@ def test_execute_production_queue_can_retain_failure_and_continue(
                         "command": [
                             "python",
                             str(failed_script),
+                            "--dataset",
+                            str(dataset),
                             "--output",
                             str(failed_output),
                         ],
@@ -499,6 +575,8 @@ def test_execute_production_queue_can_retain_failure_and_continue(
                             "python",
                             str(complete_script),
                             str(complete_output),
+                            "--dataset",
+                            str(dataset),
                             "--output",
                             str(complete_output),
                         ],
@@ -509,6 +587,11 @@ def test_execute_production_queue_can_retain_failure_and_continue(
         encoding="utf-8",
     )
     monkeypatch.setattr(execute_production_matrix, "_check_resources", lambda: None)
+    monkeypatch.setattr(
+        execute_production_matrix,
+        "_load_daily_panel",
+        lambda _dataset: panel,
+    )
     state_path = tmp_path / "queue.json"
 
     first = execute_production_matrix.execute_production_queue(
@@ -547,9 +630,10 @@ def test_execute_production_queue_can_retain_failure_and_continue(
 
 def test_execute_production_queue_requires_explicit_legacy_state_adoption(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     output = tmp_path / "output"
-    _write_authenticated_daily_output(output)
+    _, dataset, panel = _write_authenticated_daily_output(output)
     matrix = tmp_path / "matrix.json"
     matrix.write_text(
         json.dumps(
@@ -564,6 +648,8 @@ def test_execute_production_queue_requires_explicit_legacy_state_adoption(
                         "command": [
                             "python",
                             "unused",
+                            "--dataset",
+                            str(dataset),
                             "--output",
                             str(output),
                         ],
@@ -572,6 +658,11 @@ def test_execute_production_queue_requires_explicit_legacy_state_adoption(
             }
         ),
         encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        execute_production_matrix,
+        "_load_daily_panel",
+        lambda _dataset: panel,
     )
     state_path = tmp_path / "queue.json"
     state_path.write_text(

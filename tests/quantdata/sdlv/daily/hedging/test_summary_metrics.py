@@ -2,15 +2,42 @@ from __future__ import annotations
 
 import json
 import math
+from datetime import date
 from pathlib import Path
 
 import pytest
 
+import quantdata.sdlv.daily.front_spot.hedging.reports.build_summary_metrics as summary_metrics_module
 from quantdata.sdlv.daily.front_spot.hedging.reports.build_summary_metrics import (
     SUMMARY_SCHEMA,
     build_summary_metrics,
     write_summary_metrics,
 )
+from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
+    DailyEvaluationSpec,
+)
+
+
+@pytest.fixture(autouse=True)
+def _authenticate_synthetic_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        summary_metrics_module,
+        "default_public_candidate_path",
+        lambda: Path("/synthetic-public-dataset"),
+    )
+    monkeypatch.setattr(
+        summary_metrics_module,
+        "PublicHedgingPanel",
+        lambda _path, validate: object(),
+    )
+    monkeypatch.setattr(
+        summary_metrics_module,
+        "_authenticate_policy_results",
+        lambda _panel, path, expected_model: summary_metrics_module._read_results(
+            path,
+            expected_model=expected_model,
+        ),
+    )
 
 
 def test_summary_metrics_pool_complete_claim_population(tmp_path: Path) -> None:
@@ -130,6 +157,37 @@ def test_summary_metrics_reject_different_target_notionals(tmp_path: Path) -> No
         )
 
 
+def test_summary_metrics_reject_forged_target_notional_identity(
+    tmp_path: Path,
+) -> None:
+    sanos = tmp_path / "sanos" / "results.json"
+    historical = tmp_path / "historical" / "results.json"
+    _write_results(
+        sanos,
+        model="sanos-lv",
+        manifest="a" * 64,
+        one_day_pure_rmse=1.0,
+        three_day_pure_rmse=2.0,
+    )
+    _write_results(
+        historical,
+        model="historical-sanos",
+        manifest="a" * 64,
+        one_day_pure_rmse=1.5,
+        three_day_pure_rmse=3.0,
+    )
+    run_path = historical.parent / "run.json"
+    run = json.loads(run_path.read_text(encoding="utf-8"))
+    run["target_notional_identity"] = "forged-current-cohort"
+    run_path.write_text(json.dumps(run), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="identity is not authentic"):
+        build_summary_metrics(
+            sanos_results=sanos,
+            historical_results=historical,
+        )
+
+
 def _write_results(
     path: Path,
     *,
@@ -166,7 +224,30 @@ def _write_results(
                     "nonconverged_results": 0,
                 }
             )
-    run_identity = ("1" if model == "sanos-lv" else "2") * 64
+    spec = DailyEvaluationSpec(
+        label=f"summary-test-{model}",
+        model=model,
+        measure="test",
+        model_config_identity=f"model-config-{model}",
+        model_config_snapshot_json=json.dumps(
+            {
+                "fields": {
+                    "objective": "mean-volatility",
+                    "risk_parameter": 1.0,
+                }
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        dataset_manifest_sha256=manifest,
+        evaluation_start=date(2023, 1, 1),
+        evaluation_end=date(2025, 12, 31),
+        rolling_observations=252,
+        target_labels=tuple(claim for claim, _, _ in claims),
+        target_quantities=tuple(1.0 for _ in claims),
+        target_notional_identity=target_notional_identity,
+    )
+    run_identity = spec.run_identity
     path.write_text(
         json.dumps(
             {
@@ -181,16 +262,7 @@ def _write_results(
         ),
         encoding="utf-8",
     )
-    run = {
-        "run_identity": run_identity,
-        "target_notional_identity": target_notional_identity,
-        "model_config_snapshot": {
-            "fields": {
-                "objective": "mean-volatility",
-                "risk_parameter": 1.0,
-            }
-        },
-    }
+    run = {**spec.to_dict(), "run_identity": run_identity}
     (path.parent / "run.json").write_text(json.dumps(run), encoding="utf-8")
     records = path.parent / "records"
     records.mkdir()

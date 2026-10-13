@@ -20,6 +20,7 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.daily_results import (
     DailyResultsConfig,
+    authenticate_completed_daily_results,
     summarize_completed_daily_run,
     summarize_daily_results,
 )
@@ -223,6 +224,22 @@ def test_completed_daily_results_revalidate_each_record(tmp_path) -> None:
     assert report.result_count == 1
     assert report.slices[0].mean_entry_turnover_notional == pytest.approx(0.015)
     assert report.aggregation_config["hac_kernel"] == "bartlett"
+    results_path = output / "results.json"
+    report.write_json(results_path)
+    assert (
+        authenticate_completed_daily_results(
+            panel,
+            results_path=results_path,
+        ).run_identity
+        == spec.run_identity
+    )
+
+    aggregate = json.loads(results_path.read_text(encoding="utf-8"))
+    aggregate["slices"][0]["pure_hedge_loss"]["root_mean_square"] = 999.0
+    results_path.write_text(json.dumps(aggregate), encoding="utf-8")
+    with pytest.raises(ValueError, match="daily aggregate does not match"):
+        authenticate_completed_daily_results(panel, results_path=results_path)
+    report.write_json(results_path)
 
     record_path = output / "records" / "2023-01-03.json"
     payload = json.loads(record_path.read_text(encoding="utf-8"))

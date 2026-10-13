@@ -12,9 +12,14 @@ import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TextIO
+from typing import TYPE_CHECKING, TextIO
 
 from filelock import FileLock, Timeout
+
+if TYPE_CHECKING:
+    from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
+        PublicHedgingPanel,
+    )
 
 DAILY_MATRIX_SCHEMA = "hedging-daily-production-matrix-v1"
 WEEKLY_MATRIX_SCHEMA = "hedging-weekly-production-matrix-v1"
@@ -128,6 +133,11 @@ def _execute_production_queue_locked(
             expected_result_count=expected_result_count,
         )
         output = _command_option_path(command, "--output")
+        dataset = (
+            _command_option_path(command, "--dataset")
+            if matrix_schema == DAILY_MATRIX_SCHEMA
+            else None
+        )
         results_path = _results_path(output, matrix_schema=str(matrix_schema))
         if case_id in completed:
             result_sha256 = _validate_results(
@@ -136,6 +146,7 @@ def _execute_production_queue_locked(
                 matrix_schema=str(matrix_schema),
                 expected_model=_require_string(case, "model"),
                 expected_result_count=expected_result_count,
+                dataset=dataset,
             )
             record = next(
                 record
@@ -212,6 +223,7 @@ def _execute_production_queue_locked(
                 matrix_schema=str(matrix_schema),
                 expected_model=_require_string(case, "model"),
                 expected_result_count=expected_result_count,
+                dataset=dataset,
             )
         except Exception as error:
             _finish_record(
@@ -453,69 +465,27 @@ def _validate_results(
     matrix_schema: str,
     expected_model: str,
     expected_result_count: int,
+    dataset: Path | None = None,
 ) -> str:
     payload = _read_json_object(path)
     if matrix_schema == DAILY_MATRIX_SCHEMA:
-        from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
-            DailyEvaluationSpec,
-            DailyEvaluationSummary,
-            read_daily_record,
+        from quantdata.sdlv.daily.front_spot.hedging.runners.daily_results import (
+            authenticate_completed_daily_results,
         )
 
         if payload.get("schema") != DAILY_RESULTS_SCHEMA:
             raise ValueError(f"unexpected daily-results schema: {path}")
-        if payload.get("model") != expected_model:
+        if dataset is None:
+            raise ValueError("daily production validation requires its public dataset")
+        report = authenticate_completed_daily_results(
+            _load_daily_panel(dataset),
+            results_path=path,
+        )
+        if report.model != expected_model:
             raise ValueError(
                 "daily-results model mismatch: "
-                f"{payload.get('model')} != {expected_model}"
+                f"{report.model} != {expected_model}"
             )
-        spec = DailyEvaluationSpec.from_dict(_read_json_object(output / "run.json"))
-        completion = DailyEvaluationSummary.from_dict(
-            _read_json_object(output / "summary.json")
-        )
-        if spec.model != expected_model:
-            raise ValueError(
-                f"daily run model mismatch: {spec.model} != {expected_model}"
-            )
-        if completion.completed_origins != completion.eligible_origins:
-            raise ValueError("daily-results origins are incomplete")
-        identities = {
-            spec.run_identity,
-            completion.run_identity,
-            payload.get("run_identity"),
-        }
-        if len(identities) != 1:
-            raise ValueError("daily run, summary, and aggregate identities differ")
-        if (
-            payload.get("measure") != spec.measure
-            or payload.get("dataset_manifest_sha256")
-            != spec.dataset_manifest_sha256
-        ):
-            raise ValueError("daily aggregate scope does not match its run")
-        record_count = 0
-        nonconverged_results = 0
-        cap_hits = 0
-        for origin in completion.completed_origins:
-            results = read_daily_record(
-                output / "records" / f"{origin}.json",
-                spec=spec,
-                origin_date=datetime.fromisoformat(origin).date(),
-            )
-            record_count += len(results)
-            nonconverged_results += sum(not result.converged for result in results)
-            cap_hits += sum(result.cap_hits for result in results)
-        if record_count != completion.result_count:
-            raise ValueError("daily summary and dated record counts differ")
-        if record_count != len(spec.target_labels) * len(completion.completed_origins):
-            raise ValueError("daily dated records do not contain the immutable target book")
-        if completion.nonconverged_results != nonconverged_results:
-            raise ValueError("daily nonconvergence count does not match its records")
-        if completion.cap_hits != cap_hits:
-            raise ValueError("daily cap-hit count does not match its records")
-        if spec.require_convergence and (nonconverged_results != 0 or cap_hits != 0):
-            raise ValueError("daily numerical gates did not pass")
-        if payload.get("result_count") != completion.result_count:
-            raise ValueError("daily summary and aggregate result counts differ")
     elif matrix_schema == WEEKLY_MATRIX_SCHEMA:
         run = _read_json_object(output / "run.json")
         summary = _read_json_object(output / "summary.json")
@@ -586,6 +556,15 @@ def _validate_results(
     if not isinstance(payload.get("run_identity"), str):
         raise ValueError("production-results run identity is missing")
     return _file_sha256(path)
+
+
+def _load_daily_panel(dataset: Path) -> PublicHedgingPanel:
+    """Load and fully validate the public panel used by a daily production run."""
+    from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
+        PublicHedgingPanel,
+    )
+
+    return PublicHedgingPanel(dataset, validate=True)
 
 
 def _results_path(output: Path, *, matrix_schema: str) -> Path:

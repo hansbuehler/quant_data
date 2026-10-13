@@ -12,6 +12,16 @@ from typing import TypeAlias
 import numpy as np
 
 from quantdata.hedging.metrics import maximum_drawdown_from_losses
+from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
+    PublicHedgingPanel,
+    default_public_candidate_path,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
+    DailyEvaluationSpec,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners.daily_results import (
+    authenticate_completed_daily_results,
+)
 
 JsonObject: TypeAlias = dict[str, object]
 
@@ -32,10 +42,16 @@ def build_summary_metrics(
     *,
     sanos_results: Path,
     historical_results: Path,
+    dataset: Path | None = None,
 ) -> JsonObject:
     """Read, authenticate, and aggregate the completed daily policies."""
+    panel = PublicHedgingPanel(
+        default_public_candidate_path() if dataset is None else dataset,
+        validate=True,
+    )
     policies = (
         _read_policy(
+            panel,
             sanos_results,
             expected_model="sanos-lv",
             display_name="SANOS--LV",
@@ -43,6 +59,7 @@ def build_summary_metrics(
             fitted_parameter=None,
         ),
         _read_policy(
+            panel,
             historical_results,
             expected_model="historical-sanos",
             display_name="Historical SANOS",
@@ -136,6 +153,7 @@ def write_summary_metrics(
 
 
 def _read_policy(
+    panel: PublicHedgingPanel,
     path: Path,
     *,
     expected_model: str,
@@ -144,12 +162,19 @@ def _read_policy(
     fitted_parameter: float | None = None,
 ) -> JsonObject:
     results_path = Path(path)
-    results = _read_results(results_path, expected_model=expected_model)
     run = _read_json_object(results_path.parent / "run.json")
-    if _require_string(run, "run_identity") != _require_string(results, "run_identity"):
+    spec = DailyEvaluationSpec.from_dict(run)
+    results = _authenticate_policy_results(
+        panel,
+        results_path,
+        expected_model=expected_model,
+    )
+    if spec.run_identity != _require_string(results, "run_identity"):
         raise ValueError(f"run and results identities do not match: {results_path}")
+    if spec.model != expected_model:
+        raise ValueError(f"expected {expected_model} run: {results_path}")
     if fitted_objective is None:
-        snapshot = _require_object(run, "model_config_snapshot")
+        snapshot = json.loads(spec.model_config_snapshot_json)
         fields = _require_object(snapshot, "fields")
         fitted_objective = _require_string(fields, "objective")
         fitted_parameter = _require_number(fields, "risk_parameter")
@@ -159,10 +184,7 @@ def _read_policy(
         "measure": _require_string(results, "measure"),
         "run_identity": _require_string(results, "run_identity"),
         "dataset_manifest_sha256": _require_string(results, "dataset_manifest_sha256"),
-        "target_notional_identity": _require_string(
-            run,
-            "target_notional_identity",
-        ),
+        "target_notional_identity": spec.target_notional_identity,
         "result_count": _require_integer(results, "result_count"),
         "fitted_objective": fitted_objective,
         "fitted_parameter": fitted_parameter,
@@ -172,6 +194,31 @@ def _read_policy(
             expected_results=results,
         ),
     }
+
+
+def _authenticate_policy_results(
+    panel: PublicHedgingPanel,
+    path: Path,
+    *,
+    expected_model: str,
+) -> JsonObject:
+    report = authenticate_completed_daily_results(
+        panel,
+        results_path=path,
+    )
+    payload = report.to_dict()
+    if payload.get("schema") != RESULTS_SCHEMA:
+        raise ValueError(f"unexpected daily-results schema: {path}")
+    if payload.get("model") != expected_model:
+        raise ValueError(f"expected {expected_model} results: {path}")
+    if (
+        _require_integer(payload, "result_count")
+        != EXPECTED_CLAIMS * EXPECTED_OBSERVATIONS
+    ):
+        raise ValueError(
+            f"daily results are not the complete production population: {path}"
+        )
+    return payload
 
 
 def _read_results(path: Path, *, expected_model: str) -> JsonObject:
@@ -863,10 +910,18 @@ def _default_result_path(*parts: str) -> Path | None:
     return Path(root).joinpath("experiments", "hedging", "daily", *parts)
 
 
+def _default_dataset_path() -> Path | None:
+    root = os.environ.get("QUANTDATA_ROOT")
+    if not root:
+        return None
+    return default_public_candidate_path()
+
+
 def main() -> None:
     """Parse completed runs and write reproducible report inputs."""
     report_directory = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dataset", type=Path, default=_default_dataset_path())
     parser.add_argument(
         "--sanos-results",
         type=Path,
@@ -904,14 +959,19 @@ def main() -> None:
         default=report_directory / "hedging_benchmark_summary_objective_appendix.tex",
     )
     arguments = parser.parse_args()
-    if arguments.sanos_results is None or arguments.historical_results is None:
+    if (
+        arguments.dataset is None
+        or arguments.sanos_results is None
+        or arguments.historical_results is None
+    ):
         parser.error(
-            "--sanos-results and --historical-results are required without "
-            "QUANTDATA_ROOT"
+            "--dataset, --sanos-results and --historical-results are required "
+            "without QUANTDATA_ROOT"
         )
     payload = build_summary_metrics(
         sanos_results=arguments.sanos_results,
         historical_results=arguments.historical_results,
+        dataset=arguments.dataset,
     )
     write_summary_metrics(
         payload,

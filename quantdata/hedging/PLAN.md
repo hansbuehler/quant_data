@@ -50,10 +50,11 @@ cold zero-claim pricing fit across targets. This reduces identical generated
 path and repricing work from 13 calls to one for a frozen origin and from 65 to
 five for a restarted origin without changing prices, actions, identities, or
 random numbers; independent review passed. The daily production-queue validator
-now also authenticates the immutable run and completion summary, reparses every
-dated result record, and reconciles target-book size, identities, cap hits, and
-nonconvergence before pinning the aggregate hash. The resulting complete hedging
-suite contains 307 passing tests. The strictly-2022 target-sizing exercise now
+now authenticates the immutable run and completion summary, recomputes the true
+eligible-origin cohort from the public panel, reparses every dated result record,
+and rebuilds every aggregate statistic before requiring exact agreement with the
+persisted report. The resulting complete hedging suite contains 308 passing
+tests. The strictly-2022 target-sizing exercise now
 fixes each target to one
 maturity-matched ATM spot-risk unit; all 20 calibration hedges converged with
 no cap hit. Its atomic derived artifact is keyed by the public dataset manifest
