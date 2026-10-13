@@ -867,10 +867,16 @@ restart loader was corrected to restore CPU RNG state on CPU. The detailed
 evidence is recorded in
 `reports/2026-10-12-generated-gpu-readiness.md`. Production-scale generated
 runs and batch-invariance evidence remain outstanding. The authenticated 2022
-initializer and epoch-budget training pipeline is active on a managed GPU while
-the independent rolling GROMM preparation proceeds on CPU; both pipelines use
-disjoint artifact roots and retry atomic GPU claims, a scheduling arrangement
-that passed independent review.
+initializer and epoch-budget pipeline has now completed for all three generated
+baselines. The one-standard-error selections are 1,000 rolling epochs for
+VolGAN, 30 for AD-Seq-Vol, and one for AD-Seq-Vol-FT; their complete end-2022
+production initializers and distinct selection-source lineages pass the strict
+evidence loader. Rolling GROMM preparation continues independently on CPU. A
+production-gate assembler now reconstructs exact public-versus-rolling scope
+bindings, refuses stale or aliased evidence, writes under an output lock through
+a unique same-directory temporary file, and re-authenticates the completed gate
+before publishing it. Managed-GPU readiness and the final model-specific quant
+review remain required before generated production cases can launch.
 
 Gate: one model-specific review and standalone smoke test per baseline pass.
 

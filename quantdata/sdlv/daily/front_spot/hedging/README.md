@@ -322,6 +322,30 @@ Ready generated cases carry the reviewed commit in the matrix, and the queue
 rechecks the exact gate bytes, clean tracked source, and exact `HEAD`
 immediately before launch.
 
+After the model-specific quant review and managed-GPU readiness record both
+pass, assemble their gate without copying hashes by hand:
+
+```bash
+python -m quantdata.sdlv.daily.front_spot.hedging.runners.build_generated_production_gate \
+  --model diffusion-ad-seq-vol \
+  --dataset "$QUANTDATA_ROOT/datasets/hedging/spx-2022-2025-hedging-public-candidate-v1" \
+  --initializer-manifest "$GENERATED_ROOT/diffusion-ad-seq-vol/production-initializer/initializer-manifest.json" \
+  --selection-source-manifest "$GENERATED_ROOT/diffusion-ad-seq-vol/selection-source/initializer-manifest.json" \
+  --epoch-selection "$GENERATED_ROOT/diffusion-ad-seq-vol/epoch-selection.json" \
+  --scope daily-public --scope daily-rolling \
+  --scope frozen-weekly-public --scope frozen-weekly-rolling \
+  --scope restarted-weekly-public --scope restarted-weekly-rolling \
+  --quant-review "$EVIDENCE_ROOT/diffusion-ad-seq-vol-quant-review.json" \
+  --gpu-readiness "$EVIDENCE_ROOT/diffusion-ad-seq-vol-gpu-readiness.json" \
+  --output "$EVIDENCE_ROOT/diffusion-ad-seq-vol-production-gate.json"
+```
+
+The assembler validates the full public dataset, reconstructs public-versus-
+rolling lineage bindings, hashes both evidence records, writes atomically, and
+reloads the completed gate through the same verifier used by the production
+matrix. Fine-tuned diffusion additionally requires both `--base-initializer-manifest`
+and `--selection-base-initializer-manifest`.
+
 Execute an explicit ready subset sequentially with atomic queue state and
 per-case logs:
 
