@@ -31,7 +31,11 @@ supports frozen and restarted schedules for SANOS-LV, historical SANOS,
 GROMM, VolGAN, and both diffusion variants. It requires an authenticated
 strictly-2022 sizing preflight, validates every public dataset member, holds a
 single-writer lock, records exact fitted-artifact fingerprints, and rejects
-incomplete five-decision records. The
+incomplete five-decision records. Its 94-case production matrix currently has
+28 ready native CPU cases, four generated-model cases awaiting their review
+gate, and 62 cases explicitly blocked on incomplete authenticated artifacts.
+The ready cases are queued to begin only after the active daily CPU production
+queues finish. The
 strictly-2022 target-sizing exercise now fixes each target to one
 maturity-matched ATM spot-risk unit; all 20 calibration hedges converged with
 no cap hit. Its atomic derived artifact is keyed by the public dataset manifest
@@ -239,6 +243,7 @@ Planned layout:
 
 ```text
 quantdata/hedging/
+    PLAN.md
     contracts.py
     accounting.py
     objectives.py
@@ -247,7 +252,6 @@ quantdata/hedging/
     protocols.py
 
 quantdata/sdlv/daily/front_spot/hedging/
-    PLAN.md
     README.md
     benchmark/
         specification.py
@@ -786,7 +790,9 @@ artifact SHA-256 of
 A real one-origin frozen SANOS-LV public-data run and its no-recompute restart
 check pass. The corresponding restarted one-origin integration run also passes;
 its no-recompute restart check validates the exact five dated refits. These are
-orchestration checks, not benchmark estimates.
+orchestration checks, not benchmark estimates. The native SANOS-LV and
+historical-SANOS weekly cases are materialized and deferred behind the daily
+CPU production queues so they do not compete for the currently saturated host.
 
 ### Phase 9: historical and published baselines
 
@@ -865,15 +871,21 @@ The first implementation deliverable is a CPU-only vertical slice containing:
 This exercises the full benchmark path before introducing large simulations,
 deep hedging, or GPU execution.
 
-## Open Decisions Before Production Runs
+## Resolved Production Decisions
 
-The following do not block the CPU vertical slice but must be resolved before
-the full out-of-sample evaluation:
-
-1. Fix the four deep-hedging architecture candidates after reconciling the
-   hedging design with `quantdata/gromm2`.
+The four GROMM hedge-policy candidates are fixed as
+`(LSTM hidden size, deep depth, deep width)` equal to `(16,1,32)`, `(32,2,64)`,
+`(64,2,128)`, and `(64,3,128)`, all with one recurrent layer, SiLU activation,
+and the common affine action. The authenticated 2022-only selection study
+evaluated all four over 40 measure/target cases and applied the precommitted
+cheapest-within-one-standard-error rule.  It selected `(64,3,128)` with
+validation loss `0.0798512`; the one-standard-error threshold was `0.0875964`.
+The selection artifact has SHA-256
+`3170f666a9bd750d91fe45143c87c5daf79c6f8b6ee57014f887f5b29420e3db`.
 
 The episode risk unit, target-notional rule, 1,000-unit numerical position cap,
 common spot-cap convention, statistical PCA alignment tolerance, and
-inception-forward barrier reference are resolved in the implementation and
-their dated review or calibration reports.
+inception-forward barrier reference are also resolved in the implementation
+and their dated review or calibration reports. No benchmark-design decision
+remains open before production; incomplete production cases remain gated only
+on their required authenticated model evidence.
