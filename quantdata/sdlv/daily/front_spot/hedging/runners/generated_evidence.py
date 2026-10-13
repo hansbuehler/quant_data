@@ -499,6 +499,7 @@ def load_generated_initializer_evidence(
     initializer_manifest: Path,
     expected_model: str,
     expected_dataset_manifest_sha256: str,
+    expected_base_initializer_manifest: Path | None = None,
 ) -> GeneratedSelectionEvidence:
     """Authenticate an initializer when no rolling epoch budget is required."""
     path = Path(initializer_manifest)
@@ -524,6 +525,27 @@ def load_generated_initializer_evidence(
         raise ValueError("generated initializer date differs from checkpoint payload")
     if payload.get("completed_epochs") != checkpoint_evidence.completed_epochs:
         raise ValueError("generated initializer completion differs from checkpoint payload")
+    base_checkpoint = None
+    base_checkpoint_sha256 = None
+    base_initializer_manifest_sha256 = None
+    if expected_base_initializer_manifest is not None:
+        if normalized_model != "diffusion-ad-seq-vol-ft":
+            raise ValueError("only a fine-tuned initializer can use an expected base")
+        base = load_generated_initializer_evidence(
+            initializer_manifest=expected_base_initializer_manifest,
+            expected_model="diffusion-ad-seq-vol",
+            expected_dataset_manifest_sha256=expected_dataset_manifest_sha256,
+        )
+        base_checkpoint = base.initializer_checkpoint
+        base_checkpoint_sha256 = base.initializer_checkpoint_sha256
+        base_initializer_manifest_sha256 = base.initializer_manifest_sha256
+        if (
+            payload.get("base_checkpoint_path") != str(base_checkpoint)
+            or payload.get("base_checkpoint_sha256") != base_checkpoint_sha256
+            or checkpoint_evidence.base_checkpoint_sha256
+            != base_checkpoint_sha256
+        ):
+            raise ValueError("fine-tuned generated initializer has another base")
     return GeneratedSelectionEvidence(
         model=normalized_model,
         initializer_checkpoint=checkpoint,
@@ -531,9 +553,9 @@ def load_generated_initializer_evidence(
         selection_source_manifest_sha256=None,
         selection_source_checkpoint_sha256=None,
         selected_epochs=0,
-        base_checkpoint=None,
-        base_checkpoint_sha256=None,
-        base_initializer_manifest_sha256=None,
+        base_checkpoint=base_checkpoint,
+        base_checkpoint_sha256=base_checkpoint_sha256,
+        base_initializer_manifest_sha256=base_initializer_manifest_sha256,
         selection_base_initializer_manifest_sha256=None,
         selection_base_checkpoint_sha256=None,
         initializer_manifest_sha256=initializer_manifest_sha256,

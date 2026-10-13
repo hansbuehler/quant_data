@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -40,8 +41,11 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2 import 
     load_rolling_gromm2,
     prepare_rolling_gromm2,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2 import (
+    rolling_gromm2_source_identity as rolling_gromm2_artifact_source_identity,
+)
 
-ROLLING_GROMM2_RANGE_SCHEMA = "hedging-rolling-gromm2-range-v1"
+ROLLING_GROMM2_RANGE_SCHEMA = "hedging-rolling-gromm2-range-v2"
 
 
 class RollingGromm2RangeStage(StrEnum):
@@ -83,6 +87,7 @@ class RollingGromm2RangeSummary:
     selected_origin_count: int
     records: tuple[RollingGromm2RangeRecord, ...]
     config: RollingGromm2Config
+    source_identity: str
 
     @property
     def status(self) -> str:
@@ -114,6 +119,7 @@ class RollingGromm2RangeSummary:
             "completed_count": len(self.records),
             "reused_count": sum(record.reused for record in self.records),
             "physical_accepted_count": self.physical_accepted_count,
+            "source_identity": self.source_identity,
             "config": json.loads(
                 json.dumps(asdict(self.config), sort_keys=True, allow_nan=False)
             ),
@@ -144,6 +150,15 @@ def eligible_rolling_gromm2_origins(
             continue
         origins.append(origin_date)
     return tuple(origins)
+
+
+def rolling_gromm2_source_identity() -> str:
+    """Hash numerical sources plus this range-orchestration implementation."""
+    digest = hashlib.sha256()
+    digest.update(rolling_gromm2_artifact_source_identity().encode("ascii"))
+    digest.update(b"\0")
+    digest.update(Path(__file__).read_bytes())
+    return digest.hexdigest()
 
 
 def run_rolling_gromm2_range(
@@ -189,6 +204,7 @@ def run_rolling_gromm2_range(
         else eligible_origins[:stop_after]
     )
     records: list[RollingGromm2RangeRecord] = []
+    source_identity = rolling_gromm2_source_identity()
     started = clock()
     state_file.parent.mkdir(parents=True, exist_ok=True)
     lock = FileLock(str(state_file) + ".lock", timeout=0)
@@ -227,6 +243,7 @@ def run_rolling_gromm2_range(
                         "selected_origin_count": len(selected_origins),
                         "completed_count": len(records),
                         "current_origin": as_of_date.isoformat(),
+                        "source_identity": source_identity,
                         "error_type": type(error).__name__,
                         "error": str(error),
                         "config": json.loads(
@@ -249,6 +266,7 @@ def run_rolling_gromm2_range(
                 selected_origin_count=len(selected_origins),
                 records=tuple(records),
                 config=config,
+                source_identity=source_identity,
             )
             _write_json_atomic(state_file, summary.to_dict())
             elapsed = clock() - started
@@ -280,6 +298,7 @@ def run_rolling_gromm2_range(
         selected_origin_count=len(selected_origins),
         records=tuple(records),
         config=config,
+        source_identity=source_identity,
     )
     _write_json_atomic(state_file, summary.to_dict())
     return summary
@@ -301,6 +320,7 @@ def load_completed_rolling_gromm2_range(
         or payload.get("stage") != RollingGromm2RangeStage.FIT.value
         or payload.get("dataset_manifest_sha256") != dataset_manifest_sha256
         or payload.get("artifact_root") != str(Path(artifact_root).resolve())
+        or payload.get("source_identity") != rolling_gromm2_source_identity()
     ):
         raise ValueError("rolling GROMM2 range summary is stale or incomplete")
     records_payload = payload.get("records")
@@ -365,6 +385,7 @@ def load_completed_rolling_gromm2_range(
         selected_origin_count=selected_count,
         records=tuple(records),
         config=config,
+        source_identity=rolling_gromm2_source_identity(),
     )
     if (
         summary.evaluation_start > summary.evaluation_end
@@ -384,6 +405,28 @@ def load_completed_rolling_gromm2_range(
 
 
 def _run_origin(
+    *,
+    dataset: Path,
+    artifact_root: Path,
+    as_of_date: date,
+    stage: RollingGromm2RangeStage,
+    config: RollingGromm2Config,
+    dataset_manifest_sha256: str,
+) -> RollingGromm2RangeRecord:
+    lock_directory = artifact_root / ".origin-locks"
+    lock_directory.mkdir(parents=True, exist_ok=True)
+    with FileLock(str(lock_directory / f"{as_of_date.isoformat()}.lock")):
+        return _run_origin_locked(
+            dataset=dataset,
+            artifact_root=artifact_root,
+            as_of_date=as_of_date,
+            stage=stage,
+            config=config,
+            dataset_manifest_sha256=dataset_manifest_sha256,
+        )
+
+
+def _run_origin_locked(
     *,
     dataset: Path,
     artifact_root: Path,

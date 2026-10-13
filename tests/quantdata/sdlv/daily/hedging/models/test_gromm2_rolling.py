@@ -13,6 +13,9 @@ from quantdata.sdlv.daily.front_spot.hedging.data.fixtures import (
     synthetic_one_day_transition,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.checkpointing import file_sha256
+from quantdata.sdlv.daily.front_spot.hedging.models.gromm import (
+    rolling_gromm2 as rolling_gromm2_module,
+)
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_dynamics import (
     GROMM2_DYNAMICS_SCHEMA,
     _forward_over_spot,
@@ -21,9 +24,11 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2 import 
     ROLLING_GROMM2_SCHEMA,
     RollingGromm2Config,
     _fit_affine_market_until_gate,
+    _invalidate_fitted_outputs,
     load_prepared_rolling_gromm2,
     load_rolling_gromm2,
     rolling_gromm2_paths,
+    rolling_gromm2_source_identity,
     select_rolling_public_days,
 )
 
@@ -200,7 +205,27 @@ def test_affine_market_fit_resumes_partial_retry(
     assert retries == 1
 
 
-def test_prepared_rolling_gromm2_loader_authenticates_source_files(tmp_path) -> None:
+def test_repreparation_invalidates_all_fitted_outputs(tmp_path) -> None:
+    paths = rolling_gromm2_paths(tmp_path, as_of_date=date(2023, 1, 17))
+    paths.directory.mkdir(parents=True)
+    derived = (
+        paths.affine_history,
+        paths.affine_checkpoint,
+        paths.dynamics,
+        paths.dynamics.with_suffix(".json"),
+    )
+    for path in derived:
+        path.write_bytes(b"stale")
+
+    _invalidate_fitted_outputs(paths)
+
+    assert all(not path.exists() for path in derived)
+
+
+def test_prepared_rolling_gromm2_loader_authenticates_source_files(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     config = RollingGromm2Config()
     start = date(2022, 1, 1)
     origins = [start + timedelta(days=index) for index in range(252)]
@@ -222,6 +247,7 @@ def test_prepared_rolling_gromm2_loader_authenticates_source_files(tmp_path) -> 
         "training_origin_dates": [value.isoformat() for value in origins],
         "training_endpoint_dates": [value.isoformat() for value in endpoints],
         "dataset_manifest_sha256": dataset_manifest_sha256,
+        "source_identity": rolling_gromm2_source_identity(),
         "config": json.loads(json.dumps(asdict(config), sort_keys=True)),
         "source_history_sha256": file_sha256(paths.source_history),
         "prepared_books_sha256": file_sha256(paths.prepared_books),
@@ -236,6 +262,19 @@ def test_prepared_rolling_gromm2_loader_authenticates_source_files(tmp_path) -> 
     )
 
     assert loaded == paths
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            rolling_gromm2_module,
+            "rolling_gromm2_source_identity",
+            lambda: "b" * 64,
+        )
+        with pytest.raises(ValueError, match="stale or incompatible"):
+            load_prepared_rolling_gromm2(
+                tmp_path,
+                as_of_date=as_of,
+                config=config,
+                dataset_manifest_sha256=dataset_manifest_sha256,
+            )
     paths.prepared_books.write_bytes(b"changed")
     with pytest.raises(ValueError, match="prepared_books_sha256"):
         load_prepared_rolling_gromm2(
@@ -288,6 +327,7 @@ def test_complete_rolling_gromm2_loader_rejects_future_history(tmp_path) -> None
         "training_origin_dates": [value.isoformat() for value in dates[:-1]],
         "training_endpoint_dates": [value.isoformat() for value in dates[1:]],
         "dataset_manifest_sha256": dataset_manifest_sha256,
+        "source_identity": rolling_gromm2_source_identity(),
         "config": json.loads(json.dumps(asdict(config), sort_keys=True)),
         "source_history_sha256": file_sha256(paths.source_history),
         "prepared_books_sha256": file_sha256(paths.prepared_books),
@@ -430,6 +470,7 @@ def test_complete_rolling_gromm2_loader_accepts_gapped_state_window(
         "training_origin_dates": [value.isoformat() for value in origins],
         "training_endpoint_dates": [value.isoformat() for value in endpoints],
         "dataset_manifest_sha256": dataset_manifest_sha256,
+        "source_identity": rolling_gromm2_source_identity(),
         "config": json.loads(json.dumps(asdict(config), sort_keys=True)),
         "source_history_sha256": file_sha256(paths.source_history),
         "prepared_books_sha256": file_sha256(paths.prepared_books),

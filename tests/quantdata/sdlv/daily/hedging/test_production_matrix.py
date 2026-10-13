@@ -726,6 +726,43 @@ def test_generated_matrix_rejects_checkpoint_ft_lineage_forgery(
     assert "another base checkpoint" in case.blocked_reason
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("base_checkpoint_path", "/tmp/another-base.pt"),
+        ("base_checkpoint_sha256", "f" * 64),
+    ),
+)
+def test_ft_initializer_sentinel_requires_exact_expected_base(
+    tmp_path: Path,
+    field: str,
+    value: str,
+) -> None:
+    dataset = tmp_path / "dataset"
+    dataset.mkdir()
+    (dataset / "manifest.json").write_text("{}\n", encoding="utf-8")
+    dataset_sha256 = file_sha256(dataset / "manifest.json")
+    generated = _generated_inputs(tmp_path, dataset=dataset)
+    manifest = json.loads(
+        generated.diffusion_ft_initializer_manifest.read_text(encoding="utf-8")
+    )
+    manifest[field] = value
+    generated.diffusion_ft_initializer_manifest.write_text(
+        json.dumps(manifest),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="another base"):
+        load_generated_initializer_evidence(
+            initializer_manifest=generated.diffusion_ft_initializer_manifest,
+            expected_model="diffusion-ad-seq-vol-ft",
+            expected_dataset_manifest_sha256=dataset_sha256,
+            expected_base_initializer_manifest=(
+                generated.diffusion_initializer_manifest
+            ),
+        )
+
+
 def _generated_inputs(
     tmp_path: Path,
     *,

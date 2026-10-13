@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -46,8 +47,25 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_dynamics impor
     estimate_rolling_gromm2_dynamics,
 )
 
-ROLLING_GROMM2_SCHEMA = "hedging-rolling-gromm2-v3"
+ROLLING_GROMM2_SCHEMA = "hedging-rolling-gromm2-v4"
 _CALIBRATION_EPOCH_MULTIPLIERS = (1, 2, 4)
+_ROLLING_GROMM2_SOURCE_FILES = (
+    "biz_calendar.py",
+    "gromm2/bridge.py",
+    "gromm2/calibration.py",
+    "gromm2/dlv.py",
+    "gromm2/estimation.py",
+    "gromm2/geometry.py",
+    "gromm2/market.py",
+    "gromm2/simulation.py",
+    "hedging/data/pricing.py",
+    "hedging/data/public_dataset.py",
+    "sdlv/daily/front_spot/hedging/data/market_panel.py",
+    "sdlv/daily/front_spot/hedging/data/rolling_calibration.py",
+    "sdlv/daily/front_spot/hedging/data/rolling_factors.py",
+    "sdlv/daily/front_spot/hedging/models/gromm/rolling_dynamics.py",
+    "sdlv/daily/front_spot/hedging/models/gromm/rolling_gromm2.py",
+)
 
 
 @version("0.5", dependencies=[Gromm2GeometryConfig, DlvCalibrationConfig])
@@ -130,6 +148,19 @@ class RollingGromm2Artifacts:
     maximum_daily_risk_price_norm: float
     physical_accepted: bool
     dataset_manifest_sha256: str
+
+
+def rolling_gromm2_source_identity() -> str:
+    """Hash all project sources that define one dated rolling artifact."""
+    quantdata_directory = Path(__file__).resolve().parents[6]
+    digest = hashlib.sha256()
+    for relative_path in _ROLLING_GROMM2_SOURCE_FILES:
+        path = quantdata_directory / relative_path
+        digest.update(relative_path.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
 
 
 def rolling_gromm2_paths(root: Path, *, as_of_date: date) -> RollingGromm2Paths:
@@ -230,6 +261,7 @@ def prepare_rolling_gromm2(
         dataset=public_dataset.directory,
         output=paths.prepared_books,
     )
+    _invalidate_fitted_outputs(paths)
     _write_manifest(
         paths,
         {
@@ -247,6 +279,7 @@ def prepare_rolling_gromm2(
             "dataset_manifest_sha256": file_sha256(
                 public_dataset.directory / "manifest.json"
             ),
+            "source_identity": rolling_gromm2_source_identity(),
             "config": _config_snapshot(config),
             "source_history_sha256": file_sha256(paths.source_history),
             "prepared_books_sha256": file_sha256(paths.prepared_books),
@@ -704,6 +737,7 @@ def _validate_prepared_manifest(
         or manifest.get("state_count") != len(unique_states)
         or manifest.get("transition_count") != config.window_transitions
         or manifest.get("dataset_manifest_sha256") != dataset_manifest_sha256
+        or manifest.get("source_identity") != rolling_gromm2_source_identity()
         or manifest.get("config") != _config_snapshot(config)
     ):
         raise ValueError("rolling GROMM2 manifest is stale or incompatible")
@@ -713,6 +747,17 @@ def _validate_prepared_manifest(
     ):
         if manifest.get(field) != file_sha256(path):
             raise ValueError(f"rolling GROMM2 {field} does not match {path}")
+
+
+def _invalidate_fitted_outputs(paths: RollingGromm2Paths) -> None:
+    """Remove fit outputs whose prepared inputs have just been replaced."""
+    for path in (
+        paths.affine_history,
+        paths.affine_checkpoint,
+        paths.dynamics,
+        paths.dynamics.with_suffix(".json"),
+    ):
+        path.unlink(missing_ok=True)
 
 
 def _manifest_transition_dates(

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
+from threading import Event, Lock
 from types import SimpleNamespace
 
 import pytest
@@ -162,6 +165,72 @@ def test_fit_range_recovers_after_mid_range_failure(
     assert fit_attempts == [origins[0], origins[1], origins[1], origins[2]]
 
 
+def test_overlapping_ranges_serialize_each_origin(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset = _dataset(tmp_path)
+    artifact_root = tmp_path / "artifacts"
+    origin = _Panel(dataset).dates[0]
+    fit_started = Event()
+    release_fit = Event()
+    attempts_lock = Lock()
+    fit_attempts: list[date] = []
+
+    def load(_root: Path, *, as_of_date: date, **_kwargs: object) -> object:
+        manifest = artifact_root / as_of_date.isoformat() / "manifest.json"
+        if not manifest.exists():
+            raise FileNotFoundError(as_of_date)
+        return SimpleNamespace(
+            paths=SimpleNamespace(manifest=manifest),
+            physical_accepted=False,
+        )
+
+    def fit(*, as_of_date: date, **_kwargs: object) -> object:
+        with attempts_lock:
+            fit_attempts.append(as_of_date)
+        fit_started.set()
+        if not release_fit.wait(timeout=5.0):
+            raise TimeoutError("test did not release first fit")
+        manifest = _dated_manifest(artifact_root, as_of_date, label="fitted")
+        return SimpleNamespace(
+            paths=SimpleNamespace(manifest=manifest),
+            physical_accepted=False,
+        )
+
+    monkeypatch.setattr(fit_rolling_gromm2_range, "PublicHedgingPanel", _Panel)
+    monkeypatch.setattr(fit_rolling_gromm2_range, "load_rolling_gromm2", load)
+    monkeypatch.setattr(
+        fit_rolling_gromm2_range,
+        "fit_rolling_gromm2_market",
+        fit,
+    )
+
+    def run(state_name: str):
+        return run_rolling_gromm2_range(
+            dataset=dataset,
+            artifact_root=artifact_root,
+            evaluation_start=origin,
+            evaluation_end=_Panel(dataset).dates[-1],
+            stage=RollingGromm2RangeStage.FIT,
+            state_file=tmp_path / state_name,
+            stop_after=1,
+            progress_seconds=300.0,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(run, "first.json")
+        assert fit_started.wait(timeout=5.0)
+        second = executor.submit(run, "second.json")
+        time.sleep(0.1)
+        assert fit_attempts == [origin]
+        release_fit.set()
+        summaries = (first.result(timeout=5.0), second.result(timeout=5.0))
+
+    assert fit_attempts == [origin]
+    assert sorted(summary.records[0].reused for summary in summaries) == [False, True]
+
+
 def test_prepare_range_revalidates_output_after_material_work(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -241,6 +310,45 @@ def test_completed_range_loader_rejects_changed_dated_manifest(
     changed.write_text('{"changed": true}\n', encoding="utf-8")
 
     with pytest.raises(ValueError, match="invalid"):
+        load_completed_rolling_gromm2_range(
+            state_file,
+            dataset_manifest_sha256=file_sha256(dataset / "manifest.json"),
+            artifact_root=artifact_root,
+        )
+
+
+def test_completed_range_loader_rejects_changed_source_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset = _dataset(tmp_path)
+    artifact_root = tmp_path / "artifacts"
+    state_file = tmp_path / "state.json"
+    origins = _Panel(dataset).dates
+
+    def load(_root: Path, *, as_of_date: date, **_kwargs: object) -> object:
+        manifest = _dated_manifest(artifact_root, as_of_date, label="complete")
+        return SimpleNamespace(
+            paths=SimpleNamespace(manifest=manifest),
+            physical_accepted=True,
+        )
+
+    monkeypatch.setattr(fit_rolling_gromm2_range, "PublicHedgingPanel", _Panel)
+    monkeypatch.setattr(fit_rolling_gromm2_range, "load_rolling_gromm2", load)
+    run_rolling_gromm2_range(
+        dataset=dataset,
+        artifact_root=artifact_root,
+        evaluation_start=origins[0],
+        evaluation_end=origins[-1],
+        stage=RollingGromm2RangeStage.FIT,
+        state_file=state_file,
+        progress_seconds=300.0,
+    )
+    payload = json.loads(state_file.read_text(encoding="utf-8"))
+    payload["source_identity"] = "0" * 64
+    state_file.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="stale or incomplete"):
         load_completed_rolling_gromm2_range(
             state_file,
             dataset_manifest_sha256=file_sha256(dataset / "manifest.json"),
