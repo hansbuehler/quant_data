@@ -24,7 +24,11 @@ from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.config impo
     HistoricalSanosObjective,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.hedger import (
+    _fit_policy,
+    _objective_and_gradient,
+    _optimal_power_cash_translation,
     fit_historical_sanos_hedge,
+    fit_historical_sanos_hedges,
 )
 
 
@@ -50,6 +54,120 @@ def test_historical_sanos_fits_all_objectives(objective: HistoricalSanosObjectiv
     assert fit.action[0] == pytest.approx(0.4, abs=3.0e-3)
     assert fit.action[1] == pytest.approx(-0.2, abs=3.0e-3)
     assert fit.action[2] == pytest.approx(0.0, abs=3.0e-3)
+
+
+@pytest.mark.parametrize(
+    "objective,risk_parameter",
+    (
+        (HistoricalSanosObjective.ENTROPY, 10.0),
+        (HistoricalSanosObjective.POWER_EXPONENTIAL, 1.0),
+    ),
+)
+def test_historical_sanos_exact_cost_oce_converges_on_redundant_book(
+    objective: HistoricalSanosObjective,
+    risk_parameter: float,
+) -> None:
+    generator = np.random.default_rng(71)
+    common = generator.normal(scale=0.01, size=(120, 4))
+    instruments = np.column_stack(
+        (
+            common,
+            common[:, 0] + 1.0e-3 * common[:, 1],
+            common[:, 2] - 1.0e-3 * common[:, 3],
+            generator.normal(scale=1.0e-4, size=(120, 6)),
+        )
+    )
+    claims = np.column_stack(
+        (
+            -0.4 * common[:, 0] + 0.2 * common[:, 2],
+            0.3 * common[:, 1] - 0.1 * common[:, 3],
+        )
+    )
+    config = HistoricalSanosConfig(
+        rolling_observations=120,
+        objective=objective,
+        risk_parameter=risk_parameter,
+        maximum_iterations=10_000,
+        gradient_tolerance=1.0e-8,
+    )
+
+    fits = fit_historical_sanos_hedges(
+        instrument_returns=instruments,
+        claim_returns=claims,
+        linear_transaction_costs=np.full(instruments.shape[1], 1.0e-5),
+        config=config,
+    )
+
+    assert len(fits) == 2
+    assert fits[0].zero_policy is fits[1].zero_policy
+    assert all(fit.converged for fit in fits)
+    assert all(fit.cap_hits == 0 for fit in fits)
+    assert all(
+        fit.claim_policy.maximum_absolute_gradient <= config.gradient_tolerance
+        for fit in fits
+    )
+    assert fits[0].zero_policy.maximum_absolute_gradient <= config.gradient_tolerance
+
+
+def test_historical_sanos_exact_cost_has_lasso_zero_threshold() -> None:
+    instruments = np.asarray([[-0.01], [0.01], [0.02], [0.04]], dtype=np.float64)
+    config = HistoricalSanosConfig(
+        rolling_observations=20,
+        objective=HistoricalSanosObjective.ENTROPY,
+        risk_parameter=1.0,
+        gradient_tolerance=1.0e-10,
+    )
+
+    fit = _fit_policy(
+        instruments,
+        np.zeros(len(instruments)),
+        np.asarray([0.02]),
+        config=config,
+    )
+
+    assert fit.converged
+    assert fit.action[0] == pytest.approx(0.0, abs=1.0e-12)
+    assert fit.maximum_absolute_gradient == pytest.approx(0.0, abs=1.0e-12)
+
+
+def test_power_oce_cash_translation_is_shift_invariant() -> None:
+    wealth = np.asarray([-0.4, -0.1, 0.2, 0.8], dtype=np.float64)
+    shift = 0.37
+    risk_parameter = 2.0
+    translation = _optimal_power_cash_translation(
+        wealth,
+        risk_parameter=risk_parameter,
+    )
+    shifted_translation = _optimal_power_cash_translation(
+        wealth + shift,
+        risk_parameter=risk_parameter,
+    )
+    config = HistoricalSanosConfig(
+        rolling_observations=20,
+        objective=HistoricalSanosObjective.POWER_EXPONENTIAL,
+        risk_parameter=risk_parameter,
+    )
+    instruments = np.zeros((len(wealth), 1), dtype=np.float64)
+    costs = np.zeros(1, dtype=np.float64)
+    loss = _objective_and_gradient(
+        np.asarray([0.0, translation]),
+        instruments,
+        wealth,
+        costs,
+        config=config,
+        include_translation=True,
+    )[0]
+    shifted_loss = _objective_and_gradient(
+        np.asarray([0.0, shifted_translation]),
+        instruments,
+        wealth + shift,
+        costs,
+        config=config,
+        include_translation=True,
+    )[0]
+
+    assert shifted_translation == pytest.approx(translation + shift)
+    assert shifted_loss == pytest.approx(loss - shift)
 
 
 def test_historical_sanos_mean_volatility_solves_cost_lasso_socp() -> None:

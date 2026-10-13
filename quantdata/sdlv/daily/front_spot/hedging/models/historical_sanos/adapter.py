@@ -28,7 +28,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.config impo
     HistoricalSanosConfig,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.hedger import (
-    fit_historical_sanos_hedge,
+    fit_historical_sanos_hedges,
 )
 
 
@@ -168,18 +168,19 @@ def evaluate_historical_sanos_daily_book(
         ],
         dtype=np.float64,
     )
+    fits = fit_historical_sanos_hedges(
+        instrument_returns=returns.instrument_returns,
+        claim_returns=returns.target_returns * quantities[None, :],
+        linear_transaction_costs=costs,
+        config=config,
+    )
     results: list[HedgeSmokeResult] = []
-    for target_index, (sample, claim_quantity) in enumerate(
-        zip(samples, quantities, strict=True)
+    for sample, claim_quantity, fit in zip(
+        samples,
+        quantities,
+        fits,
+        strict=True,
     ):
-        fit = fit_historical_sanos_hedge(
-            instrument_returns=returns.instrument_returns,
-            claim_returns=(
-                claim_quantity * returns.target_returns[:, target_index]
-            ),
-            linear_transaction_costs=costs,
-            config=config,
-        )
         action = fit.action
         results.append(
             evaluate_daily_digital_hedge(

@@ -254,7 +254,9 @@ sense of \citet{BuehlerEtAl2019DeepHedging}. Long, short, and zero policies
 determine indifference prices; a separate drift-neutral policy gives the
 executable pure hedge. Mean--variance uses exact cost-lasso coordinate descent,
 mean--volatility uses an exact conic program with an explicit recession test,
-and entropy and power-exponential objectives use analytic-gradient L-BFGS-B.
+and entropy and power-exponential objectives use an exact positive/negative
+action split for linear trading costs, with analytic gradients and an explicit
+KKT convergence gate.
 The model is inexpensive and fully rolling. Mean--variance at $\lambda=0.1$
 is complete on the current cohort with zero cap hits and zero nonconvergence;
 the remaining objective grid is still running.

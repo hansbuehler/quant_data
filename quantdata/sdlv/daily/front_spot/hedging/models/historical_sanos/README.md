@@ -21,15 +21,18 @@
   carried position, so its turnover cost matches common realized accounting.
 - **Training:** deterministic full-batch optimization. Mean-variance uses exact
   transaction-cost lasso coordinate descent with a small declared quadratic
-  ridge and a KKT stopping rule; the other objectives use analytic-gradient
-  L-BFGS-B. The oldest 80% is fitted and the newest 20% is held out for a
+  ridge and a KKT stopping rule; entropy and power-exponential use an exact
+  positive/negative action split with analytic gradients and a KKT gate, while
+  mean-volatility uses an exact conic program. The oldest 80% is fitted and the
+  newest 20% is held out for a
   validation diagnostic; after validation the policy is refitted on all 252
   observations. No future return is used.
 - **Artifacts:** common `hedging-smoke-v2` JSON with explicit claim quantity. The model has no neural
   checkpoint because its rolling optimizer is deterministic and inexpensive.
 - **Daily book:** one shared 252-transition return panel supplies all 20 agreed
-  1D/3D digital targets. Each target retains an independent claim-minus-zero
-  policy fit and common execution accounting.
+  1D/3D digital targets. The zero-claim policy is fitted once per date and
+  shared across targets; each target retains an independent claim policy,
+  claim-minus-zero hedge, and common execution accounting.
 - **Weekly book:** complete historical remaining-horizon blocks reprice the
   frozen option universe at the current relative DTE, NMS, and side. Frozen
   weekly uses one five-row open-loop policy; restarted weekly refits the

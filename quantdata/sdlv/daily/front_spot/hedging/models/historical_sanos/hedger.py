@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import cvxpy as cp
 import numpy as np
 from numpy.typing import NDArray
-from scipy.optimize import OptimizeResult, minimize
+from scipy.optimize import OptimizeResult, brentq, minimize
 
 from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.config import (
     HistoricalSanosConfig,
@@ -59,37 +59,90 @@ def fit_historical_sanos_hedge(
         claim_returns,
         linear_transaction_costs,
     )
-    claim_policy = _fit_policy(
-        instruments,
-        claim,
-        costs,
+    return fit_historical_sanos_hedges(
+        instrument_returns=instruments,
+        claim_returns=claim[:, None],
+        linear_transaction_costs=costs,
         config=config,
-    )
+    )[0]
+
+
+def fit_historical_sanos_hedges(
+    *,
+    instrument_returns: NDArray[np.floating],
+    claim_returns: NDArray[np.floating],
+    linear_transaction_costs: NDArray[np.floating],
+    config: HistoricalSanosConfig = HistoricalSanosConfig(),
+) -> tuple[HistoricalSanosHedgeFit, ...]:
+    """Fit a claim book while reusing its common zero-claim policy."""
+    instruments = np.asarray(instrument_returns, dtype=np.float64)
+    claims = np.asarray(claim_returns, dtype=np.float64)
+    costs = np.asarray(linear_transaction_costs, dtype=np.float64)
+    if claims.ndim != 2 or claims.shape[1] == 0:
+        raise ValueError("claim_returns must be a non-empty matrix")
+    _validated_inputs(instruments, claims[:, 0], costs)
+    if claims.shape[0] != len(instruments) or not np.all(np.isfinite(claims)):
+        raise ValueError("historical SANOS claim book must align and be finite")
     zero_policy = _fit_policy(
         instruments,
-        np.zeros_like(claim),
+        np.zeros(len(instruments), dtype=np.float64),
         costs,
         config=config,
     )
+    return tuple(
+        _compose_hedge_fit(
+            instruments,
+            claims[:, index],
+            costs,
+            claim_policy=_fit_policy(
+                instruments,
+                claims[:, index],
+                costs,
+                config=config,
+            ),
+            zero_policy=zero_policy,
+            config=config,
+        )
+        for index in range(claims.shape[1])
+    )
+
+
+def _compose_hedge_fit(
+    instruments: FloatArray,
+    claim: FloatArray,
+    costs: FloatArray,
+    *,
+    claim_policy: HistoricalSanosPolicyFit,
+    zero_policy: HistoricalSanosPolicyFit,
+    config: HistoricalSanosConfig,
+) -> HistoricalSanosHedgeFit:
     raw_action = claim_policy.action - zero_policy.action
     action = np.clip(raw_action, -config.position_cap, config.position_cap)
     executable_cap_hits = int(np.count_nonzero(action != raw_action))
     internal_cap_hits = claim_policy.cap_hits + zero_policy.cap_hits
     cap_hits = internal_cap_hits + executable_cap_hits
+    include_translation = (
+        config.objective is HistoricalSanosObjective.POWER_EXPONENTIAL
+    )
+    translation = 0.0
+    if include_translation:
+        wealth = claim + instruments @ action - float(costs @ np.abs(action))
+        translation = _optimal_power_cash_translation(
+            wealth,
+            risk_parameter=config.risk_parameter,
+        )
     objective = _objective_and_gradient(
         np.concatenate(
             (
                 action,
-                np.asarray(
-                    [0.0 if claim_policy.cash_translation is None else claim_policy.cash_translation]
-                ),
+                np.asarray([translation]) if include_translation else np.empty(0),
             )
         ),
         instruments,
         claim,
         costs,
         config=config,
-        include_translation=config.objective is HistoricalSanosObjective.POWER_EXPONENTIAL,
+        include_translation=include_translation,
     )[0]
     return HistoricalSanosHedgeFit(
         action=action,
@@ -117,11 +170,6 @@ def _fit_policy(
     include_translation = config.objective is HistoricalSanosObjective.POWER_EXPONENTIAL
     parameter_count = instruments.shape[1] + int(include_translation)
     initial = np.zeros(parameter_count, dtype=np.float64)
-    bounds = [
-        (-config.solver_position_cap, config.solver_position_cap)
-    ] * instruments.shape[1]
-    if include_translation:
-        bounds.append((None, None))
     selection = _minimize_policy(
         initial,
         instruments[:split],
@@ -129,7 +177,6 @@ def _fit_policy(
         costs,
         config=config,
         include_translation=include_translation,
-        bounds=bounds,
     )
     validation_loss = _objective_and_gradient(
         selection.x,
@@ -146,25 +193,22 @@ def _fit_policy(
         costs,
         config=config,
         include_translation=include_translation,
-        bounds=bounds,
     )
-    final_loss, final_gradient = _objective_and_gradient(
+    final_loss = _objective_and_gradient(
         final.x,
         instruments,
         claim,
         costs,
         config=config,
         include_translation=include_translation,
-    )
+    )[0]
     action = np.asarray(final.x[: instruments.shape[1]], dtype=np.float64)
     cap_hits = int(
         np.count_nonzero(
             np.abs(action) >= 0.999 * config.solver_position_cap
         )
     )
-    optimality = float(
-        getattr(final, "optimality", np.max(np.abs(final_gradient)))
-    )
+    optimality = float(getattr(final, "optimality", math.inf))
     return HistoricalSanosPolicyFit(
         action=action,
         cash_translation=float(final.x[-1]) if include_translation else None,
@@ -185,8 +229,7 @@ def _minimize_policy(
     *,
     config: HistoricalSanosConfig,
     include_translation: bool,
-    bounds: list[tuple[float | None, float | None]],
-):
+) -> OptimizeResult:
     if config.objective is HistoricalSanosObjective.MEAN_VARIANCE:
         return _minimize_mean_variance(
             initial,
@@ -203,29 +246,148 @@ def _minimize_policy(
             costs,
             config=config,
         )
-
-    def value_and_gradient(parameters: NDArray[np.floating]) -> tuple[float, FloatArray]:
-        return _objective_and_gradient(
-            parameters,
+    if config.objective in (
+        HistoricalSanosObjective.ENTROPY,
+        HistoricalSanosObjective.POWER_EXPONENTIAL,
+    ):
+        return _minimize_exact_cost_policy(
+            initial,
             instruments,
             claim,
             costs,
             config=config,
             include_translation=include_translation,
         )
+    raise ValueError(f"unsupported historical SANOS objective {config.objective!r}")
 
-    return minimize(
+
+def _minimize_exact_cost_policy(
+    initial: FloatArray,
+    instruments: FloatArray,
+    claim: FloatArray,
+    costs: FloatArray,
+    *,
+    config: HistoricalSanosConfig,
+    include_translation: bool,
+) -> OptimizeResult:
+    """Solve a cash-additive OCE with exact linear spread costs."""
+    instrument_count = instruments.shape[1]
+    initial_action = np.asarray(initial[:instrument_count], dtype=np.float64)
+    cost_free_translation = np.empty(0, dtype=np.float64)
+    if include_translation:
+        cost_free_translation = np.asarray(
+            [float(initial[-1]) + float(costs @ np.abs(initial_action))],
+            dtype=np.float64,
+        )
+    split_initial = np.concatenate(
+        (
+            np.maximum(initial_action, 0.0),
+            np.maximum(-initial_action, 0.0),
+            cost_free_translation,
+        )
+    )
+    split_bounds: list[tuple[float | None, float | None]] = [
+        (0.0, config.solver_position_cap)
+    ] * (2 * instrument_count)
+    if include_translation:
+        split_bounds.append((None, None))
+    zero_costs = np.zeros_like(costs)
+
+    def value_and_gradient(parameters: NDArray[np.floating]) -> tuple[float, FloatArray]:
+        values = np.asarray(parameters, dtype=np.float64)
+        positive = values[:instrument_count]
+        negative = values[instrument_count : 2 * instrument_count]
+        action = positive - negative
+        risk_parameters = np.concatenate(
+            (
+                action,
+                np.asarray([values[-1]]) if include_translation else np.empty(0),
+            )
+        )
+        risk_value, risk_gradient = _objective_and_gradient(
+            risk_parameters,
+            instruments,
+            claim,
+            zero_costs,
+            config=config,
+            include_translation=include_translation,
+        )
+        action_gradient = risk_gradient[:instrument_count]
+        gradient = np.concatenate(
+            (
+                action_gradient + costs,
+                -action_gradient + costs,
+                np.asarray([risk_gradient[-1]])
+                if include_translation
+                else np.empty(0),
+            )
+        )
+        return (
+            float(risk_value + costs @ (positive + negative)),
+            np.asarray(gradient, dtype=np.float64),
+        )
+
+    result = minimize(
         value_and_gradient,
-        initial,
+        split_initial,
         method="L-BFGS-B",
         jac=True,
-        bounds=bounds,
+        bounds=split_bounds,
         options={
             "maxiter": config.maximum_iterations,
+            "maxfun": 4 * config.maximum_iterations,
             "gtol": config.gradient_tolerance,
-            "ftol": 1.0e-14,
+            "ftol": 0.0,
+            "maxls": 50,
         },
     )
+    split_solution = np.asarray(result.x, dtype=np.float64)
+    action = (
+        split_solution[:instrument_count]
+        - split_solution[instrument_count : 2 * instrument_count]
+    )
+    internal_parameters = np.concatenate(
+        (
+            action,
+            np.asarray([split_solution[-1]])
+            if include_translation
+            else np.empty(0),
+        )
+    )
+    risk_value, risk_gradient = _objective_and_gradient(
+        internal_parameters,
+        instruments,
+        claim,
+        zero_costs,
+        config=config,
+        include_translation=include_translation,
+    )
+    optimality = _maximum_kkt_violation(
+        action,
+        risk_gradient[:instrument_count],
+        costs,
+        position_cap=config.solver_position_cap,
+    )
+    if include_translation:
+        optimality = max(optimality, abs(float(risk_gradient[-1])))
+    translation = np.empty(0, dtype=np.float64)
+    if include_translation:
+        translation = np.asarray(
+            [split_solution[-1] - float(costs @ np.abs(action))],
+            dtype=np.float64,
+        )
+    result.x = np.concatenate((action, translation))
+    result.fun = float(risk_value + costs @ np.abs(action))
+    result.optimality = float(optimality)
+    result.success = bool(
+        result.success and optimality <= config.gradient_tolerance
+    )
+    if not result.success and optimality > config.gradient_tolerance:
+        result.message = (
+            f"{result.message}; KKT residual {optimality:.6g} exceeds "
+            f"{config.gradient_tolerance:.6g}"
+        )
+    return result
 
 
 def _minimize_mean_volatility(
@@ -421,10 +583,8 @@ def _objective_and_gradient(
     values = np.asarray(parameters, dtype=np.float64)
     instrument_count = instruments.shape[1]
     action = values[:instrument_count]
-    smoothing = config.cost_smoothing
-    smooth_absolute = np.sqrt(action**2 + smoothing**2) - smoothing
-    cost = float(costs @ smooth_absolute)
-    cost_gradient = costs * action / np.sqrt(action**2 + smoothing**2)
+    cost = float(costs @ np.abs(action))
+    cost_gradient = costs * np.sign(action)
     wealth = claim + instruments @ action - cost
     jacobian = instruments - cost_gradient[None, :]
     sample_count = len(wealth)
@@ -473,6 +633,27 @@ def _objective_and_gradient(
     if not math.isfinite(float(loss)) or not np.all(np.isfinite(gradient)):
         raise FloatingPointError("historical SANOS objective is non-finite")
     return float(loss), np.asarray(gradient, dtype=np.float64)
+
+
+def _optimal_power_cash_translation(
+    wealth: FloatArray,
+    *,
+    risk_parameter: float,
+) -> float:
+    width = 50.0 / risk_parameter
+    lower = float(np.min(wealth) - width)
+    upper = float(np.max(wealth) + width)
+
+    def first_order_condition(translation: float) -> float:
+        residual = wealth - translation
+        marginal = np.where(
+            residual >= 0.0,
+            np.exp(-risk_parameter * np.maximum(residual, 0.0)),
+            1.0 - risk_parameter * residual,
+        )
+        return 1.0 - float(np.mean(marginal))
+
+    return float(brentq(first_order_condition, lower, upper))
 
 
 def _validated_inputs(
