@@ -30,8 +30,11 @@ diagnostic rather than being relabelled as current production evidence. The
 clean current-notional SANOS-LV rerun is complete: all 611 origins and 12,220
 records pass the current record-by-record validator, with zero cap hits and zero
 nonconvergence, and deterministic reconstruction reproduces the pinned
-production-results SHA-256. Corrected robust-covariance and historical-SANOS
-sweeps remain in progress from immutable worktrees. Other daily production
+production-results SHA-256. The three corrected robust-covariance
+mean--variance cases are also complete and authenticated on the same current
+target-notional cohort, with zero cap hits and zero nonconvergence. The remaining
+robust-covariance and historical-SANOS sweeps continue from immutable worktrees.
+Other daily production
 and full weekly production remain outstanding. A unified weekly runner now
 supports frozen and restarted schedules for SANOS-LV, historical SANOS,
 GROMM, VolGAN, and both diffusion variants. It requires an authenticated
@@ -795,7 +798,10 @@ SHA-256 `9e4252f60540d6830eacda10b451677320760404e4599a5caa4e346367262b2d`,
 with zero cap hits and zero nonconvergence. The historical-SANOS result currently
 used by the summary report has the superseded target-notional identity and must
 not be compared with this run; the corrected historical-SANOS and covariance
-sweeps remain in progress. The versioned daily production matrix contains 54
+sweeps remain in progress. The covariance mean--variance cases at risk
+parameters $0.1$, $1$, and $10$ have completed all 611 origins and 12,220
+records under the current target-notional identity, with zero cap hits and zero
+nonconvergence. The versioned daily production matrix contains 54
 unique cases: 21 runnable native CPU cases, two
 staged published-setting GPU cases awaiting the generated-model GPU-readiness
 gate, and 31 explicitly blocked rolling-generated or GROMM cases. No blocked
