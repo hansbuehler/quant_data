@@ -55,8 +55,12 @@ payoff to the cached paths. Target-specific convex problems are rebuilt rather
 than carried across claims, and the reusable pure-hedge geometry receives the
 current claim payoff explicitly. A real frozen-weekly origin reproduces the
 fresh-fit prices and positions exactly, with zero cap hits or nonconvergence,
-while reducing target-book compute from 336.3 to 53.1 seconds. The daily
-production-queue validator
+while reducing target-book compute from 336.3 to 53.1 seconds; independent
+quant review passed. The 94-case weekly matrix retains 28 ready native cases,
+four generated-gate waiters, and 62 blocked cases. Its native queue and the
+generated-model readiness queue are repinned to commit `73a9626`; the former
+waits for daily CPU production and the latter for the rolling GROMM GPU fit.
+The daily production-queue validator
 now authenticates the immutable run and completion summary, recomputes the true
 eligible-origin cohort from the public panel, reparses every dated result record,
 and rebuilds every aggregate statistic before requiring exact agreement with the
