@@ -25,10 +25,13 @@ overlap inference passed their independent re-review. A resumable daily runner
 now pins dataset and model identities, enforces the complete 20-target book and
 numerical gates, and writes one atomic record per origin. Earlier SANOS-LV and
 historical-SANOS runs each completed all 611 eligible origins and 12,220 target
-records. The SANOS-LV records used a superseded target-notional identity and
-therefore remain diagnostic rather than being relabelled as current production
-evidence. A clean SANOS-LV rerun and the corrected robust-covariance sweep are
-in progress from immutable worktrees. Other daily production
+records. Those records used superseded target-notional identities and remain
+diagnostic rather than being relabelled as current production evidence. The
+clean current-notional SANOS-LV rerun is complete: all 611 origins and 12,220
+records pass the current record-by-record validator, with zero cap hits and zero
+nonconvergence, and deterministic reconstruction reproduces the pinned
+production-results SHA-256. Corrected robust-covariance and historical-SANOS
+sweeps remain in progress from immutable worktrees. Other daily production
 and full weekly production remain outstanding. A unified weekly runner now
 supports frozen and restarted schedules for SANOS-LV, historical SANOS,
 GROMM, VolGAN, and both diffusion variants. It requires an authenticated
@@ -784,12 +787,18 @@ dataset identity, run identity, convergence gate, or cap count is missing or
 inconsistent. The failed SANOS-LV `production-v1` is retained as a numerical
 diagnostic; the row-scaled `production-v2` run completed all 611 eligible
 origins and wrote 12,220 target records, but its superseded target-notional
-identity prevents its use as current production evidence. Historical SANOS
-also completed all 611 origins and 12,220 records. Clean SANOS-LV and corrected
-covariance production are resumable and remain in progress. The versioned daily
-production matrix contains 53 unique cases: 21 runnable native CPU cases, two
+identity prevents its use as current production evidence. The clean
+current-notional SANOS-LV production run is now authenticated under run identity
+`c67b549ca9eeb404be9e70c6fe2ba22c827d8d4ec75115e403a0bb2e54666a68`.
+Its 611 origins and 12,220 records reconstruct deterministically to results
+SHA-256 `9e4252f60540d6830eacda10b451677320760404e4599a5caa4e346367262b2d`,
+with zero cap hits and zero nonconvergence. The historical-SANOS result currently
+used by the summary report has the superseded target-notional identity and must
+not be compared with this run; the corrected historical-SANOS and covariance
+sweeps remain in progress. The versioned daily production matrix contains 54
+unique cases: 21 runnable native CPU cases, two
 staged published-setting GPU cases awaiting the generated-model GPU-readiness
-gate, and 30 explicitly blocked rolling-generated or GROMM cases. No blocked
+gate, and 31 explicitly blocked rolling-generated or GROMM cases. No blocked
 case is silently emitted as a launch command.
 
 Gate: interim results quant review passes.
