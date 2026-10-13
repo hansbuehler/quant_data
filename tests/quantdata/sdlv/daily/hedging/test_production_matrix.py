@@ -1,3 +1,5 @@
+import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -164,3 +166,74 @@ def test_generated_rolling_cases_require_selected_artifacts() -> None:
         assert case.command is not None
         assert case.command[case.command.index("--epochs") + 1] == epochs
         assert case.command[case.command.index("--device") + 1] == "cuda"
+
+
+def test_production_matrix_cli_serializes_dates_and_generated_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = tmp_path / "matrix.json"
+    volgan = tmp_path / "volgan.pt"
+    diffusion = tmp_path / "diffusion.pt"
+    diffusion_base = tmp_path / "diffusion-base.pt"
+    diffusion_ft = tmp_path / "diffusion-ft.pt"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "production_matrix",
+            "--dataset",
+            str(tmp_path / "dataset"),
+            "--output-root",
+            str(tmp_path / "outputs"),
+            "--checkpoint-root",
+            str(tmp_path / "checkpoints"),
+            "--output",
+            str(output),
+            "--volgan-initializer",
+            str(volgan),
+            "--volgan-update-epochs",
+            "7",
+            "--diffusion-initializer",
+            str(diffusion),
+            "--diffusion-update-epochs",
+            "11",
+            "--diffusion-ft-base",
+            str(diffusion_base),
+            "--diffusion-ft-initializer",
+            str(diffusion_ft),
+            "--diffusion-ft-update-epochs",
+            "5",
+        ],
+    )
+
+    production_matrix.main()
+
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["config"]["evaluation_start"] == "2023-01-01"
+    assert payload["config"]["evaluation_end"] == "2025-12-31"
+    case = next(
+        value
+        for value in payload["cases"]
+        if value["case_id"] == "volgan-rolling-trained"
+    )
+    assert case["readiness"] == ProductionReadiness.WAITING_GATE.value
+    assert case["command"][case["command"].index("--epochs") + 1] == "7"
+    assert case["command"][
+        case["command"].index("--warm-start-checkpoint") + 1
+    ] == str(volgan)
+    cases = {value["case_id"]: value for value in payload["cases"]}
+    for case_id, initializer, epochs in (
+        ("diffusion-ad-seq-vol-rolling-trained", diffusion, "11"),
+        ("diffusion-ad-seq-vol-ft-rolling-trained", diffusion_ft, "5"),
+    ):
+        case = cases[case_id]
+        assert case["readiness"] == ProductionReadiness.WAITING_GATE.value
+        assert case["command"][case["command"].index("--epochs") + 1] == epochs
+        assert case["command"][
+            case["command"].index("--warm-start-checkpoint") + 1
+        ] == str(initializer)
+    fine_tuned = cases["diffusion-ad-seq-vol-ft-rolling-trained"]
+    assert fine_tuned["command"][
+        fine_tuned["command"].index("--base-checkpoint") + 1
+    ] == str(diffusion_base)

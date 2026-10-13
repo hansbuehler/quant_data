@@ -88,6 +88,13 @@ class DailyProductionMatrixConfig:
             lambda: "production evaluation start must not exceed end",
         )
 
+    def to_dict(self) -> dict[str, object]:
+        """Return a stable JSON-compatible configuration snapshot."""
+        payload = asdict(self)
+        payload["evaluation_start"] = self.evaluation_start.isoformat()
+        payload["evaluation_end"] = self.evaluation_end.isoformat()
+        return payload
+
 
 @dataclass(frozen=True, kw_only=True)
 class GrommProductionInputs:
@@ -684,6 +691,13 @@ def main() -> None:
     parser.add_argument("--gromm-market-artifact-root", type=Path)
     parser.add_argument("--gromm-architecture-selection", type=Path)
     parser.add_argument("--gromm-artifact-range-summary", type=Path)
+    parser.add_argument("--volgan-initializer", type=Path)
+    parser.add_argument("--volgan-update-epochs", type=int)
+    parser.add_argument("--diffusion-initializer", type=Path)
+    parser.add_argument("--diffusion-update-epochs", type=int)
+    parser.add_argument("--diffusion-ft-base", type=Path)
+    parser.add_argument("--diffusion-ft-initializer", type=Path)
+    parser.add_argument("--diffusion-ft-update-epochs", type=int)
     arguments = parser.parse_args()
     config = DailyProductionMatrixConfig()
     cases = build_daily_production_matrix(
@@ -696,11 +710,20 @@ def main() -> None:
             architecture_selection=arguments.gromm_architecture_selection,
             artifact_range_summary=arguments.gromm_artifact_range_summary,
         ),
+        generated=GeneratedProductionInputs(
+            volgan_initializer=arguments.volgan_initializer,
+            volgan_update_epochs=arguments.volgan_update_epochs,
+            diffusion_initializer=arguments.diffusion_initializer,
+            diffusion_update_epochs=arguments.diffusion_update_epochs,
+            diffusion_ft_base=arguments.diffusion_ft_base,
+            diffusion_ft_initializer=arguments.diffusion_ft_initializer,
+            diffusion_ft_update_epochs=arguments.diffusion_ft_update_epochs,
+        ),
     )
     payload = {
         "schema": "hedging-daily-production-matrix-v1",
         "code_version": str(type(config).version),
-        "config": asdict(config),
+        "config": config.to_dict(),
         "case_count": len(cases),
         "ready_count": sum(
             case.readiness is ProductionReadiness.READY for case in cases

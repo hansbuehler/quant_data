@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
 
 import jax
@@ -25,6 +26,9 @@ from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly_runner import (
 from quantdata.sdlv.daily.front_spot.hedging.data.fixtures import (
     synthetic_weekly_market_day,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.gromm import (
+    weekly_adapter as weekly_adapter_module,
+)
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.config import (
     GrommConfig,
     GrommMeasure,
@@ -41,6 +45,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.gromm2_weekly import (
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2 import (
     RollingGromm2Artifacts,
+    rolling_gromm2_paths,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.weekly_adapter import (
     GrommWeeklyAdapter,
@@ -153,6 +158,77 @@ def test_physical_risk_price_supports_pathwise_states() -> None:
 
     assert actual.shape == (3, 2)
     np.testing.assert_array_equal(actual, np.zeros((3, 2)))
+
+
+def test_weekly_market_fit_matches_authenticated_transition_origins(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    base = _decision_state().instruction
+    adapter = GrommWeeklyAdapter(
+        artifact_root=tmp_path / "market",
+        checkpoint_directory=tmp_path / "policy",
+        config=GrommConfig(path_count=8, batch_size=8),
+        environment=BaseEnvironment(precision=64, device="cpu", debug=True),
+    )
+    instruction = WeeklyFitInstruction(
+        schedule=base.schedule,
+        model=adapter.model,
+        measure=adapter.measure,
+        target_label=base.target_label,
+        claim_quantity=base.claim_quantity,
+        model_config_identity=adapter.model_config_identity,
+        policy_config_identity=adapter.policy_config_identity,
+        episode_origin_date=base.episode_origin_date,
+        decision_date=base.decision_date,
+        fit_as_of_date=base.fit_as_of_date,
+        training_dates=base.training_dates,
+        frozen_contract_ids=base.frozen_contract_ids,
+    )
+    paths = rolling_gromm2_paths(
+        tmp_path / "market",
+        as_of_date=instruction.fit_as_of_date,
+    )
+    paths.directory.mkdir(parents=True)
+    paths.affine_history.write_bytes(b"affine")
+    paths.dynamics.write_bytes(b"dynamics")
+    transition_endpoints = (
+        instruction.training_dates[1],
+        instruction.fit_as_of_date,
+    )
+    artifacts = RollingGromm2Artifacts(
+        paths=paths,
+        as_of_date=instruction.fit_as_of_date,
+        training_dates=(
+            *instruction.training_dates,
+            instruction.fit_as_of_date,
+        ),
+        transition_origin_dates=instruction.training_dates,
+        transition_endpoint_dates=transition_endpoints,
+        percent_inside_spread=84.0,
+        explained_variance_ratio=0.95,
+        physical_projection_fraction=0.0,
+        maximum_daily_risk_price_norm=0.0,
+        physical_accepted=False,
+        dataset_manifest_sha256="a" * 64,
+    )
+    monkeypatch.setattr(
+        weekly_adapter_module,
+        "load_rolling_gromm2",
+        lambda *_args, **_kwargs: artifacts,
+    )
+    monkeypatch.setattr(
+        weekly_adapter_module,
+        "load_gromm2_market_state",
+        lambda _artifacts: _market_state(),
+    )
+
+    fitted = adapter.fit_market(
+        SimpleNamespace(dataset_manifest_sha256="a" * 64),
+        instruction=instruction,
+    )
+
+    assert fitted.artifacts.transition_origin_dates == instruction.training_dates
 
 
 def test_gromm2_weekly_scenario_and_training_smoke() -> None:

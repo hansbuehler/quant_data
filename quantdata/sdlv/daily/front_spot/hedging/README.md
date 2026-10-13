@@ -90,7 +90,10 @@ training dependencies.
   remains disabled. The rolling range runner now authenticates every reused
   artifact, writes atomic per-origin range evidence, prevents concurrent range
   writers, and emits four-minute heartbeats. Its first-origin resume smoke
-  passed; preparation of the full 611-origin range is in progress.
+  passed; preparation of the full 611-origin range is in progress. At an origin
+  following a missing intermediate release, the rolling fit keeps 252 exact
+  one-session pairs and appends the current origin state for its geometry and
+  DLV level rather than manufacturing a multi-session transition.
 - See `quantdata/hedging/PLAN.md` and the stored independent reviews before
   interpreting development smokes as benchmark results.
 
@@ -253,3 +256,10 @@ python -m quantdata.sdlv.daily.front_spot.hedging.runners.production_matrix \
   --gromm-artifact-range-summary \
     "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v3/range-fit-2023-2025.json"
 ```
+
+The matrix command also accepts authenticated generated-model inputs through
+`--volgan-initializer`, `--volgan-update-epochs`,
+`--diffusion-initializer`, `--diffusion-update-epochs`,
+`--diffusion-ft-base`, `--diffusion-ft-initializer`, and
+`--diffusion-ft-update-epochs`. Missing dependencies remain explicit blocked
+cases rather than falling back to implicit defaults.

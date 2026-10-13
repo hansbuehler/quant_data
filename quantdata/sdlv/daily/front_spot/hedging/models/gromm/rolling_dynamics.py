@@ -52,6 +52,7 @@ def estimate_rolling_gromm2_dynamics(
     history_path: Path,
     dataset: Path,
     output: Path,
+    as_of_date: date,
     origin_dates: tuple[date, ...],
     endpoint_dates: tuple[date, ...],
     factor_count: int,
@@ -69,6 +70,7 @@ def estimate_rolling_gromm2_dynamics(
     history, origin_indices, origin_states = _build_fixed_contract_history(
         panel=panel,
         arrays=arrays,
+        as_of_date=as_of_date,
         origin_dates=origin_dates,
         endpoint_dates=endpoint_dates,
     )
@@ -243,6 +245,7 @@ def _build_fixed_contract_history(
     *,
     panel: PublicHedgingPanel,
     arrays: dict[str, FloatArray | tuple[date, ...]],
+    as_of_date: date,
     origin_dates: tuple[date, ...],
     endpoint_dates: tuple[date, ...],
 ) -> tuple[FixedContractDlvHistory, IntArray, FloatArray]:
@@ -253,8 +256,13 @@ def _build_fixed_contract_history(
     business_dtes = np.asarray(arrays["business_dtes"], dtype=np.float64)
     dlvsq = np.asarray(arrays["dlvsq"], dtype=np.float64)
     by_date = {value: index for index, value in enumerate(dates)}
-    if tuple(sorted(set(origin_dates) | set(endpoint_dates))) != dates:
-        raise ValueError("affine states do not equal the exact transition-date union")
+    expected_dates = tuple(
+        sorted(set(origin_dates) | set(endpoint_dates) | {as_of_date})
+    )
+    if expected_dates != dates:
+        raise ValueError(
+            "affine states do not equal the transition-date union plus as-of"
+        )
     origin_indices: list[int] = []
     origin_values: list[FloatArray] = []
     endpoint_values: list[FloatArray] = []

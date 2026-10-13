@@ -118,6 +118,8 @@ class RollingGromm2Artifacts:
     paths: RollingGromm2Paths
     as_of_date: date
     training_dates: tuple[date, ...]
+    transition_origin_dates: tuple[date, ...]
+    transition_endpoint_dates: tuple[date, ...]
     percent_inside_spread: float
     explained_variance_ratio: float
     physical_projection_fraction: float
@@ -155,12 +157,15 @@ def select_rolling_public_days(
         endpoint_dates = tuple(endpoint for _, endpoint in transition_pairs)
         if (
             origin_dates != tuple(sorted(set(origin_dates)))
-            or endpoint_dates[-1] != as_of_date
+            or endpoint_dates != tuple(sorted(set(endpoint_dates)))
+            or endpoint_dates[-1] > as_of_date
             or any(origin >= endpoint for origin, endpoint in transition_pairs)
         ):
             raise ValueError("rolling GROMM2 transition pairs are not chronological")
         by_date = {day.trading_date: day for day in days}
-        required_dates = tuple(sorted(set(origin_dates) | set(endpoint_dates)))
+        required_dates = tuple(
+            sorted(set(origin_dates) | set(endpoint_dates) | {as_of_date})
+        )
         missing = tuple(value for value in required_dates if value not in by_date)
         if missing:
             raise ValueError(
@@ -302,6 +307,7 @@ def fit_rolling_gromm2_market(
             history_path=paths.affine_history,
             dataset=Path(dataset),
             output=paths.dynamics,
+            as_of_date=as_of_date,
             origin_dates=origin_dates,
             endpoint_dates=endpoint_dates,
             factor_count=config.factor_count,
@@ -389,7 +395,9 @@ def load_rolling_gromm2(
         manifest,
         window_transitions=config.window_transitions,
     )
-    expected_state_dates = tuple(sorted(set(origin_dates) | set(endpoint_dates)))
+    expected_state_dates = tuple(
+        sorted(set(origin_dates) | set(endpoint_dates) | {as_of_date})
+    )
     if (
         len(nms_nodes) != config.geometry.num_inner_strikes
         or dates != expected_state_dates
@@ -418,6 +426,8 @@ def load_rolling_gromm2(
         paths=paths,
         as_of_date=as_of_date,
         training_dates=dates,
+        transition_origin_dates=origin_dates,
+        transition_endpoint_dates=endpoint_dates,
         percent_inside_spread=percent_inside,
         explained_variance_ratio=float(report["explained_variance_ratio"]),
         physical_projection_fraction=physical_projection_fraction,
@@ -553,14 +563,15 @@ def _validate_prepared_manifest(
         manifest,
         window_transitions=config.window_transitions,
     )
-    unique_states = set(parsed_origins) | set(parsed_endpoints)
+    unique_states = set(parsed_origins) | set(parsed_endpoints) | {as_of_date}
     if (
         manifest.get("schema") != ROLLING_GROMM2_SCHEMA
         or manifest.get("as_of_date") != as_of_date.isoformat()
         or manifest.get("training_end_date") != as_of_date.isoformat()
         or manifest.get("training_start_date") != parsed_origins[0].isoformat()
         or parsed_origins != tuple(sorted(set(parsed_origins)))
-        or parsed_endpoints[-1] != as_of_date
+        or parsed_endpoints != tuple(sorted(set(parsed_endpoints)))
+        or parsed_endpoints[-1] > as_of_date
         or any(origin >= endpoint for origin, endpoint in zip(
             parsed_origins,
             parsed_endpoints,

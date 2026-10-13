@@ -689,9 +689,13 @@ only the hedge-policy architecture is selected on the 2022 initialization set.
 
 The dated market-artifact contract, CPU preparation stage, daily P/Q
 benchmark-book output, and weekly recurrent-policy interface are implemented.
-A production artifact contains exactly 252 transitions ending on the declared
-origin, fixes the 200-strike geometry from that origin, hashes all inputs, and
-rejects full-panel or future-dated histories. A real first-eligible 2023-01-17
+A production artifact contains exactly 252 transitions in the declared origin's
+information set, fixes the 200-strike geometry from that origin, hashes all
+inputs, and rejects full-panel or future-dated histories. When a released
+origin follows a missing intermediate market date, the fit retains the latest
+252 exact released one-session pairs and appends the current origin state for
+the geometry and DLV level; it never substitutes a multi-session return for a
+one-session transition. A real first-eligible 2023-01-17
 fit completed from the public dataset using 252 exact released one-session
 pairs supported by 257 states. It places 84.90% of observations inside spread,
 and the rank-16 innovation basis explains 95.15% of variance. The compatible-P
@@ -712,7 +716,8 @@ rolling Q production and any future-origin P acceptance remain outstanding. A
 range orchestrator now authenticates and reuses each dated preparation or fit,
 records every manifest hash atomically, prevents concurrent writers, and emits
 a persistent heartbeat at most every five minutes. Its real first-origin
-resume smoke passed. The 611-origin CPU preparation service is running.
+resume smoke passed. The 611-origin CPU preparation service is running and has
+passed the first sparse-release origin after an authenticated restart.
 
 Gate: GROMM CPU smoke test, model review, and GPU-readiness review pass.
 

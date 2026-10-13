@@ -158,7 +158,7 @@ class GrommWeeklyAdapter:
             config=self.rolling_config,
             dataset_manifest_sha256=panel.dataset_manifest_sha256,
         )
-        if artifacts.training_dates[:-1] != instruction.training_dates:
+        if artifacts.transition_origin_dates != instruction.training_dates:
             raise ValueError(
                 "rolling GROMM2 artifact does not match weekly training dates"
             )
