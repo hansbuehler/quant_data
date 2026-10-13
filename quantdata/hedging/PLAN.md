@@ -49,10 +49,14 @@ explicitly blocked until their authenticated gates pass. The ready native
 weekly cases are queued to begin only after the active daily CPU production
 queues finish. Generated weekly evaluation now shares one immutable
 target-independent path and fixed-book geometry per decision state and one
-cold zero-claim pricing fit across targets. This reduces identical generated
-path and repricing work from 13 calls to one for a frozen origin and from 65 to
-five for a restarted origin without changing prices, actions, identities, or
-random numbers; independent review passed. The daily production-queue validator
+cold zero-claim pricing fit across targets. Historical weekly evaluation also
+prices the fixed option book once per decision state and attaches each target
+payoff to the cached paths. Target-specific convex problems are rebuilt rather
+than carried across claims, and the reusable pure-hedge geometry receives the
+current claim payoff explicitly. A real frozen-weekly origin reproduces the
+fresh-fit prices and positions exactly, with zero cap hits or nonconvergence,
+while reducing target-book compute from 336.3 to 53.1 seconds. The daily
+production-queue validator
 now authenticates the immutable run and completion summary, recomputes the true
 eligible-origin cohort from the public panel, reparses every dated result record,
 and rebuilds every aggregate statistic before requiring exact agreement with the
@@ -61,7 +65,7 @@ reconstructs the overlapping-origin cohort from the validated public panel,
 reparses every dated weekly record, recomputes exposures, diagnostics,
 inference, and risk slices, and requires exact persisted-aggregate equality.
 Integrated tests reject both a forged eligible-origin summary and a tampered
-record. The resulting complete hedging suite contains 310 passing tests. The
+record. The resulting complete hedging suite contains 318 passing tests. The
 strictly-2022 target-sizing exercise now
 fixes each target to one
 maturity-matched ATM spot-risk unit; all 20 calibration hedges converged with

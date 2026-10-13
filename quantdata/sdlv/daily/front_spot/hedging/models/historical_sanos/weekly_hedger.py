@@ -105,6 +105,8 @@ class WeeklyOpenLoopPricingContext:
             signed_claim_quantity=0.0,
             terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
         )
+        self._execution_geometry_key: bytes | None = None
+        self._execution_geometry: _WeeklyOpenLoopGeometry | None = None
         self._use_lock = Lock()
 
     @contextmanager
@@ -133,6 +135,7 @@ class WeeklyOpenLoopPricingContext:
         claim_quantity: float,
     ) -> HistoricalWeeklyOpenLoopFit:
         """Fit the long claim on its reusable solver geometry."""
+        self._long_geometry.clear_compiled_problems()
         return self._long_geometry.fit_policy(
             signed_claim_quantity=claim_quantity,
             terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
@@ -150,10 +153,41 @@ class WeeklyOpenLoopPricingContext:
         claim_quantity: float,
     ) -> HistoricalWeeklyOpenLoopFit:
         """Fit the short claim on an independent reusable solver geometry."""
+        self._short_geometry.clear_compiled_problems()
         return self._short_geometry.fit_policy(
             signed_claim_quantity=-claim_quantity,
             terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
         )
+
+    def execution_geometry(
+        self,
+        scenarios: WeeklyScenarioBatch,
+        *,
+        initial_spot_position: float,
+        initial_option_positions: NDArray[np.floating],
+    ) -> _WeeklyOpenLoopGeometry:
+        """Reuse one exact pure-hedge geometry when prior positions agree."""
+        self._validate(scenarios, config=self._config)
+        initial_options = np.ascontiguousarray(
+            initial_option_positions,
+            dtype=np.float64,
+        )
+        key = (
+            np.asarray([initial_spot_position], dtype=np.float64).tobytes()
+            + initial_options.tobytes()
+        )
+        if key != self._execution_geometry_key:
+            self._execution_geometry = _WeeklyOpenLoopGeometry(
+                scenarios,
+                initial_spot_position=initial_spot_position,
+                initial_option_positions=initial_options,
+                config=self._config,
+                center_instrument_gains=True,
+            )
+            self._execution_geometry_key = key
+        if self._execution_geometry is None:
+            raise RuntimeError("weekly execution geometry was not initialized")
+        return self._execution_geometry
 
     def _validate(
         self,
@@ -192,6 +226,7 @@ def fit_historical_weekly_hedge(
     initial_spot_position: float,
     initial_option_positions: NDArray[np.floating],
     config: HistoricalSanosConfig = HistoricalSanosConfig(),
+    pricing_context: WeeklyOpenLoopPricingContext | None = None,
 ) -> HistoricalWeeklyHedgeFit:
     """Fit pricing policies and a cost-consistent pure hedge schedule."""
     return fit_weekly_open_loop_hedge(
@@ -200,6 +235,7 @@ def fit_historical_weekly_hedge(
         initial_spot_position=initial_spot_position,
         initial_option_positions=initial_option_positions,
         config=config,
+        pricing_context=pricing_context,
     )
 
 
@@ -219,13 +255,12 @@ def fit_weekly_open_loop_hedge(
         pricing_context = WeeklyOpenLoopPricingContext(scenarios, config=config)
     with pricing_context.exclusive_use():
         pricing_context.validate(scenarios, config=config)
-        execution_geometry = _WeeklyOpenLoopGeometry(
+        execution_geometry = pricing_context.execution_geometry(
             scenarios,
             initial_spot_position=initial_spot_position,
             initial_option_positions=initial_option_positions,
-            config=config,
-            center_instrument_gains=True,
         )
+        execution_geometry.clear_compiled_problems()
         with ThreadPoolExecutor(
             max_workers=3,
             thread_name_prefix="weekly-open-loop",
@@ -243,6 +278,7 @@ def fit_weekly_open_loop_hedge(
             pure_future = executor.submit(
                 execution_geometry.fit_policy,
                 signed_claim_quantity=claim_quantity,
+                terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
             )
             long_policy = long_future.result()
             short_policy = short_future.result()
@@ -340,6 +376,10 @@ class _WeeklyOpenLoopGeometry:
             axis=0,
         )
         self._convex_problems: dict[bytes, _ConvexCostLassoProblem] = {}
+
+    def clear_compiled_problems(self) -> None:
+        """Discard target-specific canonicalizations before another claim."""
+        self._convex_problems.clear()
 
     def fit_policy(
         self,
@@ -543,7 +583,7 @@ class _WeeklyOpenLoopGeometry:
             if self.config.objective is HistoricalSanosObjective.MEAN_VARIANCE:
                 compiled.problem.solve(
                     solver=cp.OSQP,
-                    warm_start=True,
+                    warm_start=False,
                     max_iter=max(10_000, self.config.maximum_iterations),
                     eps_abs=self.config.gradient_tolerance,
                     eps_rel=self.config.gradient_tolerance,
@@ -564,7 +604,7 @@ class _WeeklyOpenLoopGeometry:
                 nit=0,
                 success=False,
                 optimality=math.inf,
-                message=f"CLARABEL failed: {error}",
+                message=f"convex solver failed: {error}",
             )
         fitted = (
             np.asarray(initial[: self.parameter_count], dtype=np.float64)

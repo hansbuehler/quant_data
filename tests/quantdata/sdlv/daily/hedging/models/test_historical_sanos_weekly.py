@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import date, timedelta
+from types import SimpleNamespace
 
 import cvxpy as cp
 import numpy as np
@@ -48,6 +49,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.weekly_hedg
 from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.weekly_scenarios import (
     HistoricalWeeklyScenarioSet,
     HistoricalWeeklyTransitionHistory,
+    attach_historical_weekly_claim,
     build_historical_weekly_scenarios,
 )
 
@@ -119,6 +121,7 @@ def _scenario_set(*, scenario_count: int = 80) -> HistoricalWeeklyScenarioSet:
         scenarios=batch,
         training_origin_dates=origins,
         training_terminal_dates=terminals,
+        terminal_claim_pv_scales=np.ones(scenario_count),
     )
 
 
@@ -206,7 +209,17 @@ def test_historical_weekly_fit_respects_expiry_and_returns_pure_hedge(
     assert fit.prices.buyer <= fit.prices.seller
 
 
-def test_weekly_shared_pricing_context_matches_fresh_target_fit() -> None:
+@pytest.mark.parametrize(
+    ("initial_spot_position", "initial_option_positions"),
+    (
+        (0.0, np.zeros(2)),
+        (0.1, np.asarray([0.0, -0.1])),
+    ),
+)
+def test_weekly_shared_pricing_context_matches_fresh_target_fit(
+    initial_spot_position: float,
+    initial_option_positions: np.ndarray,
+) -> None:
     scenarios = _scenario_set().scenarios
     config = HistoricalSanosConfig(
         rolling_observations=80,
@@ -234,16 +247,16 @@ def test_weekly_shared_pricing_context_matches_fresh_target_fit() -> None:
     shared = fit_weekly_open_loop_hedge(
         second_scenarios,
         claim_quantity=0.8,
-        initial_spot_position=0.1,
-        initial_option_positions=np.asarray([0.0, -0.1]),
+        initial_spot_position=initial_spot_position,
+        initial_option_positions=initial_option_positions,
         config=config,
         pricing_context=context,
     )
     fresh = fit_weekly_open_loop_hedge(
         second_scenarios,
         claim_quantity=0.8,
-        initial_spot_position=0.1,
-        initial_option_positions=np.asarray([0.0, -0.1]),
+        initial_spot_position=initial_spot_position,
+        initial_option_positions=initial_option_positions,
         config=config,
     )
 
@@ -256,6 +269,53 @@ def test_weekly_shared_pricing_context_matches_fresh_target_fit() -> None:
     )
     assert shared.prices.buyer == pytest.approx(fresh.prices.buyer, abs=1.0e-9)
     assert shared.prices.seller == pytest.approx(fresh.prices.seller, abs=1.0e-9)
+
+
+def test_historical_weekly_target_attaches_to_exact_cached_geometry() -> None:
+    reference = _scenario_set()
+    state = SimpleNamespace(
+        decision_index=0,
+        inception_forward_path=np.asarray([1.0]),
+    )
+    claim = SimpleNamespace(
+        claim=SimpleNamespace(
+            payoff=lambda path: float(0.02 + 0.7 * path[-1]),
+        ),
+        target=SimpleNamespace(label="second-test-claim"),
+    )
+
+    shared = attach_historical_weekly_claim(reference, state=state, claim=claim)
+
+    assert shared.scenarios.target_label == "second-test-claim"
+    np.testing.assert_allclose(
+        shared.scenarios.terminal_claim_values_pv,
+        0.02 + 0.7 * reference.scenarios.inception_forward_paths[:, -1],
+    )
+    for name in (
+        "inception_forward_paths",
+        "spot_values_pv",
+        "spot_step_gains",
+        "option_step_gains",
+        "option_half_spreads_pv",
+        "option_alive",
+        "option_settles_next",
+    ):
+        assert getattr(shared.scenarios, name) is getattr(reference.scenarios, name)
+
+
+def test_historical_weekly_target_rejects_changed_decision_state() -> None:
+    reference = _scenario_set()
+    state = SimpleNamespace(
+        decision_index=0,
+        inception_forward_path=np.asarray([1.01]),
+    )
+    claim = SimpleNamespace(
+        claim=SimpleNamespace(payoff=lambda path: float(path[-1])),
+        target=SimpleNamespace(label="changed-state"),
+    )
+
+    with pytest.raises(ValueError, match="changed decision state"):
+        attach_historical_weekly_claim(reference, state=state, claim=claim)
 
 
 def test_weekly_mean_variance_osqp_matches_clarabel_reference() -> None:
@@ -363,6 +423,34 @@ def test_weekly_shared_pricing_context_is_target_order_independent() -> None:
         )
 
 
+def test_weekly_shared_pricing_context_reuses_only_matching_execution_state() -> None:
+    scenarios = _scenario_set().scenarios
+    config = HistoricalSanosConfig(
+        rolling_observations=80,
+        objective=HistoricalSanosObjective.MEAN_VARIANCE,
+        risk_parameter=3.0,
+    )
+    context = WeeklyOpenLoopPricingContext(scenarios, config=config)
+    first = context.execution_geometry(
+        scenarios,
+        initial_spot_position=0.1,
+        initial_option_positions=np.asarray([0.0, -0.1]),
+    )
+    matching = context.execution_geometry(
+        scenarios,
+        initial_spot_position=0.1,
+        initial_option_positions=np.asarray([0.0, -0.1]),
+    )
+    changed = context.execution_geometry(
+        scenarios,
+        initial_spot_position=0.2,
+        initial_option_positions=np.asarray([0.0, -0.1]),
+    )
+
+    assert matching is first
+    assert changed is not first
+
+
 def test_weekly_shared_pricing_context_rejects_concurrent_use() -> None:
     scenarios = _scenario_set().scenarios
     config = HistoricalSanosConfig(
@@ -417,6 +505,7 @@ def test_historical_weekly_records_virtual_recession_without_executable_cap() ->
             fit_date - timedelta(days=scenario_count - index + 1)
             for index in range(scenario_count)
         ),
+        terminal_claim_pv_scales=np.ones(scenario_count),
     )
     fit = fit_historical_weekly_hedge(
         scenario_set,
@@ -545,6 +634,27 @@ def test_historical_weekly_scenarios_use_complete_pre_asof_blocks() -> None:
     assert max(scenario_set.training_terminal_dates) <= day.trading_date
     assert np.all(np.isfinite(scenario_set.scenarios.option_step_gains))
     assert np.all(scenario_set.scenarios.terminal_claim_values_pv >= 0.0)
+    second_claim = build_weekly_claim(
+        day,
+        target=WeeklyTarget(kind=WeeklyTargetKind.DOWN_AND_OUT_PUT),
+    )
+    attached = attach_historical_weekly_claim(
+        scenario_set,
+        state=state,
+        claim=second_claim,
+    )
+    rebuilt = build_historical_weekly_scenarios(
+        history,
+        state=state,
+        claim=second_claim,
+        model_fit_identity="historical-test",
+    )
+    np.testing.assert_allclose(
+        attached.scenarios.terminal_claim_values_pv,
+        rebuilt.scenarios.terminal_claim_values_pv,
+        atol=1.0e-14,
+        rtol=1.0e-14,
+    )
 
 
 def test_restarted_scenarios_preserve_fixed_inception_forward_normalization() -> None:
@@ -686,6 +796,7 @@ def test_restarted_pure_hedge_respects_the_actual_carried_book() -> None:
             fit_date - timedelta(days=scenario_count - index + 1)
             for index in range(scenario_count)
         ),
+        terminal_claim_pv_scales=np.ones(scenario_count),
     )
     fit = fit_historical_weekly_hedge(
         scenario_set,

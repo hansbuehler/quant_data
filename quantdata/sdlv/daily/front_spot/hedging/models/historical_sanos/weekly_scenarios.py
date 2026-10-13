@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from enum import StrEnum
 
@@ -71,6 +71,7 @@ class HistoricalWeeklyScenarioSet:
     scenarios: WeeklyScenarioBatch
     training_origin_dates: tuple[date, ...]
     training_terminal_dates: tuple[date, ...]
+    terminal_claim_pv_scales: FloatArray
 
     def __post_init__(self) -> None:
         if len(self.training_origin_dates) != self.scenarios.scenario_count or len(
@@ -86,6 +87,54 @@ class HistoricalWeeklyScenarioSet:
             )
         ):
             raise ValueError("historical weekly scenario dates violate fit timing")
+        if self.terminal_claim_pv_scales.shape != (self.scenarios.scenario_count,):
+            raise ValueError("historical weekly claim scales do not align")
+        if np.any(~np.isfinite(self.terminal_claim_pv_scales)) or np.any(
+            self.terminal_claim_pv_scales <= 0.0
+        ):
+            raise ValueError("historical weekly claim scales must be finite-positive")
+
+
+def attach_historical_weekly_claim(
+    reference: HistoricalWeeklyScenarioSet,
+    *,
+    state: WeeklyDecisionState,
+    claim: WeeklyClaimDefinition,
+) -> HistoricalWeeklyScenarioSet:
+    """Attach one payoff to cached historical paths without repricing options."""
+    reference_batch = reference.scenarios
+    current_path = np.asarray(state.inception_forward_path, dtype=np.float64)
+    if current_path.ndim != 1 or len(current_path) != state.decision_index + 1:
+        raise ValueError("historical weekly current target path does not align")
+    if not np.allclose(
+        reference_batch.inception_forward_paths[:, 0],
+        current_path[-1],
+        atol=1.0e-14,
+        rtol=1.0e-14,
+    ):
+        raise ValueError("historical weekly cached paths changed decision state")
+    prefix = np.broadcast_to(
+        current_path[:-1],
+        (reference_batch.scenario_count, len(current_path) - 1),
+    )
+    full_paths = np.concatenate(
+        (prefix, reference_batch.inception_forward_paths),
+        axis=1,
+    )
+    terminal_claims = reference.terminal_claim_pv_scales * np.asarray(
+        [claim.claim.payoff(path) for path in full_paths],
+        dtype=np.float64,
+    )
+    if np.any(~np.isfinite(terminal_claims)) or np.any(terminal_claims < 0.0):
+        raise FloatingPointError("historical weekly target payoffs are invalid")
+    return replace(
+        reference,
+        scenarios=replace(
+            reference.scenarios,
+            terminal_claim_values_pv=terminal_claims,
+            target_label=claim.target.label,
+        ),
+    )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -137,6 +186,10 @@ def build_historical_weekly_scenarios(
     option_gains = np.stack([row[3] for row in scenario_rows])
     option_spreads = np.stack([row[4] for row in scenario_rows])
     terminal_claims = np.asarray([row[7] for row in scenario_rows], dtype=np.float64)
+    terminal_claim_pv_scales = np.asarray(
+        [row[8] for row in scenario_rows],
+        dtype=np.float64,
+    )
     invalid_fields = {
         name: float(np.min(values))
         for name, values in (
@@ -175,6 +228,7 @@ def build_historical_weekly_scenarios(
             block[0][0].origin.trading_date for block in blocks
         ),
         training_terminal_dates=tuple(block[-1][0].next_date for block in blocks),
+        terminal_claim_pv_scales=terminal_claim_pv_scales,
     )
 
 
@@ -255,6 +309,7 @@ def _historical_scenario_row(
     FloatArray,
     NDArray[np.bool_],
     NDArray[np.bool_],
+    float,
     float,
 ]:
     step_count = len(block)
@@ -372,6 +427,7 @@ def _historical_scenario_row(
         * claim.claim.payoff(full_target_path)
         / state.spot_over_episode_origin
     )
+    terminal_claim_pv_scale = discount_path[-1] / state.spot_over_episode_origin
     return (
         scenario_target_path,
         discount_path * spot_path,
@@ -381,6 +437,7 @@ def _historical_scenario_row(
         option_alive,
         option_settles_next,
         float(terminal_claim),
+        float(terminal_claim_pv_scale),
     )
 
 

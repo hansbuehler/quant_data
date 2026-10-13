@@ -24,11 +24,13 @@ from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.config impo
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.weekly_hedger import (
     HistoricalWeeklyHedgeFit,
+    WeeklyOpenLoopPricingContext,
     fit_historical_weekly_hedge,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.weekly_scenarios import (
     HistoricalWeeklyScenarioSet,
     HistoricalWeeklyTransitionHistory,
+    attach_historical_weekly_claim,
     build_historical_weekly_scenarios,
 )
 
@@ -82,6 +84,21 @@ class HistoricalSanosWeeklyAdapter:
         self.policy_config_identity = (
             f"historical-sanos-policy-{code_identity}-{config_hash}"
         )
+        self._episode_origin_date = None
+        self._weekly_scenarios: dict[
+            tuple[str, int],
+            HistoricalWeeklyScenarioSet,
+        ] = {}
+        self._weekly_pricing_contexts: dict[
+            tuple[str, int],
+            WeeklyOpenLoopPricingContext,
+        ] = {}
+
+    def release_weekly_origin(self) -> None:
+        """Release target-independent historical arrays after one episode."""
+        self._episode_origin_date = None
+        self._weekly_scenarios.clear()
+        self._weekly_pricing_contexts.clear()
 
     def fit_market(
         self,
@@ -125,18 +142,39 @@ class HistoricalSanosWeeklyAdapter:
             instruction.frozen_contract_ids
         ):
             raise ValueError("historical weekly contracts do not match instruction")
-        scenarios = build_historical_weekly_scenarios(
-            market_fit.history,
-            state=state,
-            claim=claim,
-            model_fit_identity=market_fit.market_fit_identity,
-        )
+        if self._episode_origin_date != instruction.episode_origin_date:
+            self.release_weekly_origin()
+            self._episode_origin_date = instruction.episode_origin_date
+        cache_key = (market_fit.market_fit_identity, state.decision_index)
+        cached_scenarios = self._weekly_scenarios.get(cache_key)
+        if cached_scenarios is None:
+            scenarios = build_historical_weekly_scenarios(
+                market_fit.history,
+                state=state,
+                claim=claim,
+                model_fit_identity=market_fit.market_fit_identity,
+            )
+            self._weekly_scenarios[cache_key] = scenarios
+        else:
+            scenarios = attach_historical_weekly_claim(
+                cached_scenarios,
+                state=state,
+                claim=claim,
+            )
+        pricing_context = self._weekly_pricing_contexts.get(cache_key)
+        if pricing_context is None:
+            pricing_context = WeeklyOpenLoopPricingContext(
+                scenarios.scenarios,
+                config=self.config,
+            )
+            self._weekly_pricing_contexts[cache_key] = pricing_context
         hedge = fit_historical_weekly_hedge(
             scenarios,
             claim_quantity=instruction.claim_quantity,
             initial_spot_position=state.previous_spot_position,
             initial_option_positions=state.previous_option_positions,
             config=self.config,
+            pricing_context=pricing_context,
         )
         buyer = hedge.prices.buyer / instruction.claim_quantity
         seller = hedge.prices.seller / instruction.claim_quantity
