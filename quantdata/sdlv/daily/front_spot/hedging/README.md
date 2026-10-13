@@ -263,3 +263,21 @@ The matrix command also accepts authenticated generated-model inputs through
 `--diffusion-ft-base`, `--diffusion-ft-initializer`, and
 `--diffusion-ft-update-epochs`. Missing dependencies remain explicit blocked
 cases rather than falling back to implicit defaults.
+
+Execute an explicit ready subset sequentially with atomic queue state and
+per-case logs:
+
+```bash
+python -m quantdata.sdlv.daily.front_spot.hedging.runners.execute_production_matrix \
+  --matrix "$QUANTDATA_ROOT/experiments/hedging/daily/production-matrix-v1/matrix.json" \
+  --state "$QUANTDATA_ROOT/experiments/hedging/daily/production-matrix-v1/cpu-queue.json" \
+  --interpreter /home/hans/vqdata/bin/python \
+  --resource cpu \
+  --case historical-sanos-mean-variance-1
+```
+
+The executor replaces only the matrix's Python placeholder, forces CPU-only
+child environments for CPU queues, checks resource headroom before every new
+case, resumes completed queue records, emits four-minute heartbeats, and
+accepts completion only after validating the full 12,220-record results
+artifact.
