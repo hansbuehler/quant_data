@@ -34,11 +34,17 @@ supports frozen and restarted schedules for SANOS-LV, historical SANOS,
 GROMM, VolGAN, and both diffusion variants. It requires an authenticated
 strictly-2022 sizing preflight, validates every public dataset member, holds a
 single-writer lock, records exact fitted-artifact fingerprints, and rejects
-incomplete five-decision records. Its 94-case production matrix currently has
-28 ready native CPU cases, four generated-model cases awaiting their review
-gate, and 62 cases explicitly blocked on incomplete authenticated artifacts.
-The ready cases are queued to begin only after the active daily CPU production
-queues finish. The
+incomplete five-decision records. Its production matrix launches native CPU
+cases only from complete model evidence and keeps generated or GROMM cases
+explicitly blocked until their authenticated gates pass. The ready native
+weekly cases are queued to begin only after the active daily CPU production
+queues finish. Generated weekly evaluation now shares one immutable
+target-independent path and fixed-book geometry per decision state and one
+cold zero-claim pricing fit across targets. This reduces identical generated
+path and repricing work from 13 calls to one for a frozen origin and from 65 to
+five for a restarted origin without changing prices, actions, identities, or
+random numbers; independent review and the complete 305-test hedging suite
+pass. The
 strictly-2022 target-sizing exercise now fixes each target to one
 maturity-matched ATM spot-risk unit; all 20 calibration hedges converged with
 no cap hit. Its atomic derived artifact is keyed by the public dataset manifest
@@ -875,8 +881,11 @@ evidence loader. Rolling GROMM preparation continues independently on CPU. A
 production-gate assembler now reconstructs exact public-versus-rolling scope
 bindings, refuses stale or aliased evidence, writes under an output lock through
 a unique same-directory temporary file, and re-authenticates the completed gate
-before publishing it. Managed-GPU readiness and the final model-specific quant
-review remain required before generated production cases can launch.
+before publishing it. The reviewed 18-scope managed-GPU readiness matrix is
+running from immutable commit `31b57e617dc6f57f12625515160131a8cf845e36`;
+it emits a persistent four-minute heartbeat and holds its GPU through
+`gpuctl`. Final readiness evidence and the model-specific results review remain
+required before generated production cases can launch.
 
 Gate: one model-specific review and standalone smoke test per baseline pass.
 
