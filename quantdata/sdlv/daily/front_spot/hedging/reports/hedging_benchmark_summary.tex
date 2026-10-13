@@ -84,8 +84,11 @@
   compatible-P drift is rejected; bounded normalization of float32 decode
   roundoff now makes the authenticated Q artifact operational. VolGAN and
   AD--Seq--Vol pass their current implementation gates but do not yet have
-  comparable full-production results. Weekly mechanics and pricing pass;
-  weekly production evaluation remains outstanding.}}
+  comparable full-production results. Weekly mechanics and pricing pass. The
+  94-case weekly matrix is materialized: 28 native CPU cases are ready and
+  deferred until the active daily queues finish, four generated-model cases
+  await their review gate, and 62 cases remain blocked on incomplete
+  authenticated artifacts.}}
 
 \section{Approach}
 
@@ -239,7 +242,11 @@ targets: ten five-day digitals, realized variance, a 95\% end-of-day down-and-ou
 ATM put, and a 105\% end-of-day up-and-out ATM call. The common DLV transition
 test has maximum mass and martingale errors below $3.6\times10^{-14}$ across an
 eight-date check. Daily, frozen-weekly, and restarted-weekly adapters exist for
-all model families, but no complete weekly comparison is yet reported.
+all model families, but no complete weekly comparison is yet reported. The
+production matrix contains 94 cases. Its 28 ready SANOS--LV and historical-SANOS
+CPU cases are queued behind the active daily CPU runs; four generated-model
+cases await their production gate, and 62 GROMM or generated-model cases remain
+explicitly blocked rather than being launched without complete evidence.
 
 \section{Model Catalogue}
 
@@ -287,7 +294,10 @@ normalization and authenticated Q replay now pass. An affine-plus-deep LSTM
 supports all four objectives; whenever P is accepted, the executable pure
 policy uses conditional Q-shadow gains at each realized P state, removing
 predictable physical drift without fitted holdout centering. Full rolling
-production remains outstanding.
+production remains outstanding. A separate conventional Q comparator prices
+by risk-neutral expectation and computes spot delta plus eight contemporaneous
+DLV-factor vegas from the same stochastic GROMM state using fixed-seed common
+random numbers.
 
 \subsection{VolGAN}
 
