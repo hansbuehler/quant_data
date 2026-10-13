@@ -59,6 +59,9 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.config import (
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2 import (
     RollingGromm2Config,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.gromm.selection import (
+    load_gromm_architecture_selection,
+)
 from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.adapter import (
     run_historical_sanos_daily_book,
 )
@@ -120,6 +123,7 @@ def main() -> None:
     parser.add_argument("--position-cap", type=float)
     parser.add_argument("--checkpoint-directory", type=Path)
     parser.add_argument("--market-artifact-root", type=Path)
+    parser.add_argument("--architecture-selection", type=Path)
     parser.add_argument("--base-checkpoint", type=Path)
     parser.add_argument("--warm-start-checkpoint", type=Path)
     parser.add_argument("--observation-count", type=int, default=252)
@@ -206,11 +210,13 @@ def main() -> None:
             checkpoint_directory = (
                 Path(root) / "training" / "hedging" / "daily" / arguments.model
             )
+    manifest_sha256 = dataset_manifest_sha256(panel)
     model, measure, rolling_observations, config, run_book = _build_model(
         arguments,
         claim_quantities=claim_quantities,
         default_position_cap=notional_config.numerical_position_cap,
         checkpoint_directory=checkpoint_directory,
+        expected_dataset_manifest_sha256=manifest_sha256,
     )
     config_identity = _config_identity(config)
     output = arguments.output
@@ -232,7 +238,7 @@ def main() -> None:
         measure=measure,
         model_config_identity=config_identity,
         model_config_snapshot_json=_config_snapshot_json(config),
-        dataset_manifest_sha256=dataset_manifest_sha256(panel),
+        dataset_manifest_sha256=manifest_sha256,
         evaluation_start=arguments.start,
         evaluation_end=arguments.end,
         rolling_observations=rolling_observations,
@@ -296,6 +302,7 @@ def _build_model(
     claim_quantities: dict[str, float],
     default_position_cap: float,
     checkpoint_directory: Path | None,
+    expected_dataset_manifest_sha256: str | None = None,
 ) -> tuple[str, str, int, Any, DailyBookFunction]:
     label = arguments.label or (
         f"{arguments.model}-rolling-public-settings"
@@ -358,6 +365,14 @@ def _build_model(
     if arguments.model == "gromm":
         if checkpoint_directory is None:
             raise ValueError("GROMM requires a policy checkpoint directory")
+        if arguments.architecture_selection is None:
+            raise ValueError("GROMM requires --architecture-selection")
+        if expected_dataset_manifest_sha256 is None:
+            raise ValueError("GROMM requires the public dataset manifest identity")
+        architecture_selection = load_gromm_architecture_selection(
+            arguments.architecture_selection,
+            expected_dataset_manifest_sha256=expected_dataset_manifest_sha256,
+        )
         artifact_root = arguments.market_artifact_root
         if artifact_root is None:
             root = os.environ.get("QUANTDATA_ROOT")
@@ -417,11 +432,19 @@ def _build_model(
             just_load=arguments.just_load,
         )
         rolling_config = RollingGromm2Config()
+        policy_config = architecture_selection.architecture.policy_config(
+            label=architecture_selection.selected_label,
+            feature_count=architecture_selection.training_feature_count,
+            instrument_count=architecture_selection.training_instrument_count,
+            position_cap=model_config.position_cap,
+        )
         run_config = GrommDailyRunConfig(
             label=label,
             model_config=model_config,
             rolling_config=rolling_config,
             train_config=train_config,
+            policy_architecture=architecture_selection.architecture,
+            architecture_selection_sha256=architecture_selection.sha256,
             device=arguments.device,
             precision=64,
         )
@@ -443,6 +466,7 @@ def _build_model(
                 config=model_config,
                 rolling_config=rolling_config,
                 train_config=train_config,
+                policy_config=policy_config,
                 environment=environment,
                 claim_quantities=claim_quantities,
             ),

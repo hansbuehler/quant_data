@@ -25,6 +25,7 @@ from quantdata.sdlv.daily.front_spot.hedging.data.rolling_calibration import (
 from quantdata.sdlv.daily.front_spot.hedging.data.rolling_factors import (
     RollingDlvFactorConfig,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.checkpointing import file_sha256
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.config import (
     GrommConfig,
     GrommMeasure,
@@ -36,6 +37,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.hedger import (
     select_gromm_architecture,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.policy import (
+    GrommPolicyArchitecture,
     gromm_architecture_candidates,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.simulation import (
@@ -48,7 +50,10 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.training import (
 from quantdata.torch import BaseEnvironment
 
 
-@version("1.1", dependencies=[GrommConfig, GrommTrainConfig])
+@version(
+    "1.2",
+    dependencies=[GrommConfig, GrommTrainConfig, GrommPolicyArchitecture],
+)
 @dataclass(frozen=True, kw_only=True)
 class GrommArchitectureStudyConfig:
     """Precommitted 2022 architecture-selection population."""
@@ -101,6 +106,20 @@ class GrommArchitectureStudyData:
     calibration: RollingDlvCalibration
     case_labels: tuple[str, ...]
     paths_per_case: int
+    dataset_manifest_sha256: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class GrommArchitectureSelectionArtifact:
+    """Authenticated 2022 architecture frozen for rolling production."""
+
+    path: Path
+    sha256: str
+    dataset_manifest_sha256: str
+    selected_label: str
+    architecture: GrommPolicyArchitecture
+    training_feature_count: int
+    training_instrument_count: int
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -121,6 +140,7 @@ class GrommArchitectureStudyResult:
                     "label": policy.label,
                     "hidden_size": policy.hidden_size,
                     "recurrent_layers": policy.recurrent_layers,
+                    "deep_activation": policy.decision_network.activation,
                     "deep_depth": policy.decision_network.num_depth,
                     "deep_width": policy.decision_network.num_width,
                     "parameter_count": fit.parameter_count,
@@ -136,7 +156,9 @@ class GrommArchitectureStudyResult:
                 }
             )
         return {
-            "schema": "gromm-architecture-selection-v1",
+            "schema": "gromm-architecture-selection-v2",
+            "code_version": str(type(self.config).version),
+            "dataset_manifest_sha256": self.data.dataset_manifest_sha256,
             "origin_date": self.config.origin_date.isoformat(),
             "calibration_window_sessions": (
                 self.config.calibration_window_sessions
@@ -154,6 +176,7 @@ class GrommArchitectureStudyResult:
             "case_count": len(self.data.case_labels),
             "paths_per_case": self.data.paths_per_case,
             "training_path_count": self.data.training.path_count,
+            "training_feature_count": self.data.training.feature_count,
             "instrument_count": self.data.training.instrument_count,
             "objective": self.config.objective.value,
             "risk_parameter": self.config.risk_parameter,
@@ -231,6 +254,7 @@ def build_gromm_architecture_study_data(
         calibration=calibration,
         case_labels=tuple(labels),
         paths_per_case=config.paths_per_case,
+        dataset_manifest_sha256=panel.dataset_manifest_sha256,
     )
 
 
@@ -297,3 +321,165 @@ def run_gromm_architecture_study(
         data=data,
         selection=selection,
     )
+
+
+def load_gromm_architecture_selection(
+    path: Path,
+    *,
+    expected_dataset_manifest_sha256: str,
+) -> GrommArchitectureSelectionArtifact:
+    """Load and authenticate the frozen 2022 GROMM architecture decision."""
+    path = Path(path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("schema") != "gromm-architecture-selection-v2":
+        raise ValueError("GROMM architecture selection has an incompatible schema")
+    if payload.get("code_version") != str(GrommArchitectureStudyConfig.version):
+        raise ValueError("GROMM architecture selection has an incompatible code version")
+    dataset_manifest_sha256 = _required_sha256(
+        payload,
+        "dataset_manifest_sha256",
+    )
+    if dataset_manifest_sha256 != expected_dataset_manifest_sha256:
+        raise ValueError("GROMM architecture selection belongs to another dataset")
+    origin_date = date.fromisoformat(_required_string(payload, "origin_date"))
+    if origin_date.year != 2022:
+        raise ValueError("GROMM architecture selection must use a 2022 origin")
+    if payload.get("measures") != ["Q", "P"]:
+        raise ValueError("GROMM architecture selection must contain Q then P")
+    expected_targets = [target.label for target in daily_digital_targets()]
+    if payload.get("targets") != expected_targets:
+        raise ValueError("GROMM architecture selection has the wrong target book")
+    if payload.get("case_count") != 2 * len(expected_targets):
+        raise ValueError("GROMM architecture selection has the wrong case count")
+    if payload.get("factor_rank") != 16:
+        raise ValueError("GROMM architecture selection must use 16 factors")
+    if payload.get("physical_drift_accepted") is not True:
+        raise ValueError("GROMM architecture selection requires an accepted P drift")
+    candidates = payload.get("candidates")
+    if not isinstance(candidates, list) or len(candidates) != 4:
+        raise ValueError("GROMM architecture selection must contain four candidates")
+    if any(not isinstance(candidate, dict) for candidate in candidates):
+        raise ValueError("GROMM architecture candidates must be JSON objects")
+    labels = tuple(_required_string(candidate, "label") for candidate in candidates)
+    if len(set(labels)) != len(labels):
+        raise ValueError("GROMM architecture candidate labels must be unique")
+    losses = tuple(
+        _required_finite_float(candidate, "validation_loss")
+        for candidate in candidates
+    )
+    standard_errors = tuple(
+        _required_nonnegative_float(candidate, "validation_standard_error")
+        for candidate in candidates
+    )
+    best_index = min(range(len(candidates)), key=losses.__getitem__)
+    best_loss = _required_finite_float(payload, "best_validation_loss")
+    best_standard_error = _required_nonnegative_float(
+        payload,
+        "best_validation_standard_error",
+    )
+    if (
+        not math.isclose(best_loss, losses[best_index], rel_tol=0.0, abs_tol=1.0e-14)
+        or not math.isclose(
+            best_standard_error,
+            standard_errors[best_index],
+            rel_tol=0.0,
+            abs_tol=1.0e-14,
+        )
+    ):
+        raise ValueError("GROMM architecture best-candidate statistics do not match")
+    threshold = _required_finite_float(payload, "one_standard_error_threshold")
+    if not math.isclose(
+        threshold,
+        best_loss + best_standard_error,
+        rel_tol=0.0,
+        abs_tol=1.0e-14,
+    ):
+        raise ValueError("GROMM architecture one-SE threshold does not match")
+    selected_label = _required_string(payload, "selected_label")
+    selected = tuple(
+        candidate
+        for candidate in candidates
+        if isinstance(candidate, dict) and candidate.get("label") == selected_label
+    )
+    if len(selected) != 1:
+        raise ValueError("GROMM selected architecture is not unique")
+    candidate = selected[0]
+    if candidate.get("converged") is not True:
+        raise ValueError("GROMM selected architecture did not converge")
+    cap_hit_fraction = _required_finite_float(candidate, "cap_hit_fraction")
+    if cap_hit_fraction != 0.0:
+        raise ValueError("GROMM selected architecture has position-cap hits")
+    eligible = tuple(
+        current
+        for current, loss in zip(candidates, losses, strict=True)
+        if loss <= threshold
+    )
+    expected_selected = min(
+        eligible,
+        key=lambda current: (
+            _required_positive_int(current, "parameter_count"),
+            _required_finite_float(current, "validation_loss"),
+        ),
+    )
+    if candidate is not expected_selected:
+        raise ValueError("GROMM selected architecture violates the one-SE rule")
+    architecture = GrommPolicyArchitecture(
+        hidden_size=_required_positive_int(candidate, "hidden_size"),
+        recurrent_layers=_required_positive_int(candidate, "recurrent_layers"),
+        deep_activation=_required_string(candidate, "deep_activation"),
+        deep_depth=_required_positive_int(candidate, "deep_depth"),
+        deep_width=_required_positive_int(candidate, "deep_width"),
+    )
+    return GrommArchitectureSelectionArtifact(
+        path=path.resolve(),
+        sha256=file_sha256(path),
+        dataset_manifest_sha256=dataset_manifest_sha256,
+        selected_label=selected_label,
+        architecture=architecture,
+        training_feature_count=_required_positive_int(
+            payload,
+            "training_feature_count",
+        ),
+        training_instrument_count=_required_positive_int(
+            payload,
+            "instrument_count",
+        ),
+    )
+
+
+def _required_string(payload: dict[str, object], name: str) -> str:
+    value = payload.get(name)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"GROMM architecture field {name!r} must be non-empty")
+    return value
+
+
+def _required_sha256(payload: dict[str, object], name: str) -> str:
+    value = _required_string(payload, name).lower()
+    if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+        raise ValueError(f"GROMM architecture field {name!r} must be a SHA-256")
+    return value
+
+
+def _required_positive_int(payload: dict[str, object], name: str) -> int:
+    value = payload.get(name)
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise ValueError(f"GROMM architecture field {name!r} must be positive")
+    return value
+
+
+def _required_finite_float(payload: dict[str, object], name: str) -> float:
+    value = payload.get(name)
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise ValueError(f"GROMM architecture field {name!r} must be numeric")
+    numeric = float(value)
+    if not math.isfinite(numeric):
+        raise ValueError(f"GROMM architecture field {name!r} must be finite")
+    return numeric
+
+
+def _required_nonnegative_float(payload: dict[str, object], name: str) -> float:
+    value = _required_finite_float(payload, name)
+    if value < 0.0:
+        raise ValueError(f"GROMM architecture field {name!r} must be non-negative")
+    return value

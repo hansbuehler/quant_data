@@ -79,9 +79,12 @@
   daily digital targets. SANOS--LV reduces aggregate pure-hedge RMSE by
   \textbf{\SanosVsUnhedgedReduction} versus the unhedged claims; historical
   statistical SANOS reduces it by
-  \textbf{\HistoricalVsUnhedgedReduction}. Robust covariance, GROMM, VolGAN, and
-  AD--Seq--Vol have passed their current implementation gates but do not yet
-  have comparable full-production results. Weekly mechanics and pricing pass;
+  \textbf{\HistoricalVsUnhedgedReduction}. Robust-covariance production is in
+  progress. The first rolling GROMM market fit is complete under Q, but its
+  compatible-P drift is rejected; bounded normalization of float32 decode
+  roundoff now makes the authenticated Q artifact operational. VolGAN and
+  AD--Seq--Vol pass their current implementation gates but do not yet have
+  comparable full-production results. Weekly mechanics and pricing pass;
   weekly production evaluation remains outstanding.}}
 
 \section{Approach}
@@ -207,8 +210,8 @@ Model & Measure & Daily status & Evidence \\
 \midrule
 SANOS--LV & Q price / realized path & \statuscomplete & 611 origins, \SanosRecordCount\ records, zero cap hits and zero nonconvergence. \\
 Historical SANOS & P & \statuscomplete & 611 origins, \HistoricalRecordCount\ records, zero cap hits and zero nonconvergence. \\
-Robust covariance & P & \statusready & Full 20-target one-origin mean--volatility gate passed for $\kappa\in\{0.1,1,2,3\}$; production pending. \\
-GROMM & P and Q & \statusready & Rolling artifacts, daily/weekly scenarios, four objectives, direct Q-shadow pure hedge, and quant review pass; managed-GPU fit and production pending. \\
+Robust covariance & P & \statuspending & Full 20-target one-origin mean--volatility gate passed for $\kappa\in\{0.1,1,2,3\}$; the 611-origin production run is in progress. \\
+GROMM & Q only & \statusready & First rolling Q calibration completed; compatible P failed its fixed gates, while authenticated real-artifact Q replay produces finite scenarios. \\
 VolGAN & P & \statusready & Public-architecture implementation, restartable rolling updates, daily/weekly adapters, and smoke tests pass; production pending. \\
 AD--Seq--Vol / FT & P & \statusready & Full-geometry managed-GPU origin: 4,096 scenarios, 20 targets, 158.3 seconds, 2,636 MiB VRAM, no cap hit or nonconvergence; production pending. \\
 \bottomrule
@@ -217,11 +220,19 @@ AD--Seq--Vol / FT & P & \statusready & Full-geometry managed-GPU origin: 4,096 s
 
 \subsection{Supporting calibration and weekly evidence}
 
-The rolling rank-16 DLV innovation fit explains 86.50\% of variance at the
-first production origin. The compatible physical drift passes its precommitted
-holdout test: 1.87\% validation improvement, paired gain statistic 6.84, and
-daily risk-price norm 0.371. These are model-calibration diagnostics, not hedge
-performance results.
+At the first GROMM-eligible origin, 17 January 2023, the 200-strike affine
+market fit places 84.90\% of observations inside their released spread. The
+rank-16 DLV innovation basis explains 95.15\% of fitted innovation variance.
+The compatible-P projection explains only 0.633\% of its target energy and its
+holdout loss improves by 0.473\%, below the fixed 50\% and 0.5\% gates. The
+gain statistic is 9.54 and the daily risk-price norm is 0.102, but those two
+diagnostics do not override the failed acceptance gates. The artifact is
+therefore Q-only. Its float32 serialized densities miss unit mass by at most
+$1.964\times10^{-8}$; the loader now validates that residual against the stored
+precision, normalizes in float64 to $2.22\times10^{-16}$ maximum error, and
+rejects larger deviations. An authenticated four-path replay produced finite Q
+returns over 163 instruments and rejected P as required. These are calibration
+and implementation diagnostics, not hedge-performance results.
 
 The weekly engine has 528 eligible origins through 22 August 2025 and 13 common
 targets: ten five-day digitals, realized variance, a 95\% end-of-day down-and-out
@@ -251,8 +262,8 @@ robust scales and a regularized Tyler scatter matrix, and estimates each target
 cross-moment separately by robust regression. Expected returns are HAC-screened
 in covariance eigenportfolios. Mean--variance and mean--volatility hedges use
 spread-weighted lasso costs; the latter is checked analytically for recession
-directions. The implementation gate passes, but only one production origin
-exists and it must not be compared with Table~\ref{tab:risk}.
+directions. The implementation gate passes and a full production run is in
+progress, but incomplete outputs must not be compared with Table~\ref{tab:risk}.
 
 \subsection{Historical statistical SANOS}
 
@@ -270,11 +281,13 @@ GROMM is the native generative risk-neutral option-market model: a 200-strike
 JAX market fit, 16-factor AR(1) log-DLV-squared dynamics, independent 5\% Black
 background, and eight Brownian substeps per business day. Dated artifacts are
 bound to exactly 252 public transitions and must pass compatible-P drift gates.
-It generates Q and accepted compatible-P scenarios. An affine-plus-deep LSTM
-supports all four objectives; the executable pure policy uses conditional
-Q-shadow gains at each realized P state, removing predictable physical drift
-without fitted holdout centering. CPU integration and quant review pass;
-rolling managed-GPU production remains outstanding.
+The first rolling fit clears the market-fit threshold but rejects the compatible
+P measure, so it supplies Q scenarios only. Bounded float32 decode
+normalization and authenticated Q replay now pass. An affine-plus-deep LSTM
+supports all four objectives; whenever P is accepted, the executable pure
+policy uses conditional Q-shadow gains at each realized P state, removing
+predictable physical drift without fitted holdout centering. Full rolling
+production remains outstanding.
 
 \subsection{VolGAN}
 
@@ -298,14 +311,6 @@ historical-P generators and supply indifference prices rather than Q
 expectations. Exact restart, rolling warm-start, daily/weekly adapters, and one
 full-geometry GPU origin pass; production and batch-invariance remain pending.
 
-\section{Interpretation and Next Evidence}
-
-The benchmark now has a reproducible common market, accounting system, target
-catalogue, cost model, adapters, and two complete daily baselines; it does not
-yet establish a final ranking. Next come complete covariance, GROMM P/Q, and
-generated-model daily runs; production batch/restart checks; and the frozen-
-versus-restarted weekly comparison with overlap-aware inference.
-
 \vspace{0.4em}
 \hrule
 \vspace{0.35em}
@@ -316,7 +321,6 @@ The completed results use public dataset manifest SHA-256
 SANOS--LV run identity begins \texttt{\SanosRunPrefix}; historical-SANOS run
 identity begins \texttt{\HistoricalRunPrefix}.\\
 All headline numbers are derived from immutable
-\texttt{hedging-daily-results-v2} artifacts. Readiness statements come from
-the dated reports and independent reviews alongside the implementation.}
+\texttt{hedging-daily-results-v2} artifacts.}
 
 \end{document}

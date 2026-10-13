@@ -94,6 +94,7 @@ def _market_state() -> Gromm2MarketState:
         percent_inside_spread=85.0,
         explained_variance_ratio=0.9,
         physical_projection_fraction=0.6,
+        physical_accepted=True,
     )
 
 
@@ -204,10 +205,6 @@ def test_gromm2_weekly_scenario_and_training_smoke() -> None:
         atol=1.0e-14,
     )
 
-    shifted_coefficients = np.zeros_like(
-        market_state.dynamics.physical_factor_coefficients
-    )
-    shifted_coefficients[0] = np.asarray([0.75, -0.4])
     shifted_state = replace(
         market_state,
         dynamics=replace(
@@ -216,8 +213,8 @@ def test_gromm2_weekly_scenario_and_training_smoke() -> None:
                 market_state.dynamics.log_dlvsq_loadings,
                 0.02,
             ),
-            physical_factor_coefficients=shifted_coefficients,
         ),
+        physical_market_price_of_risk=np.asarray([0.75, -0.4]),
     )
     shifted_q = generate_gromm2_weekly_scenarios(
         market_state=shifted_state,

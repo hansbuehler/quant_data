@@ -13,6 +13,54 @@ from quantdata.torch import BaseEnvironment, BaseModel, tnn, torch
 from quantdata.torch.ffw import FeedForward, FeedForwardConfig
 
 
+@version("0.1")
+@dataclass(frozen=True, kw_only=True)
+class GrommPolicyArchitecture:
+    """Shape-independent architecture selected on the 2022 initialization set."""
+
+    hidden_size: int
+    recurrent_layers: int
+    deep_activation: str
+    deep_depth: int
+    deep_width: int
+
+    def __post_init__(self) -> None:
+        verify_inp(self.hidden_size > 0, lambda: "hidden_size must be positive")
+        verify_inp(
+            self.recurrent_layers > 0,
+            lambda: "recurrent_layers must be positive",
+        )
+        verify_inp(
+            bool(self.deep_activation.strip()),
+            lambda: "deep_activation must be non-empty",
+        )
+        verify_inp(self.deep_depth > 0, lambda: "deep_depth must be positive")
+        verify_inp(self.deep_width > 0, lambda: "deep_width must be positive")
+
+    def policy_config(
+        self,
+        *,
+        label: str,
+        feature_count: int,
+        instrument_count: int,
+        position_cap: float,
+    ) -> GrommPolicyConfig:
+        """Bind the selected architecture to one dated policy geometry."""
+        return GrommPolicyConfig(
+            label=label,
+            feature_count=feature_count,
+            instrument_count=instrument_count,
+            hidden_size=self.hidden_size,
+            recurrent_layers=self.recurrent_layers,
+            decision_network=FeedForwardConfig(
+                activation=self.deep_activation,
+                num_depth=self.deep_depth,
+                num_width=self.deep_width,
+            ),
+            position_cap=position_cap,
+        )
+
+
 @version("0.3")
 @dataclass(frozen=True, kw_only=True)
 class GrommPolicyConfig:

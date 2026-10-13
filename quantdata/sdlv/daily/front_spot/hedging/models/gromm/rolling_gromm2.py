@@ -11,6 +11,7 @@ from datetime import date
 from pathlib import Path
 
 import h5py
+import jax
 import numpy as np
 from cdxcore.err import verify_inp
 from cdxcore.version import version
@@ -20,7 +21,6 @@ from quantdata.gromm2.calibration import (
     fit_affine_history,
     prepare_synthetic_books,
 )
-from quantdata.gromm2.estimation import estimate_models
 from quantdata.gromm2.geometry import (
     Gromm2GeometryConfig,
     expanding_supports,
@@ -34,14 +34,21 @@ from quantdata.gromm2.market import (
     reconstruct_public_day,
 )
 from quantdata.hedging.data.public_dataset import PublicHedgingDataset
+from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
+    PublicHedgingPanel,
+)
 from quantdata.sdlv.daily.front_spot.hedging.models.checkpointing import (
     file_sha256,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_dynamics import (
+    GROMM2_DYNAMICS_SCHEMA,
+    estimate_rolling_gromm2_dynamics,
+)
 
-ROLLING_GROMM2_SCHEMA = "hedging-rolling-gromm2-v1"
+ROLLING_GROMM2_SCHEMA = "hedging-rolling-gromm2-v3"
 
 
-@version("0.1", dependencies=[Gromm2GeometryConfig, DlvCalibrationConfig])
+@version("0.4", dependencies=[Gromm2GeometryConfig, DlvCalibrationConfig])
 @dataclass(frozen=True, kw_only=True)
 class RollingGromm2Config:
     """Precommitted market-model and rolling-estimation specification."""
@@ -53,7 +60,7 @@ class RollingGromm2Config:
     minimum_physical_projection_fraction: float = 0.5
     maximum_daily_risk_price_norm: float = 3.0
     geometry: Gromm2GeometryConfig = Gromm2GeometryConfig(num_inner_strikes=200)
-    calibration: DlvCalibrationConfig = DlvCalibrationConfig(rank=200)
+    calibration: DlvCalibrationConfig = DlvCalibrationConfig(rank=200, epochs=2_000)
 
     def __post_init__(self) -> None:
         verify_inp(
@@ -115,6 +122,7 @@ class RollingGromm2Artifacts:
     explained_variance_ratio: float
     physical_projection_fraction: float
     maximum_daily_risk_price_norm: float
+    physical_accepted: bool
     dataset_manifest_sha256: str
 
 
@@ -137,8 +145,32 @@ def select_rolling_public_days(
     *,
     as_of_date: date,
     window_transitions: int,
+    transition_pairs: tuple[tuple[date, date], ...] | None = None,
 ) -> list[PublicSanosDay]:
-    """Select exactly one trailing state more than the transition count."""
+    """Select the states supporting an exact trailing one-session-pair window."""
+    if transition_pairs is not None:
+        if len(transition_pairs) != window_transitions:
+            raise ValueError("rolling GROMM2 transition-pair count is wrong")
+        origin_dates = tuple(origin for origin, _ in transition_pairs)
+        endpoint_dates = tuple(endpoint for _, endpoint in transition_pairs)
+        if (
+            origin_dates != tuple(sorted(set(origin_dates)))
+            or endpoint_dates[-1] != as_of_date
+            or any(origin >= endpoint for origin, endpoint in transition_pairs)
+        ):
+            raise ValueError("rolling GROMM2 transition pairs are not chronological")
+        by_date = {day.trading_date: day for day in days}
+        required_dates = tuple(sorted(set(origin_dates) | set(endpoint_dates)))
+        missing = tuple(value for value in required_dates if value not in by_date)
+        if missing:
+            raise ValueError(
+                "rolling GROMM2 public states are missing transition dates: "
+                + ", ".join(value.isoformat() for value in missing[:3])
+            )
+        selected = [by_date[value] for value in required_dates]
+        if selected[-1].trading_date != as_of_date:
+            raise ValueError("rolling GROMM2 dates must end at as-of")
+        return selected
     eligible = [day for day in days if day.trading_date <= as_of_date]
     required = window_transitions + 1
     if len(eligible) < required:
@@ -163,10 +195,20 @@ def prepare_rolling_gromm2(
     paths = rolling_gromm2_paths(artifact_root, as_of_date=as_of_date)
     paths.directory.mkdir(parents=True, exist_ok=True)
     public_dataset = PublicHedgingDataset(Path(dataset))
+    panel = PublicHedgingPanel(public_dataset.directory)
+    origin_dates = panel.prior_one_day_origins(
+        as_of_date,
+        count=config.window_transitions,
+    )
+    endpoint_dates = tuple(
+        panel.next_one_session_date(origin_date) for origin_date in origin_dates
+    )
+    transition_pairs = tuple(zip(origin_dates, endpoint_dates, strict=True))
     selected = select_rolling_public_days(
         load_public_sanos_days(public_dataset.directory),
         as_of_date=as_of_date,
         window_transitions=config.window_transitions,
+        transition_pairs=transition_pairs,
     )
     _write_source_history(
         days=selected,
@@ -185,10 +227,14 @@ def prepare_rolling_gromm2(
             "schema": ROLLING_GROMM2_SCHEMA,
             "status": "prepared",
             "as_of_date": as_of_date.isoformat(),
-            "training_start_date": selected[0].trading_date.isoformat(),
-            "training_end_date": selected[-1].trading_date.isoformat(),
+            "training_start_date": origin_dates[0].isoformat(),
+            "training_end_date": as_of_date.isoformat(),
             "state_count": len(selected),
-            "transition_count": len(selected) - 1,
+            "transition_count": len(origin_dates),
+            "training_origin_dates": [value.isoformat() for value in origin_dates],
+            "training_endpoint_dates": [
+                value.isoformat() for value in endpoint_dates
+            ],
             "dataset_manifest_sha256": file_sha256(
                 public_dataset.directory / "manifest.json"
             ),
@@ -218,18 +264,32 @@ def fit_rolling_gromm2_market(
         config=config,
         dataset_manifest_sha256=dataset_manifest_sha256,
     )
-    fit_affine_history(
-        prepared_books=paths.prepared_books,
-        output=paths.affine_history,
-        checkpoint=paths.affine_checkpoint,
-        config=config.calibration,
-    )
-    report = estimate_models(
-        history_path=paths.affine_history,
-        dataset=Path(dataset),
-        output=paths.dynamics,
-        factor_count=config.factor_count,
-    )
+    with jax.enable_x64(False):
+        fit_affine_history(
+            prepared_books=paths.prepared_books,
+            output=paths.affine_history,
+            checkpoint=paths.affine_checkpoint,
+            config=config.calibration,
+        )
+    with jax.enable_x64(True):
+        origin_dates, endpoint_dates = _manifest_transition_dates(
+            prepared,
+            window_transitions=config.window_transitions,
+        )
+        report = estimate_rolling_gromm2_dynamics(
+            history_path=paths.affine_history,
+            dataset=Path(dataset),
+            output=paths.dynamics,
+            origin_dates=origin_dates,
+            endpoint_dates=endpoint_dates,
+            factor_count=config.factor_count,
+            minimum_projection_fraction=(
+                config.minimum_physical_projection_fraction
+            ),
+            maximum_daily_risk_price_norm=(
+                config.maximum_daily_risk_price_norm
+            ),
+        )
     with h5py.File(paths.affine_history, "r") as stream:
         percent_inside = float(stream.attrs["percent_inside_spread"])
     if percent_inside < config.minimum_inside_spread_percent:
@@ -239,9 +299,11 @@ def fit_rolling_gromm2_market(
         )
     physical_projection_fraction = float(report["physical_projection_fraction"])
     maximum_daily_risk_price_norm = _maximum_daily_risk_price_norm(paths.dynamics)
-    _validate_physical_fit(
+    physical_accepted = _validate_physical_fit(
         physical_projection_fraction=physical_projection_fraction,
         maximum_daily_risk_price_norm=maximum_daily_risk_price_norm,
+        validation_accepted=report.get("physical_validation_accepted"),
+        reported_accepted=report.get("physical_accepted"),
         config=config,
     )
     complete = {
@@ -254,6 +316,7 @@ def fit_rolling_gromm2_market(
         "explained_variance_ratio": float(report["explained_variance_ratio"]),
         "physical_projection_fraction": physical_projection_fraction,
         "maximum_daily_risk_price_norm": maximum_daily_risk_price_norm,
+        "physical_accepted": physical_accepted,
     }
     _write_manifest(paths, complete)
     return load_rolling_gromm2(
@@ -300,27 +363,33 @@ def load_rolling_gromm2(
         )
         nms_nodes = np.asarray(stream["nms_nodes"], dtype=np.float64)
         percent_inside = float(stream.attrs["percent_inside_spread"])
+    origin_dates, endpoint_dates = _manifest_transition_dates(
+        manifest,
+        window_transitions=config.window_transitions,
+    )
+    expected_state_dates = tuple(sorted(set(origin_dates) | set(endpoint_dates)))
     if (
         len(nms_nodes) != config.geometry.num_inner_strikes
-        or len(dates) != config.window_transitions + 1
-        or dates[-1] != as_of_date
-        or any(value > as_of_date for value in dates)
+        or dates != expected_state_dates
+        or expected_state_dates[-1] != as_of_date
     ):
         raise ValueError("rolling GROMM2 affine history violates dated geometry")
     if percent_inside < config.minimum_inside_spread_percent:
         raise ValueError("rolling GROMM2 affine history fails the market-fit gate")
     report = json.loads(paths.dynamics.with_suffix(".json").read_text(encoding="utf-8"))
     if (
-        report.get("schema") != "gromm2-estimate-v1"
+        report.get("schema") != GROMM2_DYNAMICS_SCHEMA
         or report.get("factor_count") != config.factor_count
         or report.get("pair_count") != config.window_transitions
     ):
         raise ValueError("rolling GROMM2 dynamics report violates the specification")
     physical_projection_fraction = float(report["physical_projection_fraction"])
     maximum_daily_risk_price_norm = _maximum_daily_risk_price_norm(paths.dynamics)
-    _validate_physical_fit(
+    physical_accepted = _validate_physical_fit(
         physical_projection_fraction=physical_projection_fraction,
         maximum_daily_risk_price_norm=maximum_daily_risk_price_norm,
+        validation_accepted=report.get("physical_validation_accepted"),
+        reported_accepted=report.get("physical_accepted"),
         config=config,
     )
     return RollingGromm2Artifacts(
@@ -331,6 +400,7 @@ def load_rolling_gromm2(
         explained_variance_ratio=float(report["explained_variance_ratio"]),
         physical_projection_fraction=physical_projection_fraction,
         maximum_daily_risk_price_norm=maximum_daily_risk_price_norm,
+        physical_accepted=physical_accepted,
         dataset_manifest_sha256=dataset_manifest_sha256,
     )
 
@@ -457,11 +527,24 @@ def _validate_prepared_manifest(
     config: RollingGromm2Config,
     dataset_manifest_sha256: str,
 ) -> None:
+    parsed_origins, parsed_endpoints = _manifest_transition_dates(
+        manifest,
+        window_transitions=config.window_transitions,
+    )
+    unique_states = set(parsed_origins) | set(parsed_endpoints)
     if (
         manifest.get("schema") != ROLLING_GROMM2_SCHEMA
         or manifest.get("as_of_date") != as_of_date.isoformat()
         or manifest.get("training_end_date") != as_of_date.isoformat()
-        or manifest.get("state_count") != config.window_transitions + 1
+        or manifest.get("training_start_date") != parsed_origins[0].isoformat()
+        or parsed_origins != tuple(sorted(set(parsed_origins)))
+        or parsed_endpoints[-1] != as_of_date
+        or any(origin >= endpoint for origin, endpoint in zip(
+            parsed_origins,
+            parsed_endpoints,
+            strict=True,
+        ))
+        or manifest.get("state_count") != len(unique_states)
         or manifest.get("transition_count") != config.window_transitions
         or manifest.get("dataset_manifest_sha256") != dataset_manifest_sha256
         or manifest.get("config") != _config_snapshot(config)
@@ -475,42 +558,66 @@ def _validate_prepared_manifest(
             raise ValueError(f"rolling GROMM2 {field} does not match {path}")
 
 
+def _manifest_transition_dates(
+    manifest: dict[str, object],
+    *,
+    window_transitions: int,
+) -> tuple[tuple[date, ...], tuple[date, ...]]:
+    """Return the exact dated transitions recorded by a rolling artifact."""
+    origin_dates = manifest.get("training_origin_dates")
+    endpoint_dates = manifest.get("training_endpoint_dates")
+    if (
+        not isinstance(origin_dates, list)
+        or not isinstance(endpoint_dates, list)
+        or len(origin_dates) != window_transitions
+        or len(endpoint_dates) != window_transitions
+        or any(not isinstance(value, str) for value in origin_dates)
+        or any(not isinstance(value, str) for value in endpoint_dates)
+    ):
+        raise ValueError("rolling GROMM2 manifest lacks exact transition dates")
+    return (
+        tuple(date.fromisoformat(value) for value in origin_dates),
+        tuple(date.fromisoformat(value) for value in endpoint_dates),
+    )
+
+
 def _maximum_daily_risk_price_norm(path: Path) -> float:
-    """Return the largest fitted one-day market-price-of-risk norm."""
+    """Return the fitted one-day market-price-of-risk norm."""
     with np.load(path, allow_pickle=False) as values:
         risk_prices = np.asarray(
-            values["physical_market_prices_of_risk"], dtype=np.float64
+            values["physical_market_price_of_risk"], dtype=np.float64
         )
-    if risk_prices.ndim != 2 or not np.all(np.isfinite(risk_prices)):
+    if risk_prices.ndim != 1 or not np.all(np.isfinite(risk_prices)):
         raise ValueError("rolling GROMM2 physical risk prices are invalid")
-    return float(np.max(np.linalg.norm(risk_prices, axis=1) / np.sqrt(252.0)))
+    return float(np.linalg.norm(risk_prices) / np.sqrt(252.0))
 
 
 def _validate_physical_fit(
     *,
     physical_projection_fraction: float,
     maximum_daily_risk_price_norm: float,
+    validation_accepted: object,
+    reported_accepted: object,
     config: RollingGromm2Config,
-) -> None:
-    """Enforce the precommitted compatible-physical-drift acceptance gate."""
+) -> bool:
+    """Authenticate the precommitted P gate without blocking Q artifacts."""
     if (
         not np.isfinite(physical_projection_fraction)
-        or physical_projection_fraction < config.minimum_physical_projection_fraction
+        or not np.isfinite(maximum_daily_risk_price_norm)
+        or not isinstance(validation_accepted, bool)
+        or not isinstance(reported_accepted, bool)
     ):
-        raise ValueError(
-            "rolling GROMM2 physical drift fails the projection gate: "
-            f"{physical_projection_fraction:.6g} < "
-            f"{config.minimum_physical_projection_fraction:.6g}"
-        )
-    if (
-        not np.isfinite(maximum_daily_risk_price_norm)
-        or maximum_daily_risk_price_norm > config.maximum_daily_risk_price_norm
-    ):
-        raise ValueError(
-            "rolling GROMM2 physical drift fails the daily risk-price gate: "
-            f"{maximum_daily_risk_price_norm:.6g} > "
-            f"{config.maximum_daily_risk_price_norm:.6g}"
-        )
+        raise ValueError("rolling GROMM2 physical diagnostics are invalid")
+    accepted = bool(
+        validation_accepted
+        and physical_projection_fraction
+        >= config.minimum_physical_projection_fraction
+        and maximum_daily_risk_price_norm
+        <= config.maximum_daily_risk_price_norm
+    )
+    if reported_accepted is not accepted:
+        raise ValueError("rolling GROMM2 physical acceptance flag is inconsistent")
+    return accepted
 
 
 def _config_snapshot(config: RollingGromm2Config) -> dict[str, object]:

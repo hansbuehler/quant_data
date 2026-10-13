@@ -36,7 +36,6 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.config import (
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.gromm2_daily import (
     Gromm2MarketState,
-    predict_physical_market_price_of_risk,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.training import (
     GrommTrainingData,
@@ -177,10 +176,6 @@ def generate_gromm2_weekly_scenarios(
             ),
             background_level=jnp.ones(count),
         )
-        previous_factor_score = np.broadcast_to(
-            market_state.previous_factor_score,
-            (count, market_state.dynamics.factor_count),
-        ).copy()
         current_normalized_spot = np.ones(count, dtype=np.float64)
         current_episode_spot = np.full(
             count, state.spot_over_episode_origin, dtype=np.float64
@@ -241,19 +236,13 @@ def generate_gromm2_weekly_scenarios(
             risk_neutral_factors = factor_normals[local_day - 1]
             current_factors = risk_neutral_factors.copy()
             if config.measure is GrommMeasure.P:
-                floating = _floating_future_dlvsq(
-                    full_dlvsq=full_state.dlvsq,
-                    front_index=front_index,
-                    elapsed_days=local_day - 1,
-                    business_dtes=market_state.business_dtes,
-                    reference_factor_dtes=reference_factor_dtes,
-                )
-                risk_price = predict_physical_market_price_of_risk(
-                    dlvsq=floating,
-                    dynamics=market_state.dynamics,
-                    previous_factor_score=previous_factor_score,
-                )
-                current_factors += risk_price[None] * math.sqrt(
+                if not market_state.physical_accepted:
+                    raise RuntimeError(
+                        "GROMM2 P generation requires an accepted physical fit"
+                    )
+                current_factors += market_state.physical_market_price_of_risk[
+                    None
+                ] * math.sqrt(
                     1.0 / (252.0 * config.dlv_substeps)
                 )
             current_state = SimulationState(
@@ -390,9 +379,6 @@ def generate_gromm2_weekly_scenarios(
                     result.state.dlvsq
                 ),
                 background_level=result.state.background_level,
-            )
-            previous_factor_score = np.asarray(
-                result.daily_factor_score, dtype=np.float64
             )
             current_normalized_spot = normalized_spot
             current_episode_spot = episode_spot

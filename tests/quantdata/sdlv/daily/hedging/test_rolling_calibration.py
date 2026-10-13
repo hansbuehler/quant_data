@@ -250,6 +250,33 @@ def test_constant_physical_projection_holds_identified_factor_fixed() -> None:
     assert fit.weighted_residual_rms == pytest.approx(0.0, abs=1.0e-14)
 
 
+def test_constant_physical_projection_recovers_state_dependent_loadings() -> None:
+    sample_count = 6
+    base = np.asarray(
+        [[[0.8, 0.1], [0.4, -0.2]], [[0.2, 0.6], [-0.3, 0.2]]]
+    )
+    scales = np.linspace(0.75, 1.25, sample_count)
+    loadings = scales[:, None, None, None] * base[None]
+    risk_price = np.asarray([0.25, -0.35])
+    risk_neutral = np.zeros((sample_count, 2, 2))
+    empirical = risk_neutral + np.einsum("sijf,f->sij", loadings, risk_price)
+    origins = tuple(date(2024, 1, 2 + index) for index in range(sample_count))
+    endpoints = tuple(date(2024, 1, 3 + index) for index in range(sample_count))
+
+    fit = project_constant_physical_drift(
+        training_origin_dates=origins,
+        training_endpoint_dates=endpoints,
+        empirical_log_drifts=empirical,
+        risk_neutral_log_drifts=risk_neutral,
+        coordinate_weights=np.ones_like(empirical),
+        annualized_loadings=loadings,
+        ridge=0.0,
+    )
+
+    assert fit.market_price_of_risk == pytest.approx(risk_price)
+    assert fit.weighted_residual_rms == pytest.approx(0.0, abs=1.0e-14)
+
+
 def test_validation_gate_requires_positive_economic_and_statistical_gain() -> None:
     config = RollingDlvCalibrationConfig()
 

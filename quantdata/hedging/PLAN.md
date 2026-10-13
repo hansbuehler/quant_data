@@ -23,8 +23,10 @@ review. Common SANOS/DLV weekly claim prices, exact rolling fit identities,
 precommitted as-of information windows, and Hansen--Hodrick plus moving-block
 overlap inference passed their independent re-review. A resumable daily runner
 now pins dataset and model identities, enforces the complete 20-target book and
-numerical gates, and writes one atomic record per origin. Production evaluation
-of every model and model-specific weekly policies remain outstanding. The
+numerical gates, and writes one atomic record per origin. SANOS-LV and
+historical-SANOS each completed all 611 eligible origins and 12,220 target
+records; robust-covariance production is in progress. Other daily production
+and all model-specific weekly policies remain outstanding. The
 strictly-2022 target-sizing exercise now fixes each target to one
 maturity-matched ATM spot-risk unit; all 20 calibration hedges converged with
 no cap hit. Its atomic derived artifact is keyed by the public dataset manifest
@@ -41,8 +43,8 @@ eligibility from the immutable run specification, revalidates every record,
 and reports normalized entry turnover/exposure, cap rates, and explicit HAC
 metadata; independent quant review passed. The first full SANOS-LV run exposed
 a small-coefficient linear-program equality-scaling failure. Row scaling fixes
-the numerical cause without relaxing the precommitted residual tolerance, and
-the clean versioned 2023--2025 CPU rerun is currently running resumably.
+the numerical cause without relaxing the precommitted residual tolerance; the
+clean versioned 2023--2025 CPU rerun is complete.
 
 The benchmark should ultimately provide a public, model-neutral methodology for
 comparing hedging systems. The first objective is the paper and a reproducible
@@ -684,18 +686,24 @@ The dated market-artifact contract, CPU preparation stage, daily P/Q
 benchmark-book output, and weekly recurrent-policy interface are implemented.
 A production artifact contains exactly 252 transitions ending on the declared
 origin, fixes the 200-strike geometry from that origin, hashes all inputs, and
-rejects full-panel or future-dated histories. A real 2023-01-10 preparation
-smoke completed from the public dataset. The five-session sampler recomputes
+rejects full-panel or future-dated histories. A real first-eligible 2023-01-17
+fit completed from the public dataset using 252 exact released one-session
+pairs supported by 257 states. It places 84.90% of observations inside spread,
+and the rank-16 innovation basis explains 95.15% of variance. The compatible-P
+estimator fails the unchanged projection and holdout-improvement gates, so this
+artifact is Q-only. Its authenticated four-path Q replay produces finite
+returns over 163 instruments; P generation is rejected. The loader bounds
+float32 density-mass roundoff by stored source precision, normalizes accepted
+residuals in float64, and logs the correction. The five-session sampler recomputes
 the compatible P risk price pathwise and prices the frozen contract book
 without retaining full density histories. Every artifact is bound to the exact
 public manifest and the compatible P drift must pass projection and daily
 risk-price-norm gates. Generated books start at the common SANOS executable
 marks. Signed policies provide prices and diagnostics; the directly trained
 pure policy uses conditional Q-shadow gains, exact net turnover, free cash
-settlement, and terminal
-liquidation. Managed-GPU affine
-fitting, 2022 hedge-architecture selection, and the GPU-readiness gate remain
-outstanding.
+settlement, and terminal liquidation. Managed-GPU affine fitting and 2022
+hedge-architecture selection are complete for the first rolling origin. Full
+rolling Q production and any future-origin P acceptance remain outstanding.
 
 Gate: GROMM CPU smoke test, model review, and GPU-readiness review pass.
 
@@ -717,8 +725,9 @@ implemented. A completed run is rejected if any eligible origin, target,
 dataset identity, run identity, convergence gate, or cap count is missing or
 inconsistent. The failed SANOS-LV `production-v1` is retained as a numerical
 diagnostic; the row-scaled `production-v2` run completed all 611 eligible
-origins and wrote 12,220 target records. Covariance and historical-SANOS
-production runs are resumable and remain in progress. The versioned daily
+origins and wrote 12,220 target records. Historical SANOS also completed all
+611 origins and 12,220 records; covariance production is resumable and remains
+in progress. The versioned daily
 production matrix contains 53 unique cases: 21 runnable native CPU cases, two
 staged published-setting GPU cases awaiting the generated-model GPU-readiness
 gate, and 30 explicitly blocked rolling-generated or GROMM cases. No blocked

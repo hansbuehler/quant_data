@@ -29,9 +29,10 @@ from quantdata.sdlv.daily.front_spot.hedging.data.public_only import (
 
 FloatArray = NDArray[np.float64]
 IntArray = NDArray[np.int64]
+BoolArray = NDArray[np.bool_]
 
 
-@version("1.1")
+@version("1.2")
 @dataclass(frozen=True, kw_only=True)
 class RollingDlvFactorConfig:
     """Controls for one-day fixed-contract DLV factor estimation."""
@@ -634,6 +635,7 @@ def fit_dlv_factors(
     *,
     as_of_date: date,
     config: RollingDlvFactorConfig = RollingDlvFactorConfig(),
+    active_coordinate_mask: BoolArray | None = None,
 ) -> RollingDlvFactorFit:
     """Fit coordinatewise physical AR dynamics and joint spot/DLV factors."""
     sample_count = len(history.origin_dates)
@@ -671,6 +673,11 @@ def fit_dlv_factors(
         mode="nearest",
     )
     smoothed -= np.mean(smoothed, axis=0, keepdims=True)
+    if active_coordinate_mask is not None:
+        active = np.asarray(active_coordinate_mask, dtype=bool)
+        if active.shape != origin.shape[1:] or not np.any(active):
+            raise ValueError("active coordinate mask does not align with DLV states")
+        smoothed[..., ~active] = 0.0
     diffusion_vectors = smoothed.reshape(sample_count, -1)
 
     if history.has_front_mixture_observations:
@@ -704,10 +711,22 @@ def fit_dlv_factors(
         spot_loading = np.mean(diffusion_vectors * spot_score[:, None], axis=0)
         front_risk_price = spot_mean * np.sqrt(DAYS_PER_YEAR)
         front_risk_price_se = np.sqrt(DAYS_PER_YEAR / sample_count)
-    orthogonal_residual = diffusion_vectors - spot_score[:, None] * spot_loading
-    orthogonal_loadings, orthogonal_variances, orthogonal_scores = (
-        _low_rank_loadings(orthogonal_residual, config.factor_rank - 1)
-    )
+    if history.has_front_mixture_observations:
+        orthogonal_loadings, orthogonal_variances, orthogonal_scores = (
+            _partial_observation_low_rank_loadings(
+                diffusion_vectors,
+                observed_loading=spot_loading,
+                observed_scores=spot_score,
+                rank=config.factor_rank - 1,
+            )
+        )
+    else:
+        orthogonal_residual = (
+            diffusion_vectors - spot_score[:, None] * spot_loading
+        )
+        orthogonal_loadings, orthogonal_variances, orthogonal_scores = (
+            _low_rank_loadings(orthogonal_residual, config.factor_rank - 1)
+        )
     flat_loadings = np.column_stack((spot_loading, orthogonal_loadings))
     daily_loadings = flat_loadings.reshape(
         *origin.shape[1:],
@@ -1048,3 +1067,69 @@ def _low_rank_loadings(
     loadings = residuals.T @ retained_vectors / np.sqrt(sample_count)
     scores = np.sqrt(sample_count) * retained_vectors
     return loadings, retained_values, scores
+
+
+def _partial_observation_low_rank_loadings(
+    values: FloatArray,
+    *,
+    observed_loading: FloatArray,
+    observed_scores: FloatArray,
+    rank: int,
+) -> tuple[FloatArray, FloatArray, FloatArray]:
+    """Extract latent factors without duplicating a partially observed factor.
+
+    ``observed_scores`` are posterior means of a unit-variance latent shock.
+    Regressing on those means identifies its loading, but PCA of the regression
+    residual would count the shock's posterior uncertainty a second time.  We
+    instead eigendecompose the positive-semidefinite projection of
+    ``Cov(values) - b b'`` in the sample covariance span.
+    """
+    sample_count, coordinate_count = values.shape
+    if not 0 < rank < sample_count:
+        raise ValueError(f"rank must lie in [1,{sample_count - 1}], found {rank}")
+    loading = np.asarray(observed_loading, dtype=np.float64)
+    scores = np.asarray(observed_scores, dtype=np.float64)
+    if loading.shape != (coordinate_count,) or scores.shape != (sample_count,):
+        raise ValueError("partial-observation factor inputs do not align")
+    gram = values @ values.T / sample_count
+    eigenvalues, eigenvectors = np.linalg.eigh(0.5 * (gram + gram.T))
+    order = np.argsort(eigenvalues)[::-1]
+    tolerance = np.finfo(np.float64).eps * max(float(eigenvalues[order[0]]), 1.0)
+    positive = eigenvalues[order] > tolerance
+    retained_sample_values = eigenvalues[order][positive]
+    retained_sample_vectors = eigenvectors[:, order][:, positive]
+    coordinate_basis = (
+        values.T
+        @ retained_sample_vectors
+        / np.sqrt(sample_count * retained_sample_values)[None, :]
+    )
+    loading_coordinates = coordinate_basis.T @ loading
+    unexplained = np.diag(retained_sample_values) - np.outer(
+        loading_coordinates,
+        loading_coordinates,
+    )
+    residual_values, residual_vectors = np.linalg.eigh(
+        0.5 * (unexplained + unexplained.T)
+    )
+    residual_order = np.argsort(residual_values)[::-1]
+    residual_values = np.maximum(residual_values[residual_order], 0.0)
+    retained_values = residual_values[:rank]
+    residual_tolerance = np.finfo(np.float64).eps * max(
+        float(residual_values[0]),
+        1.0,
+    )
+    if np.any(retained_values <= residual_tolerance):
+        positive_count = int(np.count_nonzero(residual_values > residual_tolerance))
+        raise FloatingPointError(
+            "partial-observation DLV covariance has only "
+            f"{positive_count} positive latent factors"
+        )
+    retained_vectors = residual_vectors[:, residual_order[:rank]]
+    loadings = (
+        coordinate_basis
+        @ retained_vectors
+        * np.sqrt(retained_values)[None, :]
+    )
+    conditional_residual = values - scores[:, None] * loading
+    factor_scores = conditional_residual @ np.linalg.pinv(loadings).T
+    return loadings, retained_values, factor_scores

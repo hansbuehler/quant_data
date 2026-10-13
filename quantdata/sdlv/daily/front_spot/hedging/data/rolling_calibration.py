@@ -836,34 +836,128 @@ def fit_rolling_constant_physical_drift(
     selection_fixed_risk_price[0] = (
         selection_factors.front_spot_market_price_of_risk
     )
+    standard_error_overrides = np.full(
+        factors.factor_rank,
+        np.nan,
+        dtype=np.float64,
+    )
+    standard_error_overrides[0] = (
+        factors.front_spot_market_price_of_risk_standard_error
+    )
+    return fit_constant_physical_drift_from_inputs(
+        training_origin_dates=history.origin_dates,
+        training_endpoint_dates=history.endpoint_dates,
+        empirical_log_drifts=empirical_log_drifts,
+        selection_risk_neutral_log_drifts=selection_risk_neutral_log_drifts,
+        selection_coordinate_weights=selection_coordinate_weights,
+        selection_annualized_loadings=selection_factors.annualized_loadings,
+        risk_neutral_log_drifts=risk_neutral_log_drifts,
+        coordinate_weights=coordinate_weights,
+        annualized_loadings=factors.annualized_loadings,
+        selection_fixed_market_price_of_risk=selection_fixed_risk_price,
+        fixed_market_price_of_risk=fixed_risk_price,
+        market_price_of_risk_standard_error_overrides=standard_error_overrides,
+        ridge_candidates=ridge_candidates,
+        validation_fraction=validation_fraction,
+        maximum_daily_risk_price_norm=maximum_daily_risk_price_norm,
+        minimum_validation_improvement_fraction=(
+            minimum_validation_improvement_fraction
+        ),
+        minimum_validation_gain_t=minimum_validation_gain_t,
+        validation_hac_lags=validation_hac_lags,
+    )
+
+
+def fit_constant_physical_drift_from_inputs(
+    *,
+    training_origin_dates: tuple[date, ...],
+    training_endpoint_dates: tuple[date, ...],
+    empirical_log_drifts: FloatArray,
+    selection_risk_neutral_log_drifts: FloatArray,
+    selection_coordinate_weights: FloatArray,
+    selection_annualized_loadings: FloatArray,
+    risk_neutral_log_drifts: FloatArray,
+    coordinate_weights: FloatArray,
+    annualized_loadings: FloatArray,
+    selection_fixed_market_price_of_risk: FloatArray | None = None,
+    fixed_market_price_of_risk: FloatArray | None = None,
+    market_price_of_risk_standard_error_overrides: FloatArray | None = None,
+    ridge_candidates: tuple[float, ...] = (1.0e-2, 1.0e-1, 1.0, 10.0),
+    validation_fraction: float = 1.0 / 3.0,
+    maximum_daily_risk_price_norm: float = 3.0,
+    minimum_validation_improvement_fraction: float = 0.005,
+    minimum_validation_gain_t: float = 1.96,
+    validation_hac_lags: int = 5,
+) -> RollingPhysicalDriftFit:
+    """Select and refit one compatible constant measure change.
+
+    The loading arrays may be either one fixed field or one field per date.
+    Candidate selection uses only the leading training block; the trailing
+    block is reserved for the one-standard-error choice and signed HAC gate.
+    """
+    sample_count = len(training_origin_dates)
+    if len(training_endpoint_dates) != sample_count:
+        raise ValueError("rolling physical-drift dates do not align")
+    empirical = np.asarray(empirical_log_drifts, dtype=np.float64)
+    if empirical.shape[:1] != (sample_count,):
+        raise ValueError("empirical rolling drifts do not align with dates")
+    factor_count = np.asarray(annualized_loadings).shape[-1]
+    validation_count = max(
+        factor_count + 1,
+        int(round(sample_count * validation_fraction)),
+    )
+    training_count = sample_count - validation_count
+    if training_count <= factor_count:
+        raise ValueError("rolling physical-drift split leaves too few training dates")
+    candidates = tuple(float(value) for value in ridge_candidates)
+    if (
+        len(candidates) < 2
+        or any(not np.isfinite(value) or value < 0.0 for value in candidates)
+        or any(left >= right for left, right in zip(candidates, candidates[1:]))
+    ):
+        raise ValueError("ridge candidates must be increasing and non-negative")
     candidate_fits: list[RollingPhysicalDriftFit] = []
     candidate_daily_losses: list[FloatArray] = []
-    for candidate in ridge_candidates:
+    selection_loadings = _slice_state_loadings(
+        selection_annualized_loadings,
+        stop=training_count,
+        sample_count=sample_count,
+    )
+    validation_loadings = _slice_state_loadings(
+        selection_annualized_loadings,
+        start=training_count,
+        sample_count=sample_count,
+    )
+    for candidate in candidates:
         candidate_fit = project_constant_physical_drift(
-            training_origin_dates=history.origin_dates[:training_count],
-            training_endpoint_dates=history.endpoint_dates[:training_count],
-            empirical_log_drifts=empirical_log_drifts[:training_count],
-            risk_neutral_log_drifts=selection_risk_neutral_log_drifts[:training_count],
+            training_origin_dates=training_origin_dates[:training_count],
+            training_endpoint_dates=training_endpoint_dates[:training_count],
+            empirical_log_drifts=empirical[:training_count],
+            risk_neutral_log_drifts=(
+                selection_risk_neutral_log_drifts[:training_count]
+            ),
             coordinate_weights=selection_coordinate_weights[:training_count],
-            annualized_loadings=selection_factors.annualized_loadings,
+            annualized_loadings=selection_loadings,
             ridge=candidate,
-            fixed_market_price_of_risk=selection_fixed_risk_price,
+            fixed_market_price_of_risk=selection_fixed_market_price_of_risk,
         )
         candidate_fits.append(candidate_fit)
         candidate_daily_losses.append(
             _daily_projection_losses(
-                empirical_log_drifts=empirical_log_drifts[training_count:],
-                risk_neutral_log_drifts=selection_risk_neutral_log_drifts[training_count:],
+                empirical_log_drifts=empirical[training_count:],
+                risk_neutral_log_drifts=(
+                    selection_risk_neutral_log_drifts[training_count:]
+                ),
                 coordinate_weights=selection_coordinate_weights[training_count:],
-                annualized_loadings=selection_factors.annualized_loadings,
+                annualized_loadings=validation_loadings,
                 market_price_of_risk=candidate_fit.market_price_of_risk,
             )
         )
     mean_losses = np.asarray([np.mean(values) for values in candidate_daily_losses])
     best_index = int(np.argmin(mean_losses))
     validation_linked = _linked_transitions(
-        history.origin_dates[training_count:],
-        history.endpoint_dates[training_count:],
+        training_origin_dates[training_count:],
+        training_endpoint_dates[training_count:],
     )
     best_standard_error = _newey_west_mean_standard_error(
         candidate_daily_losses[best_index],
@@ -874,22 +968,25 @@ def fit_rolling_constant_physical_drift(
         mean_losses <= mean_losses[best_index] + best_standard_error
     )
     selected_index = int(eligible[-1])
-    selected_ridge = float(ridge_candidates[selected_index])
+    selected_ridge = candidates[selected_index]
     selected_standard_error = _newey_west_mean_standard_error(
         candidate_daily_losses[selected_index],
         linked=validation_linked,
         lags=validation_hac_lags,
     )
-    baseline_risk_price = np.zeros(selection_factors.factor_rank, dtype=np.float64)
-    selection_fixed_mask = np.isfinite(selection_fixed_risk_price)
-    baseline_risk_price[selection_fixed_mask] = selection_fixed_risk_price[
-        selection_fixed_mask
-    ]
+    baseline_risk_price = np.zeros(factor_count, dtype=np.float64)
+    if selection_fixed_market_price_of_risk is not None:
+        selection_fixed = np.asarray(
+            selection_fixed_market_price_of_risk,
+            dtype=np.float64,
+        )
+        fixed_mask = np.isfinite(selection_fixed)
+        baseline_risk_price[fixed_mask] = selection_fixed[fixed_mask]
     baseline_daily_losses = _daily_projection_losses(
-        empirical_log_drifts=empirical_log_drifts[training_count:],
+        empirical_log_drifts=empirical[training_count:],
         risk_neutral_log_drifts=selection_risk_neutral_log_drifts[training_count:],
         coordinate_weights=selection_coordinate_weights[training_count:],
-        annualized_loadings=selection_factors.annualized_loadings,
+        annualized_loadings=validation_loadings,
         market_price_of_risk=baseline_risk_price,
     )
     baseline_loss = float(np.mean(baseline_daily_losses))
@@ -911,17 +1008,25 @@ def fit_rolling_constant_physical_drift(
         np.sqrt(np.finfo(np.float64).tiny),
     )
     result = project_constant_physical_drift(
-        training_origin_dates=history.origin_dates,
-        training_endpoint_dates=history.endpoint_dates,
-        empirical_log_drifts=empirical_log_drifts,
+        training_origin_dates=training_origin_dates,
+        training_endpoint_dates=training_endpoint_dates,
+        empirical_log_drifts=empirical,
         risk_neutral_log_drifts=risk_neutral_log_drifts,
         coordinate_weights=coordinate_weights,
-        annualized_loadings=factors.annualized_loadings,
+        annualized_loadings=annualized_loadings,
         ridge=selected_ridge,
-        fixed_market_price_of_risk=fixed_risk_price,
+        fixed_market_price_of_risk=fixed_market_price_of_risk,
     )
     standard_errors = result.market_price_of_risk_standard_errors.copy()
-    standard_errors[0] = factors.front_spot_market_price_of_risk_standard_error
+    if market_price_of_risk_standard_error_overrides is not None:
+        overrides = np.asarray(
+            market_price_of_risk_standard_error_overrides,
+            dtype=np.float64,
+        )
+        if overrides.shape != standard_errors.shape or np.any(np.isinf(overrides)):
+            raise ValueError("risk-price standard-error overrides are invalid")
+        override_mask = np.isfinite(overrides)
+        standard_errors[override_mask] = overrides[override_mask]
     daily_norm = float(
         np.linalg.norm(result.market_price_of_risk) / np.sqrt(DAYS_PER_YEAR)
     )
@@ -946,6 +1051,20 @@ def fit_rolling_constant_physical_drift(
     )
 
 
+def _slice_state_loadings(
+    annualized_loadings: FloatArray,
+    *,
+    sample_count: int,
+    start: int = 0,
+    stop: int | None = None,
+) -> FloatArray:
+    """Slice dated loadings while leaving one common field unchanged."""
+    values = np.asarray(annualized_loadings, dtype=np.float64)
+    if values.ndim == 4 and values.shape[0] == sample_count:
+        return values[start:stop]
+    return values
+
+
 def project_constant_physical_drift(
     *,
     training_origin_dates: tuple[date, ...],
@@ -964,7 +1083,7 @@ def project_constant_physical_drift(
     loadings = np.asarray(annualized_loadings, dtype=np.float64)
     if empirical.ndim != 3 or risk_neutral.shape != empirical.shape:
         raise ValueError("historical empirical and risk-neutral drifts must align")
-    if weights.shape != empirical.shape or loadings.shape[:-1] != empirical.shape[1:]:
+    if weights.shape != empirical.shape:
         raise ValueError("historical drift weights and DLV loadings must align")
     if empirical.shape[0] != len(training_origin_dates) or len(
         training_endpoint_dates
@@ -983,7 +1102,7 @@ def project_constant_physical_drift(
     if np.any(weight_sums <= np.finfo(np.float64).tiny):
         raise ValueError("each historical state needs positive projection weight")
     flat_weights *= coordinate_count / weight_sums[:, None]
-    loading_matrix = loadings.reshape(coordinate_count, loadings.shape[-1])
+    loading_matrix = _state_loading_matrix(loadings, empirical.shape)
     target = (empirical - risk_neutral).reshape(sample_count, coordinate_count)
     risk_price = _solve_weighted_risk_price(
         loading_matrix=loading_matrix,
@@ -1000,8 +1119,8 @@ def project_constant_physical_drift(
         market_price_of_risk=risk_price,
         fixed_market_price_of_risk=fixed_market_price_of_risk,
     )
-    projected = loading_matrix @ risk_price
-    residual = target - projected[None, :]
+    projected = np.einsum("spf,f->sp", loading_matrix, risk_price)
+    residual = target - projected
     target_square = float(np.sum(flat_weights * target**2))
     residual_square = float(np.sum(flat_weights * residual**2))
     weight_total = float(np.sum(flat_weights))
@@ -1014,7 +1133,7 @@ def project_constant_physical_drift(
         empirical_log_drifts=empirical,
         risk_neutral_log_drifts=risk_neutral,
         achievable_log_drifts=(
-            risk_neutral + projected.reshape(loadings.shape[:-1])[None, ...]
+            risk_neutral + projected.reshape(empirical.shape)
         ),
         coordinate_weights=weights,
         market_price_of_risk=risk_price,
@@ -1033,12 +1152,10 @@ def _daily_projection_losses(
     annualized_loadings: FloatArray,
     market_price_of_risk: FloatArray,
 ) -> FloatArray:
-    projected = np.einsum(
-        "ijf,f->ij",
-        annualized_loadings,
-        market_price_of_risk,
-    )
-    residual = empirical_log_drifts - risk_neutral_log_drifts - projected[None]
+    empirical = np.asarray(empirical_log_drifts, dtype=np.float64)
+    loading_matrix = _state_loading_matrix(annualized_loadings, empirical.shape)
+    projected = np.einsum("spf,f->sp", loading_matrix, market_price_of_risk)
+    residual = empirical - risk_neutral_log_drifts - projected.reshape(empirical.shape)
     flat_weights = coordinate_weights.reshape(len(coordinate_weights), -1)
     flat_residual = residual.reshape(len(residual), -1)
     weight_sums = np.sum(flat_weights, axis=1)
@@ -1124,6 +1241,7 @@ def _solve_weighted_risk_price(
     front scores, rather than allowing the DLV cross-section to overwrite the
     observed spot law.
     """
+    loading_matrix = _coerce_loading_matrix(loading_matrix, target.shape)
     factor_count = loading_matrix.shape[-1]
     if fixed_market_price_of_risk is None:
         fixed = np.full(factor_count, np.nan, dtype=np.float64)
@@ -1139,20 +1257,24 @@ def _solve_weighted_risk_price(
     risk_price[fixed_mask] = fixed[fixed_mask]
     residual_target = target.copy()
     if np.any(fixed_mask):
-        fixed_projection = loading_matrix[:, fixed_mask] @ risk_price[fixed_mask]
-        residual_target -= fixed_projection[None, :]
+        fixed_projection = np.einsum(
+            "spf,f->sp",
+            loading_matrix[..., fixed_mask],
+            risk_price[fixed_mask],
+        )
+        residual_target -= fixed_projection
     if not np.any(free_mask):
         return risk_price
 
-    free_loadings = loading_matrix[:, free_mask]
+    free_loadings = loading_matrix[..., free_mask]
     gram = np.einsum(
-        "pf,sp,pg->fg",
+        "spf,sp,spg->fg",
         free_loadings,
         weights,
         free_loadings,
     )
     right_hand_side = np.einsum(
-        "pf,sp,sp->f",
+        "spf,sp,sp->f",
         free_loadings,
         weights,
         residual_target,
@@ -1176,6 +1298,7 @@ def _risk_price_standard_errors(
     fixed_market_price_of_risk: FloatArray | None,
 ) -> FloatArray:
     """Return date-clustered sandwich errors for the pooled risk price."""
+    loading_matrix = _coerce_loading_matrix(loading_matrix, target.shape)
     factor_count = loading_matrix.shape[-1]
     if fixed_market_price_of_risk is None:
         fixed = np.full(factor_count, np.nan, dtype=np.float64)
@@ -1186,20 +1309,22 @@ def _risk_price_standard_errors(
     standard_errors = np.zeros(factor_count, dtype=np.float64)
     if not np.any(free_mask):
         return standard_errors
-    free_loadings = loading_matrix[:, free_mask]
+    free_loadings = loading_matrix[..., free_mask]
     residual_target = target.copy()
     if np.any(fixed_mask):
-        residual_target -= (
-            loading_matrix[:, fixed_mask] @ market_price_of_risk[fixed_mask]
-        )[None, :]
+        residual_target -= np.einsum(
+            "spf,f->sp",
+            loading_matrix[..., fixed_mask],
+            market_price_of_risk[fixed_mask],
+        )
     gram_by_date = np.einsum(
-        "pf,sp,pg->sfg",
+        "spf,sp,spg->sfg",
         free_loadings,
         weights,
         free_loadings,
     )
     right_by_date = np.einsum(
-        "pf,sp,sp->sf",
+        "spf,sp,sp->sf",
         free_loadings,
         weights,
         residual_target,
@@ -1219,6 +1344,34 @@ def _risk_price_standard_errors(
     covariance = inverse @ meat @ inverse
     standard_errors[free_mask] = np.sqrt(np.maximum(np.diag(covariance), 0.0))
     return standard_errors
+
+
+def _state_loading_matrix(
+    annualized_loadings: FloatArray,
+    empirical_shape: tuple[int, ...],
+) -> FloatArray:
+    """Return loadings as ``sample x coordinate x factor``."""
+    values = np.asarray(annualized_loadings, dtype=np.float64)
+    sample_count = empirical_shape[0]
+    coordinate_shape = empirical_shape[1:]
+    if values.shape[:-1] == coordinate_shape:
+        values = np.broadcast_to(values, (sample_count, *values.shape))
+    elif values.shape[:-1] != empirical_shape:
+        raise ValueError("historical drift loadings do not align")
+    return values.reshape(sample_count, int(np.prod(coordinate_shape)), values.shape[-1])
+
+
+def _coerce_loading_matrix(
+    loading_matrix: FloatArray,
+    target_shape: tuple[int, int],
+) -> FloatArray:
+    """Broadcast one fixed loading matrix across projection dates."""
+    values = np.asarray(loading_matrix, dtype=np.float64)
+    if values.ndim == 2 and values.shape[0] == target_shape[1]:
+        values = np.broadcast_to(values, (target_shape[0], *values.shape))
+    if values.ndim != 3 or values.shape[:2] != target_shape:
+        raise ValueError("risk-price loading matrix does not align with targets")
+    return values
 
 
 def _weighted_rms(values: FloatArray, weights: FloatArray) -> float:

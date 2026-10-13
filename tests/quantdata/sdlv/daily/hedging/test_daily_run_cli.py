@@ -6,6 +6,12 @@ from datetime import date
 
 import pytest
 
+from quantdata.sdlv.daily.front_spot.hedging.benchmark.digital_daily import (
+    daily_digital_targets,
+)
+from quantdata.sdlv.daily.front_spot.hedging.models.gromm.selection import (
+    GrommArchitectureStudyConfig,
+)
 from quantdata.sdlv.daily.front_spot.hedging.runners import run_daily
 
 
@@ -32,6 +38,53 @@ def _arguments(*, model: str) -> argparse.Namespace:
         retain_fit_checkpoints=False,
         measure="Q",
         market_artifact_root=None,
+        architecture_selection=None,
+    )
+
+
+def _write_gromm_architecture(path, *, dataset_manifest_sha256: str) -> None:
+    candidates = [
+        {
+            "label": f"candidate-{index}",
+            "hidden_size": hidden_size,
+            "recurrent_layers": 1,
+            "deep_activation": "SiLU",
+            "deep_depth": 1,
+            "deep_width": hidden_size,
+            "parameter_count": hidden_size * 10,
+            "best_epoch": 10,
+            "completed_epochs": 20,
+            "training_loss": 0.2,
+            "validation_loss": 0.1 + 0.01 * index,
+            "validation_standard_error": 0.02,
+            "cap_hit_fraction": 0.0,
+            "converged": True,
+        }
+        for index, hidden_size in enumerate((8, 16, 32, 64))
+    ]
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "gromm-architecture-selection-v2",
+                "code_version": str(GrommArchitectureStudyConfig.version),
+                "dataset_manifest_sha256": dataset_manifest_sha256,
+                "origin_date": "2022-12-30",
+                "measures": ["Q", "P"],
+                "targets": [target.label for target in daily_digital_targets()],
+                "case_count": 2 * len(daily_digital_targets()),
+                "factor_rank": 16,
+                "physical_drift_accepted": True,
+                "selected_label": "candidate-0",
+                "best_validation_loss": 0.1,
+                "best_validation_standard_error": 0.02,
+                "one_standard_error_threshold": 0.12,
+                "training_feature_count": 21,
+                "instrument_count": 17,
+                "candidates": candidates,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
     )
 
 
@@ -117,6 +170,12 @@ def test_gromm_daily_builder_pins_dated_market_artifacts(
     arguments = _arguments(model="gromm")
     arguments.measure = "P"
     arguments.market_artifact_root = tmp_path / "market"
+    arguments.architecture_selection = tmp_path / "architecture.json"
+    dataset_manifest_sha256 = "a" * 64
+    _write_gromm_architecture(
+        arguments.architecture_selection,
+        dataset_manifest_sha256=dataset_manifest_sha256,
+    )
     monkeypatch.setattr(run_daily, "run_gromm2_daily_book", run_book)
 
     model, measure, observations, config, book = run_daily._build_model(
@@ -124,16 +183,31 @@ def test_gromm_daily_builder_pins_dated_market_artifacts(
         claim_quantities={"target": 0.25},
         default_position_cap=1_000.0,
         checkpoint_directory=tmp_path / "policy",
+        expected_dataset_manifest_sha256=dataset_manifest_sha256,
     )
 
     assert (model, measure, observations) == ("gromm", "P", 252)
     assert config.model_config.path_count == 16
     assert config.model_config.batch_size == 8
     assert config.rolling_config.factor_count == 16
+    assert config.policy_architecture.hidden_size == 8
+    assert len(config.architecture_selection_sha256) == 64
     panel = object()
     assert book(panel, date(2023, 1, 17)) == (panel,)
     assert captured["artifact_root"] == tmp_path / "market"
     assert captured["claim_quantities"] == {"target": 0.25}
+    assert captured["policy_config"].hidden_size == 8
+
+
+def test_gromm_daily_builder_requires_frozen_architecture(tmp_path) -> None:
+    with pytest.raises(ValueError, match="architecture-selection"):
+        run_daily._build_model(
+            _arguments(model="gromm"),
+            claim_quantities={"target": 0.25},
+            default_position_cap=1_000.0,
+            checkpoint_directory=tmp_path,
+            expected_dataset_manifest_sha256="a" * 64,
+        )
 
 
 @pytest.mark.parametrize(

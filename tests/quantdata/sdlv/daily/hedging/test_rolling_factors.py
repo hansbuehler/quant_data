@@ -178,6 +178,16 @@ def test_factor_fit_is_spot_oriented_and_obeys_as_of_boundary() -> None:
     assert fit.factor_rank == 2
     assert fit.explained_variance_fraction == pytest.approx(1.0)
 
+    masked = fit_dlv_factors(
+        history,
+        as_of_date=endpoints[-1],
+        config=config,
+        active_coordinate_mask=np.asarray(
+            [[True, True, False], [True, True, False]]
+        ),
+    )
+    assert masked.daily_loadings[:, -1] == pytest.approx(0.0)
+
     with pytest.raises(ValueError, match="after the factor as-of date"):
         fit_dlv_factors(
             history,
@@ -380,6 +390,102 @@ def test_front_mixture_likelihood_recovers_risk_price(
     assert estimate == pytest.approx(true_risk_price, abs=0.2)
     assert standard_error > 0.0
     assert float(np.mean(filtered)) == pytest.approx(0.0, abs=0.02)
+
+
+def test_partial_front_observation_does_not_duplicate_factor_covariance() -> None:
+    sample_count = 800
+    support = np.asarray([0.98, 1.0, 1.02])
+    density = np.asarray([0.2, 0.6, 0.2])
+    cumulative = np.cumsum(density)
+    generator = np.random.default_rng(914)
+    front_shock = generator.standard_normal(sample_count)
+    surface_shock = generator.standard_normal(sample_count)
+    sampled_index = np.sum(
+        ndtr(front_shock)[:, None] > cumulative[None, :],
+        axis=1,
+    )
+    background_volatility = 0.25
+    background_shock = generator.standard_normal(sample_count)
+    terminal_spot = support[sampled_index] * np.exp(
+        -0.5 * background_volatility**2 / 252.0
+        + background_volatility / np.sqrt(252.0) * background_shock
+    )
+    front_loading = np.asarray([0.012, 0.006, -0.004])
+    surface_loading = np.asarray([0.003, -0.008, 0.010])
+    increments = (
+        front_shock[:, None] * front_loading[None]
+        + surface_shock[:, None] * surface_loading[None]
+    )
+    first_origin = date(1900, 1, 1)
+    origins = tuple(
+        first_origin + timedelta(days=index) for index in range(sample_count)
+    )
+    endpoints = tuple(value + timedelta(days=1) for value in origins)
+    history = FixedContractDlvHistory(
+        origin_dates=origins,
+        endpoint_dates=endpoints,
+        origin_log_dlvsq=np.zeros((sample_count, 1, 3)),
+        endpoint_log_dlvsq=increments[:, None, :],
+        front_cdf_values=np.full(sample_count, 0.5),
+        spot_gaussian_scores=np.zeros(sample_count),
+        interpolation_clip_fractions=np.zeros(sample_count),
+        forward_tail_extrapolation_fractions=np.zeros(sample_count),
+        front_supports=np.broadcast_to(
+            support,
+            (sample_count, len(support)),
+        ).copy(),
+        front_densities=np.broadcast_to(
+            density,
+            (sample_count, len(density)),
+        ).copy(),
+        terminal_normalized_spots=terminal_spot,
+        background_annual_volatilities=np.full(
+            sample_count,
+            background_volatility,
+        ),
+    )
+
+    fit = fit_dlv_factors(
+        history,
+        as_of_date=endpoints[-1],
+        config=RollingDlvFactorConfig(
+            window_sessions=sample_count,
+            factor_rank=2,
+            smoothing_expiry_sigma=0.0,
+            smoothing_strike_sigma=0.0,
+        ),
+    )
+
+    empirical = increments - np.mean(increments, axis=0, keepdims=True)
+    empirical_covariance = empirical.T @ empirical / sample_count
+    fitted_loadings = fit.daily_loadings.reshape(3, 2)
+    fitted_covariance = fitted_loadings @ fitted_loadings.T
+    relative_error = np.linalg.norm(
+        fitted_covariance - empirical_covariance,
+        ord="fro",
+    ) / np.linalg.norm(empirical_covariance, ord="fro")
+    filtered = filtered_front_spot_innovations(
+        history,
+        market_price_of_risk=fit.front_spot_market_price_of_risk,
+    )
+    filtered -= np.mean(filtered)
+    fitted_front = fitted_loadings[:, 0]
+    old_residual = empirical - filtered[:, None] * fitted_front[None]
+    old_values, old_vectors = np.linalg.eigh(
+        old_residual.T @ old_residual / sample_count
+    )
+    old_surface = (
+        old_vectors[:, -1:] * np.sqrt(max(float(old_values[-1]), 0.0))
+    )
+    old_covariance = (
+        np.outer(fitted_front, fitted_front) + old_surface @ old_surface.T
+    )
+    old_relative_error = np.linalg.norm(
+        old_covariance - empirical_covariance,
+        ord="fro",
+    ) / np.linalg.norm(empirical_covariance, ord="fro")
+    assert relative_error < 0.12
+    assert old_relative_error > 0.2
 
 
 def test_degenerate_factor_alignment_preserves_covariance_and_reconstruction() -> None:

@@ -18,6 +18,9 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.config import (
     GrommConfig,
     GrommTrainConfig,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.gromm.policy import (
+    GrommPolicyArchitecture,
+)
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2 import (
     RollingGromm2Config,
 )
@@ -105,8 +108,13 @@ class GeneratedDailyRunConfig:
 
 
 @version(
-    "0.1",
-    dependencies=[GrommConfig, GrommTrainConfig, RollingGromm2Config],
+    "0.2",
+    dependencies=[
+        GrommConfig,
+        GrommTrainConfig,
+        GrommPolicyArchitecture,
+        RollingGromm2Config,
+    ],
 )
 @dataclass(frozen=True, kw_only=True)
 class GrommDailyRunConfig:
@@ -116,6 +124,8 @@ class GrommDailyRunConfig:
     model_config: GrommConfig
     rolling_config: RollingGromm2Config
     train_config: GrommTrainConfig
+    policy_architecture: GrommPolicyArchitecture
+    architecture_selection_sha256: str
     device: str = "cpu"
     precision: int = 64
 
@@ -129,11 +139,20 @@ class GrommDailyRunConfig:
             self.precision == 64,
             lambda: "GROMM2 benchmark simulation requires 64-bit precision",
         )
+        verify_inp(
+            len(self.architecture_selection_sha256) == 64
+            and all(
+                character in "0123456789abcdef"
+                for character in self.architecture_selection_sha256.lower()
+            ),
+            lambda: "GROMM architecture selection must have a SHA-256 identity",
+        )
 
     def __str__(self) -> str:
         return (
             f"gromm2-{self.model_config.measure.value}-"
             f"{self.model_config.objective.value}-"
             f"lambda-{self.model_config.risk_parameter:g}-"
-            f"{self.model_config.path_count}paths-{self.device}{self.precision}"
+            f"{self.model_config.path_count}paths-{self.device}{self.precision}-"
+            f"arch-{self.architecture_selection_sha256[:8]}"
         )

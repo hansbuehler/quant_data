@@ -4,6 +4,7 @@ from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
+import h5py
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -29,6 +30,9 @@ from quantdata.sdlv.daily.front_spot.hedging.benchmark.digital_daily import (
 from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
     PublicHedgingPanel,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.gromm import (
+    gromm2_daily as gromm2_daily_module,
+)
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.config import (
     GrommConfig,
     GrommMeasure,
@@ -36,8 +40,14 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.config import (
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.gromm2_daily import (
     Gromm2MarketState,
     _digital_probability,
+    _normalize_decoded_density_tower,
     generate_gromm2_daily_scenarios,
+    load_gromm2_market_state,
     predict_physical_market_price_of_risk,
+)
+from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2 import (
+    RollingGromm2Artifacts,
+    RollingGromm2Paths,
 )
 
 PUBLIC_CANDIDATE = Path(
@@ -113,6 +123,122 @@ def test_digital_probability_respects_discrete_settlement_convention() -> None:
     assert call[0] + put[0] == pytest.approx(1.0)
 
 
+def test_density_normalization_only_accepts_bounded_decode_roundoff() -> None:
+    raw = np.asarray(
+        [
+            [0.2, 0.3, 0.50000006],
+            [0.1, 0.2, 0.7],
+        ],
+        dtype=np.float32,
+    )
+
+    normalized, maximum_error, tolerance = _normalize_decoded_density_tower(raw)
+
+    assert normalized.dtype == np.float64
+    assert maximum_error > 2.0e-10
+    assert maximum_error < tolerance
+    np.testing.assert_allclose(
+        np.sum(normalized, axis=-1),
+        1.0,
+        rtol=0.0,
+        atol=2.0e-10,
+    )
+    with pytest.raises(ValueError, match="precision bound"):
+        _normalize_decoded_density_tower(
+            np.asarray([[0.2, 0.3, 0.501]], dtype=np.float32)
+        )
+
+
+def test_loader_normalizes_float32_artifact_before_q_replay(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    origin = date(2023, 1, 17)
+    affine_history = tmp_path / "affine-history.h5"
+    dynamics_path = tmp_path / "dynamics.npz"
+    paths = RollingGromm2Paths(
+        directory=tmp_path,
+        source_history=tmp_path / "source.h5",
+        prepared_books=tmp_path / "books.h5",
+        affine_history=affine_history,
+        affine_checkpoint=tmp_path / "checkpoint.npz",
+        dynamics=dynamics_path,
+        manifest=tmp_path / "manifest.json",
+    )
+    with h5py.File(affine_history, "w") as stream:
+        stream.create_dataset(
+            "supports",
+            data=np.asarray(
+                [
+                    [0.8, 0.9, 1.0, 1.1, 1.2],
+                    [0.7, 0.85, 1.0, 1.15, 1.3],
+                    [0.6, 0.8, 1.0, 1.2, 1.4],
+                ],
+                dtype=np.float32,
+            ),
+        )
+        stream.create_dataset(
+            "transports",
+            data=np.broadcast_to(np.eye(5, dtype=np.float32), (2, 5, 5)),
+        )
+        stream.create_dataset(
+            "model_expiries_y",
+            data=np.asarray([1.0, 2.0, 3.0], dtype=np.float32) / 252.0,
+        )
+        stream.create_dataset(
+            "model_business_dtes",
+            data=np.asarray([1.0, 2.0, 3.0], dtype=np.float32),
+        )
+        stream.create_dataset(
+            "dlvsq",
+            data=np.full((1, 3, 3), 0.04, dtype=np.float32),
+        )
+    np.savez_compressed(
+        dynamics_path,
+        factor_scores=np.zeros((1, 2)),
+        physical_market_price_of_risk=np.zeros(2),
+    )
+    decoded = np.broadcast_to(
+        np.asarray([0.1, 0.2, 0.3, 0.1, 0.30000002]),
+        (3, 5),
+    ).copy()
+    monkeypatch.setattr(
+        gromm2_daily_module,
+        "decode_density_tower",
+        lambda *args: decoded,
+    )
+    monkeypatch.setattr(
+        gromm2_daily_module,
+        "load_estimated_dynamics",
+        lambda path: _dynamics(),
+    )
+    artifacts = RollingGromm2Artifacts(
+        paths=paths,
+        as_of_date=origin,
+        training_dates=(origin,),
+        percent_inside_spread=84.0,
+        explained_variance_ratio=0.95,
+        physical_projection_fraction=0.0,
+        maximum_daily_risk_price_norm=0.0,
+        physical_accepted=False,
+        dataset_manifest_sha256="a" * 64,
+    )
+
+    state = load_gromm2_market_state(artifacts)
+
+    assert state.density_tower.dtype == np.float64
+    np.testing.assert_allclose(
+        np.sum(state.density_tower, axis=-1),
+        1.0,
+        rtol=0.0,
+        atol=2.0e-10,
+    )
+    diagnostic = capsys.readouterr().out
+    assert '"serialized_dtypes": ["float32"]' in diagnostic
+    assert '"maximum_mass_error_before_normalization"' in diagnostic
+
+
 def test_gromm2_daily_scenario_smoke_uses_public_book_geometry() -> None:
     jax.config.update("jax_enable_x64", True)
     origin_date = date(2023, 1, 17)
@@ -181,6 +307,7 @@ def test_gromm2_daily_scenario_smoke_uses_public_book_geometry() -> None:
         percent_inside_spread=83.0,
         explained_variance_ratio=0.9,
         physical_projection_fraction=0.6,
+        physical_accepted=True,
     )
 
     scenarios = generate_gromm2_daily_scenarios(

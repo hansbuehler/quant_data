@@ -34,9 +34,11 @@ training dependencies.
   20-target public-data smoke and restart check. The first full run exposed a
   small-coefficient HiGHS equality-scaling failure on 2023-06-05; factor-row
   scaling fixes the numerical cause without relaxing the hedge tolerance, and
-  the clean versioned 2023--2025 rerun is running as a resumable CPU job.
+  the clean versioned 2023--2025 rerun completed all 611 origins and 12,220
+  target records without a cap hit or nonconvergence.
 - The full-universe covariance Phase-3 implementation, CPU smoke, and
-  independent quant re-review passed.
+  independent quant re-review passed; its 611-origin production run is in
+  progress.
 - The resumable daily runner also supports VolGAN and AD-Seq-Vol. One-origin
   integration runs passed for all 20 calibrated targets on CPU and a
   `gpuctl`-managed GPU respectively, with no cap hit. These abbreviated fits
@@ -71,9 +73,14 @@ training dependencies.
   ATM-volatility regime, and by year/regime intersection, including all four
   agreed risk functionals, normalized entry turnover/exposure, cap rates, and
   self-describing HAC inference. Its independent quant review passed.
-- The GROMM2 reconciliation is read-only. Its expanding-support architecture is
-  the intended scenario direction, but the current full-sample, Q-only
-  artifacts are not eligible for the rolling benchmark.
+- The first eligible rolling GROMM2 artifact uses exactly 252 released
+  one-session pairs ending on 2023-01-17. Its 200-strike fit places 84.90% of
+  observations inside spread and its 16 factors explain 95.15% of innovation
+  variance. The compatible-P fit fails the unchanged projection and holdout
+  gates, so the artifact is Q-only. Bounded float32 density normalization now
+  permits authenticated Q replay while preserving strict rejection of malformed
+  density mass; a real four-path, 163-instrument replay passed and P generation
+  remains disabled.
 - See `quantdata/hedging/PLAN.md` and the stored independent reviews before
   interpreting development smokes as benchmark results.
 

@@ -63,6 +63,7 @@ class Gromm2MarketState:
     percent_inside_spread: float
     explained_variance_ratio: float
     physical_projection_fraction: float
+    physical_accepted: bool
 
     def __post_init__(self) -> None:
         expiry_count, support_count = self.supports.shape
@@ -77,6 +78,7 @@ class Gromm2MarketState:
             != (expiry_count - 1, support_count - 2, factor_count)
             or self.previous_factor_score.shape != (factor_count,)
             or self.physical_market_price_of_risk.shape != (factor_count,)
+            or not isinstance(self.physical_accepted, bool)
         ):
             raise ValueError("GROMM2 market-state arrays do not align")
         arrays = (
@@ -170,6 +172,15 @@ def load_gromm2_market_state(
 ) -> Gromm2MarketState:
     """Load the current state and predict the compatible one-day P risk price."""
     with h5py.File(artifacts.paths.affine_history, "r") as stream:
+        serialized_dtypes = tuple(
+            np.dtype(stream[name].dtype)
+            for name in (
+                "supports",
+                "transports",
+                "model_expiries_y",
+                "dlvsq",
+            )
+        )
         supports = np.asarray(stream["supports"], dtype=np.float64)
         transports = np.asarray(stream["transports"], dtype=np.float64)
         expiries = np.asarray(stream["model_expiries_y"], dtype=np.float64)
@@ -178,10 +189,14 @@ def load_gromm2_market_state(
     dynamics = load_estimated_dynamics(artifacts.paths.dynamics)
     with np.load(artifacts.paths.dynamics, allow_pickle=False) as values:
         factor_scores = np.asarray(values["factor_scores"], dtype=np.float64)
+        risk_price = np.asarray(
+            values["physical_market_price_of_risk"],
+            dtype=np.float64,
+        )
     if factor_scores.ndim != 2 or len(factor_scores) == 0:
         raise ValueError("rolling GROMM2 dynamics contain no factor-score history")
     intervals = np.diff(expiries, prepend=0.0)
-    tower = np.asarray(
+    decoded_tower = np.asarray(
         decode_density_tower(
             jnp.asarray(supports),
             jnp.asarray(transports),
@@ -189,12 +204,23 @@ def load_gromm2_market_state(
             jnp.asarray(intervals),
         )
     )
-    previous_score = factor_scores[-1]
-    risk_price = predict_physical_market_price_of_risk(
-        dlvsq=dlvsq,
-        dynamics=dynamics,
-        previous_factor_score=previous_score,
+    tower, mass_error, mass_tolerance = _normalize_decoded_density_tower(
+        decoded_tower,
+        source_epsilon=max(float(np.finfo(dtype).eps) for dtype in serialized_dtypes),
     )
+    print(
+        json.dumps(
+            {
+                "stage": "gromm2-load-density-tower",
+                "serialized_dtypes": sorted({str(dtype) for dtype in serialized_dtypes}),
+                "decoded_dtype": str(decoded_tower.dtype),
+                "maximum_mass_error_before_normalization": mass_error,
+                "mass_error_tolerance": mass_tolerance,
+            }
+        ),
+        flush=True,
+    )
+    previous_score = factor_scores[-1]
     return Gromm2MarketState(
         as_of_date=artifacts.as_of_date,
         supports=supports,
@@ -209,7 +235,53 @@ def load_gromm2_market_state(
         percent_inside_spread=artifacts.percent_inside_spread,
         explained_variance_ratio=artifacts.explained_variance_ratio,
         physical_projection_fraction=artifacts.physical_projection_fraction,
+        physical_accepted=artifacts.physical_accepted,
     )
+
+
+def _normalize_decoded_density_tower(
+    density_tower: NDArray[np.floating],
+    *,
+    source_epsilon: float | None = None,
+) -> tuple[FloatArray, float, float]:
+    """Validate bounded decode roundoff and return float64 unit-mass rows."""
+    raw = np.asarray(density_tower)
+    if raw.ndim != 2 or raw.dtype.kind != "f" or not np.all(np.isfinite(raw)):
+        raise ValueError("decoded GROMM2 density tower must be a finite matrix")
+    effective_epsilon = (
+        float(np.finfo(raw.dtype).eps)
+        if source_epsilon is None
+        else float(source_epsilon)
+    )
+    if not math.isfinite(effective_epsilon) or effective_epsilon <= 0.0:
+        raise ValueError("decoded GROMM2 source epsilon must be finite and positive")
+    mass_tolerance = max(2.0e-10, 8.0 * effective_epsilon)
+    values = np.asarray(raw, dtype=np.float64)
+    minimum_density = float(np.min(values))
+    if minimum_density < -1.0e-12:
+        raise ValueError(
+            "decoded GROMM2 density tower has negative mass: "
+            f"minimum={minimum_density:.6g}"
+        )
+    values = np.maximum(values, 0.0)
+    masses = np.sum(values, axis=-1)
+    maximum_mass_error = float(np.max(np.abs(masses - 1.0)))
+    if np.any(masses <= 0.0) or maximum_mass_error > mass_tolerance:
+        raise ValueError(
+            "decoded GROMM2 density mass error exceeds its precision bound: "
+            f"maximum_error={maximum_mass_error:.6g}, "
+            f"tolerance={mass_tolerance:.6g}, decoded_dtype={raw.dtype}, "
+            f"source_epsilon={effective_epsilon:.6g}"
+        )
+    normalized = values / masses[:, None]
+    if not np.allclose(
+        np.sum(normalized, axis=-1),
+        1.0,
+        atol=2.0e-10,
+        rtol=0.0,
+    ):
+        raise FloatingPointError("normalized GROMM2 density tower has invalid mass")
+    return normalized, maximum_mass_error, mass_tolerance
 
 
 def predict_physical_market_price_of_risk(
@@ -256,6 +328,8 @@ def generate_gromm2_daily_scenarios(
     require_public_hedging_panel(panel)
     if market_state.as_of_date != origin_date:
         raise ValueError("GROMM2 market state must share the scenario origin date")
+    if config.measure is GrommMeasure.P and not market_state.physical_accepted:
+        raise RuntimeError("GROMM2 P generation requires an accepted physical fit")
     if not jax.config.x64_enabled:
         raise RuntimeError("GROMM2 scenario generation requires JAX 64-bit mode")
     started = time.perf_counter()
