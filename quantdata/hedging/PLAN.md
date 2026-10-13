@@ -26,7 +26,12 @@ now pins dataset and model identities, enforces the complete 20-target book and
 numerical gates, and writes one atomic record per origin. SANOS-LV and
 historical-SANOS each completed all 611 eligible origins and 12,220 target
 records; robust-covariance production is in progress. Other daily production
-and all model-specific weekly policies remain outstanding. The
+and full weekly production remain outstanding. A unified weekly runner now
+supports frozen and restarted schedules for SANOS-LV, historical SANOS,
+GROMM, VolGAN, and both diffusion variants. It requires an authenticated
+strictly-2022 sizing preflight, validates every public dataset member, holds a
+single-writer lock, records exact fitted-artifact fingerprints, and rejects
+incomplete five-decision records. The
 strictly-2022 target-sizing exercise now fixes each target to one
 maturity-matched ATM spot-risk unit; all 20 calibration hedges converged with
 no cap hit. Its atomic derived artifact is keyed by the public dataset manifest
@@ -767,6 +772,16 @@ CPU-smoke level; production execution remains outstanding. The adapter supplies
 the predictable realized path prefix and prior positions to a restarted fit,
 so path-dependent prices cannot be computed from an information-incomplete
 fit call; frozen fits still occur only once at episode inception.
+
+The model-neutral resumable evaluator writes one atomic 13-target record per
+origin. The fixed sizing handoff uses 221 complete 2022 episodes, a five-day
+ATM spot-risk standard deviation of `0.029423402816172756`, and an authenticated
+artifact SHA-256 of
+`9494bbe23699126b5137b5ab3b6d53070002e2ba8ee60d92b0327ff747fcf9e1`.
+A real one-origin frozen SANOS-LV public-data run and its no-recompute restart
+check pass. The corresponding restarted one-origin integration run also passes;
+its no-recompute restart check validates the exact five dated refits. These are
+orchestration checks, not benchmark estimates.
 
 ### Phase 9: historical and published baselines
 

@@ -65,7 +65,14 @@ training dependencies.
   rolling-forward path is retained only as a carry-basis diagnostic. Its
   common SANOS/DLV pricing, exact fit-window facade, explicit fit-price units,
   Hansen--Hodrick overlap inference, and 50-episode circular block bootstrap
-  passed independent re-review. Model-specific weekly policies remain.
+  passed independent re-review. Model-specific weekly adapters and one unified
+  resumable frozen/restarted runner are implemented. Production requires full
+  public-member checksum validation, a CPU-preflighted 2022 target-notional
+  artifact, exact five-decision records, fitted-artifact fingerprints, and a
+  single writer. A real one-origin frozen SANOS-LV run and no-recompute restart
+  check pass. The corresponding restarted one-origin run also passes, with its
+  exact five dated refits validated on restart. Full weekly benchmark
+  production remains outstanding.
 - The completed-run results layer validates every record against its immutable
   run and dataset identities, recomputes eligible origins, and rejects forged
   target books or numerical gates. It reports unhedged, economic,
@@ -104,6 +111,29 @@ Run the weekly engine gate with:
 ```bash
 pytest -q tests/quantdata/sdlv/daily/hedging/test_weekly_benchmark.py
 ```
+
+Prepare the fixed weekly target quantities on CPU, then run either weekly
+schedule with the emitted artifact hash:
+
+```bash
+python -m quantdata.sdlv.daily.front_spot.hedging.runners.prepare_weekly_inputs \
+  --output "$QUANTDATA_ROOT/processing/hedging/target-notionals/weekly-preflight.json"
+
+python -m quantdata.sdlv.daily.front_spot.hedging.runners.run_weekly \
+  --model sanos-lv \
+  --schedule frozen-weekly \
+  --target-notional-artifact-sha256 <sha256-from-preflight>
+
+python -m quantdata.sdlv.daily.front_spot.hedging.runners.run_weekly \
+  --model sanos-lv \
+  --schedule restarted-weekly \
+  --target-notional-artifact-sha256 <sha256-from-preflight>
+```
+
+The same entry point accepts `historical-sanos`, `gromm`, `volgan`,
+`diffusion-ad-seq-vol`, and `diffusion-ad-seq-vol-ft`. Generated-model
+checkpoints carry the public manifest identity; rolling warm starts or
+fine-tuning bases trained against another dataset are rejected.
 
 Run or resume one CPU daily evaluation with:
 

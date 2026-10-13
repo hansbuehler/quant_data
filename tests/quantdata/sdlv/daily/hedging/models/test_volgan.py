@@ -258,6 +258,7 @@ def test_volgan_warm_start_is_historical_and_auditable(tmp_path: Path) -> None:
     current_data = volgan_examples_from_history(history)
     config = VolganModelConfig(label="volgan-rolling-warm-start")
     environment = BaseEnvironment(precision=64, device="cpu", debug=True)
+    manifest_sha256 = "a" * 64
     source = fit_volgan(
         source_data,
         model_config=config,
@@ -269,6 +270,7 @@ def test_volgan_warm_start_is_historical_and_auditable(tmp_path: Path) -> None:
             checkpoint_epochs=1,
             progress_seconds=300.0,
         ),
+        dataset_manifest_sha256=manifest_sha256,
         environment=environment,
     )
     current = fit_volgan(
@@ -283,6 +285,7 @@ def test_volgan_warm_start_is_historical_and_auditable(tmp_path: Path) -> None:
             progress_seconds=300.0,
         ),
         warm_start_checkpoint=source.checkpoint_path,
+        dataset_manifest_sha256=manifest_sha256,
         environment=environment,
     )
     expected_mean = np.mean(
@@ -297,6 +300,24 @@ def test_volgan_warm_start_is_historical_and_auditable(tmp_path: Path) -> None:
     payload = torch.load(current.checkpoint_path, weights_only=False)
     assert payload["warm_start_source_sha256"] == current.warm_start_sha256
     assert payload["training_end_date"] == current_data.target_dates[-1].isoformat()
+    assert payload["dataset_manifest_sha256"] == manifest_sha256
+
+    with pytest.raises(ValueError, match="incomplete or incompatible"):
+        fit_volgan(
+            current_data,
+            model_config=config,
+            checkpoint_directory=tmp_path / "wrong-public-manifest",
+            train_config=VolganTrainConfig(
+                epochs=1,
+                gradient_matching_epochs=0,
+                batch_size=4,
+                checkpoint_epochs=1,
+                progress_seconds=300.0,
+            ),
+            warm_start_checkpoint=source.checkpoint_path,
+            dataset_manifest_sha256="b" * 64,
+            environment=environment,
+        )
 
     with pytest.raises(RuntimeError, match="changed before fitting"):
         fit_volgan(
@@ -328,6 +349,7 @@ def test_volgan_warm_start_is_historical_and_auditable(tmp_path: Path) -> None:
                 progress_seconds=300.0,
             ),
             warm_start_checkpoint=source.checkpoint_path,
+            dataset_manifest_sha256=manifest_sha256,
             environment=environment,
         )
 

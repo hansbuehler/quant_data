@@ -28,6 +28,14 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.daily_results import (
     summarize_completed_daily_run,
     summarize_daily_results,
 )
+from quantdata.sdlv.daily.front_spot.hedging.runners.weekly import (
+    WeeklyBookFunction,
+    WeeklyEvaluationSpec,
+    WeeklyEvaluationSummary,
+    eligible_weekly_origins,
+    read_weekly_record,
+    run_weekly_evaluation,
+)
 
 __all__ = [
     "DailyBookFunction",
@@ -38,10 +46,16 @@ __all__ = [
     "DailyResultsConfig",
     "DailyRunResults",
     "GeneratedDailyRunConfig",
+    "WeeklyBookFunction",
+    "WeeklyEvaluationSpec",
+    "WeeklyEvaluationSummary",
     "eligible_daily_origins",
+    "eligible_weekly_origins",
     "initialization_volatility_thresholds",
     "read_daily_record",
+    "read_weekly_record",
     "summarize_completed_daily_run",
     "summarize_daily_results",
     "run_daily_evaluation",
+    "run_weekly_evaluation",
 ]

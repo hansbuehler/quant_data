@@ -64,6 +64,16 @@ from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly_scenarios import (
     weekly_scenario_batch_from_episode,
     weekly_target_values_from_suffixes,
 )
+from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly_sizing import (
+    WeeklyTargetNotionalCalibration,
+    WeeklyTargetNotionalConfig,
+    calibrate_weekly_target_notionals,
+    calibrate_weekly_target_notionals_from_pnl,
+    load_authenticated_weekly_target_notionals,
+    load_or_calibrate_weekly_target_notionals,
+    weekly_target_notional_artifact_path,
+    weekly_target_notional_calibration_sha256,
+)
 
 __all__ = [
     "AsOfWeeklyMarketPanel",
@@ -90,12 +100,16 @@ __all__ = [
     "WeeklyScenarioBatch",
     "WeeklyTarget",
     "WeeklyTargetKind",
+    "WeeklyTargetNotionalCalibration",
+    "WeeklyTargetNotionalConfig",
     "build_daily_digital_sample",
     "build_weekly_claim",
     "build_weekly_episode_path",
     "attach_weekly_future_suffixes",
     "calibrate_daily_target_notionals",
     "calibrate_daily_target_notionals_from_returns",
+    "calibrate_weekly_target_notionals",
+    "calibrate_weekly_target_notionals_from_pnl",
     "daily_target_notional_calibration_sha256",
     "daily_target_notional_artifact_path",
     "daily_target_notional_file_sha256",
@@ -108,7 +122,9 @@ __all__ = [
     "overlapping_weekly_origins",
     "rolling_training_dates",
     "load_authenticated_daily_target_notionals",
+    "load_authenticated_weekly_target_notionals",
     "load_or_calibrate_daily_target_notionals",
+    "load_or_calibrate_weekly_target_notionals",
     "run_weekly_model",
     "TargetNotionalConfig",
     "weekly_fit_instructions",
@@ -117,5 +133,7 @@ __all__ = [
     "weekly_scenario_accounting",
     "weekly_scenario_batch_from_episode",
     "weekly_target_values_from_suffixes",
+    "weekly_target_notional_artifact_path",
+    "weekly_target_notional_calibration_sha256",
     "weekly_targets",
 ]

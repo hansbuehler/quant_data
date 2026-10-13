@@ -61,6 +61,11 @@ class VolganWeeklyMarketFit:
     live: VolganLiveCondition
     checkpoint_sha256: str
 
+    @property
+    def artifact_fingerprints(self) -> tuple[str, ...]:
+        """Return the immutable dated-model checkpoint fingerprint."""
+        return (f"checkpoint:{self.checkpoint_sha256}",)
+
 
 @dataclass(frozen=True, kw_only=True)
 class VolganWeeklyPolicy:
@@ -73,6 +78,7 @@ class VolganWeeklyPolicy:
     fit_decision_index: int
     scenarios: WeeklyScenarioBatch
     hedge: HistoricalWeeklyHedgeFit
+    artifact_fingerprints: tuple[str, ...] = ()
 
 
 class VolganWeeklyAdapter:

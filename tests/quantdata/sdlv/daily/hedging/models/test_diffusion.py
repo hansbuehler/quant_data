@@ -297,11 +297,13 @@ def test_diffusion_fine_tuning_rebases_historical_base_and_rejects_future(
         mixed_precision=False,
     )
     environment = BaseEnvironment(precision=32, device="cpu", debug=True)
+    manifest_sha256 = "a" * 64
     historical_base = fit_diffusion(
         historical_data,
         model_config=DiffusionModelConfig(label="historical-base", **geometry),
         checkpoint_directory=tmp_path / "historical-base",
         train_config=train_config,
+        dataset_manifest_sha256=manifest_sha256,
         environment=environment,
     )
     fine_tuned = fit_diffusion(
@@ -314,6 +316,7 @@ def test_diffusion_fine_tuning_rebases_historical_base_and_rejects_future(
         checkpoint_directory=tmp_path / "current-ft",
         train_config=train_config,
         base_checkpoint=historical_base.checkpoint_path,
+        dataset_manifest_sha256=manifest_sha256,
         environment=environment,
     )
     validation_count = max(1, int(round(len(current_data.sequences) * 0.2)))
@@ -323,6 +326,23 @@ def test_diffusion_fine_tuning_rebases_historical_base_and_rejects_future(
     )
 
     np.testing.assert_allclose(fine_tuned.model.channel_mean, current_mean)
+    payload = torch.load(fine_tuned.checkpoint_path, weights_only=False)
+    assert payload["dataset_manifest_sha256"] == manifest_sha256
+
+    with pytest.raises(ValueError, match="incomplete or incompatible"):
+        fit_diffusion(
+            current_data,
+            model_config=DiffusionModelConfig(
+                label="wrong-public-manifest-ft",
+                variant=DiffusionVariant.AD_SEQ_VOL_FT,
+                **geometry,
+            ),
+            checkpoint_directory=tmp_path / "wrong-public-manifest-ft",
+            train_config=train_config,
+            base_checkpoint=historical_base.checkpoint_path,
+            dataset_manifest_sha256="b" * 64,
+            environment=environment,
+        )
 
     with pytest.raises(RuntimeError, match="changed before fitting"):
         fit_diffusion(

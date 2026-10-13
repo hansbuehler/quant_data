@@ -32,6 +32,8 @@ from quantdata.sdlv.daily.front_spot.hedging.data.public_view import (
 )
 
 FloatArray = NDArray[np.float64]
+_SANOS_PRICE_NEGATIVE_TOLERANCE = 1.0e-8
+_SANOS_REPLAY_PRICE_FLOOR = 1.0e-12
 BoolArray = NDArray[np.bool_]
 IntArray = NDArray[np.int64]
 
@@ -412,6 +414,12 @@ class PublicMarketDay:
                     one_minute_y=self.one_minute_y,
                 )[0]
             )
+            if normalized_price < -_SANOS_PRICE_NEGATIVE_TOLERANCE:
+                raise FloatingPointError(
+                    f"{self.trading_date}: materially negative SANOS replay price "
+                    f"{normalized_price} for {contract.contract_id}"
+                )
+            normalized_price = max(normalized_price, _SANOS_REPLAY_PRICE_FLOOR)
             mark = float(
                 spot_over_episode_origin
                 * discount_factor
@@ -435,8 +443,8 @@ class PublicMarketDay:
                     eps_vol=self.book_selection_epsilon_atm_vol,
                 )[0]
             )
-            quotes.append(
-                OptionQuote(
+            try:
+                quote = OptionQuote(
                     trading_date=self.trading_date,
                     contract=contract,
                     business_dte=float(business_dte),
@@ -447,7 +455,14 @@ class PublicMarketDay:
                     half_spread=float(half_spread),
                     is_am_settlement=False,
                 )
-            )
+            except ValueError as error:
+                raise ValueError(
+                    f"{self.trading_date}: invalid replay quote for "
+                    f"{contract.contract_id}; dte={business_dte}, "
+                    f"atm_vol={atm_annual_vol}, k_over_f={strike_over_forward}, "
+                    f"mark={mark}, half_spread={half_spread}, nms={nms}"
+                ) from error
+            quotes.append(quote)
         return MarketSnapshot(
             trading_date=self.trading_date,
             normalized_spot=spot_over_episode_origin,

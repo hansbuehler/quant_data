@@ -63,6 +63,7 @@ def fit_volgan(
     train_config: VolganTrainConfig = VolganTrainConfig(),
     warm_start_checkpoint: Path | None = None,
     expected_warm_start_sha256: str | None = None,
+    dataset_manifest_sha256: str | None = None,
     environment: BaseEnvironment | None = None,
 ) -> VolganTrainingResult:
     """Fit the published conditional GAN with exact restart state."""
@@ -95,6 +96,7 @@ def fit_volgan(
         data_fingerprint,
         precision,
         warm_start_sha256,
+        dataset_manifest_sha256,
     )
     checkpoint_path = checkpoint_directory / f"{checkpoint_name}.pt"
     with FileLock(checkpoint_path.with_suffix(".pt.lock")):
@@ -108,6 +110,7 @@ def fit_volgan(
             precision=precision,
             warm_start_checkpoint=warm_start_checkpoint,
             warm_start_sha256=warm_start_sha256,
+            dataset_manifest_sha256=dataset_manifest_sha256,
         )
 
 
@@ -122,6 +125,7 @@ def _fit_locked(
     precision: str,
     warm_start_checkpoint: Path | None,
     warm_start_sha256: str | None,
+    dataset_manifest_sha256: str | None,
 ) -> VolganTrainingResult:
     train_count = len(data.conditions) - max(
         1,
@@ -216,6 +220,8 @@ def _fit_locked(
             and payload.get("precision") == precision
             and payload.get("model_config_identity") == model_config_identity
             and payload.get("warm_start_source_sha256") == warm_start_sha256
+            and payload.get("dataset_manifest_sha256")
+            == dataset_manifest_sha256
         )
         if compatible:
             changed_train_fields = validate_train_config_change(
@@ -282,6 +288,7 @@ def _fit_locked(
             model_config_identity=model_config_identity,
             precision=precision,
             current_training_end_date=data.target_dates[-1],
+            expected_dataset_manifest_sha256=dataset_manifest_sha256,
         )
         warm_started = True
     standardized_conditions = (
@@ -420,6 +427,7 @@ def _fit_locked(
                 training_end_date=data.target_dates[-1],
                 warm_start_source_sha256=warm_start_sha256,
                 warm_started=warm_started,
+                dataset_manifest_sha256=dataset_manifest_sha256,
             )
             if progress_due:
                 elapsed = now - started
@@ -464,6 +472,7 @@ def _fit_locked(
         training_end_date=data.target_dates[-1],
         warm_start_source_sha256=warm_start_sha256,
         warm_started=warm_started,
+        dataset_manifest_sha256=dataset_manifest_sha256,
     )
     return _training_result(
         generator,
@@ -663,6 +672,7 @@ def _save_checkpoint(
     training_end_date: date,
     warm_start_source_sha256: str | None,
     warm_started: bool,
+    dataset_manifest_sha256: str | None,
 ) -> None:
     payload = {
         "checkpoint_format_version": CHECKPOINT_FORMAT_VERSION,
@@ -675,6 +685,7 @@ def _save_checkpoint(
         "training_end_date": training_end_date.isoformat(),
         "warm_start_source_sha256": warm_start_source_sha256,
         "warm_started": warm_started,
+        "dataset_manifest_sha256": dataset_manifest_sha256,
         "train_config": train_config,
         "generator": generator.state_dict(),
         "discriminator": discriminator.state_dict(),
@@ -706,6 +717,7 @@ def _load_rolling_warm_start(
     model_config_identity: str,
     precision: str,
     current_training_end_date: date,
+    expected_dataset_manifest_sha256: str | None,
 ) -> tuple[float, float, int, float, float]:
     """Load an earlier fit while preserving its economic input/output map."""
     if not checkpoint.is_file():
@@ -736,6 +748,8 @@ def _load_rolling_warm_start(
         and payload.get("model_user_version") == generator.config.user_version
         and payload.get("model_config_identity") == model_config_identity
         and payload.get("precision") == precision
+        and payload.get("dataset_manifest_sha256")
+        == expected_dataset_manifest_sha256
         and isinstance(source_epochs, int)
         and int(payload.get("epoch", -1)) + 1 >= source_epochs
     )

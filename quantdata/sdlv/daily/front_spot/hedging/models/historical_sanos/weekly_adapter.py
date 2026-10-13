@@ -39,6 +39,7 @@ class HistoricalSanosWeeklyMarketFit:
 
     market_fit_identity: str
     history: HistoricalWeeklyTransitionHistory
+    artifact_fingerprints: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -52,6 +53,7 @@ class HistoricalSanosWeeklyPolicy:
     fit_decision_index: int
     scenarios: HistoricalWeeklyScenarioSet
     hedge: HistoricalWeeklyHedgeFit
+    artifact_fingerprints: tuple[str, ...] = ()
 
 
 class HistoricalSanosWeeklyAdapter:

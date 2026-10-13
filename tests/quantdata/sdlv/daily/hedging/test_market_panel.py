@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from quantdata.hedging.contracts import OptionContract, OptionRight
+from quantdata.sdlv.daily.front_spot.hedging.data import market_panel
 from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import PublicMarketDay
 
 
@@ -58,7 +59,9 @@ def test_public_market_day_converts_spread_to_forward_units_and_excludes_am() ->
     assert day.dlvsq == pytest.approx(np.full((2, 1), 0.2**2))
 
 
-def test_fixed_contract_repricing_preserves_identity_and_recovers_current_kf() -> None:
+def test_fixed_contract_repricing_preserves_identity_and_recovers_current_kf(
+    monkeypatch,
+) -> None:
     day = PublicMarketDay(
         trading_date=date(2025, 1, 2),
         expiry_dates=(date(2025, 1, 6),),
@@ -102,6 +105,28 @@ def test_fixed_contract_repricing_preserves_identity_and_recovers_current_kf() -
         contract.fixed_strike / (1.02 * 1.01)
     )
     assert repriced.option_quotes[0].half_spread == pytest.approx(1.02 * 0.001)
+
+    monkeypatch.setattr(
+        market_panel,
+        "price_sanos_surface",
+        lambda **kwargs: np.asarray([-1.0e-10]),
+    )
+    numerical_floor = day.reprice_contracts(
+        (contract,),
+        spot_over_episode_origin=1.02,
+    ).option_quotes[0]
+    assert numerical_floor.mark > 0.0
+    assert numerical_floor.mark < 2.0e-12
+    assert numerical_floor.half_spread == numerical_floor.mark
+    assert numerical_floor.synthetic_bid == 0.0
+
+    monkeypatch.setattr(
+        market_panel,
+        "price_sanos_surface",
+        lambda **kwargs: np.asarray([-1.0e-6]),
+    )
+    with pytest.raises(FloatingPointError, match="materially negative SANOS"):
+        day.reprice_contracts((contract,), spot_over_episode_origin=1.02)
 
 
 def test_synthetic_contract_repricing_interpolates_missing_expiry() -> None:

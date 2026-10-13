@@ -39,6 +39,7 @@ class SanosLvWeeklyMarketFit:
 
     market_fit_identity: str
     factors: RollingDlvFactorFit
+    artifact_fingerprints: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -50,6 +51,7 @@ class SanosLvWeeklyPolicy:
     prices: WeeklyPriceRecord
     factors: RollingDlvFactorFit
     claim: WeeklyClaimDefinition
+    artifact_fingerprints: tuple[str, ...] = ()
 
 
 class SanosLvWeeklyAdapter:

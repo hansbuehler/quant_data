@@ -166,6 +166,7 @@ class WeeklyMarketFit(Protocol):
     """Target-independent dated market-model fit."""
 
     market_fit_identity: str
+    artifact_fingerprints: tuple[str, ...]
 
 
 class WeeklyFittedPolicy(Protocol):
@@ -173,6 +174,7 @@ class WeeklyFittedPolicy(Protocol):
 
     market_fit_identity: str
     policy_fit_identity: str
+    artifact_fingerprints: tuple[str, ...]
     prices: WeeklyPriceRecord
 
 
@@ -306,6 +308,8 @@ class WeeklyModelRun:
     result: WeeklyHedgeResult
     market_fit_identities: tuple[str, ...]
     policy_fit_identities: tuple[str, ...]
+    market_artifact_fingerprints: tuple[tuple[str, ...], ...]
+    policy_artifact_fingerprints: tuple[tuple[str, ...], ...]
     fit_as_of_dates: tuple[str, ...]
     fit_price_records: tuple[WeeklyPriceRecord, ...]
     fit_long_prices_origin_pv: FloatArray
@@ -314,8 +318,12 @@ class WeeklyModelRun:
 
     def __post_init__(self) -> None:
         decision_count = len(self.policy_fit_identities)
+        if decision_count != 5:
+            raise ValueError("weekly model run must contain exactly five decisions")
         if (
             len(self.market_fit_identities) != decision_count
+            or len(self.market_artifact_fingerprints) != decision_count
+            or len(self.policy_artifact_fingerprints) != decision_count
             or len(self.fit_as_of_dates) != decision_count
             or len(self.fit_price_records) != decision_count
         ):
@@ -326,6 +334,46 @@ class WeeklyModelRun:
             raise ValueError("weekly spot actions do not align with decisions")
         if self.option_positions.shape[0] != decision_count:
             raise ValueError("weekly option actions do not align with decisions")
+        if self.option_positions.ndim != 2:
+            raise ValueError("weekly option actions must be a matrix")
+        if self.result.step_hedge_gains.shape != (decision_count,):
+            raise ValueError("weekly hedge gains do not cover five decisions")
+        if self.result.step_transaction_costs.shape != (decision_count + 1,):
+            raise ValueError("weekly transaction costs must include five trades and unwind")
+        if not math.isclose(
+            self.result.hedge_gain,
+            float(np.sum(self.result.step_hedge_gains)),
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-14,
+        ):
+            raise ValueError("weekly step hedge gains do not reconcile")
+        if not math.isclose(
+            self.result.transaction_cost,
+            float(np.sum(self.result.step_transaction_costs)),
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-14,
+        ):
+            raise ValueError("weekly step transaction costs do not reconcile")
+        if not math.isclose(
+            self.result.hedge_gain,
+            self.result.spot_gain + self.result.option_gain,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-14,
+        ):
+            raise ValueError("weekly spot and option gains do not reconcile")
+        if not math.isclose(
+            self.result.transaction_cost,
+            self.result.spot_transaction_cost + self.result.option_transaction_cost,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-14,
+        ):
+            raise ValueError("weekly spot and option costs do not reconcile")
+        for fingerprints in (
+            *self.market_artifact_fingerprints,
+            *self.policy_artifact_fingerprints,
+        ):
+            if any(not value.strip() for value in fingerprints):
+                raise ValueError("weekly artifact fingerprints must be non-empty")
 
 
 def run_weekly_model(
@@ -357,6 +405,8 @@ def run_weekly_model(
     if policy_fit_cache is None:
         policy_fit_cache = {}
     price_records: list[WeeklyPriceRecord] = []
+    market_artifact_fingerprints: list[tuple[str, ...]] = []
+    policy_artifact_fingerprints: list[tuple[str, ...]] = []
     fit_long_prices_origin_pv = np.empty(len(instructions), dtype=np.float64)
     spot_positions = np.empty(len(instructions), dtype=np.float64)
     option_positions = np.empty(
@@ -441,6 +491,8 @@ def run_weekly_model(
         if np.any(np.abs(action.option_positions[~state.option_alive]) > 1.0e-14):
             raise ValueError("weekly adapter attempted to trade an expired contract")
         fit_index = episode.spec.decision_dates.index(instruction.fit_as_of_date)
+        market_artifact_fingerprints.append(market_fit.artifact_fingerprints)
+        policy_artifact_fingerprints.append(fit.artifact_fingerprints)
         price_records.append(fit.prices)
         fit_long_prices_origin_pv[decision_index] = (
             fit.prices.long_inception_price_per_fit_spot
@@ -474,6 +526,8 @@ def run_weekly_model(
         policy_fit_identities=tuple(
             instruction.policy_fit_identity for instruction in instructions
         ),
+        market_artifact_fingerprints=tuple(market_artifact_fingerprints),
+        policy_artifact_fingerprints=tuple(policy_artifact_fingerprints),
         fit_as_of_dates=tuple(
             instruction.fit_as_of_date.isoformat() for instruction in instructions
         ),

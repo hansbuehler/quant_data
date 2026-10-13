@@ -61,6 +61,11 @@ class DiffusionWeeklyMarketFit:
     live: DiffusionLiveContext
     checkpoint_sha256: str
 
+    @property
+    def artifact_fingerprints(self) -> tuple[str, ...]:
+        """Return the immutable dated-model checkpoint fingerprint."""
+        return (f"checkpoint:{self.checkpoint_sha256}",)
+
 
 @dataclass(frozen=True, kw_only=True)
 class DiffusionWeeklyPolicy:
@@ -73,6 +78,7 @@ class DiffusionWeeklyPolicy:
     fit_decision_index: int
     scenarios: WeeklyScenarioBatch
     hedge: HistoricalWeeklyHedgeFit
+    artifact_fingerprints: tuple[str, ...] = ()
 
 
 class DiffusionWeeklyAdapter:

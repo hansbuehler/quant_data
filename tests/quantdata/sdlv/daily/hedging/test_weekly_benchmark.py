@@ -82,6 +82,7 @@ class _SyntheticWeeklyPanel:
 @dataclass(frozen=True, kw_only=True)
 class _TestMarketFit:
     market_fit_identity: str
+    artifact_fingerprints: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -89,6 +90,7 @@ class _TestFit:
     market_fit_identity: str
     policy_fit_identity: str
     prices: WeeklyPriceRecord
+    artifact_fingerprints: tuple[str, ...] = ()
 
 
 class _TestWeeklyAdapter:

@@ -67,6 +67,7 @@ def fit_diffusion(
     warm_start_checkpoint: Path | None = None,
     expected_base_checkpoint_sha256: str | None = None,
     expected_warm_start_sha256: str | None = None,
+    dataset_manifest_sha256: str | None = None,
     environment: BaseEnvironment | None = None,
 ) -> DiffusionTrainingResult:
     """Fit one published diffusion variant with full restart state."""
@@ -115,6 +116,7 @@ def fit_diffusion(
         precision,
         base_checkpoint_fingerprint,
         warm_start_sha256,
+        dataset_manifest_sha256,
     )
     checkpoint_path = checkpoint_directory / f"{checkpoint_name}.pt"
     with FileLock(checkpoint_path.with_suffix(".pt.lock")):
@@ -130,6 +132,7 @@ def fit_diffusion(
             base_checkpoint_fingerprint=base_checkpoint_fingerprint,
             warm_start_checkpoint=warm_start_checkpoint,
             warm_start_sha256=warm_start_sha256,
+            dataset_manifest_sha256=dataset_manifest_sha256,
         )
 
 
@@ -146,6 +149,7 @@ def _fit_locked(
     base_checkpoint_fingerprint: str | None,
     warm_start_checkpoint: Path | None,
     warm_start_sha256: str | None,
+    dataset_manifest_sha256: str | None,
 ) -> DiffusionTrainingResult:
     validation_count = max(1, int(round(len(data.sequences) * train_config.validation_fraction)))
     train_count = len(data.sequences) - validation_count
@@ -180,6 +184,7 @@ def _fit_locked(
             expected_sha256=base_checkpoint_fingerprint,
             precision=precision,
             current_training_end_date=data.target_dates[-1],
+            expected_dataset_manifest_sha256=dataset_manifest_sha256,
         )
         for name, parameter in model.named_parameters():
             parameter.requires_grad_(name.startswith("output_adapter."))
@@ -243,6 +248,8 @@ def _fit_locked(
             == base_checkpoint_fingerprint
             and payload.get("model_config_identity") == model_config_identity
             and payload.get("warm_start_source_sha256") == warm_start_sha256
+            and payload.get("dataset_manifest_sha256")
+            == dataset_manifest_sha256
         )
         if compatible:
             changed_train_fields = validate_train_config_change(
@@ -321,6 +328,7 @@ def _fit_locked(
             model_config_identity=model_config_identity,
             precision=precision,
             current_training_end_date=data.target_dates[-1],
+            expected_dataset_manifest_sha256=dataset_manifest_sha256,
         )
     sequences = model.normalize(raw_sequences)
     if train_config.just_load or start_epoch >= train_config.epochs:
@@ -418,6 +426,7 @@ def _fit_locked(
                 training_start_date=data.start_dates[0],
                 training_end_date=data.target_dates[-1],
                 warm_start_source_sha256=warm_start_sha256,
+                dataset_manifest_sha256=dataset_manifest_sha256,
             )
             if progress_due:
                 elapsed = now - started
@@ -455,6 +464,7 @@ def _fit_locked(
         training_start_date=data.start_dates[0],
         training_end_date=data.target_dates[-1],
         warm_start_source_sha256=warm_start_sha256,
+        dataset_manifest_sha256=dataset_manifest_sha256,
     )
     return _result(
         model,
@@ -481,6 +491,7 @@ def _load_base_for_fine_tuning(
     expected_sha256: str | None,
     precision: str,
     current_training_end_date: date,
+    expected_dataset_manifest_sha256: str | None,
 ) -> None:
     if not checkpoint.is_file():
         raise FileNotFoundError(f"base diffusion checkpoint does not exist: {checkpoint}")
@@ -510,6 +521,8 @@ def _load_base_for_fine_tuning(
         and payload.get("base_compatibility_identity")
         == _base_compatibility_identity(model.config)
         and payload.get("precision") == precision
+        and payload.get("dataset_manifest_sha256")
+        == expected_dataset_manifest_sha256
         and isinstance(source_epochs, int)
         and int(payload.get("epoch", -1)) + 1 >= source_epochs
     )
@@ -657,6 +670,7 @@ def _save_checkpoint(
     training_start_date: date,
     training_end_date: date,
     warm_start_source_sha256: str | None,
+    dataset_manifest_sha256: str | None,
 ) -> None:
     payload = {
         "checkpoint_format_version": CHECKPOINT_FORMAT_VERSION,
@@ -671,6 +685,7 @@ def _save_checkpoint(
         "training_start_date": training_start_date.isoformat(),
         "training_end_date": training_end_date.isoformat(),
         "warm_start_source_sha256": warm_start_source_sha256,
+        "dataset_manifest_sha256": dataset_manifest_sha256,
         "train_config": train_config,
         "model": model.state_dict(),
         "ema_model": ema_model.state_dict(),
@@ -699,6 +714,7 @@ def _load_rolling_warm_start(
     model_config_identity: str,
     precision: str,
     current_training_end_date: date,
+    expected_dataset_manifest_sha256: str | None,
 ) -> None:
     """Load an earlier diffusion fit under current-window normalization."""
     if not checkpoint.is_file():
@@ -734,6 +750,8 @@ def _load_rolling_warm_start(
         and payload.get("model_config_identity") == model_config_identity
         and payload.get("variant") == model.config.variant.value
         and payload.get("precision") == precision
+        and payload.get("dataset_manifest_sha256")
+        == expected_dataset_manifest_sha256
         and isinstance(source_epochs, int)
         and int(payload.get("epoch", -1)) + 1 >= source_epochs
     )

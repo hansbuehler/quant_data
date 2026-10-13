@@ -87,6 +87,7 @@ def fit_public_volgan(
         train_config=train_config,
         warm_start_checkpoint=warm_start_checkpoint,
         expected_warm_start_sha256=expected_warm_start_sha256,
+        dataset_manifest_sha256=panel.dataset_manifest_sha256,
         environment=environment,
     )
     return VolganPublicFit(as_of_date=as_of_date, data=data, result=result)

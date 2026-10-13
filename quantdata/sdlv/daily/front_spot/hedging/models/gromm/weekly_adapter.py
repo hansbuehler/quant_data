@@ -66,6 +66,14 @@ class GrommWeeklyMarketFit:
     affine_history_sha256: str
     dynamics_sha256: str
 
+    @property
+    def artifact_fingerprints(self) -> tuple[str, ...]:
+        """Return exact rolling-market artifact fingerprints."""
+        return (
+            f"affine-history:{self.affine_history_sha256}",
+            f"dynamics:{self.dynamics_sha256}",
+        )
+
 
 @dataclass(kw_only=True)
 class GrommWeeklyPolicy:
@@ -84,6 +92,7 @@ class GrommWeeklyPolicy:
     active_mask: NDArray[np.bool_]
     initial_positions: FloatArray
     realized_features: dict[int, FloatArray]
+    artifact_fingerprints: tuple[str, ...]
 
 
 class GrommWeeklyAdapter:
@@ -257,6 +266,15 @@ class GrommWeeklyAdapter:
             measure=self.config.measure,
             generated=generated,
             hedge=hedge,
+            artifact_fingerprints=tuple(
+                f"{name}:{file_sha256(result.checkpoint_path)}"
+                for name, result in (
+                    ("claim", hedge.claim),
+                    ("short", hedge.short),
+                    ("zero", hedge.zero),
+                    ("pure", hedge.pure),
+                )
+            ),
             active_mask=data.active_mask,
             initial_positions=data.initial_positions.copy(),
             realized_features={},

@@ -91,6 +91,7 @@ def fit_public_diffusion(
         warm_start_checkpoint=warm_start_checkpoint,
         expected_base_checkpoint_sha256=expected_base_checkpoint_sha256,
         expected_warm_start_sha256=expected_warm_start_sha256,
+        dataset_manifest_sha256=panel.dataset_manifest_sha256,
         environment=environment,
     )
     return DiffusionPublicFit(as_of_date=as_of_date, data=data, result=result)
