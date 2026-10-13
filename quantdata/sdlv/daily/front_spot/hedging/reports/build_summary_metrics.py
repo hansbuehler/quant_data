@@ -871,16 +871,15 @@ def main() -> None:
         "--sanos-results",
         type=Path,
         default=_default_result_path(
-            "sanos-lv", "production-v2", "results", "results.json"
+            "production-matrix-v3", "sanos-lv-reference", "results.json"
         ),
     )
     parser.add_argument(
         "--historical-results",
         type=Path,
         default=_default_result_path(
-            "historical-sanos",
-            "mean-volatility-kappa1-v2",
-            "results",
+            "production-matrix-v4",
+            "historical-sanos-mean-volatility-1",
             "results.json",
         ),
     )
