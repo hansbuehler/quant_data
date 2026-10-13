@@ -93,9 +93,13 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
 from quantdata.sdlv.daily.front_spot.hedging.runners.fit_rolling_gromm2_range import (
     load_completed_rolling_gromm2_range,
 )
+from quantdata.sdlv.daily.front_spot.hedging.runners.progress import (
+    EvaluationProgressHeartbeat,
+)
 from quantdata.sdlv.daily.front_spot.hedging.runners.weekly import (
     WeeklyBookFunction,
     WeeklyEvaluationSpec,
+    eligible_weekly_origins,
     run_weekly_evaluation,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.weekly_results import (
@@ -236,8 +240,12 @@ def main() -> None:
         spot_cost_bps=arguments.spot_cost_bps,
     )
     started = time.monotonic()
+    origin_count = len(eligible_weekly_origins(panel, spec=spec))
+    if arguments.stop_after is not None:
+        origin_count = min(origin_count, arguments.stop_after)
 
     def progress(index: int, total: int, origin_date: date, reused: bool) -> None:
+        heartbeat.update(index, last_unit=origin_date.isoformat())
         if index != total and index % arguments.progress_every != 0:
             return
         elapsed = time.monotonic() - started
@@ -250,14 +258,19 @@ def main() -> None:
             flush=True,
         )
 
-    summary = run_weekly_evaluation(
-        panel,
-        spec=spec,
-        run_book=run_book,
-        output_directory=output,
-        progress=progress,
-        stop_after=arguments.stop_after,
-    )
+    with EvaluationProgressHeartbeat(
+        stage=f"{schedule.value}-{spec.model}",
+        total_work_units=origin_count,
+        interval_seconds=arguments.training_progress_seconds,
+    ) as heartbeat:
+        summary = run_weekly_evaluation(
+            panel,
+            spec=spec,
+            run_book=run_book,
+            output_directory=output,
+            progress=progress,
+            stop_after=arguments.stop_after,
+        )
     if summary.completed_origins == summary.eligible_origins:
         aggregation_started = time.monotonic()
 

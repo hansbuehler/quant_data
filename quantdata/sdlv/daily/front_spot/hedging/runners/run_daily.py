@@ -92,6 +92,7 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
     DailyBookFunction,
     DailyEvaluationSpec,
     dataset_manifest_sha256,
+    eligible_daily_origins,
     run_daily_evaluation,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.daily_results import (
@@ -99,6 +100,9 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.daily_results import (
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.fit_rolling_gromm2_range import (
     load_completed_rolling_gromm2_range,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners.progress import (
+    EvaluationProgressHeartbeat,
 )
 from quantdata.torch import BaseEnvironment
 
@@ -270,8 +274,12 @@ def main() -> None:
         require_convergence=not arguments.allow_nonconvergence,
     )
     started = time.monotonic()
+    origin_count = len(eligible_daily_origins(panel, spec=spec))
+    if arguments.stop_after is not None:
+        origin_count = min(origin_count, arguments.stop_after)
 
     def progress(index: int, total: int, origin_date: date, reused: bool) -> None:
+        heartbeat.update(index, last_unit=origin_date.isoformat())
         if index != total and index % arguments.progress_every != 0:
             return
         elapsed = time.monotonic() - started
@@ -284,14 +292,19 @@ def main() -> None:
             flush=True,
         )
 
-    summary = run_daily_evaluation(
-        panel,
-        spec=spec,
-        run_book=run_book,
-        output_directory=output,
-        progress=progress,
-        stop_after=arguments.stop_after,
-    )
+    with EvaluationProgressHeartbeat(
+        stage=f"daily-{model}",
+        total_work_units=origin_count,
+        interval_seconds=arguments.training_progress_seconds,
+    ) as heartbeat:
+        summary = run_daily_evaluation(
+            panel,
+            spec=spec,
+            run_book=run_book,
+            output_directory=output,
+            progress=progress,
+            stop_after=arguments.stop_after,
+        )
     print(json.dumps(summary.to_dict(), indent=2, sort_keys=True), flush=True)
     if arguments.stop_after is None and not arguments.skip_results:
         report = summarize_completed_daily_run(panel, run_directory=output)
