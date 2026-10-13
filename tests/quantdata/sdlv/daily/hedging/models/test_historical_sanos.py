@@ -78,6 +78,61 @@ def test_historical_sanos_mean_volatility_solves_cost_lasso_socp() -> None:
     assert fit.zero_policy.maximum_absolute_gradient < 1.0e-6
 
 
+def test_virtual_policy_solver_cap_is_distinct_from_executable_cap() -> None:
+    generator = np.random.default_rng(31)
+    observations = 252
+    centered_instrument = generator.normal(size=observations)
+    instruments = (2_000.0 + centered_instrument)[:, None]
+    claim = 2.0 * centered_instrument + 0.01 * generator.normal(size=observations)
+    fit = fit_historical_sanos_hedge(
+        instrument_returns=instruments,
+        claim_returns=claim,
+        linear_transaction_costs=np.zeros(1),
+        config=HistoricalSanosConfig(
+            rolling_observations=observations,
+            objective=HistoricalSanosObjective.MEAN_VARIANCE,
+            risk_parameter=1.0,
+            maximum_iterations=10_000,
+            position_cap=10.0,
+            solver_position_cap=10_000.0,
+        ),
+    )
+
+    assert abs(fit.claim_policy.action[0]) > 10.0
+    assert abs(fit.zero_policy.action[0]) > 10.0
+    assert abs(fit.action[0]) < 10.0
+    assert fit.internal_cap_hits == 0
+    assert fit.executable_cap_hits == 0
+    assert fit.cap_hits == 0
+    assert fit.converged
+
+
+def test_executable_cap_is_enforced_after_policy_subtraction() -> None:
+    generator = np.random.default_rng(47)
+    observations = 252
+    instruments = generator.normal(size=(observations, 1))
+    claim = 20.0 * instruments[:, 0] + 0.01 * generator.normal(size=observations)
+    fit = fit_historical_sanos_hedge(
+        instrument_returns=instruments,
+        claim_returns=claim,
+        linear_transaction_costs=np.zeros(1),
+        config=HistoricalSanosConfig(
+            rolling_observations=observations,
+            objective=HistoricalSanosObjective.MEAN_VARIANCE,
+            risk_parameter=1.0,
+            maximum_iterations=10_000,
+            position_cap=10.0,
+            solver_position_cap=10_000.0,
+        ),
+    )
+
+    assert fit.action[0] == pytest.approx(-10.0)
+    assert fit.internal_cap_hits == 0
+    assert fit.executable_cap_hits == 1
+    assert fit.cap_hits == 1
+    assert not fit.converged
+
+
 class _OneDayPanel:
     def __init__(self) -> None:
         self.transition = synthetic_one_day_transition()

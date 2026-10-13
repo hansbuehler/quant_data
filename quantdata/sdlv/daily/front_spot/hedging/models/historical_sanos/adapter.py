@@ -217,6 +217,17 @@ def evaluate_historical_sanos_daily_book(
                     "zero_policy_maximum_optimality_residual": (
                         fit.zero_policy.maximum_absolute_gradient
                     ),
+                    "internal_solver_position_cap": config.solver_position_cap,
+                    "executable_position_cap": config.position_cap,
+                    "internal_solver_cap_hits": fit.internal_cap_hits,
+                    "executable_cap_hits": fit.executable_cap_hits,
+                    "claim_policy_gross_exposure": float(
+                        np.sum(np.abs(fit.claim_policy.action))
+                    ),
+                    "zero_policy_gross_exposure": float(
+                        np.sum(np.abs(fit.zero_policy.action))
+                    ),
+                    "pure_hedge_gross_exposure": float(np.sum(np.abs(action))),
                     "policy_semantics": "claim policy minus zero-claim policy",
                     "scenario_semantics": (
                         "same relative contracts repriced through historical "

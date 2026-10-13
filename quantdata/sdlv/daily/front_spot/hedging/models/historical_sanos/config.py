@@ -19,7 +19,7 @@ class HistoricalSanosObjective(StrEnum):
     POWER_EXPONENTIAL = "power-exponential"
 
 
-@version("1.5")
+@version("1.6")
 @dataclass(frozen=True, kw_only=True)
 class HistoricalSanosConfig:
     """Logical settings for rolling empirical SANOS hedging."""
@@ -34,6 +34,7 @@ class HistoricalSanosConfig:
     maximum_iterations: int = 50_000
     gradient_tolerance: float = 1.0e-8
     position_cap: float = 1_000_000.0
+    solver_position_cap: float = 1_000_000.0
     cost_smoothing: float = 1.0e-6
     quadratic_ridge: float = 1.0e-6
 
@@ -64,6 +65,13 @@ class HistoricalSanosConfig:
         verify_inp(
             math.isfinite(self.position_cap) and self.position_cap > 0.0,
             lambda: "position_cap must be finite-positive",
+        )
+        verify_inp(
+            math.isfinite(self.solver_position_cap)
+            and self.solver_position_cap >= self.position_cap,
+            lambda: (
+                "solver_position_cap must be finite and at least position_cap"
+            ),
         )
         verify_inp(
             math.isfinite(self.cost_smoothing) and self.cost_smoothing > 0.0,

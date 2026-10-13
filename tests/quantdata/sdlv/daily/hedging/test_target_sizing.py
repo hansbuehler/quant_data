@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import date, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -205,6 +206,61 @@ def test_target_notional_cache_is_return_geometry_keyed(
     )
 
     assert changed != original
+
+
+def test_target_notional_equivalence_accepts_blas_rounding() -> None:
+    calibration = DailyTargetNotionalCalibration(
+        as_of_date=date(2022, 12, 30),
+        training_origin_dates=(date(2022, 12, 29),),
+        target_labels=("target",),
+        target_maturities_business_days=np.asarray([1], dtype=np.int64),
+        target_standard_deviations=np.asarray([0.1]),
+        reference_spot_standard_deviations=np.asarray([0.02]),
+        target_quantities=np.asarray([0.2]),
+        covariance_actions=np.asarray([[0.5, 1.0e-4]]),
+        transaction_cost_fractions=np.asarray([0.01]),
+        covariance_converged=True,
+        covariance_cap_hits=0,
+    )
+    recomputed = replace(
+        calibration,
+        covariance_actions=calibration.covariance_actions
+        + np.asarray([[9.0e-13, 9.0e-15]]),
+        transaction_cost_fractions=calibration.transaction_cost_fractions
+        + np.asarray([3.0e-16]),
+    )
+
+    sizing._require_equivalent_target_notional_calibrations(
+        calibration,
+        recomputed,
+    )
+
+
+def test_target_notional_equivalence_rejects_material_change() -> None:
+    calibration = DailyTargetNotionalCalibration(
+        as_of_date=date(2022, 12, 30),
+        training_origin_dates=(date(2022, 12, 29),),
+        target_labels=("target",),
+        target_maturities_business_days=np.asarray([1], dtype=np.int64),
+        target_standard_deviations=np.asarray([0.1]),
+        reference_spot_standard_deviations=np.asarray([0.02]),
+        target_quantities=np.asarray([0.2]),
+        covariance_actions=np.asarray([[0.5, -0.25]]),
+        transaction_cost_fractions=np.asarray([0.01]),
+        covariance_converged=True,
+        covariance_cap_hits=0,
+    )
+    recomputed = replace(
+        calibration,
+        covariance_actions=calibration.covariance_actions
+        + np.asarray([[1.0e-7, 0.0]]),
+    )
+
+    with pytest.raises(ValueError, match="does not match its public-data fit"):
+        sizing._require_equivalent_target_notional_calibrations(
+            calibration,
+            recomputed,
+        )
 
 
 def test_authenticated_target_notional_load_uses_pinned_preflight_artifact(

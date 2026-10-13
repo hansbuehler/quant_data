@@ -553,8 +553,8 @@ def _require_equivalent_target_notional_calibrations(
         or not np.allclose(
             cached_values,
             recomputed_values,
-            rtol=1.0e-12,
-            atol=1.0e-14,
+            rtol=1.0e-10,
+            atol=1.0e-12,
         )
         for cached_values, recomputed_values in zip(
             cached_arrays,

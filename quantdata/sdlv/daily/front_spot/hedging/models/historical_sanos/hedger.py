@@ -41,6 +41,8 @@ class HistoricalSanosHedgeFit:
     zero_policy: HistoricalSanosPolicyFit
     objective: float
     converged: bool
+    internal_cap_hits: int
+    executable_cap_hits: int
     cap_hits: int
 
 
@@ -69,8 +71,11 @@ def fit_historical_sanos_hedge(
         costs,
         config=config,
     )
-    action = claim_policy.action - zero_policy.action
-    cap_hits = int(np.count_nonzero(np.abs(action) >= 0.999 * config.position_cap))
+    raw_action = claim_policy.action - zero_policy.action
+    action = np.clip(raw_action, -config.position_cap, config.position_cap)
+    executable_cap_hits = int(np.count_nonzero(action != raw_action))
+    internal_cap_hits = claim_policy.cap_hits + zero_policy.cap_hits
+    cap_hits = internal_cap_hits + executable_cap_hits
     objective = _objective_and_gradient(
         np.concatenate(
             (
@@ -92,7 +97,9 @@ def fit_historical_sanos_hedge(
         zero_policy=zero_policy,
         objective=objective,
         converged=claim_policy.converged and zero_policy.converged and cap_hits == 0,
-        cap_hits=cap_hits + claim_policy.cap_hits + zero_policy.cap_hits,
+        internal_cap_hits=internal_cap_hits,
+        executable_cap_hits=executable_cap_hits,
+        cap_hits=cap_hits,
     )
 
 
@@ -110,7 +117,9 @@ def _fit_policy(
     include_translation = config.objective is HistoricalSanosObjective.POWER_EXPONENTIAL
     parameter_count = instruments.shape[1] + int(include_translation)
     initial = np.zeros(parameter_count, dtype=np.float64)
-    bounds = [(-config.position_cap, config.position_cap)] * instruments.shape[1]
+    bounds = [
+        (-config.solver_position_cap, config.solver_position_cap)
+    ] * instruments.shape[1]
     if include_translation:
         bounds.append((None, None))
     selection = _minimize_policy(
@@ -148,7 +157,11 @@ def _fit_policy(
         include_translation=include_translation,
     )
     action = np.asarray(final.x[: instruments.shape[1]], dtype=np.float64)
-    cap_hits = int(np.count_nonzero(np.abs(action) >= 0.999 * config.position_cap))
+    cap_hits = int(
+        np.count_nonzero(
+            np.abs(action) >= 0.999 * config.solver_position_cap
+        )
+    )
     optimality = float(
         getattr(final, "optimality", np.max(np.abs(final_gradient)))
     )
@@ -261,8 +274,8 @@ def _minimize_mean_volatility(
     else:
         fitted_action = np.clip(
             np.asarray(action.value, dtype=np.float64),
-            -config.position_cap,
-            config.position_cap,
+            -config.solver_position_cap,
+            config.solver_position_cap,
         )
     residual = centered_claim + centered_instruments @ fitted_action
     residual_standard_deviation = math.sqrt(float(np.mean(residual**2)))
@@ -281,7 +294,7 @@ def _minimize_mean_volatility(
             fitted_action,
             smooth_gradient,
             costs,
-            position_cap=config.position_cap,
+            position_cap=config.solver_position_cap,
         )
     else:
         # At zero residual volatility the Euclidean norm is nondifferentiable;
@@ -332,8 +345,8 @@ def _minimize_mean_variance(
                     costs[coordinate],
                 )
                 / diagonal,
-                -config.position_cap,
-                config.position_cap,
+                -config.solver_position_cap,
+                config.solver_position_cap,
             )
             change = updated - action[coordinate]
             if change != 0.0:
@@ -343,7 +356,7 @@ def _minimize_mean_variance(
             action,
             gradient,
             costs,
-            position_cap=config.position_cap,
+            position_cap=config.solver_position_cap,
         )
         if optimality <= config.gradient_tolerance:
             converged = True
