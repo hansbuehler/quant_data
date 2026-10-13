@@ -25,13 +25,16 @@ from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly_scenarios import (
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.checkpointing import file_sha256
 from quantdata.sdlv.daily.front_spot.hedging.models.generated_weekly import (
-    build_generated_weekly_scenarios,
+    GeneratedWeeklyScenarioCache,
+    attach_generated_weekly_claim,
+    generated_live_state_fingerprint,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.generated_weekly_policy import (
     GeneratedWeeklyPolicyConfig,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.weekly_hedger import (
     HistoricalWeeklyHedgeFit,
+    WeeklyOpenLoopPricingContext,
     fit_weekly_open_loop_hedge,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.volgan.adapter import (
@@ -65,6 +68,16 @@ class VolganWeeklyMarketFit:
     def artifact_fingerprints(self) -> tuple[str, ...]:
         """Return the immutable dated-model checkpoint fingerprint."""
         return (f"checkpoint:{self.checkpoint_sha256}",)
+
+    @property
+    def live_state_fingerprint(self) -> str:
+        """Return the immutable path-conditioning state fingerprint."""
+        return generated_live_state_fingerprint(
+            model="volgan",
+            as_of_date=self.live.as_of_date,
+            forecast_date=self.live.forecast_date,
+            arrays=(self.live.values, self.live.trailing_forward_log_returns),
+        )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -117,6 +130,9 @@ class VolganWeeklyAdapter:
         self.warm_start_checkpoint = warm_start_checkpoint
         self.expected_warm_start_sha256 = expected_warm_start_sha256
         self.environment = environment
+        self._weekly_scenario_cache = GeneratedWeeklyScenarioCache()
+        self._weekly_pricing_contexts: dict[int, WeeklyOpenLoopPricingContext] = {}
+        self._weekly_cache_generation = self._weekly_scenario_cache.generation
         code_identity = GeneratedWeeklyPolicyConfig.version.unique_id48
         self.model_config_identity = (
             "volgan-weekly-market-"
@@ -181,26 +197,41 @@ class VolganWeeklyAdapter:
             instruction=instruction,
             contracts=contracts,
         )
-        paths = sample_volgan_weekly_paths(
-            market_fit.fit.result,
-            live=market_fit.live,
-            path_count=self.policy_config.scenario_count,
-            step_count=5 - state.decision_index,
-            seed=self.policy_config.seed,
-        )
-        scenarios = build_generated_weekly_scenarios(
-            paths,
+        geometry = self._weekly_scenario_cache.get_or_build(
             state=state,
-            claim=claim,
             model_fit_identity=market_fit.market_fit_identity,
+            artifact_fingerprints=market_fit.artifact_fingerprints,
+            live_state_fingerprint=market_fit.live_state_fingerprint,
+            policy_config_identity=self.policy_config_identity,
+            scenario_count=self.policy_config.scenario_count,
+            seed=self.policy_config.seed,
             measure=self.measure,
+            path_builder=lambda: sample_volgan_weekly_paths(
+                market_fit.fit.result,
+                live=market_fit.live,
+                path_count=self.policy_config.scenario_count,
+                step_count=5 - state.decision_index,
+                seed=self.policy_config.seed,
+            ),
         )
+        if self._weekly_cache_generation != self._weekly_scenario_cache.generation:
+            self._weekly_pricing_contexts.clear()
+            self._weekly_cache_generation = self._weekly_scenario_cache.generation
+        scenarios = attach_generated_weekly_claim(geometry, claim=claim)
+        pricing_context = self._weekly_pricing_contexts.get(id(geometry))
+        if pricing_context is None:
+            pricing_context = WeeklyOpenLoopPricingContext(
+                scenarios,
+                config=self.policy_config.hedge,
+            )
+            self._weekly_pricing_contexts[id(geometry)] = pricing_context
         hedge = fit_weekly_open_loop_hedge(
             scenarios,
             claim_quantity=instruction.claim_quantity,
             initial_spot_position=state.previous_spot_position,
             initial_option_positions=state.previous_option_positions,
             config=self.policy_config.hedge,
+            pricing_context=pricing_context,
         )
         buyer = hedge.prices.buyer / instruction.claim_quantity
         seller = hedge.prices.seller / instruction.claim_quantity
@@ -221,6 +252,12 @@ class VolganWeeklyAdapter:
             scenarios=scenarios,
             hedge=hedge,
         )
+
+    def release_weekly_origin(self) -> None:
+        """Release target-independent arrays after one origin is serialized."""
+        self._weekly_scenario_cache.clear()
+        self._weekly_pricing_contexts.clear()
+        self._weekly_cache_generation = self._weekly_scenario_cache.generation
 
     def action(
         self,

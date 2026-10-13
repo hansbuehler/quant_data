@@ -326,19 +326,24 @@ def weekly_book_function(
             config=common_price_config,
         )
         policy_fit_cache = {}
-        runs = tuple(
-            run_weekly_model(
-                panel,
-                episode=episode,
-                claim=claim,
-                adapter=adapter,
-                claim_quantity=claim_quantities[claim.target.label],
-                spot_cost_bps=spot_cost_bps,
-                market_fit_cache=market_fit_cache,
-                policy_fit_cache=policy_fit_cache,
+        try:
+            runs = tuple(
+                run_weekly_model(
+                    panel,
+                    episode=episode,
+                    claim=claim,
+                    adapter=adapter,
+                    claim_quantity=claim_quantities[claim.target.label],
+                    spot_cost_bps=spot_cost_bps,
+                    market_fit_cache=market_fit_cache,
+                    policy_fit_cache=policy_fit_cache,
+                )
+                for claim in claims
             )
-            for claim in claims
-        )
+        finally:
+            release_origin = getattr(adapter, "release_weekly_origin", None)
+            if release_origin is not None:
+                release_origin()
         while len(market_fit_cache) > 8:
             market_fit_cache.pop(next(iter(market_fit_cache)))
         return runs

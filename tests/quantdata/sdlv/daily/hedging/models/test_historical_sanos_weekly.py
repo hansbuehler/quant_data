@@ -38,8 +38,11 @@ from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.weekly_adap
     HistoricalSanosWeeklyPolicy,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.weekly_hedger import (
+    HistoricalWeeklyHedgeFit,
+    WeeklyOpenLoopPricingContext,
     _WeeklyOpenLoopGeometry,
     fit_historical_weekly_hedge,
+    fit_weekly_open_loop_hedge,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.weekly_scenarios import (
     HistoricalWeeklyScenarioSet,
@@ -174,10 +177,7 @@ def test_historical_weekly_gradient_matches_finite_differences(
 
 @pytest.mark.parametrize(
     "objective",
-    (
-        HistoricalSanosObjective.MEAN_VARIANCE,
-        HistoricalSanosObjective.MEAN_VOLATILITY,
-    ),
+    tuple(HistoricalSanosObjective),
 )
 def test_historical_weekly_fit_respects_expiry_and_returns_pure_hedge(
     objective: HistoricalSanosObjective,
@@ -203,6 +203,135 @@ def test_historical_weekly_fit_respects_expiry_and_returns_pure_hedge(
     assert np.all(np.isfinite(fit.spot_positions))
     assert np.all(np.isfinite(fit.option_positions))
     assert fit.prices.buyer <= fit.prices.seller
+
+
+def test_weekly_shared_pricing_context_matches_fresh_target_fit() -> None:
+    scenarios = _scenario_set().scenarios
+    config = HistoricalSanosConfig(
+        rolling_observations=80,
+        objective=HistoricalSanosObjective.MEAN_VARIANCE,
+        risk_parameter=3.0,
+        maximum_iterations=2_000,
+        gradient_tolerance=1.0e-7,
+    )
+    context = WeeklyOpenLoopPricingContext(scenarios, config=config)
+    first = fit_weekly_open_loop_hedge(
+        scenarios,
+        claim_quantity=1.0,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=config,
+        pricing_context=context,
+    )
+    second_scenarios = replace(
+        scenarios,
+        terminal_claim_values_pv=(
+            0.02 + 0.7 * scenarios.terminal_claim_values_pv
+        ),
+        target_label="second-test-claim",
+    )
+    shared = fit_weekly_open_loop_hedge(
+        second_scenarios,
+        claim_quantity=0.8,
+        initial_spot_position=0.1,
+        initial_option_positions=np.asarray([0.0, -0.1]),
+        config=config,
+        pricing_context=context,
+    )
+    fresh = fit_weekly_open_loop_hedge(
+        second_scenarios,
+        claim_quantity=0.8,
+        initial_spot_position=0.1,
+        initial_option_positions=np.asarray([0.0, -0.1]),
+        config=config,
+    )
+
+    assert first.zero_policy is shared.zero_policy
+    np.testing.assert_allclose(shared.spot_positions, fresh.spot_positions, atol=1.0e-8)
+    np.testing.assert_allclose(
+        shared.option_positions,
+        fresh.option_positions,
+        atol=1.0e-8,
+    )
+    assert shared.prices.buyer == pytest.approx(fresh.prices.buyer, abs=1.0e-9)
+    assert shared.prices.seller == pytest.approx(fresh.prices.seller, abs=1.0e-9)
+
+
+def test_weekly_shared_pricing_context_is_target_order_independent() -> None:
+    first_scenarios = _scenario_set().scenarios
+    second_scenarios = replace(
+        first_scenarios,
+        terminal_claim_values_pv=(
+            0.015 + 0.6 * first_scenarios.terminal_claim_values_pv
+        ),
+        target_label="second-order-test-claim",
+    )
+    config = HistoricalSanosConfig(
+        rolling_observations=80,
+        objective=HistoricalSanosObjective.MEAN_VARIANCE,
+        risk_parameter=3.0,
+        maximum_iterations=2_000,
+        gradient_tolerance=1.0e-7,
+    )
+
+    def fit_in_order(
+        ordered: tuple[WeeklyScenarioBatch, WeeklyScenarioBatch],
+    ) -> dict[str, HistoricalWeeklyHedgeFit]:
+        context = WeeklyOpenLoopPricingContext(first_scenarios, config=config)
+        return {
+            scenarios.target_label: fit_weekly_open_loop_hedge(
+                scenarios,
+                claim_quantity=1.0,
+                initial_spot_position=0.0,
+                initial_option_positions=np.zeros(2),
+                config=config,
+                pricing_context=context,
+            )
+            for scenarios in ordered
+        }
+
+    forward = fit_in_order((first_scenarios, second_scenarios))
+    reverse = fit_in_order((second_scenarios, first_scenarios))
+    for target_label in forward:
+        np.testing.assert_allclose(
+            forward[target_label].long_policy.spot_positions,
+            reverse[target_label].long_policy.spot_positions,
+            atol=1.0e-10,
+        )
+        np.testing.assert_allclose(
+            forward[target_label].short_policy.option_positions,
+            reverse[target_label].short_policy.option_positions,
+            atol=1.0e-10,
+        )
+        assert forward[target_label].prices.buyer == pytest.approx(
+            reverse[target_label].prices.buyer,
+            abs=1.0e-11,
+        )
+        assert forward[target_label].prices.seller == pytest.approx(
+            reverse[target_label].prices.seller,
+            abs=1.0e-11,
+        )
+
+
+def test_weekly_shared_pricing_context_rejects_concurrent_use() -> None:
+    scenarios = _scenario_set().scenarios
+    config = HistoricalSanosConfig(
+        rolling_observations=80,
+        objective=HistoricalSanosObjective.MEAN_VARIANCE,
+        risk_parameter=3.0,
+    )
+    context = WeeklyOpenLoopPricingContext(scenarios, config=config)
+
+    with context.exclusive_use():
+        with pytest.raises(RuntimeError, match="already in use"):
+            fit_weekly_open_loop_hedge(
+                scenarios,
+                claim_quantity=1.0,
+                initial_spot_position=0.0,
+                initial_option_positions=np.zeros(2),
+                config=config,
+                pricing_context=context,
+            )
 
 
 def test_historical_weekly_records_virtual_recession_without_executable_cap() -> None:

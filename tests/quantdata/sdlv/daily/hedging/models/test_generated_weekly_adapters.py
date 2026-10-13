@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
@@ -7,6 +8,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from quantdata.hedging.contracts import OptionRight
 from quantdata.hedging.protocols import HedgeSchedule
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly import (
     WeeklyFitInstruction,
@@ -135,6 +137,23 @@ def _generated_paths(*, step_count: int) -> GeneratedWeeklyPaths:
     )
 
 
+def _volgan_live() -> SimpleNamespace:
+    return SimpleNamespace(
+        as_of_date=date(2024, 1, 3),
+        forecast_date=date(2024, 1, 4),
+        values=np.zeros(8),
+        trailing_forward_log_returns=np.zeros(21),
+    )
+
+
+def _diffusion_live() -> SimpleNamespace:
+    return SimpleNamespace(
+        as_of_date=date(2024, 1, 3),
+        forecast_date=date(2024, 1, 4),
+        sequence=np.zeros((21, 2, 1, 1)),
+    )
+
+
 @pytest.mark.parametrize("schedule", tuple(HedgeSchedule)[1:])
 def test_volgan_weekly_policy_uses_correct_schedule_row(
     tmp_path: Path,
@@ -162,7 +181,7 @@ def test_volgan_weekly_policy_uses_correct_schedule_row(
     market_fit = VolganWeeklyMarketFit(
         market_fit_identity=state.instruction.market_fit_identity,
         fit=SimpleNamespace(result=object()),
-        live=SimpleNamespace(),
+        live=_volgan_live(),
         checkpoint_sha256="0" * 64,
     )
     policy = adapter.fit_policy(
@@ -207,7 +226,7 @@ def test_diffusion_weekly_policy_is_restart_safe(
     market_fit = DiffusionWeeklyMarketFit(
         market_fit_identity=state.instruction.market_fit_identity,
         fit=SimpleNamespace(result=object()),
-        live=SimpleNamespace(),
+        live=_diffusion_live(),
         checkpoint_sha256="0" * 64,
     )
     policy = adapter.fit_policy(
@@ -227,3 +246,211 @@ def test_diffusion_weekly_policy_is_restart_safe(
     )
     with pytest.raises(ValueError, match="stale"):
         adapter.action(policy, state=stale_state)
+
+
+def test_volgan_weekly_reuses_paths_geometry_and_zero_policy_across_targets(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = VolganWeeklyAdapter(
+        model_config=VolganModelConfig(label="volgan-weekly-cache-test"),
+        checkpoint_directory=tmp_path,
+        policy_config=_policy_config(),
+    )
+    state, variance_claim = _state(
+        adapter=adapter,
+        schedule=HedgeSchedule.FROZEN_WEEKLY,
+        decision_index=0,
+    )
+    target_claim = build_weekly_claim(
+        state.market_day,
+        target=WeeklyTarget(
+            kind=WeeklyTargetKind.DIGITAL,
+            right=OptionRight.PUT,
+            nms=0.0,
+        ),
+    )
+    target_instruction = replace(
+        state.instruction,
+        target_label=target_claim.target.label,
+    )
+    target_state = replace(state, instruction=target_instruction)
+    sample_calls = 0
+
+    def sample(*args: object, **kwargs: object) -> GeneratedWeeklyPaths:
+        nonlocal sample_calls
+        sample_calls += 1
+        return _generated_paths(step_count=5)
+
+    monkeypatch.setattr(
+        "quantdata.sdlv.daily.front_spot.hedging.models.volgan.weekly_adapter."
+        "sample_volgan_weekly_paths",
+        sample,
+    )
+    market_fit = VolganWeeklyMarketFit(
+        market_fit_identity=state.instruction.market_fit_identity,
+        fit=SimpleNamespace(result=object()),
+        live=_volgan_live(),
+        checkpoint_sha256="0" * 64,
+    )
+    variance_policy = adapter.fit_policy(
+        market_fit,
+        instruction=state.instruction,
+        claim=variance_claim,
+        contracts=state.contracts,
+        state=state,
+    )
+    target_policy = adapter.fit_policy(
+        market_fit,
+        instruction=target_instruction,
+        claim=target_claim,
+        contracts=target_state.contracts,
+        state=target_state,
+    )
+
+    assert sample_calls == 1
+    assert variance_policy.scenarios.spot_step_gains is (
+        target_policy.scenarios.spot_step_gains
+    )
+    assert variance_policy.scenarios.option_step_gains is (
+        target_policy.scenarios.option_step_gains
+    )
+    assert variance_policy.hedge.zero_policy is target_policy.hedge.zero_policy
+    assert variance_policy.hedge.long_policy is not target_policy.hedge.long_policy
+    assert variance_policy.scenarios.target_label != target_policy.scenarios.target_label
+    assert not np.array_equal(
+        variance_policy.scenarios.terminal_claim_values_pv,
+        target_policy.scenarios.terminal_claim_values_pv,
+    )
+    [pricing_context] = adapter._weekly_pricing_contexts.values()
+    assert len(pricing_context._long_geometry._convex_problems) == 2
+    assert len(pricing_context._short_geometry._convex_problems) == 2
+    assert not variance_policy.scenarios.spot_step_gains.flags.writeable
+    assert adapter._weekly_scenario_cache.entry_count == 1
+
+    adapter.release_weekly_origin()
+
+    assert adapter._weekly_scenario_cache.entry_count == 0
+    assert not adapter._weekly_pricing_contexts
+
+
+def test_diffusion_weekly_reuses_paths_geometry_and_zero_policy_across_targets(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = DiffusionWeeklyAdapter(
+        model_config=DiffusionModelConfig(
+            label="diffusion-weekly-cache-test",
+            model_dimension=16,
+            transformer_layers=1,
+            attention_heads=4,
+            diffusion_steps=4,
+        ),
+        checkpoint_directory=tmp_path,
+        policy_config=_policy_config(),
+    )
+    state, claim = _state(
+        adapter=adapter,
+        schedule=HedgeSchedule.FROZEN_WEEKLY,
+        decision_index=0,
+    )
+    second_instruction = replace(
+        state.instruction,
+        claim_quantity=2.0,
+        target_label="realized-variance-double",
+    )
+    second_state = replace(state, instruction=second_instruction)
+    sample_calls = 0
+
+    def sample(*args: object, **kwargs: object) -> GeneratedWeeklyPaths:
+        nonlocal sample_calls
+        sample_calls += 1
+        return _generated_paths(step_count=5)
+
+    monkeypatch.setattr(
+        "quantdata.sdlv.daily.front_spot.hedging.models.diffusion.weekly_adapter."
+        "sample_diffusion_weekly_paths",
+        sample,
+    )
+    market_fit = DiffusionWeeklyMarketFit(
+        market_fit_identity=state.instruction.market_fit_identity,
+        fit=SimpleNamespace(result=object()),
+        live=_diffusion_live(),
+        checkpoint_sha256="0" * 64,
+    )
+    first = adapter.fit_policy(
+        market_fit,
+        instruction=state.instruction,
+        claim=claim,
+        contracts=state.contracts,
+        state=state,
+    )
+    second = adapter.fit_policy(
+        market_fit,
+        instruction=second_instruction,
+        claim=claim,
+        contracts=second_state.contracts,
+        state=second_state,
+    )
+
+    assert sample_calls == 1
+    assert first.scenarios.spot_step_gains is second.scenarios.spot_step_gains
+    assert first.scenarios.option_step_gains is second.scenarios.option_step_gains
+    assert first.hedge.zero_policy is second.hedge.zero_policy
+    assert adapter._weekly_scenario_cache.entry_count == 1
+
+
+def test_volgan_weekly_cache_invalidates_checkpoint_and_live_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = VolganWeeklyAdapter(
+        model_config=VolganModelConfig(label="volgan-weekly-invalidation-test"),
+        checkpoint_directory=tmp_path,
+        policy_config=_policy_config(),
+    )
+    initial_model_identity = adapter.model_config_identity
+    initial_policy_identity = adapter.policy_config_identity
+    state, claim = _state(
+        adapter=adapter,
+        schedule=HedgeSchedule.FROZEN_WEEKLY,
+        decision_index=0,
+    )
+    sample_calls = 0
+
+    def sample(*args: object, **kwargs: object) -> GeneratedWeeklyPaths:
+        nonlocal sample_calls
+        sample_calls += 1
+        return _generated_paths(step_count=5)
+
+    monkeypatch.setattr(
+        "quantdata.sdlv.daily.front_spot.hedging.models.volgan.weekly_adapter."
+        "sample_volgan_weekly_paths",
+        sample,
+    )
+    baseline = VolganWeeklyMarketFit(
+        market_fit_identity=state.instruction.market_fit_identity,
+        fit=SimpleNamespace(result=object()),
+        live=_volgan_live(),
+        checkpoint_sha256="0" * 64,
+    )
+    changed_checkpoint = replace(baseline, checkpoint_sha256="1" * 64)
+    changed_live_condition = _volgan_live()
+    changed_live_condition.values = np.ones_like(changed_live_condition.values)
+    changed_live = replace(
+        baseline,
+        live=changed_live_condition,
+    )
+    for market_fit in (baseline, changed_checkpoint, changed_live):
+        adapter.fit_policy(
+            market_fit,
+            instruction=state.instruction,
+            claim=claim,
+            contracts=state.contracts,
+            state=state,
+        )
+
+    assert sample_calls == 3
+    assert adapter._weekly_scenario_cache.entry_count == 3
+    assert adapter.model_config_identity == initial_model_identity
+    assert adapter.policy_config_identity == initial_policy_identity

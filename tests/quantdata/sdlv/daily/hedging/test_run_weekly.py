@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 
@@ -12,6 +13,7 @@ from quantdata.sdlv.daily.front_spot.hedging.runners import run_weekly
 from quantdata.sdlv.daily.front_spot.hedging.runners.run_weekly import (
     _load_target_notionals,
     build_weekly_adapter,
+    weekly_book_function,
 )
 
 
@@ -175,3 +177,47 @@ def test_weekly_conventional_gromm_builds_without_deep_policy_selection(
     assert build.adapter.model == "gromm-q-dlv-vega"
     assert build.adapter.measure == "Q"
     assert build.rolling_observations == 252
+
+
+def test_weekly_book_releases_generated_origin_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    claims = (
+        SimpleNamespace(target=SimpleNamespace(label="first")),
+        SimpleNamespace(target=SimpleNamespace(label="second")),
+    )
+
+    class Adapter:
+        model = "generated-test"
+        measure = "P"
+        release_count = 0
+
+        def release_weekly_origin(self) -> None:
+            self.release_count += 1
+
+    adapter = Adapter()
+    monkeypatch.setattr(
+        run_weekly,
+        "build_weekly_episode_path",
+        lambda *args, **kwargs: SimpleNamespace(market_days=(object(),)),
+    )
+    monkeypatch.setattr(
+        run_weekly,
+        "build_common_weekly_claims",
+        lambda *args, **kwargs: claims,
+    )
+    monkeypatch.setattr(
+        run_weekly,
+        "run_weekly_model",
+        lambda *args, claim, **kwargs: claim.target.label,
+    )
+    run_book = weekly_book_function(
+        adapter=adapter,
+        schedule=run_weekly.HedgeSchedule.FROZEN_WEEKLY,
+        rolling_observations=252,
+        claim_quantities={"first": 1.0, "second": 2.0},
+        spot_cost_bps=1.0,
+    )
+
+    assert run_book(object(), date(2025, 1, 2)) == ("first", "second")
+    assert adapter.release_count == 1
