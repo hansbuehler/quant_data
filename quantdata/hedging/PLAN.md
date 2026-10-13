@@ -916,9 +916,13 @@ evidence loader. Rolling GROMM preparation continues independently on CPU. A
 production-gate assembler now reconstructs exact public-versus-rolling scope
 bindings, refuses stale or aliased evidence, writes under an output lock through
 a unique same-directory temporary file, and re-authenticates the completed gate
-before publishing it. The reviewed 18-scope managed-GPU readiness matrix is
-running from immutable commit `31b57e617dc6f57f12625515160131a8cf845e36`;
-it emits a persistent four-minute heartbeat and holds its GPU through
+before publishing it. The initial reviewed 18-scope managed-GPU readiness
+matrix ran from immutable commit
+`31b57e617dc6f57f12625515160131a8cf845e36`; VolGAN daily-public readiness
+passed, but its first frozen-weekly case failed as described below. The
+replacement matrix is queued from immutable commit
+`b1e359712bf1cca20cc71f6dfa3e78172b2f1c84` behind rolling GROMM production.
+It emits a persistent four-minute heartbeat and acquires its GPU only through
 `gpuctl`. Final readiness evidence and the model-specific results review remain
 required before generated production cases can launch.
 
@@ -932,6 +936,12 @@ policy plus first complete target fit took 45.1 seconds and converged without a
 cap hit. A solver-reference test matches the CLARABEL optimum, and weekly runs
 now report target-level progress inside each origin. A fresh managed-GPU
 readiness run is required before the generated production gate can pass.
+
+The 28 ready native weekly cases are likewise repinned to
+`b1e359712bf1cca20cc71f6dfa3e78172b2f1c84` and remain deferred behind the
+active daily CPU queues. Their matrix still contains all 94 specified cells:
+28 ready native cases, four generated cases waiting on production gates, and 62
+explicitly blocked cases.
 
 Gate: one model-specific review and standalone smoke test per baseline pass.
 
