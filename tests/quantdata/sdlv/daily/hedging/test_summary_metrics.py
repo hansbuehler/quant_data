@@ -15,6 +15,9 @@ from quantdata.sdlv.daily.front_spot.hedging.reports.build_summary_metrics impor
     daily_policy_inputs_from_matrices,
     write_summary_metrics,
 )
+from quantdata.sdlv.daily.front_spot.hedging.reports.policy_labels import (
+    canonical_policy_variant,
+)
 from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
     DailyEvaluationSpec,
 )
@@ -101,7 +104,10 @@ def test_summary_metrics_pool_complete_claim_population(tmp_path: Path) -> None:
     assert r"\newcommand{\SanosVsHistoricalReduction}{33.3\%}" in tex
     objective_tables = objective_tables_output.read_text(encoding="utf-8")
     assert "Mean--variance: full out-of-sample economic-risk score" in objective_tables
-    assert "Historical SANOS & MVol, $\\kappa=1$" in objective_tables
+    assert (
+        "Historical SANOS & test; SANOS scenarios & MVol, $\\kappa=1$"
+        in objective_tables
+    )
     objective_appendix = objective_appendix_output.read_text(encoding="utf-8")
     assert "Target-level mean--volatility scores and drawdowns" in objective_appendix
     assert "Economic MDD" in objective_appendix
@@ -210,7 +216,7 @@ def test_summary_metrics_discovers_all_completed_matrix_cases(
         ),
         (
             "covariance-mean-volatility-1",
-            "covariance",
+            "robust-covariance",
             "mean-volatility",
             1.0,
             1.25,
@@ -230,6 +236,11 @@ def test_summary_metrics_discovers_all_completed_matrix_cases(
             {
                 "case_id": case_id,
                 "model": model,
+                "measure": "test",
+                "variant": canonical_policy_variant(
+                    case_id=case_id,
+                    model=model,
+                ),
                 "objective": objective,
                 "risk_parameter": parameter,
                 "readiness": "ready",
@@ -284,6 +295,8 @@ def test_summary_metrics_rejects_matrix_objective_that_disagrees_with_run(
                     {
                         "case_id": "historical-sanos-forged-objective",
                         "model": "historical-sanos",
+                        "measure": "test",
+                        "variant": "rolling-fixed-contract-scenarios",
                         "objective": "entropy",
                         "risk_parameter": 10.0,
                         "readiness": "ready",
@@ -308,6 +321,96 @@ def test_summary_metrics_rejects_matrix_objective_that_disagrees_with_run(
         build_daily_policy_summary_metrics(policies=policies)
 
 
+def test_summary_metrics_rejects_matrix_measure_that_disagrees_with_run(
+    tmp_path: Path,
+) -> None:
+    results = tmp_path / "historical" / "results.json"
+    _write_results(
+        results,
+        model="historical-sanos",
+        manifest="a" * 64,
+        one_day_pure_rmse=1.0,
+        three_day_pure_rmse=2.0,
+    )
+    matrix = tmp_path / "matrix.json"
+    matrix.write_text(
+        json.dumps(
+            {
+                "schema": "hedging-daily-production-matrix-v1",
+                "cases": [
+                    {
+                        "case_id": "historical-sanos-forged-measure",
+                        "model": "historical-sanos",
+                        "measure": "Q",
+                        "variant": "rolling-fixed-contract-scenarios",
+                        "objective": "mean-volatility",
+                        "risk_parameter": 1.0,
+                        "readiness": "ready",
+                        "command": [
+                            "python",
+                            "runner",
+                            "--output",
+                            str(results.parent),
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    policies = daily_policy_inputs_from_matrices(
+        (matrix,),
+        require_ready_complete=True,
+    )
+    with pytest.raises(ValueError, match="measure does not match"):
+        build_daily_policy_summary_metrics(policies=policies)
+
+
+def test_summary_metrics_rejects_forged_matrix_variant(tmp_path: Path) -> None:
+    results = tmp_path / "historical" / "results.json"
+    _write_results(
+        results,
+        model="historical-sanos",
+        manifest="a" * 64,
+        one_day_pure_rmse=1.0,
+        three_day_pure_rmse=2.0,
+    )
+    matrix = tmp_path / "matrix.json"
+    matrix.write_text(
+        json.dumps(
+            {
+                "schema": "hedging-daily-production-matrix-v1",
+                "cases": [
+                    {
+                        "case_id": "historical-sanos-forged-variant",
+                        "model": "historical-sanos",
+                        "measure": "test",
+                        "variant": "published-settings-full-rolling-fit",
+                        "objective": "mean-volatility",
+                        "risk_parameter": 1.0,
+                        "readiness": "ready",
+                        "command": [
+                            "python",
+                            "runner",
+                            "--output",
+                            str(results.parent),
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    policies = daily_policy_inputs_from_matrices(
+        (matrix,),
+        require_ready_complete=True,
+    )
+    with pytest.raises(ValueError, match="variant does not match"):
+        build_daily_policy_summary_metrics(policies=policies)
+
+
 def test_summary_metrics_rejects_incomplete_ready_matrix_case(
     tmp_path: Path,
 ) -> None:
@@ -319,7 +422,9 @@ def test_summary_metrics_rejects_incomplete_ready_matrix_case(
                 "cases": [
                     {
                         "case_id": "missing",
-                        "model": "covariance",
+                        "model": "robust-covariance",
+                        "measure": "test",
+                        "variant": "independent-shrinkage-tyler",
                         "objective": "mean-variance",
                         "risk_parameter": 1.0,
                         "readiness": "ready",
@@ -411,6 +516,7 @@ def _write_results(
                 "model": model,
                 "measure": "test",
                 "run_identity": run_identity,
+                "aggregation_identity": "aggregation-test",
                 "result_count": 12_220,
                 "slices": slices,
             }

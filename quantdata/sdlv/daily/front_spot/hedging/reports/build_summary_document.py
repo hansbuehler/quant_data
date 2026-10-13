@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
+import os
 import shutil
 import subprocess
 from datetime import date
@@ -14,14 +16,36 @@ from typing import TypeAlias
 from quantdata.sdlv.daily.front_spot.hedging.reports.build_summary_metrics import (
     SUMMARY_SCHEMA as DAILY_SUMMARY_SCHEMA,
 )
+from quantdata.sdlv.daily.front_spot.hedging.reports.build_summary_metrics import (
+    build_daily_policy_summary_metrics,
+    daily_policy_inputs_from_matrices,
+    write_summary_metrics,
+)
 from quantdata.sdlv.daily.front_spot.hedging.reports.build_weekly_summary_metrics import (
     SUMMARY_SCHEMA as WEEKLY_SUMMARY_SCHEMA,
+)
+from quantdata.sdlv.daily.front_spot.hedging.reports.build_weekly_summary_metrics import (
+    build_weekly_policy_summary_metrics,
+    weekly_policy_inputs_from_matrices,
+    write_weekly_summary_metrics,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners.production_matrix import (
+    DailyProductionMatrixConfig,
+    build_daily_production_matrix,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners.weekly_production_matrix import (
+    WeeklyProductionMatrixConfig,
+    build_weekly_production_matrix,
 )
 
 JsonObject: TypeAlias = dict[str, object]
 
-DOCUMENT_SCHEMA = "hedging-benchmark-summary-document-v1"
+DOCUMENT_SCHEMA = "hedging-benchmark-summary-document-v2"
 DISPLAY_SCALE = 10_000.0
+DAILY_MATRIX_SCHEMA = "hedging-daily-production-matrix-v1"
+WEEKLY_MATRIX_SCHEMA = "hedging-weekly-production-matrix-v1"
+EXPECTED_DAILY_MATRIX_CASES = 54
+EXPECTED_WEEKLY_MATRIX_CASES = 94
 
 
 def build_summary_document(
@@ -38,20 +62,18 @@ def build_summary_document(
     _validate_inputs(daily=daily, weekly=weekly)
     daily_models = _require_object(daily, "models")
     weekly_models = _require_object(weekly, "models")
-    daily_best = _best_daily_by_model(daily_models)
-    weekly_best = _best_weekly_by_schedule_and_model(weekly_models)
     daily_reference = _daily_reference(daily_models)
     daily_unhedged = _daily_metric(daily_reference, "unhedged_rmse")
-    daily_best_reduction = max(
-        _daily_metric(model, "pure_rmse_reduction") for model in daily_best
-    )
     weekly_schedules = sorted(
-        {_require_string(model, "schedule") for model in weekly_best}
+        {
+            _require_string(_as_object(model, "weekly model"), "schedule")
+            for model in weekly_models.values()
+        }
     )
     model_names = sorted(
         {
-            _require_string(model, "model")
-            for model in (*daily_best, *weekly_best)
+            _require_string(_as_object(model, "model"), "model")
+            for model in (*daily_models.values(), *weekly_models.values())
         }
     )
     manifest = _require_string(daily, "dataset_manifest_sha256")
@@ -115,11 +137,9 @@ The final daily comparison contains {_integer(sum(_result_count(model) for model
 authenticated claim/origin evaluations across {len(daily_models)} policies;
 the weekly comparison contains {_integer(sum(_result_count(model) for model in weekly_models.values()))}
 evaluations across {len(weekly_models)} policies and {len(weekly_schedules)} schedules.
-The common daily unhedged RMSE is {_basis_points(daily_unhedged)} basis points;
-the largest descriptive pure-RMSE reduction among the reported daily policies
-is {_percent(daily_best_reduction)}. Headline rows below select the lowest
-pure-RMSE policy within each model family only for compact presentation; every
-precommitted objective and parameter remains reported in the full tables.}}}}
+The common daily unhedged RMSE is {_basis_points(daily_unhedged)} basis points.
+Every precommitted objective and parameter is reported; no policy is selected
+using the 2023--2025 evaluation outcomes.}}}}
 
 \section{{Approach}}
 \subsection{{Public data boundary and common market}}
@@ -160,27 +180,24 @@ candidate-minus-SANOS differences with Hansen--Hodrick and moving-block
 bootstrap intervals, preserving five-session overlap.
 
 \section{{Results}}
-\subsection{{Daily headline}}
-Table~\ref{{tab:daily-headline}} reports the lowest pure-RMSE policy within each
-model family. This is a descriptive compression of the completed grid, not a
-new tuning rule. Losses, costs, and drawdowns are basis points of inception
-normalized spot.
-
-{_daily_headline_table(daily_best)}
-
-\subsection{{Weekly headline}}
-Table~\ref{{tab:weekly-headline}} applies the same descriptive compression
-separately to frozen and restarted schedules. The final column is the mean
-paired economic-book loss difference against the schedule-matched SANOS--LV
-reference; negative values favour the candidate.
-
-{_weekly_headline_table(weekly_best, weekly)}
-
-\subsection{{All objective grids}}
-The following tables retain every completed policy and evaluate every
+\subsection{{Daily objective grid}}
+Losses, costs, and drawdowns are basis points of inception normalized spot.
+The following tables retain every completed daily policy and evaluate every
 precommitted ex-post risk parameter on inception-spot-normalized economic loss.
 \input{{{_tex_escape(daily_objective_tables)}}}
+
+\subsection{{Weekly objective grid}}
+The following tables retain every completed weekly policy, separately by
+schedule and authenticated policy specification.
 \input{{{_tex_escape(weekly_objective_tables)}}}
+
+\subsection{{Weekly paired reference comparisons}}
+For every completed policy and both loss definitions, the tables below report
+the equal-weighted thirteen-target episode-book loss minus the schedule-matched
+SANOS--LV loss. Negative values favour the candidate. Both the precommitted
+Hansen--Hodrick and moving-block-bootstrap 95\% intervals are shown.
+
+{_weekly_comparison_tables(weekly)}
 
 \section{{Model Catalogue}}
 {_model_catalogue(model_names)}
@@ -211,8 +228,123 @@ forbidden, or nonconverged fits where forbidden are rejected before rendering.
 
 def write_summary_document(
     *,
-    daily_metrics: Path,
-    weekly_metrics: Path,
+    dataset: Path,
+    daily_matrix: Path,
+    daily_matrix_sha256: str,
+    weekly_matrix: Path,
+    weekly_matrix_sha256: str,
+    output: Path,
+    bibliography_source: Path,
+    status_date: date | None = None,
+    compile_pdf: bool = False,
+) -> Path | None:
+    """Authenticate production matrices and render their final report."""
+    dataset = Path(dataset)
+    daily_matrix = Path(daily_matrix)
+    weekly_matrix = Path(weekly_matrix)
+    output = Path(output)
+    bibliography_source = Path(bibliography_source)
+    _validate_output_boundaries(
+        dataset=dataset,
+        daily_matrix=daily_matrix,
+        weekly_matrix=weekly_matrix,
+        bibliography_source=bibliography_source,
+        output=output,
+    )
+    _validate_production_matrix(
+        daily_matrix,
+        expected_sha256=daily_matrix_sha256,
+        expected_schema=DAILY_MATRIX_SCHEMA,
+        expected_cases=EXPECTED_DAILY_MATRIX_CASES,
+        dataset=dataset,
+        weekly=False,
+    )
+    _validate_production_matrix(
+        weekly_matrix,
+        expected_sha256=weekly_matrix_sha256,
+        expected_schema=WEEKLY_MATRIX_SCHEMA,
+        expected_cases=EXPECTED_WEEKLY_MATRIX_CASES,
+        dataset=dataset,
+        weekly=True,
+    )
+    daily = build_daily_policy_summary_metrics(
+        policies=daily_policy_inputs_from_matrices(
+            (daily_matrix,),
+            require_ready_complete=True,
+        ),
+        dataset=dataset,
+    )
+    weekly = build_weekly_policy_summary_metrics(
+        policies=weekly_policy_inputs_from_matrices(
+            (weekly_matrix,),
+            require_ready_complete=True,
+        ),
+        dataset=dataset,
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    daily_metrics = output.parent / "daily-metrics.json"
+    weekly_metrics = output.parent / "weekly-metrics.json"
+    daily_macros = output.parent / "daily-macros.tex"
+    daily_objective_tables = output.parent / "daily-objective-tables.tex"
+    weekly_objective_tables = output.parent / "weekly-objective-tables.tex"
+    daily_target_appendix = output.parent / "daily-target-appendix.tex"
+    weekly_target_appendix = output.parent / "weekly-target-appendix.tex"
+    write_summary_metrics(
+        daily,
+        json_output=daily_metrics,
+        tex_output=daily_macros,
+        objective_tables_output=daily_objective_tables,
+        objective_appendix_output=daily_target_appendix,
+    )
+    write_weekly_summary_metrics(
+        weekly,
+        json_output=weekly_metrics,
+        objective_tables_output=weekly_objective_tables,
+        target_appendix_output=weekly_target_appendix,
+    )
+    pdf = _write_rendered_summary_document(
+        daily=daily,
+        weekly=weekly,
+        output=output,
+        bibliography_source=bibliography_source,
+        daily_objective_tables=daily_objective_tables,
+        weekly_objective_tables=weekly_objective_tables,
+        daily_target_appendix=daily_target_appendix,
+        weekly_target_appendix=weekly_target_appendix,
+        status_date=status_date,
+        compile_pdf=compile_pdf,
+    )
+    _require_sha256(daily_matrix, daily_matrix_sha256, "daily production matrix")
+    _require_sha256(weekly_matrix, weekly_matrix_sha256, "weekly production matrix")
+    _write_document_manifest(
+        dataset=dataset,
+        daily_matrix=daily_matrix,
+        daily_matrix_sha256=daily_matrix_sha256,
+        weekly_matrix=weekly_matrix,
+        weekly_matrix_sha256=weekly_matrix_sha256,
+        daily=daily,
+        weekly=weekly,
+        output=output,
+        artifact_paths=(
+            daily_metrics,
+            weekly_metrics,
+            daily_macros,
+            daily_objective_tables,
+            weekly_objective_tables,
+            daily_target_appendix,
+            weekly_target_appendix,
+            output.parent / Path(bibliography_source).name,
+            output,
+            *(tuple() if pdf is None else (pdf,)),
+        ),
+    )
+    return pdf
+
+
+def _write_rendered_summary_document(
+    *,
+    daily: JsonObject,
+    weekly: JsonObject,
     output: Path,
     bibliography_source: Path,
     daily_objective_tables: Path,
@@ -222,9 +354,7 @@ def write_summary_document(
     status_date: date | None = None,
     compile_pdf: bool = False,
 ) -> Path | None:
-    """Write the final TeX document and optionally compile its PDF."""
-    daily = _read_json_object(daily_metrics)
-    weekly = _read_json_object(weekly_metrics)
+    """Render already authenticated in-memory summaries and local fragments."""
     required_inputs = (
         bibliography_source,
         daily_objective_tables,
@@ -273,6 +403,257 @@ def write_summary_document(
     return pdf
 
 
+def _validate_production_matrix(
+    path: Path,
+    *,
+    expected_sha256: str,
+    expected_schema: str,
+    expected_cases: int,
+    dataset: Path,
+    weekly: bool,
+) -> None:
+    _require_sha256(path, expected_sha256, "production matrix")
+    payload = _read_json_object(path)
+    if payload.get("schema") != expected_schema:
+        raise ValueError(f"production matrix uses an incompatible schema: {path}")
+    cases = payload.get("cases")
+    if not isinstance(cases, list) or len(cases) != expected_cases:
+        raise ValueError(
+            f"production matrix must contain {expected_cases} cases: {path}"
+        )
+    config = (
+        WeeklyProductionMatrixConfig()
+        if weekly
+        else DailyProductionMatrixConfig()
+    )
+    if payload.get("code_version") != str(type(config).version):
+        raise ValueError(f"production matrix code version is not canonical: {path}")
+    canonical_config = json.loads(json.dumps(config.to_dict()))
+    if payload.get("config") != canonical_config:
+        raise ValueError(f"production matrix configuration is not canonical: {path}")
+    if payload.get("case_count") != expected_cases:
+        raise ValueError(f"production matrix case count is not canonical: {path}")
+    if (
+        payload.get("ready_count") != expected_cases
+        or payload.get("blocked_count") != 0
+        or payload.get("waiting_gate_count") != 0
+    ):
+        raise ValueError(f"final production matrix is not fully ready: {path}")
+    canonical = _canonical_case_identities(dataset=dataset, weekly=weekly)
+    identities: set[str] = set()
+    for raw_case in cases:
+        case = _as_object(raw_case, "production matrix case")
+        case_id = _require_string(case, "case_id")
+        if case_id in identities:
+            raise ValueError(f"production matrix contains duplicate case {case_id}")
+        identities.add(case_id)
+        identity = _case_identity(case)
+        if canonical.get(case_id) != identity:
+            raise ValueError(
+                f"production matrix case is not canonical: {case_id}"
+            )
+        readiness = _require_string(case, "readiness")
+        if readiness != "ready":
+            raise ValueError(f"final production case is not ready: {case_id}")
+        command = case.get("command")
+        if not isinstance(command, list) or not command or not all(
+            isinstance(value, str) and value for value in command
+        ):
+            raise ValueError(f"final production case has no command: {case_id}")
+        if case.get("blocked_reason") is not None:
+            raise ValueError(f"ready production case has a blocked reason: {case_id}")
+    if identities != set(canonical):
+        raise ValueError(f"production matrix case set is not canonical: {path}")
+
+
+def _canonical_case_identities(
+    *,
+    dataset: Path,
+    weekly: bool,
+) -> dict[str, tuple[object, ...]]:
+    sentinel = Path("/__hedging_report_canonical_matrix__")
+    if weekly:
+        cases = build_weekly_production_matrix(
+            dataset=dataset,
+            output_root=sentinel / "weekly-output",
+            checkpoint_root=sentinel / "weekly-checkpoints",
+            weekly_input_preflight=None,
+        )
+    else:
+        cases = build_daily_production_matrix(
+            dataset=dataset,
+            output_root=sentinel / "daily-output",
+            checkpoint_root=sentinel / "daily-checkpoints",
+        )
+    return {
+        case.case_id: (
+            case.model,
+            case.measure,
+            case.variant,
+            case.objective,
+            case.risk_parameter,
+        )
+        for case in cases
+    }
+
+
+def _case_identity(case: JsonObject) -> tuple[object, ...]:
+    parameter = case.get("risk_parameter")
+    if parameter is not None:
+        parameter = _require_number(case, "risk_parameter")
+    objective = case.get("objective")
+    if objective is not None:
+        objective = _require_string(case, "objective")
+    return (
+        _require_string(case, "model"),
+        _require_string(case, "measure"),
+        _require_string(case, "variant"),
+        objective,
+        parameter,
+    )
+
+
+def _validate_output_boundaries(
+    *,
+    dataset: Path,
+    daily_matrix: Path,
+    weekly_matrix: Path,
+    bibliography_source: Path,
+    output: Path,
+) -> None:
+    dataset_root = dataset.resolve()
+    output_root = output.parent.resolve()
+    if output_root == dataset_root or output_root.is_relative_to(dataset_root):
+        raise ValueError("report output must not be inside the public dataset")
+    inputs = {
+        "dataset manifest": (dataset / "manifest.json").resolve(),
+        "daily matrix": daily_matrix.resolve(),
+        "weekly matrix": weekly_matrix.resolve(),
+        "bibliography": bibliography_source.resolve(),
+    }
+    if len(set(inputs.values())) != len(inputs):
+        raise ValueError("report inputs must be distinct files")
+    outputs = tuple(
+        (output.parent / name).resolve()
+        for name in (
+            "daily-metrics.json",
+            "weekly-metrics.json",
+            "daily-macros.tex",
+            "daily-objective-tables.tex",
+            "weekly-objective-tables.tex",
+            "daily-target-appendix.tex",
+            "weekly-target-appendix.tex",
+            bibliography_source.name,
+            output.name,
+            output.with_suffix(".pdf").name,
+            "hedging_benchmark_summary_manifest.json",
+        )
+    )
+    if len(set(outputs)) != len(outputs):
+        raise ValueError("report output artifacts must use distinct paths")
+    aliases = set(inputs.values()).intersection(outputs)
+    if aliases:
+        raise ValueError(f"report output aliases an authenticated input: {aliases}")
+    for input_path in inputs.values():
+        for output_path in outputs:
+            if (
+                input_path.exists()
+                and output_path.exists()
+                and os.path.samefile(input_path, output_path)
+            ):
+                raise ValueError(
+                    "report output hardlinks an authenticated input: "
+                    f"{output_path}"
+                )
+    for index, left in enumerate(outputs):
+        if not left.exists():
+            continue
+        for right in outputs[index + 1 :]:
+            if right.exists() and os.path.samefile(left, right):
+                raise ValueError(
+                    f"report output artifacts are hardlinked: {left}, {right}"
+                )
+
+
+def _write_document_manifest(
+    *,
+    dataset: Path,
+    daily_matrix: Path,
+    daily_matrix_sha256: str,
+    weekly_matrix: Path,
+    weekly_matrix_sha256: str,
+    daily: JsonObject,
+    weekly: JsonObject,
+    output: Path,
+    artifact_paths: tuple[Path, ...],
+) -> None:
+    dataset_manifest = Path(dataset) / "manifest.json"
+    manifest_sha256 = _sha256(dataset_manifest)
+    if manifest_sha256 != _require_string(daily, "dataset_manifest_sha256"):
+        raise ValueError("rendered daily metrics do not match the public dataset")
+    if manifest_sha256 != _require_string(weekly, "dataset_manifest_sha256"):
+        raise ValueError("rendered weekly metrics do not match the public dataset")
+    artifacts = {path.name: _sha256(path) for path in artifact_paths}
+    payload = {
+        "schema": "hedging-benchmark-summary-bundle-v1",
+        "dataset_manifest_sha256": manifest_sha256,
+        "daily_matrix": str(daily_matrix),
+        "daily_matrix_sha256": daily_matrix_sha256,
+        "weekly_matrix": str(weekly_matrix),
+        "weekly_matrix_sha256": weekly_matrix_sha256,
+        "daily_target_notional_identity": _require_string(
+            daily,
+            "target_notional_identity",
+        ),
+        "weekly_target_notional_identity": _require_string(
+            weekly,
+            "target_notional_identity",
+        ),
+        "daily_source_identities": _source_identities(daily),
+        "weekly_source_identities": _source_identities(weekly),
+        "artifacts": artifacts,
+    }
+    manifest = output.parent / "hedging_benchmark_summary_manifest.json"
+    temporary = manifest.with_suffix(".json.tmp")
+    temporary.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(manifest)
+
+
+def _source_identities(payload: JsonObject) -> JsonObject:
+    models = _require_object(payload, "models")
+    return {
+        key: {
+            "run_identity": _require_string(_as_object(model, key), "run_identity"),
+            "aggregation_identity": _require_string(
+                _as_object(model, key),
+                "aggregation_identity",
+            ),
+            "result_count": _result_count(model),
+        }
+        for key, model in models.items()
+    }
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def _require_sha256(path: Path, expected: str, label: str) -> None:
+    if (
+        len(expected) != 64
+        or any(character not in "0123456789abcdef" for character in expected.lower())
+    ):
+        raise ValueError(f"{label} expected SHA-256 is invalid")
+    actual = _sha256(path)
+    if actual != expected.lower():
+        raise ValueError(
+            f"{label} SHA-256 mismatch: expected {expected.lower()}, got {actual}"
+        )
+
+
 def _validate_inputs(*, daily: JsonObject, weekly: JsonObject) -> None:
     if daily.get("schema") != DAILY_SUMMARY_SCHEMA:
         raise ValueError("daily metrics use an incompatible schema")
@@ -287,29 +668,6 @@ def _validate_inputs(*, daily: JsonObject, weekly: JsonObject) -> None:
         raise ValueError("summary document requires daily and weekly policies")
 
 
-def _best_daily_by_model(models: JsonObject) -> tuple[JsonObject, ...]:
-    grouped: dict[str, list[JsonObject]] = {}
-    for key, value in models.items():
-        model = _as_object(value, key)
-        grouped.setdefault(_require_string(model, "model"), []).append(model)
-    return tuple(
-        min(values, key=lambda model: _daily_metric(model, "pure_rmse"))
-        for _, values in sorted(grouped.items())
-    )
-
-
-def _best_weekly_by_schedule_and_model(models: JsonObject) -> tuple[JsonObject, ...]:
-    grouped: dict[tuple[str, str], list[JsonObject]] = {}
-    for key, value in models.items():
-        model = _as_object(value, key)
-        group = (_require_string(model, "schedule"), _require_string(model, "model"))
-        grouped.setdefault(group, []).append(model)
-    return tuple(
-        min(values, key=_weekly_pure_rmse)
-        for _, values in sorted(grouped.items())
-    )
-
-
 def _daily_reference(models: JsonObject) -> JsonObject:
     references = tuple(
         _as_object(value, key)
@@ -321,94 +679,79 @@ def _daily_reference(models: JsonObject) -> JsonObject:
     return references[0]
 
 
-def _daily_headline_table(models: tuple[JsonObject, ...]) -> str:
-    rows = []
-    for model in models:
-        rows.append(
-            " & ".join(
-                (
-                    _require_string(model, "display_name"),
-                    _fit_label(model),
-                    _basis_points(_daily_metric(model, "pure_rmse")),
-                    _percent(_daily_metric(model, "pure_rmse_reduction")),
-                    _basis_points(_daily_metric(model, "expected_shortfall_95")),
-                    _basis_points(_daily_metric(model, "mean_transaction_cost")),
-                    f"{_daily_metric(model, 'mean_gross_exposure'):.4f}",
-                    _basis_points(
-                        _daily_metric(model, "economic_book_maximum_drawdown")
-                    ),
-                )
-            )
-            + r" \\"
-        )
-    return "\n".join(
-        (
-            r"\begin{table}[H]",
-            r"\centering\scriptsize",
-            r"\caption{Daily headline: lowest pure RMSE within each model family.}",
-            r"\label{tab:daily-headline}",
-            r"\begin{tabular}{@{}llrrrrrr@{}}",
-            r"\toprule",
-            r"Model & Fitted policy & Pure RMSE & Reduction & ES$_{95}$ & Cost & Gross & Economic MDD \\",
-            r"\midrule",
-            *rows,
-            r"\bottomrule",
-            r"\end{tabular}",
-            r"\end{table}",
-        )
-    )
-
-
-def _weekly_headline_table(
-    models: tuple[JsonObject, ...],
-    weekly: JsonObject,
-) -> str:
+def _weekly_comparison_tables(weekly: JsonObject) -> str:
+    models = _require_object(weekly, "models")
     comparisons = _require_object(weekly, "comparisons")
-    rows = []
-    for model in models:
-        schedule = _require_string(model, "schedule")
+    schedules = sorted(
+        {
+            _require_string(_as_object(model, key), "schedule")
+            for key, model in models.items()
+        }
+    )
+    lines: list[str] = []
+    for schedule in schedules:
         comparison = _require_object(comparisons, schedule)
         paired = _require_object(comparison, "paired_book_loss_differences")
-        case = _require_string(model, "key")
-        case_comparison = _require_object(paired, case)
-        economic = _require_object(case_comparison, "economic_loss")
-        interval = _number_pair(economic, "hac_confidence_interval_95")
-        all_metrics = _weekly_all(model)
-        rows.append(
-            " & ".join(
-                (
-                    _tex_escape(schedule),
-                    _require_string(model, "display_name"),
-                    _fit_label(model),
-                    _basis_points(_weekly_pure_rmse(model)),
-                    _percent(_require_number(all_metrics, "pure_rmse_reduction")),
-                    _basis_points(_require_number(all_metrics, "mean_transaction_cost")),
-                    _basis_points(_require_number(economic, "mean")),
-                    "["
-                    + _basis_points(interval[0])
-                    + ", "
-                    + _basis_points(interval[1])
-                    + "]",
-                )
+        lines.extend(
+            (
+                r"\begin{landscape}",
+                r"\scriptsize",
+                r"\begin{longtable}{@{}llllrrrrrr@{}}",
+                r"\caption{Paired "
+                + _tex_escape(schedule)
+                + r" episode-book loss differences against SANOS--LV.}\\",
+                r"\toprule",
+                r"Policy & Specification & Fit & Loss & $\Delta$ mean & HH 95\% & MBB 95\% & $n$ & HH lags & MBB block \\",
+                r"\midrule",
+                r"\endfirsthead",
+                r"\toprule",
+                r"Policy & Specification & Fit & Loss & $\Delta$ mean & HH 95\% & MBB 95\% & $n$ & HH lags & MBB block \\",
+                r"\midrule",
+                r"\endhead",
             )
-            + r" \\"
         )
-    return "\n".join(
-        (
-            r"\begin{table}[H]",
-            r"\centering\scriptsize",
-            r"\caption{Weekly headline by schedule and model family.}",
-            r"\label{tab:weekly-headline}",
-            r"\begin{tabular}{@{}lllrrrrr@{}}",
-            r"\toprule",
-            r"Schedule & Model & Fitted policy & Pure RMSE & Reduction & Cost & $\Delta$ economic & HH 95\% CI \\",
-            r"\midrule",
-            *rows,
-            r"\bottomrule",
-            r"\end{tabular}",
-            r"\end{table}",
+        schedule_models = sorted(
+            (
+                _as_object(model, key)
+                for key, model in models.items()
+                if _require_string(_as_object(model, key), "schedule") == schedule
+            ),
+            key=lambda model: _require_string(model, "key"),
         )
-    )
+        for model in schedule_models:
+            case = _require_string(model, "key")
+            case_comparison = _require_object(paired, case)
+            for loss_name, loss_label in (
+                ("pure_hedge_loss", "Pure"),
+                ("economic_loss", "Economic"),
+            ):
+                loss = _require_object(case_comparison, loss_name)
+                hac = _number_pair(loss, "hac_confidence_interval_95")
+                bootstrap = _number_pair(
+                    loss,
+                    "bootstrap_confidence_interval_95",
+                )
+                lines.append(
+                    " & ".join(
+                        (
+                            _require_string(model, "display_name"),
+                            _tex_escape(_require_string(model, "specification")),
+                            _fit_label(model),
+                            loss_label,
+                            _basis_points(_require_number(loss, "mean")),
+                            _interval_basis_points(hac),
+                            _interval_basis_points(bootstrap),
+                            str(_require_integer(loss, "observations")),
+                            str(_require_integer(loss, "hac_lags")),
+                            str(_require_integer(loss, "bootstrap_block_length")),
+                        )
+                    )
+                    + r" \\"
+                )
+        lines.extend(
+            (r"\bottomrule", r"\end{longtable}", r"\end{landscape}", "")
+        )
+    return "\n".join(lines)
 
 
 def _model_catalogue(model_names: list[str]) -> str:
@@ -464,10 +807,9 @@ def _model_catalogue(model_names: list[str]) -> str:
     }
     sections = []
     for model in model_names:
-        title, description = descriptions.get(
-            model,
-            (model.replace("-", " ").title(), "Benchmark model."),
-        )
+        if model not in descriptions:
+            raise ValueError(f"unknown benchmark model: {model}")
+        title, description = descriptions[model]
         sections.append(f"\\subsection{{{title}}}\n{description}")
     return "\n\n".join(sections)
 
@@ -479,24 +821,14 @@ def _fit_label(model: JsonObject) -> str:
         return _tex_escape(objective)
     if isinstance(parameter, bool) or not isinstance(parameter, int | float):
         raise ValueError("fitted_parameter must be numeric or null")
-    return _tex_escape(objective) + f", $\\lambda={float(parameter):g}$"
+    symbol = "\\kappa" if objective == "mean-volatility" else "\\lambda"
+    return _tex_escape(objective) + f", ${symbol}={float(parameter):g}$"
 
 
 def _daily_metric(model: JsonObject, name: str) -> float:
     return _require_number(
         _require_object(_require_object(model, "metrics"), "all"),
         name,
-    )
-
-
-def _weekly_all(model: JsonObject) -> JsonObject:
-    return _require_object(_require_object(model, "metrics"), "all")
-
-
-def _weekly_pure_rmse(model: JsonObject) -> float:
-    return _require_number(
-        _require_object(_weekly_all(model), "pure_hedge_loss"),
-        "root_mean_square",
     )
 
 
@@ -512,8 +844,9 @@ def _basis_points(value: float) -> str:
     return f"{DISPLAY_SCALE * value:,.2f}"
 
 
-def _percent(value: float) -> str:
-    return f"{100.0 * value:.2f}\\%"
+def _interval_basis_points(value: tuple[float, float]) -> str:
+    left, right = value
+    return f"[{_basis_points(left)}, {_basis_points(right)}]"
 
 
 def _integer(value: int) -> str:
@@ -568,16 +901,22 @@ def _require_number(payload: JsonObject, name: str) -> float:
     return number
 
 
+def _require_integer(payload: JsonObject, name: str) -> int:
+    value = payload.get(name)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{name} must be an integer")
+    return value
+
+
 def main() -> None:
     """Render and optionally compile a complete authenticated benchmark report."""
     report_directory = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--daily-metrics", type=Path, required=True)
-    parser.add_argument("--weekly-metrics", type=Path, required=True)
-    parser.add_argument("--daily-objective-tables", type=Path, required=True)
-    parser.add_argument("--weekly-objective-tables", type=Path, required=True)
-    parser.add_argument("--daily-target-appendix", type=Path, required=True)
-    parser.add_argument("--weekly-target-appendix", type=Path, required=True)
+    parser.add_argument("--dataset", type=Path, required=True)
+    parser.add_argument("--daily-matrix", type=Path, required=True)
+    parser.add_argument("--daily-matrix-sha256", required=True)
+    parser.add_argument("--weekly-matrix", type=Path, required=True)
+    parser.add_argument("--weekly-matrix-sha256", required=True)
     parser.add_argument(
         "--bibliography-source",
         type=Path,
@@ -588,14 +927,13 @@ def main() -> None:
     parser.add_argument("--compile", action="store_true")
     arguments = parser.parse_args()
     pdf = write_summary_document(
-        daily_metrics=arguments.daily_metrics,
-        weekly_metrics=arguments.weekly_metrics,
+        dataset=arguments.dataset,
+        daily_matrix=arguments.daily_matrix,
+        daily_matrix_sha256=arguments.daily_matrix_sha256,
+        weekly_matrix=arguments.weekly_matrix,
+        weekly_matrix_sha256=arguments.weekly_matrix_sha256,
         output=arguments.output,
         bibliography_source=arguments.bibliography_source,
-        daily_objective_tables=arguments.daily_objective_tables,
-        weekly_objective_tables=arguments.weekly_objective_tables,
-        daily_target_appendix=arguments.daily_target_appendix,
-        weekly_target_appendix=arguments.weekly_target_appendix,
         status_date=arguments.status_date,
         compile_pdf=arguments.compile,
     )

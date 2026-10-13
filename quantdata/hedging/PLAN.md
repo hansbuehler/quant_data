@@ -87,7 +87,7 @@ conflicting duplicate cases, and can require that every ready matrix case is
 complete. Its real current-cohort smoke automatically authenticated the SANOS-LV
 reference, three robust-covariance policies, and the completed Historical-SANOS
 policy and generated all four objective tables plus target appendices. The
-resulting complete hedging suite contains 328 passing tests. The
+resulting complete hedging suite contains 337 passing tests. The
 strictly-2022 target-sizing exercise now
 fixes each target to one
 maturity-matched ATM spot-risk unit; all 20 calibration hedges converged with
@@ -984,17 +984,25 @@ Run the complete benchmark, generate versioned tables and figures, perform the
 final results review, and reconcile every reported number with its source
 artifact.
 
-The daily and weekly report-input paths are matrix-driven and authenticated
-rather than manually transcribed. Weekly ingestion requires the complete
+The daily and weekly report paths are matrix-driven and authenticated rather
+than manually transcribed. The public CLI accepts only the public dataset and
+immutable production matrices; it rebuilds the metrics and LaTeX fragments and
+writes a manifest binding dataset, matrix, run, aggregation, and report hashes.
+Precommitted matrix digests are explicit trust anchors. Final rendering requires
+the canonical 54-cell daily and 94-cell weekly grids to be fully ready and
+complete, so a post-outcome matrix cannot suppress a policy by relabelling it
+blocked.
+Weekly ingestion requires the complete
 528-origin, 6,864-record population, verifies objective labels against the
 immutable run snapshot, keeps frozen and restarted schedules distinct, and
 generates aggregate objective and target-level appendix tables. Final
 weekly comparisons use equal-weighted 13-target episode books and report
 candidate-minus-SANOS paired differences with Hansen--Hodrick and moving-block
-bootstrap uncertainty. A standalone final-document builder now renders compact
-best-within-model descriptive headlines, all daily and weekly objective grids,
-target-level appendices, model references, and immutable provenance directly
-from those authenticated inputs; its synthetic end-to-end PDF compile passes.
+bootstrap uncertainty. A standalone final-document builder now renders all
+daily and weekly objective grids without selecting policies on 2023--2025
+outcomes, target-level appendices, model references, and immutable provenance
+directly from those authenticated inputs; its synthetic end-to-end PDF compile
+passes.
 Final completed-case figures, production-data PDF regeneration, and the final
 results review remain outstanding.
 

@@ -17,6 +17,10 @@ from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
     PublicHedgingPanel,
     default_public_candidate_path,
 )
+from quantdata.sdlv.daily.front_spot.hedging.reports.policy_labels import (
+    canonical_policy_variant,
+    policy_specification_label,
+)
 from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
     DailyEvaluationSpec,
 )
@@ -26,7 +30,7 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.daily_results import (
 
 JsonObject: TypeAlias = dict[str, object]
 
-SUMMARY_SCHEMA = "hedging-benchmark-summary-metrics-v3"
+SUMMARY_SCHEMA = "hedging-benchmark-summary-metrics-v4"
 RESULTS_SCHEMA = "hedging-daily-results-v2"
 EXPECTED_CLAIMS = 20
 EXPECTED_OBSERVATIONS = 611
@@ -62,6 +66,8 @@ class DailyPolicyInput:
     display_name: str
     fitted_objective: str
     fitted_parameter: float | None
+    expected_measure: str | None = None
+    variant: str = "unspecified"
 
 
 def build_summary_metrics(
@@ -80,6 +86,7 @@ def build_summary_metrics(
                 display_name="SANOS--LV",
                 fitted_objective="reference",
                 fitted_parameter=None,
+                variant="reference-delta-eight-factor-vega",
             ),
             DailyPolicyInput(
                 key="historical-sanos",
@@ -88,6 +95,7 @@ def build_summary_metrics(
                 display_name="Historical SANOS",
                 fitted_objective="from-run",
                 fitted_parameter=None,
+                variant="rolling-fixed-contract-scenarios",
             ),
         ),
         dataset=dataset,
@@ -124,6 +132,8 @@ def build_daily_policy_summary_metrics(
                 else policy.fitted_objective
             ),
             fitted_parameter=policy.fitted_parameter,
+            expected_measure=policy.expected_measure,
+            variant=policy.variant,
         )
         for policy in policies
     )
@@ -270,6 +280,8 @@ def daily_policy_inputs_from_matrices(
                     )
                 continue
             expected_model = _require_string(case, "model")
+            expected_measure = _require_string(case, "measure")
+            variant = _require_string(case, "variant")
             objective_value = case.get("objective")
             fitted_objective = (
                 "reference"
@@ -292,6 +304,8 @@ def daily_policy_inputs_from_matrices(
                 ),
                 fitted_objective=fitted_objective,
                 fitted_parameter=fitted_parameter,
+                expected_measure=expected_measure,
+                variant=variant,
             )
             if case_id in inputs:
                 if inputs[case_id] != policy or commands[case_id] != command:
@@ -345,6 +359,8 @@ def _read_policy(
     display_name: str,
     fitted_objective: str | None = None,
     fitted_parameter: float | None = None,
+    expected_measure: str | None = None,
+    variant: str = "unspecified",
 ) -> JsonObject:
     results_path = Path(path)
     run = _read_json_object(results_path.parent / "run.json")
@@ -383,12 +399,33 @@ def _read_policy(
             )
         fitted_objective = run_objective
         fitted_parameter = run_parameter
+    measure = _require_string(results, "measure")
+    if expected_measure is not None and measure != expected_measure:
+        raise ValueError(
+            "daily production matrix measure does not match authenticated "
+            f"run: {results_path}"
+        )
+    canonical_variant = canonical_policy_variant(
+        case_id=key,
+        model=expected_model,
+    )
+    if variant != canonical_variant:
+        raise ValueError(
+            "daily production matrix variant does not match the canonical "
+            f"policy: {results_path}"
+        )
     return {
         "key": key,
         "model": expected_model,
         "display_name": display_name,
-        "measure": _require_string(results, "measure"),
+        "measure": measure,
+        "variant": canonical_variant,
+        "specification": policy_specification_label(
+            measure=measure,
+            variant=canonical_variant,
+        ),
         "run_identity": _require_string(results, "run_identity"),
+        "aggregation_identity": _require_string(results, "aggregation_identity"),
         "dataset_manifest_sha256": _require_string(results, "dataset_manifest_sha256"),
         "target_notional_identity": spec.target_notional_identity,
         "result_count": _require_integer(results, "result_count"),
@@ -688,6 +725,9 @@ def _objective_tables(models: JsonObject) -> JsonObject:
                 {
                     "model": key,
                     "display_name": _require_string(model, "display_name"),
+                    "measure": _require_string(model, "measure"),
+                    "variant": _require_string(model, "variant"),
+                    "specification": _require_string(model, "specification"),
                     "fitted_objective": _require_string(model, "fitted_objective"),
                     "fitted_parameter": model.get("fitted_parameter"),
                     "scores": {
@@ -884,9 +924,9 @@ def _objective_tables_tex(payload: JsonObject) -> str:
                 "\\small",
                 f"\\caption{{{_objective_title(objective)}: full out-of-sample economic-risk score.}}",
                 f"\\label{{tab:objective-{index}}}",
-                f"\\begin{{tabular}}{{ll{'r' * len(parameters)}rr}}",
+                f"\\begin{{tabular}}{{lll{'r' * len(parameters)}rr}}",
                 "\\toprule",
-                "Model & Fitted policy & "
+                "Model & Specification & Fitted policy & "
                 + " & ".join(
                     _parameter_heading(objective, value) for value in parameters
                 )
@@ -900,6 +940,7 @@ def _objective_tables_tex(payload: JsonObject) -> str:
                 " & ".join(
                     (
                         _require_string(row, "display_name"),
+                        _tex_escape(_require_string(row, "specification")),
                         _policy_tex(row),
                         *(
                             _basis_points(_require_number(scores, parameter))
@@ -963,7 +1004,9 @@ def _objective_appendix_tex(payload: JsonObject) -> str:
                 lines.append(
                     " & ".join(
                         (
-                            f"{_require_string(model, 'display_name')} ({_policy_tex(model)})",
+                            f"{_require_string(model, 'display_name')} "
+                            f"[{_tex_escape(_require_string(model, 'specification'))}] "
+                            f"({_policy_tex(model)})",
                             _target_tex(claim),
                             *(
                                 _basis_points(_require_number(scores, parameter))
@@ -1124,6 +1167,10 @@ def _require_integer(payload: JsonObject, name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValueError(f"{name} must be an integer")
     return value
+
+
+def _tex_escape(value: str) -> str:
+    return value.replace("_", r"\_").replace("%", r"\%")
 
 
 def _default_result_path(*parts: str) -> Path | None:

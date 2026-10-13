@@ -17,6 +17,9 @@ from quantdata.sdlv.daily.front_spot.hedging.reports.build_weekly_summary_metric
     weekly_policy_inputs_from_matrices,
     write_weekly_summary_metrics,
 )
+from quantdata.sdlv.daily.front_spot.hedging.reports.policy_labels import (
+    canonical_policy_variant,
+)
 from quantdata.sdlv.daily.front_spot.hedging.runners.weekly import (
     WeeklyEvaluationSpec,
 )
@@ -92,6 +95,12 @@ def test_weekly_summary_discovers_schedules_and_aggregates_complete_cases(
             {
                 "case_id": case_id,
                 "model": model,
+                "measure": "test",
+                "variant": canonical_policy_variant(
+                    case_id=case_id,
+                    model=model,
+                    schedule=schedule.value,
+                ),
                 "objective": objective,
                 "risk_parameter": parameter,
                 "readiness": "ready",
@@ -148,6 +157,8 @@ def test_weekly_summary_discovers_schedules_and_aggregates_complete_cases(
     paired = comparison["paired_book_loss_differences"][definitions[1][0]]
     assert paired["economic_loss"]["mean"] == pytest.approx(0.5)
     assert paired["economic_loss"]["observations"] == 528
+    assert paired["economic_loss"]["bootstrap_block_length"] == 50
+    assert frozen_historical["specification"] == "test; SANOS scenarios"
     assert len(payload["objective_tables"]["mean_variance"]["rows"]) == 3
 
     json_output = tmp_path / "weekly.json"
@@ -195,6 +206,10 @@ def test_weekly_summary_rejects_matrix_objective_that_disagrees_with_run(
                     {
                         "case_id": "forged-objective",
                         "model": "historical-sanos",
+                        "measure": "test",
+                        "variant": (
+                            "frozen-weekly-rolling-fixed-contract-scenarios"
+                        ),
                         "objective": "entropy",
                         "risk_parameter": 10.0,
                         "readiness": "ready",
@@ -221,6 +236,124 @@ def test_weekly_summary_rejects_matrix_objective_that_disagrees_with_run(
         build_weekly_policy_summary_metrics(policies=policies)
 
 
+def test_weekly_summary_rejects_matrix_measure_that_disagrees_with_run(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = tmp_path / "historical"
+    results_path = output / "results.json"
+    spec = _write_run(
+        output,
+        model="historical-sanos",
+        schedule=HedgeSchedule.FROZEN_WEEKLY,
+        objective="mean-volatility",
+        parameter=1.0,
+    )
+    results_path.write_text("{}", encoding="utf-8")
+    result = _weekly_result(spec=spec, pure_rmse=1.0)
+    monkeypatch.setattr(
+        weekly_summary_module,
+        "authenticate_completed_weekly_results",
+        lambda _panel, *, results_path: result,
+    )
+    matrix = tmp_path / "matrix.json"
+    matrix.write_text(
+        json.dumps(
+            {
+                "schema": "hedging-weekly-production-matrix-v1",
+                "cases": [
+                    {
+                        "case_id": "forged-measure",
+                        "model": "historical-sanos",
+                        "measure": "Q",
+                        "variant": (
+                            "frozen-weekly-rolling-fixed-contract-scenarios"
+                        ),
+                        "objective": "mean-volatility",
+                        "risk_parameter": 1.0,
+                        "readiness": "ready",
+                        "command": [
+                            "python",
+                            "runner",
+                            "--schedule",
+                            HedgeSchedule.FROZEN_WEEKLY.value,
+                            "--output",
+                            str(output),
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    policies = weekly_policy_inputs_from_matrices(
+        (matrix,),
+        require_ready_complete=True,
+    )
+    with pytest.raises(ValueError, match="measure does not match"):
+        build_weekly_policy_summary_metrics(policies=policies)
+
+
+def test_weekly_summary_rejects_forged_matrix_variant(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = tmp_path / "historical"
+    results_path = output / "results.json"
+    spec = _write_run(
+        output,
+        model="historical-sanos",
+        schedule=HedgeSchedule.FROZEN_WEEKLY,
+        objective="mean-volatility",
+        parameter=1.0,
+    )
+    results_path.write_text("{}", encoding="utf-8")
+    result = _weekly_result(spec=spec, pure_rmse=1.0)
+    monkeypatch.setattr(
+        weekly_summary_module,
+        "authenticate_completed_weekly_results",
+        lambda _panel, *, results_path: result,
+    )
+    matrix = tmp_path / "matrix.json"
+    matrix.write_text(
+        json.dumps(
+            {
+                "schema": "hedging-weekly-production-matrix-v1",
+                "cases": [
+                    {
+                        "case_id": "forged-variant",
+                        "model": "historical-sanos",
+                        "measure": "test",
+                        "variant": (
+                            "frozen-weekly-published-settings-full-rolling-fit"
+                        ),
+                        "objective": "mean-volatility",
+                        "risk_parameter": 1.0,
+                        "readiness": "ready",
+                        "command": [
+                            "python",
+                            "runner",
+                            "--schedule",
+                            HedgeSchedule.FROZEN_WEEKLY.value,
+                            "--output",
+                            str(output),
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    policies = weekly_policy_inputs_from_matrices(
+        (matrix,),
+        require_ready_complete=True,
+    )
+    with pytest.raises(ValueError, match="variant does not match"):
+        build_weekly_policy_summary_metrics(policies=policies)
+
+
 def test_weekly_summary_rejects_incomplete_ready_case(tmp_path: Path) -> None:
     matrix = tmp_path / "matrix.json"
     matrix.write_text(
@@ -231,6 +364,10 @@ def test_weekly_summary_rejects_incomplete_ready_case(tmp_path: Path) -> None:
                     {
                         "case_id": "missing",
                         "model": "sanos-lv",
+                        "measure": "test",
+                        "variant": (
+                            "frozen-weekly-reference-delta-eight-factor-vega"
+                        ),
                         "objective": None,
                         "risk_parameter": None,
                         "readiness": "ready",

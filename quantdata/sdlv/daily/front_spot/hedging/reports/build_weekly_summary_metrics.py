@@ -24,6 +24,10 @@ from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
     PublicHedgingPanel,
     default_public_candidate_path,
 )
+from quantdata.sdlv.daily.front_spot.hedging.reports.policy_labels import (
+    canonical_policy_variant,
+    policy_specification_label,
+)
 from quantdata.sdlv.daily.front_spot.hedging.runners.weekly import (
     WeeklyEvaluationSpec,
 )
@@ -37,7 +41,7 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.weekly_results import (
 
 JsonObject: TypeAlias = dict[str, object]
 
-SUMMARY_SCHEMA = "hedging-benchmark-weekly-summary-metrics-v1"
+SUMMARY_SCHEMA = "hedging-benchmark-weekly-summary-metrics-v2"
 WEEKLY_MATRIX_SCHEMA = "hedging-weekly-production-matrix-v1"
 DISPLAY_SCALE = 10_000.0
 EXPECTED_ORIGINS = 528
@@ -73,6 +77,8 @@ class WeeklyPolicyInput:
     display_name: str
     fitted_objective: str
     fitted_parameter: float | None
+    expected_measure: str
+    variant: str
 
 
 def weekly_policy_inputs_from_matrices(
@@ -117,6 +123,8 @@ def weekly_policy_inputs_from_matrices(
                     )
                 continue
             model = _require_string(case, "model")
+            measure = _require_string(case, "measure")
+            variant = _require_string(case, "variant")
             objective_value = case.get("objective")
             fitted_objective = (
                 "reference"
@@ -140,6 +148,8 @@ def weekly_policy_inputs_from_matrices(
                 ),
                 fitted_objective=fitted_objective,
                 fitted_parameter=fitted_parameter,
+                expected_measure=measure,
+                variant=variant,
             )
             if case_id in inputs:
                 if inputs[case_id] != policy or commands[case_id] != command:
@@ -248,6 +258,21 @@ def _read_policy(
         or result.schedule != policy.expected_schedule
     ):
         raise ValueError(f"unexpected weekly schedule: {policy.results_path}")
+    if result.measure != policy.expected_measure:
+        raise ValueError(
+            "weekly production matrix measure does not match authenticated "
+            f"run: {policy.results_path}"
+        )
+    canonical_variant = canonical_policy_variant(
+        case_id=policy.key,
+        model=result.model,
+        schedule=result.schedule,
+    )
+    if policy.variant != canonical_variant:
+        raise ValueError(
+            "weekly production matrix variant does not match the canonical "
+            f"policy: {policy.results_path}"
+        )
     if result.dataset_manifest_sha256 != spec.dataset_manifest_sha256:
         raise ValueError(f"weekly result manifest differs from run: {policy.results_path}")
     if (
@@ -273,6 +298,11 @@ def _read_policy(
         "model": result.model,
         "display_name": policy.display_name,
         "measure": result.measure,
+        "variant": canonical_variant,
+        "specification": policy_specification_label(
+            measure=result.measure,
+            variant=canonical_variant,
+        ),
         "schedule": result.schedule,
         "run_identity": result.run_identity,
         "dataset_manifest_sha256": result.dataset_manifest_sha256,
@@ -618,6 +648,7 @@ def _paired_book_comparison(
     reference: JsonObject,
 ) -> JsonObject:
     summaries: JsonObject = {}
+    inference_config = WeeklyResultsConfig().inference
     for loss_name in ("pure_hedge_loss", "economic_loss"):
         candidate_ids, candidate_losses = _book_loss_series(
             candidate,
@@ -636,7 +667,7 @@ def _paired_book_comparison(
         summary = summarize_episode_losses(
             differences,
             episode_dates=tuple(date.fromisoformat(value) for value in candidate_ids),
-            config=WeeklyResultsConfig().inference,
+            config=inference_config,
         )
         inference = summary.inference
         summaries[loss_name] = {
@@ -657,6 +688,12 @@ def _paired_book_comparison(
             "hac_confidence_interval_99": list(inference.hac_99),
             "bootstrap_confidence_interval_95": list(inference.bootstrap_95),
             "bootstrap_confidence_interval_99": list(inference.bootstrap_99),
+            "bootstrap_block_length": min(
+                inference_config.bootstrap_block_length,
+                summary.observations,
+            ),
+            "bootstrap_samples": inference_config.bootstrap_samples,
+            "bootstrap_seed": inference_config.bootstrap_seed,
         }
     return summaries
 
@@ -703,6 +740,9 @@ def _objective_tables(models: JsonObject) -> JsonObject:
                 {
                     "model": key,
                     "display_name": _require_string(model, "display_name"),
+                    "measure": _require_string(model, "measure"),
+                    "variant": _require_string(model, "variant"),
+                    "specification": _require_string(model, "specification"),
                     "schedule": _require_string(model, "schedule"),
                     "fitted_objective": _require_string(model, "fitted_objective"),
                     "fitted_parameter": model.get("fitted_parameter"),
@@ -736,11 +776,11 @@ def _objective_tables_tex(payload: JsonObject) -> str:
             (
                 "\\begin{landscape}",
                 f"\\subsection*{{Weekly {_tex_objective_name(objective)} scores}}",
-                "\\begin{longtable}{@{}lllr"
+                "\\begin{longtable}{@{}llllr"
                 + "r" * len(parameters)
                 + "rr@{}}",
                 "\\toprule",
-                "Schedule & Policy & Fit & $\\lambda_{fit}$ & "
+                "Schedule & Policy & Specification & Fit & $\\lambda_{fit}$ & "
                 + " & ".join(f"$\\rho_{{{parameter}}}$" for parameter in parameters)
                 + " & Pure RMSE & Cost \\\\",
                 "\\midrule",
@@ -761,6 +801,7 @@ def _objective_tables_tex(payload: JsonObject) -> str:
                     (
                         _tex_escape(_require_string(row, "schedule")),
                         _require_string(row, "display_name"),
+                        _tex_escape(_require_string(row, "specification")),
                         _tex_escape(_require_string(row, "fitted_objective")),
                         fit_parameter,
                         *(
@@ -787,7 +828,9 @@ def _target_appendix_tex(payload: JsonObject) -> str:
             (
                 "\\begin{landscape}",
                 "\\subsection*{" + _require_string(model, "display_name") + ": "
-                + _tex_escape(_require_string(model, "schedule")) + "}",
+                + _tex_escape(_require_string(model, "schedule")) + "; "
+                + _tex_escape(_require_string(model, "specification")) + "; "
+                + _policy_tex(model) + "}",
                 "\\begin{longtable}{@{}lrrrrrr@{}}",
                 "\\toprule",
                 "Target & Unhedged RMSE & Pure RMSE & Economic RMSE & ES$_{95}$ & Cost & Gross \\\\",
@@ -848,6 +891,21 @@ def _basis_points(value: float) -> str:
 
 def _tex_objective_name(value: str) -> str:
     return value.replace("_", "--")
+
+
+def _policy_tex(payload: JsonObject) -> str:
+    objective = _require_string(payload, "fitted_objective")
+    if objective == "reference":
+        return "reference"
+    parameter = _number(payload.get("fitted_parameter"))
+    symbol = "\\kappa" if objective == "mean-volatility" else "\\lambda"
+    title = {
+        "mean-variance": "MV",
+        "mean-volatility": "MVol",
+        "entropy": "Ent",
+        "power-exponential": "Power",
+    }.get(objective, objective)
+    return f"{title}, ${symbol}={parameter:g}$"
 
 
 def _tex_escape(value: str) -> str:

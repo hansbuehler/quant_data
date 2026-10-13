@@ -398,25 +398,28 @@ runs with different dataset manifests, target notionals, or schedule-specific
 unhedged claims. Model comparisons use paired equal-weighted 13-target episode
 books with Hansen--Hodrick and moving-block-bootstrap uncertainty.
 
-After both authenticated metric builders finish, render the standalone final
-document beside their generated tables:
+The final document builder accepts only the public dataset and immutable
+production matrices. It re-authenticates every completed run, rebuilds all
+metrics and LaTeX fragments itself, and writes a bundle manifest binding the
+dataset, matrices, run identities, aggregation identities, and report files.
+The two matrix digests are precommitted trust anchors; final rendering rejects
+blocked, gate-waiting, incomplete, or noncanonical cells:
 
 ```bash
 python -m quantdata.sdlv.daily.front_spot.hedging.reports.build_summary_document \
-  --daily-metrics daily-metrics.json \
-  --weekly-metrics weekly-metrics.json \
-  --daily-objective-tables daily-objective-tables.tex \
-  --weekly-objective-tables weekly-objective-tables.tex \
-  --daily-target-appendix daily-target-appendix.tex \
-  --weekly-target-appendix weekly-target-appendix.tex \
+  --dataset "$QUANTDATA_ROOT/datasets/hedging/spx-2022-2025-hedging-public-candidate-v1" \
+  --daily-matrix "$DAILY_MATRIX" \
+  --daily-matrix-sha256 "$PRECOMMITTED_DAILY_MATRIX_SHA256" \
+  --weekly-matrix "$WEEKLY_MATRIX" \
+  --weekly-matrix-sha256 "$PRECOMMITTED_WEEKLY_MATRIX_SHA256" \
   --output hedging_benchmark_summary.tex \
   --compile
 ```
 
-The generated PDF contains a compact best-within-model descriptive headline,
-all precommitted objective grids, paired weekly uncertainty, every target-level
-appendix, model references, and immutable dataset/target provenance. The
-headline compression is explicitly not a tuning rule.
+The generated PDF contains every precommitted daily and weekly objective grid,
+paired weekly Hansen--Hodrick and moving-block-bootstrap uncertainty, every
+target-level appendix, model references, and immutable dataset/target
+provenance. It never chooses a policy using 2023--2025 outcomes.
 
 Legacy queue state without a matrix digest is rejected unless the operator
 explicitly supplies `--adopt-unpinned-state` after checking the matrix.
