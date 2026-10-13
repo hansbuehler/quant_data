@@ -190,6 +190,16 @@ def main() -> None:
         "train_config": asdict(train_config),
         "checkpoint_path": str(result.checkpoint_path),
         "checkpoint_sha256": file_sha256(result.checkpoint_path),
+        "base_checkpoint_path": (
+            None
+            if arguments.base_checkpoint is None
+            else str(arguments.base_checkpoint)
+        ),
+        "base_checkpoint_sha256": (
+            None
+            if arguments.base_checkpoint is None
+            else file_sha256(arguments.base_checkpoint)
+        ),
         "completed_epochs": result.completed_epochs,
         "validation_loss": result.validation_loss,
         "best_validation_loss": result.best_validation_loss,

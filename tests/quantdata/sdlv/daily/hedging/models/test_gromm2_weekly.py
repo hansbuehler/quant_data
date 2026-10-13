@@ -26,6 +26,12 @@ from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly_runner import (
 from quantdata.sdlv.daily.front_spot.hedging.data.fixtures import (
     synthetic_weekly_market_day,
 )
+from quantdata.sdlv.daily.front_spot.hedging.data.rolling_factors import (
+    RollingDlvFactorFit,
+)
+from quantdata.sdlv.daily.front_spot.hedging.models.gromm import (
+    conventional_weekly as conventional_weekly_module,
+)
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm import (
     weekly_adapter as weekly_adapter_module,
 )
@@ -33,6 +39,10 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.config import (
     GrommConfig,
     GrommMeasure,
     GrommTrainConfig,
+)
+from quantdata.sdlv.daily.front_spot.hedging.models.gromm.conventional_weekly import (
+    GrommConventionalWeeklyAdapter,
+    GrommConventionalWeeklyMarketFit,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.gromm2_daily import (
     Gromm2MarketState,
@@ -50,6 +60,14 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2 import 
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.weekly_adapter import (
     GrommWeeklyAdapter,
     GrommWeeklyMarketFit,
+)
+from quantdata.sdlv.daily.front_spot.hedging.models.sanos_lv.config import SanosLvConfig
+from quantdata.sdlv.daily.front_spot.hedging.models.sanos_lv.greeks import (
+    DeltaFactorHedge,
+    DlvGreeks,
+)
+from quantdata.sdlv.daily.front_spot.hedging.models.sanos_lv.weekly_adapter import (
+    SanosLvWeeklyMarketFit,
 )
 from quantdata.torch import BaseEnvironment
 
@@ -142,6 +160,34 @@ def _decision_state() -> WeeklyDecisionState:
         option_alive=np.ones(len(contracts), dtype=bool),
         previous_spot_position=0.0,
         previous_option_positions=np.zeros(len(contracts)),
+    )
+
+
+def _rolling_factors() -> RollingDlvFactorFit:
+    day = synthetic_weekly_market_day()
+    state_shape = day.dlvsq[1:].shape
+    loadings = np.empty((*state_shape, 2), dtype=np.float64)
+    loadings[..., 0] = 1.0e-3
+    loadings[..., 1] = np.linspace(
+        -2.0e-3,
+        2.0e-3,
+        np.prod(state_shape),
+    ).reshape(state_shape)
+    return RollingDlvFactorFit(
+        as_of_date=day.trading_date,
+        training_origin_dates=(date(2025, 1, 2), date(2025, 1, 3)),
+        training_endpoint_dates=(date(2025, 1, 3), date(2025, 1, 6)),
+        conditional_intercept=np.zeros(state_shape),
+        conditional_slope=np.ones(state_shape),
+        centered_residuals=np.zeros((2, *state_shape)),
+        spot_score_mean=0.0,
+        spot_score_std=1.0,
+        daily_loadings=loadings,
+        daily_factor_variances=np.ones(2),
+        factor_scores=np.zeros((2, 2)),
+        explained_variance_fraction=0.9,
+        interpolation_clip_fraction=0.0,
+        forward_tail_extrapolation_fraction=0.0,
     )
 
 
@@ -386,3 +432,133 @@ def test_gromm2_weekly_adapter_fits_signed_policies_and_returns_action(
     assert np.isfinite(action.spot_position)
     assert action.option_positions.shape == (len(state.contracts),)
     assert fitted.hedge.short.checkpoint_path.is_file()
+
+
+def test_conventional_gromm_weekly_differentiates_its_q_price(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    adapter = GrommConventionalWeeklyAdapter(
+        artifact_root=tmp_path / "market",
+        gromm_config=GrommConfig(path_count=8, batch_size=8),
+        dlv_config=SanosLvConfig(),
+    )
+    base_state = _decision_state()
+    base = base_state.instruction
+    instruction = WeeklyFitInstruction(
+        schedule=base.schedule,
+        model=adapter.model,
+        measure=adapter.measure,
+        target_label=base.target_label,
+        claim_quantity=base.claim_quantity,
+        model_config_identity=adapter.model_config_identity,
+        policy_config_identity=adapter.policy_config_identity,
+        episode_origin_date=base.episode_origin_date,
+        decision_date=base.decision_date,
+        fit_as_of_date=base.fit_as_of_date,
+        training_dates=base.training_dates,
+        frozen_contract_ids=base.frozen_contract_ids,
+    )
+    state = replace(base_state, instruction=instruction)
+    claim = build_weekly_claim(
+        state.market_day,
+        target=WeeklyTarget(
+            kind=WeeklyTargetKind.DIGITAL,
+            right=OptionRight.CALL,
+            nms=0.0,
+        ),
+    )
+    factors = _rolling_factors()
+
+    def fake_generate(*, market_state, state, **_kwargs):
+        current_scale = state.discount_to_origin * state.spot_over_episode_origin
+        normalized_value = (
+            1.0
+            + 0.1 * state.spot_over_episode_origin
+            + 0.01 * float(np.sum(np.log(market_state.dlvsq[1:])))
+        )
+        return SimpleNamespace(
+            scenarios=SimpleNamespace(
+                terminal_claim_values_pv=np.full(
+                    adapter.gromm_config.path_count,
+                    current_scale * normalized_value,
+                )
+            )
+        )
+
+    monkeypatch.setattr(
+        conventional_weekly_module,
+        "generate_gromm2_weekly_scenarios",
+        fake_generate,
+    )
+    market_fit = GrommConventionalWeeklyMarketFit(
+        market_fit_identity=instruction.market_fit_identity,
+        artifacts=cast(RollingGromm2Artifacts, None),
+        market_state=_market_state(),
+        dlv_fit=SanosLvWeeklyMarketFit(
+            market_fit_identity=instruction.market_fit_identity,
+            factors=factors,
+        ),
+        affine_history_sha256="0" * 64,
+        dynamics_sha256="1" * 64,
+    )
+
+    fitted = adapter.fit_policy(
+        market_fit,
+        instruction=instruction,
+        claim=claim,
+        contracts=state.contracts,
+        state=state,
+    )
+    assert fitted.prices.q_expectation_per_fit_spot is not None
+    assert np.isfinite(fitted.prices.q_expectation_per_fit_spot)
+    assert fitted.prices.buyer_indifference_per_fit_spot is None
+    expected_vegas = 0.01 * np.sum(factors.daily_loadings, axis=(0, 1))
+    np.testing.assert_allclose(
+        fitted.inception_target_greeks.factor_vegas[0],
+        expected_vegas,
+        atol=2.0e-12,
+    )
+    expected_price = (
+        1.1 + 0.01 * float(np.sum(np.log(state.market_day.dlvsq[1:])))
+    )
+    assert np.isclose(fitted.inception_target_greeks.model_prices[0], expected_price)
+    assert np.isclose(
+        fitted.inception_target_greeks.spot_deltas[0],
+        expected_price + 0.1,
+        atol=2.0e-10,
+    )
+
+    option_count = int(np.sum(state.option_alive))
+    monkeypatch.setattr(
+        conventional_weekly_module,
+        "dlv_option_greeks",
+        lambda *_args, **_kwargs: DlvGreeks(
+            model_prices=np.ones(option_count),
+            spot_deltas=np.zeros(option_count),
+            factor_vegas=np.ones((option_count, factors.factor_rank)),
+        ),
+    )
+    captured = {}
+
+    def fake_solve(*, target, **_kwargs):
+        captured["target"] = target
+        return DeltaFactorHedge(
+            spot_action=0.25,
+            option_actions=np.zeros(option_count),
+            factor_residual=np.zeros(factors.factor_rank),
+            delta_residual=0.0,
+            cap_hits=0,
+        )
+
+    monkeypatch.setattr(
+        conventional_weekly_module,
+        "solve_delta_factor_hedge",
+        fake_solve,
+    )
+    action = adapter.action(fitted, state=state)
+    np.testing.assert_allclose(
+        captured["target"].factor_vegas,
+        instruction.claim_quantity * fitted.inception_target_greeks.factor_vegas,
+    )
+    assert action.spot_position == 0.25

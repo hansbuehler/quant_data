@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import math
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 
 import h5py
@@ -239,6 +239,63 @@ def load_gromm2_market_state(
     )
 
 
+def price_gromm2_daily_target(
+    market_state: Gromm2MarketState,
+    *,
+    sample: DailyDigitalSample,
+) -> float:
+    """Return the exact current Q expectation of one daily digital target."""
+    target = sample.target
+    if market_state.as_of_date != sample.transition.origin.trading_date:
+        raise ValueError("GROMM2 market state and daily sample dates differ")
+    expiry_index = target.maturity_business_days - 1
+    if expiry_index < 0 or expiry_index >= len(market_state.business_dtes):
+        raise ValueError("daily target maturity is absent from the GROMM2 state")
+    value = sample.target_discount_factor * float(
+        _digital_probability(
+            support=market_state.supports[expiry_index],
+            density=market_state.density_tower[expiry_index][None],
+            background_level=np.ones(1),
+            strike=sample.target_strike_over_forward,
+            remaining_days=target.maturity_business_days,
+            right=target.right,
+        )[0]
+    )
+    if not math.isfinite(value) or value < 0.0:
+        raise FloatingPointError("GROMM2 daily target price is invalid")
+    return value
+
+
+def gromm2_market_state_with_dlvsq(
+    market_state: Gromm2MarketState,
+    *,
+    dlvsq: NDArray[np.floating],
+) -> Gromm2MarketState:
+    """Replace the live DLV state and reconstruct its exact density tower."""
+    values = np.asarray(dlvsq, dtype=np.float64)
+    if (
+        values.shape != market_state.dlvsq.shape
+        or np.any(~np.isfinite(values))
+        or np.any(values <= 0.0)
+    ):
+        raise ValueError("replacement GROMM2 DLV state is invalid")
+    intervals = np.diff(market_state.expiries_y, prepend=0.0)
+    decoded = np.asarray(
+        decode_density_tower(
+            jnp.asarray(market_state.supports),
+            jnp.asarray(market_state.transports),
+            jnp.asarray(values),
+            jnp.asarray(intervals),
+        )
+    )
+    tower, _, _ = _normalize_decoded_density_tower(decoded)
+    return replace(
+        market_state,
+        dlvsq=values.copy(),
+        density_tower=tower,
+    )
+
+
 def _normalize_decoded_density_tower(
     density_tower: NDArray[np.floating],
     *,
@@ -343,17 +400,9 @@ def generate_gromm2_daily_scenarios(
         origin_day=sample.transition.origin,
         elapsed_days=0,
     )[0]
-    claim_model_price = sample.target_discount_factor * float(
-        _digital_probability(
-            support=market_state.supports[target.maturity_business_days - 1],
-            density=market_state.density_tower[
-                target.maturity_business_days - 1
-            ][None],
-            background_level=np.ones(1),
-            strike=sample.target_strike_over_forward,
-            remaining_days=target.maturity_business_days,
-            right=target.right,
-        )[0]
+    claim_model_price = price_gromm2_daily_target(
+        market_state,
+        sample=sample,
     )
     instrument_model_prices = np.concatenate(([1.0], option_prices))
     instrument_entry_prices = np.asarray(

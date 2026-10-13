@@ -27,6 +27,7 @@ from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly_sizing import (
     WeeklyTargetNotionalConfig,
     calibrate_weekly_target_notionals,
     load_authenticated_weekly_target_notionals,
+    load_authenticated_weekly_target_notionals_from_path,
     load_or_calibrate_weekly_target_notionals,
     weekly_target_notional_artifact_path,
     weekly_target_notional_calibration_sha256,
@@ -52,6 +53,9 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.config import (
     GrommMeasure,
     GrommObjective,
     GrommTrainConfig,
+)
+from quantdata.sdlv.daily.front_spot.hedging.models.gromm.conventional_weekly import (
+    GrommConventionalWeeklyAdapter,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2 import (
     RollingGromm2Config,
@@ -116,6 +120,7 @@ def main() -> None:
             "sanos-lv",
             "historical-sanos",
             "gromm",
+            "gromm-q-dlv-vega",
             "volgan",
             "diffusion-ad-seq-vol",
             "diffusion-ad-seq-vol-ft",
@@ -142,7 +147,9 @@ def main() -> None:
     parser.add_argument("--market-artifact-range-summary", type=Path)
     parser.add_argument("--architecture-selection", type=Path)
     parser.add_argument("--base-checkpoint", type=Path)
+    parser.add_argument("--base-checkpoint-sha256")
     parser.add_argument("--warm-start-checkpoint", type=Path)
+    parser.add_argument("--warm-start-checkpoint-sha256")
     parser.add_argument("--observation-count", type=int, default=252)
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--batch-size", type=int)
@@ -155,6 +162,7 @@ def main() -> None:
     parser.add_argument("--no-mixed-precision", action="store_true")
     parser.add_argument("--just-load", action="store_true")
     parser.add_argument("--target-notional-artifact-sha256")
+    parser.add_argument("--target-notional-artifact", type=Path)
     parser.add_argument("--stop-after", type=int)
     parser.add_argument("--progress-every", type=int, default=1)
     parser.add_argument("--allow-cap-hits", action="store_true")
@@ -172,6 +180,7 @@ def main() -> None:
     target_notionals = _load_target_notionals(
         panel,
         config=notional_config,
+        artifact_path=arguments.target_notional_artifact,
         expected_artifact_sha256=arguments.target_notional_artifact_sha256,
     )
     claim_quantities = target_notionals.quantity_by_label
@@ -319,6 +328,68 @@ def build_weekly_adapter(
             position_cap=config.position_cap,
             configurations={"model": config},
         )
+    if arguments.model == "gromm-q-dlv-vega":
+        if arguments.market_artifact_range_summary is None:
+            raise ValueError(
+                "conventional GROMM requires --market-artifact-range-summary"
+            )
+        artifact_root = arguments.market_artifact_root
+        if artifact_root is None:
+            root = os.environ.get("QUANTDATA_ROOT")
+            if not root:
+                raise ValueError(
+                    "conventional GROMM requires --market-artifact-root or "
+                    "QUANTDATA_ROOT"
+                )
+            artifact_root = Path(root) / "training" / "hedging" / "gromm2-rolling"
+        range_summary = load_completed_rolling_gromm2_range(
+            arguments.market_artifact_range_summary,
+            dataset_manifest_sha256=dataset_manifest_sha256,
+            artifact_root=artifact_root,
+        )
+        if (
+            range_summary.evaluation_start != arguments.start
+            or range_summary.evaluation_end != arguments.end
+        ):
+            raise ValueError(
+                "GROMM rolling artifact range does not match evaluation dates"
+            )
+        rolling_config = RollingGromm2Config()
+        gromm_config = GrommConfig(
+            label=label,
+            measure=GrommMeasure.Q,
+            path_count=arguments.scenario_count,
+            batch_size=(
+                arguments.scenario_count
+                if arguments.batch_size is None
+                else arguments.batch_size
+            ),
+            position_cap=arguments.position_cap,
+        )
+        dlv_config = SanosLvConfig(
+            label=f"{label}-eight-factor-dlv",
+            position_cap=arguments.position_cap,
+        )
+        adapter = GrommConventionalWeeklyAdapter(
+            artifact_root=artifact_root,
+            gromm_config=gromm_config,
+            dlv_config=dlv_config,
+            rolling_config=rolling_config,
+        )
+        return _adapter_build(
+            adapter,
+            rolling_observations=rolling_config.window_transitions,
+            position_cap=dlv_config.position_cap,
+            configurations={
+                "gromm": gromm_config,
+                "dlv_hedge": dlv_config,
+                "rolling": asdict(rolling_config),
+                "artifact_range_summary_sha256": file_sha256(
+                    arguments.market_artifact_range_summary
+                ),
+                "artifact_root": artifact_root,
+            },
+        )
     if arguments.model == "gromm":
         if checkpoint_directory is None:
             raise ValueError("GROMM requires a policy checkpoint directory")
@@ -420,7 +491,15 @@ def build_weekly_adapter(
     if arguments.model == "volgan":
         model_config = VolganModelConfig(label=label)
         train_config = _volgan_train_config(arguments)
-        warm_start_sha256 = _optional_file_sha256(arguments.warm_start_checkpoint)
+        warm_start_sha256 = _authenticated_file_fingerprint(
+            arguments.warm_start_checkpoint,
+            expected_sha256=getattr(
+                arguments,
+                "warm_start_checkpoint_sha256",
+                None,
+            ),
+            label="warm-start checkpoint",
+        )
         environment = BaseEnvironment(
             precision=64 if arguments.precision is None else arguments.precision,
             device=arguments.device,
@@ -455,8 +534,20 @@ def build_weekly_adapter(
         raise ValueError("base checkpoint is only valid for fine-tuned diffusion")
     model_config = DiffusionModelConfig(label=label, variant=variant)
     train_config = _diffusion_train_config(arguments)
-    base_sha256 = _optional_file_sha256(arguments.base_checkpoint)
-    warm_start_sha256 = _optional_file_sha256(arguments.warm_start_checkpoint)
+    base_sha256 = _authenticated_file_fingerprint(
+        arguments.base_checkpoint,
+        expected_sha256=getattr(arguments, "base_checkpoint_sha256", None),
+        label="base checkpoint",
+    )
+    warm_start_sha256 = _authenticated_file_fingerprint(
+        arguments.warm_start_checkpoint,
+        expected_sha256=getattr(
+            arguments,
+            "warm_start_checkpoint_sha256",
+            None,
+        ),
+        label="warm-start checkpoint",
+    )
     precision = 32 if arguments.precision is None else arguments.precision
     environment = BaseEnvironment(
         precision=precision,
@@ -644,8 +735,26 @@ def _load_target_notionals(
     panel: PublicHedgingPanel,
     *,
     config: WeeklyTargetNotionalConfig,
+    artifact_path: Path | None,
     expected_artifact_sha256: str | None,
 ) -> WeeklyTargetNotionalCalibration:
+    if artifact_path is not None:
+        if expected_artifact_sha256 is None:
+            raise ValueError(
+                "--target-notional-artifact requires "
+                "--target-notional-artifact-sha256"
+            )
+        print(
+            "loading exact CPU-preflighted weekly target notionals: "
+            f"{artifact_path}",
+            flush=True,
+        )
+        return load_authenticated_weekly_target_notionals_from_path(
+            panel,
+            artifact_path=artifact_path,
+            expected_artifact_sha256=expected_artifact_sha256,
+            config=config,
+        )
     root = os.environ.get("QUANTDATA_ROOT")
     if not root:
         if expected_artifact_sha256 is not None:
@@ -700,8 +809,20 @@ def _default_output(model: str, spec: WeeklyEvaluationSpec) -> Path:
     )
 
 
-def _optional_file_sha256(path: Path | None) -> str | None:
-    return None if path is None else file_sha256(path)
+def _authenticated_file_fingerprint(
+    path: Path | None,
+    *,
+    expected_sha256: str | None,
+    label: str,
+) -> str | None:
+    if path is None:
+        if expected_sha256 is not None:
+            raise ValueError(f"{label} SHA-256 requires its file path")
+        return None
+    actual = file_sha256(path)
+    if expected_sha256 is not None and actual != expected_sha256:
+        raise ValueError(f"{label} changed after production-matrix creation")
+    return actual
 
 
 if __name__ == "__main__":

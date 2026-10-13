@@ -419,6 +419,43 @@ def load_authenticated_weekly_target_notionals(
         return calibration
 
 
+def load_authenticated_weekly_target_notionals_from_path(
+    panel: PublicHedgingPanel,
+    *,
+    artifact_path: Path,
+    expected_artifact_sha256: str,
+    config: WeeklyTargetNotionalConfig = WeeklyTargetNotionalConfig(),
+) -> WeeklyTargetNotionalCalibration:
+    """Load the exact CPU-preflighted sizing artifact passed by production."""
+    require_public_hedging_panel(panel)
+    verify_inp(
+        len(expected_artifact_sha256) == 64
+        and all(
+            character in "0123456789abcdef"
+            for character in expected_artifact_sha256.lower()
+        ),
+        lambda: "expected weekly target-notional hash must be a SHA-256",
+    )
+    path = Path(artifact_path)
+    _, expected_header = _artifact_identity(
+        panel,
+        cache_directory=path.parent,
+        config=config,
+    )
+    with FileLock(str(path) + ".lock"):
+        if file_sha256(path) != expected_artifact_sha256:
+            raise RuntimeError("weekly target-notional artifact changed after preflight")
+        calibration = _load_artifact(
+            path,
+            expected_header=expected_header,
+            panel=panel,
+            config=config,
+        )
+        if file_sha256(path) != expected_artifact_sha256:
+            raise RuntimeError("weekly target-notional artifact changed while loading")
+        return calibration
+
+
 def weekly_target_notional_artifact_path(
     panel: PublicHedgingPanel,
     *,

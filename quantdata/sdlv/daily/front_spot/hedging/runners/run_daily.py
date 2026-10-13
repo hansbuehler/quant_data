@@ -56,6 +56,9 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.config import (
     GrommObjective,
     GrommTrainConfig,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.gromm.conventional import (
+    run_gromm2_conventional_daily_book,
+)
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2 import (
     RollingGromm2Config,
 )
@@ -82,6 +85,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.volgan.config import (
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.config import (
     GeneratedDailyRunConfig,
+    GrommConventionalDailyRunConfig,
     GrommDailyRunConfig,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
@@ -92,6 +96,9 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.daily_results import (
     summarize_completed_daily_run,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners.fit_rolling_gromm2_range import (
+    load_completed_rolling_gromm2_range,
 )
 from quantdata.torch import BaseEnvironment
 
@@ -106,6 +113,7 @@ def main() -> None:
             "covariance",
             "historical-sanos",
             "gromm",
+            "gromm-q-dlv-vega",
             "volgan",
             "diffusion-ad-seq-vol",
             "diffusion-ad-seq-vol-ft",
@@ -123,9 +131,12 @@ def main() -> None:
     parser.add_argument("--position-cap", type=float)
     parser.add_argument("--checkpoint-directory", type=Path)
     parser.add_argument("--market-artifact-root", type=Path)
+    parser.add_argument("--market-artifact-range-summary", type=Path)
     parser.add_argument("--architecture-selection", type=Path)
     parser.add_argument("--base-checkpoint", type=Path)
+    parser.add_argument("--base-checkpoint-sha256")
     parser.add_argument("--warm-start-checkpoint", type=Path)
+    parser.add_argument("--warm-start-checkpoint-sha256")
     parser.add_argument("--observation-count", type=int, default=252)
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--batch-size", type=int)
@@ -362,6 +373,67 @@ def _build_model(
                 claim_quantities=claim_quantities,
             ),
         )
+    if arguments.model == "gromm-q-dlv-vega":
+        if expected_dataset_manifest_sha256 is None:
+            raise ValueError(
+                "conventional GROMM requires the public dataset manifest identity"
+            )
+        if arguments.market_artifact_range_summary is None:
+            raise ValueError(
+                "conventional GROMM requires --market-artifact-range-summary"
+            )
+        artifact_root = arguments.market_artifact_root
+        if artifact_root is None:
+            root = os.environ.get("QUANTDATA_ROOT")
+            if not root:
+                raise ValueError(
+                    "conventional GROMM requires --market-artifact-root or "
+                    "QUANTDATA_ROOT"
+                )
+            artifact_root = Path(root) / "training" / "hedging" / "gromm2-rolling"
+        range_summary = load_completed_rolling_gromm2_range(
+            arguments.market_artifact_range_summary,
+            dataset_manifest_sha256=expected_dataset_manifest_sha256,
+            artifact_root=artifact_root,
+        )
+        if (
+            range_summary.evaluation_start != arguments.start
+            or range_summary.evaluation_end != arguments.end
+        ):
+            raise ValueError(
+                "GROMM rolling artifact range does not match evaluation dates"
+            )
+        dlv_config = SanosLvConfig(
+            label=label,
+            position_cap=(
+                default_position_cap
+                if arguments.position_cap is None
+                else arguments.position_cap
+            ),
+        )
+        rolling_config = RollingGromm2Config()
+        run_config = GrommConventionalDailyRunConfig(
+            label=label,
+            dlv_config=dlv_config,
+            rolling_config=rolling_config,
+            artifact_range_summary_sha256=file_sha256(
+                arguments.market_artifact_range_summary
+            ),
+        )
+        return (
+            "gromm-q-dlv-vega",
+            "Q-price/historical-transition",
+            rolling_config.window_transitions,
+            run_config,
+            lambda panel, origin: run_gromm2_conventional_daily_book(
+                panel,
+                origin_date=origin,
+                artifact_root=artifact_root,
+                config=dlv_config,
+                rolling_config=rolling_config,
+                claim_quantities=claim_quantities,
+            ),
+        )
     if arguments.model == "gromm":
         if checkpoint_directory is None:
             raise ValueError("GROMM requires a policy checkpoint directory")
@@ -517,10 +589,14 @@ def _build_model(
             ),
         )
         precision = 64 if arguments.precision is None else arguments.precision
-        warm_start_fingerprint = (
-            None
-            if arguments.warm_start_checkpoint is None
-            else file_sha256(arguments.warm_start_checkpoint)
+        warm_start_fingerprint = _authenticated_file_fingerprint(
+            arguments.warm_start_checkpoint,
+            expected_sha256=getattr(
+                arguments,
+                "warm_start_checkpoint_sha256",
+                None,
+            ),
+            label="warm-start checkpoint",
         )
         run_config = GeneratedDailyRunConfig(
             label=label,
@@ -609,15 +685,23 @@ def _build_model(
             ),
         )
         precision = 32 if arguments.precision is None else arguments.precision
-        base_fingerprint = (
-            None
-            if arguments.base_checkpoint is None
-            else file_sha256(arguments.base_checkpoint)
+        base_fingerprint = _authenticated_file_fingerprint(
+            arguments.base_checkpoint,
+            expected_sha256=getattr(
+                arguments,
+                "base_checkpoint_sha256",
+                None,
+            ),
+            label="base checkpoint",
         )
-        warm_start_fingerprint = (
-            None
-            if arguments.warm_start_checkpoint is None
-            else file_sha256(arguments.warm_start_checkpoint)
+        warm_start_fingerprint = _authenticated_file_fingerprint(
+            arguments.warm_start_checkpoint,
+            expected_sha256=getattr(
+                arguments,
+                "warm_start_checkpoint_sha256",
+                None,
+            ),
+            label="warm-start checkpoint",
         )
         run_config = GeneratedDailyRunConfig(
             label=label,
@@ -690,6 +774,22 @@ def _build_model(
 
 def _is_generated_model(model: str) -> bool:
     return model == "volgan" or model.startswith("diffusion-")
+
+
+def _authenticated_file_fingerprint(
+    path: Path | None,
+    *,
+    expected_sha256: str | None,
+    label: str,
+) -> str | None:
+    if path is None:
+        if expected_sha256 is not None:
+            raise ValueError(f"{label} SHA-256 requires its file path")
+        return None
+    actual = file_sha256(path)
+    if expected_sha256 is not None and actual != expected_sha256:
+        raise ValueError(f"{label} changed after production-matrix creation")
+    return actual
 
 
 def _config_identity(config: Any) -> str:

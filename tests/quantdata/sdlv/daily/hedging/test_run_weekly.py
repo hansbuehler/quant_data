@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 import argparse
+from datetime import date
 
 import pytest
 
+from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly_sizing import (
+    WeeklyTargetNotionalConfig,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners import run_weekly
 from quantdata.sdlv.daily.front_spot.hedging.runners.run_weekly import (
+    _load_target_notionals,
     build_weekly_adapter,
 )
 
@@ -23,6 +29,8 @@ def _arguments(model: str, **updates) -> argparse.Namespace:
         "architecture_selection": None,
         "base_checkpoint": None,
         "warm_start_checkpoint": None,
+        "base_checkpoint_sha256": None,
+        "warm_start_checkpoint_sha256": None,
         "observation_count": 252,
         "start": None,
         "end": None,
@@ -105,3 +113,65 @@ def test_weekly_gromm_requires_completed_range_evidence(tmp_path) -> None:
             checkpoint_directory=tmp_path,
             dataset_manifest_sha256="d" * 64,
         )
+
+
+def test_weekly_sizing_loads_the_exact_preflighted_path(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifact = tmp_path / "custom" / "notionals.json"
+    captured = {}
+    expected = object()
+
+    def load(panel, **kwargs):
+        captured.update(kwargs)
+        return expected
+
+    monkeypatch.setattr(
+        run_weekly,
+        "load_authenticated_weekly_target_notionals_from_path",
+        load,
+    )
+    result = _load_target_notionals(
+        object(),
+        config=WeeklyTargetNotionalConfig(),
+        artifact_path=artifact,
+        expected_artifact_sha256="a" * 64,
+    )
+
+    assert result is expected
+    assert captured["artifact_path"] == artifact
+    assert captured["expected_artifact_sha256"] == "a" * 64
+
+
+def test_weekly_conventional_gromm_builds_without_deep_policy_selection(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    summary = tmp_path / "range.json"
+    summary.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(
+        run_weekly,
+        "load_completed_rolling_gromm2_range",
+        lambda *_args, **_kwargs: argparse.Namespace(
+            evaluation_start=date(2023, 1, 1),
+            evaluation_end=date(2025, 12, 31),
+        ),
+    )
+    arguments = _arguments(
+        "gromm-q-dlv-vega",
+        start=date(2023, 1, 1),
+        end=date(2025, 12, 31),
+        market_artifact_root=tmp_path / "artifacts",
+        market_artifact_range_summary=summary,
+    )
+
+    build = build_weekly_adapter(
+        arguments,
+        checkpoint_directory=None,
+        dataset_manifest_sha256="d" * 64,
+    )
+
+    assert build.adapter.model == "gromm-q-dlv-vega"
+    assert build.adapter.measure == "Q"
+    assert build.rolling_observations == 252

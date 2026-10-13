@@ -13,10 +13,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TextIO
 
-MATRIX_SCHEMA = "hedging-daily-production-matrix-v1"
-RESULTS_SCHEMA = "hedging-daily-results-v2"
-QUEUE_SCHEMA = "hedging-daily-production-queue-v1"
-DEFAULT_EXPECTED_RESULT_COUNT = 12_220
+DAILY_MATRIX_SCHEMA = "hedging-daily-production-matrix-v1"
+WEEKLY_MATRIX_SCHEMA = "hedging-weekly-production-matrix-v1"
+DAILY_RESULTS_SCHEMA = "hedging-daily-results-v2"
+WEEKLY_RESULTS_SCHEMA = "hedging-weekly-evaluation-v1"
+QUEUE_SCHEMA = "hedging-production-queue-v1"
+LEGACY_DAILY_QUEUE_SCHEMA = "hedging-daily-production-queue-v1"
+DEFAULT_DAILY_RESULT_COUNT = 12_220
+DEFAULT_WEEKLY_RESULT_COUNT = 6_864
 GPUCTL_PATH = Path("/home/hans/.local/bin/gpuctl")
 
 
@@ -28,13 +32,20 @@ def execute_production_queue(
     case_ids: tuple[str, ...],
     case_prefix: str | None,
     resource: str,
-    expected_result_count: int = DEFAULT_EXPECTED_RESULT_COUNT,
+    expected_result_count: int | None = None,
     heartbeat_seconds: float = 240.0,
 ) -> dict[str, object]:
     """Run selected matrix cases sequentially and persist atomic queue evidence."""
     matrix = _read_json_object(matrix_path)
-    if matrix.get("schema") != MATRIX_SCHEMA:
+    matrix_schema = matrix.get("schema")
+    if matrix_schema not in {DAILY_MATRIX_SCHEMA, WEEKLY_MATRIX_SCHEMA}:
         raise ValueError(f"unexpected production-matrix schema: {matrix_path}")
+    if expected_result_count is None:
+        expected_result_count = (
+            DEFAULT_DAILY_RESULT_COUNT
+            if matrix_schema == DAILY_MATRIX_SCHEMA
+            else DEFAULT_WEEKLY_RESULT_COUNT
+        )
     cases_value = matrix.get("cases")
     if not isinstance(cases_value, list):
         raise ValueError("production matrix cases must be a list")
@@ -67,6 +78,7 @@ def execute_production_queue(
             expected_result_count=expected_result_count,
         )
         output = _command_option_path(command, "--output")
+        results_path = _results_path(output, matrix_schema=str(matrix_schema))
         output.mkdir(parents=True, exist_ok=True)
         log_path = output / "run.log"
         _check_resources()
@@ -80,7 +92,7 @@ def execute_production_queue(
                 "completed_at": None,
                 "command": command,
                 "log_path": str(log_path),
-                "results_path": str(output / "results" / "results.json"),
+                "results_path": str(results_path),
                 "return_code": None,
             },
         )
@@ -94,6 +106,7 @@ def execute_production_queue(
             log_path=log_path,
             heartbeat_seconds=heartbeat_seconds,
             case_id=case_id,
+            resource=resource,
         )
         if return_code != 0:
             _finish_record(
@@ -105,7 +118,9 @@ def execute_production_queue(
             )
             raise RuntimeError(f"production case failed: {case_id} ({return_code})")
         _validate_results(
-            output / "results" / "results.json",
+            results_path,
+            output=output,
+            matrix_schema=str(matrix_schema),
             expected_model=_require_string(case, "model"),
             expected_result_count=expected_result_count,
         )
@@ -196,6 +211,7 @@ def _run_logged_command(
     log_path: Path,
     heartbeat_seconds: float,
     case_id: str,
+    resource: str,
 ) -> int:
     if heartbeat_seconds <= 0.0:
         raise ValueError("heartbeat_seconds must be positive")
@@ -205,7 +221,7 @@ def _run_logged_command(
         process = subprocess.Popen(
             command,
             cwd=Path(__file__).resolve().parents[6],
-            env=_child_environment(),
+            env=_child_environment(resource=resource),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -236,17 +252,30 @@ def _run_logged_command(
         return int(process.returncode)
 
 
-def _child_environment() -> dict[str, str]:
+def _child_environment(*, resource: str) -> dict[str, str]:
+    if resource not in {"cpu", "gpu"}:
+        raise ValueError(f"unsupported production resource: {resource}")
     environment = os.environ.copy()
     environment.update(
         {
             "PYTHONPATH": "/home/hans/python/quant_data",
             "QUANTDATA_ROOT": "/home/hans/quantdata_data",
-            "CUDA_VISIBLE_DEVICES": "",
-            "JAX_PLATFORMS": "cpu",
             "PYTHONUNBUFFERED": "1",
         }
     )
+    if resource == "cpu":
+        environment.update(
+            {
+                "CUDA_VISIBLE_DEVICES": "",
+                "JAX_PLATFORMS": "cpu",
+            }
+        )
+    else:
+        environment.pop("JAX_PLATFORMS", None)
+        if not environment.get("CUDA_VISIBLE_DEVICES"):
+            raise RuntimeError(
+                "GPU production queue must run inside a managed gpuctl allocation"
+            )
     return environment
 
 
@@ -291,23 +320,55 @@ def _check_resources() -> None:
 def _validate_results(
     path: Path,
     *,
+    output: Path,
+    matrix_schema: str,
     expected_model: str,
     expected_result_count: int,
 ) -> None:
     payload = _read_json_object(path)
-    if payload.get("schema") != RESULTS_SCHEMA:
-        raise ValueError(f"unexpected daily-results schema: {path}")
-    if payload.get("model") != expected_model:
-        raise ValueError(
-            f"daily-results model mismatch: {payload.get('model')} != {expected_model}"
-        )
+    if matrix_schema == DAILY_MATRIX_SCHEMA:
+        if payload.get("schema") != DAILY_RESULTS_SCHEMA:
+            raise ValueError(f"unexpected daily-results schema: {path}")
+        if payload.get("model") != expected_model:
+            raise ValueError(
+                "daily-results model mismatch: "
+                f"{payload.get('model')} != {expected_model}"
+            )
+    elif matrix_schema == WEEKLY_MATRIX_SCHEMA:
+        if payload.get("schema") != WEEKLY_RESULTS_SCHEMA:
+            raise ValueError(f"unexpected weekly-results schema: {path}")
+        run = _read_json_object(output / "run.json")
+        if run.get("schema") != WEEKLY_RESULTS_SCHEMA:
+            raise ValueError("weekly run metadata has an unexpected schema")
+        if run.get("model") != expected_model:
+            raise ValueError(
+                f"weekly-results model mismatch: {run.get('model')} != {expected_model}"
+            )
+        completed = payload.get("completed_origins")
+        eligible = payload.get("eligible_origins")
+        if completed != eligible:
+            raise ValueError("weekly-results origins are incomplete")
+        if payload.get("cap_hits") != 0:
+            raise ValueError("weekly-results contain position-cap hits")
+        if run.get("run_identity") != payload.get("run_identity"):
+            raise ValueError("weekly run and summary identities do not match")
+    else:
+        raise ValueError(f"unsupported production-matrix schema: {matrix_schema}")
     if payload.get("result_count") != expected_result_count:
         raise ValueError(
             "daily-results count mismatch: "
             f"{payload.get('result_count')} != {expected_result_count}"
         )
     if not isinstance(payload.get("run_identity"), str):
-        raise ValueError("daily-results run identity is missing")
+        raise ValueError("production-results run identity is missing")
+
+
+def _results_path(output: Path, *, matrix_schema: str) -> Path:
+    if matrix_schema == DAILY_MATRIX_SCHEMA:
+        return output / "results" / "results.json"
+    if matrix_schema == WEEKLY_MATRIX_SCHEMA:
+        return output / "summary.json"
+    raise ValueError(f"unsupported production-matrix schema: {matrix_schema}")
 
 
 def _load_or_initialize_state(
@@ -320,7 +381,7 @@ def _load_or_initialize_state(
     if state_path.exists():
         state = _read_json_object(state_path)
         if (
-            state.get("schema") != QUEUE_SCHEMA
+            state.get("schema") not in {QUEUE_SCHEMA, LEGACY_DAILY_QUEUE_SCHEMA}
             or state.get("matrix_path") != str(matrix_path.resolve())
             or tuple(state.get("case_ids", ())) != case_ids
             or state.get("resource") != resource
@@ -431,7 +492,6 @@ def main() -> None:
     parser.add_argument(
         "--expected-result-count",
         type=int,
-        default=DEFAULT_EXPECTED_RESULT_COUNT,
     )
     parser.add_argument("--heartbeat-seconds", type=float, default=240.0)
     arguments = parser.parse_args()

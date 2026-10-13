@@ -44,6 +44,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.gromm2_daily import (
     generate_gromm2_daily_scenarios,
     load_gromm2_market_state,
     predict_physical_market_price_of_risk,
+    price_gromm2_daily_target,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2 import (
     RollingGromm2Artifacts,
@@ -331,6 +332,11 @@ def test_gromm2_daily_scenario_smoke_uses_public_book_geometry() -> None:
     assert np.all(np.isfinite(scenarios.instrument_returns))
     assert np.all(np.isfinite(scenarios.claim_returns))
     assert scenarios.claim_model_price > 0.0
+    assert scenarios.claim_model_price == pytest.approx(
+        price_gromm2_daily_target(state, sample=scenarios.sample),
+        rel=0.0,
+        abs=0.0,
+    )
     np.testing.assert_allclose(
         scenarios.instrument_entry_prices[1:],
         [quote.mark for quote in scenarios.sample.hedge_quotes],

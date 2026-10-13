@@ -34,6 +34,13 @@ energy or has a fitted daily risk-price norm above 3.
   conditional mean on held-out paths. It is needed because the absolute
   turnover cost of a policy difference is not the difference of the two
   policies' costs.
+- **Conventional comparator:** a separate result uses the exact current GROMM
+  `Q` expectation for daily digitals, Monte Carlo GROMM `Q` expectation for
+  weekly claims, and central common-random-number repricing of that same GROMM
+  expectation for spot delta and the first eight rolling DLV-factor vegas.
+  Hedge-option vegas use the identical contemporaneous DLV bumps. It does not
+  train a deep policy and is reported separately from every
+  objective-dependent GROMM hedge.
 - **Weekly paths:** the dated market state is rolled recursively for five
   sessions. The compatible P risk price is recomputed from each path's
   floating log-DLV state and previous factor score; Q factors remain unshifted.

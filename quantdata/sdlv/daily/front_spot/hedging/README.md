@@ -125,16 +125,19 @@ python -m quantdata.sdlv.daily.front_spot.hedging.runners.prepare_weekly_inputs 
 python -m quantdata.sdlv.daily.front_spot.hedging.runners.run_weekly \
   --model sanos-lv \
   --schedule frozen-weekly \
+  --target-notional-artifact <artifact-from-preflight> \
   --target-notional-artifact-sha256 <sha256-from-preflight>
 
 python -m quantdata.sdlv.daily.front_spot.hedging.runners.run_weekly \
   --model sanos-lv \
   --schedule restarted-weekly \
+  --target-notional-artifact <artifact-from-preflight> \
   --target-notional-artifact-sha256 <sha256-from-preflight>
 ```
 
-The same entry point accepts `historical-sanos`, `gromm`, `volgan`,
-`diffusion-ad-seq-vol`, and `diffusion-ad-seq-vol-ft`. Generated-model
+The same entry point accepts `historical-sanos`, `gromm`,
+`gromm-q-dlv-vega`, `volgan`, `diffusion-ad-seq-vol`, and
+`diffusion-ad-seq-vol-ft`. Generated-model
 checkpoints carry the public manifest identity; rolling warm starts or
 fine-tuning bases trained against another dataset are rejected.
 
@@ -257,12 +260,32 @@ python -m quantdata.sdlv.daily.front_spot.hedging.runners.production_matrix \
     "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v3/range-fit-2023-2025.json"
 ```
 
+Build the corresponding frozen- and restarted-weekly matrix from the same
+evidence and the authenticated 2022 sizing preflight with:
+
+```bash
+python -m quantdata.sdlv.daily.front_spot.hedging.runners.weekly_production_matrix \
+  --output-root "$QUANTDATA_ROOT/experiments/hedging/weekly" \
+  --checkpoint-root "$QUANTDATA_ROOT/training/hedging/weekly" \
+  --weekly-input-preflight \
+    "$QUANTDATA_ROOT/processing/hedging/target-notionals/weekly-preflight.json" \
+  --gromm-market-artifact-root "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v3" \
+  --gromm-architecture-selection \
+    "$QUANTDATA_ROOT/training/hedging/gromm/architecture-2022-v1/result-v2.json" \
+  --gromm-artifact-range-summary \
+    "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v3/range-fit-2023-2025.json"
+```
+
 The matrix command also accepts authenticated generated-model inputs through
-`--volgan-initializer`, `--volgan-update-epochs`,
-`--diffusion-initializer`, `--diffusion-update-epochs`,
-`--diffusion-ft-base`, `--diffusion-ft-initializer`, and
-`--diffusion-ft-update-epochs`. Missing dependencies remain explicit blocked
-cases rather than falling back to implicit defaults.
+paired initializer manifests and 2022 epoch-selection artifacts:
+`--volgan-initializer-manifest`, `--volgan-epoch-selection`,
+`--diffusion-initializer-manifest`, `--diffusion-epoch-selection`,
+`--diffusion-ft-initializer-manifest`, and
+`--diffusion-ft-epoch-selection`. The matrix verifies the public-dataset
+identity, pre-2023 timing, selected epoch, initializer bytes, and fine-tuning
+base bytes before staging a command; the runner rechecks the pinned hashes at
+launch. Missing dependencies remain explicit blocked cases rather than falling
+back to implicit defaults.
 
 Execute an explicit ready subset sequentially with atomic queue state and
 per-case logs:

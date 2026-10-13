@@ -24,6 +24,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.policy import (
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2 import (
     RollingGromm2Config,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.sanos_lv.config import SanosLvConfig
 from quantdata.sdlv.daily.front_spot.hedging.models.volgan.config import (
     VolganModelConfig,
     VolganTrainConfig,
@@ -155,4 +156,30 @@ class GrommDailyRunConfig:
             f"lambda-{self.model_config.risk_parameter:g}-"
             f"{self.model_config.path_count}paths-{self.device}{self.precision}-"
             f"arch-{self.architecture_selection_sha256[:8]}"
+        )
+
+
+@version("0.1", dependencies=[SanosLvConfig])
+@dataclass(frozen=True, kw_only=True)
+class GrommConventionalDailyRunConfig:
+    """Dated GROMM Q pricing with a conventional eight-factor DLV hedge."""
+
+    label: str
+    dlv_config: SanosLvConfig
+    rolling_config: RollingGromm2Config
+    artifact_range_summary_sha256: str
+
+    def __post_init__(self) -> None:
+        verify_inp(bool(self.label.strip()), lambda: "run label must be non-empty")
+        verify_inp(
+            self.dlv_config.rolling_factors.factor_rank == 8,
+            lambda: "conventional GROMM hedge requires eight DLV factors",
+        )
+        verify_inp(
+            len(self.artifact_range_summary_sha256) == 64
+            and all(
+                character in "0123456789abcdef"
+                for character in self.artifact_range_summary_sha256.lower()
+            ),
+            lambda: "GROMM artifact range must have a SHA-256 identity",
         )

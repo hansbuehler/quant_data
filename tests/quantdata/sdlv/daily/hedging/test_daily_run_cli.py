@@ -34,11 +34,16 @@ def _arguments(*, model: str) -> argparse.Namespace:
         no_mixed_precision=False,
         just_load=False,
         base_checkpoint=None,
+        base_checkpoint_sha256=None,
         warm_start_checkpoint=None,
+        warm_start_checkpoint_sha256=None,
         retain_fit_checkpoints=False,
         measure="Q",
         market_artifact_root=None,
+        market_artifact_range_summary=None,
         architecture_selection=None,
+        start=date(2023, 1, 1),
+        end=date(2025, 12, 31),
     )
 
 
@@ -208,6 +213,51 @@ def test_gromm_daily_builder_requires_frozen_architecture(tmp_path) -> None:
             checkpoint_directory=tmp_path,
             expected_dataset_manifest_sha256="a" * 64,
         )
+
+
+def test_conventional_gromm_daily_builder_uses_q_price_and_dlv_hedge(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = {}
+
+    def run_book(panel, **kwargs):
+        captured.update(kwargs)
+        return (panel,)
+
+    summary = tmp_path / "range.json"
+    summary.write_text("{}\n", encoding="utf-8")
+    arguments = _arguments(model="gromm-q-dlv-vega")
+    arguments.market_artifact_root = tmp_path / "market"
+    arguments.market_artifact_range_summary = summary
+    monkeypatch.setattr(
+        run_daily,
+        "load_completed_rolling_gromm2_range",
+        lambda *_args, **_kwargs: argparse.Namespace(
+            evaluation_start=arguments.start,
+            evaluation_end=arguments.end,
+        ),
+    )
+    monkeypatch.setattr(run_daily, "run_gromm2_conventional_daily_book", run_book)
+
+    model, measure, observations, config, book = run_daily._build_model(
+        arguments,
+        claim_quantities={"target": 0.25},
+        default_position_cap=1_000.0,
+        checkpoint_directory=None,
+        expected_dataset_manifest_sha256="a" * 64,
+    )
+
+    assert (model, measure, observations) == (
+        "gromm-q-dlv-vega",
+        "Q-price/historical-transition",
+        252,
+    )
+    panel = object()
+    assert book(panel, date(2023, 1, 17)) == (panel,)
+    assert captured["artifact_root"] == tmp_path / "market"
+    assert captured["claim_quantities"] == {"target": 0.25}
+    assert config.dlv_config.rolling_factors.factor_rank == 8
 
 
 @pytest.mark.parametrize(

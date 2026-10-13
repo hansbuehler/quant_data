@@ -26,6 +26,11 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.daily_results import (
 from quantdata.sdlv.daily.front_spot.hedging.runners.fit_rolling_gromm2_range import (
     load_completed_rolling_gromm2_range,
 )
+from quantdata.sdlv.daily.front_spot.hedging.runners.generated_evidence import (
+    GeneratedSelectionEvidence,
+    load_generated_initializer_evidence,
+    load_generated_selection_evidence,
+)
 
 
 class ProductionResource(StrEnum):
@@ -107,26 +112,14 @@ class GrommProductionInputs:
 
 @dataclass(frozen=True, kw_only=True)
 class GeneratedProductionInputs:
-    """Selected immutable artifacts required by generated rolling cases."""
+    """Authenticated initializer manifests and 2022 epoch selections."""
 
-    volgan_initializer: Path | None = None
-    volgan_update_epochs: int | None = None
-    diffusion_initializer: Path | None = None
-    diffusion_update_epochs: int | None = None
-    diffusion_ft_base: Path | None = None
-    diffusion_ft_initializer: Path | None = None
-    diffusion_ft_update_epochs: int | None = None
-
-    def __post_init__(self) -> None:
-        for name, epochs in (
-            ("volgan_update_epochs", self.volgan_update_epochs),
-            ("diffusion_update_epochs", self.diffusion_update_epochs),
-            ("diffusion_ft_update_epochs", self.diffusion_ft_update_epochs),
-        ):
-            verify_inp(
-                epochs is None or epochs >= 1,
-                lambda name=name: f"{name} must be positive when supplied",
-            )
+    volgan_initializer_manifest: Path | None = None
+    volgan_epoch_selection: Path | None = None
+    diffusion_initializer_manifest: Path | None = None
+    diffusion_epoch_selection: Path | None = None
+    diffusion_ft_initializer_manifest: Path | None = None
+    diffusion_ft_epoch_selection: Path | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -298,22 +291,16 @@ def _gromm_cases(
     config: DailyProductionMatrixConfig,
     inputs: GrommProductionInputs,
 ) -> tuple[DailyProductionCase, ...]:
-    missing = []
+    market_missing = []
     if inputs.market_artifact_root is None:
-        missing.append("complete rolling market-artifact root")
-    if inputs.architecture_selection is None:
-        missing.append("authenticated 2022 hedge-architecture selection")
+        market_missing.append("complete rolling market-artifact root")
     if inputs.artifact_range_summary is None:
-        missing.append("completed rolling fit-range summary")
+        market_missing.append("completed rolling fit-range summary")
     range_summary = None
-    invalid_reason = None
-    if not missing:
+    market_reason = None
+    if not market_missing:
         try:
             dataset_manifest_sha256 = file_sha256(Path(dataset) / "manifest.json")
-            load_gromm_architecture_selection(
-                inputs.architecture_selection,
-                expected_dataset_manifest_sha256=dataset_manifest_sha256,
-            )
             range_summary = load_completed_rolling_gromm2_range(
                 inputs.artifact_range_summary,
                 dataset_manifest_sha256=dataset_manifest_sha256,
@@ -327,13 +314,50 @@ def _gromm_cases(
                     "rolling fit range does not match the production evaluation range"
                 )
         except (FileNotFoundError, OSError, ValueError) as error:
-            invalid_reason = f"invalid GROMM production evidence: {error}"
-    common_reason = (
-        "missing " + ", ".join(missing)
-        if missing
-        else invalid_reason
-    )
+            market_reason = f"invalid GROMM production evidence: {error}"
+    else:
+        market_reason = "missing " + ", ".join(market_missing)
+    architecture_reason = market_reason
+    if architecture_reason is None and inputs.architecture_selection is None:
+        architecture_reason = "missing authenticated 2022 hedge-architecture selection"
+    if architecture_reason is None:
+        try:
+            load_gromm_architecture_selection(
+                inputs.architecture_selection,
+                expected_dataset_manifest_sha256=file_sha256(
+                    Path(dataset) / "manifest.json"
+                ),
+            )
+        except (FileNotFoundError, OSError, ValueError) as error:
+            architecture_reason = f"invalid GROMM architecture evidence: {error}"
+    conventional = {
+        "case_id": "gromm-q-dlv-vega",
+        "model": "gromm-q-dlv-vega",
+        "measure": "Q-price/historical-transition",
+        "variant": "q-expectation-eight-factor-dlv-vega",
+        "objective": None,
+        "risk_parameter": None,
+        "resource": ProductionResource.CPU,
+    }
     cases: list[DailyProductionCase] = []
+    if market_reason is not None:
+        cases.append(_blocked_case(reason=market_reason, **conventional))
+    else:
+        cases.append(
+            _ready_case(
+                command=_daily_command(
+                    model="gromm-q-dlv-vega",
+                    case_id="gromm-q-dlv-vega",
+                    dataset=dataset,
+                    output_root=output_root,
+                    checkpoint_root=checkpoint_root,
+                    config=config,
+                    market_artifact_root=inputs.market_artifact_root,
+                    market_artifact_range_summary=inputs.artifact_range_summary,
+                ),
+                **conventional,
+            )
+        )
     for measure in ("P", "Q"):
         for objective, parameters in _objective_grids(config):
             for parameter in parameters:
@@ -349,8 +373,8 @@ def _gromm_cases(
                     "risk_parameter": parameter,
                     "resource": ProductionResource.GPU,
                 }
-                if common_reason is not None:
-                    cases.append(_blocked_case(reason=common_reason, **common))
+                if architecture_reason is not None:
+                    cases.append(_blocked_case(reason=architecture_reason, **common))
                     continue
                 assert range_summary is not None
                 if (
@@ -399,6 +423,31 @@ def _generated_cases(
     config: DailyProductionMatrixConfig,
     generated: GeneratedProductionInputs,
 ) -> tuple[DailyProductionCase, ...]:
+    dataset_sha256 = _dataset_manifest_sha256(dataset)
+    volgan_evidence, volgan_reason = _generated_selection(
+        generated.volgan_initializer_manifest,
+        generated.volgan_epoch_selection,
+        expected_model="volgan",
+        dataset_sha256=dataset_sha256,
+    )
+    diffusion_evidence, diffusion_reason = _generated_selection(
+        generated.diffusion_initializer_manifest,
+        generated.diffusion_epoch_selection,
+        expected_model="diffusion-ad-seq-vol",
+        dataset_sha256=dataset_sha256,
+    )
+    diffusion_base, diffusion_base_reason = _generated_initializer(
+        generated.diffusion_initializer_manifest,
+        expected_model="diffusion-ad-seq-vol",
+        dataset_sha256=dataset_sha256,
+    )
+    diffusion_ft_evidence, diffusion_ft_reason = _generated_selection(
+        generated.diffusion_ft_initializer_manifest,
+        generated.diffusion_ft_epoch_selection,
+        expected_model="diffusion-ad-seq-vol-ft",
+        dataset_sha256=dataset_sha256,
+        base_initializer_manifest=generated.diffusion_initializer_manifest,
+    )
     cases: list[DailyProductionCase] = []
     cases.append(
         _waiting_gate_case(
@@ -406,7 +455,7 @@ def _generated_cases(
             model="volgan",
             measure="historical-P",
             variant="published-settings-full-rolling-fit",
-            objective="published-cost-lasso",
+            objective="mean-variance",
             risk_parameter=1.0,
             resource=ProductionResource.GPU,
             reason="awaiting generated-model review and GPU-readiness gate",
@@ -418,6 +467,8 @@ def _generated_cases(
                 checkpoint_root=checkpoint_root,
                 config=config,
                 device="cuda",
+                objective="mean-variance",
+                risk_parameter=1.0,
             ),
         )
     )
@@ -426,9 +477,8 @@ def _generated_cases(
             case_id="volgan-rolling-trained",
             model="volgan",
             variant="fixed-2022-source-selected-update",
-            initializer=generated.volgan_initializer,
-            update_epochs=generated.volgan_update_epochs,
-            base_checkpoint=None,
+            evidence=volgan_evidence,
+            evidence_reason=volgan_reason,
             dataset=dataset,
             output_root=output_root,
             checkpoint_root=checkpoint_root,
@@ -441,7 +491,7 @@ def _generated_cases(
             model="diffusion-ad-seq-vol",
             measure="historical-P",
             variant="published-settings-full-rolling-fit",
-            objective="published-cost-lasso",
+            objective="mean-variance",
             risk_parameter=1.0,
             resource=ProductionResource.GPU,
             reason="awaiting generated-model review and GPU-readiness gate",
@@ -453,6 +503,8 @@ def _generated_cases(
                 checkpoint_root=checkpoint_root,
                 config=config,
                 device="cuda",
+                objective="mean-variance",
+                risk_parameter=1.0,
             ),
         )
     )
@@ -461,9 +513,8 @@ def _generated_cases(
             case_id="diffusion-ad-seq-vol-rolling-trained",
             model="diffusion-ad-seq-vol",
             variant="fixed-2022-source-selected-update",
-            initializer=generated.diffusion_initializer,
-            update_epochs=generated.diffusion_update_epochs,
-            base_checkpoint=None,
+            evidence=diffusion_evidence,
+            evidence_reason=diffusion_reason,
             dataset=dataset,
             output_root=output_root,
             checkpoint_root=checkpoint_root,
@@ -471,17 +522,20 @@ def _generated_cases(
         )
     )
     ft_public_id = "diffusion-ad-seq-vol-ft-public-settings"
-    if generated.diffusion_ft_base is None:
+    if diffusion_base is None:
         cases.append(
             _blocked_case(
                 case_id=ft_public_id,
                 model="diffusion-ad-seq-vol-ft",
                 measure="historical-P",
                 variant="published-settings-full-rolling-fit",
-                objective="published-cost-lasso",
+                objective="mean-variance",
                 risk_parameter=1.0,
                 resource=ProductionResource.GPU,
-                reason="fine-tuned diffusion base checkpoint is not selected",
+                reason=(
+                    diffusion_base_reason
+                    or "fine-tuned diffusion base checkpoint is not selected"
+                ),
             )
         )
     else:
@@ -491,7 +545,7 @@ def _generated_cases(
                 model="diffusion-ad-seq-vol-ft",
                 measure="historical-P",
                 variant="published-settings-full-rolling-fit",
-                objective="published-cost-lasso",
+                objective="mean-variance",
                 risk_parameter=1.0,
                 resource=ProductionResource.GPU,
                 reason="awaiting generated-model review and GPU-readiness gate",
@@ -503,7 +557,12 @@ def _generated_cases(
                     checkpoint_root=checkpoint_root,
                     config=config,
                     device="cuda",
-                    base_checkpoint=generated.diffusion_ft_base,
+                    objective="mean-variance",
+                    risk_parameter=1.0,
+                    base_checkpoint=diffusion_base.initializer_checkpoint,
+                    base_checkpoint_sha256=(
+                        diffusion_base.initializer_checkpoint_sha256
+                    ),
                 ),
             )
         )
@@ -512,9 +571,8 @@ def _generated_cases(
             case_id="diffusion-ad-seq-vol-ft-rolling-trained",
             model="diffusion-ad-seq-vol-ft",
             variant="fixed-2022-source-selected-update",
-            initializer=generated.diffusion_ft_initializer,
-            update_epochs=generated.diffusion_ft_update_epochs,
-            base_checkpoint=generated.diffusion_ft_base,
+            evidence=diffusion_ft_evidence,
+            evidence_reason=diffusion_ft_reason,
             dataset=dataset,
             output_root=output_root,
             checkpoint_root=checkpoint_root,
@@ -529,38 +587,30 @@ def _rolling_generated_case(
     case_id: str,
     model: str,
     variant: str,
-    initializer: Path | None,
-    update_epochs: int | None,
-    base_checkpoint: Path | None,
+    evidence: GeneratedSelectionEvidence | None,
+    evidence_reason: str | None,
     dataset: Path,
     output_root: Path,
     checkpoint_root: Path,
     config: DailyProductionMatrixConfig,
 ) -> DailyProductionCase:
-    missing = []
-    if initializer is None:
-        missing.append("fixed pre-evaluation initializer")
-    if update_epochs is None:
-        missing.append("2022 one-standard-error update budget")
-    if model.endswith("-ft") and base_checkpoint is None:
-        missing.append("fine-tuning base checkpoint")
-    if missing:
+    if evidence is None:
         return _blocked_case(
             case_id=case_id,
             model=model,
             measure="historical-P",
             variant=variant,
-            objective="published-cost-lasso",
+            objective="mean-variance",
             risk_parameter=1.0,
             resource=ProductionResource.GPU,
-            reason="missing " + ", ".join(missing),
+            reason=evidence_reason or "missing authenticated generated evidence",
         )
     return _waiting_gate_case(
         case_id=case_id,
         model=model,
         measure="historical-P",
         variant=variant,
-        objective="published-cost-lasso",
+        objective="mean-variance",
         risk_parameter=1.0,
         resource=ProductionResource.GPU,
         reason="awaiting generated-model review and GPU-readiness gate",
@@ -572,11 +622,77 @@ def _rolling_generated_case(
             checkpoint_root=checkpoint_root,
             config=config,
             device="cuda",
-            epochs=update_epochs,
-            warm_start_checkpoint=initializer,
-            base_checkpoint=base_checkpoint,
+            objective="mean-variance",
+            risk_parameter=1.0,
+            epochs=evidence.selected_epochs,
+            warm_start_checkpoint=evidence.initializer_checkpoint,
+            warm_start_checkpoint_sha256=(
+                evidence.initializer_checkpoint_sha256
+            ),
+            base_checkpoint=evidence.base_checkpoint,
+            base_checkpoint_sha256=evidence.base_checkpoint_sha256,
         ),
     )
+
+
+def _dataset_manifest_sha256(dataset: Path) -> str | None:
+    try:
+        return file_sha256(Path(dataset) / "manifest.json")
+    except (FileNotFoundError, OSError):
+        return None
+
+
+def _generated_selection(
+    initializer_manifest: Path | None,
+    epoch_selection: Path | None,
+    *,
+    expected_model: str,
+    dataset_sha256: str | None,
+    base_initializer_manifest: Path | None = None,
+) -> tuple[GeneratedSelectionEvidence | None, str | None]:
+    missing = []
+    if initializer_manifest is None:
+        missing.append("authenticated pre-evaluation initializer manifest")
+    if epoch_selection is None:
+        missing.append("authenticated 2022 epoch selection")
+    if dataset_sha256 is None:
+        missing.append("public dataset manifest")
+    if missing:
+        return None, "missing " + ", ".join(missing)
+    try:
+        return (
+            load_generated_selection_evidence(
+                initializer_manifest=initializer_manifest,
+                epoch_selection=epoch_selection,
+                expected_model=expected_model,
+                expected_dataset_manifest_sha256=dataset_sha256,
+                base_initializer_manifest=base_initializer_manifest,
+            ),
+            None,
+        )
+    except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError) as error:
+        return None, f"invalid generated production evidence: {error}"
+
+
+def _generated_initializer(
+    initializer_manifest: Path | None,
+    *,
+    expected_model: str,
+    dataset_sha256: str | None,
+) -> tuple[GeneratedSelectionEvidence | None, str | None]:
+    if initializer_manifest is None or dataset_sha256 is None:
+        return None, "missing authenticated fine-tuning base initializer"
+    try:
+        return (
+            load_generated_initializer_evidence(
+                initializer_manifest=initializer_manifest,
+                expected_model=expected_model,
+                expected_dataset_manifest_sha256=dataset_sha256,
+            ),
+            None,
+        )
+    except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError) as error:
+        return None, f"invalid generated base evidence: {error}"
 
 
 def _daily_command(
@@ -592,9 +708,12 @@ def _daily_command(
     device: str = "cpu",
     epochs: int | None = None,
     warm_start_checkpoint: Path | None = None,
+    warm_start_checkpoint_sha256: str | None = None,
     base_checkpoint: Path | None = None,
+    base_checkpoint_sha256: str | None = None,
     measure: str | None = None,
     market_artifact_root: Path | None = None,
+    market_artifact_range_summary: Path | None = None,
     architecture_selection: Path | None = None,
 ) -> tuple[str, ...]:
     command = [
@@ -630,12 +749,22 @@ def _daily_command(
         command.extend(("--epochs", str(epochs)))
     if warm_start_checkpoint is not None:
         command.extend(("--warm-start-checkpoint", str(warm_start_checkpoint)))
+    if warm_start_checkpoint_sha256 is not None:
+        command.extend(
+            ("--warm-start-checkpoint-sha256", warm_start_checkpoint_sha256)
+        )
     if base_checkpoint is not None:
         command.extend(("--base-checkpoint", str(base_checkpoint)))
+    if base_checkpoint_sha256 is not None:
+        command.extend(("--base-checkpoint-sha256", base_checkpoint_sha256))
     if measure is not None:
         command.extend(("--measure", measure))
     if market_artifact_root is not None:
         command.extend(("--market-artifact-root", str(market_artifact_root)))
+    if market_artifact_range_summary is not None:
+        command.extend(
+            ("--market-artifact-range-summary", str(market_artifact_range_summary))
+        )
     if architecture_selection is not None:
         command.extend(("--architecture-selection", str(architecture_selection)))
     return tuple(command)
@@ -691,13 +820,12 @@ def main() -> None:
     parser.add_argument("--gromm-market-artifact-root", type=Path)
     parser.add_argument("--gromm-architecture-selection", type=Path)
     parser.add_argument("--gromm-artifact-range-summary", type=Path)
-    parser.add_argument("--volgan-initializer", type=Path)
-    parser.add_argument("--volgan-update-epochs", type=int)
-    parser.add_argument("--diffusion-initializer", type=Path)
-    parser.add_argument("--diffusion-update-epochs", type=int)
-    parser.add_argument("--diffusion-ft-base", type=Path)
-    parser.add_argument("--diffusion-ft-initializer", type=Path)
-    parser.add_argument("--diffusion-ft-update-epochs", type=int)
+    parser.add_argument("--volgan-initializer-manifest", type=Path)
+    parser.add_argument("--volgan-epoch-selection", type=Path)
+    parser.add_argument("--diffusion-initializer-manifest", type=Path)
+    parser.add_argument("--diffusion-epoch-selection", type=Path)
+    parser.add_argument("--diffusion-ft-initializer-manifest", type=Path)
+    parser.add_argument("--diffusion-ft-epoch-selection", type=Path)
     arguments = parser.parse_args()
     config = DailyProductionMatrixConfig()
     cases = build_daily_production_matrix(
@@ -711,13 +839,18 @@ def main() -> None:
             artifact_range_summary=arguments.gromm_artifact_range_summary,
         ),
         generated=GeneratedProductionInputs(
-            volgan_initializer=arguments.volgan_initializer,
-            volgan_update_epochs=arguments.volgan_update_epochs,
-            diffusion_initializer=arguments.diffusion_initializer,
-            diffusion_update_epochs=arguments.diffusion_update_epochs,
-            diffusion_ft_base=arguments.diffusion_ft_base,
-            diffusion_ft_initializer=arguments.diffusion_ft_initializer,
-            diffusion_ft_update_epochs=arguments.diffusion_ft_update_epochs,
+            volgan_initializer_manifest=arguments.volgan_initializer_manifest,
+            volgan_epoch_selection=arguments.volgan_epoch_selection,
+            diffusion_initializer_manifest=(
+                arguments.diffusion_initializer_manifest
+            ),
+            diffusion_epoch_selection=arguments.diffusion_epoch_selection,
+            diffusion_ft_initializer_manifest=(
+                arguments.diffusion_ft_initializer_manifest
+            ),
+            diffusion_ft_epoch_selection=(
+                arguments.diffusion_ft_epoch_selection
+            ),
         ),
     )
     payload = {

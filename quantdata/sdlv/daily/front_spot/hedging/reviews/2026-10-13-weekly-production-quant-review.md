@@ -132,3 +132,25 @@ This is a code-path and invariant review, not an endorsement of numerical
 results that have not yet been produced. Production result acceptance should
 still require zero cap hits, complete 13-target output at every eligible
 origin, and the precommitted model-specific quantitative diagnostics.
+
+## Final production-matrix re-review
+
+The subsequent review of the 94-cell weekly production matrix also **passed**
+after two further remediations:
+
+1. Generated-model evidence now loads the hash-bound Torch payload and checks
+   checkpoint format, public-dataset identity, model variant, actual training
+   dates, completed epoch budget, and fine-tuning lineage. It independently
+   reconstructs every finite validation score, its mean and standard error,
+   and the cheapest budget admitted by the one-standard-error rule.
+2. The conventional weekly GROMM comparator now obtains its target price,
+   spot delta, and first-eight DLV-factor vegas from the same GROMM Q model.
+   Central bumps use common random numbers, the observed live DLV state, and
+   the same bounded log-DLV-squared directions as the hedge-option vegas.
+
+The final independent review covered both weekly schedules, all 94 unique
+cells, exact sizing-path handoff, generated-checkpoint tampering, CPU/GPU
+execution environments, and GROMM P/Q gating. It reported **63 focused and
+adjacent tests passed**; the complete hedging suite reported **247 passed**.
+Compilation, Ruff, and `git diff --check` were clean. No source files were
+modified by the reviewer.
