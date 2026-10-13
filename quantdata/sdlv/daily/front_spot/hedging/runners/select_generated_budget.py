@@ -37,6 +37,9 @@ from quantdata.sdlv.daily.front_spot.hedging.models.volgan.config import (
 from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
     dataset_manifest_sha256,
 )
+from quantdata.sdlv.daily.front_spot.hedging.runners.generated_evidence import (
+    BUDGET_SELECTION_OBSERVATION_COUNT,
+)
 from quantdata.torch import BaseEnvironment, torch
 
 
@@ -99,7 +102,11 @@ def main() -> None:
     parser.add_argument("--base-checkpoint", type=Path)
     parser.add_argument("--validation-start", type=date.fromisoformat, required=True)
     parser.add_argument("--validation-end", type=date.fromisoformat, required=True)
-    parser.add_argument("--observation-count", type=int, required=True)
+    parser.add_argument(
+        "--observation-count",
+        type=int,
+        default=BUDGET_SELECTION_OBSERVATION_COUNT,
+    )
     parser.add_argument("--origin-count", type=int, default=8)
     parser.add_argument("--candidate-epochs", required=True)
     parser.add_argument("--checkpoint-directory", type=Path, required=True)
@@ -118,6 +125,11 @@ def main() -> None:
         parser.error("validation start follows validation end")
     if arguments.validation_end.year > 2022:
         parser.error("generated-model budget selection must not use post-2022 dates")
+    if arguments.observation_count != BUDGET_SELECTION_OBSERVATION_COUNT:
+        parser.error(
+            "generated-model budget selection requires the precommitted "
+            f"{BUDGET_SELECTION_OBSERVATION_COUNT}-observation window"
+        )
     if arguments.origin_count < 2:
         parser.error("--origin-count must be at least two")
 

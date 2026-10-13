@@ -388,10 +388,13 @@ def _generated_inputs(
     )
     return GeneratedProductionInputs(
         volgan_initializer_manifest=volgan_manifest,
+        volgan_selection_source_manifest=volgan_manifest,
         volgan_epoch_selection=volgan_selection,
         diffusion_initializer_manifest=diffusion_manifest,
+        diffusion_selection_source_manifest=diffusion_manifest,
         diffusion_epoch_selection=diffusion_selection,
         diffusion_ft_initializer_manifest=diffusion_ft_manifest,
+        diffusion_ft_selection_source_manifest=diffusion_ft_manifest,
         diffusion_ft_epoch_selection=diffusion_ft_selection,
     )
 
@@ -411,22 +414,34 @@ def _generated_gates(
     evidence = {
         "volgan": load_generated_selection_evidence(
             initializer_manifest=generated.volgan_initializer_manifest,
+            selection_source_initializer_manifest=(
+                generated.volgan_selection_source_manifest
+            ),
             epoch_selection=generated.volgan_epoch_selection,
             expected_model="volgan",
             expected_dataset_manifest_sha256=dataset_sha256,
         ),
         "diffusion-ad-seq-vol": load_generated_selection_evidence(
             initializer_manifest=generated.diffusion_initializer_manifest,
+            selection_source_initializer_manifest=(
+                generated.diffusion_selection_source_manifest
+            ),
             epoch_selection=generated.diffusion_epoch_selection,
             expected_model="diffusion-ad-seq-vol",
             expected_dataset_manifest_sha256=dataset_sha256,
         ),
         "diffusion-ad-seq-vol-ft": load_generated_selection_evidence(
             initializer_manifest=generated.diffusion_ft_initializer_manifest,
+            selection_source_initializer_manifest=(
+                generated.diffusion_ft_selection_source_manifest
+            ),
             epoch_selection=generated.diffusion_ft_epoch_selection,
             expected_model="diffusion-ad-seq-vol-ft",
             expected_dataset_manifest_sha256=dataset_sha256,
             base_initializer_manifest=generated.diffusion_initializer_manifest,
+            selection_base_initializer_manifest=(
+                generated.diffusion_selection_source_manifest
+            ),
         ),
     }
     values: dict[str, Path] = {}
@@ -558,7 +573,7 @@ def _generated_pair(
                 "warm_start_sha256": checkpoint_sha256,
                 "warm_start_training_end_date": "2022-08-31",
                 "base_checkpoint_sha256": base_sha256,
-                "observation_count": 252,
+                "observation_count": 126,
                 "one_standard_error_rule": True,
                 "validation_origins": ["2022-09-01", "2022-11-01"],
                 "selected_epochs": epochs,

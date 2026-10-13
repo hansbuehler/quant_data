@@ -20,9 +20,10 @@ from quantdata.torch import torch
 
 INITIALIZER_SCHEMA = "hedging-generated-initializer-v1"
 SELECTION_SCHEMA = "hedging-generated-epoch-selection-v1"
-PRODUCTION_GATE_SCHEMA = "hedging-generated-production-gate-v2"
+PRODUCTION_GATE_SCHEMA = "hedging-generated-production-gate-v3"
 QUANT_REVIEW_SCHEMA = "hedging-generated-quant-review-v1"
 GPU_READINESS_SCHEMA = "hedging-generated-gpu-readiness-v1"
+BUDGET_SELECTION_OBSERVATION_COUNT = 126
 PRODUCTION_SCOPES = frozenset(
     {
         "daily-public",
@@ -37,10 +38,14 @@ _SCOPE_BINDING_FIELDS = frozenset(
     {
         "initializer_manifest_sha256",
         "initializer_checkpoint_sha256",
+        "selection_source_manifest_sha256",
+        "selection_source_checkpoint_sha256",
         "epoch_selection_sha256",
         "selected_epochs",
         "base_initializer_manifest_sha256",
         "base_checkpoint_sha256",
+        "selection_base_initializer_manifest_sha256",
+        "selection_base_checkpoint_sha256",
     }
 )
 
@@ -52,10 +57,14 @@ class GeneratedSelectionEvidence:
     model: str
     initializer_checkpoint: Path
     initializer_checkpoint_sha256: str
+    selection_source_manifest_sha256: str | None
+    selection_source_checkpoint_sha256: str | None
     selected_epochs: int
     base_checkpoint: Path | None
     base_checkpoint_sha256: str | None
     base_initializer_manifest_sha256: str | None
+    selection_base_initializer_manifest_sha256: str | None
+    selection_base_checkpoint_sha256: str | None
     initializer_manifest_sha256: str
     epoch_selection_sha256: str
 
@@ -80,6 +89,10 @@ class _CheckpointEvidence:
     training_end_date: date
     completed_epochs: int
     base_checkpoint_sha256: str | None
+    model_code_version: str
+    model_user_version: str
+    model_config_identity: str
+    precision: str
 
 
 def load_generated_production_gate(
@@ -184,6 +197,8 @@ def generated_scope_binding(
         initializer_checkpoint_sha256 = None
         epoch_selection_sha256 = None
         selected_epochs = None
+        selection_source_manifest_sha256 = None
+        selection_source_checkpoint_sha256 = None
         selection_base_manifest_sha256 = None
         selection_base_checkpoint_sha256 = None
     else:
@@ -191,41 +206,53 @@ def generated_scope_binding(
         initializer_checkpoint_sha256 = selection.initializer_checkpoint_sha256
         epoch_selection_sha256 = selection.epoch_selection_sha256 or None
         selected_epochs = selection.selected_epochs or None
-        selection_base_manifest_sha256 = (
-            selection.base_initializer_manifest_sha256
+        selection_source_manifest_sha256 = (
+            selection.selection_source_manifest_sha256
         )
-        selection_base_checkpoint_sha256 = selection.base_checkpoint_sha256
+        selection_source_checkpoint_sha256 = (
+            selection.selection_source_checkpoint_sha256
+        )
+        selection_base_manifest_sha256 = (
+            selection.selection_base_initializer_manifest_sha256
+        )
+        selection_base_checkpoint_sha256 = (
+            selection.selection_base_checkpoint_sha256
+        )
+    selection_production_base_manifest_sha256 = (
+        None if selection is None else selection.base_initializer_manifest_sha256
+    )
+    selection_production_base_checkpoint_sha256 = (
+        None if selection is None else selection.base_checkpoint_sha256
+    )
     base_manifest_sha256 = (
-        None
+        selection_production_base_manifest_sha256
         if base_initializer is None
         else base_initializer.initializer_manifest_sha256
     )
     base_checkpoint_sha256 = (
-        None
+        selection_production_base_checkpoint_sha256
         if base_initializer is None
         else base_initializer.initializer_checkpoint_sha256
     )
-    if selection_base_manifest_sha256 is not None:
-        if (
-            base_manifest_sha256 is not None
-            and base_manifest_sha256 != selection_base_manifest_sha256
-        ):
-            raise ValueError("generated scope uses conflicting base initializer manifests")
-        base_manifest_sha256 = selection_base_manifest_sha256
-    if selection_base_checkpoint_sha256 is not None:
-        if (
-            base_checkpoint_sha256 is not None
-            and base_checkpoint_sha256 != selection_base_checkpoint_sha256
-        ):
-            raise ValueError("generated scope uses conflicting base checkpoints")
-        base_checkpoint_sha256 = selection_base_checkpoint_sha256
+    if base_initializer is not None and (
+        selection_production_base_manifest_sha256 not in {None, base_manifest_sha256}
+        or selection_production_base_checkpoint_sha256
+        not in {None, base_checkpoint_sha256}
+    ):
+        raise ValueError("generated scope uses conflicting production bases")
     return {
         "initializer_manifest_sha256": initializer_manifest_sha256,
         "initializer_checkpoint_sha256": initializer_checkpoint_sha256,
+        "selection_source_manifest_sha256": selection_source_manifest_sha256,
+        "selection_source_checkpoint_sha256": selection_source_checkpoint_sha256,
         "epoch_selection_sha256": epoch_selection_sha256,
         "selected_epochs": selected_epochs,
         "base_initializer_manifest_sha256": base_manifest_sha256,
         "base_checkpoint_sha256": base_checkpoint_sha256,
+        "selection_base_initializer_manifest_sha256": (
+            selection_base_manifest_sha256
+        ),
+        "selection_base_checkpoint_sha256": selection_base_checkpoint_sha256,
     }
 
 
@@ -253,10 +280,12 @@ def require_generated_production_scope(
 def load_generated_selection_evidence(
     *,
     initializer_manifest: Path,
+    selection_source_initializer_manifest: Path,
     epoch_selection: Path,
     expected_model: str,
     expected_dataset_manifest_sha256: str,
     base_initializer_manifest: Path | None = None,
+    selection_base_initializer_manifest: Path | None = None,
 ) -> GeneratedSelectionEvidence:
     """Load and cross-check one pre-evaluation generated-model selection."""
     initializer_path = Path(initializer_manifest)
@@ -289,6 +318,27 @@ def load_generated_selection_evidence(
     if initializer.get("completed_epochs") != checkpoint_evidence.completed_epochs:
         raise ValueError("generated initializer completion differs from checkpoint payload")
 
+    selection_source = load_generated_initializer_evidence(
+        initializer_manifest=selection_source_initializer_manifest,
+        expected_model=normalized_model,
+        expected_dataset_manifest_sha256=expected_dataset_manifest_sha256,
+    )
+    selection_checkpoint = selection_source.initializer_checkpoint
+    selection_checkpoint_sha256 = (
+        selection_source.initializer_checkpoint_sha256
+    )
+    selection_checkpoint_evidence = _load_checkpoint_evidence(
+        selection_checkpoint,
+        expected_model=normalized_model,
+        expected_dataset_manifest_sha256=expected_dataset_manifest_sha256,
+    )
+    if _checkpoint_model_identity(selection_checkpoint_evidence) != (
+        _checkpoint_model_identity(checkpoint_evidence)
+    ):
+        raise ValueError(
+            "generated epoch-selection source uses another model geometry"
+        )
+
     if selection.get("schema") != SELECTION_SCHEMA:
         raise ValueError("unexpected generated epoch-selection schema")
     if _normalized_model(_require_string(selection, "model")) != normalized_model:
@@ -298,19 +348,22 @@ def load_generated_selection_evidence(
     selected_epochs = selection.get("selected_epochs")
     if not isinstance(selected_epochs, int) or selected_epochs <= 0:
         raise ValueError("generated epoch selection has no positive selected budget")
-    if Path(_require_string(selection, "warm_start_checkpoint")) != checkpoint:
-        raise ValueError("generated epoch selection uses another initializer path")
-    if _require_sha256(selection, "warm_start_sha256") != checkpoint_sha256:
-        raise ValueError("generated epoch selection uses another initializer hash")
+    if Path(_require_string(selection, "warm_start_checkpoint")) != selection_checkpoint:
+        raise ValueError("generated epoch selection uses another source initializer")
+    if _require_sha256(selection, "warm_start_sha256") != selection_checkpoint_sha256:
+        raise ValueError("generated epoch selection uses another source hash")
     claimed_source_end_date = date.fromisoformat(
         _require_string(selection, "warm_start_training_end_date")
     )
-    if claimed_source_end_date != checkpoint_evidence.training_end_date:
+    if claimed_source_end_date != selection_checkpoint_evidence.training_end_date:
         raise ValueError("generated selection source date differs from checkpoint")
     if selection.get("one_standard_error_rule") is not True:
         raise ValueError("generated epoch selection did not use one-standard-error rule")
-    if selection.get("observation_count") != 252:
-        raise ValueError("generated epoch selection does not use 252 observations")
+    if selection.get("observation_count") != BUDGET_SELECTION_OBSERVATION_COUNT:
+        raise ValueError(
+            "generated epoch selection does not use the precommitted "
+            f"{BUDGET_SELECTION_OBSERVATION_COUNT}-observation window"
+        )
     raw_validation_origins = selection.get("validation_origins")
     if not isinstance(raw_validation_origins, list) or not raw_validation_origins:
         raise ValueError("generated epoch selection has no validation origins")
@@ -323,7 +376,7 @@ def load_generated_selection_evidence(
             validation_origins[index] >= validation_origins[index + 1]
             for index in range(len(validation_origins) - 1)
         )
-        or checkpoint_evidence.training_end_date >= validation_origins[0]
+        or selection_checkpoint_evidence.training_end_date >= validation_origins[0]
     ):
         raise ValueError("generated epoch selection uses evaluation-period data")
     selected_scores = _validated_budget_scores(
@@ -343,6 +396,9 @@ def load_generated_selection_evidence(
     base_checkpoint = None
     base_checkpoint_sha256 = None
     base_initializer_manifest_sha256 = None
+    selection_base_initializer_manifest_sha256 = None
+    selection_base_checkpoint_sha256 = None
+    selection_base = None
     if base_initializer_manifest is not None:
         base = load_generated_initializer_evidence(
             initializer_manifest=base_initializer_manifest,
@@ -352,22 +408,68 @@ def load_generated_selection_evidence(
         base_checkpoint = base.initializer_checkpoint
         base_checkpoint_sha256 = base.initializer_checkpoint_sha256
         base_initializer_manifest_sha256 = base.initializer_manifest_sha256
+    if selection_base_initializer_manifest is not None:
+        selection_base = load_generated_initializer_evidence(
+            initializer_manifest=selection_base_initializer_manifest,
+            expected_model="diffusion-ad-seq-vol",
+            expected_dataset_manifest_sha256=expected_dataset_manifest_sha256,
+        )
+        selection_base_initializer_manifest_sha256 = (
+            selection_base.initializer_manifest_sha256
+        )
+        selection_base_checkpoint_sha256 = (
+            selection_base.initializer_checkpoint_sha256
+        )
     if normalized_model == "diffusion-ad-seq-vol-ft":
         initializer_base_path = initializer.get("base_checkpoint_path")
         initializer_base_sha256 = initializer.get("base_checkpoint_sha256")
+        selection_source_manifest = _read_json_object(
+            Path(selection_source_initializer_manifest)
+        )
+        selection_source_base_path = selection_source_manifest.get(
+            "base_checkpoint_path"
+        )
+        selection_source_base_sha256 = selection_source_manifest.get(
+            "base_checkpoint_sha256"
+        )
         if (
             base_checkpoint is None
+            or selection_base is None
             or initializer_base_path != str(base_checkpoint)
             or initializer_base_sha256 != base_checkpoint_sha256
-            or selected_base_sha256 != base_checkpoint_sha256
             or checkpoint_evidence.base_checkpoint_sha256
             != base_checkpoint_sha256
+            or selection_source_base_path
+            != str(selection_base.initializer_checkpoint)
+            or selection_source_base_sha256
+            != selection_base_checkpoint_sha256
+            or selected_base_sha256 != selection_base_checkpoint_sha256
+            or selection_checkpoint_evidence.base_checkpoint_sha256
+            != selection_base_checkpoint_sha256
         ):
             raise ValueError("fine-tuned generated selection has another base checkpoint")
+        selection_base_checkpoint_evidence = _load_checkpoint_evidence(
+            selection_base.initializer_checkpoint,
+            expected_model="diffusion-ad-seq-vol",
+            expected_dataset_manifest_sha256=expected_dataset_manifest_sha256,
+        )
+        base_checkpoint_evidence = _load_checkpoint_evidence(
+            base_checkpoint,
+            expected_model="diffusion-ad-seq-vol",
+            expected_dataset_manifest_sha256=expected_dataset_manifest_sha256,
+        )
+        if _checkpoint_model_identity(selection_base_checkpoint_evidence) != (
+            _checkpoint_model_identity(base_checkpoint_evidence)
+        ):
+            raise ValueError(
+                "fine-tuned selection and production bases use another geometry"
+            )
     elif (
         selected_base_sha256 is not None
         or base_checkpoint is not None
+        or selection_base is not None
         or checkpoint_evidence.base_checkpoint_sha256 is not None
+        or selection_checkpoint_evidence.base_checkpoint_sha256 is not None
     ):
         raise ValueError("non-fine-tuned generated selection cannot use a base checkpoint")
 
@@ -375,10 +477,18 @@ def load_generated_selection_evidence(
         model=normalized_model,
         initializer_checkpoint=checkpoint,
         initializer_checkpoint_sha256=checkpoint_sha256,
+        selection_source_manifest_sha256=(
+            selection_source.initializer_manifest_sha256
+        ),
+        selection_source_checkpoint_sha256=selection_checkpoint_sha256,
         selected_epochs=selected_epochs,
         base_checkpoint=base_checkpoint,
         base_checkpoint_sha256=base_checkpoint_sha256,
         base_initializer_manifest_sha256=base_initializer_manifest_sha256,
+        selection_base_initializer_manifest_sha256=(
+            selection_base_initializer_manifest_sha256
+        ),
+        selection_base_checkpoint_sha256=selection_base_checkpoint_sha256,
         initializer_manifest_sha256=initializer_manifest_sha256,
         epoch_selection_sha256=epoch_selection_sha256,
     )
@@ -418,10 +528,14 @@ def load_generated_initializer_evidence(
         model=normalized_model,
         initializer_checkpoint=checkpoint,
         initializer_checkpoint_sha256=checkpoint_sha256,
+        selection_source_manifest_sha256=None,
+        selection_source_checkpoint_sha256=None,
         selected_epochs=0,
         base_checkpoint=None,
         base_checkpoint_sha256=None,
         base_initializer_manifest_sha256=None,
+        selection_base_initializer_manifest_sha256=None,
+        selection_base_checkpoint_sha256=None,
         initializer_manifest_sha256=initializer_manifest_sha256,
         epoch_selection_sha256="",
     )
@@ -429,6 +543,18 @@ def load_generated_initializer_evidence(
 
 def _normalized_model(model: str) -> str:
     return model if model == "volgan" or model.startswith("diffusion-") else f"diffusion-{model}"
+
+
+def _checkpoint_model_identity(
+    evidence: _CheckpointEvidence,
+) -> tuple[str, str, str, str, str]:
+    return (
+        evidence.model,
+        evidence.model_code_version,
+        evidence.model_user_version,
+        evidence.model_config_identity,
+        evidence.precision,
+    )
 
 
 def _load_checkpoint_evidence(
@@ -444,9 +570,10 @@ def _load_checkpoint_evidence(
         raise ValueError("generated initializer checkpoint format is incompatible")
     if payload.get("dataset_manifest_sha256") != expected_dataset_manifest_sha256:
         raise ValueError("generated initializer checkpoint uses another dataset")
-    for name in ("model_code_version", "model_user_version", "model_config_identity"):
-        _require_string(payload, name)
-    _require_string(payload, "precision")
+    model_code_version = _require_string(payload, "model_code_version")
+    model_user_version = _require_string(payload, "model_user_version")
+    model_config_identity = _require_string(payload, "model_config_identity")
+    precision = _require_string(payload, "precision")
     training_start = date.fromisoformat(_require_string(payload, "training_start_date"))
     training_end = date.fromisoformat(_require_string(payload, "training_end_date"))
     if training_start > training_end or training_end.year > 2022:
@@ -499,6 +626,10 @@ def _load_checkpoint_evidence(
         training_end_date=training_end,
         completed_epochs=epoch_index + 1,
         base_checkpoint_sha256=base_fingerprint,
+        model_code_version=model_code_version,
+        model_user_version=model_user_version,
+        model_config_identity=model_config_identity,
+        precision=precision,
     )
 
 
@@ -667,6 +798,8 @@ def _validated_scope_bindings(value: object) -> dict[str, dict[str, object]]:
             for name in (
                 "initializer_manifest_sha256",
                 "initializer_checkpoint_sha256",
+                "selection_source_manifest_sha256",
+                "selection_source_checkpoint_sha256",
                 "epoch_selection_sha256",
                 "selected_epochs",
             )
@@ -689,6 +822,19 @@ def _validated_scope_bindings(value: object) -> dict[str, dict[str, object]]:
         ):
             raise ValueError(
                 f"generated production scope {raw_scope} has partial base evidence"
+            )
+        selection_base_values = tuple(
+            binding[name]
+            for name in (
+                "selection_base_initializer_manifest_sha256",
+                "selection_base_checkpoint_sha256",
+            )
+        )
+        if any(item is None for item in selection_base_values) and any(
+            item is not None for item in selection_base_values
+        ):
+            raise ValueError(
+                f"generated production scope {raw_scope} has partial selection-base evidence"
             )
         bindings[raw_scope] = binding
     return bindings

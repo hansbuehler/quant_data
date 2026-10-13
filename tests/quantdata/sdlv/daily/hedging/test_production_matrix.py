@@ -341,14 +341,20 @@ def test_production_matrix_cli_serializes_dates_and_generated_inputs(
             str(output),
             "--volgan-initializer-manifest",
             str(generated.volgan_initializer_manifest),
+            "--volgan-selection-source-manifest",
+            str(generated.volgan_selection_source_manifest),
             "--volgan-epoch-selection",
             str(generated.volgan_epoch_selection),
             "--diffusion-initializer-manifest",
             str(generated.diffusion_initializer_manifest),
+            "--diffusion-selection-source-manifest",
+            str(generated.diffusion_selection_source_manifest),
             "--diffusion-epoch-selection",
             str(generated.diffusion_epoch_selection),
             "--diffusion-ft-initializer-manifest",
             str(generated.diffusion_ft_initializer_manifest),
+            "--diffusion-ft-selection-source-manifest",
+            str(generated.diffusion_ft_selection_source_manifest),
             "--diffusion-ft-epoch-selection",
             str(generated.diffusion_ft_epoch_selection),
         ],
@@ -401,6 +407,191 @@ def test_generated_matrix_rejects_checkpoint_tampering(tmp_path: Path) -> None:
     case = cases["volgan-rolling-trained"]
     assert case.readiness is ProductionReadiness.BLOCKED
     assert "hash mismatch" in case.blocked_reason
+
+
+def test_generated_matrix_accepts_distinct_budget_selection_source(
+    tmp_path: Path,
+) -> None:
+    dataset = tmp_path / "dataset"
+    dataset.mkdir()
+    (dataset / "manifest.json").write_text("{}\n", encoding="utf-8")
+    generated = _generated_inputs(tmp_path, dataset=dataset)
+    source = tmp_path / "volgan-selection-source.pt"
+    payload = torch.load(
+        tmp_path / "volgan.pt",
+        map_location="cpu",
+        weights_only=False,
+    )
+    payload["training_end_date"] = "2022-07-01"
+    torch.save(payload, source)
+    source_manifest = tmp_path / "volgan-selection-source.json"
+    manifest = json.loads(
+        generated.volgan_initializer_manifest.read_text(encoding="utf-8")
+    )
+    manifest["as_of_date"] = "2022-07-01"
+    manifest["checkpoint_path"] = str(source)
+    manifest["checkpoint_sha256"] = file_sha256(source)
+    source_manifest.write_text(json.dumps(manifest), encoding="utf-8")
+    generated = replace(
+        generated,
+        volgan_selection_source_manifest=source_manifest,
+    )
+    selection = json.loads(
+        generated.volgan_epoch_selection.read_text(encoding="utf-8")
+    )
+    selection["warm_start_checkpoint"] = str(source)
+    selection["warm_start_sha256"] = file_sha256(source)
+    selection["warm_start_training_end_date"] = "2022-07-01"
+    generated.volgan_epoch_selection.write_text(
+        json.dumps(selection),
+        encoding="utf-8",
+    )
+
+    cases = {
+        case.case_id: case
+        for case in _matrix(dataset=dataset, generated=generated)
+    }
+
+    assert (
+        cases["volgan-rolling-trained"].readiness
+        is ProductionReadiness.WAITING_GATE
+    )
+
+
+def test_generated_matrix_rejects_selection_source_with_another_geometry(
+    tmp_path: Path,
+) -> None:
+    dataset = tmp_path / "dataset"
+    dataset.mkdir()
+    (dataset / "manifest.json").write_text("{}\n", encoding="utf-8")
+    generated = _generated_inputs(tmp_path, dataset=dataset)
+    source = tmp_path / "volgan-selection-source.pt"
+    payload = torch.load(
+        tmp_path / "volgan.pt",
+        map_location="cpu",
+        weights_only=False,
+    )
+    payload["training_end_date"] = "2022-07-01"
+    payload["model_config_identity"] = "another-geometry"
+    torch.save(payload, source)
+    source_manifest = tmp_path / "volgan-selection-source.json"
+    manifest = json.loads(
+        generated.volgan_initializer_manifest.read_text(encoding="utf-8")
+    )
+    manifest["as_of_date"] = "2022-07-01"
+    manifest["checkpoint_path"] = str(source)
+    manifest["checkpoint_sha256"] = file_sha256(source)
+    source_manifest.write_text(json.dumps(manifest), encoding="utf-8")
+    generated = replace(
+        generated,
+        volgan_selection_source_manifest=source_manifest,
+    )
+    selection = json.loads(
+        generated.volgan_epoch_selection.read_text(encoding="utf-8")
+    )
+    selection["warm_start_checkpoint"] = str(source)
+    selection["warm_start_sha256"] = file_sha256(source)
+    selection["warm_start_training_end_date"] = "2022-07-01"
+    generated.volgan_epoch_selection.write_text(
+        json.dumps(selection),
+        encoding="utf-8",
+    )
+
+    cases = {
+        case.case_id: case
+        for case in _matrix(dataset=dataset, generated=generated)
+    }
+
+    case = cases["volgan-rolling-trained"]
+    assert case.readiness is ProductionReadiness.BLOCKED
+    assert "another model geometry" in case.blocked_reason
+
+
+def test_generated_matrix_separates_ft_selection_and_production_bases(
+    tmp_path: Path,
+) -> None:
+    dataset = tmp_path / "dataset"
+    dataset.mkdir()
+    (dataset / "manifest.json").write_text("{}\n", encoding="utf-8")
+    generated = _generated_inputs(tmp_path, dataset=dataset)
+
+    selection_base = tmp_path / "diffusion-selection-source.pt"
+    base_payload = torch.load(
+        tmp_path / "diffusion.pt",
+        map_location="cpu",
+        weights_only=False,
+    )
+    base_payload["training_end_date"] = "2022-07-01"
+    torch.save(base_payload, selection_base)
+    selection_base_manifest = tmp_path / "diffusion-selection-source.json"
+    base_manifest = json.loads(
+        generated.diffusion_initializer_manifest.read_text(encoding="utf-8")
+    )
+    base_manifest["as_of_date"] = "2022-07-01"
+    base_manifest["checkpoint_path"] = str(selection_base)
+    base_manifest["checkpoint_sha256"] = file_sha256(selection_base)
+    selection_base_manifest.write_text(json.dumps(base_manifest), encoding="utf-8")
+    base_selection = json.loads(
+        generated.diffusion_epoch_selection.read_text(encoding="utf-8")
+    )
+    base_selection["warm_start_checkpoint"] = str(selection_base)
+    base_selection["warm_start_sha256"] = file_sha256(selection_base)
+    base_selection["warm_start_training_end_date"] = "2022-07-01"
+    generated.diffusion_epoch_selection.write_text(
+        json.dumps(base_selection),
+        encoding="utf-8",
+    )
+
+    selection_ft = tmp_path / "diffusion-ft-selection-source.pt"
+    ft_payload = torch.load(
+        tmp_path / "diffusion-ft.pt",
+        map_location="cpu",
+        weights_only=False,
+    )
+    ft_payload["training_end_date"] = "2022-07-01"
+    ft_payload["base_checkpoint_fingerprint"] = file_sha256(selection_base)
+    torch.save(ft_payload, selection_ft)
+    selection_ft_manifest = tmp_path / "diffusion-ft-selection-source.json"
+    ft_manifest = json.loads(
+        generated.diffusion_ft_initializer_manifest.read_text(encoding="utf-8")
+    )
+    ft_manifest["as_of_date"] = "2022-07-01"
+    ft_manifest["checkpoint_path"] = str(selection_ft)
+    ft_manifest["checkpoint_sha256"] = file_sha256(selection_ft)
+    ft_manifest["base_checkpoint_path"] = str(selection_base)
+    ft_manifest["base_checkpoint_sha256"] = file_sha256(selection_base)
+    selection_ft_manifest.write_text(json.dumps(ft_manifest), encoding="utf-8")
+    ft_selection = json.loads(
+        generated.diffusion_ft_epoch_selection.read_text(encoding="utf-8")
+    )
+    ft_selection["warm_start_checkpoint"] = str(selection_ft)
+    ft_selection["warm_start_sha256"] = file_sha256(selection_ft)
+    ft_selection["warm_start_training_end_date"] = "2022-07-01"
+    ft_selection["base_checkpoint_sha256"] = file_sha256(selection_base)
+    generated.diffusion_ft_epoch_selection.write_text(
+        json.dumps(ft_selection),
+        encoding="utf-8",
+    )
+    generated = replace(
+        generated,
+        diffusion_selection_source_manifest=selection_base_manifest,
+        diffusion_ft_selection_source_manifest=selection_ft_manifest,
+    )
+
+    cases = {
+        case.case_id: case
+        for case in _matrix(dataset=dataset, generated=generated)
+    }
+
+    case = cases["diffusion-ad-seq-vol-ft-rolling-trained"]
+    assert case.readiness is ProductionReadiness.WAITING_GATE
+    assert case.command is not None
+    assert case.command[case.command.index("--warm-start-checkpoint") + 1] == str(
+        tmp_path / "diffusion-ft.pt"
+    )
+    assert case.command[case.command.index("--base-checkpoint") + 1] == str(
+        tmp_path / "diffusion.pt"
+    )
 
 
 def test_generated_matrix_rejects_forged_initializer_date(tmp_path: Path) -> None:
@@ -469,6 +660,32 @@ def test_generated_matrix_recomputes_one_se_choice(tmp_path: Path) -> None:
     case = cases["volgan-rolling-trained"]
     assert case.readiness is ProductionReadiness.BLOCKED
     assert "not the recomputed one-SE choice" in case.blocked_reason
+
+
+def test_generated_matrix_rejects_another_budget_selection_window(
+    tmp_path: Path,
+) -> None:
+    dataset = tmp_path / "dataset"
+    dataset.mkdir()
+    (dataset / "manifest.json").write_text("{}\n", encoding="utf-8")
+    generated = _generated_inputs(tmp_path, dataset=dataset)
+    selection = json.loads(
+        generated.volgan_epoch_selection.read_text(encoding="utf-8")
+    )
+    selection["observation_count"] = 252
+    generated.volgan_epoch_selection.write_text(
+        json.dumps(selection),
+        encoding="utf-8",
+    )
+
+    cases = {
+        case.case_id: case
+        for case in _matrix(dataset=dataset, generated=generated)
+    }
+
+    case = cases["volgan-rolling-trained"]
+    assert case.readiness is ProductionReadiness.BLOCKED
+    assert "126-observation window" in case.blocked_reason
 
 
 def test_generated_matrix_rejects_checkpoint_ft_lineage_forgery(
@@ -543,10 +760,13 @@ def _generated_inputs(
     )
     return GeneratedProductionInputs(
         volgan_initializer_manifest=volgan_manifest,
+        volgan_selection_source_manifest=volgan_manifest,
         volgan_epoch_selection=volgan_selection,
         diffusion_initializer_manifest=diffusion_manifest,
+        diffusion_selection_source_manifest=diffusion_manifest,
         diffusion_epoch_selection=diffusion_selection,
         diffusion_ft_initializer_manifest=diffusion_ft_manifest,
+        diffusion_ft_selection_source_manifest=diffusion_ft_manifest,
         diffusion_ft_epoch_selection=diffusion_ft_selection,
     )
 
@@ -566,22 +786,34 @@ def _generated_gates(
     evidence = {
         "volgan": load_generated_selection_evidence(
             initializer_manifest=generated.volgan_initializer_manifest,
+            selection_source_initializer_manifest=(
+                generated.volgan_selection_source_manifest
+            ),
             epoch_selection=generated.volgan_epoch_selection,
             expected_model="volgan",
             expected_dataset_manifest_sha256=dataset_sha256,
         ),
         "diffusion-ad-seq-vol": load_generated_selection_evidence(
             initializer_manifest=generated.diffusion_initializer_manifest,
+            selection_source_initializer_manifest=(
+                generated.diffusion_selection_source_manifest
+            ),
             epoch_selection=generated.diffusion_epoch_selection,
             expected_model="diffusion-ad-seq-vol",
             expected_dataset_manifest_sha256=dataset_sha256,
         ),
         "diffusion-ad-seq-vol-ft": load_generated_selection_evidence(
             initializer_manifest=generated.diffusion_ft_initializer_manifest,
+            selection_source_initializer_manifest=(
+                generated.diffusion_ft_selection_source_manifest
+            ),
             epoch_selection=generated.diffusion_ft_epoch_selection,
             expected_model="diffusion-ad-seq-vol-ft",
             expected_dataset_manifest_sha256=dataset_sha256,
             base_initializer_manifest=generated.diffusion_initializer_manifest,
+            selection_base_initializer_manifest=(
+                generated.diffusion_selection_source_manifest
+            ),
         ),
     }
     values: dict[str, Path] = {}
@@ -715,7 +947,7 @@ def _generated_pair(
                 "warm_start_sha256": checkpoint_sha256,
                 "warm_start_training_end_date": "2022-08-31",
                 "base_checkpoint_sha256": base_sha256,
-                "observation_count": 252,
+                "observation_count": 126,
                 "one_standard_error_rule": True,
                 "validation_origins": ["2022-09-01", "2022-11-01"],
                 "selected_epochs": epochs,

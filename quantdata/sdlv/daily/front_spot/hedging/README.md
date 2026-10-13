@@ -172,7 +172,8 @@ is accepted as production evidence only when all eligible origins are present
 and every recorded dated-manifest hash still matches. This completion enables
 Q cases; P cases additionally require every dated physical-drift gate to pass.
 
-Train a generated-model initializer using the complete 247-date 2022 sample:
+Train the production generated-model initializer using the complete 247-date
+2022 sample:
 
 ```bash
 python -m quantdata.sdlv.daily.front_spot.hedging.runners.train_generated \
@@ -182,8 +183,10 @@ python -m quantdata.sdlv.daily.front_spot.hedging.runners.train_generated \
 ```
 
 Select the rolling update budget on explicitly chosen 2022 origins before
-running 2023--2025. The selection initializer must itself predate the first
-validation origin:
+running 2023--2025. This uses a separate, same-geometry selection source ending
+on 2022-07-05, the last released date before the first eligible 126-observation
+validation window. The end-2022 production initializer remains the checkpoint
+used by every 2023--2025 rolling fit:
 
 ```bash
 python -m quantdata.sdlv.daily.front_spot.hedging.runners.select_generated_budget \
@@ -192,15 +195,24 @@ python -m quantdata.sdlv.daily.front_spot.hedging.runners.select_generated_budge
   --warm-start-checkpoint <selection-initializer.pt> \
   --validation-start 2022-07-01 \
   --validation-end 2022-12-30 \
-  --observation-count 126 \
   --candidate-epochs <comma-separated-precommitted-grid> \
   --checkpoint-directory <selection-checkpoints> \
   --output <selection.json>
 ```
 
-The production `run_daily` invocation then uses the separately trained
-end-2022 initializer via `--warm-start-checkpoint` and the selected value via
-`--epochs`. A fixed initializer makes origin fits independent and restartable;
+Train each selection source with `--as-of 2022-07-05 --observation-count 125`
+and each production initializer with `--as-of 2022-12-30
+--observation-count 247`. Fine-tuned diffusion uses the matching AD-Seq-Vol
+base at each cutoff. The precommitted rolling-update grids are `1,10,100,1000`
+for VolGAN and `1,3,10,30` for both diffusion variants. The 126-observation
+study is necessarily a 2022-only proxy for the 252-session production window:
+the released 2022 panel contains only 247 dates.
+
+The selection artifact authenticates its earlier source checkpoint, while the
+production matrix independently authenticates the same-geometry end-2022
+initializer. The production `run_daily` invocation uses that end-2022
+initializer via `--warm-start-checkpoint` and the selected value via `--epochs`.
+A fixed production initializer makes origin fits independent and restartable;
 no fitted 2023 state is allowed to initialize a different 2023 origin. Each
 completed fit's SHA-256 is retained in all 20 origin records, while the large
 optimizer checkpoint is removed under its training lock by default. Use
@@ -284,16 +296,18 @@ paired initializer manifests and 2022 epoch-selection artifacts:
 `--volgan-initializer-manifest`, `--volgan-epoch-selection`,
 `--diffusion-initializer-manifest`, `--diffusion-epoch-selection`,
 `--diffusion-ft-initializer-manifest`, and
-`--diffusion-ft-epoch-selection`. The matrix verifies the public-dataset
-identity, pre-2023 timing, selected epoch, initializer bytes, and fine-tuning
-base bytes before staging a command; the runner rechecks the pinned hashes at
-launch. Missing dependencies remain explicit blocked cases rather than falling
-back to implicit defaults.
+`--diffusion-ft-epoch-selection`. Each model also requires its explicit
+`--*-selection-source-manifest`; fine-tuned diffusion binds the AD-Seq-Vol
+selection source as its selection-time base. The matrix verifies the
+public-dataset identity, pre-2023 timing, selected epoch, selection-source and
+production-initializer bytes, and both fine-tuning base lineages before staging
+a command; the runner rechecks the pinned hashes at launch. Missing dependencies
+remain explicit blocked cases rather than falling back to implicit defaults.
 
 Generated cases remain `waiting-gate` until the corresponding model supplies
 `--volgan-production-gate`, `--diffusion-production-gate`, or
 `--diffusion-ft-production-gate`. A gate is a
-`hedging-generated-production-gate-v2` JSON object containing the model and
+`hedging-generated-production-gate-v3` JSON object containing the model and
 dataset-manifest identities, `status: "pass"`, the exact clean reviewed Git
 commit, and workflow-specific evidence bindings. The allowed scopes distinguish
 daily, frozen-weekly, and restarted-weekly runs and, within each, published

@@ -823,6 +823,14 @@ runs and managed-GPU VRAM, timing, batch-invariance, and restart evidence remain
 outstanding. The production matrix
 pins one immutable initializer hash across every rolling origin, while each
 fit verifies the warm-start and fine-tuning-base hashes before and after load.
+The 2022 budget study uses a separate same-geometry source checkpoint ending
+before its first 126-observation validation window; the resulting budget is
+then paired with the complete end-2022 production initializer. This separation
+is authenticated explicitly and avoids the impossible requirement that an
+end-2022 checkpoint predate its own 2022 validation origins.
+Because the released 2022 panel contains 247 dates, this is explicitly a proxy
+for the 252-session production window. The precommitted candidate grids are
+`1,10,100,1000` for VolGAN and `1,3,10,30` for AD-Seq-Vol and AD-Seq-Vol-FT.
 Diffusion base checkpoints additionally carry a shared semantic-geometry
 identity, preventing same-shaped but economically different transformer or
 surface configurations from loading silently.

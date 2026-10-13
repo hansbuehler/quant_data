@@ -416,12 +416,14 @@ def _generated_cases(
     )
     volgan_evidence, volgan_reason = _generated_selection(
         generated.volgan_initializer_manifest,
+        generated.volgan_selection_source_manifest,
         generated.volgan_epoch_selection,
         expected_model="volgan",
         dataset_sha256=dataset_sha256,
     )
     diffusion_evidence, diffusion_reason = _generated_selection(
         generated.diffusion_initializer_manifest,
+        generated.diffusion_selection_source_manifest,
         generated.diffusion_epoch_selection,
         expected_model="diffusion-ad-seq-vol",
         dataset_sha256=dataset_sha256,
@@ -433,10 +435,14 @@ def _generated_cases(
     )
     diffusion_ft_evidence, diffusion_ft_reason = _generated_selection(
         generated.diffusion_ft_initializer_manifest,
+        generated.diffusion_ft_selection_source_manifest,
         generated.diffusion_ft_epoch_selection,
         expected_model="diffusion-ad-seq-vol-ft",
         dataset_sha256=dataset_sha256,
         base_initializer_manifest=generated.diffusion_initializer_manifest,
+        selection_base_initializer_manifest=(
+            generated.diffusion_selection_source_manifest
+        ),
     )
     cases: list[DailyProductionCase] = []
     for schedule in _schedules():
@@ -702,15 +708,19 @@ def _generated_gate(
 
 def _generated_selection(
     initializer_manifest: Path | None,
+    selection_source_initializer_manifest: Path | None,
     epoch_selection: Path | None,
     *,
     expected_model: str,
     dataset_sha256: str | None,
     base_initializer_manifest: Path | None = None,
+    selection_base_initializer_manifest: Path | None = None,
 ) -> tuple[GeneratedSelectionEvidence | None, str | None]:
     missing = []
     if initializer_manifest is None:
         missing.append("authenticated pre-evaluation initializer manifest")
+    if selection_source_initializer_manifest is None:
+        missing.append("authenticated 2022 selection-source manifest")
     if epoch_selection is None:
         missing.append("authenticated 2022 epoch selection")
     if dataset_sha256 is None:
@@ -721,10 +731,16 @@ def _generated_selection(
         return (
             load_generated_selection_evidence(
                 initializer_manifest=initializer_manifest,
+                selection_source_initializer_manifest=(
+                    selection_source_initializer_manifest
+                ),
                 epoch_selection=epoch_selection,
                 expected_model=expected_model,
                 expected_dataset_manifest_sha256=dataset_sha256,
                 base_initializer_manifest=base_initializer_manifest,
+                selection_base_initializer_manifest=(
+                    selection_base_initializer_manifest
+                ),
             ),
             None,
         )
@@ -943,12 +959,15 @@ def main() -> None:
     parser.add_argument("--gromm-artifact-range-summary", type=Path)
     parser.add_argument("--volgan-production-gate", type=Path)
     parser.add_argument("--volgan-initializer-manifest", type=Path)
+    parser.add_argument("--volgan-selection-source-manifest", type=Path)
     parser.add_argument("--volgan-epoch-selection", type=Path)
     parser.add_argument("--diffusion-production-gate", type=Path)
     parser.add_argument("--diffusion-initializer-manifest", type=Path)
+    parser.add_argument("--diffusion-selection-source-manifest", type=Path)
     parser.add_argument("--diffusion-epoch-selection", type=Path)
     parser.add_argument("--diffusion-ft-production-gate", type=Path)
     parser.add_argument("--diffusion-ft-initializer-manifest", type=Path)
+    parser.add_argument("--diffusion-ft-selection-source-manifest", type=Path)
     parser.add_argument("--diffusion-ft-epoch-selection", type=Path)
     arguments = parser.parse_args()
     config = WeeklyProductionMatrixConfig()
@@ -966,10 +985,16 @@ def main() -> None:
         generated=GeneratedProductionInputs(
             volgan_production_gate=arguments.volgan_production_gate,
             volgan_initializer_manifest=arguments.volgan_initializer_manifest,
+            volgan_selection_source_manifest=(
+                arguments.volgan_selection_source_manifest
+            ),
             volgan_epoch_selection=arguments.volgan_epoch_selection,
             diffusion_production_gate=arguments.diffusion_production_gate,
             diffusion_initializer_manifest=(
                 arguments.diffusion_initializer_manifest
+            ),
+            diffusion_selection_source_manifest=(
+                arguments.diffusion_selection_source_manifest
             ),
             diffusion_epoch_selection=arguments.diffusion_epoch_selection,
             diffusion_ft_production_gate=(
@@ -977,6 +1002,9 @@ def main() -> None:
             ),
             diffusion_ft_initializer_manifest=(
                 arguments.diffusion_ft_initializer_manifest
+            ),
+            diffusion_ft_selection_source_manifest=(
+                arguments.diffusion_ft_selection_source_manifest
             ),
             diffusion_ft_epoch_selection=(
                 arguments.diffusion_ft_epoch_selection
