@@ -866,7 +866,11 @@ observed VRAM. An interrupted epoch checkpoint resumed successfully after the
 restart loader was corrected to restore CPU RNG state on CPU. The detailed
 evidence is recorded in
 `reports/2026-10-12-generated-gpu-readiness.md`. Production-scale generated
-runs and batch-invariance evidence remain outstanding.
+runs and batch-invariance evidence remain outstanding. The authenticated 2022
+initializer and epoch-budget training pipeline is active on a managed GPU while
+the independent rolling GROMM preparation proceeds on CPU; both pipelines use
+disjoint artifact roots and retry atomic GPU claims, a scheduling arrangement
+that passed independent review.
 
 Gate: one model-specific review and standalone smoke test per baseline pass.
 

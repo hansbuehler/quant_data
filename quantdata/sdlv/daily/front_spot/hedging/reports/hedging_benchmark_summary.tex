@@ -298,10 +298,11 @@ from released SANOS states \citep{SANOS2026} and uses those empirical rows
 directly as scenarios. It supports all four risk criteria in the deep-hedging
 sense of \citet{BuehlerEtAl2019DeepHedging}. Long, short, and zero policies
 determine indifference prices; a separate drift-neutral policy gives the
-executable pure hedge. Mean--variance uses exact cost-lasso coordinate descent
-and nonlinear objectives use analytic-gradient L-BFGS-B. The model is
-inexpensive and fully rolling, but its completed mean--volatility $\kappa=1$
-result trails SANOS--LV.
+executable pure hedge. Mean--variance uses exact cost-lasso coordinate descent,
+mean--volatility uses an exact conic program with an explicit recession test,
+and entropy and power-exponential objectives use analytic-gradient L-BFGS-B.
+The model is inexpensive and fully rolling, but its completed
+mean--volatility $\kappa=1$ result trails SANOS--LV.
 
 \subsection{Robust covariance}
 
