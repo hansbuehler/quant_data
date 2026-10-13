@@ -1,0 +1,313 @@
+\documentclass[10pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[a4paper,margin=17mm,headheight=14pt]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{siunitx}
+
+\definecolor{navy}{HTML}{15324A}
+\definecolor{blue}{HTML}{2F6F9F}
+\definecolor{pale}{HTML}{EAF2F8}
+\definecolor{green}{HTML}{DDEFE4}
+\definecolor{amber}{HTML}{FFF1CC}
+\definecolor{grey}{HTML}{5D6973}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=navy,
+  urlcolor=blue,
+  pdftitle={Public-Data Hedging Benchmark Summary},
+  pdfauthor={Quantitative Research}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{Public-Data Hedging Benchmark}
+\rhead{13 October 2026}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+
+\titleformat{\section}{\large\bfseries\color{navy}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalsize\bfseries\color{blue}}{\thesubsection}{0.5em}{}
+\titlespacing*{\section}{0pt}{1.1em}{0.45em}
+\titlespacing*{\subsection}{0pt}{0.8em}{0.3em}
+
+\setlist[itemize]{leftmargin=1.4em,itemsep=0.15em,topsep=0.25em}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.35em}
+\renewcommand{\arraystretch}{1.16}
+\raggedbottom
+
+\newcommand{\statuscomplete}{\colorbox{green}{\strut\textbf{complete}}}
+\newcommand{\statusready}{\colorbox{pale}{\strut\textbf{ready}}}
+\newcommand{\statuspending}{\colorbox{amber}{\strut\textbf{pending}}}
+\newcommand{\model}[1]{\textbf{#1}}
+
+\begin{document}
+
+\begin{center}
+  {\LARGE\bfseries\color{navy} Public-Data Hedging Benchmark}\par
+  \vspace{0.2em}
+  {\large Approach, current results, and model catalogue}\par
+  \vspace{0.35em}
+  {\color{grey}Status date: 13 October 2026}
+\end{center}
+
+\vspace{0.4em}
+\noindent\colorbox{pale}{%
+  \parbox{\dimexpr\textwidth-2\fboxsep\relax}{%
+  \textbf{Executive status.}
+  The model-neutral daily benchmark is operational on a normalized,
+  original-data-free public-candidate panel. Two methods have complete
+  out-of-sample results over all 611 eligible 2023--2025 origins and all 20
+  daily digital targets. SANOS--LV reduces aggregate pure-hedge RMSE by
+  \textbf{56.5\%} versus the unhedged claims; historical statistical SANOS
+  reduces it by \textbf{17.4\%}. Robust covariance, GROMM, VolGAN, and
+  AD--Seq--Vol have passed their current implementation gates but do not yet
+  have comparable full-production results. Weekly mechanics and pricing pass;
+  weekly production evaluation remains outstanding.}}
+
+\section{Approach}
+
+\subsection{Data boundary and common market}
+
+The sole runtime input is the distributable-candidate dataset
+\texttt{spx-2022-2025-hedging-public-candidate-v1}. It contains 891 retained
+dates from 3 January 2022 to 29 August 2025 and 2,014,740 contemporaneously
+eligible quote-side option coordinates. It contains no original WRDS price,
+midpoint, identifier, volume, open interest, vendor Greek, or vendor implied
+volatility. Instead it releases normalized fitted SANOS and DLV states,
+separate reconstructable SANOS and DLV model prices, Black implied
+volatilities, forward/spot ratios, discount factors, normalized half-spreads,
+and forward-adjusted spot returns.
+
+The common executable market mark is the released SANOS price. A purchase pays
+SANOS plus one half-spread and a sale receives SANOS minus one half-spread.
+Spot costs one basis point of traded notional per transaction; cash settlement
+is free. The release is technically classified as \texttt{public\_candidate};
+redistribution still requires a separate rights decision.
+
+\subsection{Out-of-sample protocol}
+
+\begin{itemize}
+  \item Model initialization, architecture validation, and target sizing use
+  2022 only. Every rolling estimator uses the previous 252 exact one-session
+  transitions and no future observation.
+  \item Daily evaluation runs from 17 January 2023 through 28 August 2025:
+  611 eligible origins, 20 targets per origin, and 12,220 claim/origin records.
+  \item The targets are cash digitals at 1D and 3D: ATM call and put plus OTM
+  NMS levels $\pm0.25,\pm0.50,\pm0.75,\pm1.00$. Quantities are fixed from
+  2022 so each target has one maturity-matched ATM spot-risk unit.
+  \item The hedge universe is normalized spot plus one OTM option per eligible
+  strike inside $(-2,2)$ NMS, using expiries up to five business days (or the
+  first later expiry when five days is absent).
+  \item Weekly evaluation starts an overlapping five-session episode on every
+  eligible date. Frozen weekly fits once and keeps its inception contract book;
+  restarted weekly refits daily. Both may react to the realized state.
+\end{itemize}
+
+\subsection{Common accounting and objectives}
+
+Every method starts from the same market claim mark and is evaluated on the
+same realized next-date SANOS mark or cash payoff. The report separates
+\emph{pricing loss}, \emph{pure hedge loss}, and their sum, \emph{economic
+loss}. Buyer and seller indifference prices are additional model outputs, not
+substitutes for this common-price comparison.
+
+Supported risk criteria are mean--variance, mean--volatility, entropy OCE, and
+power-exponential OCE. Learned or statistical policies use the hedge of the
+claim relative to the corresponding zero-claim policy; generated models also
+fit a direct pure policy so transaction costs are charged on the executable
+net position rather than inferred from differences of absolute-policy costs.
+
+\section{Current Results}
+
+\subsection{Completed daily production runs}
+
+Table~\ref{tab:risk} uses the pure-hedge loss in inception-spot units. Aggregate
+RMSE is the square root of the equally weighted mean claim-level MSE; every
+claim contributes 611 observations. ``Reduction'' is relative to the matching
+unhedged RMSE. Expected shortfall is the equally weighted claim-level 95\%
+expected shortfall.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Out-of-sample daily risk across the completed 611-origin runs.}
+\label{tab:risk}
+\begin{tabular}{llrrrrr}
+\toprule
+Model & Targets & Unhedged RMSE & Pure RMSE & Reduction & Economic RMSE & ES$_{95}$ \\
+\midrule
+SANOS--LV & all 20 & 0.01632 & 0.00710 & 56.5\% & 0.00710 & 0.01351 \\
+SANOS--LV & 1D & 0.01244 & 0.00862 & 30.7\% & 0.00862 & 0.01329 \\
+SANOS--LV & 3D & 0.01943 & 0.00514 & 73.6\% & 0.00514 & 0.01373 \\
+\addlinespace
+Historical SANOS & all 20 & 0.01632 & 0.01347 & 17.4\% & 0.01347 & 0.02571 \\
+Historical SANOS & 1D & 0.01244 & 0.01116 & 10.3\% & 0.01116 & 0.02234 \\
+Historical SANOS & 3D & 0.01943 & 0.01544 & 20.6\% & 0.01544 & 0.02908 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The SANOS--LV hedge is materially stronger on this first completed comparison,
+especially for the remaining-life 3D claims. Its aggregate pure RMSE is 47.3\%
+lower than historical SANOS. Pricing loss is negligible at aggregate scale:
+SANOS--LV economic RMSE is 0.007098 versus pure RMSE 0.007096; historical SANOS
+uses the common price and therefore has zero pricing contribution by design.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Average trading diagnostics across all 20 targets and 611 origins.}
+\label{tab:trading}
+\begin{tabular}{lrrrrrr}
+\toprule
+Model & Mean cost & Entry turnover & Nonzero actions & Cap hits & Nonconverged & Records \\
+\midrule
+SANOS--LV & 0.001011 & 2.670 & 5.0 & 0 & 0 & 12,220 \\
+Historical SANOS & 0.001019 & 0.0738 & 181.6 & 0 & 0 & 12,220 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The similar average cost hides different portfolio geometry. SANOS--LV uses a
+sparse exact eight-factor hedge plus spot; historical SANOS spreads small
+positions across much of the 200-coordinate option book. Turnover and action
+count therefore should not be read interchangeably.
+
+\subsection{Evidence level across models}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Current evidence. ``Readiness'' is not a performance estimate.}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{28mm}p{19mm}p{25mm}X}
+\toprule
+Model & Measure & Daily status & Evidence \\
+\midrule
+SANOS--LV & Q price / realized path & \statuscomplete & 611 origins, 12,220 records, zero cap hits and zero nonconvergence. \\
+Historical SANOS & P & \statuscomplete & 611 origins, 12,220 records, zero cap hits and zero nonconvergence. \\
+Robust covariance & P & \statusready & Full 20-target one-origin mean--volatility gate passed for $\kappa\in\{0.1,1,2,3\}$; production pending. \\
+GROMM & P and Q & \statusready & Rolling artifacts, daily/weekly scenarios, four objectives, direct Q-shadow pure hedge, and quant review pass; managed-GPU fit and production pending. \\
+VolGAN & P & \statusready & Public-architecture implementation, restartable rolling updates, daily/weekly adapters, and smoke tests pass; production pending. \\
+AD--Seq--Vol / FT & P & \statusready & Full-geometry managed-GPU origin: 4,096 scenarios, 20 targets, 158.3 seconds, 2,636 MiB VRAM, no cap hit or nonconvergence; production pending. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Supporting calibration and weekly evidence}
+
+The rolling rank-16 DLV innovation fit explains 86.50\% of variance at the
+first production origin. The compatible physical drift passes its precommitted
+holdout test: 1.87\% validation improvement, paired gain statistic 6.84, and
+daily risk-price norm 0.371. These are model-calibration diagnostics, not hedge
+performance results.
+
+The weekly engine has 528 eligible origins through 22 August 2025 and 13 common
+targets: ten five-day digitals, realized variance, a 95\% end-of-day down-and-out
+ATM put, and a 105\% end-of-day up-and-out ATM call. The common DLV transition
+test has maximum mass and martingale errors below $3.6\times10^{-14}$ across an
+eight-date check. Daily, frozen-weekly, and restarted-weekly adapters exist for
+all model families, but no complete weekly comparison is yet reported.
+
+\section{Model Catalogue}
+
+\subsection{SANOS--LV reference hedge}
+
+SANOS supplies the common market interpolation and digital price. DLV local
+volatility supplies the model price and Greeks. From each trailing 252-day
+window, the method estimates one front-spot-projected DLV factor and seven
+residual PCA factors. Central DLV-squared bumps give factor vegas; a linear
+program selects the minimum predictable-cost option portfolio that exactly
+neutralizes them, and spot removes residual delta. One-day claims are
+delta-only; three-day claims use at most eight option hedges. The method is
+deterministic, sparse, and the strongest completed baseline.
+
+\subsection{Independent robust covariance}
+
+This baseline deliberately avoids a SANOS scenario generator. It replays the
+current relative option book over 252 historical public transitions, fits
+robust scales and a regularized Tyler scatter matrix, and estimates each target
+cross-moment separately by robust regression. Expected returns are HAC-screened
+in covariance eigenportfolios. Mean--variance and mean--volatility hedges use
+spread-weighted lasso costs; the latter is checked analytically for recession
+directions. The implementation gate passes, but only one production origin
+exists and it must not be compared with Table~\ref{tab:risk}.
+
+\subsection{Historical statistical SANOS}
+
+Historical SANOS reconstructs 252 same-coordinate option and target returns
+from released SANOS states and uses those empirical rows directly as scenarios.
+It supports all four risk criteria. Long, short, and zero policies determine
+indifference prices; a separate drift-neutral policy gives the executable pure
+hedge. Mean--variance uses exact cost-lasso coordinate descent and nonlinear
+objectives use analytic-gradient L-BFGS-B. The model is inexpensive and fully
+rolling, but its completed mean--volatility $\kappa=1$ result trails SANOS--LV.
+
+\subsection{GROMM}
+
+GROMM is the native generative risk-neutral option-market model: a 200-strike
+JAX market fit, 16-factor AR(1) log-DLV-squared dynamics, independent 5\% Black
+background, and eight Brownian substeps per business day. Dated artifacts are
+bound to exactly 252 public transitions and must pass compatible-P drift gates.
+It generates Q and accepted compatible-P scenarios. An affine-plus-deep LSTM
+supports all four objectives; the executable pure policy uses conditional
+Q-shadow gains at each realized P state, removing predictable physical drift
+without fitted holdout centering. CPU integration and quant review pass;
+rolling managed-GPU production remains outstanding.
+
+\subsection{VolGAN}
+
+VolGAN is a historical-P surface generator on a fixed $9\times11$ Black-IV
+grid reconstructed from public SANOS states. It conditions on two lagged
+returns, trailing 21-day realized volatility, and the current surface. The
+published two-layer Softplus architecture uses 32 noise dimensions, a 16-unit
+hidden layer, and strike/maturity gradient penalties. Weekly paths recursively
+update surface and return state. The implementation is project-native and uses
+no proprietary surfaces. Smoke, restart, and rolling warm-start gates pass;
+full production does not yet exist.
+
+\subsection{AD--Seq--Vol and arbitrage-penalized fine tuning}
+
+AD--Seq--Vol is a causal sequence diffusion model on 22-day histories of the
+same $9\times11$ surface plus forward-adjusted returns. Its eight-layer,
+width-256, four-head transformer predicts the clean sequence through a 200-step
+cosine DDPM. AD--Seq--Vol--FT freezes the EMA base and trains a zero-initialized
+rank-four adapter with calendar, call-spread, and butterfly penalties. Both are
+historical-P generators and supply indifference prices rather than Q
+expectations. Exact restart, rolling warm-start, daily/weekly adapters, and one
+full-geometry GPU origin pass; production and batch-invariance remain pending.
+
+\section{Interpretation and Next Evidence}
+
+The benchmark now has a reproducible common market, accounting system, target
+catalogue, cost model, adapters, and two complete daily baselines; it does not
+yet establish a final ranking. Next come complete covariance, GROMM P/Q, and
+generated-model daily runs; production batch/restart checks; and the frozen-
+versus-restarted weekly comparison with overlap-aware inference.
+
+\vspace{0.4em}
+\hrule
+\vspace{0.35em}
+{\footnotesize
+\textbf{Provenance.}
+The completed results use public dataset manifest SHA-256
+\texttt{58741552e0f6...12cf903007a}. SANOS--LV run identity begins
+\texttt{2af7a4f64df4}; historical-SANOS run identity begins
+\texttt{64adf168a213}. All headline numbers are derived from immutable
+\texttt{hedging-daily-results-v2} artifacts. Readiness statements come from
+the dated reports and independent reviews alongside the implementation.}
+
+\end{document}
