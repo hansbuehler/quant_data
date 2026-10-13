@@ -60,6 +60,17 @@ quant review passed. The 94-case weekly matrix retains 28 ready native cases,
 four generated-gate waiters, and 62 blocked cases. Its native queue and the
 generated-model readiness queue are repinned to commit `73a9626`; the former
 waits for daily CPU production and the latter for the rolling GROMM GPU fit.
+Independent model review records for VolGAN, AD-Seq-Vol, and AD-Seq-Vol-FT now
+bind that commit, the public manifest, their distinct initializer and selection
+lineages, and all six daily/frozen/restarted public/rolling scopes. A deferred
+full-production service waits for both the rolling GROMM range and the complete
+managed-GPU readiness matrix, assembles the three authenticated production
+gates, and writes new pinned daily and weekly matrices without changing the
+matrices used by active native queues. It then executes only newly ready GPU
+cases through `gpuctl`, with four-minute progress and resource checks. A second
+deferred CPU service runs the remaining daily GROMM Q-expectation plus
+eight-factor-vega case only after native weekly production releases the CPU
+capacity.
 The daily production-queue validator
 now authenticates the immutable run and completion summary, recomputes the true
 eligible-origin cohort from the public panel, reparses every dated result record,
