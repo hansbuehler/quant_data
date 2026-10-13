@@ -6,6 +6,7 @@ import argparse
 import json
 import math
 import os
+import sys
 import tempfile
 import threading
 import time
@@ -18,6 +19,12 @@ from typing import Callable, Iterator
 
 from cdxcore.err import verify_inp
 from filelock import FileLock
+
+from quantdata.sdlv.daily.front_spot.hedging.runners.jax_environment import (
+    force_cpu_for_prepare_cli,
+)
+
+force_cpu_for_prepare_cli(sys.argv)
 
 from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
     PublicHedgingPanel,

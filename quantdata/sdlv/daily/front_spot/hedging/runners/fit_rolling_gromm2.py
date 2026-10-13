@@ -4,9 +4,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import asdict
 from datetime import date
 from pathlib import Path
+
+from quantdata.sdlv.daily.front_spot.hedging.runners.jax_environment import (
+    force_cpu_for_prepare_cli,
+)
+
+force_cpu_for_prepare_cli(sys.argv)
 
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2 import (
     RollingGromm2Config,

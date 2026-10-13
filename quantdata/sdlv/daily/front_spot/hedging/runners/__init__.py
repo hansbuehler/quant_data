@@ -1,5 +1,13 @@
 """Resumable production runners for the public hedging benchmark."""
 
+import sys
+
+from quantdata.sdlv.daily.front_spot.hedging.runners.jax_environment import (
+    force_cpu_for_prepare_cli,
+)
+
+force_cpu_for_prepare_cli(sys.argv)
+
 from quantdata.sdlv.daily.front_spot.hedging.runners.config import (
     GeneratedDailyRunConfig,
 )
