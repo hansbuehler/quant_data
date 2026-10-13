@@ -754,7 +754,10 @@ A completed range summary binds the dataset, configuration, evaluation dates,
 artifact root, and every dated manifest hash. The production matrix enables Q
 cases only from this complete evidence; it enables P cases only when every
 origin also passes the physical-drift gate. Full managed-GPU range fitting and
-forced-restart recovery evidence remain outstanding.
+live managed-GPU forced-restart evidence remain outstanding. A deterministic
+mid-range failure test now verifies that the failed state identifies the exact
+origin, preserves the authenticated completed prefix, and reuses that prefix on
+restart before completing the missing origins.
 
 The queue executor can retain a numerically rejected parameter case and
 continue an otherwise independent sweep. Such a queue is explicitly marked

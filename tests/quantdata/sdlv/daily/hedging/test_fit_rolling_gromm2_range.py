@@ -95,6 +95,73 @@ def test_fit_range_reuses_authenticated_origins_and_resumes_missing_ones(
     assert loaded.to_dict() == summary.to_dict()
 
 
+def test_fit_range_recovers_after_mid_range_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset = _dataset(tmp_path)
+    artifact_root = tmp_path / "artifacts"
+    state_file = tmp_path / "state.json"
+    origins = _Panel(dataset).dates
+    fit_attempts: list[date] = []
+    fail_second_origin = True
+
+    def load(_root: Path, *, as_of_date: date, **_kwargs: object) -> object:
+        manifest = artifact_root / as_of_date.isoformat() / "manifest.json"
+        if not manifest.exists():
+            raise FileNotFoundError(as_of_date)
+        return SimpleNamespace(
+            paths=SimpleNamespace(manifest=manifest),
+            physical_accepted=False,
+        )
+
+    def fit(*, as_of_date: date, **_kwargs: object) -> object:
+        nonlocal fail_second_origin
+        fit_attempts.append(as_of_date)
+        if as_of_date == origins[1] and fail_second_origin:
+            fail_second_origin = False
+            raise RuntimeError("forced restart test")
+        manifest = _dated_manifest(artifact_root, as_of_date, label="fitted")
+        return SimpleNamespace(
+            paths=SimpleNamespace(manifest=manifest),
+            physical_accepted=False,
+        )
+
+    monkeypatch.setattr(fit_rolling_gromm2_range, "PublicHedgingPanel", _Panel)
+    monkeypatch.setattr(fit_rolling_gromm2_range, "load_rolling_gromm2", load)
+    monkeypatch.setattr(fit_rolling_gromm2_range, "fit_rolling_gromm2_market", fit)
+
+    with pytest.raises(RuntimeError, match="forced restart test"):
+        run_rolling_gromm2_range(
+            dataset=dataset,
+            artifact_root=artifact_root,
+            evaluation_start=origins[0],
+            evaluation_end=origins[-1],
+            stage=RollingGromm2RangeStage.FIT,
+            state_file=state_file,
+            progress_seconds=300.0,
+        )
+
+    failed = json.loads(state_file.read_text(encoding="utf-8"))
+    assert failed["status"] == "failed"
+    assert failed["completed_count"] == 1
+    assert failed["current_origin"] == origins[1].isoformat()
+
+    resumed = run_rolling_gromm2_range(
+        dataset=dataset,
+        artifact_root=artifact_root,
+        evaluation_start=origins[0],
+        evaluation_end=origins[-1],
+        stage=RollingGromm2RangeStage.FIT,
+        state_file=state_file,
+        progress_seconds=300.0,
+    )
+
+    assert resumed.status == "complete"
+    assert [record.reused for record in resumed.records] == [True, False, False]
+    assert fit_attempts == [origins[0], origins[1], origins[1], origins[2]]
+
+
 def test_prepare_range_revalidates_output_after_material_work(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
