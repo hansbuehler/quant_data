@@ -921,7 +921,7 @@ matrix ran from immutable commit
 `31b57e617dc6f57f12625515160131a8cf845e36`; VolGAN daily-public readiness
 passed, but its first frozen-weekly case failed as described below. The
 replacement matrix is queued from immutable commit
-`b1e359712bf1cca20cc71f6dfa3e78172b2f1c84` behind rolling GROMM production.
+`ecb591fd96827326b4f612c1d63c1a903cf38760` behind rolling GROMM production.
 It emits a persistent four-minute heartbeat and acquires its GPU only through
 `gpuctl`. Final readiness evidence and the model-specific results review remain
 required before generated production cases can launch.
