@@ -798,10 +798,10 @@ current-notional SANOS-LV production run is now authenticated under run identity
 `c67b549ca9eeb404be9e70c6fe2ba22c827d8d4ec75115e403a0bb2e54666a68`.
 Its 611 origins and 12,220 records reconstruct deterministically to results
 SHA-256 `9e4252f60540d6830eacda10b451677320760404e4599a5caa4e346367262b2d`,
-with zero cap hits and zero nonconvergence. The historical-SANOS result currently
-used by the summary report has the superseded target-notional identity and must
-not be compared with this run; the corrected historical-SANOS and covariance
-sweeps remain in progress. The covariance mean--variance cases at risk
+with zero cap hits and zero nonconvergence. The summary report now excludes the
+superseded historical-SANOS cohort rather than comparing it with this run; the
+corrected historical-SANOS and remaining covariance sweeps remain in progress.
+The covariance mean--variance cases at risk
 parameters $0.1$, $1$, and $10$ have completed all 611 origins and 12,220
 records under the current target-notional identity, with zero cap hits and zero
 nonconvergence. The versioned daily production matrix contains 54
