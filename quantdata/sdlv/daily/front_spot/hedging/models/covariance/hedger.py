@@ -62,6 +62,8 @@ class CovarianceBookAction:
     objective: float
     expected_profit: float
     standard_deviation: float
+    internal_cap_hits: int
+    executable_cap_hits: int
     cap_hits: int
     converged: bool
     bounded: bool
@@ -222,6 +224,8 @@ def fit_covariance_book_actions(
                     objective=claim_policy.objective,
                     expected_profit=claim_center,
                     standard_deviation=math.sqrt(claim_variance),
+                    internal_cap_hits=0,
+                    executable_cap_hits=0,
                     cap_hits=0,
                     converged=False,
                     bounded=False,
@@ -241,7 +245,8 @@ def fit_covariance_book_actions(
             penalty=penalty,
             config=config,
         )
-        cap_hits = claim_policy.cap_hits + zero_policy.cap_hits + final_cap_hits
+        internal_cap_hits = claim_policy.cap_hits + zero_policy.cap_hits
+        cap_hits = internal_cap_hits + final_cap_hits
         actions.append(
             CovarianceBookAction(
                 action=action,
@@ -250,11 +255,13 @@ def fit_covariance_book_actions(
                 objective=objective,
                 expected_profit=expected_profit,
                 standard_deviation=standard_deviation,
+                internal_cap_hits=internal_cap_hits,
+                executable_cap_hits=final_cap_hits,
                 cap_hits=cap_hits,
                 converged=(
                     claim_policy.converged
                     and zero_policy.converged
-                    and cap_hits == 0
+                    and internal_cap_hits == 0
                     and final_cap_hits == 0
                 ),
                 bounded=True,
@@ -582,15 +589,20 @@ def _solve_quadratic_lasso(
             ) / quadratic[coordinate, coordinate]
             action[coordinate] = np.clip(
                 unconstrained,
-                -config.position_cap,
-                config.position_cap,
+                -config.solver_position_cap,
+                config.solver_position_cap,
             )
         if np.max(np.abs(action - previous)) <= config.action_tolerance:
             converged = True
             break
     cap_hits = int(
         np.count_nonzero(
-            np.isclose(np.abs(action), config.position_cap, rtol=0.0, atol=1.0e-10)
+            np.isclose(
+                np.abs(action),
+                config.solver_position_cap,
+                rtol=0.0,
+                atol=1.0e-10,
+            )
         )
     )
     return action, iterations, converged, cap_hits

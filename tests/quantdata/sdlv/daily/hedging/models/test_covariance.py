@@ -92,6 +92,50 @@ def test_book_mean_variance_recovers_pure_factor_hedge() -> None:
     assert action.standard_deviation < 0.2 * np.sqrt(fit.estimate.covariance[-1, -1])
 
 
+def test_virtual_policy_solver_cap_is_distinct_from_executable_cap() -> None:
+    generator = np.random.default_rng(31)
+    observations = 500
+    centered_instrument = generator.normal(size=observations)
+    instrument = 2_000.0 + centered_instrument
+    target = 2.0 * centered_instrument + 0.01 * generator.normal(size=observations)
+    first = date(2022, 1, 3)
+    panel = HistoricalReturnPanel(
+        training_origin_dates=tuple(
+            first + timedelta(days=index) for index in range(observations)
+        ),
+        training_terminal_dates=tuple(
+            first + timedelta(days=index + 1) for index in range(observations)
+        ),
+        instrument_ids=("spot",),
+        target_labels=("synthetic-target",),
+        instrument_returns=instrument[:, None],
+        target_returns=target[:, None],
+    )
+    fit = fit_covariance_book_actions(
+        panel,
+        linear_transaction_costs=np.zeros(1),
+        config=CovarianceHedgeConfig(
+            rolling_observations=observations,
+            objective=CovarianceObjective.MEAN_VARIANCE,
+            risk_parameter=1.0,
+            cost_multiplier=0.0,
+            mean_z_threshold=0.0,
+            position_cap=10.0,
+            solver_position_cap=10_000.0,
+        ),
+    )
+
+    action = fit.actions[0]
+    assert action.action is not None
+    assert abs(action.claim_policy.action[0]) > 10.0
+    assert abs(action.zero_policy.action[0]) > 10.0
+    assert abs(action.action[0]) < 10.0
+    assert action.internal_cap_hits == 0
+    assert action.executable_cap_hits == 0
+    assert action.cap_hits == 0
+    assert action.converged
+
+
 @pytest.mark.parametrize("risk_parameter", [0.1, 1.0, 2.0, 3.0])
 def test_book_mean_volatility_recovers_pure_factor_hedge(
     risk_parameter: float,

@@ -166,6 +166,10 @@ def run_covariance_daily_book(
                     "pure_hedge_gross_exposure": pure_gross,
                     "pure_hedge_l2_exposure": float(np.linalg.norm(final_action)),
                     "maximum_absolute_action": float(np.max(np.abs(final_action))),
+                    "internal_solver_position_cap": config.solver_position_cap,
+                    "executable_position_cap": config.position_cap,
+                    "internal_solver_cap_hits": action.internal_cap_hits,
+                    "executable_cap_hits": action.executable_cap_hits,
                     "claim_zero_cancellation_ratio": (
                         pure_gross / max(claim_gross + zero_gross, 1.0e-300)
                     ),

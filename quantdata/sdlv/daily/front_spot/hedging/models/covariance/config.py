@@ -17,7 +17,7 @@ class CovarianceObjective(StrEnum):
     MEAN_VOLATILITY = "mean-volatility"
 
 
-@version("3.1")
+@version("3.2")
 @dataclass(frozen=True, kw_only=True)
 class CovarianceHedgeConfig:
     """Logical and numerical settings for the rolling covariance hedge."""
@@ -33,6 +33,7 @@ class CovarianceHedgeConfig:
     mean_hac_lags: int | None = None
     recession_tolerance: float = 1.0e-8
     position_cap: float = 1_000_000.0
+    solver_position_cap: float = 1_000_000.0
     maximum_solver_iterations: int = 10_000
     maximum_reweighting_iterations: int = 100
     action_tolerance: float = 1.0e-8
@@ -73,6 +74,13 @@ class CovarianceHedgeConfig:
         verify_inp(
             math.isfinite(self.position_cap) and self.position_cap > 0.0,
             lambda: "position_cap must be finite and positive",
+        )
+        verify_inp(
+            math.isfinite(self.solver_position_cap)
+            and self.solver_position_cap >= self.position_cap,
+            lambda: (
+                "solver_position_cap must be finite and at least position_cap"
+            ),
         )
         verify_inp(
             self.maximum_solver_iterations > 0,
