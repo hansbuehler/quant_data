@@ -286,7 +286,7 @@ def main() -> None:
             progress=progress,
             stop_after=arguments.stop_after,
         )
-    if summary.completed_origins == summary.eligible_origins:
+    if _can_summarize_weekly_run(summary):
         aggregation_started = time.monotonic()
 
         def aggregation_progress(
@@ -311,7 +311,21 @@ def main() -> None:
             progress=aggregation_progress,
         )
         results.write_json(output / "results.json")
+    elif summary.completed_origins == summary.eligible_origins:
+        print(
+            "weekly aggregation skipped completed_origins=1 "
+            "minimum_completed_origins=2",
+            flush=True,
+        )
     print(json.dumps(summary.to_dict(), indent=2, sort_keys=True), flush=True)
+
+
+def _can_summarize_weekly_run(summary: WeeklyEvaluationSummary) -> bool:
+    """Require at least two complete origins for statistical aggregation."""
+    return (
+        summary.completed_origins == summary.eligible_origins
+        and len(summary.completed_origins) >= 2
+    )
 
 
 def weekly_book_function(

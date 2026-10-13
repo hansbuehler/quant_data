@@ -11,9 +11,13 @@ from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly_sizing import (
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners import run_weekly
 from quantdata.sdlv.daily.front_spot.hedging.runners.run_weekly import (
+    _can_summarize_weekly_run,
     _load_target_notionals,
     build_weekly_adapter,
     weekly_book_function,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners.weekly import (
+    WeeklyEvaluationSummary,
 )
 
 
@@ -227,3 +231,39 @@ def test_weekly_book_releases_generated_origin_cache(
         (date(2025, 1, 2), 1, 2, "first"),
         (date(2025, 1, 2), 2, 2, "second"),
     ]
+
+
+@pytest.mark.parametrize(
+    ("eligible", "completed", "expected"),
+    (
+        (("2023-01-17",), ("2023-01-17",), False),
+        (
+            ("2023-01-17", "2023-01-18"),
+            ("2023-01-17",),
+            False,
+        ),
+        (
+            ("2023-01-17", "2023-01-18"),
+            ("2023-01-17", "2023-01-18"),
+            True,
+        ),
+    ),
+)
+def test_weekly_aggregation_requires_two_complete_origins(
+    eligible: tuple[str, ...],
+    completed: tuple[str, ...],
+    expected: bool,
+) -> None:
+    summary = WeeklyEvaluationSummary(
+        run_identity="test-run",
+        eligible_origins=eligible,
+        completed_origins=completed,
+        reused_origins=(),
+        result_count=13 * len(completed),
+        fit_cap_hits=0,
+        executed_cap_hits=0,
+        nonconverged_fits=0,
+        cap_hits=0,
+    )
+
+    assert _can_summarize_weekly_run(summary) is expected

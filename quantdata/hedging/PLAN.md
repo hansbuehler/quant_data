@@ -937,6 +937,13 @@ cap hit. A solver-reference test matches the CLARABEL optimum, and weekly runs
 now report target-level progress inside each origin. A fresh managed-GPU
 readiness run is required before the generated production gate can pass.
 
+A real 2023-01-17 frozen Historical-SANOS origin then completed all 13 targets
+in 336.3 seconds with zero cap hits and zero nonconverged fits; its immediate
+restart authenticated and reused the dated record. Single-origin readiness runs
+now skip statistical result aggregation, whose loss and inference slices require
+at least two origins, while complete production runs continue to aggregate
+normally.
+
 The 28 ready native weekly cases are likewise repinned to
 `b1e359712bf1cca20cc71f6dfa3e78172b2f1c84` and remain deferred behind the
 active daily CPU queues. Their matrix still contains all 94 specified cells:
