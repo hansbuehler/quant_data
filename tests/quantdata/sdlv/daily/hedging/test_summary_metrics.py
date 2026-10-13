@@ -10,7 +10,9 @@ import pytest
 import quantdata.sdlv.daily.front_spot.hedging.reports.build_summary_metrics as summary_metrics_module
 from quantdata.sdlv.daily.front_spot.hedging.reports.build_summary_metrics import (
     SUMMARY_SCHEMA,
+    build_daily_policy_summary_metrics,
     build_summary_metrics,
+    daily_policy_inputs_from_matrices,
     write_summary_metrics,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
@@ -185,6 +187,159 @@ def test_summary_metrics_reject_forged_target_notional_identity(
         build_summary_metrics(
             sanos_results=sanos,
             historical_results=historical,
+        )
+
+
+def test_summary_metrics_discovers_all_completed_matrix_cases(
+    tmp_path: Path,
+) -> None:
+    cases = (
+        (
+            "sanos-lv-reference",
+            "sanos-lv",
+            None,
+            None,
+            1.0,
+        ),
+        (
+            "historical-sanos-mean-volatility-1",
+            "historical-sanos",
+            "mean-volatility",
+            1.0,
+            1.5,
+        ),
+        (
+            "covariance-mean-volatility-1",
+            "covariance",
+            "mean-volatility",
+            1.0,
+            1.25,
+        ),
+    )
+    matrix_cases = []
+    for case_id, model, objective, parameter, pure_rmse in cases:
+        results = tmp_path / case_id / "results.json"
+        _write_results(
+            results,
+            model=model,
+            manifest="a" * 64,
+            one_day_pure_rmse=pure_rmse,
+            three_day_pure_rmse=2.0 * pure_rmse,
+        )
+        matrix_cases.append(
+            {
+                "case_id": case_id,
+                "model": model,
+                "objective": objective,
+                "risk_parameter": parameter,
+                "readiness": "ready",
+                "command": ["python", "runner", "--output", str(results.parent)],
+            }
+        )
+    matrix = tmp_path / "matrix.json"
+    matrix.write_text(
+        json.dumps(
+            {
+                "schema": "hedging-daily-production-matrix-v1",
+                "cases": matrix_cases,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    policies = daily_policy_inputs_from_matrices(
+        (matrix,),
+        require_ready_complete=True,
+    )
+    payload = build_daily_policy_summary_metrics(policies=policies)
+
+    assert tuple(payload["models"]) == tuple(case[0] for case in cases)
+    tables = payload["objective_tables"]
+    assert isinstance(tables, dict)
+    assert len(tables["mean_variance"]["rows"]) == 3
+    comparison = payload["comparisons"]
+    assert comparison["reference_case"] == "sanos-lv-reference"
+    assert comparison["pure_rmse_reduction_vs_reference"][
+        "covariance-mean-volatility-1"
+    ] == pytest.approx(-0.25)
+
+
+def test_summary_metrics_rejects_matrix_objective_that_disagrees_with_run(
+    tmp_path: Path,
+) -> None:
+    results = tmp_path / "historical" / "results.json"
+    _write_results(
+        results,
+        model="historical-sanos",
+        manifest="a" * 64,
+        one_day_pure_rmse=1.0,
+        three_day_pure_rmse=2.0,
+    )
+    matrix = tmp_path / "matrix.json"
+    matrix.write_text(
+        json.dumps(
+            {
+                "schema": "hedging-daily-production-matrix-v1",
+                "cases": [
+                    {
+                        "case_id": "historical-sanos-forged-objective",
+                        "model": "historical-sanos",
+                        "objective": "entropy",
+                        "risk_parameter": 10.0,
+                        "readiness": "ready",
+                        "command": [
+                            "python",
+                            "runner",
+                            "--output",
+                            str(results.parent),
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    policies = daily_policy_inputs_from_matrices(
+        (matrix,),
+        require_ready_complete=True,
+    )
+    with pytest.raises(ValueError, match="matrix objective does not match"):
+        build_daily_policy_summary_metrics(policies=policies)
+
+
+def test_summary_metrics_rejects_incomplete_ready_matrix_case(
+    tmp_path: Path,
+) -> None:
+    matrix = tmp_path / "matrix.json"
+    matrix.write_text(
+        json.dumps(
+            {
+                "schema": "hedging-daily-production-matrix-v1",
+                "cases": [
+                    {
+                        "case_id": "missing",
+                        "model": "covariance",
+                        "objective": "mean-variance",
+                        "risk_parameter": 1.0,
+                        "readiness": "ready",
+                        "command": [
+                            "python",
+                            "runner",
+                            "--output",
+                            str(tmp_path / "missing"),
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="ready daily production case is incomplete"):
+        daily_policy_inputs_from_matrices(
+            (matrix,),
+            require_ready_complete=True,
         )
 
 

@@ -6,6 +6,7 @@ import argparse
 import json
 import math
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeAlias
 
@@ -25,17 +26,42 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.daily_results import (
 
 JsonObject: TypeAlias = dict[str, object]
 
-SUMMARY_SCHEMA = "hedging-benchmark-summary-metrics-v2"
+SUMMARY_SCHEMA = "hedging-benchmark-summary-metrics-v3"
 RESULTS_SCHEMA = "hedging-daily-results-v2"
 EXPECTED_CLAIMS = 20
 EXPECTED_OBSERVATIONS = 611
 DISPLAY_SCALE = 10_000.0
+DAILY_MATRIX_SCHEMA = "hedging-daily-production-matrix-v1"
 OBJECTIVE_GRIDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("mean_variance", ("0.1", "1", "10")),
     ("mean_volatility", ("0.1", "1", "2", "3")),
     ("entropy", ("0.1", "1", "10")),
     ("power_exponential", ("0.1", "1", "10")),
 )
+
+_MODEL_DISPLAY_NAMES = {
+    "sanos-lv": "SANOS--LV",
+    "covariance": "Robust covariance",
+    "robust-covariance": "Robust covariance",
+    "historical-sanos": "Historical SANOS",
+    "gromm": "GROMM",
+    "gromm-q-dlv-vega": "GROMM Q + DLV vegas",
+    "volgan": "VolGAN",
+    "diffusion-ad-seq-vol": "AD--Seq--Vol",
+    "diffusion-ad-seq-vol-ft": "AD--Seq--Vol--FT",
+}
+
+
+@dataclass(frozen=True, kw_only=True)
+class DailyPolicyInput:
+    """One completed daily policy selected for authenticated reporting."""
+
+    key: str
+    results_path: Path
+    expected_model: str
+    display_name: str
+    fitted_objective: str
+    fitted_parameter: float | None
 
 
 def build_summary_metrics(
@@ -45,39 +71,77 @@ def build_summary_metrics(
     dataset: Path | None = None,
 ) -> JsonObject:
     """Read, authenticate, and aggregate the completed daily policies."""
+    return build_daily_policy_summary_metrics(
+        policies=(
+            DailyPolicyInput(
+                key="sanos-lv",
+                results_path=Path(sanos_results),
+                expected_model="sanos-lv",
+                display_name="SANOS--LV",
+                fitted_objective="reference",
+                fitted_parameter=None,
+            ),
+            DailyPolicyInput(
+                key="historical-sanos",
+                results_path=Path(historical_results),
+                expected_model="historical-sanos",
+                display_name="Historical SANOS",
+                fitted_objective="from-run",
+                fitted_parameter=None,
+            ),
+        ),
+        dataset=dataset,
+        legacy_comparison=True,
+    )
+
+
+def build_daily_policy_summary_metrics(
+    *,
+    policies: tuple[DailyPolicyInput, ...],
+    dataset: Path | None = None,
+    legacy_comparison: bool = False,
+) -> JsonObject:
+    """Authenticate and aggregate an explicitly identified daily policy set."""
+    if not policies:
+        raise ValueError("at least one completed daily policy is required")
+    keys = tuple(policy.key for policy in policies)
+    if len(set(keys)) != len(keys) or any(not key.strip() for key in keys):
+        raise ValueError("daily policy keys must be unique and non-empty")
     panel = PublicHedgingPanel(
         default_public_candidate_path() if dataset is None else dataset,
         validate=True,
     )
-    policies = (
+    loaded_policies = tuple(
         _read_policy(
             panel,
-            sanos_results,
-            expected_model="sanos-lv",
-            display_name="SANOS--LV",
-            fitted_objective="reference",
-            fitted_parameter=None,
-        ),
-        _read_policy(
-            panel,
-            historical_results,
-            expected_model="historical-sanos",
-            display_name="Historical SANOS",
-        ),
+            policy.results_path,
+            key=policy.key,
+            expected_model=policy.expected_model,
+            display_name=policy.display_name,
+            fitted_objective=(
+                None
+                if policy.fitted_objective == "from-run"
+                else policy.fitted_objective
+            ),
+            fitted_parameter=policy.fitted_parameter,
+        )
+        for policy in policies
     )
     manifests = {
-        _require_string(policy, "dataset_manifest_sha256") for policy in policies
+        _require_string(policy, "dataset_manifest_sha256")
+        for policy in loaded_policies
     }
     if len(manifests) != 1:
         raise ValueError("completed summary runs use different dataset manifests")
     target_notionals = {
-        _require_string(policy, "target_notional_identity") for policy in policies
+        _require_string(policy, "target_notional_identity")
+        for policy in loaded_policies
     }
     if len(target_notionals) != 1:
         raise ValueError("completed summary runs use different target notionals")
 
     models: JsonObject = {}
-    for policy in policies:
+    for policy in loaded_policies:
         key = _require_string(policy, "key")
         model = {
             name: value
@@ -90,17 +154,63 @@ def build_summary_metrics(
         )
         models[key] = model
 
-    sanos_metrics = _require_object(_require_object(models, "sanos-lv"), "metrics")
-    historical_metrics = _require_object(
-        _require_object(models, "historical-sanos"),
-        "metrics",
-    )
-    sanos_all = _require_object(sanos_metrics, "all")
-    historical_all = _require_object(historical_metrics, "all")
-    sanos_unhedged = _require_number(sanos_all, "unhedged_rmse")
-    historical_unhedged = _require_number(historical_all, "unhedged_rmse")
-    if not math.isclose(sanos_unhedged, historical_unhedged, rel_tol=0.0, abs_tol=1e-14):
+    unhedged = [
+        _require_number(
+            _require_object(_require_object(model, "metrics"), "all"),
+            "unhedged_rmse",
+        )
+        for model in models.values()
+        if isinstance(model, dict)
+    ]
+    if any(
+        not math.isclose(value, unhedged[0], rel_tol=0.0, abs_tol=1e-14)
+        for value in unhedged[1:]
+    ):
         raise ValueError("completed runs do not share the same unhedged claims")
+
+    comparisons: JsonObject = {}
+    reference_key = next(
+        (
+            key
+            for key, raw_model in models.items()
+            if _require_string(_as_object(raw_model, key), "model") == "sanos-lv"
+        ),
+        None,
+    )
+    if reference_key is not None:
+        reference_all = _require_object(
+            _require_object(_require_object(models, reference_key), "metrics"),
+            "all",
+        )
+        reference_rmse = _require_number(reference_all, "pure_rmse")
+        comparisons["reference_case"] = reference_key
+        comparisons["pure_rmse_reduction_vs_reference"] = {
+            key: 1.0
+            - _require_number(
+                _require_object(
+                    _require_object(_require_object(models, key), "metrics"),
+                    "all",
+                ),
+                "pure_rmse",
+            )
+            / reference_rmse
+            for key in models
+        }
+    if legacy_comparison:
+        sanos_all = _require_object(
+            _require_object(_require_object(models, "sanos-lv"), "metrics"),
+            "all",
+        )
+        historical_all = _require_object(
+            _require_object(
+                _require_object(models, "historical-sanos"), "metrics"
+            ),
+            "all",
+        )
+        comparisons["sanos_pure_rmse_reduction_vs_historical"] = 1.0 - (
+            _require_number(sanos_all, "pure_rmse")
+            / _require_number(historical_all, "pure_rmse")
+        )
 
     return {
         "schema": SUMMARY_SCHEMA,
@@ -113,13 +223,87 @@ def build_summary_metrics(
             "economic losses; only the final scalar is multiplied by 10,000"
         ),
         "models": models,
-        "comparisons": {
-            "sanos_pure_rmse_reduction_vs_historical": 1.0
-            - _require_number(sanos_all, "pure_rmse")
-            / _require_number(historical_all, "pure_rmse"),
-        },
+        "comparisons": comparisons,
         "objective_tables": _objective_tables(models),
     }
+
+
+def daily_policy_inputs_from_matrices(
+    matrix_paths: tuple[Path, ...],
+    *,
+    require_ready_complete: bool = False,
+) -> tuple[DailyPolicyInput, ...]:
+    """Discover completed daily policies from immutable production matrices."""
+    if not matrix_paths:
+        raise ValueError("at least one daily production matrix is required")
+    inputs: dict[str, DailyPolicyInput] = {}
+    commands: dict[str, tuple[str, ...]] = {}
+    for matrix_path in matrix_paths:
+        matrix = _read_json_object(matrix_path)
+        if matrix.get("schema") != DAILY_MATRIX_SCHEMA:
+            raise ValueError(f"unexpected daily production matrix: {matrix_path}")
+        cases = matrix.get("cases")
+        if not isinstance(cases, list):
+            raise ValueError(f"daily matrix cases must be a list: {matrix_path}")
+        for raw_case in cases:
+            case = _as_object(raw_case, "daily production case")
+            case_id = _require_string(case, "case_id")
+            command_value = case.get("command")
+            if not isinstance(command_value, list) or not all(
+                isinstance(value, str) for value in command_value
+            ):
+                continue
+            command = tuple(command_value)
+            try:
+                output_index = command.index("--output") + 1
+                output = Path(command[output_index])
+            except (ValueError, IndexError) as error:
+                raise ValueError(
+                    f"daily matrix case {case_id} has no output directory"
+                ) from error
+            results_path = output / "results.json"
+            readiness = _require_string(case, "readiness")
+            if not results_path.is_file():
+                if require_ready_complete and readiness == "ready":
+                    raise ValueError(
+                        f"ready daily production case is incomplete: {case_id}"
+                    )
+                continue
+            expected_model = _require_string(case, "model")
+            objective_value = case.get("objective")
+            fitted_objective = (
+                "reference"
+                if objective_value is None
+                else _require_string(case, "objective")
+            )
+            parameter_value = case.get("risk_parameter")
+            fitted_parameter = (
+                None
+                if parameter_value is None
+                else _require_number(case, "risk_parameter")
+            )
+            policy = DailyPolicyInput(
+                key=case_id,
+                results_path=results_path,
+                expected_model=expected_model,
+                display_name=_MODEL_DISPLAY_NAMES.get(
+                    expected_model,
+                    expected_model.replace("-", " ").title(),
+                ),
+                fitted_objective=fitted_objective,
+                fitted_parameter=fitted_parameter,
+            )
+            if case_id in inputs:
+                if inputs[case_id] != policy or commands[case_id] != command:
+                    raise ValueError(
+                        f"daily production matrices disagree on case {case_id}"
+                    )
+                continue
+            inputs[case_id] = policy
+            commands[case_id] = command
+    if not inputs:
+        raise ValueError("daily production matrices contain no completed cases")
+    return tuple(inputs.values())
 
 
 def write_summary_metrics(
@@ -156,6 +340,7 @@ def _read_policy(
     panel: PublicHedgingPanel,
     path: Path,
     *,
+    key: str,
     expected_model: str,
     display_name: str,
     fitted_objective: str | None = None,
@@ -173,13 +358,34 @@ def _read_policy(
         raise ValueError(f"run and results identities do not match: {results_path}")
     if spec.model != expected_model:
         raise ValueError(f"expected {expected_model} run: {results_path}")
+    snapshot = json.loads(spec.model_config_snapshot_json)
+    fields = _require_object(snapshot, "fields")
     if fitted_objective is None:
-        snapshot = json.loads(spec.model_config_snapshot_json)
-        fields = _require_object(snapshot, "fields")
         fitted_objective = _require_string(fields, "objective")
         fitted_parameter = _require_number(fields, "risk_parameter")
+    elif fitted_objective == "reference":
+        if fitted_parameter is not None:
+            raise ValueError(
+                f"reference policy cannot have a fitted parameter: {results_path}"
+            )
+    else:
+        run_objective = _require_string(fields, "objective")
+        run_parameter = _require_number(fields, "risk_parameter")
+        if run_objective != fitted_objective or fitted_parameter is None or not math.isclose(
+            run_parameter,
+            fitted_parameter,
+            rel_tol=0.0,
+            abs_tol=1e-14,
+        ):
+            raise ValueError(
+                "daily production matrix objective does not match authenticated "
+                f"run: {results_path}"
+            )
+        fitted_objective = run_objective
+        fitted_parameter = run_parameter
     return {
-        "key": expected_model,
+        "key": key,
+        "model": expected_model,
         "display_name": display_name,
         "measure": _require_string(results, "measure"),
         "run_identity": _require_string(results, "run_identity"),
@@ -472,8 +678,8 @@ def _objective_tables(models: JsonObject) -> JsonObject:
     tables: JsonObject = {}
     for objective, parameters in OBJECTIVE_GRIDS:
         rows: list[JsonObject] = []
-        for key in ("sanos-lv", "historical-sanos"):
-            model = _require_object(models, key)
+        for key, raw_model in models.items():
+            model = _as_object(raw_model, key)
             metrics = _require_object(model, "metrics")
             all_metrics = _require_object(metrics, "all")
             economic = _require_object(all_metrics, "economic_objectives")
@@ -524,11 +730,23 @@ def _mean_row_number(rows: list[JsonObject], name: str) -> float:
 
 def _tex_fragment(payload: JsonObject) -> str:
     models = _require_object(payload, "models")
-    sanos = _require_object(_require_object(models, "sanos-lv"), "metrics")
+    sanos_key = _first_model_key(models, "sanos-lv")
+    historical_key = _first_model_key(models, "historical-sanos")
+    sanos = _require_object(_require_object(models, sanos_key), "metrics")
     historical = _require_object(
-        _require_object(models, "historical-sanos"), "metrics"
+        _require_object(models, historical_key), "metrics"
     )
     comparison = _require_object(payload, "comparisons")
+    comparison_value = comparison.get(
+        "sanos_pure_rmse_reduction_vs_historical"
+    )
+    if isinstance(comparison_value, bool) or not isinstance(
+        comparison_value, int | float
+    ):
+        comparison_value = 1.0 - (
+            _metric(sanos, "all", "pure_rmse")
+            / _metric(historical, "all", "pure_rmse")
+        )
     lines = [
         "% Generated by build_summary_metrics.py; do not edit by hand.",
         _macro(
@@ -541,11 +759,7 @@ def _tex_fragment(payload: JsonObject) -> str:
         ),
         _macro(
             "SanosVsHistoricalReduction",
-            _percent(
-                _require_number(
-                    comparison, "sanos_pure_rmse_reduction_vs_historical"
-                )
-            ),
+            _percent(float(comparison_value)),
         ),
     ]
     for prefix, metrics in (("Sanos", sanos), ("Historical", historical)):
@@ -621,8 +835,8 @@ def _tex_fragment(payload: JsonObject) -> str:
             )
         )
     sanos_all = _require_object(sanos, "all")
-    sanos_model = _require_object(models, "sanos-lv")
-    historical_model = _require_object(models, "historical-sanos")
+    sanos_model = _require_object(models, sanos_key)
+    historical_model = _require_object(models, historical_key)
     lines.extend(
         (
             _macro(
@@ -737,8 +951,9 @@ def _objective_appendix_tex(payload: JsonObject) -> str:
                 "\\endhead",
             )
         )
-        for model_key in ("sanos-lv", "historical-sanos"):
-            model = _require_object(models, model_key)
+        model_items = tuple(models.items())
+        for model_index, (model_key, raw_model) in enumerate(model_items):
+            model = _as_object(raw_model, model_key)
             metrics = _require_object(model, "metrics")
             targets = _require_object(metrics, "targets")
             for claim in sorted(targets, key=_target_sort_key):
@@ -762,7 +977,7 @@ def _objective_appendix_tex(payload: JsonObject) -> str:
                     )
                     + " \\\\"
                 )
-            if model_key == "sanos-lv":
+            if model_index + 1 < len(model_items):
                 lines.append("\\addlinespace")
         lines.extend(
             ("\\bottomrule", "\\end{longtable}", "\\end{landscape}", "")
@@ -772,6 +987,14 @@ def _objective_appendix_tex(payload: JsonObject) -> str:
 
 def _metric(metrics: JsonObject, group: str, name: str) -> float:
     return _require_number(_require_object(metrics, group), name)
+
+
+def _first_model_key(models: JsonObject, expected_model: str) -> str:
+    for key, raw_model in models.items():
+        model = _as_object(raw_model, key)
+        if _require_string(model, "model") == expected_model:
+            return key
+    raise ValueError(f"summary has no {expected_model} policy")
 
 
 def _macro(name: str, value: str) -> str:
@@ -923,6 +1146,21 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", type=Path, default=_default_dataset_path())
     parser.add_argument(
+        "--daily-matrix",
+        type=Path,
+        action="append",
+        default=[],
+        help=(
+            "discover and authenticate every completed case in this production "
+            "matrix; may be repeated"
+        ),
+    )
+    parser.add_argument(
+        "--require-ready-complete",
+        action="store_true",
+        help="reject any ready matrix case without completed results",
+    )
+    parser.add_argument(
         "--sanos-results",
         type=Path,
         default=_default_result_path(
@@ -934,7 +1172,7 @@ def main() -> None:
         type=Path,
         default=_default_result_path(
             "production-matrix-v4",
-            "historical-sanos-mean-volatility-1",
+            "historical-sanos-mean-variance-0p1",
             "results.json",
         ),
     )
@@ -959,20 +1197,30 @@ def main() -> None:
         default=report_directory / "hedging_benchmark_summary_objective_appendix.tex",
     )
     arguments = parser.parse_args()
-    if (
-        arguments.dataset is None
-        or arguments.sanos_results is None
-        or arguments.historical_results is None
+    if arguments.dataset is None:
+        parser.error("--dataset is required without QUANTDATA_ROOT")
+    if not arguments.daily_matrix and (
+        arguments.sanos_results is None or arguments.historical_results is None
     ):
         parser.error(
-            "--dataset, --sanos-results and --historical-results are required "
-            "without QUANTDATA_ROOT"
+            "--sanos-results and --historical-results are required unless "
+            "--daily-matrix is supplied"
         )
-    payload = build_summary_metrics(
-        sanos_results=arguments.sanos_results,
-        historical_results=arguments.historical_results,
-        dataset=arguments.dataset,
-    )
+    if arguments.daily_matrix:
+        policies = daily_policy_inputs_from_matrices(
+            tuple(arguments.daily_matrix),
+            require_ready_complete=arguments.require_ready_complete,
+        )
+        payload = build_daily_policy_summary_metrics(
+            policies=policies,
+            dataset=arguments.dataset,
+        )
+    else:
+        payload = build_summary_metrics(
+            sanos_results=arguments.sanos_results,
+            historical_results=arguments.historical_results,
+            dataset=arguments.dataset,
+        )
     write_summary_metrics(
         payload,
         json_output=arguments.json_output,
@@ -988,6 +1236,7 @@ def main() -> None:
                 "tex_output": str(arguments.tex_output),
                 "objective_tables_output": str(arguments.objective_tables_output),
                 "objective_appendix_output": str(arguments.objective_appendix_output),
+                "policy_count": len(_require_object(payload, "models")),
             },
             indent=2,
             sort_keys=True,

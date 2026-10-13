@@ -363,7 +363,24 @@ child environments for CPU queues, checks resource headroom before every new
 case, pins the exact matrix SHA-256 in queue state, resumes completed queue
 records, emits four-minute heartbeats, and
 accepts completion only after validating the full 12,220-record results
-artifact. A matrix whose bytes change after the queue is armed is rejected.
+population artifact.
+
+Build report inputs directly from one or more immutable daily matrices rather
+than transcribing result paths or table values by hand:
+
+```bash
+python -m quantdata.sdlv.daily.front_spot.hedging.reports.build_summary_metrics \
+  --daily-matrix "$QUANTDATA_ROOT/experiments/hedging/daily/production-matrix-v3/matrix.json" \
+  --daily-matrix "$QUANTDATA_ROOT/experiments/hedging/daily/production-matrix-v4/matrix-full-73a9626.json"
+```
+
+Every discovered `results.json` is reconstructed from its immutable run,
+eligible origin cohort, and dated records before inclusion. Duplicate case IDs
+must have identical commands and outputs. Add `--require-ready-complete` for a
+final build; it rejects any matrix case marked ready whose complete results are
+still absent. Without `--daily-matrix`, the original explicit SANOS-LV plus
+Historical-SANOS two-policy interface remains available. A matrix whose bytes
+change after the queue is armed is rejected.
 Legacy queue state without a matrix digest is rejected unless the operator
 explicitly supplies `--adopt-unpinned-state` after checking the matrix.
 For a parameter sweep, `--continue-after-failure` retains an already failed

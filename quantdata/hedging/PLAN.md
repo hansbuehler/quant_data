@@ -80,7 +80,14 @@ reconstructs the overlapping-origin cohort from the validated public panel,
 reparses every dated weekly record, recomputes exposures, diagnostics,
 inference, and risk slices, and requires exact persisted-aggregate equality.
 Integrated tests reject both a forged eligible-origin summary and a tampered
-record. The resulting complete hedging suite contains 318 passing tests. The
+record. The report-input builder now also accepts one or more immutable daily
+production matrices, discovers every completed case by case ID and command
+output, reconstructs each aggregate from its run and dated records, rejects
+conflicting duplicate cases, and can require that every ready matrix case is
+complete. Its real current-cohort smoke automatically authenticated the SANOS-LV
+reference, three robust-covariance policies, and the completed Historical-SANOS
+policy and generated all four objective tables plus target appendices. The
+resulting complete hedging suite contains 321 passing tests. The
 strictly-2022 target-sizing exercise now
 fixes each target to one
 maturity-matched ATM spot-risk unit; all 20 calibration hedges converged with
@@ -976,6 +983,10 @@ Gate: one model-specific review and standalone smoke test per baseline pass.
 Run the complete benchmark, generate versioned tables and figures, perform the
 final results review, and reconcile every reported number with its source
 artifact.
+
+The daily report-input path is matrix-driven and authenticated rather than
+manually transcribed. Weekly matrix ingestion, final completed-case tables and
+figures, PDF regeneration, and the final results review remain outstanding.
 
 ## Minimum Test Gates
 
