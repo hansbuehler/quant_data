@@ -828,8 +828,13 @@ before rolling retraining.
 
 Historical SANOS now has a model-specific daily implementation; its
 mean-volatility cost-lasso is solved as an exact CLARABEL SOCP rather than by an
-unstable smooth line search. VolGAN and diffusion have exact within-fit restart
-checkpoints and a fixed-source rolling-update path. One immutable checkpoint
+unstable smooth line search. The solver first attempts the economically
+unconstrained problem. If CLARABEL certifies a recession direction, it resolves
+the same SOCP with the separate numerical solver cap solely to expose and record
+the direction; any resulting internal cap hit is nonconverged and fails the
+production gate rather than being reported as a hedge estimate. VolGAN and
+diffusion have exact within-fit restart checkpoints and a fixed-source
+rolling-update path. One immutable checkpoint
 trained strictly before evaluation initializes every rolling origin. Its file
 hash and training end date are checkpointed, source dates must be strictly
 earlier than current training dates, and current-window normalization is
