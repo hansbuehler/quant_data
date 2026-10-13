@@ -1,19 +1,30 @@
 from pathlib import Path
+from types import SimpleNamespace
 
+import pytest
+
+from quantdata.sdlv.daily.front_spot.hedging.runners import production_matrix
 from quantdata.sdlv.daily.front_spot.hedging.runners.production_matrix import (
     DailyProductionMatrixConfig,
     GeneratedProductionInputs,
+    GrommProductionInputs,
     ProductionReadiness,
     ProductionResource,
     build_daily_production_matrix,
 )
 
 
-def _matrix(*, generated: GeneratedProductionInputs = GeneratedProductionInputs()):
+def _matrix(
+    *,
+    dataset: Path = Path("/public/dataset"),
+    gromm: GrommProductionInputs = GrommProductionInputs(),
+    generated: GeneratedProductionInputs = GeneratedProductionInputs(),
+):
     return build_daily_production_matrix(
-        dataset=Path("/public/dataset"),
+        dataset=dataset,
         output_root=Path("/outputs"),
         checkpoint_root=Path("/checkpoints"),
+        gromm=gromm,
         generated=generated,
     )
 
@@ -57,6 +68,72 @@ def test_native_commands_pin_common_daily_controls() -> None:
         )
         assert case.command[case.command.index("--position-cap") + 1] == "1000"
         assert case.command[case.command.index("--device") + 1] == "cpu"
+        assert case.command[case.command.index("--start") + 1] == "2023-01-01"
+        assert case.command[case.command.index("--end") + 1] == "2025-12-31"
+
+
+@pytest.mark.parametrize(
+    ("physical_accepted_count", "expected_p_readiness"),
+    (
+        (2, ProductionReadiness.BLOCKED),
+        (3, ProductionReadiness.READY),
+    ),
+)
+def test_gromm_readiness_uses_authenticated_q_and_physical_range_gates(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    physical_accepted_count: int,
+    expected_p_readiness: ProductionReadiness,
+) -> None:
+    dataset = tmp_path / "dataset"
+    dataset.mkdir()
+    (dataset / "manifest.json").write_text("{}\n", encoding="utf-8")
+    architecture = tmp_path / "architecture.json"
+    architecture.write_text("{}\n", encoding="utf-8")
+    summary_path = tmp_path / "range.json"
+    summary_path.write_text("{}\n", encoding="utf-8")
+    artifact_root = tmp_path / "artifacts"
+
+    monkeypatch.setattr(
+        production_matrix,
+        "load_gromm_architecture_selection",
+        lambda *_args, **_kwargs: object(),
+    )
+    monkeypatch.setattr(
+        production_matrix,
+        "load_completed_rolling_gromm2_range",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            evaluation_start=DailyProductionMatrixConfig().evaluation_start,
+            evaluation_end=DailyProductionMatrixConfig().evaluation_end,
+            eligible_origin_count=3,
+            physical_accepted_count=physical_accepted_count,
+        ),
+    )
+    cases = _matrix(
+        dataset=dataset,
+        gromm=GrommProductionInputs(
+            market_artifact_root=artifact_root,
+            architecture_selection=architecture,
+            artifact_range_summary=summary_path,
+        ),
+    )
+    gromm_cases = tuple(case for case in cases if case.model == "gromm")
+    q_cases = tuple(case for case in gromm_cases if case.measure == "Q")
+    p_cases = tuple(case for case in gromm_cases if case.measure == "P")
+    assert all(case.readiness is ProductionReadiness.READY for case in q_cases)
+    assert all(case.readiness is expected_p_readiness for case in p_cases)
+    for case in q_cases:
+        assert case.command is not None
+        assert case.command[case.command.index("--measure") + 1] == "Q"
+        assert case.command[case.command.index("--device") + 1] == "cuda"
+        assert case.command[case.command.index("--market-artifact-root") + 1] == str(
+            artifact_root
+        )
+        assert case.command[case.command.index("--architecture-selection") + 1] == str(
+            architecture
+        )
+    if expected_p_readiness is ProductionReadiness.BLOCKED:
+        assert all("2/3 origins" in case.blocked_reason for case in p_cases)
 
 
 def test_generated_rolling_cases_require_selected_artifacts() -> None:

@@ -246,6 +246,28 @@ def prepare_rolling_gromm2(
     return paths
 
 
+def load_prepared_rolling_gromm2(
+    artifact_root: Path,
+    *,
+    as_of_date: date,
+    config: RollingGromm2Config = RollingGromm2Config(),
+    dataset_manifest_sha256: str,
+) -> RollingGromm2Paths:
+    """Load and authenticate the CPU-prepared portion of one rolling fit."""
+    paths = rolling_gromm2_paths(artifact_root, as_of_date=as_of_date)
+    manifest = _read_manifest(paths.manifest)
+    if manifest.get("status") not in {"prepared", "complete"}:
+        raise ValueError("rolling GROMM2 artifact is not prepared")
+    _validate_prepared_manifest(
+        manifest,
+        paths=paths,
+        as_of_date=as_of_date,
+        config=config,
+        dataset_manifest_sha256=dataset_manifest_sha256,
+    )
+    return paths
+
+
 def fit_rolling_gromm2_market(
     *,
     dataset: Path,

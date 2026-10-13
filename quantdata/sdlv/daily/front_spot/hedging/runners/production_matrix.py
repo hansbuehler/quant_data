@@ -6,6 +6,7 @@ import argparse
 import json
 import math
 from dataclasses import asdict, dataclass
+from datetime import date
 from enum import StrEnum
 from pathlib import Path
 
@@ -15,8 +16,15 @@ from cdxcore.version import version
 from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
     default_public_candidate_path,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.checkpointing import file_sha256
+from quantdata.sdlv.daily.front_spot.hedging.models.gromm.selection import (
+    load_gromm_architecture_selection,
+)
 from quantdata.sdlv.daily.front_spot.hedging.runners.daily_results import (
     DailyResultsConfig,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners.fit_rolling_gromm2_range import (
+    load_completed_rolling_gromm2_range,
 )
 
 
@@ -35,7 +43,7 @@ class ProductionReadiness(StrEnum):
     BLOCKED = "blocked"
 
 
-@version("1.0", dependencies=[DailyResultsConfig])
+@version("1.1", dependencies=[DailyResultsConfig])
 @dataclass(frozen=True, kw_only=True)
 class DailyProductionMatrixConfig:
     """Precommitted objective grids and shared daily run controls."""
@@ -47,6 +55,8 @@ class DailyProductionMatrixConfig:
     observation_count: int = 252
     scenario_count: int = 4_096
     position_cap: float = 1_000.0
+    evaluation_start: date = date(2023, 1, 1)
+    evaluation_end: date = date(2025, 12, 31)
 
     def __post_init__(self) -> None:
         for values in (
@@ -73,6 +83,19 @@ class DailyProductionMatrixConfig:
             math.isfinite(self.position_cap) and self.position_cap > 0.0,
             lambda: "position_cap must be finite-positive",
         )
+        verify_inp(
+            self.evaluation_start <= self.evaluation_end,
+            lambda: "production evaluation start must not exceed end",
+        )
+
+
+@dataclass(frozen=True, kw_only=True)
+class GrommProductionInputs:
+    """Authenticated artifacts required to enable rolling GROMM cases."""
+
+    market_artifact_root: Path | None = None
+    architecture_selection: Path | None = None
+    artifact_range_summary: Path | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -161,6 +184,7 @@ def build_daily_production_matrix(
     output_root: Path,
     checkpoint_root: Path,
     config: DailyProductionMatrixConfig = DailyProductionMatrixConfig(),
+    gromm: GrommProductionInputs = GrommProductionInputs(),
     generated: GeneratedProductionInputs = GeneratedProductionInputs(),
 ) -> tuple[DailyProductionCase, ...]:
     """Build every precommitted daily case without launching material work."""
@@ -235,26 +259,15 @@ def build_daily_production_matrix(
                     ),
                 )
             )
-    for measure in ("P", "Q"):
-        for objective, parameters in _objective_grids(config):
-            for parameter in parameters:
-                cases.append(
-                    _blocked_case(
-                        case_id=_risk_case_id(
-                            f"gromm-{measure.lower()}", objective, parameter
-                        ),
-                        model="gromm",
-                        measure=measure,
-                        variant="rolling-16-factor-eight-substep-deep-hedge",
-                        objective=objective,
-                        risk_parameter=parameter,
-                        resource=ProductionResource.GPU,
-                        reason=(
-                            "awaiting managed rolling market artifacts, 2022 hedge-"
-                            "architecture selection, and GPU-readiness gate"
-                        ),
-                    )
-                )
+    cases.extend(
+        _gromm_cases(
+            dataset=dataset,
+            output_root=output_root,
+            checkpoint_root=checkpoint_root,
+            config=config,
+            inputs=gromm,
+        )
+    )
     cases.extend(
         _generated_cases(
             dataset=dataset,
@@ -267,6 +280,107 @@ def build_daily_production_matrix(
     identities = tuple(case.case_id for case in cases)
     if len(set(identities)) != len(identities):
         raise RuntimeError("daily production matrix contains duplicate case identities")
+    return tuple(cases)
+
+
+def _gromm_cases(
+    *,
+    dataset: Path,
+    output_root: Path,
+    checkpoint_root: Path,
+    config: DailyProductionMatrixConfig,
+    inputs: GrommProductionInputs,
+) -> tuple[DailyProductionCase, ...]:
+    missing = []
+    if inputs.market_artifact_root is None:
+        missing.append("complete rolling market-artifact root")
+    if inputs.architecture_selection is None:
+        missing.append("authenticated 2022 hedge-architecture selection")
+    if inputs.artifact_range_summary is None:
+        missing.append("completed rolling fit-range summary")
+    range_summary = None
+    invalid_reason = None
+    if not missing:
+        try:
+            dataset_manifest_sha256 = file_sha256(Path(dataset) / "manifest.json")
+            load_gromm_architecture_selection(
+                inputs.architecture_selection,
+                expected_dataset_manifest_sha256=dataset_manifest_sha256,
+            )
+            range_summary = load_completed_rolling_gromm2_range(
+                inputs.artifact_range_summary,
+                dataset_manifest_sha256=dataset_manifest_sha256,
+                artifact_root=inputs.market_artifact_root,
+            )
+            if (
+                range_summary.evaluation_start != config.evaluation_start
+                or range_summary.evaluation_end != config.evaluation_end
+            ):
+                raise ValueError(
+                    "rolling fit range does not match the production evaluation range"
+                )
+        except (FileNotFoundError, OSError, ValueError) as error:
+            invalid_reason = f"invalid GROMM production evidence: {error}"
+    common_reason = (
+        "missing " + ", ".join(missing)
+        if missing
+        else invalid_reason
+    )
+    cases: list[DailyProductionCase] = []
+    for measure in ("P", "Q"):
+        for objective, parameters in _objective_grids(config):
+            for parameter in parameters:
+                case_id = _risk_case_id(
+                    f"gromm-{measure.lower()}", objective, parameter
+                )
+                common = {
+                    "case_id": case_id,
+                    "model": "gromm",
+                    "measure": measure,
+                    "variant": "rolling-16-factor-eight-substep-deep-hedge",
+                    "objective": objective,
+                    "risk_parameter": parameter,
+                    "resource": ProductionResource.GPU,
+                }
+                if common_reason is not None:
+                    cases.append(_blocked_case(reason=common_reason, **common))
+                    continue
+                assert range_summary is not None
+                if (
+                    measure == "P"
+                    and range_summary.physical_accepted_count
+                    != range_summary.eligible_origin_count
+                ):
+                    cases.append(
+                        _blocked_case(
+                            reason=(
+                                "rolling physical-drift gate passed for only "
+                                f"{range_summary.physical_accepted_count}/"
+                                f"{range_summary.eligible_origin_count} origins"
+                            ),
+                            **common,
+                        )
+                    )
+                    continue
+                cases.append(
+                    _ready_case(
+                        command=_daily_command(
+                            model="gromm",
+                            case_id=case_id,
+                            dataset=dataset,
+                            output_root=output_root,
+                            checkpoint_root=checkpoint_root,
+                            config=config,
+                            objective=objective,
+                            risk_parameter=parameter,
+                            device="cuda",
+                            measure=measure,
+                            market_artifact_root=inputs.market_artifact_root,
+                            architecture_selection=inputs.architecture_selection,
+                        ),
+                        **common,
+                    )
+                )
     return tuple(cases)
 
 
@@ -472,6 +586,9 @@ def _daily_command(
     epochs: int | None = None,
     warm_start_checkpoint: Path | None = None,
     base_checkpoint: Path | None = None,
+    measure: str | None = None,
+    market_artifact_root: Path | None = None,
+    architecture_selection: Path | None = None,
 ) -> tuple[str, ...]:
     command = [
         "python",
@@ -493,6 +610,10 @@ def _daily_command(
         str(config.scenario_count),
         "--device",
         device,
+        "--start",
+        config.evaluation_start.isoformat(),
+        "--end",
+        config.evaluation_end.isoformat(),
     ]
     if objective is not None:
         command.extend(("--objective", objective))
@@ -504,6 +625,12 @@ def _daily_command(
         command.extend(("--warm-start-checkpoint", str(warm_start_checkpoint)))
     if base_checkpoint is not None:
         command.extend(("--base-checkpoint", str(base_checkpoint)))
+    if measure is not None:
+        command.extend(("--measure", measure))
+    if market_artifact_root is not None:
+        command.extend(("--market-artifact-root", str(market_artifact_root)))
+    if architecture_selection is not None:
+        command.extend(("--architecture-selection", str(architecture_selection)))
     return tuple(command)
 
 
@@ -554,6 +681,9 @@ def main() -> None:
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--checkpoint-root", type=Path, required=True)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--gromm-market-artifact-root", type=Path)
+    parser.add_argument("--gromm-architecture-selection", type=Path)
+    parser.add_argument("--gromm-artifact-range-summary", type=Path)
     arguments = parser.parse_args()
     config = DailyProductionMatrixConfig()
     cases = build_daily_production_matrix(
@@ -561,6 +691,11 @@ def main() -> None:
         output_root=arguments.output_root,
         checkpoint_root=arguments.checkpoint_root,
         config=config,
+        gromm=GrommProductionInputs(
+            market_artifact_root=arguments.gromm_market_artifact_root,
+            architecture_selection=arguments.gromm_architecture_selection,
+            artifact_range_summary=arguments.gromm_artifact_range_summary,
+        ),
     )
     payload = {
         "schema": "hedging-daily-production-matrix-v1",

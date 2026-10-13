@@ -20,6 +20,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_dynamics impor
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2 import (
     ROLLING_GROMM2_SCHEMA,
     RollingGromm2Config,
+    load_prepared_rolling_gromm2,
     load_rolling_gromm2,
     rolling_gromm2_paths,
     select_rolling_public_days,
@@ -98,6 +99,52 @@ def test_rolling_gromm2_forward_uses_flat_released_tail() -> None:
 
     assert extrapolated
     assert value == pytest.approx(day.forward_over_spot[-1])
+
+
+def test_prepared_rolling_gromm2_loader_authenticates_source_files(tmp_path) -> None:
+    config = RollingGromm2Config()
+    start = date(2022, 1, 1)
+    origins = [start + timedelta(days=index) for index in range(252)]
+    endpoints = [value + timedelta(days=1) for value in origins]
+    as_of = endpoints[-1]
+    paths = rolling_gromm2_paths(tmp_path, as_of_date=as_of)
+    paths.directory.mkdir(parents=True)
+    paths.source_history.write_bytes(b"source")
+    paths.prepared_books.write_bytes(b"books")
+    dataset_manifest_sha256 = "a" * 64
+    manifest = {
+        "schema": ROLLING_GROMM2_SCHEMA,
+        "status": "prepared",
+        "as_of_date": as_of.isoformat(),
+        "training_start_date": origins[0].isoformat(),
+        "training_end_date": as_of.isoformat(),
+        "state_count": len(set(origins) | set(endpoints)),
+        "transition_count": 252,
+        "training_origin_dates": [value.isoformat() for value in origins],
+        "training_endpoint_dates": [value.isoformat() for value in endpoints],
+        "dataset_manifest_sha256": dataset_manifest_sha256,
+        "config": json.loads(json.dumps(asdict(config), sort_keys=True)),
+        "source_history_sha256": file_sha256(paths.source_history),
+        "prepared_books_sha256": file_sha256(paths.prepared_books),
+    }
+    paths.manifest.write_text(json.dumps(manifest), encoding="utf-8")
+
+    loaded = load_prepared_rolling_gromm2(
+        tmp_path,
+        as_of_date=as_of,
+        config=config,
+        dataset_manifest_sha256=dataset_manifest_sha256,
+    )
+
+    assert loaded == paths
+    paths.prepared_books.write_bytes(b"changed")
+    with pytest.raises(ValueError, match="prepared_books_sha256"):
+        load_prepared_rolling_gromm2(
+            tmp_path,
+            as_of_date=as_of,
+            config=config,
+            dataset_manifest_sha256=dataset_manifest_sha256,
+        )
 
 
 def test_complete_rolling_gromm2_loader_rejects_future_history(tmp_path) -> None:

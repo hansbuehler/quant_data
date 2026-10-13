@@ -80,7 +80,10 @@ training dependencies.
   gates, so the artifact is Q-only. Bounded float32 density normalization now
   permits authenticated Q replay while preserving strict rejection of malformed
   density mass; a real four-path, 163-instrument replay passed and P generation
-  remains disabled.
+  remains disabled. The rolling range runner now authenticates every reused
+  artifact, writes atomic per-origin range evidence, prevents concurrent range
+  writers, and emits four-minute heartbeats. Its first-origin resume smoke
+  passed; preparation of the full 611-origin range is in progress.
 - See `quantdata/hedging/PLAN.md` and the stored independent reviews before
   interpreting development smokes as benchmark results.
 
@@ -108,6 +111,27 @@ Run or resume one CPU daily evaluation with:
 python -m quantdata.sdlv.daily.front_spot.hedging.runners.run_daily \
   --model sanos-lv
 ```
+
+Prepare and then fit the complete rolling GROMM2 artifact range with separate
+CPU and managed-GPU stages:
+
+```bash
+python -m quantdata.sdlv.daily.front_spot.hedging.runners.fit_rolling_gromm2_range \
+  --dataset "$QUANTDATA_ROOT/datasets/hedging/spx-2022-2025-hedging-public-candidate-v1" \
+  --artifact-root "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v3" \
+  --start 2023-01-01 --end 2025-12-31 --stage prepare
+
+gpuctl run --gpus 1 -- \
+  python -m quantdata.sdlv.daily.front_spot.hedging.runners.fit_rolling_gromm2_range \
+  --dataset "$QUANTDATA_ROOT/datasets/hedging/spx-2022-2025-hedging-public-candidate-v1" \
+  --artifact-root "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v3" \
+  --start 2023-01-01 --end 2025-12-31 --stage fit
+```
+
+Both stages revalidate completed origins before reusing them. The fit summary
+is accepted as production evidence only when all eligible origins are present
+and every recorded dated-manifest hash still matches. This completion enables
+Q cases; P cases additionally require every dated physical-drift gate to pass.
 
 Train a generated-model initializer using the complete 247-date 2022 sample:
 
@@ -186,3 +210,16 @@ The matrix distinguishes runnable CPU cases, staged GPU commands that still
 await their review gate, and blocked cases whose selected initializer, update
 budget, fine-tuning base, or dated GROMM artifact is absent. It never treats a
 missing dependency as an implicit default.
+
+Supply a completed GROMM range and the fixed 2022 policy architecture with:
+
+```bash
+python -m quantdata.sdlv.daily.front_spot.hedging.runners.production_matrix \
+  --output-root "$QUANTDATA_ROOT/experiments/hedging/daily" \
+  --checkpoint-root "$QUANTDATA_ROOT/training/hedging/daily" \
+  --gromm-market-artifact-root "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v3" \
+  --gromm-architecture-selection \
+    "$QUANTDATA_ROOT/training/hedging/gromm/architecture-2022-v1/result-v2.json" \
+  --gromm-artifact-range-summary \
+    "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v3/range-fit-2023-2025.json"
+```

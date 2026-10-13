@@ -703,7 +703,11 @@ marks. Signed policies provide prices and diagnostics; the directly trained
 pure policy uses conditional Q-shadow gains, exact net turnover, free cash
 settlement, and terminal liquidation. Managed-GPU affine fitting and 2022
 hedge-architecture selection are complete for the first rolling origin. Full
-rolling Q production and any future-origin P acceptance remain outstanding.
+rolling Q production and any future-origin P acceptance remain outstanding. A
+range orchestrator now authenticates and reuses each dated preparation or fit,
+records every manifest hash atomically, prevents concurrent writers, and emits
+a persistent heartbeat at most every five minutes. Its real first-origin
+resume smoke passed. The 611-origin CPU preparation service is running.
 
 Gate: GROMM CPU smoke test, model review, and GPU-readiness review pass.
 
@@ -711,6 +715,14 @@ Gate: GROMM CPU smoke test, model review, and GPU-readiness review pass.
 
 Implement restartable rolling fit, path-generation, and deep-hedging jobs with
 the required resource checks, checkpointing, and progress logs.
+
+The rolling GROMM2 range runner provides authenticated per-origin restart, an
+atomic range state, a single-writer lock, and four-minute progress heartbeats.
+A completed range summary binds the dataset, configuration, evaluation dates,
+artifact root, and every dated manifest hash. The production matrix enables Q
+cases only from this complete evidence; it enables P cases only when every
+origin also passes the physical-drift gate. Full managed-GPU range fitting and
+forced-restart recovery evidence remain outstanding.
 
 Gate: CPU/GPU fixture agreement and forced-restart recovery test pass.
 
