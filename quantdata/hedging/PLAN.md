@@ -23,9 +23,12 @@ review. Common SANOS/DLV weekly claim prices, exact rolling fit identities,
 precommitted as-of information windows, and Hansen--Hodrick plus moving-block
 overlap inference passed their independent re-review. A resumable daily runner
 now pins dataset and model identities, enforces the complete 20-target book and
-numerical gates, and writes one atomic record per origin. SANOS-LV and
-historical-SANOS each completed all 611 eligible origins and 12,220 target
-records; robust-covariance production is in progress. Other daily production
+numerical gates, and writes one atomic record per origin. Earlier SANOS-LV and
+historical-SANOS runs each completed all 611 eligible origins and 12,220 target
+records. The SANOS-LV records used a superseded target-notional identity and
+therefore remain diagnostic rather than being relabelled as current production
+evidence. A clean SANOS-LV rerun and the corrected robust-covariance sweep are
+in progress from immutable worktrees. Other daily production
 and full weekly production remain outstanding. A unified weekly runner now
 supports frozen and restarted schedules for SANOS-LV, historical SANOS,
 GROMM, VolGAN, and both diffusion variants. It requires an authenticated
@@ -670,6 +673,17 @@ mean-variance, and mean-volatility.
 
 Gate: standalone covariance smoke test and model review pass.
 
+The production implementation subsequently exposed a distinct numerical issue:
+the 1,000-unit executable position cap was also bounding the claim and
+zero-claim virtual policies before their subtraction. Those virtual policies
+now use a separate 1,000,000-unit internal solver cap, while only the executable
+claim-minus-zero hedge uses the 1,000-unit benchmark cap. Internal and
+executable cap hits are reported separately and both fail the numerical gate.
+An independent exact-date replay and a public-data 20-target smoke passed with
+no cap hit or nonconvergence. Results produced under the shared-cap implementation
+are retained only as failed diagnostics; the clean production sweep is running
+from a pinned source worktree.
+
 ### Phase 4: rolling SDLV calibration (complete)
 
 Implement the rolling 252-day innovation fit, 16-factor PCA alignment, eight
@@ -760,9 +774,10 @@ implemented. A completed run is rejected if any eligible origin, target,
 dataset identity, run identity, convergence gate, or cap count is missing or
 inconsistent. The failed SANOS-LV `production-v1` is retained as a numerical
 diagnostic; the row-scaled `production-v2` run completed all 611 eligible
-origins and wrote 12,220 target records. Historical SANOS also completed all
-611 origins and 12,220 records; covariance production is resumable and remains
-in progress. The versioned daily
+origins and wrote 12,220 target records, but its superseded target-notional
+identity prevents its use as current production evidence. Historical SANOS
+also completed all 611 origins and 12,220 records. Clean SANOS-LV and corrected
+covariance production are resumable and remain in progress. The versioned daily
 production matrix contains 53 unique cases: 21 runnable native CPU cases, two
 staged published-setting GPU cases awaiting the generated-model GPU-readiness
 gate, and 30 explicitly blocked rolling-generated or GROMM cases. No blocked
