@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
+import subprocess
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -18,6 +20,29 @@ from quantdata.torch import torch
 
 INITIALIZER_SCHEMA = "hedging-generated-initializer-v1"
 SELECTION_SCHEMA = "hedging-generated-epoch-selection-v1"
+PRODUCTION_GATE_SCHEMA = "hedging-generated-production-gate-v2"
+QUANT_REVIEW_SCHEMA = "hedging-generated-quant-review-v1"
+GPU_READINESS_SCHEMA = "hedging-generated-gpu-readiness-v1"
+PRODUCTION_SCOPES = frozenset(
+    {
+        "daily-public",
+        "daily-rolling",
+        "frozen-weekly-public",
+        "frozen-weekly-rolling",
+        "restarted-weekly-public",
+        "restarted-weekly-rolling",
+    }
+)
+_SCOPE_BINDING_FIELDS = frozenset(
+    {
+        "initializer_manifest_sha256",
+        "initializer_checkpoint_sha256",
+        "epoch_selection_sha256",
+        "selected_epochs",
+        "base_initializer_manifest_sha256",
+        "base_checkpoint_sha256",
+    }
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -30,8 +55,23 @@ class GeneratedSelectionEvidence:
     selected_epochs: int
     base_checkpoint: Path | None
     base_checkpoint_sha256: str | None
+    base_initializer_manifest_sha256: str | None
     initializer_manifest_sha256: str
     epoch_selection_sha256: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class GeneratedProductionGateEvidence:
+    """Authenticated review and GPU-readiness approval for one model."""
+
+    model: str
+    reviewed_commit: str
+    quant_review_path: Path
+    quant_review_sha256: str
+    gpu_readiness_path: Path
+    gpu_readiness_sha256: str
+    scope_bindings: dict[str, dict[str, object]]
+    gate_sha256: str
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -40,6 +80,174 @@ class _CheckpointEvidence:
     training_end_date: date
     completed_epochs: int
     base_checkpoint_sha256: str | None
+
+
+def load_generated_production_gate(
+    *,
+    gate_path: Path,
+    expected_model: str,
+    expected_dataset_manifest_sha256: str,
+    expected_reviewed_commit: str,
+) -> GeneratedProductionGateEvidence:
+    """Authenticate the explicit production gate for one generated model."""
+    path = Path(gate_path)
+    payload, gate_sha256 = _read_json_object_with_sha256(path)
+    normalized_model = _normalized_model(expected_model)
+    if payload.get("schema") != PRODUCTION_GATE_SCHEMA:
+        raise ValueError("unexpected generated production-gate schema")
+    if _normalized_model(_require_string(payload, "model")) != normalized_model:
+        raise ValueError("generated production gate uses another model")
+    if payload.get("dataset_manifest_sha256") != expected_dataset_manifest_sha256:
+        raise ValueError("generated production gate uses another dataset")
+    if payload.get("status") != "pass":
+        raise ValueError("generated production gate has not passed")
+    reviewed_commit = _require_hex_digest(payload, "reviewed_commit", lengths=(40,))
+    if reviewed_commit != expected_reviewed_commit:
+        raise ValueError("generated production gate reviews another commit")
+    scope_bindings = _validated_scope_bindings(payload.get("scope_bindings"))
+    quant_review_path, quant_review_sha256 = _authenticated_gate_artifact(
+        payload,
+        "quant_review",
+        gate_path=path,
+        expected_schema=QUANT_REVIEW_SCHEMA,
+        expected_model=normalized_model,
+        expected_dataset_manifest_sha256=expected_dataset_manifest_sha256,
+        expected_reviewed_commit=reviewed_commit,
+        expected_scope_bindings=scope_bindings,
+    )
+    gpu_readiness_path, gpu_readiness_sha256 = _authenticated_gate_artifact(
+        payload,
+        "gpu_readiness",
+        gate_path=path,
+        expected_schema=GPU_READINESS_SCHEMA,
+        expected_model=normalized_model,
+        expected_dataset_manifest_sha256=expected_dataset_manifest_sha256,
+        expected_reviewed_commit=reviewed_commit,
+        expected_scope_bindings=scope_bindings,
+    )
+    return GeneratedProductionGateEvidence(
+        model=normalized_model,
+        reviewed_commit=reviewed_commit,
+        quant_review_path=quant_review_path,
+        quant_review_sha256=quant_review_sha256,
+        gpu_readiness_path=gpu_readiness_path,
+        gpu_readiness_sha256=gpu_readiness_sha256,
+        scope_bindings=scope_bindings,
+        gate_sha256=gate_sha256,
+    )
+
+
+def reviewable_repository_commit(repo_root: Path | None = None) -> str:
+    """Return HEAD only when tracked source is clean enough to authenticate."""
+    root = (
+        Path(__file__).resolve().parents[6]
+        if repo_root is None
+        else Path(repo_root).resolve()
+    )
+    head = subprocess.run(
+        ("git", "-C", str(root), "rev-parse", "HEAD"),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    reviewed_commit = _validate_hex_digest_value(
+        head,
+        name="repository HEAD",
+        lengths=(40,),
+    )
+    status = subprocess.run(
+        (
+            "git",
+            "-C",
+            str(root),
+            "status",
+            "--porcelain",
+            "--untracked-files=no",
+        ),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if status:
+        raise ValueError("tracked repository changes are not reviewable production code")
+    return reviewed_commit
+
+
+def generated_scope_binding(
+    *,
+    selection: GeneratedSelectionEvidence | None,
+    base_initializer: GeneratedSelectionEvidence | None = None,
+) -> dict[str, object]:
+    """Return the exact pre-evaluation evidence required by one workflow."""
+    if selection is None:
+        initializer_manifest_sha256 = None
+        initializer_checkpoint_sha256 = None
+        epoch_selection_sha256 = None
+        selected_epochs = None
+        selection_base_manifest_sha256 = None
+        selection_base_checkpoint_sha256 = None
+    else:
+        initializer_manifest_sha256 = selection.initializer_manifest_sha256
+        initializer_checkpoint_sha256 = selection.initializer_checkpoint_sha256
+        epoch_selection_sha256 = selection.epoch_selection_sha256 or None
+        selected_epochs = selection.selected_epochs or None
+        selection_base_manifest_sha256 = (
+            selection.base_initializer_manifest_sha256
+        )
+        selection_base_checkpoint_sha256 = selection.base_checkpoint_sha256
+    base_manifest_sha256 = (
+        None
+        if base_initializer is None
+        else base_initializer.initializer_manifest_sha256
+    )
+    base_checkpoint_sha256 = (
+        None
+        if base_initializer is None
+        else base_initializer.initializer_checkpoint_sha256
+    )
+    if selection_base_manifest_sha256 is not None:
+        if (
+            base_manifest_sha256 is not None
+            and base_manifest_sha256 != selection_base_manifest_sha256
+        ):
+            raise ValueError("generated scope uses conflicting base initializer manifests")
+        base_manifest_sha256 = selection_base_manifest_sha256
+    if selection_base_checkpoint_sha256 is not None:
+        if (
+            base_checkpoint_sha256 is not None
+            and base_checkpoint_sha256 != selection_base_checkpoint_sha256
+        ):
+            raise ValueError("generated scope uses conflicting base checkpoints")
+        base_checkpoint_sha256 = selection_base_checkpoint_sha256
+    return {
+        "initializer_manifest_sha256": initializer_manifest_sha256,
+        "initializer_checkpoint_sha256": initializer_checkpoint_sha256,
+        "epoch_selection_sha256": epoch_selection_sha256,
+        "selected_epochs": selected_epochs,
+        "base_initializer_manifest_sha256": base_manifest_sha256,
+        "base_checkpoint_sha256": base_checkpoint_sha256,
+    }
+
+
+def require_generated_production_scope(
+    gate: GeneratedProductionGateEvidence,
+    *,
+    scope: str,
+    selection: GeneratedSelectionEvidence | None,
+    base_initializer: GeneratedSelectionEvidence | None = None,
+) -> None:
+    """Require a gate for this exact workflow and pre-evaluation lineage."""
+    if scope not in PRODUCTION_SCOPES:
+        raise ValueError(f"unknown generated production scope: {scope}")
+    actual = gate.scope_bindings.get(scope)
+    if actual is None:
+        raise ValueError(f"generated production gate does not cover {scope}")
+    expected = generated_scope_binding(
+        selection=selection,
+        base_initializer=base_initializer,
+    )
+    if actual != expected:
+        raise ValueError(f"generated production gate evidence differs for {scope}")
 
 
 def load_generated_selection_evidence(
@@ -53,8 +261,12 @@ def load_generated_selection_evidence(
     """Load and cross-check one pre-evaluation generated-model selection."""
     initializer_path = Path(initializer_manifest)
     selection_path = Path(epoch_selection)
-    initializer = _read_json_object(initializer_path)
-    selection = _read_json_object(selection_path)
+    initializer, initializer_manifest_sha256 = _read_json_object_with_sha256(
+        initializer_path
+    )
+    selection, epoch_selection_sha256 = _read_json_object_with_sha256(
+        selection_path
+    )
     normalized_model = _normalized_model(expected_model)
     if initializer.get("schema") != INITIALIZER_SCHEMA:
         raise ValueError("unexpected generated initializer schema")
@@ -130,6 +342,7 @@ def load_generated_selection_evidence(
         )
     base_checkpoint = None
     base_checkpoint_sha256 = None
+    base_initializer_manifest_sha256 = None
     if base_initializer_manifest is not None:
         base = load_generated_initializer_evidence(
             initializer_manifest=base_initializer_manifest,
@@ -138,6 +351,7 @@ def load_generated_selection_evidence(
         )
         base_checkpoint = base.initializer_checkpoint
         base_checkpoint_sha256 = base.initializer_checkpoint_sha256
+        base_initializer_manifest_sha256 = base.initializer_manifest_sha256
     if normalized_model == "diffusion-ad-seq-vol-ft":
         initializer_base_path = initializer.get("base_checkpoint_path")
         initializer_base_sha256 = initializer.get("base_checkpoint_sha256")
@@ -164,8 +378,9 @@ def load_generated_selection_evidence(
         selected_epochs=selected_epochs,
         base_checkpoint=base_checkpoint,
         base_checkpoint_sha256=base_checkpoint_sha256,
-        initializer_manifest_sha256=file_sha256(initializer_path),
-        epoch_selection_sha256=file_sha256(selection_path),
+        base_initializer_manifest_sha256=base_initializer_manifest_sha256,
+        initializer_manifest_sha256=initializer_manifest_sha256,
+        epoch_selection_sha256=epoch_selection_sha256,
     )
 
 
@@ -177,7 +392,7 @@ def load_generated_initializer_evidence(
 ) -> GeneratedSelectionEvidence:
     """Authenticate an initializer when no rolling epoch budget is required."""
     path = Path(initializer_manifest)
-    payload = _read_json_object(path)
+    payload, initializer_manifest_sha256 = _read_json_object_with_sha256(path)
     normalized_model = _normalized_model(expected_model)
     if payload.get("schema") != INITIALIZER_SCHEMA:
         raise ValueError("unexpected generated initializer schema")
@@ -206,7 +421,8 @@ def load_generated_initializer_evidence(
         selected_epochs=0,
         base_checkpoint=None,
         base_checkpoint_sha256=None,
-        initializer_manifest_sha256=file_sha256(path),
+        base_initializer_manifest_sha256=None,
+        initializer_manifest_sha256=initializer_manifest_sha256,
         epoch_selection_sha256="",
     )
 
@@ -350,10 +566,16 @@ def _one_standard_error_selection(
 
 
 def _read_json_object(path: Path) -> dict[str, object]:
-    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    payload, _ = _read_json_object_with_sha256(path)
+    return payload
+
+
+def _read_json_object_with_sha256(path: Path) -> tuple[dict[str, object], str]:
+    value = Path(path).read_bytes()
+    payload = json.loads(value)
     if not isinstance(payload, dict):
         raise ValueError(f"JSON artifact must be an object: {path}")
-    return payload
+    return payload, hashlib.sha256(value).hexdigest()
 
 
 def _require_string(payload: dict[str, object], name: str) -> str:
@@ -365,6 +587,137 @@ def _require_string(payload: dict[str, object], name: str) -> str:
 
 def _require_sha256(payload: dict[str, object], name: str) -> str:
     return _validate_sha256_value(payload.get(name), name=name)
+
+
+def _authenticated_gate_artifact(
+    payload: dict[str, object],
+    name: str,
+    *,
+    gate_path: Path,
+    expected_schema: str,
+    expected_model: str,
+    expected_dataset_manifest_sha256: str,
+    expected_reviewed_commit: str,
+    expected_scope_bindings: dict[str, dict[str, object]],
+) -> tuple[Path, str]:
+    value = payload.get(name)
+    if not isinstance(value, dict):
+        raise ValueError(f"generated production gate has no {name} artifact")
+    artifact_path = Path(_require_string(value, "path"))
+    if not artifact_path.is_absolute():
+        artifact_path = gate_path.parent / artifact_path
+    artifact_sha256 = _require_sha256(value, "sha256")
+    artifact, actual_artifact_sha256 = _read_json_object_with_sha256(artifact_path)
+    if actual_artifact_sha256 != artifact_sha256:
+        raise ValueError(f"generated production gate {name} hash mismatch")
+    if artifact.get("schema") != expected_schema:
+        raise ValueError(f"generated production gate {name} schema is incompatible")
+    if artifact.get("status") != "pass":
+        raise ValueError(f"generated production gate {name} has not passed")
+    if _normalized_model(_require_string(artifact, "model")) != expected_model:
+        raise ValueError(f"generated production gate {name} uses another model")
+    if artifact.get("dataset_manifest_sha256") != expected_dataset_manifest_sha256:
+        raise ValueError(f"generated production gate {name} uses another dataset")
+    reviewed_commit = _require_hex_digest(
+        artifact,
+        "reviewed_commit",
+        lengths=(40,),
+    )
+    if reviewed_commit != expected_reviewed_commit:
+        raise ValueError(f"generated production gate {name} reviews another commit")
+    artifact_bindings = _validated_scope_bindings(
+        artifact.get("scope_bindings")
+    )
+    if artifact_bindings != expected_scope_bindings:
+        raise ValueError(f"generated production gate {name} covers other evidence")
+    return artifact_path, artifact_sha256
+
+
+def _validated_scope_bindings(value: object) -> dict[str, dict[str, object]]:
+    if not isinstance(value, dict) or not value:
+        raise ValueError("generated production gate has no workflow scopes")
+    bindings: dict[str, dict[str, object]] = {}
+    for raw_scope, raw_binding in value.items():
+        if not isinstance(raw_scope, str) or raw_scope not in PRODUCTION_SCOPES:
+            raise ValueError(f"unknown generated production scope: {raw_scope}")
+        if not isinstance(raw_binding, dict):
+            raise ValueError(f"generated production scope {raw_scope} is not an object")
+        if set(raw_binding) != _SCOPE_BINDING_FIELDS:
+            raise ValueError(
+                f"generated production scope {raw_scope} has incomplete bindings"
+            )
+        binding: dict[str, object] = {}
+        for name in _SCOPE_BINDING_FIELDS - {"selected_epochs"}:
+            item = raw_binding.get(name)
+            binding[name] = (
+                None
+                if item is None
+                else _validate_sha256_value(item, name=f"{raw_scope}.{name}")
+            )
+        selected_epochs = raw_binding.get("selected_epochs")
+        if selected_epochs is not None and (
+            not isinstance(selected_epochs, int)
+            or isinstance(selected_epochs, bool)
+            or selected_epochs <= 0
+        ):
+            raise ValueError(f"{raw_scope}.selected_epochs must be positive")
+        binding["selected_epochs"] = selected_epochs
+        selection_values = tuple(
+            binding[name]
+            for name in (
+                "initializer_manifest_sha256",
+                "initializer_checkpoint_sha256",
+                "epoch_selection_sha256",
+                "selected_epochs",
+            )
+        )
+        if any(item is None for item in selection_values) and any(
+            item is not None for item in selection_values
+        ):
+            raise ValueError(
+                f"generated production scope {raw_scope} has partial selection evidence"
+            )
+        base_values = tuple(
+            binding[name]
+            for name in (
+                "base_initializer_manifest_sha256",
+                "base_checkpoint_sha256",
+            )
+        )
+        if any(item is None for item in base_values) and any(
+            item is not None for item in base_values
+        ):
+            raise ValueError(
+                f"generated production scope {raw_scope} has partial base evidence"
+            )
+        bindings[raw_scope] = binding
+    return bindings
+
+
+def _require_hex_digest(
+    payload: dict[str, object],
+    name: str,
+    *,
+    lengths: tuple[int, ...],
+) -> str:
+    return _validate_hex_digest_value(
+        payload.get(name),
+        name=name,
+        lengths=lengths,
+    )
+
+
+def _validate_hex_digest_value(
+    value: object,
+    *,
+    name: str,
+    lengths: tuple[int, ...],
+) -> str:
+    if not isinstance(value, str) or len(value) not in lengths or any(
+        character not in "0123456789abcdef" for character in value.lower()
+    ):
+        raise ValueError(f"{name} must be a hexadecimal digest")
+    return value.lower()
 
 
 def _validate_sha256_value(value: object, *, name: str) -> str:

@@ -133,6 +133,7 @@ def main() -> None:
         required=True,
     )
     parser.add_argument("--dataset", type=Path, default=default_public_candidate_path())
+    parser.add_argument("--dataset-manifest-sha256")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--label")
     parser.add_argument("--start", type=date.fromisoformat, default=date(2023, 1, 1))
@@ -185,6 +186,11 @@ def main() -> None:
     )
     claim_quantities = target_notionals.quantity_by_label
     manifest_sha256 = dataset_manifest_sha256(panel)
+    if (
+        arguments.dataset_manifest_sha256 is not None
+        and arguments.dataset_manifest_sha256 != manifest_sha256
+    ):
+        raise ValueError("public dataset manifest changed after matrix construction")
     checkpoint_directory = _checkpoint_directory(arguments)
     build = build_weekly_adapter(
         arguments,

@@ -1,5 +1,6 @@
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,6 +12,14 @@ from quantdata.sdlv.daily.front_spot.hedging.models.checkpointing import (
     file_sha256,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners import production_matrix
+from quantdata.sdlv.daily.front_spot.hedging.runners.generated_evidence import (
+    GPU_READINESS_SCHEMA,
+    PRODUCTION_GATE_SCHEMA,
+    QUANT_REVIEW_SCHEMA,
+    generated_scope_binding,
+    load_generated_initializer_evidence,
+    load_generated_selection_evidence,
+)
 from quantdata.sdlv.daily.front_spot.hedging.runners.production_matrix import (
     DailyProductionMatrixConfig,
     GeneratedProductionInputs,
@@ -80,6 +89,7 @@ def test_native_commands_pin_common_daily_controls() -> None:
         assert case.command[case.command.index("--device") + 1] == "cpu"
         assert case.command[case.command.index("--start") + 1] == "2023-01-01"
         assert case.command[case.command.index("--end") + 1] == "2025-12-31"
+        assert "--validate-dataset" in case.command
 
 
 @pytest.mark.parametrize(
@@ -182,6 +192,129 @@ def test_generated_rolling_cases_require_selected_artifacts(tmp_path: Path) -> N
         assert case.command[case.command.index("--objective") + 1] == "mean-variance"
         assert case.command[case.command.index("--risk-parameter") + 1] == "1"
         assert "--warm-start-checkpoint-sha256" in case.command
+        assert case.command[case.command.index("--dataset-manifest-sha256") + 1] == (
+            file_sha256(dataset / "manifest.json")
+        )
+
+
+def test_generated_production_gates_promote_only_authenticated_models(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset = tmp_path / "dataset"
+    dataset.mkdir()
+    (dataset / "manifest.json").write_text("{}\n", encoding="utf-8")
+    selected = _generated_inputs(tmp_path, dataset=dataset)
+    monkeypatch.setattr(
+        production_matrix,
+        "reviewable_repository_commit",
+        lambda: "a" * 40,
+    )
+    generated = replace(
+        selected,
+        **_generated_gates(tmp_path, dataset=dataset, generated=selected),
+    )
+
+    cases = {
+        case.case_id: case
+        for case in _matrix(dataset=dataset, generated=generated)
+    }
+
+    for case_id in (
+        "volgan-public-settings",
+        "volgan-rolling-trained",
+        "diffusion-ad-seq-vol-public-settings",
+        "diffusion-ad-seq-vol-rolling-trained",
+        "diffusion-ad-seq-vol-ft-public-settings",
+        "diffusion-ad-seq-vol-ft-rolling-trained",
+    ):
+        assert cases[case_id].readiness is ProductionReadiness.READY
+        assert cases[case_id].reviewed_commit == "a" * 40
+        assert cases[case_id].production_gate_sha256 is not None
+        assert len(cases[case_id].production_gate_sha256) == 64
+        assert cases[case_id].production_gate_path is not None
+
+
+def test_generated_production_gate_rejects_tampered_readiness_artifact(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset = tmp_path / "dataset"
+    dataset.mkdir()
+    (dataset / "manifest.json").write_text("{}\n", encoding="utf-8")
+    selected = _generated_inputs(tmp_path, dataset=dataset)
+    monkeypatch.setattr(
+        production_matrix,
+        "reviewable_repository_commit",
+        lambda: "a" * 40,
+    )
+    gates = _generated_gates(
+        tmp_path,
+        dataset=dataset,
+        generated=selected,
+    )
+    (tmp_path / "volgan-gpu-readiness.json").write_text(
+        '{"tampered": true}\n',
+        encoding="utf-8",
+    )
+    generated = replace(
+        selected,
+        **gates,
+    )
+
+    cases = {
+        case.case_id: case
+        for case in _matrix(dataset=dataset, generated=generated)
+    }
+
+    assert cases["volgan-public-settings"].readiness is ProductionReadiness.BLOCKED
+    assert "gpu_readiness hash mismatch" in cases[
+        "volgan-public-settings"
+    ].blocked_reason
+
+
+def test_generated_production_gate_binds_commit_and_selected_budget(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset = tmp_path / "dataset"
+    dataset.mkdir()
+    (dataset / "manifest.json").write_text("{}\n", encoding="utf-8")
+    selected = _generated_inputs(tmp_path, dataset=dataset)
+    gates = _generated_gates(tmp_path, dataset=dataset, generated=selected)
+    generated = replace(selected, **gates)
+
+    monkeypatch.setattr(
+        production_matrix,
+        "reviewable_repository_commit",
+        lambda: "b" * 40,
+    )
+    stale = {
+        case.case_id: case
+        for case in _matrix(dataset=dataset, generated=generated)
+    }
+    assert stale["volgan-public-settings"].readiness is ProductionReadiness.BLOCKED
+    assert "another commit" in stale["volgan-public-settings"].blocked_reason
+
+    monkeypatch.setattr(
+        production_matrix,
+        "reviewable_repository_commit",
+        lambda: "a" * 40,
+    )
+    _rewrite_gate_scope(
+        gates["volgan_production_gate"],
+        scope="daily-rolling",
+        selected_epochs=99,
+    )
+    mismatched = {
+        case.case_id: case
+        for case in _matrix(dataset=dataset, generated=generated)
+    }
+    assert mismatched["volgan-public-settings"].readiness is ProductionReadiness.READY
+    assert mismatched["volgan-rolling-trained"].readiness is ProductionReadiness.BLOCKED
+    assert "evidence differs" in mismatched[
+        "volgan-rolling-trained"
+    ].blocked_reason
 
 
 def test_production_matrix_cli_serializes_dates_and_generated_inputs(
@@ -418,6 +551,103 @@ def _generated_inputs(
     )
 
 
+def _generated_gates(
+    tmp_path: Path,
+    *,
+    dataset: Path,
+    generated: GeneratedProductionInputs,
+) -> dict[str, Path]:
+    dataset_sha256 = file_sha256(dataset / "manifest.json")
+    base = load_generated_initializer_evidence(
+        initializer_manifest=generated.diffusion_initializer_manifest,
+        expected_model="diffusion-ad-seq-vol",
+        expected_dataset_manifest_sha256=dataset_sha256,
+    )
+    evidence = {
+        "volgan": load_generated_selection_evidence(
+            initializer_manifest=generated.volgan_initializer_manifest,
+            epoch_selection=generated.volgan_epoch_selection,
+            expected_model="volgan",
+            expected_dataset_manifest_sha256=dataset_sha256,
+        ),
+        "diffusion-ad-seq-vol": load_generated_selection_evidence(
+            initializer_manifest=generated.diffusion_initializer_manifest,
+            epoch_selection=generated.diffusion_epoch_selection,
+            expected_model="diffusion-ad-seq-vol",
+            expected_dataset_manifest_sha256=dataset_sha256,
+        ),
+        "diffusion-ad-seq-vol-ft": load_generated_selection_evidence(
+            initializer_manifest=generated.diffusion_ft_initializer_manifest,
+            epoch_selection=generated.diffusion_ft_epoch_selection,
+            expected_model="diffusion-ad-seq-vol-ft",
+            expected_dataset_manifest_sha256=dataset_sha256,
+            base_initializer_manifest=generated.diffusion_initializer_manifest,
+        ),
+    }
+    values: dict[str, Path] = {}
+    for field, model, stem in (
+        ("volgan_production_gate", "volgan", "volgan"),
+        (
+            "diffusion_production_gate",
+            "diffusion-ad-seq-vol",
+            "diffusion",
+        ),
+        (
+            "diffusion_ft_production_gate",
+            "diffusion-ad-seq-vol-ft",
+            "diffusion-ft",
+        ),
+    ):
+        public_base = base if model.endswith("-ft") else None
+        bindings = {
+            "daily-public": generated_scope_binding(
+                selection=None,
+                base_initializer=public_base,
+            ),
+            "daily-rolling": generated_scope_binding(
+                selection=evidence[model],
+                base_initializer=public_base,
+            ),
+        }
+        common = {
+            "model": model,
+            "dataset_manifest_sha256": dataset_sha256,
+            "status": "pass",
+            "reviewed_commit": "a" * 40,
+            "scope_bindings": bindings,
+        }
+        review = tmp_path / f"{stem}-quant-review.json"
+        readiness = tmp_path / f"{stem}-gpu-readiness.json"
+        review.write_text(
+            json.dumps({"schema": QUANT_REVIEW_SCHEMA, **common}),
+            encoding="utf-8",
+        )
+        readiness.write_text(
+            json.dumps({"schema": GPU_READINESS_SCHEMA, **common}),
+            encoding="utf-8",
+        )
+        gate = tmp_path / f"{stem}-production-gate.json"
+        gate.write_text(
+            json.dumps(
+                {
+                    "schema": PRODUCTION_GATE_SCHEMA,
+                    **common,
+                    "quant_review": {
+                        "path": str(review),
+                        "sha256": file_sha256(review),
+                    },
+                    "gpu_readiness": {
+                        "path": str(readiness),
+                        "sha256": file_sha256(readiness),
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        values[field] = gate
+    return values
+
+
 def _generated_pair(
     tmp_path: Path,
     *,
@@ -503,3 +733,20 @@ def _generated_pair(
         encoding="utf-8",
     )
     return manifest, selection
+
+
+def _rewrite_gate_scope(
+    gate_path: Path,
+    *,
+    scope: str,
+    selected_epochs: int,
+) -> None:
+    gate = json.loads(gate_path.read_text(encoding="utf-8"))
+    gate["scope_bindings"][scope]["selected_epochs"] = selected_epochs
+    for name in ("quant_review", "gpu_readiness"):
+        artifact_path = Path(gate[name]["path"])
+        artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+        artifact["scope_bindings"][scope]["selected_epochs"] = selected_epochs
+        artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+        gate[name]["sha256"] = file_sha256(artifact_path)
+    gate_path.write_text(json.dumps(gate), encoding="utf-8")

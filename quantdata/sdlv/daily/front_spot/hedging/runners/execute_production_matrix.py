@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import selectors
@@ -22,6 +23,9 @@ LEGACY_DAILY_QUEUE_SCHEMA = "hedging-daily-production-queue-v1"
 DEFAULT_DAILY_RESULT_COUNT = 12_220
 DEFAULT_WEEKLY_RESULT_COUNT = 6_864
 GPUCTL_PATH = Path("/home/hans/.local/bin/gpuctl")
+GENERATED_MODELS = frozenset(
+    {"volgan", "diffusion-ad-seq-vol", "diffusion-ad-seq-vol-ft"}
+)
 
 
 def execute_production_queue(
@@ -34,9 +38,12 @@ def execute_production_queue(
     resource: str,
     expected_result_count: int | None = None,
     heartbeat_seconds: float = 240.0,
+    adopt_unpinned_state: bool = False,
 ) -> dict[str, object]:
     """Run selected matrix cases sequentially and persist atomic queue evidence."""
-    matrix = _read_json_object(matrix_path)
+    matrix_bytes = matrix_path.read_bytes()
+    matrix_sha256 = hashlib.sha256(matrix_bytes).hexdigest()
+    matrix = _read_json_object_bytes(matrix_bytes, path=matrix_path)
     matrix_schema = matrix.get("schema")
     if matrix_schema not in {DAILY_MATRIX_SCHEMA, WEEKLY_MATRIX_SCHEMA}:
         raise ValueError(f"unexpected production-matrix schema: {matrix_path}")
@@ -58,8 +65,10 @@ def execute_production_queue(
     state = _load_or_initialize_state(
         state_path=state_path,
         matrix_path=matrix_path,
+        matrix_sha256=matrix_sha256,
         case_ids=tuple(_require_string(case, "case_id") for case in selected),
         resource=resource,
+        adopt_unpinned_state=adopt_unpinned_state,
     )
     completed = {
         _require_string(record, "case_id")
@@ -190,6 +199,23 @@ def _production_command(
     interpreter: Path,
     expected_result_count: int,
 ) -> list[str]:
+    model = _require_string(case, "model")
+    if model in GENERATED_MODELS:
+        reviewed_commit = _require_string(case, "reviewed_commit")
+        gate_path = Path(_require_string(case, "production_gate_path"))
+        gate_sha256 = _require_sha256(case, "production_gate_sha256")
+        if hashlib.sha256(gate_path.read_bytes()).hexdigest() != gate_sha256:
+            raise ValueError(
+                f"production case {case.get('case_id')} gate bytes changed"
+            )
+        from quantdata.sdlv.daily.front_spot.hedging.runners.generated_evidence import (
+            reviewable_repository_commit,
+        )
+
+        if reviewable_repository_commit() != reviewed_commit:
+            raise ValueError(
+                f"production case {case.get('case_id')} reviews another commit"
+            )
     command_value = case.get("command")
     if not isinstance(command_value, list) or not command_value:
         raise ValueError("ready production case command must be a non-empty list")
@@ -375,8 +401,10 @@ def _load_or_initialize_state(
     *,
     state_path: Path,
     matrix_path: Path,
+    matrix_sha256: str,
     case_ids: tuple[str, ...],
     resource: str,
+    adopt_unpinned_state: bool,
 ) -> dict[str, object]:
     if state_path.exists():
         state = _read_json_object(state_path)
@@ -387,10 +415,24 @@ def _load_or_initialize_state(
             or state.get("resource") != resource
         ):
             raise ValueError("existing production queue state does not match request")
+        pinned_sha256 = state.get("matrix_sha256")
+        if pinned_sha256 is None:
+            if not adopt_unpinned_state:
+                raise ValueError(
+                    "legacy production queue state is not matrix-pinned; "
+                    "use explicit adoption after verifying its matrix"
+                )
+            state["legacy_state_adopted_at"] = _utc_now()
+            state["matrix_sha256"] = matrix_sha256
+            _write_json_atomic(state_path, state)
+        elif pinned_sha256 != matrix_sha256:
+            raise ValueError("production matrix bytes changed after queue creation")
+        state["matrix_sha256"] = matrix_sha256
         return state
     return {
         "schema": QUEUE_SCHEMA,
         "matrix_path": str(matrix_path.resolve()),
+        "matrix_sha256": matrix_sha256,
         "resource": resource,
         "case_ids": list(case_ids),
         "status": "pending",
@@ -446,7 +488,11 @@ def _command_option_path(command: list[str], option: str) -> Path:
 
 
 def _read_json_object(path: Path) -> dict[str, object]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    return _read_json_object_bytes(path.read_bytes(), path=path)
+
+
+def _read_json_object_bytes(value: bytes, *, path: Path) -> dict[str, object]:
+    payload = json.loads(value)
     if not isinstance(payload, dict):
         raise ValueError(f"JSON artifact must be an object: {path}")
     return payload
@@ -476,6 +522,15 @@ def _require_string(payload: dict[str, object], name: str) -> str:
     return value
 
 
+def _require_sha256(payload: dict[str, object], name: str) -> str:
+    value = _require_string(payload, name)
+    if len(value) != 64 or any(
+        character not in "0123456789abcdef" for character in value.lower()
+    ):
+        raise ValueError(f"{name} must be a SHA-256")
+    return value.lower()
+
+
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -494,6 +549,7 @@ def main() -> None:
         type=int,
     )
     parser.add_argument("--heartbeat-seconds", type=float, default=240.0)
+    parser.add_argument("--adopt-unpinned-state", action="store_true")
     arguments = parser.parse_args()
     execute_production_queue(
         matrix_path=arguments.matrix,
@@ -504,6 +560,7 @@ def main() -> None:
         resource=arguments.resource,
         expected_result_count=arguments.expected_result_count,
         heartbeat_seconds=arguments.heartbeat_seconds,
+        adopt_unpinned_state=arguments.adopt_unpinned_state,
     )
 
 

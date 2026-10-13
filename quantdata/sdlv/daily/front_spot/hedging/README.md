@@ -287,6 +287,24 @@ base bytes before staging a command; the runner rechecks the pinned hashes at
 launch. Missing dependencies remain explicit blocked cases rather than falling
 back to implicit defaults.
 
+Generated cases remain `waiting-gate` until the corresponding model supplies
+`--volgan-production-gate`, `--diffusion-production-gate`, or
+`--diffusion-ft-production-gate`. A gate is a
+`hedging-generated-production-gate-v2` JSON object containing the model and
+dataset-manifest identities, `status: "pass"`, the exact clean reviewed Git
+commit, and workflow-specific evidence bindings. The allowed scopes distinguish
+daily, frozen-weekly, and restarted-weekly runs and, within each, published
+settings from rolling trained settings. Each scope binds the exact initializer
+manifest, initializer checkpoint, epoch-selection artifact, selected epoch
+budget, and fine-tuning base where applicable. The referenced quant-review and
+GPU-readiness artifacts are structured JSON records that must independently
+repeat the same model, dataset, commit, scopes, bindings, and passing status;
+their bytes are pinned by SHA-256. An absent gate leaves commands staged. An
+invalid, stale, out-of-scope, or tampered gate blocks only the affected cases.
+Ready generated cases carry the reviewed commit in the matrix, and the queue
+rechecks the exact gate bytes, clean tracked source, and exact `HEAD`
+immediately before launch.
+
 Execute an explicit ready subset sequentially with atomic queue state and
 per-case logs:
 
@@ -301,6 +319,13 @@ python -m quantdata.sdlv.daily.front_spot.hedging.runners.execute_production_mat
 
 The executor replaces only the matrix's Python placeholder, forces CPU-only
 child environments for CPU queues, checks resource headroom before every new
-case, resumes completed queue records, emits four-minute heartbeats, and
+case, pins the exact matrix SHA-256 in queue state, resumes completed queue
+records, emits four-minute heartbeats, and
 accepts completion only after validating the full 12,220-record results
-artifact.
+artifact. A matrix whose bytes change after the queue is armed is rejected.
+Legacy queue state without a matrix digest is rejected unless the operator
+explicitly supplies `--adopt-unpinned-state` after checking the matrix.
+Production-matrix commands also pin the public dataset manifest SHA-256, which
+the daily and weekly runners recheck before fitting or evaluation. Daily
+production commands additionally run the full released-dataset checksum
+validation so unchanged manifest bytes cannot mask changed payload files.

@@ -27,9 +27,13 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.fit_rolling_gromm2_range im
     load_completed_rolling_gromm2_range,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.generated_evidence import (
+    GeneratedProductionGateEvidence,
     GeneratedSelectionEvidence,
     load_generated_initializer_evidence,
+    load_generated_production_gate,
     load_generated_selection_evidence,
+    require_generated_production_scope,
+    reviewable_repository_commit,
 )
 
 
@@ -48,7 +52,7 @@ class ProductionReadiness(StrEnum):
     BLOCKED = "blocked"
 
 
-@version("1.1", dependencies=[DailyResultsConfig])
+@version("1.2", dependencies=[DailyResultsConfig])
 @dataclass(frozen=True, kw_only=True)
 class DailyProductionMatrixConfig:
     """Precommitted objective grids and shared daily run controls."""
@@ -114,10 +118,13 @@ class GrommProductionInputs:
 class GeneratedProductionInputs:
     """Authenticated initializer manifests and 2022 epoch selections."""
 
+    volgan_production_gate: Path | None = None
     volgan_initializer_manifest: Path | None = None
     volgan_epoch_selection: Path | None = None
+    diffusion_production_gate: Path | None = None
     diffusion_initializer_manifest: Path | None = None
     diffusion_epoch_selection: Path | None = None
+    diffusion_ft_production_gate: Path | None = None
     diffusion_ft_initializer_manifest: Path | None = None
     diffusion_ft_epoch_selection: Path | None = None
 
@@ -136,6 +143,9 @@ class DailyProductionCase:
     readiness: ProductionReadiness
     blocked_reason: str | None
     command: tuple[str, ...] | None
+    reviewed_commit: str | None = None
+    production_gate_sha256: str | None = None
+    production_gate_path: str | None = None
 
     def __post_init__(self) -> None:
         verify_inp(bool(self.case_id.strip()), lambda: "case_id must be non-empty")
@@ -146,6 +156,32 @@ class DailyProductionCase:
             self.risk_parameter is None
             or (math.isfinite(self.risk_parameter) and self.risk_parameter > 0.0),
             lambda: "risk_parameter must be finite-positive when supplied",
+        )
+        verify_inp(
+            self.reviewed_commit is None
+            or (
+                len(self.reviewed_commit) == 40
+                and all(
+                    character in "0123456789abcdef"
+                    for character in self.reviewed_commit.lower()
+                )
+            ),
+            lambda: "reviewed_commit must be a Git SHA-1 when supplied",
+        )
+        verify_inp(
+            self.production_gate_sha256 is None
+            or (
+                len(self.production_gate_sha256) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in self.production_gate_sha256.lower()
+                )
+            ),
+            lambda: "production_gate_sha256 must be a SHA-256 when supplied",
+        )
+        verify_inp(
+            self.production_gate_path is None or bool(self.production_gate_path),
+            lambda: "production_gate_path must be non-empty when supplied",
         )
         if self.readiness is ProductionReadiness.READY:
             verify_inp(self.command is not None, lambda: "ready case requires a command")
@@ -424,6 +460,21 @@ def _generated_cases(
     generated: GeneratedProductionInputs,
 ) -> tuple[DailyProductionCase, ...]:
     dataset_sha256 = _dataset_manifest_sha256(dataset)
+    volgan_gate, volgan_gate_reason = _generated_gate(
+        generated.volgan_production_gate,
+        expected_model="volgan",
+        dataset_sha256=dataset_sha256,
+    )
+    diffusion_gate, diffusion_gate_reason = _generated_gate(
+        generated.diffusion_production_gate,
+        expected_model="diffusion-ad-seq-vol",
+        dataset_sha256=dataset_sha256,
+    )
+    diffusion_ft_gate, diffusion_ft_gate_reason = _generated_gate(
+        generated.diffusion_ft_production_gate,
+        expected_model="diffusion-ad-seq-vol-ft",
+        dataset_sha256=dataset_sha256,
+    )
     volgan_evidence, volgan_reason = _generated_selection(
         generated.volgan_initializer_manifest,
         generated.volgan_epoch_selection,
@@ -450,7 +501,11 @@ def _generated_cases(
     )
     cases: list[DailyProductionCase] = []
     cases.append(
-        _waiting_gate_case(
+        _review_gated_case(
+            gate=volgan_gate,
+            gate_path=generated.volgan_production_gate,
+            gate_reason=volgan_gate_reason,
+            scope="daily-public",
             case_id="volgan-public-settings",
             model="volgan",
             measure="historical-P",
@@ -458,7 +513,6 @@ def _generated_cases(
             objective="mean-variance",
             risk_parameter=1.0,
             resource=ProductionResource.GPU,
-            reason="awaiting generated-model review and GPU-readiness gate",
             command=_daily_command(
                 model="volgan",
                 case_id="volgan-public-settings",
@@ -479,6 +533,9 @@ def _generated_cases(
             variant="fixed-2022-source-selected-update",
             evidence=volgan_evidence,
             evidence_reason=volgan_reason,
+            gate=volgan_gate,
+            gate_path=generated.volgan_production_gate,
+            gate_reason=volgan_gate_reason,
             dataset=dataset,
             output_root=output_root,
             checkpoint_root=checkpoint_root,
@@ -486,7 +543,11 @@ def _generated_cases(
         )
     )
     cases.append(
-        _waiting_gate_case(
+        _review_gated_case(
+            gate=diffusion_gate,
+            gate_path=generated.diffusion_production_gate,
+            gate_reason=diffusion_gate_reason,
+            scope="daily-public",
             case_id="diffusion-ad-seq-vol-public-settings",
             model="diffusion-ad-seq-vol",
             measure="historical-P",
@@ -494,7 +555,6 @@ def _generated_cases(
             objective="mean-variance",
             risk_parameter=1.0,
             resource=ProductionResource.GPU,
-            reason="awaiting generated-model review and GPU-readiness gate",
             command=_daily_command(
                 model="diffusion-ad-seq-vol",
                 case_id="diffusion-ad-seq-vol-public-settings",
@@ -515,6 +575,9 @@ def _generated_cases(
             variant="fixed-2022-source-selected-update",
             evidence=diffusion_evidence,
             evidence_reason=diffusion_reason,
+            gate=diffusion_gate,
+            gate_path=generated.diffusion_production_gate,
+            gate_reason=diffusion_gate_reason,
             dataset=dataset,
             output_root=output_root,
             checkpoint_root=checkpoint_root,
@@ -540,7 +603,12 @@ def _generated_cases(
         )
     else:
         cases.append(
-            _waiting_gate_case(
+            _review_gated_case(
+                gate=diffusion_ft_gate,
+                gate_path=generated.diffusion_ft_production_gate,
+                gate_reason=diffusion_ft_gate_reason,
+                scope="daily-public",
+                base_evidence=diffusion_base,
                 case_id=ft_public_id,
                 model="diffusion-ad-seq-vol-ft",
                 measure="historical-P",
@@ -548,7 +616,6 @@ def _generated_cases(
                 objective="mean-variance",
                 risk_parameter=1.0,
                 resource=ProductionResource.GPU,
-                reason="awaiting generated-model review and GPU-readiness gate",
                 command=_daily_command(
                     model="diffusion-ad-seq-vol-ft",
                     case_id=ft_public_id,
@@ -573,6 +640,9 @@ def _generated_cases(
             variant="fixed-2022-source-selected-update",
             evidence=diffusion_ft_evidence,
             evidence_reason=diffusion_ft_reason,
+            gate=diffusion_ft_gate,
+            gate_path=generated.diffusion_ft_production_gate,
+            gate_reason=diffusion_ft_gate_reason,
             dataset=dataset,
             output_root=output_root,
             checkpoint_root=checkpoint_root,
@@ -589,6 +659,9 @@ def _rolling_generated_case(
     variant: str,
     evidence: GeneratedSelectionEvidence | None,
     evidence_reason: str | None,
+    gate: GeneratedProductionGateEvidence | None,
+    gate_path: Path | None,
+    gate_reason: str | None,
     dataset: Path,
     output_root: Path,
     checkpoint_root: Path,
@@ -605,7 +678,12 @@ def _rolling_generated_case(
             resource=ProductionResource.GPU,
             reason=evidence_reason or "missing authenticated generated evidence",
         )
-    return _waiting_gate_case(
+    return _review_gated_case(
+        gate=gate,
+        gate_path=gate_path,
+        gate_reason=gate_reason,
+        scope="daily-rolling",
+        evidence=evidence,
         case_id=case_id,
         model=model,
         measure="historical-P",
@@ -613,7 +691,6 @@ def _rolling_generated_case(
         objective="mean-variance",
         risk_parameter=1.0,
         resource=ProductionResource.GPU,
-        reason="awaiting generated-model review and GPU-readiness gate",
         command=_daily_command(
             model=model,
             case_id=case_id,
@@ -640,6 +717,31 @@ def _dataset_manifest_sha256(dataset: Path) -> str | None:
         return file_sha256(Path(dataset) / "manifest.json")
     except (FileNotFoundError, OSError):
         return None
+
+
+def _generated_gate(
+    gate_path: Path | None,
+    *,
+    expected_model: str,
+    dataset_sha256: str | None,
+) -> tuple[GeneratedProductionGateEvidence | None, str | None]:
+    if gate_path is None:
+        return None, "awaiting generated-model review and GPU-readiness gate"
+    if dataset_sha256 is None:
+        return None, "invalid generated production gate: missing public dataset manifest"
+    try:
+        reviewed_commit = reviewable_repository_commit()
+        return (
+            load_generated_production_gate(
+                gate_path=gate_path,
+                expected_model=expected_model,
+                expected_dataset_manifest_sha256=dataset_sha256,
+                expected_reviewed_commit=reviewed_commit,
+            ),
+            None,
+        )
+    except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError) as error:
+        return None, f"invalid generated production gate: {error}"
 
 
 def _generated_selection(
@@ -724,6 +826,7 @@ def _daily_command(
         model,
         "--dataset",
         str(dataset),
+        "--validate-dataset",
         "--output",
         str(output_root / case_id),
         "--checkpoint-directory",
@@ -741,6 +844,9 @@ def _daily_command(
         "--end",
         config.evaluation_end.isoformat(),
     ]
+    dataset_sha256 = _dataset_manifest_sha256(dataset)
+    if dataset_sha256 is not None:
+        command.extend(("--dataset-manifest-sha256", dataset_sha256))
     if objective is not None:
         command.extend(("--objective", objective))
     if risk_parameter is not None:
@@ -785,6 +891,16 @@ def _risk_case_id(prefix: str, objective: str, parameter: float) -> str:
     return f"{prefix}-{objective}-{parameter:g}".replace(".", "p")
 
 
+def _artifact_identity(path: Path | None) -> dict[str, str | None] | None:
+    if path is None:
+        return None
+    try:
+        sha256 = file_sha256(path)
+    except (FileNotFoundError, OSError):
+        sha256 = None
+    return {"path": str(path), "sha256": sha256}
+
+
 def _ready_case(**kwargs: object) -> DailyProductionCase:
     return DailyProductionCase(
         readiness=ProductionReadiness.READY,
@@ -800,6 +916,45 @@ def _blocked_case(*, reason: str, **kwargs: object) -> DailyProductionCase:
         command=None,
         **kwargs,
     )
+
+
+def _review_gated_case(
+    *,
+    gate: GeneratedProductionGateEvidence | None,
+    gate_path: Path | None,
+    gate_reason: str | None,
+    scope: str,
+    evidence: GeneratedSelectionEvidence | None = None,
+    base_evidence: GeneratedSelectionEvidence | None = None,
+    **kwargs: object,
+) -> DailyProductionCase:
+    if gate is not None:
+        try:
+            require_generated_production_scope(
+                gate,
+                scope=scope,
+                selection=evidence,
+                base_initializer=base_evidence,
+            )
+        except ValueError as error:
+            blocked = dict(kwargs)
+            blocked.pop("command", None)
+            return _blocked_case(
+                reason=f"invalid generated production gate: {error}",
+                **blocked,
+            )
+        return _ready_case(
+            reviewed_commit=gate.reviewed_commit,
+            production_gate_sha256=gate.gate_sha256,
+            production_gate_path=str(Path(gate_path).resolve()),
+            **kwargs,
+        )
+    reason = gate_reason or "awaiting generated-model production gate"
+    if gate_path is not None:
+        blocked = dict(kwargs)
+        blocked.pop("command", None)
+        return _blocked_case(reason=reason, **blocked)
+    return _waiting_gate_case(reason=reason, **kwargs)
 
 
 def _waiting_gate_case(*, reason: str, **kwargs: object) -> DailyProductionCase:
@@ -820,10 +975,13 @@ def main() -> None:
     parser.add_argument("--gromm-market-artifact-root", type=Path)
     parser.add_argument("--gromm-architecture-selection", type=Path)
     parser.add_argument("--gromm-artifact-range-summary", type=Path)
+    parser.add_argument("--volgan-production-gate", type=Path)
     parser.add_argument("--volgan-initializer-manifest", type=Path)
     parser.add_argument("--volgan-epoch-selection", type=Path)
+    parser.add_argument("--diffusion-production-gate", type=Path)
     parser.add_argument("--diffusion-initializer-manifest", type=Path)
     parser.add_argument("--diffusion-epoch-selection", type=Path)
+    parser.add_argument("--diffusion-ft-production-gate", type=Path)
     parser.add_argument("--diffusion-ft-initializer-manifest", type=Path)
     parser.add_argument("--diffusion-ft-epoch-selection", type=Path)
     arguments = parser.parse_args()
@@ -839,12 +997,17 @@ def main() -> None:
             artifact_range_summary=arguments.gromm_artifact_range_summary,
         ),
         generated=GeneratedProductionInputs(
+            volgan_production_gate=arguments.volgan_production_gate,
             volgan_initializer_manifest=arguments.volgan_initializer_manifest,
             volgan_epoch_selection=arguments.volgan_epoch_selection,
+            diffusion_production_gate=arguments.diffusion_production_gate,
             diffusion_initializer_manifest=(
                 arguments.diffusion_initializer_manifest
             ),
             diffusion_epoch_selection=arguments.diffusion_epoch_selection,
+            diffusion_ft_production_gate=(
+                arguments.diffusion_ft_production_gate
+            ),
             diffusion_ft_initializer_manifest=(
                 arguments.diffusion_ft_initializer_manifest
             ),
@@ -857,6 +1020,15 @@ def main() -> None:
         "schema": "hedging-daily-production-matrix-v1",
         "code_version": str(type(config).version),
         "config": config.to_dict(),
+        "generated_production_gates": {
+            "volgan": _artifact_identity(arguments.volgan_production_gate),
+            "diffusion-ad-seq-vol": _artifact_identity(
+                arguments.diffusion_production_gate
+            ),
+            "diffusion-ad-seq-vol-ft": _artifact_identity(
+                arguments.diffusion_ft_production_gate
+            ),
+        },
         "case_count": len(cases),
         "ready_count": sum(
             case.readiness is ProductionReadiness.READY for case in cases
