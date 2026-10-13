@@ -7,6 +7,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+from filelock import FileLock
 
 from quantdata.hedging.protocols import HedgeSchedule
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly import weekly_targets
@@ -308,6 +309,25 @@ def test_execute_production_queue_rejects_unready_case(tmp_path: Path) -> None:
             resource="gpu",
             expected_result_count=2,
         )
+
+
+def test_execute_production_queue_rejects_concurrent_state_owner(
+    tmp_path: Path,
+) -> None:
+    state_path = tmp_path / "queue.json"
+    lock = FileLock(str(state_path) + ".lock")
+
+    with lock:
+        with pytest.raises(RuntimeError, match="queue state is already owned"):
+            execute_production_matrix.execute_production_queue(
+                matrix_path=tmp_path / "unused-matrix.json",
+                state_path=state_path,
+                interpreter=Path(sys.executable),
+                case_ids=("unused",),
+                case_prefix=None,
+                resource="cpu",
+                expected_result_count=2,
+            )
 
 
 def test_execute_production_queue_can_retain_failure_and_continue(

@@ -14,6 +14,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TextIO
 
+from filelock import FileLock, Timeout
+
 DAILY_MATRIX_SCHEMA = "hedging-daily-production-matrix-v1"
 WEEKLY_MATRIX_SCHEMA = "hedging-weekly-production-matrix-v1"
 DAILY_RESULTS_SCHEMA = "hedging-daily-results-v2"
@@ -42,7 +44,42 @@ def execute_production_queue(
     adopt_unpinned_state: bool = False,
     continue_after_failure: bool = False,
 ) -> dict[str, object]:
-    """Run selected matrix cases sequentially and persist atomic queue evidence."""
+    """Run selected matrix cases under one nonblocking queue-state lock."""
+    lock = FileLock(str(state_path) + ".lock")
+    try:
+        with lock.acquire(timeout=0.0):
+            return _execute_production_queue_locked(
+                matrix_path=matrix_path,
+                state_path=state_path,
+                interpreter=interpreter,
+                case_ids=case_ids,
+                case_prefix=case_prefix,
+                resource=resource,
+                expected_result_count=expected_result_count,
+                heartbeat_seconds=heartbeat_seconds,
+                adopt_unpinned_state=adopt_unpinned_state,
+                continue_after_failure=continue_after_failure,
+            )
+    except Timeout as error:
+        raise RuntimeError(
+            f"production queue state is already owned: {state_path}"
+        ) from error
+
+
+def _execute_production_queue_locked(
+    *,
+    matrix_path: Path,
+    state_path: Path,
+    interpreter: Path,
+    case_ids: tuple[str, ...],
+    case_prefix: str | None,
+    resource: str,
+    expected_result_count: int | None = None,
+    heartbeat_seconds: float = 240.0,
+    adopt_unpinned_state: bool = False,
+    continue_after_failure: bool = False,
+) -> dict[str, object]:
+    """Run selected cases sequentially while the caller owns the state lock."""
     matrix_bytes = matrix_path.read_bytes()
     matrix_sha256 = hashlib.sha256(matrix_bytes).hexdigest()
     matrix = _read_json_object_bytes(matrix_bytes, path=matrix_path)
