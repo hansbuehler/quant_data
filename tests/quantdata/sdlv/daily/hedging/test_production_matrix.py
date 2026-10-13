@@ -300,6 +300,16 @@ def test_generated_production_gate_binds_commit_and_selected_budget(
     assert stale["volgan-public-settings"].readiness is ProductionReadiness.BLOCKED
     assert "another commit" in stale["volgan-public-settings"].blocked_reason
 
+    pinned = {
+        case.case_id: case
+        for case in _matrix(
+            dataset=dataset,
+            generated=replace(generated, reviewed_commit="a" * 40),
+        )
+    }
+    assert pinned["volgan-public-settings"].readiness is ProductionReadiness.READY
+    assert pinned["volgan-public-settings"].reviewed_commit == "a" * 40
+
     monkeypatch.setattr(
         production_matrix,
         "reviewable_repository_commit",

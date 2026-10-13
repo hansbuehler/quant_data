@@ -83,11 +83,13 @@ training dependencies.
 - The first eligible rolling GROMM2 artifact uses exactly 252 released
   one-session pairs ending on 2023-01-17. Its 200-strike fit places 84.90% of
   observations inside spread and its 16 factors explain 95.15% of innovation
-  variance. The compatible-P fit fails the unchanged projection and holdout
-  gates, so the artifact is Q-only. Bounded float32 density normalization now
-  permits authenticated Q replay while preserving strict rejection of malformed
-  density mass; a real four-path, 163-instrument replay passed and P generation
-  remains disabled. The rolling range runner now authenticates every reused
+  variance. A full compatible-P candidate must pass holdout-improvement,
+  Newey--West significance, and daily risk-price-norm gates. Projection energy
+  is descriptive, not an admissibility threshold. A rejected candidate falls
+  back to the finite front-only physical null, with all 15 DLV-factor premia set
+  to zero, and the artifact records which model was selected. Bounded float32
+  density normalization permits authenticated replay while preserving strict
+  rejection of malformed density mass. The rolling range runner authenticates every reused
   artifact, writes atomic per-origin range evidence, prevents concurrent range
   writers, and emits four-minute heartbeats. A fit below the fixed 80% spread
   gate is continued deterministically from its authenticated checkpoint to

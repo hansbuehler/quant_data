@@ -266,6 +266,7 @@ def _gromm_cases(
             dataset_sha256 = file_sha256(Path(dataset) / "manifest.json")
             range_summary = load_completed_rolling_gromm2_range(
                 inputs.artifact_range_summary,
+                dataset=dataset,
                 dataset_manifest_sha256=dataset_sha256,
                 artifact_root=inputs.market_artifact_root,
             )
@@ -403,16 +404,19 @@ def _generated_cases(
         generated.volgan_production_gate,
         expected_model="volgan",
         dataset_sha256=dataset_sha256,
+        expected_reviewed_commit=generated.reviewed_commit,
     )
     diffusion_gate, diffusion_gate_reason = _generated_gate(
         generated.diffusion_production_gate,
         expected_model="diffusion-ad-seq-vol",
         dataset_sha256=dataset_sha256,
+        expected_reviewed_commit=generated.reviewed_commit,
     )
     diffusion_ft_gate, diffusion_ft_gate_reason = _generated_gate(
         generated.diffusion_ft_production_gate,
         expected_model="diffusion-ad-seq-vol-ft",
         dataset_sha256=dataset_sha256,
+        expected_reviewed_commit=generated.reviewed_commit,
     )
     volgan_evidence, volgan_reason = _generated_selection(
         generated.volgan_initializer_manifest,
@@ -686,13 +690,18 @@ def _generated_gate(
     *,
     expected_model: str,
     dataset_sha256: str | None,
+    expected_reviewed_commit: str | None,
 ) -> tuple[GeneratedProductionGateEvidence | None, str | None]:
     if gate_path is None:
         return None, "awaiting generated-model review and GPU-readiness gate"
     if dataset_sha256 is None:
         return None, "invalid generated production gate: missing public dataset manifest"
     try:
-        reviewed_commit = reviewable_repository_commit()
+        reviewed_commit = (
+            reviewable_repository_commit()
+            if expected_reviewed_commit is None
+            else expected_reviewed_commit
+        )
         return (
             load_generated_production_gate(
                 gate_path=gate_path,
@@ -959,6 +968,7 @@ def main() -> None:
     parser.add_argument("--gromm-market-artifact-root", type=Path)
     parser.add_argument("--gromm-architecture-selection", type=Path)
     parser.add_argument("--gromm-artifact-range-summary", type=Path)
+    parser.add_argument("--generated-reviewed-commit")
     parser.add_argument("--volgan-production-gate", type=Path)
     parser.add_argument("--volgan-initializer-manifest", type=Path)
     parser.add_argument("--volgan-selection-source-manifest", type=Path)
@@ -985,6 +995,7 @@ def main() -> None:
             artifact_range_summary=arguments.gromm_artifact_range_summary,
         ),
         generated=GeneratedProductionInputs(
+            reviewed_commit=arguments.generated_reviewed_commit,
             volgan_production_gate=arguments.volgan_production_gate,
             volgan_initializer_manifest=arguments.volgan_initializer_manifest,
             volgan_selection_source_manifest=(
@@ -1017,6 +1028,7 @@ def main() -> None:
         "schema": WEEKLY_MATRIX_SCHEMA,
         "code_version": str(type(config).version),
         "config": config.to_dict(),
+        "generated_reviewed_commit": arguments.generated_reviewed_commit,
         "weekly_input_preflight": (
             None
             if arguments.weekly_input_preflight is None

@@ -9,8 +9,13 @@ The hedging wrapper never uses the existing full-panel GROMM2 artifacts for a
 historical origin. Each production artifact contains exactly 252 transitions,
 ends on its declared as-of date, records file hashes and the public-manifest
 identity, and is rejected if any state date lies in the future or its compatible
-physical drift explains less than 50% of the density-weighted target-drift
-energy or has a fitted daily risk-price norm above 3.
+physical specification is non-finite or has a fitted daily risk-price norm above
+3. The full DLV-premium candidate must also improve linked holdout loss by at
+least 0.5% with a Newey--West gain statistic of at least 1.96. Projection energy
+is reported descriptively. When the full candidate fails, the explicit
+front-only null retains the full-window front risk price and sets all 15 DLV
+risk prices to zero; reports identify this fallback rather than presenting it as
+an accepted full DLV-premium fit.
 
 - **Inputs:** only the distributable public candidate's dated DLV states,
   SANOS reference marks, forward/discount curves, spreads, and normalized spot

@@ -225,8 +225,14 @@ def test_loader_normalizes_float32_artifact_before_q_replay(
         percent_inside_spread=84.0,
         explained_variance_ratio=0.95,
         physical_projection_fraction=0.0,
+        candidate_physical_projection_fraction=0.0,
+        baseline_physical_projection_fraction=0.0,
         maximum_daily_risk_price_norm=0.0,
-        physical_accepted=False,
+        candidate_daily_risk_price_norm=0.0,
+        candidate_physical_accepted=False,
+        physical_fallback_used=True,
+        physical_selected_model="front-only-null",
+        physical_accepted=True,
         dataset_manifest_sha256="a" * 64,
     )
 
@@ -312,6 +318,9 @@ def test_gromm2_daily_scenario_smoke_uses_public_book_geometry() -> None:
         percent_inside_spread=83.0,
         explained_variance_ratio=0.9,
         physical_projection_fraction=0.6,
+        candidate_physical_projection_fraction=0.6,
+        physical_fallback_used=False,
+        physical_selected_model="candidate",
         physical_accepted=True,
     )
 

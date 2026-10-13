@@ -224,6 +224,25 @@ def test_weekly_generated_gates_promote_authenticated_models(
     assert all(len(case.production_gate_sha256 or "") == 64 for case in cases)
     assert all(case.production_gate_path is not None for case in cases)
 
+    monkeypatch.setattr(
+        weekly_production_matrix,
+        "reviewable_repository_commit",
+        lambda: "b" * 40,
+    )
+    pinned = build_weekly_production_matrix(
+        dataset=dataset,
+        output_root=tmp_path / "pinned-output",
+        checkpoint_root=tmp_path / "pinned-checkpoints",
+        weekly_input_preflight=preflight,
+        generated=replace(generated, reviewed_commit="a" * 40),
+    )
+    generated_cases = tuple(
+        case
+        for case in pinned
+        if case.model in {"volgan", "diffusion-ad-seq-vol", "diffusion-ad-seq-vol-ft"}
+    )
+    assert all(case.readiness is ProductionReadiness.READY for case in generated_cases)
+
 
 @pytest.mark.parametrize(
     ("physical_accepted_count", "expected_p_readiness"),

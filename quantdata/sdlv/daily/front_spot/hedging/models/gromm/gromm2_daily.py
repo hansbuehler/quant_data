@@ -63,6 +63,9 @@ class Gromm2MarketState:
     percent_inside_spread: float
     explained_variance_ratio: float
     physical_projection_fraction: float
+    candidate_physical_projection_fraction: float
+    physical_fallback_used: bool
+    physical_selected_model: str
     physical_accepted: bool
 
     def __post_init__(self) -> None:
@@ -78,7 +81,14 @@ class Gromm2MarketState:
             != (expiry_count - 1, support_count - 2, factor_count)
             or self.previous_factor_score.shape != (factor_count,)
             or self.physical_market_price_of_risk.shape != (factor_count,)
+            or not isinstance(self.physical_fallback_used, bool)
+            or self.physical_selected_model
+            not in {"candidate", "front-only-null", "unavailable"}
             or not isinstance(self.physical_accepted, bool)
+            or self.physical_fallback_used
+            != (self.physical_selected_model == "front-only-null")
+            or self.physical_accepted
+            != (self.physical_selected_model != "unavailable")
         ):
             raise ValueError("GROMM2 market-state arrays do not align")
         arrays = (
@@ -235,6 +245,11 @@ def load_gromm2_market_state(
         percent_inside_spread=artifacts.percent_inside_spread,
         explained_variance_ratio=artifacts.explained_variance_ratio,
         physical_projection_fraction=artifacts.physical_projection_fraction,
+        candidate_physical_projection_fraction=(
+            artifacts.candidate_physical_projection_fraction
+        ),
+        physical_fallback_used=artifacts.physical_fallback_used,
+        physical_selected_model=artifacts.physical_selected_model,
         physical_accepted=artifacts.physical_accepted,
     )
 

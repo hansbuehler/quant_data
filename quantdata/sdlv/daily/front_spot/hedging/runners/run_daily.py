@@ -412,6 +412,7 @@ def _build_model(
             artifact_root = Path(root) / "training" / "hedging" / "gromm2-rolling"
         range_summary = load_completed_rolling_gromm2_range(
             arguments.market_artifact_range_summary,
+            dataset=arguments.dataset,
             dataset_manifest_sha256=expected_dataset_manifest_sha256,
             artifact_root=artifact_root,
         )

@@ -228,6 +228,7 @@ def test_conventional_gromm_daily_builder_uses_q_price_and_dlv_hedge(
     summary = tmp_path / "range.json"
     summary.write_text("{}\n", encoding="utf-8")
     arguments = _arguments(model="gromm-q-dlv-vega")
+    arguments.dataset = tmp_path / "dataset"
     arguments.market_artifact_root = tmp_path / "market"
     arguments.market_artifact_range_summary = summary
     monkeypatch.setattr(

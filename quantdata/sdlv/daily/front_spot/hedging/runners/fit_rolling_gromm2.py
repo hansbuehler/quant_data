@@ -69,9 +69,21 @@ def main() -> None:
             "percent_inside_spread": result.percent_inside_spread,
             "explained_variance_ratio": result.explained_variance_ratio,
             "physical_projection_fraction": result.physical_projection_fraction,
+            "candidate_physical_projection_fraction": (
+                result.candidate_physical_projection_fraction
+            ),
+            "baseline_physical_projection_fraction": (
+                result.baseline_physical_projection_fraction
+            ),
             "maximum_daily_risk_price_norm": (
                 result.maximum_daily_risk_price_norm
             ),
+            "candidate_daily_risk_price_norm": (
+                result.candidate_daily_risk_price_norm
+            ),
+            "candidate_physical_accepted": result.candidate_physical_accepted,
+            "physical_fallback_used": result.physical_fallback_used,
+            "physical_selected_model": result.physical_selected_model,
             "physical_accepted": result.physical_accepted,
         }
     print(json.dumps(payload, sort_keys=True), flush=True)

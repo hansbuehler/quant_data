@@ -17,7 +17,7 @@ instrument-only shrinkage Tyler geometry, target-specific robust cross-moments,
 sample-mean/HAC drift screening, and exact mean-volatility recession checks;
 its Phase-3 implementation and independent re-review passed. The rolling
 rank-16 SDLV calibration, factor alignment, eight Greek factors, analytical Q
-drift, and compatible P-drift projection passed the Phase-4 remediation review.
+drift, and compatible P-drift estimation passed the Phase-4 remediation review.
 The Phase-8 weekly accounting engine now also passes its independent mechanical
 review. Common SANOS/DLV weekly claim prices, exact rolling fit identities,
 precommitted as-of information windows, and Hansen--Hodrick plus moving-block
@@ -767,9 +767,16 @@ one-session transition. A real first-eligible 2023-01-17
 fit completed from the public dataset using 252 exact released one-session
 pairs supported by 257 states. It places 84.90% of observations inside spread,
 and the rank-16 innovation basis explains 95.15% of variance. The compatible-P
-estimator fails the unchanged projection and holdout-improvement gates, so this
-artifact is Q-only. Its authenticated four-path Q replay produces finite
-returns over 163 instruments; P generation is rejected. The loader bounds
+candidate is accepted only when its linked holdout improvement is at least
+0.5%, its Newey--West gain statistic is at least 1.96, and its daily risk-price
+norm is at most 3. The density-weighted projection fraction is retained as a
+descriptive fit statistic rather than used as an admissibility gate. If the
+candidate is rejected, the precommitted physical null retains the full-window
+front-factor risk price and sets the other 15 DLV-factor prices to zero. This
+front-only fallback is accepted only when finite and within the same norm gate;
+it is labelled explicitly and is not reported as an accepted full DLV
+risk-price fit. Its authenticated four-path Q replay produces finite returns
+over 163 instruments. The loader bounds
 float32 density-mass roundoff by stored source precision, normalizes accepted
 residuals in float64, and logs the correction. The five-session sampler recomputes
 the compatible P risk price pathwise and prices the frozen contract book
@@ -791,6 +798,13 @@ Its real first-origin
 resume smoke passed. The 611-origin CPU preparation service is running and has
 passed the first sparse-release origin after an authenticated restart.
 
+The range evidence reports full-candidate, front-only-fallback, and unavailable
+physical-origin counts separately. A versioned migration path authenticates the
+completed legacy range and every dated manifest, hard-links only its immutable
+source, prepared-book, and accepted affine-history files into a distinct target
+root, and recomputes all dynamics and physical-selection evidence under the
+current code. Legacy physical decisions and legacy dynamics are never reused.
+
 Gate: GROMM CPU smoke test, model review, and GPU-readiness review pass.
 
 ### Phase 6: GPU production infrastructure
@@ -803,7 +817,8 @@ atomic range state, a single-writer lock, and four-minute progress heartbeats.
 A completed range summary binds the dataset, configuration, evaluation dates,
 artifact root, and every dated manifest hash. The production matrix enables Q
 cases only from this complete evidence; it enables P cases only when every
-origin also passes the physical-drift gate. Full managed-GPU range fitting and
+origin has either an accepted full candidate or an accepted, explicitly labelled
+front-only null fallback. Full managed-GPU range fitting and
 live managed-GPU forced-restart evidence remain outstanding. A deterministic
 mid-range failure test now verifies that the failed state identifies the exact
 origin, preserves the authenticated completed prefix, and reuses that prefix on

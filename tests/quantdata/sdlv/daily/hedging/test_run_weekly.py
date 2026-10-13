@@ -166,6 +166,7 @@ def test_weekly_conventional_gromm_builds_without_deep_policy_selection(
     )
     arguments = _arguments(
         "gromm-q-dlv-vega",
+        dataset=tmp_path / "dataset",
         start=date(2023, 1, 1),
         end=date(2025, 12, 31),
         market_artifact_root=tmp_path / "artifacts",

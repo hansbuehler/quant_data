@@ -35,17 +35,20 @@ from quantdata.sdlv.daily.front_spot.hedging.models.checkpointing import (
     file_sha256,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2 import (
+    LEGACY_PHYSICAL_PROJECTION_FRACTION,
     RollingGromm2Config,
     fit_rolling_gromm2_market,
     load_prepared_rolling_gromm2,
     load_rolling_gromm2,
+    migrate_legacy_rolling_gromm2_affine_fit,
     prepare_rolling_gromm2,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2 import (
     rolling_gromm2_source_identity as rolling_gromm2_artifact_source_identity,
 )
 
-ROLLING_GROMM2_RANGE_SCHEMA = "hedging-rolling-gromm2-range-v2"
+ROLLING_GROMM2_RANGE_SCHEMA = "hedging-rolling-gromm2-range-v3"
+LEGACY_ROLLING_GROMM2_RANGE_SCHEMA = "hedging-rolling-gromm2-range-v2"
 
 
 class RollingGromm2RangeStage(StrEnum):
@@ -63,6 +66,8 @@ class RollingGromm2RangeRecord:
     reused: bool
     manifest_sha256: str
     physical_accepted: bool | None
+    candidate_physical_accepted: bool | None = None
+    physical_fallback_used: bool | None = None
 
     def to_dict(self) -> dict[str, object]:
         """Return the stable JSON representation."""
@@ -71,6 +76,8 @@ class RollingGromm2RangeRecord:
             "reused": self.reused,
             "manifest_sha256": self.manifest_sha256,
             "physical_accepted": self.physical_accepted,
+            "candidate_physical_accepted": self.candidate_physical_accepted,
+            "physical_fallback_used": self.physical_fallback_used,
         }
 
 
@@ -104,6 +111,18 @@ class RollingGromm2RangeSummary:
         """Count fitted origins accepted for physical-measure generation."""
         return sum(record.physical_accepted is True for record in self.records)
 
+    @property
+    def candidate_physical_accepted_count(self) -> int:
+        """Count origins that selected the full DLV-premium candidate."""
+        return sum(
+            record.candidate_physical_accepted is True for record in self.records
+        )
+
+    @property
+    def physical_fallback_count(self) -> int:
+        """Count origins that selected the front-only physical null."""
+        return sum(record.physical_fallback_used is True for record in self.records)
+
     def to_dict(self) -> dict[str, object]:
         """Return the stable, auditable JSON representation."""
         return {
@@ -119,12 +138,96 @@ class RollingGromm2RangeSummary:
             "completed_count": len(self.records),
             "reused_count": sum(record.reused for record in self.records),
             "physical_accepted_count": self.physical_accepted_count,
+            "candidate_physical_accepted_count": (
+                self.candidate_physical_accepted_count
+            ),
+            "physical_fallback_count": self.physical_fallback_count,
             "source_identity": self.source_identity,
             "config": json.loads(
                 json.dumps(asdict(self.config), sort_keys=True, allow_nan=False)
             ),
             "records": [record.to_dict() for record in self.records],
         }
+
+
+@dataclass(frozen=True, kw_only=True)
+class LegacyRollingGromm2RangeEvidence:
+    """Authenticated complete legacy range eligible for affine reuse."""
+
+    artifact_root: Path
+    source_identity: str
+    manifest_sha256_by_date: dict[date, str]
+
+
+def load_legacy_rolling_gromm2_range(
+    path: Path,
+    *,
+    dataset_manifest_sha256: str,
+    artifact_root: Path,
+    config: RollingGromm2Config = RollingGromm2Config(),
+) -> LegacyRollingGromm2RangeEvidence:
+    """Authenticate a complete v2 range and every legacy dated manifest."""
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("legacy rolling GROMM2 range must be a JSON object")
+    source_identity = payload.get("source_identity")
+    records_payload = payload.get("records")
+    eligible_count = payload.get("eligible_origin_count")
+    selected_count = payload.get("selected_origin_count")
+    completed_count = payload.get("completed_count")
+    artifact_root = Path(artifact_root)
+    legacy_config = json.loads(
+        json.dumps(asdict(config), sort_keys=True, allow_nan=False)
+    )
+    legacy_config["minimum_physical_projection_fraction"] = (
+        LEGACY_PHYSICAL_PROJECTION_FRACTION
+    )
+    if (
+        payload.get("schema") != LEGACY_ROLLING_GROMM2_RANGE_SCHEMA
+        or payload.get("status") != "complete"
+        or payload.get("stage") != RollingGromm2RangeStage.FIT.value
+        or payload.get("dataset_manifest_sha256") != dataset_manifest_sha256
+        or payload.get("artifact_root") != str(artifact_root.resolve())
+        or payload.get("config") != legacy_config
+        or not isinstance(source_identity, str)
+        or len(source_identity) != 64
+        or any(character not in "0123456789abcdef" for character in source_identity)
+        or not isinstance(records_payload, list)
+        or not isinstance(eligible_count, int)
+        or not isinstance(selected_count, int)
+        or not isinstance(completed_count, int)
+        or eligible_count <= 0
+        or selected_count != eligible_count
+        or completed_count != eligible_count
+        or len(records_payload) != eligible_count
+    ):
+        raise ValueError("legacy rolling GROMM2 range is stale or incomplete")
+    manifest_sha256_by_date: dict[date, str] = {}
+    for value in records_payload:
+        if not isinstance(value, dict):
+            raise ValueError("legacy rolling GROMM2 range record is invalid")
+        as_of_date = date.fromisoformat(str(value.get("as_of_date")))
+        manifest_sha256 = value.get("manifest_sha256")
+        manifest = artifact_root / as_of_date.isoformat() / "manifest.json"
+        if (
+            not isinstance(manifest_sha256, str)
+            or manifest_sha256 != file_sha256(manifest)
+            or not isinstance(value.get("physical_accepted"), bool)
+            or not isinstance(value.get("reused"), bool)
+            or as_of_date in manifest_sha256_by_date
+        ):
+            raise ValueError(
+                f"legacy rolling GROMM2 range record is invalid for {as_of_date}"
+            )
+        manifest_sha256_by_date[as_of_date] = manifest_sha256
+    dates = tuple(manifest_sha256_by_date)
+    if dates != tuple(sorted(dates)):
+        raise ValueError("legacy rolling GROMM2 dates are not chronological")
+    return LegacyRollingGromm2RangeEvidence(
+        artifact_root=artifact_root,
+        source_identity=source_identity,
+        manifest_sha256_by_date=manifest_sha256_by_date,
+    )
 
 
 def eligible_rolling_gromm2_origins(
@@ -170,6 +273,7 @@ def run_rolling_gromm2_range(
     stage: RollingGromm2RangeStage,
     state_file: Path,
     config: RollingGromm2Config = RollingGromm2Config(),
+    legacy: LegacyRollingGromm2RangeEvidence | None = None,
     stop_after: int | None = None,
     progress_seconds: float = 240.0,
     clock: Callable[[], float] = time.monotonic,
@@ -203,6 +307,19 @@ def run_rolling_gromm2_range(
         if stop_after is None
         else eligible_origins[:stop_after]
     )
+    if legacy is not None:
+        missing_legacy = tuple(
+            origin
+            for origin in selected_origins
+            if origin not in legacy.manifest_sha256_by_date
+        )
+        verify_inp(
+            not missing_legacy,
+            lambda: (
+                "legacy rolling GROMM2 range does not cover selected origins: "
+                + ", ".join(value.isoformat() for value in missing_legacy[:3])
+            ),
+        )
     records: list[RollingGromm2RangeRecord] = []
     source_identity = rolling_gromm2_source_identity()
     started = clock()
@@ -227,6 +344,7 @@ def run_rolling_gromm2_range(
                         stage=stage,
                         config=config,
                         dataset_manifest_sha256=dataset_manifest_sha256,
+                        legacy=legacy,
                     )
             except Exception as error:
                 _write_json_atomic(
@@ -307,10 +425,14 @@ def run_rolling_gromm2_range(
 def load_completed_rolling_gromm2_range(
     path: Path,
     *,
+    dataset: Path,
     dataset_manifest_sha256: str,
     artifact_root: Path,
 ) -> RollingGromm2RangeSummary:
     """Authenticate a completed fit-range summary and every dated manifest."""
+    dataset = Path(dataset)
+    if file_sha256(dataset / "manifest.json") != dataset_manifest_sha256:
+        raise ValueError("rolling GROMM2 dataset manifest hash is inconsistent")
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError("rolling GROMM2 range summary must be a JSON object")
@@ -346,11 +468,23 @@ def load_completed_rolling_gromm2_range(
         manifest = Path(artifact_root) / as_of_date.isoformat() / "manifest.json"
         manifest_sha256 = value.get("manifest_sha256")
         physical_accepted = value.get("physical_accepted")
+        candidate_physical_accepted = value.get("candidate_physical_accepted")
+        physical_fallback_used = value.get("physical_fallback_used")
         reused = value.get("reused")
+        selected_physical_model = (
+            candidate_physical_accepted or physical_fallback_used
+            if isinstance(candidate_physical_accepted, bool)
+            and isinstance(physical_fallback_used, bool)
+            else None
+        )
         if (
             not isinstance(manifest_sha256, str)
             or manifest_sha256 != file_sha256(manifest)
             or not isinstance(physical_accepted, bool)
+            or not isinstance(candidate_physical_accepted, bool)
+            or not isinstance(physical_fallback_used, bool)
+            or (candidate_physical_accepted and physical_fallback_used)
+            or physical_accepted != selected_physical_model
             or not isinstance(reused, bool)
         ):
             raise ValueError(
@@ -362,6 +496,8 @@ def load_completed_rolling_gromm2_range(
                 reused=reused,
                 manifest_sha256=manifest_sha256,
                 physical_accepted=physical_accepted,
+                candidate_physical_accepted=candidate_physical_accepted,
+                physical_fallback_used=physical_fallback_used,
             )
         )
     if tuple(record.as_of_date for record in records) != tuple(
@@ -401,6 +537,41 @@ def load_completed_rolling_gromm2_range(
         "physical_accepted_count"
     ):
         raise ValueError("rolling GROMM2 physical-acceptance count is inconsistent")
+    if summary.to_dict()["candidate_physical_accepted_count"] != payload.get(
+        "candidate_physical_accepted_count"
+    ):
+        raise ValueError("rolling GROMM2 candidate-acceptance count is inconsistent")
+    if summary.to_dict()["physical_fallback_count"] != payload.get(
+        "physical_fallback_count"
+    ):
+        raise ValueError("rolling GROMM2 fallback count is inconsistent")
+    expected_origins = eligible_rolling_gromm2_origins(
+        PublicHedgingPanel(dataset),
+        evaluation_start=summary.evaluation_start,
+        evaluation_end=summary.evaluation_end,
+        window_transitions=config.window_transitions,
+    )
+    if tuple(record.as_of_date for record in summary.records) != expected_origins:
+        raise ValueError("rolling GROMM2 range does not match the eligible cohort")
+    for record in summary.records:
+        artifacts = load_rolling_gromm2(
+            artifact_root,
+            as_of_date=record.as_of_date,
+            config=config,
+            dataset_manifest_sha256=dataset_manifest_sha256,
+        )
+        if (
+            file_sha256(artifacts.paths.manifest) != record.manifest_sha256
+            or artifacts.physical_accepted is not record.physical_accepted
+            or artifacts.candidate_physical_accepted
+            is not record.candidate_physical_accepted
+            or artifacts.physical_fallback_used
+            is not record.physical_fallback_used
+        ):
+            raise ValueError(
+                "rolling GROMM2 dated artifact disagrees with range record for "
+                f"{record.as_of_date}"
+            )
     return summary
 
 
@@ -412,6 +583,7 @@ def _run_origin(
     stage: RollingGromm2RangeStage,
     config: RollingGromm2Config,
     dataset_manifest_sha256: str,
+    legacy: LegacyRollingGromm2RangeEvidence | None,
 ) -> RollingGromm2RangeRecord:
     lock_directory = artifact_root / ".origin-locks"
     lock_directory.mkdir(parents=True, exist_ok=True)
@@ -423,6 +595,7 @@ def _run_origin(
             stage=stage,
             config=config,
             dataset_manifest_sha256=dataset_manifest_sha256,
+            legacy=legacy,
         )
 
 
@@ -434,6 +607,7 @@ def _run_origin_locked(
     stage: RollingGromm2RangeStage,
     config: RollingGromm2Config,
     dataset_manifest_sha256: str,
+    legacy: LegacyRollingGromm2RangeEvidence | None,
 ) -> RollingGromm2RangeRecord:
     if stage is RollingGromm2RangeStage.PREPARE:
         reused = True
@@ -463,6 +637,8 @@ def _run_origin_locked(
             reused=reused,
             manifest_sha256=file_sha256(paths.manifest),
             physical_accepted=None,
+            candidate_physical_accepted=None,
+            physical_fallback_used=None,
         )
     reused = True
     try:
@@ -474,6 +650,16 @@ def _run_origin_locked(
         )
     except (FileNotFoundError, OSError, ValueError):
         reused = False
+        if legacy is not None:
+            migrate_legacy_rolling_gromm2_affine_fit(
+                dataset=dataset,
+                source_artifact_root=legacy.artifact_root,
+                target_artifact_root=artifact_root,
+                as_of_date=as_of_date,
+                source_manifest_sha256=legacy.manifest_sha256_by_date[as_of_date],
+                source_identity=legacy.source_identity,
+                config=config,
+            )
         artifacts = fit_rolling_gromm2_market(
             dataset=dataset,
             artifact_root=artifact_root,
@@ -485,6 +671,8 @@ def _run_origin_locked(
         reused=reused,
         manifest_sha256=file_sha256(artifacts.paths.manifest),
         physical_accepted=artifacts.physical_accepted,
+        candidate_physical_accepted=artifacts.candidate_physical_accepted,
+        physical_fallback_used=artifacts.physical_fallback_used,
     )
 
 
@@ -565,6 +753,8 @@ def main() -> None:
         required=True,
     )
     parser.add_argument("--state-file", type=Path)
+    parser.add_argument("--legacy-artifact-root", type=Path)
+    parser.add_argument("--legacy-range-summary", type=Path)
     parser.add_argument("--stop-after", type=int)
     parser.add_argument("--progress-seconds", type=float, default=240.0)
     arguments = parser.parse_args()
@@ -575,6 +765,21 @@ def main() -> None:
             f"{arguments.end.isoformat()}.json"
         )
     )
+    if (arguments.legacy_artifact_root is None) != (
+        arguments.legacy_range_summary is None
+    ):
+        parser.error(
+            "--legacy-artifact-root and --legacy-range-summary must be supplied together"
+        )
+    legacy = None
+    if arguments.legacy_artifact_root is not None:
+        legacy = load_legacy_rolling_gromm2_range(
+            arguments.legacy_range_summary,
+            dataset_manifest_sha256=file_sha256(
+                arguments.dataset / "manifest.json"
+            ),
+            artifact_root=arguments.legacy_artifact_root,
+        )
     summary = run_rolling_gromm2_range(
         dataset=arguments.dataset,
         artifact_root=arguments.artifact_root,
@@ -582,6 +787,7 @@ def main() -> None:
         evaluation_end=arguments.end,
         stage=arguments.stage,
         state_file=state_file,
+        legacy=legacy,
         stop_after=arguments.stop_after,
         progress_seconds=arguments.progress_seconds,
     )

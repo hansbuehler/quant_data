@@ -117,6 +117,9 @@ def _market_state() -> Gromm2MarketState:
         percent_inside_spread=85.0,
         explained_variance_ratio=0.9,
         physical_projection_fraction=0.6,
+        candidate_physical_projection_fraction=0.6,
+        physical_fallback_used=False,
+        physical_selected_model="candidate",
         physical_accepted=True,
     )
 
@@ -256,8 +259,14 @@ def test_weekly_market_fit_matches_authenticated_transition_origins(
             percent_inside_spread=84.0,
         explained_variance_ratio=0.95,
         physical_projection_fraction=0.0,
+        candidate_physical_projection_fraction=0.0,
+        baseline_physical_projection_fraction=0.0,
         maximum_daily_risk_price_norm=0.0,
-        physical_accepted=False,
+        candidate_daily_risk_price_norm=0.0,
+        candidate_physical_accepted=False,
+        physical_fallback_used=True,
+        physical_selected_model="front-only-null",
+        physical_accepted=True,
         dataset_manifest_sha256="a" * 64,
     )
     monkeypatch.setattr(

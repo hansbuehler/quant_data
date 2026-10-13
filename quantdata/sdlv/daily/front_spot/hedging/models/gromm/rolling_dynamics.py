@@ -6,7 +6,7 @@ import json
 import os
 import tempfile
 import time
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import date
 from pathlib import Path
 
@@ -33,6 +33,7 @@ from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
 from quantdata.sdlv.daily.front_spot.hedging.data.rolling_calibration import (
     RollingPhysicalDriftFit,
     fit_constant_physical_drift_from_inputs,
+    project_constant_physical_drift,
 )
 from quantdata.sdlv.daily.front_spot.hedging.data.rolling_factors import (
     FixedContractDlvHistory,
@@ -44,7 +45,34 @@ from quantdata.sdlv.daily.front_spot.hedging.data.rolling_factors import (
 FloatArray = NDArray[np.float64]
 IntArray = NDArray[np.int64]
 
-GROMM2_DYNAMICS_SCHEMA = "hedging-gromm2-estimate-v3"
+GROMM2_DYNAMICS_SCHEMA = "hedging-gromm2-estimate-v4"
+PHYSICAL_SELECTION_RULE = "front-only-null-fallback-v1"
+MINIMUM_PHYSICAL_VALIDATION_IMPROVEMENT = 0.005
+MINIMUM_PHYSICAL_VALIDATION_GAIN_T = 1.96
+
+
+@dataclass(frozen=True, kw_only=True)
+class PhysicalDriftSelection:
+    """Authenticated choice between a DLV-premium fit and its front-only null."""
+
+    candidate: RollingPhysicalDriftFit
+    baseline: RollingPhysicalDriftFit
+    selected: RollingPhysicalDriftFit
+    candidate_accepted: bool
+    baseline_accepted: bool
+    selected_model: str
+    candidate_rejection_reasons: tuple[str, ...]
+    baseline_rejection_reasons: tuple[str, ...]
+
+    @property
+    def fallback_used(self) -> bool:
+        """Return whether the selected physical model is the front-only null."""
+        return self.selected_model == "front-only-null"
+
+    @property
+    def selected_physical_accepted(self) -> bool:
+        """Return whether one authenticated physical model was selected."""
+        return self.selected_model in {"candidate", "front-only-null"}
 
 
 def estimate_rolling_gromm2_dynamics(
@@ -56,7 +84,6 @@ def estimate_rolling_gromm2_dynamics(
     origin_dates: tuple[date, ...],
     endpoint_dates: tuple[date, ...],
     factor_count: int,
-    minimum_projection_fraction: float,
     maximum_daily_risk_price_norm: float,
     batch_size: int = 16,
 ) -> dict[str, object]:
@@ -142,29 +169,32 @@ def estimate_rolling_gromm2_dynamics(
         ridge_candidates=(1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0, 10.0, 100.0),
         validation_fraction=1.0 / 3.0,
         maximum_daily_risk_price_norm=maximum_daily_risk_price_norm,
-        minimum_validation_improvement_fraction=0.005,
-        minimum_validation_gain_t=1.96,
+        minimum_validation_improvement_fraction=(
+            MINIMUM_PHYSICAL_VALIDATION_IMPROVEMENT
+        ),
+        minimum_validation_gain_t=MINIMUM_PHYSICAL_VALIDATION_GAIN_T,
         validation_hac_lags=5,
     )
-    physical_accepted = bool(
-        physical.accepted
-        and physical.achievable_fraction >= minimum_projection_fraction
+    physical_selection = _select_physical_drift(
+        candidate=physical,
+        annualized_loadings=full_effective,
+        fixed_market_price_of_risk=fixed,
+        maximum_daily_risk_price_norm=maximum_daily_risk_price_norm,
     )
     constant = _constant_diffusion(
         history=history,
         factors=factors,
         origin_indices=origin_indices,
-        physical=physical,
+        physical=physical_selection.selected,
     )
     selective = _unsupported_selective_state_space(constant)
     _write_dynamics(
         output,
         constant=constant,
         selective=selective,
-        physical=physical,
+        physical_selection=physical_selection,
         origin_dates=origin_dates,
         endpoint_dates=endpoint_dates,
-        physical_accepted=physical_accepted,
     )
     report: dict[str, object] = {
         "schema": GROMM2_DYNAMICS_SCHEMA,
@@ -183,11 +213,40 @@ def estimate_rolling_gromm2_dynamics(
         "spot_market_price_of_risk_standard_error": (
             factors.front_spot_market_price_of_risk_standard_error
         ),
-        "physical_projection_fraction": physical.achievable_fraction,
+        "physical_selection_rule": PHYSICAL_SELECTION_RULE,
+        "physical_projection_fraction": (
+            physical_selection.selected.achievable_fraction
+        ),
         "physical_projection_metric": (
             "pooled_realized_transition_achievable_fraction"
         ),
+        "candidate_achievable_fraction": physical.achievable_fraction,
+        "baseline_achievable_fraction": (
+            physical_selection.baseline.achievable_fraction
+        ),
+        "selected_achievable_fraction": (
+            physical_selection.selected.achievable_fraction
+        ),
+        "candidate_market_price_of_risk": (
+            physical.market_price_of_risk.tolist()
+        ),
+        "candidate_market_price_of_risk_standard_errors": (
+            physical.market_price_of_risk_standard_errors.tolist()
+        ),
+        "baseline_market_price_of_risk": (
+            physical_selection.baseline.market_price_of_risk.tolist()
+        ),
+        "selected_market_price_of_risk": (
+            physical_selection.selected.market_price_of_risk.tolist()
+        ),
+        "full_window_front_market_price_of_risk": float(
+            physical_selection.baseline.market_price_of_risk[0]
+        ),
+        "full_window_front_market_price_of_risk_standard_error": float(
+            physical_selection.baseline.market_price_of_risk_standard_errors[0]
+        ),
         "physical_selected_ridge": physical.selected_ridge,
+        "candidate_selected_ridge": physical.selected_ridge,
         "physical_validation_loss": physical.validation_loss,
         "physical_validation_baseline_loss": physical.validation_baseline_loss,
         "physical_validation_improvement_fraction": (
@@ -198,9 +257,32 @@ def estimate_rolling_gromm2_dynamics(
             physical.validation_gain_standard_error
         ),
         "physical_validation_gain_t": physical.validation_gain_t,
-        "physical_daily_risk_price_norm": physical.daily_risk_price_norm,
+        "physical_daily_risk_price_norm": (
+            physical_selection.selected.daily_risk_price_norm
+        ),
+        "candidate_daily_risk_price_norm": physical.daily_risk_price_norm,
+        "baseline_daily_risk_price_norm": (
+            physical_selection.baseline.daily_risk_price_norm
+        ),
+        "selected_daily_risk_price_norm": (
+            physical_selection.selected.daily_risk_price_norm
+        ),
         "physical_validation_accepted": physical.accepted,
-        "physical_accepted": physical_accepted,
+        "candidate_accepted": physical_selection.candidate_accepted,
+        "candidate_rejection_reasons": list(
+            physical_selection.candidate_rejection_reasons
+        ),
+        "baseline_accepted": physical_selection.baseline_accepted,
+        "baseline_rejection_reasons": list(
+            physical_selection.baseline_rejection_reasons
+        ),
+        "selected_model": physical_selection.selected_model,
+        "selected_candidate": physical_selection.candidate_accepted,
+        "fallback_used": physical_selection.fallback_used,
+        "selected_physical_accepted": (
+            physical_selection.selected_physical_accepted
+        ),
+        "physical_accepted": physical_selection.selected_physical_accepted,
         "selective_state_space": {
             "architecture": "constant unit factor amplitudes",
             "supported": False,
@@ -219,6 +301,88 @@ def estimate_rolling_gromm2_dynamics(
         encoding="utf-8",
     )
     return report
+
+
+def _select_physical_drift(
+    *,
+    candidate: RollingPhysicalDriftFit,
+    annualized_loadings: FloatArray,
+    fixed_market_price_of_risk: FloatArray,
+    maximum_daily_risk_price_norm: float,
+) -> PhysicalDriftSelection:
+    """Select a validated DLV premium or the nested front-only null model."""
+    fixed = np.asarray(fixed_market_price_of_risk, dtype=np.float64)
+    factor_count = candidate.market_price_of_risk.shape[0]
+    if (
+        fixed.shape != (factor_count,)
+        or not np.isfinite(fixed[0])
+        or np.any(np.isinf(fixed))
+    ):
+        raise ValueError("front-only physical baseline is invalid")
+    baseline_fixed = np.zeros(factor_count, dtype=np.float64)
+    baseline_fixed[0] = fixed[0]
+    baseline = project_constant_physical_drift(
+        training_origin_dates=candidate.training_origin_dates,
+        training_endpoint_dates=candidate.training_endpoint_dates,
+        empirical_log_drifts=candidate.empirical_log_drifts,
+        risk_neutral_log_drifts=candidate.risk_neutral_log_drifts,
+        coordinate_weights=candidate.coordinate_weights,
+        annualized_loadings=annualized_loadings,
+        ridge=0.0,
+        fixed_market_price_of_risk=baseline_fixed,
+    )
+    baseline_standard_errors = np.zeros(factor_count, dtype=np.float64)
+    baseline_standard_errors[0] = (
+        candidate.market_price_of_risk_standard_errors[0]
+    )
+    baseline_daily_norm = float(
+        np.linalg.norm(baseline.market_price_of_risk) / np.sqrt(DAYS_PER_YEAR)
+    )
+    baseline_rejection_reasons: list[str] = []
+    if not np.all(np.isfinite(baseline.market_price_of_risk)):
+        baseline_rejection_reasons.append("nonfinite-market-price-of-risk")
+    if baseline_daily_norm > maximum_daily_risk_price_norm:
+        baseline_rejection_reasons.append("daily-risk-price-norm")
+    baseline_accepted = not baseline_rejection_reasons
+    baseline = replace(
+        baseline,
+        market_price_of_risk_standard_errors=baseline_standard_errors,
+        daily_risk_price_norm=baseline_daily_norm,
+        accepted=baseline_accepted,
+    )
+
+    candidate_rejection_reasons: list[str] = []
+    if not np.all(np.isfinite(candidate.market_price_of_risk)):
+        candidate_rejection_reasons.append("nonfinite-market-price-of-risk")
+    if candidate.daily_risk_price_norm > maximum_daily_risk_price_norm:
+        candidate_rejection_reasons.append("daily-risk-price-norm")
+    if (
+        candidate.validation_improvement_fraction
+        < MINIMUM_PHYSICAL_VALIDATION_IMPROVEMENT
+    ):
+        candidate_rejection_reasons.append("validation-improvement")
+    if candidate.validation_gain_t < MINIMUM_PHYSICAL_VALIDATION_GAIN_T:
+        candidate_rejection_reasons.append("validation-gain-t")
+    candidate_accepted = not candidate_rejection_reasons
+    if candidate.accepted is not candidate_accepted:
+        raise ValueError("physical candidate acceptance is inconsistent")
+
+    if candidate_accepted:
+        selected = candidate
+        selected_model = "candidate"
+    else:
+        selected = baseline
+        selected_model = "front-only-null" if baseline_accepted else "unavailable"
+    return PhysicalDriftSelection(
+        candidate=candidate,
+        baseline=baseline,
+        selected=selected,
+        candidate_accepted=candidate_accepted,
+        baseline_accepted=baseline_accepted,
+        selected_model=selected_model,
+        candidate_rejection_reasons=tuple(candidate_rejection_reasons),
+        baseline_rejection_reasons=tuple(baseline_rejection_reasons),
+    )
 
 
 def _load_affine_history(path: Path) -> dict[str, FloatArray | tuple[date, ...]]:
@@ -642,12 +806,19 @@ def _write_dynamics(
     *,
     constant: ConstantDiffusionEstimate,
     selective: SelectiveStateSpaceEstimate,
-    physical: RollingPhysicalDriftFit,
+    physical_selection: PhysicalDriftSelection,
     origin_dates: tuple[date, ...],
     endpoint_dates: tuple[date, ...],
-    physical_accepted: bool,
 ) -> None:
+    candidate = physical_selection.candidate
+    baseline = physical_selection.baseline
+    selected = physical_selection.selected
     arrays: dict[str, np.ndarray] = {
+        "physical_selection_rule": np.asarray(PHYSICAL_SELECTION_RULE, dtype="S32"),
+        "selected_model": np.asarray(
+            physical_selection.selected_model,
+            dtype="S16",
+        ),
         "log_dlvsq_loadings": constant.log_dlvsq_loadings.astype(np.float32),
         "factor_scores": constant.factor_scores.astype(np.float32),
         "physical_ar_intercept": constant.physical_ar_intercept.astype(np.float32),
@@ -659,13 +830,22 @@ def _write_dynamics(
             constant.physical_factor_coefficients.astype(np.float32)
         ),
         "physical_market_price_of_risk": (
-            physical.market_price_of_risk.astype(np.float64)
+            selected.market_price_of_risk.astype(np.float64)
         ),
         "physical_market_price_of_risk_standard_errors": (
-            physical.market_price_of_risk_standard_errors.astype(np.float64)
+            selected.market_price_of_risk_standard_errors.astype(np.float64)
+        ),
+        "candidate_market_price_of_risk": (
+            candidate.market_price_of_risk.astype(np.float64)
+        ),
+        "candidate_market_price_of_risk_standard_errors": (
+            candidate.market_price_of_risk_standard_errors.astype(np.float64)
+        ),
+        "baseline_market_price_of_risk": (
+            baseline.market_price_of_risk.astype(np.float64)
         ),
         "spot_market_price_of_risk": np.asarray(
-            physical.market_price_of_risk[0], dtype=np.float64
+            selected.market_price_of_risk[0], dtype=np.float64
         ),
         "pair_origin_indices": constant.pair_origin_indices,
         "training_origin_dates": np.asarray(
@@ -674,18 +854,43 @@ def _write_dynamics(
         "training_endpoint_dates": np.asarray(
             [value.isoformat() for value in endpoint_dates], dtype="S10"
         ),
-        "physical_selected_ridge": np.asarray(physical.selected_ridge),
+        "physical_selected_ridge": np.asarray(candidate.selected_ridge),
+        "candidate_selected_ridge": np.asarray(candidate.selected_ridge),
         "physical_daily_risk_price_norm": np.asarray(
-            physical.daily_risk_price_norm
+            selected.daily_risk_price_norm
+        ),
+        "candidate_daily_risk_price_norm": np.asarray(
+            candidate.daily_risk_price_norm
+        ),
+        "baseline_daily_risk_price_norm": np.asarray(
+            baseline.daily_risk_price_norm
         ),
         "physical_projection_fraction": np.asarray(
-            physical.achievable_fraction
+            selected.achievable_fraction
+        ),
+        "candidate_achievable_fraction": np.asarray(
+            candidate.achievable_fraction
+        ),
+        "baseline_achievable_fraction": np.asarray(
+            baseline.achievable_fraction
+        ),
+        "selected_achievable_fraction": np.asarray(
+            selected.achievable_fraction
         ),
         "physical_validation_improvement_fraction": np.asarray(
-            physical.validation_improvement_fraction
+            candidate.validation_improvement_fraction
         ),
-        "physical_validation_gain_t": np.asarray(physical.validation_gain_t),
-        "physical_accepted": np.asarray(physical_accepted),
+        "physical_validation_gain_t": np.asarray(candidate.validation_gain_t),
+        "candidate_accepted": np.asarray(physical_selection.candidate_accepted),
+        "baseline_accepted": np.asarray(physical_selection.baseline_accepted),
+        "selected_candidate": np.asarray(physical_selection.candidate_accepted),
+        "fallback_used": np.asarray(physical_selection.fallback_used),
+        "selected_physical_accepted": np.asarray(
+            physical_selection.selected_physical_accepted
+        ),
+        "physical_accepted": np.asarray(
+            physical_selection.selected_physical_accepted
+        ),
         "ssm_input_mean": selective.input_mean.astype(np.float32),
         "ssm_input_scale": selective.input_scale.astype(np.float32),
         "ssm_terminal_hidden": selective.terminal_hidden.astype(np.float32),

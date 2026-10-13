@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict
 from datetime import date, timedelta
 from pathlib import Path
 from threading import Event, Lock
@@ -13,8 +14,11 @@ import pytest
 from quantdata.sdlv.daily.front_spot.hedging.models.checkpointing import file_sha256
 from quantdata.sdlv.daily.front_spot.hedging.runners import fit_rolling_gromm2_range
 from quantdata.sdlv.daily.front_spot.hedging.runners.fit_rolling_gromm2_range import (
+    LEGACY_ROLLING_GROMM2_RANGE_SCHEMA,
+    LegacyRollingGromm2RangeEvidence,
     RollingGromm2RangeStage,
     load_completed_rolling_gromm2_range,
+    load_legacy_rolling_gromm2_range,
     run_rolling_gromm2_range,
 )
 
@@ -62,6 +66,8 @@ def test_fit_range_reuses_authenticated_origins_and_resumes_missing_ones(
         return SimpleNamespace(
             paths=SimpleNamespace(manifest=existing),
             physical_accepted=True,
+            candidate_physical_accepted=True,
+            physical_fallback_used=False,
         )
 
     def fit(*, as_of_date: date, **_kwargs: object) -> object:
@@ -70,6 +76,8 @@ def test_fit_range_reuses_authenticated_origins_and_resumes_missing_ones(
         return SimpleNamespace(
             paths=SimpleNamespace(manifest=manifest),
             physical_accepted=False,
+            candidate_physical_accepted=False,
+            physical_fallback_used=False,
         )
 
     monkeypatch.setattr(fit_rolling_gromm2_range, "PublicHedgingPanel", _Panel)
@@ -89,13 +97,208 @@ def test_fit_range_reuses_authenticated_origins_and_resumes_missing_ones(
     assert fitted == list(origins[1:])
     assert summary.status == "complete"
     assert summary.physical_accepted_count == 1
+    assert summary.candidate_physical_accepted_count == 1
+    assert summary.physical_fallback_count == 0
     assert [record.reused for record in summary.records] == [True, False, False]
+    records_by_date = {record.as_of_date: record for record in summary.records}
+
+    def authenticated_load(
+        _root: Path,
+        *,
+        as_of_date: date,
+        **_kwargs: object,
+    ) -> object:
+        record = records_by_date[as_of_date]
+        return SimpleNamespace(
+            paths=SimpleNamespace(
+                manifest=artifact_root / as_of_date.isoformat() / "manifest.json"
+            ),
+            physical_accepted=record.physical_accepted,
+            candidate_physical_accepted=record.candidate_physical_accepted,
+            physical_fallback_used=record.physical_fallback_used,
+        )
+
+    monkeypatch.setattr(
+        fit_rolling_gromm2_range,
+        "load_rolling_gromm2",
+        authenticated_load,
+    )
     loaded = load_completed_rolling_gromm2_range(
         state_file,
+        dataset=dataset,
         dataset_manifest_sha256=file_sha256(dataset / "manifest.json"),
         artifact_root=artifact_root,
     )
     assert loaded.to_dict() == summary.to_dict()
+
+    original_payload = state_file.read_text(encoding="utf-8")
+    truncated = json.loads(original_payload)
+    truncated["records"] = truncated["records"][:-1]
+    truncated["eligible_origin_count"] -= 1
+    truncated["selected_origin_count"] -= 1
+    truncated["completed_count"] -= 1
+    truncated["physical_accepted_count"] = sum(
+        value["physical_accepted"] for value in truncated["records"]
+    )
+    truncated["candidate_physical_accepted_count"] = sum(
+        value["candidate_physical_accepted"] for value in truncated["records"]
+    )
+    truncated["physical_fallback_count"] = sum(
+        value["physical_fallback_used"] for value in truncated["records"]
+    )
+    state_file.write_text(json.dumps(truncated), encoding="utf-8")
+    with pytest.raises(ValueError, match="eligible cohort"):
+        load_completed_rolling_gromm2_range(
+            state_file,
+            dataset=dataset,
+            dataset_manifest_sha256=file_sha256(dataset / "manifest.json"),
+            artifact_root=artifact_root,
+        )
+    state_file.write_text(original_payload, encoding="utf-8")
+
+    def mismatched_load(
+        _root: Path,
+        *,
+        as_of_date: date,
+        **_kwargs: object,
+    ) -> object:
+        return SimpleNamespace(
+            paths=SimpleNamespace(
+                manifest=artifact_root / as_of_date.isoformat() / "manifest.json"
+            ),
+            physical_accepted=True,
+            candidate_physical_accepted=False,
+            physical_fallback_used=True,
+        )
+
+    monkeypatch.setattr(
+        fit_rolling_gromm2_range,
+        "load_rolling_gromm2",
+        mismatched_load,
+    )
+    with pytest.raises(ValueError, match="disagrees with range record"):
+        load_completed_rolling_gromm2_range(
+            state_file,
+            dataset=dataset,
+            dataset_manifest_sha256=file_sha256(dataset / "manifest.json"),
+            artifact_root=artifact_root,
+        )
+
+
+def test_legacy_range_loader_authenticates_complete_manifest_set(
+    tmp_path: Path,
+) -> None:
+    dataset = _dataset(tmp_path)
+    artifact_root = tmp_path / "legacy"
+    origins = _Panel(dataset).dates
+    records = []
+    for origin in origins:
+        manifest = _dated_manifest(artifact_root, origin, label="legacy")
+        records.append(
+            {
+                "as_of_date": origin.isoformat(),
+                "reused": True,
+                "manifest_sha256": file_sha256(manifest),
+                "physical_accepted": False,
+            }
+        )
+    config = fit_rolling_gromm2_range.RollingGromm2Config()
+    legacy_config = json.loads(json.dumps(asdict(config), sort_keys=True))
+    legacy_config["minimum_physical_projection_fraction"] = 0.5
+    summary = tmp_path / "legacy-range.json"
+    summary.write_text(
+        json.dumps(
+            {
+                "schema": LEGACY_ROLLING_GROMM2_RANGE_SCHEMA,
+                "status": "complete",
+                "stage": RollingGromm2RangeStage.FIT.value,
+                "dataset_manifest_sha256": file_sha256(
+                    dataset / "manifest.json"
+                ),
+                "artifact_root": str(artifact_root.resolve()),
+                "eligible_origin_count": len(origins),
+                "selected_origin_count": len(origins),
+                "completed_count": len(origins),
+                "source_identity": "a" * 64,
+                "config": legacy_config,
+                "records": records,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = load_legacy_rolling_gromm2_range(
+        summary,
+        dataset_manifest_sha256=file_sha256(dataset / "manifest.json"),
+        artifact_root=artifact_root,
+    )
+
+    assert loaded.source_identity == "a" * 64
+    assert tuple(loaded.manifest_sha256_by_date) == origins
+    (artifact_root / origins[1].isoformat() / "manifest.json").write_text(
+        '{"changed": true}\n', encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="invalid"):
+        load_legacy_rolling_gromm2_range(
+            summary,
+            dataset_manifest_sha256=file_sha256(dataset / "manifest.json"),
+            artifact_root=artifact_root,
+        )
+
+
+def test_fit_range_uses_authenticated_legacy_affine_seed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset = _dataset(tmp_path)
+    artifact_root = tmp_path / "current"
+    origin = _Panel(dataset).dates[0]
+    migrated: list[date] = []
+
+    def load(_root: Path, *, as_of_date: date, **_kwargs: object) -> object:
+        raise FileNotFoundError(as_of_date)
+
+    def migrate(*, as_of_date: date, **_kwargs: object) -> object:
+        migrated.append(as_of_date)
+        return object()
+
+    def fit(*, as_of_date: date, **_kwargs: object) -> object:
+        manifest = _dated_manifest(artifact_root, as_of_date, label="migrated")
+        return SimpleNamespace(
+            paths=SimpleNamespace(manifest=manifest),
+            physical_accepted=True,
+            candidate_physical_accepted=False,
+            physical_fallback_used=True,
+        )
+
+    monkeypatch.setattr(fit_rolling_gromm2_range, "PublicHedgingPanel", _Panel)
+    monkeypatch.setattr(fit_rolling_gromm2_range, "load_rolling_gromm2", load)
+    monkeypatch.setattr(
+        fit_rolling_gromm2_range,
+        "migrate_legacy_rolling_gromm2_affine_fit",
+        migrate,
+    )
+    monkeypatch.setattr(fit_rolling_gromm2_range, "fit_rolling_gromm2_market", fit)
+    legacy = LegacyRollingGromm2RangeEvidence(
+        artifact_root=tmp_path / "legacy",
+        source_identity="a" * 64,
+        manifest_sha256_by_date={origin: "b" * 64},
+    )
+
+    summary = run_rolling_gromm2_range(
+        dataset=dataset,
+        artifact_root=artifact_root,
+        evaluation_start=origin,
+        evaluation_end=_Panel(dataset).dates[-1],
+        stage=RollingGromm2RangeStage.FIT,
+        state_file=tmp_path / "state.json",
+        legacy=legacy,
+        stop_after=1,
+        progress_seconds=300.0,
+    )
+
+    assert migrated == [origin]
+    assert summary.physical_fallback_count == 1
 
 
 def test_fit_range_recovers_after_mid_range_failure(
@@ -115,7 +318,9 @@ def test_fit_range_recovers_after_mid_range_failure(
             raise FileNotFoundError(as_of_date)
         return SimpleNamespace(
             paths=SimpleNamespace(manifest=manifest),
-            physical_accepted=False,
+            physical_accepted=True,
+            candidate_physical_accepted=False,
+            physical_fallback_used=True,
         )
 
     def fit(*, as_of_date: date, **_kwargs: object) -> object:
@@ -127,7 +332,9 @@ def test_fit_range_recovers_after_mid_range_failure(
         manifest = _dated_manifest(artifact_root, as_of_date, label="fitted")
         return SimpleNamespace(
             paths=SimpleNamespace(manifest=manifest),
-            physical_accepted=False,
+            physical_accepted=True,
+            candidate_physical_accepted=False,
+            physical_fallback_used=True,
         )
 
     monkeypatch.setattr(fit_rolling_gromm2_range, "PublicHedgingPanel", _Panel)
@@ -161,6 +368,8 @@ def test_fit_range_recovers_after_mid_range_failure(
     )
 
     assert resumed.status == "complete"
+    assert resumed.candidate_physical_accepted_count == 0
+    assert resumed.physical_fallback_count == 3
     assert [record.reused for record in resumed.records] == [True, False, False]
     assert fit_attempts == [origins[0], origins[1], origins[1], origins[2]]
 
@@ -183,7 +392,9 @@ def test_overlapping_ranges_serialize_each_origin(
             raise FileNotFoundError(as_of_date)
         return SimpleNamespace(
             paths=SimpleNamespace(manifest=manifest),
-            physical_accepted=False,
+            physical_accepted=True,
+            candidate_physical_accepted=False,
+            physical_fallback_used=True,
         )
 
     def fit(*, as_of_date: date, **_kwargs: object) -> object:
@@ -195,7 +406,9 @@ def test_overlapping_ranges_serialize_each_origin(
         manifest = _dated_manifest(artifact_root, as_of_date, label="fitted")
         return SimpleNamespace(
             paths=SimpleNamespace(manifest=manifest),
-            physical_accepted=False,
+            physical_accepted=True,
+            candidate_physical_accepted=False,
+            physical_fallback_used=True,
         )
 
     monkeypatch.setattr(fit_rolling_gromm2_range, "PublicHedgingPanel", _Panel)
@@ -293,6 +506,8 @@ def test_completed_range_loader_rejects_changed_dated_manifest(
         return SimpleNamespace(
             paths=SimpleNamespace(manifest=manifest),
             physical_accepted=True,
+            candidate_physical_accepted=True,
+            physical_fallback_used=False,
         )
 
     monkeypatch.setattr(fit_rolling_gromm2_range, "PublicHedgingPanel", _Panel)
@@ -312,6 +527,7 @@ def test_completed_range_loader_rejects_changed_dated_manifest(
     with pytest.raises(ValueError, match="invalid"):
         load_completed_rolling_gromm2_range(
             state_file,
+            dataset=dataset,
             dataset_manifest_sha256=file_sha256(dataset / "manifest.json"),
             artifact_root=artifact_root,
         )
@@ -331,6 +547,8 @@ def test_completed_range_loader_rejects_changed_source_identity(
         return SimpleNamespace(
             paths=SimpleNamespace(manifest=manifest),
             physical_accepted=True,
+            candidate_physical_accepted=False,
+            physical_fallback_used=True,
         )
 
     monkeypatch.setattr(fit_rolling_gromm2_range, "PublicHedgingPanel", _Panel)
@@ -351,6 +569,7 @@ def test_completed_range_loader_rejects_changed_source_identity(
     with pytest.raises(ValueError, match="stale or incomplete"):
         load_completed_rolling_gromm2_range(
             state_file,
+            dataset=dataset,
             dataset_manifest_sha256=file_sha256(dataset / "manifest.json"),
             artifact_root=artifact_root,
         )

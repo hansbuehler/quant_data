@@ -320,6 +320,15 @@ def run_gromm2_daily_book(
                     "physical_projection_fraction": (
                         market_state.physical_projection_fraction
                     ),
+                    "candidate_physical_projection_fraction": (
+                        market_state.candidate_physical_projection_fraction
+                    ),
+                    "physical_fallback_used": (
+                        market_state.physical_fallback_used
+                    ),
+                    "physical_selected_model": (
+                        market_state.physical_selected_model
+                    ),
                     "physical_daily_risk_price_norm": float(
                         np.linalg.norm(
                             market_state.physical_market_price_of_risk
