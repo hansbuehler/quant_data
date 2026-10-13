@@ -78,6 +78,32 @@ def test_historical_sanos_mean_volatility_solves_cost_lasso_socp() -> None:
     assert fit.zero_policy.maximum_absolute_gradient < 1.0e-6
 
 
+def test_historical_sanos_mean_volatility_reports_recession_cap() -> None:
+    generator = np.random.default_rng(23)
+    observations = 252
+    instruments = (0.1 + 0.001 * generator.normal(size=observations))[:, None]
+    fit = fit_historical_sanos_hedge(
+        instrument_returns=instruments,
+        claim_returns=np.zeros(observations),
+        linear_transaction_costs=np.zeros(1),
+        config=HistoricalSanosConfig(
+            rolling_observations=observations,
+            objective=HistoricalSanosObjective.MEAN_VOLATILITY,
+            risk_parameter=0.1,
+            maximum_iterations=10_000,
+            position_cap=10.0,
+            solver_position_cap=100.0,
+        ),
+    )
+
+    assert fit.claim_policy.action[0] == pytest.approx(100.0, abs=1.0e-5)
+    assert fit.zero_policy.action[0] == pytest.approx(100.0, abs=1.0e-5)
+    assert fit.internal_cap_hits == 2
+    assert fit.executable_cap_hits == 0
+    assert fit.action[0] == pytest.approx(0.0, abs=1.0e-5)
+    assert not fit.converged
+
+
 def test_virtual_policy_solver_cap_is_distinct_from_executable_cap() -> None:
     generator = np.random.default_rng(31)
     observations = 252

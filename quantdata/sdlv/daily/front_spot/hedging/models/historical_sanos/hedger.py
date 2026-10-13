@@ -248,9 +248,10 @@ def _minimize_mean_volatility(
         centered_claim + centered_instruments @ action,
         2,
     ) / math.sqrt(observations)
-    problem = cp.Problem(
-        cp.Minimize(-expected_wealth + config.risk_parameter * standard_deviation)
+    objective = cp.Minimize(
+        -expected_wealth + config.risk_parameter * standard_deviation
     )
+    problem = cp.Problem(objective)
     action.value = np.asarray(initial[:instrument_count], dtype=np.float64)
     try:
         problem.solve(
@@ -261,6 +262,23 @@ def _minimize_mean_volatility(
             tol_gap_rel=config.gradient_tolerance,
             tol_feas=config.gradient_tolerance,
         )
+        if problem.status in {cp.UNBOUNDED, cp.UNBOUNDED_INACCURATE}:
+            problem = cp.Problem(
+                objective,
+                [
+                    action >= -config.solver_position_cap,
+                    action <= config.solver_position_cap,
+                ],
+            )
+            action.value = np.asarray(initial[:instrument_count], dtype=np.float64)
+            problem.solve(
+                solver=cp.CLARABEL,
+                warm_start=True,
+                max_iter=config.maximum_iterations,
+                tol_gap_abs=config.gradient_tolerance,
+                tol_gap_rel=config.gradient_tolerance,
+                tol_feas=config.gradient_tolerance,
+            )
     except cp.error.SolverError as error:
         return OptimizeResult(
             x=np.asarray(initial[:instrument_count], dtype=np.float64),
