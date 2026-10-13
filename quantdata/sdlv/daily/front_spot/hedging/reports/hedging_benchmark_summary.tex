@@ -77,8 +77,9 @@
   robust-covariance mean--variance policies over all 611 eligible 2023--2025
   origins and all 20 daily digital targets. SANOS--LV reduces aggregate
   pure-hedge RMSE by \textbf{56.61\%}; the completed covariance policies reduce
-  it by \textbf{7.62\%--20.79\%}. Historical-SANOS and the remaining covariance
-  objectives are still running. The 611-origin GROMM preparation is complete
+  it by \textbf{7.62\%--20.79\%}, while Historical-SANOS mean--variance at
+  $\lambda=0.1$ reduces it by \textbf{38.19\%}. The remaining Historical-SANOS
+  and covariance objectives are still running. The 611-origin GROMM preparation is complete
   and its rolling Q fit is waiting for the managed GPU. VolGAN daily readiness
   passes and frozen-weekly readiness is running; AD--Seq--Vol and its
   fine-tuned variant remain behind the same authenticated readiness gate.
@@ -166,6 +167,7 @@ gross exposure is normalized entry notional.
 Policy & Pure RMSE & Reduction & Pure ES$_{95}$ & Mean cost & Gross exposure & Economic book MDD \\
 \midrule
 SANOS--LV reference & 70.80 & 56.61\% & 134.71 & 10.10 & 2.6640 & 6,779.67 \\
+Historical SANOS MV, $\lambda=0.1$ & 100.85 & 38.19\% & 179.07 & 2.45 & 0.0236 & 2,752.93 \\
 Covariance MV, $\lambda=0.1$ & 150.73 & 7.62\% & 215.13 & 0.66 & 0.0048 & 1,723.98 \\
 Covariance MV, $\lambda=1$ & 135.85 & 16.74\% & 209.59 & 0.74 & 0.0062 & 1,720.29 \\
 Covariance MV, $\lambda=10$ & 129.25 & 20.79\% & 257.48 & 1.48 & 0.0518 & 1,754.14 \\
@@ -175,9 +177,11 @@ Covariance MV, $\lambda=10$ & 129.25 & 20.79\% & 257.48 & 1.48 & 0.0518 & 1,754.
 
 SANOS--LV gives the largest RMSE reduction in this completed subset, but it uses
 a materially larger marked book and pays more transaction cost. The covariance
-policies trade smaller books and have smaller cumulative book drawdown. The
-$\lambda=10$ covariance policy has its best RMSE, whereas its tail expected
-shortfall is worse than at $\lambda=1$. Historical-SANOS and the other fitted
+policies trade smaller books and have smaller cumulative book drawdown.
+Historical-SANOS mean--variance at $\lambda=0.1$ ranks second by both RMSE and
+ES$_{95}$ in the completed subset while using much less gross exposure than
+SANOS--LV. The $\lambda=10$ covariance policy has its best RMSE, whereas its
+tail expected shortfall is worse than at $\lambda=1$. The remaining fitted
 objectives must complete before this becomes a full model ranking.
 
 \subsection{Evidence level across models}
@@ -191,7 +195,7 @@ objectives must complete before this becomes a full model ranking.
 Model & Measure & Daily status & Evidence \\
 \midrule
 SANOS--LV & Q price / realized path & \statuscomplete & Current cohort: 611 origins, 12,220 records, zero cap hits and zero nonconvergence. \\
-Historical SANOS & P & \statuspending & Current-cohort rolling production is running; superseded-cohort results are excluded. \\
+Historical SANOS & P & \statuspending & Mean--variance $\lambda=0.1$ is complete on the current cohort; the remaining objectives are running. Superseded-cohort results are excluded. \\
 Robust covariance & P & \statuspending & Mean--variance $\lambda\in\{0.1,1,10\}$ is complete on the current cohort; mean--volatility production is running. \\
 GROMM & Q only & \statusready & All 611 dated inputs are prepared; rolling Q fitting is waiting for the managed GPU. Compatible P remains rejected by its fixed gates. \\
 VolGAN & P & \statusready & Daily public readiness passes; frozen-weekly public readiness is running. Full production remains pending. \\
@@ -251,8 +255,9 @@ determine indifference prices; a separate drift-neutral policy gives the
 executable pure hedge. Mean--variance uses exact cost-lasso coordinate descent,
 mean--volatility uses an exact conic program with an explicit recession test,
 and entropy and power-exponential objectives use analytic-gradient L-BFGS-B.
-The model is inexpensive and fully rolling. Current-cohort production remains
-in progress, so no performance comparison is reported yet.
+The model is inexpensive and fully rolling. Mean--variance at $\lambda=0.1$
+is complete on the current cohort with zero cap hits and zero nonconvergence;
+the remaining objective grid is still running.
 
 \subsection{Robust covariance}
 
@@ -263,8 +268,9 @@ robust scales and a regularized Tyler scatter matrix
 cross-moment separately by robust regression. Expected returns are HAC-screened
 in covariance eigenportfolios. Mean--variance and mean--volatility hedges use
 spread-weighted lasso costs; the latter is checked analytically for recession
-directions. The implementation gate passes and a full production run is in
-progress, but incomplete outputs must not be compared with Table~\ref{tab:risk}.
+directions. The implementation gate passes. Mean--variance at
+$\lambda\in\{0.1,1,10\}$ is complete on the current cohort; mean--volatility
+and the remaining objective grid are still running.
 
 \subsection{GROMM}
 
@@ -316,7 +322,8 @@ its target-notional identity begins \texttt{1.1:fd6839a0}. The SANOS--LV
 results SHA-256 begins \texttt{9e4252f60540}.
 The covariance results SHA-256 values are
 \texttt{5ec474dd...}, \texttt{17cfc415...}, and \texttt{47ff392b...} for
-$\lambda=0.1,1,10$, respectively. Every headline number is derived from an
+$\lambda=0.1,1,10$, respectively. The Historical-SANOS mean--variance
+$\lambda=0.1$ results SHA-256 begins \texttt{4197864e...}. Every headline number is derived from an
 immutable \texttt{hedging-daily-results-v2} artifact and its fully reconciled
 dated records.}
 
