@@ -85,12 +85,6 @@ def execute_production_queue(
     ran_case = False
     for case in selected:
         case_id = _require_string(case, "case_id")
-        if case_id in completed:
-            print(f"queue case={case_id} reused queue-state completion", flush=True)
-            continue
-        if continue_after_failure and case_id in failed:
-            print(f"queue case={case_id} retained queue-state failure", flush=True)
-            continue
         command = _production_command(
             case=case,
             interpreter=interpreter,
@@ -98,6 +92,35 @@ def execute_production_queue(
         )
         output = _command_option_path(command, "--output")
         results_path = _results_path(output, matrix_schema=str(matrix_schema))
+        if case_id in completed:
+            result_sha256 = _validate_results(
+                results_path,
+                output=output,
+                matrix_schema=str(matrix_schema),
+                expected_model=_require_string(case, "model"),
+                expected_result_count=expected_result_count,
+            )
+            record = next(
+                record
+                for record in _records(state)
+                if record.get("case_id") == case_id
+            )
+            pinned_sha256 = record.get("validated_results_sha256")
+            if pinned_sha256 is not None and pinned_sha256 != result_sha256:
+                raise ValueError(
+                    f"completed production result hash changed: {case_id}"
+                )
+            record["validated_results_sha256"] = result_sha256
+            record["revalidated_at"] = _utc_now()
+            _write_json_atomic(state_path, state)
+            print(
+                f"queue case={case_id} reused authenticated completion",
+                flush=True,
+            )
+            continue
+        if continue_after_failure and case_id in failed:
+            print(f"queue case={case_id} retained queue-state failure", flush=True)
+            continue
         output.mkdir(parents=True, exist_ok=True)
         log_path = output / "run.log"
         _check_resources()
@@ -146,7 +169,7 @@ def execute_production_queue(
                 continue
             raise RuntimeError(f"production case failed: {case_id} ({return_code})")
         try:
-            _validate_results(
+            result_sha256 = _validate_results(
                 results_path,
                 output=output,
                 matrix_schema=str(matrix_schema),
@@ -176,6 +199,7 @@ def execute_production_queue(
             case_id=case_id,
             status="complete",
             return_code=return_code,
+            validated_results_sha256=result_sha256,
         )
         completed.add(case_id)
         failed.discard(case_id)
@@ -392,7 +416,7 @@ def _validate_results(
     matrix_schema: str,
     expected_model: str,
     expected_result_count: int,
-) -> None:
+) -> str:
     payload = _read_json_object(path)
     if matrix_schema == DAILY_MATRIX_SCHEMA:
         if payload.get("schema") != DAILY_RESULTS_SCHEMA:
@@ -462,6 +486,7 @@ def _validate_results(
         )
     if not isinstance(payload.get("run_identity"), str):
         raise ValueError("production-results run identity is missing")
+    return _file_sha256(path)
 
 
 def _results_path(output: Path, *, matrix_schema: str) -> Path:
@@ -526,6 +551,7 @@ def _finish_record(
     status: str,
     return_code: int,
     error: str | None = None,
+    validated_results_sha256: str | None = None,
 ) -> None:
     record = next(
         record for record in _records(state) if record.get("case_id") == case_id
@@ -537,6 +563,10 @@ def _finish_record(
         record.pop("error", None)
     else:
         record["error"] = error
+    if validated_results_sha256 is None:
+        record.pop("validated_results_sha256", None)
+    else:
+        record["validated_results_sha256"] = validated_results_sha256
     state["status"] = status if status == "failed" else "running"
     state["current_case_id"] = None
     _write_json_atomic(state_path, state)

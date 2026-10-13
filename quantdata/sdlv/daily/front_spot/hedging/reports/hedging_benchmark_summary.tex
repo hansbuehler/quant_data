@@ -7,14 +7,17 @@
 \usepackage[a4paper,margin=17mm,headheight=14pt]{geometry}
 \usepackage{booktabs}
 \usepackage{tabularx}
+\usepackage{longtable}
 \usepackage{array}
 \usepackage{float}
+\usepackage{pdflscape}
 \usepackage{enumitem}
 \usepackage{xcolor}
 \usepackage{hyperref}
 \usepackage{fancyhdr}
 \usepackage{titlesec}
 \usepackage{siunitx}
+\usepackage[numbers,sort&compress]{natbib}
 
 \definecolor{navy}{HTML}{15324A}
 \definecolor{blue}{HTML}{2F6F9F}
@@ -141,7 +144,8 @@ loss}. Buyer and seller indifference prices are additional model outputs, not
 substitutes for this common-price comparison.
 
 Supported risk criteria are mean--variance, mean--volatility, entropy OCE, and
-power-exponential OCE. Learned or statistical policies use the hedge of the
+power-exponential OCE, following the risk-functional hedging framework of
+\citet{BuehlerEtAl2019DeepHedging}. Learned or statistical policies use the hedge of the
 claim relative to the corresponding zero-claim policy; generated models also
 fit a direct pure policy so transaction costs are charged on the executable
 net position rather than inferred from differences of absolute-policy costs.
@@ -150,28 +154,48 @@ net position rather than inferred from differences of absolute-policy costs.
 
 \subsection{Completed daily production runs}
 
-Table~\ref{tab:risk} uses the pure-hedge loss in inception-spot units. Aggregate
+The four objective tables evaluate each completed policy on its full 611-origin
+out-of-sample \emph{economic loss}, including transaction costs and the common
+market-price contribution. Risk functionals are evaluated before rescaling;
+only the final scalar is displayed in basis points of inception normalized
+spot. Each entry is the equal-weighted mean of the 20 target-level scores. The
+historical row is the single fitted mean--volatility $\kappa=1$ policy evaluated
+under all four functionals; it is not presented as four separately refitted
+policies. As the remaining authenticated production runs finish, they enter as
+additional fitted-policy rows.
+
+\IfFileExists{hedging_benchmark_summary_objective_tables.tex}{
+  \input{hedging_benchmark_summary_objective_tables.tex}
+}{
+  \input{quantdata/sdlv/daily/front_spot/hedging/reports/hedging_benchmark_summary_objective_tables.tex}
+}
+
+Table~\ref{tab:risk} gives complementary distributional diagnostics. Aggregate
 RMSE is the square root of the equally weighted mean claim-level MSE; every
 claim contributes 611 observations. ``Reduction'' is relative to the matching
-unhedged RMSE. Expected shortfall is the equally weighted claim-level 95\%
-expected shortfall.
+unhedged RMSE. Expected shortfall is the equal-weighted target-level 95\%
+expected shortfall. Book MDD is the maximum drawdown of the cumulative P\&L of
+an equal-weighted 20-target daily book; worst target MDD is the largest
+single-target drawdown. Drawdowns start from zero and are reported in basis
+points of inception normalized spot, not as percentages of an unspecified
+capital account.
 
 \begin{table}[H]
 \centering
 \small
-\caption{Out-of-sample daily risk across the completed 611-origin runs.}
+\caption{Out-of-sample daily distributional risk, in basis points except reduction.}
 \label{tab:risk}
-\begin{tabular}{llrrrrr}
+\begin{tabular}{llrrrrrr}
 \toprule
-Model & Targets & Unhedged RMSE & Pure RMSE & Reduction & Economic RMSE & ES$_{95}$ \\
+Model & Targets & Unhedged RMSE & Pure RMSE & Reduction & ES$_{95}$ & Book MDD & Worst MDD \\
 \midrule
-SANOS--LV & all 20 & \SanosAllUnhedgedRmse & \SanosAllPureRmse & \SanosAllReduction & \SanosAllEconomicRmse & \SanosAllEsNinetyFive \\
-SANOS--LV & 1D & \SanosOneDayUnhedgedRmse & \SanosOneDayPureRmse & \SanosOneDayReduction & \SanosOneDayEconomicRmse & \SanosOneDayEsNinetyFive \\
-SANOS--LV & 3D & \SanosThreeDayUnhedgedRmse & \SanosThreeDayPureRmse & \SanosThreeDayReduction & \SanosThreeDayEconomicRmse & \SanosThreeDayEsNinetyFive \\
+SANOS--LV & all 20 & \SanosAllUnhedgedRmse & \SanosAllPureRmse & \SanosAllReduction & \SanosAllEsNinetyFive & \SanosAllBookDrawdown & \SanosAllWorstDrawdown \\
+SANOS--LV & 1D & \SanosOneDayUnhedgedRmse & \SanosOneDayPureRmse & \SanosOneDayReduction & \SanosOneDayEsNinetyFive & \SanosOneDayBookDrawdown & \SanosOneDayWorstDrawdown \\
+SANOS--LV & 3D & \SanosThreeDayUnhedgedRmse & \SanosThreeDayPureRmse & \SanosThreeDayReduction & \SanosThreeDayEsNinetyFive & \SanosThreeDayBookDrawdown & \SanosThreeDayWorstDrawdown \\
 \addlinespace
-Historical SANOS & all 20 & \HistoricalAllUnhedgedRmse & \HistoricalAllPureRmse & \HistoricalAllReduction & \HistoricalAllEconomicRmse & \HistoricalAllEsNinetyFive \\
-Historical SANOS & 1D & \HistoricalOneDayUnhedgedRmse & \HistoricalOneDayPureRmse & \HistoricalOneDayReduction & \HistoricalOneDayEconomicRmse & \HistoricalOneDayEsNinetyFive \\
-Historical SANOS & 3D & \HistoricalThreeDayUnhedgedRmse & \HistoricalThreeDayPureRmse & \HistoricalThreeDayReduction & \HistoricalThreeDayEconomicRmse & \HistoricalThreeDayEsNinetyFive \\
+Historical SANOS & all 20 & \HistoricalAllUnhedgedRmse & \HistoricalAllPureRmse & \HistoricalAllReduction & \HistoricalAllEsNinetyFive & \HistoricalAllBookDrawdown & \HistoricalAllWorstDrawdown \\
+Historical SANOS & 1D & \HistoricalOneDayUnhedgedRmse & \HistoricalOneDayPureRmse & \HistoricalOneDayReduction & \HistoricalOneDayEsNinetyFive & \HistoricalOneDayBookDrawdown & \HistoricalOneDayWorstDrawdown \\
+Historical SANOS & 3D & \HistoricalThreeDayUnhedgedRmse & \HistoricalThreeDayPureRmse & \HistoricalThreeDayReduction & \HistoricalThreeDayEsNinetyFive & \HistoricalThreeDayBookDrawdown & \HistoricalThreeDayWorstDrawdown \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -180,8 +204,8 @@ The SANOS--LV hedge is materially stronger on this first completed comparison,
 especially for the remaining-life 3D claims. Its aggregate pure RMSE is
 \SanosVsHistoricalReduction\ lower than historical SANOS. Pricing loss is
 negligible at aggregate scale:
-SANOS--LV economic RMSE is \SanosAllEconomicRmseSix\ versus pure RMSE
-\SanosAllPureRmseSix; historical SANOS
+SANOS--LV economic RMSE is \SanosAllEconomicRmseSix\,bp versus pure RMSE
+\SanosAllPureRmseSix\,bp; historical SANOS
 uses the common price and therefore has zero pricing contribution by design.
 
 \begin{table}[H]
@@ -189,20 +213,22 @@ uses the common price and therefore has zero pricing contribution by design.
 \small
 \caption{Average trading diagnostics across all 20 targets and 611 origins.}
 \label{tab:trading}
-\begin{tabular}{lrrrrrr}
+\begin{tabular}{lrrrrr}
 \toprule
-Model & Mean cost & Entry turnover & Nonzero actions & Cap hits & Nonconverged & Records \\
+Model & Mean cost (bp) & Gross marked exposure & Cap hits & Nonconverged & Records \\
 \midrule
-SANOS--LV & \SanosAllMeanCost & \SanosAllTurnover & \SanosAllNonzero & \SanosAllCapHits & \SanosAllNonconverged & \SanosRecordCount \\
-Historical SANOS & \HistoricalAllMeanCost & \HistoricalAllTurnover & \HistoricalAllNonzero & \HistoricalAllCapHits & \HistoricalAllNonconverged & \HistoricalRecordCount \\
+SANOS--LV & \SanosAllMeanCost & \SanosAllGrossExposure & \SanosAllCapHits & \SanosAllNonconverged & \SanosRecordCount \\
+Historical SANOS & \HistoricalAllMeanCost & \HistoricalAllGrossExposure & \HistoricalAllCapHits & \HistoricalAllNonconverged & \HistoricalRecordCount \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The similar average cost hides different portfolio geometry. SANOS--LV uses a
-sparse exact eight-factor hedge plus spot; historical SANOS spreads small
-positions across much of the 200-coordinate option book. Turnover and action
-count therefore should not be read interchangeably.
+Raw support counts are deliberately omitted. Conic-solver residuals and the
+difference between claim and zero-claim policies make a numerical ``nonzero''
+threshold economically arbitrary. Table~\ref{tab:trading} instead reports the
+actual paid cost and the origin-marked gross executable position. SANOS--LV's
+larger marked exposure reflects its spot delta and exact factor hedge; the
+historical policy pays a similar average cost on a much smaller marked book.
 
 \subsection{Evidence level across models}
 
@@ -253,9 +279,10 @@ explicitly blocked rather than being launched without complete evidence.
 
 \section{Model Catalogue}
 
-\subsection{SANOS--LV reference hedge}
+\subsection{SANOS--LV}
 
-SANOS supplies the common market interpolation and digital price. DLV local
+SANOS supplies the common market interpolation and digital price
+\citep{SANOS2026}. DLV local
 volatility supplies the model price and Greeks. From each trailing 252-day
 window, the method estimates one front-spot-projected DLV factor and seven
 residual PCA factors. Central DLV-squared bumps give factor vegas; a linear
@@ -264,26 +291,29 @@ neutralizes them, and spot removes residual delta. One-day claims are
 delta-only; three-day claims use at most eight option hedges. The method is
 deterministic, sparse, and the strongest completed baseline.
 
-\subsection{Independent robust covariance}
+\subsection{Historical SANOS}
+
+Historical SANOS reconstructs 252 same-coordinate option and target returns
+from released SANOS states \citep{SANOS2026} and uses those empirical rows
+directly as scenarios. It supports all four risk criteria in the deep-hedging
+sense of \citet{BuehlerEtAl2019DeepHedging}. Long, short, and zero policies
+determine indifference prices; a separate drift-neutral policy gives the
+executable pure hedge. Mean--variance uses exact cost-lasso coordinate descent
+and nonlinear objectives use analytic-gradient L-BFGS-B. The model is
+inexpensive and fully rolling, but its completed mean--volatility $\kappa=1$
+result trails SANOS--LV.
+
+\subsection{Robust covariance}
 
 This baseline deliberately avoids a SANOS scenario generator. It replays the
 current relative option book over 252 historical public transitions, fits
-robust scales and a regularized Tyler scatter matrix, and estimates each target
+robust scales and a regularized Tyler scatter matrix
+\citep{Tyler1987,ChenWieselHero2011}, and estimates each target
 cross-moment separately by robust regression. Expected returns are HAC-screened
 in covariance eigenportfolios. Mean--variance and mean--volatility hedges use
 spread-weighted lasso costs; the latter is checked analytically for recession
 directions. The implementation gate passes and a full production run is in
 progress, but incomplete outputs must not be compared with Table~\ref{tab:risk}.
-
-\subsection{Historical statistical SANOS}
-
-Historical SANOS reconstructs 252 same-coordinate option and target returns
-from released SANOS states and uses those empirical rows directly as scenarios.
-It supports all four risk criteria. Long, short, and zero policies determine
-indifference prices; a separate drift-neutral policy gives the executable pure
-hedge. Mean--variance uses exact cost-lasso coordinate descent and nonlinear
-objectives use analytic-gradient L-BFGS-B. The model is inexpensive and fully
-rolling, but its completed mean--volatility $\kappa=1$ result trails SANOS--LV.
 
 \subsection{GROMM}
 
@@ -300,7 +330,7 @@ predictable physical drift without fitted holdout centering. Full rolling
 production remains outstanding. A separate conventional Q comparator prices
 by risk-neutral expectation and computes spot delta plus eight contemporaneous
 DLV-factor vegas from the same stochastic GROMM state using fixed-seed common
-random numbers.
+random numbers \citep{GROMM2026}.
 
 \subsection{VolGAN}
 
@@ -311,9 +341,9 @@ published two-layer Softplus architecture uses 32 noise dimensions, a 16-unit
 hidden layer, and strike/maturity gradient penalties. Weekly paths recursively
 update surface and return state. The implementation is project-native and uses
 no proprietary surfaces. Smoke, restart, and rolling warm-start gates pass;
-full production does not yet exist.
+full production does not yet exist \citep{VuleticCont2024}.
 
-\subsection{AD--Seq--Vol and arbitrage-penalized fine tuning}
+\subsection{AD--Seq--Vol / FT}
 
 AD--Seq--Vol is a causal sequence diffusion model on 22-day histories of the
 same $9\times11$ surface plus forward-adjusted returns. Its eight-layer,
@@ -323,6 +353,7 @@ rank-four adapter with calendar, call-spread, and butterfly penalties. Both are
 historical-P generators and supply indifference prices rather than Q
 expectations. Exact restart, rolling warm-start, daily/weekly adapters, and one
 full-geometry GPU origin pass; production and batch-invariance remain pending.
+The architecture and published comparison are due to \citet{HanEtAl2026}.
 
 \vspace{0.4em}
 \hrule
@@ -335,5 +366,28 @@ SANOS--LV run identity begins \texttt{\SanosRunPrefix}; historical-SANOS run
 identity begins \texttt{\HistoricalRunPrefix}.\\
 All headline numbers are derived from immutable
 \texttt{hedging-daily-results-v2} artifacts.}
+
+\clearpage
+\appendix
+\section{Target-Level Out-of-Sample Objectives}
+\label{app:target-objectives}
+
+Each table reports the complete 611-origin score for every target and completed
+policy. Objectives are evaluated on the original inception-spot-normalized
+economic loss, including transaction costs, and the final scalar alone is
+multiplied by $10^4$ for display in basis points. Pure RMSE and economic maximum
+drawdown use the same target notional. This preserves the risk-aversion
+parameters shown in the column headings; applying them after converting losses
+to basis points would be dimensionally incorrect.
+
+\IfFileExists{hedging_benchmark_summary_objective_appendix.tex}{
+  \input{hedging_benchmark_summary_objective_appendix.tex}
+}{
+  \input{quantdata/sdlv/daily/front_spot/hedging/reports/hedging_benchmark_summary_objective_appendix.tex}
+}
+
+\clearpage
+\bibliographystyle{plainnat}
+\bibliography{hedging_benchmark_summary_refs}
 
 \end{document}

@@ -236,13 +236,33 @@ print("synthetic production complete", flush=True)
     )
 
     assert first["status"] == "complete"
-    assert second == first
+    assert second["status"] == first["status"]
+    assert second["completed_at"] == first["completed_at"]
     assert len(first["matrix_sha256"]) == 64
     records = first["records"]
     assert isinstance(records, list)
     assert len(records) == 1
     assert records[0]["status"] == "complete"
+    assert records[0]["validated_results_sha256"] == _sha256(
+        output / "results.json"
+    )
+    assert "revalidated_at" in second["records"][0]
     assert "synthetic production complete" in (output / "run.log").read_text()
+
+    payload = json.loads((output / "results.json").read_text(encoding="utf-8"))
+    payload["run_identity"] = "tampered-run"
+    _write_json(output / "results.json", payload)
+    with pytest.raises(ValueError, match="result hash changed"):
+        execute_production_matrix.execute_production_queue(
+            matrix_path=matrix,
+            state_path=state_path,
+            interpreter=Path(sys.executable),
+            case_ids=("historical-sanos-test",),
+            case_prefix=None,
+            resource="cpu",
+            expected_result_count=2,
+            heartbeat_seconds=1.0,
+        )
 
     matrix.write_text(matrix.read_text(encoding="utf-8") + "\n", encoding="utf-8")
     with pytest.raises(ValueError, match="matrix bytes changed"):
@@ -381,7 +401,8 @@ results.write_text(json.dumps({
     )
 
     assert first["status"] == "complete-with-failures"
-    assert second == first
+    assert second["status"] == first["status"]
+    assert second["completed_at"] == first["completed_at"]
     assert [record["status"] for record in first["records"]] == [
         "failed",
         "complete",
@@ -393,6 +414,16 @@ results.write_text(json.dumps({
 def test_execute_production_queue_requires_explicit_legacy_state_adoption(
     tmp_path: Path,
 ) -> None:
+    output = tmp_path / "output"
+    _write_json(
+        output / "results.json",
+        {
+            "schema": "hedging-daily-results-v2",
+            "model": "historical-sanos",
+            "result_count": 2,
+            "run_identity": "legacy-run",
+        },
+    )
     matrix = tmp_path / "matrix.json"
     matrix.write_text(
         json.dumps(
@@ -404,7 +435,12 @@ def test_execute_production_queue_requires_explicit_legacy_state_adoption(
                         "model": "historical-sanos",
                         "resource": "cpu",
                         "readiness": "ready",
-                        "command": ["python", "unused", "--output", "unused"],
+                        "command": [
+                            "python",
+                            "unused",
+                            "--output",
+                            str(output),
+                        ],
                     }
                 ],
             }
@@ -450,6 +486,9 @@ def test_execute_production_queue_requires_explicit_legacy_state_adoption(
     )
     assert len(adopted["matrix_sha256"]) == 64
     assert "legacy_state_adopted_at" in adopted
+    assert adopted["records"][0]["validated_results_sha256"] == _sha256(
+        output / "results.json"
+    )
     persisted = json.loads(state_path.read_text(encoding="utf-8"))
     assert persisted["matrix_sha256"] == adopted["matrix_sha256"]
     assert persisted["legacy_state_adopted_at"] == adopted["legacy_state_adopted_at"]
