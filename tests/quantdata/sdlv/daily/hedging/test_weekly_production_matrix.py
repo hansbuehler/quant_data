@@ -123,6 +123,10 @@ def test_weekly_native_commands_pin_protocol_and_authenticated_sizing(
             case.command.index("--target-notional-artifact") + 1
         ]
         assert Path(target_path).exists()
+        if case.objective == "mean-volatility":
+            assert "--allow-cap-hits" in case.command
+        else:
+            assert "--allow-cap-hits" not in case.command
 
 
 def test_weekly_generated_rolling_cases_require_selected_artifacts(

@@ -215,23 +215,6 @@ def fit_covariance_book_actions(
             bounded=bounded,
             recession_ratio=recession_ratio,
         )
-        if not bounded:
-            actions.append(
-                CovarianceBookAction(
-                    action=None,
-                    claim_policy=claim_policy,
-                    zero_policy=zero_policy,
-                    objective=claim_policy.objective,
-                    expected_profit=claim_center,
-                    standard_deviation=math.sqrt(claim_variance),
-                    internal_cap_hits=0,
-                    executable_cap_hits=0,
-                    cap_hits=0,
-                    converged=False,
-                    bounded=False,
-                )
-            )
-            continue
         raw_action = claim_policy.action - zero_policy.action
         action = np.clip(raw_action, -config.position_cap, config.position_cap)
         final_cap_hits = int(np.count_nonzero(action != raw_action))
@@ -259,12 +242,13 @@ def fit_covariance_book_actions(
                 executable_cap_hits=final_cap_hits,
                 cap_hits=cap_hits,
                 converged=(
-                    claim_policy.converged
+                    bounded
+                    and claim_policy.converged
                     and zero_policy.converged
                     and internal_cap_hits == 0
                     and final_cap_hits == 0
                 ),
-                bounded=True,
+                bounded=bounded,
             )
         )
     return CovarianceBookFit(
@@ -456,12 +440,7 @@ def _fit_policy(
     bounded: bool,
     recession_ratio: float,
 ) -> RobustPolicyFit:
-    if not bounded:
-        action = np.zeros_like(instrument_center)
-        iterations = 0
-        converged = False
-        cap_hits = 0
-    elif config.objective is CovarianceObjective.MEAN_VARIANCE:
+    if config.objective is CovarianceObjective.MEAN_VARIANCE:
         action, iterations, converged, cap_hits = _solve_quadratic_lasso(
             instrument_center=instrument_center,
             covariance=covariance,
@@ -480,6 +459,7 @@ def _fit_policy(
             penalty=penalty,
             config=config,
         )
+        converged = converged and bounded
     expected_profit, standard_deviation, objective = _policy_statistics(
         action=action,
         instrument_center=instrument_center,

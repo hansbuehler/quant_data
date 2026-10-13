@@ -28,9 +28,10 @@
   twice the current half-spread as a predictable round-trip proxy otherwise.
 - **Mean-volatility boundedness:** the objective is positively homogeneous. A
   covariance-metric distance-to-cost-box calculation checks its recession
-  condition before optimization. An unbounded fit returns no tradable
-  differenced action. Position-cap hits in an otherwise bounded numerical fit
-  remain failed convergence diagnostics.
+  condition before optimization. An unbounded fit is solved under the
+  precommitted large numerical cap, retained with `bounded=false`, and
+  reported through non-convergence and cap-hit diagnostics. Position-cap hits
+  in an otherwise bounded numerical fit remain failed convergence diagnostics.
 - **Training:** production configuration and the regression smoke use exactly
   252 valid prior one-session observations. The last training return may end at
   the decision-date close, but no endpoint after that close enters the fit.

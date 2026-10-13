@@ -53,6 +53,16 @@ class SanosLvWeeklyPolicy:
     claim: WeeklyClaimDefinition
     artifact_fingerprints: tuple[str, ...] = ()
 
+    @property
+    def converged(self) -> bool:
+        """Return the deterministic factor-hedge fit status."""
+        return True
+
+    @property
+    def cap_hits(self) -> int:
+        """Return target-independent fit cap hits."""
+        return 0
+
 
 class SanosLvWeeklyAdapter:
     """Fit rolling DLV factors and hedge fixed claims by delta and factor vega."""

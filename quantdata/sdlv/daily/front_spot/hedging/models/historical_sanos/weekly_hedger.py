@@ -56,6 +56,8 @@ class HistoricalWeeklyHedgeFit:
     pure_policy: HistoricalWeeklyOpenLoopFit
     prices: WeeklyIndifferencePrices
     converged: bool
+    internal_cap_hits: int
+    executable_cap_hits: int
     cap_hits: int
 
 
@@ -115,19 +117,26 @@ def fit_weekly_open_loop_hedge(
         buyer=long_policy.certainty_equivalent - zero_policy.certainty_equivalent,
         seller=zero_policy.certainty_equivalent - short_policy.certainty_equivalent,
     )
-    spot_positions = pure_policy.spot_positions
-    option_positions = pure_policy.option_positions
-    cap_hits = int(
-        np.count_nonzero(
-            np.abs(
-                np.concatenate((spot_positions[:, None], option_positions), axis=1)
-            )
-            >= 0.999 * config.position_cap
-        )
+    raw_positions = np.concatenate(
+        (pure_policy.spot_positions[:, None], pure_policy.option_positions),
+        axis=1,
     )
+    executable_positions = np.clip(
+        raw_positions,
+        -config.position_cap,
+        config.position_cap,
+    )
+    executable_cap_hits = int(np.count_nonzero(executable_positions != raw_positions))
+    internal_cap_hits = (
+        long_policy.cap_hits
+        + short_policy.cap_hits
+        + zero_policy.cap_hits
+        + pure_policy.cap_hits
+    )
+    cap_hits = internal_cap_hits + executable_cap_hits
     return HistoricalWeeklyHedgeFit(
-        spot_positions=spot_positions,
-        option_positions=option_positions,
+        spot_positions=executable_positions[:, 0],
+        option_positions=executable_positions[:, 1:],
         long_policy=long_policy,
         short_policy=short_policy,
         zero_policy=zero_policy,
@@ -140,13 +149,9 @@ def fit_weekly_open_loop_hedge(
             and pure_policy.converged
             and cap_hits == 0
         ),
-        cap_hits=(
-            cap_hits
-            + long_policy.cap_hits
-            + short_policy.cap_hits
-            + zero_policy.cap_hits
-            + pure_policy.cap_hits
-        ),
+        internal_cap_hits=internal_cap_hits,
+        executable_cap_hits=executable_cap_hits,
+        cap_hits=cap_hits,
     )
 
 
@@ -214,7 +219,7 @@ class _WeeklyOpenLoopGeometry:
         )
         initial = np.zeros(self.parameter_count + int(include_translation))
         bounds = [
-            (-self.config.position_cap, self.config.position_cap)
+            (-self.config.solver_position_cap, self.config.solver_position_cap)
         ] * self.parameter_count
         if include_translation:
             bounds.append((None, None))
@@ -266,7 +271,7 @@ class _WeeklyOpenLoopGeometry:
         positions = np.concatenate((spot[:, None], options), axis=1)
         cap_hits = int(
             np.count_nonzero(
-                np.abs(positions) >= 0.999 * self.config.position_cap
+                np.abs(positions) >= 0.999 * self.config.solver_position_cap
             )
         )
         return HistoricalWeeklyOpenLoopFit(
@@ -400,8 +405,8 @@ class _WeeklyOpenLoopGeometry:
                 + ridge
             ),
             [
-                positions >= -self.config.position_cap,
-                positions <= self.config.position_cap,
+                positions >= -self.config.solver_position_cap,
+                positions <= self.config.solver_position_cap,
             ],
         )
         positions.value = np.asarray(
@@ -432,8 +437,8 @@ class _WeeklyOpenLoopGeometry:
         )
         fitted = np.clip(
             fitted,
-            -self.config.position_cap,
-            self.config.position_cap,
+            -self.config.solver_position_cap,
+            self.config.solver_position_cap,
         )
         success = problem.status == cp.OPTIMAL
         return OptimizeResult(

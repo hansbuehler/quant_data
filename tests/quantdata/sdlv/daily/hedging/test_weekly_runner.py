@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -76,6 +77,8 @@ def _run(
     target_label: str,
     claim_quantity: float,
     spot_position: float = 0.0,
+    fit_converged: bool = True,
+    fit_cap_hits: int = 0,
 ) -> WeeklyModelRun:
     terminal_date = origin_date + timedelta(days=7)
     market_price = 0.10
@@ -122,7 +125,9 @@ def _run(
     return WeeklyModelRun(
         result=result,
         market_fit_identities=tuple("market-fit" for _ in range(5)),
-        policy_fit_identities=tuple("policy-fit" for _ in range(5)),
+        policy_fit_identities=tuple(
+            f"policy-fit-{target_label}" for _ in range(5)
+        ),
         market_artifact_fingerprints=tuple(
             ("market:sha256",) for _ in range(5)
         ),
@@ -131,6 +136,8 @@ def _run(
         ),
         fit_as_of_dates=tuple(origin_date.isoformat() for _ in range(5)),
         fit_price_records=prices,
+        policy_fit_converged=tuple(fit_converged for _ in range(5)),
+        policy_fit_cap_hits=tuple(fit_cap_hits for _ in range(5)),
         fit_long_prices_origin_pv=np.full(5, model_price),
         spot_positions=np.full(5, spot_position),
         option_positions=np.zeros((5, 2)),
@@ -188,6 +195,9 @@ def test_weekly_runner_writes_complete_atomic_books_and_resumes(
 
     assert calls == [origin]
     assert first.result_count == 13
+    assert first.fit_cap_hits == 0
+    assert first.executed_cap_hits == 0
+    assert first.nonconverged_fits == 0
     assert second.reused_origins == (origin.isoformat(),)
     assert not tuple(output.rglob("*.tmp"))
     record = read_weekly_record(
@@ -237,6 +247,81 @@ def test_weekly_runner_rejects_incomplete_book_and_cap_hits(
             ),
             output_directory=tmp_path / "cap-hit",
         )
+
+
+def test_weekly_runner_authenticates_internal_fit_diagnostics_without_duplication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    panel, manifest_sha256 = _panel_and_manifest(tmp_path)
+    origin = date(2023, 1, 3)
+    monkeypatch.setattr(
+        weekly_runner,
+        "overlapping_weekly_origins",
+        lambda *_args, **_kwargs: (origin,),
+    )
+    strict = _spec(manifest_sha256)
+
+    def book(_panel: PublicHedgingPanel, origin_date: date):
+        runs = list(_book(origin_date))
+        runs[0] = _run(
+            origin_date,
+            target_label=weekly_targets()[0].label,
+            claim_quantity=0.5,
+            fit_converged=False,
+            fit_cap_hits=3,
+        )
+        return tuple(runs)
+
+    with pytest.raises(RuntimeError, match="3 position-cap hits"):
+        run_weekly_evaluation(
+            panel,
+            spec=strict,
+            run_book=book,
+            output_directory=tmp_path / "strict-fit-cap",
+        )
+
+    def nonconverged_book(_panel: PublicHedgingPanel, origin_date: date):
+        runs = list(_book(origin_date))
+        runs[0] = _run(
+            origin_date,
+            target_label=weekly_targets()[0].label,
+            claim_quantity=0.5,
+            fit_converged=False,
+        )
+        return tuple(runs)
+
+    with pytest.raises(RuntimeError, match="1 nonconverged policy fits"):
+        run_weekly_evaluation(
+            panel,
+            spec=strict,
+            run_book=nonconverged_book,
+            output_directory=tmp_path / "strict-nonconverged",
+        )
+
+    permitted = replace(strict, require_no_cap_hits=False)
+    output = tmp_path / "permitted-fit-cap"
+    summary = run_weekly_evaluation(
+        panel,
+        spec=permitted,
+        run_book=book,
+        output_directory=output,
+    )
+    assert summary.fit_cap_hits == 3
+    assert summary.executed_cap_hits == 0
+    assert summary.nonconverged_fits == 1
+    assert summary.cap_hits == 3
+    record = json.loads(
+        (output / "records" / f"{origin.isoformat()}.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert record["numerical_diagnostics"] == {
+        "fit_cap_hits": 3,
+        "executed_cap_hits": 0,
+        "nonconverged_fits": 1,
+        "cap_hits": 3,
+    }
 
 
 def test_weekly_runner_rejects_changed_record_and_run_identity(

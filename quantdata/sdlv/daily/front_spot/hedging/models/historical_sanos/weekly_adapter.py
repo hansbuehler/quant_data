@@ -55,6 +55,16 @@ class HistoricalSanosWeeklyPolicy:
     hedge: HistoricalWeeklyHedgeFit
     artifact_fingerprints: tuple[str, ...] = ()
 
+    @property
+    def converged(self) -> bool:
+        """Return whether every fitted component passed its numerical gate."""
+        return self.hedge.converged
+
+    @property
+    def cap_hits(self) -> int:
+        """Return internal solver cap hits for this fit."""
+        return self.hedge.internal_cap_hits
+
 
 class HistoricalSanosWeeklyAdapter:
     """Fit rolling historical SANOS paths and open-loop weekly policies."""

@@ -19,8 +19,8 @@ from filelock import FileLock, Timeout
 DAILY_MATRIX_SCHEMA = "hedging-daily-production-matrix-v1"
 WEEKLY_MATRIX_SCHEMA = "hedging-weekly-production-matrix-v1"
 DAILY_RESULTS_SCHEMA = "hedging-daily-results-v2"
-WEEKLY_EVALUATION_SCHEMA = "hedging-weekly-evaluation-v1"
-WEEKLY_RESULTS_SCHEMA = "hedging-weekly-results-v1"
+WEEKLY_EVALUATION_SCHEMA = "hedging-weekly-evaluation-v2"
+WEEKLY_RESULTS_SCHEMA = "hedging-weekly-results-v2"
 QUEUE_SCHEMA = "hedging-production-queue-v1"
 LEGACY_DAILY_QUEUE_SCHEMA = "hedging-daily-production-queue-v1"
 DEFAULT_DAILY_RESULT_COUNT = 12_220
@@ -490,8 +490,17 @@ def _validate_results(
             raise ValueError("weekly-results origins are incomplete")
         if completion.result_count != aggregate.result_count:
             raise ValueError("weekly summary and aggregate result counts differ")
-        if completion.cap_hits != 0:
+        if spec.require_no_cap_hits and completion.cap_hits != 0:
             raise ValueError("weekly-results contain position-cap hits")
+        if spec.require_no_cap_hits and completion.nonconverged_fits != 0:
+            raise ValueError("weekly-results contain nonconverged policy fits")
+        if (
+            aggregate.fit_cap_hits != completion.fit_cap_hits
+            or aggregate.executed_cap_hits != completion.executed_cap_hits
+            or aggregate.nonconverged_fits != completion.nonconverged_fits
+            or aggregate.cap_hits != completion.cap_hits
+        ):
+            raise ValueError("weekly numerical diagnostics do not reconcile")
         identities = {spec.run_identity, completion.run_identity, aggregate.run_identity}
         if len(identities) != 1:
             raise ValueError("weekly run, summary, and aggregate identities differ")

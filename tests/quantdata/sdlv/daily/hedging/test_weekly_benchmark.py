@@ -90,6 +90,8 @@ class _TestFit:
     market_fit_identity: str
     policy_fit_identity: str
     prices: WeeklyPriceRecord
+    converged: bool = True
+    cap_hits: int = 0
     artifact_fingerprints: tuple[str, ...] = ()
 
 

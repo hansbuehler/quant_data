@@ -10,7 +10,11 @@
 - **Scenarios:** the empirical rolling return rows themselves, without a
   parametric generator.
 - **Objectives:** mean-variance, mean-volatility, entropy OCE, and the benchmark
-  power-exponential OCE, all with predictable spread costs.
+  power-exponential OCE, all with predictable spread costs. If the homogeneous
+  mean-volatility objective fails its recession condition at low risk aversion,
+  the fit is retained under the precommitted large numerical cap and reported
+  with non-convergence and cap-hit diagnostics rather than treated as a finite
+  unconstrained optimum.
 - **Hedge:** independently train fresh-book long, short, and zero policies for
   internally consistent indifference prices. The executed hedge is a separate
   drift-neutral policy fitted with centered instrument gains and the actual
@@ -31,7 +35,12 @@
   weekly uses one five-row open-loop policy; restarted weekly refits the
   remaining rows from the realized claim prefix and carried positions. Future
   claim paths preserve the fixed inception-forward normalization while using
-  the current known forward curve.
+  the current known forward curve. Virtual pricing policies use the declared
+  solver cap before the pure hedge is clipped to the executable cap. Weekly
+  records preserve internal fitted-policy convergence and cap counts once per
+  unique fit identity, separately from cap hits in the five realized action
+  books. Planned executable clipping in an unused restarted-policy suffix
+  still marks that fit nonconverged without double-counting a realized cap.
 
 Run on CPU:
 

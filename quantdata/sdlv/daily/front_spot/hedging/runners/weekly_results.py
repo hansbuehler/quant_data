@@ -48,9 +48,10 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.weekly import (
     WeeklyEvaluationSummary,
     eligible_weekly_origins,
     read_weekly_record,
+    weekly_numerical_diagnostics,
 )
 
-WEEKLY_RESULTS_SCHEMA = "hedging-weekly-results-v1"
+WEEKLY_RESULTS_SCHEMA = "hedging-weekly-results-v2"
 
 
 @version("0.1", dependencies=[EpisodeInferenceConfig, WeeklyEvaluationSpec])
@@ -167,6 +168,10 @@ class WeeklyRunResults:
     schedule: str
     dataset_manifest_sha256: str
     result_count: int
+    fit_cap_hits: int
+    executed_cap_hits: int
+    nonconverged_fits: int
+    cap_hits: int
     aggregation_config: dict[str, object]
     volatility_thresholds: tuple[float, float]
     exposure_convention: str
@@ -197,6 +202,16 @@ class WeeklyRunResults:
             _validate_sha256(value, name=name)
         if self.result_count <= 0:
             raise ValueError("weekly result count must be positive")
+        numerical_counts = (
+            self.fit_cap_hits,
+            self.executed_cap_hits,
+            self.nonconverged_fits,
+            self.cap_hits,
+        )
+        if any(value < 0 for value in numerical_counts):
+            raise ValueError("weekly numerical result counts must be non-negative")
+        if self.cap_hits != self.fit_cap_hits + self.executed_cap_hits:
+            raise ValueError("weekly aggregate cap counts do not reconcile")
         lower, upper = self.volatility_thresholds
         if not 0.0 < lower <= upper:
             raise ValueError("weekly result volatility thresholds are invalid")
@@ -246,6 +261,10 @@ class WeeklyRunResults:
                 "schedule": self.schedule,
                 "dataset_manifest_sha256": self.dataset_manifest_sha256,
                 "result_count": self.result_count,
+                "fit_cap_hits": self.fit_cap_hits,
+                "executed_cap_hits": self.executed_cap_hits,
+                "nonconverged_fits": self.nonconverged_fits,
+                "cap_hits": self.cap_hits,
                 "volatility_thresholds": self.volatility_thresholds,
                 "exposure_convention": self.exposure_convention,
                 "source_run_sha256": self.source_run_sha256,
@@ -266,6 +285,10 @@ class WeeklyRunResults:
             "schedule": self.schedule,
             "dataset_manifest_sha256": self.dataset_manifest_sha256,
             "result_count": self.result_count,
+            "fit_cap_hits": self.fit_cap_hits,
+            "executed_cap_hits": self.executed_cap_hits,
+            "nonconverged_fits": self.nonconverged_fits,
+            "cap_hits": self.cap_hits,
             "aggregation_config": self.aggregation_config,
             "volatility_thresholds": list(self.volatility_thresholds),
             "exposure_convention": self.exposure_convention,
@@ -309,6 +332,10 @@ class WeeklyRunResults:
                 "dataset_manifest_sha256",
             ),
             result_count=_required_integer(payload, "result_count"),
+            fit_cap_hits=_required_integer(payload, "fit_cap_hits"),
+            executed_cap_hits=_required_integer(payload, "executed_cap_hits"),
+            nonconverged_fits=_required_integer(payload, "nonconverged_fits"),
+            cap_hits=_required_integer(payload, "cap_hits"),
             aggregation_config=aggregation_config,
             volatility_thresholds=_required_float_pair(
                 payload,
@@ -391,6 +418,9 @@ def summarize_completed_weekly_run(
     runs: list[WeeklyModelRun] = []
     exposures: dict[tuple[str, str], WeeklyExposure] = {}
     record_sha256_by_origin: dict[str, str] = {}
+    fit_cap_hits = 0
+    executed_cap_hits = 0
+    nonconverged_fits = 0
     cap_hits = 0
     for index, origin in enumerate(summary.completed_origins, start=1):
         origin_date = date.fromisoformat(origin)
@@ -401,6 +431,14 @@ def summarize_completed_weekly_run(
             spec=spec,
             origin_date=origin_date,
         )
+        diagnostics = weekly_numerical_diagnostics(
+            origin_runs,
+            position_cap=spec.position_cap,
+        )
+        fit_cap_hits += diagnostics.fit_cap_hits
+        executed_cap_hits += diagnostics.executed_cap_hits
+        nonconverged_fits += diagnostics.nonconverged_fits
+        cap_hits += diagnostics.cap_hits
         record_sha256_by_origin[origin] = _file_sha256(record_path)
         episode = build_weekly_episode_path(
             panel,
@@ -413,7 +451,6 @@ def summarize_completed_weekly_run(
             if key in exposures:
                 raise ValueError("weekly run contains duplicate origin/claim results")
             exposures[key] = weekly_exposure(run, episode=episode)
-            cap_hits += _run_cap_hits(run, position_cap=spec.position_cap)
         runs.extend(origin_runs)
         if progress is not None:
             progress(index, len(summary.completed_origins), origin_date)
@@ -421,8 +458,13 @@ def summarize_completed_weekly_run(
         raise ValueError("weekly record count does not match the completed summary")
     if summary.result_count != len(eligible) * len(spec.target_labels):
         raise ValueError("weekly result count does not match the immutable target book")
-    if cap_hits != summary.cap_hits:
-        raise ValueError("weekly cap-hit count does not match its records")
+    if (
+        fit_cap_hits != summary.fit_cap_hits
+        or executed_cap_hits != summary.executed_cap_hits
+        or nonconverged_fits != summary.nonconverged_fits
+        or cap_hits != summary.cap_hits
+    ):
+        raise ValueError("weekly numerical diagnostics do not match their records")
 
     thresholds = initialization_weekly_volatility_thresholds(panel, config=config)
     volatility_by_origin = {
@@ -446,6 +488,10 @@ def summarize_completed_weekly_run(
         schedule=spec.schedule.value,
         dataset_manifest_sha256=spec.dataset_manifest_sha256,
         result_count=len(runs),
+        fit_cap_hits=fit_cap_hits,
+        executed_cap_hits=executed_cap_hits,
+        nonconverged_fits=nonconverged_fits,
+        cap_hits=cap_hits,
         aggregation_config=config.to_dict(),
         volatility_thresholds=thresholds,
         exposure_convention=(
@@ -819,9 +865,23 @@ def _with_risk_scores(
 
 
 def _run_cap_hits(run: WeeklyModelRun, *, position_cap: float) -> int:
+    fit_cap_hits = sum(
+        diagnostics[1]
+        for diagnostics in {
+            identity: (converged, cap_hits)
+            for identity, converged, cap_hits in zip(
+                run.policy_fit_identities,
+                run.policy_fit_converged,
+                run.policy_fit_cap_hits,
+                strict=True,
+            )
+        }.values()
+    )
     threshold = position_cap * (1.0 - 1.0e-10)
-    return int(np.count_nonzero(np.abs(run.spot_positions) >= threshold)) + int(
-        np.count_nonzero(np.abs(run.option_positions) >= threshold)
+    return (
+        fit_cap_hits
+        + int(np.count_nonzero(np.abs(run.spot_positions) >= threshold))
+        + int(np.count_nonzero(np.abs(run.option_positions) >= threshold))
     )
 
 

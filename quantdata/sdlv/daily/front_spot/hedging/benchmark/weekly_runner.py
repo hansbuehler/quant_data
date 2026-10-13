@@ -176,6 +176,8 @@ class WeeklyFittedPolicy(Protocol):
     policy_fit_identity: str
     artifact_fingerprints: tuple[str, ...]
     prices: WeeklyPriceRecord
+    converged: bool
+    cap_hits: int
 
 
 class WeeklyModelAdapter(Protocol):
@@ -312,6 +314,8 @@ class WeeklyModelRun:
     policy_artifact_fingerprints: tuple[tuple[str, ...], ...]
     fit_as_of_dates: tuple[str, ...]
     fit_price_records: tuple[WeeklyPriceRecord, ...]
+    policy_fit_converged: tuple[bool, ...]
+    policy_fit_cap_hits: tuple[int, ...]
     fit_long_prices_origin_pv: FloatArray
     spot_positions: FloatArray
     option_positions: FloatArray
@@ -326,8 +330,27 @@ class WeeklyModelRun:
             or len(self.policy_artifact_fingerprints) != decision_count
             or len(self.fit_as_of_dates) != decision_count
             or len(self.fit_price_records) != decision_count
+            or len(self.policy_fit_converged) != decision_count
+            or len(self.policy_fit_cap_hits) != decision_count
         ):
             raise ValueError("weekly fit audit arrays do not align")
+        if any(
+            type(value) is not bool for value in self.policy_fit_converged
+        ) or any(
+            type(value) is not int or value < 0 for value in self.policy_fit_cap_hits
+        ):
+            raise ValueError("weekly numerical fit diagnostics are invalid")
+        diagnostics_by_identity: dict[str, tuple[bool, int]] = {}
+        for identity, converged, cap_hits in zip(
+            self.policy_fit_identities,
+            self.policy_fit_converged,
+            self.policy_fit_cap_hits,
+            strict=True,
+        ):
+            diagnostics = (converged, cap_hits)
+            previous = diagnostics_by_identity.setdefault(identity, diagnostics)
+            if previous != diagnostics:
+                raise ValueError("reused weekly policy fit diagnostics changed")
         if self.fit_long_prices_origin_pv.shape != (decision_count,):
             raise ValueError("weekly fit prices do not align with decisions")
         if self.spot_positions.shape != (decision_count,):
@@ -407,6 +430,8 @@ def run_weekly_model(
     price_records: list[WeeklyPriceRecord] = []
     market_artifact_fingerprints: list[tuple[str, ...]] = []
     policy_artifact_fingerprints: list[tuple[str, ...]] = []
+    policy_fit_converged: list[bool] = []
+    policy_fit_cap_hits: list[int] = []
     fit_long_prices_origin_pv = np.empty(len(instructions), dtype=np.float64)
     spot_positions = np.empty(len(instructions), dtype=np.float64)
     option_positions = np.empty(
@@ -493,6 +518,8 @@ def run_weekly_model(
         fit_index = episode.spec.decision_dates.index(instruction.fit_as_of_date)
         market_artifact_fingerprints.append(market_fit.artifact_fingerprints)
         policy_artifact_fingerprints.append(fit.artifact_fingerprints)
+        policy_fit_converged.append(bool(fit.converged))
+        policy_fit_cap_hits.append(int(fit.cap_hits))
         price_records.append(fit.prices)
         fit_long_prices_origin_pv[decision_index] = (
             fit.prices.long_inception_price_per_fit_spot
@@ -532,6 +559,8 @@ def run_weekly_model(
             instruction.fit_as_of_date.isoformat() for instruction in instructions
         ),
         fit_price_records=tuple(price_records),
+        policy_fit_converged=tuple(policy_fit_converged),
+        policy_fit_cap_hits=tuple(policy_fit_cap_hits),
         fit_long_prices_origin_pv=fit_long_prices_origin_pv,
         spot_positions=spot_positions,
         option_positions=option_positions,

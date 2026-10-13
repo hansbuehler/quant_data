@@ -86,6 +86,16 @@ class GrommConventionalWeeklyPolicy:
     greek_decision_index: int
     artifact_fingerprints: tuple[str, ...] = ()
 
+    @property
+    def converged(self) -> bool:
+        """Return the deterministic Greek-policy fit status."""
+        return True
+
+    @property
+    def cap_hits(self) -> int:
+        """Return target-independent fit cap hits."""
+        return 0
+
 
 class GrommConventionalWeeklyAdapter:
     """Differentiate the GROMM Q price along common rolling DLV bumps."""

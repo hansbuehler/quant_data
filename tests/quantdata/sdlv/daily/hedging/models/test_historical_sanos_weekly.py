@@ -16,6 +16,7 @@ from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly import (
 )
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly_runner import (
     WeeklyDecisionState,
+    WeeklyPriceRecord,
 )
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly_scenarios import (
     WeeklyRiskObjective,
@@ -32,6 +33,9 @@ from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
 from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.config import (
     HistoricalSanosConfig,
     HistoricalSanosObjective,
+)
+from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.weekly_adapter import (
+    HistoricalSanosWeeklyPolicy,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.weekly_hedger import (
     _WeeklyOpenLoopGeometry,
@@ -199,6 +203,88 @@ def test_historical_weekly_fit_respects_expiry_and_returns_pure_hedge(
     assert np.all(np.isfinite(fit.spot_positions))
     assert np.all(np.isfinite(fit.option_positions))
     assert fit.prices.buyer <= fit.prices.seller
+
+
+def test_historical_weekly_records_virtual_recession_without_executable_cap() -> None:
+    generator = np.random.default_rng(109)
+    scenario_count = 80
+    fit_date = date(2022, 12, 30)
+    spot_gains = (0.1 + 0.001 * generator.normal(size=scenario_count))[:, None]
+    scenarios = WeeklyScenarioBatch(
+        inception_forward_paths=np.column_stack(
+            (np.ones(scenario_count), np.exp(spot_gains[:, 0]))
+        ),
+        spot_values_pv=np.ones((scenario_count, 2)),
+        spot_step_gains=spot_gains,
+        option_step_gains=np.zeros((scenario_count, 1, 1)),
+        option_half_spreads_pv=np.zeros((scenario_count, 2, 1)),
+        option_alive=np.asarray([[True], [False]]),
+        option_settles_next=np.asarray([[True]]),
+        terminal_claim_values_pv=np.zeros(scenario_count),
+        contract_ids=("zero-gain-option",),
+        target_label="virtual-recession",
+        fit_as_of_date=fit_date,
+        model_fit_identity="virtual-recession",
+        measure="historical-P",
+        seed=109,
+    )
+    scenario_set = HistoricalWeeklyScenarioSet(
+        scenarios=scenarios,
+        training_origin_dates=tuple(
+            fit_date - timedelta(days=scenario_count - index + 2)
+            for index in range(scenario_count)
+        ),
+        training_terminal_dates=tuple(
+            fit_date - timedelta(days=scenario_count - index + 1)
+            for index in range(scenario_count)
+        ),
+    )
+    fit = fit_historical_weekly_hedge(
+        scenario_set,
+        claim_quantity=1.0,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(1),
+        config=HistoricalSanosConfig(
+            rolling_observations=scenario_count,
+            objective=HistoricalSanosObjective.MEAN_VOLATILITY,
+            risk_parameter=0.1,
+            position_cap=10.0,
+            solver_position_cap=100.0,
+            maximum_iterations=10_000,
+        ),
+    )
+
+    assert fit.long_policy.spot_positions[0] == pytest.approx(100.0, abs=1.0e-5)
+    assert fit.short_policy.spot_positions[0] == pytest.approx(100.0, abs=1.0e-5)
+    assert fit.zero_policy.spot_positions[0] == pytest.approx(100.0, abs=1.0e-5)
+    assert fit.internal_cap_hits >= 3
+    assert fit.executable_cap_hits == 0
+    assert fit.spot_positions[0] == pytest.approx(0.0, abs=1.0e-5)
+    assert not fit.converged
+
+    diagnostic_fit = replace(
+        fit,
+        internal_cap_hits=2,
+        executable_cap_hits=1,
+        cap_hits=3,
+    )
+    policy = HistoricalSanosWeeklyPolicy(
+        market_fit_identity="market-fit",
+        policy_fit_identity="policy-fit",
+        prices=WeeklyPriceRecord(
+            common_market_price_per_fit_spot=0.0,
+            q_expectation_per_fit_spot=None,
+            buyer_indifference_per_fit_spot=0.0,
+            seller_indifference_per_fit_spot=0.0,
+            continuation_price_per_fit_spot=0.0,
+        ),
+        schedule=HedgeSchedule.FROZEN_WEEKLY,
+        fit_decision_index=0,
+        scenarios=scenario_set,
+        hedge=diagnostic_fit,
+    )
+    assert policy.cap_hits == 2
+    assert policy.converged is False
 
 
 def test_historical_weekly_scenarios_use_complete_pre_asof_blocks() -> None:

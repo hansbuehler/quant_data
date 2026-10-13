@@ -79,7 +79,12 @@ def _weekly_loss_statistics(
     )
 
 
-def _write_authenticated_weekly_output(output: Path) -> WeeklyRunResults:
+def _write_authenticated_weekly_output(
+    output: Path,
+    *,
+    cap_hits: int = 0,
+    require_no_cap_hits: bool = True,
+) -> WeeklyRunResults:
     origins = ("2023-01-17", "2023-01-18")
     targets = weekly_targets()
     spec = WeeklyEvaluationSpec(
@@ -98,6 +103,7 @@ def _write_authenticated_weekly_output(output: Path) -> WeeklyRunResults:
         target_quantities=tuple(1.0 for _ in targets),
         target_notional_identity="notional-test",
         position_cap=1_000.0,
+        require_no_cap_hits=require_no_cap_hits,
     )
     run_path = output / "run.json"
     _write_json(run_path, {**spec.to_dict(), "run_identity": spec.run_identity})
@@ -107,7 +113,10 @@ def _write_authenticated_weekly_output(output: Path) -> WeeklyRunResults:
         completed_origins=origins,
         reused_origins=(),
         result_count=len(origins) * len(targets),
-        cap_hits=0,
+        fit_cap_hits=cap_hits,
+        executed_cap_hits=0,
+        nonconverged_fits=int(cap_hits > 0),
+        cap_hits=cap_hits,
     )
     summary_path = output / "summary.json"
     _write_json(summary_path, summary.to_dict())
@@ -138,8 +147,8 @@ def _write_authenticated_weekly_output(output: Path) -> WeeklyRunResults:
             mean_net_exposure=0.0,
             mean_absolute_net_exposure=0.0,
             mean_nonzero_actions_per_decision=0.0,
-            cap_hits=0,
-            numerical_cap_hit_result_rate=0.0,
+            cap_hits=cap_hits,
+            numerical_cap_hit_result_rate=float(cap_hits > 0),
         )
         for target in targets
     )
@@ -150,6 +159,10 @@ def _write_authenticated_weekly_output(output: Path) -> WeeklyRunResults:
         schedule=spec.schedule.value,
         dataset_manifest_sha256=spec.dataset_manifest_sha256,
         result_count=summary.result_count,
+        fit_cap_hits=summary.fit_cap_hits,
+        executed_cap_hits=summary.executed_cap_hits,
+        nonconverged_fits=summary.nonconverged_fits,
+        cap_hits=summary.cap_hits,
         aggregation_config=config.to_dict(),
         volatility_thresholds=(0.2, 0.3),
         exposure_convention="test convention",
@@ -160,6 +173,27 @@ def _write_authenticated_weekly_output(output: Path) -> WeeklyRunResults:
     )
     results.write_json(output / "results.json")
     return results
+
+
+def test_weekly_production_validation_retains_precommitted_cap_hits(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "weekly"
+    results = _write_authenticated_weekly_output(
+        output,
+        cap_hits=3,
+        require_no_cap_hits=False,
+    )
+
+    validated = execute_production_matrix._validate_results(
+        output / "results.json",
+        output=output,
+        matrix_schema="hedging-weekly-production-matrix-v1",
+        expected_model="sanos-lv",
+        expected_result_count=results.result_count,
+    )
+
+    assert validated == _sha256(output / "results.json")
 
 
 def test_execute_production_queue_runs_and_resumes(

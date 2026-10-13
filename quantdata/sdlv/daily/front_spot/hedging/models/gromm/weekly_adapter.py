@@ -94,6 +94,36 @@ class GrommWeeklyPolicy:
     realized_features: dict[int, FloatArray]
     artifact_fingerprints: tuple[str, ...]
 
+    @property
+    def cap_hits(self) -> int:
+        """Return cap hits across all four fitted policy surfaces."""
+        scenarios = self.generated.scenarios
+        action_count = (
+            scenarios.scenario_count
+            * scenarios.step_count
+            * (scenarios.contract_count + 1)
+        )
+        return sum(
+            int(round(result.cap_hit_fraction * action_count))
+            for result in (
+                self.hedge.claim,
+                self.hedge.short,
+                self.hedge.zero,
+                self.hedge.pure,
+            )
+        )
+
+    @property
+    def converged(self) -> bool:
+        """Return whether every policy converged without fitted cap hits."""
+        return (
+            self.hedge.claim.converged
+            and self.hedge.short.converged
+            and self.hedge.zero.converged
+            and self.hedge.pure.converged
+            and self.cap_hits == 0
+        )
+
 
 class GrommWeeklyAdapter:
     """Load rolling GROMM2 markets and fit recurrent weekly P/Q policies."""

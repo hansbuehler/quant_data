@@ -113,10 +113,7 @@ def run_covariance_daily_book(
         strict=True,
     ):
         if action.action is None:
-            raise RuntimeError(
-                f"{sample.target.label}: mean-volatility objective is unbounded; "
-                "no tradable covariance action exists"
-            )
+            raise RuntimeError(f"{sample.target.label}: covariance action is missing")
         final_action = action.action
         claim_gross = float(np.sum(np.abs(action.claim_policy.action)))
         zero_gross = float(np.sum(np.abs(action.zero_policy.action)))

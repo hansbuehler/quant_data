@@ -78,6 +78,8 @@ def _run(
         policy_artifact_fingerprints=(("policy:sha256",),) * 5,
         fit_as_of_dates=(origin_date.isoformat(),) * 5,
         fit_price_records=prices,
+        policy_fit_converged=(True,) * 5,
+        policy_fit_cap_hits=(0,) * 5,
         fit_long_prices_origin_pv=np.full(5, model_price),
         spot_positions=(
             np.zeros(5) if spot_positions is None else np.asarray(spot_positions)

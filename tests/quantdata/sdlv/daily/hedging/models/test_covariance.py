@@ -159,7 +159,7 @@ def test_book_mean_volatility_recovers_pure_factor_hedge(
     assert action.standard_deviation < 0.2 * np.sqrt(fit.estimate.covariance[-1, -1])
 
 
-def test_mean_volatility_rejects_unbounded_policy_before_optimization() -> None:
+def test_mean_volatility_caps_and_flags_unbounded_policy() -> None:
     generator = np.random.default_rng(29)
     observations = 500
     instrument = 0.1 + 0.01 * generator.normal(size=observations)
@@ -192,9 +192,9 @@ def test_mean_volatility_rejects_unbounded_policy_before_optimization() -> None:
     action = fit.actions[0]
     assert not action.bounded
     assert not action.zero_policy.bounded
-    assert action.action is None
-    assert action.zero_policy.iterations == 0
-    assert action.cap_hits == 0
+    assert action.action is not None
+    assert action.zero_policy.iterations > 0
+    assert action.cap_hits > 0
     assert not action.converged
 
 

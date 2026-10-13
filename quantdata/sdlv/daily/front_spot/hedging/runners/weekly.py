@@ -36,8 +36,8 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
     dataset_manifest_sha256,
 )
 
-WEEKLY_EVALUATION_SCHEMA = "hedging-weekly-evaluation-v1"
-WEEKLY_RECORD_SCHEMA = "hedging-weekly-record-v1"
+WEEKLY_EVALUATION_SCHEMA = "hedging-weekly-evaluation-v2"
+WEEKLY_RECORD_SCHEMA = "hedging-weekly-record-v2"
 
 WeeklyBookFunction = Callable[
     [PublicHedgingPanel, date],
@@ -45,7 +45,7 @@ WeeklyBookFunction = Callable[
 ]
 
 
-@version("0.1")
+@version("0.2")
 @dataclass(frozen=True, kw_only=True)
 class WeeklyEvaluationSpec:
     """Immutable logical identity and numerical gates for one weekly run."""
@@ -215,13 +215,16 @@ class WeeklyEvaluationSpec:
 
 @dataclass(frozen=True, kw_only=True)
 class WeeklyEvaluationSummary:
-    """Completion and action-cap counts for one resumable weekly run."""
+    """Completion and numerical diagnostics for one resumable weekly run."""
 
     run_identity: str
     eligible_origins: tuple[str, ...]
     completed_origins: tuple[str, ...]
     reused_origins: tuple[str, ...]
     result_count: int
+    fit_cap_hits: int
+    executed_cap_hits: int
+    nonconverged_fits: int
     cap_hits: int
 
     def __post_init__(self) -> None:
@@ -238,8 +241,17 @@ class WeeklyEvaluationSummary:
             raise ValueError("weekly reused origins must be unique and chronological")
         if not set(self.reused_origins).issubset(self.completed_origins):
             raise ValueError("weekly reused origins must be completed origins")
-        if self.result_count < 0 or self.cap_hits < 0:
+        counts = (
+            self.result_count,
+            self.fit_cap_hits,
+            self.executed_cap_hits,
+            self.nonconverged_fits,
+            self.cap_hits,
+        )
+        if any(value < 0 for value in counts):
             raise ValueError("weekly summary counts must be non-negative")
+        if self.cap_hits != self.fit_cap_hits + self.executed_cap_hits:
+            raise ValueError("weekly summary cap counts do not reconcile")
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-compatible completion summary."""
@@ -256,8 +268,36 @@ class WeeklyEvaluationSummary:
             completed_origins=_required_string_tuple(payload, "completed_origins"),
             reused_origins=_required_string_tuple(payload, "reused_origins"),
             result_count=_required_integer(payload, "result_count"),
+            fit_cap_hits=_required_integer(payload, "fit_cap_hits"),
+            executed_cap_hits=_required_integer(payload, "executed_cap_hits"),
+            nonconverged_fits=_required_integer(payload, "nonconverged_fits"),
             cap_hits=_required_integer(payload, "cap_hits"),
         )
+
+
+@dataclass(frozen=True, kw_only=True)
+class WeeklyNumericalDiagnostics:
+    """Deduplicated fitted-policy and realized-action diagnostics."""
+
+    fit_cap_hits: int
+    executed_cap_hits: int
+    nonconverged_fits: int
+
+    def __post_init__(self) -> None:
+        if any(
+            value < 0
+            for value in (
+                self.fit_cap_hits,
+                self.executed_cap_hits,
+                self.nonconverged_fits,
+            )
+        ):
+            raise ValueError("weekly numerical diagnostic counts must be non-negative")
+
+    @property
+    def cap_hits(self) -> int:
+        """Return fitted-policy plus realized-action cap hits."""
+        return self.fit_cap_hits + self.executed_cap_hits
 
 
 def eligible_weekly_origins(
@@ -323,6 +363,9 @@ def _run_weekly_evaluation_locked(
     completed: list[str] = []
     reused: list[str] = []
     result_count = 0
+    fit_cap_hits = 0
+    executed_cap_hits = 0
+    nonconverged_fits = 0
     cap_hits = 0
     for index, origin_date in enumerate(selected_origins, start=1):
         record_path = records_directory / f"{origin_date.isoformat()}.json"
@@ -337,7 +380,7 @@ def _run_weekly_evaluation_locked(
             reused.append(origin_date.isoformat())
         else:
             runs = tuple(run_book(panel, origin_date))
-            current_cap_hits = _validate_runs(
+            diagnostics = _validate_runs(
                 runs,
                 panel=panel,
                 spec=spec,
@@ -348,12 +391,18 @@ def _run_weekly_evaluation_locked(
                 spec=spec,
                 origin_date=origin_date,
                 runs=runs,
-                cap_hits=current_cap_hits,
+                diagnostics=diagnostics,
             )
-        current_cap_hits = _count_cap_hits(runs, position_cap=spec.position_cap)
+        diagnostics = weekly_numerical_diagnostics(
+            runs,
+            position_cap=spec.position_cap,
+        )
         completed.append(origin_date.isoformat())
         result_count += len(runs)
-        cap_hits += current_cap_hits
+        fit_cap_hits += diagnostics.fit_cap_hits
+        executed_cap_hits += diagnostics.executed_cap_hits
+        nonconverged_fits += diagnostics.nonconverged_fits
+        cap_hits += diagnostics.cap_hits
         if progress is not None:
             progress(index, len(selected_origins), origin_date, was_reused)
 
@@ -363,6 +412,9 @@ def _run_weekly_evaluation_locked(
         completed_origins=tuple(completed),
         reused_origins=tuple(reused),
         result_count=result_count,
+        fit_cap_hits=fit_cap_hits,
+        executed_cap_hits=executed_cap_hits,
+        nonconverged_fits=nonconverged_fits,
         cap_hits=cap_hits,
     )
     _atomic_write_json(output / "summary.json", summary.to_dict())
@@ -386,14 +438,20 @@ def read_weekly_record(
     ):
         raise ValueError(f"invalid or incompatible weekly record {path}")
     runs = tuple(_weekly_model_run_from_dict(value) for value in payload["runs"])
-    cap_hits = _validate_runs(
+    diagnostics = _validate_runs(
         runs,
         panel=panel,
         spec=spec,
         origin_date=origin_date,
     )
-    if payload.get("cap_hits") != cap_hits:
-        raise ValueError("weekly record cap count is inconsistent")
+    expected_diagnostics = {
+        "fit_cap_hits": diagnostics.fit_cap_hits,
+        "executed_cap_hits": diagnostics.executed_cap_hits,
+        "nonconverged_fits": diagnostics.nonconverged_fits,
+        "cap_hits": diagnostics.cap_hits,
+    }
+    if payload.get("numerical_diagnostics") != expected_diagnostics:
+        raise ValueError("weekly record numerical diagnostics are inconsistent")
     return runs
 
 
@@ -413,7 +471,7 @@ def _write_weekly_record(
     spec: WeeklyEvaluationSpec,
     origin_date: date,
     runs: tuple[WeeklyModelRun, ...],
-    cap_hits: int,
+    diagnostics: WeeklyNumericalDiagnostics,
 ) -> None:
     _atomic_write_json(
         path,
@@ -421,7 +479,12 @@ def _write_weekly_record(
             "schema": WEEKLY_RECORD_SCHEMA,
             "run_identity": spec.run_identity,
             "origin_date": origin_date.isoformat(),
-            "cap_hits": cap_hits,
+            "numerical_diagnostics": {
+                "fit_cap_hits": diagnostics.fit_cap_hits,
+                "executed_cap_hits": diagnostics.executed_cap_hits,
+                "nonconverged_fits": diagnostics.nonconverged_fits,
+                "cap_hits": diagnostics.cap_hits,
+            },
             "runs": [_weekly_model_run_to_dict(run) for run in runs],
         },
     )
@@ -433,7 +496,7 @@ def _validate_runs(
     panel: PublicHedgingPanel,
     spec: WeeklyEvaluationSpec,
     origin_date: date,
-) -> int:
+) -> WeeklyNumericalDiagnostics:
     if tuple(run.result.target_label for run in runs) != spec.target_labels:
         raise ValueError("weekly model did not emit the precommitted target book")
     decision_dates, terminal_date = _expected_episode_dates(panel, origin_date)
@@ -499,10 +562,20 @@ def _validate_runs(
             or len(set(run.policy_fit_identities)) != 5
         ):
             raise ValueError("restarted-weekly fit dates are incomplete or unordered")
-    cap_hits = _count_cap_hits(runs, position_cap=spec.position_cap)
-    if spec.require_no_cap_hits and cap_hits:
-        raise RuntimeError(f"weekly numerical gate found {cap_hits} position-cap hits")
-    return cap_hits
+    diagnostics = weekly_numerical_diagnostics(
+        runs,
+        position_cap=spec.position_cap,
+    )
+    if spec.require_no_cap_hits and diagnostics.cap_hits:
+        raise RuntimeError(
+            f"weekly numerical gate found {diagnostics.cap_hits} position-cap hits"
+        )
+    if spec.require_no_cap_hits and diagnostics.nonconverged_fits:
+        raise RuntimeError(
+            "weekly numerical gate found "
+            f"{diagnostics.nonconverged_fits} nonconverged policy fits"
+        )
+    return diagnostics
 
 
 def _expected_episode_dates(
@@ -520,16 +593,33 @@ def _expected_episode_dates(
     return tuple(episode_dates[:5]), episode_dates[5]
 
 
-def _count_cap_hits(
+def weekly_numerical_diagnostics(
     runs: tuple[WeeklyModelRun, ...],
     *,
     position_cap: float,
-) -> int:
+) -> WeeklyNumericalDiagnostics:
+    fit_diagnostics: dict[str, tuple[bool, int]] = {}
+    for run in runs:
+        for identity, converged, cap_hits in zip(
+            run.policy_fit_identities,
+            run.policy_fit_converged,
+            run.policy_fit_cap_hits,
+            strict=True,
+        ):
+            diagnostics = (converged, cap_hits)
+            previous = fit_diagnostics.setdefault(identity, diagnostics)
+            if previous != diagnostics:
+                raise ValueError("shared weekly policy fit diagnostics changed")
     threshold = position_cap * (1.0 - 1.0e-10)
-    return sum(
+    executed_cap_hits = sum(
         int(np.count_nonzero(np.abs(run.spot_positions) >= threshold))
         + int(np.count_nonzero(np.abs(run.option_positions) >= threshold))
         for run in runs
+    )
+    return WeeklyNumericalDiagnostics(
+        fit_cap_hits=sum(value[1] for value in fit_diagnostics.values()),
+        executed_cap_hits=executed_cap_hits,
+        nonconverged_fits=sum(not value[0] for value in fit_diagnostics.values()),
     )
 
 
@@ -562,6 +652,8 @@ def _weekly_model_run_to_dict(run: WeeklyModelRun) -> dict[str, object]:
         ],
         "fit_as_of_dates": list(run.fit_as_of_dates),
         "fit_price_records": [asdict(record) for record in run.fit_price_records],
+        "policy_fit_converged": list(run.policy_fit_converged),
+        "policy_fit_cap_hits": list(run.policy_fit_cap_hits),
         "fit_long_prices_origin_pv": run.fit_long_prices_origin_pv.tolist(),
         "spot_positions": run.spot_positions.tolist(),
         "option_positions": run.option_positions.tolist(),
@@ -628,6 +720,12 @@ def _weekly_model_run_from_dict(payload: object) -> WeeklyModelRun:
         fit_as_of_dates=_required_string_tuple(payload, "fit_as_of_dates"),
         fit_price_records=tuple(
             WeeklyPriceRecord(**value) for value in price_records_payload
+        ),
+        policy_fit_converged=_required_boolean_tuple(
+            payload, "policy_fit_converged"
+        ),
+        policy_fit_cap_hits=_required_integer_tuple(
+            payload, "policy_fit_cap_hits"
         ),
         fit_long_prices_origin_pv=np.asarray(
             _required_float_tuple(payload, "fit_long_prices_origin_pv"),
@@ -713,6 +811,30 @@ def _required_string_tuple(
         not isinstance(item, str) for item in value
     ):
         raise ValueError(f"weekly metadata field {name!r} must be a string array")
+    return tuple(value)
+
+
+def _required_boolean_tuple(
+    payload: dict[str, object],
+    name: str,
+) -> tuple[bool, ...]:
+    value = payload.get(name)
+    if not isinstance(value, (list, tuple)) or any(
+        not isinstance(item, bool) for item in value
+    ):
+        raise ValueError(f"weekly metadata field {name!r} must be a boolean array")
+    return tuple(value)
+
+
+def _required_integer_tuple(
+    payload: dict[str, object],
+    name: str,
+) -> tuple[int, ...]:
+    value = payload.get(name)
+    if not isinstance(value, (list, tuple)) or any(
+        not isinstance(item, int) or isinstance(item, bool) for item in value
+    ):
+        raise ValueError(f"weekly metadata field {name!r} must be an integer array")
     return tuple(value)
 
 
