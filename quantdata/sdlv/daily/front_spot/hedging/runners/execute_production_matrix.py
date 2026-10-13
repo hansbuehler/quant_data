@@ -432,7 +432,7 @@ def _validate_results(
 
 def _results_path(output: Path, *, matrix_schema: str) -> Path:
     if matrix_schema == DAILY_MATRIX_SCHEMA:
-        return output / "results" / "results.json"
+        return output / "results.json"
     if matrix_schema == WEEKLY_MATRIX_SCHEMA:
         return output / "summary.json"
     raise ValueError(f"unsupported production-matrix schema: {matrix_schema}")

@@ -25,7 +25,7 @@ from pathlib import Path
 import sys
 
 output = Path(sys.argv[1])
-results = output / "results" / "results.json"
+results = output / "results.json"
 results.parent.mkdir(parents=True, exist_ok=True)
 results.write_text(json.dumps({
     "schema": "hedging-daily-results-v2",
@@ -157,7 +157,7 @@ from pathlib import Path
 import sys
 
 output = Path(sys.argv[1])
-results = output / "results" / "results.json"
+results = output / "results.json"
 results.parent.mkdir(parents=True, exist_ok=True)
 results.write_text(json.dumps({
     "schema": "hedging-daily-results-v2",
