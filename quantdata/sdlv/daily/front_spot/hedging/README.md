@@ -89,8 +89,11 @@ training dependencies.
   density mass; a real four-path, 163-instrument replay passed and P generation
   remains disabled. The rolling range runner now authenticates every reused
   artifact, writes atomic per-origin range evidence, prevents concurrent range
-  writers, and emits four-minute heartbeats. Its first-origin resume smoke
-  passed; preparation of the full 611-origin range is in progress. At an origin
+  writers, and emits four-minute heartbeats. A fit below the fixed 80% spread
+  gate is continued deterministically from its authenticated checkpoint to
+  4,000 and, if required, 8,000 epochs; the attained epoch count and retry
+  count are authenticated rather than weakening the gate. Its first-origin
+  resume smoke passed; preparation of the full 611-origin range is in progress. At an origin
   following a missing intermediate release, the rolling fit keeps 252 exact
   one-session pairs and appends the current origin state for its geometry and
   DLV level rather than manufacturing a multi-session transition.
@@ -325,6 +328,10 @@ accepts completion only after validating the full 12,220-record results
 artifact. A matrix whose bytes change after the queue is armed is rejected.
 Legacy queue state without a matrix digest is rejected unless the operator
 explicitly supplies `--adopt-unpinned-state` after checking the matrix.
+For a parameter sweep, `--continue-after-failure` retains an already failed
+case as terminal evidence, runs the remaining selected cases, and finishes the
+queue as `complete-with-failures`; it never relabels a failed numerical gate as
+a result.
 Production-matrix commands also pin the public dataset manifest SHA-256, which
 the daily and weekly runners recheck before fitting or evaluation. Daily
 production commands additionally run the full released-dataset checksum

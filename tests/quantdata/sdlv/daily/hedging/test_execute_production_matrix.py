@@ -141,6 +141,106 @@ def test_execute_production_queue_rejects_unready_case(tmp_path: Path) -> None:
         )
 
 
+def test_execute_production_queue_can_retain_failure_and_continue(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    failed_output = tmp_path / "failed"
+    complete_output = tmp_path / "complete"
+    failed_script = tmp_path / "fail.py"
+    failed_script.write_text("raise SystemExit(7)\n", encoding="utf-8")
+    complete_script = tmp_path / "complete.py"
+    complete_script.write_text(
+        """
+import json
+from pathlib import Path
+import sys
+
+output = Path(sys.argv[1])
+results = output / "results" / "results.json"
+results.parent.mkdir(parents=True, exist_ok=True)
+results.write_text(json.dumps({
+    "schema": "hedging-daily-results-v2",
+    "model": "historical-sanos",
+    "result_count": 2,
+    "run_identity": "continued-run",
+}), encoding="utf-8")
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    matrix = tmp_path / "matrix.json"
+    matrix.write_text(
+        json.dumps(
+            {
+                "schema": "hedging-daily-production-matrix-v1",
+                "cases": [
+                    {
+                        "case_id": "failed-case",
+                        "model": "historical-sanos",
+                        "resource": "cpu",
+                        "readiness": "ready",
+                        "command": [
+                            "python",
+                            str(failed_script),
+                            "--output",
+                            str(failed_output),
+                        ],
+                    },
+                    {
+                        "case_id": "complete-case",
+                        "model": "historical-sanos",
+                        "resource": "cpu",
+                        "readiness": "ready",
+                        "command": [
+                            "python",
+                            str(complete_script),
+                            str(complete_output),
+                            "--output",
+                            str(complete_output),
+                        ],
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(execute_production_matrix, "_check_resources", lambda: None)
+    state_path = tmp_path / "queue.json"
+
+    first = execute_production_matrix.execute_production_queue(
+        matrix_path=matrix,
+        state_path=state_path,
+        interpreter=Path(sys.executable),
+        case_ids=("failed-case", "complete-case"),
+        case_prefix=None,
+        resource="cpu",
+        expected_result_count=2,
+        heartbeat_seconds=1.0,
+        continue_after_failure=True,
+    )
+    second = execute_production_matrix.execute_production_queue(
+        matrix_path=matrix,
+        state_path=state_path,
+        interpreter=Path(sys.executable),
+        case_ids=("failed-case", "complete-case"),
+        case_prefix=None,
+        resource="cpu",
+        expected_result_count=2,
+        heartbeat_seconds=1.0,
+        continue_after_failure=True,
+    )
+
+    assert first["status"] == "complete-with-failures"
+    assert second == first
+    assert [record["status"] for record in first["records"]] == [
+        "failed",
+        "complete",
+    ]
+    assert first["records"][0]["return_code"] == 7
+    assert "production command returned 7" in first["records"][0]["error"]
+
+
 def test_execute_production_queue_requires_explicit_legacy_state_adoption(
     tmp_path: Path,
 ) -> None:

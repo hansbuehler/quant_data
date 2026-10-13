@@ -220,6 +220,8 @@ def test_loader_normalizes_float32_artifact_before_q_replay(
         training_dates=(origin,),
         transition_origin_dates=(origin,),
         transition_endpoint_dates=(origin,),
+        calibration_epochs_completed=2_000,
+        calibration_retry_count=0,
         percent_inside_spread=84.0,
         explained_variance_ratio=0.95,
         physical_projection_fraction=0.0,

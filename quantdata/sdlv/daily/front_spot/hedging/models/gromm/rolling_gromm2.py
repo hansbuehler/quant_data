@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import tempfile
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import date
 from pathlib import Path
 
@@ -46,9 +47,10 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_dynamics impor
 )
 
 ROLLING_GROMM2_SCHEMA = "hedging-rolling-gromm2-v3"
+_CALIBRATION_EPOCH_MULTIPLIERS = (1, 2, 4)
 
 
-@version("0.4", dependencies=[Gromm2GeometryConfig, DlvCalibrationConfig])
+@version("0.5", dependencies=[Gromm2GeometryConfig, DlvCalibrationConfig])
 @dataclass(frozen=True, kw_only=True)
 class RollingGromm2Config:
     """Precommitted market-model and rolling-estimation specification."""
@@ -120,6 +122,8 @@ class RollingGromm2Artifacts:
     training_dates: tuple[date, ...]
     transition_origin_dates: tuple[date, ...]
     transition_endpoint_dates: tuple[date, ...]
+    calibration_epochs_completed: int
+    calibration_retry_count: int
     percent_inside_spread: float
     explained_variance_ratio: float
     physical_projection_fraction: float
@@ -291,13 +295,16 @@ def fit_rolling_gromm2_market(
         config=config,
         dataset_manifest_sha256=dataset_manifest_sha256,
     )
-    with jax.enable_x64(False):
-        fit_affine_history(
-            prepared_books=paths.prepared_books,
-            output=paths.affine_history,
-            checkpoint=paths.affine_checkpoint,
-            config=config.calibration,
-        )
+    (
+        percent_inside,
+        calibration_epochs_completed,
+        calibration_retry_count,
+        fitted_calibration,
+    ) = _fit_affine_market_until_gate(
+        paths=paths,
+        calibration=config.calibration,
+        minimum_inside_spread_percent=config.minimum_inside_spread_percent,
+    )
     with jax.enable_x64(True):
         origin_dates, endpoint_dates = _manifest_transition_dates(
             prepared,
@@ -318,13 +325,6 @@ def fit_rolling_gromm2_market(
                 config.maximum_daily_risk_price_norm
             ),
         )
-    with h5py.File(paths.affine_history, "r") as stream:
-        percent_inside = float(stream.attrs["percent_inside_spread"])
-    if percent_inside < config.minimum_inside_spread_percent:
-        raise RuntimeError(
-            "rolling GROMM2 market fit failed the accepted inside-spread gate: "
-            f"{percent_inside:.3f}% < {config.minimum_inside_spread_percent:.3f}%"
-        )
     physical_projection_fraction = float(report["physical_projection_fraction"])
     maximum_daily_risk_price_norm = _maximum_daily_risk_price_norm(paths.dynamics)
     physical_accepted = _validate_physical_fit(
@@ -338,6 +338,11 @@ def fit_rolling_gromm2_market(
         **prepared,
         "status": "complete",
         "affine_history_sha256": file_sha256(paths.affine_history),
+        "affine_calibration_config": json.loads(
+            json.dumps(asdict(fitted_calibration), sort_keys=True, allow_nan=False)
+        ),
+        "calibration_epochs_completed": calibration_epochs_completed,
+        "calibration_retry_count": calibration_retry_count,
         "dynamics_sha256": file_sha256(paths.dynamics),
         "dynamics_report_sha256": file_sha256(paths.dynamics.with_suffix(".json")),
         "percent_inside_spread": percent_inside,
@@ -391,6 +396,15 @@ def load_rolling_gromm2(
         )
         nms_nodes = np.asarray(stream["nms_nodes"], dtype=np.float64)
         percent_inside = float(stream.attrs["percent_inside_spread"])
+        calibration_payload = json.loads(str(stream.attrs["calibration_config"]))
+    (
+        calibration_epochs_completed,
+        calibration_retry_count,
+        fitted_calibration,
+    ) = _validate_affine_calibration_payload(
+        calibration_payload,
+        baseline=config.calibration,
+    )
     origin_dates, endpoint_dates = _manifest_transition_dates(
         manifest,
         window_transitions=config.window_transitions,
@@ -406,6 +420,29 @@ def load_rolling_gromm2(
         raise ValueError("rolling GROMM2 affine history violates dated geometry")
     if percent_inside < config.minimum_inside_spread_percent:
         raise ValueError("rolling GROMM2 affine history fails the market-fit gate")
+    manifest_percent_inside = manifest.get("percent_inside_spread")
+    if (
+        isinstance(manifest_percent_inside, bool)
+        or not isinstance(manifest_percent_inside, int | float)
+        or not math.isclose(
+            float(manifest_percent_inside),
+            percent_inside,
+            rel_tol=0.0,
+            abs_tol=1.0e-12,
+        )
+        or manifest.get(
+            "calibration_epochs_completed",
+            config.calibration.epochs,
+        )
+        != calibration_epochs_completed
+        or manifest.get("calibration_retry_count", 0) != calibration_retry_count
+    ):
+        raise ValueError("rolling GROMM2 calibration evidence is inconsistent")
+    manifest_calibration = manifest.get("affine_calibration_config")
+    if manifest_calibration is not None and manifest_calibration != json.loads(
+        json.dumps(asdict(fitted_calibration), sort_keys=True, allow_nan=False)
+    ):
+        raise ValueError("rolling GROMM2 fitted calibration config is inconsistent")
     report = json.loads(paths.dynamics.with_suffix(".json").read_text(encoding="utf-8"))
     if (
         report.get("schema") != GROMM2_DYNAMICS_SCHEMA
@@ -428,6 +465,8 @@ def load_rolling_gromm2(
         training_dates=dates,
         transition_origin_dates=origin_dates,
         transition_endpoint_dates=endpoint_dates,
+        calibration_epochs_completed=calibration_epochs_completed,
+        calibration_retry_count=calibration_retry_count,
         percent_inside_spread=percent_inside,
         explained_variance_ratio=float(report["explained_variance_ratio"]),
         physical_projection_fraction=physical_projection_fraction,
@@ -435,6 +474,91 @@ def load_rolling_gromm2(
         physical_accepted=physical_accepted,
         dataset_manifest_sha256=dataset_manifest_sha256,
     )
+
+
+def _fit_affine_market_until_gate(
+    *,
+    paths: RollingGromm2Paths,
+    calibration: DlvCalibrationConfig,
+    minimum_inside_spread_percent: float,
+) -> tuple[float, int, int, DlvCalibrationConfig]:
+    """Continue a borderline affine fit without weakening its market-fit gate."""
+    last_percent_inside = float("nan")
+    if paths.affine_history.is_file():
+        with h5py.File(paths.affine_history, "r") as stream:
+            if stream.attrs.get("schema") == "gromm2-affine-dlv-history-v1":
+                percent_inside = float(stream.attrs["percent_inside_spread"])
+                last_percent_inside = percent_inside
+                payload = json.loads(str(stream.attrs["calibration_config"]))
+                epochs, retries, fitted = _validate_affine_calibration_payload(
+                    payload,
+                    baseline=calibration,
+                )
+                if percent_inside >= minimum_inside_spread_percent:
+                    return percent_inside, epochs, retries, fitted
+
+    completed_epochs = _checkpoint_completed_epochs(paths.affine_checkpoint)
+    last_calibration = calibration
+    for retry_count, multiplier in enumerate(_CALIBRATION_EPOCH_MULTIPLIERS):
+        epochs = calibration.epochs * multiplier
+        if epochs < completed_epochs:
+            continue
+        fitted_calibration = replace(calibration, epochs=epochs)
+        with jax.enable_x64(False):
+            fit_affine_history(
+                prepared_books=paths.prepared_books,
+                output=paths.affine_history,
+                checkpoint=paths.affine_checkpoint,
+                config=fitted_calibration,
+            )
+        with h5py.File(paths.affine_history, "r") as stream:
+            last_percent_inside = float(stream.attrs["percent_inside_spread"])
+        last_calibration = fitted_calibration
+        completed_epochs = epochs
+        if last_percent_inside >= minimum_inside_spread_percent:
+            return (
+                last_percent_inside,
+                completed_epochs,
+                retry_count,
+                fitted_calibration,
+            )
+    raise RuntimeError(
+        "rolling GROMM2 market fit failed the accepted inside-spread gate after "
+        f"{completed_epochs} epochs: {last_percent_inside:.3f}% < "
+        f"{minimum_inside_spread_percent:.3f}% (last config "
+        f"epochs={last_calibration.epochs})"
+    )
+
+
+def _checkpoint_completed_epochs(path: Path) -> int:
+    if not path.is_file():
+        return 0
+    with np.load(path, allow_pickle=False) as values:
+        completed = int(values["completed_epochs"])
+    if completed < 0:
+        raise ValueError("rolling GROMM2 checkpoint has negative completed epochs")
+    return completed
+
+
+def _validate_affine_calibration_payload(
+    payload: object,
+    *,
+    baseline: DlvCalibrationConfig,
+) -> tuple[int, int, DlvCalibrationConfig]:
+    if not isinstance(payload, dict):
+        raise ValueError("rolling GROMM2 affine calibration config is invalid")
+    allowed: list[tuple[int, DlvCalibrationConfig]] = []
+    for retry_count, multiplier in enumerate(_CALIBRATION_EPOCH_MULTIPLIERS):
+        candidate = replace(baseline, epochs=baseline.epochs * multiplier)
+        candidate_payload = json.loads(
+            json.dumps(asdict(candidate), sort_keys=True, allow_nan=False)
+        )
+        if payload == candidate_payload:
+            allowed.append((retry_count, candidate))
+    if len(allowed) != 1:
+        raise ValueError("rolling GROMM2 affine calibration config is incompatible")
+    retry_count, fitted = allowed[0]
+    return fitted.epochs, retry_count, fitted
 
 
 def _write_source_history(

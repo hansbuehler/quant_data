@@ -719,7 +719,11 @@ hedge-architecture selection are complete for the first rolling origin. Full
 rolling Q production and any future-origin P acceptance remain outstanding. A
 range orchestrator now authenticates and reuses each dated preparation or fit,
 records every manifest hash atomically, prevents concurrent writers, and emits
-a persistent heartbeat at most every five minutes. Its real first-origin
+a persistent heartbeat at most every five minutes. Borderline affine fits keep
+the fixed 80% inside-spread gate and continue from their authenticated 2,000
+epoch checkpoint to at most 4,000 and 8,000 epochs; completed epochs, retry
+count, and the actual fit configuration are retained in the dated artifact.
+Its real first-origin
 resume smoke passed. The 611-origin CPU preparation service is running and has
 passed the first sparse-release origin after an authenticated restart.
 
@@ -737,6 +741,11 @@ artifact root, and every dated manifest hash. The production matrix enables Q
 cases only from this complete evidence; it enables P cases only when every
 origin also passes the physical-drift gate. Full managed-GPU range fitting and
 forced-restart recovery evidence remain outstanding.
+
+The queue executor can retain a numerically rejected parameter case and
+continue an otherwise independent sweep. Such a queue is explicitly marked
+`complete-with-failures`; the failed case remains failed and cannot satisfy a
+model-results gate.
 
 Gate: CPU/GPU fixture agreement and forced-restart recovery test pass.
 

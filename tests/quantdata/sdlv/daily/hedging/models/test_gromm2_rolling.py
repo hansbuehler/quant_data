@@ -20,6 +20,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_dynamics impor
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2 import (
     ROLLING_GROMM2_SCHEMA,
     RollingGromm2Config,
+    _fit_affine_market_until_gate,
     load_prepared_rolling_gromm2,
     load_rolling_gromm2,
     rolling_gromm2_paths,
@@ -124,6 +125,81 @@ def test_rolling_gromm2_forward_uses_flat_released_tail() -> None:
     assert value == pytest.approx(day.forward_over_spot[-1])
 
 
+def test_affine_market_fit_continues_until_fixed_gate(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = RollingGromm2Config()
+    paths = rolling_gromm2_paths(tmp_path, as_of_date=date(2023, 1, 17))
+    paths.directory.mkdir(parents=True)
+    paths.prepared_books.write_bytes(b"prepared")
+    percentages = iter((79.5, 84.0))
+    fitted_epochs: list[int] = []
+
+    def fit(*, output, checkpoint, config, **_kwargs) -> None:
+        fitted_epochs.append(config.epochs)
+        with h5py.File(output, "w") as stream:
+            stream.attrs["schema"] = "gromm2-affine-dlv-history-v1"
+            stream.attrs["percent_inside_spread"] = next(percentages)
+            stream.attrs["calibration_config"] = json.dumps(
+                asdict(config), sort_keys=True
+            )
+        np.savez_compressed(checkpoint, completed_epochs=config.epochs)
+
+    monkeypatch.setattr(
+        "quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2.fit_affine_history",
+        fit,
+    )
+
+    percent, epochs, retries, fitted = _fit_affine_market_until_gate(
+        paths=paths,
+        calibration=config.calibration,
+        minimum_inside_spread_percent=config.minimum_inside_spread_percent,
+    )
+
+    assert fitted_epochs == [2_000, 4_000]
+    assert percent == pytest.approx(84.0)
+    assert epochs == fitted.epochs == 4_000
+    assert retries == 1
+
+
+def test_affine_market_fit_resumes_partial_retry(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = RollingGromm2Config()
+    paths = rolling_gromm2_paths(tmp_path, as_of_date=date(2023, 1, 17))
+    paths.directory.mkdir(parents=True)
+    paths.prepared_books.write_bytes(b"prepared")
+    np.savez_compressed(paths.affine_checkpoint, completed_epochs=3_500)
+    fitted_epochs: list[int] = []
+
+    def fit(*, output, checkpoint, config, **_kwargs) -> None:
+        fitted_epochs.append(config.epochs)
+        with h5py.File(output, "w") as stream:
+            stream.attrs["schema"] = "gromm2-affine-dlv-history-v1"
+            stream.attrs["percent_inside_spread"] = 84.0
+            stream.attrs["calibration_config"] = json.dumps(
+                asdict(config), sort_keys=True
+            )
+        np.savez_compressed(checkpoint, completed_epochs=config.epochs)
+
+    monkeypatch.setattr(
+        "quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2.fit_affine_history",
+        fit,
+    )
+
+    _, epochs, retries, _ = _fit_affine_market_until_gate(
+        paths=paths,
+        calibration=config.calibration,
+        minimum_inside_spread_percent=config.minimum_inside_spread_percent,
+    )
+
+    assert fitted_epochs == [4_000]
+    assert epochs == 4_000
+    assert retries == 1
+
+
 def test_prepared_rolling_gromm2_loader_authenticates_source_files(tmp_path) -> None:
     config = RollingGromm2Config()
     start = date(2022, 1, 1)
@@ -216,6 +292,12 @@ def test_complete_rolling_gromm2_loader_rejects_future_history(tmp_path) -> None
         "source_history_sha256": file_sha256(paths.source_history),
         "prepared_books_sha256": file_sha256(paths.prepared_books),
         "affine_history_sha256": file_sha256(paths.affine_history),
+        "affine_calibration_config": json.loads(
+            json.dumps(asdict(config.calibration), sort_keys=True)
+        ),
+        "calibration_epochs_completed": config.calibration.epochs,
+        "calibration_retry_count": 0,
+        "percent_inside_spread": 83.5,
         "dynamics_sha256": file_sha256(paths.dynamics),
         "dynamics_report_sha256": file_sha256(paths.dynamics.with_suffix(".json")),
     }
@@ -352,6 +434,12 @@ def test_complete_rolling_gromm2_loader_accepts_gapped_state_window(
         "source_history_sha256": file_sha256(paths.source_history),
         "prepared_books_sha256": file_sha256(paths.prepared_books),
         "affine_history_sha256": file_sha256(paths.affine_history),
+        "affine_calibration_config": json.loads(
+            json.dumps(asdict(config.calibration), sort_keys=True)
+        ),
+        "calibration_epochs_completed": config.calibration.epochs,
+        "calibration_retry_count": 0,
+        "percent_inside_spread": 83.5,
         "dynamics_sha256": file_sha256(paths.dynamics),
         "dynamics_report_sha256": file_sha256(paths.dynamics.with_suffix(".json")),
     }
@@ -375,6 +463,9 @@ def _write_affine_history(path, *, dates: list[date], config: RollingGromm2Confi
     with h5py.File(path, "w") as stream:
         stream.attrs["schema"] = "gromm2-affine-dlv-history-v1"
         stream.attrs["percent_inside_spread"] = 83.5
+        stream.attrs["calibration_config"] = json.dumps(
+            asdict(config.calibration), sort_keys=True
+        )
         stream.create_dataset(
             "dates",
             data=np.asarray([value.isoformat() for value in dates], dtype="S10"),

@@ -39,6 +39,7 @@ def execute_production_queue(
     expected_result_count: int | None = None,
     heartbeat_seconds: float = 240.0,
     adopt_unpinned_state: bool = False,
+    continue_after_failure: bool = False,
 ) -> dict[str, object]:
     """Run selected matrix cases sequentially and persist atomic queue evidence."""
     matrix_bytes = matrix_path.read_bytes()
@@ -75,11 +76,19 @@ def execute_production_queue(
         for record in _records(state)
         if record.get("status") == "complete"
     }
+    failed = {
+        _require_string(record, "case_id")
+        for record in _records(state)
+        if record.get("status") == "failed"
+    }
     ran_case = False
     for case in selected:
         case_id = _require_string(case, "case_id")
         if case_id in completed:
             print(f"queue case={case_id} reused queue-state completion", flush=True)
+            continue
+        if continue_after_failure and case_id in failed:
+            print(f"queue case={case_id} retained queue-state failure", flush=True)
             continue
         command = _production_command(
             case=case,
@@ -124,15 +133,42 @@ def execute_production_queue(
                 case_id=case_id,
                 status="failed",
                 return_code=return_code,
+                error=f"production command returned {return_code}",
             )
+            failed.add(case_id)
+            if continue_after_failure:
+                print(
+                    f"queue case={case_id} failed return_code={return_code}; "
+                    "continuing",
+                    flush=True,
+                )
+                continue
             raise RuntimeError(f"production case failed: {case_id} ({return_code})")
-        _validate_results(
-            results_path,
-            output=output,
-            matrix_schema=str(matrix_schema),
-            expected_model=_require_string(case, "model"),
-            expected_result_count=expected_result_count,
-        )
+        try:
+            _validate_results(
+                results_path,
+                output=output,
+                matrix_schema=str(matrix_schema),
+                expected_model=_require_string(case, "model"),
+                expected_result_count=expected_result_count,
+            )
+        except Exception as error:
+            _finish_record(
+                state=state,
+                state_path=state_path,
+                case_id=case_id,
+                status="failed",
+                return_code=return_code,
+                error=f"{type(error).__name__}: {error}",
+            )
+            failed.add(case_id)
+            if continue_after_failure:
+                print(
+                    f"queue case={case_id} failed validation; continuing",
+                    flush=True,
+                )
+                continue
+            raise
         _finish_record(
             state=state,
             state_path=state_path,
@@ -141,15 +177,20 @@ def execute_production_queue(
             return_code=return_code,
         )
         completed.add(case_id)
+        failed.discard(case_id)
         print(f"queue case={case_id} complete", flush=True)
-    if not ran_case and state.get("status") == "complete":
+    terminal_status = "complete-with-failures" if failed else "complete"
+    if not ran_case and state.get("status") == terminal_status:
         print(f"queue reused completion cases={len(selected)}", flush=True)
         return state
-    state["status"] = "complete"
+    state["status"] = terminal_status
     state["current_case_id"] = None
     state["completed_at"] = _utc_now()
     _write_json_atomic(state_path, state)
-    print(f"queue complete cases={len(selected)}", flush=True)
+    print(
+        f"queue {terminal_status} cases={len(selected)} failures={len(failed)}",
+        flush=True,
+    )
     return state
 
 
@@ -450,6 +491,7 @@ def _finish_record(
     case_id: str,
     status: str,
     return_code: int,
+    error: str | None = None,
 ) -> None:
     record = next(
         record for record in _records(state) if record.get("case_id") == case_id
@@ -457,6 +499,10 @@ def _finish_record(
     record["status"] = status
     record["completed_at"] = _utc_now()
     record["return_code"] = return_code
+    if error is None:
+        record.pop("error", None)
+    else:
+        record["error"] = error
     state["status"] = status if status == "failed" else "running"
     state["current_case_id"] = None
     _write_json_atomic(state_path, state)
@@ -550,6 +596,7 @@ def main() -> None:
     )
     parser.add_argument("--heartbeat-seconds", type=float, default=240.0)
     parser.add_argument("--adopt-unpinned-state", action="store_true")
+    parser.add_argument("--continue-after-failure", action="store_true")
     arguments = parser.parse_args()
     execute_production_queue(
         matrix_path=arguments.matrix,
@@ -561,6 +608,7 @@ def main() -> None:
         expected_result_count=arguments.expected_result_count,
         heartbeat_seconds=arguments.heartbeat_seconds,
         adopt_unpinned_state=arguments.adopt_unpinned_state,
+        continue_after_failure=arguments.continue_after_failure,
     )
 
 
