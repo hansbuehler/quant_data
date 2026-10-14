@@ -739,7 +739,9 @@ the 1,000-unit executable position cap was also bounding the claim and
 zero-claim virtual policies before their subtraction. Those virtual policies
 now use a separate 1,000,000-unit internal solver cap, while only the executable
 claim-minus-zero hedge uses the 1,000-unit benchmark cap. Internal and
-executable cap hits are reported separately and both fail the numerical gate.
+executable cap hits are reported separately. They fail the strict numerical
+gate; a precommitted mean-volatility recession diagnostic may retain them only
+as an explicitly nonconverged, cap-limited direction.
 An independent exact-date replay and a public-data 20-target smoke passed with
 no cap hit or nonconvergence. Results produced under the shared-cap implementation
 are retained only as failed diagnostics; the clean production sweep is running
