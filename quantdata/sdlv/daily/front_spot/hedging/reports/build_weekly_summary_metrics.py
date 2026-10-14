@@ -824,13 +824,19 @@ def _target_appendix_tex(payload: JsonObject) -> str:
     for key, raw_model in models.items():
         model = _as_object(raw_model, key)
         targets = _require_object(_require_object(model, "metrics"), "targets")
+        model_heading = (
+            _require_string(model, "display_name")
+            + ": "
+            + _tex_escape(_require_string(model, "schedule"))
+            + "; "
+            + _tex_escape(_require_string(model, "specification"))
+            + "; "
+            + _policy_tex(model)
+        )
         lines.extend(
             (
                 "\\begin{landscape}",
-                "\\subsection*{" + _require_string(model, "display_name") + ": "
-                + _tex_escape(_require_string(model, "schedule")) + "; "
-                + _tex_escape(_require_string(model, "specification")) + "; "
-                + _policy_tex(model) + "}",
+                "\\subsection*{" + model_heading + "}",
                 "\\begin{longtable}{@{}lrrrrrr@{}}",
                 "\\toprule",
                 "Target & Unhedged RMSE & Pure RMSE & Economic RMSE & ES$_{95}$ & Cost & Gross \\\\",
@@ -875,6 +881,62 @@ def _target_appendix_tex(payload: JsonObject) -> str:
                 + " \\\\"
             )
         lines.extend(("\\bottomrule", "\\end{longtable}", "\\end{landscape}", ""))
+        for objective, parameters in OBJECTIVE_GRIDS:
+            lines.extend(
+                (
+                    "\\begin{landscape}",
+                    "\\subsection*{"
+                    + model_heading
+                    + "; target "
+                    + _objective_title(objective)
+                    + " scores}",
+                    "\\begin{longtable}{@{}l"
+                    + "r" * len(parameters)
+                    + "rr@{}}",
+                    "\\toprule",
+                    "Target & "
+                    + " & ".join(
+                        _parameter_heading(objective, parameter)
+                        for parameter in parameters
+                    )
+                    + " & Pure RMSE & Economic RMSE \\\\",
+                    "\\midrule",
+                    "\\endhead",
+                )
+            )
+            for claim in sorted(targets):
+                target = _require_object(targets, claim)
+                economic = _require_object(target, "economic_loss")
+                scores = _require_object(economic, objective)
+                lines.append(
+                    " & ".join(
+                        (
+                            _tex_escape(claim),
+                            *(
+                                _basis_points(
+                                    _require_number(scores, parameter)
+                                )
+                                for parameter in parameters
+                            ),
+                            _basis_points(
+                                _require_number(
+                                    _require_object(target, "pure_hedge_loss"),
+                                    "root_mean_square",
+                                )
+                            ),
+                            _basis_points(
+                                _require_number(
+                                    economic,
+                                    "root_mean_square",
+                                )
+                            ),
+                        )
+                    )
+                    + " \\\\"
+                )
+            lines.extend(
+                ("\\bottomrule", "\\end{longtable}", "\\end{landscape}", "")
+            )
     return "\n".join(lines) + "\n"
 
 
@@ -891,6 +953,20 @@ def _basis_points(value: float) -> str:
 
 def _tex_objective_name(value: str) -> str:
     return value.replace("_", "--")
+
+
+def _objective_title(objective: str) -> str:
+    return {
+        "mean_variance": "Mean--variance",
+        "mean_volatility": "Mean--volatility",
+        "entropy": "Entropy OCE",
+        "power_exponential": "Power-exponential OCE",
+    }[objective]
+
+
+def _parameter_heading(objective: str, parameter: str) -> str:
+    symbol = "\\kappa" if objective == "mean_volatility" else "\\lambda"
+    return f"${symbol}={parameter}$"
 
 
 def _policy_tex(payload: JsonObject) -> str:

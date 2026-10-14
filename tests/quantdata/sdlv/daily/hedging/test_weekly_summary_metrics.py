@@ -174,7 +174,15 @@ def test_weekly_summary_discovers_schedules_and_aggregates_complete_cases(
         SUMMARY_SCHEMA
     )
     assert "frozen-weekly" in tables_output.read_text(encoding="utf-8")
-    assert "digital" in appendix_output.read_text(encoding="utf-8")
+    appendix = appendix_output.read_text(encoding="utf-8")
+    assert "digital" in appendix
+    assert "target Mean--variance scores" in appendix
+    assert "target Mean--volatility scores" in appendix
+    assert "target Entropy OCE scores" in appendix
+    assert "target Power-exponential OCE scores" in appendix
+    assert "$\\kappa=3$" in appendix
+    assert "$\\lambda=10$" in appendix
+    assert "16,000.00" in appendix
 
 
 def test_weekly_summary_rejects_matrix_objective_that_disagrees_with_run(

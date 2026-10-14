@@ -71,7 +71,7 @@ declared fitting ridge, which is excluded from reported certainty equivalents.
 Real first-origin frozen-weekly gates cover all 13 targets: entropy at risk
 parameter 10 and power-exponential at risk parameter 1 both pass with zero cap
 hits and zero nonconverged fits. Exact cached wealth matches the common pathwise
-accounting engine to $10^{-14}$, the full hedging suite has 361 passing tests,
+accounting engine to $10^{-14}$, the full hedging suite has 419 passing tests,
 and independent quant review passes. The 94-case weekly matrix retains 28 ready
 native cases, four generated-gate waiters, and 62 blocked cases. The native
 weekly queue is pinned to commit `a1baa69` and waits for the active corrected
@@ -106,7 +106,7 @@ conflicting duplicate cases, and can require that every ready matrix case is
 complete. Its real current-cohort smoke automatically authenticated the SANOS-LV
 reference, three robust-covariance policies, and the completed Historical-SANOS
 policy and generated all four objective tables plus target appendices. The
-resulting complete hedging suite contains 361 passing tests. The
+resulting complete hedging suite contains 419 passing tests. The
 strictly-2022 target-sizing exercise now
 fixes each target to one
 maturity-matched ATM spot-risk unit; all 20 calibration hedges converged with
@@ -1041,7 +1041,10 @@ blocked.
 Weekly ingestion requires the complete
 528-origin, 6,864-record population, verifies objective labels against the
 immutable run snapshot, keeps frozen and restarted schedules distinct, and
-generates aggregate objective and target-level appendix tables. Final
+generates aggregate objective tables and target-level appendix tables for all
+four ex-post objective families at every precommitted parameter. Objective
+functionals are evaluated in unscaled inception-spot-normalized loss units and
+only the resulting scalar is converted to basis points for display. Final
 weekly comparisons use equal-weighted 13-target episode books and report
 candidate-minus-SANOS paired differences with Hansen--Hodrick and moving-block
 bootstrap uncertainty. A standalone final-document builder now renders all
@@ -1061,7 +1064,7 @@ hit or nonconvergence; precommitted mean-volatility recession diagnostics are
 retained with their counts. It records the dataset, target-notional, and
 target-cohort identities together with every source-matrix hash. Adversarial
 tests reject a missing record, forged aggregate, wrong dataset, and wrong target
-cohort; a real 12,220-record SANOS--LV composition smoke and the 361-test full
+cohort; a real 12,220-record SANOS--LV composition smoke and the 419-test full
 hedging suite pass, and independent quant re-review closes the authentication
 blocker. This permits the final
 54-cell daily and 94-cell weekly matrices to reuse completed native evidence
