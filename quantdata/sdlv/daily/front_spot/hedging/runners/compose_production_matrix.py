@@ -8,6 +8,13 @@ import json
 from pathlib import Path
 from typing import TypeAlias
 
+from quantdata.sdlv.daily.front_spot.hedging.benchmark.digital_daily import (
+    daily_digital_targets,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners import (
+    execute_production_matrix,
+)
+
 JsonObject: TypeAlias = dict[str, object]
 
 
@@ -18,6 +25,7 @@ def compose_production_matrix(
     replace_models: frozenset[str],
     expected_result_count: int,
     expected_results_schema: str,
+    dataset: Path,
     output: Path,
 ) -> JsonObject:
     """Replace selected base cases with the first complete authenticated source."""
@@ -28,6 +36,14 @@ def compose_production_matrix(
     if expected_result_count <= 0:
         raise ValueError("expected result count must be positive")
     base = _read_object(base_matrix)
+    matrix_schema = _required_string(base, "schema")
+    expected_schema = _expected_results_schema(matrix_schema)
+    if expected_results_schema != expected_schema:
+        raise ValueError(
+            "results schema does not match the production-matrix scope: "
+            f"{expected_results_schema} != {expected_schema}"
+        )
+    panel = execute_production_matrix._load_daily_panel(dataset)
     base_cases = _case_map(base, label="base matrix")
     source_candidates: dict[str, list[tuple[JsonObject, Path]]] = {}
     source_hashes: list[dict[str, str]] = []
@@ -45,6 +61,7 @@ def compose_production_matrix(
     replacement_sources: dict[str, str] = {}
     dataset_identities: set[str] = set()
     target_notional_identities: set[str] = set()
+    target_cohort_identities: set[str] = set()
     for case_id, base_case in base_cases.items():
         model = _required_string(base_case, "model")
         if model not in replace_models:
@@ -55,13 +72,21 @@ def compose_production_matrix(
                 candidate,
                 expected_result_count=expected_result_count,
                 expected_results_schema=expected_results_schema,
+                matrix_schema=matrix_schema,
+                dataset=dataset,
+                panel=panel,
             )
             if completed_identity is not None:
                 replacements[case_id] = candidate
                 replacement_sources[case_id] = str(source_path)
-                dataset_identity, target_notional_identity = completed_identity
+                (
+                    dataset_identity,
+                    target_notional_identity,
+                    target_cohort_identity,
+                ) = completed_identity
                 dataset_identities.add(dataset_identity)
                 target_notional_identities.add(target_notional_identity)
+                target_cohort_identities.add(target_cohort_identity)
                 break
         if case_id not in replacements:
             raise ValueError(
@@ -71,6 +96,8 @@ def compose_production_matrix(
         raise ValueError("completed source cases use different public datasets")
     if len(target_notional_identities) != 1:
         raise ValueError("completed source cases use different target notionals")
+    if len(target_cohort_identities) != 1:
+        raise ValueError("completed source cases use different target cohorts")
 
     cases = base.get("cases")
     if not isinstance(cases, list):
@@ -90,6 +117,7 @@ def compose_production_matrix(
         "replacement_sources": replacement_sources,
         "dataset_manifest_sha256": dataset_identities.pop(),
         "target_notional_identity": target_notional_identities.pop(),
+        "target_cohort_sha256": target_cohort_identities.pop(),
     }
     _write_object(output, payload)
     return payload
@@ -100,7 +128,10 @@ def _completed_output_identity(
     *,
     expected_result_count: int,
     expected_results_schema: str,
-) -> tuple[str, str] | None:
+    matrix_schema: str,
+    dataset: Path,
+    panel: object,
+) -> tuple[str, str, str] | None:
     if case.get("readiness") != "ready" or case.get("blocked_reason") is not None:
         return None
     command = case.get("command")
@@ -113,10 +144,25 @@ def _completed_output_identity(
     except (ValueError, IndexError):
         return None
     run_path = output / "run.json"
+    summary_path = output / "summary.json"
     results_path = output / "results.json"
-    if not run_path.is_file() or not results_path.is_file():
+    if (
+        not run_path.is_file()
+        or not summary_path.is_file()
+        or not results_path.is_file()
+    ):
         return None
+    execute_production_matrix._validate_results(
+        results_path,
+        output=output,
+        matrix_schema=matrix_schema,
+        expected_model=_required_string(case, "model"),
+        expected_result_count=expected_result_count,
+        dataset=dataset,
+        panel=panel,
+    )
     run = _read_object(run_path)
+    summary = _read_object(summary_path)
     results = _read_object(results_path)
     if results.get("schema") != expected_results_schema:
         return None
@@ -127,18 +173,54 @@ def _completed_output_identity(
     if results.get("model") != case.get("model"):
         return None
     if results.get("measure") != case.get("measure"):
-        return None
+        raise ValueError("completed source measure does not match its matrix case")
     dataset_identity = results.get("dataset_manifest_sha256")
     if (
         not isinstance(dataset_identity, str)
         or not dataset_identity
         or dataset_identity != run.get("dataset_manifest_sha256")
     ):
-        return None
+        raise ValueError("completed source dataset identity is inconsistent")
     target_notional_identity = run.get("target_notional_identity")
     if not isinstance(target_notional_identity, str) or not target_notional_identity:
-        return None
-    return dataset_identity, target_notional_identity
+        raise ValueError("completed source target-notional identity is missing")
+    target_labels = _required_string_list(run, "target_labels")
+    target_quantities = _required_number_list(run, "target_quantities")
+    if len(target_labels) != len(target_quantities):
+        raise ValueError("completed source target cohort is not aligned")
+    if matrix_schema == execute_production_matrix.DAILY_MATRIX_SCHEMA:
+        expected_labels = tuple(target.label for target in daily_digital_targets())
+        if tuple(target_labels) != expected_labels:
+            raise ValueError("completed daily source uses the wrong target cohort")
+        numerical_failures = (
+            _required_integer(summary, "nonconverged_results")
+            + _required_integer(summary, "cap_hits")
+        )
+    elif matrix_schema == execute_production_matrix.WEEKLY_MATRIX_SCHEMA:
+        numerical_failures = (
+            _required_integer(summary, "nonconverged_fits")
+            + _required_integer(summary, "cap_hits")
+        )
+    else:
+        raise ValueError(f"unsupported production-matrix schema: {matrix_schema}")
+    if numerical_failures:
+        raise ValueError("completed source failed its numerical gates")
+    target_cohort_identity = _canonical_sha256(
+        {
+            "target_labels": target_labels,
+            "target_quantities": target_quantities,
+            "target_notional_identity": target_notional_identity,
+        }
+    )
+    return dataset_identity, target_notional_identity, target_cohort_identity
+
+
+def _expected_results_schema(matrix_schema: str) -> str:
+    if matrix_schema == execute_production_matrix.DAILY_MATRIX_SCHEMA:
+        return execute_production_matrix.DAILY_RESULTS_SCHEMA
+    if matrix_schema == execute_production_matrix.WEEKLY_MATRIX_SCHEMA:
+        return execute_production_matrix.WEEKLY_RESULTS_SCHEMA
+    raise ValueError(f"unsupported production-matrix schema: {matrix_schema}")
 
 
 def _case_map(matrix: JsonObject, *, label: str) -> dict[str, JsonObject]:
@@ -193,6 +275,42 @@ def _required_string(payload: JsonObject, field: str) -> str:
     return value
 
 
+def _required_string_list(payload: JsonObject, field: str) -> list[str]:
+    value = payload.get(field)
+    if not isinstance(value, list) or not value or not all(
+        isinstance(item, str) and item for item in value
+    ):
+        raise ValueError(f"{field} must be a non-empty string list")
+    return value
+
+
+def _required_number_list(payload: JsonObject, field: str) -> list[float | int]:
+    value = payload.get(field)
+    if not isinstance(value, list) or not value or not all(
+        isinstance(item, (float, int)) and not isinstance(item, bool)
+        for item in value
+    ):
+        raise ValueError(f"{field} must be a non-empty number list")
+    return value
+
+
+def _required_integer(payload: JsonObject, field: str) -> int:
+    value = payload.get(field)
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{field} must be a non-negative integer")
+    return value
+
+
+def _canonical_sha256(payload: JsonObject) -> str:
+    encoded = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
@@ -214,6 +332,7 @@ def main() -> None:
     )
     parser.add_argument("--expected-result-count", type=int, required=True)
     parser.add_argument("--expected-results-schema", required=True)
+    parser.add_argument("--dataset", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
     payload = compose_production_matrix(
@@ -222,6 +341,7 @@ def main() -> None:
         replace_models=frozenset(arguments.replace_model),
         expected_result_count=arguments.expected_result_count,
         expected_results_schema=arguments.expected_results_schema,
+        dataset=arguments.dataset,
         output=arguments.output,
     )
     print(

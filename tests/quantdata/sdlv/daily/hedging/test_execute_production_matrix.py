@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
@@ -12,6 +13,9 @@ from filelock import FileLock
 from quantdata.hedging.data.public_dataset import HEDGING_PUBLIC_SCHEMA
 from quantdata.hedging.metrics import HedgeSmokeResult
 from quantdata.hedging.protocols import HedgeSchedule
+from quantdata.sdlv.daily.front_spot.hedging.benchmark.digital_daily import (
+    daily_digital_targets,
+)
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly import weekly_targets
 from quantdata.sdlv.daily.front_spot.hedging.data.public_view import (
     PublicHedgingPanelView,
@@ -19,6 +23,9 @@ from quantdata.sdlv.daily.front_spot.hedging.data.public_view import (
 from quantdata.sdlv.daily.front_spot.hedging.runners import (
     execute_production_matrix,
     weekly_results,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners.compose_production_matrix import (
+    compose_production_matrix,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
     DAILY_RECORD_SCHEMA,
@@ -108,9 +115,9 @@ def _write_authenticated_daily_output(
     output: Path,
     *,
     model: str = "historical-sanos",
+    target_labels: tuple[str, ...] = ("digital-put-1d-atm",),
 ) -> tuple[str, Path, _DailyPanel]:
     origins = ("2023-01-17", "2023-01-18")
-    target = "digital-put-1d-atm"
     dataset = output.parent / f"{output.name}-dataset"
     dataset.mkdir(parents=True, exist_ok=True)
     manifest_path = dataset / "manifest.json"
@@ -127,30 +134,33 @@ def _write_authenticated_daily_output(
         evaluation_start=date.fromisoformat(origins[0]),
         evaluation_end=date.fromisoformat(origins[-1]),
         rolling_observations=2,
-        target_labels=(target,),
-        target_quantities=(1.0,),
+        target_labels=target_labels,
+        target_quantities=(1.0,) * len(target_labels),
         target_notional_identity="notional-test",
     )
     _write_json(output / "run.json", {**spec.to_dict(), "run_identity": spec.run_identity})
     for origin in origins:
-        result = HedgeSmokeResult(
-            model=model,
-            measure=spec.measure,
-            origin_date=origin,
-            terminal_date=origin,
-            claim=target,
-            market_price=0.5,
-            model_price=0.5,
-            payoff=0.0,
-            unhedged_pnl=-0.5,
-            hedged_pnl=-0.5,
-            transaction_cost=0.0,
-            actions={},
-            pricing_difference=0.0,
-            pure_hedge_error=-0.5,
-            objective_value=0.25,
-            converged=True,
-            cap_hits=0,
+        results = tuple(
+            HedgeSmokeResult(
+                model=model,
+                measure=spec.measure,
+                origin_date=origin,
+                terminal_date=origin,
+                claim=target,
+                market_price=0.5,
+                model_price=0.5,
+                payoff=0.0,
+                unhedged_pnl=-0.5,
+                hedged_pnl=-0.5,
+                transaction_cost=0.0,
+                actions={},
+                pricing_difference=0.0,
+                pure_hedge_error=-0.5,
+                objective_value=0.25,
+                converged=True,
+                cap_hits=0,
+            )
+            for target in target_labels
         )
         _write_json(
             output / "records" / f"{origin}.json",
@@ -158,7 +168,7 @@ def _write_authenticated_daily_output(
                 "schema": DAILY_RECORD_SCHEMA,
                 "run_identity": spec.run_identity,
                 "origin_date": origin,
-                "results": [result.to_dict()],
+                "results": [result.to_dict() for result in results],
             },
         )
     summary = DailyEvaluationSummary(
@@ -166,7 +176,7 @@ def _write_authenticated_daily_output(
         eligible_origins=origins,
         completed_origins=origins,
         reused_origins=(),
-        result_count=len(origins),
+        result_count=len(origins) * len(target_labels),
         nonconverged_results=0,
         cap_hits=0,
     )
@@ -175,6 +185,82 @@ def _write_authenticated_daily_output(
         output / "results.json"
     )
     return spec.run_identity, dataset, panel
+
+
+def _daily_composition_case(
+    *,
+    output: Path,
+) -> dict[str, object]:
+    return {
+        "blocked_reason": None,
+        "case_id": "historical-sanos-mean-variance-1",
+        "command": ["python", "runner", "--output", str(output)],
+        "measure": "P",
+        "model": "historical-sanos",
+        "objective": "mean-variance",
+        "readiness": "ready",
+        "resource": "cpu",
+        "risk_parameter": 1.0,
+        "variant": "test-variant",
+    }
+
+
+def _write_daily_composition_matrix(
+    path: Path,
+    *,
+    output: Path,
+) -> None:
+    _write_json(
+        path,
+        {
+            "schema": "hedging-daily-production-matrix-v1",
+            "case_count": 1,
+            "ready_count": 1,
+            "blocked_count": 0,
+            "waiting_gate_count": 0,
+            "cases": [_daily_composition_case(output=output)],
+        },
+    )
+
+
+def _compose_authenticated_daily_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    target_labels: tuple[str, ...],
+    dataset_panel: _DailyPanel | None = None,
+    mutate_output: Callable[[Path], None] | None = None,
+) -> tuple[dict[str, object], Path, _DailyPanel]:
+    source_output = tmp_path / "source-output"
+    _, dataset, panel = _write_authenticated_daily_output(
+        source_output,
+        target_labels=target_labels,
+    )
+    if mutate_output is not None:
+        mutate_output(source_output)
+    _write_daily_composition_matrix(
+        tmp_path / "base.json",
+        output=tmp_path / "base-output",
+    )
+    _write_daily_composition_matrix(
+        tmp_path / "source.json",
+        output=source_output,
+    )
+    monkeypatch.setattr(
+        execute_production_matrix,
+        "_load_daily_panel",
+        lambda _dataset: dataset_panel or panel,
+    )
+    payload = compose_production_matrix(
+        base_matrix=tmp_path / "base.json",
+        source_matrices=(tmp_path / "source.json",),
+        replace_models=frozenset({"historical-sanos"}),
+        expected_result_count=2 * len(target_labels),
+        expected_results_schema="hedging-daily-results-v2",
+        dataset=dataset,
+        output=tmp_path / "composed.json",
+    )
+    return payload, dataset, panel
 
 
 def _weekly_loss_statistics(
@@ -377,6 +463,90 @@ def test_daily_production_validation_reconciles_dated_records(
             expected_model="historical-sanos",
             expected_result_count=2,
             dataset=dataset,
+        )
+
+
+def test_composition_deeply_authenticates_daily_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    labels = tuple(target.label for target in daily_digital_targets())
+
+    payload, _, _ = _compose_authenticated_daily_output(
+        tmp_path,
+        monkeypatch,
+        target_labels=labels,
+    )
+
+    assert payload["composition"]["target_cohort_sha256"]
+
+
+def test_composition_rejects_missing_daily_record(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    labels = tuple(target.label for target in daily_digital_targets())
+
+    with pytest.raises(FileNotFoundError):
+        _compose_authenticated_daily_output(
+            tmp_path,
+            monkeypatch,
+            target_labels=labels,
+            mutate_output=lambda output: (
+                output / "records" / "2023-01-17.json"
+            ).unlink(),
+        )
+
+
+def test_composition_rejects_forged_daily_aggregate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    labels = tuple(target.label for target in daily_digital_targets())
+
+    def forge_aggregate(output: Path) -> None:
+        path = output / "results.json"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["result_count"] -= 1
+        _write_json(path, payload)
+
+    with pytest.raises(ValueError, match="aggregate does not match"):
+        _compose_authenticated_daily_output(
+            tmp_path,
+            monkeypatch,
+            target_labels=labels,
+            mutate_output=forge_aggregate,
+        )
+
+
+def test_composition_rejects_wrong_public_dataset(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    labels = tuple(target.label for target in daily_digital_targets())
+    wrong_panel = _DailyPanel(
+        tmp_path / "wrong-dataset",
+        manifest_sha256="0" * 64,
+    )
+
+    with pytest.raises(ValueError, match="another public dataset"):
+        _compose_authenticated_daily_output(
+            tmp_path,
+            monkeypatch,
+            target_labels=labels,
+            dataset_panel=wrong_panel,
+        )
+
+
+def test_composition_rejects_wrong_daily_target_cohort(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with pytest.raises(ValueError, match="wrong target cohort"):
+        _compose_authenticated_daily_output(
+            tmp_path,
+            monkeypatch,
+            target_labels=("digital-put-1d-atm",),
         )
 
 

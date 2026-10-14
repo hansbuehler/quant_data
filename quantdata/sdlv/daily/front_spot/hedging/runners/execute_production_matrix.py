@@ -462,8 +462,15 @@ def _validate_results(
     expected_model: str,
     expected_result_count: int,
     dataset: Path | None = None,
+    panel: PublicHedgingPanel | None = None,
 ) -> str:
     payload = _read_json_object(path)
+    if panel is None:
+        if dataset is None:
+            raise ValueError(
+                "production validation requires its public dataset or panel"
+            )
+        panel = _load_daily_panel(dataset)
     if matrix_schema == DAILY_MATRIX_SCHEMA:
         from quantdata.sdlv.daily.front_spot.hedging.runners.daily_results import (
             authenticate_completed_daily_results,
@@ -471,10 +478,8 @@ def _validate_results(
 
         if payload.get("schema") != DAILY_RESULTS_SCHEMA:
             raise ValueError(f"unexpected daily-results schema: {path}")
-        if dataset is None:
-            raise ValueError("daily production validation requires its public dataset")
         report = authenticate_completed_daily_results(
-            _load_daily_panel(dataset),
+            panel,
             results_path=path,
         )
         if report.model != expected_model:
@@ -491,11 +496,9 @@ def _validate_results(
             authenticate_completed_weekly_results,
         )
 
-        if dataset is None:
-            raise ValueError("weekly production validation requires its public dataset")
         spec = WeeklyEvaluationSpec.from_dict(run)
         aggregate = authenticate_completed_weekly_results(
-            _load_daily_panel(dataset),
+            panel,
             results_path=path,
         )
         if spec.model != expected_model:

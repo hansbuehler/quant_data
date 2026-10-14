@@ -5,6 +5,12 @@ from pathlib import Path
 
 import pytest
 
+from quantdata.sdlv.daily.front_spot.hedging.benchmark.digital_daily import (
+    daily_digital_targets,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners import (
+    execute_production_matrix,
+)
 from quantdata.sdlv.daily.front_spot.hedging.runners.compose_production_matrix import (
     compose_production_matrix,
 )
@@ -51,10 +57,13 @@ def _matrix(path: Path, cases: list[dict[str, object]]) -> None:
 
 
 def _complete(output: Path, *, model: str, count: int = 7) -> None:
+    labels = [target.label for target in daily_digital_targets()]
     run = {
         "run_identity": "run-identity",
         "dataset_manifest_sha256": "dataset-identity",
         "target_notional_identity": "target-notional-identity",
+        "target_labels": labels,
+        "target_quantities": [1.0] * len(labels),
     }
     results = {
         "schema": "hedging-daily-results-v2",
@@ -65,7 +74,25 @@ def _complete(output: Path, *, model: str, count: int = 7) -> None:
         "result_count": count,
     }
     _write_json(output / "run.json", run)
+    _write_json(
+        output / "summary.json",
+        {"nonconverged_results": 0, "cap_hits": 0},
+    )
     _write_json(output / "results.json", results)
+
+
+@pytest.fixture(autouse=True)
+def _stub_deep_validation(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        execute_production_matrix,
+        "_load_daily_panel",
+        lambda _dataset: object(),
+    )
+    monkeypatch.setattr(
+        execute_production_matrix,
+        "_validate_results",
+        lambda *_args, **_kwargs: "validated-results-sha256",
+    )
 
 
 def test_compose_replaces_only_complete_selected_models(tmp_path: Path) -> None:
@@ -98,6 +125,7 @@ def test_compose_replaces_only_complete_selected_models(tmp_path: Path) -> None:
         replace_models=frozenset({"historical-sanos"}),
         expected_result_count=7,
         expected_results_schema="hedging-daily-results-v2",
+        dataset=tmp_path / "dataset",
         output=destination,
     )
 
@@ -130,6 +158,7 @@ def test_compose_uses_first_complete_source(tmp_path: Path) -> None:
         replace_models=frozenset({"historical-sanos"}),
         expected_result_count=7,
         expected_results_schema="hedging-daily-results-v2",
+        dataset=tmp_path / "dataset",
         output=tmp_path / "composed.json",
     )
 
@@ -153,6 +182,7 @@ def test_compose_rejects_missing_complete_source(tmp_path: Path) -> None:
             replace_models=frozenset({"historical-sanos"}),
             expected_result_count=7,
             expected_results_schema="hedging-daily-results-v2",
+            dataset=tmp_path / "dataset",
             output=tmp_path / "composed.json",
         )
 
@@ -173,6 +203,7 @@ def test_compose_rejects_source_identity_change(tmp_path: Path) -> None:
             replace_models=frozenset({"historical-sanos"}),
             expected_result_count=7,
             expected_results_schema="hedging-daily-results-v2",
+            dataset=tmp_path / "dataset",
             output=tmp_path / "composed.json",
         )
 
@@ -206,5 +237,6 @@ def test_compose_rejects_mixed_target_notionals(tmp_path: Path) -> None:
             replace_models=frozenset({"historical-sanos"}),
             expected_result_count=7,
             expected_results_schema="hedging-daily-results-v2",
+            dataset=tmp_path / "dataset",
             output=tmp_path / "composed.json",
         )
