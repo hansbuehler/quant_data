@@ -53,24 +53,28 @@ cold zero-claim pricing fit across targets. Historical weekly evaluation also
 prices the fixed option book once per decision state and attaches each target
 payoff to the cached paths. Target-specific convex problems are rebuilt rather
 than carried across claims, and the reusable pure-hedge geometry receives the
-current claim payoff explicitly. A real frozen-weekly origin reproduces the
-fresh-fit prices and positions exactly, with zero cap hits or nonconvergence,
-while reducing target-book compute from 336.3 to 53.1 seconds; independent
-quant review passed. The 94-case weekly matrix retains 28 ready native cases,
-four generated-gate waiters, and 62 blocked cases. Its native queue and the
-generated-model readiness queue are repinned to commit `73a9626`; the former
-waits for daily CPU production and the latter for the rolling GROMM GPU fit.
+current claim payoff explicitly. Weekly entropy and power-exponential policies
+now use exact conic epigraphs for scenario-dependent turnover costs plus the
+declared fitting ridge, which is excluded from reported certainty equivalents.
+Real first-origin frozen-weekly gates cover all 13 targets: entropy at risk
+parameter 10 and power-exponential at risk parameter 1 both pass with zero cap
+hits and zero nonconverged fits. Exact cached wealth matches the common pathwise
+accounting engine to $10^{-14}$, the full hedging suite has 349 passing tests,
+and independent quant review passes. The 94-case weekly matrix retains 28 ready
+native cases, four generated-gate waiters, and 62 blocked cases. The native
+weekly queue is pinned to commit `edf28cc` and waits for the active corrected
+daily covariance and Historical-SANOS queues; the generated-model readiness
+queue waits for the rolling GROMM GPU fit.
 Independent model review records for VolGAN, AD-Seq-Vol, and AD-Seq-Vol-FT now
-bind that commit, the public manifest, their distinct initializer and selection
+bind their reviewed commit, the public manifest, their distinct initializer and selection
 lineages, and all six daily/frozen/restarted public/rolling scopes. A deferred
-full-production service waits for both the rolling GROMM range and the complete
-managed-GPU readiness matrix, assembles the three authenticated production
-gates, and writes new pinned daily and weekly matrices without changing the
-matrices used by active native queues. It then executes only newly ready GPU
-cases through `gpuctl`, with four-minute progress and resource checks. A second
-deferred CPU service runs the remaining daily GROMM Q-expectation plus
-eight-factor-vega case only after native weekly production releases the CPU
-capacity.
+full-production service will be rebuilt from the final pinned commit after the
+rolling GROMM range and managed-GPU readiness matrix complete. It will assemble
+the three authenticated production gates and write new pinned matrices without
+changing the matrices used by active native queues. Newly ready GPU cases must
+run through `gpuctl`, with four-minute progress and resource checks; the
+remaining daily GROMM Q-expectation plus eight-factor-vega case must wait until
+native weekly production releases CPU capacity.
 The daily production-queue validator
 now authenticates the immutable run and completion summary, recomputes the true
 eligible-origin cohort from the public panel, reparses every dated result record,
@@ -87,7 +91,7 @@ conflicting duplicate cases, and can require that every ready matrix case is
 complete. Its real current-cohort smoke automatically authenticated the SANOS-LV
 reference, three robust-covariance policies, and the completed Historical-SANOS
 policy and generated all four objective tables plus target appendices. The
-resulting complete hedging suite contains 337 passing tests. The
+resulting complete hedging suite contains 349 passing tests. The
 strictly-2022 target-sizing exercise now
 fixes each target to one
 maturity-matched ATM spot-risk unit; all 20 calibration hedges converged with
