@@ -133,18 +133,27 @@ class WeeklyPriceRecord:
     continuation_price_per_fit_spot: float | None
 
     def __post_init__(self) -> None:
-        values = (
+        non_negative_values = (
             self.common_market_price_per_fit_spot,
             self.q_expectation_per_fit_spot,
+        )
+        if any(
+            value is not None and (not math.isfinite(value) or value < 0.0)
+            for value in non_negative_values
+        ):
+            raise ValueError(
+                "weekly market and risk-neutral prices must be finite and non-negative"
+            )
+        indifference_values = (
             self.buyer_indifference_per_fit_spot,
             self.seller_indifference_per_fit_spot,
             self.continuation_price_per_fit_spot,
         )
         if any(
-            value is not None and (not math.isfinite(value) or value < 0.0)
-            for value in values
+            value is not None and not math.isfinite(value)
+            for value in indifference_values
         ):
-            raise ValueError("weekly price quantities must be finite and non-negative")
+            raise ValueError("weekly indifference-price quantities must be finite")
         if (
             self.q_expectation_per_fit_spot is None
             and self.buyer_indifference_per_fit_spot is None

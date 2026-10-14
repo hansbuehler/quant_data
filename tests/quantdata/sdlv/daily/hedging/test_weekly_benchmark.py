@@ -101,12 +101,13 @@ class _TestWeeklyAdapter:
     model_config_identity = "model-v1"
     policy_config_identity = "policy-v1"
 
-    def __init__(self) -> None:
+    def __init__(self, *, buyer_indifference_price: float | None = None) -> None:
         self.market_fit_calls: list[date] = []
         self.policy_fit_calls: list[date] = []
         self.fit_panel_last_dates: list[date] = []
         self.fit_path_lengths: list[int] = []
         self.action_path_lengths: list[int] = []
+        self.buyer_indifference_price = buyer_indifference_price
 
     def fit_market(self, panel, *, instruction) -> _TestMarketFit:
         self.market_fit_calls.append(instruction.fit_as_of_date)
@@ -128,15 +129,20 @@ class _TestWeeklyAdapter:
         self.policy_fit_calls.append(instruction.fit_as_of_date)
         self.fit_path_lengths.append(len(state.inception_forward_path))
         price = 0.01 + 0.001 * len(self.policy_fit_calls)
+        buyer = self.buyer_indifference_price
         return _TestFit(
             market_fit_identity=market_fit.market_fit_identity,
             policy_fit_identity=instruction.policy_fit_identity,
             prices=WeeklyPriceRecord(
                 common_market_price_per_fit_spot=price,
-                q_expectation_per_fit_spot=price,
-                buyer_indifference_per_fit_spot=None,
-                seller_indifference_per_fit_spot=None,
-                continuation_price_per_fit_spot=price,
+                q_expectation_per_fit_spot=(price if buyer is None else None),
+                buyer_indifference_per_fit_spot=buyer,
+                seller_indifference_per_fit_spot=(
+                    None if buyer is None else buyer + 0.002
+                ),
+                continuation_price_per_fit_spot=(
+                    price if buyer is None else buyer + 0.001
+                ),
             ),
         )
 
@@ -536,6 +542,43 @@ def test_weekly_runner_owns_refit_schedule_and_hides_future_path(
                 )
             ]
         ),
+    )
+
+
+def test_weekly_runner_accounts_signed_buyer_indifference_price(
+    weekly_panel: tuple[_SyntheticWeeklyPanel, tuple[date, ...]],
+) -> None:
+    panel, dates = weekly_panel
+    episode = build_weekly_episode_path(
+        panel,
+        origin_date=dates[0],
+        schedule=HedgeSchedule.FROZEN_WEEKLY,
+        rolling_window_business_days=3,
+    )
+    claim = build_weekly_claim(
+        episode.market_days[0],
+        target=WeeklyTarget(
+            kind=WeeklyTargetKind.DIGITAL,
+            right=OptionRight.CALL,
+            nms=0.0,
+        ),
+    )
+    adapter = _TestWeeklyAdapter(buyer_indifference_price=-0.01)
+
+    run = run_weekly_model(
+        panel,
+        episode=episode,
+        claim=claim,
+        adapter=adapter,
+    )
+
+    assert run.result.breakdown.model_price == pytest.approx(-0.01)
+    assert run.result.breakdown.pricing_contribution == pytest.approx(
+        -0.01 - claim.market_price
+    )
+    assert run.result.breakdown.economic_pnl == pytest.approx(
+        run.result.breakdown.pricing_contribution
+        + run.result.breakdown.pure_hedge_error
     )
 
 

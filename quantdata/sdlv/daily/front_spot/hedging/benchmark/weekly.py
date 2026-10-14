@@ -825,8 +825,8 @@ def evaluate_weekly_hedge(
     scalar_inputs = (market_price, model_price, claim_quantity, spot_cost_bps)
     if any(not math.isfinite(value) for value in scalar_inputs):
         raise ValueError("weekly hedge scalar inputs must be finite")
-    if market_price < 0.0 or model_price < 0.0 or spot_cost_bps < 0.0:
-        raise ValueError("weekly prices and spot cost must be non-negative")
+    if market_price < 0.0 or spot_cost_bps < 0.0:
+        raise ValueError("weekly market price and spot cost must be non-negative")
 
     step_costs = np.zeros(WEEKLY_HORIZON + 1, dtype=np.float64)
     step_gains = np.zeros(WEEKLY_HORIZON, dtype=np.float64)

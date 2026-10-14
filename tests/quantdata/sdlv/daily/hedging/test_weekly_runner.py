@@ -162,6 +162,36 @@ def _panel_and_manifest(tmp_path: Path) -> tuple[_RunnerPanel, str]:
     return _RunnerPanel(tmp_path), hashlib.sha256(b"{}\n").hexdigest()
 
 
+def test_weekly_price_record_allows_signed_indifference_prices() -> None:
+    prices = WeeklyPriceRecord(
+        common_market_price_per_fit_spot=None,
+        q_expectation_per_fit_spot=None,
+        buyer_indifference_per_fit_spot=-0.01,
+        seller_indifference_per_fit_spot=0.02,
+        continuation_price_per_fit_spot=0.005,
+    )
+
+    assert prices.long_inception_price_per_fit_spot == pytest.approx(-0.01)
+
+
+@pytest.mark.parametrize(
+    ("market_price", "q_expectation"),
+    [(-0.01, None), (None, -0.01)],
+)
+def test_weekly_price_record_rejects_negative_market_or_q_price(
+    market_price: float | None,
+    q_expectation: float | None,
+) -> None:
+    with pytest.raises(ValueError, match="market and risk-neutral"):
+        WeeklyPriceRecord(
+            common_market_price_per_fit_spot=market_price,
+            q_expectation_per_fit_spot=q_expectation,
+            buyer_indifference_per_fit_spot=(0.01 if q_expectation is None else None),
+            seller_indifference_per_fit_spot=None,
+            continuation_price_per_fit_spot=0.01,
+        )
+
+
 def test_weekly_runner_writes_complete_atomic_books_and_resumes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
