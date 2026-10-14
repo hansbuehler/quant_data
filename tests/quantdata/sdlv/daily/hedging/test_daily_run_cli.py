@@ -275,6 +275,7 @@ def test_generated_rolling_fit_skips_initializer_warmup(
     source.write_bytes(b"initializer")
     arguments = _arguments(model=model)
     arguments.warm_start_checkpoint = source
+    arguments.model_label = "authenticated-initializer"
     captured = {}
 
     def run_book(panel, **kwargs):
@@ -296,6 +297,7 @@ def test_generated_rolling_fit_skips_initializer_warmup(
     )
 
     assert getattr(config.train_config, field) == 0
+    assert config.model_config.label == "authenticated-initializer"
     assert config.warm_start_checkpoint_sha256 is not None
     panel = object()
     assert book(panel, date(2023, 1, 17)) == (panel,)

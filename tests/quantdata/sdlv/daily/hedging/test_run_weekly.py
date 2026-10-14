@@ -109,6 +109,20 @@ def test_weekly_diffusion_precision_changes_configuration_identity(tmp_path) -> 
     assert '"precision":"torch.float64"' in build64.configuration_snapshot_json
 
 
+@pytest.mark.parametrize("model", ("volgan", "diffusion-ad-seq-vol"))
+def test_weekly_generated_adapter_uses_authenticated_model_label(
+    tmp_path,
+    model: str,
+) -> None:
+    build = build_weekly_adapter(
+        _arguments(model, model_label="authenticated-initializer"),
+        checkpoint_directory=tmp_path,
+        dataset_manifest_sha256="d" * 64,
+    )
+
+    assert build.adapter.model_config.label == "authenticated-initializer"
+
+
 def test_weekly_gromm_requires_completed_range_evidence(tmp_path) -> None:
     with pytest.raises(ValueError, match="market-artifact-range-summary"):
         build_weekly_adapter(

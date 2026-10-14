@@ -128,6 +128,7 @@ def main() -> None:
     parser.add_argument("--dataset-manifest-sha256")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--label")
+    parser.add_argument("--model-label")
     parser.add_argument("--start", type=date.fromisoformat, default=date(2023, 1, 1))
     parser.add_argument("--end", type=date.fromisoformat, default=date(2025, 12, 31))
     parser.add_argument("--objective", default="mean-variance")
@@ -567,7 +568,9 @@ def _build_model(
     if arguments.model == "volgan":
         if checkpoint_directory is None:
             raise ValueError("VolGAN requires a checkpoint directory")
-        model_config = VolganModelConfig(label=label)
+        model_config = VolganModelConfig(
+            label=getattr(arguments, "model_label", None) or label
+        )
         train_defaults = VolganTrainConfig()
         train_config = VolganTrainConfig(
             epochs=(train_defaults.epochs if arguments.epochs is None else arguments.epochs),
@@ -662,7 +665,10 @@ def _build_model(
             raise ValueError("fine-tuned diffusion requires --base-checkpoint")
         if variant is DiffusionVariant.AD_SEQ_VOL and arguments.base_checkpoint is not None:
             raise ValueError("base checkpoint is only valid for fine-tuned diffusion")
-        model_config = DiffusionModelConfig(label=label, variant=variant)
+        model_config = DiffusionModelConfig(
+            label=getattr(arguments, "model_label", None) or label,
+            variant=variant,
+        )
         train_defaults = DiffusionTrainConfig()
         train_config = DiffusionTrainConfig(
             epochs=(train_defaults.epochs if arguments.epochs is None else arguments.epochs),

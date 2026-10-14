@@ -190,10 +190,14 @@ def test_generated_rolling_cases_require_selected_artifacts(tmp_path: Path) -> N
         case.case_id: case
         for case in _matrix(dataset=dataset, generated=supplied)
     }
-    for case_id, epochs in (
-        ("volgan-rolling-trained", "7"),
-        ("diffusion-ad-seq-vol-rolling-trained", "11"),
-        ("diffusion-ad-seq-vol-ft-rolling-trained", "5"),
+    for case_id, epochs, model_label in (
+        ("volgan-rolling-trained", "7", "volgan-model"),
+        ("diffusion-ad-seq-vol-rolling-trained", "11", "diffusion-model"),
+        (
+            "diffusion-ad-seq-vol-ft-rolling-trained",
+            "5",
+            "diffusion-ft-model",
+        ),
     ):
         case = cases[case_id]
         assert case.readiness is ProductionReadiness.WAITING_GATE
@@ -202,6 +206,7 @@ def test_generated_rolling_cases_require_selected_artifacts(tmp_path: Path) -> N
         assert case.command[case.command.index("--device") + 1] == "cuda"
         assert case.command[case.command.index("--objective") + 1] == "mean-variance"
         assert case.command[case.command.index("--risk-parameter") + 1] == "1"
+        assert case.command[case.command.index("--model-label") + 1] == model_label
         assert "--warm-start-checkpoint-sha256" in case.command
         assert case.command[case.command.index("--dataset-manifest-sha256") + 1] == (
             file_sha256(dataset / "manifest.json")
@@ -983,6 +988,7 @@ def _generated_pair(
                 "checkpoint_path": str(checkpoint),
                 "checkpoint_sha256": checkpoint_sha256,
                 "completed_epochs": 3,
+                "model_config": {"label": f"{stem}-model"},
                 "base_checkpoint_path": (
                     None if base_checkpoint is None else str(base_checkpoint)
                 ),

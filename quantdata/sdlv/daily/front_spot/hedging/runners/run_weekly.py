@@ -143,6 +143,7 @@ def main() -> None:
     parser.add_argument("--dataset-manifest-sha256")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--label")
+    parser.add_argument("--model-label")
     parser.add_argument("--start", type=date.fromisoformat, default=date(2023, 1, 1))
     parser.add_argument("--end", type=date.fromisoformat, default=date(2025, 12, 31))
     parser.add_argument("--objective", default="mean-variance")
@@ -582,7 +583,9 @@ def build_weekly_adapter(
         hedge=policy_hedge,
     )
     if arguments.model == "volgan":
-        model_config = VolganModelConfig(label=label)
+        model_config = VolganModelConfig(
+            label=getattr(arguments, "model_label", None) or label
+        )
         train_config = _volgan_train_config(arguments)
         warm_start_sha256 = _authenticated_file_fingerprint(
             arguments.warm_start_checkpoint,
@@ -625,7 +628,10 @@ def build_weekly_adapter(
         raise ValueError("fine-tuned diffusion requires --base-checkpoint")
     if variant is DiffusionVariant.AD_SEQ_VOL and arguments.base_checkpoint is not None:
         raise ValueError("base checkpoint is only valid for fine-tuned diffusion")
-    model_config = DiffusionModelConfig(label=label, variant=variant)
+    model_config = DiffusionModelConfig(
+        label=getattr(arguments, "model_label", None) or label,
+        variant=variant,
+    )
     train_config = _diffusion_train_config(arguments)
     base_sha256 = _authenticated_file_fingerprint(
         arguments.base_checkpoint,

@@ -717,6 +717,7 @@ def _rolling_generated_case(
             objective="mean-variance",
             risk_parameter=1.0,
             epochs=evidence.selected_epochs,
+            model_label=evidence.initializer_model_label,
             warm_start_checkpoint=evidence.initializer_checkpoint,
             warm_start_checkpoint_sha256=(
                 evidence.initializer_checkpoint_sha256
@@ -839,6 +840,7 @@ def _daily_command(
     risk_parameter: float | None = None,
     device: str = "cpu",
     epochs: int | None = None,
+    model_label: str | None = None,
     warm_start_checkpoint: Path | None = None,
     warm_start_checkpoint_sha256: str | None = None,
     base_checkpoint: Path | None = None,
@@ -885,6 +887,8 @@ def _daily_command(
         command.extend(("--risk-parameter", f"{risk_parameter:g}"))
     if epochs is not None:
         command.extend(("--epochs", str(epochs)))
+    if model_label is not None:
+        command.extend(("--model-label", model_label))
     if warm_start_checkpoint is not None:
         command.extend(("--warm-start-checkpoint", str(warm_start_checkpoint)))
     if warm_start_checkpoint_sha256 is not None:

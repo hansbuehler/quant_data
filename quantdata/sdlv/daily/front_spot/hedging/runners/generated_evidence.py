@@ -67,6 +67,7 @@ class GeneratedSelectionEvidence:
     selection_base_checkpoint_sha256: str | None
     initializer_manifest_sha256: str
     epoch_selection_sha256: str
+    initializer_model_label: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -313,6 +314,7 @@ def load_generated_selection_evidence(
         expected_dataset_manifest_sha256=expected_dataset_manifest_sha256,
     )
     initializer_as_of = date.fromisoformat(_require_string(initializer, "as_of_date"))
+    initializer_model_label = _initializer_model_label(initializer)
     if initializer_as_of != checkpoint_evidence.training_end_date:
         raise ValueError("generated initializer date differs from checkpoint payload")
     if initializer.get("completed_epochs") != checkpoint_evidence.completed_epochs:
@@ -491,6 +493,7 @@ def load_generated_selection_evidence(
         selection_base_checkpoint_sha256=selection_base_checkpoint_sha256,
         initializer_manifest_sha256=initializer_manifest_sha256,
         epoch_selection_sha256=epoch_selection_sha256,
+        initializer_model_label=initializer_model_label,
     )
 
 
@@ -521,6 +524,7 @@ def load_generated_initializer_evidence(
         expected_dataset_manifest_sha256=expected_dataset_manifest_sha256,
     )
     as_of_date = date.fromisoformat(_require_string(payload, "as_of_date"))
+    initializer_model_label = _initializer_model_label(payload)
     if as_of_date != checkpoint_evidence.training_end_date:
         raise ValueError("generated initializer date differs from checkpoint payload")
     if payload.get("completed_epochs") != checkpoint_evidence.completed_epochs:
@@ -560,7 +564,18 @@ def load_generated_initializer_evidence(
         selection_base_checkpoint_sha256=None,
         initializer_manifest_sha256=initializer_manifest_sha256,
         epoch_selection_sha256="",
+        initializer_model_label=initializer_model_label,
     )
+
+
+def _initializer_model_label(payload: dict[str, object]) -> str:
+    model_config = payload.get("model_config")
+    if not isinstance(model_config, dict):
+        raise ValueError("generated initializer has no model configuration")
+    label = model_config.get("label")
+    if not isinstance(label, str) or not label:
+        raise ValueError("generated initializer has no model label")
+    return label
 
 
 def _normalized_model(model: str) -> str:
