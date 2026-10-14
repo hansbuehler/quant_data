@@ -54,8 +54,9 @@
 
 \begin{abstract}
    We refine the GROMM model presented in~\cite{GROMM2026} such that it has an expanding strike and expory grid, and
-   its parameters can be estimated based on prevailing grid geometry. We train a Mamba3 model to drive its discrete local
-   volatility dynamics.
+   its parameters can be estimated based on prevailing grid geometry. We compare LSTM and compact Mamba-style selective
+   state-space backbones for its discrete local-volatility factor law, including variants with state-dependent spot--volatility
+   correlation.
 
    The resulting model has a near-perfect
    fit to observed option prices and outperforms comparable models in $\PP$-measure simulations.
@@ -147,7 +148,7 @@ sample standard deviation.  We report
 Unlike~\eqref{eq:q-factor-log-score}, this evaluates an estimated attainable
 drift target.  It is not a realized hedging profit-and-loss statistic.
 
-\subsubsection{LSTM and selective state-space factor laws}
+\subsubsection{LSTM and Mamba-style selective state-space factor laws}
 
 Both recurrent models receive the same causal input $x_t$: the standardized
 current DLV-level coordinates concatenated with the previous day's factor
@@ -250,12 +251,12 @@ history.
       & 0.6125 & $-0.0973$ & $[-0.3397,\;0.0475]$
       & 0.9007
       & 0.2927 & $\phantom{-}0.1145$ & $[0.0663,\;0.1572]$ \\
-    Selective SSM
+    Mamba SSM
       & 0.4859 & $\phantom{-}0.0292$
       & $[-0.0229,\;0.0794]$
       & 0
       & 0.3484 & $\phantom{-}0.0588$ & $[0.0100,\;0.1023]$ \\
-    Selective SSM with $\rho_t$
+    Mamba SSM with $\rho_t$
       & \textbf{0.4796} & $\phantom{-}\textbf{0.0355}$
       & $[-0.0476,\;0.1096]$
       & 0.8682
@@ -265,7 +266,7 @@ history.
   }
 \end{table}
 
-The correlated selective state-space model has the best average $\Q$ score.
+The correlated Mamba-style selective state-space model has the best average $\Q$ score.
 Relative to its diagonal version, however, its mean improvement is only
 $0.0063$, with a direct paired 95\% interval of
 $[-0.0429,0.0484]$.  The extra correlation state is therefore learnable but
@@ -275,6 +276,85 @@ block, which is direct evidence of overfitting.  The LSTM improvement in the
 attainable $\PP$-drift target remains the clearest result.  These diagnostics
 evaluate the dynamics model; final model selection must be based on
 out-of-sample hedging performance for economically relevant portfolios.
+
+\subsubsection{Observable spot--ATM-volatility correlation}
+\label{sec:spot-atm-volatility-correlation}
+
+The factor score evaluates the latent diffusion, whereas a directly observable
+leverage diagnostic is the expiry-dependent correlation
+\begin{equation}
+  \rho_{S,\mathrm{ATM}}(\tau)
+  :=
+  \operatorname{Corr}\!\left(
+    \frac{\Delta S_t}{S_{t-1}},
+    \Delta\log\sigma_{\mathrm{ATM},t}(\tau)
+  \right),
+  \label{eq:spot-atm-volatility-correlation}
+\end{equation}
+where spot returns are forward-adjusted and
+$\sigma_{\mathrm{ATM},t}(\tau)$ is the Black implied volatility at a fixed
+rolling business-day tenor $\tau$.  The historical curves in
+Figure~\ref{fig:spot-atm-volatility-correlation} use the published SANOS ATM
+term structure.  The full curve contains 890 daily transitions from January
+2022 to August 2025; the recent curve contains the 258 transitions from
+13 August 2024 onward.
+
+For the model curves, we start from the calibrated state on 29 August 2025
+and simulate one business day under $\Q$ using eight DLV substeps and 1,000
+antithetic paths.  The constant model keeps the unconditional factor
+loadings, while the Mamba-style selective SSM applies its state-dependent
+factor amplitudes.  At the next date, ATM prices are inverted to Black
+volatilities at the same rolling tenor.  When that tenor lies between two
+surviving fixed expiries, total variance is interpolated linearly.  The 125D
+simulation point is omitted because a one-day rolling 125D volatility
+requires the birth of an expiry beyond the terminal model date.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.88\textwidth]{atm_vol_spot_correlation_term_structure.pdf}
+  \caption{Term structure of daily forward-adjusted spot-return correlation
+  with changes in rolling-tenor ATM Black implied volatility.  Historical
+  curves are measured under $\PP$; model curves are one-day conditional
+  simulations under $\Q$ from the final calibration state.}
+  \label{fig:spot-atm-volatility-correlation}
+\end{figure}
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Selected points from
+  Figure~\ref{fig:spot-atm-volatility-correlation}.}
+  \label{tab:spot-atm-volatility-correlation}
+  \begin{tabular}{@{}rrrrr@{}}
+    \toprule
+    Business days
+    & Historical
+    & Recent
+    & Constant $\Q$
+    & Mamba SSM $\Q$ \\
+    \midrule
+      1 & $-0.382$ & $-0.510$ & $-0.632$ & $-0.679$ \\
+      5 & $-0.689$ & $-0.790$ & $-0.614$ & $-0.674$ \\
+     10 & $-0.766$ & $-0.861$ & $-0.662$ & $-0.729$ \\
+     20 & $-0.806$ & $-0.894$ & $-0.663$ & $-0.741$ \\
+     30 & $-0.762$ & $-0.881$ & $-0.603$ & $-0.678$ \\
+     60 & $-0.752$ & $-0.869$ & $-0.599$ & $-0.650$ \\
+     90 & $-0.742$ & $-0.856$ & $-0.586$ & $-0.621$ \\
+    120 & $-0.733$ & $-0.845$ & $-0.568$ & $-0.594$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The selective backbone improves the root-mean-square discrepancy from the
+full historical curve from $0.142$ to $0.098$.  It is close to the
+full-sample 5D correlation ($-0.674$ versus $-0.689$), but does not reproduce
+the stronger recent value of $-0.790$.  More generally, it is too negative
+at 1--3D and too weak beyond roughly one month.  The corresponding discrepancy
+from the recent curve is $0.185$, compared with $0.239$ for the constant
+model.  Thus the selective state improves the observable leverage effect,
+but the maturity shape and recent regime remain material targets for the
+state-dependent correlation head in
+Equation~\eqref{eq:conditional-spot-factor-correlation}.
 
 \subsection{Portfolio-conditional entropic hedging}
 \label{sec:portfolio-conditional-entropic-hedging}
