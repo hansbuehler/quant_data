@@ -56,7 +56,15 @@ def _matrix(path: Path, cases: list[dict[str, object]]) -> None:
     )
 
 
-def _complete(output: Path, *, model: str, count: int = 7) -> None:
+def _complete(
+    output: Path,
+    *,
+    model: str,
+    count: int = 7,
+    require_convergence: bool = True,
+    nonconverged_results: int = 0,
+    cap_hits: int = 0,
+) -> None:
     labels = [target.label for target in daily_digital_targets()]
     run = {
         "run_identity": "run-identity",
@@ -64,6 +72,7 @@ def _complete(output: Path, *, model: str, count: int = 7) -> None:
         "target_notional_identity": "target-notional-identity",
         "target_labels": labels,
         "target_quantities": [1.0] * len(labels),
+        "require_convergence": require_convergence,
     }
     results = {
         "schema": "hedging-daily-results-v2",
@@ -76,7 +85,10 @@ def _complete(output: Path, *, model: str, count: int = 7) -> None:
     _write_json(output / "run.json", run)
     _write_json(
         output / "summary.json",
-        {"nonconverged_results": 0, "cap_hits": 0},
+        {
+            "nonconverged_results": nonconverged_results,
+            "cap_hits": cap_hits,
+        },
     )
     _write_json(output / "results.json", results)
 
@@ -231,6 +243,33 @@ def test_compose_rejects_mixed_target_notionals(tmp_path: Path) -> None:
     _write_json(second_run_path, second_run)
 
     with pytest.raises(ValueError, match="different target notionals"):
+        compose_production_matrix(
+            base_matrix=base_path,
+            source_matrices=(source_path,),
+            replace_models=frozenset({"historical-sanos"}),
+            expected_result_count=7,
+            expected_results_schema="hedging-daily-results-v2",
+            dataset=tmp_path / "dataset",
+            output=tmp_path / "composed.json",
+        )
+
+
+def test_compose_enforces_precommitted_numerical_gate(tmp_path: Path) -> None:
+    output = tmp_path / "source"
+    base = _case("native", model="historical-sanos", output=tmp_path / "base")
+    source = _case("native", model="historical-sanos", output=output)
+    base_path = tmp_path / "base.json"
+    source_path = tmp_path / "source.json"
+    _matrix(base_path, [base])
+    _matrix(source_path, [source])
+    _complete(
+        output,
+        model="historical-sanos",
+        nonconverged_results=1,
+        cap_hits=1,
+    )
+
+    with pytest.raises(ValueError, match="failed its numerical gates"):
         compose_production_matrix(
             base_matrix=base_path,
             source_matrices=(source_path,),

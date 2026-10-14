@@ -116,6 +116,9 @@ def _write_authenticated_daily_output(
     *,
     model: str = "historical-sanos",
     target_labels: tuple[str, ...] = ("digital-put-1d-atm",),
+    require_convergence: bool = True,
+    converged: bool = True,
+    cap_hits: int = 0,
 ) -> tuple[str, Path, _DailyPanel]:
     origins = ("2023-01-17", "2023-01-18")
     dataset = output.parent / f"{output.name}-dataset"
@@ -137,6 +140,7 @@ def _write_authenticated_daily_output(
         target_labels=target_labels,
         target_quantities=(1.0,) * len(target_labels),
         target_notional_identity="notional-test",
+        require_convergence=require_convergence,
     )
     _write_json(output / "run.json", {**spec.to_dict(), "run_identity": spec.run_identity})
     for origin in origins:
@@ -157,8 +161,8 @@ def _write_authenticated_daily_output(
                 pricing_difference=0.0,
                 pure_hedge_error=-0.5,
                 objective_value=0.25,
-                converged=True,
-                cap_hits=0,
+                converged=converged,
+                cap_hits=cap_hits,
             )
             for target in target_labels
         )
@@ -177,8 +181,10 @@ def _write_authenticated_daily_output(
         completed_origins=origins,
         reused_origins=(),
         result_count=len(origins) * len(target_labels),
-        nonconverged_results=0,
-        cap_hits=0,
+        nonconverged_results=(
+            0 if converged else len(origins) * len(target_labels)
+        ),
+        cap_hits=cap_hits * len(origins) * len(target_labels),
     )
     _write_json(output / "summary.json", summary.to_dict())
     summarize_completed_daily_run(panel, run_directory=output).write_json(
@@ -193,14 +199,14 @@ def _daily_composition_case(
 ) -> dict[str, object]:
     return {
         "blocked_reason": None,
-        "case_id": "historical-sanos-mean-variance-1",
+        "case_id": "historical-sanos-mean-volatility-0p1",
         "command": ["python", "runner", "--output", str(output)],
         "measure": "P",
         "model": "historical-sanos",
-        "objective": "mean-variance",
+        "objective": "mean-volatility",
         "readiness": "ready",
         "resource": "cpu",
-        "risk_parameter": 1.0,
+        "risk_parameter": 0.1,
         "variant": "test-variant",
     }
 
@@ -230,11 +236,17 @@ def _compose_authenticated_daily_output(
     target_labels: tuple[str, ...],
     dataset_panel: _DailyPanel | None = None,
     mutate_output: Callable[[Path], None] | None = None,
+    require_convergence: bool = True,
+    converged: bool = True,
+    cap_hits: int = 0,
 ) -> tuple[dict[str, object], Path, _DailyPanel]:
     source_output = tmp_path / "source-output"
     _, dataset, panel = _write_authenticated_daily_output(
         source_output,
         target_labels=target_labels,
+        require_convergence=require_convergence,
+        converged=converged,
+        cap_hits=cap_hits,
     )
     if mutate_output is not None:
         mutate_output(source_output)
@@ -479,6 +491,31 @@ def test_composition_deeply_authenticates_daily_output(
     )
 
     assert payload["composition"]["target_cohort_sha256"]
+
+
+def test_composition_retains_precommitted_mean_volatility_diagnostics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    labels = tuple(target.label for target in daily_digital_targets())
+
+    payload, _, _ = _compose_authenticated_daily_output(
+        tmp_path,
+        monkeypatch,
+        target_labels=labels,
+        require_convergence=False,
+        converged=False,
+        cap_hits=1,
+    )
+
+    diagnostics = payload["composition"]["source_numerical_diagnostics"]
+    assert diagnostics == {
+        "historical-sanos-mean-volatility-0p1": {
+            "gate_required": False,
+            "nonconverged": 40,
+            "cap_hits": 40,
+        }
+    }
 
 
 def test_composition_rejects_missing_daily_record(

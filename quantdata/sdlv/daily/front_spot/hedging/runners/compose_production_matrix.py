@@ -62,6 +62,7 @@ def compose_production_matrix(
     dataset_identities: set[str] = set()
     target_notional_identities: set[str] = set()
     target_cohort_identities: set[str] = set()
+    source_numerical_diagnostics: dict[str, JsonObject] = {}
     for case_id, base_case in base_cases.items():
         model = _required_string(base_case, "model")
         if model not in replace_models:
@@ -83,10 +84,12 @@ def compose_production_matrix(
                     dataset_identity,
                     target_notional_identity,
                     target_cohort_identity,
+                    numerical_diagnostics,
                 ) = completed_identity
                 dataset_identities.add(dataset_identity)
                 target_notional_identities.add(target_notional_identity)
                 target_cohort_identities.add(target_cohort_identity)
+                source_numerical_diagnostics[case_id] = numerical_diagnostics
                 break
         if case_id not in replacements:
             raise ValueError(
@@ -118,6 +121,7 @@ def compose_production_matrix(
         "dataset_manifest_sha256": dataset_identities.pop(),
         "target_notional_identity": target_notional_identities.pop(),
         "target_cohort_sha256": target_cohort_identities.pop(),
+        "source_numerical_diagnostics": source_numerical_diagnostics,
     }
     _write_object(output, payload)
     return payload
@@ -131,7 +135,7 @@ def _completed_output_identity(
     matrix_schema: str,
     dataset: Path,
     panel: object,
-) -> tuple[str, str, str] | None:
+) -> tuple[str, str, str, JsonObject] | None:
     if case.get("readiness") != "ready" or case.get("blocked_reason") is not None:
         return None
     command = case.get("command")
@@ -192,18 +196,16 @@ def _completed_output_identity(
         expected_labels = tuple(target.label for target in daily_digital_targets())
         if tuple(target_labels) != expected_labels:
             raise ValueError("completed daily source uses the wrong target cohort")
-        numerical_failures = (
-            _required_integer(summary, "nonconverged_results")
-            + _required_integer(summary, "cap_hits")
-        )
+        nonconverged = _required_integer(summary, "nonconverged_results")
+        cap_hits = _required_integer(summary, "cap_hits")
+        numerical_gate_required = _required_boolean(run, "require_convergence")
     elif matrix_schema == execute_production_matrix.WEEKLY_MATRIX_SCHEMA:
-        numerical_failures = (
-            _required_integer(summary, "nonconverged_fits")
-            + _required_integer(summary, "cap_hits")
-        )
+        nonconverged = _required_integer(summary, "nonconverged_fits")
+        cap_hits = _required_integer(summary, "cap_hits")
+        numerical_gate_required = _required_boolean(run, "require_no_cap_hits")
     else:
         raise ValueError(f"unsupported production-matrix schema: {matrix_schema}")
-    if numerical_failures:
+    if numerical_gate_required and (nonconverged or cap_hits):
         raise ValueError("completed source failed its numerical gates")
     target_cohort_identity = _canonical_sha256(
         {
@@ -212,7 +214,17 @@ def _completed_output_identity(
             "target_notional_identity": target_notional_identity,
         }
     )
-    return dataset_identity, target_notional_identity, target_cohort_identity
+    numerical_diagnostics: JsonObject = {
+        "gate_required": numerical_gate_required,
+        "nonconverged": nonconverged,
+        "cap_hits": cap_hits,
+    }
+    return (
+        dataset_identity,
+        target_notional_identity,
+        target_cohort_identity,
+        numerical_diagnostics,
+    )
 
 
 def _expected_results_schema(matrix_schema: str) -> str:
@@ -298,6 +310,13 @@ def _required_integer(payload: JsonObject, field: str) -> int:
     value = payload.get(field)
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         raise ValueError(f"{field} must be a non-negative integer")
+    return value
+
+
+def _required_boolean(payload: JsonObject, field: str) -> bool:
+    value = payload.get(field)
+    if not isinstance(value, bool):
+        raise ValueError(f"{field} must be boolean")
     return value
 
 
