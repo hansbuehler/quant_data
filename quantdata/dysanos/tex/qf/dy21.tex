@@ -138,8 +138,9 @@ foundational work of~\citet{ContVol} on dynamics of the implied volatility surfa
     \label{fig:initialexample}
 \end{figure}
 
-The most advanced approach until recently were the simulators of~\citet{wiese2019simulate,wiese2021multiassetspotoptionmarket,Cohen02012023}
-for realistic dynamics of
+The most advanced approach until recently were the
+simulators of~\citet{wiese2019simulate,wiese2021multiassetspotoptionmarket,Cohen02012023}
+for trained generative dynamics of
 a \emph{discrete floating grid} of options which are strictly
  arbitrage-free at each simulation date. These simulators are using, in essence, the discrete local volatility
 representation pioneered in~\citet{DLV} to ensure absence of static arbitrage in every simulated
@@ -207,6 +208,154 @@ in the literature (we repeat them below).
 
 Most published works also simplify the problem by only considering few strikes and expiries.\\
 
+\iffalse % Tables are maintained in models.tex.
+Tables~\ref{tab:surface-interpolation-literature} and
+\ref{tab:surface-dynamics-literature} separate two questions which are often
+conflated in this literature: constructing one admissible surface, and learning
+the evolution of a surface through time.  We use \textbf{S$\infty$} for a
+theorem- or architecture-level guarantee on the full continuous surface,
+\textbf{S$\Omega$} for such a guarantee only on a stated bounded fitting domain,
+\textbf{SG} for a strict guarantee only on the modelled finite grid, \textbf{A}
+for an approximate treatment based on penalties, reweighting, rejection, or
+empirical violation rates, \textbf{N} when no static-arbitrage guarantee is
+provided, and \textbf{U} when the paper claims arbitrage freedom but the
+available construction does not suffice for us to verify its continuum scope.
+We also distinguish constraints imposed inside the fit from a projection or
+iterative repair applied after an unconstrained fit; only the former makes the
+fitted family itself constrained.
+The option counts refer to native surface coordinates rather than the number of
+option-day observations.  An extrapolation count of $\infty$ means that the
+representation can be evaluated on a continuum of strikes and maturities,
+subject to its stated domain and tail assumptions.
+
+\begin{landscape}
+\begin{table}[p]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.12}
+\caption{Selected implied-volatility and option-price interpolation methods.
+``Parametric'' describes the surface representation, not the calibration
+algorithm.  Soft-penalty methods are classified as approximate even when their
+reported numerical violations are negligible.}
+\label{tab:surface-interpolation-literature}
+\begin{tabular}{@{}p{4.5cm}p{3.3cm}p{1.45cm}p{2.9cm}p{2.0cm}p{8.0cm}@{}}
+\toprule
+Method & Representation & Static arb. & Native inputs & Off-grid & Scope and qualification \\
+\midrule
+\citet{AndreasenHuge}
+  & Non-parametric DLV & SG/S$\infty$ & Arbitrary grid & $\infty$
+  & Exact grid constraints with prescribed piecewise interpolation; not a globally smooth density. \\
+\citet{fengler2009}
+  & Constrained non-parametric spline & S$\infty$ & Arbitrary & $\infty$
+  & Shape-constrained smoothing on the fitted domain; tails depend on the boundary specification. \\
+\citet{GatheralJacquier2014}
+  & Parametric SVI/SSVI & S$\infty$ & Arbitrary & $\infty$
+  & Strict for admissible parameters; a central low-dimensional benchmark. \\
+\citet{GuoJacquierMartiniNeufcourt2016}
+  & Parametric generalized SVI & S$\infty$ & Arbitrary & $\infty$
+  & Extends the strict SVI/SSVI constructions. \\
+\citet{Bloch2013MixVar}
+  & Parametric mixture & S$\infty$ (conditional) & Arbitrary & $\infty$
+  & Positive mixtures of strike-shifted Black--Scholes calls; strike arbitrage is structural and calendar arbitrage requires non-decreasing component total variances and the stated parameter restrictions. \\
+\citet{Orosi2015}
+  & Thin-plate regression splines/QP & U & Arbitrary & $\infty$
+  & Constraints are integrated into a quadratic-program fit, rather than added as a soft loss, but we have not verified a basis-level theorem extending them from the constrained locations to the whole continuum. \\
+\citet{AckererTagasovskaVatter2020}
+  & Non-parametric neural network & A & Irregular daily panel & $\infty$
+  & Static conditions enter through soft penalties; violation rates depend on penalty weight. \\
+\citet{ZhangLiZhang2021}
+  & PCA/VAE/samples plus neural surface & A & $14\times11=154$ & $\infty$
+  & Calendar, butterfly, and wing conditions enter as penalties; occasional spikes remain. \\
+\citet{ChataignerEtAl2022}
+  & Constrained GP or penalized NN & GP: S$\Omega$; NN: A & Arbitrary & $\infty$
+  & The GP is a piecewise-multilinear finite-element surface: linear inequalities on nodal coefficients imply monotonicity and convexity everywhere on its bounded rectangle.  The NN and fitted SSVI alternatives use penalties. \\
+\citet{SANOS2026}
+  & Smooth non-parametric DLV & S$\infty$ & Arbitrary; about 1,000 in example & $\infty$
+  & Bid--ask-aware smooth surface with positivity as the essential parameter constraint. \\
+\citet{YangChenShuHospedales2025}
+  & Hypernetwork plus compact neural surface & A & 9 observations & $\infty$
+  & Calendar and density conditions are auxiliary losses evaluated on finite grids; the paper explicitly notes that these do not provide a hard guarantee. \\
+\citet{Roos2025}
+  & Parametric/discrete-time local-vol interpretation & U & Arbitrary coterminal set & $\infty$
+  & The abstract advertises analytic $C^2$ strike interpolation, explicit wings, and an expiry extension, but the continuum inequalities cannot be audited without the construction and proof. \\
+\citet{Schlenkrich2025}
+  & Parametric piecewise & S$\infty$ & Arbitrary & $\infty$
+  & Static interpolation and extrapolation proposed also as a generator building block. \\
+\citet{QinYangCheFeng2026}
+  & Non-parametric risk-neutral marginals & S$\infty$ & Arbitrary discrete quotes & $\infty$
+  & Exact price reproduction on the observed range and explicit power-law tails; no dynamics. \\
+\bottomrule
+\end{tabular}
+\end{table}
+\end{landscape}
+
+\begin{landscape}
+\begin{table}[p]
+\centering
+\fontsize{7}{7.8}\selectfont
+\setlength{\tabcolsep}{2.6pt}
+\renewcommand{\arraystretch}{1.04}
+\caption{PCA, latent-surface, and option-market dynamics.  ``Off-grid'' counts
+options not represented by native model coordinates; interpolation performed
+only as an external preprocessing or postprocessing step is not counted.
+The $\Q$ column excludes classic underlying-first pricing models such as
+Heston, local volatility, and Bates.  The final column records whether the
+stated dynamic construction, rather than only its static preprocessing, is
+implemented numerically.}
+\label{tab:surface-dynamics-literature}
+\begin{tabular}{@{}p{3.8cm}p{3.0cm}p{2.5cm}p{1.3cm}p{2.2cm}p{2.2cm}p{3.2cm}p{1.7cm}@{}}
+\toprule
+Method & Representation & Native option coordinates & Off-grid & PCA/latent static arb. & Dynamics under $\P$ & Direct market-model dynamics under $\Q$ & Numerical implementation \\
+\midrule
+\citet{SkiadopoulosHodgesClewlow2000}
+  & Direct-IV PCA & Not reported; three maturity groups & 0 & N & N & --- & Yes \\
+\citet{ContVol}
+  & Functional/direct-IV PCA & Not reported & Functional, no guarantee & N & N & Drift restrictions only & Yes ($\P$) \\
+\citet{PanigirtzoglouSkiadopoulos2004}
+  & Separate PCA of implied CDFs by expiry & $3\times21=63$: 21 deltas at each of 1, 3, and 6 months & 0 & N for a full surface & Bounded martingale probabilities at each delta and expiry & No proof of CDF monotonicity across deltas or calendar consistency across expiries & Yes \\
+\citet{SchweizerWissel2008}
+  & Local implied volatilities and price level & One fixed expiry; continuum of strikes & No other expiries & S$\infty$ in strike & S$\infty$, theoretical & S$\infty$: solvability theorem and explicit admissible coefficient examples & No \\
+\citet{DellaportasMijatovic2014}
+  & Parametric SABR/RN-measure encoding & $n\geq40$, one maturity & $\infty$ within smile & S$\infty$ & S$\infty$, one-step & Excluded: pricing-family parameters & Yes \\
+\citet{wiese2019simulate}
+  & DLV, PCA, and GAN & $8\times4=32$ & 0 & SG & SG & --- & Yes \\
+\citet{wiese2021multiassetspotoptionmarket}
+  & DLV, arbitrage-free autoencoder, and flow & $9\times4=36$ per asset & 0 & SG & SG & --- & Yes \\
+\citet{vae_ning2023arbitrage}
+  & Parametric RN-model parameters plus VAE/PCA & $5\times8=40$ per FX pair & Model-price continuum & CTMC-VAE: S$\infty$; other decoders conditional & Snapshot generator & Excluded: surfaces are prices of imposed CTMC/L\'evy models & Yes \\
+\citet{ZhangLiZhang2021}
+  & PCA/VAE/samples, LSTM, and neural surface & 154 & $\infty$ & A & A & --- & Yes \\
+\citet{Cohen02012023}
+  & Constrained option-price factors and neural SDE & $13\times10=130$ in applications & 0 & SG & SG: hard invariant polytope & N: HJM compatibility diagnostic, not enforced & Yes ($\P$ only) \\
+\citet{ContVuletic2023}
+  & Direct-IV PCA/factors plus path reweighting & $10\times8=80$ & 0 & Raw PCA: N; output: A & A & --- & Yes \\
+\citet{ChoudharyJaimungalBergeron2024}
+  & Functional PCA and neural SDE & $17\times11=187$ per asset & Functional continuum & A & A & --- & Yes \\
+\citet{VuleticCont2024}
+  & Direct-IV GAN plus penalties/reweighting & $10\times8=80$ & 0 & A & A & --- & Yes \\
+\citet{AndresBoumezouedJourdain2023}
+  & Parsimonious SSVI with path-dependent, Jacobi-confined factors & $24\times16\simeq384$ & $\infty$ & S$\infty$ & S$\infty$ for each simulated snapshot & No market-measure dynamics & Yes ($\P$) \\
+\citet{GolubitskyDavisonCaraman2026}
+  & VAE latent representation & $2\times11\times17=374$ & 337 in 90\% missing test & A & No temporal path model & --- & Yes (snapshots) \\
+\citet{JinAgarwal2025}
+  & Direct-IV conditional diffusion & $9\times9=81$ & 0 & A & A & --- & Yes \\
+\citet{BrooksEtAl2026}
+  & Arbitrage-penalized VAE and latent flow & $32\times16=512$ & 0 & A; 90.8\% pass all tests & Snapshot generator & --- & Yes \\
+\citet{HanEtAl2026}
+  & Adaptive sequential diffusion & $11\times9=99$ & 0 & A; nearly zero after fine-tuning & A & --- & Yes \\
+\citet{YangWangZhangLi2026}
+  & Universal cross-stock diffusion & $11\times9=99$ per stock & 99 coordinates on unseen stocks, not off-grid & A & A & --- & Yes \\
+This paper
+  & Smooth non-parametric SANOS, affine latent state, and AR(1) & $18\times200=3{,}600$ prices; 3,620 controls & $\infty$ & S$\infty$ & S$\infty$ & Limited SG: 48 options plus spot & Yes \\
+\citet{WieseBuehlerHorvath2026}
+  & Smooth SANOS and stochastic DLV/PCA factors & $25\times200=5{,}000$ options plus spot & $\infty$ & S$\infty$ & S$\infty$ & S$\infty$ with explicit full-surface drift & Yes \\
+\bottomrule
+\end{tabular}
+\end{table}
+\end{landscape}
+\fi
+
 \noindent
 \textbf{Constrained Parameter Spaces and Code Books:}
 The core challenge of any representation of an option price surface is that no-static-arbitrage conditions are essentially
@@ -249,7 +398,11 @@ its native option prices for strikes not on its base grid are the result of line
 We therefore use
 our smooth SANOS extension~\citep{SANOS2026}.
 
-The use of SANOS also allows to fit our model very efficiently to observed bid/ask spreads over the entire observed option surface.
+The use of SANOS also allows to fit our model very efficiently to observed bid/ask spreads over the entire observed option surface.\\
+
+\noindent
+\textbf{Overview of Related Papers:} dynamic option surface representations have a long history. We summarized
+the papers we are aware of in~\table{tab:surface-representation-literature} on page~\pageref{tab:surface-representation-literature}.
 
 \subsection*{Key contributions}
 
@@ -1728,17 +1881,35 @@ demonstration rather than a full-surface risk-neutral construction.
 We want to thank the team at Wharton for their WRDS \url{https://wrds-www.wharton.upenn.edu} portal and Option Metrics \url{https://optionmetrics.com/united-states} 
 for providing their IvyDB data via this service. Without this data our work would not have been possible.
 
+\section*{Declaration of Funding}
+
+B.~Horvath thankfully acknowledges financial support from UKRI1010: High order mathematical and
+computational infrastructure for streamed data that enhance contemporary generative and large language models.\\
+
+\noindent
+A.~Kratsios gratefully acknowledges financial support from an NSERC Discovery Grant No. RGPIN-2023-04482 and No. DGECR-2023-00230.
+
+\section*{Disclosure of Interest}
+
+There are no interests to declare.
+
+\section*{Declaration of generative AI use}
+
+OpenAI Codex (GPT-5) was used to assist with software implementation,
+testing and numerical verification of the models reported in this article,
+and with copy-editing and language refinement of author-written text. The
+research design, mathematical arguments, interpretation of results and final
+manuscript were determined and approved by the authors. The authors verified
+the originality and accuracy of all generated code, numerical results,
+references and text, checked the tool's terms of use and confirmed its
+suitability for publication, and take full responsibility for the integrity
+of the article.
+
 \section*{Data availability statement}
 
 The market data supporting the findings of this study are proprietary
 OptionMetrics IvyDB data accessed through WRDS. They are available from
 OptionMetrics under licence, and restrictions apply to their redistribution.
-
-% SUBMISSION CHECK: the authors must add or confirm a Funding statement.
-% SUBMISSION CHECK: the authors must add or confirm a Disclosure statement.
-% SUBMISSION CHECK: the authors must supply CRediT roles in the submission system.
-% SUBMISSION CHECK: Taylor & Francis requires disclosure of generative-AI use,
-% including the tool name and version; the authors must approve the final wording.
 
 %% ============================================================
 %% Bibliography
@@ -2260,7 +2431,9 @@ training weights and inside-spread objective are those in
 \eqref{eq:production-quote-loss}.  Appendix~\ref{app:affine-training}
 describes the complete optimization sequence.
 
-
-
+\clearpage
+\section{Option-surface literature classification}
+\label{app:literature-tables}
+\input{models}
 
 \end{document}
