@@ -156,6 +156,7 @@ class LegacyRollingGromm2RangeEvidence:
 
     artifact_root: Path
     source_identity: str
+    manifest_source_identity: str
     manifest_sha256_by_date: dict[date, str]
 
 
@@ -203,15 +204,28 @@ def load_legacy_rolling_gromm2_range(
     ):
         raise ValueError("legacy rolling GROMM2 range is stale or incomplete")
     manifest_sha256_by_date: dict[date, str] = {}
+    manifest_source_identity: str | None = None
     for value in records_payload:
         if not isinstance(value, dict):
             raise ValueError("legacy rolling GROMM2 range record is invalid")
         as_of_date = date.fromisoformat(str(value.get("as_of_date")))
         manifest_sha256 = value.get("manifest_sha256")
         manifest = artifact_root / as_of_date.isoformat() / "manifest.json"
+        manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
+        dated_source_identity = (
+            manifest_payload.get("source_identity")
+            if isinstance(manifest_payload, dict)
+            else None
+        )
         if (
             not isinstance(manifest_sha256, str)
             or manifest_sha256 != file_sha256(manifest)
+            or not isinstance(dated_source_identity, str)
+            or len(dated_source_identity) != 64
+            or any(
+                character not in "0123456789abcdef"
+                for character in dated_source_identity
+            )
             or not isinstance(value.get("physical_accepted"), bool)
             or not isinstance(value.get("reused"), bool)
             or as_of_date in manifest_sha256_by_date
@@ -219,13 +233,22 @@ def load_legacy_rolling_gromm2_range(
             raise ValueError(
                 f"legacy rolling GROMM2 range record is invalid for {as_of_date}"
             )
+        if manifest_source_identity is None:
+            manifest_source_identity = dated_source_identity
+        elif dated_source_identity != manifest_source_identity:
+            raise ValueError(
+                "legacy rolling GROMM2 dated manifests use different source identities"
+            )
         manifest_sha256_by_date[as_of_date] = manifest_sha256
     dates = tuple(manifest_sha256_by_date)
     if dates != tuple(sorted(dates)):
         raise ValueError("legacy rolling GROMM2 dates are not chronological")
+    if manifest_source_identity is None:
+        raise ValueError("legacy rolling GROMM2 range has no dated source identity")
     return LegacyRollingGromm2RangeEvidence(
         artifact_root=artifact_root,
         source_identity=source_identity,
+        manifest_source_identity=manifest_source_identity,
         manifest_sha256_by_date=manifest_sha256_by_date,
     )
 
@@ -657,7 +680,7 @@ def _run_origin_locked(
                 target_artifact_root=artifact_root,
                 as_of_date=as_of_date,
                 source_manifest_sha256=legacy.manifest_sha256_by_date[as_of_date],
-                source_identity=legacy.source_identity,
+                source_identity=legacy.manifest_source_identity,
                 config=config,
             )
         artifacts = fit_rolling_gromm2_market(

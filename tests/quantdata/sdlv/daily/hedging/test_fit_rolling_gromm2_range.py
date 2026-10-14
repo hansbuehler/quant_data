@@ -45,7 +45,10 @@ def _dataset(tmp_path: Path) -> Path:
 def _dated_manifest(root: Path, as_of_date: date, *, label: str) -> Path:
     path = root / as_of_date.isoformat() / "manifest.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"label": label}), encoding="utf-8")
+    path.write_text(
+        json.dumps({"label": label, "source_identity": "c" * 64}),
+        encoding="utf-8",
+    )
     return path
 
 
@@ -234,6 +237,7 @@ def test_legacy_range_loader_authenticates_complete_manifest_set(
     )
 
     assert loaded.source_identity == "a" * 64
+    assert loaded.manifest_source_identity == "c" * 64
     assert tuple(loaded.manifest_sha256_by_date) == origins
     (artifact_root / origins[1].isoformat() / "manifest.json").write_text(
         '{"changed": true}\n', encoding="utf-8"
@@ -254,12 +258,19 @@ def test_fit_range_uses_authenticated_legacy_affine_seed(
     artifact_root = tmp_path / "current"
     origin = _Panel(dataset).dates[0]
     migrated: list[date] = []
+    migrated_source_identities: list[str] = []
 
     def load(_root: Path, *, as_of_date: date, **_kwargs: object) -> object:
         raise FileNotFoundError(as_of_date)
 
-    def migrate(*, as_of_date: date, **_kwargs: object) -> object:
+    def migrate(
+        *,
+        as_of_date: date,
+        source_identity: str,
+        **_kwargs: object,
+    ) -> object:
         migrated.append(as_of_date)
+        migrated_source_identities.append(source_identity)
         return object()
 
     def fit(*, as_of_date: date, **_kwargs: object) -> object:
@@ -282,6 +293,7 @@ def test_fit_range_uses_authenticated_legacy_affine_seed(
     legacy = LegacyRollingGromm2RangeEvidence(
         artifact_root=tmp_path / "legacy",
         source_identity="a" * 64,
+        manifest_source_identity="c" * 64,
         manifest_sha256_by_date={origin: "b" * 64},
     )
 
@@ -298,6 +310,7 @@ def test_fit_range_uses_authenticated_legacy_affine_seed(
     )
 
     assert migrated == [origin]
+    assert migrated_source_identities == ["c" * 64]
     assert summary.physical_fallback_count == 1
 
 
