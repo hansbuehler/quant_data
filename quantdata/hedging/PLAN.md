@@ -1083,11 +1083,12 @@ matrix v3 rather than the empty v4 output directory. Its read-only persisted
 launcher has SHA-256
 `5ff2b5c6bd92b739da37ae8dffb9ecb6b5a9524bb49c73d8dac9c7f46fa40685`.
 The report-only successor
-`quantdata-hedging-report-refresh-84e83c.service` waits for that production
+`quantdata-hedging-report-refresh-380daef.service` waits for that production
 service and then re-authenticates the final matrices before rendering the full
-weekly per-model, per-target objective appendix from immutable commit
-`84e83c47dacd386504b65405deed594794569460`. Its persisted launcher has
-SHA-256 `c16d955613ab9867d7a88fe2010d07258ec95156880e6ea14ee285147b327505`;
+weekly per-model, per-target objective appendix and the authenticated model
+catalogue order from immutable commit
+`380daef5e1d1303380641b8e015dc7b120e17ca0`. Its persisted launcher has
+SHA-256 `199a6d6c93943b4a8adbf30dfc4d05d33b4bd48f94782aceb92e6df1a9be6814`;
 it writes a separate report manifest and never changes production results.
 Final completed-case figures, production-data PDF regeneration, and the final
 results review remain outstanding.
