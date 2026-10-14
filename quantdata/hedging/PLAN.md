@@ -1047,8 +1047,11 @@ functionals are evaluated in unscaled inception-spot-normalized loss units and
 only the resulting scalar is converted to basis points for display. Final
 weekly comparisons use equal-weighted 13-target episode books and report
 candidate-minus-SANOS paired differences with Hansen--Hodrick and moving-block
-bootstrap uncertainty. A standalone final-document builder now renders all
-daily and weekly objective grids without selecting policies on 2023--2025
+bootstrap uncertainty. The model catalogue follows first appearance in the
+authenticated daily grid, followed by weekly-only models, and uses the same
+display names as the result tables. A standalone final-document builder now
+renders all daily and weekly objective grids without selecting policies on
+2023--2025
 outcomes, target-level appendices, model references, and immutable provenance
 directly from those authenticated inputs; its synthetic end-to-end PDF compile
 passes.

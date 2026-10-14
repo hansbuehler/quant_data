@@ -70,11 +70,11 @@ def build_summary_document(
             for model in weekly_models.values()
         }
     )
-    model_names = sorted(
-        {
+    model_names = list(
+        dict.fromkeys(
             _require_string(_as_object(model, "model"), "model")
             for model in (*daily_models.values(), *weekly_models.values())
-        }
+        )
     )
     manifest = _require_string(daily, "dataset_manifest_sha256")
     return rf"""\documentclass[10pt]{{article}}
