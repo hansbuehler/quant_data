@@ -52,3 +52,18 @@ The final benchmark remains incomplete until the 57 daily and 94 weekly cells
 have authenticated terminal outcomes, the production PDF is regenerated from
 their precommitted matrices, the complete suite passes on the reporting commit,
 and a separate quantitative results review reconciles the finished numbers.
+
+## Successor launcher
+
+The successor launcher closes the operational gate and passed independent
+re-review. It is pinned to reporting commit
+`de185864a9eb414ca431b92321b56c41062fd651`; its installed SHA-256 is
+`5a2eefa09b3607814d497b328c80ecffeacce00a31925f32eb618b5cb9bd27b1`.
+It uses fresh `de18586` matrix, checkpoint, operations, and report roots, keeps
+the independently reviewed generated-model source commit at `d22ec9a`, and
+rechecks the clean reporting worktree immediately before final commitment
+validation and rendering. Its exact detached-environment preflight passed.
+Service `quantdata-hedging-full-production-de18586.service` is active and waits
+only for generated readiness and authenticated Historical-SANOS failure
+canonicalization. The obsolete `d22ec9a` coordinator was stopped while it was
+still waiting and launched no production case.

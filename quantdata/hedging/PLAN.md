@@ -1259,17 +1259,18 @@ The pre-production complete-suite record on the remediated report source has
 458 passing tests; the suite is rerun after every final source change and will
 be rerun again after production. This permits the final
 57-cell daily and 94-cell weekly matrices to reuse completed native evidence
-without copying it or rerunning it. The installed detached final-production
-service `quantdata-hedging-full-production-d22ec9a.service` remains only a
-prerequisite waiter and must be replaced before its prerequisites clear:
-independent review found that its launcher still writes a version-1 commitment
-and recomputes hashes after outcomes. The successor must be pinned to the
-report-remediation commit, create and persist the version-2 commitment and its
-fixed SHA-256 before production, and pass that immutable identity to final
-rendering. It will retain the existing ordered daily sources, authenticated
-weekly native source, and combined SANOS--LV failure ledger, then run only
-missing GROMM and generated cases. The superseded coordinator must be stopped
-while still waiting and must not launch production cases.
+without copying it or rerunning it. The reviewed detached final-production
+service `quantdata-hedging-full-production-de18586.service` is active from
+immutable reporting commit `de185864a9eb414ca431b92321b56c41062fd651`. Its
+exact detached-environment preflight passed and its installed launcher has
+SHA-256 `5a2eefa09b3607814d497b328c80ecffeacce00a31925f32eb618b5cb9bd27b1`.
+It creates and persists the version-2 commitment and fixed SHA-256 before any
+final generated or GROMM production case, revalidates them on restart and
+immediately before reporting, and rechecks its clean pinned worktree before the
+final render. It retains the existing ordered daily sources, authenticated
+weekly native source, and combined SANOS--LV failure ledger, then runs only
+missing GROMM and generated cases. The obsolete `d22ec9a` coordinator was
+stopped while still waiting and launched no production case.
 
 Weekly objective tables now
 include equal-weight episode-book and worst-target maximum drawdown, computed
