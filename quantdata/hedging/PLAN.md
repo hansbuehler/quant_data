@@ -846,9 +846,10 @@ a persistent heartbeat at most every five minutes. Borderline affine fits keep
 the fixed 80% inside-spread gate and continue from their authenticated 2,000
 epoch checkpoint to at most 4,000 and 8,000 epochs; completed epochs, retry
 count, and the actual fit configuration are retained in the dated artifact.
-Its real first-origin resume smoke passed. CPU preparation is complete for all
-611 eligible origins, including the first sparse-release origin after an
-authenticated restart; managed-GPU rolling fitting remains active.
+Its real first-origin resume smoke passed. CPU preparation and the legacy
+managed-GPU fit are complete for all 611 eligible origins, including the first
+sparse-release origin after an authenticated restart. Current-code migration
+waits behind generated-model readiness on the managed GPU.
 
 The range evidence reports full-candidate, front-only-fallback, and unavailable
 physical-origin counts separately. A versioned migration path authenticates the
@@ -874,8 +875,8 @@ A completed range summary binds the dataset, configuration, evaluation dates,
 artifact root, and every dated manifest hash. The production matrix enables Q
 cases only from this complete evidence; it enables P cases only when every
 origin has either an accepted full candidate or an accepted, explicitly labelled
-front-only null fallback. Full managed-GPU range fitting and
-live managed-GPU forced-restart evidence remain outstanding. A deterministic
+front-only null fallback. Current-code migration and live managed-GPU
+forced-restart evidence remain outstanding. A deterministic
 mid-range failure test now verifies that the failed state identifies the exact
 origin, preserves the authenticated completed prefix, and reuses that prefix on
 restart before completing the missing origins.
@@ -1025,8 +1026,9 @@ initializer and epoch-budget pipeline has now completed for all three generated
 baselines. The one-standard-error selections are 1,000 rolling epochs for
 VolGAN, 30 for AD-Seq-Vol, and one for AD-Seq-Vol-FT; their complete end-2022
 production initializers and distinct selection-source lineages pass the strict
-evidence loader. Rolling GROMM CPU preparation is complete for all 611 eligible
-origins, while managed-GPU rolling fitting continues independently. A
+evidence loader. The authenticated legacy rolling GROMM range is complete for
+all 611 eligible origins, while current-code migration waits behind generated
+readiness on the managed GPU. A
 production-gate assembler now reconstructs exact public-versus-rolling scope
 bindings, refuses stale or aliased evidence, writes under an output lock through
 a unique same-directory temporary file, and re-authenticates the completed gate
