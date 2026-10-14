@@ -909,8 +909,15 @@ parameters $0.1$, $1$, and $10$ have completed all 611 origins and 12,220
 records under the current target-notional identity, with zero cap hits and zero
 nonconvergence. Gaussian entropy is represented exactly by these same
 mean--variance policies at equal risk parameter. A distinct exact-Gaussian
-power-exponential covariance fit is implemented and remains to be run. The
-versioned daily production matrix contains 57
+power-exponential covariance fit is implemented and passes independent
+quantitative review in
+`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-14-covariance-gaussian-power-review.md`.
+Its three risk-parameter cohorts are queued from immutable commit `656ca65`
+behind the two active covariance services under
+`quantdata-hedging-covariance-power-656ca65.service`; the persisted launcher
+SHA-256 is
+`32179eebebd0f6d8b039f7eacdc5eca54607eb762d6c2b37a52afe196cd8b1db`.
+The versioned daily production matrix contains 57
 unique cases: 24 runnable native CPU cases, two
 staged published-setting GPU cases awaiting the generated-model GPU-readiness
 gate, and 31 explicitly blocked rolling-generated or GROMM cases. No blocked
@@ -1124,7 +1131,14 @@ records and realized accounting. Its persisted launcher has SHA-256
 `e400ee3a986c603643028028075253c78af11d4630b56bf3cc19fc3fe16f92da`;
 it writes a separate report manifest and never changes production results.
 Final completed-case figures, production-data PDF regeneration, and the final
-results review remain outstanding.
+results review remain outstanding. A final successor service,
+`quantdata-hedging-final-57-656ca65.service`, waits for both the existing
+54-case full-production service and the three reviewed covariance-power
+cohorts. It will authenticate and reuse every completed case, compose the
+canonical 57-case daily matrix, pair it with the complete 94-case weekly
+matrix, and render a fresh report without rerunning existing policies. Its
+persisted launcher SHA-256 is
+`a633269ca7fb637139b533a7e4b247158396f004356318249fa87b86e96efd93`.
 
 ## Minimum Test Gates
 
