@@ -43,27 +43,27 @@ are negligible.}
 \toprule
 Method & Representation & Parametric & Static arb. & Native inputs & Off-grid & Scope and qualification \\
 \midrule
-\citet{AndreasenHuge}
-  & One-step implicit FD; DLV-like & No & SG/S$\infty$ & Arbitrary quotes & $\infty$
-  & One implicit Markov/resolvent step per quoted expiry, with a strike-local variance proxy calibrated sequentially.  The basic derivation uses an equidistant strike grid, but the positivity and convexity-preservation argument also covers non-equidistant spacing. \\
-\citet{fengler2009}
-  & Constrained non-parametric spline & No & S$\Omega$ & Arbitrary & $\infty$
-  & Shape-constrained smoothing on the fitted domain; tails depend on the boundary specification. \\
-\citet{GatheralJacquier2014}
-  & Parametric SVI/SSVI & Yes & S$\infty$ & Arbitrary & $\infty$
-  & Strict for admissible parameters; a central low-dimensional benchmark. \\
-\citet{GuoJacquierMartiniNeufcourt2016}
-  & Parametric generalized SVI & Yes & S$\infty$ & Arbitrary & $\infty$
-  & Extends the strict SVI/SSVI constructions. \\
 \citet{Hafner2004}
   & Parametric polynomial IV surface & Yes & N & Variable daily DAX transactions & $\infty$ on bounded domain
   & Weighted least-squares fit followed by finite-grid screening: dates violating hedge, bull-spread, butterfly, or calendar tests on a 200-point grid are discarded.  The fitted family itself is unconstrained. \\
+\citet{fengler2009}
+  & Constrained non-parametric spline & No & S$\Omega$ & Arbitrary & $\infty$
+  & Shape-constrained smoothing on the fitted domain; tails depend on the boundary specification. \\
+\citet{AndreasenHuge}
+  & One-step implicit FD; basis for DLV & No & SG/S$\infty$ & Arbitrary quotes & $\infty$
+  & Basis for DLV: one implicit Markov/resolvent step per quoted expiry, with a strike-local variance proxy calibrated sequentially.  The basic derivation uses an equidistant strike grid, but the positivity and convexity-preservation argument also covers non-equidistant spacing. \\
 \citet{Bloch2013MixVar}
   & Parametric mixture & Yes & S$\infty$ (conditional) & Arbitrary & $\infty$
   & The admissible mixture family is specified before calibration, so this is not fit--then--repair.  The paper gives parameter restrictions rather than one fully specified constrained calibration program; a compact direct fit requires one of its monotone total-variance parameterizations. \\
+\citet{GatheralJacquier2014}
+  & Parametric SVI/SSVI & Yes & S$\infty$ & Arbitrary & $\infty$
+  & Strict for admissible parameters; a central low-dimensional benchmark. \\
 \citet{Orosi2015}
   & Thin-plate regression splines/QP & No & U & Arbitrary & $\infty$
   & Constraints are integrated into a quadratic-program fit, but we have not verified a basis-level theorem extending them from the constrained locations to the whole continuum. \\
+\citet{GuoJacquierMartiniNeufcourt2016}
+  & Parametric generalized SVI & Yes & S$\infty$ & Arbitrary & $\infty$
+  & Extends the strict SVI/SSVI constructions. \\
 \citet{AckererTagasovskaVatter2020}
   & Non-parametric neural network & No & A & Irregular daily panel & $\infty$
   & Static conditions enter through soft penalties; violation rates depend on the penalty weight. \\
@@ -73,9 +73,6 @@ Method & Representation & Parametric & Static arb. & Native inputs & Off-grid & 
 \citet{ChataignerEtAl2022}
   & Constrained GP or penalized NN & No; fitted SSVI: yes & GP: S$\Omega$; NN: A & Arbitrary & $\infty$
   & Nodal inequalities imply monotonicity and convexity throughout the GP's bounded piecewise-multilinear domain.  The NN and fitted SSVI alternatives use penalties. \\
-\citet{SANOS2026}
-  & Smooth non-parametric DLV & No & S$\infty$ & Arbitrary; about 1,000 in example & $\infty$
-  & Bid--ask-aware smooth surface with positivity as the essential parameter constraint. \\
 \citet{YangChenShuHospedales2025}
   & Hypernetwork plus compact neural surface & No & A & 9 observations & $\infty$
   & Calendar and density conditions are finite-grid auxiliary losses; the paper explicitly states that they provide no hard guarantee. \\
@@ -88,6 +85,9 @@ Method & Representation & Parametric & Static arb. & Native inputs & Off-grid & 
 \citet{QinYangCheFeng2026}
   & Piecewise-quadratic calls/RN marginals & No & S$\infty$ (conditional) & Arbitrage-free discrete quotes & $\infty$
   & A completion process, not a market model: it maps an already arbitrage-free discrete call grid to full risk-neutral marginals.  Projected admissible nodal slopes determine interval masses; non-negative two-piece constant curvature gives exact quote reproduction, hence piecewise-quadratic calls.  Closed-form power-law tails complete each law.  Later maturities are built above the preceding forward-aligned call curve, using a local three-piece curvature construction where needed.  The theorem assumes a strengthened discrete calendar condition on the inputs; no dynamics are supplied. \\
+\citet{SANOS2026}
+  & Smooth non-parametric DLV & No & S$\infty$ & Arbitrary; about 1,000 in example & $\infty$
+  & Bid--ask-aware smooth surface with positivity as the essential parameter constraint. \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -123,6 +123,8 @@ Method & Representation & Native option coordinates & Off-grid & Latent/static a
   & DLV, constrained autoencoder, and flow & $9\times4=36$ per asset & 0 & SG & Decoder is constrained on the finite lattice. \\
 \citet{ZhangLiZhang2021}
   & PCA/VAE/samples plus neural reconstruction & 154 & $\infty$ & A & Reconstruction uses static-arbitrage penalties. \\
+\citet{AndresBoumezouedJourdain2023}
+  & Four-parameter SSVI state & $24\times16\simeq384$ & $\infty$ & S$\infty$ & Admissible SSVI parameter conditions hold for each state. \\
 \citet{Cohen02012023}
   & Affine factors of normalized call prices & $13\times10=130$ in applications & 0 & SG & The linear no-static-arbitrage inequalities for the finite rolling $(\tau,m)$ lattice become a convex polytope for the factors.  This is a hard grid-level constraint, not DLV and not a continuum interpolator. \\
 \citet{ContVuletic2023}
@@ -131,12 +133,10 @@ Method & Representation & Native option coordinates & Off-grid & Latent/static a
   & Functional PCA and neural SDE & $17\times11=187$ per asset & Functional continuum & A & Functional penalties, not an invariant admissible family. \\
 \citet{VuleticCont2024}
   & Direct-IV GAN plus penalties/reweighting & $10\times8=80$ & 0 & A & Approximate output correction. \\
-\citet{AndresBoumezouedJourdain2023}
-  & Four-parameter SSVI state & $24\times16\simeq384$ & $\infty$ & S$\infty$ & Admissible SSVI parameter conditions hold for each state. \\
-\citet{GolubitskyDavisonCaraman2026}
-  & VAE latent representation & $2\times11\times17=374$ & 337 in 90\% missing test & A & Static constraints are approximate. \\
 \citet{JinAgarwal2025}
   & Direct-IV conditional diffusion & $9\times9=81$ & 0 & A & Penalty-based. \\
+\citet{GolubitskyDavisonCaraman2026}
+  & VAE latent representation & $2\times11\times17=374$ & 337 in 90\% missing test & A & Static constraints are approximate. \\
 \citet{BrooksEtAl2026}
   & Arbitrage-penalized VAE and latent flow & $32\times16=512$ & 0 & A; 90.8\% pass all tests & Empirical pass rate, not a guarantee. \\
 \citet{HaoJi2026}
@@ -177,14 +177,14 @@ Method & Underlying pricing family & Role of ML & Online inverse step & Why sepa
   & Rough Bergomi and related rough-volatility models & Learns the forward parameter-to-IV map & Classical Levenberg--Marquardt optimization through the surrogate & The NN accelerates a conventional model calibration. \\
 \citet{HorvathMuguruzaTomas2019,BayerEtAl2019DeepCalibration}
   & Broad class including rough-volatility models & Learns a fast forward pricing/IV map & Classical numerical or Bayesian inversion of the surrogate & Explicitly retains the two-step pricing-model-plus-calibration architecture. \\
-\citet{RoederDimitroff2020}
-  & Volatility-model examples used in deep-calibration benchmarks & Compares a direct IV-to-parameter map with the two-step forward surrogate & None for the direct version; solver for the indirect version & Both outputs are parameters of an exogenously specified pricing model. \\
 \citet{Itkin2019}
   & Classical option-pricing models & Audits direct and surrogate deep-calibration designs & Method-dependent & Focuses on identifiability, training coverage, and no-arbitrage pitfalls of ML calibration. \\
-\citet{vae_ning2023arbitrage}
-  & Time-inhomogeneous CTMC; additive Gaussian-mixture and CGMY/KoBoL L\'evy models & VAE/PCA learns the cross-date distribution of already calibrated parameters & Regularized inverse calibration is done first, date by date; CTMC maturities are fitted sequentially & The VAE generates model parameters, and prices are recovered through the model's characteristic function. \\
+\citet{RoederDimitroff2020}
+  & Volatility-model examples used in deep-calibration benchmarks & Compares a direct IV-to-parameter map with the two-step forward surrogate & None for the direct version; solver for the indirect version & Both outputs are parameters of an exogenously specified pricing model. \\
 \citet{RosenbaumZhang2021}
   & Quadratic rough Heston & Neural pricing/calibration engine based on a multifactor approximation & Optimization against the learned engine & The calibrated state is a rough-volatility parameter vector. \\
+\citet{vae_ning2023arbitrage}
+  & Time-inhomogeneous CTMC; additive Gaussian-mixture and CGMY/KoBoL L\'evy models & VAE/PCA learns the cross-date distribution of already calibrated parameters & Regularized inverse calibration is done first, date by date; CTMC maturities are fitted sequentially & The VAE generates model parameters, and prices are recovered through the model's characteristic function. \\
 \citet{SridiBilokon2023,ZhangAmiciMorandotti2024}
   & Heston & Differential networks learn prices and parameter sensitivities & Gradient-based calibration through the learned pricer & Heston supplies the risk-neutral structure; ML speeds its inverse search. \\
 \bottomrule
@@ -223,6 +223,8 @@ Method & Dynamic state/model & Dynamics under $\P$ & Direct market-model dynamic
   & Constrained DLV latent flow & SG & --- & Yes & Finite-grid historical dynamics. \\
 \citet{ZhangLiZhang2021}
   & LSTM latent evolution and neural reconstruction & A & --- & Yes & Static-arbitrage penalties only. \\
+\citet{AndresBoumezouedJourdain2023}
+  & Path-dependent SSVI factors & S$\infty$ for every simulated snapshot & No market-measure dynamics & Yes ($\P$) & Static arbitrage freedom does not imply dynamic no-arbitrage. \\
 \citet{Cohen02012023}
   & Rolling normalized-call lattice, affine factors, and neural SDE & SG under $\P$: exact for model SDE & --- (not implemented) & Yes ($\P$ only) & The drift points inward and the normal diffusion vanishes at every face, so the continuous-time factor process remains in the finite-lattice no-static-arbitrage polytope $\P$-a.s.  The coordinates float with fixed $(\tau,m)$ rather than tracking fixed contracts.  The HJM expression is only a factor-selection criterion and residual diagnostic, not an implemented $\Q$ model. \\
 \citet{ContVuletic2023}
@@ -231,8 +233,6 @@ Method & Dynamic state/model & Dynamics under $\P$ & Direct market-model dynamic
   & Functional PCA and neural SDE & A & --- & Yes & Penalty-based admissibility. \\
 \citet{VuleticCont2024}
   & Direct-IV GAN dynamics & A & --- & Yes & Penalties and reweighting. \\
-\citet{AndresBoumezouedJourdain2023}
-  & Path-dependent SSVI factors & S$\infty$ for every simulated snapshot & No market-measure dynamics & Yes ($\P$) & Static arbitrage freedom does not imply dynamic no-arbitrage. \\
 \citet{JinAgarwal2025}
   & Conditional diffusion on IV grids & A & --- & Yes & Penalty-based. \\
 \citet{BrooksEtAl2026}
