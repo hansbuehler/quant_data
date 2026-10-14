@@ -1139,6 +1139,9 @@ canonical 57-case daily matrix, pair it with the complete 94-case weekly
 matrix, and render a fresh report without rerunning existing policies. Its
 persisted launcher SHA-256 is
 `cbdb44a4af29a596f89d912ef3bc80310fa6a5761a29cef190cf425b6f98b10a`.
+The requirement-by-requirement acceptance state and the evidence still needed
+for completion are tracked in
+`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-14-plan-completion-audit.md`.
 
 ## Minimum Test Gates
 
