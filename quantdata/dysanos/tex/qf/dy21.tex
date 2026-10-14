@@ -146,7 +146,6 @@ a \emph{discrete floating grid} of options which are strictly
 representation pioneered in~\citet{DLV} to ensure absence of static arbitrage in every simulated
 option surface. 
 
-
 However, the restriction of the above models to a discrete set of floating option strikes and time-to-expiries
 means that the simulators do not have access to the daily returns $dC_t(\tau,k)$
 of actual tradable instruments with cash strikes $k$ and calendar expiries~$\tau$ (because the
@@ -194,19 +193,28 @@ paths.\\
 \noindent
 \textbf{Simulating Implied Volatility:}
 A natural data-driven alternative is to treat the implied volatility surface itself
-as the simulation object, much as implied in~\citet{ContVol}.
+as the simulation object, much as implied in~\citet{ContVol} and recently explored in
+~\cite{ContVuletic2023,ChoudharyJaimungalBergeron2024,HanEtAl2026}.
 The fundamental difficulty is that there is no known parametrization  of
 the implied volatility surface which is strictly free of static
-arbitrage. There exist numerous attempts to rectify this with classic (e.g.~\citealp{fengler2009}) and machine learned
-methods (e.g.~\citealp{vae_ning2023arbitrage}) but to our knowledge none of them can strictly guarantee absence of static arbitrage.
+arbitrage. There exist numerous attempts to rectify this with classic
+interpolation and parametrization methods
+(e.g.~\citealp{Kahale2004,fengler2009,GatheralJacquier2014,GuoJacquierMartiniNeufcourt2016,Orosi2015})
+and machine-learned surface interpolation methods
+(e.g.~\citealp{AckererTagasovskaVatter2020,YangChenShuHospedales2025,GononJacquierWiedemann2025}).
+The learned methods generally impose static-arbitrage conditions through
+penalties rather than a strict full-surface guarantee.
 
 If a simulated surface admits a butterfly spread or calendar spread arbitrage,
 then a learning agent can exploit an artificial profit which is unrelated to the
 problem for which the generated market was intended. Aside from those classic constraints
-call prices also need to adhere to boundary conditions which are often not discussed
-in the literature (we repeat them below).
+call prices also need to adhere to boundary conditions which are often not considered
+in the literature on implied volatility fitting or simulation, c.f.~theorem~\ref{th:arbfree}.
+Most published works also simplify the problem by only considering few strikes and expiries.
 
-Most published works also simplify the problem by only considering few strikes and expiries.\\
+The aim of this paper is to present a framework which achieves absence of static arbitrage
+in an accessible and numerically efficient way.\\
+
 
 \iffalse % Tables are maintained in models.tex.
 Tables~\ref{tab:surface-interpolation-literature} and
@@ -368,7 +376,8 @@ which is numerically tractable for simulation and for which required parameter c
 Indeed, the seminal construction of~\citet{TangentLevy} achieves that goal. In addition, the authors are able to also
 construct a risk-neutral measure consistent with the code book representation.
 They achieve this, essentially, by writing the spot price as a product of independent increments. That construction unfortunately also restricts
-the dynamics their model can represent. It tends to fit poorly to statistical data due to the strong cross-expiry correlation of implied forward volatilities.\\
+the dynamics their model can represent. It tends to fit poorly to statistical data due to the strong cross-expiry correlation of implied forward volatilities.
+\\
 
 \noindent
 \textbf{Local Volatility as a Code Book:}
@@ -384,6 +393,7 @@ $\partial_T C^\mathrm{LV}(\sigma_t;T,K)
    \partial^2_{KK}C^\mathrm{LV}(\sigma_t;T,K)$.
 That means any statistical generative model of Dupire's local volatility gives rise
 to a dynamic model of option surfaces which are by construction free of static arbitrage.
+For such a model,~\cite{CarmonaNadtochiy2009} have derived the condition on when a risk-neutral measure exists.
 
 However, in order to price any simulated option off a simulated local volatility surface
 we would need to solve a forward-PDE on a suitably
@@ -391,9 +401,8 @@ fine grid which is slow, particularly when used within batch-based gradient desc
 
 The idea to address this conundrum is to use a grid of options and define a discrete version
 of local volatility on that grid, which is what we called
-\emph{discrete local volatility (DLV)} in~\citet{DLV}.
-It is essentially the discretized local volatility which is consistent with using an implicit forward-PDE operator on a sparse inhomogeneous grid of options,
-as explained in~\citet{AndreasenHuge}.
+\emph{discrete local volatility (DLV)} in~\citet{DLV}, which is based on work by~\cite{AndreasenHuge}.
+It is essentially the discretized local volatility which is consistent with using an implicit forward-PDE operator on a sparse inhomogeneous grid of options.
 However,
 its native option prices for strikes not on its base grid are the result of linear interpolation and therefore, as mentioned above, `too expensive'.
 We therefore use
@@ -402,8 +411,9 @@ our smooth SANOS extension~\citep{SANOS2026}.
 The use of SANOS also allows to fit our model very efficiently to observed bid/ask spreads over the entire observed option surface.\\
 
 \noindent
-\textbf{Overview of Related Papers:} dynamic option surface representations have a long history. We summarized
-the papers we are aware of in table~\ref{tab:surface-representation-literature} on page~\pageref{tab:surface-representation-literature}.
+\textbf{Overview of Related Papers:} the current topic has been subject to extensive research for the last decades.
+We have therefore provide a table with the contributions we are aware in tables~\ref{tab:surface-interpolation-literature} to~\ref{tab:surface-dynamics-literature}
+starting on page~\pageref{tab:surface-interpolation-literature}.
 
 \subsection*{Key contributions}
 
@@ -2433,7 +2443,7 @@ training weights and inside-spread objective are those in
 describes the complete optimization sequence.
 
 \clearpage
-\section{Option-surface literature classification}
+\section{Option-surface Literature Classification}
 \label{app:literature-tables}
 \input{models}
 

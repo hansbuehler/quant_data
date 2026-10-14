@@ -6,10 +6,10 @@ Tables~\ref{tab:surface-interpolation-literature},
 \ref{tab:surface-representation-literature},
 \ref{tab:inverse-calibration-literature}, and
 \ref{tab:surface-dynamics-literature} separate four questions which are often
-conflated: constructing one admissible surface, compressing or generating a
+conflated: constructing an option or implied volatility surface, compressing or generating a
 market state, solving an underlying-model inverse problem, and learning a
 surface's evolution through time.  We use common classification
-symbols throughout the tables.\footnote{%
+symbols throughout the tables:
 \begin{itemize}[leftmargin=*,nosep]
   \item \textbf{S$\infty$}: a theorem- or architecture-level guarantee on the
         full continuous surface.
@@ -21,17 +21,13 @@ symbols throughout the tables.\footnote{%
   \item \textbf{N}: no static-arbitrage guarantee.
   \item \textbf{U}: arbitrage freedom is claimed, but the available construction
         does not suffice to verify its continuum scope.
-\end{itemize}}
-Constraints imposed inside a fit are distinguished from a projection or
-iterative repair applied after an unconstrained fit; only the former makes the
-fitted family itself constrained.  Option counts refer to native surface
-coordinates rather than option-day observations.  An off-grid count of
-$\infty$ means that the representation can be evaluated on a continuum, subject
-to its stated domain and tail assumptions.  Entries discovered in the
-backward-reference audit of the papers already in these tables are shown in
+\end{itemize}
+
+
 \textcolor{blue}{blue}.
 
 \newcommand{\auditnew}[1]{\textcolor{blue}{#1}}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 
 \begin{landscape}
 \begin{table}[p]
@@ -42,9 +38,10 @@ backward-reference audit of the papers already in these tables are shown in
 \caption{Selected parametric implied-volatility and option-price interpolation
 methods.  ``Parametric'' means that the surface is restricted to a prescribed
 finite-dimensional functional family; it does not describe the calibration
-algorithm.}
+algorithm. Fit implied volatility fitting method we distinguish fitting a model under constraints directly from post-fit adjustments.
+}
 \label{tab:surface-interpolation-literature}
-\begin{tabular}{@{}p{4.2cm}p{3.8cm}p{2.2cm}p{3.2cm}p{2.0cm}p{8.0cm}@{}}
+\begin{tabular}{@{}L{4.2cm}L{3.8cm}L{2.2cm}L{3.2cm}L{2.0cm}L{8.0cm}@{}}
 \toprule
 Method & Representation & Static arb. & Native inputs & Off-grid & Scope and qualification \\
 \midrule
@@ -89,10 +86,10 @@ Method & Representation & Static arb. & Native inputs & Off-grid & Scope and qua
 \end{landscape}
 
 \begin{landscape}
-\fontsize{6.5}{7.1}\selectfont
-\setlength{\tabcolsep}{3pt}
-\renewcommand{\arraystretch}{1.00}
-\begin{longtable}{@{}p{4.2cm}p{4.0cm}p{2.2cm}p{3.4cm}p{2.0cm}p{7.6cm}@{}}
+\fontsize{7}{7.7}\selectfont
+\setlength{\tabcolsep}{2.5pt}
+\renewcommand{\arraystretch}{1.04}
+\begin{longtable}{@{}L{4.2cm}L{4.0cm}L{2.2cm}L{3.4cm}L{2.0cm}L{7.6cm}@{}}
 \caption{Selected non-parametric implied-volatility and option-price
 interpolation methods.  Soft-penalty methods are approximate even when reported
 violations are negligible.}
@@ -170,26 +167,31 @@ Method & Representation & Static arb. & Native inputs & Off-grid & Scope and qua
 \renewcommand{\arraystretch}{1.06}
 \caption{PCA, autoencoder, and other latent representations of option surfaces.
 ``Off-grid'' counts options not represented by native model coordinates;
-external interpolation is not credited to the representation.}
+external interpolation is not credited to the representation.
+  An off-grid count of
+$\infty$ means that the representation can be evaluated on a continuum, subject
+to its stated domain and tail assumptions.
+}
 \label{tab:surface-representation-literature}
-\begin{tabular}{@{}p{4.3cm}p{4.2cm}p{3.6cm}p{2.7cm}p{3.0cm}p{6.0cm}@{}}
+\begin{tabular}{@{}L{4.3cm}L{4.2cm}L{3.6cm}L{2.7cm}L{3.0cm}L{6.0cm}@{}}
 \toprule
 Method & Representation & Native option coordinates & Off-grid & Latent/static arb. & Qualification \\
 \midrule
 \citet{SkiadopoulosHodgesClewlow2000}
   & Direct-IV PCA & Not reported; three maturity groups & 0 & N & PCA factors do not preserve static inequalities. \\
 \citet{ContVol}
-  & Functional/direct-IV PCA & Not reported & Functional continuum & N & Functional interpolation does not make the PCA cone invariant. \\
+  & Functional/direct-IV PCA & Not reported & Any number within the fitted domain & N & Functional interpolation does not make the PCA cone invariant. \\
 \auditnew{\citet{FenglerHardleVilla2003}}
   & \auditnew{Common PCA of direct IV changes} & \auditnew{Panel of DAX option surfaces}
   & \auditnew{0} & \auditnew{N}
   & \auditnew{Common factors summarize smile dynamics but do not define an invariant no-arbitrage state space.} \\
 \citet{Hafner2004}
-  & Four parametric IV factors: level, slope, curvature, and term slope & Variable daily DAX transactions; 200-point diagnostic grid & $\infty$ on its bounded domain & N & The daily regression family is not constrained.  Dates failing finite-grid hedge, bull-spread, butterfly, or calendar tests are discarded ex post; the subsequent OU factor process does not preserve those tests. \\
+  & Four parametric IV factors: level, slope, curvature, and term slope & Variable daily DAX transactions; 200-point diagnostic grid & $\infty$ on its bounded domain & N & The daily regression
+   family is not constrained.  Dates failing finite-grid hedge, bull-spread, butterfly, or calendar tests are discarded ex post. \\
 \citet{PanigirtzoglouSkiadopoulos2004}
   & Separate implied-distribution PCA by expiry & $3\times21=63$: 21 deltas at each of 1, 3, and 6 months & 0 & PDF algorithm: S$\infty$ per expiry; CDF algorithm: N; joint surface: N & The positive, normalized PDF construction defines a distribution for one expiry.  The alternative CDF-coordinate construction only bounds each ordinate; neither it nor the separate-expiry fit enforces joint calendar consistency. \\
 \citet{DellaportasMijatovic2014}
-  & Parametric SABR/RN-measure encoding & $n\geq40$, one maturity & $\infty$ within smile & S$\infty$ & Strictness comes from the imposed pricing family. \\
+  & Parametric SABR/RN-measure encoding & $n\geq40$, one maturity & Any strike at the modelled expiry & S$\infty$ & Strictness comes from the imposed pricing family. \\
 \citet{wiese2019simulate}
   & DLV, PCA, and GAN & $8\times4=32$ & 0 & SG & Finite DLV lattice. \\
 \auditnew{\citet{AvellanedaEtAl2020}}
@@ -207,11 +209,12 @@ Method & Representation & Native option coordinates & Off-grid & Latent/static a
 \citet{AndresBoumezouedJourdain2023}
   & Four-parameter SSVI state & $24\times16\simeq384$ & $\infty$ & S$\infty$ & Admissible SSVI parameter conditions hold for each state. \\
 \citet{Cohen02012023}
-  & Affine factors of normalized call prices & $13\times10=130$ in applications & 0 & SG & The linear no-static-arbitrage inequalities for the finite rolling $(\tau,m)$ lattice become a convex polytope for the factors.  This is a hard grid-level constraint, not DLV and not a continuum interpolator. \\
+  & Affine factors of normalized call prices & $13\times10=130$ in applications & 0 & SG & The linear no-static-arbitrage inequalities for the finite rolling $(\tau,m)$ lattice become a convex
+  polytope for the factors. \\
 \citet{ContVuletic2023}
   & Direct-IV PCA/factors plus path reweighting & $10\times8=80$ & 0 & Raw PCA: N; output: A & Arbitrage scenarios are downweighted rather than excluded structurally. \\
 \citet{ChoudharyJaimungalBergeron2024}
-  & Functional PCA and neural SDE & $17\times11=187$ per asset & Functional continuum & A & Functional penalties, not an invariant admissible family. \\
+  & Functional PCA and neural SDE & $17\times11=187$ per asset & Any number within the fitted domain & A & Functional penalties, not an invariant admissible family. \\
 \citet{VuleticCont2024}
   & Direct-IV GAN plus penalties/reweighting & $10\times8=80$ & 0 & A & Approximate output correction. \\
 \citet{JinAgarwal2025}
@@ -239,7 +242,7 @@ This paper
 \begin{landscape}
 \begin{table}[p]
 \centering
-\scriptsize
+\fontsize{7}{7.8}\selectfont
 \setlength{\tabcolsep}{2pt}
 \renewcommand{\arraystretch}{1.08}
 \caption{Machine-learning methods for underlying-model inverse problems.
@@ -248,7 +251,7 @@ they do not make the observed option market itself the dynamic state.  Static
 arbitrage properties are inherited from the pricing model, subject to decoded
 parameters remaining admissible.}
 \label{tab:inverse-calibration-literature}
-\begin{tabular}{@{}p{4.5cm}p{5.0cm}p{5.2cm}p{4.2cm}p{5.2cm}@{}}
+\begin{tabular}{@{}L{4.5cm}L{5.0cm}L{5.2cm}L{4.2cm}L{5.2cm}@{}}
 \toprule
 Method & Underlying pricing family & Role of ML & Online inverse step & Why separate from a market-state model \\
 \midrule
@@ -294,120 +297,124 @@ Method & Underlying pricing family & Role of ML & Online inverse step & Why sepa
 \end{landscape}
 
 \begin{landscape}
-\fontsize{7.5}{8.2}\selectfont
-\setlength{\tabcolsep}{2.8pt}
-\renewcommand{\arraystretch}{1.04}
-\begin{longtable}{@{}p{3.8cm}p{3.7cm}p{3.7cm}p{5.1cm}p{1.8cm}p{5.5cm}@{}}
+\fontsize{7}{7.8}\selectfont
+\setlength{\tabcolsep}{2.2pt}
+\renewcommand{\arraystretch}{1.06}
+\begin{longtable}{@{}L{3.7cm}L{3.4cm}L{2.8cm}L{2.2cm}L{4.1cm}L{1.5cm}L{5.3cm}@{}}
 \caption{Option-surface dynamics under the historical measure $\P$ and direct
 market-model dynamics under $\Q$.  The $\Q$ column excludes underlying-first
-pricing families such as Heston, local volatility, and Bates.  ``Implemented''
-refers to the stated dynamic construction, not merely static preprocessing.}
+pricing families such as Heston, local volatility, and Bates.  ``Multi-step
+$\P$ path'' records whether the cited work actually reports a simulated or
+forecast path spanning more than one transition, rather than whether its model
+could in principle be iterated.  ``Implemented'' refers to the stated dynamic
+construction, not merely static preprocessing.}
 \label{tab:surface-dynamics-literature}\\
 \toprule
-Method & Dynamic state/model & Dynamics under $\P$ & Direct market-model dynamics under $\Q$ & Implemented & Qualification \\
+Method & Dynamic state/model & Dynamics under $\P$ & Multi-step $\P$ path & Direct market-model dynamics under $\Q$ & Implemented & Qualification \\
 \midrule
 \endfirsthead
-\multicolumn{6}{c}{\tablename\ \thetable\ -- continued}\\
+\multicolumn{7}{c}{\tablename\ \thetable\ -- continued}\\
 \toprule
-Method & Dynamic state/model & Dynamics under $\P$ & Direct market-model dynamics under $\Q$ & Implemented & Qualification \\
+Method & Dynamic state/model & Dynamics under $\P$ & Multi-step $\P$ path & Direct market-model dynamics under $\Q$ & Implemented & Qualification \\
 \midrule
 \endhead
 \midrule
-\multicolumn{6}{r}{Continued on next page}\\
+\multicolumn{7}{r}{Continued on next page}\\
 \endfoot
 \bottomrule
 \endlastfoot
 \auditnew{\citet{Schonbucher1999}}
   & \auditnew{One fixed-strike term structure of implied volatilities}
-  & \auditnew{---} & \auditnew{Exact drift restrictions across maturities for one strike}
+  & \auditnew{---} & \auditnew{---} & \auditnew{Exact drift restrictions across maturities for one strike}
   & \auditnew{MC implementation strategy only}
   & \auditnew{The setup initially permits a generic finite option set, but the developed discrete and continuous constructions vary maturity at one strike.  Independent dynamics across strikes at the same maturity are explicitly left for future research; this is not a full-surface model.} \\
 \citet{SkiadopoulosHodgesClewlow2000}
-  & Direct-IV PCA factors & N & --- & Yes & No static invariant state space. \\
+  & Direct-IV PCA factors & N & No & --- & Yes & No static invariant state space. \\
 \citet{ContVol}
-  & Functional/direct-IV PCA factors & N & Drift restrictions only & Yes ($\P$) & No constructed admissible $\Q$ dynamics. \\
+  & Functional/direct-IV PCA factors & N & No (single-horizon scenarios) & Drift restrictions only & Yes ($\P$) & No constructed admissible $\Q$ dynamics. \\
 \auditnew{\citet{ContDaFonseca2002Dynamics}}
   & \auditnew{Functional PCA factors of direct IV surfaces} & \auditnew{N}
-  & \auditnew{---} & \auditnew{Yes ($\P$)}
+  & \auditnew{No} & \auditnew{---} & \auditnew{Yes ($\P$)}
   & \auditnew{Empirical factor dynamics; distinct from the three-author stochastic-surface paper and not a constructed risk-neutral model.} \\
 \auditnew{\citet{FenglerHardleVilla2003}}
   & \auditnew{Common PCA factors of direct IV changes} & \auditnew{N}
-  & \auditnew{---} & \auditnew{Yes ($\P$)}
-  & \auditnew{No invariant static-arbitrage state space.} \\
+  & \auditnew{No} & \auditnew{---} & \auditnew{Yes ($\P$)}
+  & \auditnew{Empirical CPCA of observed daily surfaces.  The factors are proposed as a starting point for VaR Monte Carlo, but the paper does not report synthetic multi-step IV paths.  There is no invariant static-arbitrage state space.} \\
 \citet{Hafner2004}
-  & Four parametric IV factors with correlated OU dynamics & N; the estimation sample is screened only & A/local: exact drift restriction derived, but not satisfied by the fitted OU model & Yes & The paper proves that its concrete specification violates the global drift condition near expiry.  It instead regresses market prices of risk on a floating $10\times4=40$ option grid and calibrates pricing to $5\times2=10$ options; this is an approximate local $\Q$ construction. \\
+  & Four parametric IV factors with correlated OU dynamics & N; the estimation sample is screened only & No & A/local: exact drift restriction derived, but not satisfied by the fitted OU model & Yes & The paper proves that its concrete specification violates the global drift condition near expiry.  It instead regresses market prices of risk on a floating $10\times4=40$ option grid and calibrates pricing to $5\times2=10$ options; this is an approximate local $\Q$ construction. \\
 \citet{PanigirtzoglouSkiadopoulos2004}
-  & Separate distribution factors for each constant maturity & PDF algorithm: S$\infty$ per expiry; CDF ordinates only bounded & N for a joint surface & Yes & The normalized positive-PDF algorithm is strict for one expiry; the CDF-coordinate variant does not enforce cross-delta ordering, and neither construction supplies calendar consistency. \\
+  & Separate distribution factors for each constant maturity & PDF algorithm: S$\infty$ per expiry; CDF ordinates only bounded & Yes & N for a joint surface & Yes & The normalized positive-PDF algorithm is strict for one expiry; the CDF-coordinate variant does not enforce cross-delta ordering, and neither construction supplies calendar consistency. \\
 \auditnew{\citet{FenglerHardleMammen2007}}
   & \auditnew{Semiparametric IV-factor surface} & \auditnew{N}
-  & \auditnew{---} & \auditnew{Yes ($\P$)}
+  & \auditnew{No} & \auditnew{---} & \auditnew{Yes ($\P$)}
   & \auditnew{Estimates and forecasts historical surface factors without a hard static-arbitrage invariant.} \\
 \citet{SchweizerWissel2008}
-  & Price level and local implied-volatility field & S$\infty$, theoretical & S$\infty$: solvability theorem and explicit admissible coefficient examples & No & One fixed expiry and all strikes; not a finite option lattice or full maturity surface. \\
+  & Price level and local implied-volatility field & S$\infty$, theoretical & --- & S$\infty$: solvability theorem and explicit admissible coefficient examples & No & One fixed expiry and all strikes; not a finite option lattice or full maturity surface. \\
 \auditnew{\citet{SchweizerWisselTerm2008}}
   & \auditnew{Term structure of one fixed-strike implied volatility} & \auditnew{---}
-  & \auditnew{Strict theoretical drift/existence results}
+  & \auditnew{---} & \auditnew{Strict theoretical drift/existence results}
   & \auditnew{No}
   & \auditnew{All maturities but a fixed payoff/strike; an existence theory rather than an implemented full-surface model.} \\
 \auditnew{\citet{CarmonaNadtochiy2009}}
   & \auditnew{Local-volatility surface as option-market codebook} & \auditnew{---}
-  & \auditnew{S$\infty$: drift and spot-consistency conditions}
+  & \auditnew{---} & \auditnew{S$\infty$: drift and spot-consistency conditions}
   & \auditnew{No empirical implementation}
   & \auditnew{Direct HJM-style market dynamics for the option codebook; ``local volatility'' here is the state parametrization, not a fixed underlying-first Dupire model.} \\
 \auditnew{\citet{TangentLevy}}
   & \auditnew{Tangent L\'evy option-market codebook} & \auditnew{---}
-  & \auditnew{S$\infty$ under the consistency conditions}
+  & \auditnew{---} & \auditnew{S$\infty$ under the consistency conditions}
   & \auditnew{Theory}
   & \auditnew{Constructs direct risk-neutral dynamics for all strikes and maturities from admissible tangent L\'evy characteristics.} \\
 \auditnew{\citet{KallsenKruhner2015}}
   & \auditnew{Time-inhomogeneous L\'evy option codebook} & \auditnew{---}
-  & \auditnew{S$\infty$: necessary/sufficient conditions and existence}
+  & \auditnew{---} & \auditnew{S$\infty$: necessary/sufficient conditions and existence}
   & \auditnew{No numerical implementation}
   & \auditnew{Constructive existence and uniqueness from stated building blocks, but a theoretical HJM framework rather than a calibrated simulator.} \\
 \auditnew{\citet{CarmonaMaNadtochiy2017}}
   & \auditnew{Finite-dimensional tangent L\'evy specifications} & \auditnew{Historically estimated dynamics}
-  & \auditnew{S$\infty$ under model admissibility}
+  & \auditnew{Yes} & \auditnew{S$\infty$ under model admissibility}
   & \auditnew{Yes}
   & \auditnew{Implements, estimates, and simulates arbitrage-free direct option-surface paths on market data.} \\
 \pagebreak[4]
 \citet{wiese2019simulate}
-  & DLV PCA/GAN state & SG & --- & Yes & Finite-grid historical dynamics. \\
+  & DLV PCA/GAN state & SG & Yes & --- & Yes & Finite-grid historical dynamics. \\
 \auditnew{\citet{CaoChenHull2020}}
   & \auditnew{Neural factors of direct IV movements} & \auditnew{N}
-  & \auditnew{---} & \auditnew{Yes ($\P$)}
+  & \auditnew{No} & \auditnew{---} & \auditnew{Yes ($\P$)}
   & \auditnew{Learns historical IV-surface movements, but does not preserve the static-arbitrage inequalities structurally.} \\
 \citet{wiese2021multiassetspotoptionmarket}
-  & Constrained DLV latent flow & SG & --- & Yes & Finite-grid historical dynamics. \\
+  & Constrained DLV latent flow & SG & Yes & --- & Yes & Finite-grid historical dynamics. \\
 \citet{ZhangLiZhang2021}
-  & LSTM latent evolution and neural reconstruction & A & --- & Yes & Static-arbitrage penalties only. \\
+  & LSTM latent evolution and neural reconstruction & A & No (next-day only) & --- & Yes & Static-arbitrage penalties only. \\
 \auditnew{\citet{removedrift}}
   & \auditnew{General $\P$-simulator plus an OCE/entropy path-density model}
   & \auditnew{Inherited from the input simulator}
+  & \auditnew{Input-dependent}
   & \auditnew{General numerical measure change targeting zero conditional gains for a finite trading universe}
   & \auditnew{Yes}
   & \auditnew{A general approach, not an option-surface model: it reweights paths from an existing simulator.  Pathwise static guarantees are inherited; the $\Q$ result is limited to the selected instruments and successful optimization of the density.} \\
 \citet{AndresBoumezouedJourdain2023}
-  & Path-dependent SSVI factors & S$\infty$ for every simulated snapshot & No market-measure dynamics & Yes ($\P$) & Static arbitrage freedom does not imply dynamic no-arbitrage. \\
+  & Path-dependent SSVI factors & S$\infty$ for every simulated snapshot & Yes & No market-measure dynamics & Yes ($\P$) & Static arbitrage freedom does not imply dynamic no-arbitrage. \\
 \citet{Cohen02012023}
-  & Rolling normalized-call lattice, affine factors, and neural SDE & SG under $\P$: exact for model SDE & --- (not implemented) & Yes ($\P$ only) & The drift points inward and the normal diffusion vanishes at every face, so the continuous-time factor process remains in the finite-lattice no-static-arbitrage polytope $\P$-a.s.  The coordinates float with fixed $(\tau,m)$ rather than tracking fixed contracts.  The HJM expression is only a factor-selection criterion and residual diagnostic, not an implemented $\Q$ model. \\
+  & Rolling normalized-call lattice, affine factors, and neural SDE & SG under $\P$: exact for model SDE & Yes & --- (not implemented) & Yes ($\P$ only) & The drift points inward and the normal diffusion vanishes at every face, so the continuous-time factor process remains in the finite-lattice no-static-arbitrage polytope $\P$-a.s.  The coordinates float with fixed $(\tau,m)$ rather than tracking fixed contracts.  The HJM expression is only a factor-selection criterion and residual diagnostic, not an implemented $\Q$ model. \\
 \citet{ContVuletic2023}
-  & Direct-IV factors plus path reweighting & A & --- & Yes & Reweighting reduces violations. \\
+  & Direct-IV factors plus path reweighting & A & Yes & --- & Yes & Reweighting reduces violations. \\
 \citet{ChoudharyJaimungalBergeron2024}
-  & Functional PCA and neural SDE & A & --- & Yes & Penalty-based admissibility. \\
+  & Functional PCA and neural SDE & A & Yes & --- & Yes & Penalty-based admissibility. \\
 \citet{VuleticCont2024}
-  & Direct-IV GAN dynamics & A & --- & Yes & Penalties and reweighting. \\
+  & Direct-IV GAN dynamics & A & No (next-day only) & --- & Yes & Penalties and reweighting. \\
 \citet{JinAgarwal2025}
-  & Conditional diffusion on IV grids & A & --- & Yes & Penalty-based. \\
+  & Conditional diffusion on IV grids & A & No (next-day only) & --- & Yes & Penalty-based. \\
 \citet{BrooksEtAl2026}
-  & Arbitrage-penalized VAE and latent flow matching & Snapshot generator & --- & Yes & Only 90.8\% of generated surfaces pass all reported tests. \\
+  & Arbitrage-penalized VAE and latent flow matching & Snapshot generator & No & --- & Yes & Only 90.8\% of generated surfaces pass all reported tests. \\
 \citet{HaoJi2026}
-  & Conditional diffusion plus SAAM refinement & A & --- & Yes & Residual penalties reduce, but do not eliminate, finite-grid violations. \\
+  & Conditional diffusion plus SAAM refinement & A & Five-minute experiment only & --- & Yes & Residual penalties reduce, but do not eliminate, finite-grid violations. \\
 \citet{HanEtAl2026}
-  & Adaptive sequential diffusion & A & --- & Yes & Approximate static conditions. \\
+  & Adaptive sequential diffusion & A & Yes (three days) & --- & Yes & Approximate static conditions. \\
 \citet{YangWangZhangLi2026}
-  & Joint stock-return/option-IV diffusion across equities & A & --- & Yes & Jointly generates the next-day stock return and $11\times9$ option-IV increment; static option constraints are approximate. \\
+  & Joint stock-return/option-IV diffusion across equities & A & No (next-day only) & --- & Yes & Jointly generates the next-day stock return and $11\times9$ option-IV increment; static option constraints are approximate. \\
 This paper
-  & SANOS, affine latent state, and AR(1) & S$\infty$ & Limited SG: 48 options plus spot & Yes & The implemented $\Q$ construction is finite-dimensional. \\
+  & SANOS, affine latent state, and AR(1) & S$\infty$ & Yes & Limited SG: 48 options plus spot & Yes & The implemented $\Q$ construction is finite-dimensional. \\
 % GROMM is the next paper and is intentionally omitted from this review.
 %\citet{WieseBuehlerHorvath2026}
 %  & Smooth SANOS and stochastic DLV/PCA factors & S$\infty$ & S$\infty$ with explicit full-surface drift & Yes & Direct smooth full-surface construction. \\
