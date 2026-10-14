@@ -209,7 +209,7 @@ def _fit_locked(
     if checkpoint_path.exists():
         payload = torch.load(
             checkpoint_path,
-            map_location=environment.device,
+            map_location="cpu",
             weights_only=False,
         )
         compatible = (

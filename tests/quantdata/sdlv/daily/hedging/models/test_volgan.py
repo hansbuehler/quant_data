@@ -400,6 +400,14 @@ def test_volgan_epoch_checkpoint_resumes_exactly(
             environment=environment,
         )
     monkeypatch.setattr(volgan_training, "_save_checkpoint", save_checkpoint)
+    load_checkpoint = torch.load
+    checkpoint_map_locations: list[object] = []
+
+    def load_on_cpu(*args: object, **kwargs: object) -> object:
+        checkpoint_map_locations.append(kwargs.get("map_location"))
+        return load_checkpoint(*args, **kwargs)
+
+    monkeypatch.setattr(volgan_training.torch, "load", load_on_cpu)
     resumed = fit_volgan(
         data,
         model_config=config,
@@ -407,6 +415,7 @@ def test_volgan_epoch_checkpoint_resumes_exactly(
         train_config=train_config,
         environment=environment,
     )
+    assert checkpoint_map_locations == ["cpu"]
 
     for name, value in uninterrupted.generator.state_dict().items():
         assert value.equal(resumed.generator.state_dict()[name]), name

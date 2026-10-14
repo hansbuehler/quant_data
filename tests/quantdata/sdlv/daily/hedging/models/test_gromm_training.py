@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+import torch
 
+from quantdata.sdlv.daily.front_spot.hedging.models.gromm import (
+    training as gromm_training,
+)
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.config import (
     GrommObjective,
     GrommTrainConfig,
@@ -200,7 +204,10 @@ def test_gromm_checkpoint_identity_includes_exact_training_data(tmp_path) -> Non
     assert original.checkpoint_path != perturbed.checkpoint_path
 
 
-def test_gromm_budget_extension_matches_uninterrupted_training(tmp_path) -> None:
+def test_gromm_budget_extension_matches_uninterrupted_training(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     data = _synthetic_training_data()
     policy_config = GrommPolicyConfig(
         label="exact-restart",
@@ -244,6 +251,14 @@ def test_gromm_budget_extension_matches_uninterrupted_training(tmp_path) -> None
         environment=environment,
     )
     assert not partial.converged
+    load_checkpoint = torch.load
+    checkpoint_map_locations: list[object] = []
+
+    def load_on_cpu(*args: object, **kwargs: object) -> object:
+        checkpoint_map_locations.append(kwargs.get("map_location"))
+        return load_checkpoint(*args, **kwargs)
+
+    monkeypatch.setattr(gromm_training.torch, "load", load_on_cpu)
     resumed = fit_gromm_policy(
         data,
         policy_config=policy_config,
@@ -253,6 +268,7 @@ def test_gromm_budget_extension_matches_uninterrupted_training(tmp_path) -> None
         train_config=GrommTrainConfig(maximum_epochs=4, **common),
         environment=environment,
     )
+    assert checkpoint_map_locations == ["cpu"]
 
     assert resumed.best_epoch == uninterrupted.best_epoch
     assert resumed.validation_loss == pytest.approx(
