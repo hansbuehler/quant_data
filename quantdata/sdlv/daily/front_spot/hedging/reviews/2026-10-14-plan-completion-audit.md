@@ -8,10 +8,12 @@ production scope are both proved by current artifacts. A running service,
 partial checkpoint, smoke test, or plausible downstream path is not completion
 evidence.
 
-Snapshot time: 14 October 2026, 14:50 BST. The generated-model source and
-detached launchers are pinned to independently reviewed commit
-`d22ec9a0893313363fb503f8f53f5528159b1549`; documentation updates do not alter
-that production identity.
+Snapshot date: 14 October 2026. Generated-model readiness remains pinned to
+independently reviewed source commit
+`d22ec9a0893313363fb503f8f53f5528159b1549`; the final report coordinator and
+reporting worktree are separately pinned to
+`de185864a9eb414ca431b92321b56c41062fd651`. Documentation updates do not alter
+either production identity.
 
 ## Requirement Matrix
 
@@ -28,7 +30,7 @@ that production identity.
 | Published generated baselines | **Implementation, training lineage, initializer-label remediation, and current-source quant review complete; readiness and production incomplete.** VolGAN, AD-Seq-Vol, and AD-Seq-Vol-FT have distinct authenticated lineages and use `hedging-generated-v1` for rolling checkpoint restoration independently of their evaluation labels. | `2026-10-12-volgan-diffusion-integration-remediation-review.md`; `2026-10-12-generated-rolling-warmstart-quant-review.md`; `2026-10-13-generated-gate-assembler-review.md`; `2026-10-14-weekly-signed-indifference-prices.md`; `2026-10-14-generated-initializer-label-lineage-review.md`; lineage snapshot SHA-256 `91f04fa3067c2df7d6978abbf083eea2a7d856d0be493a4345f44c894cd5742e`; three quant-review JSON files under `generated-readiness-d22ec9a/evidence`. | Complete the corrected 18-scope GPU-readiness matrix, assemble all three production gates, and complete every enabled daily and weekly case. |
 | Daily benchmark matrix | **Incomplete.** The canonical specification has 57 cases. Native queues, rolling GROMM, and generated cases are not all terminal. | Versioned daily production matrix builder and validators; active immutable services listed below. | A 57-case matrix in which every specified cell has an authenticated terminal outcome and every completed case reconstructs to the declared 12,220 records per policy. |
 | Weekly benchmark matrix | **Incomplete; Historical-SANOS production is active and both SANOS--LV cells have authenticated failures.** The canonical specification has 94 cases. | `2026-10-13-weekly-production-quant-review.md`; native matrix SHA-256 `8d069cadde0c21dd677bbe7ab16cd59e0d3dae9907456608da7fcb4b9bce0b26`; combined SANOS--LV failure ledger above. | A 94-case matrix in which every specified cell has an authenticated terminal outcome and every completed case reconstructs to 528 origins and 6,864 authenticated target records. |
-| Statistical reporting | **Python implementation, contract re-review, and successor-launcher gate complete; final evidence incomplete.** The version-2 pre-outcome commitment binds the dataset, matrices, failure ledgers, fixed commitment hash, and reporting commit. Daily and weekly aggregators retain complete strata, prices, distributions, costs, turnover, exposure, sparsity, caps, and convergence diagnostics. Daily comparisons use 20-target Bartlett-HAC plus moving-block-bootstrap inference; weekly comparisons use 13-target Hansen--Hodrick plus moving-block-bootstrap inference. | `2026-10-14-final-report-contract-rereview.md`; report builder and summary tests; real daily-plus-weekly fragment compile; matrix-commitment adversarial tests; active reviewed `de18586` coordinator. | Rebuild all statistics from the complete canonical matrices and pass an independent results review. |
+| Statistical reporting | **Python implementation, contract re-review, successor-launcher gate, and pre-outcome final-review protocol complete; final evidence incomplete.** The version-2 pre-outcome commitment binds the dataset, matrices, failure ledgers, fixed commitment hash, and reporting commit. Daily and weekly aggregators retain complete strata, prices, distributions, costs, turnover, exposure, sparsity, caps, and convergence diagnostics. Daily comparisons use 20-target Bartlett-HAC plus moving-block-bootstrap inference; weekly comparisons use 13-target Hansen--Hodrick plus moving-block-bootstrap inference. | `2026-10-14-final-report-contract-rereview.md`; `final-results-review-protocol.md`; report builder and summary tests; real daily-plus-weekly fragment compile; matrix-commitment adversarial tests; active reviewed `de18586` coordinator. | Rebuild all statistics from the complete canonical matrices and pass the fixed independent results-review protocol. |
 | Final public report | **Incomplete.** The repository PDF is preliminary and predates full production. | Preliminary `reports/hedging_benchmark_summary.pdf`; active final successor described below. | Authenticated production PDF and manifest from the complete 57-case daily and 94-case weekly matrices, followed by repository refresh and final review. |
 
 ## Active Immutable Work

@@ -1285,6 +1285,10 @@ PDF regeneration, the final complete-suite rerun, and the final results review
 remain outstanding.
 The independent Python contract re-review is recorded in
 `quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-14-final-report-contract-rereview.md`.
+The independent post-production acceptance procedure is fixed before outcomes
+in `quantdata/sdlv/daily/front_spot/hedging/reviews/final-results-review-protocol.md`;
+it requires record-level population, objective, price, cost, inference,
+rendering, provenance, and public-data-boundary reconciliation.
 The requirement-by-requirement acceptance state and the evidence still needed
 for completion are tracked in
 `quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-14-plan-completion-audit.md`.
