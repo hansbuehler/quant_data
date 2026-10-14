@@ -88,17 +88,24 @@ The fresh 94-case native weekly matrix has 28 ready native cases, four generated
 gate waiters, and 62 explicitly blocked cases. It was generated from immutable
 commit `b37a643ea8e5ef11b7557e37c035cf650a729e95` and has SHA-256
 `8d069cadde0c21dd677bbe7ab16cd59e0d3dae9907456608da7fcb4b9bce0b26`.
-Service `quantdata-hedging-weekly-native-b37a643-v3.service` waits for the active
-Historical-SANOS mean--volatility and corrected exact-cost queues, then runs all
-28 native cases. Its launcher SHA-256 is
-`2c2950a50582cf3c97686a4bae4ce4a7545d09efa0cb0edab46c72f657f2cc72`.
+The two independent SANOS--LV weekly cases now run ahead of the daily recovery
+queues. The 26 Historical-SANOS weekly cases use an atomic per-case pool whose
+low-priority concurrency expands only after the protected GPU-readiness and
+daily CPU services finish. Their persisted launcher SHA-256 values are
+`361b4376fe8257cc0a608bca348bcccc2a1004f728b9b66e764989ed984ae676` and
+`056574fcc73f22a69e93e1751b4aaeac84188575af0779d41f4a185a228e00e9`.
+Service `quantdata-hedging-weekly-native-b37a643-v5.service` waits for those
+two checkpointed pools and the active daily recovery queues, then authenticates
+all 28 native cases through the original matrix prefixes. Its launcher SHA-256
+is `992a61911968e5246f277b99fe9354865e423538b20bddb5a3dff18a68c0ea6c`.
 
-The legacy rolling GROMM range is complete and authenticated for all 611
-origins. Its current-code migration authenticates the range-level and
-dated-manifest source identities separately; service
-`quantdata-hedging-gromm2-migration-661d575.service` is actively recomputing the
-current-code dynamics and physical-selection evidence. Generated-model
-readiness now runs from immutable commit
+The legacy rolling GROMM range and its current-code migration are complete and
+authenticated for all 611 origins. The migration separately authenticated the
+range-level and dated-manifest source identities, accepted 576 full physical
+candidates, and used the declared front-only fallback at 35 origins. Its range
+summary `gromm2-rolling-v4/range-fit-2023-2025-v7.json` has SHA-256
+`8f7e6a63e90dfbfa367a06a220c75ebb4d0c9a0aa5f61ff2a92d8a58858b924e`.
+Generated-model readiness now owns the managed GPU and runs from immutable commit
 `b37a643ea8e5ef11b7557e37c035cf650a729e95`, which includes CPU-first
 checkpoint restoration and permits finite signed buyer, seller, and continuation
 indifference values while keeping common market and genuine-Q prices
@@ -109,16 +116,16 @@ review artifact SHA-256 values are
 `2333db2cd8894b2949bfddc98d41bdc4dfea9985ac0f421f6ba72e9a042f23b1`,
 and `062e7268f6c25461e15da9ea61ef33fef138767630c55111736c1a5652332c41`
 for VolGAN, AD-Seq-Vol, and AD-Seq-Vol-FT, respectively. Service
-`quantdata-hedging-generated-readiness-b37a643.service` waits for the managed
-GPU behind the active GROMM migration.
+`quantdata-hedging-generated-readiness-b37a643.service` is executing the fresh
+signed-price-aware 18-scope readiness matrix.
 
 The corrected full-production service
-`quantdata-hedging-full-production-b37a643-v3.service` runs from the same immutable
-commit and waits for GROMM migration, generated readiness, native weekly
-production, Historical-SANOS exact-cost recovery, and covariance
-power-exponential recovery. Its launcher SHA-256 is
-`b5a14f43a9416eed5443365fb0cd24ecb5c913ade89df51cd53240b25f077e7c`.
-The v2 coordinators use service activity only for capacity scheduling; because
+`quantdata-hedging-full-production-b37a643-v5.service` runs from the same immutable
+commit and waits for generated readiness, native weekly production,
+Historical-SANOS exact-cost recovery, and covariance power-exponential
+recovery. Its launcher SHA-256 is
+`ba8971871b011d2ca1ff24674ffaa3a94c8c90227d8f902df050c7dd095a049a`.
+The coordinators use service activity only for capacity scheduling; because
 transient units may be collected immediately after exit, completion is accepted
 only by reconstructing the required matrices, gates, and result artifacts.
 The daily composition prioritizes the corrected exact-cost and covariance-power
@@ -872,10 +879,12 @@ a persistent heartbeat at most every five minutes. Borderline affine fits keep
 the fixed 80% inside-spread gate and continue from their authenticated 2,000
 epoch checkpoint to at most 4,000 and 8,000 epochs; completed epochs, retry
 count, and the actual fit configuration are retained in the dated artifact.
-Its real first-origin resume smoke passed. CPU preparation and the legacy
-managed-GPU fit are complete for all 611 eligible origins, including the first
-sparse-release origin after an authenticated restart. Current-code migration
-now owns the managed GPU; generated-model readiness is queued behind it.
+Its real first-origin resume smoke passed. CPU preparation, the legacy
+managed-GPU fit, and the current-code migration are complete for all 611
+eligible origins, including the first sparse-release origin after an
+authenticated restart. The authenticated current range contains 576 accepted
+full physical candidates and 35 declared front-only fallbacks. Generated-model
+readiness now owns the managed GPU.
 
 The range evidence reports full-candidate, front-only-fallback, and unavailable
 physical-origin counts separately. A versioned migration path authenticates the
@@ -901,8 +910,9 @@ A completed range summary binds the dataset, configuration, evaluation dates,
 artifact root, and every dated manifest hash. The production matrix enables Q
 cases only from this complete evidence; it enables P cases only when every
 origin has either an accepted full candidate or an accepted, explicitly labelled
-front-only null fallback. Current-code migration and live managed-GPU
-forced-restart evidence remain outstanding. A deterministic
+front-only null fallback. The current-code migration is complete; live
+managed-GPU forced-restart evidence for the downstream generated workflows
+remains outstanding. A deterministic
 mid-range failure test now verifies that the failed state identifies the exact
 origin, preserves the authenticated completed prefix, and reuses that prefix on
 restart before completing the missing origins.
@@ -1053,10 +1063,10 @@ initializer and epoch-budget pipeline has now completed for all three generated
 baselines. The one-standard-error selections are 1,000 rolling epochs for
 VolGAN, 30 for AD-Seq-Vol, and one for AD-Seq-Vol-FT; their complete end-2022
 production initializers and distinct selection-source lineages pass the strict
-evidence loader. The authenticated legacy rolling GROMM range is complete for
-all 611 eligible origins. Current-code migration now owns the managed GPU and
-reports completed dated fits every four minutes; generated readiness is queued
-behind it. A
+evidence loader. The authenticated legacy and current-code rolling GROMM ranges
+are complete for all 611 eligible origins. The migrated range passes full
+authentication with 576 accepted physical candidates and 35 declared
+front-only fallbacks; generated readiness now owns the managed GPU. A
 production-gate assembler now reconstructs exact public-versus-rolling scope
 bindings, refuses stale or aliased evidence, writes under an output lock through
 a unique same-directory temporary file, and re-authenticates the completed gate
@@ -1149,10 +1159,10 @@ The last durable complete-suite record has 349 passing tests; the final full
 suite will be rerun after production. This permits the final
 57-cell daily and 94-cell weekly matrices to reuse completed native evidence
 without copying it or rerunning it. The detached final-production service
-`quantdata-hedging-full-production-b37a643-v3.service` passed its exact-environment
-preflight and is waiting on rolling GROMM migration, generated-model GPU
-readiness, the corrected native weekly matrix, Historical-SANOS exact-cost
-recovery, and covariance power-exponential recovery. Once all five succeed, it
+`quantdata-hedging-full-production-b37a643-v5.service` passed its exact-environment
+preflight and is waiting on generated-model GPU readiness, the corrected native
+weekly matrix, Historical-SANOS exact-cost recovery, and covariance
+power-exponential recovery. Once those prerequisites succeed, it
 composes fresh canonical matrices under dedicated `production-matrix-b37a643`
 roots, runs only the missing GROMM and generated-model cases, and rebuilds the
 authenticated PDF. Its ordered daily source list gives first priority to the
@@ -1160,7 +1170,7 @@ corrected Historical-SANOS exact-cost matrix and covariance power-exponential
 matrix, followed by the covariance mean--volatility recovery and remaining
 authenticated native sources. The weekly source is the fresh `b37a643` native
 matrix. Its read-only persisted launcher has SHA-256
-`b5a14f43a9416eed5443365fb0cd24ecb5c913ade89df51cd53240b25f077e7c`.
+`ba8971871b011d2ca1ff24674ffaa3a94c8c90227d8f902df050c7dd095a049a`.
 The superseded `a1baa69` coordinator and its report-only/final-57 successors
 were stopped while still waiting and did not launch production cases.
 
