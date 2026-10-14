@@ -59,7 +59,7 @@ declared fitting ridge, which is excluded from reported certainty equivalents.
 Real first-origin frozen-weekly gates cover all 13 targets: entropy at risk
 parameter 10 and power-exponential at risk parameter 1 both pass with zero cap
 hits and zero nonconverged fits. Exact cached wealth matches the common pathwise
-accounting engine to $10^{-14}$, the full hedging suite has 353 passing tests,
+accounting engine to $10^{-14}$, the full hedging suite has 359 passing tests,
 and independent quant review passes. The 94-case weekly matrix retains 28 ready
 native cases, four generated-gate waiters, and 62 blocked cases. The native
 weekly queue is pinned to commit `edf28cc` and waits for the active corrected
@@ -68,7 +68,7 @@ queue waits for the rolling GROMM GPU fit.
 Independent model review records for VolGAN, AD-Seq-Vol, and AD-Seq-Vol-FT now
 bind their reviewed commit, the public manifest, their distinct initializer and selection
 lineages, and all six daily/frozen/restarted public/rolling scopes. The
-full-production service now runs from immutable commit `e3c8401` and waits for
+full-production service now runs from immutable commit `df13b89` and waits for
 the rolling GROMM range, managed-GPU readiness matrix, and native weekly queue.
 It will assemble the three authenticated production gates and write new pinned
 matrices without changing the matrices used by active native queues. Newly
@@ -91,7 +91,7 @@ conflicting duplicate cases, and can require that every ready matrix case is
 complete. Its real current-cohort smoke automatically authenticated the SANOS-LV
 reference, three robust-covariance policies, and the completed Historical-SANOS
 policy and generated all four objective tables plus target appendices. The
-resulting complete hedging suite contains 353 passing tests. The
+resulting complete hedging suite contains 359 passing tests. The
 strictly-2022 target-sizing exercise now
 fixes each target to one
 maturity-matched ATM spot-risk unit; all 20 calibration hedges converged with
@@ -1027,18 +1027,29 @@ outcomes, target-level appendices, model references, and immutable provenance
 directly from those authenticated inputs; its synthetic end-to-end PDF compile
 passes.
 A matrix-composition utility at immutable commit
-`e3c8401e82ba69ab78e60b12f4f0f2080005c3c7` now replaces only selected native
+`df13b89084a2ee42f41493365b8efe0ee09f1073` now replaces only selected native
 cases in a fresh canonical matrix with the first complete authenticated source
-case. It checks schema, result population, run identity, model, measure, and
-dataset identity and records all source-matrix hashes. This permits the final
+case. Before accepting a source it loads the supplied public panel once, applies
+the production executor's full authentication path, reconstructs the eligible
+origin cohort and every dated record and aggregate, binds the actual dataset,
+requires the canonical target book and common target quantities, and rejects
+any cap hit or nonconvergence. It records the dataset, target-notional, and
+target-cohort identities together with every source-matrix hash. Adversarial
+tests reject a missing record, forged aggregate, wrong dataset, and wrong target
+cohort; a real 12,220-record SANOS--LV composition smoke and the 359-test full
+hedging suite pass, and independent quant re-review closes the authentication
+blocker. This permits the final
 54-cell daily and 94-cell weekly matrices to reuse completed native evidence
 without copying it or rerunning it. The detached final-production service
-`quantdata-hedging-full-production-e3c8401.service` passed its exact-environment
+`quantdata-hedging-full-production-df13b89.service` passed its exact-environment
 preflight and is waiting on rolling GROMM migration, generated-model GPU
 readiness, and the native weekly matrix. Once all three succeed, it composes
-the canonical matrices, runs only the missing GROMM and generated-model cases,
-and rebuilds the authenticated PDF. Its read-only persisted launcher has
-SHA-256 `45328680c715399561760aa0db5f84633c3dcba42c5292b4bc26f665e76ae5e1`.
+fresh daily-v8 and weekly-v6 canonical matrices, runs only the missing GROMM and
+generated-model cases, and rebuilds the authenticated PDF. The composition
+source list explicitly
+includes the current-notional SANOS--LV result from production matrix v3 rather
+than the empty v4 output directory. Its read-only persisted launcher has
+SHA-256 `be74ebef93e273aabf8995402dd8ef181e0c74ac39c0a763cf46682b0e637344`.
 Final completed-case figures, production-data PDF regeneration, and the final
 results review remain outstanding.
 
