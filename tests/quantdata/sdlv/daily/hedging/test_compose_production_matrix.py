@@ -54,6 +54,7 @@ def _complete(output: Path, *, model: str, count: int = 7) -> None:
     run = {
         "run_identity": "run-identity",
         "dataset_manifest_sha256": "dataset-identity",
+        "target_notional_identity": "target-notional-identity",
     }
     results = {
         "schema": "hedging-daily-results-v2",
@@ -166,6 +167,39 @@ def test_compose_rejects_source_identity_change(tmp_path: Path) -> None:
     _matrix(source_path, [changed])
 
     with pytest.raises(ValueError, match="source case identity mismatch"):
+        compose_production_matrix(
+            base_matrix=base_path,
+            source_matrices=(source_path,),
+            replace_models=frozenset({"historical-sanos"}),
+            expected_result_count=7,
+            expected_results_schema="hedging-daily-results-v2",
+            output=tmp_path / "composed.json",
+        )
+
+
+def test_compose_rejects_mixed_target_notionals(tmp_path: Path) -> None:
+    first_output = tmp_path / "first"
+    second_output = tmp_path / "second"
+    base_cases = [
+        _case("first", model="historical-sanos", output=tmp_path / "base-first"),
+        _case("second", model="historical-sanos", output=tmp_path / "base-second"),
+    ]
+    source_cases = [
+        _case("first", model="historical-sanos", output=first_output),
+        _case("second", model="historical-sanos", output=second_output),
+    ]
+    base_path = tmp_path / "base.json"
+    source_path = tmp_path / "source.json"
+    _matrix(base_path, base_cases)
+    _matrix(source_path, source_cases)
+    _complete(first_output, model="historical-sanos")
+    _complete(second_output, model="historical-sanos")
+    second_run_path = second_output / "run.json"
+    second_run = json.loads(second_run_path.read_text(encoding="utf-8"))
+    second_run["target_notional_identity"] = "different-notional-identity"
+    _write_json(second_run_path, second_run)
+
+    with pytest.raises(ValueError, match="different target notionals"):
         compose_production_matrix(
             base_matrix=base_path,
             source_matrices=(source_path,),

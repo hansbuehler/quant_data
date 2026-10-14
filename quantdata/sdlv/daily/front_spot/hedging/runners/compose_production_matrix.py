@@ -43,24 +43,34 @@ def compose_production_matrix(
 
     replacements: dict[str, JsonObject] = {}
     replacement_sources: dict[str, str] = {}
+    dataset_identities: set[str] = set()
+    target_notional_identities: set[str] = set()
     for case_id, base_case in base_cases.items():
         model = _required_string(base_case, "model")
         if model not in replace_models:
             continue
         for candidate, source_path in source_candidates.get(case_id, ()):  # priority order
             _require_same_identity(case_id, base_case, candidate)
-            if _completed_output(
+            completed_identity = _completed_output_identity(
                 candidate,
                 expected_result_count=expected_result_count,
                 expected_results_schema=expected_results_schema,
-            ):
+            )
+            if completed_identity is not None:
                 replacements[case_id] = candidate
                 replacement_sources[case_id] = str(source_path)
+                dataset_identity, target_notional_identity = completed_identity
+                dataset_identities.add(dataset_identity)
+                target_notional_identities.add(target_notional_identity)
                 break
         if case_id not in replacements:
             raise ValueError(
                 f"no complete authenticated source case for {case_id}"
             )
+    if len(dataset_identities) != 1:
+        raise ValueError("completed source cases use different public datasets")
+    if len(target_notional_identities) != 1:
+        raise ValueError("completed source cases use different target notionals")
 
     cases = base.get("cases")
     if not isinstance(cases, list):
@@ -78,47 +88,57 @@ def compose_production_matrix(
         "source_matrices": source_hashes,
         "replace_models": sorted(replace_models),
         "replacement_sources": replacement_sources,
+        "dataset_manifest_sha256": dataset_identities.pop(),
+        "target_notional_identity": target_notional_identities.pop(),
     }
     _write_object(output, payload)
     return payload
 
 
-def _completed_output(
+def _completed_output_identity(
     case: JsonObject,
     *,
     expected_result_count: int,
     expected_results_schema: str,
-) -> bool:
+) -> tuple[str, str] | None:
     if case.get("readiness") != "ready" or case.get("blocked_reason") is not None:
-        return False
+        return None
     command = case.get("command")
     if not isinstance(command, list) or not all(
         isinstance(value, str) and value for value in command
     ):
-        return False
+        return None
     try:
         output = Path(command[command.index("--output") + 1])
     except (ValueError, IndexError):
-        return False
+        return None
     run_path = output / "run.json"
     results_path = output / "results.json"
     if not run_path.is_file() or not results_path.is_file():
-        return False
+        return None
     run = _read_object(run_path)
     results = _read_object(results_path)
     if results.get("schema") != expected_results_schema:
-        return False
+        return None
     if results.get("result_count") != expected_result_count:
-        return False
+        return None
     if results.get("run_identity") != run.get("run_identity"):
-        return False
+        return None
     if results.get("model") != case.get("model"):
-        return False
+        return None
     if results.get("measure") != case.get("measure"):
-        return False
-    return results.get("dataset_manifest_sha256") == run.get(
-        "dataset_manifest_sha256"
-    )
+        return None
+    dataset_identity = results.get("dataset_manifest_sha256")
+    if (
+        not isinstance(dataset_identity, str)
+        or not dataset_identity
+        or dataset_identity != run.get("dataset_manifest_sha256")
+    ):
+        return None
+    target_notional_identity = run.get("target_notional_identity")
+    if not isinstance(target_notional_identity, str) or not target_notional_identity:
+        return None
+    return dataset_identity, target_notional_identity
 
 
 def _case_map(matrix: JsonObject, *, label: str) -> dict[str, JsonObject]:
