@@ -39,8 +39,9 @@
   vector and current relative-coordinate definitions, not the future-bearing
   evaluation return.
 - **Current scope:** the full daily relative-option universe and all 20 daily
-  digital targets are implemented. Multi-date production evaluation remains a
-  later benchmark phase.
+  digital targets are implemented, together with authenticated restartable
+  rolling evaluation across the full eligible date cohort. The full production
+  sweep is an external artifact and may still be in progress.
 - **Artifacts:** common `hedging-smoke-v2` JSON with explicit claim quantity.
 
 Run on CPU:

@@ -95,8 +95,9 @@ training dependencies.
   gate is continued deterministically from its authenticated checkpoint to
   4,000 and, if required, 8,000 epochs; the attained epoch count and retry
   count are authenticated rather than weakening the gate. Its first-origin
-  resume smoke passed; preparation of the full 611-origin range is in progress. At an origin
-  following a missing intermediate release, the rolling fit keeps 252 exact
+  resume smoke passed; preparation is complete for the full 611-origin range,
+  while managed-GPU fitting remains active. At an origin following a missing
+  intermediate release, the rolling fit keeps 252 exact
   one-session pairs and appends the current origin state for its geometry and
   DLV level rather than manufacturing a multi-session transition.
 - See `quantdata/hedging/PLAN.md` and the stored independent reviews before
