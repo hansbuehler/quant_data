@@ -27,8 +27,12 @@ class HistoricalSanosPolicyFit:
     training_loss: float
     validation_loss: float
     iterations: int
+    selection_converged: bool
+    final_converged: bool
     converged: bool
+    selection_maximum_absolute_gradient: float
     maximum_absolute_gradient: float
+    selection_cap_hits: int
     cap_hits: int
 
 
@@ -219,20 +223,38 @@ def _fit_policy(
         include_translation=include_translation,
     )[0]
     action = np.asarray(final.x[: instruments.shape[1]], dtype=np.float64)
+    selection_action = np.asarray(
+        selection.x[: instruments.shape[1]],
+        dtype=np.float64,
+    )
+    selection_cap_hits = int(
+        np.count_nonzero(
+            np.abs(selection_action) >= 0.999 * config.solver_position_cap
+        )
+    )
     cap_hits = int(
         np.count_nonzero(
             np.abs(action) >= 0.999 * config.solver_position_cap
         )
     )
+    selection_optimality = float(getattr(selection, "optimality", math.inf))
     optimality = float(getattr(final, "optimality", math.inf))
+    selection_converged = bool(selection.success and selection_cap_hits == 0)
+    # The split fit only supplies a warm start and held-out diagnostic. The
+    # executable policy and its numerical gate come from the full-window refit.
+    final_converged = bool(final.success and cap_hits == 0)
     return HistoricalSanosPolicyFit(
         action=action,
         cash_translation=float(final.x[-1]) if include_translation else None,
         training_loss=float(final_loss),
         validation_loss=float(validation_loss),
         iterations=int(selection.nit) + int(final.nit),
-        converged=bool(selection.success and final.success and cap_hits == 0),
+        selection_converged=selection_converged,
+        final_converged=final_converged,
+        converged=final_converged,
+        selection_maximum_absolute_gradient=selection_optimality,
         maximum_absolute_gradient=optimality,
+        selection_cap_hits=selection_cap_hits,
         cap_hits=cap_hits,
     )
 

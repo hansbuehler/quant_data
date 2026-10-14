@@ -212,6 +212,24 @@ def evaluate_historical_sanos_daily_book(
                     "zero_validation_loss": fit.zero_policy.validation_loss,
                     "claim_policy_iterations": fit.claim_policy.iterations,
                     "zero_policy_iterations": fit.zero_policy.iterations,
+                    "claim_policy_selection_converged": (
+                        fit.claim_policy.selection_converged
+                    ),
+                    "zero_policy_selection_converged": (
+                        fit.zero_policy.selection_converged
+                    ),
+                    "claim_policy_final_converged": (
+                        fit.claim_policy.final_converged
+                    ),
+                    "zero_policy_final_converged": (
+                        fit.zero_policy.final_converged
+                    ),
+                    "claim_policy_selection_maximum_optimality_residual": (
+                        fit.claim_policy.selection_maximum_absolute_gradient
+                    ),
+                    "zero_policy_selection_maximum_optimality_residual": (
+                        fit.zero_policy.selection_maximum_absolute_gradient
+                    ),
                     "claim_policy_maximum_optimality_residual": (
                         fit.claim_policy.maximum_absolute_gradient
                     ),
@@ -220,6 +238,12 @@ def evaluate_historical_sanos_daily_book(
                     ),
                     "internal_solver_position_cap": config.solver_position_cap,
                     "executable_position_cap": config.position_cap,
+                    "claim_policy_selection_cap_hits": (
+                        fit.claim_policy.selection_cap_hits
+                    ),
+                    "zero_policy_selection_cap_hits": (
+                        fit.zero_policy.selection_cap_hits
+                    ),
                     "internal_solver_cap_hits": fit.internal_cap_hits,
                     "executable_cap_hits": fit.executable_cap_hits,
                     "claim_policy_gross_exposure": float(

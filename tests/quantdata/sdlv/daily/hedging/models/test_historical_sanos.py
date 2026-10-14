@@ -213,6 +213,50 @@ def test_historical_sanos_exact_cost_restarts_stalled_split_fit(
     assert fit.action[0] == pytest.approx(0.0, abs=1.0e-12)
 
 
+def test_historical_sanos_selection_failure_does_not_reject_final_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    instruments = np.asarray([[-0.01], [0.01], [0.02], [0.04]], dtype=np.float64)
+    config = HistoricalSanosConfig(
+        rolling_observations=20,
+        objective=HistoricalSanosObjective.ENTROPY,
+        risk_parameter=1.0,
+        gradient_tolerance=1.0e-10,
+    )
+    calls = 0
+
+    def failed_selection_then_final(
+        initial: np.ndarray,
+        *args: object,
+        **kwargs: object,
+    ) -> OptimizeResult:
+        nonlocal calls
+        calls += 1
+        return OptimizeResult(
+            x=np.zeros_like(initial),
+            nit=1,
+            success=(calls == 3),
+            optimality=(0.0 if calls == 3 else 1.0e-6),
+            message=("converged" if calls == 3 else "selection stalled"),
+        )
+
+    monkeypatch.setattr(hedger, "_minimize_policy", failed_selection_then_final)
+    fit = _fit_policy(
+        instruments,
+        np.zeros(len(instruments)),
+        np.asarray([0.02]),
+        config=config,
+    )
+
+    assert calls == 3
+    assert not fit.selection_converged
+    assert fit.selection_maximum_absolute_gradient == pytest.approx(1.0e-6)
+    assert fit.selection_cap_hits == 0
+    assert fit.final_converged
+    assert fit.converged
+    assert fit.maximum_absolute_gradient == pytest.approx(0.0)
+
+
 def test_power_oce_cash_translation_is_shift_invariant() -> None:
     wealth = np.asarray([-0.4, -0.1, 0.2, 0.8], dtype=np.float64)
     shift = 0.37
@@ -437,6 +481,14 @@ def test_historical_sanos_daily_book_reuses_one_aligned_return_panel() -> None:
         target.label for target in targets
     )
     assert all(result.diagnostics["target_count"] == 2 for result in results)
+    assert all(
+        result.diagnostics["claim_policy_final_converged"]
+        for result in results
+    )
+    assert all(
+        "claim_policy_selection_maximum_optimality_residual" in result.diagnostics
+        for result in results
+    )
 
 
 def test_historical_sanos_daily_book_rejects_misaligned_targets() -> None:

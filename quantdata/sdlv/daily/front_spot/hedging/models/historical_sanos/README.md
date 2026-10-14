@@ -28,9 +28,10 @@
   original signed-action problem, not the optimizer's line-search status; a
   stalled split solve receives one restart from its canonical signed action
   without changing the objective or tolerance. The oldest 80% is fitted and
-  the newest 20% is held out for a
-  validation diagnostic; after validation the policy is refitted on all 252
-  observations. No future return is used.
+  the newest 20% is held out for a validation diagnostic; after validation the
+  policy is refitted on all 252 observations. Selection-fit convergence and
+  cap diagnostics are retained, but only the final full-window fit determines
+  whether the executable policy converged. No future return is used.
 - **Artifacts:** common `hedging-smoke-v2` JSON with explicit claim quantity. The model has no neural
   checkpoint because its rolling optimizer is deterministic and inexpensive.
 - **Daily book:** one shared 252-transition return panel supplies all 20 agreed
