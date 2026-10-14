@@ -45,6 +45,10 @@ pinned. The legacy `0b8d20a` launcher is restricted to its two unfinished
 mean--variance cases at risk parameters $1$ and $10$; the already authenticated
 $0.1$ result remains unchanged, and that service no longer launches corrected
 mean--volatility, entropy, or power-exponential cases owned by the newer matrix.
+The persisted launcher SHA-256 values are
+`86ef24fe3770ebd8f35e5dc3b9e85ad499803a5dabda68dc67439c671a8c9db8` and
+`223d5132eaa9f480062b6b23cbdc5598b69af9f65215136d18effaeb39ce5eaf`,
+respectively.
 Other daily production
 and full weekly production remain outstanding. A unified weekly runner now
 supports frozen and restarted schedules for SANOS-LV, historical SANOS,
