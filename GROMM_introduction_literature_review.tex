@@ -1,0 +1,151 @@
+% Revised introduction: approximately 25% shorter; numeric citations.
+\subsection*{Related literature and choice of option-surface codebook}
+
+Modelling joint stock--option dynamics requires fitting market quotes, preserving static arbitrage freedom across strikes and maturities, and excluding dynamic trading arbitrage. These are distinct objectives: a sequence of admissible surfaces need not admit a common equivalent martingale measure. We organise the literature by its surface representation, or \emph{codebook}, and the arbitrage restrictions imposed on its evolution.
+
+\paragraph{Implied-volatility dynamics and dynamic consistency.}
+Early empirical studies identified low-dimensional patterns in implied-volatility movements \cite{skiadopoulos,contfonseca,fengler2003}. Stochastic surface models and associated drift restrictions were investigated in \cite{cont2002}, while subsequent factor approaches developed their statistical modelling \cite{hafner,fengler2007}. Ordinary implied-volatility factors, however, do not automatically preserve admissible option prices, and fitting historical dynamics does not establish a joint pricing measure. This distinction remains relevant to modern latent-variable models: dimensionality reduction alone provides neither a statically admissible decoder nor dynamically consistent evolution.
+
+Direct market models address dynamic consistency explicitly. No-arbitrage restrictions for stochastic implied volatilities, including a fixed-strike term structure, are developed in \cite{schonbucher}; drift and existence results for the fixed-strike problem follow in \cite{wisselterm}. The complementary multi-strike construction \cite{wisselmulti} replaces ordinary implied volatilities at one maturity by a price level and a field of \emph{local implied volatilities}. These encode static restrictions across strikes; separate coefficient restrictions ensure dynamic consistency. This motivates selecting admissible coordinates before prescribing their evolution. Local implied volatility here differs from Dupire local volatility, so our method is conceptually related rather than a discretisation of those equations.
+
+The symmetric SSVI specification in \cite{elamrani} cannot reconcile its martingale requirements with vanishing total implied variance at expiry in the desired nontrivial model. It instead leads to implied-volatility bubbles with a restricted arbitrage-free lifespan. This model-specific impossibility illustrates why static smile admissibility does not ensure dynamic consistency through expiry.
+
+\paragraph{Local-volatility and alternative codebooks.}
+The local-volatility market codebook in \cite{cn2009} is the closest continuous ancestor of our approach: local volatility represents the current option surface, while consistency conditions govern its joint evolution with the underlying. Alternative codebooks use tangent L\'evy characteristics \cite{cn2012} or time-inhomogeneous L\'evy exponents in an HJM framework \cite{kk}. The latter supplies necessary and sufficient no-arbitrage conditions and constructive existence and uniqueness results. Empirical estimation and simulation of tangent L\'evy models are developed in \cite{cmn}. Thus dynamically consistent surface models predate neural simulators; the relevant distinctions concern representation, computation and statistical flexibility.
+
+Consistent recalibration \cite{crc} uses forward characteristics and generalised Hull--White extensions, illustrated through an extended Bates model and neural calibration. Parameters evolve while a compensating extension preserves the current surface, subject to admissibility and consistency conditions. This shares the preceding market-model lineage but evolves an extended pricing-model representation rather than DLV coordinates. Its compensation mechanism is substantive: recalibrating a conventional pricing model independently at each date would not itself produce a consistent stochastic market model. Analytical consistency must be distinguished from numerical recalibration accuracy: the theoretical framework does not certify every approximate neural inverse or arbitrary proposed parameter reset.
+
+\paragraph{Learned models addressing dynamic arbitrage.}
+Affine factors of normalised call prices and neural SDEs are combined in \cite{crw}. The price-factor codebook differs from DLV, although both seek to preserve admissible prices under learned dynamics. An invariant factor polytope structurally preserves finite-lattice static inequalities. An HJM-type dynamic condition is also derived, but the rolling-lattice implementation pursues it through factor selection and residual diagnostics rather than exact enforcement for all fixed contracts. The theoretical condition, implemented static guarantee and numerical dynamic criterion therefore have different scopes.
+
+A complementary approach learns a change of measure on historical simulator paths, targeting zero conditional trading gains \cite{removedrift}. DYSANOS \cite{dysanos} applies this to a smooth SANOS generator, combining historical dynamics, structural static admissibility and a numerical risk-neutral density for selected instruments. It consequently belongs among models explicitly addressing dynamic arbitrage, while its finite-universe validation differs from a theorem providing one pricing measure for the full option continuum. Such a measure change also inherits the surface representation and its pathwise static properties from the input simulator.
+
+\paragraph{Structural static admissibility.}
+Other generators preserve static admissibility without establishing joint risk-neutral dynamics. DLV-based simulators \cite{wiese2019,wiese2021} enforce admissibility on their native lattice. Path-dependent SSVI dynamics \cite{andres} evolve within an admissible parametric family. These constructions preserve static restrictions at simulated dates, but that property alone does not establish dynamic no-arbitrage. Their codebooks also differ: the former parameterise discrete local variances, whereas the latter restrict entire surfaces through SSVI parameters.
+
+The VAE literature needs a separate distinction. The latent surface representation in \cite{bergeron} has no hard static guarantee. By contrast, \cite{ning} decodes into parameters of arbitrage-free regime-switching or L\'evy additive pricing models. Admissibility comes from the pricing representation, not an arbitrage penalty on ordinary implied-volatility outputs. Nevertheless, sampling pricing-model parameters across dates does not establish dynamically consistent traded-price evolution. A statically admissible snapshot generator should therefore not be assessed as though it had already constructed a multi-step market model.
+
+\paragraph{Soft constraints and unconstrained generators.}
+Static restrictions are instead encouraged through losses, reweighting or output corrections in \cite{zhang,contvuletic,funvol,volgan}. FuNVol combines functional principal components and neural SDEs for joint asset--surface movements, with penalties controlling static violations. VolGAN and related reweighting methods also seek empirically admissible outputs without restricting every decoded state to an admissible family. Low violation rates do not guarantee admissibility between diagnostic points or beyond the training distribution. The original VAE \cite{bergeron} is more accurately classified as unconstrained than as a guaranteed or necessarily penalty-enforced construction.
+
+Recent diffusion and latent-flow approaches \cite{jin,brooks,hao,han,yang} extend these architectures, but their arbitrage control remains approximate in the implementations surveyed. Their statistical performance, static constraint violations and dynamic consistency require separate evaluation; snapshot generation, one-step forecasting and multi-step simulation are likewise different tasks. This classification concerns the reported constructions and does not suggest that a generative architecture itself prevents structural arbitrage constraints from being incorporated.
+
+\paragraph{Related smile-dynamics literature.}
+Forward-variance models \cite{bergomi2,bergomi3} and stochastic-volatility smile expansions \cite{bergomiguyon} investigate the volatility structures underlying smile dynamics. Leverage-based analysis \cite{bouchaud} explains movements intermediate between sticky-strike and sticky-delta rules. These provide economic targets for surface simulators, rather than the same nonparametric surface codebook. They are particularly relevant when evaluating whether a simulator reproduces spot--surface dependence beyond matching individual surface distributions.
+
+Rough-SABR and asymptotically arbitrage-free approximation results \cite{fukasawagatheral,fukasawa} connect implied-volatility approximations to pricing-model drift restrictions. Their asymptotic guarantees differ from exact admissibility of generated full surfaces. Normalising volatility transforms and smile parametrisation \cite{lucic} provide further background on admissible coordinates, rather than an established joint dynamically arbitrage-free surface simulator. These adjacent contributions clarify which statistical and geometric properties a codebook should preserve without conflating approximation theory with a market-model existence theorem.
+
+\paragraph{Why DLV and SANOS, and where GROMM fits.}
+Our choice follows the local-volatility branch. Implicit forward-equation pricing \cite{ah} and DLV \cite{dlv} replace coupled inequalities on implied volatilities with constrained local-variance coordinates and a structured pricing map. Local volatility serves as a surface coordinate system: it does not force historical stock--surface dynamics to follow a fixed local-volatility diffusion. This separates learned surface evolution from structural static admissibility.
+
+The computational attraction is especially relevant for repeated decoding during optimisation: solving a fine forward PDE for every candidate surface would be expensive. Positivity constraints on codebook coordinates are also easier to impose than the coupled strike and maturity restrictions on directly generated implied volatilities.
+
+SANOS \cite{sanos} provides the smooth admissible extension needed to evaluate contracts with fixed cash strikes and calendar expiries beyond the native lattice. Transformed coordinates permit unconstrained latent learning:
+\[
+ h_t\in\mathbb{R}^{d}\longmapsto u_t=\Phi(h_t)
+ \longmapsto C_t(\tau,k)=\mathcal{D}_{\mathrm{SANOS}}(u_t;\tau,k).
+\]
+The codebook is the DLV-derived SANOS representation, not the latent vector or transition alone. Its lineage runs from local-volatility market codebooks through computational DLV to smooth SANOS decoding. The connection to \cite{wisselmulti} is the principle of choosing an admissible parametrisation before specifying dynamics, rather than identical coordinate formulas.
+
+GROMM combines this smooth, nonparametric, statically admissible decoder with direct bid--ask fitting and generative joint stock--surface dynamics. Static admissibility is structural, and fixed contracts remain evaluable as time and spot change. A smooth decoder also allows observed quotes to enter training at their actual contract coordinates, while bid--ask spreads provide the natural scale for assessing fit. Historical dynamics can then be learned in latent coordinates without making the static guarantee depend on the quality of that dynamics model. Calibration need not reproduce inconsistent quotes exactly. For the construction documented here, dynamic evidence consists of a numerical measure change and conditional-martingale validation for 48 options and spot, rather than a full-continuum theorem. The contribution is this combination of representation, market fitting and generative dynamics at the stated scope.
+
+\clearpage
+\begin{thebibliography}{99}
+\small
+\setlength{\itemsep}{2pt}
+\bibitem{skiadopoulos} G. Skiadopoulos, S. Hodges and L. Clewlow (2000). The dynamics of the S\&P 500 implied volatility surface.
+\bibitem{contfonseca} R. Cont and J. da Fonseca (2002). Dynamics of implied volatility surfaces. \emph{Quantitative Finance}, 2, 45--60.
+\bibitem{fengler2003} M. Fengler, W. H\"ardle and C. Villa (2003). The dynamics of implied volatilities: A common principal components approach.
+\bibitem{cont2002} R. Cont, J. da Fonseca and V. Durrleman (2002). Stochastic models of implied volatility surfaces. \emph{Economic Notes}, 31, 361--377.
+\bibitem{hafner} R. Hafner (2004). \emph{Stochastic Implied Volatility: A Factor-Based Model}. Springer.
+\bibitem{fengler2007} M. Fengler, W. H\"ardle and E. Mammen (2007). A semiparametric factor model for implied volatility surface dynamics.
+\bibitem{schonbucher} P. Sch\"onbucher (1999). A market model for stochastic implied volatility.
+\bibitem{wisselterm} M. Schweizer and J. Wissel (2008b). Term structures of implied volatilities: Absence of arbitrage and existence results. \emph{Mathematical Finance}, 18, 77--114.
+\bibitem{wisselmulti} M. Schweizer and J. Wissel (2008a). Arbitrage-free market models for option prices: The multi-strike case. \emph{Finance and Stochastics}, 12, 469--505.
+\bibitem{elamrani} M. El Amrani, A. Jacquier and C. Martini (2021). Dynamics of symmetric SSVI smiles and implied volatility bubbles. \emph{SIAM Journal on Financial Mathematics}. DOI: 10.1137/20M136089X.
+\bibitem{cn2009} R. Carmona and S. Nadtochiy (2009). Local volatility dynamic models. \emph{Finance and Stochastics}, 13, 1--48.
+\bibitem{cn2012} R. Carmona and S. Nadtochiy (2012). Tangent L\'evy market models. \emph{Finance and Stochastics}, 16, 63--104.
+\bibitem{kk} J. Kallsen and P. Kr\"uhner (2015). On a Heath--Jarrow--Morton approach for stock options. \emph{Finance and Stochastics}, 19, 583--615.
+\bibitem{cmn} R. Carmona, Y. Ma and S. Nadtochiy (2017). Simulation of implied volatility surfaces via tangent L\'evy models. \emph{SIAM Journal on Financial Mathematics}, 8, 171--213.
+\bibitem{crc} M. Gambara and J. Teichmann (2020; revised 2021). Consistent recalibration models and deep calibration. arXiv:2006.09455.
+\bibitem{crw} S. Cohen, C. Reisinger and S. Wang (2023). Arbitrage-free neural-SDE market models. \emph{Applied Mathematical Finance}, 30, 1--46.
+\bibitem{removedrift} H. Buehler, P. Murray, M. Pakkanen and B. Wood (2022). Deep hedging: Learning to remove the drift. \emph{Risk}.
+\bibitem{dysanos} H. Buehler, B. Horvath, A. Kratsios and M. Wiese. DYSANOS: Generative Dynamic Smooth Arbitrage-free Non-parametric Option Surfaces. Supplied manuscript.
+\bibitem{wiese2019} M. Wiese, L. Bai, B. Wood and H. Buehler (2019). Deep hedging: Learning to simulate equity option markets. arXiv:1911.01700.
+\bibitem{wiese2021} M. Wiese et al. (2021). Multi-asset spot and option market simulation. arXiv:2112.06823.
+\bibitem{andres} H. Andrès, A. Boumezoued and B. Jourdain (2023; revised 2025; published 2026). The implied volatility surface (also) is path-dependent. DOI: 10.1080/14697688.2026.2637739.
+\bibitem{bergeron} M. Bergeron, N. Fung, J. Hull and Z. Poulos (2021). Variational autoencoders: A hands-off approach to volatility. arXiv:2102.03945.
+\bibitem{ning} B. Ning, S. Jaimungal, X. Zhang and M. Bergeron (2023). Arbitrage-free implied volatility surface generation with variational autoencoders. \emph{SIAM Journal on Financial Mathematics}, 14, 1004--1027.
+\bibitem{zhang} W. Zhang, L. Li and G. Zhang (2021). A two-step framework for arbitrage-free prediction of the implied volatility surface.
+\bibitem{contvuletic} R. Cont and M. Vuleti\'c (2023). Simulation of arbitrage-free implied volatility surfaces. \emph{Applied Mathematical Finance}, 30, 94--121.
+\bibitem{funvol} V. Choudhary, S. Jaimungal and M. Bergeron (2024). FuNVol: A multi-asset implied volatility market simulator using functional principal components and neural SDEs. \emph{Quantitative Finance}, 24, 1077--1103.
+\bibitem{volgan} M. Vuleti\'c and R. Cont (2024). VolGAN: A generative model for arbitrage-free implied volatility surfaces. \emph{Applied Mathematical Finance}, 31, 203--238.
+\bibitem{jin} C. Jin and A. Agarwal (2025). Forecasting implied volatility surface with generative diffusion models.
+\bibitem{brooks} O. Brooks, D. Bajalica, Y. Lui and I. Ben Tahar (2026). Latent flow matching for arbitrage-aware implied volatility surface generation.
+\bibitem{hao} L. Hao and S. Ji (2026). Decoupled probabilistic forecasting and arbitrage-aware refinement of implied volatility surfaces.
+\bibitem{han} Y. Han et al. (2026). Diffusion models for dynamic volatility surface generation and data-driven hedging.
+\bibitem{yang} M. Yang, S. Wang, C. Zhang and R. Li (2026). Universal diffusion models for implied volatility surfaces: Learning shared dynamics across stocks.
+\bibitem{bergomi2} L. Bergomi (2005). Smile dynamics II.
+\bibitem{bergomi3} L. Bergomi (2008). Smile dynamics III.
+\bibitem{bergomiguyon} L. Bergomi and J. Guyon (2011). The smile in stochastic volatility models. SSRN:1967470.
+\bibitem{bouchaud} S. Ciliberti, J.-P. Bouchaud and M. Potters (2008). Smile dynamics---a theory of the implied leverage effect. arXiv:0809.3375.
+\bibitem{fukasawagatheral} M. Fukasawa and J. Gatheral (2022). A rough SABR formula. \emph{Frontiers of Mathematical Finance}, 1, 81--97.
+\bibitem{fukasawa} M. Fukasawa (2022). On asymptotically arbitrage-free approximations of the implied volatility. arXiv:2201.02752.
+\bibitem{lucic} V. Lu\v{c}i\'c (2021). Normalizing volatility transforms and parameterization of volatility smile. SSRN:3835233.
+\bibitem{ah} J. Andreasen and B. Huge (2011). Volatility interpolation. \emph{Risk}, 86--89.
+\bibitem{dlv} H. Buehler and E. Ryskin (2015). Discrete local volatility for large time steps (extended version). SSRN:2642630.
+\bibitem{sanos} H. Buehler, B. Horvath, A. Kratsios, Y. Limmer and R. Saqur (2026). SANOS: Smooth arbitrage-free non-parametric option surfaces. arXiv:2601.11209.
+\end{thebibliography}
+
+% EDITORIAL NOTE -- STRONGER GROMM CLAIM
+% The supplied PDF contains no separately specified GROMM construction or theorem.
+% If GROMM is a new model with a proved joint pricing measure, replace the final
+% two sentences above only after matching the statement to that theorem's scope.
+% A suitable version, CONDITIONAL ON SUCH A THEOREM, is:
+% ``In addition, under the assumptions of our dynamic-consistency theorem,
+% the joint underlying and option-price process admits an equivalent martingale
+% measure on the stated trading universe and horizon. GROMM therefore combines
+% structural static admissibility and market calibration with dynamically
+% consistent generative evolution. Its distinction from earlier arbitrage-free
+% market models lies in this computational and statistical construction, rather
+% than in dynamic no-arbitrage as an isolated property.''
+% Verify terminal payoff consistency, equivalence/integrability, maturities,
+% strike domain, and any feasible-recalibration assumptions before using it.
+
+% SOURCE AND BIBLIOGRAPHY NOTES (do not typeset)
+% Source manuscript: dy21(2).pdf, especially Introduction and Tables 15/17.
+% Existing manuscript author-year references retained; exact .bib keys unknown.
+% Added / externally checked sources:
+% El Amrani, Jacquier, Martini (2021), Dynamics of Symmetric SSVI Smiles and
+% Implied Volatility Bubbles, SIAM J. Financial Math. DOI 10.1137/20M136089X.
+% https://arxiv.org/abs/1909.10272
+% Gambara, Teichmann (2020; revised 2021), Consistent Recalibration Models
+% and Deep Calibration. https://arxiv.org/abs/2006.09455
+% Schweizer, Wissel (2008a), Arbitrage-free market models for option prices:
+% The multi-strike case. DOI 10.1007/s00780-008-0068-6.
+% https://people.math.ethz.ch/~mschweiz/Files/MSJW-finasto2008.pdf
+% Kallsen, Kruehner (2015), On a Heath--Jarrow--Morton approach for stock
+% options. DOI 10.1007/s00780-015-0263-1. https://arxiv.org/abs/1305.5621
+% Cohen, Reisinger, Wang (2023), Arbitrage-free neural-SDE market models.
+% https://arxiv.org/html/2105.11053v2 (Sections 2.3, 3.1 and Appendix A).
+% Ning, Jaimungal, Zhang, Bergeron (2023), Arbitrage-Free Implied Volatility
+% Surface Generation with Variational Autoencoders. DOI 10.1137/21M1443546.
+% https://arxiv.org/html/2108.04941v3
+% FuNVol: https://arxiv.org/abs/2303.00859
+% Andres et al.: publication update DOI 10.1080/14697688.2026.2637739.
+% Bergomi (2005), Smile Dynamics II; Bergomi (2008), Smile Dynamics III.
+% https://www.lorenzobergomi.com/papers
+% Bergomi, Guyon (2011), The Smile in Stochastic Volatility Models.
+% https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1967470
+% Ciliberti, Bouchaud, Potters (2008), Smile dynamics -- a theory of the
+% implied leverage effect. https://arxiv.org/abs/0809.3375
+% Fukasawa, Gatheral (2022), A rough SABR formula. DOI 10.3934/fmf.2021003.
+% Fukasawa (2022), On Asymptotically Arbitrage-free Approximations of the
+% Implied Volatility. https://arxiv.org/html/2201.02752v2
+% Lucic (2021), Normalizing Volatility Transforms and Parameterization of
+% Volatility Smile. https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3835233
+% Lucic abstract/metadata checked; full paper was not retrievable here.
+% Recent 2025/2026 generative papers above are classified from supplied table;
+% they have not all received an independent full-paper audit in this review.
+% Original Bergeron VAE author list follows the attached manuscript/arXiv
+% version; SSRN's later entry also lists Andreas Veneris. Match chosen version.
