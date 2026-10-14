@@ -8,14 +8,19 @@ Tables~\ref{tab:surface-interpolation-literature},
 conflated: constructing one admissible surface, compressing or generating a
 market state, solving an underlying-model inverse problem, and learning a
 surface's evolution through time.  We use common classification
-symbols throughout the tables.\footnote{\textbf{S$\infty$}: a theorem- or
-architecture-level guarantee on the full continuous surface; \textbf{S$\Omega$}:
-the same guarantee only on a stated bounded fitting domain; \textbf{SG}: a
-strict guarantee only on the modelled finite grid; \textbf{A}: approximate,
-using penalties, reweighting, rejection, or empirical violation rates;
-\textbf{N}: no static-arbitrage guarantee; \textbf{U}: arbitrage freedom is
-claimed, but the available construction does not suffice to verify its
-continuum scope.}
+symbols throughout the tables.\footnote{%
+\begin{itemize}[leftmargin=*,nosep]
+  \item \textbf{S$\infty$}: a theorem- or architecture-level guarantee on the
+        full continuous surface.
+  \item \textbf{S$\Omega$}: the same guarantee only on a stated bounded fitting
+        domain.
+  \item \textbf{SG}: a strict guarantee only on the modelled finite grid.
+  \item \textbf{A}: approximate, using penalties, reweighting, rejection, or
+        empirical violation rates.
+  \item \textbf{N}: no static-arbitrage guarantee.
+  \item \textbf{U}: arbitrage freedom is claimed, but the available construction
+        does not suffice to verify its continuum scope.
+\end{itemize}}
 Constraints imposed inside a fit are distinguished from a projection or
 iterative repair applied after an unconstrained fit; only the former makes the
 fitted family itself constrained.  Option counts refer to native surface
@@ -142,6 +147,7 @@ Method & Representation & Native option coordinates & Off-grid & Latent/static a
   & Universal cross-stock diffusion & $11\times9=99$ per stock & 99 coordinates on unseen stocks & A & Cross-stock generalization is not off-grid interpolation. \\
 This paper
   & Smooth SANOS plus affine latent state & $18\times200=3{,}600$ prices; 3,620 controls & $\infty$ & S$\infty$ & The decoded continuum remains in the SANOS admissible family. \\
+% GROMM is the next paper and is intentionally omitted from this review.
 %\citet{WieseBuehlerHorvath2026}
 %  & Smooth SANOS and stochastic DLV/PCA factors & $25\times200=5{,}000$ options plus spot & $\infty$ & S$\infty$ & Full smooth continuum representation. \\
 \bottomrule
@@ -239,6 +245,7 @@ Method & Dynamic state/model & Dynamics under $\P$ & Direct market-model dynamic
   & Universal cross-stock diffusion & A & --- & Yes & Approximate static conditions. \\
 This paper
   & SANOS, affine latent state, and AR(1) & S$\infty$ & Limited SG: 48 options plus spot & Yes & The implemented $\Q$ construction is finite-dimensional. \\
+% GROMM is the next paper and is intentionally omitted from this review.
 %\citet{WieseBuehlerHorvath2026}
 %  & Smooth SANOS and stochastic DLV/PCA factors & S$\infty$ & S$\infty$ with explicit full-surface drift & Yes & Direct smooth full-surface construction. \\
 \bottomrule
