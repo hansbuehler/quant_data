@@ -20,6 +20,12 @@ Services `quantdata-hedging-historical-v111-daily-cd6f440.service` and
 replay at `2023-06-13` passes all 20 targets with zero cap hits and zero
 nonconvergence. Entropy risk `0.1` and one entropy-risk-`10` target retain their
 genuine final-fit failures and must not be relabelled as passing production.
+Service `quantdata-hedging-failure-canonicalization-8851996.service` waits for
+both matrices, then validates completed cases and replays only incomplete or
+failed daily/frozen/restarted cells under the structured gate-artifact runner.
+It emits terminal queue evidence and separate authenticated daily and weekly
+failure ledgers. Its immutable launcher SHA-256 is
+`0b48ad825ac1e37b2b5cff5912f3a856e14600b3d11246b80049530ae2403cfa`.
 The frozen-weekly SANOS-LV reference also retains a strict failure at origin
 `2023-02-08`: all 13 targets load the same two one-day calls to the 1,000-unit
 execution cap after those frozen strikes drift to approximately `+3.46` and
