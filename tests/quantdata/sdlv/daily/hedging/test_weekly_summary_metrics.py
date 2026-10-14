@@ -218,6 +218,54 @@ def test_weekly_summary_discovers_schedules_and_aggregates_complete_cases(
     )
 
 
+def test_weekly_summary_maps_diffusion_cli_alias(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case_id = "frozen-weekly-diffusion-ad-seq-vol-rolling-trained"
+    output = tmp_path / case_id
+    results_path = output / "results.json"
+    spec = _write_run(
+        output,
+        model="ad-seq-vol",
+        schedule=HedgeSchedule.FROZEN_WEEKLY,
+        objective="mean-variance",
+        parameter=1.0,
+    )
+    result = _weekly_result(spec=spec, pure_rmse=1.0)
+    results_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        weekly_summary_module,
+        "authenticate_completed_weekly_results",
+        lambda _panel, *, results_path: result,
+    )
+    monkeypatch.setattr(
+        weekly_summary_module,
+        "_read_record_losses",
+        lambda *_args, **_kwargs: _record_losses(result),
+    )
+    policy = weekly_summary_module.WeeklyPolicyInput(
+        key=case_id,
+        results_path=results_path,
+        expected_model="diffusion-ad-seq-vol",
+        expected_schedule=HedgeSchedule.FROZEN_WEEKLY.value,
+        display_name="AD--Seq--Vol",
+        fitted_objective="mean-variance",
+        fitted_parameter=1.0,
+        expected_measure="test",
+        variant=canonical_policy_variant(
+            case_id=case_id,
+            model="diffusion-ad-seq-vol",
+            schedule=HedgeSchedule.FROZEN_WEEKLY.value,
+        ),
+    )
+
+    metrics = weekly_summary_module._read_policy(object(), policy)
+
+    assert metrics["model"] == "diffusion-ad-seq-vol"
+    assert metrics["variant"] == policy.variant
+
+
 def test_weekly_drawdown_uses_chronological_pnl_reversals() -> None:
     claims = tuple(sorted(target.label for target in weekly_targets()))
     origins = ("2023-01-03", "2023-01-04", "2023-01-05")

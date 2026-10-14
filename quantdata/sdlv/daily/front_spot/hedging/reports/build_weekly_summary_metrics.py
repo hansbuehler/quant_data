@@ -31,6 +31,7 @@ from quantdata.sdlv.daily.front_spot.hedging.reports.policy_labels import (
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.weekly import (
     WeeklyEvaluationSpec,
+    weekly_evaluation_model,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.weekly_results import (
     WeeklyLossStatistics,
@@ -263,7 +264,8 @@ def _read_policy(
     )
     if result.run_identity != spec.run_identity:
         raise ValueError(f"weekly run and results identities differ: {policy.results_path}")
-    if spec.model != policy.expected_model or result.model != policy.expected_model:
+    expected_model = weekly_evaluation_model(policy.expected_model)
+    if spec.model != expected_model or result.model != expected_model:
         raise ValueError(f"unexpected weekly model: {policy.results_path}")
     if (
         spec.schedule.value != policy.expected_schedule
@@ -277,7 +279,7 @@ def _read_policy(
         )
     canonical_variant = canonical_policy_variant(
         case_id=policy.key,
-        model=result.model,
+        model=policy.expected_model,
         schedule=result.schedule,
     )
     if policy.variant != canonical_variant:
@@ -315,7 +317,7 @@ def _read_policy(
     )
     return {
         "key": policy.key,
-        "model": result.model,
+        "model": policy.expected_model,
         "display_name": policy.display_name,
         "measure": result.measure,
         "variant": canonical_variant,

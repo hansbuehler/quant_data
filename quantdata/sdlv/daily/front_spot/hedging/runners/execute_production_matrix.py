@@ -506,6 +506,7 @@ def _validate_results(
         run = _read_json_object(output / "run.json")
         from quantdata.sdlv.daily.front_spot.hedging.runners.weekly import (
             WeeklyEvaluationSpec,
+            weekly_evaluation_model,
         )
         from quantdata.sdlv.daily.front_spot.hedging.runners.weekly_results import (
             authenticate_completed_weekly_results,
@@ -516,14 +517,16 @@ def _validate_results(
             panel,
             results_path=path,
         )
-        if spec.model != expected_model:
+        expected_weekly_model = weekly_evaluation_model(expected_model)
+        if spec.model != expected_weekly_model:
             raise ValueError(
-                f"weekly-results model mismatch: {spec.model} != {expected_model}"
+                "weekly-results model mismatch: "
+                f"{spec.model} != {expected_weekly_model}"
             )
-        if aggregate.model != expected_model:
+        if aggregate.model != expected_weekly_model:
             raise ValueError(
                 f"weekly aggregate model mismatch: {aggregate.model} != "
-                f"{expected_model}"
+                f"{expected_weekly_model}"
             )
         if spec.require_no_cap_hits and aggregate.cap_hits != 0:
             raise ValueError("weekly-results contain position-cap hits")

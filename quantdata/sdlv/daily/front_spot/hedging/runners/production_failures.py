@@ -554,21 +554,29 @@ def _validated_gate_evidence(
         spec = DailyEvaluationSpec.from_dict(run_metadata)
         strict_gate = spec.require_convergence
         expected_schedule = None
+        expected_source_model = spec.model
     elif evaluation_schema.startswith("hedging-weekly-evaluation-"):
         from quantdata.sdlv.daily.front_spot.hedging.runners.weekly import (
             WeeklyEvaluationSpec,
+            weekly_evaluation_model,
         )
 
         spec = WeeklyEvaluationSpec.from_dict(run_metadata)
         strict_gate = spec.require_no_cap_hits
         expected_schedule = spec.schedule.value
+        expected_source_model = weekly_evaluation_model(
+            _require_string(source_case, "model")
+        )
     else:
         raise ValueError("failure run metadata has an unsupported evaluation schema")
     if not strict_gate:
         raise ValueError("failure run did not require its numerical gate")
     if gate_failure.get("run_identity") != spec.run_identity:
         raise ValueError("failure gate artifact run identity mismatch")
-    if gate_failure.get("model") != spec.model or source_case.get("model") != spec.model:
+    if (
+        gate_failure.get("model") != spec.model
+        or expected_source_model != spec.model
+    ):
         raise ValueError("failure gate artifact model mismatch")
     if gate_failure.get("measure") != spec.measure:
         raise ValueError("failure gate artifact measure mismatch")

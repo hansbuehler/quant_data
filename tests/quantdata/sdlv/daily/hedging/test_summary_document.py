@@ -107,6 +107,42 @@ def test_summary_document_rejects_unknown_model() -> None:
         )
 
 
+def test_summary_document_accepts_canonical_weekly_diffusion_model() -> None:
+    weekly = _weekly_metrics()
+    models = weekly["models"]
+    comparisons = weekly["comparisons"]
+    assert isinstance(models, dict)
+    assert isinstance(comparisons, dict)
+    key = "frozen-weekly-diffusion-ad-seq-vol-rolling-trained"
+    models[key] = _weekly_model(
+        key=key,
+        model="diffusion-ad-seq-vol",
+        display_name="AD--Seq--Vol",
+        schedule="frozen-weekly",
+        pure_rmse=0.017,
+        objective="mean-variance",
+        parameter=1.0,
+        specification="historical P; rolling-trained diffusion",
+    )
+    frozen = comparisons["frozen-weekly"]
+    assert isinstance(frozen, dict)
+    paired = frozen["paired_book_loss_differences"]
+    assert isinstance(paired, dict)
+    paired[key] = _paired(-0.002)
+
+    document = build_summary_document(
+        daily=_daily_metrics(),
+        weekly=weekly,
+        status_date=date(2026, 10, 14),
+        daily_objective_tables="daily.tex",
+        weekly_objective_tables="weekly.tex",
+        daily_target_appendix="daily-target.tex",
+        weekly_target_appendix="weekly-target.tex",
+    )
+
+    assert "\\subsection{AD--Seq--Vol}" in document
+
+
 def test_summary_document_writer_rebuilds_from_authenticated_matrices(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -40,6 +40,16 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.numerical_gate_failure impo
 )
 
 WEEKLY_EVALUATION_SCHEMA = "hedging-weekly-evaluation-v2"
+
+
+def weekly_evaluation_model(model: str) -> str:
+    """Return the model identity persisted by the weekly adapter."""
+    return {
+        "diffusion-ad-seq-vol": "ad-seq-vol",
+        "diffusion-ad-seq-vol-ft": "ad-seq-vol-ft",
+    }.get(model, model)
+
+
 WEEKLY_RECORD_SCHEMA = "hedging-weekly-record-v2"
 
 WeeklyBookFunction = Callable[

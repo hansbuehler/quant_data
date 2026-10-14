@@ -18,6 +18,7 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.run_weekly import (
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.weekly import (
     WeeklyEvaluationSummary,
+    weekly_evaluation_model,
 )
 
 
@@ -81,6 +82,22 @@ def test_weekly_adapter_builds_are_fully_identified(
     assert build.rolling_observations == 252
     assert build.position_cap == 1_000.0
     assert "common_market_pricing" in build.configuration_snapshot_json
+
+
+@pytest.mark.parametrize(
+    ("matrix_model", "evaluation_model"),
+    (
+        ("volgan", "volgan"),
+        ("diffusion-ad-seq-vol", "ad-seq-vol"),
+        ("diffusion-ad-seq-vol-ft", "ad-seq-vol-ft"),
+    ),
+)
+def test_weekly_evaluation_model_maps_cli_aliases(
+    matrix_model: str,
+    evaluation_model: str,
+) -> None:
+    assert weekly_evaluation_model(matrix_model) == evaluation_model
+    assert weekly_evaluation_model(evaluation_model) == evaluation_model
 
 
 def test_weekly_fine_tuned_diffusion_requires_base_checkpoint(tmp_path) -> None:

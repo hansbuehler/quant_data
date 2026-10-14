@@ -321,13 +321,15 @@ def _write_authenticated_weekly_output(
     *,
     cap_hits: int = 0,
     require_no_cap_hits: bool = True,
+    model: str = "sanos-lv",
+    measure: str = "Q",
 ) -> WeeklyRunResults:
     origins = ("2023-01-17", "2023-01-18")
     targets = weekly_targets()
     spec = WeeklyEvaluationSpec(
         label="weekly-test",
-        model="sanos-lv",
-        measure="Q",
+        model=model,
+        measure=measure,
         model_config_identity="model-test",
         policy_config_identity="policy-test",
         configuration_snapshot_json='{"test":true}',
@@ -606,6 +608,32 @@ def test_weekly_production_validation_retains_precommitted_cap_hits(
         output=output,
         matrix_schema="hedging-weekly-production-matrix-v1",
         expected_model="sanos-lv",
+        expected_result_count=results.result_count,
+        dataset=dataset,
+    )
+
+    assert validated == _sha256(output / "results.json")
+
+
+def test_weekly_production_validation_maps_diffusion_cli_alias(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = tmp_path / "weekly-diffusion"
+    results = _write_authenticated_weekly_output(
+        output,
+        model="ad-seq-vol",
+        measure="historical-P",
+    )
+    dataset = tmp_path / "dataset"
+    dataset.mkdir()
+    _stub_weekly_authentication(monkeypatch, expected=results)
+
+    validated = execute_production_matrix._validate_results(
+        output / "results.json",
+        output=output,
+        matrix_schema="hedging-weekly-production-matrix-v1",
+        expected_model="diffusion-ad-seq-vol",
         expected_result_count=results.result_count,
         dataset=dataset,
     )
