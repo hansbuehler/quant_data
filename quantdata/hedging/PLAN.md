@@ -41,7 +41,10 @@ four CPU cases active with a work-conserving queue: when any case finishes, the
 next precommitted objective starts immediately rather than waiting for the other
 three cases in its original batch. Existing atomic origin records are reused,
 while the model code, production matrix, case order, and four-worker limit remain
-pinned.
+pinned. The legacy `0b8d20a` launcher is restricted to its two unfinished
+mean--variance cases at risk parameters $1$ and $10$; the already authenticated
+$0.1$ result remains unchanged, and that service no longer launches corrected
+mean--volatility, entropy, or power-exponential cases owned by the newer matrix.
 Other daily production
 and full weekly production remain outstanding. A unified weekly runner now
 supports frozen and restarted schedules for SANOS-LV, historical SANOS,
