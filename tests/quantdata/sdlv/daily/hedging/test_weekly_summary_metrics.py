@@ -150,6 +150,15 @@ def test_weekly_summary_discovers_schedules_and_aggregates_complete_cases(
     assert frozen_historical["metrics"]["all"]["pure_rmse_reduction"] == (
         pytest.approx(0.25)
     )
+    assert frozen_historical["metrics"]["all"][
+        "economic_book_maximum_drawdown"
+    ] == pytest.approx(528 * 1.6)
+    assert frozen_historical["metrics"]["all"][
+        "worst_target_economic_maximum_drawdown"
+    ] == pytest.approx(528 * 1.6)
+    assert frozen_historical["metrics"]["targets"][weekly_targets()[0].label][
+        "economic_maximum_drawdown"
+    ] == pytest.approx(528 * 1.6)
     comparison = payload["comparisons"][HedgeSchedule.FROZEN_WEEKLY.value]
     assert comparison["pure_rmse_reduction_vs_reference"][definitions[1][0]] == (
         pytest.approx(-0.5)
@@ -173,7 +182,9 @@ def test_weekly_summary_discovers_schedules_and_aggregates_complete_cases(
     assert json.loads(json_output.read_text(encoding="utf-8"))["schema"] == (
         SUMMARY_SCHEMA
     )
-    assert "frozen-weekly" in tables_output.read_text(encoding="utf-8")
+    tables = tables_output.read_text(encoding="utf-8")
+    assert "frozen-weekly" in tables
+    assert "Book MDD & Worst target MDD" in tables
     appendix = appendix_output.read_text(encoding="utf-8")
     assert "digital" in appendix
     assert "target Mean--variance scores" in appendix
@@ -183,6 +194,47 @@ def test_weekly_summary_discovers_schedules_and_aggregates_complete_cases(
     assert "$\\kappa=3$" in appendix
     assert "$\\lambda=10$" in appendix
     assert "16,000.00" in appendix
+    assert "Economic MDD" in appendix
+
+
+def test_weekly_drawdown_uses_chronological_pnl_reversals() -> None:
+    claims = tuple(sorted(target.label for target in weekly_targets()))
+    origins = ("2023-01-03", "2023-01-04", "2023-01-05")
+    record_losses = {
+        claim: tuple(
+            {
+                "origin_date": origin,
+                "economic_loss": loss,
+                "pure_hedge_loss": loss,
+            }
+            for origin, loss in zip(
+                origins,
+                (-1.0, 2.0, -0.5) if claim == claims[0] else (0.0, 0.0, 0.0),
+                strict=True,
+            )
+        )
+        for claim in claims
+    }
+    metrics = weekly_summary_module._with_drawdown_metrics(
+        metrics={
+            "all": {},
+            "targets": {claim: {} for claim in claims},
+        },
+        record_losses=record_losses,
+    )
+
+    assert metrics["targets"][claims[0]]["economic_maximum_drawdown"] == (
+        pytest.approx(2.0)
+    )
+    assert metrics["all"]["economic_book_maximum_drawdown"] == pytest.approx(
+        2.0 / len(claims)
+    )
+    assert metrics["all"]["mean_target_economic_maximum_drawdown"] == (
+        pytest.approx(2.0 / len(claims))
+    )
+    assert metrics["all"]["worst_target_economic_maximum_drawdown"] == (
+        pytest.approx(2.0)
+    )
 
 
 def test_weekly_summary_rejects_matrix_objective_that_disagrees_with_run(

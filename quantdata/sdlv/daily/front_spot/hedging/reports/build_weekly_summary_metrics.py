@@ -19,6 +19,7 @@ from quantdata.hedging.inference import (
     paired_episode_differences,
     summarize_episode_losses,
 )
+from quantdata.hedging.metrics import maximum_drawdown_from_losses
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly import weekly_targets
 from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
     PublicHedgingPanel,
@@ -41,7 +42,7 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.weekly_results import (
 
 JsonObject: TypeAlias = dict[str, object]
 
-SUMMARY_SCHEMA = "hedging-benchmark-weekly-summary-metrics-v2"
+SUMMARY_SCHEMA = "hedging-benchmark-weekly-summary-metrics-v3"
 WEEKLY_MATRIX_SCHEMA = "hedging-weekly-production-matrix-v1"
 DISPLAY_SCALE = 10_000.0
 EXPECTED_ORIGINS = 528
@@ -293,6 +294,10 @@ def _read_policy(
         policy.results_path.parent / "records",
         expected_result=result,
     )
+    metrics = _with_drawdown_metrics(
+        metrics=_aggregate_result(result),
+        record_losses=record_losses,
+    )
     return {
         "key": policy.key,
         "model": result.model,
@@ -316,7 +321,7 @@ def _read_policy(
         "nonconverged_fits": result.nonconverged_fits,
         "cap_hits": result.cap_hits,
         "aggregation_identity": result.aggregation_identity,
-        "metrics": _aggregate_result(result),
+        "metrics": metrics,
         "record_losses": record_losses,
         "result": result,
     }
@@ -457,6 +462,43 @@ def _aggregate_result(result: WeeklyRunResults) -> JsonObject:
             for value in sorted(overall, key=lambda item: item.claim)
         },
     }
+
+
+def _with_drawdown_metrics(
+    *,
+    metrics: JsonObject,
+    record_losses: dict[str, tuple[JsonObject, ...]],
+) -> JsonObject:
+    all_metrics = dict(_require_object(metrics, "all"))
+    targets = {
+        claim: dict(_as_object(value, f"weekly target {claim}"))
+        for claim, value in _require_object(metrics, "targets").items()
+    }
+    for loss_name, prefix in (
+        ("economic_loss", "economic"),
+        ("pure_hedge_loss", "pure"),
+    ):
+        _, matrix = _loss_matrix(record_losses, loss_name=loss_name)
+        target_drawdowns = np.asarray(
+            [maximum_drawdown_from_losses(values) for values in matrix],
+            dtype=np.float64,
+        )
+        all_metrics[f"{prefix}_book_maximum_drawdown"] = (
+            maximum_drawdown_from_losses(np.mean(matrix, axis=0))
+        )
+        all_metrics[f"mean_target_{prefix}_maximum_drawdown"] = float(
+            np.mean(target_drawdowns)
+        )
+        all_metrics[f"worst_target_{prefix}_maximum_drawdown"] = float(
+            np.max(target_drawdowns)
+        )
+        for claim, drawdown in zip(
+            sorted(record_losses),
+            target_drawdowns,
+            strict=True,
+        ):
+            targets[claim][f"{prefix}_maximum_drawdown"] = float(drawdown)
+    return {"all": all_metrics, "targets": targets}
 
 
 def _aggregate_slices(slices: tuple[WeeklyResultSlice, ...]) -> JsonObject:
@@ -704,9 +746,18 @@ def _book_loss_series(
     loss_name: str,
 ) -> tuple[tuple[str, ...], np.ndarray]:
     record_losses = _require_record_losses(policy)
+    origins, matrix = _loss_matrix(record_losses, loss_name=loss_name)
+    return origins, np.mean(matrix, axis=0)
+
+
+def _loss_matrix(
+    record_losses: dict[str, tuple[JsonObject, ...]],
+    *,
+    loss_name: str,
+) -> tuple[tuple[str, ...], np.ndarray]:
     claims = tuple(sorted(record_losses))
     if len(claims) != EXPECTED_TARGETS:
-        raise ValueError("weekly book comparison requires 13 targets")
+        raise ValueError("weekly loss matrix requires 13 targets")
     origins = tuple(
         str(value["origin_date"]) for value in record_losses[claims[0]]
     )
@@ -723,7 +774,7 @@ def _book_loss_series(
         ],
         dtype=np.float64,
     )
-    return origins, np.mean(matrix, axis=0)
+    return origins, matrix
 
 
 def _objective_tables(models: JsonObject) -> JsonObject:
@@ -758,6 +809,14 @@ def _objective_tables(models: JsonObject) -> JsonObject:
                         all_metrics,
                         "mean_transaction_cost",
                     ),
+                    "economic_book_maximum_drawdown": _require_number(
+                        all_metrics,
+                        "economic_book_maximum_drawdown",
+                    ),
+                    "worst_target_economic_maximum_drawdown": _require_number(
+                        all_metrics,
+                        "worst_target_economic_maximum_drawdown",
+                    ),
                 }
             )
         tables[objective] = {"parameters": list(parameters), "rows": rows}
@@ -778,11 +837,11 @@ def _objective_tables_tex(payload: JsonObject) -> str:
                 f"\\subsection*{{Weekly {_tex_objective_name(objective)} scores}}",
                 "\\begin{longtable}{@{}llllr"
                 + "r" * len(parameters)
-                + "rr@{}}",
+                + "rrrr@{}}",
                 "\\toprule",
                 "Schedule & Policy & Specification & Fit & $\\lambda_{fit}$ & "
                 + " & ".join(f"$\\rho_{{{parameter}}}$" for parameter in parameters)
-                + " & Pure RMSE & Cost \\\\",
+                + " & Book MDD & Worst target MDD & Pure RMSE & Cost \\\\",
                 "\\midrule",
                 "\\endhead",
             )
@@ -807,6 +866,15 @@ def _objective_tables_tex(payload: JsonObject) -> str:
                         *(
                             _basis_points(_require_number(scores, parameter))
                             for parameter in parameters
+                        ),
+                        _basis_points(
+                            _require_number(row, "economic_book_maximum_drawdown")
+                        ),
+                        _basis_points(
+                            _require_number(
+                                row,
+                                "worst_target_economic_maximum_drawdown",
+                            )
                         ),
                         _basis_points(_require_number(row, "pure_rmse")),
                         _basis_points(_require_number(row, "mean_transaction_cost")),
@@ -837,9 +905,9 @@ def _target_appendix_tex(payload: JsonObject) -> str:
             (
                 "\\begin{landscape}",
                 "\\subsection*{" + model_heading + "}",
-                "\\begin{longtable}{@{}lrrrrrr@{}}",
+                "\\begin{longtable}{@{}lrrrrrrr@{}}",
                 "\\toprule",
-                "Target & Unhedged RMSE & Pure RMSE & Economic RMSE & ES$_{95}$ & Cost & Gross \\\\",
+                "Target & Unhedged RMSE & Pure RMSE & Economic RMSE & Economic MDD & ES$_{95}$ & Cost & Gross \\\\",
                 "\\midrule",
                 "\\endhead",
             )
@@ -869,6 +937,9 @@ def _target_appendix_tex(payload: JsonObject) -> str:
                             )
                         ),
                         _basis_points(
+                            _require_number(target, "economic_maximum_drawdown")
+                        ),
+                        _basis_points(
                             _require_number(
                                 _require_object(target, "economic_loss"),
                                 "expected_shortfall_95",
@@ -892,14 +963,14 @@ def _target_appendix_tex(payload: JsonObject) -> str:
                     + " scores}",
                     "\\begin{longtable}{@{}l"
                     + "r" * len(parameters)
-                    + "rr@{}}",
+                    + "rrr@{}}",
                     "\\toprule",
                     "Target & "
                     + " & ".join(
                         _parameter_heading(objective, parameter)
                         for parameter in parameters
                     )
-                    + " & Pure RMSE & Economic RMSE \\\\",
+                    + " & Pure RMSE & Economic RMSE & Economic MDD \\\\",
                     "\\midrule",
                     "\\endhead",
                 )
@@ -928,6 +999,12 @@ def _target_appendix_tex(payload: JsonObject) -> str:
                                 _require_number(
                                     economic,
                                     "root_mean_square",
+                                )
+                            ),
+                            _basis_points(
+                                _require_number(
+                                    target,
+                                    "economic_maximum_drawdown",
                                 )
                             ),
                         )

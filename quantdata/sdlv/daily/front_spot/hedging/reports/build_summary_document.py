@@ -188,7 +188,10 @@ precommitted ex-post risk parameter on inception-spot-normalized economic loss.
 
 \subsection{{Weekly objective grid}}
 The following tables retain every completed weekly policy, separately by
-schedule and authenticated policy specification.
+schedule and authenticated policy specification. Weekly drawdown is computed
+from the cumulative P\&L, equal to minus loss, of the chronologically ordered,
+overlapping equal-weighted episode books; it is an episode-origin risk
+statistic rather than the drawdown of a non-overlapping self-financing account.
 \input{{{_tex_escape(weekly_objective_tables)}}}
 
 \subsection{{Weekly paired reference comparisons}}
