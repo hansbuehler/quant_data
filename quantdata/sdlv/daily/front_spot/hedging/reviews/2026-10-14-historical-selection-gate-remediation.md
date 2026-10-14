@@ -39,7 +39,31 @@ diagnostics.
 - The focused Historical-SANOS module passes 18 tests, including a regression
   in which both selection attempts fail but the final full-window KKT
   certificate passes.
+- A strict one-origin replay of entropy risk parameter `1` at `2023-06-13`
+  completed all 20 targets with zero cap hits and zero nonconverged results.
+  Its results artifact has SHA-256
+  `6159236d674e63d6ad42aa9624e2d79ca50ec8c748c845dd3037804e58e03e93`.
 - Python compilation, Ruff import checks, and `git diff --check` pass.
 - Independent quantitative review confirms the behavioral gate and the `1.11`
   provenance change, while requiring the genuine risk-`0.1` and risk-`10` cap
   events to remain failures.
+
+## Fresh production provenance
+
+Fresh daily and weekly Historical-SANOS matrices were built from immutable
+commit `cd6f440626a59c58196880f47265a3f041962ec4`. They write to new directories
+and therefore cannot reuse version-`1.10` records.
+
+- Daily matrix SHA-256:
+  `68a8edb5cbcafaae91abbb056ae48fc2a9818d02e5407487bd02169287beb0c0`.
+- Weekly matrix SHA-256:
+  `e465f1594b5904b2c9c1a7beaa363b5df9c6dd062ada4ab8d880ea12f1dee5c0`.
+- Daily launcher SHA-256:
+  `bd9473f03c4e605e6f6eb71f83578cd515b838b60f2694e46f6c4db7e6fd184f`.
+- Weekly launcher SHA-256:
+  `9ae3e50f66aa61e29a4583bc464e08d20b53c831f084ccecb6213c8421d1d5e8`.
+
+The daily launcher owns all 13 Historical-SANOS objective/risk-parameter
+cells. The weekly launcher owns all 26 frozen and restarted cells. Both retain
+the matrix's precommitted numerical gates and emit four-minute progress and
+resource records.

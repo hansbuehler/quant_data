@@ -6,6 +6,26 @@ This document is the implementation plan for the hedging benchmark built around
 the daily front-spot SDLV/GROMM model. It records the agreed experimental design
 and implementation order.
 
+**Current production correction (2026-10-14).** Historical-SANOS version
+`1.11` makes the final 252-observation fit, rather than its 80% warm-start
+selection fit, authoritative. This invalidates the Historical-SANOS `1.10`
+records and supersedes the older Historical-SANOS service references later in
+this status history. Fresh commit-pinned daily and weekly matrices now run from
+`cd6f440626a59c58196880f47265a3f041962ec4`; their SHA-256 values are
+`68a8edb5cbcafaae91abbb056ae48fc2a9818d02e5407487bd02169287beb0c0` and
+`e465f1594b5904b2c9c1a7beaa363b5df9c6dd062ada4ab8d880ea12f1dee5c0`.
+Services `quantdata-hedging-historical-v111-daily-cd6f440.service` and
+`quantdata-hedging-historical-v111-weekly-cd6f440.service` own all 13 daily and
+26 weekly Historical-SANOS cells, respectively. A strict entropy-risk-`1`
+replay at `2023-06-13` passes all 20 targets with zero cap hits and zero
+nonconvergence. Entropy risk `0.1` and one entropy-risk-`10` target retain their
+genuine final-fit failures and must not be relabelled as passing production.
+The frozen-weekly SANOS-LV reference also retains a strict failure at origin
+`2023-02-08`: all 13 targets load the same two one-day calls to the 1,000-unit
+execution cap after those frozen strikes drift to approximately `+3.46` and
+`+3.68` current NMS. The replay has zero fit-cap hits, so this is an executable
+conditioning/economic-universe failure rather than an optimizer-fit failure.
+
 The distributable public-candidate data layer and CPU accounting vertical slice
 are implemented and passed independent quant review. The SANOS-LV Phase-2
 implementation has rolling 252-transition fixed-contract DLV factors, eight
