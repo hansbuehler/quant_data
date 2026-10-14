@@ -71,8 +71,10 @@ declared fitting ridge, which is excluded from reported certainty equivalents.
 Real first-origin frozen-weekly gates cover all 13 targets: entropy at risk
 parameter 10 and power-exponential at risk parameter 1 both pass with zero cap
 hits and zero nonconverged fits. Exact cached wealth matches the common pathwise
-accounting engine to $10^{-14}$, the full hedging suite has 419 passing tests,
-and independent quant review passes. The 94-case weekly matrix retains 28 ready
+accounting engine to $10^{-14}$, and independent quant review passes. The last
+durable complete-suite record has 349 passing tests; later focused suites pass,
+and a final complete-suite rerun remains required after production. The 94-case
+weekly matrix retains 28 ready
 native cases, four generated-gate waiters, and 62 blocked cases. The native
 weekly queue is pinned to commit `a1baa69` and waits for the active corrected
 daily covariance and Historical-SANOS queues. The covariance mean--volatility
@@ -110,8 +112,8 @@ weekly report layer also reconstructs inception market, accounting,
 risk-neutral, buyer-indifference, and seller-indifference unit prices directly
 from authenticated dated records. It rejects any disagreement with realized
 accounting and renders cross-origin target-level price means without filling
-unavailable Q or indifference quantities. The resulting complete hedging suite
-contains 419 passing tests. The
+unavailable Q or indifference quantities. Focused report and authentication
+suites pass; a final complete-suite rerun remains required after production. The
 strictly-2022 target-sizing exercise now
 fixes each target to one
 maturity-matched ATM spot-risk unit; all 20 calibration hedges converged with
@@ -811,11 +813,12 @@ float32 density-mass roundoff by stored source precision, normalizes accepted
 residuals in float64, and logs the correction. The five-session sampler recomputes
 the compatible P risk price pathwise and prices the frozen contract book
 without retaining full density histories. Every artifact is bound to the exact
-public manifest and the compatible P drift must pass projection and daily
-risk-price-norm gates. Generated books start at the common SANOS executable
-marks. Signed policies provide prices and diagnostics; the directly trained
-pure policy uses conditional Q-shadow gains, exact net turnover, free cash
-settlement, and terminal liquidation. Managed-GPU affine fitting and 2022
+public manifest. A compatible-P candidate must pass the precommitted holdout
+improvement, Newey--West gain-statistic, and daily risk-price-norm gates; the
+projection fraction remains descriptive. Generated books start at the common
+SANOS executable marks. Signed policies provide prices and diagnostics; the
+directly trained pure policy uses conditional Q-shadow gains, exact net
+turnover, free cash settlement, and terminal liquidation. Managed-GPU affine fitting and 2022
 hedge-architecture selection are complete for the first rolling origin. Full
 rolling Q production and any future-origin P acceptance remain outstanding. A
 range orchestrator now authenticates and reuses each dated preparation or fit,
@@ -824,9 +827,9 @@ a persistent heartbeat at most every five minutes. Borderline affine fits keep
 the fixed 80% inside-spread gate and continue from their authenticated 2,000
 epoch checkpoint to at most 4,000 and 8,000 epochs; completed epochs, retry
 count, and the actual fit configuration are retained in the dated artifact.
-Its real first-origin
-resume smoke passed. The 611-origin CPU preparation service is running and has
-passed the first sparse-release origin after an authenticated restart.
+Its real first-origin resume smoke passed. CPU preparation is complete for all
+611 eligible origins, including the first sparse-release origin after an
+authenticated restart; managed-GPU rolling fitting remains active.
 
 The range evidence reports full-candidate, front-only-fallback, and unavailable
 physical-origin counts separately. A versioned migration path authenticates the
@@ -834,6 +837,10 @@ completed legacy range and every dated manifest, hard-links only its immutable
 source, prepared-book, and accepted affine-history files into a distinct target
 root, and recomputes all dynamics and physical-selection evidence under the
 current code. Legacy physical decisions and legacy dynamics are never reused.
+Independent review of these selection and authentication semantics passes in
+`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-14-rolling-gromm2-physical-selection-review.md`;
+it does not
+stand in for the still-incomplete rolling-production evidence.
 
 Gate: GROMM CPU smoke test, model review, and GPU-readiness review pass.
 
@@ -989,7 +996,8 @@ initializer and epoch-budget pipeline has now completed for all three generated
 baselines. The one-standard-error selections are 1,000 rolling epochs for
 VolGAN, 30 for AD-Seq-Vol, and one for AD-Seq-Vol-FT; their complete end-2022
 production initializers and distinct selection-source lineages pass the strict
-evidence loader. Rolling GROMM preparation continues independently on CPU. A
+evidence loader. Rolling GROMM CPU preparation is complete for all 611 eligible
+origins, while managed-GPU rolling fitting continues independently. A
 production-gate assembler now reconstructs exact public-versus-rolling scope
 bindings, refuses stale or aliased evidence, writes under an output lock through
 a unique same-directory temporary file, and re-authenticates the completed gate
@@ -997,8 +1005,8 @@ before publishing it. The initial reviewed 18-scope managed-GPU readiness
 matrix ran from immutable commit
 `31b57e617dc6f57f12625515160131a8cf845e36`; VolGAN daily-public readiness
 passed, but its first frozen-weekly case failed as described below. The
-replacement matrix is queued from immutable commit
-`ecb591fd96827326b4f612c1d63c1a903cf38760` behind rolling GROMM production.
+replacement matrix is queued from immutable reviewed commit
+`73a9626cb467da88ed9ee979c292af8e9b45b65a` behind rolling GROMM production.
 It emits a persistent four-minute heartbeat and acquires its GPU only through
 `gpuctl`. Final readiness evidence and the model-specific results review remain
 required before generated production cases can launch.
@@ -1072,9 +1080,10 @@ hit or nonconvergence; precommitted mean-volatility recession diagnostics are
 retained with their counts. It records the dataset, target-notional, and
 target-cohort identities together with every source-matrix hash. Adversarial
 tests reject a missing record, forged aggregate, wrong dataset, and wrong target
-cohort; a real 12,220-record SANOS--LV composition smoke and the 419-test full
-hedging suite pass, and independent quant re-review closes the authentication
-blocker. This permits the final
+cohort; a real 12,220-record SANOS--LV composition smoke and focused composition
+tests pass, and independent quant re-review closes the authentication blocker.
+The last durable complete-suite record has 349 passing tests; the final full
+suite will be rerun after production. This permits the final
 54-cell daily and 94-cell weekly matrices to reuse completed native evidence
 without copying it or rerunning it. The detached final-production service
 `quantdata-hedging-full-production-a1baa69.service` passed its exact-environment
@@ -1151,7 +1160,9 @@ evaluated all four over 40 measure/target cases and applied the precommitted
 cheapest-within-one-standard-error rule.  It selected `(64,3,128)` with
 validation loss `0.0798512`; the one-standard-error threshold was `0.0875964`.
 The selection artifact has SHA-256
-`3170f666a9bd750d91fe45143c87c5daf79c6f8b6ee57014f887f5b29420e3db`.
+`3170f666a9bd750d91fe45143c87c5daf79c6f8b6ee57014f887f5b29420e3db` and is
+stored outside the source tree at
+`/home/hans/quantdata_data/training/hedging/gromm/architecture-2022-v1/result-v2.json`.
 
 The episode risk unit, target-notional rule, 1,000-unit numerical position cap,
 common spot-cap convention, statistical PCA alignment tolerance, and

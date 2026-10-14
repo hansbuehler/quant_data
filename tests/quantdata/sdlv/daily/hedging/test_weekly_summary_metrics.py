@@ -207,6 +207,10 @@ def test_weekly_summary_discovers_schedules_and_aggregates_complete_cases(
     assert "Mean inception unit prices" in appendix
     assert "$Q$ expectation" in appendix
     assert "3,900.00" in appendix
+    assert (
+        "4,000.00 & 3,900.00 & -- & 3,900.00 & 4,100.00 & -100.00"
+        in appendix
+    )
 
 
 def test_weekly_drawdown_uses_chronological_pnl_reversals() -> None:
@@ -465,7 +469,7 @@ def test_weekly_summary_rejects_incomplete_ready_case(tmp_path: Path) -> None:
         )
 
 
-def test_weekly_record_loss_reader_rechecks_authenticated_bytes(
+def test_weekly_record_loss_reader_rechecks_prices_and_authenticated_bytes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -523,11 +527,35 @@ def test_weekly_record_loss_reader_rechecks_authenticated_bytes(
     claim = weekly_targets()[0].label
     assert losses[claim][0]["unhedged_loss"] == pytest.approx(0.6)
     assert losses[claim][0]["economic_loss"] == pytest.approx(0.2)
+    assert losses[claim][0]["q_expectation"] is None
     assert losses[claim][0]["buyer_indifference"] == pytest.approx(0.41)
     assert losses[claim][0]["seller_indifference"] == pytest.approx(0.43)
 
     first_path = records / "2023-01-03.json"
-    first_path.write_text(first_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+    original = first_path.read_text(encoding="utf-8")
+    mismatched = json.loads(original)
+    mismatched["runs"][0]["result"]["breakdown"]["market_price"] = 0.405
+    first_path.write_text(json.dumps(mismatched), encoding="utf-8")
+    hashes[first_path.stem] = hashlib.sha256(first_path.read_bytes()).hexdigest()
+    with pytest.raises(ValueError, match="market price disagrees"):
+        weekly_summary_module._read_record_losses(
+            records,
+            expected_result=expected,
+        )
+
+    mismatched["runs"][0]["result"]["breakdown"]["market_price"] = 0.4
+    mismatched["runs"][0]["result"]["breakdown"]["model_price"] = 0.42
+    first_path.write_text(json.dumps(mismatched), encoding="utf-8")
+    hashes[first_path.stem] = hashlib.sha256(first_path.read_bytes()).hexdigest()
+    with pytest.raises(ValueError, match="model price disagrees"):
+        weekly_summary_module._read_record_losses(
+            records,
+            expected_result=expected,
+        )
+
+    first_path.write_text(original, encoding="utf-8")
+    hashes[first_path.stem] = hashlib.sha256(first_path.read_bytes()).hexdigest()
+    first_path.write_text(original + "\n", encoding="utf-8")
     with pytest.raises(ValueError, match="changed after authentication"):
         weekly_summary_module._read_record_losses(
             records,
