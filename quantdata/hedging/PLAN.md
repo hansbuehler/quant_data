@@ -59,7 +59,7 @@ declared fitting ridge, which is excluded from reported certainty equivalents.
 Real first-origin frozen-weekly gates cover all 13 targets: entropy at risk
 parameter 10 and power-exponential at risk parameter 1 both pass with zero cap
 hits and zero nonconverged fits. Exact cached wealth matches the common pathwise
-accounting engine to $10^{-14}$, the full hedging suite has 349 passing tests,
+accounting engine to $10^{-14}$, the full hedging suite has 353 passing tests,
 and independent quant review passes. The 94-case weekly matrix retains 28 ready
 native cases, four generated-gate waiters, and 62 blocked cases. The native
 weekly queue is pinned to commit `edf28cc` and waits for the active corrected
@@ -67,14 +67,14 @@ daily covariance and Historical-SANOS queues; the generated-model readiness
 queue waits for the rolling GROMM GPU fit.
 Independent model review records for VolGAN, AD-Seq-Vol, and AD-Seq-Vol-FT now
 bind their reviewed commit, the public manifest, their distinct initializer and selection
-lineages, and all six daily/frozen/restarted public/rolling scopes. A deferred
-full-production service will be rebuilt from the final pinned commit after the
-rolling GROMM range and managed-GPU readiness matrix complete. It will assemble
-the three authenticated production gates and write new pinned matrices without
-changing the matrices used by active native queues. Newly ready GPU cases must
-run through `gpuctl`, with four-minute progress and resource checks; the
-remaining daily GROMM Q-expectation plus eight-factor-vega case must wait until
-native weekly production releases CPU capacity.
+lineages, and all six daily/frozen/restarted public/rolling scopes. The
+full-production service now runs from immutable commit `e3c8401` and waits for
+the rolling GROMM range, managed-GPU readiness matrix, and native weekly queue.
+It will assemble the three authenticated production gates and write new pinned
+matrices without changing the matrices used by active native queues. Newly
+ready GPU cases run through `gpuctl`, with four-minute progress and resource
+checks; the remaining daily GROMM Q-expectation plus eight-factor-vega case
+starts only after native weekly production releases CPU capacity.
 The daily production-queue validator
 now authenticates the immutable run and completion summary, recomputes the true
 eligible-origin cohort from the public panel, reparses every dated result record,
@@ -91,7 +91,7 @@ conflicting duplicate cases, and can require that every ready matrix case is
 complete. Its real current-cohort smoke automatically authenticated the SANOS-LV
 reference, three robust-covariance policies, and the completed Historical-SANOS
 policy and generated all four objective tables plus target appendices. The
-resulting complete hedging suite contains 349 passing tests. The
+resulting complete hedging suite contains 353 passing tests. The
 strictly-2022 target-sizing exercise now
 fixes each target to one
 maturity-matched ATM spot-risk unit; all 20 calibration hedges converged with
@@ -1037,7 +1037,8 @@ without copying it or rerunning it. The detached final-production service
 preflight and is waiting on rolling GROMM migration, generated-model GPU
 readiness, and the native weekly matrix. Once all three succeed, it composes
 the canonical matrices, runs only the missing GROMM and generated-model cases,
-and rebuilds the authenticated PDF.
+and rebuilds the authenticated PDF. Its read-only persisted launcher has
+SHA-256 `45328680c715399561760aa0db5f84633c3dcba42c5292b4bc26f665e76ae5e1`.
 Final completed-case figures, production-data PDF regeneration, and the final
 results review remain outstanding.
 
