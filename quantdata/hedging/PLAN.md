@@ -98,7 +98,7 @@ Its coordinator now follows migration service
 `quantdata-hedging-gromm2-migration-661d575.service` and generated-readiness
 service `quantdata-hedging-generated-readiness-b434852.service`; the persisted
 coordinator launcher SHA-256 is
-`324a33db4c6277616905b819360ce9a094904a45abea086c19b7ddf42f6bf161`.
+`d3787f21c7a8b3f61b2fc84d41e4c8c2d1a51fa7d0607d7973acb652aaf05d06`.
 It will assemble the three authenticated production gates and write new pinned
 matrices without changing the matrices used by active native queues. Newly
 ready GPU cases run through `gpuctl`, with four-minute progress and resource

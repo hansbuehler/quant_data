@@ -71,6 +71,6 @@ The full-production coordinator remains pinned to its reviewed source commit,
 but now waits on the corrected migration and generated-readiness services and
 reads `range-fit-2023-2025-v7.json` plus the
 `generated-readiness-b434852` evidence root. Its persisted launcher SHA-256 is
-`324a33db4c6277616905b819360ce9a094904a45abea086c19b7ddf42f6bf161`.
+`d3787f21c7a8b3f61b2fc84d41e4c8c2d1a51fa7d0607d7973acb652aaf05d06`.
 No daily or weekly benchmark output was relabelled or reused to conceal either
 failure.
