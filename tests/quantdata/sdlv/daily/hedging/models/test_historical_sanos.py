@@ -4,6 +4,7 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
+from scipy.optimize import OptimizeResult
 
 from quantdata.hedging.contracts import OptionRight
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.digital_daily import (
@@ -16,6 +17,7 @@ from quantdata.sdlv.daily.front_spot.hedging.data.fixtures import (
 from quantdata.sdlv.daily.front_spot.hedging.models.covariance.returns import (
     HistoricalReturnPanel,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos import hedger
 from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.adapter import (
     evaluate_historical_sanos_daily_book,
 )
@@ -128,6 +130,87 @@ def test_historical_sanos_exact_cost_has_lasso_zero_threshold() -> None:
     assert fit.converged
     assert fit.action[0] == pytest.approx(0.0, abs=1.0e-12)
     assert fit.maximum_absolute_gradient == pytest.approx(0.0, abs=1.0e-12)
+
+
+def test_historical_sanos_exact_cost_accepts_independent_kkt_certificate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    instruments = np.asarray([[-0.01], [0.01], [0.02], [0.04]], dtype=np.float64)
+    config = HistoricalSanosConfig(
+        rolling_observations=20,
+        objective=HistoricalSanosObjective.ENTROPY,
+        risk_parameter=1.0,
+        gradient_tolerance=1.0e-10,
+    )
+
+    def line_search_failure(*args: object, **kwargs: object) -> OptimizeResult:
+        initial = np.asarray(args[1] if len(args) > 1 else kwargs["x0"], dtype=np.float64)
+        return OptimizeResult(
+            x=np.zeros_like(initial),
+            nit=1,
+            success=False,
+            message="synthetic line-search failure",
+        )
+
+    monkeypatch.setattr(hedger, "minimize", line_search_failure)
+    fit = _fit_policy(
+        instruments,
+        np.zeros(len(instruments)),
+        np.asarray([0.02]),
+        config=config,
+    )
+
+    assert fit.converged
+    assert fit.action[0] == pytest.approx(0.0, abs=1.0e-12)
+    assert fit.maximum_absolute_gradient == pytest.approx(0.0, abs=1.0e-12)
+
+
+@pytest.mark.parametrize(
+    "objective",
+    [
+        HistoricalSanosObjective.ENTROPY,
+        HistoricalSanosObjective.POWER_EXPONENTIAL,
+    ],
+)
+def test_historical_sanos_exact_cost_restarts_stalled_split_fit(
+    monkeypatch: pytest.MonkeyPatch,
+    objective: HistoricalSanosObjective,
+) -> None:
+    instruments = np.asarray([[-0.01], [0.01], [0.02], [0.04]], dtype=np.float64)
+    config = HistoricalSanosConfig(
+        rolling_observations=20,
+        objective=objective,
+        risk_parameter=1.0,
+        gradient_tolerance=1.0e-10,
+    )
+    calls = 0
+
+    def stalled_then_converged(*args: object, **kwargs: object) -> OptimizeResult:
+        nonlocal calls
+        calls += 1
+        initial = np.asarray(args[1] if len(args) > 1 else kwargs["x0"], dtype=np.float64)
+        solution = np.zeros_like(initial)
+        if calls == 1:
+            solution[0] = 1.0
+        return OptimizeResult(
+            x=solution,
+            nit=1,
+            success=(calls != 1),
+            message=("stalled" if calls == 1 else "converged"),
+        )
+
+    monkeypatch.setattr(hedger, "minimize", stalled_then_converged)
+    fit = _fit_policy(
+        instruments,
+        np.zeros(len(instruments)),
+        np.asarray([0.02]),
+        config=config,
+    )
+
+    assert calls == 3
+    assert fit.converged
+    assert fit.iterations == 3
+    assert fit.action[0] == pytest.approx(0.0, abs=1.0e-12)
 
 
 def test_power_oce_cash_translation_is_shift_invariant() -> None:

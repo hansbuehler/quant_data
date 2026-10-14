@@ -23,8 +23,12 @@
   transaction-cost lasso coordinate descent with a small declared quadratic
   ridge and a KKT stopping rule; entropy and power-exponential use an exact
   positive/negative action split with analytic gradients and a KKT gate, while
-  mean-volatility uses an exact conic program. The oldest 80% is fitted and the
-  newest 20% is held out for a
+  mean-volatility uses an exact conic program. The entropy and
+  power-exponential gate is the independently recomputed KKT residual of the
+  original signed-action problem, not the optimizer's line-search status; a
+  stalled split solve receives one restart from its canonical signed action
+  without changing the objective or tolerance. The oldest 80% is fitted and
+  the newest 20% is held out for a
   validation diagnostic; after validation the policy is refitted on all 252
   observations. No future return is used.
 - **Artifacts:** common `hedging-smoke-v2` JSON with explicit claim quantity. The model has no neural

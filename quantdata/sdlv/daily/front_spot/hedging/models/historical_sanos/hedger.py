@@ -178,6 +178,14 @@ def _fit_policy(
         config=config,
         include_translation=include_translation,
     )
+    selection = _retry_exact_cost_policy(
+        selection,
+        instruments[:split],
+        claim[:split],
+        costs,
+        config=config,
+        include_translation=include_translation,
+    )
     validation_loss = _objective_and_gradient(
         selection.x,
         instruments[split:],
@@ -188,6 +196,14 @@ def _fit_policy(
     )[0]
     final = _minimize_policy(
         selection.x,
+        instruments,
+        claim,
+        costs,
+        config=config,
+        include_translation=include_translation,
+    )
+    final = _retry_exact_cost_policy(
+        final,
         instruments,
         claim,
         costs,
@@ -259,6 +275,34 @@ def _minimize_policy(
             include_translation=include_translation,
         )
     raise ValueError(f"unsupported historical SANOS objective {config.objective!r}")
+
+
+def _retry_exact_cost_policy(
+    result: OptimizeResult,
+    instruments: FloatArray,
+    claim: FloatArray,
+    costs: FloatArray,
+    *,
+    config: HistoricalSanosConfig,
+    include_translation: bool,
+) -> OptimizeResult:
+    """Restart a stalled split solve from its canonical signed action."""
+    if result.success or config.objective not in (
+        HistoricalSanosObjective.ENTROPY,
+        HistoricalSanosObjective.POWER_EXPONENTIAL,
+    ):
+        return result
+    retry = _minimize_policy(
+        np.asarray(result.x, dtype=np.float64),
+        instruments,
+        claim,
+        costs,
+        config=config,
+        include_translation=include_translation,
+    )
+    retry.nit = int(result.nit) + int(retry.nit)
+    retry.message = f"canonical restart after {result.message}; {retry.message}"
+    return retry
 
 
 def _minimize_exact_cost_policy(
@@ -379,13 +423,17 @@ def _minimize_exact_cost_policy(
     result.x = np.concatenate((action, translation))
     result.fun = float(risk_value + costs @ np.abs(action))
     result.optimality = float(optimality)
-    result.success = bool(
-        result.success and optimality <= config.gradient_tolerance
-    )
-    if not result.success and optimality > config.gradient_tolerance:
+    optimizer_success = bool(result.success)
+    result.success = bool(optimality <= config.gradient_tolerance)
+    if not result.success:
         result.message = (
             f"{result.message}; KKT residual {optimality:.6g} exceeds "
             f"{config.gradient_tolerance:.6g}"
+        )
+    elif not optimizer_success:
+        result.message = (
+            f"{result.message}; accepted by independent KKT certificate "
+            f"{optimality:.6g}"
         )
     return result
 
