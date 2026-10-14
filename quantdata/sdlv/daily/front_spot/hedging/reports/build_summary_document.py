@@ -40,7 +40,7 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.weekly_production_matrix im
 
 JsonObject: TypeAlias = dict[str, object]
 
-DOCUMENT_SCHEMA = "hedging-benchmark-summary-document-v2"
+DOCUMENT_SCHEMA = "hedging-benchmark-summary-document-v3"
 DISPLAY_SCALE = 10_000.0
 DAILY_MATRIX_SCHEMA = "hedging-daily-production-matrix-v1"
 WEEKLY_MATRIX_SCHEMA = "hedging-weekly-production-matrix-v1"
@@ -221,6 +221,11 @@ forbidden, or nonconverged fits where forbidden are rejected before rendering.
 \input{{{_tex_escape(daily_target_appendix)}}}
 \clearpage
 \section{{Weekly Target-Level Results}}
+The price tables report cross-origin means of inception unit prices. Market is
+the common SANOS mark; accounting is the price used in the economic-P\&L
+decomposition. A genuine risk-neutral expectation is shown only for a
+risk-neutral model, while buyer and seller columns are shown only when the
+policy supplies the corresponding indifference prices.
 \input{{{_tex_escape(weekly_target_appendix)}}}
 
 \clearpage

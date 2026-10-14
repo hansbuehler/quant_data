@@ -159,6 +159,12 @@ def test_weekly_summary_discovers_schedules_and_aggregates_complete_cases(
     assert frozen_historical["metrics"]["targets"][weekly_targets()[0].label][
         "economic_maximum_drawdown"
     ] == pytest.approx(528 * 1.6)
+    historical_prices = frozen_historical["metrics"]["targets"][
+        weekly_targets()[0].label
+    ]["prices"]
+    assert historical_prices["mean_q_expectation"] is None
+    assert historical_prices["mean_buyer_indifference"] == pytest.approx(0.39)
+    assert historical_prices["mean_seller_indifference"] == pytest.approx(0.41)
     comparison = payload["comparisons"][HedgeSchedule.FROZEN_WEEKLY.value]
     assert comparison["pure_rmse_reduction_vs_reference"][definitions[1][0]] == (
         pytest.approx(-0.5)
@@ -198,6 +204,9 @@ def test_weekly_summary_discovers_schedules_and_aggregates_complete_cases(
     assert "$\\lambda=10$" in appendix
     assert "16,000.00" in appendix
     assert "Economic MDD" in appendix
+    assert "Mean inception unit prices" in appendix
+    assert "$Q$ expectation" in appendix
+    assert "3,900.00" in appendix
 
 
 def test_weekly_drawdown_uses_chronological_pnl_reversals() -> None:
@@ -477,12 +486,23 @@ def test_weekly_record_loss_reader_rechecks_authenticated_bytes(
                         "breakdown": {
                             "claim_quantity": 2.0,
                             "market_price": 0.4,
+                            "model_price": 0.41,
                             "payoff": 0.1,
                             "economic_pnl": -0.2,
                             "pure_hedge_error": -0.15,
                             "pricing_contribution": -0.05,
                         },
-                    }
+                    },
+                    "fit_price_records": [
+                        {
+                            "common_market_price_per_fit_spot": 0.4,
+                            "q_expectation_per_fit_spot": None,
+                            "buyer_indifference_per_fit_spot": 0.41,
+                            "seller_indifference_per_fit_spot": 0.43,
+                            "continuation_price_per_fit_spot": 0.42,
+                        }
+                        for _decision in range(5)
+                    ],
                 }
                 for target in weekly_targets()
             ],
@@ -503,6 +523,8 @@ def test_weekly_record_loss_reader_rechecks_authenticated_bytes(
     claim = weekly_targets()[0].label
     assert losses[claim][0]["unhedged_loss"] == pytest.approx(0.6)
     assert losses[claim][0]["economic_loss"] == pytest.approx(0.2)
+    assert losses[claim][0]["buyer_indifference"] == pytest.approx(0.41)
+    assert losses[claim][0]["seller_indifference"] == pytest.approx(0.43)
 
     first_path = records / "2023-01-03.json"
     first_path.write_text(first_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
@@ -651,6 +673,7 @@ def _record_losses(
     result: WeeklyRunResults,
 ) -> dict[str, tuple[dict[str, object], ...]]:
     origins = tuple(result.record_sha256_by_origin)
+    risk_neutral = result.model == "sanos-lv"
     return {
         value.claim: tuple(
             {
@@ -659,6 +682,11 @@ def _record_losses(
                 "economic_loss": value.economic_loss.root_mean_square,
                 "pure_hedge_loss": value.pure_hedge_loss.root_mean_square,
                 "pricing_loss": value.pricing_loss.root_mean_square,
+                "market_price": 0.4,
+                "accounting_model_price": 0.4 if risk_neutral else 0.39,
+                "q_expectation": 0.4 if risk_neutral else None,
+                "buyer_indifference": None if risk_neutral else 0.39,
+                "seller_indifference": None if risk_neutral else 0.41,
             }
             for origin in origins
         )

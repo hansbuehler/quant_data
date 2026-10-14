@@ -42,7 +42,7 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.weekly_results import (
 
 JsonObject: TypeAlias = dict[str, object]
 
-SUMMARY_SCHEMA = "hedging-benchmark-weekly-summary-metrics-v3"
+SUMMARY_SCHEMA = "hedging-benchmark-weekly-summary-metrics-v4"
 WEEKLY_MATRIX_SCHEMA = "hedging-weekly-production-matrix-v1"
 DISPLAY_SCALE = 10_000.0
 EXPECTED_ORIGINS = 528
@@ -298,6 +298,10 @@ def _read_policy(
         metrics=_aggregate_result(result),
         record_losses=record_losses,
     )
+    metrics = _with_price_metrics(
+        metrics=metrics,
+        record_losses=record_losses,
+    )
     return {
         "key": policy.key,
         "model": result.model,
@@ -414,7 +418,60 @@ def _read_record_losses(
             seen.add(key)
             quantity = _require_number(breakdown, "claim_quantity")
             market_price = _require_number(breakdown, "market_price")
+            model_price = _require_number(breakdown, "model_price")
             payoff = _require_number(breakdown, "payoff")
+            price_records = run.get("fit_price_records")
+            if not isinstance(price_records, list) or len(price_records) != 5:
+                raise ValueError(
+                    f"weekly run must contain five fit-price records: {path}"
+                )
+            inception_prices = _as_object(
+                price_records[0],
+                "weekly inception price record",
+            )
+            inception_market_price = _require_number(
+                inception_prices,
+                "common_market_price_per_fit_spot",
+            )
+            q_expectation = _optional_number(
+                inception_prices,
+                "q_expectation_per_fit_spot",
+            )
+            buyer_indifference = _optional_number(
+                inception_prices,
+                "buyer_indifference_per_fit_spot",
+            )
+            seller_indifference = _optional_number(
+                inception_prices,
+                "seller_indifference_per_fit_spot",
+            )
+            accounting_price = (
+                buyer_indifference
+                if buyer_indifference is not None
+                else q_expectation
+            )
+            if accounting_price is None:
+                raise ValueError(
+                    f"weekly inception prices lack Q or buyer price: {path}"
+                )
+            if not math.isclose(
+                inception_market_price,
+                market_price,
+                rel_tol=1.0e-12,
+                abs_tol=1.0e-12,
+            ):
+                raise ValueError(
+                    f"weekly inception market price disagrees with accounting: {path}"
+                )
+            if not math.isclose(
+                accounting_price,
+                model_price,
+                rel_tol=1.0e-12,
+                abs_tol=1.0e-12,
+            ):
+                raise ValueError(
+                    f"weekly inception model price disagrees with accounting: {path}"
+                )
             rows.setdefault(claim, []).append(
                 {
                     "origin_date": origin,
@@ -428,6 +485,11 @@ def _read_record_losses(
                         breakdown,
                         "pricing_contribution",
                     ),
+                    "market_price": market_price,
+                    "accounting_model_price": model_price,
+                    "q_expectation": q_expectation,
+                    "buyer_indifference": buyer_indifference,
+                    "seller_indifference": seller_indifference,
                 }
             )
     if len(seen) != expected_result.result_count:
@@ -499,6 +561,71 @@ def _with_drawdown_metrics(
         ):
             targets[claim][f"{prefix}_maximum_drawdown"] = float(drawdown)
     return {"all": all_metrics, "targets": targets}
+
+
+def _with_price_metrics(
+    *,
+    metrics: JsonObject,
+    record_losses: dict[str, tuple[JsonObject, ...]],
+) -> JsonObject:
+    """Attach inception unit-price summaries without mixing claim quantities."""
+    all_metrics = dict(_require_object(metrics, "all"))
+    targets = {
+        claim: dict(_as_object(value, f"weekly target {claim}"))
+        for claim, value in _require_object(metrics, "targets").items()
+    }
+    all_rows = tuple(
+        row
+        for claim in sorted(record_losses)
+        for row in record_losses[claim]
+    )
+    all_metrics["prices"] = _price_summary(all_rows)
+    for claim, rows in record_losses.items():
+        targets[claim]["prices"] = _price_summary(rows)
+    return {"all": all_metrics, "targets": targets}
+
+
+def _price_summary(rows: tuple[JsonObject, ...]) -> JsonObject:
+    if not rows:
+        raise ValueError("weekly price summary requires observations")
+    market = np.asarray(
+        [_require_number(row, "market_price") for row in rows],
+        dtype=np.float64,
+    )
+    accounting = np.asarray(
+        [_require_number(row, "accounting_model_price") for row in rows],
+        dtype=np.float64,
+    )
+    return {
+        "observations": len(rows),
+        "mean_market_price": float(np.mean(market)),
+        "mean_accounting_model_price": float(np.mean(accounting)),
+        "mean_accounting_minus_market": float(np.mean(accounting - market)),
+        **{
+            f"mean_{name}": _mean_optional_record_number(rows, name)
+            for name in (
+                "q_expectation",
+                "buyer_indifference",
+                "seller_indifference",
+            )
+        },
+    }
+
+
+def _mean_optional_record_number(
+    rows: tuple[JsonObject, ...],
+    name: str,
+) -> float | None:
+    values = tuple(row.get(name) for row in rows)
+    present = tuple(value for value in values if value is not None)
+    if not present:
+        return None
+    if len(present) != len(values):
+        raise ValueError(f"weekly price field {name} is missing for some origins")
+    numbers = tuple(_number(value) for value in present)
+    if any(not math.isfinite(value) for value in numbers):
+        raise ValueError(f"weekly price field {name} must be finite")
+    return float(np.mean(numbers))
 
 
 def _aggregate_slices(slices: tuple[WeeklyResultSlice, ...]) -> JsonObject:
@@ -908,6 +1035,46 @@ def _target_appendix_tex(payload: JsonObject) -> str:
             (
                 "\\begin{landscape}",
                 "\\subsection*{" + model_heading + "}",
+                "\\begin{longtable}{@{}lrrrrrr@{}}",
+                "\\caption{Mean inception unit prices across weekly origins, in basis points of inception normalized spot.}\\\\",
+                "\\toprule",
+                "Target & Market & Accounting & $Q$ expectation & Buyer & Seller & Accounting--market \\\\",
+                "\\midrule",
+                "\\endhead",
+            )
+        )
+        for claim in sorted(targets):
+            prices = _require_object(_require_object(targets, claim), "prices")
+            lines.append(
+                " & ".join(
+                    (
+                        _tex_escape(claim),
+                        _basis_points(_require_number(prices, "mean_market_price")),
+                        _basis_points(
+                            _require_number(prices, "mean_accounting_model_price")
+                        ),
+                        _optional_basis_points(prices.get("mean_q_expectation")),
+                        _optional_basis_points(
+                            prices.get("mean_buyer_indifference")
+                        ),
+                        _optional_basis_points(
+                            prices.get("mean_seller_indifference")
+                        ),
+                        _basis_points(
+                            _require_number(
+                                prices,
+                                "mean_accounting_minus_market",
+                            )
+                        ),
+                    )
+                )
+                + " \\\\"
+            )
+        lines.extend(
+            (
+                "\\bottomrule",
+                "\\end{longtable}",
+                "\\medskip",
                 "\\begin{longtable}{@{}lrrrrrrr@{}}",
                 "\\toprule",
                 "Target & Unhedged RMSE & Pure RMSE & Economic RMSE & Economic MDD & ES$_{95}$ & Cost & Gross \\\\",
@@ -1031,6 +1198,12 @@ def _basis_points(value: float) -> str:
     return f"{DISPLAY_SCALE * value:,.2f}"
 
 
+def _optional_basis_points(value: object) -> str:
+    if value is None:
+        return "--"
+    return _basis_points(_number(value))
+
+
 def _tex_objective_name(value: str) -> str:
     return value.replace("_", "--")
 
@@ -1070,7 +1243,7 @@ def _tex_escape(value: str) -> str:
 
 def _number(value: object) -> float:
     if isinstance(value, bool) or not isinstance(value, int | float):
-        raise ValueError("weekly fitted parameter must be numeric")
+        raise ValueError("weekly report value must be numeric")
     return float(value)
 
 
@@ -1106,6 +1279,13 @@ def _require_number(payload: JsonObject, name: str) -> float:
     if not math.isfinite(number):
         raise ValueError(f"{name} must be finite")
     return number
+
+
+def _optional_number(payload: JsonObject, name: str) -> float | None:
+    value = payload.get(name)
+    if value is None:
+        return None
+    return _require_number(payload, name)
 
 
 def _require_record_losses(

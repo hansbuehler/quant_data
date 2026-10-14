@@ -106,7 +106,12 @@ conflicting duplicate cases, and can require that every ready matrix case is
 complete. Its real current-cohort smoke automatically authenticated the SANOS-LV
 reference, three robust-covariance policies, and the completed Historical-SANOS
 policy and generated all four objective tables plus target appendices. The
-resulting complete hedging suite contains 419 passing tests. The
+weekly report layer also reconstructs inception market, accounting,
+risk-neutral, buyer-indifference, and seller-indifference unit prices directly
+from authenticated dated records. It rejects any disagreement with realized
+accounting and renders cross-origin target-level price means without filling
+unavailable Q or indifference quantities. The resulting complete hedging suite
+contains 419 passing tests. The
 strictly-2022 target-sizing exercise now
 fixes each target to one
 maturity-matched ATM spot-risk unit; all 20 calibration hedges converged with

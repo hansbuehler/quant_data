@@ -45,6 +45,7 @@ def test_summary_document_reports_full_grid_without_ex_post_selection() -> None:
     assert "pending" not in document.lower()
     assert "daily-objective-tables.tex" in document
     assert "weekly-target-appendix.tex" in document
+    assert "genuine risk-neutral expectation" in document
     catalogue = document.split("\\section{Model Catalogue}", maxsplit=1)[1]
     assert catalogue.index("\\subsection{SANOS--LV}") < catalogue.index(
         "\\subsection{Historical SANOS}"
