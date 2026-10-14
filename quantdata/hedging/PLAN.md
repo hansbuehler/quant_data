@@ -1083,15 +1083,17 @@ matrix v3 rather than the empty v4 output directory. Its read-only persisted
 launcher has SHA-256
 `5ff2b5c6bd92b739da37ae8dffb9ecb6b5a9524bb49c73d8dac9c7f46fa40685`.
 The report-only successor
-`quantdata-hedging-report-refresh-60ad1ce.service` waits for that production
+`quantdata-hedging-report-refresh-94db273.service` waits for that production
 service and then re-authenticates the final matrices before rendering the full
 weekly per-model, per-target objective appendix and the authenticated model
 catalogue order from immutable commit
-`60ad1ce0d999a1b8498b2564c44bac6c81afc128`. Weekly objective tables now
+`94db273ad4bc3badde1c8f842064fc8a50b8b1d1`. Weekly objective tables now
 include equal-weight episode-book and worst-target maximum drawdown, computed
 from chronological overlapping episode-origin P\&L and explicitly distinguished
-from a non-overlapping self-financing-account drawdown. Its persisted launcher
-has SHA-256 `b79d1bb2accf48ffd4fd0402e3f6d9df12af4096fad881a14d2ece8dc3e781ea`;
+from a non-overlapping self-financing-account drawdown. Fitted-policy parameters
+and ex-post risk-score parameters have distinct headings and the correct
+$\kappa$ or $\lambda$ symbol. Its persisted launcher has SHA-256
+`516d93bc35b38a65ac1e540d1e9faccbb1f823c97824364cdc14550bef33f92f`;
 it writes a separate report manifest and never changes production results.
 Final completed-case figures, production-data PDF regeneration, and the final
 results review remain outstanding.
