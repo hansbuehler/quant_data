@@ -916,7 +916,7 @@ Its three risk-parameter cohorts are queued from immutable commit `656ca65`
 behind the two active covariance services under
 `quantdata-hedging-covariance-power-656ca65.service`; the persisted launcher
 SHA-256 is
-`32179eebebd0f6d8b039f7eacdc5eca54607eb762d6c2b37a52afe196cd8b1db`.
+`f359b2de7b710bd76652bb5c27fe0089b6740bab3fba9fecf8ca91b9cd46fdc2`.
 The versioned daily production matrix contains 57
 unique cases: 24 runnable native CPU cases, two
 staged published-setting GPU cases awaiting the generated-model GPU-readiness
@@ -1138,7 +1138,7 @@ cohorts. It will authenticate and reuse every completed case, compose the
 canonical 57-case daily matrix, pair it with the complete 94-case weekly
 matrix, and render a fresh report without rerunning existing policies. Its
 persisted launcher SHA-256 is
-`a633269ca7fb637139b533a7e4b247158396f004356318249fa87b86e96efd93`.
+`cbdb44a4af29a596f89d912ef3bc80310fa6a5761a29cef190cf425b6f98b10a`.
 
 ## Minimum Test Gates
 
