@@ -36,7 +36,12 @@ target-notional cohort, with zero cap hits and zero nonconvergence. The correcte
 Historical-SANOS mean--variance case at risk parameter $0.1$ is likewise complete
 and authenticated for all 611 origins and 12,220 records, with zero cap hits and
 zero nonconvergence. The remaining robust-covariance and Historical-SANOS sweeps
-continue from immutable worktrees.
+continue from immutable worktrees. The remaining Historical-SANOS launcher keeps
+four CPU cases active with a work-conserving queue: when any case finishes, the
+next precommitted objective starts immediately rather than waiting for the other
+three cases in its original batch. Existing atomic origin records are reused,
+while the model code, production matrix, case order, and four-worker limit remain
+pinned.
 Other daily production
 and full weekly production remain outstanding. A unified weekly runner now
 supports frozen and restarted schedules for SANOS-LV, historical SANOS,
