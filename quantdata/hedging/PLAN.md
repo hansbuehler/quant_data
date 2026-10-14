@@ -6,29 +6,29 @@ This document is the implementation plan for the hedging benchmark built around
 the daily front-spot SDLV/GROMM model. It records the agreed experimental design
 and implementation order.
 
-**Current generated-model correction (2026-10-14).** Rolling VolGAN and
-diffusion warm starts must use the authenticated initializer's logical model
-label, `hedging-generated-v1`; the operational evaluation label is a distinct
-run identifier. The earlier readiness service incorrectly used the latter for
-checkpoint lookup. Immutable commit
-`d22ec9a0893313363fb503f8f53f5528159b1549` separates these identities through
-an explicit `--model-label` argument without weakening checkpoint validation.
-The correction and both detached launchers passed independent quantitative
-review, recorded in
-`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-14-generated-initializer-label-lineage-review.md`
+**Current authenticated production chain (2026-10-14).** The `d22ec9a`
+generated-readiness run halted after numerically completing the first weekly
+AD--Seq--Vol scope because its validator compared the canonical matrix identity
+`diffusion-ad-seq-vol` literally with the weekly adapter identity
+`ad-seq-vol`. No production matrix commitment had been written. Immutable
+commit `b20dea5bae0ebdce3c698565d74e4de2c729824f` now maps only the two
+diffusion matrix identities to their weekly runtime identities during
+authentication, while reports continue to export the canonical taxonomy. Both
+complete hedging test trees pass, with 464 tests in total. Independent review is
+recorded in
+`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-14-weekly-generated-model-identity-review.md`
 (SHA-256
-`041f00d5b322c92c2b1d23f7933eb967dc86671701f81b4403a94155eb2b4fc1`).
-The authenticated lineage snapshot has SHA-256
-`91f04fa3067c2df7d6978abbf083eea2a7d856d0be493a4345f44c894cd5742e`.
-Service `quantdata-hedging-generated-readiness-d22ec9a.service` is rerunning the
-complete generated-model readiness matrix on the managed GPU; its immutable
-launcher SHA-256 is
-`ebdd216999c1553316603a6fa1280e0ad5dd669967bc99022a062a38987c25af`.
-Service `quantdata-hedging-full-production-d22ec9a.service` waits for that
-readiness evidence and the remaining native prerequisites before composing the
-daily and weekly production matrices and rebuilding the report; its launcher
-SHA-256 is
-`b6c7c9534cf73b4c03bce1563e1190a700de41f2f6b9cbe360c516df8ca03dff`.
+`c8c8e0c9864da6fbddf4be2d21c9c00e2a1632191a63f47e3b47f73ffc20a5f9`).
+Service `quantdata-hedging-generated-readiness-b20dea5.service` owns the managed
+GPU and reauthenticates every one-origin readiness scope. Its seeded run and
+checkpoint files are byte-identical to the prior tree and remain inadmissible
+until the new validator accepts them. Its reviewed launcher SHA-256 is
+`8c1ed51e45dc2588ce50294b066e2e22ae3597bbc7fa4a94196c37f515fd009a`.
+Service `quantdata-hedging-full-production-b20dea5.service` waits for that
+readiness evidence and the remaining native prerequisites before it may compose
+and commit the daily and weekly matrices. Its reviewed launcher SHA-256 is
+`e6de16d5c645f1ae78e3f91b51376ff6496d029d1d5ae8066d8f72cb14207774`.
+The superseded coordinator was stopped before commitment.
 
 **Current production correction (2026-10-14).** Historical-SANOS version
 `1.11` makes the final 252-observation fit, rather than its 80% warm-start
