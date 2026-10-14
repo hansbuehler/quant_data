@@ -8,8 +8,8 @@ production scope are both proved by current artifacts. A running service,
 partial checkpoint, smoke test, or plausible downstream path is not completion
 evidence.
 
-Snapshot time: 14 October 2026, 05:51 BST. Repository commit:
-`6a8909a810ba9ef7c6305d7ca0918608fb1cdaf7`.
+Snapshot time: 14 October 2026, 06:43 BST. Repository commit:
+`661d5752c7813de3d7ab2cbdb8998a0b0ccc47ee`.
 
 ## Requirement Matrix
 
@@ -20,8 +20,8 @@ Snapshot time: 14 October 2026, 05:51 BST. Repository commit:
 | SANOS--LV reference | **Implementation and daily production complete; weekly production incomplete.** Current-notional daily evidence has 611 origins and 12,220 target records. | `2026-10-12-sanos-lv-phase2.md`; `2026-10-12-sanos-lv-weekly-policy-quant-review.md`; authenticated daily production matrix v3 output. | Both complete 528-origin weekly schedules in the canonical weekly matrix. |
 | Independent covariance baseline | **Implementation complete; production incomplete.** Mean--variance, mean--volatility, Gaussian entropy equivalence, and exact Gaussian power OCE pass review. Three power cohorts are queued. | `2026-10-12-covariance-phase3-rereview.md`; `2026-10-12-covariance-dlv-return-correction-review.md`; `2026-10-14-covariance-gaussian-power-review.md`. | Complete and authenticate all ten fitted-policy cases, including the three 611-origin power cohorts and the precommitted low-risk mean--volatility diagnostic. |
 | Rolling SDLV estimation | **Complete implementation gate.** Rolling 252-transition estimation, rank 16, aligned factors, eight Greek factors, Q drift, and compatible P drift pass remediation review. | `2026-10-12-rolling-dlv-phase4-remediation-review.md`; `2026-10-12-rolling-dlv-phase4-second-remediation-review.md`. | Dated production artifacts must be present for every GROMM origin. |
-| GROMM market model and hedges | **Implementation complete; rolling evidence incomplete.** The active legacy affine range has 595 of 611 fitted origins in this snapshot. Current physical decisions will be recomputed by the reviewed migration. | `2026-10-12-gromm2-architecture-quant-review.md`; `2026-10-12-gromm-hedging-integration-remediation-review.md`; `2026-10-14-rolling-gromm2-physical-selection-review.md`; live range state under `gromm2-rolling-v3/operations/dbf8bde`. | Complete all 611 legacy fits, migrate and authenticate all 611 current-code artifacts, then complete every enabled daily and weekly GROMM policy. |
-| GPU production infrastructure | **Mechanical gate complete; live production evidence incomplete.** Restart, source pinning, range authentication, and progress heartbeat paths exist. | `2026-10-13-gromm-production-provenance-review.md`; `2026-10-13-evaluation-heartbeat-review.md`; focused restart tests. | Successful current rolling range, generated readiness matrix, production gates, and completed GPU cases. |
+| GROMM market model and hedges | **Implementation complete; legacy rolling evidence complete; current migration incomplete.** The authenticated legacy affine range now has all 611 origins. The corrected migration separately authenticates the range source and the common dated-manifest source before it can claim a GPU. | `2026-10-12-gromm2-architecture-quant-review.md`; `2026-10-12-gromm-hedging-integration-remediation-review.md`; `2026-10-14-rolling-gromm2-physical-selection-review.md`; `2026-10-14-production-handoff-remediation.md`; complete range `gromm2-rolling-v3/range-fit-2023-2025-v5.json`. | Migrate and authenticate all 611 current-code artifacts, then complete every enabled daily and weekly GROMM policy. |
+| GPU production infrastructure | **Mechanical gate complete; live production evidence incomplete.** Restart, source pinning, range authentication, and progress heartbeat paths exist. The legacy range completed successfully; two handoff defects were found and remediated before downstream production. | `2026-10-13-gromm-production-provenance-review.md`; `2026-10-13-evaluation-heartbeat-review.md`; `2026-10-14-production-handoff-remediation.md`; focused restart tests. | Successful current rolling migration, generated readiness matrix, production gates, and completed GPU cases. |
 | Historical SANOS baseline | **Implementation complete; production incomplete.** Daily and weekly exact-cost solvers and OCE formulations pass review; active daily queues are partial. | `2026-10-12-historical-sanos-weekly-quant-review.md`; `2026-10-14-historical-weekly-oce-review.md`. | Complete every daily objective/parameter and both 528-origin weekly schedules; retain cap-limited recession cases only under their declared diagnostic gate. |
 | Published generated baselines | **Implementation and training-lineage review complete; readiness and production incomplete.** VolGAN, AD-Seq-Vol, and AD-Seq-Vol-FT have distinct authenticated lineages. | `2026-10-12-volgan-diffusion-integration-remediation-review.md`; `2026-10-12-generated-rolling-warmstart-quant-review.md`; `2026-10-13-generated-gate-assembler-review.md`; generated training `pipeline-complete.json`. | Complete the replacement 18-scope GPU-readiness matrix, assemble all three production gates, and complete every enabled daily and weekly case. |
 | Daily benchmark matrix | **Incomplete.** The canonical specification has 57 cases. Native queues, rolling GROMM, and generated cases are not all complete. | Versioned daily production matrix builder and validators; active immutable services listed below. | A 57-case matrix in which every case is ready, has a complete authenticated output, and reconstructs to the declared 12,220 records per policy. |
@@ -31,19 +31,23 @@ Snapshot time: 14 October 2026, 05:51 BST. Repository commit:
 
 ## Active Immutable Work
 
-- `quantdata-hedging-gromm2-production-v5.service` completes the remaining
-  legacy affine origins.
-- `quantdata-hedging-gromm2-migration-3f285fe-v2.service` waits to recompute
-  current dynamics and physical-selection evidence.
-- `quantdata-hedging-generated-readiness-v5.service` waits for a managed GPU.
+- The legacy affine range is complete for all 611 origins; its authenticated
+  fit summary SHA-256 is
+  `6cbdcb13913d322d95e1ff644950f638aaf090ea36278553d6eb898b2bce3205`.
+- `quantdata-hedging-gromm2-migration-661d575.service` waits to recompute
+  current dynamics and physical-selection evidence after authenticating both
+  legacy source identities across all 611 manifests.
+- `quantdata-hedging-generated-readiness-b434852.service` runs the corrected
+  18-scope managed-GPU readiness matrix.
 - The corrected covariance and Historical-SANOS daily services continue their
   restartable current-notional cohorts.
 - `quantdata-hedging-weekly-native-parallel-a1baa69.service` waits for complete
   native daily prerequisites.
 - `quantdata-hedging-covariance-power-656ca65.service` waits for existing
   covariance capacity, then runs the three reviewed Gaussian power cohorts.
-- `quantdata-hedging-full-production-a1baa69.service` produces the original
-  54-case daily and 94-case weekly canonical outputs.
+- `quantdata-hedging-full-production-a1baa69.service` follows the corrected
+  migration/readiness services and produces the original 54-case daily and
+  94-case weekly canonical outputs.
 - `quantdata-hedging-final-57-656ca65.service` authenticates those outputs plus
   the three power cohorts, composes the required 57-case daily matrix, and
   renders the successor report.

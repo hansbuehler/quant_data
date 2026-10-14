@@ -81,13 +81,24 @@ weekly queue is pinned to commit `a1baa69` and waits for the active corrected
 daily covariance and Historical-SANOS queues. The covariance mean--volatility
 case at risk parameter $0.1$ is being rebuilt in a fresh commit-pinned output:
 its old runner correctly detected a recession direction but stopped before
-recording the precommitted capped diagnostic. The generated-model readiness
-queue waits for the rolling GROMM GPU fit.
+recording the precommitted capped diagnostic. The legacy rolling GROMM range is
+now complete and authenticated for all 611 origins. Its current-code migration
+authenticates the range-level and dated-manifest source identities separately;
+the earlier migration conflated those two hashes and therefore rejected the
+otherwise valid legacy evidence before doing any work. Generated-model
+readiness now runs from immutable commit `b434852`, which restores checkpoint
+payloads on CPU before loading model, optimizer, and RNG state. This fixes the
+VolGAN CUDA-resume failure exposed by the first readiness attempt.
 Independent model review records for VolGAN, AD-Seq-Vol, and AD-Seq-Vol-FT now
 bind their reviewed commit, the public manifest, their distinct initializer and selection
 lineages, and all six daily/frozen/restarted public/rolling scopes. The
 full-production service now runs from immutable commit `a1baa69` and waits for
 the rolling GROMM range, managed-GPU readiness matrix, and native weekly queue.
+Its coordinator now follows migration service
+`quantdata-hedging-gromm2-migration-661d575.service` and generated-readiness
+service `quantdata-hedging-generated-readiness-b434852.service`; the persisted
+coordinator launcher SHA-256 is
+`324a33db4c6277616905b819360ce9a094904a45abea086c19b7ddf42f6bf161`.
 It will assemble the three authenticated production gates and write new pinned
 matrices without changing the matrices used by active native queues. Newly
 ready GPU cases run through `gpuctl`, with four-minute progress and resource
