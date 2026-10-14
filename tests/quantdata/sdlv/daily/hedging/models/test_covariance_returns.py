@@ -152,6 +152,46 @@ def test_relative_replay_uses_dlv_and_not_sanos_history() -> None:
         origin_date=origin_date,
         target=target,
     )
+    changed_dlv_origin = replace(
+        origin,
+        dlv_raw_log_excess_dlvsq=np.log(
+            np.full_like(
+                origin.dlv_raw_log_excess_dlvsq,
+                0.35**2 - origin.minimum_dlvsq,
+            )
+        ),
+    )
+    changed_dlv_endpoint = replace(
+        endpoint,
+        dlv_raw_log_excess_dlvsq=np.log(
+            np.full_like(
+                endpoint.dlv_raw_log_excess_dlvsq,
+                0.35**2 - endpoint.minimum_dlvsq,
+            )
+        ),
+    )
+    current_dlv_changed = build_daily_digital_sample(
+        _SyntheticPanel(
+            transition=replace(transition, origin=changed_dlv_origin),
+            endpoint=changed_dlv_endpoint,
+        ),
+        origin_date=origin_date,
+        target=target,
+    )
+    assert current_dlv_changed.market_price == current.market_price
+    assert current_dlv_changed.terminal_value == current.terminal_value
+    np.testing.assert_allclose(
+        [quote.mark for quote in current_dlv_changed.hedge_quotes],
+        [quote.mark for quote in current.hedge_quotes],
+        rtol=0.0,
+        atol=0.0,
+    )
+    np.testing.assert_allclose(
+        current_dlv_changed.hedge_returns,
+        current.hedge_returns,
+        rtol=0.0,
+        atol=0.0,
+    )
     coordinates = tuple(
         RelativeOptionCoordinate.from_quote(quote) for quote in current.hedge_quotes
     )

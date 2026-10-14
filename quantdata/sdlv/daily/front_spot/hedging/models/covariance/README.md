@@ -2,10 +2,11 @@
 
 - **Inputs:** historical public forward-adjusted spot returns and realized
   option/digital returns. The current hedge book is replayed over the rolling
-  history at the same initial business DTE, NMS, and option side. No
-  SANOS-generated scenarios enter the covariance fit; historical fitted SANOS
-  marks are the common public price proxy because the release contains no
-  midpoint.
+  history at the same initial business DTE, NMS, and option side. Option and
+  digital training returns are reconstructed from the released DLV state; no
+  SANOS-generated scenarios enter the covariance fit. SANOS marks are used
+  only as the common executable market proxy for current prices and realized
+  accounting because the release contains no midpoint.
 - **Measure:** historical `P`.
 - **Price:** none independently; pure hedging uses the common SANOS market mark.
 - **Estimator:** one rolling, automatically regularized Tyler covariance over
