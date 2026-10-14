@@ -728,6 +728,12 @@ weekly episodes.
 Implement the versioned benchmark configuration, common artifact schema,
 contract identity, and episode timing definitions.
 
+The 891-date public-candidate artifact passes checksum, leakage-control, schema,
+and full SANOS/DLV reconstruction validation from an otherwise empty data root;
+durable evidence is in
+`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-14-public-dataset-validation.md`.
+Formal redistribution rights remain separate from this technical gate.
+
 Gate: protocol quant review passes.
 
 ### Phase 1: accounting vertical slice (complete)
