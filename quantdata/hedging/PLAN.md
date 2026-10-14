@@ -1088,17 +1088,20 @@ matrix v3 rather than the empty v4 output directory. Its read-only persisted
 launcher has SHA-256
 `5ff2b5c6bd92b739da37ae8dffb9ecb6b5a9524bb49c73d8dac9c7f46fa40685`.
 The report-only successor
-`quantdata-hedging-report-refresh-94db273.service` waits for that production
+`quantdata-hedging-report-refresh-a0eff79.service` waits for that production
 service and then re-authenticates the final matrices before rendering the full
 weekly per-model, per-target objective appendix and the authenticated model
 catalogue order from immutable commit
-`94db273ad4bc3badde1c8f842064fc8a50b8b1d1`. Weekly objective tables now
+`a0eff79f7aea935e6deff542982302d129e5d3db`. Weekly objective tables now
 include equal-weight episode-book and worst-target maximum drawdown, computed
 from chronological overlapping episode-origin P\&L and explicitly distinguished
 from a non-overlapping self-financing-account drawdown. Fitted-policy parameters
 and ex-post risk-score parameters have distinct headings and the correct
-$\kappa$ or $\lambda$ symbol. Its persisted launcher has SHA-256
-`516d93bc35b38a65ac1e540d1e9faccbb1f823c97824364cdc14550bef33f92f`;
+$\kappa$ or $\lambda$ symbol. The target appendix separately reports authenticated
+inception market, accounting, genuine-Q, buyer-indifference, and
+seller-indifference price means and rejects disagreement between stored price
+records and realized accounting. Its persisted launcher has SHA-256
+`e400ee3a986c603643028028075253c78af11d4630b56bf3cc19fc3fe16f92da`;
 it writes a separate report manifest and never changes production results.
 Final completed-case figures, production-data PDF regeneration, and the final
 results review remain outstanding.
