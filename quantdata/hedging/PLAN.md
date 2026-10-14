@@ -50,60 +50,80 @@ The persisted launcher SHA-256 values are
 `86ef24fe3770ebd8f35e5dc3b9e85ad499803a5dabda68dc67439c671a8c9db8` and
 `223d5132eaa9f480062b6b23cbdc5598b69af9f65215136d18effaeb39ce5eaf`,
 respectively.
-Other daily production
-and full weekly production remain outstanding. A unified weekly runner now
-supports frozen and restarted schedules for SANOS-LV, historical SANOS,
-GROMM, VolGAN, and both diffusion variants. It requires an authenticated
-strictly-2022 sizing preflight, validates every public dataset member, holds a
-single-writer lock, records exact fitted-artifact fingerprints, and rejects
-incomplete five-decision records. Its production matrix launches native CPU
-cases only from complete model evidence and keeps generated or GROMM cases
-explicitly blocked until their authenticated gates pass. The ready native
-weekly cases are queued to begin only after the active daily CPU production
-queues finish. Generated weekly evaluation now shares one immutable
-target-independent path and fixed-book geometry per decision state and one
-cold zero-claim pricing fit across targets. Historical weekly evaluation also
+Other daily production and full weekly production remain outstanding. The six
+Historical-SANOS entropy and power-exponential cases from the older `edf28cc`
+cohort remain failed diagnostics: their exact-cost optimizer could reject a
+valid solution after the split-variable solver stalled. The corrected
+implementation at immutable commit
+`cff579c38c489e315b624d055d4336e80554cd58` uses the original-action KKT
+residual as the acceptance test and one canonical signed restart without
+changing the objective, costs, bounds, or tolerance. Independent review passed,
+and service `quantdata-hedging-historical-exact-cost-cff579c.service` is
+producing the six fresh cases. The three exact-Gaussian covariance
+power-exponential cases run independently under service
+`quantdata-hedging-covariance-power-656ca65.service`.
+
+A unified weekly runner supports frozen and restarted schedules for SANOS-LV,
+historical SANOS, GROMM, VolGAN, and both diffusion variants. It requires an
+authenticated strictly-2022 sizing preflight, validates every public dataset
+member, holds a single-writer lock, records exact fitted-artifact fingerprints,
+and rejects incomplete five-decision records. Generated weekly evaluation shares
+one immutable target-independent path and fixed-book geometry per decision state
+and one cold zero-claim pricing fit across targets. Historical weekly evaluation
 prices the fixed option book once per decision state and attaches each target
 payoff to the cached paths. Target-specific convex problems are rebuilt rather
 than carried across claims, and the reusable pure-hedge geometry receives the
 current claim payoff explicitly. Weekly entropy and power-exponential policies
-now use exact conic epigraphs for scenario-dependent turnover costs plus the
-declared fitting ridge, which is excluded from reported certainty equivalents.
-Real first-origin frozen-weekly gates cover all 13 targets: entropy at risk
-parameter 10 and power-exponential at risk parameter 1 both pass with zero cap
-hits and zero nonconverged fits. Exact cached wealth matches the common pathwise
-accounting engine to $10^{-14}$, and independent quant review passes. The last
+use exact conic epigraphs for scenario-dependent turnover costs plus the declared
+fitting ridge, which is excluded from reported certainty equivalents. Real
+first-origin frozen-weekly gates cover all 13 targets: entropy at risk parameter
+10 and power-exponential at risk parameter 1 both pass with zero cap hits and
+zero nonconverged fits. Exact cached wealth matches the common pathwise
+accounting engine to $10^{-14}$, and independent quant review passes.
+
+The fresh 94-case native weekly matrix has 28 ready native cases, four generated
+gate waiters, and 62 explicitly blocked cases. It was generated from immutable
+commit `b37a643ea8e5ef11b7557e37c035cf650a729e95` and has SHA-256
+`8d069cadde0c21dd677bbe7ab16cd59e0d3dae9907456608da7fcb4b9bce0b26`.
+Service `quantdata-hedging-weekly-native-b37a643.service` waits for the active
+Historical-SANOS mean--volatility and corrected exact-cost queues, then runs all
+28 native cases. Its launcher SHA-256 is
+`c336f800301dc820017ca92c8bf70a44b7a4ce1955ab191466c3ec3899d29719`.
+
+The legacy rolling GROMM range is complete and authenticated for all 611
+origins. Its current-code migration authenticates the range-level and
+dated-manifest source identities separately; service
+`quantdata-hedging-gromm2-migration-661d575.service` is actively recomputing the
+current-code dynamics and physical-selection evidence. Generated-model
+readiness now runs from immutable commit
+`b37a643ea8e5ef11b7557e37c035cf650a729e95`, which includes CPU-first
+checkpoint restoration and permits finite signed buyer, seller, and continuation
+indifference values while keeping common market and genuine-Q prices
+non-negative. Independent quant review passed all 18 generated workflows and
+all six daily/frozen/restarted public/rolling scope bindings for each model. The
+review artifact SHA-256 values are
+`0c8df8ce78645b278fb8587a90c9d03b4ed61ca56d4c60ab7848510e94506a87`,
+`2333db2cd8894b2949bfddc98d41bdc4dfea9985ac0f421f6ba72e9a042f23b1`,
+and `062e7268f6c25461e15da9ea61ef33fef138767630c55111736c1a5652332c41`
+for VolGAN, AD-Seq-Vol, and AD-Seq-Vol-FT, respectively. Service
+`quantdata-hedging-generated-readiness-b37a643.service` waits for the managed
+GPU behind the active GROMM migration.
+
+The corrected full-production service
+`quantdata-hedging-full-production-b37a643.service` runs from the same immutable
+commit and waits for GROMM migration, generated readiness, native weekly
+production, Historical-SANOS exact-cost recovery, and covariance
+power-exponential recovery. Its launcher SHA-256 is
+`056f77b0696b21447393ba20312fbee53a5004c58cf20459a3a0291e60929872`.
+The daily composition prioritizes the corrected exact-cost and covariance-power
+matrices before older sources, so a failed legacy case cannot shadow its
+authenticated successor. The stale `a1baa69` weekly and full coordinators and
+their report-only successors were stopped before they launched production work.
+Newly ready GPU cases run through `gpuctl`, with four-minute progress and
+resource checks; the remaining daily GROMM Q-expectation plus eight-factor-vega
+case starts only after native weekly production releases CPU capacity. The last
 durable complete-suite record has 349 passing tests; later focused suites pass,
-and a final complete-suite rerun remains required after production. The 94-case
-weekly matrix retains 28 ready
-native cases, four generated-gate waiters, and 62 blocked cases. The native
-weekly queue is pinned to commit `a1baa69` and waits for the active corrected
-daily covariance and Historical-SANOS queues. The covariance mean--volatility
-case at risk parameter $0.1$ is being rebuilt in a fresh commit-pinned output:
-its old runner correctly detected a recession direction but stopped before
-recording the precommitted capped diagnostic. The legacy rolling GROMM range is
-now complete and authenticated for all 611 origins. Its current-code migration
-authenticates the range-level and dated-manifest source identities separately;
-the earlier migration conflated those two hashes and therefore rejected the
-otherwise valid legacy evidence before doing any work. Generated-model
-readiness now runs from immutable commit `b434852`, which restores checkpoint
-payloads on CPU before loading model, optimizer, and RNG state. This fixes the
-VolGAN CUDA-resume failure exposed by the first readiness attempt.
-Independent model review records for VolGAN, AD-Seq-Vol, and AD-Seq-Vol-FT now
-bind their reviewed commit, the public manifest, their distinct initializer and selection
-lineages, and all six daily/frozen/restarted public/rolling scopes. The
-full-production service now runs from immutable commit `a1baa69` and waits for
-the rolling GROMM range, managed-GPU readiness matrix, and native weekly queue.
-Its coordinator now follows migration service
-`quantdata-hedging-gromm2-migration-661d575.service` and generated-readiness
-service `quantdata-hedging-generated-readiness-b434852.service`; the persisted
-coordinator launcher SHA-256 is
-`d3787f21c7a8b3f61b2fc84d41e4c8c2d1a51fa7d0607d7973acb652aaf05d06`.
-It will assemble the three authenticated production gates and write new pinned
-matrices without changing the matrices used by active native queues. Newly
-ready GPU cases run through `gpuctl`, with four-minute progress and resource
-checks; the remaining daily GROMM Q-expectation plus eight-factor-vega case
-starts only after native weekly production releases CPU capacity.
+and a final complete-suite rerun remains required after production.
 The daily production-queue validator
 now authenticates the immutable run and completion summary, recomputes the true
 eligible-origin cohort from the public panel, reparses every dated result record,
@@ -849,7 +869,7 @@ count, and the actual fit configuration are retained in the dated artifact.
 Its real first-origin resume smoke passed. CPU preparation and the legacy
 managed-GPU fit are complete for all 611 eligible origins, including the first
 sparse-release origin after an authenticated restart. Current-code migration
-waits behind generated-model readiness on the managed GPU.
+now owns the managed GPU; generated-model readiness is queued behind it.
 
 The range evidence reports full-candidate, front-only-fallback, and unavailable
 physical-origin counts separately. A versioned migration path authenticates the
@@ -912,10 +932,12 @@ completed all 611 origins and 12,220 records under the current target-notional
 identity, with zero cap hits and zero nonconvergence; its results SHA-256 is
 `ad5850d4ba33c180cdac776623e49725260f46dd88ee6f7fd70b73b89319261e`.
 The remaining Historical-SANOS and covariance sweeps remain in progress. The
-current Historical-SANOS queues use the exact-cost solvers from immutable
-commit `edf28ccdb52ccac1788e20a51ce226220a5f74f3`; low-risk
-mean--volatility recession directions are retained as explicitly flagged
-cap-limited diagnostics rather than silently reported as finite optima.
+legacy `edf28ccdb52ccac1788e20a51ce226220a5f74f3` queue now owns only the
+precommitted low-risk mean--volatility recession diagnostic. Its failed entropy
+and power-exponential cells remain failed and cannot satisfy a production gate.
+Fresh exact-cost entropy and power-exponential cases run from independently
+reviewed commit `cff579c38c489e315b624d055d4336e80554cd58`; the original-action
+KKT residual, rather than the split-variable solver status, is authoritative.
 The covariance mean--variance cases at risk
 parameters $0.1$, $1$, and $10$ have completed all 611 origins and 12,220
 records under the current target-notional identity, with zero cap hits and zero
@@ -924,9 +946,8 @@ mean--variance policies at equal risk parameter. A distinct exact-Gaussian
 power-exponential covariance fit is implemented and passes independent
 quantitative review in
 `quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-14-covariance-gaussian-power-review.md`.
-Its three risk-parameter cohorts are queued from immutable commit `656ca65`
-behind the two active covariance services under
-`quantdata-hedging-covariance-power-656ca65.service`; the persisted launcher
+Its three risk-parameter cohorts are running from immutable commit `656ca65`
+under `quantdata-hedging-covariance-power-656ca65.service`; the persisted launcher
 SHA-256 is
 `f359b2de7b710bd76652bb5c27fe0089b6740bab3fba9fecf8ca91b9cd46fdc2`.
 The versioned daily production matrix contains 57
@@ -1027,32 +1048,36 @@ baselines. The one-standard-error selections are 1,000 rolling epochs for
 VolGAN, 30 for AD-Seq-Vol, and one for AD-Seq-Vol-FT; their complete end-2022
 production initializers and distinct selection-source lineages pass the strict
 evidence loader. The authenticated legacy rolling GROMM range is complete for
-all 611 eligible origins, while current-code migration waits behind generated
-readiness on the managed GPU. A
+all 611 eligible origins. Current-code migration now owns the managed GPU and
+reports completed dated fits every four minutes; generated readiness is queued
+behind it. A
 production-gate assembler now reconstructs exact public-versus-rolling scope
 bindings, refuses stale or aliased evidence, writes under an output lock through
 a unique same-directory temporary file, and re-authenticates the completed gate
 before publishing it. The initial reviewed 18-scope managed-GPU readiness
 matrix ran from immutable commit
 `31b57e617dc6f57f12625515160131a8cf845e36`; VolGAN daily-public readiness
-passed, but its first frozen-weekly case failed as described below. The
-replacement matrix runs from immutable reviewed commit
-`b4348520c362fbf19e9fe1451f6546022f9f5241`. It currently owns the managed
-GPU; the corrected rolling GROMM migration waits behind it. The matrix emits a
-persistent four-minute heartbeat and acquires its GPU only through `gpuctl`.
-Final readiness evidence and the model-specific results review remain required
-before generated production cases can launch.
-
-The first VolGAN frozen-weekly readiness attempt correctly failed the strict
-price gate after its mean--variance CLARABEL solve returned a negative
-indifference price; it is not accepted as readiness evidence. The weekly
-mean--variance quadratic program now uses OSQP, while mean--volatility retains
+passed, but its first frozen-weekly case exposed two independent issues. The
+checkpoint restore path was corrected at `b434852`, and the weekly price schema
+was corrected at `b37a643ea8e5ef11b7557e37c035cf650a729e95` to permit finite
+signed buyer, seller, and continuation indifference values. Common market and
+genuine-Q prices remain finite and non-negative. This distinction is required
+for non-monotone mean--variance and mean--volatility objectives; a negative
+indifference value is not by itself a numerical failure. The weekly
+mean--variance quadratic program uses OSQP, while mean--volatility retains
 CLARABEL for its conic problem. On a synthetic 4,096-path geometry matching the
 first production origin's 207 contracts and five decisions, the shared zero
 policy plus first complete target fit took 45.1 seconds and converged without a
 cap hit. A solver-reference test matches the CLARABEL optimum, and weekly runs
-now report target-level progress inside each origin. A fresh managed-GPU
-readiness run is required before the generated production gate can pass.
+report target-level progress inside each origin.
+
+Independent re-review at `b37a643` passed 161 focused tests, reconstructed all
+six scope bindings for each generated model, and authenticated all three
+production-gate round trips. Service
+`quantdata-hedging-generated-readiness-b37a643.service` emits a persistent
+four-minute heartbeat and acquires its GPU only through `gpuctl`. A fresh
+managed-GPU readiness execution remains required before generated production
+cases can launch.
 
 A real 2023-01-17 frozen Historical-SANOS origin then completed all 13 targets
 in 336.3 seconds with zero cap hits and zero nonconverged fits; its immediate
@@ -1062,10 +1087,10 @@ at least two origins, while complete production runs continue to aggregate
 normally.
 
 The 28 ready native weekly cases are repinned to
-`a1baa69605514ad9a0aba007ab8844f5fed29824` and are queued behind the
-authenticated daily CPU artifacts they require. Their matrix still contains all 94 specified cells:
-28 ready native cases, four generated cases waiting on production gates, and 62
-explicitly blocked cases.
+`b37a643ea8e5ef11b7557e37c035cf650a729e95` and are queued behind the
+authenticated Historical-SANOS daily CPU artifacts they require. Their fresh
+matrix still contains all 94 specified cells: 28 ready native cases, four
+generated cases waiting on production gates, and 62 explicitly blocked cases.
 
 Gate: one model-specific review and standalone smoke test per baseline pass.
 
@@ -1118,22 +1143,22 @@ The last durable complete-suite record has 349 passing tests; the final full
 suite will be rerun after production. This permits the final
 57-cell daily and 94-cell weekly matrices to reuse completed native evidence
 without copying it or rerunning it. The detached final-production service
-`quantdata-hedging-full-production-a1baa69.service` passed its exact-environment
+`quantdata-hedging-full-production-b37a643.service` passed its exact-environment
 preflight and is waiting on rolling GROMM migration, generated-model GPU
-readiness, and the native weekly matrix. Once all three succeed, it composes
-fresh daily-v9 and weekly-v7 canonical matrices, runs only the missing GROMM and
-generated-model cases, and rebuilds the authenticated PDF. The composition
-source list prioritizes the fresh `a1baa69` covariance mean--volatility recovery
-matrix and includes the current-notional SANOS--LV result from production
-matrix v3 rather than the empty v4 output directory. Its read-only persisted
-launcher has SHA-256
-`d3787f21c7a8b3f61b2fc84d41e4c8c2d1a51fa7d0607d7973acb652aaf05d06`.
-The report-only successor
-`quantdata-hedging-report-refresh-a0eff79.service` waits for that production
-service and then re-authenticates the final matrices before rendering the full
-weekly per-model, per-target objective appendix and the authenticated model
-catalogue order from immutable commit
-`a0eff79f7aea935e6deff542982302d129e5d3db`. Weekly objective tables now
+readiness, the corrected native weekly matrix, Historical-SANOS exact-cost
+recovery, and covariance power-exponential recovery. Once all five succeed, it
+composes fresh canonical matrices under dedicated `production-matrix-b37a643`
+roots, runs only the missing GROMM and generated-model cases, and rebuilds the
+authenticated PDF. Its ordered daily source list gives first priority to the
+corrected Historical-SANOS exact-cost matrix and covariance power-exponential
+matrix, followed by the covariance mean--volatility recovery and remaining
+authenticated native sources. The weekly source is the fresh `b37a643` native
+matrix. Its read-only persisted launcher has SHA-256
+`056f77b0696b21447393ba20312fbee53a5004c58cf20459a3a0291e60929872`.
+The superseded `a1baa69` coordinator and its report-only/final-57 successors
+were stopped while still waiting and did not launch production cases.
+
+Weekly objective tables now
 include equal-weight episode-book and worst-target maximum drawdown, computed
 from chronological overlapping episode-origin P\&L and explicitly distinguished
 from a non-overlapping self-financing-account drawdown. Fitted-policy parameters
@@ -1141,18 +1166,9 @@ and ex-post risk-score parameters have distinct headings and the correct
 $\kappa$ or $\lambda$ symbol. The target appendix separately reports authenticated
 inception market, accounting, genuine-Q, buyer-indifference, and
 seller-indifference price means and rejects disagreement between stored price
-records and realized accounting. Its persisted launcher has SHA-256
-`e400ee3a986c603643028028075253c78af11d4630b56bf3cc19fc3fe16f92da`;
-it writes a separate report manifest and never changes production results.
-Final completed-case figures, production-data PDF regeneration, and the final
-results review remain outstanding. A final successor service,
-`quantdata-hedging-final-57-656ca65.service`, waits for both the existing
-54-case full-production service and the three reviewed covariance-power
-cohorts. It will authenticate and reuse every completed case, compose the
-canonical 57-case daily matrix, pair it with the complete 94-case weekly
-matrix, and render a fresh report without rerunning existing policies. Its
-persisted launcher SHA-256 is
-`cbdb44a4af29a596f89d912ef3bc80310fa6a5761a29cef190cf425b6f98b10a`.
+records and realized accounting. Final completed-case figures, production-data
+PDF regeneration, the final complete-suite rerun, and the final results review
+remain outstanding.
 The requirement-by-requirement acceptance state and the evidence still needed
 for completion are tracked in
 `quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-14-plan-completion-audit.md`.
