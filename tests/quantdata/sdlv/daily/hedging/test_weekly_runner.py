@@ -24,6 +24,10 @@ from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
     PublicHedgingPanel,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners import weekly as weekly_runner
+from quantdata.sdlv.daily.front_spot.hedging.runners.numerical_gate_failure import (
+    NUMERICAL_GATE_FAILURE_FILENAME,
+    load_numerical_gate_failure,
+)
 from quantdata.sdlv.daily.front_spot.hedging.runners.weekly import (
     WeeklyEvaluationSpec,
     WeeklyEvaluationSummary,
@@ -267,6 +271,7 @@ def test_weekly_runner_rejects_incomplete_book_and_cap_hits(
             run_book=lambda _panel, origin_date: _book(origin_date)[:-1],
             output_directory=tmp_path / "incomplete",
         )
+    cap_output = tmp_path / "cap-hit"
     with pytest.raises(RuntimeError, match="position-cap hits"):
         run_weekly_evaluation(
             panel,
@@ -275,8 +280,19 @@ def test_weekly_runner_rejects_incomplete_book_and_cap_hits(
                 origin_date,
                 cap_first=True,
             ),
-            output_directory=tmp_path / "cap-hit",
+            output_directory=cap_output,
         )
+    failure = load_numerical_gate_failure(
+        cap_output / NUMERICAL_GATE_FAILURE_FILENAME
+    )
+    assert failure["origin_date"] == origin.isoformat()
+    assert failure["triggered_gates"] == ["position-cap-hit"]
+    assert failure["diagnostics"] == {
+        "cap_hits": 5,
+        "executed_cap_hits": 5,
+        "fit_cap_hits": 0,
+        "nonconverged_fits": 0,
+    }
 
 
 def test_weekly_runner_authenticates_internal_fit_diagnostics_without_duplication(

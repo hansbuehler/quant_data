@@ -29,6 +29,11 @@ from quantdata.sdlv.daily.front_spot.hedging.reports.build_weekly_summary_metric
     weekly_policy_inputs_from_matrices,
     write_weekly_summary_metrics,
 )
+from quantdata.sdlv.daily.front_spot.hedging.runners.production_failures import (
+    ProductionFailure,
+    load_production_failure_ledger,
+    reject_completed_failure_cases,
+)
 from quantdata.sdlv.daily.front_spot.hedging.runners.production_matrix import (
     DailyProductionMatrixConfig,
     build_daily_production_matrix,
@@ -40,7 +45,7 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.weekly_production_matrix im
 
 JsonObject: TypeAlias = dict[str, object]
 
-DOCUMENT_SCHEMA = "hedging-benchmark-summary-document-v4"
+DOCUMENT_SCHEMA = "hedging-benchmark-summary-document-v5"
 DISPLAY_SCALE = 10_000.0
 DAILY_MATRIX_SCHEMA = "hedging-daily-production-matrix-v1"
 WEEKLY_MATRIX_SCHEMA = "hedging-weekly-production-matrix-v1"
@@ -57,6 +62,8 @@ def build_summary_document(
     weekly_objective_tables: str,
     daily_target_appendix: str,
     weekly_target_appendix: str,
+    daily_failures: tuple[ProductionFailure, ...] = (),
+    weekly_failures: tuple[ProductionFailure, ...] = (),
 ) -> str:
     """Return a standalone LaTeX benchmark document from authenticated inputs."""
     _validate_inputs(daily=daily, weekly=weekly)
@@ -76,7 +83,15 @@ def build_summary_document(
             for model in (*daily_models.values(), *weekly_models.values())
         )
     )
+    model_names.extend(
+        model
+        for model in dict.fromkeys(
+            failure.model for failure in (*daily_failures, *weekly_failures)
+        )
+        if model not in model_names
+    )
     manifest = _require_string(daily, "dataset_manifest_sha256")
+    failure_count = len(daily_failures) + len(weekly_failures)
     return rf"""\documentclass[10pt]{{article}}
 
 \usepackage[T1]{{fontenc}}
@@ -137,9 +152,13 @@ The final daily comparison contains {_integer(sum(_result_count(model) for model
 authenticated claim/origin evaluations across {len(daily_models)} policies;
 the weekly comparison contains {_integer(sum(_result_count(model) for model in weekly_models.values()))}
 evaluations across {len(weekly_models)} policies and {len(weekly_schedules)} schedules.
+The immutable production grids contain {failure_count} explicitly authenticated
+strict numerical-gate rejection{'' if failure_count == 1 else 's'}; these cells
+contribute no performance estimate.
 The common daily unhedged RMSE is {_basis_points(daily_unhedged)} basis points.
-Every precommitted objective and parameter is reported; no policy is selected
-using the 2023--2025 evaluation outcomes.}}}}
+Every precommitted objective and parameter is accounted for as either a complete
+population or a strict gate rejection; no policy is selected using the 2023--2025
+evaluation outcomes.}}}}
 
 \section{{Approach}}
 \subsection{{Public data boundary and common market}}
@@ -164,8 +183,9 @@ spot costs one basis point of traded notional, and cash settlement is free.
   overlapping origins. Frozen-weekly policies retain the inception model and
   contract book; restarted-weekly policies refit daily.
   \item Hedge instruments are normalized spot plus all eligible OTM options
-  strictly inside $(-2,2)$ contemporaneous NMS with expiries through five
-  business days, or the first later expiry if five days is absent.
+  strictly inside $(-2,2)$ NMS at episode inception with expiries through five
+  business days, or the first later expiry if five days is absent. The resulting
+  contract book is fixed over each five-session weekly episode.
   \item Every method starts at the same market claim price. Pricing loss, pure
   hedge loss, and total economic loss are reported separately. Target sizes are
   fixed from 2022 at one maturity-matched ATM spot-risk unit.
@@ -180,6 +200,14 @@ candidate-minus-SANOS differences with Hansen--Hodrick and moving-block
 bootstrap intervals, preserving five-session overlap.
 
 \section{{Results}}
+\subsection{{Authenticated production outcomes}}
+Every ready matrix cell must be either a complete population that passes its
+precommitted numerical gates or a hash-bound rejection emitted by one of those
+gates. A rejected cell is never relabelled as blocked and its relaxed diagnostic,
+if any, is excluded from the performance tables.
+
+{_failure_table(daily_failures=daily_failures, weekly_failures=weekly_failures)}
+
 \subsection{{Daily objective grid}}
 Losses, costs, and drawdowns are basis points of inception normalized spot.
 The following tables retain every completed daily policy and evaluate every
@@ -214,6 +242,8 @@ Every number is rebuilt from immutable run specifications and authenticated
 dated records. Results with incomplete populations, mismatched model/schedule
 identities, changed source bytes, different target quantities, cap hits where
 forbidden, or nonconverged fits where forbidden are rejected before rendering.
+Hash-bound queue failures remain visible in the production-outcome table and
+are never admitted as performance observations.
 
 \clearpage
 \appendix
@@ -244,6 +274,10 @@ def write_summary_document(
     weekly_matrix_sha256: str,
     output: Path,
     bibliography_source: Path,
+    daily_failure_ledger: Path | None = None,
+    daily_failure_ledger_sha256: str | None = None,
+    weekly_failure_ledger: Path | None = None,
+    weekly_failure_ledger_sha256: str | None = None,
     status_date: date | None = None,
     compile_pdf: bool = False,
 ) -> Path | None:
@@ -253,12 +287,29 @@ def write_summary_document(
     weekly_matrix = Path(weekly_matrix)
     output = Path(output)
     bibliography_source = Path(bibliography_source)
+    daily_failure_ledger = _optional_path(daily_failure_ledger)
+    weekly_failure_ledger = _optional_path(weekly_failure_ledger)
+    _validate_optional_hash_pair(
+        path=daily_failure_ledger,
+        sha256=daily_failure_ledger_sha256,
+        label="daily failure ledger",
+    )
+    _validate_optional_hash_pair(
+        path=weekly_failure_ledger,
+        sha256=weekly_failure_ledger_sha256,
+        label="weekly failure ledger",
+    )
     _validate_output_boundaries(
         dataset=dataset,
         daily_matrix=daily_matrix,
         weekly_matrix=weekly_matrix,
         bibliography_source=bibliography_source,
         output=output,
+        failure_ledgers=tuple(
+            path
+            for path in (daily_failure_ledger, weekly_failure_ledger)
+            if path is not None
+        ),
     )
     _validate_production_matrix(
         daily_matrix,
@@ -276,10 +327,35 @@ def write_summary_document(
         dataset=dataset,
         weekly=True,
     )
+    daily_failures = _load_optional_failure_ledger(
+        ledger_path=daily_failure_ledger,
+        expected_ledger_sha256=daily_failure_ledger_sha256,
+        matrix_path=daily_matrix,
+        expected_matrix_sha256=daily_matrix_sha256,
+    )
+    weekly_failures = _load_optional_failure_ledger(
+        ledger_path=weekly_failure_ledger,
+        expected_ledger_sha256=weekly_failure_ledger_sha256,
+        matrix_path=weekly_matrix,
+        expected_matrix_sha256=weekly_matrix_sha256,
+    )
+    reject_completed_failure_cases(
+        matrix_path=daily_matrix,
+        failures=daily_failures,
+        dataset=dataset,
+    )
+    reject_completed_failure_cases(
+        matrix_path=weekly_matrix,
+        failures=weekly_failures,
+        dataset=dataset,
+    )
     daily = build_daily_policy_summary_metrics(
         policies=daily_policy_inputs_from_matrices(
             (daily_matrix,),
             require_ready_complete=True,
+            failed_case_ids=frozenset(
+                failure.case_id for failure in daily_failures
+            ),
         ),
         dataset=dataset,
     )
@@ -287,6 +363,9 @@ def write_summary_document(
         policies=weekly_policy_inputs_from_matrices(
             (weekly_matrix,),
             require_ready_complete=True,
+            failed_case_ids=frozenset(
+                failure.case_id for failure in weekly_failures
+            ),
         ),
         dataset=dataset,
     )
@@ -320,17 +399,37 @@ def write_summary_document(
         weekly_objective_tables=weekly_objective_tables,
         daily_target_appendix=daily_target_appendix,
         weekly_target_appendix=weekly_target_appendix,
+        daily_failures=daily_failures,
+        weekly_failures=weekly_failures,
         status_date=status_date,
         compile_pdf=compile_pdf,
     )
     _require_sha256(daily_matrix, daily_matrix_sha256, "daily production matrix")
     _require_sha256(weekly_matrix, weekly_matrix_sha256, "weekly production matrix")
+    _reload_optional_failure_ledger(
+        ledger_path=daily_failure_ledger,
+        expected_ledger_sha256=daily_failure_ledger_sha256,
+        matrix_path=daily_matrix,
+        expected_matrix_sha256=daily_matrix_sha256,
+    )
+    _reload_optional_failure_ledger(
+        ledger_path=weekly_failure_ledger,
+        expected_ledger_sha256=weekly_failure_ledger_sha256,
+        matrix_path=weekly_matrix,
+        expected_matrix_sha256=weekly_matrix_sha256,
+    )
     _write_document_manifest(
         dataset=dataset,
         daily_matrix=daily_matrix,
         daily_matrix_sha256=daily_matrix_sha256,
         weekly_matrix=weekly_matrix,
         weekly_matrix_sha256=weekly_matrix_sha256,
+        daily_failure_ledger=daily_failure_ledger,
+        daily_failure_ledger_sha256=daily_failure_ledger_sha256,
+        weekly_failure_ledger=weekly_failure_ledger,
+        weekly_failure_ledger_sha256=weekly_failure_ledger_sha256,
+        daily_failures=daily_failures,
+        weekly_failures=weekly_failures,
         daily=daily,
         weekly=weekly,
         output=output,
@@ -360,6 +459,8 @@ def _write_rendered_summary_document(
     weekly_objective_tables: Path,
     daily_target_appendix: Path,
     weekly_target_appendix: Path,
+    daily_failures: tuple[ProductionFailure, ...] = (),
+    weekly_failures: tuple[ProductionFailure, ...] = (),
     status_date: date | None = None,
     compile_pdf: bool = False,
 ) -> Path | None:
@@ -390,6 +491,8 @@ def _write_rendered_summary_document(
             weekly_objective_tables=local_inputs[weekly_objective_tables],
             daily_target_appendix=local_inputs[daily_target_appendix],
             weekly_target_appendix=local_inputs[weekly_target_appendix],
+            daily_failures=daily_failures,
+            weekly_failures=weekly_failures,
         ),
         encoding="utf-8",
     )
@@ -529,6 +632,7 @@ def _validate_output_boundaries(
     weekly_matrix: Path,
     bibliography_source: Path,
     output: Path,
+    failure_ledgers: tuple[Path, ...] = (),
 ) -> None:
     dataset_root = dataset.resolve()
     output_root = output.parent.resolve()
@@ -540,6 +644,12 @@ def _validate_output_boundaries(
         "weekly matrix": weekly_matrix.resolve(),
         "bibliography": bibliography_source.resolve(),
     }
+    inputs.update(
+        {
+            f"failure ledger {index}": path.resolve()
+            for index, path in enumerate(failure_ledgers, start=1)
+        }
+    )
     if len(set(inputs.values())) != len(inputs):
         raise ValueError("report inputs must be distinct files")
     outputs = tuple(
@@ -591,6 +701,12 @@ def _write_document_manifest(
     daily_matrix_sha256: str,
     weekly_matrix: Path,
     weekly_matrix_sha256: str,
+    daily_failure_ledger: Path | None,
+    daily_failure_ledger_sha256: str | None,
+    weekly_failure_ledger: Path | None,
+    weekly_failure_ledger_sha256: str | None,
+    daily_failures: tuple[ProductionFailure, ...],
+    weekly_failures: tuple[ProductionFailure, ...],
     daily: JsonObject,
     weekly: JsonObject,
     output: Path,
@@ -610,6 +726,16 @@ def _write_document_manifest(
         "daily_matrix_sha256": daily_matrix_sha256,
         "weekly_matrix": str(weekly_matrix),
         "weekly_matrix_sha256": weekly_matrix_sha256,
+        "daily_failure_ledger": (
+            None if daily_failure_ledger is None else str(daily_failure_ledger)
+        ),
+        "daily_failure_ledger_sha256": daily_failure_ledger_sha256,
+        "weekly_failure_ledger": (
+            None if weekly_failure_ledger is None else str(weekly_failure_ledger)
+        ),
+        "weekly_failure_ledger_sha256": weekly_failure_ledger_sha256,
+        "daily_failed_cases": [failure.case_id for failure in daily_failures],
+        "weekly_failed_cases": [failure.case_id for failure in weekly_failures],
         "daily_target_notional_identity": _require_string(
             daily,
             "target_notional_identity",
@@ -644,6 +770,54 @@ def _source_identities(payload: JsonObject) -> JsonObject:
         }
         for key, model in models.items()
     }
+
+
+def _optional_path(path: Path | None) -> Path | None:
+    return None if path is None else Path(path)
+
+
+def _validate_optional_hash_pair(
+    *,
+    path: Path | None,
+    sha256: str | None,
+    label: str,
+) -> None:
+    if (path is None) != (sha256 is None):
+        raise ValueError(f"{label} path and SHA-256 must be supplied together")
+
+
+def _load_optional_failure_ledger(
+    *,
+    ledger_path: Path | None,
+    expected_ledger_sha256: str | None,
+    matrix_path: Path,
+    expected_matrix_sha256: str,
+) -> tuple[ProductionFailure, ...]:
+    if ledger_path is None:
+        return ()
+    if expected_ledger_sha256 is None:
+        raise ValueError("failure ledger SHA-256 is missing")
+    return load_production_failure_ledger(
+        ledger_path,
+        expected_ledger_sha256=expected_ledger_sha256,
+        matrix_path=matrix_path,
+        expected_matrix_sha256=expected_matrix_sha256,
+    )
+
+
+def _reload_optional_failure_ledger(
+    *,
+    ledger_path: Path | None,
+    expected_ledger_sha256: str | None,
+    matrix_path: Path,
+    expected_matrix_sha256: str,
+) -> None:
+    _load_optional_failure_ledger(
+        ledger_path=ledger_path,
+        expected_ledger_sha256=expected_ledger_sha256,
+        matrix_path=matrix_path,
+        expected_matrix_sha256=expected_matrix_sha256,
+    )
 
 
 def _sha256(path: Path) -> str:
@@ -688,6 +862,71 @@ def _daily_reference(models: JsonObject) -> JsonObject:
     return references[0]
 
 
+def _failure_table(
+    *,
+    daily_failures: tuple[ProductionFailure, ...],
+    weekly_failures: tuple[ProductionFailure, ...],
+) -> str:
+    failures = tuple(
+        sorted(
+            (*daily_failures, *weekly_failures),
+            key=lambda failure: (
+                "daily" if failure.schedule is None else failure.schedule,
+                failure.case_id,
+            ),
+        )
+    )
+    if not failures:
+        return (
+            "All canonical production cases completed and passed their strict "
+            "numerical gates."
+        )
+    lines = [
+        r"\begin{landscape}",
+        r"\small",
+        r"\begin{longtable}{@{}lllllll@{}}",
+        "\\caption{Authenticated strict numerical-gate rejections.}\\\\",
+        r"\toprule",
+        r"Scope & Policy & Fit & Classification & First origin & Case & Evidence \\",
+        r"\midrule",
+        r"\endfirsthead",
+        r"\toprule",
+        r"Scope & Policy & Fit & Classification & First origin & Case & Evidence \\",
+        r"\midrule",
+        r"\endhead",
+    ]
+    for failure in failures:
+        lines.append(
+            " & ".join(
+                (
+                    _tex_escape("daily" if failure.schedule is None else failure.schedule),
+                    _tex_escape(failure.model),
+                    _failure_fit_label(failure),
+                    _tex_escape(" / ".join(failure.triggered_gates)),
+                    (
+                        "--"
+                        if failure.first_failed_origin is None
+                        else failure.first_failed_origin.isoformat()
+                    ),
+                    _tex_escape(failure.case_id),
+                    _tex_escape(failure.summary),
+                )
+            )
+            + r" \\"
+        )
+    lines.extend((r"\bottomrule", r"\end{longtable}", r"\end{landscape}", ""))
+    return "\n".join(lines)
+
+
+def _failure_fit_label(failure: ProductionFailure) -> str:
+    if failure.objective is None:
+        return "reference"
+    if failure.risk_parameter is None:
+        return _tex_escape(failure.objective)
+    symbol = r"\kappa" if failure.objective == "mean-volatility" else r"\lambda"
+    return _tex_escape(failure.objective) + f", ${symbol}={failure.risk_parameter:g}$"
+
+
 def _weekly_comparison_tables(weekly: JsonObject) -> str:
     models = _require_object(weekly, "models")
     comparisons = _require_object(weekly, "comparisons")
@@ -699,7 +938,16 @@ def _weekly_comparison_tables(weekly: JsonObject) -> str:
     )
     lines: list[str] = []
     for schedule in schedules:
-        comparison = _require_object(comparisons, schedule)
+        comparison_value = comparisons.get(schedule)
+        if comparison_value is None:
+            lines.append(
+                "No paired SANOS--LV comparison is reported for "
+                + _tex_escape(schedule)
+                + ", because its strict reference policy did not produce an "
+                "admissible complete population.\n"
+            )
+            continue
+        comparison = _as_object(comparison_value, schedule)
         paired = _require_object(comparison, "paired_book_loss_differences")
         lines.extend(
             (
@@ -865,7 +1113,17 @@ def _integer(value: int) -> str:
 
 
 def _tex_escape(value: str) -> str:
-    return value.replace("_", r"\_").replace("%", r"\%")
+    replacements = {
+        "\\": r"\textbackslash{}",
+        "&": r"\&",
+        "%": r"\%",
+        "$": r"\$",
+        "#": r"\#",
+        "_": r"\_",
+        "{": r"\{",
+        "}": r"\}",
+    }
+    return "".join(replacements.get(character, character) for character in value)
 
 
 def _number_pair(payload: JsonObject, name: str) -> tuple[float, float]:
@@ -926,8 +1184,12 @@ def main() -> None:
     parser.add_argument("--dataset", type=Path, required=True)
     parser.add_argument("--daily-matrix", type=Path, required=True)
     parser.add_argument("--daily-matrix-sha256", required=True)
+    parser.add_argument("--daily-failure-ledger", type=Path)
+    parser.add_argument("--daily-failure-ledger-sha256")
     parser.add_argument("--weekly-matrix", type=Path, required=True)
     parser.add_argument("--weekly-matrix-sha256", required=True)
+    parser.add_argument("--weekly-failure-ledger", type=Path)
+    parser.add_argument("--weekly-failure-ledger-sha256")
     parser.add_argument(
         "--bibliography-source",
         type=Path,
@@ -943,6 +1205,10 @@ def main() -> None:
         daily_matrix_sha256=arguments.daily_matrix_sha256,
         weekly_matrix=arguments.weekly_matrix,
         weekly_matrix_sha256=arguments.weekly_matrix_sha256,
+        daily_failure_ledger=arguments.daily_failure_ledger,
+        daily_failure_ledger_sha256=arguments.daily_failure_ledger_sha256,
+        weekly_failure_ledger=arguments.weekly_failure_ledger,
+        weekly_failure_ledger_sha256=arguments.weekly_failure_ledger_sha256,
         output=arguments.output,
         bibliography_source=arguments.bibliography_source,
         status_date=arguments.status_date,

@@ -20,6 +20,9 @@ from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
 from quantdata.sdlv.daily.front_spot.hedging.data.public_only import (
     require_public_hedging_panel,
 )
+from quantdata.sdlv.daily.front_spot.hedging.runners.numerical_gate_failure import (
+    write_numerical_gate_failure,
+)
 
 DAILY_EVALUATION_SCHEMA = "hedging-daily-evaluation-v2"
 DAILY_RECORD_SCHEMA = "hedging-daily-record-v2"
@@ -306,7 +309,25 @@ def run_daily_evaluation(
             reused.append(origin_date.isoformat())
         else:
             results = tuple(run_book(panel, origin_date))
-            _validate_results(results, spec=spec, origin_date=origin_date)
+            _validate_results(
+                results,
+                spec=spec,
+                origin_date=origin_date,
+                enforce_numerical_gate=False,
+            )
+            diagnostics = daily_numerical_diagnostics(results)
+            if spec.require_convergence and any(diagnostics.values()):
+                write_numerical_gate_failure(
+                    output_directory=output,
+                    run_identity=spec.run_identity,
+                    evaluation_schema=DAILY_EVALUATION_SCHEMA,
+                    model=spec.model,
+                    measure=spec.measure,
+                    dataset_manifest_sha256=spec.dataset_manifest_sha256,
+                    origin_date=origin_date,
+                    diagnostics=diagnostics,
+                )
+                _enforce_daily_numerical_gate(results)
             _write_daily_record(
                 record_path,
                 spec=spec,
@@ -385,6 +406,7 @@ def _validate_results(
     *,
     spec: DailyEvaluationSpec,
     origin_date: date,
+    enforce_numerical_gate: bool = True,
 ) -> None:
     if tuple(result.claim for result in results) != spec.target_labels:
         raise ValueError("daily model did not emit the precommitted target book")
@@ -406,16 +428,30 @@ def _validate_results(
             abs_tol=1.0e-14,
         ):
             raise ValueError("daily result claim quantity does not match its run specification")
-    if spec.require_convergence:
-        failures = tuple(
-            result.claim
-            for result in results
-            if not result.converged or result.cap_hits > 0
-        )
-        if failures:
-            raise RuntimeError(
-                "daily numerical gate failed for " + ", ".join(failures)
-            )
+    if spec.require_convergence and enforce_numerical_gate:
+        _enforce_daily_numerical_gate(results)
+
+
+def daily_numerical_diagnostics(
+    results: tuple[HedgeSmokeResult, ...],
+) -> dict[str, object]:
+    """Return the exact counts used by the strict daily numerical gate."""
+    return {
+        "cap_hits": sum(result.cap_hits for result in results),
+        "nonconverged_results": sum(not result.converged for result in results),
+    }
+
+
+def _enforce_daily_numerical_gate(
+    results: tuple[HedgeSmokeResult, ...],
+) -> None:
+    failures = tuple(
+        result.claim
+        for result in results
+        if not result.converged or result.cap_hits > 0
+    )
+    if failures:
+        raise RuntimeError("daily numerical gate failed for " + ", ".join(failures))
 
 
 def _atomic_write_json(path: Path, payload: dict[str, object]) -> None:

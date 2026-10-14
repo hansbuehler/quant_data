@@ -780,8 +780,19 @@ def test_execute_production_queue_can_retain_failure_and_continue(
     failed_output = tmp_path / "failed"
     complete_output = tmp_path / "complete"
     _, dataset, panel = _write_authenticated_daily_output(complete_output)
+    failed_output.mkdir(parents=True)
+    gate_failure_path = failed_output / "numerical-gate-failure.json"
+    gate_failure_path.write_text('{"schema":"stale-gate-failure"}\n', encoding="utf-8")
     failed_script = tmp_path / "fail.py"
-    failed_script.write_text("raise SystemExit(7)\n", encoding="utf-8")
+    failed_script.write_text(
+        "from pathlib import Path\n"
+        "import sys\n"
+        "output = Path(sys.argv[sys.argv.index('--output') + 1])\n"
+        "(output / 'numerical-gate-failure.json').write_text("
+        "'{\\\"schema\\\":\\\"fresh-gate-failure\\\"}\\n', encoding='utf-8')\n"
+        "raise SystemExit(7)\n",
+        encoding="utf-8",
+    )
     complete_script = tmp_path / "complete.py"
     complete_script.write_text(
         'print("synthetic production complete", flush=True)\n',
@@ -867,6 +878,68 @@ def test_execute_production_queue_can_retain_failure_and_continue(
     ]
     assert first["records"][0]["return_code"] == 7
     assert "production command returned 7" in first["records"][0]["error"]
+    assert first["records"][0]["numerical_gate_failure_path"] == str(
+        gate_failure_path.resolve()
+    )
+    assert first["records"][0]["numerical_gate_failure_sha256"] == _sha256(
+        gate_failure_path
+    )
+
+
+def test_execute_production_queue_does_not_pin_stale_gate_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = tmp_path / "failed"
+    output.mkdir()
+    (output / "numerical-gate-failure.json").write_text(
+        '{"schema":"stale-gate-failure"}\n',
+        encoding="utf-8",
+    )
+    failed_script = tmp_path / "fail.py"
+    failed_script.write_text("raise SystemExit(7)\n", encoding="utf-8")
+    matrix = tmp_path / "matrix.json"
+    _write_json(
+        matrix,
+        {
+            "schema": "hedging-daily-production-matrix-v1",
+            "cases": [
+                {
+                    "case_id": "failed-case",
+                    "model": "historical-sanos",
+                    "resource": "cpu",
+                    "readiness": "ready",
+                    "command": [
+                        "python",
+                        str(failed_script),
+                        "--dataset",
+                        str(tmp_path / "dataset"),
+                        "--output",
+                        str(output),
+                    ],
+                }
+            ],
+        },
+    )
+    monkeypatch.setattr(execute_production_matrix, "_check_resources", lambda: None)
+    state_path = tmp_path / "queue.json"
+
+    with pytest.raises(RuntimeError, match="production case failed"):
+        execute_production_matrix.execute_production_queue(
+            matrix_path=matrix,
+            state_path=state_path,
+            interpreter=Path(sys.executable),
+            case_ids=("failed-case",),
+            case_prefix=None,
+            resource="cpu",
+            expected_result_count=2,
+            heartbeat_seconds=1.0,
+        )
+
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    record = state["records"][0]
+    assert "numerical_gate_failure_path" not in record
+    assert "numerical_gate_failure_sha256" not in record
 
 
 def test_execute_production_queue_requires_explicit_legacy_state_adoption(

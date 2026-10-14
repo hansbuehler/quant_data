@@ -35,6 +35,9 @@ from quantdata.sdlv.daily.front_spot.hedging.data.public_only import (
 from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
     dataset_manifest_sha256,
 )
+from quantdata.sdlv.daily.front_spot.hedging.runners.numerical_gate_failure import (
+    write_numerical_gate_failure,
+)
 
 WEEKLY_EVALUATION_SCHEMA = "hedging-weekly-evaluation-v2"
 WEEKLY_RECORD_SCHEMA = "hedging-weekly-record-v2"
@@ -385,7 +388,28 @@ def _run_weekly_evaluation_locked(
                 panel=panel,
                 spec=spec,
                 origin_date=origin_date,
+                enforce_numerical_gate=False,
             )
+            if spec.require_no_cap_hits and (
+                diagnostics.cap_hits or diagnostics.nonconverged_fits
+            ):
+                write_numerical_gate_failure(
+                    output_directory=output,
+                    run_identity=spec.run_identity,
+                    evaluation_schema=WEEKLY_EVALUATION_SCHEMA,
+                    model=spec.model,
+                    measure=spec.measure,
+                    schedule=spec.schedule.value,
+                    dataset_manifest_sha256=spec.dataset_manifest_sha256,
+                    origin_date=origin_date,
+                    diagnostics={
+                        "fit_cap_hits": diagnostics.fit_cap_hits,
+                        "executed_cap_hits": diagnostics.executed_cap_hits,
+                        "nonconverged_fits": diagnostics.nonconverged_fits,
+                        "cap_hits": diagnostics.cap_hits,
+                    },
+                )
+                _enforce_weekly_numerical_gate(diagnostics)
             _write_weekly_record(
                 record_path,
                 spec=spec,
@@ -496,6 +520,7 @@ def _validate_runs(
     panel: PublicHedgingPanel,
     spec: WeeklyEvaluationSpec,
     origin_date: date,
+    enforce_numerical_gate: bool = True,
 ) -> WeeklyNumericalDiagnostics:
     if tuple(run.result.target_label for run in runs) != spec.target_labels:
         raise ValueError("weekly model did not emit the precommitted target book")
@@ -566,16 +591,23 @@ def _validate_runs(
         runs,
         position_cap=spec.position_cap,
     )
-    if spec.require_no_cap_hits and diagnostics.cap_hits:
+    if spec.require_no_cap_hits and enforce_numerical_gate:
+        _enforce_weekly_numerical_gate(diagnostics)
+    return diagnostics
+
+
+def _enforce_weekly_numerical_gate(
+    diagnostics: WeeklyNumericalDiagnostics,
+) -> None:
+    if diagnostics.cap_hits:
         raise RuntimeError(
             f"weekly numerical gate found {diagnostics.cap_hits} position-cap hits"
         )
-    if spec.require_no_cap_hits and diagnostics.nonconverged_fits:
+    if diagnostics.nonconverged_fits:
         raise RuntimeError(
             "weekly numerical gate found "
             f"{diagnostics.nonconverged_fits} nonconverged policy fits"
         )
-    return diagnostics
 
 
 def _expected_episode_dates(

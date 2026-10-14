@@ -187,6 +187,8 @@ def _execute_production_queue_locked(
         _write_json_atomic(state_path, state)
         print(f"queue case={case_id} started_at={started_at}", flush=True)
         ran_case = True
+        gate_failure_path = output / "numerical-gate-failure.json"
+        gate_failure_before = _file_generation(gate_failure_path)
         return_code = _run_logged_command(
             command=command,
             log_path=log_path,
@@ -195,6 +197,13 @@ def _execute_production_queue_locked(
             resource=resource,
         )
         if return_code != 0:
+            gate_failure_after = _file_generation(gate_failure_path)
+            gate_failure_sha256 = (
+                _file_sha256(gate_failure_path)
+                if gate_failure_after is not None
+                and gate_failure_after != gate_failure_before
+                else None
+            )
             _finish_record(
                 state=state,
                 state_path=state_path,
@@ -202,6 +211,12 @@ def _execute_production_queue_locked(
                 status="failed",
                 return_code=return_code,
                 error=f"production command returned {return_code}",
+                numerical_gate_failure_path=(
+                    str(gate_failure_path.resolve())
+                    if gate_failure_sha256 is not None
+                    else None
+                ),
+                numerical_gate_failure_sha256=gate_failure_sha256,
             )
             failed.add(case_id)
             if continue_after_failure:
@@ -608,6 +623,8 @@ def _finish_record(
     return_code: int,
     error: str | None = None,
     validated_results_sha256: str | None = None,
+    numerical_gate_failure_path: str | None = None,
+    numerical_gate_failure_sha256: str | None = None,
 ) -> None:
     record = next(
         record for record in _records(state) if record.get("case_id") == case_id
@@ -623,6 +640,14 @@ def _finish_record(
         record.pop("validated_results_sha256", None)
     else:
         record["validated_results_sha256"] = validated_results_sha256
+    if numerical_gate_failure_path is None:
+        record.pop("numerical_gate_failure_path", None)
+    else:
+        record["numerical_gate_failure_path"] = numerical_gate_failure_path
+    if numerical_gate_failure_sha256 is None:
+        record.pop("numerical_gate_failure_sha256", None)
+    else:
+        record["numerical_gate_failure_sha256"] = numerical_gate_failure_sha256
     state["status"] = status if status == "failed" else "running"
     state["current_case_id"] = None
     _write_json_atomic(state_path, state)
@@ -670,6 +695,15 @@ def _file_sha256(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _file_generation(path: Path) -> tuple[int, int, int] | None:
+    """Return identity metadata that changes after an atomic artifact rewrite."""
+    try:
+        stat = Path(path).stat()
+    except FileNotFoundError:
+        return None
+    return stat.st_ino, stat.st_mtime_ns, stat.st_size
 
 
 def _write_json_atomic(path: Path, payload: dict[str, object]) -> None:

@@ -86,12 +86,14 @@ def weekly_policy_inputs_from_matrices(
     matrix_paths: tuple[Path, ...],
     *,
     require_ready_complete: bool = False,
+    failed_case_ids: frozenset[str] = frozenset(),
 ) -> tuple[WeeklyPolicyInput, ...]:
     """Discover completed weekly policies from immutable production matrices."""
     if not matrix_paths:
         raise ValueError("at least one weekly production matrix is required")
     inputs: dict[str, WeeklyPolicyInput] = {}
     commands: dict[str, tuple[str, ...]] = {}
+    seen_case_ids: set[str] = set()
     for matrix_path in matrix_paths:
         matrix = _read_json_object(matrix_path)
         if matrix.get("schema") != WEEKLY_MATRIX_SCHEMA:
@@ -102,6 +104,7 @@ def weekly_policy_inputs_from_matrices(
         for raw_case in cases:
             case = _as_object(raw_case, "weekly production case")
             case_id = _require_string(case, "case_id")
+            seen_case_ids.add(case_id)
             command_value = case.get("command")
             if not isinstance(command_value, list) or not all(
                 isinstance(value, str) for value in command_value
@@ -117,6 +120,8 @@ def weekly_policy_inputs_from_matrices(
                 ) from error
             results_path = output / "results.json"
             readiness = _require_string(case, "readiness")
+            if case_id in failed_case_ids:
+                continue
             if not results_path.is_file():
                 if require_ready_complete and readiness == "ready":
                     raise ValueError(
@@ -160,6 +165,12 @@ def weekly_policy_inputs_from_matrices(
                 continue
             inputs[case_id] = policy
             commands[case_id] = command
+    unknown_failures = failed_case_ids - seen_case_ids
+    if unknown_failures:
+        raise ValueError(
+            "weekly production failures are absent from their matrices: "
+            f"{sorted(unknown_failures)}"
+        )
     if not inputs:
         raise ValueError("weekly production matrices contain no completed cases")
     return tuple(inputs.values())

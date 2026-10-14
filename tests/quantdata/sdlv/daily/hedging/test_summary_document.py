@@ -10,6 +10,8 @@ from pathlib import Path
 import pytest
 
 import quantdata.sdlv.daily.front_spot.hedging.reports.build_summary_document as summary_document_module
+from quantdata.hedging.protocols import HedgeSchedule
+from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly import weekly_targets
 from quantdata.sdlv.daily.front_spot.hedging.reports.build_summary_document import (
     _write_rendered_summary_document,
     build_summary_document,
@@ -20,6 +22,20 @@ from quantdata.sdlv.daily.front_spot.hedging.reports.build_summary_metrics impor
 )
 from quantdata.sdlv.daily.front_spot.hedging.reports.build_weekly_summary_metrics import (
     SUMMARY_SCHEMA as WEEKLY_SUMMARY_SCHEMA,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners.execute_production_matrix import (
+    QUEUE_SCHEMA,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners.numerical_gate_failure import (
+    write_numerical_gate_failure,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners.production_failures import (
+    ProductionFailure,
+    build_production_failure_ledger,
+    write_production_failure_ledger,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners.weekly import (
+    WeeklyEvaluationSpec,
 )
 
 
@@ -112,6 +128,10 @@ def test_summary_document_writer_rebuilds_from_authenticated_matrices(
         dataset=dataset,
         weekly=True,
     )
+    weekly_failure_ledger, weekly_failed_case = _write_first_case_failure_ledger(
+        weekly_matrix,
+        output=tmp_path / "weekly-failures.json",
+    )
     bibliography = tmp_path / "source" / "hedging_benchmark_summary_refs.bib"
     bibliography.parent.mkdir()
     bibliography.write_text("% test\n", encoding="utf-8")
@@ -121,16 +141,18 @@ def test_summary_document_writer_rebuilds_from_authenticated_matrices(
         paths: tuple[Path, ...],
         *,
         require_ready_complete: bool,
+        failed_case_ids: frozenset[str],
     ) -> tuple[object, ...]:
-        calls["daily_inputs"] = (paths, require_ready_complete)
+        calls["daily_inputs"] = (paths, require_ready_complete, failed_case_ids)
         return (object(),)
 
     def weekly_inputs(
         paths: tuple[Path, ...],
         *,
         require_ready_complete: bool,
+        failed_case_ids: frozenset[str],
     ) -> tuple[object, ...]:
-        calls["weekly_inputs"] = (paths, require_ready_complete)
+        calls["weekly_inputs"] = (paths, require_ready_complete, failed_case_ids)
         return (object(),)
 
     monkeypatch.setattr(summary_document_module, "daily_policy_inputs_from_matrices", daily_inputs)
@@ -159,14 +181,20 @@ def test_summary_document_writer_rebuilds_from_authenticated_matrices(
         daily_matrix_sha256=_sha256(daily_matrix),
         weekly_matrix=weekly_matrix,
         weekly_matrix_sha256=_sha256(weekly_matrix),
+        weekly_failure_ledger=weekly_failure_ledger,
+        weekly_failure_ledger_sha256=_sha256(weekly_failure_ledger),
         output=output,
         bibliography_source=bibliography,
         status_date=date(2026, 10, 14),
     )
 
     assert pdf is None
-    assert calls["daily_inputs"] == ((daily_matrix,), True)
-    assert calls["weekly_inputs"] == ((weekly_matrix,), True)
+    assert calls["daily_inputs"] == ((daily_matrix,), True, frozenset())
+    assert calls["weekly_inputs"] == (
+        (weekly_matrix,),
+        True,
+        frozenset({weekly_failed_case}),
+    )
     assert output.is_file()
     assert (output.parent / "hedging_benchmark_summary_refs.bib").is_file()
     bundle = json.loads(
@@ -176,6 +204,10 @@ def test_summary_document_writer_rebuilds_from_authenticated_matrices(
     )
     assert bundle["daily_matrix_sha256"] == _sha256(daily_matrix)
     assert bundle["weekly_matrix_sha256"] == _sha256(weekly_matrix)
+    assert bundle["weekly_failure_ledger_sha256"] == _sha256(
+        weekly_failure_ledger
+    )
+    assert bundle["weekly_failed_cases"] == [weekly_failed_case]
     assert bundle["daily_source_identities"]["sanos-lv-reference"][
         "aggregation_identity"
     ] == "daily-aggregation"
@@ -284,6 +316,31 @@ def test_summary_document_compiles(tmp_path: Path) -> None:
         weekly_objective_tables=fragments[1],
         daily_target_appendix=fragments[2],
         weekly_target_appendix=fragments[3],
+        weekly_failures=(
+            ProductionFailure(
+                case_id="frozen-weekly-sanos-lv-reference",
+                model="sanos-lv",
+                measure="Q-price/historical-transition",
+                variant="frozen-weekly-reference-delta-eight-factor-vega",
+                objective=None,
+                risk_parameter=None,
+                    schedule="frozen-weekly",
+                    classification="position-cap-hit",
+                    triggered_gates=("position-cap-hit",),
+                    summary="26 executed position-cap hits",
+                first_failed_origin=date(2023, 2, 8),
+                source_matrix_path=tmp_path / "source-matrix.json",
+                source_matrix_sha256="a" * 64,
+                queue_state_path=tmp_path / "queue.json",
+                queue_state_sha256="b" * 64,
+                    queue_log_path=tmp_path / "run.log",
+                    queue_log_sha256="c" * 64,
+                    run_metadata_path=tmp_path / "run.json",
+                    run_metadata_sha256="d" * 64,
+                    gate_failure_path=tmp_path / "numerical-gate-failure.json",
+                    gate_failure_sha256="e" * 64,
+                ),
+        ),
         status_date=date(2026, 10, 14),
         compile_pdf=True,
     )
@@ -337,6 +394,21 @@ def _write_matrix(
     cases = []
     for case_id, identity in identities.items():
         model, measure, variant, objective, parameter = identity
+        command = [
+            "python",
+            "runner",
+            "--output",
+            str(path.parent / "results" / case_id),
+            "--dataset-manifest-sha256",
+            _sha256(dataset / "manifest.json"),
+        ]
+        if weekly:
+            schedule = (
+                "frozen-weekly"
+                if case_id.startswith("frozen-weekly-")
+                else "restarted-weekly"
+            )
+            command.extend(("--schedule", schedule))
         cases.append(
             {
                 "case_id": case_id,
@@ -348,12 +420,7 @@ def _write_matrix(
                 "resource": "cpu",
                 "readiness": "ready",
                 "blocked_reason": None,
-                "command": [
-                    "python",
-                    "runner",
-                    "--output",
-                    str(path.parent / "results" / case_id),
-                ],
+                "command": command,
                 "reviewed_commit": None,
                 "production_gate_sha256": None,
                 "production_gate_path": None,
@@ -375,6 +442,118 @@ def _write_matrix(
         encoding="utf-8",
     )
     return path
+
+
+def _write_first_case_failure_ledger(
+    matrix: Path,
+    *,
+    output: Path,
+) -> tuple[Path, str]:
+    matrix_payload = json.loads(matrix.read_text(encoding="utf-8"))
+    case = matrix_payload["cases"][0]
+    case_id = case["case_id"]
+    command = case["command"]
+    run_output = Path(command[command.index("--output") + 1])
+    manifest_sha256 = command[command.index("--dataset-manifest-sha256") + 1]
+    schedule = HedgeSchedule(command[command.index("--schedule") + 1])
+    targets = weekly_targets()
+    spec = WeeklyEvaluationSpec(
+        label=case_id,
+        model=case["model"],
+        measure=case["measure"],
+        model_config_identity="model-config",
+        policy_config_identity="policy-config",
+        configuration_snapshot_json="{}",
+        dataset_manifest_sha256=manifest_sha256,
+        schedule=schedule,
+        evaluation_start=date(2023, 1, 1),
+        evaluation_end=date(2025, 12, 31),
+        rolling_observations=252,
+        target_labels=tuple(target.label for target in targets),
+        target_quantities=tuple(1.0 for _ in targets),
+        target_notional_identity="target-notional",
+        position_cap=1_000.0,
+        spot_cost_bps=1.0,
+        require_no_cap_hits=True,
+    )
+    run_output.mkdir(parents=True, exist_ok=True)
+    (run_output / "run.json").write_text(
+        json.dumps({**spec.to_dict(), "run_identity": spec.run_identity}),
+        encoding="utf-8",
+    )
+    gate_failure_path = write_numerical_gate_failure(
+        output_directory=run_output,
+        run_identity=spec.run_identity,
+        evaluation_schema=str(spec.to_dict()["schema"]),
+        model=spec.model,
+        measure=spec.measure,
+        schedule=spec.schedule.value,
+        dataset_manifest_sha256=spec.dataset_manifest_sha256,
+        origin_date=date(2023, 2, 8),
+        diagnostics={
+            "fit_cap_hits": 0,
+            "executed_cap_hits": 26,
+            "nonconverged_fits": 0,
+            "cap_hits": 26,
+        },
+    )
+    run_log = output.parent / f"{case_id}.log"
+    run_log.write_text("strict numerical gate failed\n", encoding="utf-8")
+    queue_state = output.parent / f"{case_id}-queue.json"
+    queue_state.write_text(
+        json.dumps(
+            {
+                "schema": QUEUE_SCHEMA,
+                "matrix_path": str(matrix.resolve()),
+                "matrix_sha256": _sha256(matrix),
+                "resource": "cpu",
+                "case_ids": [case_id],
+                "status": "complete-with-failures",
+                "current_case_id": None,
+                "started_at": "2026-10-14T07:09:10+00:00",
+                "completed_at": "2026-10-14T07:52:57+00:00",
+                "records": [
+                    {
+                        "case_id": case_id,
+                        "status": "failed",
+                        "return_code": 1,
+                        "error": "production command returned 1",
+                        "command": [
+                            "/venv/bin/python",
+                            *case["command"][1:],
+                            "--progress-every",
+                            "2",
+                        ],
+                        "log_path": str(run_log.resolve()),
+                        "numerical_gate_failure_path": str(
+                            gate_failure_path.resolve()
+                        ),
+                        "numerical_gate_failure_sha256": _sha256(
+                            gate_failure_path
+                        ),
+                        "started_at": "2026-10-14T07:09:10+00:00",
+                        "completed_at": "2026-10-14T07:52:57+00:00",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    write_production_failure_ledger(
+        build_production_failure_ledger(
+            matrix_path=matrix,
+            declarations=(
+                {
+                    "case_id": case_id,
+                    "classification": "position-cap-hit",
+                    "summary": "strict numerical gate failed",
+                    "queue_state_path": str(queue_state),
+                },
+            ),
+        ),
+        output=output,
+    )
+    return output, case_id
 
 
 def _daily_metrics(*, manifest_sha256: str = "a" * 64) -> dict[str, object]:

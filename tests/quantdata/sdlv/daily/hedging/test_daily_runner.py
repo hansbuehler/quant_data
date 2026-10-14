@@ -14,6 +14,10 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
     DailyEvaluationSummary,
     run_daily_evaluation,
 )
+from quantdata.sdlv.daily.front_spot.hedging.runners.numerical_gate_failure import (
+    NUMERICAL_GATE_FAILURE_FILENAME,
+    load_numerical_gate_failure,
+)
 
 
 class _Dataset:
@@ -160,6 +164,7 @@ def test_daily_runner_rejects_incomplete_or_nonconverged_books(tmp_path) -> None
             ),
             output_directory=tmp_path / "incomplete",
         )
+    nonconverged_output = tmp_path / "nonconverged"
     with pytest.raises(RuntimeError, match="numerical gate failed"):
         run_daily_evaluation(
             panel,
@@ -173,8 +178,17 @@ def test_daily_runner_rejects_incomplete_or_nonconverged_books(tmp_path) -> None
                 ),
                 _result(origin, claim="claim-b", claim_quantity=0.5),
             ),
-            output_directory=tmp_path / "nonconverged",
+            output_directory=nonconverged_output,
         )
+    failure = load_numerical_gate_failure(
+        nonconverged_output / NUMERICAL_GATE_FAILURE_FILENAME
+    )
+    assert failure["origin_date"] == "2023-01-03"
+    assert failure["triggered_gates"] == ["nonconverged-fit"]
+    assert failure["diagnostics"] == {
+        "cap_hits": 0,
+        "nonconverged_results": 1,
+    }
 
 
 def test_daily_runner_rejects_wrong_target_quantity(tmp_path) -> None:
