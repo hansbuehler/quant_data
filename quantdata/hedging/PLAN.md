@@ -14,8 +14,9 @@ synthetic contract replay, minimum-predictable-option-cost factor hedges, and a
 residual spot-delta hedge. Its independent Phase-2 review and 160-target
 multi-date CPU pilot passed. The independent covariance baseline now uses an
 instrument-only shrinkage Tyler geometry, target-specific robust cross-moments,
-sample-mean/HAC drift screening, and exact mean-volatility recession checks;
-its Phase-3 implementation and independent re-review passed. The rolling
+sample-mean/HAC drift screening, exact mean-volatility recession checks,
+Gaussian entropy equivalence, and an exact Gaussian power-exponential OCE;
+its Phase-3 implementation and independent re-reviews passed. The rolling
 rank-16 SDLV calibration, factor alignment, eight Greek factors, analytical Q
 drift, and compatible P-drift estimation passed the Phase-4 remediation review.
 The Phase-8 weekly accounting engine now also passes its independent mechanical
@@ -755,7 +756,8 @@ Gate: standalone SANOS-LV smoke test passes.
 ### Phase 3: independent covariance baseline (complete)
 
 Implement same-contract historical returns, robust covariance, cost lasso,
-mean-variance, and mean-volatility.
+mean-variance, mean-volatility, Gaussian entropy equivalence, and the exact
+Gaussian power-exponential OCE.
 
 Gate: standalone covariance smoke test and model review pass.
 

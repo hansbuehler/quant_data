@@ -782,6 +782,8 @@ def _model_catalogue(model_names: list[str]) -> str:
             "Robust covariance",
             "This independent baseline uses HAC-screened means, robust regression, "
             "regularized Tyler scatter, and spread-weighted lasso costs "
+            "\nUnder its Gaussian law, entropy equals the corresponding mean--variance "
+            "policy and power-exponential uses the exact Gaussian OCE "
             r"\citep{Tyler1987,ChenWieselHero2011}.",
         ),
         "gromm": (

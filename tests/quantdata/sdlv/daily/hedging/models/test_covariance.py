@@ -21,6 +21,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.covariance.config import (
 from quantdata.sdlv.daily.front_spot.hedging.models.covariance.hedger import (
     _gaussian_power_risk,
     _robust_target_scatter,
+    _solve_power_exponential,
     fit_covariance_action,
     fit_covariance_book_actions,
 )
@@ -276,6 +277,72 @@ def test_gaussian_power_risk_matches_direct_normal_integration() -> None:
     assert numerical.success
     assert value == pytest.approx(float(numerical.fun), abs=1.0e-12)
     assert translation == pytest.approx(float(numerical.x), abs=1.0e-8)
+
+
+def test_gaussian_power_risk_is_finite_and_monotone_at_extreme_scales() -> None:
+    for risk_parameter in np.logspace(-3, 3, 7):
+        previous_value = -1.0
+        for standard_deviation in np.concatenate(([0.0], np.logspace(-6, 2, 9))):
+            value, derivative, translation = _gaussian_power_risk(
+                float(standard_deviation),
+                risk_parameter=float(risk_parameter),
+            )
+            assert np.all(np.isfinite((value, derivative, translation)))
+            assert value >= previous_value - 1.0e-10
+            assert derivative >= 0.0
+            previous_value = value
+
+
+def test_gaussian_power_solver_matches_direct_scalar_spread_problem() -> None:
+    covariance = np.asarray([[0.04]], dtype=np.float64)
+    claim_cross_covariance = np.asarray([0.012], dtype=np.float64)
+    claim_variance = 0.09
+    instrument_center = np.asarray([0.006], dtype=np.float64)
+    penalty = np.asarray([0.0015], dtype=np.float64)
+    config = CovarianceHedgeConfig(
+        objective=CovarianceObjective.POWER_EXPONENTIAL,
+        risk_parameter=2.0,
+        position_cap=10.0,
+        solver_position_cap=10.0,
+    )
+
+    action, _, converged, cap_hits = _solve_power_exponential(
+        instrument_center=instrument_center,
+        covariance=covariance,
+        claim_cross_covariance=claim_cross_covariance,
+        claim_variance=claim_variance,
+        penalty=penalty,
+        config=config,
+    )
+
+    def objective(action_value: float) -> float:
+        variance = (
+            claim_variance
+            + 2.0 * claim_cross_covariance[0] * action_value
+            + covariance[0, 0] * action_value**2
+        )
+        risk = _gaussian_power_risk(
+            math.sqrt(max(variance, 0.0)),
+            risk_parameter=config.risk_parameter,
+        )[0]
+        return (
+            -instrument_center[0] * action_value
+            + penalty[0] * abs(action_value)
+            + risk
+        )
+
+    numerical = minimize_scalar(
+        objective,
+        bounds=(-config.solver_position_cap, config.solver_position_cap),
+        method="bounded",
+        options={"xatol": 1.0e-12},
+    )
+
+    assert numerical.success
+    assert converged
+    assert cap_hits == 0
+    assert action[0] == pytest.approx(float(numerical.x), abs=1.0e-7)
+    assert objective(action[0]) == pytest.approx(float(numerical.fun), abs=1.0e-11)
 
 
 def test_mean_volatility_caps_and_flags_unbounded_policy() -> None:
