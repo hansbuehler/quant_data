@@ -1260,17 +1260,22 @@ The pre-production complete-suite record on the remediated report source has
 be rerun again after production. This permits the final
 57-cell daily and 94-cell weekly matrices to reuse completed native evidence
 without copying it or rerunning it. The reviewed detached final-production
-service `quantdata-hedging-full-production-de18586.service` is active from
+service `quantdata-hedging-full-production-de18586-v2.service` is active from
 immutable reporting commit `de185864a9eb414ca431b92321b56c41062fd651`. Its
 exact detached-environment preflight passed and its installed launcher has
-SHA-256 `5a2eefa09b3607814d497b328c80ecffeacce00a31925f32eb618b5cb9bd27b1`.
+SHA-256 `9ca7c53ecf1d843ae6e1aa7c124665b85384737c4352607d01601006b935c51c`.
 It creates and persists the version-2 commitment and fixed SHA-256 before any
 final generated or GROMM production case, revalidates them on restart and
 immediately before reporting, and rechecks its clean pinned worktree before the
-final render. It retains the existing ordered daily sources, authenticated
+final render. It also fail-closes unless the independently approved final-review
+protocol from commit `5fc1bc87f529630bf7b936e4eb77e2ffa6ce7bfe` has SHA-256
+`34ea83410614c3395bb4ccdf561ff95d1acd9ee572f413cfdf2d48bea29a9c7f`;
+that identity is logged before preflight, matrix preparation, queues, and final
+rendering. It retains the existing ordered daily sources, authenticated
 weekly native source, and combined SANOS--LV failure ledger, then runs only
-missing GROMM and generated cases. The obsolete `d22ec9a` coordinator was
-stopped while still waiting and launched no production case.
+missing GROMM and generated cases. The obsolete `d22ec9a` coordinator and the
+unbound first `de18586` waiter were stopped while still waiting and launched no
+production case.
 
 Weekly objective tables now
 include equal-weight episode-book and worst-target maximum drawdown, computed

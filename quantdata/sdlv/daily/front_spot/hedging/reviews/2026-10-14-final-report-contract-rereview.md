@@ -58,12 +58,18 @@ and a separate quantitative results review reconciles the finished numbers.
 The successor launcher closes the operational gate and passed independent
 re-review. It is pinned to reporting commit
 `de185864a9eb414ca431b92321b56c41062fd651`; its installed SHA-256 is
-`5a2eefa09b3607814d497b328c80ecffeacce00a31925f32eb618b5cb9bd27b1`.
+`9ca7c53ecf1d843ae6e1aa7c124665b85384737c4352607d01601006b935c51c`.
 It uses fresh `de18586` matrix, checkpoint, operations, and report roots, keeps
 the independently reviewed generated-model source commit at `d22ec9a`, and
 rechecks the clean reporting worktree immediately before final commitment
-validation and rendering. Its exact detached-environment preflight passed.
-Service `quantdata-hedging-full-production-de18586.service` is active and waits
-only for generated readiness and authenticated Historical-SANOS failure
-canonicalization. The obsolete `d22ec9a` coordinator was stopped while it was
-still waiting and launched no production case.
+validation and rendering. It fail-closes unless the independently approved
+review protocol from commit `5fc1bc87f529630bf7b936e4eb77e2ffa6ce7bfe`
+matches SHA-256
+`34ea83410614c3395bb4ccdf561ff95d1acd9ee572f413cfdf2d48bea29a9c7f`
+before preflight, matrix preparation, queues, and final rendering. Its exact
+bound detached-environment preflight passed. Service
+`quantdata-hedging-full-production-de18586-v2.service` is active and waits only
+for generated readiness and authenticated Historical-SANOS failure
+canonicalization. The obsolete `d22ec9a` coordinator and the first unbound
+`de18586` waiter were stopped while still waiting and launched no production
+case.

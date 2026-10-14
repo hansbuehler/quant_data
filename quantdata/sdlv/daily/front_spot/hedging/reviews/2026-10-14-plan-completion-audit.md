@@ -55,15 +55,19 @@ either production identity.
   version-1.11 matrices and will validate completed cells and canonicalize only
   genuine terminal failures. Its launcher SHA-256 is
   `70bd69a679fd9cef58aba1087c84e49f35f8db796e4cfde8176e17df47252846`.
-- `quantdata-hedging-full-production-de18586.service` is active from immutable
+- `quantdata-hedging-full-production-de18586-v2.service` is active from immutable
   reporting commit `de185864a9eb414ca431b92321b56c41062fd651` and waits on
   generated readiness and Historical-SANOS canonicalization. Its independently
   reviewed launcher writes the version-2 commitment and immutable SHA-256
   before final production, passed its exact detached-environment preflight, and
   has SHA-256
-  `5a2eefa09b3607814d497b328c80ecffeacce00a31925f32eb618b5cb9bd27b1`.
-  The obsolete `d22ec9a` coordinator was stopped while still waiting and
-  launched no production case.
+  `9ca7c53ecf1d843ae6e1aa7c124665b85384737c4352607d01601006b935c51c`.
+  It also authenticates the independently approved final-review protocol from
+  commit `5fc1bc87f529630bf7b936e4eb77e2ffa6ce7bfe`, SHA-256
+  `34ea83410614c3395bb4ccdf561ff95d1acd9ee572f413cfdf2d48bea29a9c7f`,
+  before preflight, matrix preparation, queues, and rendering. The obsolete
+  `d22ec9a` coordinator and first unbound `de18586` waiter were stopped while
+  still waiting and launched no production case.
 - The coordinators use service activity only for capacity scheduling. Their
   authoritative gates reconstruct immutable matrices, production gates, and
   result artifacts, avoiding a race with auto-collected transient units.
