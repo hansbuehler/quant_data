@@ -40,11 +40,11 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.weekly_production_matrix im
 
 JsonObject: TypeAlias = dict[str, object]
 
-DOCUMENT_SCHEMA = "hedging-benchmark-summary-document-v3"
+DOCUMENT_SCHEMA = "hedging-benchmark-summary-document-v4"
 DISPLAY_SCALE = 10_000.0
 DAILY_MATRIX_SCHEMA = "hedging-daily-production-matrix-v1"
 WEEKLY_MATRIX_SCHEMA = "hedging-weekly-production-matrix-v1"
-EXPECTED_DAILY_MATRIX_CASES = 54
+EXPECTED_DAILY_MATRIX_CASES = 57
 EXPECTED_WEEKLY_MATRIX_CASES = 94
 
 

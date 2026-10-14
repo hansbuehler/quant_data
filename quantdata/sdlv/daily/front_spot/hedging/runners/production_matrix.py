@@ -52,7 +52,7 @@ class ProductionReadiness(StrEnum):
     BLOCKED = "blocked"
 
 
-@version("1.2", dependencies=[DailyResultsConfig])
+@version("1.3", dependencies=[DailyResultsConfig])
 @dataclass(frozen=True, kw_only=True)
 class DailyProductionMatrixConfig:
     """Precommitted objective grids and shared daily run controls."""
@@ -251,6 +251,7 @@ def build_daily_production_matrix(
     for objective, parameters in (
         ("mean-variance", config.mean_variance_parameters),
         ("mean-volatility", config.mean_volatility_parameters),
+        ("power-exponential", config.power_exponential_parameters),
     ):
         for parameter in parameters:
             case_id = _risk_case_id("covariance", objective, parameter)

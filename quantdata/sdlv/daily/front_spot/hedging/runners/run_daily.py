@@ -368,7 +368,8 @@ def _build_model(
             objective = CovarianceObjective(arguments.objective)
         except ValueError as error:
             raise ValueError(
-                "covariance supports mean-variance and mean-volatility"
+                "covariance supports mean-variance, mean-volatility, and "
+                "Gaussian power-exponential"
             ) from error
         config = CovarianceHedgeConfig(
             label=label,

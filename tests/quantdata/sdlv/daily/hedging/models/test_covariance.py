@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import math
 from dataclasses import replace
 from datetime import date, timedelta
 
 import numpy as np
 import pytest
+from scipy.integrate import quad
+from scipy.optimize import minimize_scalar
 
 from quantdata.hedging.objectives import regularized_tyler_covariance
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.daily import one_day_market_sample
@@ -16,6 +19,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.covariance.config import (
     CovarianceObjective,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.covariance.hedger import (
+    _gaussian_power_risk,
     _robust_target_scatter,
     fit_covariance_action,
     fit_covariance_book_actions,
@@ -157,6 +161,121 @@ def test_book_mean_volatility_recovers_pure_factor_hedge(
     assert action.action is not None
     np.testing.assert_allclose(action.action, [-2.0], atol=0.08)
     assert action.standard_deviation < 0.2 * np.sqrt(fit.estimate.covariance[-1, -1])
+
+
+@pytest.mark.parametrize("risk_parameter", [0.1, 1.0, 10.0])
+def test_book_gaussian_power_recovers_pure_factor_hedge(
+    risk_parameter: float,
+) -> None:
+    panel = _one_factor_return_panel()
+    fit = fit_covariance_book_actions(
+        panel,
+        linear_transaction_costs=np.zeros(1),
+        config=CovarianceHedgeConfig(
+            rolling_observations=len(panel.training_origin_dates),
+            objective=CovarianceObjective.POWER_EXPONENTIAL,
+            risk_parameter=risk_parameter,
+            cost_multiplier=0.0,
+        ),
+    )
+    action = fit.actions[0]
+    assert action.bounded
+    assert action.converged
+    assert action.action is not None
+    np.testing.assert_allclose(action.action, [-2.0], atol=0.08)
+    assert action.standard_deviation < 0.2 * np.sqrt(fit.estimate.covariance[-1, -1])
+
+
+@pytest.mark.parametrize(
+    ("risk_parameter", "standard_deviation"),
+    ((0.1, 0.01), (1.0, 0.1), (10.0, 1.0)),
+)
+def test_gaussian_power_risk_has_correct_slope(
+    risk_parameter: float,
+    standard_deviation: float,
+) -> None:
+    value, derivative, _ = _gaussian_power_risk(
+        standard_deviation,
+        risk_parameter=risk_parameter,
+    )
+    step = 1.0e-6 * max(1.0, standard_deviation)
+    upper = _gaussian_power_risk(
+        standard_deviation + step,
+        risk_parameter=risk_parameter,
+    )[0]
+    lower = _gaussian_power_risk(
+        standard_deviation - step,
+        risk_parameter=risk_parameter,
+    )[0]
+
+    assert value > 0.0
+    assert derivative == pytest.approx((upper - lower) / (2.0 * step), rel=1.0e-7)
+
+
+def test_gaussian_power_risk_has_mean_variance_small_risk_limit() -> None:
+    risk_parameter = 0.2
+    standard_deviation = 1.0e-3
+    value, derivative, _ = _gaussian_power_risk(
+        standard_deviation,
+        risk_parameter=risk_parameter,
+    )
+
+    assert value == pytest.approx(
+        0.5 * risk_parameter * standard_deviation**2,
+        rel=1.0e-4,
+    )
+    assert derivative == pytest.approx(
+        risk_parameter * standard_deviation,
+        rel=1.0e-4,
+    )
+
+
+def test_gaussian_power_risk_matches_direct_normal_integration() -> None:
+    risk_parameter = 2.0
+    standard_deviation = 0.35
+
+    def utility(value: float) -> float:
+        if value >= 0.0:
+            return -math.expm1(-risk_parameter * value) / risk_parameter
+        return value - 0.5 * risk_parameter * value**2
+
+    def normal_density(value: float) -> float:
+        return math.exp(-0.5 * value**2) / math.sqrt(2.0 * math.pi)
+
+    def oce(translation: float) -> float:
+        split = translation / standard_deviation
+        expectation = quad(
+            lambda value: utility(
+                standard_deviation * value - translation
+            )
+            * normal_density(value),
+            -math.inf,
+            split,
+            epsabs=1.0e-12,
+        )[0] + quad(
+            lambda value: utility(
+                standard_deviation * value - translation
+            )
+            * normal_density(value),
+            split,
+            math.inf,
+            epsabs=1.0e-12,
+        )[0]
+        return translation + expectation
+
+    numerical = minimize_scalar(
+        lambda translation: -oce(float(translation)),
+        bracket=(-1.0, 1.0),
+        tol=1.0e-12,
+    )
+    value, _, translation = _gaussian_power_risk(
+        standard_deviation,
+        risk_parameter=risk_parameter,
+    )
+
+    assert numerical.success
+    assert value == pytest.approx(float(numerical.fun), abs=1.0e-12)
+    assert translation == pytest.approx(float(numerical.x), abs=1.0e-8)
 
 
 def test_mean_volatility_caps_and_flags_unbounded_policy() -> None:

@@ -20,10 +20,16 @@
   and soft-thresholded using Newey--West standard errors at the rolling
   universal threshold `sqrt(2 log p)`. The automatic HAC lag and threshold are
   recomputed in every rolling window rather than fixed from 2022.
+- **Objectives:** mean--variance and mean--volatility use the fitted first two
+  moments directly. Gaussian entropy is exactly the mean--variance policy at
+  the same risk parameter. Power-exponential uses its distinct exact Gaussian
+  OCE, profiling the scalar cash translation with stable truncated-normal
+  formulas and solving the resulting convex spread-lasso problem; it is not
+  relabelled from mean--variance.
 - **Hedge:** claim-policy minus zero-claim-policy action with
-  transaction-cost-weighted lasso. Both mean-variance and mean-volatility are
-  supported. The deterministic regression uses mean-variance risk aversion 10
-  and a loose numerical cap of one million. The
+  transaction-cost-weighted lasso. Mean-variance, mean-volatility, and
+  Gaussian power-exponential are supported. The deterministic regression uses
+  mean-variance risk aversion 10 and a loose numerical cap of one million. The
   spot penalty contains its one-basis-point entry and liquidation costs; the
   option penalty uses one current half-spread for next-date cash settlement and
   twice the current half-spread as a predictable round-trip proxy otherwise.

@@ -905,8 +905,11 @@ cap-limited diagnostics rather than silently reported as finite optima.
 The covariance mean--variance cases at risk
 parameters $0.1$, $1$, and $10$ have completed all 611 origins and 12,220
 records under the current target-notional identity, with zero cap hits and zero
-nonconvergence. The versioned daily production matrix contains 54
-unique cases: 21 runnable native CPU cases, two
+nonconvergence. Gaussian entropy is represented exactly by these same
+mean--variance policies at equal risk parameter. A distinct exact-Gaussian
+power-exponential covariance fit is implemented and remains to be run. The
+versioned daily production matrix contains 57
+unique cases: 24 runnable native CPU cases, two
 staged published-setting GPU cases awaiting the generated-model GPU-readiness
 gate, and 31 explicitly blocked rolling-generated or GROMM cases. No blocked
 case is silently emitted as a launch command.
@@ -1054,7 +1057,7 @@ than manually transcribed. The public CLI accepts only the public dataset and
 immutable production matrices; it rebuilds the metrics and LaTeX fragments and
 writes a manifest binding dataset, matrix, run, aggregation, and report hashes.
 Precommitted matrix digests are explicit trust anchors. Final rendering requires
-the canonical 54-cell daily and 94-cell weekly grids to be fully ready and
+the canonical 57-cell daily and 94-cell weekly grids to be fully ready and
 complete, so a post-outcome matrix cannot suppress a policy by relabelling it
 blocked.
 Weekly ingestion requires the complete
@@ -1090,7 +1093,7 @@ cohort; a real 12,220-record SANOS--LV composition smoke and focused composition
 tests pass, and independent quant re-review closes the authentication blocker.
 The last durable complete-suite record has 349 passing tests; the final full
 suite will be rerun after production. This permits the final
-54-cell daily and 94-cell weekly matrices to reuse completed native evidence
+57-cell daily and 94-cell weekly matrices to reuse completed native evidence
 without copying it or rerunning it. The detached final-production service
 `quantdata-hedging-full-production-a1baa69.service` passed its exact-environment
 preflight and is waiting on rolling GROMM migration, generated-model GPU

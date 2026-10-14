@@ -15,9 +15,10 @@ class CovarianceObjective(StrEnum):
 
     MEAN_VARIANCE = "mean-variance"
     MEAN_VOLATILITY = "mean-volatility"
+    POWER_EXPONENTIAL = "power-exponential"
 
 
-@version("3.2")
+@version("3.3")
 @dataclass(frozen=True, kw_only=True)
 class CovarianceHedgeConfig:
     """Logical and numerical settings for the rolling covariance hedge."""

@@ -48,10 +48,17 @@ def _matrix(
 
 def test_daily_production_matrix_is_complete_unique_and_resource_partitioned() -> None:
     cases = _matrix()
-    assert len(cases) == 54
+    assert len(cases) == 57
     assert len({case.case_id for case in cases}) == len(cases)
     assert sum(case.model == "gromm" for case in cases) == 26
     assert sum(case.model == "gromm-q-dlv-vega" for case in cases) == 1
+    covariance_power = tuple(
+        case
+        for case in cases
+        if case.model == "robust-covariance"
+        and case.objective == "power-exponential"
+    )
+    assert tuple(case.risk_parameter for case in covariance_power) == (0.1, 1.0, 10.0)
     assert all(
         case.resource is ProductionResource.GPU
         for case in cases

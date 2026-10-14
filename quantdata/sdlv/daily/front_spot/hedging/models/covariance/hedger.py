@@ -7,7 +7,8 @@ from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.optimize import minimize
+from scipy.optimize import brentq, minimize
+from scipy.special import log_ndtr, ndtr
 
 from quantdata.hedging.objectives import (
     CovarianceEstimate,
@@ -25,6 +26,8 @@ from quantdata.sdlv.daily.front_spot.hedging.models.covariance.returns import (
 )
 
 FloatArray = NDArray[np.float64]
+_LOG_TWO_PI = math.log(2.0 * math.pi)
+_LOG_MAX_FLOAT = math.log(np.finfo(np.float64).max)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -181,7 +184,7 @@ def fit_covariance_book_actions(
             penalty=penalty,
         )
     bounded = (
-        config.objective is CovarianceObjective.MEAN_VARIANCE
+        config.objective is not CovarianceObjective.MEAN_VOLATILITY
         or recession_ratio <= config.risk_parameter + config.recession_tolerance
     )
     zero_policy = _fit_policy(
@@ -450,7 +453,7 @@ def _fit_policy(
             initial_action=np.zeros_like(instrument_center),
             config=config,
         )
-    else:
+    elif config.objective is CovarianceObjective.MEAN_VOLATILITY:
         action, iterations, converged, cap_hits = _solve_mean_volatility(
             instrument_center=instrument_center,
             covariance=covariance,
@@ -460,6 +463,17 @@ def _fit_policy(
             config=config,
         )
         converged = converged and bounded
+    elif config.objective is CovarianceObjective.POWER_EXPONENTIAL:
+        action, iterations, converged, cap_hits = _solve_power_exponential(
+            instrument_center=instrument_center,
+            covariance=covariance,
+            claim_cross_covariance=claim_cross_covariance,
+            claim_variance=claim_variance,
+            penalty=penalty,
+            config=config,
+        )
+    else:
+        raise ValueError(f"unsupported covariance objective {config.objective!r}")
     expected_profit, standard_deviation, objective = _policy_statistics(
         action=action,
         instrument_center=instrument_center,
@@ -540,6 +554,237 @@ def _solve_mean_volatility(
     return action, total_iterations, converged, cap_hits
 
 
+def _solve_power_exponential(
+    *,
+    instrument_center: FloatArray,
+    covariance: FloatArray,
+    claim_cross_covariance: FloatArray,
+    claim_variance: float,
+    penalty: FloatArray,
+    config: CovarianceHedgeConfig,
+) -> tuple[FloatArray, int, bool, int]:
+    """Solve the exact Gaussian power-exponential OCE by radial reweighting."""
+    action = np.zeros_like(instrument_center)
+    initial_standard_deviation = math.sqrt(max(claim_variance, 0.0))
+    variance_aversion = _gaussian_power_variance_aversion(
+        initial_standard_deviation,
+        risk_parameter=config.risk_parameter,
+        minimum_standard_deviation=config.minimum_standard_deviation,
+    )
+    total_iterations = 0
+    converged = False
+    cap_hits = 0
+    for _ in range(config.maximum_reweighting_iterations):
+        updated, iterations, inner_converged, inner_cap_hits = _solve_quadratic_lasso(
+            instrument_center=instrument_center,
+            covariance=covariance,
+            claim_cross_covariance=claim_cross_covariance,
+            penalty=penalty,
+            variance_aversion=variance_aversion,
+            initial_action=action,
+            config=config,
+        )
+        total_iterations += iterations
+        cap_hits = max(cap_hits, inner_cap_hits)
+        variance = _residual_variance(
+            action=updated,
+            covariance=covariance,
+            claim_cross_covariance=claim_cross_covariance,
+            claim_variance=claim_variance,
+        )
+        updated_standard_deviation = math.sqrt(variance)
+        updated_aversion = _gaussian_power_variance_aversion(
+            updated_standard_deviation,
+            risk_parameter=config.risk_parameter,
+            minimum_standard_deviation=config.minimum_standard_deviation,
+        )
+        action_change = float(np.max(np.abs(updated - action)))
+        aversion_change = abs(updated_aversion - variance_aversion) / max(
+            1.0,
+            abs(variance_aversion),
+        )
+        action = updated
+        variance_aversion = updated_aversion
+        if (
+            inner_converged
+            and action_change <= config.action_tolerance
+            and aversion_change <= config.action_tolerance
+            and _lasso_kkt_residual(
+                action=action,
+                instrument_center=instrument_center,
+                covariance=covariance,
+                claim_cross_covariance=claim_cross_covariance,
+                penalty=penalty,
+                variance_aversion=variance_aversion,
+                position_cap=config.solver_position_cap,
+            )
+            <= 10.0 * config.action_tolerance
+        ):
+            converged = True
+            break
+    return action, total_iterations, converged, cap_hits
+
+
+def _gaussian_power_variance_aversion(
+    standard_deviation: float,
+    *,
+    risk_parameter: float,
+    minimum_standard_deviation: float,
+) -> float:
+    if standard_deviation <= minimum_standard_deviation:
+        return risk_parameter
+    _, derivative, _ = _gaussian_power_risk(
+        standard_deviation,
+        risk_parameter=risk_parameter,
+    )
+    return derivative / standard_deviation
+
+
+def _gaussian_power_risk(
+    standard_deviation: float,
+    *,
+    risk_parameter: float,
+) -> tuple[float, float, float]:
+    """Return exact centered-Gaussian power risk, slope, and OCE translation."""
+    sigma = float(standard_deviation)
+    risk = float(risk_parameter)
+    if not math.isfinite(sigma) or sigma < 0.0:
+        raise ValueError("standard_deviation must be finite and non-negative")
+    if not math.isfinite(risk) or risk <= 0.0:
+        raise ValueError("risk_parameter must be finite-positive")
+    if risk * sigma <= 1.0e-7:
+        return 0.5 * risk * sigma**2, risk * sigma, 0.0
+
+    scaled_sigma = risk * sigma
+
+    def first_order_condition(residual_mean: float) -> float:
+        standardized_mean = residual_mean / sigma
+        log_exponential_part = (
+            -risk * residual_mean
+            + 0.5 * scaled_sigma**2
+            + float(log_ndtr(standardized_mean - scaled_sigma))
+        )
+        exponential_part = _exp_bounded(log_exponential_part)
+        negative_probability = float(ndtr(-standardized_mean))
+        density = _standard_normal_density(standardized_mean)
+        negative_first_moment = (
+            residual_mean * negative_probability - sigma * density
+        )
+        return (
+            exponential_part
+            + negative_probability
+            - risk * negative_first_moment
+            - 1.0
+        )
+
+    bound = max(sigma, 1.0 / risk)
+    lower = -bound
+    upper = bound
+    lower_value = first_order_condition(lower)
+    upper_value = first_order_condition(upper)
+    for _ in range(64):
+        if lower_value >= 0.0 and upper_value <= 0.0:
+            break
+        if lower_value < 0.0:
+            lower *= 2.0
+            lower_value = first_order_condition(lower)
+        if upper_value > 0.0:
+            upper *= 2.0
+            upper_value = first_order_condition(upper)
+    else:
+        raise FloatingPointError("failed to bracket Gaussian power OCE translation")
+    residual_mean = float(
+        brentq(
+            first_order_condition,
+            lower,
+            upper,
+            xtol=1.0e-13,
+            rtol=4.0 * np.finfo(np.float64).eps,
+            maxiter=100,
+        )
+    )
+    standardized_mean = residual_mean / sigma
+    shifted_argument = standardized_mean - scaled_sigma
+    log_exponential_part = (
+        -risk * residual_mean
+        + 0.5 * scaled_sigma**2
+        + float(log_ndtr(shifted_argument))
+    )
+    exponential_part = _exp_bounded(log_exponential_part)
+    positive_probability = float(ndtr(standardized_mean))
+    negative_probability = float(ndtr(-standardized_mean))
+    density = _standard_normal_density(standardized_mean)
+    negative_first_moment = residual_mean * negative_probability - sigma * density
+    negative_second_moment = (
+        (residual_mean**2 + sigma**2) * negative_probability
+        - residual_mean * sigma * density
+    )
+    expected_utility = (
+        (positive_probability - exponential_part) / risk
+        + negative_first_moment
+        - 0.5 * risk * negative_second_moment
+    )
+    centered_risk = residual_mean - expected_utility
+
+    log_mills_ratio = (
+        -0.5 * shifted_argument**2
+        - 0.5 * _LOG_TWO_PI
+        - float(log_ndtr(shifted_argument))
+    )
+    exponential_z_moment = exponential_part * (
+        _exp_bounded(log_mills_ratio) - scaled_sigma
+    )
+    derivative = (
+        density
+        + scaled_sigma * negative_probability
+        - exponential_z_moment
+    )
+    if not math.isfinite(centered_risk) or not math.isfinite(derivative):
+        raise FloatingPointError("Gaussian power OCE is non-finite")
+    return (
+        max(centered_risk, 0.0),
+        max(derivative, 0.0),
+        -residual_mean,
+    )
+
+
+def _exp_bounded(log_value: float) -> float:
+    if log_value <= math.log(np.finfo(np.float64).tiny):
+        return 0.0
+    return math.exp(min(log_value, _LOG_MAX_FLOAT))
+
+
+def _standard_normal_density(value: float) -> float:
+    return math.exp(-0.5 * value**2 - 0.5 * _LOG_TWO_PI)
+
+
+def _lasso_kkt_residual(
+    *,
+    action: FloatArray,
+    instrument_center: FloatArray,
+    covariance: FloatArray,
+    claim_cross_covariance: FloatArray,
+    penalty: FloatArray,
+    variance_aversion: float,
+    position_cap: float,
+) -> float:
+    smooth_gradient = (
+        -instrument_center
+        + variance_aversion * (covariance @ action + claim_cross_covariance)
+    )
+    residual = smooth_gradient + penalty * np.sign(action)
+    zero = action == 0.0
+    residual[zero] = np.sign(smooth_gradient[zero]) * np.maximum(
+        np.abs(smooth_gradient[zero]) - penalty[zero],
+        0.0,
+    )
+    upper = action >= position_cap
+    lower = action <= -position_cap
+    residual[upper] = np.maximum(residual[upper], 0.0)
+    residual[lower] = np.minimum(residual[lower], 0.0)
+    return float(np.max(np.abs(residual)))
+
+
 def _solve_quadratic_lasso(
     *,
     instrument_center: FloatArray,
@@ -607,11 +852,17 @@ def _policy_statistics(
         claim_variance=claim_variance,
     )
     standard_deviation = math.sqrt(variance)
-    risk = (
-        0.5 * config.risk_parameter * variance
-        if config.objective is CovarianceObjective.MEAN_VARIANCE
-        else config.risk_parameter * standard_deviation
-    )
+    if config.objective is CovarianceObjective.MEAN_VARIANCE:
+        risk = 0.5 * config.risk_parameter * variance
+    elif config.objective is CovarianceObjective.MEAN_VOLATILITY:
+        risk = config.risk_parameter * standard_deviation
+    elif config.objective is CovarianceObjective.POWER_EXPONENTIAL:
+        risk, _, _ = _gaussian_power_risk(
+            standard_deviation,
+            risk_parameter=config.risk_parameter,
+        )
+    else:
+        raise ValueError(f"unsupported covariance objective {config.objective!r}")
     objective = float(-expected_profit + risk + penalty @ np.abs(action))
     return expected_profit, standard_deviation, objective
 
