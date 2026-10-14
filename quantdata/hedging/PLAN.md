@@ -6,6 +6,30 @@ This document is the implementation plan for the hedging benchmark built around
 the daily front-spot SDLV/GROMM model. It records the agreed experimental design
 and implementation order.
 
+**Current generated-model correction (2026-10-14).** Rolling VolGAN and
+diffusion warm starts must use the authenticated initializer's logical model
+label, `hedging-generated-v1`; the operational evaluation label is a distinct
+run identifier. The earlier readiness service incorrectly used the latter for
+checkpoint lookup. Immutable commit
+`d22ec9a0893313363fb503f8f53f5528159b1549` separates these identities through
+an explicit `--model-label` argument without weakening checkpoint validation.
+The correction and both detached launchers passed independent quantitative
+review, recorded in
+`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-14-generated-initializer-label-lineage-review.md`
+(SHA-256
+`041f00d5b322c92c2b1d23f7933eb967dc86671701f81b4403a94155eb2b4fc1`).
+The authenticated lineage snapshot has SHA-256
+`91f04fa3067c2df7d6978abbf083eea2a7d856d0be493a4345f44c894cd5742e`.
+Service `quantdata-hedging-generated-readiness-d22ec9a.service` is rerunning the
+complete generated-model readiness matrix on the managed GPU; its immutable
+launcher SHA-256 is
+`ebdd216999c1553316603a6fa1280e0ad5dd669967bc99022a062a38987c25af`.
+Service `quantdata-hedging-full-production-d22ec9a.service` waits for that
+readiness evidence and the remaining native prerequisites before composing the
+daily and weekly production matrices and rebuilding the report; its launcher
+SHA-256 is
+`b6c7c9534cf73b4c03bce1563e1190a700de41f2f6b9cbe360c516df8ca03dff`.
+
 **Current production correction (2026-10-14).** Historical-SANOS version
 `1.11` makes the final 252-observation fit, rather than its 80% warm-start
 selection fit, authoritative. This invalidates the Historical-SANOS `1.10`
@@ -20,13 +44,14 @@ Services `quantdata-hedging-historical-v111-daily-cd6f440.service` and
 replay at `2023-06-13` passes all 20 targets with zero cap hits and zero
 nonconvergence. Entropy risk `0.1` and one entropy-risk-`10` target retain their
 genuine final-fit failures and must not be relabelled as passing production.
-Service `quantdata-hedging-failure-canonicalization-8851996.service` waits for
+Service `quantdata-hedging-failure-canonicalization-8851996-v2.service` waits for
 both matrices, then validates completed cases and replays only incomplete or
 failed daily/frozen/restarted cells under the structured gate-artifact runner.
 It emits terminal queue evidence and separate authenticated daily and weekly
 failure ledgers. Its immutable launcher SHA-256 is
-`0b48ad825ac1e37b2b5cff5912f3a856e14600b3d11246b80049530ae2403cfa`.
-The frozen-weekly SANOS-LV reference also retains a strict failure at origin
+`70bd69a679fd9cef58aba1087c84e49f35f8db796e4cfde8176e17df47252846`.
+Both the frozen- and restarted-weekly SANOS-LV references retain a strict
+failure at origin
 `2023-02-08`: all 13 targets load the same two one-day calls to the 1,000-unit
 execution cap after those frozen strikes drift to approximately `+3.46` and
 `+3.68` current NMS. The replay has zero fit-cap hits, so this is an executable
@@ -46,12 +71,12 @@ estimates, displays them in a dedicated production-outcome table, and rejects a
 stale failure if any valid completed result is available. Matrix composition
 therefore preserves mixed successful/failed model grids while preferring a
 strict completion over an earlier failure regardless of source order. Focused
-tests and independent quantitative review pass. The current strict replay is
-terminal `complete-with-failures` and its queue pins the freshly generated gate
-artifact. The canonical ledger is
-`/home/hans/quantdata_data/experiments/hedging/weekly/native-b37a643/failure-ledger-8851996.json`,
+tests and independent quantitative review pass. Both strict replays are
+terminal `complete-with-failures` and their queues pin the freshly generated
+gate artifacts. The combined canonical ledger is
+`/home/hans/quantdata_data/experiments/hedging/weekly/native-b37a643/failure-ledger-65fbf1d.json`,
 SHA-256
-`32173d76dea5b823a332b22c7549ec52c7ab805a490bc9f5471c8267fce4d2df`.
+`2dcbece08a86939ead37f17fd03f02ce5505b8a32f4cd562104bc3cc46c13505`.
 The real replay also verifies the explicit reporting-to-operational measure
 mapping from `Q-price/historical-transition` to the runner's `Q`; an unrelated
 P/Q mismatch remains rejected by regression test.
@@ -164,25 +189,25 @@ candidates, and used the declared front-only fallback at 35 origins. Its range
 summary `gromm2-rolling-v4/range-fit-2023-2025-v7.json` has SHA-256
 `8f7e6a63e90dfbfa367a06a220c75ebb4d0c9a0aa5f61ff2a92d8a58858b924e`.
 Generated-model readiness now owns the managed GPU and runs from immutable commit
-`b37a643ea8e5ef11b7557e37c035cf650a729e95`, which includes CPU-first
-checkpoint restoration and permits finite signed buyer, seller, and continuation
-indifference values while keeping common market and genuine-Q prices
-non-negative. Independent quant review passed all 18 generated workflows and
-all six daily/frozen/restarted public/rolling scope bindings for each model. The
-review artifact SHA-256 values are
-`0c8df8ce78645b278fb8587a90c9d03b4ed61ca56d4c60ab7848510e94506a87`,
-`2333db2cd8894b2949bfddc98d41bdc4dfea9985ac0f421f6ba72e9a042f23b1`,
-and `062e7268f6c25461e15da9ea61ef33fef138767630c55111736c1a5652332c41`
-for VolGAN, AD-Seq-Vol, and AD-Seq-Vol-FT, respectively. Service
-`quantdata-hedging-generated-readiness-b37a643.service` is executing the fresh
-signed-price-aware 18-scope readiness matrix.
+`d22ec9a0893313363fb503f8f53f5528159b1549`. It retains the earlier CPU-first
+checkpoint restoration and signed buyer, seller, and continuation indifference
+values, and additionally binds every rolling scope to the authenticated
+initializer label rather than its operational run label. Independent quant
+review passed the source correction, all generated matrix/CLI paths, both model
+test suites, and the detached launchers. The current formal review artifacts
+for VolGAN, AD-Seq-Vol, and AD-Seq-Vol-FT have SHA-256 values
+`8b344877a1755596eb883bacd0fc9d12c42dcee24e75b245ea0928aa565f0546`,
+`4014b863a6970892ae24ecce679fd291c5b22239e4c0bacf8b3256823949c6fc`,
+and `405fde6cba65c74e272a4ef51891e9b272adda9a6bc6018bd10e6525e9f5edb5`,
+respectively. Service `quantdata-hedging-generated-readiness-d22ec9a.service`
+is executing the fresh 18-scope readiness matrix.
 
 The corrected full-production service
-`quantdata-hedging-full-production-b37a643-v5.service` runs from the same immutable
-commit and waits for generated readiness, native weekly production,
-Historical-SANOS exact-cost recovery, and covariance power-exponential
-recovery. Its launcher SHA-256 is
-`ba8971871b011d2ca1ff24674ffaa3a94c8c90227d8f902df050c7dd095a049a`.
+`quantdata-hedging-full-production-d22ec9a.service` runs from the same immutable
+commit and waits for generated readiness, the version-1.11 Historical-SANOS
+matrices and failure canonicalization, and the remaining authenticated native
+sources. Its launcher SHA-256 is
+`b6c7c9534cf73b4c03bce1563e1190a700de41f2f6b9cbe360c516df8ca03dff`.
 The coordinators use service activity only for capacity scheduling; because
 transient units may be collected immediately after exit, completion is accepted
 only by reconstructing the required matrices, gates, and result artifacts.
@@ -1096,8 +1121,9 @@ analytically rebased without changing the source model's economic mapping.
 Update epochs are selected from precommitted candidates on 2022-only validation
 origins with the one-standard-error rule. The independent generated rolling
 warm-start quant review passes with no correctness blockers. The production
-runs and managed-GPU VRAM, timing, batch-invariance, and restart evidence remain
-outstanding. The production matrix
+runs remain outstanding; the corrected managed-GPU readiness matrix is now
+regenerating the VRAM, timing, batch-invariance, and restart evidence required
+before production is admitted. The production matrix
 pins one immutable initializer hash across every rolling origin, while each
 fit verifies the warm-start and fine-tuning-base hashes before and after load.
 The 2022 budget study uses a separate same-geometry source checkpoint ending
@@ -1151,11 +1177,14 @@ report target-level progress inside each origin.
 
 Independent re-review at `b37a643` passed 161 focused tests, reconstructed all
 six scope bindings for each generated model, and authenticated all three
-production-gate round trips. Service
-`quantdata-hedging-generated-readiness-b37a643.service` emits a persistent
-four-minute heartbeat and acquires its GPU only through `gpuctl`. A fresh
-managed-GPU readiness execution remains required before generated production
-cases can launch.
+production-gate round trips. A later rolling-readiness attempt exposed the
+initializer-label/run-label alias described in the current status. The source
+fix at `d22ec9a0893313363fb503f8f53f5528159b1549` passed an additional
+independent quantitative review and 67 focused tests. Service
+`quantdata-hedging-generated-readiness-d22ec9a.service` emits a persistent
+four-minute heartbeat, acquires its GPU only through `gpuctl`, and is producing
+the corrected readiness evidence required before generated production cases can
+launch.
 
 A real 2023-01-17 frozen Historical-SANOS origin then completed all 13 targets
 in 336.3 seconds with zero cap hits and zero nonconverged fits; its immediate
@@ -1221,18 +1250,18 @@ The last durable complete-suite record has 349 passing tests; the final full
 suite will be rerun after production. This permits the final
 57-cell daily and 94-cell weekly matrices to reuse completed native evidence
 without copying it or rerunning it. The detached final-production service
-`quantdata-hedging-full-production-b37a643-v5.service` passed its exact-environment
-preflight and is waiting on generated-model GPU readiness, the corrected native
-weekly matrix, Historical-SANOS exact-cost recovery, and covariance
-power-exponential recovery. Once those prerequisites succeed, it
-composes fresh canonical matrices under dedicated `production-matrix-b37a643`
-roots, runs only the missing GROMM and generated-model cases, and rebuilds the
-authenticated PDF. Its ordered daily source list gives first priority to the
-corrected Historical-SANOS exact-cost matrix and covariance power-exponential
-matrix, followed by the covariance mean--volatility recovery and remaining
-authenticated native sources. The weekly source is the fresh `b37a643` native
-matrix. Its read-only persisted launcher has SHA-256
-`ba8971871b011d2ca1ff24674ffaa3a94c8c90227d8f902df050c7dd095a049a`.
+`quantdata-hedging-full-production-d22ec9a.service` passed its exact-environment
+preflight and is waiting on corrected generated-model GPU readiness, the
+version-1.11 Historical-SANOS daily and weekly matrices, and their authenticated
+failure canonicalization. Once those prerequisites terminate, it composes fresh
+canonical matrices under dedicated `d22ec9a` roots, runs only the missing GROMM
+and generated-model cases, and rebuilds the authenticated PDF. Its ordered daily
+source list gives first priority to the corrected Historical-SANOS exact-cost
+matrix and covariance power-exponential matrix, followed by the covariance
+mean--volatility recovery and remaining authenticated native sources. The
+weekly source retains the authenticated `b37a643` native matrix and combined
+SANOS-LV failure ledger. Its read-only persisted launcher has SHA-256
+`b6c7c9534cf73b4c03bce1563e1190a700de41f2f6b9cbe360c516df8ca03dff`.
 The superseded `a1baa69` coordinator and its report-only/final-57 successors
 were stopped while still waiting and did not launch production cases.
 
