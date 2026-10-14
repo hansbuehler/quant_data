@@ -184,7 +184,10 @@ def test_weekly_summary_discovers_schedules_and_aggregates_complete_cases(
     )
     tables = tables_output.read_text(encoding="utf-8")
     assert "frozen-weekly" in tables
+    assert "Fit objective & Fit parameter" in tables
     assert "Book MDD & Worst target MDD" in tables
+    assert "$\\kappa=2$" in tables
+    assert "$\\lambda=10$" in tables
     appendix = appendix_output.read_text(encoding="utf-8")
     assert "digital" in appendix
     assert "target Mean--variance scores" in appendix

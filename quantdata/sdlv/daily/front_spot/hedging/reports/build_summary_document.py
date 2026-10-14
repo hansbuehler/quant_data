@@ -192,6 +192,7 @@ schedule and authenticated policy specification. Weekly drawdown is computed
 from the cumulative P\&L, equal to minus loss, of the chronologically ordered,
 overlapping equal-weighted episode books; it is an episode-origin risk
 statistic rather than the drawdown of a non-overlapping self-financing account.
+Scores, costs, and drawdowns use basis points of inception normalized spot.
 \input{{{_tex_escape(weekly_objective_tables)}}}
 
 \subsection{{Weekly paired reference comparisons}}

@@ -839,8 +839,11 @@ def _objective_tables_tex(payload: JsonObject) -> str:
                 + "r" * len(parameters)
                 + "rrrr@{}}",
                 "\\toprule",
-                "Schedule & Policy & Specification & Fit & $\\lambda_{fit}$ & "
-                + " & ".join(f"$\\rho_{{{parameter}}}$" for parameter in parameters)
+                "Schedule & Policy & Specification & Fit objective & Fit parameter & "
+                + " & ".join(
+                    _parameter_heading(objective, parameter)
+                    for parameter in parameters
+                )
                 + " & Book MDD & Worst target MDD & Pure RMSE & Cost \\\\",
                 "\\midrule",
                 "\\endhead",
