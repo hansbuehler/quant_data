@@ -59,16 +59,19 @@ declared fitting ridge, which is excluded from reported certainty equivalents.
 Real first-origin frozen-weekly gates cover all 13 targets: entropy at risk
 parameter 10 and power-exponential at risk parameter 1 both pass with zero cap
 hits and zero nonconverged fits. Exact cached wealth matches the common pathwise
-accounting engine to $10^{-14}$, the full hedging suite has 359 passing tests,
+accounting engine to $10^{-14}$, the full hedging suite has 361 passing tests,
 and independent quant review passes. The 94-case weekly matrix retains 28 ready
 native cases, four generated-gate waiters, and 62 blocked cases. The native
-weekly queue is pinned to commit `edf28cc` and waits for the active corrected
-daily covariance and Historical-SANOS queues; the generated-model readiness
+weekly queue is pinned to commit `a1baa69` and waits for the active corrected
+daily covariance and Historical-SANOS queues. The covariance mean--volatility
+case at risk parameter $0.1$ is being rebuilt in a fresh commit-pinned output:
+its old runner correctly detected a recession direction but stopped before
+recording the precommitted capped diagnostic. The generated-model readiness
 queue waits for the rolling GROMM GPU fit.
 Independent model review records for VolGAN, AD-Seq-Vol, and AD-Seq-Vol-FT now
 bind their reviewed commit, the public manifest, their distinct initializer and selection
 lineages, and all six daily/frozen/restarted public/rolling scopes. The
-full-production service now runs from immutable commit `df13b89` and waits for
+full-production service now runs from immutable commit `a1baa69` and waits for
 the rolling GROMM range, managed-GPU readiness matrix, and native weekly queue.
 It will assemble the three authenticated production gates and write new pinned
 matrices without changing the matrices used by active native queues. Newly
@@ -91,7 +94,7 @@ conflicting duplicate cases, and can require that every ready matrix case is
 complete. Its real current-cohort smoke automatically authenticated the SANOS-LV
 reference, three robust-covariance policies, and the completed Historical-SANOS
 policy and generated all four objective tables plus target appendices. The
-resulting complete hedging suite contains 359 passing tests. The
+resulting complete hedging suite contains 361 passing tests. The
 strictly-2022 target-sizing exercise now
 fixes each target to one
 maturity-matched ATM spot-risk unit; all 20 calibration hedges converged with
@@ -531,7 +534,11 @@ size is deliberately absent from the distributable dataset.
 Use the following cap regimes:
 
 - A loose numerical cap of 1,000 normalized action units, applied to spot and
-  option coordinates, with every cap hit treated as a failed numerical gate.
+  option coordinates. Cap hits and nonconvergence fail the numerical gate by
+  default. A mean-volatility case whose unconstrained SOCP certifies a recession
+  direction precommits the relaxed diagnostic gate instead: the capped solve is
+  retained and explicitly flagged as an economically unbounded direction, not
+  relabelled as a converged finite hedge.
 - An internal-only display-size cap sensitivity when source size data are
   available.
 
@@ -921,8 +928,10 @@ mean-volatility cost-lasso is solved as an exact CLARABEL SOCP rather than by an
 unstable smooth line search. The solver first attempts the economically
 unconstrained problem. If CLARABEL certifies a recession direction, it resolves
 the same SOCP with the separate numerical solver cap solely to expose and record
-the direction; any resulting internal cap hit is nonconverged and fails the
-production gate rather than being reported as a hedge estimate. VolGAN and
+the direction. Such a result is retained only when the immutable production
+case precommits the relaxed mean-volatility diagnostic gate; the report exposes
+its cap-hit and nonconvergence counts rather than presenting it as a finite
+optimum. VolGAN and
 diffusion have exact within-fit restart checkpoints and a fixed-source
 rolling-update path. One immutable checkpoint
 trained strictly before evaluation initializes every rolling origin. Its file
@@ -994,7 +1003,7 @@ at least two origins, while complete production runs continue to aggregate
 normally.
 
 The 28 ready native weekly cases are repinned to
-`edf28ccdb52ccac1788e20a51ce226220a5f74f3` and are queued behind the
+`a1baa69605514ad9a0aba007ab8844f5fed29824` and are queued behind the
 authenticated daily CPU artifacts they require. Their matrix still contains all 94 specified cells:
 28 ready native cases, four generated cases waiting on production gates, and 62
 explicitly blocked cases.
@@ -1027,29 +1036,32 @@ outcomes, target-level appendices, model references, and immutable provenance
 directly from those authenticated inputs; its synthetic end-to-end PDF compile
 passes.
 A matrix-composition utility at immutable commit
-`df13b89084a2ee42f41493365b8efe0ee09f1073` now replaces only selected native
+`a1baa69605514ad9a0aba007ab8844f5fed29824` now replaces only selected native
 cases in a fresh canonical matrix with the first complete authenticated source
 case. Before accepting a source it loads the supplied public panel once, applies
 the production executor's full authentication path, reconstructs the eligible
 origin cohort and every dated record and aggregate, binds the actual dataset,
-requires the canonical target book and common target quantities, and rejects
-any cap hit or nonconvergence. It records the dataset, target-notional, and
+requires the canonical target book and common target quantities, and enforces
+each source run's immutable numerical-gate policy. Strict cases reject any cap
+hit or nonconvergence; precommitted mean-volatility recession diagnostics are
+retained with their counts. It records the dataset, target-notional, and
 target-cohort identities together with every source-matrix hash. Adversarial
 tests reject a missing record, forged aggregate, wrong dataset, and wrong target
-cohort; a real 12,220-record SANOS--LV composition smoke and the 359-test full
+cohort; a real 12,220-record SANOS--LV composition smoke and the 361-test full
 hedging suite pass, and independent quant re-review closes the authentication
 blocker. This permits the final
 54-cell daily and 94-cell weekly matrices to reuse completed native evidence
 without copying it or rerunning it. The detached final-production service
-`quantdata-hedging-full-production-df13b89.service` passed its exact-environment
+`quantdata-hedging-full-production-a1baa69.service` passed its exact-environment
 preflight and is waiting on rolling GROMM migration, generated-model GPU
 readiness, and the native weekly matrix. Once all three succeed, it composes
-fresh daily-v8 and weekly-v6 canonical matrices, runs only the missing GROMM and
+fresh daily-v9 and weekly-v7 canonical matrices, runs only the missing GROMM and
 generated-model cases, and rebuilds the authenticated PDF. The composition
-source list explicitly
-includes the current-notional SANOS--LV result from production matrix v3 rather
-than the empty v4 output directory. Its read-only persisted launcher has
-SHA-256 `be74ebef93e273aabf8995402dd8ef181e0c74ac39c0a763cf46682b0e637344`.
+source list prioritizes the fresh `a1baa69` covariance mean--volatility recovery
+matrix and includes the current-notional SANOS--LV result from production
+matrix v3 rather than the empty v4 output directory. Its read-only persisted
+launcher has SHA-256
+`5ff2b5c6bd92b739da37ae8dffb9ecb6b5a9524bb49c73d8dac9c7f46fa40685`.
 Final completed-case figures, production-data PDF regeneration, and the final
 results review remain outstanding.
 
