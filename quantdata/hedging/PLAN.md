@@ -58,8 +58,11 @@ implementation at immutable commit
 `cff579c38c489e315b624d055d4336e80554cd58` uses the original-action KKT
 residual as the acceptance test and one canonical signed restart without
 changing the objective, costs, bounds, or tolerance. Independent review passed,
-and service `quantdata-hedging-historical-exact-cost-cff579c.service` is
-producing the six fresh cases. The three exact-Gaussian covariance
+and service `quantdata-hedging-historical-exact-cost-cff579c-v2.service` is
+producing the six fresh cases concurrently. Its concurrency-only restart reused
+97 atomic origin records; the launcher SHA-256 is
+`425a95f3a7da39e890b637c9aae0938e42e1feb15ed65b6b213f8e029a87523d`.
+The three exact-Gaussian covariance
 power-exponential cases run independently under service
 `quantdata-hedging-covariance-power-656ca65.service`.
 
@@ -85,10 +88,10 @@ The fresh 94-case native weekly matrix has 28 ready native cases, four generated
 gate waiters, and 62 explicitly blocked cases. It was generated from immutable
 commit `b37a643ea8e5ef11b7557e37c035cf650a729e95` and has SHA-256
 `8d069cadde0c21dd677bbe7ab16cd59e0d3dae9907456608da7fcb4b9bce0b26`.
-Service `quantdata-hedging-weekly-native-b37a643-v2.service` waits for the active
+Service `quantdata-hedging-weekly-native-b37a643-v3.service` waits for the active
 Historical-SANOS mean--volatility and corrected exact-cost queues, then runs all
 28 native cases. Its launcher SHA-256 is
-`18df7be9fb34d3005db01f388faf89dbe4199ab2269694c3b026b7018f81ad4a`.
+`2c2950a50582cf3c97686a4bae4ce4a7545d09efa0cb0edab46c72f657f2cc72`.
 
 The legacy rolling GROMM range is complete and authenticated for all 611
 origins. Its current-code migration authenticates the range-level and
@@ -110,11 +113,11 @@ for VolGAN, AD-Seq-Vol, and AD-Seq-Vol-FT, respectively. Service
 GPU behind the active GROMM migration.
 
 The corrected full-production service
-`quantdata-hedging-full-production-b37a643-v2.service` runs from the same immutable
+`quantdata-hedging-full-production-b37a643-v3.service` runs from the same immutable
 commit and waits for GROMM migration, generated readiness, native weekly
 production, Historical-SANOS exact-cost recovery, and covariance
 power-exponential recovery. Its launcher SHA-256 is
-`256775cd622cf50af9dd93f95bf7ff745d8d70a7941e9d8bc030d1d75cbe8d31`.
+`b5a14f43a9416eed5443365fb0cd24ecb5c913ade89df51cd53240b25f077e7c`.
 The v2 coordinators use service activity only for capacity scheduling; because
 transient units may be collected immediately after exit, completion is accepted
 only by reconstructing the required matrices, gates, and result artifacts.
@@ -1146,7 +1149,7 @@ The last durable complete-suite record has 349 passing tests; the final full
 suite will be rerun after production. This permits the final
 57-cell daily and 94-cell weekly matrices to reuse completed native evidence
 without copying it or rerunning it. The detached final-production service
-`quantdata-hedging-full-production-b37a643-v2.service` passed its exact-environment
+`quantdata-hedging-full-production-b37a643-v3.service` passed its exact-environment
 preflight and is waiting on rolling GROMM migration, generated-model GPU
 readiness, the corrected native weekly matrix, Historical-SANOS exact-cost
 recovery, and covariance power-exponential recovery. Once all five succeed, it
@@ -1157,7 +1160,7 @@ corrected Historical-SANOS exact-cost matrix and covariance power-exponential
 matrix, followed by the covariance mean--volatility recovery and remaining
 authenticated native sources. The weekly source is the fresh `b37a643` native
 matrix. Its read-only persisted launcher has SHA-256
-`256775cd622cf50af9dd93f95bf7ff745d8d70a7941e9d8bc030d1d75cbe8d31`.
+`b5a14f43a9416eed5443365fb0cd24ecb5c913ade89df51cd53240b25f077e7c`.
 The superseded `a1baa69` coordinator and its report-only/final-57 successors
 were stopped while still waiting and did not launch production cases.
 
