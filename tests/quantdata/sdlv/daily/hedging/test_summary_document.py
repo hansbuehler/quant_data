@@ -460,7 +460,11 @@ def _write_first_case_failure_ledger(
     spec = WeeklyEvaluationSpec(
         label=case_id,
         model=case["model"],
-        measure=case["measure"],
+        measure=(
+            "Q"
+            if case["measure"] == "Q-price/historical-transition"
+            else case["measure"]
+        ),
         model_config_identity="model-config",
         policy_config_identity="policy-config",
         configuration_snapshot_json="{}",

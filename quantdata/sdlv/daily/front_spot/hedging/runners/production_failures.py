@@ -570,8 +570,10 @@ def _validated_gate_evidence(
         raise ValueError("failure gate artifact run identity mismatch")
     if gate_failure.get("model") != spec.model or source_case.get("model") != spec.model:
         raise ValueError("failure gate artifact model mismatch")
-    if gate_failure.get("measure") != spec.measure or source_case.get("measure") != spec.measure:
+    if gate_failure.get("measure") != spec.measure:
         raise ValueError("failure gate artifact measure mismatch")
+    if _operational_measure(source_case) != spec.measure:
+        raise ValueError("failure source case measure mismatch")
     if gate_failure.get("schedule") != expected_schedule:
         raise ValueError("failure gate artifact schedule mismatch")
     if gate_failure.get("dataset_manifest_sha256") != spec.dataset_manifest_sha256:
@@ -583,6 +585,14 @@ def _validated_gate_evidence(
     if command_manifest is not None and command_manifest != spec.dataset_manifest_sha256:
         raise ValueError("failure source command dataset identity mismatch")
     return gate_failure_path, gate_failure, run_metadata_path
+
+
+def _operational_measure(source_case: JsonObject) -> str:
+    """Map reporting labels to the measure recorded by the evaluation runner."""
+    measure = _require_string(source_case, "measure")
+    if measure == "Q-price/historical-transition":
+        return "Q"
+    return measure
 
 
 def _failed_queue_record(

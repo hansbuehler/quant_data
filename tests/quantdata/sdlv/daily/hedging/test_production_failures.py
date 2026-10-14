@@ -122,6 +122,30 @@ def test_failure_ledger_rejects_semantically_different_source_command(
         )
 
 
+def test_failure_ledger_maps_reporting_q_measure_but_rejects_p(
+    tmp_path: Path,
+) -> None:
+    source_matrix, final_matrix, queue_state, _ = _failure_artifacts(tmp_path)
+    for matrix_path in (source_matrix, final_matrix):
+        payload = json.loads(matrix_path.read_text(encoding="utf-8"))
+        payload["cases"][0]["measure"] = "historical-P"
+        matrix_path.write_text(json.dumps(payload), encoding="utf-8")
+    queue = json.loads(queue_state.read_text(encoding="utf-8"))
+    queue["matrix_sha256"] = _sha256(source_matrix)
+    queue_state.write_text(json.dumps(queue), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="source case measure mismatch"):
+        build_production_failure_ledger(
+            matrix_path=final_matrix,
+            declarations=(
+                {
+                    "case_id": "frozen-weekly-sanos-lv-reference",
+                    "queue_state_path": str(queue_state),
+                },
+            ),
+        )
+
+
 def test_failure_ledger_rejects_disabled_source_gate(tmp_path: Path) -> None:
     source_matrix, final_matrix, queue_state, _ = _failure_artifacts(tmp_path)
     source = json.loads(source_matrix.read_text(encoding="utf-8"))
@@ -285,7 +309,7 @@ def _failure_artifacts(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
     spec = WeeklyEvaluationSpec(
         label="sanos-lv-frozen",
         model="sanos-lv",
-        measure="Q-price/historical-transition",
+        measure="Q",
         model_config_identity="model-config",
         policy_config_identity="policy-config",
         configuration_snapshot_json="{}",
