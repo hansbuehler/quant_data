@@ -1034,11 +1034,12 @@ before publishing it. The initial reviewed 18-scope managed-GPU readiness
 matrix ran from immutable commit
 `31b57e617dc6f57f12625515160131a8cf845e36`; VolGAN daily-public readiness
 passed, but its first frozen-weekly case failed as described below. The
-replacement matrix is queued from immutable reviewed commit
-`73a9626cb467da88ed9ee979c292af8e9b45b65a` behind rolling GROMM production.
-It emits a persistent four-minute heartbeat and acquires its GPU only through
-`gpuctl`. Final readiness evidence and the model-specific results review remain
-required before generated production cases can launch.
+replacement matrix runs from immutable reviewed commit
+`b4348520c362fbf19e9fe1451f6546022f9f5241`. It currently owns the managed
+GPU; the corrected rolling GROMM migration waits behind it. The matrix emits a
+persistent four-minute heartbeat and acquires its GPU only through `gpuctl`.
+Final readiness evidence and the model-specific results review remain required
+before generated production cases can launch.
 
 The first VolGAN frozen-weekly readiness attempt correctly failed the strict
 price gate after its mean--variance CLARABEL solve returned a negative
@@ -1124,7 +1125,7 @@ source list prioritizes the fresh `a1baa69` covariance mean--volatility recovery
 matrix and includes the current-notional SANOS--LV result from production
 matrix v3 rather than the empty v4 output directory. Its read-only persisted
 launcher has SHA-256
-`5ff2b5c6bd92b739da37ae8dffb9ecb6b5a9524bb49c73d8dac9c7f46fa40685`.
+`d3787f21c7a8b3f61b2fc84d41e4c8c2d1a51fa7d0607d7973acb652aaf05d06`.
 The report-only successor
 `quantdata-hedging-report-refresh-a0eff79.service` waits for that production
 service and then re-authenticates the final matrices before rendering the full
