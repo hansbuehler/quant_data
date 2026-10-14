@@ -61,6 +61,12 @@ that production identity.
 - The coordinators use service activity only for capacity scheduling. Their
   authoritative gates reconstruct immutable matrices, production gates, and
   result artifacts, avoiding a race with auto-collected transient units.
+- A pre-final CPU-only regression sweep at repository commit
+  `6a431f6fcb03610d281a280917ed7eb9f773c8b7` passed all 454 tests under
+  `tests/quantdata/hedging` and `tests/quantdata/sdlv/daily/hedging` in 85.12
+  seconds. This is early source-validation evidence only; acceptance item 6
+  still requires the same complete suite on the final committed source after
+  the authenticated report artifacts are refreshed.
 
 ## Final Acceptance Checklist
 
