@@ -42,7 +42,7 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.weekly_results import (
 
 JsonObject: TypeAlias = dict[str, object]
 
-SUMMARY_SCHEMA = "hedging-benchmark-weekly-summary-metrics-v4"
+SUMMARY_SCHEMA = "hedging-benchmark-weekly-summary-metrics-v5"
 WEEKLY_MATRIX_SCHEMA = "hedging-weekly-production-matrix-v1"
 DISPLAY_SCALE = 10_000.0
 EXPECTED_ORIGINS = 528
@@ -534,7 +534,39 @@ def _aggregate_result(result: WeeklyRunResults) -> JsonObject:
             value.claim: _slice_payload(value)
             for value in sorted(overall, key=lambda item: item.claim)
         },
+        "strata": _stratified_slice_metrics(result.slices),
     }
+
+
+def _stratified_slice_metrics(
+    slices: tuple[WeeklyResultSlice, ...],
+) -> JsonObject:
+    groups: dict[str, JsonObject] = {}
+    for value in slices:
+        if value.slice_label == "overall":
+            continue
+        group = groups.setdefault(
+            value.slice_label,
+            {
+                "year": value.year,
+                "volatility_regime": value.volatility_regime,
+                "targets": {},
+            },
+        )
+        if (
+            group["year"] != value.year
+            or group["volatility_regime"] != value.volatility_regime
+        ):
+            raise ValueError(
+                f"weekly stratum metadata is inconsistent: {value.slice_label}"
+            )
+        targets = _require_object(group, "targets")
+        if value.claim in targets:
+            raise ValueError(
+                f"duplicate weekly stratum target: {value.slice_label}/{value.claim}"
+            )
+        targets[value.claim] = _slice_payload(value)
+    return {label: groups[label] for label in sorted(groups)}
 
 
 def _with_drawdown_metrics(
@@ -571,7 +603,7 @@ def _with_drawdown_metrics(
             strict=True,
         ):
             targets[claim][f"{prefix}_maximum_drawdown"] = float(drawdown)
-    return {"all": all_metrics, "targets": targets}
+    return {**metrics, "all": all_metrics, "targets": targets}
 
 
 def _with_price_metrics(
@@ -593,7 +625,7 @@ def _with_price_metrics(
     all_metrics["prices"] = _price_summary(all_rows)
     for claim, rows in record_losses.items():
         targets[claim]["prices"] = _price_summary(rows)
-    return {"all": all_metrics, "targets": targets}
+    return {**metrics, "all": all_metrics, "targets": targets}
 
 
 def _price_summary(rows: tuple[JsonObject, ...]) -> JsonObject:
@@ -964,6 +996,57 @@ def _objective_tables(models: JsonObject) -> JsonObject:
 def _objective_tables_tex(payload: JsonObject) -> str:
     tables = _require_object(payload, "objective_tables")
     lines = ["% Generated weekly objective tables; do not edit by hand."]
+    models = _require_object(payload, "models")
+    comparisons = _require_object(payload, "comparisons")
+    for schedule, raw_comparison in comparisons.items():
+        comparison = _as_object(raw_comparison, f"weekly {schedule} comparison")
+        paired = _require_object(comparison, "paired_book_loss_differences")
+        lines.extend(
+            (
+                "\\begin{landscape}",
+                "\\subsection*{Paired weekly book comparisons: "
+                + _tex_escape(schedule)
+                + "}",
+                "\\scriptsize",
+                "\\begin{longtable}{@{}llllrrr@{}}",
+                "\\caption{Paired equal-weighted thirteen-target book loss differences relative to SANOS--LV, in basis points. HH and MBB preserve the five-session overlap.}\\\\",
+                "\\toprule",
+                "Schedule & Policy & Specification & Loss & Mean & HH 95\\% CI & MBB 95\\% CI \\\\",
+                "\\midrule",
+                "\\endhead",
+            )
+        )
+        for model_key, raw_model in models.items():
+            model = _as_object(raw_model, model_key)
+            if _require_string(model, "schedule") != schedule:
+                continue
+            model_comparison = _require_object(paired, model_key)
+            for loss_name, loss_label in (
+                ("pure_hedge_loss", "Pure"),
+                ("economic_loss", "Economic"),
+            ):
+                statistics = _require_object(model_comparison, loss_name)
+                lines.append(
+                    " & ".join(
+                        (
+                            _tex_escape(schedule),
+                            _require_string(model, "display_name"),
+                            _tex_escape(_require_string(model, "specification")),
+                            loss_label,
+                            _basis_points(_require_number(statistics, "mean")),
+                            _basis_point_interval(
+                                statistics,
+                                "hac_confidence_interval_95",
+                            ),
+                            _basis_point_interval(
+                                statistics,
+                                "bootstrap_confidence_interval_95",
+                            ),
+                        )
+                    )
+                    + " \\\\"
+                )
+        lines.extend(("\\bottomrule", "\\end{longtable}", "\\end{landscape}", ""))
     for objective, parameters in OBJECTIVE_GRIDS:
         table = _require_object(tables, objective)
         rows = table.get("rows")
@@ -973,6 +1056,7 @@ def _objective_tables_tex(payload: JsonObject) -> str:
             (
                 "\\begin{landscape}",
                 f"\\subsection*{{Weekly {_tex_objective_name(objective)} scores}}",
+                "\\tiny",
                 "\\begin{longtable}{@{}llllr"
                 + "r" * len(parameters)
                 + "rrrr@{}}",
@@ -1132,6 +1216,92 @@ def _target_appendix_tex(payload: JsonObject) -> str:
                 )
                 + " \\\\"
             )
+        lines.extend(
+            (
+                "\\bottomrule",
+                "\\end{longtable}",
+                "\\medskip",
+                "\\tiny",
+                "\\begin{longtable}{@{}lrrrrrrrrrr@{}}",
+                "\\caption{Complete target-level weekly economic-loss distribution; HH denotes the Hansen--Hodrick interval.}\\\\",
+                "\\toprule",
+                "Target & Mean & HH 95\\% CI & Median & SD & RMSE & MAE & Q$_{95}$ & Q$_{99}$ & ES$_{95}$ & ES$_{99}$ \\\\",
+                "\\midrule",
+                "\\endhead",
+            )
+        )
+        for claim in sorted(targets):
+            economic = _require_object(_require_object(targets, claim), "economic_loss")
+            lines.append(
+                " & ".join(
+                    (
+                        _tex_escape(claim),
+                        _basis_points(_require_number(economic, "mean")),
+                        _basis_point_interval(
+                            economic,
+                            "hac_confidence_interval_95",
+                        ),
+                        _basis_points(_require_number(economic, "median")),
+                        _basis_points(
+                            _require_number(economic, "sample_standard_deviation")
+                        ),
+                        _basis_points(_require_number(economic, "root_mean_square")),
+                        _basis_points(_require_number(economic, "mean_absolute_loss")),
+                        _basis_points(_require_number(economic, "quantile_95")),
+                        _basis_points(_require_number(economic, "quantile_99")),
+                        _basis_points(
+                            _require_number(economic, "expected_shortfall_95")
+                        ),
+                        _basis_points(
+                            _require_number(economic, "expected_shortfall_99")
+                        ),
+                    )
+                )
+                + " \\\\"
+            )
+        lines.extend(
+            (
+                "\\bottomrule",
+                "\\end{longtable}",
+                "\\medskip",
+                "\\scriptsize",
+                "\\begin{longtable}{@{}lrrrrrrrrrr@{}}",
+                "\\caption{Weekly target-level cost, turnover, exposure, sparsity, and numerical-gate incidence.}\\\\",
+                "\\toprule",
+                "Target & Cost & Spot cost & Option cost & Total turnover & Entry turnover & Gross & Net & $|$Net$|$ & Nonzero & Cap rate \\\\",
+                "\\midrule",
+                "\\endhead",
+            )
+        )
+        for claim in sorted(targets):
+            target = _require_object(targets, claim)
+            lines.append(
+                " & ".join(
+                    (
+                        _tex_escape(claim),
+                        _basis_points(_require_number(target, "mean_transaction_cost")),
+                        _basis_points(
+                            _require_number(target, "mean_spot_transaction_cost")
+                        ),
+                        _basis_points(
+                            _require_number(target, "mean_option_transaction_cost")
+                        ),
+                        f"{_require_number(target, 'mean_total_turnover_notional'):.4f}",
+                        f"{_require_number(target, 'mean_entry_turnover_notional'):.4f}",
+                        f"{_require_number(target, 'mean_gross_exposure'):.4f}",
+                        f"{_require_number(target, 'mean_net_exposure'):.4f}",
+                        f"{_require_number(target, 'mean_absolute_net_exposure'):.4f}",
+                        f"{_require_number(target, 'mean_nonzero_actions_per_decision'):.2f}",
+                        _percent(
+                            _require_number(
+                                target,
+                                "numerical_cap_hit_result_rate",
+                            )
+                        ),
+                    )
+                )
+                + " \\\\"
+            )
         lines.extend(("\\bottomrule", "\\end{longtable}", "\\end{landscape}", ""))
         for objective, parameters in OBJECTIVE_GRIDS:
             lines.extend(
@@ -1213,6 +1383,17 @@ def _optional_basis_points(value: object) -> str:
     if value is None:
         return "--"
     return _basis_points(_number(value))
+
+
+def _basis_point_interval(payload: JsonObject, name: str) -> str:
+    value = payload.get(name)
+    if not isinstance(value, list | tuple) or len(value) != 2:
+        raise ValueError(f"{name} must be a numeric pair")
+    return f"[{_basis_points(_number(value[0]))}, {_basis_points(_number(value[1]))}]"
+
+
+def _percent(value: float) -> str:
+    return f"{100.0 * value:.2f}\\%"
 
 
 def _tex_objective_name(value: str) -> str:

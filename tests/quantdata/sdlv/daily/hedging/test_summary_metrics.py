@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import math
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -79,11 +79,26 @@ def test_summary_metrics_pool_complete_claim_population(tmp_path: Path) -> None:
     assert sanos_all["economic_book_maximum_drawdown"] == pytest.approx(
         611 * 1.6
     )
+    assert sanos_all["mean_net_exposure"] == pytest.approx(0.25)
+    sanos_target = models["sanos-lv"]["metrics"]["targets"][
+        "digital-put-1d-nms-0.00"
+    ]
+    assert sanos_target["economic_loss"]["confidence_interval_95"] == pytest.approx(
+        [1.1, 1.1]
+    )
+    assert sanos_target["prices"]["mean_q_expectation"] == pytest.approx(0.4)
+    historical_target = models["historical-sanos"]["metrics"]["targets"][
+        "digital-put-1d-nms-0.00"
+    ]
+    assert historical_target["prices"]["mean_q_expectation"] is None
     comparison = payload["comparisons"]
     assert isinstance(comparison, dict)
     assert comparison["sanos_pure_rmse_reduction_vs_historical"] == pytest.approx(
         1.0 / 3.0
     )
+    paired = comparison["paired_book_loss_differences"]["historical-sanos"]
+    assert paired["pure_hedge_loss"]["observations"] == 611
+    assert paired["pure_hedge_loss"]["mean"] == pytest.approx(0.75)
 
     json_output = tmp_path / "metrics.json"
     tex_output = tmp_path / "metrics.tex"
@@ -104,6 +119,8 @@ def test_summary_metrics_pool_complete_claim_population(tmp_path: Path) -> None:
     assert r"\newcommand{\SanosVsHistoricalReduction}{33.3\%}" in tex
     objective_tables = objective_tables_output.read_text(encoding="utf-8")
     assert "Mean--variance: full out-of-sample economic-risk score" in objective_tables
+    assert "Paired daily equal-weighted target-book" in objective_tables
+    assert "MBB 95\\% CI" in objective_tables
     assert (
         "Historical SANOS & test; SANOS scenarios & MVol, $\\kappa=1$"
         in objective_tables
@@ -111,6 +128,9 @@ def test_summary_metrics_pool_complete_claim_population(tmp_path: Path) -> None:
     objective_appendix = objective_appendix_output.read_text(encoding="utf-8")
     assert "Target-level mean--volatility scores and drawdowns" in objective_appendix
     assert "Economic MDD" in objective_appendix
+    assert "Mean inception unit prices across daily origins" in objective_appendix
+    assert "Complete target-level economic-loss distribution" in objective_appendix
+    assert "cost, turnover, exposure, sparsity" in objective_appendix
 
 
 def test_summary_metrics_reject_different_dataset_manifests(tmp_path: Path) -> None:
@@ -448,6 +468,38 @@ def test_summary_metrics_rejects_incomplete_ready_matrix_case(
         )
 
 
+def test_daily_strata_retain_full_distribution_and_exposure() -> None:
+    row = {
+        "claim": "digital-put-1d-atm",
+        "slice_label": "year:2024/regime:high",
+        "year": 2024,
+        "volatility_regime": "high",
+        "unhedged_loss": _loss(2.0),
+        "economic_loss": _loss(1.5),
+        "pure_hedge_loss": _loss(1.4),
+        "pricing_loss": _loss(0.1),
+        "mean_transaction_cost": 0.01,
+        "mean_action_l1": 2.5,
+        "mean_entry_turnover_notional": 2.0,
+        "mean_gross_exposure": 2.0,
+        "mean_net_exposure": -0.25,
+        "mean_absolute_net_exposure": 0.5,
+        "mean_nonzero_actions": 3.0,
+        "nonconverged_results": 0,
+        "nonconvergence_rate": 0.0,
+        "cap_hits": 0,
+        "numerical_cap_hit_result_rate": 0.0,
+    }
+
+    strata = summary_metrics_module._stratified_slice_metrics({"slices": [row]})
+
+    target = strata["year:2024/regime:high"]["targets"][row["claim"]]
+    assert target["economic_loss"]["confidence_interval_99"] == pytest.approx(
+        [1.5, 1.5]
+    )
+    assert target["mean_net_exposure"] == pytest.approx(-0.25)
+
+
 def _write_results(
     path: Path,
     *,
@@ -476,12 +528,18 @@ def _write_results(
                     "unhedged_loss": _loss(unhedged),
                     "pure_hedge_loss": _loss(pure),
                     "economic_loss": _loss(pure + 0.1),
+                    "pricing_loss": _loss(0.1),
                     "mean_transaction_cost": 0.01,
+                    "mean_action_l1": 2.5,
                     "mean_entry_turnover_notional": 2.0,
                     "mean_gross_exposure": 2.0,
+                    "mean_net_exposure": 0.25,
+                    "mean_absolute_net_exposure": 0.5,
                     "mean_nonzero_actions": 3.0,
                     "cap_hits": 0,
+                    "numerical_cap_hit_result_rate": 0.0,
                     "nonconverged_results": 0,
+                    "nonconvergence_rate": 0.0,
                 }
             )
     spec = DailyEvaluationSpec(
@@ -528,15 +586,18 @@ def _write_results(
     records = path.parent / "records"
     records.mkdir()
     for observation in range(611):
-        origin = f"origin-{observation:04d}"
+        origin = (date(2023, 1, 1) + timedelta(days=observation)).isoformat()
         results = [
             {
                 "origin_date": origin,
                 "claim": claim,
+                "market_price": 0.4,
+                "model_price": 0.4,
                 "unhedged_pnl": -unhedged,
                 "hedged_pnl": -(pure + 0.1),
                 "pure_hedge_error": -pure,
                 "pricing_difference": -0.1,
+                "diagnostics": {},
             }
             for claim, unhedged, pure in claims
         ]
@@ -549,7 +610,19 @@ def _write_results(
 def _loss(root_mean_square: float) -> dict[str, float | int]:
     return {
         "observations": 611,
+        "mean": root_mean_square,
+        "standard_error": 0.0,
+        "standard_error_method": "test",
+        "hac_kernel": "bartlett",
+        "hac_lags": 5,
+        "hac_lag_unit": "test order",
+        "confidence_interval_95": [root_mean_square, root_mean_square],
+        "confidence_interval_99": [root_mean_square, root_mean_square],
+        "median": root_mean_square,
+        "sample_standard_deviation": 0.0,
         "root_mean_square": root_mean_square,
+        "quantile_95": root_mean_square,
+        "quantile_99": root_mean_square,
         "expected_shortfall_95": 2.0 * root_mean_square,
         "expected_shortfall_99": 2.5 * root_mean_square,
         "mean_absolute_loss": 0.5 * root_mean_square,

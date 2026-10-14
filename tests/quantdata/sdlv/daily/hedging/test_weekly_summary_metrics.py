@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 from datetime import date, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -190,6 +191,8 @@ def test_weekly_summary_discovers_schedules_and_aggregates_complete_cases(
     )
     tables = tables_output.read_text(encoding="utf-8")
     assert "frozen-weekly" in tables
+    assert "Paired weekly book comparisons" in tables
+    assert "MBB 95\\% CI" in tables
     assert "Fit objective & Fit parameter" in tables
     assert "Book MDD & Worst target MDD" in tables
     assert "$\\kappa=2$" in tables
@@ -205,6 +208,8 @@ def test_weekly_summary_discovers_schedules_and_aggregates_complete_cases(
     assert "16,000.00" in appendix
     assert "Economic MDD" in appendix
     assert "Mean inception unit prices" in appendix
+    assert "Complete target-level weekly economic-loss distribution" in appendix
+    assert "cost, turnover, exposure, sparsity" in appendix
     assert "$Q$ expectation" in appendix
     assert "3,900.00" in appendix
     assert (
@@ -251,6 +256,33 @@ def test_weekly_drawdown_uses_chronological_pnl_reversals() -> None:
     assert metrics["all"]["worst_target_economic_maximum_drawdown"] == (
         pytest.approx(2.0)
     )
+
+
+def test_weekly_strata_retain_full_distribution_and_exposure(
+    tmp_path: Path,
+) -> None:
+    spec = _write_run(
+        tmp_path / "weekly-strata-test",
+        model="sanos-lv",
+        schedule=HedgeSchedule.FROZEN_WEEKLY,
+        objective=None,
+        parameter=None,
+    )
+    result = _weekly_result(spec=spec, pure_rmse=1.0)
+    stratum = replace(
+        result.slices[0],
+        slice_label="year:2024/regime:high",
+        year=2024,
+        volatility_regime="high",
+    )
+
+    metrics = weekly_summary_module._stratified_slice_metrics((stratum,))
+
+    target = metrics[stratum.slice_label]["targets"][stratum.claim]
+    assert target["economic_loss"]["bootstrap_confidence_interval_99"] == (
+        pytest.approx([-2.2, 2.2])
+    )
+    assert target["mean_net_exposure"] == pytest.approx(-0.1)
 
 
 def test_weekly_summary_rejects_matrix_objective_that_disagrees_with_run(

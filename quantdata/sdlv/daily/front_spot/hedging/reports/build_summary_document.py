@@ -45,7 +45,8 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.weekly_production_matrix im
 
 JsonObject: TypeAlias = dict[str, object]
 
-DOCUMENT_SCHEMA = "hedging-benchmark-summary-document-v5"
+DOCUMENT_SCHEMA = "hedging-benchmark-summary-document-v6"
+MATRIX_COMMITMENT_SCHEMA = "hedging-production-matrix-commitment-v2"
 DISPLAY_SCALE = 10_000.0
 DAILY_MATRIX_SCHEMA = "hedging-daily-production-matrix-v1"
 WEEKLY_MATRIX_SCHEMA = "hedging-weekly-production-matrix-v1"
@@ -194,10 +195,13 @@ spot costs one basis point of traded notional, and cash settlement is free.
 \subsection{{Objectives and inference}}
 The benchmark reports mean--variance, mean--volatility, entropy OCE, and
 power-exponential OCE criteria \citep{{BuehlerEtAl2019DeepHedging}}. Daily
-uncertainty uses complete daily episodes. Weekly comparisons first form the
-equal-weighted thirteen-target episode book, then report paired
-candidate-minus-SANOS differences with Hansen--Hodrick and moving-block
-bootstrap intervals, preserving five-session overlap.
+comparisons first form the equal-weighted twenty-target episode book and report
+paired candidate-minus-SANOS differences with five-lag Bartlett HAC and
+moving-block-bootstrap intervals. Weekly comparisons use the equal-weighted
+thirteen-target episode book with Hansen--Hodrick and moving-block-bootstrap
+intervals that preserve five-session overlap. The authenticated JSON retains
+the complete overall, annual, volatility-regime, and annual-by-regime loss,
+cost, turnover, exposure, sparsity, and numerical-gate statistics.
 
 \section{{Results}}
 \subsection{{Authenticated production outcomes}}
@@ -247,7 +251,11 @@ are never admitted as performance observations.
 
 \clearpage
 \appendix
-\section{{Daily Target-Level Objectives}}
+\section{{Daily Target-Level Results}}
+The price tables report cross-origin means of unit prices. Market is the common
+SANOS mark; accounting is the price used in economic P\&L. A genuine
+risk-neutral expectation is shown only where the model supplies one, while
+buyer and seller columns are shown only for indifference-pricing policies.
 \input{{{_tex_escape(daily_target_appendix)}}}
 \clearpage
 \section{{Weekly Target-Level Results}}
@@ -268,6 +276,9 @@ policy supplies the corresponding indifference prices.
 def write_summary_document(
     *,
     dataset: Path,
+    matrix_commitment: Path,
+    matrix_commitment_sha256: str,
+    reporting_commit: str,
     daily_matrix: Path,
     daily_matrix_sha256: str,
     weekly_matrix: Path,
@@ -283,12 +294,27 @@ def write_summary_document(
 ) -> Path | None:
     """Authenticate production matrices and render their final report."""
     dataset = Path(dataset)
+    matrix_commitment = Path(matrix_commitment)
     daily_matrix = Path(daily_matrix)
     weekly_matrix = Path(weekly_matrix)
     output = Path(output)
     bibliography_source = Path(bibliography_source)
     daily_failure_ledger = _optional_path(daily_failure_ledger)
     weekly_failure_ledger = _optional_path(weekly_failure_ledger)
+    commitment = _validate_matrix_commitment(
+        path=matrix_commitment,
+        expected_sha256=matrix_commitment_sha256,
+        reporting_commit=reporting_commit,
+        dataset=dataset,
+        daily_matrix=daily_matrix,
+        daily_matrix_sha256=daily_matrix_sha256,
+        daily_failure_ledger=daily_failure_ledger,
+        daily_failure_ledger_sha256=daily_failure_ledger_sha256,
+        weekly_matrix=weekly_matrix,
+        weekly_matrix_sha256=weekly_matrix_sha256,
+        weekly_failure_ledger=weekly_failure_ledger,
+        weekly_failure_ledger_sha256=weekly_failure_ledger_sha256,
+    )
     _validate_optional_hash_pair(
         path=daily_failure_ledger,
         sha256=daily_failure_ledger_sha256,
@@ -301,6 +327,7 @@ def write_summary_document(
     )
     _validate_output_boundaries(
         dataset=dataset,
+        matrix_commitment=matrix_commitment,
         daily_matrix=daily_matrix,
         weekly_matrix=weekly_matrix,
         bibliography_source=bibliography_source,
@@ -406,6 +433,20 @@ def write_summary_document(
     )
     _require_sha256(daily_matrix, daily_matrix_sha256, "daily production matrix")
     _require_sha256(weekly_matrix, weekly_matrix_sha256, "weekly production matrix")
+    _validate_matrix_commitment(
+        path=matrix_commitment,
+        expected_sha256=matrix_commitment_sha256,
+        reporting_commit=reporting_commit,
+        dataset=dataset,
+        daily_matrix=daily_matrix,
+        daily_matrix_sha256=daily_matrix_sha256,
+        daily_failure_ledger=daily_failure_ledger,
+        daily_failure_ledger_sha256=daily_failure_ledger_sha256,
+        weekly_matrix=weekly_matrix,
+        weekly_matrix_sha256=weekly_matrix_sha256,
+        weekly_failure_ledger=weekly_failure_ledger,
+        weekly_failure_ledger_sha256=weekly_failure_ledger_sha256,
+    )
     _reload_optional_failure_ledger(
         ledger_path=daily_failure_ledger,
         expected_ledger_sha256=daily_failure_ledger_sha256,
@@ -420,6 +461,9 @@ def write_summary_document(
     )
     _write_document_manifest(
         dataset=dataset,
+        matrix_commitment=matrix_commitment,
+        matrix_commitment_sha256=matrix_commitment_sha256,
+        reporting_commit=_require_string(commitment, "reporting_commit"),
         daily_matrix=daily_matrix,
         daily_matrix_sha256=daily_matrix_sha256,
         weekly_matrix=weekly_matrix,
@@ -625,9 +669,146 @@ def _case_identity(case: JsonObject) -> tuple[object, ...]:
     )
 
 
+def _validate_matrix_commitment(
+    *,
+    path: Path,
+    expected_sha256: str,
+    reporting_commit: str,
+    dataset: Path,
+    daily_matrix: Path,
+    daily_matrix_sha256: str,
+    daily_failure_ledger: Path | None,
+    daily_failure_ledger_sha256: str | None,
+    weekly_matrix: Path,
+    weekly_matrix_sha256: str,
+    weekly_failure_ledger: Path | None,
+    weekly_failure_ledger_sha256: str | None,
+) -> JsonObject:
+    """Authenticate the immutable production-input commitment."""
+    _require_sha256(path, expected_sha256, "matrix commitment")
+    payload = _read_json_object(path)
+    expected_fields = {
+        "schema",
+        "reporting_commit",
+        "committed_at_utc",
+        "dataset",
+        "dataset_manifest_sha256",
+        "daily_matrix",
+        "daily_matrix_sha256",
+        "daily_failure_ledger",
+        "daily_failure_ledger_sha256",
+        "weekly_matrix",
+        "weekly_matrix_sha256",
+        "weekly_failure_ledger",
+        "weekly_failure_ledger_sha256",
+    }
+    if set(payload) != expected_fields:
+        raise ValueError("matrix commitment fields are not canonical")
+    if payload.get("schema") != MATRIX_COMMITMENT_SCHEMA:
+        raise ValueError("matrix commitment uses an incompatible schema")
+    _require_string(payload, "committed_at_utc")
+    if (
+        len(reporting_commit) != 40
+        or any(character not in "0123456789abcdef" for character in reporting_commit.lower())
+    ):
+        raise ValueError("reporting commit must be a full Git SHA-1")
+    if _require_string(payload, "reporting_commit").lower() != reporting_commit.lower():
+        raise ValueError("matrix commitment reporting commit does not match")
+    _require_committed_path(payload, "dataset", dataset)
+    manifest_sha256 = _sha256(Path(dataset) / "manifest.json")
+    if _require_string(payload, "dataset_manifest_sha256") != manifest_sha256:
+        raise ValueError("matrix commitment public dataset does not match")
+    _require_committed_input(
+        payload,
+        path_key="daily_matrix",
+        hash_key="daily_matrix_sha256",
+        expected_path=daily_matrix,
+        expected_sha256=daily_matrix_sha256,
+    )
+    _require_committed_input(
+        payload,
+        path_key="weekly_matrix",
+        hash_key="weekly_matrix_sha256",
+        expected_path=weekly_matrix,
+        expected_sha256=weekly_matrix_sha256,
+    )
+    _require_optional_committed_input(
+        payload,
+        path_key="daily_failure_ledger",
+        hash_key="daily_failure_ledger_sha256",
+        expected_path=daily_failure_ledger,
+        expected_sha256=daily_failure_ledger_sha256,
+    )
+    _require_optional_committed_input(
+        payload,
+        path_key="weekly_failure_ledger",
+        hash_key="weekly_failure_ledger_sha256",
+        expected_path=weekly_failure_ledger,
+        expected_sha256=weekly_failure_ledger_sha256,
+    )
+    return payload
+
+
+def _require_committed_path(
+    payload: JsonObject,
+    key: str,
+    expected_path: Path,
+) -> None:
+    raw_path = Path(_require_string(payload, key))
+    if not raw_path.is_absolute():
+        raise ValueError(f"matrix commitment {key} path must be absolute")
+    if raw_path.resolve() != Path(expected_path).resolve():
+        raise ValueError(f"matrix commitment {key} path does not match")
+
+
+def _require_committed_input(
+    payload: JsonObject,
+    *,
+    path_key: str,
+    hash_key: str,
+    expected_path: Path,
+    expected_sha256: str,
+) -> None:
+    _require_committed_path(payload, path_key, expected_path)
+    committed_sha256 = _require_string(payload, hash_key)
+    if committed_sha256.lower() != expected_sha256.lower():
+        raise ValueError(f"matrix commitment {hash_key} does not match")
+    _require_sha256(expected_path, committed_sha256, path_key.replace("_", " "))
+
+
+def _require_optional_committed_input(
+    payload: JsonObject,
+    *,
+    path_key: str,
+    hash_key: str,
+    expected_path: Path | None,
+    expected_sha256: str | None,
+) -> None:
+    committed_path = payload.get(path_key)
+    committed_sha256 = payload.get(hash_key)
+    if expected_path is None:
+        if committed_path is not None or committed_sha256 is not None:
+            raise ValueError(f"matrix commitment unexpectedly binds {path_key}")
+        return
+    if expected_sha256 is None:
+        raise ValueError(f"{hash_key} is required with {path_key}")
+    if not isinstance(committed_path, str) or not committed_path.strip():
+        raise ValueError(f"matrix commitment {path_key} is missing")
+    if not isinstance(committed_sha256, str) or not committed_sha256.strip():
+        raise ValueError(f"matrix commitment {hash_key} is missing")
+    _require_committed_input(
+        payload,
+        path_key=path_key,
+        hash_key=hash_key,
+        expected_path=expected_path,
+        expected_sha256=expected_sha256,
+    )
+
+
 def _validate_output_boundaries(
     *,
     dataset: Path,
+    matrix_commitment: Path | None = None,
     daily_matrix: Path,
     weekly_matrix: Path,
     bibliography_source: Path,
@@ -644,6 +825,8 @@ def _validate_output_boundaries(
         "weekly matrix": weekly_matrix.resolve(),
         "bibliography": bibliography_source.resolve(),
     }
+    if matrix_commitment is not None:
+        inputs["matrix commitment"] = matrix_commitment.resolve()
     inputs.update(
         {
             f"failure ledger {index}": path.resolve()
@@ -697,6 +880,9 @@ def _validate_output_boundaries(
 def _write_document_manifest(
     *,
     dataset: Path,
+    matrix_commitment: Path,
+    matrix_commitment_sha256: str,
+    reporting_commit: str,
     daily_matrix: Path,
     daily_matrix_sha256: str,
     weekly_matrix: Path,
@@ -712,6 +898,11 @@ def _write_document_manifest(
     output: Path,
     artifact_paths: tuple[Path, ...],
 ) -> None:
+    _require_sha256(
+        matrix_commitment,
+        matrix_commitment_sha256,
+        "matrix commitment",
+    )
     dataset_manifest = Path(dataset) / "manifest.json"
     manifest_sha256 = _sha256(dataset_manifest)
     if manifest_sha256 != _require_string(daily, "dataset_manifest_sha256"):
@@ -720,8 +911,11 @@ def _write_document_manifest(
         raise ValueError("rendered weekly metrics do not match the public dataset")
     artifacts = {path.name: _sha256(path) for path in artifact_paths}
     payload = {
-        "schema": "hedging-benchmark-summary-bundle-v1",
+        "schema": "hedging-benchmark-summary-bundle-v2",
         "dataset_manifest_sha256": manifest_sha256,
+        "matrix_commitment": str(matrix_commitment),
+        "matrix_commitment_sha256": matrix_commitment_sha256,
+        "reporting_commit": reporting_commit,
         "daily_matrix": str(daily_matrix),
         "daily_matrix_sha256": daily_matrix_sha256,
         "weekly_matrix": str(weekly_matrix),
@@ -1182,6 +1376,9 @@ def main() -> None:
     report_directory = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", type=Path, required=True)
+    parser.add_argument("--matrix-commitment", type=Path, required=True)
+    parser.add_argument("--matrix-commitment-sha256", required=True)
+    parser.add_argument("--reporting-commit", required=True)
     parser.add_argument("--daily-matrix", type=Path, required=True)
     parser.add_argument("--daily-matrix-sha256", required=True)
     parser.add_argument("--daily-failure-ledger", type=Path)
@@ -1201,6 +1398,9 @@ def main() -> None:
     arguments = parser.parse_args()
     pdf = write_summary_document(
         dataset=arguments.dataset,
+        matrix_commitment=arguments.matrix_commitment,
+        matrix_commitment_sha256=arguments.matrix_commitment_sha256,
+        reporting_commit=arguments.reporting_commit,
         daily_matrix=arguments.daily_matrix,
         daily_matrix_sha256=arguments.daily_matrix_sha256,
         weekly_matrix=arguments.weekly_matrix,

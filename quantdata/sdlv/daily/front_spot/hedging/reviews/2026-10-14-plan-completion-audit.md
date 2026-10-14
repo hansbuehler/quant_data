@@ -28,7 +28,7 @@ that production identity.
 | Published generated baselines | **Implementation, training lineage, initializer-label remediation, and current-source quant review complete; readiness and production incomplete.** VolGAN, AD-Seq-Vol, and AD-Seq-Vol-FT have distinct authenticated lineages and use `hedging-generated-v1` for rolling checkpoint restoration independently of their evaluation labels. | `2026-10-12-volgan-diffusion-integration-remediation-review.md`; `2026-10-12-generated-rolling-warmstart-quant-review.md`; `2026-10-13-generated-gate-assembler-review.md`; `2026-10-14-weekly-signed-indifference-prices.md`; `2026-10-14-generated-initializer-label-lineage-review.md`; lineage snapshot SHA-256 `91f04fa3067c2df7d6978abbf083eea2a7d856d0be493a4345f44c894cd5742e`; three quant-review JSON files under `generated-readiness-d22ec9a/evidence`. | Complete the corrected 18-scope GPU-readiness matrix, assemble all three production gates, and complete every enabled daily and weekly case. |
 | Daily benchmark matrix | **Incomplete.** The canonical specification has 57 cases. Native queues, rolling GROMM, and generated cases are not all terminal. | Versioned daily production matrix builder and validators; active immutable services listed below. | A 57-case matrix in which every specified cell has an authenticated terminal outcome and every completed case reconstructs to the declared 12,220 records per policy. |
 | Weekly benchmark matrix | **Incomplete; Historical-SANOS production is active and both SANOS--LV cells have authenticated failures.** The canonical specification has 94 cases. | `2026-10-13-weekly-production-quant-review.md`; native matrix SHA-256 `8d069cadde0c21dd677bbe7ab16cd59e0d3dae9907456608da7fcb4b9bce0b26`; combined SANOS--LV failure ledger above. | A 94-case matrix in which every specified cell has an authenticated terminal outcome and every completed case reconstructs to 528 origins and 6,864 authenticated target records. |
-| Statistical reporting | **Implemented, final evidence incomplete.** Daily and weekly aggregators, overlap-aware inference, prices, drawdowns, and model catalogue are tested. | Report builder and summary tests; synthetic end-to-end PDF compile; matrix-composition adversarial tests. | Rebuild all statistics from the complete canonical matrices and pass an independent results review. |
+| Statistical reporting | **Python implementation and contract re-review complete; final evidence incomplete.** The version-2 pre-outcome commitment binds the dataset, matrices, failure ledgers, fixed commitment hash, and reporting commit. Daily and weekly aggregators retain complete strata, prices, distributions, costs, turnover, exposure, sparsity, caps, and convergence diagnostics. Daily comparisons use 20-target Bartlett-HAC plus moving-block-bootstrap inference; weekly comparisons use 13-target Hansen--Hodrick plus moving-block-bootstrap inference. | `2026-10-14-final-report-contract-rereview.md`; report builder and summary tests; real daily-plus-weekly fragment compile; matrix-commitment adversarial tests. | Install the reviewed commit-pinned successor launcher, rebuild all statistics from the complete canonical matrices, and pass an independent results review. |
 | Final public report | **Incomplete.** The repository PDF is preliminary and predates full production. | Preliminary `reports/hedging_benchmark_summary.pdf`; active final successor described below. | Authenticated production PDF and manifest from the complete 57-case daily and 94-case weekly matrices, followed by repository refresh and final review. |
 
 ## Active Immutable Work
@@ -53,20 +53,22 @@ that production identity.
   version-1.11 matrices and will validate completed cells and canonicalize only
   genuine terminal failures. Its launcher SHA-256 is
   `70bd69a679fd9cef58aba1087c84e49f35f8db796e4cfde8176e17df47252846`.
-- `quantdata-hedging-full-production-d22ec9a.service` waits on generated
-  readiness and Historical-SANOS canonicalization. It then composes the
-  canonical 57-case daily and 94-case weekly matrices and runs only missing
-  GROMM/generated cases. Its launcher SHA-256 is
-  `b6c7c9534cf73b4c03bce1563e1190a700de41f2f6b9cbe360c516df8ca03dff`.
+- `quantdata-hedging-full-production-d22ec9a.service` is still only waiting on
+  generated readiness and Historical-SANOS canonicalization. Independent
+  review found its installed launcher obsolete: it writes a version-1 matrix
+  commitment and recomputes hashes after outcomes. It must be stopped before
+  prerequisites clear and replaced by a remediation-commit-pinned successor
+  which writes the version-2 commitment and its immutable SHA-256 before
+  production.
 - The coordinators use service activity only for capacity scheduling. Their
   authoritative gates reconstruct immutable matrices, production gates, and
   result artifacts, avoiding a race with auto-collected transient units.
-- A pre-final CPU-only regression sweep at repository commit
-  `6a431f6fcb03610d281a280917ed7eb9f773c8b7` passed all 454 tests under
-  `tests/quantdata/hedging` and `tests/quantdata/sdlv/daily/hedging` in 85.12
-  seconds. This is early source-validation evidence only; acceptance item 6
-  still requires the same complete suite on the final committed source after
-  the authenticated report artifacts are refreshed.
+- A pre-final CPU-only regression sweep on the report-remediation source passed
+  all 458 tests under `tests/quantdata/hedging` and
+  `tests/quantdata/sdlv/daily/hedging` in 101.98 seconds. Syntax compilation,
+  Ruff import checks, and `git diff --check` also pass. This remains
+  source-validation evidence only; acceptance item 6 also requires the suite on
+  the final source after authenticated report artifacts are refreshed.
 
 ## Final Acceptance Checklist
 

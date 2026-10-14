@@ -226,6 +226,9 @@ def test_completed_daily_results_revalidate_each_record(tmp_path) -> None:
     assert report.aggregation_config["hac_kernel"] == "bartlett"
     results_path = output / "results.json"
     report.write_json(results_path)
+    persisted = json.loads(results_path.read_text(encoding="utf-8"))
+    assert persisted["aggregation_identity"] == report.aggregation_identity
+    assert persisted["slices_sha256"] == report.slices_sha256
     assert (
         authenticate_completed_daily_results(
             panel,
@@ -233,6 +236,19 @@ def test_completed_daily_results_revalidate_each_record(tmp_path) -> None:
         ).run_identity
         == spec.run_identity
     )
+
+    legacy = {
+        name: value
+        for name, value in persisted.items()
+        if name not in {"aggregation_identity", "slices_sha256"}
+    }
+    results_path.write_text(json.dumps(legacy), encoding="utf-8")
+    authenticated_legacy = authenticate_completed_daily_results(
+        panel,
+        results_path=results_path,
+    )
+    assert authenticated_legacy.aggregation_identity == report.aggregation_identity
+    report.write_json(results_path)
 
     aggregate = json.loads(results_path.read_text(encoding="utf-8"))
     aggregate["slices"][0]["pure_hedge_loss"]["root_mean_square"] = 999.0

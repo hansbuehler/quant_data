@@ -38,6 +38,8 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.weekly import (
     WeeklyEvaluationSpec,
 )
 
+REPORTING_COMMIT = "f" * 40
+
 
 def test_summary_document_reports_full_grid_without_ex_post_selection() -> None:
     document = build_summary_document(
@@ -132,6 +134,13 @@ def test_summary_document_writer_rebuilds_from_authenticated_matrices(
         weekly_matrix,
         output=tmp_path / "weekly-failures.json",
     )
+    commitment = _write_commitment(
+        tmp_path / "matrix-commitment.json",
+        dataset=dataset,
+        daily_matrix=daily_matrix,
+        weekly_matrix=weekly_matrix,
+        weekly_failure_ledger=weekly_failure_ledger,
+    )
     bibliography = tmp_path / "source" / "hedging_benchmark_summary_refs.bib"
     bibliography.parent.mkdir()
     bibliography.write_text("% test\n", encoding="utf-8")
@@ -177,6 +186,9 @@ def test_summary_document_writer_rebuilds_from_authenticated_matrices(
 
     pdf = write_summary_document(
         dataset=dataset,
+        matrix_commitment=commitment,
+        matrix_commitment_sha256=_sha256(commitment),
+        reporting_commit=REPORTING_COMMIT,
         daily_matrix=daily_matrix,
         daily_matrix_sha256=_sha256(daily_matrix),
         weekly_matrix=weekly_matrix,
@@ -203,6 +215,8 @@ def test_summary_document_writer_rebuilds_from_authenticated_matrices(
         )
     )
     assert bundle["daily_matrix_sha256"] == _sha256(daily_matrix)
+    assert bundle["matrix_commitment_sha256"] == _sha256(commitment)
+    assert bundle["reporting_commit"] == REPORTING_COMMIT
     assert bundle["weekly_matrix_sha256"] == _sha256(weekly_matrix)
     assert bundle["weekly_failure_ledger_sha256"] == _sha256(
         weekly_failure_ledger
@@ -288,6 +302,105 @@ def test_final_report_rejects_hardlink_to_authenticated_input(
             weekly_matrix=weekly_matrix,
             bibliography_source=bibliography,
             output=output,
+        )
+
+
+def test_matrix_commitment_rejects_mutation_and_redirection(tmp_path: Path) -> None:
+    dataset = tmp_path / "dataset"
+    dataset.mkdir()
+    (dataset / "manifest.json").write_text("{}\n", encoding="utf-8")
+    daily_matrix = tmp_path / "daily.json"
+    weekly_matrix = tmp_path / "weekly.json"
+    daily_matrix.write_text('{"daily":true}\n', encoding="utf-8")
+    weekly_matrix.write_text('{"weekly":true}\n', encoding="utf-8")
+    commitment = _write_commitment(
+        tmp_path / "commitment.json",
+        dataset=dataset,
+        daily_matrix=daily_matrix,
+        weekly_matrix=weekly_matrix,
+    )
+
+    def validate() -> None:
+        summary_document_module._validate_matrix_commitment(
+            path=commitment,
+            expected_sha256=_sha256(commitment),
+            reporting_commit=REPORTING_COMMIT,
+            dataset=dataset,
+            daily_matrix=daily_matrix,
+            daily_matrix_sha256=_sha256(daily_matrix),
+            daily_failure_ledger=None,
+            daily_failure_ledger_sha256=None,
+            weekly_matrix=weekly_matrix,
+            weekly_matrix_sha256=_sha256(weekly_matrix),
+            weekly_failure_ledger=None,
+            weekly_failure_ledger_sha256=None,
+        )
+
+    validate()
+    daily_matrix.write_text('{"daily":false}\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="daily_matrix_sha256 does not match"):
+        validate()
+
+    daily_matrix.write_text('{"daily":true}\n', encoding="utf-8")
+    payload = json.loads(commitment.read_text(encoding="utf-8"))
+    payload["daily_matrix"] = str(weekly_matrix.resolve())
+    commitment.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="daily_matrix path does not match"):
+        validate()
+
+    payload["daily_matrix"] = str(daily_matrix.resolve())
+    payload["reporting_commit"] = "e" * 40
+    commitment.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="reporting commit does not match"):
+        validate()
+
+    payload["reporting_commit"] = REPORTING_COMMIT
+    payload["schema"] = "obsolete-schema"
+    commitment.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="incompatible schema"):
+        validate()
+
+    payload["schema"] = summary_document_module.MATRIX_COMMITMENT_SCHEMA
+    commitment.write_text(json.dumps(payload), encoding="utf-8")
+    (dataset / "manifest.json").write_text('{"changed":true}\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="public dataset does not match"):
+        validate()
+
+
+def test_matrix_commitment_rejects_failure_ledger_mutation(tmp_path: Path) -> None:
+    dataset = tmp_path / "dataset"
+    dataset.mkdir()
+    (dataset / "manifest.json").write_text("{}\n", encoding="utf-8")
+    daily_matrix = tmp_path / "daily.json"
+    weekly_matrix = tmp_path / "weekly.json"
+    daily_ledger = tmp_path / "daily-ledger.json"
+    daily_matrix.write_text('{"daily":true}\n', encoding="utf-8")
+    weekly_matrix.write_text('{"weekly":true}\n', encoding="utf-8")
+    daily_ledger.write_text('{"failures":[]}\n', encoding="utf-8")
+    commitment = _write_commitment(
+        tmp_path / "commitment.json",
+        dataset=dataset,
+        daily_matrix=daily_matrix,
+        weekly_matrix=weekly_matrix,
+        daily_failure_ledger=daily_ledger,
+    )
+
+    daily_ledger.write_text('{"failures":["changed"]}\n', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="daily_failure_ledger_sha256 does not match"):
+        summary_document_module._validate_matrix_commitment(
+            path=commitment,
+            expected_sha256=_sha256(commitment),
+            reporting_commit=REPORTING_COMMIT,
+            dataset=dataset,
+            daily_matrix=daily_matrix,
+            daily_matrix_sha256=_sha256(daily_matrix),
+            daily_failure_ledger=daily_ledger,
+            daily_failure_ledger_sha256=_sha256(daily_ledger),
+            weekly_matrix=weekly_matrix,
+            weekly_matrix_sha256=_sha256(weekly_matrix),
+            weekly_failure_ledger=None,
+            weekly_failure_ledger_sha256=None,
         )
 
 
@@ -441,6 +554,46 @@ def _write_matrix(
         ),
         encoding="utf-8",
     )
+    return path
+
+
+def _write_commitment(
+    path: Path,
+    *,
+    dataset: Path,
+    daily_matrix: Path,
+    weekly_matrix: Path,
+    daily_failure_ledger: Path | None = None,
+    weekly_failure_ledger: Path | None = None,
+) -> Path:
+    payload = {
+        "schema": summary_document_module.MATRIX_COMMITMENT_SCHEMA,
+        "reporting_commit": REPORTING_COMMIT,
+        "committed_at_utc": "2026-10-14T12:00:00+00:00",
+        "dataset": str(dataset.resolve()),
+        "dataset_manifest_sha256": _sha256(dataset / "manifest.json"),
+        "daily_matrix": str(daily_matrix.resolve()),
+        "daily_matrix_sha256": _sha256(daily_matrix),
+        "daily_failure_ledger": (
+            None
+            if daily_failure_ledger is None
+            else str(daily_failure_ledger.resolve())
+        ),
+        "daily_failure_ledger_sha256": (
+            None if daily_failure_ledger is None else _sha256(daily_failure_ledger)
+        ),
+        "weekly_matrix": str(weekly_matrix.resolve()),
+        "weekly_matrix_sha256": _sha256(weekly_matrix),
+        "weekly_failure_ledger": (
+            None
+            if weekly_failure_ledger is None
+            else str(weekly_failure_ledger.resolve())
+        ),
+        "weekly_failure_ledger_sha256": (
+            None if weekly_failure_ledger is None else _sha256(weekly_failure_ledger)
+        ),
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
     return path
 
 

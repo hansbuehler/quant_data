@@ -411,6 +411,9 @@ blocked, gate-waiting, incomplete, or noncanonical cells:
 ```bash
 python -m quantdata.sdlv.daily.front_spot.hedging.reports.build_summary_document \
   --dataset "$QUANTDATA_ROOT/datasets/hedging/spx-2022-2025-hedging-public-candidate-v1" \
+  --matrix-commitment "$MATRIX_COMMITMENT" \
+  --matrix-commitment-sha256 "$PRECOMMITTED_COMMITMENT_SHA256" \
+  --reporting-commit "$REPORTING_COMMIT" \
   --daily-matrix "$DAILY_MATRIX" \
   --daily-matrix-sha256 "$PRECOMMITTED_DAILY_MATRIX_SHA256" \
   --weekly-matrix "$WEEKLY_MATRIX" \
@@ -419,10 +422,17 @@ python -m quantdata.sdlv.daily.front_spot.hedging.reports.build_summary_document
   --compile
 ```
 
+The version-two commitment binds its own digest, the reporting commit, exact
+public-dataset path and manifest, exact matrix and failure-ledger paths, and
+all four input digests. The report revalidates that commitment before and after
+aggregation and uses its digests rather than recomputing new trust anchors.
 The generated PDF contains every precommitted daily and weekly objective grid,
-paired weekly Hansen--Hodrick and moving-block-bootstrap uncertainty, every
-target-level appendix, model references, and immutable dataset/target
-provenance. It never chooses a policy using 2023--2025 outcomes.
+paired daily Bartlett-HAC and weekly Hansen--Hodrick comparisons with
+moving-block-bootstrap uncertainty, every target-level distribution, price,
+cost, turnover, exposure, and sparsity appendix, model references, and
+immutable dataset/target provenance. The authenticated JSON additionally
+retains annual, volatility-regime, and annual-by-regime target slices. It never
+chooses a policy using 2023--2025 outcomes.
 
 Legacy queue state without a matrix digest is rejected unless the operator
 explicitly supplies `--adopt-unpinned-state` after checking the matrix.

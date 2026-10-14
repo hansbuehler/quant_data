@@ -7,11 +7,18 @@ import json
 import math
 import os
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import TypeAlias
 
 import numpy as np
 
+from quantdata.hedging.inference import (
+    EpisodeInferenceConfig,
+    HacKernel,
+    paired_episode_differences,
+    summarize_episode_losses,
+)
 from quantdata.hedging.metrics import maximum_drawdown_from_losses
 from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
     PublicHedgingPanel,
@@ -30,7 +37,7 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.daily_results import (
 
 JsonObject: TypeAlias = dict[str, object]
 
-SUMMARY_SCHEMA = "hedging-benchmark-summary-metrics-v4"
+SUMMARY_SCHEMA = "hedging-benchmark-summary-metrics-v5"
 RESULTS_SCHEMA = "hedging-daily-results-v2"
 EXPECTED_CLAIMS = 20
 EXPECTED_OBSERVATIONS = 611
@@ -41,6 +48,13 @@ OBJECTIVE_GRIDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("mean_volatility", ("0.1", "1", "2", "3")),
     ("entropy", ("0.1", "1", "10")),
     ("power_exponential", ("0.1", "1", "10")),
+)
+DAILY_COMPARISON_INFERENCE = EpisodeInferenceConfig(
+    hac_lags=5,
+    hac_kernel=HacKernel.BARTLETT,
+    bootstrap_block_length=50,
+    bootstrap_samples=2_000,
+    bootstrap_seed=20_261_014,
 )
 
 _MODEL_DISPLAY_NAMES = {
@@ -178,34 +192,7 @@ def build_daily_policy_summary_metrics(
     ):
         raise ValueError("completed runs do not share the same unhedged claims")
 
-    comparisons: JsonObject = {}
-    reference_key = next(
-        (
-            key
-            for key, raw_model in models.items()
-            if _require_string(_as_object(raw_model, key), "model") == "sanos-lv"
-        ),
-        None,
-    )
-    if reference_key is not None:
-        reference_all = _require_object(
-            _require_object(_require_object(models, reference_key), "metrics"),
-            "all",
-        )
-        reference_rmse = _require_number(reference_all, "pure_rmse")
-        comparisons["reference_case"] = reference_key
-        comparisons["pure_rmse_reduction_vs_reference"] = {
-            key: 1.0
-            - _require_number(
-                _require_object(
-                    _require_object(_require_object(models, key), "metrics"),
-                    "all",
-                ),
-                "pure_rmse",
-            )
-            / reference_rmse
-            for key in models
-        }
+    comparisons = _reference_comparisons(loaded_policies, models=models)
     if legacy_comparison:
         sanos_all = _require_object(
             _require_object(_require_object(models, "sanos-lv"), "metrics"),
@@ -491,6 +478,12 @@ def _read_record_losses(
     *,
     expected_results: JsonObject,
 ) -> dict[str, tuple[dict[str, object], ...]]:
+    model = _require_string(expected_results, "model")
+    supplies_q_expectation = model in {
+        "sanos-lv",
+        "gromm",
+        "gromm-q-dlv-vega",
+    }
     rows: dict[str, list[dict[str, object]]] = {}
     seen: set[tuple[str, str]] = set()
     for path in sorted(Path(records_directory).glob("*.json")):
@@ -508,6 +501,10 @@ def _read_record_losses(
             if key in seen:
                 raise ValueError(f"duplicate daily origin/claim record: {key}")
             seen.add(key)
+            diagnostics_value = result.get("diagnostics", {})
+            diagnostics = _as_object(diagnostics_value, "daily diagnostics")
+            market_price = _require_number(result, "market_price")
+            model_price = _require_number(result, "model_price")
             rows.setdefault(claim, []).append(
                 {
                     "origin_date": origin,
@@ -515,6 +512,17 @@ def _read_record_losses(
                     "economic_loss": -_require_number(result, "hedged_pnl"),
                     "pure_hedge_loss": -_require_number(result, "pure_hedge_error"),
                     "pricing_loss": -_require_number(result, "pricing_difference"),
+                    "market_price": market_price,
+                    "accounting_model_price": model_price,
+                    "q_expectation": model_price if supplies_q_expectation else None,
+                    "buyer_indifference": _optional_number(
+                        diagnostics,
+                        "buyer_indifference_price",
+                    ),
+                    "seller_indifference": _optional_number(
+                        diagnostics,
+                        "seller_indifference_price",
+                    ),
                 }
             )
     if len(seen) != _require_integer(expected_results, "result_count"):
@@ -552,6 +560,7 @@ def _aggregate_run(
         )
         for row in overall
     }
+    aggregates["strata"] = _stratified_slice_metrics(payload)
     return aggregates
 
 
@@ -649,13 +658,32 @@ def _aggregate_rows(
         "economic_objectives": _aggregate_objectives(rows, "economic_loss"),
         "pure_objectives": _aggregate_objectives(rows, "pure_hedge_loss"),
         "mean_transaction_cost": _mean_row_number(rows, "mean_transaction_cost"),
+        "mean_action_l1": _mean_row_number(rows, "mean_action_l1"),
         "mean_entry_turnover_notional": _mean_row_number(
             rows, "mean_entry_turnover_notional"
         ),
         "mean_gross_exposure": _mean_row_number(rows, "mean_gross_exposure"),
+        "mean_net_exposure": _mean_row_number(rows, "mean_net_exposure"),
+        "mean_absolute_net_exposure": _mean_row_number(
+            rows,
+            "mean_absolute_net_exposure",
+        ),
+        "mean_nonzero_actions": _mean_row_number(rows, "mean_nonzero_actions"),
         "cap_hits": sum(_require_integer(value, "cap_hits") for value in rows),
+        "numerical_cap_hit_result_rate": _mean_row_number(
+            rows,
+            "numerical_cap_hit_result_rate",
+        ),
         "nonconverged_results": sum(
             _require_integer(value, "nonconverged_results") for value in rows
+        ),
+        "nonconvergence_rate": _mean_row_number(rows, "nonconvergence_rate"),
+        "prices": _price_summary(
+            tuple(
+                record
+                for claim in claims
+                for record in record_losses[claim]
+            )
         ),
     }
 
@@ -673,7 +701,12 @@ def _target_metrics(
         [_record_number(value, "pure_hedge_loss") for value in record_losses],
         dtype=np.float64,
     )
-    return {
+    payload = {
+        name: value
+        for name, value in row.items()
+        if name not in {"claim", "slice_label", "year", "volatility_regime"}
+    }
+    payload.update({
         "economic_objectives": _loss_objectives(_require_object(row, "economic_loss")),
         "pure_objectives": _loss_objectives(_require_object(row, "pure_hedge_loss")),
         "economic_maximum_drawdown": maximum_drawdown_from_losses(economic),
@@ -687,7 +720,222 @@ def _target_metrics(
         "expected_shortfall_95": _require_number(
             _require_object(row, "pure_hedge_loss"), "expected_shortfall_95"
         ),
+        "prices": _price_summary(record_losses),
+    })
+    return payload
+
+
+def _stratified_slice_metrics(payload: JsonObject) -> JsonObject:
+    slices_value = payload.get("slices")
+    if not isinstance(slices_value, list):
+        raise ValueError("daily results slices must be a list")
+    groups: dict[str, JsonObject] = {}
+    for raw_slice in slices_value:
+        row = _as_object(raw_slice, "daily result slice")
+        label = _require_string(row, "slice_label")
+        if label == "overall":
+            continue
+        claim = _require_string(row, "claim")
+        group = groups.setdefault(
+            label,
+            {
+                "year": row.get("year"),
+                "volatility_regime": row.get("volatility_regime"),
+                "targets": {},
+            },
+        )
+        if (
+            group["year"] != row.get("year")
+            or group["volatility_regime"] != row.get("volatility_regime")
+        ):
+            raise ValueError(f"daily stratum metadata is inconsistent: {label}")
+        targets = _require_object(group, "targets")
+        if claim in targets:
+            raise ValueError(f"duplicate daily stratum target: {label}/{claim}")
+        targets[claim] = {
+            name: value
+            for name, value in row.items()
+            if name not in {"claim", "slice_label", "year", "volatility_regime"}
+        }
+    return {label: groups[label] for label in sorted(groups)}
+
+
+def _price_summary(rows: tuple[dict[str, object], ...]) -> JsonObject:
+    if not rows:
+        raise ValueError("daily price summary requires observations")
+    market = np.asarray(
+        [_record_number(row, "market_price") for row in rows],
+        dtype=np.float64,
+    )
+    accounting = np.asarray(
+        [_record_number(row, "accounting_model_price") for row in rows],
+        dtype=np.float64,
+    )
+    return {
+        "observations": len(rows),
+        "mean_market_price": float(np.mean(market)),
+        "mean_accounting_model_price": float(np.mean(accounting)),
+        "mean_accounting_minus_market": float(np.mean(accounting - market)),
+        **{
+            f"mean_{name}": _mean_optional_record_number(rows, name)
+            for name in (
+                "q_expectation",
+                "buyer_indifference",
+                "seller_indifference",
+            )
+        },
     }
+
+
+def _mean_optional_record_number(
+    rows: tuple[dict[str, object], ...],
+    name: str,
+) -> float | None:
+    values = tuple(row.get(name) for row in rows)
+    present = tuple(value for value in values if value is not None)
+    if not present:
+        return None
+    if len(present) != len(values):
+        raise ValueError(f"daily price field {name} is missing for some origins")
+    numbers = tuple(_number(value) for value in present)
+    if any(not math.isfinite(value) for value in numbers):
+        raise ValueError(f"daily price field {name} must be finite")
+    return float(np.mean(numbers))
+
+
+def _reference_comparisons(
+    loaded: tuple[JsonObject, ...],
+    *,
+    models: JsonObject,
+) -> JsonObject:
+    references = tuple(
+        policy
+        for policy in loaded
+        if _require_string(policy, "model") == "sanos-lv"
+        and _require_string(policy, "fitted_objective") == "reference"
+    )
+    if not references:
+        return {}
+    if len(references) != 1:
+        raise ValueError("daily results contain multiple SANOS-LV references")
+    reference_policy = references[0]
+    reference_key = _require_string(reference_policy, "key")
+    reference_all = _require_object(
+        _require_object(_require_object(models, reference_key), "metrics"),
+        "all",
+    )
+    reference_rmse = _require_number(reference_all, "pure_rmse")
+    return {
+        "reference_case": reference_key,
+        "pure_rmse_reduction_vs_reference": {
+            key: 1.0
+            - _require_number(
+                _require_object(
+                    _require_object(_require_object(models, key), "metrics"),
+                    "all",
+                ),
+                "pure_rmse",
+            )
+            / reference_rmse
+            for key in models
+        },
+        "paired_book_loss_differences": {
+            _require_string(policy, "key"): _paired_book_comparison(
+                candidate=policy,
+                reference=reference_policy,
+            )
+            for policy in loaded
+        },
+    }
+
+
+def _paired_book_comparison(
+    *,
+    candidate: JsonObject,
+    reference: JsonObject,
+) -> JsonObject:
+    summaries: JsonObject = {}
+    for loss_name in ("pure_hedge_loss", "economic_loss"):
+        candidate_ids, candidate_losses = _book_loss_series(
+            candidate,
+            loss_name=loss_name,
+        )
+        reference_ids, reference_losses = _book_loss_series(
+            reference,
+            loss_name=loss_name,
+        )
+        differences = paired_episode_differences(
+            candidate_ids,
+            candidate_losses,
+            reference_ids,
+            reference_losses,
+        )
+        summary = summarize_episode_losses(
+            differences,
+            episode_dates=tuple(date.fromisoformat(value) for value in candidate_ids),
+            config=DAILY_COMPARISON_INFERENCE,
+        )
+        inference = summary.inference
+        summaries[loss_name] = {
+            "convention": "candidate minus SANOS-LV reference loss",
+            "observations": summary.observations,
+            "mean": summary.mean,
+            "median": summary.median,
+            "sample_standard_deviation": summary.sample_standard_deviation,
+            "root_mean_square": summary.root_mean_square,
+            "mean_absolute_difference": summary.mean_absolute_loss,
+            "quantile_95": summary.quantile_95,
+            "quantile_99": summary.quantile_99,
+            "expected_shortfall_95": summary.expected_shortfall_95,
+            "expected_shortfall_99": summary.expected_shortfall_99,
+            "hac_standard_error": inference.hac_standard_error,
+            "raw_hac_long_run_variance": inference.raw_hac_long_run_variance,
+            "hac_long_run_variance": inference.hac_long_run_variance,
+            "hac_variance_was_floored": inference.hac_variance_was_floored,
+            "hac_kernel": inference.hac_kernel.value,
+            "hac_lags": inference.hac_lags,
+            "hac_confidence_interval_95": list(inference.hac_95),
+            "hac_confidence_interval_99": list(inference.hac_99),
+            "bootstrap_confidence_interval_95": list(inference.bootstrap_95),
+            "bootstrap_confidence_interval_99": list(inference.bootstrap_99),
+            "bootstrap_block_length": min(
+                DAILY_COMPARISON_INFERENCE.bootstrap_block_length,
+                summary.observations,
+            ),
+            "bootstrap_samples": DAILY_COMPARISON_INFERENCE.bootstrap_samples,
+            "bootstrap_seed": DAILY_COMPARISON_INFERENCE.bootstrap_seed,
+        }
+    return summaries
+
+
+def _book_loss_series(
+    policy: JsonObject,
+    *,
+    loss_name: str,
+) -> tuple[tuple[str, ...], np.ndarray]:
+    record_losses = _require_record_losses(policy)
+    claims = tuple(sorted(record_losses))
+    if len(claims) != EXPECTED_CLAIMS:
+        raise ValueError("daily paired comparison requires the complete target book")
+    origins = tuple(
+        str(row["origin_date"])
+        for row in record_losses[claims[0]]
+    )
+    matrix = np.asarray(
+        [
+            [_record_number(row, loss_name) for row in record_losses[claim]]
+            for claim in claims
+        ],
+        dtype=np.float64,
+    )
+    for claim in claims[1:]:
+        claim_origins = tuple(
+            str(row["origin_date"])
+            for row in record_losses[claim]
+        )
+        if claim_origins != origins:
+            raise ValueError("daily paired comparison origin grids differ")
+    return origins, np.mean(matrix, axis=0)
 
 
 def _aggregate_objectives(rows: list[JsonObject], loss_name: str) -> JsonObject:
@@ -924,18 +1172,68 @@ def _tex_fragment(payload: JsonObject) -> str:
 def _objective_tables_tex(payload: JsonObject) -> str:
     tables = _require_object(payload, "objective_tables")
     lines = ["% Generated by build_summary_metrics.py; do not edit by hand."]
+    comparisons = _require_object(payload, "comparisons")
+    paired_value = comparisons.get("paired_book_loss_differences")
+    if isinstance(paired_value, dict):
+        models = _require_object(payload, "models")
+        lines.extend(
+            (
+                "\\begin{landscape}",
+                "\\subsection*{Paired daily target-book comparisons}",
+                "\\scriptsize",
+                "\\begin{longtable}{@{}p{25mm}p{65mm}lrrr@{}}",
+                "\\caption{Paired daily equal-weighted target-book loss differences relative to SANOS--LV, in basis points. HAC uses a five-lag Bartlett kernel; MBB uses chronological moving blocks.}\\label{tab:daily-paired-book}\\\\",
+                "\\toprule",
+                "Model & Specification & Loss & Mean & HAC 95\\% CI & MBB 95\\% CI \\\\",
+                "\\midrule",
+                "\\endfirsthead",
+                "\\toprule",
+                "Model & Specification & Loss & Mean & HAC 95\\% CI & MBB 95\\% CI \\\\",
+                "\\midrule",
+                "\\endhead",
+            )
+        )
+        for model_key, raw_model in models.items():
+            model = _as_object(raw_model, model_key)
+            comparison = _require_object(paired_value, model_key)
+            for loss_name, loss_label in (
+                ("pure_hedge_loss", "Pure"),
+                ("economic_loss", "Economic"),
+            ):
+                statistics = _require_object(comparison, loss_name)
+                lines.append(
+                    " & ".join(
+                        (
+                            _require_string(model, "display_name"),
+                            _tex_escape(_require_string(model, "specification")),
+                            loss_label,
+                            _basis_points(_require_number(statistics, "mean")),
+                            _basis_point_interval(
+                                statistics,
+                                "hac_confidence_interval_95",
+                            ),
+                            _basis_point_interval(
+                                statistics,
+                                "bootstrap_confidence_interval_95",
+                            ),
+                        )
+                    )
+                    + " \\\\"
+                )
+        lines.extend(
+            ("\\bottomrule", "\\end{longtable}", "\\end{landscape}", "")
+        )
     for index, (objective, _) in enumerate(OBJECTIVE_GRIDS, start=1):
         table = _require_object(tables, objective)
         parameters = _require_string_list(table, "parameters")
         rows = _require_object_list(table, "rows")
         lines.extend(
             (
-                "\\begin{table}[H]",
-                "\\centering",
-                "\\small",
-                f"\\caption{{{_objective_title(objective)}: full out-of-sample economic-risk score.}}",
-                f"\\label{{tab:objective-{index}}}",
-                f"\\begin{{tabular}}{{lll{'r' * len(parameters)}rr}}",
+                "\\begin{landscape}",
+                f"\\subsection*{{Daily {_objective_title(objective)} scores}}",
+                "\\scriptsize",
+                f"\\begin{{longtable}}{{@{{}}p{{25mm}}p{{65mm}}p{{20mm}}{'r' * len(parameters)}rr@{{}}}}",
+                f"\\caption{{{_objective_title(objective)}: full out-of-sample economic-risk score.}}\\label{{tab:objective-{index}}}\\\\",
                 "\\toprule",
                 "Model & Specification & Fitted policy & "
                 + " & ".join(
@@ -943,6 +1241,15 @@ def _objective_tables_tex(payload: JsonObject) -> str:
                 )
                 + " & Book MDD & Worst target MDD \\\\",
                 "\\midrule",
+                "\\endfirsthead",
+                "\\toprule",
+                "Model & Specification & Fitted policy & "
+                + " & ".join(
+                    _parameter_heading(objective, value) for value in parameters
+                )
+                + " & Book MDD & Worst target MDD \\\\",
+                "\\midrule",
+                "\\endhead",
             )
         )
         for row in rows:
@@ -969,13 +1276,136 @@ def _objective_tables_tex(payload: JsonObject) -> str:
                 )
                 + " \\\\"
             )
-        lines.extend(("\\bottomrule", "\\end{tabular}", "\\end{table}", ""))
+        lines.extend(
+            ("\\bottomrule", "\\end{longtable}", "\\end{landscape}", "")
+        )
     return "\n".join(lines) + "\n"
 
 
 def _objective_appendix_tex(payload: JsonObject) -> str:
     models = _require_object(payload, "models")
     lines = ["% Generated by build_summary_metrics.py; do not edit by hand."]
+    for model_key, raw_model in models.items():
+        model = _as_object(raw_model, model_key)
+        targets = _require_object(_require_object(model, "metrics"), "targets")
+        heading = (
+            _require_string(model, "display_name")
+            + ": "
+            + _tex_escape(_require_string(model, "specification"))
+            + "; "
+            + _policy_tex(model)
+        )
+        lines.extend(
+            (
+                "\\begin{landscape}",
+                "\\subsection*{" + heading + "}",
+                "\\scriptsize",
+                "\\begin{longtable}{@{}lrrrrrr@{}}",
+                "\\caption{Mean inception unit prices across daily origins, in basis points of inception normalized spot.}\\\\",
+                "\\toprule",
+                "Target & Market & Accounting & $Q$ expectation & Buyer & Seller & Accounting--market \\\\",
+                "\\midrule",
+                "\\endhead",
+            )
+        )
+        for claim in sorted(targets, key=_target_sort_key):
+            prices = _require_object(_require_object(targets, claim), "prices")
+            lines.append(
+                " & ".join(
+                    (
+                        _target_tex(claim),
+                        _basis_points(_require_number(prices, "mean_market_price")),
+                        _basis_points(
+                            _require_number(prices, "mean_accounting_model_price")
+                        ),
+                        _optional_basis_points(prices.get("mean_q_expectation")),
+                        _optional_basis_points(
+                            prices.get("mean_buyer_indifference")
+                        ),
+                        _optional_basis_points(
+                            prices.get("mean_seller_indifference")
+                        ),
+                        _basis_points(
+                            _require_number(prices, "mean_accounting_minus_market")
+                        ),
+                    )
+                )
+                + " \\\\"
+            )
+        lines.extend(
+            (
+                "\\bottomrule",
+                "\\end{longtable}",
+                "\\medskip",
+                "\\tiny",
+                "\\begin{longtable}{@{}lrrrrrrrrrr@{}}",
+                "\\caption{Complete target-level economic-loss distribution.}\\\\",
+                "\\toprule",
+                "Target & Mean & 95\\% CI & Median & SD & RMSE & MAE & Q$_{95}$ & Q$_{99}$ & ES$_{95}$ & ES$_{99}$ \\\\",
+                "\\midrule",
+                "\\endhead",
+            )
+        )
+        for claim in sorted(targets, key=_target_sort_key):
+            loss = _require_object(_require_object(targets, claim), "economic_loss")
+            lines.append(
+                " & ".join(
+                    (
+                        _target_tex(claim),
+                        _basis_points(_require_number(loss, "mean")),
+                        _basis_point_interval(loss, "confidence_interval_95"),
+                        _basis_points(_require_number(loss, "median")),
+                        _basis_points(
+                            _require_number(loss, "sample_standard_deviation")
+                        ),
+                        _basis_points(_require_number(loss, "root_mean_square")),
+                        _basis_points(_require_number(loss, "mean_absolute_loss")),
+                        _basis_points(_require_number(loss, "quantile_95")),
+                        _basis_points(_require_number(loss, "quantile_99")),
+                        _basis_points(_require_number(loss, "expected_shortfall_95")),
+                        _basis_points(_require_number(loss, "expected_shortfall_99")),
+                    )
+                )
+                + " \\\\"
+            )
+        lines.extend(
+            (
+                "\\bottomrule",
+                "\\end{longtable}",
+                "\\medskip",
+                "\\scriptsize",
+                "\\begin{longtable}{@{}lrrrrrrrr@{}}",
+                "\\caption{Target-level cost, turnover, exposure, sparsity, and numerical-gate incidence.}\\\\",
+                "\\toprule",
+                "Target & Cost & Entry turnover & Gross & Net & $|$Net$|$ & Nonzero & Cap rate & Nonconv. rate \\\\",
+                "\\midrule",
+                "\\endhead",
+            )
+        )
+        for claim in sorted(targets, key=_target_sort_key):
+            target = _require_object(targets, claim)
+            lines.append(
+                " & ".join(
+                    (
+                        _target_tex(claim),
+                        _basis_points(_require_number(target, "mean_transaction_cost")),
+                        f"{_require_number(target, 'mean_entry_turnover_notional'):.4f}",
+                        f"{_require_number(target, 'mean_gross_exposure'):.4f}",
+                        f"{_require_number(target, 'mean_net_exposure'):.4f}",
+                        f"{_require_number(target, 'mean_absolute_net_exposure'):.4f}",
+                        f"{_require_number(target, 'mean_nonzero_actions'):.2f}",
+                        _percent(
+                            _require_number(
+                                target,
+                                "numerical_cap_hit_result_rate",
+                            )
+                        ),
+                        _percent(_require_number(target, "nonconvergence_rate")),
+                    )
+                )
+                + " \\\\"
+            )
+        lines.extend(("\\bottomrule", "\\end{longtable}", "\\end{landscape}", ""))
     for index, (objective, parameters) in enumerate(OBJECTIVE_GRIDS, start=1):
         lines.extend(
             (
@@ -1062,6 +1492,17 @@ def _basis_points(value: float) -> str:
     return f"{scaled:.2f}"
 
 
+def _optional_basis_points(value: object) -> str:
+    return "--" if value is None else _basis_points(_number(value))
+
+
+def _basis_point_interval(payload: JsonObject, name: str) -> str:
+    value = payload.get(name)
+    if not isinstance(value, list) or len(value) != 2:
+        raise ValueError(f"{name} must be a numeric pair")
+    return f"[{_basis_points(_number(value[0]))}, {_basis_points(_number(value[1]))}]"
+
+
 def _percent(value: float) -> str:
     return f"{100.0 * value:.1f}\\%"
 
@@ -1116,6 +1557,20 @@ def _target_sort_key(claim: str) -> tuple[int, int, float]:
 
 def _record_number(payload: dict[str, object], name: str) -> float:
     return _require_number(payload, name)
+
+
+def _optional_number(payload: JsonObject, name: str) -> float | None:
+    value = payload.get(name)
+    return None if value is None else _number(value)
+
+
+def _number(value: object) -> float:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ValueError("value must be numeric")
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("value must be finite")
+    return number
 
 
 def _require_record_losses(

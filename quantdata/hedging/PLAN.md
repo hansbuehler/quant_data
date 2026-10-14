@@ -1208,13 +1208,16 @@ final results review, and reconcile every reported number with its source
 artifact.
 
 The daily and weekly report paths are matrix-driven and authenticated rather
-than manually transcribed. The public CLI accepts only the public dataset and
-immutable production matrices; it rebuilds the metrics and LaTeX fragments and
-writes a manifest binding dataset, matrix, run, aggregation, and report hashes.
-Precommitted matrix digests are explicit trust anchors. Final rendering requires
-the canonical 57-cell daily and 94-cell weekly grids to be fully ready and
-complete, so a post-outcome matrix cannot suppress a policy by relabelling it
-blocked.
+than manually transcribed. The public CLI accepts only the public dataset,
+immutable production matrices, and their version-2 pre-outcome commitment; it
+rebuilds the metrics and LaTeX fragments and writes a manifest binding dataset,
+matrix, failure-ledger, run, aggregation, report, and reporting-commit hashes.
+The commitment records the exact dataset and matrix paths and hashes before any
+generated or GROMM production outcome exists. Its SHA-256 is fixed at creation,
+validated before aggregation and after rendering, and supplied explicitly to
+the report builder. Final rendering requires the canonical 57-cell daily and
+94-cell weekly grids to have authenticated terminal outcomes, so a post-outcome
+matrix cannot suppress a policy by relabelling it blocked.
 Weekly ingestion requires the complete
 528-origin, 6,864-record population, verifies objective labels against the
 immutable run snapshot, keeps frozen and restarted schedules distinct, and
@@ -1231,7 +1234,13 @@ renders all daily and weekly objective grids without selecting policies on
 2023--2025
 outcomes, target-level appendices, model references, and immutable provenance
 directly from those authenticated inputs; its synthetic end-to-end PDF compile
-passes.
+passes. Daily ingestion likewise retains complete overall, year,
+volatility-regime, and year-by-regime distributions, all price decompositions,
+costs, turnover, exposure, sparsity, cap and convergence diagnostics. Its
+equal-weighted 20-target book comparisons use five-lag Bartlett HAC inference
+and a 2,000-sample moving-block bootstrap. The rendered daily and weekly
+objective and target appendices are multipage tables rather than selected
+headline rows.
 A matrix-composition utility at immutable commit
 `a1baa69605514ad9a0aba007ab8844f5fed29824` now replaces only selected native
 cases in a fresh canonical matrix with the first complete authenticated source
@@ -1246,24 +1255,21 @@ target-cohort identities together with every source-matrix hash. Adversarial
 tests reject a missing record, forged aggregate, wrong dataset, and wrong target
 cohort; a real 12,220-record SANOS--LV composition smoke and focused composition
 tests pass, and independent quant re-review closes the authentication blocker.
-The last durable complete-suite record has 349 passing tests; the final full
-suite will be rerun after production. This permits the final
+The pre-production complete-suite record on the remediated report source has
+458 passing tests; the suite is rerun after every final source change and will
+be rerun again after production. This permits the final
 57-cell daily and 94-cell weekly matrices to reuse completed native evidence
-without copying it or rerunning it. The detached final-production service
-`quantdata-hedging-full-production-d22ec9a.service` passed its exact-environment
-preflight and is waiting on corrected generated-model GPU readiness, the
-version-1.11 Historical-SANOS daily and weekly matrices, and their authenticated
-failure canonicalization. Once those prerequisites terminate, it composes fresh
-canonical matrices under dedicated `d22ec9a` roots, runs only the missing GROMM
-and generated-model cases, and rebuilds the authenticated PDF. Its ordered daily
-source list gives first priority to the corrected Historical-SANOS exact-cost
-matrix and covariance power-exponential matrix, followed by the covariance
-mean--volatility recovery and remaining authenticated native sources. The
-weekly source retains the authenticated `b37a643` native matrix and combined
-SANOS-LV failure ledger. Its read-only persisted launcher has SHA-256
-`b6c7c9534cf73b4c03bce1563e1190a700de41f2f6b9cbe360c516df8ca03dff`.
-The superseded `a1baa69` coordinator and its report-only/final-57 successors
-were stopped while still waiting and did not launch production cases.
+without copying it or rerunning it. The installed detached final-production
+service `quantdata-hedging-full-production-d22ec9a.service` remains only a
+prerequisite waiter and must be replaced before its prerequisites clear:
+independent review found that its launcher still writes a version-1 commitment
+and recomputes hashes after outcomes. The successor must be pinned to the
+report-remediation commit, create and persist the version-2 commitment and its
+fixed SHA-256 before production, and pass that immutable identity to final
+rendering. It will retain the existing ordered daily sources, authenticated
+weekly native source, and combined SANOS--LV failure ledger, then run only
+missing GROMM and generated cases. The superseded coordinator must be stopped
+while still waiting and must not launch production cases.
 
 Weekly objective tables now
 include equal-weight episode-book and worst-target maximum drawdown, computed
@@ -1276,6 +1282,8 @@ seller-indifference price means and rejects disagreement between stored price
 records and realized accounting. Final completed-case figures, production-data
 PDF regeneration, the final complete-suite rerun, and the final results review
 remain outstanding.
+The independent Python contract re-review is recorded in
+`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-14-final-report-contract-rereview.md`.
 The requirement-by-requirement acceptance state and the evidence still needed
 for completion are tracked in
 `quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-14-plan-completion-audit.md`.

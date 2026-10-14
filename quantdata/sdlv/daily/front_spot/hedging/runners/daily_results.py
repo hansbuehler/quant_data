@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from dataclasses import asdict, dataclass
@@ -165,6 +166,28 @@ class DailyRunResults:
     volatility_thresholds: dict[str, tuple[float, float]]
     slices: tuple[DailyResultSlice, ...]
 
+    @property
+    def slices_sha256(self) -> str:
+        """Return the deterministic hash of every reported slice."""
+        return _json_sha256([asdict(value) for value in self.slices])
+
+    @property
+    def aggregation_identity(self) -> str:
+        """Bind aggregation controls and reported slices to the run identity."""
+        return _json_sha256(
+            {
+                "run_identity": self.run_identity,
+                "model": self.model,
+                "measure": self.measure,
+                "dataset_manifest_sha256": self.dataset_manifest_sha256,
+                "result_count": self.result_count,
+                "aggregation_config": self.aggregation_config,
+                "exposure_convention": self.exposure_convention,
+                "volatility_thresholds": self.volatility_thresholds,
+                "slices_sha256": self.slices_sha256,
+            }
+        )
+
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-compatible report payload."""
         return {
@@ -180,6 +203,8 @@ class DailyRunResults:
                 label: list(values)
                 for label, values in self.volatility_thresholds.items()
             },
+            "slices_sha256": self.slices_sha256,
+            "aggregation_identity": self.aggregation_identity,
             "slices": [asdict(value) for value in self.slices],
         }
 
@@ -290,7 +315,12 @@ def authenticate_completed_daily_results(
             allow_nan=False,
         )
     )
-    if persisted != rebuilt:
+    legacy_rebuilt = {
+        name: value
+        for name, value in rebuilt.items()
+        if name not in {"slices_sha256", "aggregation_identity"}
+    }
+    if persisted not in (rebuilt, legacy_rebuilt):
         raise ValueError(
             "daily aggregate does not match the authenticated run, summary, "
             "eligible origins, and dated records"
@@ -611,3 +641,13 @@ def _read_json_object(path: Path) -> dict[str, object]:
     if not isinstance(payload, dict):
         raise ValueError(f"{path} must contain a JSON object")
     return payload
+
+
+def _json_sha256(value: object) -> str:
+    encoded = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
