@@ -72,6 +72,23 @@ class _ConvexCostLassoProblem:
     problem: cp.Problem
 
 
+@dataclass(frozen=True, kw_only=True)
+class _EntropyCostProblem:
+    scaled_positions: cp.Variable
+    claim: cp.Parameter
+    action_scale: FloatArray
+    problem: cp.Problem
+
+
+@dataclass(frozen=True, kw_only=True)
+class _PowerCostProblem:
+    scaled_positions: cp.Variable
+    cash_translation: cp.Variable
+    claim: cp.Parameter
+    action_scale: FloatArray
+    problem: cp.Problem
+
+
 class WeeklyOpenLoopPricingContext:
     """Reusable target-independent pricing geometry for one scenario state."""
 
@@ -375,11 +392,21 @@ class _WeeklyOpenLoopGeometry:
             self.scenarios.option_step_gains,
             axis=0,
         )
+        self._instrument_gains = self._build_instrument_gains()
+        (
+            self._turnover_matrix,
+            self._turnover_offset,
+            self._scenario_turnover_weights,
+        ) = self._build_scenario_turnover_geometry()
         self._convex_problems: dict[bytes, _ConvexCostLassoProblem] = {}
+        self._entropy_problems: dict[bytes, _EntropyCostProblem] = {}
+        self._power_problems: dict[bytes, _PowerCostProblem] = {}
 
     def clear_compiled_problems(self) -> None:
         """Discard target-specific canonicalizations before another claim."""
         self._convex_problems.clear()
+        self._entropy_problems.clear()
+        self._power_problems.clear()
 
     def fit_policy(
         self,
@@ -438,6 +465,8 @@ class _WeeklyOpenLoopGeometry:
         if self.config.objective in (
             HistoricalSanosObjective.MEAN_VARIANCE,
             HistoricalSanosObjective.MEAN_VOLATILITY,
+            HistoricalSanosObjective.ENTROPY,
+            HistoricalSanosObjective.POWER_EXPONENTIAL,
         ):
             optimality = float(getattr(final, "optimality", math.inf))
         else:
@@ -505,11 +534,19 @@ class _WeeklyOpenLoopGeometry:
                 @ np.abs(turnover_matrix @ positions - turnover_offset)
             )
             wealth = claim + instrument_gains @ positions - deterministic_cost
+        elif self.config.objective in (
+            HistoricalSanosObjective.ENTROPY,
+            HistoricalSanosObjective.POWER_EXPONENTIAL,
+        ):
+            wealth = self._exact_scenario_wealth(
+                values[: self.parameter_count],
+                indices=indices,
+                signed_claim_quantity=signed_claim_quantity,
+                terminal_claim_values_pv=terminal_claim_values_pv,
+            )
         else:
-            spot, options = self.unpack(values[: self.parameter_count])
             wealth, _ = self._smooth_wealth_and_jacobian(
-                spot,
-                options,
+                values[: self.parameter_count],
                 indices=indices,
                 signed_claim_quantity=signed_claim_quantity,
                 terminal_claim_values_pv=terminal_claim_values_pv,
@@ -538,6 +575,20 @@ class _WeeklyOpenLoopGeometry:
                 signed_claim_quantity=signed_claim_quantity,
                 terminal_claim_values_pv=terminal_claim_values_pv,
             )
+        if self.config.objective is HistoricalSanosObjective.ENTROPY:
+            return self._minimize_entropy_cost(
+                initial,
+                np.asarray(indices, dtype=np.int64),
+                signed_claim_quantity=signed_claim_quantity,
+                terminal_claim_values_pv=terminal_claim_values_pv,
+            )
+        if self.config.objective is HistoricalSanosObjective.POWER_EXPONENTIAL:
+            return self._minimize_power_cost(
+                initial,
+                np.asarray(indices, dtype=np.int64),
+                signed_claim_quantity=signed_claim_quantity,
+                terminal_claim_values_pv=terminal_claim_values_pv,
+            )
         return minimize(
             lambda parameters: self._loss_and_gradient(
                 parameters,
@@ -552,10 +603,275 @@ class _WeeklyOpenLoopGeometry:
             bounds=bounds,
             options={
                 "maxiter": self.config.maximum_iterations,
+                "maxfun": 4 * self.config.maximum_iterations,
                 "gtol": self.config.gradient_tolerance,
-                "ftol": 1.0e-14,
+                "ftol": 0.0,
+                "maxls": 50,
             },
         )
+
+    def _minimize_entropy_cost(
+        self,
+        initial: FloatArray,
+        indices: NDArray[np.int64],
+        *,
+        signed_claim_quantity: float,
+        terminal_claim_values_pv: FloatArray,
+    ) -> OptimizeResult:
+        claim, instrument_gains = self._linear_wealth_geometry(
+            indices,
+            signed_claim_quantity=signed_claim_quantity,
+            terminal_claim_values_pv=terminal_claim_values_pv,
+        )
+        compiled = self._entropy_cost_problem(
+            indices,
+            instrument_gains=instrument_gains,
+        )
+        compiled.claim.value = claim
+        compiled.scaled_positions.value = (
+            np.asarray(initial[: self.parameter_count], dtype=np.float64)
+            / compiled.action_scale
+        )
+        try:
+            compiled.problem.solve(
+                solver=cp.CLARABEL,
+                warm_start=True,
+                max_iter=self.config.maximum_iterations,
+                tol_gap_abs=self.config.gradient_tolerance,
+                tol_gap_rel=self.config.gradient_tolerance,
+                tol_feas=self.config.gradient_tolerance,
+            )
+        except cp.error.SolverError as error:
+            return OptimizeResult(
+                x=np.asarray(initial[: self.parameter_count], dtype=np.float64),
+                nit=0,
+                success=False,
+                optimality=math.inf,
+                message=f"entropy cone solver failed: {error}",
+            )
+        if compiled.scaled_positions.value is None:
+            fitted = np.asarray(initial[: self.parameter_count], dtype=np.float64)
+        else:
+            fitted = compiled.action_scale * np.asarray(
+                compiled.scaled_positions.value,
+                dtype=np.float64,
+            )
+        cap_hits = int(
+            np.count_nonzero(
+                np.abs(fitted) >= 0.999 * self.config.solver_position_cap
+            )
+        )
+        success = compiled.problem.status == cp.OPTIMAL and cap_hits == 0
+        return OptimizeResult(
+            x=np.clip(
+                fitted,
+                -self.config.solver_position_cap,
+                self.config.solver_position_cap,
+            ),
+            nit=int(compiled.problem.solver_stats.num_iters or 0),
+            success=success,
+            optimality=0.0 if success else math.inf,
+            message=compiled.problem.status,
+            fun=(
+                float(compiled.problem.value)
+                if compiled.problem.value is not None
+                else math.inf
+            ),
+        )
+
+    def _entropy_cost_problem(
+        self,
+        indices: NDArray[np.int64],
+        *,
+        instrument_gains: FloatArray,
+    ) -> _EntropyCostProblem:
+        key = np.ascontiguousarray(indices).tobytes()
+        cached = self._entropy_problems.get(key)
+        if cached is not None:
+            return cached
+        gain_rms = np.sqrt(np.mean(instrument_gains**2, axis=0))
+        action_scale = np.clip(
+            1.0 / np.maximum(gain_rms, 1.0e-8),
+            1.0,
+            1.0e6,
+        )
+        scaled_positions = cp.Variable(self.parameter_count)
+        positions = cp.multiply(action_scale, scaled_positions)
+        claim = cp.Parameter(len(indices))
+        turnover = self._turnover_matrix @ positions - self._turnover_offset
+        scenario_costs = self._scenario_turnover_weights[indices] @ cp.abs(
+            turnover
+        )
+        wealth = claim + instrument_gains @ positions - scenario_costs
+        risk = self.config.risk_parameter
+        objective = cp.Minimize(
+            (cp.log_sum_exp(-risk * wealth) - math.log(len(indices))) / risk
+            + 0.5 * self.config.quadratic_ridge * cp.sum_squares(positions)
+        )
+        problem = cp.Problem(objective)
+        if not problem.is_dpp():
+            raise RuntimeError("weekly entropy problem is not parameter-cacheable")
+        cached = _EntropyCostProblem(
+            scaled_positions=scaled_positions,
+            claim=claim,
+            action_scale=np.asarray(action_scale, dtype=np.float64),
+            problem=problem,
+        )
+        self._entropy_problems[key] = cached
+        return cached
+
+    def _minimize_power_cost(
+        self,
+        initial: FloatArray,
+        indices: NDArray[np.int64],
+        *,
+        signed_claim_quantity: float,
+        terminal_claim_values_pv: FloatArray,
+    ) -> OptimizeResult:
+        claim, instrument_gains = self._linear_wealth_geometry(
+            indices,
+            signed_claim_quantity=signed_claim_quantity,
+            terminal_claim_values_pv=terminal_claim_values_pv,
+        )
+        compiled = self._power_cost_problem(
+            indices,
+            instrument_gains=instrument_gains,
+        )
+        compiled.claim.value = claim
+        compiled.scaled_positions.value = (
+            np.asarray(initial[: self.parameter_count], dtype=np.float64)
+            / compiled.action_scale
+        )
+        compiled.cash_translation.value = float(initial[-1])
+        iterations = 0
+        retry_tolerance = max(
+            5.0 * self.config.gradient_tolerance,
+            5.0e-8,
+        )
+        for attempt, tolerance in enumerate(
+            (self.config.gradient_tolerance, retry_tolerance)
+        ):
+            try:
+                compiled.problem.solve(
+                    solver=cp.CLARABEL,
+                    warm_start=attempt == 0,
+                    max_iter=self.config.maximum_iterations,
+                    tol_gap_abs=tolerance,
+                    tol_gap_rel=tolerance,
+                    tol_feas=tolerance,
+                )
+            except cp.error.SolverError as error:
+                return OptimizeResult(
+                    x=np.asarray(initial, dtype=np.float64),
+                    nit=iterations,
+                    success=False,
+                    optimality=math.inf,
+                    message=f"power cone solver failed: {error}",
+                )
+            iterations += int(compiled.problem.solver_stats.num_iters or 0)
+            if compiled.problem.status != cp.OPTIMAL_INACCURATE:
+                break
+        if compiled.scaled_positions.value is None:
+            fitted = np.asarray(initial[: self.parameter_count], dtype=np.float64)
+        else:
+            fitted = compiled.action_scale * np.asarray(
+                compiled.scaled_positions.value,
+                dtype=np.float64,
+            )
+        cash_translation = (
+            float(initial[-1])
+            if compiled.cash_translation.value is None
+            else float(compiled.cash_translation.value)
+        )
+        cap_hits = int(
+            np.count_nonzero(
+                np.abs(fitted) >= 0.999 * self.config.solver_position_cap
+            )
+        )
+        success = compiled.problem.status == cp.OPTIMAL and cap_hits == 0
+        return OptimizeResult(
+            x=np.concatenate(
+                (
+                    np.clip(
+                        fitted,
+                        -self.config.solver_position_cap,
+                        self.config.solver_position_cap,
+                    ),
+                    [cash_translation],
+                )
+            ),
+            nit=iterations,
+            success=success,
+            optimality=0.0 if success else math.inf,
+            message=compiled.problem.status,
+            fun=(
+                float(compiled.problem.value)
+                if compiled.problem.value is not None
+                else math.inf
+            ),
+        )
+
+    def _power_cost_problem(
+        self,
+        indices: NDArray[np.int64],
+        *,
+        instrument_gains: FloatArray,
+    ) -> _PowerCostProblem:
+        key = np.ascontiguousarray(indices).tobytes()
+        cached = self._power_problems.get(key)
+        if cached is not None:
+            return cached
+        risk = self.config.risk_parameter
+        gain_rms = np.sqrt(np.mean(instrument_gains**2, axis=0))
+        action_scale = np.clip(
+            1.0
+            / np.sqrt(
+                risk * gain_rms**2 + self.config.quadratic_ridge
+            ),
+            1.0,
+            1.0e6,
+        )
+        scaled_positions = cp.Variable(self.parameter_count)
+        positions = cp.multiply(action_scale, scaled_positions)
+        cash_translation = cp.Variable()
+        claim = cp.Parameter(len(indices))
+        turnover = self._turnover_matrix @ positions - self._turnover_offset
+        scenario_costs = self._scenario_turnover_weights[indices] @ cp.abs(
+            turnover
+        )
+        wealth = claim + instrument_gains @ positions - scenario_costs
+        loss_argument = cp.Variable(len(indices))
+        negative_part = cp.Variable(len(indices))
+        positive_part = cp.Variable(len(indices))
+        scenario_loss = cp.Variable(len(indices))
+        constraints = [
+            loss_argument >= cash_translation - wealth,
+            negative_part <= 0.0,
+            positive_part >= 0.0,
+            negative_part + positive_part == loss_argument,
+            scenario_loss
+            >= (cp.exp(risk * negative_part) - 1.0) / risk + positive_part,
+            scenario_loss
+            >= loss_argument
+            + 0.5 * risk * cp.square(cp.pos(loss_argument)),
+        ]
+        objective = cp.Minimize(
+            -cash_translation
+            + cp.sum(scenario_loss) / len(indices)
+            + 0.5 * self.config.quadratic_ridge * cp.sum_squares(positions)
+        )
+        problem = cp.Problem(objective, constraints)
+        if not problem.is_dpp():
+            raise RuntimeError("weekly power problem is not parameter-cacheable")
+        cached = _PowerCostProblem(
+            scaled_positions=scaled_positions,
+            cash_translation=cash_translation,
+            claim=claim,
+            action_scale=np.asarray(action_scale, dtype=np.float64),
+            problem=problem,
+        )
+        self._power_problems[key] = cached
+        return cached
 
     def _minimize_convex_cost_lasso(
         self,
@@ -698,6 +1014,8 @@ class _WeeklyOpenLoopGeometry:
         if self.config.objective not in (
             HistoricalSanosObjective.MEAN_VARIANCE,
             HistoricalSanosObjective.MEAN_VOLATILITY,
+            HistoricalSanosObjective.ENTROPY,
+            HistoricalSanosObjective.POWER_EXPONENTIAL,
         ):
             return self._loss_and_gradient(
                 parameters,
@@ -707,6 +1025,39 @@ class _WeeklyOpenLoopGeometry:
                 include_translation=include_translation,
             )[0]
         values = np.asarray(parameters, dtype=np.float64)
+        if self.config.objective is HistoricalSanosObjective.ENTROPY:
+            positions = values[: self.parameter_count]
+            wealth = self._exact_scenario_wealth(
+                positions,
+                indices=np.asarray(indices, dtype=np.int64),
+                signed_claim_quantity=signed_claim_quantity,
+                terminal_claim_values_pv=terminal_claim_values_pv,
+            )
+            risk = self.config.risk_parameter
+            return float(
+                (logsumexp(-risk * wealth) - math.log(len(wealth))) / risk
+                + 0.5 * self.config.quadratic_ridge * (positions @ positions)
+            )
+        if self.config.objective is HistoricalSanosObjective.POWER_EXPONENTIAL:
+            positions = values[: self.parameter_count]
+            wealth = self._exact_scenario_wealth(
+                positions,
+                indices=np.asarray(indices, dtype=np.int64),
+                signed_claim_quantity=signed_claim_quantity,
+                terminal_claim_values_pv=terminal_claim_values_pv,
+            )
+            translation = float(values[-1])
+            residual = wealth - translation
+            risk = self.config.risk_parameter
+            utility = np.where(
+                residual >= 0.0,
+                -np.expm1(-risk * np.maximum(residual, 0.0)) / risk,
+                residual - 0.5 * risk * residual**2,
+            )
+            return float(
+                -(translation + np.mean(utility))
+                + 0.5 * self.config.quadratic_ridge * (positions @ positions)
+            )
         claim, instrument_gains = self._linear_wealth_geometry(
             np.asarray(indices, dtype=np.int64),
             signed_claim_quantity=signed_claim_quantity,
@@ -742,32 +1093,40 @@ class _WeeklyOpenLoopGeometry:
         signed_claim_quantity: float,
         terminal_claim_values_pv: FloatArray,
     ) -> tuple[FloatArray, FloatArray]:
+        claim = signed_claim_quantity * terminal_claim_values_pv[indices]
+        return (
+            np.asarray(claim, dtype=np.float64),
+            self._instrument_gains[indices],
+        )
+
+    def _build_instrument_gains(self) -> FloatArray:
         scenarios = self.scenarios
-        gains = np.zeros((len(indices), self.parameter_count), dtype=np.float64)
+        gains = np.zeros(
+            (scenarios.scenario_count, self.parameter_count),
+            dtype=np.float64,
+        )
         for step in range(scenarios.step_count):
-            gains[:, step] = scenarios.spot_step_gains[indices, step]
+            gains[:, step] = scenarios.spot_step_gains[:, step]
             if self.center_instrument_gains:
                 gains[:, step] -= self._spot_gain_means[step]
         for pair, parameter_index in self._option_parameter_index.items():
             step, contract = pair
             gains[:, parameter_index] = scenarios.option_step_gains[
-                indices,
+                :,
                 step,
                 contract,
             ]
             if self.center_instrument_gains:
                 gains[:, parameter_index] -= self._option_gain_means[step, contract]
-        claim = signed_claim_quantity * terminal_claim_values_pv[indices]
-        return np.asarray(claim, dtype=np.float64), gains
+        return np.ascontiguousarray(gains)
 
-    def _turnover_geometry(
+    def _build_scenario_turnover_geometry(
         self,
-        indices: NDArray[np.int64],
     ) -> tuple[FloatArray, FloatArray, FloatArray]:
         scenarios = self.scenarios
         rows: list[FloatArray] = []
         offsets: list[float] = []
-        weights: list[float] = []
+        weights: list[FloatArray] = []
 
         for step in range(scenarios.step_count):
             row = np.zeros(self.parameter_count, dtype=np.float64)
@@ -779,9 +1138,7 @@ class _WeeklyOpenLoopGeometry:
                 offset = 0.0
             rows.append(row)
             offsets.append(offset)
-            weights.append(
-                float(np.mean(scenarios.spot_values_pv[indices, step])) * 1.0e-4
-            )
+            weights.append(scenarios.spot_values_pv[:, step] * 1.0e-4)
 
             for contract in np.flatnonzero(scenarios.option_alive[step]):
                 parameter_index = self._option_parameter_index[(step, int(contract))]
@@ -798,24 +1155,14 @@ class _WeeklyOpenLoopGeometry:
                 rows.append(row)
                 offsets.append(offset)
                 weights.append(
-                    float(
-                        np.mean(
-                            scenarios.option_half_spreads_pv[
-                                indices,
-                                step,
-                                contract,
-                            ]
-                        )
-                    )
+                    scenarios.option_half_spreads_pv[:, step, contract]
                 )
 
         terminal_spot = np.zeros(self.parameter_count, dtype=np.float64)
         terminal_spot[scenarios.step_count - 1] = 1.0
         rows.append(terminal_spot)
         offsets.append(0.0)
-        weights.append(
-            float(np.mean(scenarios.spot_values_pv[indices, -1])) * 1.0e-4
-        )
+        weights.append(scenarios.spot_values_pv[:, -1] * 1.0e-4)
         for contract in np.flatnonzero(scenarios.option_alive[-1]):
             row = np.zeros(self.parameter_count, dtype=np.float64)
             row[
@@ -825,21 +1172,21 @@ class _WeeklyOpenLoopGeometry:
             ] = 1.0
             rows.append(row)
             offsets.append(0.0)
-            weights.append(
-                float(
-                    np.mean(
-                        scenarios.option_half_spreads_pv[
-                            indices,
-                            -1,
-                            contract,
-                        ]
-                    )
-                )
-            )
+            weights.append(scenarios.option_half_spreads_pv[:, -1, contract])
         return (
             np.stack(rows),
             np.asarray(offsets, dtype=np.float64),
-            np.asarray(weights, dtype=np.float64),
+            np.ascontiguousarray(np.column_stack(weights)),
+        )
+
+    def _turnover_geometry(
+        self,
+        indices: NDArray[np.int64],
+    ) -> tuple[FloatArray, FloatArray, FloatArray]:
+        return (
+            self._turnover_matrix,
+            self._turnover_offset,
+            np.mean(self._scenario_turnover_weights[indices], axis=0),
         )
 
     def _loss_and_gradient(
@@ -853,10 +1200,8 @@ class _WeeklyOpenLoopGeometry:
     ) -> tuple[float, FloatArray]:
         claim_values = self._claim_values(terminal_claim_values_pv)
         values = np.asarray(parameters, dtype=np.float64)
-        spot, options = self.unpack(values[: self.parameter_count])
         wealth, jacobian = self._smooth_wealth_and_jacobian(
-            spot,
-            options,
+            values[: self.parameter_count],
             indices=np.asarray(indices, dtype=np.int64),
             signed_claim_quantity=signed_claim_quantity,
             terminal_claim_values_pv=claim_values,
@@ -913,77 +1258,49 @@ class _WeeklyOpenLoopGeometry:
 
     def _smooth_wealth_and_jacobian(
         self,
-        spot: FloatArray,
-        options: FloatArray,
+        positions: FloatArray,
         *,
         indices: NDArray[np.int64],
         signed_claim_quantity: float,
         terminal_claim_values_pv: FloatArray,
     ) -> tuple[FloatArray, FloatArray]:
-        scenarios = self.scenarios
-        count = len(indices)
-        wealth = (signed_claim_quantity * terminal_claim_values_pv[indices]).copy()
-        jacobian = np.zeros((count, self.parameter_count), dtype=np.float64)
+        values = np.asarray(positions, dtype=np.float64)
+        if values.shape != (self.parameter_count,):
+            raise ValueError("historical weekly parameter vector has wrong shape")
         epsilon = self.config.cost_smoothing
-        previous_spot = self.initial_spot
-        for step in range(scenarios.step_count):
-            spot_index = step
-            gains = scenarios.spot_step_gains[indices, step]
-            if self.center_instrument_gains:
-                gains = gains - self._spot_gain_means[step]
-            wealth += spot[step] * gains
-            jacobian[:, spot_index] += gains
-            weight = scenarios.spot_values_pv[indices, step] * 1.0e-4
-            difference = spot[step] - previous_spot
-            root = math.sqrt(difference**2 + epsilon**2)
-            wealth -= weight * (root - epsilon)
-            jacobian[:, spot_index] -= weight * difference / root
-            if step > 0:
-                jacobian[:, step - 1] += weight * difference / root
-            previous_spot = spot[step]
-
-            for contract in np.flatnonzero(scenarios.option_alive[step]):
-                pair = (step, int(contract))
-                parameter_index = self._option_parameter_index[pair]
-                gains = scenarios.option_step_gains[indices, step, contract]
-                if self.center_instrument_gains:
-                    gains = gains - self._option_gain_means[step, contract]
-                wealth += options[step, contract] * gains
-                jacobian[:, parameter_index] += gains
-                previous = (
-                    self.initial_options[contract]
-                    if step == 0
-                    else options[step - 1, contract]
-                )
-                difference = options[step, contract] - previous
-                root = math.sqrt(difference**2 + epsilon**2)
-                weight = scenarios.option_half_spreads_pv[
-                    indices,
-                    step,
-                    contract,
-                ]
-                wealth -= weight * (root - epsilon)
-                jacobian[:, parameter_index] -= weight * difference / root
-                if step > 0:
-                    previous_index = self._option_parameter_index[(step - 1, int(contract))]
-                    jacobian[:, previous_index] += weight * difference / root
-
-        terminal_spot_weight = scenarios.spot_values_pv[indices, -1] * 1.0e-4
-        terminal_spot_root = math.sqrt(spot[-1] ** 2 + epsilon**2)
-        wealth -= terminal_spot_weight * (terminal_spot_root - epsilon)
-        jacobian[:, scenarios.step_count - 1] -= (
-            terminal_spot_weight * spot[-1] / terminal_spot_root
+        gains = self._instrument_gains[indices]
+        turnover = self._turnover_matrix @ values - self._turnover_offset
+        root = np.sqrt(turnover**2 + epsilon**2)
+        smooth_absolute = root - epsilon
+        turnover_derivative = turnover / root
+        weights = self._scenario_turnover_weights[indices]
+        wealth = (
+            signed_claim_quantity * terminal_claim_values_pv[indices]
+            + gains @ values
+            - weights @ smooth_absolute
         )
-        for contract in np.flatnonzero(scenarios.option_alive[-1]):
-            parameter_index = self._option_parameter_index[
-                (scenarios.step_count - 1, int(contract))
-            ]
-            terminal = options[-1, contract]
-            root = math.sqrt(terminal**2 + epsilon**2)
-            weight = scenarios.option_half_spreads_pv[indices, -1, contract]
-            wealth -= weight * (root - epsilon)
-            jacobian[:, parameter_index] -= weight * terminal / root
+        jacobian = gains - (weights * turnover_derivative) @ self._turnover_matrix
         return wealth, jacobian
+
+    def _exact_scenario_wealth(
+        self,
+        positions: FloatArray,
+        *,
+        indices: NDArray[np.int64],
+        signed_claim_quantity: float,
+        terminal_claim_values_pv: FloatArray,
+    ) -> FloatArray:
+        values = np.asarray(positions, dtype=np.float64)
+        if values.shape != (self.parameter_count,):
+            raise ValueError("historical weekly parameter vector has wrong shape")
+        gains = self._instrument_gains[indices]
+        turnover = self._turnover_matrix @ values - self._turnover_offset
+        weights = self._scenario_turnover_weights[indices]
+        return (
+            signed_claim_quantity * terminal_claim_values_pv[indices]
+            + gains @ values
+            - weights @ np.abs(turnover)
+        )
 
     def _claim_values(
         self,

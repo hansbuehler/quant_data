@@ -210,6 +210,144 @@ def test_historical_weekly_fit_respects_expiry_and_returns_pure_hedge(
 
 
 @pytest.mark.parametrize(
+    "objective",
+    (
+        HistoricalSanosObjective.ENTROPY,
+        HistoricalSanosObjective.POWER_EXPONENTIAL,
+    ),
+)
+def test_weekly_oce_cones_use_exact_scenario_transaction_costs(
+    objective: HistoricalSanosObjective,
+) -> None:
+    scenario_set = _scenario_set(scenario_count=60)
+    config = HistoricalSanosConfig(
+        rolling_observations=60,
+        objective=objective,
+        risk_parameter=2.0,
+        quadratic_ridge=1.0e-6,
+        maximum_iterations=2_000,
+        gradient_tolerance=1.0e-7,
+    )
+    fit = fit_historical_weekly_hedge(
+        scenario_set,
+        claim_quantity=1.0,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=config,
+    )
+
+    assert fit.converged
+    for policy, signed_claim_quantity in (
+        (fit.long_policy, 1.0),
+        (fit.short_policy, -1.0),
+        (fit.zero_policy, 0.0),
+    ):
+        accounting = weekly_scenario_accounting(
+            scenario_set.scenarios,
+            spot_positions=policy.spot_positions,
+            option_positions=policy.option_positions,
+            signed_claim_quantity=signed_claim_quantity,
+        )
+        expected = weekly_certainty_equivalent(
+            accounting.terminal_wealth,
+            objective=WeeklyRiskObjective(objective.value),
+            risk_parameter=config.risk_parameter,
+        )
+        assert policy.certainty_equivalent == pytest.approx(expected, abs=1.0e-10)
+
+
+def test_weekly_cached_geometry_matches_pathwise_scenario_accounting() -> None:
+    scenario_set = _scenario_set(scenario_count=60)
+    initial_spot_position = 0.15
+    initial_option_positions = np.asarray([-0.2, 0.1])
+    geometry = _WeeklyOpenLoopGeometry(
+        scenario_set,
+        initial_spot_position=initial_spot_position,
+        initial_option_positions=initial_option_positions,
+        config=HistoricalSanosConfig(
+            rolling_observations=60,
+            objective=HistoricalSanosObjective.ENTROPY,
+            risk_parameter=2.0,
+        ),
+    )
+    generator = np.random.default_rng(20261014)
+    parameters = generator.normal(scale=0.2, size=geometry.parameter_count)
+    spot_positions, option_positions = geometry.unpack(parameters)
+    indices = np.arange(scenario_set.scenarios.scenario_count, dtype=np.int64)
+
+    cached_wealth = geometry._exact_scenario_wealth(
+        parameters,
+        indices=indices,
+        signed_claim_quantity=0.7,
+        terminal_claim_values_pv=scenario_set.scenarios.terminal_claim_values_pv,
+    )
+    accounting = weekly_scenario_accounting(
+        scenario_set.scenarios,
+        spot_positions=spot_positions,
+        option_positions=option_positions,
+        signed_claim_quantity=0.7,
+        initial_spot_position=initial_spot_position,
+        initial_option_positions=initial_option_positions,
+    )
+
+    np.testing.assert_allclose(
+        cached_wealth,
+        accounting.terminal_wealth,
+        atol=1.0e-14,
+        rtol=1.0e-14,
+    )
+
+
+def test_weekly_power_cone_matches_direct_objective_and_cash_shift() -> None:
+    scenario_set = _scenario_set(scenario_count=60)
+    config = HistoricalSanosConfig(
+        rolling_observations=60,
+        objective=HistoricalSanosObjective.POWER_EXPONENTIAL,
+        risk_parameter=2.0,
+        quadratic_ridge=1.0e-6,
+        maximum_iterations=2_000,
+        gradient_tolerance=1.0e-7,
+    )
+    geometry = _WeeklyOpenLoopGeometry(
+        scenario_set,
+        initial_spot_position=0.15,
+        initial_option_positions=np.asarray([-0.2, 0.1]),
+        config=config,
+    )
+    indices = np.arange(45, dtype=np.int64)
+    claim_values = scenario_set.scenarios.terminal_claim_values_pv
+    initial = np.zeros(geometry.parameter_count + 1, dtype=np.float64)
+    fitted = geometry._minimize_power_cost(
+        initial,
+        indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=claim_values,
+    )
+
+    assert fitted.success
+    direct = geometry._objective_value(
+        fitted.x,
+        indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=claim_values,
+        include_translation=True,
+    )
+    assert fitted.fun == pytest.approx(direct, abs=2.0e-6)
+
+    cash_shift = 0.03
+    shifted_parameters = fitted.x.copy()
+    shifted_parameters[-1] += cash_shift
+    shifted = geometry._objective_value(
+        shifted_parameters,
+        indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=claim_values + cash_shift,
+        include_translation=True,
+    )
+    assert shifted == pytest.approx(direct - cash_shift, abs=1.0e-12)
+
+
+@pytest.mark.parametrize(
     ("initial_spot_position", "initial_option_positions"),
     (
         (0.0, np.zeros(2)),

@@ -38,7 +38,16 @@
   weekly uses one five-row open-loop policy; restarted weekly refits the
   remaining rows from the realized claim prefix and carried positions. Future
   claim paths preserve the fixed inception-forward normalization while using
-  the current known forward curve. Virtual pricing policies use the declared
+  the current known forward curve. Weekly entropy and power-exponential OCEs
+  use exact conic epigraphs for scenario-dependent turnover costs. Their
+  declared quadratic ridge makes the over-parameterized empirical problem
+  finite; the ridge is a fitting regularizer and is excluded from reported
+  certainty equivalents. Scaled action coordinates improve conditioning while
+  CLARABEL's optimal certificate supplies the convergence gate. A solve labelled
+  `optimal_inaccurate` is never accepted: power-exponential fitting makes one
+  cold retry at five times the configured tolerance, floored at
+  $5\times 10^{-8}$, and still requires an `optimal` certificate. Virtual pricing
+  policies use the declared
   solver cap before the pure hedge is clipped to the executable cap. Weekly
   records preserve internal fitted-policy convergence and cap counts once per
   unique fit identity, separately from cap hits in the five realized action

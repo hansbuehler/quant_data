@@ -195,7 +195,7 @@ objectives must complete before this becomes a full model ranking.
 Model & Measure & Daily status & Evidence \\
 \midrule
 SANOS--LV & Q price / realized path & \statuscomplete & Current cohort: 611 origins, 12,220 records, zero cap hits and zero nonconvergence. \\
-Historical SANOS & P & \statuspending & Mean--variance $\lambda=0.1$ is complete on the current cohort; the remaining objectives are running. Superseded-cohort results are excluded. \\
+Historical SANOS & P & \statuspending & Mean--variance $\lambda=0.1$ is complete on the current cohort; the remaining daily objectives are running. Exact-cost weekly entropy and power first-origin gates pass, while full weekly production remains pending. Superseded-cohort results are excluded. \\
 Robust covariance & P & \statuspending & Mean--variance $\lambda\in\{0.1,1,10\}$ is complete on the current cohort; mean--volatility production is running. \\
 GROMM & Q only & \statusready & All 611 dated inputs are prepared; rolling Q fitting is running on the managed GPU. Compatible P remains rejected by its fixed gates. \\
 VolGAN & P & \statusready & Daily public readiness passes; corrected frozen-weekly public readiness is queued behind GROMM. Full production remains pending. \\
@@ -230,6 +230,10 @@ production matrix contains 94 cases. Its 28 ready SANOS--LV and historical-SANOS
 CPU cases are queued behind the active daily CPU runs; four generated-model
 cases await their production gate, and 62 GROMM or generated-model cases remain
 explicitly blocked rather than being launched without complete evidence.
+For Historical SANOS, real first-origin frozen-weekly gates cover all 13 targets:
+entropy at $\lambda=10$ and power-exponential at $\lambda=1$ both have zero cap
+hits and zero nonconverged fits. These are implementation gates, not weekly
+performance estimates.
 
 \section{Model Catalogue}
 
@@ -257,6 +261,10 @@ mean--volatility uses an exact conic program with an explicit recession test,
 and entropy and power-exponential objectives use an exact positive/negative
 action split for linear trading costs, with analytic gradients and an explicit
 KKT convergence gate.
+For weekly paths, entropy and power-exponential use exact conic epigraphs for
+scenario-dependent turnover costs plus the declared quadratic fitting ridge;
+reported certainty equivalents exclude that ridge. Only an optimal conic
+certificate passes the numerical gate.
 The model is inexpensive and fully rolling. Mean--variance at $\lambda=0.1$
 is complete on the current cohort with zero cap hits and zero nonconvergence;
 the remaining objective grid is still running.
