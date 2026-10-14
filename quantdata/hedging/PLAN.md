@@ -858,7 +858,11 @@ corrected Historical-SANOS mean--variance case at risk parameter $0.1$ has
 completed all 611 origins and 12,220 records under the current target-notional
 identity, with zero cap hits and zero nonconvergence; its results SHA-256 is
 `4197864e4f3b122f84b1308779d2b85cfc5f088496c39f2b594a0aab75c777e1`.
-The remaining Historical-SANOS and covariance sweeps remain in progress.
+The remaining Historical-SANOS and covariance sweeps remain in progress. The
+current Historical-SANOS queues use the exact-cost solvers from immutable
+commit `edf28ccdb52ccac1788e20a51ce226220a5f74f3`; low-risk
+mean--volatility recession directions are retained as explicitly flagged
+cap-limited diagnostics rather than silently reported as finite optima.
 The covariance mean--variance cases at risk
 parameters $0.1$, $1$, and $10$ have completed all 611 origins and 12,220
 records under the current target-notional identity, with zero cap hits and zero
@@ -989,9 +993,9 @@ now skip statistical result aggregation, whose loss and inference slices require
 at least two origins, while complete production runs continue to aggregate
 normally.
 
-The 28 ready native weekly cases are likewise repinned to
-`b1e359712bf1cca20cc71f6dfa3e78172b2f1c84` and remain deferred behind the
-active daily CPU queues. Their matrix still contains all 94 specified cells:
+The 28 ready native weekly cases are repinned to
+`edf28ccdb52ccac1788e20a51ce226220a5f74f3` and are queued behind the
+authenticated daily CPU artifacts they require. Their matrix still contains all 94 specified cells:
 28 ready native cases, four generated cases waiting on production gates, and 62
 explicitly blocked cases.
 
@@ -1022,6 +1026,18 @@ daily and weekly objective grids without selecting policies on 2023--2025
 outcomes, target-level appendices, model references, and immutable provenance
 directly from those authenticated inputs; its synthetic end-to-end PDF compile
 passes.
+A matrix-composition utility at immutable commit
+`e3c8401e82ba69ab78e60b12f4f0f2080005c3c7` now replaces only selected native
+cases in a fresh canonical matrix with the first complete authenticated source
+case. It checks schema, result population, run identity, model, measure, and
+dataset identity and records all source-matrix hashes. This permits the final
+54-cell daily and 94-cell weekly matrices to reuse completed native evidence
+without copying it or rerunning it. The detached final-production service
+`quantdata-hedging-full-production-e3c8401.service` passed its exact-environment
+preflight and is waiting on rolling GROMM migration, generated-model GPU
+readiness, and the native weekly matrix. Once all three succeed, it composes
+the canonical matrices, runs only the missing GROMM and generated-model cases,
+and rebuilds the authenticated PDF.
 Final completed-case figures, production-data PDF regeneration, and the final
 results review remain outstanding.
 
