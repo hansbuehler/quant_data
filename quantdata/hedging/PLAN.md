@@ -866,7 +866,7 @@ superseded historical-SANOS cohort rather than comparing it with this run. The
 corrected Historical-SANOS mean--variance case at risk parameter $0.1$ has
 completed all 611 origins and 12,220 records under the current target-notional
 identity, with zero cap hits and zero nonconvergence; its results SHA-256 is
-`4197864e4f3b122f84b1308779d2b85cfc5f088496c39f2b594a0aab75c777e1`.
+`ad5850d4ba33c180cdac776623e49725260f46dd88ee6f7fd70b73b89319261e`.
 The remaining Historical-SANOS and covariance sweeps remain in progress. The
 current Historical-SANOS queues use the exact-cost solvers from immutable
 commit `edf28ccdb52ccac1788e20a51ce226220a5f74f3`; low-risk
