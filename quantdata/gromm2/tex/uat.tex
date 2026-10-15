@@ -1,0 +1,110 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1.1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage[T1]{fontenc}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{enumitem}
+\usepackage[colorlinks=true,linkcolor=black,citecolor=black,urlcolor=black]{hyperref}
+
+\newcommand{\R}{\mathbb R}
+\newcommand{\E}{\mathbb E}
+\newcommand{\Q}{\mathbb Q}
+\newcommand{\PP}{\mathbb P}
+\newcommand{\dd}{\mathrm d}
+\newcommand{\dlv}{\Sigma}
+\newcommand{\abs}[1]{\lvert #1\rvert}
+\newcommand{\ip}[2]{\langle #1,#2\rangle}
+\newcommand{\qv}[1]{\langle #1\rangle}
+\newcommand{\one}{\mathbf 1}
+\newcommand{\Var}{\operatorname{Var}}
+\newcommand{\Gh}{\widehat G}
+\newcommand{\Nh}{\widehat N}
+\newcommand{\removeblock}[1]{}
+\newcommand{\MW}[1]{{\color{red}#1}}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\tr}{tr}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{assumption}[theorem]{Assumption}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\title{Universal Approximation Theorem\\{Work in Progress}}
+\author{}
+\begin{document}
+\maketitle
+
+We want to derive a UAT that GROMM can approximate any LVSV model for a finite number of maturities. It turns out that the first part of this is an alternate derivation of the BHW drift restriction. 
+
+Assume for a fixed list of strikes and maturities the model prices are defined as $C = (C^{j, i})$ for strikes $K^0 < \dots < K^{N+1}$ and expirations $T_1 < \dots < T_M$. Since prices are risk-neutral under $\Q$ we know in particular that for a SV model, any call price $C$ is a positive martingale (stochastic exponential), i.e. $d C^{j, i}_t = C^{j, i}_t\psi^{j, i}_tdW_t $ for some process $\psi^{j, i}_t$. 
+
+Recall that the squared discrete local volatility (DLV squared) is given by 
+\begin{equation*}
+    \Sigma^{j, i} = \dfrac{b\Theta^{j, i}}{\frac{1}{2}(K^{i})^2\Gamma^{j, i}}
+\end{equation*}
+where backward Theta and Gamma are defined as: 
+\begin{align*}
+    b\Theta^{j, i} &= \dfrac{C^{j, i} - C^{j-1, i}}{T_{j} - T_{j-1}}
+    \\
+    \Gamma^{j, i} &= \dfrac{\frac{C^{j, i + 1} - C^{j, i}}{K^{i+1} - K^i} - \frac{C^{j, i} - C^{j, i-1}}{K^{i} - K^{i-1}}}{\frac{K^{i+1} - K^{i-1}}{2}}
+\end{align*}
+Observe that Gamma and the risk-neutral density are directly related: 
+\begin{equation*}
+    q^{j, i} = \frac{K^{i+1} - K^{i-1}}{2} \Gamma^{j, i}. 
+\end{equation*}
+Write $dq^{j, i}_t = E^{j, i}_t dW $ for $E^{j, i}_t = q^{j, i}_t \eta^{j, i}_t$. 
+
+
+\begin{equation*}
+    d \Sigma^{j, i} / \Sigma^{j, i} = \mu^{j, i} dt + \xi^{j, i} dW 
+\end{equation*}
+
+\begin{equation}
+    \label{eq:dlnDLV}
+    d \ln \Sigma^{j, i} = d \Sigma^{j, i} / \Sigma^{j, i} - \tfrac{1}{2}  d \qv{\Sigma^{j, i}} / (\Sigma^{j, i})^2 = \mu^{j, i} dt + \xi^{j, i} dW - \frac{1}{2} |\xi^{j, i}|^2 dt 
+\end{equation}
+
+
+We apply Itô on $\ln \Sigma^{j, i} = \ln b \Theta^{j, i} - \ln q^{j, i} + \text{const}$. Suppress dependence on current time $t$ for readability. 
+\begin{equation*}
+    d \ln b \Theta^{j, i} =  \zeta^{j, i} dW - \frac{1}{2} |\zeta^{j, i}|^2 dt  \quad \textrm{for} \quad \zeta^{j, i} \coloneqq \dfrac{C^{j, i}\psi^{j, i} - C^{j-1, i} \psi^{j-1, i}}{C^{j, i} - C^{j-1, i}}
+\end{equation*}
+
+\begin{equation*}
+    d \ln q^{j, i} = \eta^{j, i} dW - \frac{1}{2} |\eta^{j, i}|^2 dt  
+\end{equation*}
+
+Combining the expressions we obtain Itô on the log-DLV squared: 
+\begin{equation}
+    \label{eq:intermediate}
+    d \ln \Sigma^{j, i} = \frac{1}{2} \left( |\eta^{j, i}|^2 -  |\zeta^{j, i}|^2 \right)dt + \left( \zeta^{j, i}  - \eta^{j, i} \right)dW  
+\end{equation}
+where $\xi^{j, i} = \zeta^{j, i} - \eta^{j, i}$. Substituting $\zeta^{j, i} = \xi^{j, i} + \eta^{j, i}$ into \eqref{eq:intermediate} gives 
+\begin{align*}
+    d \ln \Sigma^{j, i} &= \frac{1}{2} \left( |\eta^{j, i}|^2 -  |\eta^{j, i} + \xi^{j, i}|^2 \right)dt + \xi^{j, i} dW  
+    \\ 
+    &= \frac{1}{2} \left( - 2\ip{\xi^{j, i}}{\eta^{j, i}} - |\xi^{j,i}|^2  \right)dt + \xi^{j, i} dW 
+\end{align*}
+Compare this with \eqref{eq:dlnDLV} and match the terms to obtain $\mu^{j, i} = -\ip{\xi^{j,i}}{\eta^{j,i}}$, which demonstrates that for any lattice of options $(C^{j, i})_{j, i}$ from a diffusion model the drift coincides with the BHW-type drift restriction. 
+
+Next, we inspect whether the assumptions of the existence theorem fit the assumptions of the SV model and how we can extend them. We have a couple: 
+\begin{itemize}
+    \item Spot stays in $[K^0, K^{N+1}]$: violation in general for SV models. $K^0 = 0$ works. $K^{N+1} \rightarrow \infty $ is problematic as it's an absorbing state: once we hit it, spot stays there. In an SV model the spot continues. However, we can keep on increasing $K^{N+1}$ such that the hitting probability goes towards zero. But then the representation holds only in the limit, i.e. SV model is a GROMM model with growing top barrier. 
+    \item Lipschitz continuity of $\xi$: in general not true. Volatility process $\sqrt V$ in SV model can be Hölder-$\tfrac{1}{2}$ (Heston). 
+    \item $\xi$ is square-integrable: $\xi = \zeta - \eta$, both $\zeta$ and $\eta$ could explode. Difference needs to be  square-integrable. 
+    \item The Gaussian bridge front / settlement on the strike: we need to drop this and just use $q^1$ as implied by the SV model. $q^1$ moves freely but needs to lead to a barycentric payoff on two neighbouring nodes (as determined by the SV model). Extreme nodes stay absorbing (as determined by $\Omega_j$). 
+    \item Mass on interior strikes $q^1_t$ at $t=T_{k-1}$: this holds in general for SV models. 
+\end{itemize}
+
+
+\end{document}
