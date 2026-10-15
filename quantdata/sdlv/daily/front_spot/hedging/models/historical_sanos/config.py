@@ -19,7 +19,7 @@ class HistoricalSanosObjective(StrEnum):
     POWER_EXPONENTIAL = "power-exponential"
 
 
-@version("1.16")
+@version("1.17")
 @dataclass(frozen=True, kw_only=True)
 class HistoricalSanosConfig:
     """Logical settings for rolling empirical SANOS hedging."""
@@ -32,6 +32,7 @@ class HistoricalSanosConfig:
     risk_parameter: float = 10.0
     validation_fraction: float = 0.2
     maximum_iterations: int = 50_000
+    fallback_time_limit_seconds: float = 60.0
     gradient_tolerance: float = 1.0e-8
     position_cap: float = 1_000_000.0
     solver_position_cap: float = 1_000_000.0
@@ -61,6 +62,11 @@ class HistoricalSanosConfig:
         verify_inp(
             self.maximum_iterations > 0,
             lambda: "maximum_iterations must be positive",
+        )
+        verify_inp(
+            math.isfinite(self.fallback_time_limit_seconds)
+            and self.fallback_time_limit_seconds > 0.0,
+            lambda: "fallback_time_limit_seconds must be finite and positive",
         )
         verify_inp(
             math.isfinite(self.gradient_tolerance) and self.gradient_tolerance > 0.0,

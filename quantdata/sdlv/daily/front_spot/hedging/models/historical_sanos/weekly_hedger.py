@@ -13,7 +13,7 @@ from typing import Iterator
 import cvxpy as cp
 import numpy as np
 from numpy.typing import NDArray
-from scipy.optimize import OptimizeResult, minimize
+from scipy.optimize import OptimizeResult, lsq_linear, minimize
 from scipy.special import logsumexp
 
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly_scenarios import (
@@ -80,11 +80,36 @@ class HistoricalWeeklyHedgeFit:
 
 
 @dataclass(frozen=True, kw_only=True)
+class _CompactMeanVarianceCertificate:
+    hessian: FloatArray
+    turnover_matrix: FloatArray
+    turnover_offset: FloatArray
+    turnover_weights: FloatArray
+    turnover_epigraph: cp.Variable
+    positive_turnover_constraint: cp.constraints.constraint.Constraint
+    negative_turnover_constraint: cp.constraints.constraint.Constraint
+    lower_position_constraint: cp.constraints.constraint.Constraint
+    upper_position_constraint: cp.constraints.constraint.Constraint
+
+
+@dataclass(frozen=True, kw_only=True)
+class _CompactMeanVarianceDualMetrics:
+    optimality: float
+    primal_dual_gap: float
+    dual_violation: float
+    stationarity_violation: float
+    complementarity_violation: float
+
+
+@dataclass(frozen=True, kw_only=True)
 class _ConvexCostLassoProblem:
     scaled_positions: cp.Variable
-    claim: cp.Parameter
     action_scale: FloatArray
     problem: cp.Problem
+    claim: cp.Parameter | None = None
+    linear: cp.Parameter | None = None
+    objective_constant: cp.Parameter | None = None
+    compact_certificate: _CompactMeanVarianceCertificate | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -167,7 +192,6 @@ class WeeklyOpenLoopPricingContext:
         claim_quantity: float,
     ) -> HistoricalWeeklyOpenLoopFit:
         """Fit the long claim on its reusable solver geometry."""
-        self._long_geometry.clear_compiled_problems()
         return self._long_geometry.fit_policy(
             signed_claim_quantity=claim_quantity,
             terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
@@ -185,7 +209,6 @@ class WeeklyOpenLoopPricingContext:
         claim_quantity: float,
     ) -> HistoricalWeeklyOpenLoopFit:
         """Fit the short claim on an independent reusable solver geometry."""
-        self._short_geometry.clear_compiled_problems()
         return self._short_geometry.fit_policy(
             signed_claim_quantity=-claim_quantity,
             terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
@@ -292,7 +315,6 @@ def fit_weekly_open_loop_hedge(
             initial_spot_position=initial_spot_position,
             initial_option_positions=initial_option_positions,
         )
-        execution_geometry.clear_compiled_problems()
         with ThreadPoolExecutor(
             max_workers=3,
             thread_name_prefix="weekly-open-loop",
@@ -1114,17 +1136,22 @@ class _WeeklyOpenLoopGeometry:
             indices,
             instrument_gains=instrument_gains,
         )
-        compiled.claim.value = claim
+        self._assign_convex_claim(
+            compiled,
+            claim=claim,
+            instrument_gains=instrument_gains,
+        )
         compiled.scaled_positions.value = (
             np.asarray(initial[: self.parameter_count], dtype=np.float64)
             / compiled.action_scale
         )
         iterations = 0
+        primary_error: cp.error.SolverError | None = None
         try:
             if self.config.objective is HistoricalSanosObjective.MEAN_VARIANCE:
                 compiled.problem.solve(
                     solver=cp.OSQP,
-                    warm_start=False,
+                    warm_start=True,
                     max_iter=max(10_000, self.config.maximum_iterations),
                     eps_abs=self.config.gradient_tolerance,
                     eps_rel=self.config.gradient_tolerance,
@@ -1148,26 +1175,43 @@ class _WeeklyOpenLoopGeometry:
                     if compiled.problem.status != cp.OPTIMAL_INACCURATE:
                         break
         except cp.error.SolverError as error:
-            result = OptimizeResult(
-                x=np.asarray(initial[: self.parameter_count], dtype=np.float64),
-                nit=iterations,
-                success=False,
-                optimality=math.inf,
-                message=f"convex solver failed: {error}",
-                objective_error=math.inf,
+            if self.config.objective is not HistoricalSanosObjective.MEAN_VARIANCE:
+                result = OptimizeResult(
+                    x=np.asarray(initial[: self.parameter_count], dtype=np.float64),
+                    nit=iterations,
+                    success=False,
+                    optimality=math.inf,
+                    message=f"convex solver failed: {error}",
+                    objective_error=math.inf,
+                )
+                result.action_scale = compiled.action_scale
+                return result
+            primary_error = error
+        if primary_error is None:
+            solver_status = compiled.problem.status
+            solver_name = str(
+                compiled.problem.solver_stats.solver_name or "primary"
             )
-            result.action_scale = compiled.action_scale
-            return result
-        solver_status = compiled.problem.status
-        solver_name = str(compiled.problem.solver_stats.solver_name or "primary")
-        solver_trace = f"{solver_name}={solver_status}"
-        if self.config.objective is not HistoricalSanosObjective.MEAN_VARIANCE:
-            solver_status, solver_trace, independent_iterations = (
-                self._resolve_inaccurate_conic_problem(compiled.problem)
-            )
-            iterations += independent_iterations
-        fitted, certified, exact_objective, objective_error, constraint_violation = (
-            self._certify_raw_convex_solution(
+            solver_trace = f"{solver_name}={solver_status}"
+            if self.config.objective is not HistoricalSanosObjective.MEAN_VARIANCE:
+                solver_status, solver_trace, independent_iterations = (
+                    self._resolve_inaccurate_conic_problem(compiled.problem)
+                )
+                iterations += independent_iterations
+            elif (
+                solver_status != cp.OPTIMAL
+                and self._polish_compact_mean_variance_solution(compiled)
+            ):
+                solver_trace = f"{solver_trace}; active-set KKT polish"
+            (
+                fitted,
+                certified,
+                exact_objective,
+                objective_error,
+                constraint_violation,
+                optimality,
+                primal_dual_gap,
+            ) = self._certify_raw_convex_solution(
                 compiled,
                 initial,
                 indices,
@@ -1175,32 +1219,80 @@ class _WeeklyOpenLoopGeometry:
                 terminal_claim_values_pv=terminal_claim_values_pv,
                 solver_status=solver_status,
             )
-        )
+        else:
+            solver_status = None
+            solver_trace = f"OSQP failed: {primary_error}"
+            fitted = np.asarray(
+                initial[: self.parameter_count],
+                dtype=np.float64,
+            )
+            exact_objective = self._objective_value(
+                fitted,
+                indices,
+                signed_claim_quantity=signed_claim_quantity,
+                terminal_claim_values_pv=terminal_claim_values_pv,
+                include_translation=False,
+                action_scale=compiled.action_scale,
+            )
+            certified = False
+            objective_error = math.inf
+            constraint_violation = math.inf
+            optimality = math.inf
+            primal_dual_gap = math.inf
+        if (
+            self.config.objective is HistoricalSanosObjective.MEAN_VARIANCE
+            and not certified
+            and self._polish_compact_mean_variance_solution(compiled)
+        ):
+            solver_trace = f"{solver_trace}; active-set KKT polish"
+            (
+                fitted,
+                certified,
+                exact_objective,
+                objective_error,
+                constraint_violation,
+                optimality,
+                primal_dual_gap,
+            ) = self._certify_raw_convex_solution(
+                compiled,
+                initial,
+                indices,
+                signed_claim_quantity=signed_claim_quantity,
+                terminal_claim_values_pv=terminal_claim_values_pv,
+                solver_status=solver_status,
+            )
         if (
             self.config.objective is HistoricalSanosObjective.MEAN_VARIANCE
             and not certified
         ):
             try:
                 compiled.problem.solve(
-                    solver=cp.CLARABEL,
+                    solver=cp.HIGHS,
                     warm_start=False,
-                    max_iter=self.config.maximum_iterations,
-                    tol_gap_abs=self.config.certificate_tolerance,
-                    tol_gap_rel=self.config.certificate_tolerance,
-                    tol_feas=self.config.certificate_tolerance,
+                    primal_feasibility_tolerance=self.config.gradient_tolerance,
+                    dual_feasibility_tolerance=self.config.gradient_tolerance,
+                    ipm_optimality_tolerance=self.config.gradient_tolerance,
+                    time_limit=self.config.fallback_time_limit_seconds,
+                    threads=1,
                 )
                 iterations += int(compiled.problem.solver_stats.num_iters or 0)
-                fallback_status, fallback_trace, independent_iterations = (
-                    self._resolve_inaccurate_conic_problem(compiled.problem)
+                fallback_status = compiled.problem.status
+                fallback_solver = str(
+                    compiled.problem.solver_stats.solver_name or "HIGHS"
                 )
-                iterations += independent_iterations
-                solver_trace = f"{solver_trace}; fallback {fallback_trace}"
+                solver_trace = (
+                    f"{solver_trace}; fallback {fallback_solver}={fallback_status}"
+                )
+                if self._polish_compact_mean_variance_solution(compiled):
+                    solver_trace = f"{solver_trace}; active-set KKT polish"
                 (
                     fitted,
                     certified,
                     exact_objective,
                     objective_error,
                     constraint_violation,
+                    optimality,
+                    primal_dual_gap,
                 ) = self._certify_raw_convex_solution(
                     compiled,
                     initial,
@@ -1210,7 +1302,7 @@ class _WeeklyOpenLoopGeometry:
                     solver_status=fallback_status,
                 )
             except cp.error.SolverError as error:
-                solver_trace = f"{solver_trace}; CLARABEL fallback failed: {error}"
+                solver_trace = f"{solver_trace}; HIGHS fallback failed: {error}"
         scaled_fitted = fitted / compiled.action_scale
         unregularized_objective = exact_objective - (
             0.5
@@ -1226,10 +1318,11 @@ class _WeeklyOpenLoopGeometry:
             x=fitted,
             nit=iterations,
             success=certified and not recession_direction,
-            optimality=math.inf,
+            optimality=optimality,
             message=(
                 f"{solver_trace}; exact-objective-error={objective_error:.6g}; "
-                f"constraint-violation={constraint_violation:.6g}"
+                f"constraint-violation={constraint_violation:.6g}; "
+                f"primal-dual-gap={primal_dual_gap:.6g}"
                 + (
                     f"; recession_direction={unregularized_objective:.6g}"
                     if recession_direction
@@ -1244,6 +1337,139 @@ class _WeeklyOpenLoopGeometry:
         result.action_scale = compiled.action_scale
         return result
 
+    def _polish_compact_mean_variance_solution(
+        self,
+        compiled: _ConvexCostLassoProblem,
+    ) -> bool:
+        """Solve the exact KKT system for the fallback solver's active set."""
+        certificate = compiled.compact_certificate
+        scaled_value = compiled.scaled_positions.value
+        if (
+            certificate is None
+            or compiled.linear is None
+            or scaled_value is None
+        ):
+            return False
+        scaled_fitted = np.asarray(scaled_value, dtype=np.float64)
+        if not np.all(np.isfinite(scaled_fitted)):
+            return False
+        turnover = (
+            certificate.turnover_matrix @ scaled_fitted
+            - certificate.turnover_offset
+        )
+        tolerance = self.config.certificate_tolerance
+        positive_turnover = turnover > tolerance
+        negative_turnover = turnover < -tolerance
+        zero_turnover = ~(positive_turnover | negative_turnover)
+        turnover_subgradient = np.zeros_like(turnover)
+        turnover_subgradient[positive_turnover] = (
+            certificate.turnover_weights[positive_turnover]
+        )
+        turnover_subgradient[negative_turnover] = (
+            -certificate.turnover_weights[negative_turnover]
+        )
+        fitted = compiled.action_scale * scaled_fitted
+        cap = self.config.solver_position_cap
+        lower_active = fitted <= -cap + tolerance
+        upper_active = fitted >= cap - tolerance
+
+        equality_rows: list[FloatArray] = []
+        equality_values: list[float] = []
+        equality_kinds: list[tuple[str, int]] = []
+        for index in np.flatnonzero(zero_turnover):
+            equality_rows.append(certificate.turnover_matrix[index])
+            equality_values.append(certificate.turnover_offset[index])
+            equality_kinds.append(("turnover", int(index)))
+        for index in np.flatnonzero(lower_active):
+            row = np.zeros(self.parameter_count, dtype=np.float64)
+            row[index] = 1.0
+            equality_rows.append(row)
+            equality_values.append(-cap / compiled.action_scale[index])
+            equality_kinds.append(("lower", int(index)))
+        for index in np.flatnonzero(upper_active):
+            row = np.zeros(self.parameter_count, dtype=np.float64)
+            row[index] = 1.0
+            equality_rows.append(row)
+            equality_values.append(cap / compiled.action_scale[index])
+            equality_kinds.append(("upper", int(index)))
+
+        linear = np.asarray(compiled.linear.value, dtype=np.float64)
+        smooth_linear = (
+            linear
+            + certificate.turnover_matrix.T @ turnover_subgradient
+        )
+        if equality_rows:
+            equality_matrix = np.asarray(equality_rows, dtype=np.float64)
+            equality_value = np.asarray(equality_values, dtype=np.float64)
+            kkt_matrix = np.block(
+                [
+                    [certificate.hessian, equality_matrix.T],
+                    [
+                        equality_matrix,
+                        np.zeros(
+                            (len(equality_rows), len(equality_rows)),
+                            dtype=np.float64,
+                        ),
+                    ],
+                ]
+            )
+            kkt_rhs = np.concatenate((-smooth_linear, equality_value))
+        else:
+            equality_matrix = np.empty(
+                (0, self.parameter_count),
+                dtype=np.float64,
+            )
+            equality_value = np.empty(0, dtype=np.float64)
+            kkt_matrix = certificate.hessian
+            kkt_rhs = -smooth_linear
+        try:
+            polished = np.linalg.solve(kkt_matrix, kkt_rhs)
+        except np.linalg.LinAlgError:
+            polished, _, _, _ = np.linalg.lstsq(
+                kkt_matrix,
+                kkt_rhs,
+                rcond=None,
+            )
+        if not np.all(np.isfinite(polished)):
+            return False
+        kkt_residual = float(
+            np.max(np.abs(kkt_matrix @ polished - kkt_rhs))
+        )
+        if kkt_residual > tolerance:
+            return False
+        polished_scaled = polished[: self.parameter_count]
+        multipliers = polished[self.parameter_count :]
+        polished_turnover = (
+            certificate.turnover_matrix @ polished_scaled
+            - certificate.turnover_offset
+        )
+        polished_fitted = compiled.action_scale * polished_scaled
+        if (
+            np.any(polished_turnover[positive_turnover] < -tolerance)
+            or np.any(polished_turnover[negative_turnover] > tolerance)
+            or np.any(np.abs(polished_turnover[zero_turnover]) > tolerance)
+            or np.any(polished_fitted < -cap - tolerance)
+            or np.any(polished_fitted > cap + tolerance)
+        ):
+            return False
+        for multiplier, (kind, index) in zip(
+            multipliers,
+            equality_kinds,
+            strict=True,
+        ):
+            if kind == "turnover":
+                if abs(multiplier) > (
+                    certificate.turnover_weights[index] + tolerance
+                ):
+                    return False
+            elif kind == "lower" and multiplier > tolerance:
+                return False
+            elif kind == "upper" and multiplier < -tolerance:
+                return False
+        compiled.scaled_positions.value = polished_scaled
+        certificate.turnover_epigraph.value = np.abs(polished_turnover)
+        return True
+
     def _certify_raw_convex_solution(
         self,
         compiled: _ConvexCostLassoProblem,
@@ -1253,7 +1479,7 @@ class _WeeklyOpenLoopGeometry:
         signed_claim_quantity: float,
         terminal_claim_values_pv: FloatArray,
         solver_status: str | None,
-    ) -> tuple[FloatArray, bool, float, float, float]:
+    ) -> tuple[FloatArray, bool, float, float, float, float, float]:
         """Certify the exact point whose objective the convex solver reports."""
         scaled_fitted = (
             np.asarray(initial[: self.parameter_count], dtype=np.float64)
@@ -1262,6 +1488,31 @@ class _WeeklyOpenLoopGeometry:
             else np.asarray(compiled.scaled_positions.value, dtype=np.float64)
         )
         fitted = compiled.action_scale * scaled_fitted
+        if self.config.objective is HistoricalSanosObjective.MEAN_VARIANCE:
+            (
+                certified,
+                exact_objective,
+                objective_error,
+                constraint_violation,
+                optimality,
+                primal_dual_gap,
+            ) = self._certify_compact_mean_variance_solution(
+                compiled,
+                scaled_fitted=scaled_fitted,
+                indices=indices,
+                signed_claim_quantity=signed_claim_quantity,
+                terminal_claim_values_pv=terminal_claim_values_pv,
+                solver_status=solver_status,
+            )
+            return (
+                fitted,
+                certified,
+                exact_objective,
+                objective_error,
+                constraint_violation,
+                optimality,
+                primal_dual_gap,
+            )
         constraint_violation = _maximum_constraint_violation(compiled.problem)
         certified, exact_objective, objective_error = self._certify_conic_result(
             fitted,
@@ -1280,6 +1531,433 @@ class _WeeklyOpenLoopGeometry:
             exact_objective,
             objective_error,
             constraint_violation,
+            math.inf,
+            math.inf,
+        )
+
+    def _certify_compact_mean_variance_solution(
+        self,
+        compiled: _ConvexCostLassoProblem,
+        *,
+        scaled_fitted: FloatArray,
+        indices: NDArray[np.int64],
+        signed_claim_quantity: float,
+        terminal_claim_values_pv: FloatArray,
+        solver_status: str | None,
+    ) -> tuple[bool, float, float, float, float, float]:
+        """Independently verify primal, dual, KKT, and gap conditions."""
+        certificate = compiled.compact_certificate
+        if (
+            certificate is None
+            or compiled.linear is None
+            or compiled.objective_constant is None
+        ):
+            raise RuntimeError("compact mean-variance certificate is missing")
+        fitted = compiled.action_scale * scaled_fitted
+        exact_objective = self._objective_value(
+            fitted,
+            indices,
+            signed_claim_quantity=signed_claim_quantity,
+            terminal_claim_values_pv=terminal_claim_values_pv,
+            include_translation=False,
+            action_scale=compiled.action_scale,
+        )
+        epigraph_value = certificate.turnover_epigraph.value
+        if epigraph_value is None:
+            return (
+                False,
+                exact_objective,
+                math.inf,
+                math.inf,
+                math.inf,
+                math.inf,
+            )
+        epigraph = np.asarray(epigraph_value, dtype=np.float64)
+        arrays = (scaled_fitted, epigraph)
+        if not all(np.all(np.isfinite(value)) for value in arrays):
+            return (
+                False,
+                exact_objective,
+                math.inf,
+                math.inf,
+                math.inf,
+                math.inf,
+            )
+        turnover = (
+            certificate.turnover_matrix @ scaled_fitted
+            - certificate.turnover_offset
+        )
+        compact_objective = float(
+            0.5
+            * scaled_fitted
+            @ certificate.hessian
+            @ scaled_fitted
+            + np.asarray(compiled.linear.value, dtype=np.float64)
+            @ scaled_fitted
+            + float(compiled.objective_constant.value)
+            + certificate.turnover_weights @ epigraph
+        )
+        objective_error = abs(compact_objective - exact_objective)
+        objective_limit = self.config.objective_agreement_tolerance * (
+            1.0 + abs(exact_objective)
+        )
+        cap = self.config.solver_position_cap
+        primal_violation = float(
+            max(
+                0.0,
+                np.max(turnover - epigraph),
+                np.max(-turnover - epigraph),
+                np.max(-cap - fitted),
+                np.max(fitted - cap),
+            )
+        )
+        linear = np.asarray(compiled.linear.value, dtype=np.float64)
+        smooth_gradient = certificate.hessian @ scaled_fitted + linear
+        dual_candidates: list[
+            tuple[str, _CompactMeanVarianceDualMetrics]
+        ] = []
+        raw_dual_values = (
+            certificate.positive_turnover_constraint.dual_value,
+            certificate.negative_turnover_constraint.dual_value,
+            certificate.lower_position_constraint.dual_value,
+            certificate.upper_position_constraint.dual_value,
+        )
+        if all(value is not None for value in raw_dual_values):
+            raw_positive, raw_negative, raw_lower, raw_upper = (
+                np.asarray(value, dtype=np.float64)
+                for value in raw_dual_values
+            )
+            raw_arrays = (
+                raw_positive,
+                raw_negative,
+                raw_lower,
+                raw_upper,
+            )
+            if all(np.all(np.isfinite(value)) for value in raw_arrays):
+                dual_candidates.append(
+                    (
+                        "solver",
+                        self._compact_mean_variance_dual_metrics(
+                            compiled,
+                            scaled_fitted=scaled_fitted,
+                            epigraph=epigraph,
+                            turnover=turnover,
+                            fitted=fitted,
+                            exact_objective=exact_objective,
+                            objective_error=objective_error,
+                            primal_violation=primal_violation,
+                            positive_dual=raw_positive,
+                            negative_dual=raw_negative,
+                            lower_dual=raw_lower,
+                            upper_dual=raw_upper,
+                        ),
+                    )
+                )
+        if (
+            dual_candidates
+            and dual_candidates[0][1].optimality
+            <= self.config.certificate_tolerance
+        ):
+            dual_source, dual_metrics = dual_candidates[0]
+        else:
+            recovered_metrics = self._recover_compact_mean_variance_dual(
+                compiled,
+                scaled_fitted=scaled_fitted,
+                epigraph=epigraph,
+                turnover=turnover,
+                fitted=fitted,
+                exact_objective=exact_objective,
+                objective_error=objective_error,
+                primal_violation=primal_violation,
+                smooth_gradient=smooth_gradient,
+            )
+            if recovered_metrics is not None:
+                dual_candidates.append(("recovered", recovered_metrics))
+            if not dual_candidates:
+                return (
+                    False,
+                    exact_objective,
+                    objective_error,
+                    primal_violation,
+                    math.inf,
+                    math.inf,
+                )
+            dual_source, dual_metrics = min(
+                dual_candidates,
+                key=lambda candidate: candidate[1].optimality,
+            )
+        optimality = dual_metrics.optimality
+        primal_dual_gap = dual_metrics.primal_dual_gap
+        rejected_statuses = {
+            None,
+            cp.INFEASIBLE,
+            cp.INFEASIBLE_INACCURATE,
+            cp.UNBOUNDED,
+            cp.UNBOUNDED_INACCURATE,
+        }
+        accepted = bool(
+            solver_status not in rejected_statuses
+            and objective_error <= objective_limit
+            and optimality <= self.config.certificate_tolerance
+        )
+        if solver_status != cp.OPTIMAL or not accepted:
+            print(
+                "historical weekly compact mean-variance certificate "
+                f"status={solver_status} accepted={accepted} "
+                f"dual_source={dual_source} "
+                f"objective_error={objective_error:.6g} "
+                f"primal={primal_violation:.6g} "
+                f"dual={dual_metrics.dual_violation:.6g} "
+                f"stationarity={dual_metrics.stationarity_violation:.6g} "
+                f"complementarity="
+                f"{dual_metrics.complementarity_violation:.6g} "
+                f"gap={primal_dual_gap:.6g} optimality={optimality:.6g} "
+                f"scenarios={len(indices)} parameters={self.parameter_count}",
+                flush=True,
+            )
+        return (
+            accepted,
+            exact_objective,
+            objective_error,
+            primal_violation,
+            optimality,
+            primal_dual_gap,
+        )
+
+    def _recover_compact_mean_variance_dual(
+        self,
+        compiled: _ConvexCostLassoProblem,
+        *,
+        scaled_fitted: FloatArray,
+        epigraph: FloatArray,
+        turnover: FloatArray,
+        fitted: FloatArray,
+        exact_objective: float,
+        objective_error: float,
+        primal_violation: float,
+        smooth_gradient: FloatArray,
+    ) -> _CompactMeanVarianceDualMetrics | None:
+        """Recover a dual candidate from the primal active set."""
+        certificate = compiled.compact_certificate
+        if certificate is None:
+            return None
+        cap = self.config.solver_position_cap
+        positive_dual = np.zeros_like(certificate.turnover_weights)
+        positive_turnover = turnover > self.config.certificate_tolerance
+        negative_turnover = turnover < -self.config.certificate_tolerance
+        positive_dual[positive_turnover] = certificate.turnover_weights[
+            positive_turnover
+        ]
+        free_turnover = (
+            ~(positive_turnover | negative_turnover)
+            & (certificate.turnover_weights > 0.0)
+        )
+        lower_active = fitted <= (
+            -cap + self.config.certificate_tolerance
+        )
+        upper_active = fitted >= (
+            cap - self.config.certificate_tolerance
+        )
+        dual_columns: list[FloatArray] = []
+        dual_upper_bounds: list[float] = []
+        dual_kinds: list[tuple[str, int]] = []
+        for index in np.flatnonzero(free_turnover):
+            dual_columns.append(2.0 * certificate.turnover_matrix[index])
+            dual_upper_bounds.append(certificate.turnover_weights[index])
+            dual_kinds.append(("turnover", int(index)))
+        for index in np.flatnonzero(lower_active):
+            column = np.zeros(self.parameter_count)
+            column[index] = -compiled.action_scale[index]
+            dual_columns.append(column)
+            dual_upper_bounds.append(math.inf)
+            dual_kinds.append(("lower", int(index)))
+        for index in np.flatnonzero(upper_active):
+            column = np.zeros(self.parameter_count)
+            column[index] = compiled.action_scale[index]
+            dual_columns.append(column)
+            dual_upper_bounds.append(math.inf)
+            dual_kinds.append(("upper", int(index)))
+        base_stationarity = (
+            smooth_gradient
+            + certificate.turnover_matrix.T
+            @ (2.0 * positive_dual - certificate.turnover_weights)
+        )
+        recovered_values = np.empty(0, dtype=np.float64)
+        if dual_columns:
+            recovered = lsq_linear(
+                np.column_stack(dual_columns),
+                -base_stationarity,
+                bounds=(
+                    np.zeros(len(dual_columns)),
+                    np.asarray(dual_upper_bounds, dtype=np.float64),
+                ),
+                tol=self.config.gradient_tolerance,
+                max_iter=self.config.maximum_iterations,
+                lsmr_tol="auto",
+            )
+            if not recovered.success or not np.all(np.isfinite(recovered.x)):
+                return None
+            recovered_values = np.asarray(recovered.x, dtype=np.float64)
+        lower_dual = np.zeros(self.parameter_count)
+        upper_dual = np.zeros(self.parameter_count)
+        for value, (kind, index) in zip(
+            recovered_values,
+            dual_kinds,
+            strict=True,
+        ):
+            if kind == "turnover":
+                positive_dual[index] = value
+            elif kind == "lower":
+                lower_dual[index] = value
+            else:
+                upper_dual[index] = value
+        negative_dual = certificate.turnover_weights - positive_dual
+        return self._compact_mean_variance_dual_metrics(
+            compiled,
+            scaled_fitted=scaled_fitted,
+            epigraph=epigraph,
+            turnover=turnover,
+            fitted=fitted,
+            exact_objective=exact_objective,
+            objective_error=objective_error,
+            primal_violation=primal_violation,
+            positive_dual=positive_dual,
+            negative_dual=negative_dual,
+            lower_dual=lower_dual,
+            upper_dual=upper_dual,
+        )
+
+    def _compact_mean_variance_dual_metrics(
+        self,
+        compiled: _ConvexCostLassoProblem,
+        *,
+        scaled_fitted: FloatArray,
+        epigraph: FloatArray,
+        turnover: FloatArray,
+        fitted: FloatArray,
+        exact_objective: float,
+        objective_error: float,
+        primal_violation: float,
+        positive_dual: FloatArray,
+        negative_dual: FloatArray,
+        lower_dual: FloatArray,
+        upper_dual: FloatArray,
+    ) -> _CompactMeanVarianceDualMetrics:
+        """Evaluate one dual candidate against the exact compact KKT system."""
+        certificate = compiled.compact_certificate
+        if (
+            certificate is None
+            or compiled.linear is None
+            or compiled.objective_constant is None
+        ):
+            raise RuntimeError("compact mean-variance certificate is missing")
+        cap = self.config.solver_position_cap
+        linear = np.asarray(compiled.linear.value, dtype=np.float64)
+        smooth_gradient = certificate.hessian @ scaled_fitted + linear
+        turnover_gradient = certificate.turnover_matrix.T @ (
+            positive_dual - negative_dual
+        )
+        bound_gradient = compiled.action_scale * (upper_dual - lower_dual)
+        stationarity = smooth_gradient + turnover_gradient + bound_gradient
+        stationarity_scale = max(
+            1.0,
+            float(np.max(np.abs(smooth_gradient))),
+            float(np.max(np.abs(turnover_gradient))),
+            float(np.max(np.abs(bound_gradient))),
+        )
+        stationarity_violation = float(
+            np.max(np.abs(stationarity)) / stationarity_scale
+        )
+        complementarity = max(
+            float(
+                np.max(
+                    np.abs(
+                        positive_dual * (epigraph - turnover)
+                    )
+                )
+            ),
+            float(
+                np.max(
+                    np.abs(
+                        negative_dual * (epigraph + turnover)
+                    )
+                )
+            ),
+            float(np.max(np.abs(lower_dual * (fitted + cap)))),
+            float(np.max(np.abs(upper_dual * (cap - fitted)))),
+        )
+        complementarity_violation = complementarity / (
+            1.0 + abs(exact_objective)
+        )
+        dual_linear = (
+            linear
+            + turnover_gradient
+            + bound_gradient
+        )
+        try:
+            dual_minimizer = np.linalg.solve(
+                certificate.hessian,
+                dual_linear,
+            )
+        except np.linalg.LinAlgError:
+            dual_minimizer, _, _, _ = np.linalg.lstsq(
+                certificate.hessian,
+                dual_linear,
+                rcond=None,
+            )
+        dual_range_residual = (
+            certificate.hessian @ dual_minimizer - dual_linear
+        )
+        dual_violation = float(
+            max(
+                0.0,
+                -float(np.min(positive_dual)),
+                -float(np.min(negative_dual)),
+                -float(np.min(lower_dual)),
+                -float(np.min(upper_dual)),
+                float(
+                    np.max(
+                        np.abs(
+                            positive_dual
+                            + negative_dual
+                            - certificate.turnover_weights
+                        )
+                    )
+                ),
+                float(np.max(np.abs(dual_range_residual)))
+                / max(1.0, float(np.max(np.abs(dual_linear)))),
+            )
+        )
+        dual_objective = float(
+            compiled.objective_constant.value
+            - certificate.turnover_offset
+            @ (positive_dual - negative_dual)
+            - cap * np.sum(lower_dual + upper_dual)
+            - 0.5
+            * dual_linear
+            @ dual_minimizer
+        )
+        primal_dual_gap = exact_objective - dual_objective
+        scaled_gap = abs(primal_dual_gap) / (
+            1.0 + abs(exact_objective) + abs(dual_objective)
+        )
+        scaled_objective_error = objective_error / (1.0 + abs(exact_objective))
+        optimality = float(
+            max(
+                primal_violation,
+                dual_violation,
+                stationarity_violation,
+                complementarity_violation,
+                scaled_gap,
+                scaled_objective_error,
+            )
+        )
+        return _CompactMeanVarianceDualMetrics(
+            optimality=optimality,
+            primal_dual_gap=primal_dual_gap,
+            dual_violation=dual_violation,
+            stationarity_violation=stationarity_violation,
+            complementarity_violation=complementarity_violation,
         )
 
     def _convex_cost_lasso_problem(
@@ -1303,52 +1981,142 @@ class _WeeklyOpenLoopGeometry:
         )
         scaled_positions = cp.Variable(self.parameter_count)
         positions = cp.multiply(action_scale, scaled_positions)
-        claim = cp.Parameter(len(indices))
-        wealth_before_cost = claim + instrument_gains @ positions
-        centered = wealth_before_cost - cp.sum(wealth_before_cost) / len(indices)
-        cost = turnover_weights @ cp.abs(
-            turnover_matrix @ positions - turnover_offset
-        )
         if self.config.objective is HistoricalSanosObjective.MEAN_VARIANCE:
-            risk_penalty = (
-                0.5
-                * self.config.risk_parameter
-                * cp.sum_squares(centered)
-                / len(indices)
+            scaled_gains = instrument_gains * action_scale[None, :]
+            centered_scaled_gains = scaled_gains - np.mean(
+                scaled_gains,
+                axis=0,
             )
+            hessian = (
+                self.config.risk_parameter
+                * (centered_scaled_gains.T @ centered_scaled_gains)
+                / len(indices)
+                + self.config.quadratic_ridge
+                * np.eye(self.parameter_count)
+            )
+            hessian = 0.5 * (hessian + hessian.T)
+            linear = cp.Parameter(self.parameter_count)
+            objective_constant = cp.Parameter()
+            linear.value = np.zeros(self.parameter_count)
+            objective_constant.value = 0.0
+            turnover = turnover_matrix @ positions - turnover_offset
+            turnover_epigraph = cp.Variable(len(turnover_weights))
+            positive_turnover_constraint = turnover <= turnover_epigraph
+            negative_turnover_constraint = -turnover <= turnover_epigraph
+            lower_position_constraint = (
+                positions >= -self.config.solver_position_cap
+            )
+            upper_position_constraint = (
+                positions <= self.config.solver_position_cap
+            )
+            objective = (
+                0.5 * cp.quad_form(scaled_positions, cp.psd_wrap(hessian))
+                + linear @ scaled_positions
+                + objective_constant
+                + turnover_weights @ turnover_epigraph
+            )
+            constraints = [
+                positive_turnover_constraint,
+                negative_turnover_constraint,
+                lower_position_constraint,
+                upper_position_constraint,
+            ]
+            compact_certificate = _CompactMeanVarianceCertificate(
+                hessian=np.asarray(hessian, dtype=np.float64),
+                turnover_matrix=np.asarray(
+                    turnover_matrix * action_scale[None, :],
+                    dtype=np.float64,
+                ),
+                turnover_offset=np.asarray(turnover_offset, dtype=np.float64),
+                turnover_weights=np.asarray(turnover_weights, dtype=np.float64),
+                turnover_epigraph=turnover_epigraph,
+                positive_turnover_constraint=positive_turnover_constraint,
+                negative_turnover_constraint=negative_turnover_constraint,
+                lower_position_constraint=lower_position_constraint,
+                upper_position_constraint=upper_position_constraint,
+            )
+            claim = None
         else:
+            claim = cp.Parameter(len(indices))
+            wealth_before_cost = claim + instrument_gains @ positions
+            centered = wealth_before_cost - cp.sum(wealth_before_cost) / len(indices)
+            cost = turnover_weights @ cp.abs(
+                turnover_matrix @ positions - turnover_offset
+            )
             risk_penalty = (
                 self.config.risk_parameter
                 * cp.norm(centered, 2)
                 / math.sqrt(len(indices))
             )
-        ridge = (
-            0.5
-            * self.config.quadratic_ridge
-            * cp.sum_squares(scaled_positions)
-        )
-        problem = cp.Problem(
-            cp.Minimize(
+            ridge = (
+                0.5
+                * self.config.quadratic_ridge
+                * cp.sum_squares(scaled_positions)
+            )
+            objective = (
                 -cp.sum(wealth_before_cost) / len(indices)
                 + risk_penalty
                 + cost
                 + ridge
-            ),
-            [
+            )
+            linear = None
+            objective_constant = None
+            compact_certificate = None
+            constraints = [
                 positions >= -self.config.solver_position_cap,
                 positions <= self.config.solver_position_cap,
-            ],
+            ]
+        problem = cp.Problem(
+            cp.Minimize(objective),
+            constraints,
         )
         if not problem.is_dpp():
             raise RuntimeError("weekly convex policy problem is not parameter-cacheable")
         cached = _ConvexCostLassoProblem(
             scaled_positions=scaled_positions,
-            claim=claim,
             action_scale=np.asarray(action_scale, dtype=np.float64),
             problem=problem,
+            claim=claim,
+            linear=linear,
+            objective_constant=objective_constant,
+            compact_certificate=compact_certificate,
         )
         self._convex_problems[key] = cached
         return cached
+
+    def _assign_convex_claim(
+        self,
+        compiled: _ConvexCostLassoProblem,
+        *,
+        claim: FloatArray,
+        instrument_gains: FloatArray,
+    ) -> None:
+        """Update only the claim-dependent terms of one cached convex problem."""
+        if self.config.objective is HistoricalSanosObjective.MEAN_VARIANCE:
+            if compiled.linear is None or compiled.objective_constant is None:
+                raise RuntimeError("compact mean-variance problem is incomplete")
+            scaled_gains = instrument_gains * compiled.action_scale[None, :]
+            centered_scaled_gains = scaled_gains - np.mean(
+                scaled_gains,
+                axis=0,
+            )
+            centered_claim = claim - np.mean(claim)
+            compiled.linear.value = (
+                -np.mean(scaled_gains, axis=0)
+                + self.config.risk_parameter
+                * (centered_scaled_gains.T @ centered_claim)
+                / len(claim)
+            )
+            compiled.objective_constant.value = float(
+                -np.mean(claim)
+                + 0.5
+                * self.config.risk_parameter
+                * np.mean(centered_claim**2)
+            )
+            return
+        if compiled.claim is None:
+            raise RuntimeError("mean-volatility claim parameter is missing")
+        compiled.claim.value = claim
 
     def _objective_value(
         self,

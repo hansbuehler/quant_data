@@ -929,13 +929,31 @@ def test_weekly_mean_variance_osqp_matches_clarabel_reference() -> None:
         signed_claim_quantity=1.0,
         terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
     )
-    compiled = reference._convex_cost_lasso_problem(
-        indices,
-        instrument_gains=instrument_gains,
+    action_scale = reference._action_scale(indices)
+    scaled_positions = cp.Variable(reference.parameter_count)
+    positions = cp.multiply(action_scale, scaled_positions)
+    wealth_before_cost = claim + instrument_gains @ positions
+    centered = wealth_before_cost - cp.sum(wealth_before_cost) / len(indices)
+    turnover_matrix, turnover_offset, turnover_weights = (
+        reference._turnover_geometry(indices)
     )
-    compiled.claim.value = claim
-    compiled.scaled_positions.value = np.zeros(reference.parameter_count)
-    compiled.problem.solve(
+    expanded_problem = cp.Problem(
+        cp.Minimize(
+            -cp.sum(wealth_before_cost) / len(indices)
+            + 0.5
+            * config.risk_parameter
+            * cp.sum_squares(centered)
+            / len(indices)
+            + turnover_weights
+            @ cp.abs(turnover_matrix @ positions - turnover_offset)
+            + 0.5 * config.quadratic_ridge * cp.sum_squares(scaled_positions)
+        ),
+        [
+            positions >= -config.solver_position_cap,
+            positions <= config.solver_position_cap,
+        ],
+    )
+    expanded_problem.solve(
         solver=cp.CLARABEL,
         warm_start=False,
         max_iter=config.maximum_iterations,
@@ -944,9 +962,43 @@ def test_weekly_mean_variance_osqp_matches_clarabel_reference() -> None:
         tol_feas=config.gradient_tolerance,
     )
 
-    assert compiled.problem.status == cp.OPTIMAL
+    assert expanded_problem.status == cp.OPTIMAL
     assert fit.converged
-    assert fit.training_loss == pytest.approx(compiled.problem.value, abs=1.0e-8)
+    assert fit.training_loss == pytest.approx(expanded_problem.value, abs=1.0e-8)
+
+
+def test_weekly_mean_variance_reuses_compact_target_independent_problem() -> None:
+    first = _scenario_set().scenarios
+    second = replace(
+        first,
+        terminal_claim_values_pv=0.01 + 0.4 * first.terminal_claim_values_pv,
+        target_label="second-compact-claim",
+    )
+    config = HistoricalSanosConfig(
+        rolling_observations=80,
+        objective=HistoricalSanosObjective.MEAN_VARIANCE,
+        risk_parameter=3.0,
+        maximum_iterations=2_000,
+    )
+    context = WeeklyOpenLoopPricingContext(first, config=config)
+
+    context.fit_long(first, claim_quantity=1.0)
+    first_problems = {
+        key: id(problem.problem)
+        for key, problem in context._long_geometry._convex_problems.items()
+    }
+    context.fit_long(second, claim_quantity=1.0)
+    second_problems = {
+        key: id(problem.problem)
+        for key, problem in context._long_geometry._convex_problems.items()
+    }
+
+    assert len(first_problems) == 2
+    assert second_problems == first_problems
+    assert all(
+        problem.problem.is_dpp()
+        for problem in context._long_geometry._convex_problems.values()
+    )
 
 
 def test_weekly_mean_variance_certifies_raw_solver_point(
@@ -978,7 +1030,7 @@ def test_weekly_mean_variance_certifies_raw_solver_point(
     assert fit.converged
 
 
-def test_weekly_mean_variance_retries_failed_raw_certificate_with_clarabel(
+def test_weekly_mean_variance_polishes_failed_raw_certificate_before_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     scenarios = _scenario_set().scenarios
@@ -993,23 +1045,20 @@ def test_weekly_mean_variance_retries_failed_raw_certificate_with_clarabel(
             maximum_iterations=2_000,
         ),
     )
-    original_certificate = geometry._certify_conic_result
+    original_certificate = geometry._certify_compact_mean_variance_solution
     certificate_calls = 0
 
     def reject_primary_certificate(*args: object, **kwargs: object):
         nonlocal certificate_calls
         certificate_calls += 1
-        accepted, exact_objective, objective_error = original_certificate(
-            *args,
-            **kwargs,
-        )
+        result = original_certificate(*args, **kwargs)
         if certificate_calls == 1:
-            return False, exact_objective, objective_error
-        return accepted, exact_objective, objective_error
+            return (False, *result[1:])
+        return result
 
     monkeypatch.setattr(
         geometry,
-        "_certify_conic_result",
+        "_certify_compact_mean_variance_solution",
         reject_primary_certificate,
     )
     result = geometry._minimize_convex_cost_lasso(
@@ -1021,7 +1070,338 @@ def test_weekly_mean_variance_retries_failed_raw_certificate_with_clarabel(
 
     assert certificate_calls == 2
     assert result.success
-    assert "fallback CLARABEL=optimal" in result.message
+    assert "active-set KKT polish" in result.message
+    assert "fallback HIGHS" not in result.message
+
+
+def test_weekly_mean_variance_retries_osqp_exception_with_highs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scenarios = _scenario_set().scenarios
+    geometry = _WeeklyOpenLoopGeometry(
+        scenarios,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=HistoricalSanosConfig(
+            rolling_observations=80,
+            objective=HistoricalSanosObjective.MEAN_VARIANCE,
+            risk_parameter=3.0,
+            maximum_iterations=2_000,
+        ),
+    )
+    original_solve = cp.Problem.solve
+
+    def fail_osqp(
+        problem: cp.Problem,
+        *args: object,
+        solver: str | None = None,
+        **kwargs: object,
+    ) -> float:
+        if solver == cp.OSQP:
+            raise cp.error.SolverError("forced OSQP failure")
+        return original_solve(problem, *args, solver=solver, **kwargs)
+
+    monkeypatch.setattr(cp.Problem, "solve", fail_osqp)
+    result = geometry._minimize_convex_cost_lasso(
+        np.zeros(geometry.parameter_count),
+        np.arange(scenarios.scenario_count, dtype=np.int64),
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
+    )
+
+    assert result.success
+    assert "OSQP failed: forced OSQP failure" in result.message
+    assert "fallback HIGHS=optimal" in result.message
+
+
+def test_weekly_mean_variance_polishes_genuine_osqp_user_limit() -> None:
+    scenarios = _scenario_set().scenarios
+    geometry = _WeeklyOpenLoopGeometry(
+        scenarios,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=HistoricalSanosConfig(
+            rolling_observations=80,
+            objective=HistoricalSanosObjective.MEAN_VARIANCE,
+            risk_parameter=3.0,
+        ),
+    )
+    indices = np.arange(scenarios.scenario_count, dtype=np.int64)
+    claim, instrument_gains = geometry._linear_wealth_geometry(
+        indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
+    )
+    compiled = geometry._convex_cost_lasso_problem(
+        indices,
+        instrument_gains=instrument_gains,
+    )
+    geometry._assign_convex_claim(
+        compiled,
+        claim=claim,
+        instrument_gains=instrument_gains,
+    )
+    compiled.scaled_positions.value = np.zeros(geometry.parameter_count)
+    compiled.problem.solve(
+        solver=cp.OSQP,
+        warm_start=False,
+        max_iter=50,
+        eps_abs=geometry.config.gradient_tolerance,
+        eps_rel=geometry.config.gradient_tolerance,
+        polishing=False,
+    )
+
+    assert compiled.problem.status == cp.USER_LIMIT
+    assert geometry._polish_compact_mean_variance_solution(compiled)
+    scaled_fitted = np.asarray(compiled.scaled_positions.value)
+    certified = geometry._certify_compact_mean_variance_solution(
+        compiled,
+        scaled_fitted=scaled_fitted,
+        indices=indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
+        solver_status=compiled.problem.status,
+    )
+
+    assert certified[0]
+    assert certified[4] <= geometry.config.certificate_tolerance
+
+
+def test_weekly_mean_variance_compact_objective_includes_all_turnover_costs() -> None:
+    scenarios = _scenario_set().scenarios
+    config = HistoricalSanosConfig(
+        rolling_observations=80,
+        objective=HistoricalSanosObjective.MEAN_VARIANCE,
+        risk_parameter=3.0,
+    )
+    geometry = _WeeklyOpenLoopGeometry(
+        scenarios,
+        initial_spot_position=0.1,
+        initial_option_positions=np.asarray([0.0, -0.1]),
+        config=config,
+    )
+    indices = np.arange(scenarios.scenario_count, dtype=np.int64)
+    claim, instrument_gains = geometry._linear_wealth_geometry(
+        indices,
+        signed_claim_quantity=0.7,
+        terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
+    )
+    compiled = geometry._convex_cost_lasso_problem(
+        indices,
+        instrument_gains=instrument_gains,
+    )
+    geometry._assign_convex_claim(
+        compiled,
+        claim=claim,
+        instrument_gains=instrument_gains,
+    )
+    certificate = compiled.compact_certificate
+    assert certificate is not None
+    assert compiled.linear is not None
+    assert compiled.objective_constant is not None
+    scaled_positions = np.linspace(-0.002, 0.003, geometry.parameter_count)
+    positions = compiled.action_scale * scaled_positions
+    turnover = (
+        certificate.turnover_matrix @ scaled_positions
+        - certificate.turnover_offset
+    )
+    compact_objective = float(
+        0.5
+        * scaled_positions
+        @ certificate.hessian
+        @ scaled_positions
+        + np.asarray(compiled.linear.value) @ scaled_positions
+        + float(compiled.objective_constant.value)
+        + certificate.turnover_weights @ np.abs(turnover)
+    )
+    exact_objective = geometry._objective_value(
+        positions,
+        indices,
+        signed_claim_quantity=0.7,
+        terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
+        include_translation=False,
+        action_scale=compiled.action_scale,
+    )
+
+    assert compact_objective == pytest.approx(exact_objective, abs=1.0e-12)
+    assert certificate.turnover_offset[0] == pytest.approx(0.1)
+    assert certificate.turnover_offset[1] == pytest.approx(0.0)
+    assert certificate.turnover_offset[2] == pytest.approx(-0.1)
+    assert np.count_nonzero(certificate.turnover_matrix[-2:]) > 0
+
+
+def test_weekly_mean_variance_compact_size_is_scenario_independent() -> None:
+    scenarios = _scenario_set().scenarios
+    geometry = _WeeklyOpenLoopGeometry(
+        scenarios,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=HistoricalSanosConfig(
+            rolling_observations=80,
+            objective=HistoricalSanosObjective.MEAN_VARIANCE,
+            risk_parameter=3.0,
+        ),
+    )
+    sizes: list[tuple[int, int, int]] = []
+    for scenario_count in (40, scenarios.scenario_count):
+        indices = np.arange(scenario_count, dtype=np.int64)
+        _, instrument_gains = geometry._linear_wealth_geometry(
+            indices,
+            signed_claim_quantity=1.0,
+            terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
+        )
+        compiled = geometry._convex_cost_lasso_problem(
+            indices,
+            instrument_gains=instrument_gains,
+        )
+        certificate = compiled.compact_certificate
+        assert certificate is not None
+        metrics = compiled.problem.size_metrics
+        sizes.append(
+            (
+                metrics.num_scalar_variables,
+                metrics.num_scalar_eq_constr,
+                metrics.num_scalar_leq_constr,
+            )
+        )
+        assert metrics.num_scalar_variables == (
+            geometry.parameter_count + len(certificate.turnover_weights)
+        )
+        assert metrics.num_scalar_eq_constr == 0
+
+    assert sizes[0] == sizes[1]
+
+
+def test_weekly_mean_variance_rejects_feasible_non_kkt_point() -> None:
+    scenarios = _scenario_set().scenarios
+    geometry = _WeeklyOpenLoopGeometry(
+        scenarios,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=HistoricalSanosConfig(
+            rolling_observations=80,
+            objective=HistoricalSanosObjective.MEAN_VARIANCE,
+            risk_parameter=3.0,
+        ),
+    )
+    indices = np.arange(scenarios.scenario_count, dtype=np.int64)
+    claim, instrument_gains = geometry._linear_wealth_geometry(
+        indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
+    )
+    compiled = geometry._convex_cost_lasso_problem(
+        indices,
+        instrument_gains=instrument_gains,
+    )
+    geometry._assign_convex_claim(
+        compiled,
+        claim=claim,
+        instrument_gains=instrument_gains,
+    )
+    compiled.problem.solve(solver=cp.OSQP, polishing=True)
+    certificate = compiled.compact_certificate
+    assert certificate is not None
+    scaled_positions = np.asarray(compiled.scaled_positions.value).copy()
+    accepted = geometry._certify_compact_mean_variance_solution(
+        compiled,
+        scaled_fitted=scaled_positions,
+        indices=indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
+        solver_status=cp.OPTIMAL_INACCURATE,
+    )[0]
+    assert accepted
+
+    scaled_positions[0] += 1.0e-3
+    turnover = (
+        certificate.turnover_matrix @ scaled_positions
+        - certificate.turnover_offset
+    )
+    compiled.scaled_positions.value = scaled_positions
+    certificate.turnover_epigraph.value = np.abs(turnover)
+    accepted = geometry._certify_compact_mean_variance_solution(
+        compiled,
+        scaled_fitted=scaled_positions,
+        indices=indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
+        solver_status=cp.OPTIMAL_INACCURATE,
+    )[0]
+
+    assert not accepted
+
+
+def test_weekly_mean_variance_certifies_boundary_optimum_as_cap_hit() -> None:
+    scenarios = _scenario_set().scenarios
+    cap = 0.01
+    geometry = _WeeklyOpenLoopGeometry(
+        scenarios,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=HistoricalSanosConfig(
+            rolling_observations=80,
+            objective=HistoricalSanosObjective.MEAN_VARIANCE,
+            risk_parameter=3.0,
+            position_cap=cap,
+            solver_position_cap=cap,
+        ),
+    )
+    result = geometry._minimize_convex_cost_lasso(
+        np.zeros(geometry.parameter_count),
+        np.arange(scenarios.scenario_count, dtype=np.int64),
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
+    )
+
+    assert result.success
+    assert np.any(np.abs(result.x) >= 0.999 * cap)
+    fit = geometry.fit_policy(signed_claim_quantity=1.0)
+    assert fit.cap_hits > 0
+    assert not fit.converged
+
+
+def test_weekly_mean_variance_certifies_rank_deficient_zero_ridge() -> None:
+    base = _scenario_set().scenarios
+    scenarios = replace(
+        base,
+        spot_step_gains=np.zeros_like(base.spot_step_gains),
+        option_step_gains=np.zeros_like(base.option_step_gains),
+        target_label="rank-deficient-zero-ridge",
+    )
+    geometry = _WeeklyOpenLoopGeometry(
+        scenarios,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=HistoricalSanosConfig(
+            rolling_observations=80,
+            objective=HistoricalSanosObjective.MEAN_VARIANCE,
+            risk_parameter=3.0,
+            quadratic_ridge=0.0,
+        ),
+    )
+    indices = np.arange(scenarios.scenario_count, dtype=np.int64)
+    _, instrument_gains = geometry._linear_wealth_geometry(
+        indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
+    )
+    compiled = geometry._convex_cost_lasso_problem(
+        indices,
+        instrument_gains=instrument_gains,
+    )
+    certificate = compiled.compact_certificate
+    assert certificate is not None
+    assert np.linalg.matrix_rank(certificate.hessian) < geometry.parameter_count
+    result = geometry._minimize_convex_cost_lasso(
+        np.zeros(geometry.parameter_count),
+        indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
+    )
+
+    assert result.success
+    assert result.optimality <= geometry.config.certificate_tolerance
 
 
 def test_weekly_shared_pricing_context_is_target_order_independent() -> None:
@@ -1537,3 +1917,8 @@ def test_mean_variance_prices_use_the_fitted_expected_cost_functional() -> None:
         risk_parameter=config.risk_parameter,
     )
     assert abs(exact_long_ce - fit.long_policy.certainty_equivalent) > 1.0e-7
+
+
+def test_historical_sanos_config_rejects_invalid_fallback_time_limit() -> None:
+    with pytest.raises(ValueError, match="fallback_time_limit_seconds"):
+        HistoricalSanosConfig(fallback_time_limit_seconds=0.0)
