@@ -19,13 +19,26 @@ logging. Its detached preflight and 72 focused generated-weekly, gate, matrix,
 and executor tests pass; the service currently waits for a managed GPU. The
 installed readiness launcher SHA-256 is
 `c8edb76fdbfa5f45dec274d24e9fc37466400ac381f513b9dd8bfafd6c5363aa`.
+The current factor estimator invalidated the earlier 2022 GROMM architecture
+study because `RollingDlvFactorConfig` changed materially from version 1.1 to
+1.2. A fresh CPU-only study from immutable commit `fe7c3a7` and the public
+dataset completed all four prescribed candidates. Every fit converged with
+zero cap hits; the one-standard-error rule selects
+`gromm-architecture-2022-h64-d3-w128`. The authenticated result SHA-256 is
+`ed68dd71a87465507191f476cf85eea691596751fa122d95ac21c7381abb166b`.
+Independent pinned-worktree matrix builds report all 27 daily and 54 weekly
+GROMM cases ready. Quantitative review is recorded in
+`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-15-gromm-architecture-remediation-review.md`
+(SHA-256
+`687f9b4ee61eb101318fb20e20364ee8af2d3cd9f6836d6e26ababd57342e96e`).
 The corrected final coordinator
 `quantdata-hedging-full-production-fe7c3a7.service` is active and waits for both
-this readiness service and the authenticated Historical-SANOS handoff before it
-may compose or commit production matrices. It binds every generated case to
-`fe7c3a7`, runs weekly production under schema v3, and retains exact commit
-authentication. Its installed launcher SHA-256 is
-`b9be5f4eda5b146129c4ac5bf153f1cf00a33220d1f87fcb94a082ee14064d1b`.
+generated readiness and the authenticated Historical-SANOS handoff before it
+may compose or commit production matrices. It binds every generated and GROMM
+case to reviewed evidence, authenticates the new architecture and its CPU-only
+launcher during preflight, runs weekly production under schema v3, and retains
+exact commit authentication. Its installed launcher SHA-256 is
+`d729a52ee477f1db48b1e8eb68cf608eeb185a7fb3cb680f0efaade89891973d`.
 The strict Historical-SANOS daily CPU queue remains active from immutable
 version-1.13 commit
 `f4d42c2e893b5a814f954c21e92a60634e02e286`. Weekly production now runs from
