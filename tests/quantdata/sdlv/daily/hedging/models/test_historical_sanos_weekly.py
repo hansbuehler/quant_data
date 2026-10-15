@@ -209,7 +209,7 @@ def test_historical_weekly_fit_respects_expiry_and_returns_pure_hedge(
     assert fit.prices.buyer <= fit.prices.seller
 
 
-def test_weekly_rejects_inaccurate_status_without_independent_optimum() -> None:
+def test_weekly_accepts_certified_inaccurate_status() -> None:
     scenario_set = _scenario_set(scenario_count=60)
     config = HistoricalSanosConfig(
         rolling_observations=60,
@@ -236,7 +236,7 @@ def test_weekly_rejects_inaccurate_status_without_independent_optimum() -> None:
         action_scale=action_scale,
     )
 
-    rejected, _, objective_error = geometry._certify_conic_result(
+    accepted_inaccurate, _, objective_error = geometry._certify_conic_result(
         parameters,
         indices,
         signed_claim_quantity=1.0,
@@ -249,7 +249,7 @@ def test_weekly_rejects_inaccurate_status_without_independent_optimum() -> None:
         solver_objective=exact_objective,
         maximum_constraint_violation=0.0,
     )
-    accepted, _, accepted_error = geometry._certify_conic_result(
+    rejected_bad_objective, _, rejected_error = geometry._certify_conic_result(
         parameters,
         indices,
         signed_claim_quantity=1.0,
@@ -258,18 +258,18 @@ def test_weekly_rejects_inaccurate_status_without_independent_optimum() -> None:
         ),
         include_translation=False,
         action_scale=action_scale,
-        solver_status=cp.OPTIMAL,
-        solver_objective=exact_objective,
+        solver_status=cp.OPTIMAL_INACCURATE,
+        solver_objective=exact_objective + 1.0,
         maximum_constraint_violation=0.0,
     )
 
-    assert not rejected
+    assert accepted_inaccurate
     assert objective_error == pytest.approx(0.0)
-    assert accepted
-    assert accepted_error == pytest.approx(0.0)
+    assert not rejected_bad_objective
+    assert rejected_error == pytest.approx(1.0)
 
 
-def test_weekly_inaccurate_primary_requires_independent_scs_optimum(
+def test_weekly_inaccurate_primary_requires_independent_scs_resolution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     scenario_set = _scenario_set(scenario_count=60)
@@ -307,8 +307,247 @@ def test_weekly_inaccurate_primary_requires_independent_scs_optimum(
     )
 
     assert result.success
-    assert "CLARABEL=optimal_inaccurate; SCS=optimal" in result.message
+    assert (
+        "CLARABEL=optimal_inaccurate; CLARABEL=optimal_inaccurate; "
+        "SCS=optimal"
+    ) in result.message
     assert result.constraint_violation <= config.certificate_tolerance
+
+
+def test_weekly_conic_trace_keeps_inaccurate_retry_statuses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scenario_set = _scenario_set(scenario_count=60)
+    geometry = _WeeklyOpenLoopGeometry(
+        scenario_set,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=HistoricalSanosConfig(
+            rolling_observations=60,
+            objective=HistoricalSanosObjective.ENTROPY,
+            risk_parameter=2.0,
+        ),
+    )
+    original_solve = cp.Problem.solve
+    clarabel_calls = 0
+
+    def force_first_primary_inaccurate(
+        problem: cp.Problem,
+        *args: object,
+        **kwargs: object,
+    ) -> float:
+        nonlocal clarabel_calls
+        value = original_solve(problem, *args, **kwargs)
+        if kwargs.get("solver") == cp.CLARABEL:
+            clarabel_calls += 1
+            if clarabel_calls == 1:
+                problem._status = cp.OPTIMAL_INACCURATE
+        return value
+
+    monkeypatch.setattr(cp.Problem, "solve", force_first_primary_inaccurate)
+    result = geometry._minimize_entropy_cost(
+        np.zeros(geometry.parameter_count),
+        np.arange(scenario_set.scenarios.scenario_count, dtype=np.int64),
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=(
+            scenario_set.scenarios.terminal_claim_values_pv
+        ),
+    )
+
+    assert clarabel_calls == 2
+    assert result.success
+    assert (
+        "CLARABEL=optimal_inaccurate; CLARABEL=optimal"
+        in result.message
+    )
+
+
+@pytest.mark.parametrize(
+    "objective",
+    [
+        HistoricalSanosObjective.ENTROPY,
+        HistoricalSanosObjective.POWER_EXPONENTIAL,
+    ],
+)
+def test_weekly_optimal_primary_with_failed_certificate_retries_scs(
+    monkeypatch: pytest.MonkeyPatch,
+    objective: HistoricalSanosObjective,
+) -> None:
+    scenario_set = _scenario_set(scenario_count=60)
+    config = HistoricalSanosConfig(
+        rolling_observations=60,
+        objective=objective,
+        risk_parameter=2.0,
+    )
+    geometry = _WeeklyOpenLoopGeometry(
+        scenario_set,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=config,
+    )
+    original_certificate = geometry._certify_conic_result
+    certificate_calls = 0
+
+    def reject_primary_certificate(*args: object, **kwargs: object):
+        nonlocal certificate_calls
+        certificate_calls += 1
+        accepted, exact_objective, objective_error = original_certificate(
+            *args,
+            **kwargs,
+        )
+        if certificate_calls == 1:
+            return False, exact_objective, objective_error
+        return accepted, exact_objective, objective_error
+
+    def reject_canonicalization(*_: object, **__: object) -> np.ndarray:
+        raise AssertionError("raw conic solution must be certified unchanged")
+
+    monkeypatch.setattr(
+        geometry,
+        "_certify_conic_result",
+        reject_primary_certificate,
+    )
+    monkeypatch.setattr(
+        geometry,
+        "_canonicalize_positions",
+        reject_canonicalization,
+    )
+    minimize_cost = (
+        geometry._minimize_entropy_cost
+        if objective is HistoricalSanosObjective.ENTROPY
+        else geometry._minimize_power_cost
+    )
+    result = minimize_cost(
+        np.zeros(
+            geometry.parameter_count
+            + int(objective is HistoricalSanosObjective.POWER_EXPONENTIAL)
+        ),
+        np.arange(scenario_set.scenarios.scenario_count, dtype=np.int64),
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=(
+            scenario_set.scenarios.terminal_claim_values_pv
+        ),
+    )
+
+    assert certificate_calls == 2
+    assert result.success
+    assert "CLARABEL=optimal; SCS=optimal" in result.message
+
+
+@pytest.mark.parametrize(
+    "objective",
+    [
+        HistoricalSanosObjective.ENTROPY,
+        HistoricalSanosObjective.POWER_EXPONENTIAL,
+    ],
+)
+def test_weekly_clarabel_exception_retries_same_problem_with_scs(
+    monkeypatch: pytest.MonkeyPatch,
+    objective: HistoricalSanosObjective,
+) -> None:
+    scenario_set = _scenario_set(scenario_count=60)
+    config = HistoricalSanosConfig(
+        rolling_observations=60,
+        objective=objective,
+        risk_parameter=2.0,
+    )
+    geometry = _WeeklyOpenLoopGeometry(
+        scenario_set,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=config,
+    )
+    original_solve = cp.Problem.solve
+
+    def fail_clarabel(
+        problem: cp.Problem,
+        *args: object,
+        **kwargs: object,
+    ) -> float:
+        if kwargs.get("solver") == cp.CLARABEL:
+            raise cp.error.SolverError("forced CLARABEL failure")
+        return original_solve(problem, *args, **kwargs)
+
+    monkeypatch.setattr(cp.Problem, "solve", fail_clarabel)
+    minimize_cost = (
+        geometry._minimize_entropy_cost
+        if objective is HistoricalSanosObjective.ENTROPY
+        else geometry._minimize_power_cost
+    )
+    result = minimize_cost(
+        np.zeros(
+            geometry.parameter_count
+            + int(objective is HistoricalSanosObjective.POWER_EXPONENTIAL)
+        ),
+        np.arange(scenario_set.scenarios.scenario_count, dtype=np.int64),
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=(
+            scenario_set.scenarios.terminal_claim_values_pv
+        ),
+    )
+
+    assert result.success
+    assert "CLARABEL failed: forced CLARABEL failure; SCS=optimal" in result.message
+
+
+@pytest.mark.parametrize(
+    "objective",
+    [
+        HistoricalSanosObjective.ENTROPY,
+        HistoricalSanosObjective.POWER_EXPONENTIAL,
+    ],
+)
+def test_weekly_failed_scs_fallback_is_not_repeated(
+    monkeypatch: pytest.MonkeyPatch,
+    objective: HistoricalSanosObjective,
+) -> None:
+    scenario_set = _scenario_set(scenario_count=60)
+    geometry = _WeeklyOpenLoopGeometry(
+        scenario_set,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=HistoricalSanosConfig(
+            rolling_observations=60,
+            objective=objective,
+            risk_parameter=2.0,
+        ),
+    )
+    scs_calls = 0
+
+    def fail_conic_solvers(
+        problem: cp.Problem,
+        *args: object,
+        **kwargs: object,
+    ) -> float:
+        nonlocal scs_calls
+        if kwargs.get("solver") == cp.SCS:
+            scs_calls += 1
+            raise cp.error.SolverError("forced SCS failure")
+        if kwargs.get("solver") == cp.CLARABEL:
+            raise cp.error.SolverError("forced CLARABEL failure")
+        raise AssertionError(f"unexpected solver {kwargs.get('solver')}")
+
+    monkeypatch.setattr(cp.Problem, "solve", fail_conic_solvers)
+    minimize_cost = (
+        geometry._minimize_entropy_cost
+        if objective is HistoricalSanosObjective.ENTROPY
+        else geometry._minimize_power_cost
+    )
+    result = minimize_cost(
+        np.zeros(
+            geometry.parameter_count
+            + int(objective is HistoricalSanosObjective.POWER_EXPONENTIAL)
+        ),
+        np.arange(scenario_set.scenarios.scenario_count, dtype=np.int64),
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=(
+            scenario_set.scenarios.terminal_claim_values_pv
+        ),
+    )
+
+    assert scs_calls == 1
+    assert not result.success
+    assert "SCS failed: forced SCS failure" in result.message
 
 
 def test_weekly_standardized_ridge_is_scale_invariant() -> None:

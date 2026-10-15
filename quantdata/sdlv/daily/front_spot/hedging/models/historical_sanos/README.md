@@ -66,10 +66,12 @@
   failed OSQP certificate with CLARABEL; it never compares a sparsified point
   against the stale raw objective. A primary conic solve labelled
   `optimal_inaccurate` receives a cold retry and is then solved independently by
-  SCS; it is accepted only if the independent solve reports `optimal`, all
-  values are finite, the exact reconstructed objective agrees with the solver
-  objective, the primal constraints pass the declared tolerance, and no solver
-  or executable cap is hit. Selection-fit failure alone does not reject a
+  SCS. A result labelled `optimal` or `optimal_inaccurate` is accepted only if
+  all values are finite, the exact reconstructed objective agrees with the
+  solver objective, the primal constraints pass the declared tolerance, and no
+  solver or executable cap is hit. Thus `optimal_inaccurate` is treated as a
+  status requiring an explicit certificate rather than as either automatic
+  success or automatic failure. Selection-fit failure alone does not reject a
   separately certified full-window fit. Virtual pricing
   policies use the declared
   solver cap before the pure hedge is clipped to the executable cap. Weekly

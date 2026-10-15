@@ -393,6 +393,126 @@ def test_historical_sanos_mean_volatility_solves_cost_lasso_socp() -> None:
     assert fit.zero_policy.maximum_absolute_gradient < 1.0e-6
 
 
+def test_mean_variance_retries_osqp_failure_with_clarabel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    generator = np.random.default_rng(113)
+    instruments = generator.normal(scale=0.01, size=(80, 3))
+    claim = -(0.5 * instruments[:, 0] - 0.2 * instruments[:, 1])
+    original_solve = cp.Problem.solve
+
+    def fail_osqp(
+        problem: cp.Problem,
+        *args: object,
+        **kwargs: object,
+    ) -> float:
+        if kwargs.get("solver") == cp.OSQP:
+            raise cp.error.SolverError("forced OSQP failure")
+        return original_solve(problem, *args, **kwargs)
+
+    monkeypatch.setattr(cp.Problem, "solve", fail_osqp)
+    fit = _fit_policy(
+        instruments,
+        claim,
+        np.zeros(instruments.shape[1]),
+        config=HistoricalSanosConfig(
+            rolling_observations=80,
+            objective=HistoricalSanosObjective.MEAN_VARIANCE,
+            risk_parameter=2.0,
+        ),
+    )
+
+    assert fit.converged
+    assert "OSQP failed: forced OSQP failure" in fit.solver_status
+    assert "CLARABEL=optimal" in fit.solver_status
+
+
+def test_mean_variance_preserves_all_solver_failures_after_bad_certificate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    generator = np.random.default_rng(119)
+    instruments = generator.normal(scale=0.01, size=(80, 3))
+    claim = -0.4 * instruments[:, 0] + generator.normal(scale=0.001, size=80)
+    costs = np.full(instruments.shape[1], 1.0e-5)
+    config = HistoricalSanosConfig(
+        rolling_observations=80,
+        objective=HistoricalSanosObjective.MEAN_VARIANCE,
+        risk_parameter=2.0,
+    )
+    action_scale = hedger._action_scale(instruments, config=config)
+    original_solve = cp.Problem.solve
+
+    def reject_clarabel(
+        problem: cp.Problem,
+        *args: object,
+        **kwargs: object,
+    ) -> float:
+        if kwargs.get("solver") == cp.CLARABEL:
+            raise cp.error.SolverError("forced CLARABEL failure")
+        return original_solve(problem, *args, **kwargs)
+
+    monkeypatch.setattr(cp.Problem, "solve", reject_clarabel)
+    monkeypatch.setattr(
+        hedger,
+        "_maximum_kkt_violation",
+        lambda *args, **kwargs: float("inf"),
+    )
+    result = hedger._minimize_mean_variance(
+        np.zeros(instruments.shape[1]),
+        instruments,
+        claim,
+        costs,
+        config=config,
+        action_scale=action_scale,
+    )
+
+    assert not result.success
+    assert "OSQP=optimal" in result.message
+    assert "CLARABEL failed: forced CLARABEL failure" in result.message
+
+
+def test_mean_volatility_retries_failed_certificate_with_scs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    generator = np.random.default_rng(127)
+    instruments = generator.normal(scale=0.01, size=(80, 3))
+    claim = -0.4 * instruments[:, 0] + generator.normal(scale=0.001, size=80)
+    costs = np.full(instruments.shape[1], 1.0e-5)
+    config = HistoricalSanosConfig(
+        rolling_observations=80,
+        objective=HistoricalSanosObjective.MEAN_VOLATILITY,
+        risk_parameter=2.0,
+    )
+    action_scale = hedger._action_scale(instruments, config=config)
+    original_kkt = hedger._maximum_kkt_violation
+    certificate_calls = 0
+
+    def reject_primary_certificate(*args: object, **kwargs: object) -> float:
+        nonlocal certificate_calls
+        certificate_calls += 1
+        if certificate_calls == 1:
+            return float("inf")
+        return original_kkt(*args, **kwargs)
+
+    monkeypatch.setattr(
+        hedger,
+        "_maximum_kkt_violation",
+        reject_primary_certificate,
+    )
+    result = hedger._minimize_mean_volatility(
+        np.zeros(instruments.shape[1]),
+        instruments,
+        claim,
+        costs,
+        config=config,
+        action_scale=action_scale,
+    )
+
+    assert certificate_calls >= 2
+    assert result.success
+    assert "SCS=optimal" in result.message
+
+
 def test_mean_volatility_exact_zero_norm_is_not_a_false_failure() -> None:
     instruments = np.asarray(
         [
@@ -423,8 +543,10 @@ def test_mean_volatility_canonicalizes_scaled_solver_noise(
 ) -> None:
     generator = np.random.default_rng(103)
     instruments = generator.normal(scale=0.01, size=(80, 2))
-    claim = -0.4 * instruments[:, 0]
+    claim = -0.4 * instruments[:, 0] + generator.normal(scale=1.0e-4, size=80)
     original_solve = cp.Problem.solve
+    original_kkt = hedger._maximum_kkt_violation
+    certified_inactive_coordinates: list[float] = []
 
     def inject_inactive_coordinate_noise(
         problem: cp.Problem,
@@ -439,7 +561,17 @@ def test_mean_volatility_canonicalizes_scaled_solver_noise(
             scaled_action.value = fitted
         return value
 
+    def record_certified_point(*args: object, **kwargs: object) -> float:
+        action = np.asarray(args[0], dtype=np.float64)
+        certified_inactive_coordinates.append(float(action[1]))
+        return original_kkt(*args, **kwargs)
+
     monkeypatch.setattr(cp.Problem, "solve", inject_inactive_coordinate_noise)
+    monkeypatch.setattr(
+        hedger,
+        "_maximum_kkt_violation",
+        record_certified_point,
+    )
     fit = _fit_policy(
         instruments,
         claim,
@@ -452,8 +584,11 @@ def test_mean_volatility_canonicalizes_scaled_solver_noise(
     )
 
     assert fit.converged
+    assert certified_inactive_coordinates[0] != 0.0
+    assert 0.0 in certified_inactive_coordinates[1:]
     assert fit.action[1] == 0.0
     assert fit.maximum_absolute_gradient <= 1.0e-6
+    assert "canonicalization_error=" in fit.solver_status
 
 
 def test_historical_sanos_mean_volatility_reports_recession_cap() -> None:
@@ -485,7 +620,7 @@ def test_historical_sanos_mean_volatility_reports_recession_cap() -> None:
     assert not fit.converged
 
 
-def test_mean_volatility_does_not_accept_uncertified_inaccurate_status(
+def test_mean_volatility_accepts_certified_inaccurate_status(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     generator = np.random.default_rng(97)
@@ -514,8 +649,8 @@ def test_mean_volatility_does_not_accept_uncertified_inaccurate_status(
         ),
     )
 
-    assert not fit.final_converged
-    assert not fit.converged
+    assert fit.final_converged
+    assert fit.converged
     assert "SCS=optimal_inaccurate" in fit.solver_status
 
 

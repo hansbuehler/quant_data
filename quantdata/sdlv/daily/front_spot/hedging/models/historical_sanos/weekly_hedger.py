@@ -699,6 +699,7 @@ class _WeeklyOpenLoopGeometry:
             5.0 * self.config.gradient_tolerance,
             5.0e-8,
         )
+        primary_traces: list[str] = []
         try:
             for attempt, tolerance in enumerate(
                 (self.config.gradient_tolerance, retry_tolerance)
@@ -712,53 +713,109 @@ class _WeeklyOpenLoopGeometry:
                     tol_feas=tolerance,
                 )
                 iterations += int(compiled.problem.solver_stats.num_iters or 0)
+                primary_solver = str(
+                    compiled.problem.solver_stats.solver_name or "CLARABEL"
+                )
+                primary_traces.append(
+                    f"{primary_solver}={compiled.problem.status}"
+                )
                 if compiled.problem.status != cp.OPTIMAL_INACCURATE:
                     break
         except cp.error.SolverError as error:
-            result = OptimizeResult(
-                x=np.asarray(initial[: self.parameter_count], dtype=np.float64),
-                nit=iterations,
-                success=False,
-                optimality=math.inf,
-                message=f"entropy cone solver failed: {error}",
-                objective_error=math.inf,
+            primary_trace = "; ".join(
+                (*primary_traces, f"CLARABEL failed: {error}")
             )
-            result.recession_direction = False
-            result.action_scale = compiled.action_scale
-            return result
-        solver_status, solver_trace, independent_iterations = (
-            self._resolve_inaccurate_conic_problem(compiled.problem)
-        )
-        iterations += independent_iterations
-        if compiled.scaled_positions.value is None:
-            fitted = np.asarray(initial[: self.parameter_count], dtype=np.float64)
+            solver_status, solver_trace, independent_iterations = (
+                self._solve_conic_with_scs(
+                    compiled.problem,
+                    primary_trace=primary_trace,
+                )
+            )
         else:
-            fitted = compiled.action_scale * np.asarray(
-                compiled.scaled_positions.value,
-                dtype=np.float64,
+            solver_status = compiled.problem.status
+            solver_trace = "; ".join(primary_traces)
+            independent_iterations = 0
+            if solver_status == cp.OPTIMAL_INACCURATE:
+                solver_status, solver_trace, independent_iterations = (
+                    self._solve_conic_with_scs(
+                        compiled.problem,
+                        primary_trace=solver_trace,
+                    )
+                )
+        iterations += independent_iterations
+
+        def certify_current_solution() -> tuple[
+            FloatArray,
+            int,
+            bool,
+            float,
+            float,
+            float,
+        ]:
+            if compiled.scaled_positions.value is None:
+                fitted = np.asarray(
+                    initial[: self.parameter_count],
+                    dtype=np.float64,
+                )
+            else:
+                fitted = compiled.action_scale * np.asarray(
+                    compiled.scaled_positions.value,
+                    dtype=np.float64,
+                )
+            cap_hits = int(
+                np.count_nonzero(
+                    np.abs(fitted) >= 0.999 * self.config.solver_position_cap
+                )
             )
-        cap_hits = int(
-            np.count_nonzero(
-                np.abs(fitted) >= 0.999 * self.config.solver_position_cap
+            constraint_violation = _maximum_constraint_violation(compiled.problem)
+            certified, exact_objective, objective_error = self._certify_conic_result(
+                fitted,
+                indices,
+                signed_claim_quantity=signed_claim_quantity,
+                terminal_claim_values_pv=terminal_claim_values_pv,
+                include_translation=False,
+                action_scale=compiled.action_scale,
+                solver_status=solver_status,
+                solver_objective=compiled.problem.value,
+                maximum_constraint_violation=constraint_violation,
             )
-        )
-        fitted = self._canonicalize_positions(
+            return (
+                fitted,
+                cap_hits,
+                certified,
+                exact_objective,
+                objective_error,
+                constraint_violation,
+            )
+
+        (
             fitted,
-            initial[: self.parameter_count],
-            action_scale=compiled.action_scale,
-        )
-        constraint_violation = _maximum_constraint_violation(compiled.problem)
-        certified, exact_objective, objective_error = self._certify_conic_result(
-            fitted,
-            indices,
-            signed_claim_quantity=signed_claim_quantity,
-            terminal_claim_values_pv=terminal_claim_values_pv,
-            include_translation=False,
-            action_scale=compiled.action_scale,
-            solver_status=solver_status,
-            solver_objective=compiled.problem.value,
-            maximum_constraint_violation=constraint_violation,
-        )
+            cap_hits,
+            certified,
+            exact_objective,
+            objective_error,
+            constraint_violation,
+        ) = certify_current_solution()
+        if (
+            not certified
+            and "SCS=" not in solver_trace
+            and "SCS failed:" not in solver_trace
+        ):
+            solver_status, solver_trace, fallback_iterations = (
+                self._solve_conic_with_scs(
+                    compiled.problem,
+                    primary_trace=solver_trace,
+                )
+            )
+            iterations += fallback_iterations
+            (
+                fitted,
+                cap_hits,
+                certified,
+                exact_objective,
+                objective_error,
+                constraint_violation,
+            ) = certify_current_solution()
         result = OptimizeResult(
             x=fitted,
             nit=iterations,
@@ -841,10 +898,11 @@ class _WeeklyOpenLoopGeometry:
             5.0 * self.config.gradient_tolerance,
             5.0e-8,
         )
-        for attempt, tolerance in enumerate(
-            (self.config.gradient_tolerance, retry_tolerance)
-        ):
-            try:
+        primary_traces: list[str] = []
+        try:
+            for attempt, tolerance in enumerate(
+                (self.config.gradient_tolerance, retry_tolerance)
+            ):
                 compiled.problem.solve(
                     solver=cp.CLARABEL,
                     warm_start=attempt == 0,
@@ -853,59 +911,120 @@ class _WeeklyOpenLoopGeometry:
                     tol_gap_rel=tolerance,
                     tol_feas=tolerance,
                 )
-            except cp.error.SolverError as error:
-                result = OptimizeResult(
-                    x=np.asarray(initial, dtype=np.float64),
-                    nit=iterations,
-                    success=False,
-                    optimality=math.inf,
-                    message=f"power cone solver failed: {error}",
-                    objective_error=math.inf,
+                iterations += int(compiled.problem.solver_stats.num_iters or 0)
+                primary_solver = str(
+                    compiled.problem.solver_stats.solver_name or "CLARABEL"
                 )
-                result.action_scale = compiled.action_scale
-                return result
-            iterations += int(compiled.problem.solver_stats.num_iters or 0)
-            if compiled.problem.status != cp.OPTIMAL_INACCURATE:
-                break
-        solver_status, solver_trace, independent_iterations = (
-            self._resolve_inaccurate_conic_problem(compiled.problem)
-        )
-        iterations += independent_iterations
-        if compiled.scaled_positions.value is None:
-            fitted = np.asarray(initial[: self.parameter_count], dtype=np.float64)
+                primary_traces.append(
+                    f"{primary_solver}={compiled.problem.status}"
+                )
+                if compiled.problem.status != cp.OPTIMAL_INACCURATE:
+                    break
+        except cp.error.SolverError as error:
+            primary_trace = "; ".join(
+                (*primary_traces, f"CLARABEL failed: {error}")
+            )
+            solver_status, solver_trace, independent_iterations = (
+                self._solve_conic_with_scs(
+                    compiled.problem,
+                    primary_trace=primary_trace,
+                )
+            )
         else:
-            fitted = compiled.action_scale * np.asarray(
-                compiled.scaled_positions.value,
-                dtype=np.float64,
+            solver_status = compiled.problem.status
+            solver_trace = "; ".join(primary_traces)
+            independent_iterations = 0
+            if solver_status == cp.OPTIMAL_INACCURATE:
+                solver_status, solver_trace, independent_iterations = (
+                    self._solve_conic_with_scs(
+                        compiled.problem,
+                        primary_trace=solver_trace,
+                    )
+                )
+        iterations += independent_iterations
+
+        def certify_current_solution() -> tuple[
+            FloatArray,
+            int,
+            float,
+            bool,
+            float,
+            float,
+            float,
+        ]:
+            if compiled.scaled_positions.value is None:
+                fitted = np.asarray(
+                    initial[: self.parameter_count],
+                    dtype=np.float64,
+                )
+            else:
+                fitted = compiled.action_scale * np.asarray(
+                    compiled.scaled_positions.value,
+                    dtype=np.float64,
+                )
+            cash_translation = (
+                float(initial[-1])
+                if compiled.cash_translation.value is None
+                else float(compiled.cash_translation.value)
             )
-        cash_translation = (
-            float(initial[-1])
-            if compiled.cash_translation.value is None
-            else float(compiled.cash_translation.value)
-        )
-        cap_hits = int(
-            np.count_nonzero(
-                np.abs(fitted) >= 0.999 * self.config.solver_position_cap
+            cap_hits = int(
+                np.count_nonzero(
+                    np.abs(fitted) >= 0.999 * self.config.solver_position_cap
+                )
             )
-        )
-        fitted = self._canonicalize_positions(
-            fitted,
-            initial[: self.parameter_count],
-            action_scale=compiled.action_scale,
-        )
-        parameters = np.concatenate((fitted, [cash_translation]))
-        constraint_violation = _maximum_constraint_violation(compiled.problem)
-        certified, exact_objective, objective_error = self._certify_conic_result(
+            parameters = np.concatenate((fitted, [cash_translation]))
+            constraint_violation = _maximum_constraint_violation(compiled.problem)
+            certified, exact_objective, objective_error = self._certify_conic_result(
+                parameters,
+                indices,
+                signed_claim_quantity=signed_claim_quantity,
+                terminal_claim_values_pv=terminal_claim_values_pv,
+                include_translation=True,
+                action_scale=compiled.action_scale,
+                solver_status=solver_status,
+                solver_objective=compiled.problem.value,
+                maximum_constraint_violation=constraint_violation,
+            )
+            return (
+                parameters,
+                cap_hits,
+                cash_translation,
+                certified,
+                exact_objective,
+                objective_error,
+                constraint_violation,
+            )
+
+        (
             parameters,
-            indices,
-            signed_claim_quantity=signed_claim_quantity,
-            terminal_claim_values_pv=terminal_claim_values_pv,
-            include_translation=True,
-            action_scale=compiled.action_scale,
-            solver_status=solver_status,
-            solver_objective=compiled.problem.value,
-            maximum_constraint_violation=constraint_violation,
-        )
+            cap_hits,
+            cash_translation,
+            certified,
+            exact_objective,
+            objective_error,
+            constraint_violation,
+        ) = certify_current_solution()
+        if (
+            not certified
+            and "SCS=" not in solver_trace
+            and "SCS failed:" not in solver_trace
+        ):
+            solver_status, solver_trace, fallback_iterations = (
+                self._solve_conic_with_scs(
+                    compiled.problem,
+                    primary_trace=solver_trace,
+                )
+            )
+            iterations += fallback_iterations
+            (
+                parameters,
+                cap_hits,
+                cash_translation,
+                certified,
+                exact_objective,
+                objective_error,
+                constraint_violation,
+            ) = certify_current_solution()
         result = OptimizeResult(
             x=parameters,
             nit=iterations,
@@ -1357,7 +1476,10 @@ class _WeeklyOpenLoopGeometry:
         objective_limit = self.config.objective_agreement_tolerance * (
             1.0 + abs(exact_objective)
         )
-        accepted_status = solver_status == cp.OPTIMAL
+        accepted_status = solver_status in {
+            cp.OPTIMAL,
+            cp.OPTIMAL_INACCURATE,
+        }
         accepted = bool(
             accepted_status
             and objective_error <= objective_limit
@@ -1388,26 +1510,41 @@ class _WeeklyOpenLoopGeometry:
         primary_solver = str(problem.solver_stats.solver_name or "primary")
         if primary_status != cp.OPTIMAL_INACCURATE:
             return primary_status, f"{primary_solver}={primary_status}", 0
+        return self._solve_conic_with_scs(
+            problem,
+            primary_trace=f"{primary_solver}={primary_status}",
+        )
+
+    def _solve_conic_with_scs(
+        self,
+        problem: cp.Problem,
+        *,
+        primary_trace: str,
+    ) -> tuple[str | None, str, int]:
+        """Independently solve the unchanged conic objective with SCS."""
         try:
             problem.solve(
                 solver=cp.SCS,
                 warm_start=False,
                 max_iters=max(50_000, self.config.maximum_iterations),
-                eps=self.config.certificate_tolerance,
+                eps=min(
+                    self.config.gradient_tolerance,
+                    0.1 * self.config.certificate_tolerance,
+                ),
                 normalize=True,
                 verbose=False,
             )
         except cp.error.SolverError as error:
             return (
                 None,
-                f"{primary_solver}={primary_status}; SCS failed: {error}",
+                f"{primary_trace}; SCS failed: {error}",
                 0,
             )
         independent_status = problem.status
         iterations = int(problem.solver_stats.num_iters or 0)
         return (
             independent_status,
-            f"{primary_solver}={primary_status}; SCS={independent_status}",
+            f"{primary_trace}; SCS={independent_status}",
             iterations,
         )
 

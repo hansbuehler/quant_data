@@ -538,6 +538,7 @@ def _minimize_mean_volatility(
     scaled_action.value = (
         np.asarray(initial[:instrument_count], dtype=np.float64) / action_scale
     )
+    primary_iterations = 0
     try:
         problem.solve(
             solver=cp.CLARABEL,
@@ -567,108 +568,189 @@ def _minimize_mean_volatility(
                 tol_feas=config.gradient_tolerance,
             )
     except cp.error.SolverError as error:
-        return OptimizeResult(
-            x=np.asarray(initial[:instrument_count], dtype=np.float64),
-            nit=0,
-            success=False,
-            optimality=math.inf,
-            message=f"CLARABEL failed: {error}",
-        )
-    primary_iterations = int(problem.solver_stats.num_iters or 0)
-    solver_status, solver_trace, independent_iterations = (
-        _resolve_inaccurate_conic_problem(problem, config=config)
-    )
-    if scaled_action.value is None:
-        fitted_scaled_action = (
-            np.asarray(initial[:instrument_count], dtype=np.float64) / action_scale
-        )
-    else:
-        fitted_scaled_action = np.asarray(scaled_action.value, dtype=np.float64)
-    fitted_scaled_action[
-        np.abs(fitted_scaled_action) <= config.certificate_tolerance
-    ] = 0.0
-    fitted_action = np.clip(
-        action_scale * fitted_scaled_action,
-        -config.solver_position_cap,
-        config.solver_position_cap,
-    )
-    residual = centered_claim + centered_instruments @ fitted_action
-    residual_standard_deviation = math.sqrt(float(np.mean(residual**2)))
-    zero_residual_tolerance = max(
-        config.gradient_tolerance,
-        np.finfo(np.float64).eps,
-    ) * max(1.0, float(np.std(claim, ddof=0)))
-    if residual_standard_deviation > zero_residual_tolerance:
-        smooth_gradient = (
-            -instrument_center
-            + config.risk_parameter
-            * (centered_instruments.T @ residual)
-            / (observations * residual_standard_deviation)
-            + config.quadratic_ridge * fitted_action / action_scale**2
-        )
-        optimality = _maximum_kkt_violation(
-            fitted_action,
-            smooth_gradient,
-            costs,
-            position_cap=config.solver_position_cap,
-            coordinate_scale=action_scale,
-        )
-    else:
-        # At zero residual volatility the Euclidean norm is nondifferentiable.
-        # Require a solver-certified optimum, including the independent SCS
-        # resolution above when CLARABEL reported an inaccurate status.
-        optimality = 0.0 if solver_status == cp.OPTIMAL else math.inf
-    exact_objective = _objective_and_gradient(
-        fitted_action,
-        instruments,
-        claim,
-        costs,
-        config=config,
-        include_translation=False,
-        action_scale=action_scale,
-    )[0]
-    objective_error = abs(float(problem.value) - exact_objective)
-    objective_limit = config.objective_agreement_tolerance * (
-        1.0 + abs(exact_objective)
-    )
-    unregularized_objective = exact_objective - (
-        0.5
-        * config.quadratic_ridge
-        * float(fitted_scaled_action @ fitted_scaled_action)
-    )
-    recession_direction = bool(
-        np.all(claim == 0.0)
-        and unregularized_objective < -config.certificate_tolerance
-    )
-    accepted_status = solver_status == cp.OPTIMAL
-    success = bool(
-        accepted_status
-        and np.all(np.isfinite(fitted_action))
-        and optimality <= config.certificate_tolerance
-        and objective_error <= objective_limit
-        and not recession_direction
-    )
-    conic_result = OptimizeResult(
-        x=fitted_action,
-        nit=primary_iterations + independent_iterations,
-        success=success,
-        optimality=optimality,
-        message=(
-            f"{solver_trace}; certificate kkt={optimality:.6g} "
-            f"objective_error={objective_error:.6g}"
-            + (
-                f"; recession_direction={unregularized_objective:.6g}"
-                if recession_direction
-                else ""
+        solver_status, solver_trace, independent_iterations = (
+            _solve_conic_with_scs(
+                problem,
+                config=config,
+                primary_trace=f"CLARABEL failed: {error}",
             )
-        ),
-        fun=exact_objective,
-        recession_direction=recession_direction,
-    )
-    if success or recession_direction:
+        )
+    else:
+        primary_iterations = int(problem.solver_stats.num_iters or 0)
+        solver_status, solver_trace, independent_iterations = (
+            _resolve_inaccurate_conic_problem(problem, config=config)
+        )
+    total_iterations = primary_iterations + independent_iterations
+
+    def certify_action(
+        candidate: FloatArray,
+        *,
+        canonicalization_error: float | None = None,
+    ) -> OptimizeResult:
+        candidate_scaled = candidate / action_scale
+        feasibility = float(
+            np.max(
+                np.maximum(
+                    np.abs(candidate) - config.solver_position_cap,
+                    0.0,
+                )
+            )
+        )
+        residual = centered_claim + centered_instruments @ candidate
+        residual_standard_deviation = math.sqrt(float(np.mean(residual**2)))
+        zero_residual_tolerance = max(
+            config.gradient_tolerance,
+            np.finfo(np.float64).eps,
+        ) * max(1.0, float(np.std(claim, ddof=0)))
+        if residual_standard_deviation > zero_residual_tolerance:
+            smooth_gradient = (
+                -instrument_center
+                + config.risk_parameter
+                * (centered_instruments.T @ residual)
+                / (observations * residual_standard_deviation)
+                + config.quadratic_ridge * candidate / action_scale**2
+            )
+            optimality = _maximum_kkt_violation(
+                candidate,
+                smooth_gradient,
+                costs,
+                position_cap=config.solver_position_cap,
+                coordinate_scale=action_scale,
+            )
+        else:
+            # At zero residual volatility the Euclidean norm is nondifferentiable.
+            # Require an independently accepted conic solver status.
+            optimality = (
+                0.0
+                if solver_status in {cp.OPTIMAL, cp.OPTIMAL_INACCURATE}
+                else math.inf
+            )
+        exact_objective = _objective_and_gradient(
+            candidate,
+            instruments,
+            claim,
+            costs,
+            config=config,
+            include_translation=False,
+            action_scale=action_scale,
+        )[0]
+        objective_error = (
+            math.inf
+            if problem.value is None or not math.isfinite(float(problem.value))
+            else abs(float(problem.value) - exact_objective)
+        )
+        objective_limit = config.objective_agreement_tolerance * (
+            1.0 + abs(exact_objective)
+        )
+        unregularized_objective = exact_objective - (
+            0.5
+            * config.quadratic_ridge
+            * float(candidate_scaled @ candidate_scaled)
+        )
+        recession_direction = bool(
+            np.all(claim == 0.0)
+            and unregularized_objective < -config.certificate_tolerance
+        )
+        success = bool(
+            solver_status in {cp.OPTIMAL, cp.OPTIMAL_INACCURATE}
+            and np.all(np.isfinite(candidate))
+            and feasibility <= config.certificate_tolerance
+            and optimality <= config.certificate_tolerance
+            and objective_error <= objective_limit
+            and (
+                canonicalization_error is None
+                or canonicalization_error <= objective_limit
+            )
+            and not recession_direction
+        )
+        canonicalization_trace = (
+            ""
+            if canonicalization_error is None
+            else f" canonicalization_error={canonicalization_error:.6g}"
+        )
+        return OptimizeResult(
+            x=candidate,
+            nit=total_iterations,
+            success=success,
+            optimality=optimality,
+            message=(
+                f"{solver_trace}; certificate kkt={optimality:.6g} "
+                f"objective_error={objective_error:.6g} "
+                f"constraint_violation={feasibility:.6g}"
+                f"{canonicalization_trace}"
+                + (
+                    f"; recession_direction={unregularized_objective:.6g}"
+                    if recession_direction
+                    else ""
+                )
+            ),
+            fun=exact_objective,
+            recession_direction=recession_direction,
+        )
+
+    def certify_current_solution() -> OptimizeResult:
+        raw_scaled_action = (
+            np.asarray(initial[:instrument_count], dtype=np.float64) / action_scale
+            if scaled_action.value is None
+            else np.asarray(scaled_action.value, dtype=np.float64).copy()
+        )
+        raw_action = action_scale * raw_scaled_action
+        raw_result = certify_action(raw_action)
+        raw_feasible = bool(
+            np.all(
+                np.abs(raw_action)
+                <= config.solver_position_cap + config.certificate_tolerance
+            )
+        )
+        if raw_result.success or (
+            raw_result.recession_direction and raw_feasible
+        ):
+            return raw_result
+        canonical_scaled_action = raw_scaled_action.copy()
+        canonical_scaled_action[
+            np.abs(canonical_scaled_action) <= config.certificate_tolerance
+        ] = 0.0
+        canonical_action = np.clip(
+            action_scale * canonical_scaled_action,
+            -config.solver_position_cap,
+            config.solver_position_cap,
+        )
+        if np.array_equal(canonical_action, raw_action):
+            return raw_result
+        canonical_objective = _objective_and_gradient(
+            canonical_action,
+            instruments,
+            claim,
+            costs,
+            config=config,
+            include_translation=False,
+            action_scale=action_scale,
+        )[0]
+        return certify_action(
+            canonical_action,
+            canonicalization_error=abs(
+                canonical_objective - float(raw_result.fun)
+            ),
+        )
+
+    conic_result = certify_current_solution()
+    if (
+        not conic_result.success
+        and not conic_result.recession_direction
+        and "SCS=" not in solver_trace
+        and "SCS failed:" not in solver_trace
+    ):
+        solver_status, solver_trace, fallback_iterations = _solve_conic_with_scs(
+            problem,
+            config=config,
+            primary_trace=solver_trace,
+        )
+        total_iterations += fallback_iterations
+        conic_result = certify_current_solution()
+    if conic_result.success or conic_result.recession_direction:
         return conic_result
     refined = _minimize_exact_cost_policy(
-        fitted_action,
+        np.asarray(conic_result.x, dtype=np.float64),
         instruments,
         claim,
         costs,
@@ -692,26 +774,43 @@ def _resolve_inaccurate_conic_problem(
     primary_solver = str(problem.solver_stats.solver_name or "CLARABEL")
     if primary_status != cp.OPTIMAL_INACCURATE:
         return primary_status, f"{primary_solver}={primary_status}", 0
+    return _solve_conic_with_scs(
+        problem,
+        config=config,
+        primary_trace=f"{primary_solver}={primary_status}",
+    )
+
+
+def _solve_conic_with_scs(
+    problem: cp.Problem,
+    *,
+    config: HistoricalSanosConfig,
+    primary_trace: str,
+) -> tuple[str | None, str, int]:
+    """Independently solve the unchanged conic objective with SCS."""
     try:
         problem.solve(
             solver=cp.SCS,
             warm_start=False,
             max_iters=max(50_000, config.maximum_iterations),
-            eps=config.certificate_tolerance,
+            eps=min(
+                config.gradient_tolerance,
+                0.1 * config.certificate_tolerance,
+            ),
             normalize=True,
             verbose=False,
         )
     except cp.error.SolverError as error:
         return (
             None,
-            f"{primary_solver}={primary_status}; SCS failed: {error}",
+            f"{primary_trace}; SCS failed: {error}",
             0,
         )
     independent_status = problem.status
     iterations = int(problem.solver_stats.num_iters or 0)
     return (
         independent_status,
-        f"{primary_solver}={primary_status}; SCS={independent_status}",
+        f"{primary_trace}; SCS={independent_status}",
         iterations,
     )
 
@@ -725,63 +824,195 @@ def _minimize_mean_variance(
     config: HistoricalSanosConfig,
     action_scale: FloatArray,
 ) -> OptimizeResult:
-    """Solve the quadratic spread-cost problem by coordinate descent."""
+    """Solve the quadratic spread-cost problem and certify original actions."""
+    observations, instrument_count = instruments.shape
     centered_instruments = instruments - np.mean(instruments, axis=0)
     centered_claim = claim - np.mean(claim)
-    risk = config.risk_parameter
-    covariance = centered_instruments.T @ centered_instruments / len(instruments)
-    hessian = risk * covariance
-    hessian.flat[:: len(hessian) + 1] += (
-        config.quadratic_ridge / action_scale**2
+    instrument_center = np.mean(instruments, axis=0)
+    scaled_action = cp.Variable(instrument_count)
+    action = cp.multiply(action_scale, scaled_action)
+    residual = centered_claim + centered_instruments @ action
+    objective = cp.Minimize(
+        -float(np.mean(claim))
+        - instrument_center @ action
+        + 0.5
+        * config.risk_parameter
+        * cp.sum_squares(residual)
+        / observations
+        + costs @ cp.abs(action)
+        + 0.5 * config.quadratic_ridge * cp.sum_squares(scaled_action)
     )
-    linear = (
-        risk * (centered_instruments.T @ centered_claim / len(instruments))
-        - np.mean(instruments, axis=0)
+    problem = cp.Problem(
+        objective,
+        [
+            action >= -config.solver_position_cap,
+            action <= config.solver_position_cap,
+        ],
     )
-    action = np.asarray(initial[: instruments.shape[1]], dtype=np.float64).copy()
-    gradient = hessian @ action + linear
-    converged = False
-    optimality = math.inf
+    scaled_action.value = (
+        np.asarray(initial[:instrument_count], dtype=np.float64) / action_scale
+    )
     iterations = 0
-    for iterations in range(1, config.maximum_iterations + 1):
-        for coordinate in range(len(action)):
-            diagonal = hessian[coordinate, coordinate]
-            if diagonal <= 0.0:
-                raise FloatingPointError("mean-variance Hessian diagonal is not positive")
-            updated = np.clip(
-                _soft_threshold(
-                    diagonal * action[coordinate] - gradient[coordinate],
-                    costs[coordinate],
+    traces: list[str] = []
+    last_result: OptimizeResult | None = None
+    for solver in (cp.OSQP, cp.CLARABEL):
+        try:
+            if solver == cp.OSQP:
+                problem.solve(
+                    solver=solver,
+                    warm_start=False,
+                    max_iter=max(10_000, config.maximum_iterations),
+                    eps_abs=config.gradient_tolerance,
+                    eps_rel=config.gradient_tolerance,
+                    polishing=True,
                 )
-                / diagonal,
-                -config.solver_position_cap,
-                config.solver_position_cap,
-            )
-            change = updated - action[coordinate]
-            if change != 0.0:
-                action[coordinate] = updated
-                gradient += hessian[:, coordinate] * change
-        optimality = _maximum_kkt_violation(
-            action,
-            gradient,
-            costs,
-            position_cap=config.solver_position_cap,
-            coordinate_scale=action_scale,
+            else:
+                problem.solve(
+                    solver=solver,
+                    warm_start=False,
+                    max_iter=config.maximum_iterations,
+                    tol_gap_abs=config.certificate_tolerance,
+                    tol_gap_rel=config.certificate_tolerance,
+                    tol_feas=config.certificate_tolerance,
+                )
+        except cp.error.SolverError as error:
+            traces.append(f"{solver} failed: {error}")
+            continue
+        iterations += int(problem.solver_stats.num_iters or 0)
+        solver_name = str(problem.solver_stats.solver_name or solver)
+        solver_status = problem.status
+        traces.append(f"{solver_name}={solver_status}")
+        raw_scaled_action = (
+            np.asarray(initial[:instrument_count], dtype=np.float64) / action_scale
+            if scaled_action.value is None
+            else np.asarray(scaled_action.value, dtype=np.float64).copy()
         )
-        if optimality <= config.certificate_tolerance:
-            converged = True
-            break
+        raw_action = action_scale * raw_scaled_action
+
+        def certify_action(
+            candidate: FloatArray,
+            *,
+            canonicalization_error: float | None = None,
+        ) -> OptimizeResult:
+            feasibility = float(
+                np.max(
+                    np.maximum(
+                        np.abs(candidate) - config.solver_position_cap,
+                        0.0,
+                    )
+                )
+            )
+            residual_value = centered_claim + centered_instruments @ candidate
+            smooth_gradient = (
+                -instrument_center
+                + config.risk_parameter
+                * (centered_instruments.T @ residual_value)
+                / observations
+                + config.quadratic_ridge * candidate / action_scale**2
+            )
+            optimality = _maximum_kkt_violation(
+                candidate,
+                smooth_gradient,
+                costs,
+                position_cap=config.solver_position_cap,
+                coordinate_scale=action_scale,
+            )
+            exact_objective = _objective_and_gradient(
+                candidate,
+                instruments,
+                claim,
+                costs,
+                config=config,
+                include_translation=False,
+                action_scale=action_scale,
+            )[0]
+            objective_error = (
+                math.inf
+                if problem.value is None or not math.isfinite(float(problem.value))
+                else abs(float(problem.value) - exact_objective)
+            )
+            objective_limit = config.objective_agreement_tolerance * (
+                1.0 + abs(exact_objective)
+            )
+            success = bool(
+                solver_status in {cp.OPTIMAL, cp.OPTIMAL_INACCURATE}
+                and feasibility <= config.certificate_tolerance
+                and optimality <= config.certificate_tolerance
+                and objective_error <= objective_limit
+                and (
+                    canonicalization_error is None
+                    or canonicalization_error <= objective_limit
+                )
+            )
+            canonicalization_trace = (
+                ""
+                if canonicalization_error is None
+                else f" canonicalization_error={canonicalization_error:.6g}"
+            )
+            return OptimizeResult(
+                x=candidate,
+                nit=iterations,
+                success=success,
+                optimality=optimality,
+                message=(
+                    "; ".join(traces)
+                    + f"; certificate kkt={optimality:.6g} "
+                    f"objective_error={objective_error:.6g} "
+                    f"constraint_violation={feasibility:.6g}"
+                    f"{canonicalization_trace}"
+                ),
+                fun=exact_objective,
+            )
+
+        raw_result = certify_action(raw_action)
+        if raw_result.success:
+            return raw_result
+        canonical_scaled_action = raw_scaled_action.copy()
+        canonical_scaled_action[
+            np.abs(canonical_scaled_action) <= config.certificate_tolerance
+        ] = 0.0
+        canonical_action = np.clip(
+            action_scale * canonical_scaled_action,
+            -config.solver_position_cap,
+            config.solver_position_cap,
+        )
+        if not np.array_equal(canonical_action, raw_action):
+            canonical_objective = _objective_and_gradient(
+                canonical_action,
+                instruments,
+                claim,
+                costs,
+                config=config,
+                include_translation=False,
+                action_scale=action_scale,
+            )[0]
+            canonicalization_error = abs(
+                canonical_objective - float(raw_result.fun)
+            )
+            canonical_result = certify_action(
+                canonical_action,
+                canonicalization_error=canonicalization_error,
+            )
+            if canonical_result.success:
+                return canonical_result
+            last_result = canonical_result
+        else:
+            last_result = raw_result
+    if last_result is not None:
+        _, separator, diagnostics = str(last_result.message).partition(
+            "; certificate"
+        )
+        last_result.message = "; ".join(traces) + (
+            f"; certificate{diagnostics}" if separator else ""
+        )
+        return last_result
     return OptimizeResult(
-        x=action,
+        x=np.asarray(initial[:instrument_count], dtype=np.float64),
         nit=iterations,
-        success=converged,
-        optimality=optimality,
-        message=("converged" if converged else "maximum iterations reached"),
+        success=False,
+        optimality=math.inf,
+        message="; ".join(traces) or "no mean-variance solver completed",
     )
-
-
-def _soft_threshold(value: float, threshold: float) -> float:
-    return math.copysign(max(abs(value) - threshold, 0.0), value)
 
 
 def _maximum_kkt_violation(
