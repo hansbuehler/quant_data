@@ -1397,7 +1397,7 @@ it requires record-level population, objective, price, cost, inference,
 rendering, provenance, and public-data-boundary reconciliation.
 The requirement-by-requirement acceptance state and the evidence still needed
 for completion are tracked in
-`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-14-plan-completion-audit.md`.
+`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-15-plan-completion-audit.md`.
 
 ## Minimum Test Gates
 
