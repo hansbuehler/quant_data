@@ -295,6 +295,7 @@ def test_weekly_aggregation_requires_two_complete_origins(
         fit_cap_hits=0,
         executed_cap_hits=0,
         nonconverged_fits=0,
+        recession_direction_fits=0,
         cap_hits=0,
     )
 

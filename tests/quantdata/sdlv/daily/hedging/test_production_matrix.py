@@ -97,10 +97,7 @@ def test_native_commands_pin_common_daily_controls() -> None:
         assert case.command[case.command.index("--start") + 1] == "2023-01-01"
         assert case.command[case.command.index("--end") + 1] == "2025-12-31"
         assert "--validate-dataset" in case.command
-        if case.objective == "mean-volatility":
-            assert "--allow-nonconvergence" in case.command
-        else:
-            assert "--allow-nonconvergence" not in case.command
+        assert "--allow-nonconvergence" not in case.command
 
 
 @pytest.mark.parametrize(

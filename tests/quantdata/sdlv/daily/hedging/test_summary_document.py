@@ -64,6 +64,9 @@ def test_summary_document_reports_full_grid_without_ex_post_selection() -> None:
     assert "daily-objective-tables.tex" in document
     assert "weekly-target-appendix.tex" in document
     assert "genuine risk-neutral expectation" in document
+    assert "unannualized realized-variance payoff" in document
+    assert "95\\% end-of-day" in document
+    assert "105\\% end-of-day" in document
     catalogue = document.split("\\section{Model Catalogue}", maxsplit=1)[1]
     assert catalogue.index("\\subsection{SANOS--LV}") < catalogue.index(
         "\\subsection{Historical SANOS}"
@@ -140,7 +143,7 @@ def test_summary_document_accepts_canonical_weekly_diffusion_model() -> None:
         weekly_target_appendix="weekly-target.tex",
     )
 
-    assert "\\subsection{AD--Seq--Vol}" in document
+    assert "\\subsection{AD--Seq--Vol (Renyuan Xu coauthored)}" in document
 
 
 def test_summary_document_writer_rebuilds_from_authenticated_matrices(

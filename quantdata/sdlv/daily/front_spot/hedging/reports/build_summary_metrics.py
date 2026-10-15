@@ -65,8 +65,8 @@ _MODEL_DISPLAY_NAMES = {
     "gromm": "GROMM",
     "gromm-q-dlv-vega": "GROMM Q + DLV vegas",
     "volgan": "VolGAN",
-    "diffusion-ad-seq-vol": "AD--Seq--Vol",
-    "diffusion-ad-seq-vol-ft": "AD--Seq--Vol--FT",
+    "diffusion-ad-seq-vol": "AD--Seq--Vol (R. Xu coauthored)",
+    "diffusion-ad-seq-vol-ft": "AD--Seq--Vol--FT (R. Xu coauthored)",
 }
 
 

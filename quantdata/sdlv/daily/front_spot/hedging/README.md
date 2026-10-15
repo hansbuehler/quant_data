@@ -39,7 +39,8 @@ training dependencies.
 - The full-universe covariance Phase-3 implementation, CPU smoke, and
   independent quant re-review passed; its 611-origin production run is in
   progress.
-- The resumable daily runner also supports VolGAN and AD-Seq-Vol. One-origin
+- The resumable daily runner also supports VolGAN and the Renyuan Xu coauthored
+  AD-Seq-Vol / AD-Seq-Vol-FT baselines. One-origin
   integration runs passed for all 20 calibrated targets on CPU and a
   `gpuctl`-managed GPU respectively, with no cap hit. These abbreviated fits
   validate orchestration only; they are not benchmark results. Generated-model

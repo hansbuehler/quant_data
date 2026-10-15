@@ -83,6 +83,7 @@ def _run(
     spot_position: float = 0.0,
     fit_converged: bool = True,
     fit_cap_hits: int = 0,
+    fit_recession_direction: bool = False,
 ) -> WeeklyModelRun:
     terminal_date = origin_date + timedelta(days=7)
     market_price = 0.10
@@ -142,6 +143,9 @@ def _run(
         fit_price_records=prices,
         policy_fit_converged=tuple(fit_converged for _ in range(5)),
         policy_fit_cap_hits=tuple(fit_cap_hits for _ in range(5)),
+        policy_fit_recession_directions=tuple(
+            fit_recession_direction for _ in range(5)
+        ),
         fit_long_prices_origin_pv=np.full(5, model_price),
         spot_positions=np.full(5, spot_position),
         option_positions=np.zeros((5, 2)),
@@ -292,6 +296,7 @@ def test_weekly_runner_rejects_incomplete_book_and_cap_hits(
         "executed_cap_hits": 5,
         "fit_cap_hits": 0,
         "nonconverged_fits": 0,
+        "recession_direction_fits": 0,
     }
 
 
@@ -345,6 +350,39 @@ def test_weekly_runner_authenticates_internal_fit_diagnostics_without_duplicatio
             output_directory=tmp_path / "strict-nonconverged",
         )
 
+    recession_output = tmp_path / "strict-recession"
+
+    def recession_book(_panel: PublicHedgingPanel, origin_date: date):
+        runs = list(_book(origin_date))
+        runs[0] = _run(
+            origin_date,
+            target_label=weekly_targets()[0].label,
+            claim_quantity=0.5,
+            fit_converged=False,
+            fit_cap_hits=3,
+            fit_recession_direction=True,
+        )
+        return tuple(runs)
+
+    with pytest.raises(RuntimeError, match="1 mean-volatility recession-direction"):
+        run_weekly_evaluation(
+            panel,
+            spec=strict,
+            run_book=recession_book,
+            output_directory=recession_output,
+        )
+    recession_failure = load_numerical_gate_failure(
+        recession_output / NUMERICAL_GATE_FAILURE_FILENAME
+    )
+    assert recession_failure["classification"] == (
+        "mean-volatility-recession-direction"
+    )
+    assert recession_failure["triggered_gates"] == [
+        "mean-volatility-recession-direction",
+        "policy-fit-cap-hit",
+        "nonconverged-fit",
+    ]
+
     permitted = replace(strict, require_no_cap_hits=False)
     output = tmp_path / "permitted-fit-cap"
     summary = run_weekly_evaluation(
@@ -356,6 +394,7 @@ def test_weekly_runner_authenticates_internal_fit_diagnostics_without_duplicatio
     assert summary.fit_cap_hits == 3
     assert summary.executed_cap_hits == 0
     assert summary.nonconverged_fits == 1
+    assert summary.recession_direction_fits == 0
     assert summary.cap_hits == 3
     record = json.loads(
         (output / "records" / f"{origin.isoformat()}.json").read_text(
@@ -366,6 +405,7 @@ def test_weekly_runner_authenticates_internal_fit_diagnostics_without_duplicatio
         "fit_cap_hits": 3,
         "executed_cap_hits": 0,
         "nonconverged_fits": 1,
+        "recession_direction_fits": 0,
         "cap_hits": 3,
     }
 

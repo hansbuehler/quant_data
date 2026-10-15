@@ -19,7 +19,7 @@ class HistoricalSanosObjective(StrEnum):
     POWER_EXPONENTIAL = "power-exponential"
 
 
-@version("1.11")
+@version("1.14")
 @dataclass(frozen=True, kw_only=True)
 class HistoricalSanosConfig:
     """Logical settings for rolling empirical SANOS hedging."""
@@ -36,7 +36,11 @@ class HistoricalSanosConfig:
     position_cap: float = 1_000_000.0
     solver_position_cap: float = 1_000_000.0
     cost_smoothing: float = 1.0e-6
-    quadratic_ridge: float = 1.0e-6
+    quadratic_ridge: float = 1.0e-4
+    certificate_tolerance: float = 1.0e-6
+    objective_agreement_tolerance: float = 1.0e-7
+    scale_floor: float = 1.0e-8
+    thin_sample_ratio: float = 2.0
 
     def __post_init__(self) -> None:
         verify_inp(bool(self.label.strip()), lambda: "label must be non-empty")
@@ -80,4 +84,25 @@ class HistoricalSanosConfig:
         verify_inp(
             math.isfinite(self.quadratic_ridge) and self.quadratic_ridge >= 0.0,
             lambda: "quadratic_ridge must be finite and non-negative",
+        )
+        verify_inp(
+            math.isfinite(self.certificate_tolerance)
+            and self.certificate_tolerance >= self.gradient_tolerance,
+            lambda: (
+                "certificate_tolerance must be finite and at least the solver "
+                "gradient_tolerance"
+            ),
+        )
+        verify_inp(
+            math.isfinite(self.objective_agreement_tolerance)
+            and self.objective_agreement_tolerance > 0.0,
+            lambda: "objective_agreement_tolerance must be finite-positive",
+        )
+        verify_inp(
+            math.isfinite(self.scale_floor) and self.scale_floor > 0.0,
+            lambda: "scale_floor must be finite-positive",
+        )
+        verify_inp(
+            math.isfinite(self.thin_sample_ratio) and self.thin_sample_ratio > 0.0,
+            lambda: "thin_sample_ratio must be finite-positive",
         )

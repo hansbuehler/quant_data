@@ -1,4 +1,10 @@
-# Adapted sequential volatility diffusion
+# Adapted sequential volatility diffusion (Renyuan Xu coauthored baseline)
+
+This directory implements the AD-Seq-Vol and AD-Seq-Vol-FT baselines from
+Han, Zhang, Torres, Acero, and Renyuan Xu, *Diffusion Models for Dynamic
+Volatility Surface Generation and Data-Driven Hedging* (2026). The benchmark
+and reports retain the published model names and stable internal identities;
+"Renyuan" is not a separate duplicate model.
 
 - **Inputs:** 22-day exact-session sequences reconstructed solely from released
   SANOS states. Each day has a log-IV channel and the released normalized

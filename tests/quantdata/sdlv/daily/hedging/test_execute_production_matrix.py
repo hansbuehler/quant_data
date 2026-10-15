@@ -355,6 +355,7 @@ def _write_authenticated_weekly_output(
         fit_cap_hits=cap_hits,
         executed_cap_hits=0,
         nonconverged_fits=int(cap_hits > 0),
+        recession_direction_fits=0,
         cap_hits=cap_hits,
     )
     summary_path = output / "summary.json"

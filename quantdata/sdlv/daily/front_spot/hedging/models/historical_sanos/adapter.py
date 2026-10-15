@@ -174,6 +174,9 @@ def evaluate_historical_sanos_daily_book(
         linear_transaction_costs=costs,
         config=config,
     )
+    observation_parameter_ratio = (
+        len(returns.training_origin_dates) / returns.instrument_returns.shape[1]
+    )
     results: list[HedgeSmokeResult] = []
     for sample, claim_quantity, fit in zip(
         samples,
@@ -202,10 +205,17 @@ def evaluate_historical_sanos_daily_book(
                         returns.training_terminal_dates[-1].isoformat()
                     ),
                     "instrument_count": returns.instrument_returns.shape[1],
+                    "observation_parameter_ratio": observation_parameter_ratio,
+                    "statistically_thin": (
+                        observation_parameter_ratio < config.thin_sample_ratio
+                    ),
                     "target_count": returns.target_returns.shape[1],
                     "claim_quantity": float(claim_quantity),
                     "objective": config.objective.value,
                     "risk_parameter": config.risk_parameter,
+                    "quadratic_ridge": config.quadratic_ridge,
+                    "regularization_coordinates": "unit-rms instrument gains",
+                    "certificate_tolerance": config.certificate_tolerance,
                     "claim_training_loss": fit.claim_policy.training_loss,
                     "claim_validation_loss": fit.claim_policy.validation_loss,
                     "zero_training_loss": fit.zero_policy.training_loss,
@@ -223,6 +233,26 @@ def evaluate_historical_sanos_daily_book(
                     ),
                     "zero_policy_final_converged": (
                         fit.zero_policy.final_converged
+                    ),
+                    "claim_policy_selection_solver_status": (
+                        fit.claim_policy.selection_solver_status
+                    ),
+                    "zero_policy_selection_solver_status": (
+                        fit.zero_policy.selection_solver_status
+                    ),
+                    "claim_policy_solver_status": fit.claim_policy.solver_status,
+                    "zero_policy_solver_status": fit.zero_policy.solver_status,
+                    "claim_policy_selection_recession_direction": (
+                        fit.claim_policy.selection_recession_direction
+                    ),
+                    "zero_policy_selection_recession_direction": (
+                        fit.zero_policy.selection_recession_direction
+                    ),
+                    "claim_policy_recession_direction": (
+                        fit.claim_policy.recession_direction
+                    ),
+                    "zero_policy_recession_direction": (
+                        fit.zero_policy.recession_direction
                     ),
                     "claim_policy_selection_maximum_optimality_residual": (
                         fit.claim_policy.selection_maximum_absolute_gradient

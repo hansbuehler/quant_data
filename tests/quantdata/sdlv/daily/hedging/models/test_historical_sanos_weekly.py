@@ -209,6 +209,211 @@ def test_historical_weekly_fit_respects_expiry_and_returns_pure_hedge(
     assert fit.prices.buyer <= fit.prices.seller
 
 
+def test_weekly_rejects_inaccurate_status_without_independent_optimum() -> None:
+    scenario_set = _scenario_set(scenario_count=60)
+    config = HistoricalSanosConfig(
+        rolling_observations=60,
+        objective=HistoricalSanosObjective.ENTROPY,
+        risk_parameter=2.0,
+    )
+    geometry = _WeeklyOpenLoopGeometry(
+        scenario_set,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=config,
+    )
+    indices = np.arange(scenario_set.scenarios.scenario_count, dtype=np.int64)
+    parameters = np.zeros(geometry.parameter_count)
+    action_scale = geometry._action_scale(indices)
+    exact_objective = geometry._objective_value(
+        parameters,
+        indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=(
+            scenario_set.scenarios.terminal_claim_values_pv
+        ),
+        include_translation=False,
+        action_scale=action_scale,
+    )
+
+    rejected, _, objective_error = geometry._certify_conic_result(
+        parameters,
+        indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=(
+            scenario_set.scenarios.terminal_claim_values_pv
+        ),
+        include_translation=False,
+        action_scale=action_scale,
+        solver_status=cp.OPTIMAL_INACCURATE,
+        solver_objective=exact_objective,
+        maximum_constraint_violation=0.0,
+    )
+    accepted, _, accepted_error = geometry._certify_conic_result(
+        parameters,
+        indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=(
+            scenario_set.scenarios.terminal_claim_values_pv
+        ),
+        include_translation=False,
+        action_scale=action_scale,
+        solver_status=cp.OPTIMAL,
+        solver_objective=exact_objective,
+        maximum_constraint_violation=0.0,
+    )
+
+    assert not rejected
+    assert objective_error == pytest.approx(0.0)
+    assert accepted
+    assert accepted_error == pytest.approx(0.0)
+
+
+def test_weekly_inaccurate_primary_requires_independent_scs_optimum(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scenario_set = _scenario_set(scenario_count=60)
+    config = HistoricalSanosConfig(
+        rolling_observations=60,
+        objective=HistoricalSanosObjective.ENTROPY,
+        risk_parameter=2.0,
+    )
+    geometry = _WeeklyOpenLoopGeometry(
+        scenario_set,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=config,
+    )
+    original_solve = cp.Problem.solve
+
+    def force_primary_inaccurate(
+        problem: cp.Problem,
+        *args: object,
+        **kwargs: object,
+    ) -> float:
+        value = original_solve(problem, *args, **kwargs)
+        if kwargs.get("solver") == cp.CLARABEL:
+            problem._status = cp.OPTIMAL_INACCURATE
+        return value
+
+    monkeypatch.setattr(cp.Problem, "solve", force_primary_inaccurate)
+    result = geometry._minimize_entropy_cost(
+        np.zeros(geometry.parameter_count),
+        np.arange(scenario_set.scenarios.scenario_count, dtype=np.int64),
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=(
+            scenario_set.scenarios.terminal_claim_values_pv
+        ),
+    )
+
+    assert result.success
+    assert "CLARABEL=optimal_inaccurate; SCS=optimal" in result.message
+    assert result.constraint_violation <= config.certificate_tolerance
+
+
+def test_weekly_standardized_ridge_is_scale_invariant() -> None:
+    scenario_set = _scenario_set(scenario_count=80)
+    spot_scale = 3.0
+    option_scale = np.asarray([0.4, 2.0])
+    rescaled_scenarios = replace(
+        scenario_set.scenarios,
+        spot_values_pv=scenario_set.scenarios.spot_values_pv * spot_scale,
+        spot_step_gains=scenario_set.scenarios.spot_step_gains * spot_scale,
+        option_step_gains=(
+            scenario_set.scenarios.option_step_gains
+            * option_scale[None, None, :]
+        ),
+        option_half_spreads_pv=(
+            scenario_set.scenarios.option_half_spreads_pv
+            * option_scale[None, None, :]
+        ),
+    )
+    rescaled_set = replace(scenario_set, scenarios=rescaled_scenarios)
+    config = HistoricalSanosConfig(
+        rolling_observations=80,
+        objective=HistoricalSanosObjective.ENTROPY,
+        risk_parameter=2.0,
+        gradient_tolerance=1.0e-10,
+    )
+    base_geometry = _WeeklyOpenLoopGeometry(
+        scenario_set,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=config,
+    )
+    rescaled_geometry = _WeeklyOpenLoopGeometry(
+        rescaled_set,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=config,
+    )
+
+    base = base_geometry.fit_policy(signed_claim_quantity=1.0)
+    rescaled = rescaled_geometry.fit_policy(signed_claim_quantity=1.0)
+
+    assert base.converged
+    assert rescaled.converged
+    np.testing.assert_allclose(
+        rescaled.spot_positions * spot_scale,
+        base.spot_positions,
+        atol=2.0e-4,
+        rtol=1.0e-3,
+    )
+    np.testing.assert_allclose(
+        rescaled.option_positions * option_scale[None, :],
+        base.option_positions,
+        atol=2.0e-4,
+        rtol=1.0e-3,
+    )
+
+
+def test_weekly_selection_failure_does_not_reject_certified_final_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scenario_set = _scenario_set(scenario_count=60)
+    config = HistoricalSanosConfig(
+        rolling_observations=60,
+        objective=HistoricalSanosObjective.ENTROPY,
+        risk_parameter=2.0,
+    )
+    geometry = _WeeklyOpenLoopGeometry(
+        scenario_set,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=config,
+    )
+    calls = 0
+
+    def failed_selection_then_final(
+        initial: np.ndarray,
+        indices: np.ndarray,
+        **_: object,
+    ) -> SimpleNamespace:
+        nonlocal calls
+        calls += 1
+        result = SimpleNamespace(
+            x=np.zeros_like(initial),
+            nit=1,
+            success=calls == 2,
+            optimality=0.0 if calls == 2 else 1.0,
+            message="optimal" if calls == 2 else "selection failed",
+            objective_error=0.0 if calls == 2 else 1.0,
+            action_scale=geometry._action_scale(
+                np.asarray(indices, dtype=np.int64)
+            ),
+        )
+        return result
+
+    monkeypatch.setattr(geometry, "_minimize", failed_selection_then_final)
+    fit = geometry.fit_policy(signed_claim_quantity=1.0)
+
+    assert calls == 2
+    assert fit.selection_solver_status == "selection failed"
+    assert fit.solver_status == "optimal"
+    assert fit.converged
+    assert fit.cap_hits == 0
+
+
 @pytest.mark.parametrize(
     "objective",
     (
@@ -490,7 +695,7 @@ def test_weekly_mean_variance_osqp_matches_clarabel_reference() -> None:
         instrument_gains=instrument_gains,
     )
     compiled.claim.value = claim
-    compiled.positions.value = np.zeros(reference.parameter_count)
+    compiled.scaled_positions.value = np.zeros(reference.parameter_count)
     compiled.problem.solve(
         solver=cp.CLARABEL,
         warm_start=False,
@@ -503,6 +708,81 @@ def test_weekly_mean_variance_osqp_matches_clarabel_reference() -> None:
     assert compiled.problem.status == cp.OPTIMAL
     assert fit.converged
     assert fit.training_loss == pytest.approx(compiled.problem.value, abs=1.0e-8)
+
+
+def test_weekly_mean_variance_certifies_raw_solver_point(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scenarios = _scenario_set().scenarios
+    geometry = _WeeklyOpenLoopGeometry(
+        scenarios,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=HistoricalSanosConfig(
+            rolling_observations=80,
+            objective=HistoricalSanosObjective.MEAN_VARIANCE,
+            risk_parameter=3.0,
+            maximum_iterations=2_000,
+        ),
+    )
+
+    def reject_canonicalization(*_: object, **__: object) -> np.ndarray:
+        raise AssertionError("raw convex solution must not be modified")
+
+    monkeypatch.setattr(
+        geometry,
+        "_canonicalize_positions",
+        reject_canonicalization,
+    )
+    fit = geometry.fit_policy(signed_claim_quantity=1.0)
+
+    assert fit.converged
+
+
+def test_weekly_mean_variance_retries_failed_raw_certificate_with_clarabel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scenarios = _scenario_set().scenarios
+    geometry = _WeeklyOpenLoopGeometry(
+        scenarios,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=HistoricalSanosConfig(
+            rolling_observations=80,
+            objective=HistoricalSanosObjective.MEAN_VARIANCE,
+            risk_parameter=3.0,
+            maximum_iterations=2_000,
+        ),
+    )
+    original_certificate = geometry._certify_conic_result
+    certificate_calls = 0
+
+    def reject_primary_certificate(*args: object, **kwargs: object):
+        nonlocal certificate_calls
+        certificate_calls += 1
+        accepted, exact_objective, objective_error = original_certificate(
+            *args,
+            **kwargs,
+        )
+        if certificate_calls == 1:
+            return False, exact_objective, objective_error
+        return accepted, exact_objective, objective_error
+
+    monkeypatch.setattr(
+        geometry,
+        "_certify_conic_result",
+        reject_primary_certificate,
+    )
+    result = geometry._minimize_convex_cost_lasso(
+        np.zeros(geometry.parameter_count),
+        np.arange(scenarios.scenario_count, dtype=np.int64),
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
+    )
+
+    assert certificate_calls == 2
+    assert result.success
+    assert "fallback CLARABEL=optimal" in result.message
 
 
 def test_weekly_shared_pricing_context_is_target_order_independent() -> None:
@@ -663,6 +943,9 @@ def test_historical_weekly_records_virtual_recession_without_executable_cap() ->
     assert fit.long_policy.spot_positions[0] == pytest.approx(100.0, abs=1.0e-5)
     assert fit.short_policy.spot_positions[0] == pytest.approx(100.0, abs=1.0e-5)
     assert fit.zero_policy.spot_positions[0] == pytest.approx(100.0, abs=1.0e-5)
+    assert fit.zero_policy.recession_direction
+    assert "recession_direction=" in fit.zero_policy.solver_status
+    assert fit.recession_direction
     assert fit.internal_cap_hits >= 3
     assert fit.executable_cap_hits == 0
     assert fit.spot_positions[0] == pytest.approx(0.0, abs=1.0e-5)
@@ -690,6 +973,7 @@ def test_historical_weekly_records_virtual_recession_without_executable_cap() ->
         hedge=diagnostic_fit,
     )
     assert policy.cap_hits == 2
+    assert policy.recession_direction
     assert policy.converged is False
 
 

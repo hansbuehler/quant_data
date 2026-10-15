@@ -30,6 +30,7 @@ FAILURE_CLASSIFICATIONS = frozenset(
         "position-cap-hit",
         "policy-fit-cap-hit",
         "nonconverged-fit",
+        "mean-volatility-recession-direction",
     }
 )
 _PATH_OPTIONS = frozenset({"--checkpoint-directory", "--output"})

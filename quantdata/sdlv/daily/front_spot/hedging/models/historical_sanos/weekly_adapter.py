@@ -67,6 +67,11 @@ class HistoricalSanosWeeklyPolicy:
         """Return internal solver cap hits for this fit."""
         return self.hedge.internal_cap_hits
 
+    @property
+    def recession_direction(self) -> bool:
+        """Return whether the unregularized objective has a recession direction."""
+        return self.hedge.recession_direction
+
 
 class HistoricalSanosWeeklyAdapter:
     """Fit rolling historical SANOS paths and open-loop weekly policies."""

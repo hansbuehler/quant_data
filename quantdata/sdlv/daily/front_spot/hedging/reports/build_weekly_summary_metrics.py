@@ -61,10 +61,10 @@ _MODEL_DISPLAY_NAMES = {
     "historical-sanos": "Historical SANOS",
     "gromm": "GROMM",
     "volgan": "VolGAN",
-    "ad-seq-vol": "AD--Seq--Vol",
-    "ad-seq-vol-ft": "AD--Seq--Vol--FT",
-    "diffusion-ad-seq-vol": "AD--Seq--Vol",
-    "diffusion-ad-seq-vol-ft": "AD--Seq--Vol--FT",
+    "ad-seq-vol": "AD--Seq--Vol (R. Xu coauthored)",
+    "ad-seq-vol-ft": "AD--Seq--Vol--FT (R. Xu coauthored)",
+    "diffusion-ad-seq-vol": "AD--Seq--Vol (R. Xu coauthored)",
+    "diffusion-ad-seq-vol-ft": "AD--Seq--Vol--FT (R. Xu coauthored)",
 }
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import warnings
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -45,6 +46,18 @@ class HistoricalWeeklyOpenLoopFit:
     iterations: int
     converged: bool
     maximum_absolute_gradient: float
+    selection_solver_status: str
+    solver_status: str
+    selection_objective_error: float
+    objective_error: float
+    selection_maximum_constraint_violation: float
+    maximum_constraint_violation: float
+    scenario_count: int
+    parameter_count: int
+    observation_parameter_ratio: float
+    statistically_thin: bool
+    selection_recession_direction: bool
+    recession_direction: bool
     cap_hits: int
 
 
@@ -60,6 +73,7 @@ class HistoricalWeeklyHedgeFit:
     pure_policy: HistoricalWeeklyOpenLoopFit
     prices: WeeklyIndifferencePrices
     converged: bool
+    recession_direction: bool
     internal_cap_hits: int
     executable_cap_hits: int
     cap_hits: int
@@ -67,8 +81,9 @@ class HistoricalWeeklyHedgeFit:
 
 @dataclass(frozen=True, kw_only=True)
 class _ConvexCostLassoProblem:
-    positions: cp.Variable
+    scaled_positions: cp.Variable
     claim: cp.Parameter
+    action_scale: FloatArray
     problem: cp.Problem
 
 
@@ -322,6 +337,10 @@ def fit_weekly_open_loop_hedge(
         + pure_policy.cap_hits
     )
     cap_hits = internal_cap_hits + executable_cap_hits
+    recession_direction = any(
+        policy.recession_direction
+        for policy in (long_policy, short_policy, zero_policy, pure_policy)
+    )
     return HistoricalWeeklyHedgeFit(
         spot_positions=executable_positions[:, 0],
         option_positions=executable_positions[:, 1:],
@@ -336,7 +355,9 @@ def fit_weekly_open_loop_hedge(
             and zero_policy.converged
             and pure_policy.converged
             and cap_hits == 0
+            and not recession_direction
         ),
+        recession_direction=recession_direction,
         internal_cap_hits=internal_cap_hits,
         executable_cap_hits=executable_cap_hits,
         cap_hits=cap_hits,
@@ -380,6 +401,20 @@ class _WeeklyOpenLoopGeometry:
         self.parameter_count = self.scenarios.step_count + len(
             self.option_parameter_pairs
         )
+        observation_parameter_ratio = (
+            self.scenarios.scenario_count / self.parameter_count
+        )
+        if observation_parameter_ratio < self.config.thin_sample_ratio:
+            warnings.warn(
+                "historical weekly policy is statistically thin: "
+                f"observations={self.scenarios.scenario_count} "
+                f"parameters={self.parameter_count} "
+                f"ratio={observation_parameter_ratio:.3f}; the fitted policy is "
+                "an explicitly regularized estimate, not an unrestricted empirical "
+                "optimum",
+                RuntimeWarning,
+                stacklevel=2,
+            )
         self._option_parameter_index = {
             pair: self.scenarios.step_count + index
             for index, pair in enumerate(self.option_parameter_pairs)
@@ -446,6 +481,7 @@ class _WeeklyOpenLoopGeometry:
             signed_claim_quantity=signed_claim_quantity,
             terminal_claim_values_pv=claim_values,
             include_translation=include_translation,
+            action_scale=np.asarray(selection.action_scale, dtype=np.float64),
         )
         final = self._minimize(
             np.asarray(selection.x, dtype=np.float64),
@@ -461,6 +497,7 @@ class _WeeklyOpenLoopGeometry:
             signed_claim_quantity=signed_claim_quantity,
             terminal_claim_values_pv=claim_values,
             include_translation=include_translation,
+            action_scale=np.asarray(final.action_scale, dtype=np.float64),
         )
         if self.config.objective in (
             HistoricalSanosObjective.MEAN_VARIANCE,
@@ -491,6 +528,11 @@ class _WeeklyOpenLoopGeometry:
                 np.abs(positions) >= 0.999 * self.config.solver_position_cap
             )
         )
+        selection_recession_direction = bool(
+            getattr(selection, "recession_direction", False)
+        )
+        recession_direction = bool(getattr(final, "recession_direction", False))
+        ratio = observation_count / self.parameter_count
         return HistoricalWeeklyOpenLoopFit(
             spot_positions=spot,
             option_positions=options,
@@ -501,8 +543,28 @@ class _WeeklyOpenLoopGeometry:
             validation_loss=float(validation_loss),
             certainty_equivalent=certainty_equivalent,
             iterations=int(selection.nit) + int(final.nit),
-            converged=bool(selection.success and final.success and cap_hits == 0),
+            converged=bool(
+                final.success and cap_hits == 0 and not recession_direction
+            ),
             maximum_absolute_gradient=optimality,
+            selection_solver_status=str(selection.message),
+            solver_status=str(final.message),
+            selection_objective_error=float(
+                getattr(selection, "objective_error", math.inf)
+            ),
+            objective_error=float(getattr(final, "objective_error", math.inf)),
+            selection_maximum_constraint_violation=float(
+                getattr(selection, "constraint_violation", math.inf)
+            ),
+            maximum_constraint_violation=float(
+                getattr(final, "constraint_violation", math.inf)
+            ),
+            scenario_count=observation_count,
+            parameter_count=self.parameter_count,
+            observation_parameter_ratio=ratio,
+            statistically_thin=ratio < self.config.thin_sample_ratio,
+            selection_recession_direction=selection_recession_direction,
+            recession_direction=recession_direction,
             cap_hits=cap_hits,
         )
 
@@ -632,23 +694,42 @@ class _WeeklyOpenLoopGeometry:
             np.asarray(initial[: self.parameter_count], dtype=np.float64)
             / compiled.action_scale
         )
+        iterations = 0
+        retry_tolerance = max(
+            5.0 * self.config.gradient_tolerance,
+            5.0e-8,
+        )
         try:
-            compiled.problem.solve(
-                solver=cp.CLARABEL,
-                warm_start=True,
-                max_iter=self.config.maximum_iterations,
-                tol_gap_abs=self.config.gradient_tolerance,
-                tol_gap_rel=self.config.gradient_tolerance,
-                tol_feas=self.config.gradient_tolerance,
-            )
+            for attempt, tolerance in enumerate(
+                (self.config.gradient_tolerance, retry_tolerance)
+            ):
+                compiled.problem.solve(
+                    solver=cp.CLARABEL,
+                    warm_start=attempt == 0,
+                    max_iter=self.config.maximum_iterations,
+                    tol_gap_abs=tolerance,
+                    tol_gap_rel=tolerance,
+                    tol_feas=tolerance,
+                )
+                iterations += int(compiled.problem.solver_stats.num_iters or 0)
+                if compiled.problem.status != cp.OPTIMAL_INACCURATE:
+                    break
         except cp.error.SolverError as error:
-            return OptimizeResult(
+            result = OptimizeResult(
                 x=np.asarray(initial[: self.parameter_count], dtype=np.float64),
-                nit=0,
+                nit=iterations,
                 success=False,
                 optimality=math.inf,
                 message=f"entropy cone solver failed: {error}",
+                objective_error=math.inf,
             )
+            result.recession_direction = False
+            result.action_scale = compiled.action_scale
+            return result
+        solver_status, solver_trace, independent_iterations = (
+            self._resolve_inaccurate_conic_problem(compiled.problem)
+        )
+        iterations += independent_iterations
         if compiled.scaled_positions.value is None:
             fitted = np.asarray(initial[: self.parameter_count], dtype=np.float64)
         else:
@@ -661,23 +742,38 @@ class _WeeklyOpenLoopGeometry:
                 np.abs(fitted) >= 0.999 * self.config.solver_position_cap
             )
         )
-        success = compiled.problem.status == cp.OPTIMAL and cap_hits == 0
-        return OptimizeResult(
-            x=np.clip(
-                fitted,
-                -self.config.solver_position_cap,
-                self.config.solver_position_cap,
-            ),
-            nit=int(compiled.problem.solver_stats.num_iters or 0),
-            success=success,
-            optimality=0.0 if success else math.inf,
-            message=compiled.problem.status,
-            fun=(
-                float(compiled.problem.value)
-                if compiled.problem.value is not None
-                else math.inf
-            ),
+        fitted = self._canonicalize_positions(
+            fitted,
+            initial[: self.parameter_count],
+            action_scale=compiled.action_scale,
         )
+        constraint_violation = _maximum_constraint_violation(compiled.problem)
+        certified, exact_objective, objective_error = self._certify_conic_result(
+            fitted,
+            indices,
+            signed_claim_quantity=signed_claim_quantity,
+            terminal_claim_values_pv=terminal_claim_values_pv,
+            include_translation=False,
+            action_scale=compiled.action_scale,
+            solver_status=solver_status,
+            solver_objective=compiled.problem.value,
+            maximum_constraint_violation=constraint_violation,
+        )
+        result = OptimizeResult(
+            x=fitted,
+            nit=iterations,
+            success=certified and cap_hits == 0,
+            optimality=math.inf,
+            message=(
+                f"{solver_trace}; exact-objective-error={objective_error:.6g}; "
+                f"constraint-violation={constraint_violation:.6g}"
+            ),
+            fun=exact_objective,
+            objective_error=objective_error,
+            constraint_violation=constraint_violation,
+        )
+        result.action_scale = compiled.action_scale
+        return result
 
     def _entropy_cost_problem(
         self,
@@ -689,12 +785,7 @@ class _WeeklyOpenLoopGeometry:
         cached = self._entropy_problems.get(key)
         if cached is not None:
             return cached
-        gain_rms = np.sqrt(np.mean(instrument_gains**2, axis=0))
-        action_scale = np.clip(
-            1.0 / np.maximum(gain_rms, 1.0e-8),
-            1.0,
-            1.0e6,
-        )
+        action_scale = self._action_scale(indices)
         scaled_positions = cp.Variable(self.parameter_count)
         positions = cp.multiply(action_scale, scaled_positions)
         claim = cp.Parameter(len(indices))
@@ -706,7 +797,9 @@ class _WeeklyOpenLoopGeometry:
         risk = self.config.risk_parameter
         objective = cp.Minimize(
             (cp.log_sum_exp(-risk * wealth) - math.log(len(indices))) / risk
-            + 0.5 * self.config.quadratic_ridge * cp.sum_squares(positions)
+            + 0.5
+            * self.config.quadratic_ridge
+            * cp.sum_squares(scaled_positions)
         )
         problem = cp.Problem(objective)
         if not problem.is_dpp():
@@ -761,16 +854,23 @@ class _WeeklyOpenLoopGeometry:
                     tol_feas=tolerance,
                 )
             except cp.error.SolverError as error:
-                return OptimizeResult(
+                result = OptimizeResult(
                     x=np.asarray(initial, dtype=np.float64),
                     nit=iterations,
                     success=False,
                     optimality=math.inf,
                     message=f"power cone solver failed: {error}",
+                    objective_error=math.inf,
                 )
+                result.action_scale = compiled.action_scale
+                return result
             iterations += int(compiled.problem.solver_stats.num_iters or 0)
             if compiled.problem.status != cp.OPTIMAL_INACCURATE:
                 break
+        solver_status, solver_trace, independent_iterations = (
+            self._resolve_inaccurate_conic_problem(compiled.problem)
+        )
+        iterations += independent_iterations
         if compiled.scaled_positions.value is None:
             fitted = np.asarray(initial[: self.parameter_count], dtype=np.float64)
         else:
@@ -788,28 +888,39 @@ class _WeeklyOpenLoopGeometry:
                 np.abs(fitted) >= 0.999 * self.config.solver_position_cap
             )
         )
-        success = compiled.problem.status == cp.OPTIMAL and cap_hits == 0
-        return OptimizeResult(
-            x=np.concatenate(
-                (
-                    np.clip(
-                        fitted,
-                        -self.config.solver_position_cap,
-                        self.config.solver_position_cap,
-                    ),
-                    [cash_translation],
-                )
-            ),
-            nit=iterations,
-            success=success,
-            optimality=0.0 if success else math.inf,
-            message=compiled.problem.status,
-            fun=(
-                float(compiled.problem.value)
-                if compiled.problem.value is not None
-                else math.inf
-            ),
+        fitted = self._canonicalize_positions(
+            fitted,
+            initial[: self.parameter_count],
+            action_scale=compiled.action_scale,
         )
+        parameters = np.concatenate((fitted, [cash_translation]))
+        constraint_violation = _maximum_constraint_violation(compiled.problem)
+        certified, exact_objective, objective_error = self._certify_conic_result(
+            parameters,
+            indices,
+            signed_claim_quantity=signed_claim_quantity,
+            terminal_claim_values_pv=terminal_claim_values_pv,
+            include_translation=True,
+            action_scale=compiled.action_scale,
+            solver_status=solver_status,
+            solver_objective=compiled.problem.value,
+            maximum_constraint_violation=constraint_violation,
+        )
+        result = OptimizeResult(
+            x=parameters,
+            nit=iterations,
+            success=certified and cap_hits == 0,
+            optimality=math.inf,
+            message=(
+                f"{solver_trace}; exact-objective-error={objective_error:.6g}; "
+                f"constraint-violation={constraint_violation:.6g}"
+            ),
+            fun=exact_objective,
+            objective_error=objective_error,
+            constraint_violation=constraint_violation,
+        )
+        result.action_scale = compiled.action_scale
+        return result
 
     def _power_cost_problem(
         self,
@@ -822,15 +933,7 @@ class _WeeklyOpenLoopGeometry:
         if cached is not None:
             return cached
         risk = self.config.risk_parameter
-        gain_rms = np.sqrt(np.mean(instrument_gains**2, axis=0))
-        action_scale = np.clip(
-            1.0
-            / np.sqrt(
-                risk * gain_rms**2 + self.config.quadratic_ridge
-            ),
-            1.0,
-            1.0e6,
-        )
+        action_scale = self._action_scale(indices)
         scaled_positions = cp.Variable(self.parameter_count)
         positions = cp.multiply(action_scale, scaled_positions)
         cash_translation = cp.Variable()
@@ -858,7 +961,9 @@ class _WeeklyOpenLoopGeometry:
         objective = cp.Minimize(
             -cash_translation
             + cp.sum(scenario_loss) / len(indices)
-            + 0.5 * self.config.quadratic_ridge * cp.sum_squares(positions)
+            + 0.5
+            * self.config.quadratic_ridge
+            * cp.sum_squares(scaled_positions)
         )
         problem = cp.Problem(objective, constraints)
         if not problem.is_dpp():
@@ -891,10 +996,11 @@ class _WeeklyOpenLoopGeometry:
             instrument_gains=instrument_gains,
         )
         compiled.claim.value = claim
-        compiled.positions.value = np.asarray(
-            initial[: self.parameter_count],
-            dtype=np.float64,
+        compiled.scaled_positions.value = (
+            np.asarray(initial[: self.parameter_count], dtype=np.float64)
+            / compiled.action_scale
         )
+        iterations = 0
         try:
             if self.config.objective is HistoricalSanosObjective.MEAN_VARIANCE:
                 compiled.problem.solve(
@@ -905,45 +1011,156 @@ class _WeeklyOpenLoopGeometry:
                     eps_rel=self.config.gradient_tolerance,
                     polishing=True,
                 )
+                iterations += int(compiled.problem.solver_stats.num_iters or 0)
             else:
+                for tolerance in (
+                    self.config.gradient_tolerance,
+                    self.config.certificate_tolerance,
+                ):
+                    compiled.problem.solve(
+                        solver=cp.CLARABEL,
+                        warm_start=False,
+                        max_iter=self.config.maximum_iterations,
+                        tol_gap_abs=tolerance,
+                        tol_gap_rel=tolerance,
+                        tol_feas=tolerance,
+                    )
+                    iterations += int(compiled.problem.solver_stats.num_iters or 0)
+                    if compiled.problem.status != cp.OPTIMAL_INACCURATE:
+                        break
+        except cp.error.SolverError as error:
+            result = OptimizeResult(
+                x=np.asarray(initial[: self.parameter_count], dtype=np.float64),
+                nit=iterations,
+                success=False,
+                optimality=math.inf,
+                message=f"convex solver failed: {error}",
+                objective_error=math.inf,
+            )
+            result.action_scale = compiled.action_scale
+            return result
+        solver_status = compiled.problem.status
+        solver_name = str(compiled.problem.solver_stats.solver_name or "primary")
+        solver_trace = f"{solver_name}={solver_status}"
+        if self.config.objective is not HistoricalSanosObjective.MEAN_VARIANCE:
+            solver_status, solver_trace, independent_iterations = (
+                self._resolve_inaccurate_conic_problem(compiled.problem)
+            )
+            iterations += independent_iterations
+        fitted, certified, exact_objective, objective_error, constraint_violation = (
+            self._certify_raw_convex_solution(
+                compiled,
+                initial,
+                indices,
+                signed_claim_quantity=signed_claim_quantity,
+                terminal_claim_values_pv=terminal_claim_values_pv,
+                solver_status=solver_status,
+            )
+        )
+        if (
+            self.config.objective is HistoricalSanosObjective.MEAN_VARIANCE
+            and not certified
+        ):
+            try:
                 compiled.problem.solve(
                     solver=cp.CLARABEL,
                     warm_start=False,
                     max_iter=self.config.maximum_iterations,
-                    tol_gap_abs=self.config.gradient_tolerance,
-                    tol_gap_rel=self.config.gradient_tolerance,
-                    tol_feas=self.config.gradient_tolerance,
+                    tol_gap_abs=self.config.certificate_tolerance,
+                    tol_gap_rel=self.config.certificate_tolerance,
+                    tol_feas=self.config.certificate_tolerance,
                 )
-        except cp.error.SolverError as error:
-            return OptimizeResult(
-                x=np.asarray(initial[: self.parameter_count], dtype=np.float64),
-                nit=0,
-                success=False,
-                optimality=math.inf,
-                message=f"convex solver failed: {error}",
-            )
-        fitted = (
-            np.asarray(initial[: self.parameter_count], dtype=np.float64)
-            if compiled.positions.value is None
-            else np.asarray(compiled.positions.value, dtype=np.float64)
+                iterations += int(compiled.problem.solver_stats.num_iters or 0)
+                fallback_status, fallback_trace, independent_iterations = (
+                    self._resolve_inaccurate_conic_problem(compiled.problem)
+                )
+                iterations += independent_iterations
+                solver_trace = f"{solver_trace}; fallback {fallback_trace}"
+                (
+                    fitted,
+                    certified,
+                    exact_objective,
+                    objective_error,
+                    constraint_violation,
+                ) = self._certify_raw_convex_solution(
+                    compiled,
+                    initial,
+                    indices,
+                    signed_claim_quantity=signed_claim_quantity,
+                    terminal_claim_values_pv=terminal_claim_values_pv,
+                    solver_status=fallback_status,
+                )
+            except cp.error.SolverError as error:
+                solver_trace = f"{solver_trace}; CLARABEL fallback failed: {error}"
+        scaled_fitted = fitted / compiled.action_scale
+        unregularized_objective = exact_objective - (
+            0.5
+            * self.config.quadratic_ridge
+            * float(scaled_fitted @ scaled_fitted)
         )
-        fitted = np.clip(
-            fitted,
-            -self.config.solver_position_cap,
-            self.config.solver_position_cap,
+        recession_direction = bool(
+            self.config.objective is HistoricalSanosObjective.MEAN_VOLATILITY
+            and np.all(claim == 0.0)
+            and unregularized_objective < -self.config.certificate_tolerance
         )
-        success = compiled.problem.status == cp.OPTIMAL
-        return OptimizeResult(
+        result = OptimizeResult(
             x=fitted,
-            nit=int(compiled.problem.solver_stats.num_iters or 0),
-            success=success,
-            optimality=0.0 if success else math.inf,
-            message=compiled.problem.status,
-            fun=(
-                float(compiled.problem.value)
-                if compiled.problem.value is not None
-                else math.inf
+            nit=iterations,
+            success=certified and not recession_direction,
+            optimality=math.inf,
+            message=(
+                f"{solver_trace}; exact-objective-error={objective_error:.6g}; "
+                f"constraint-violation={constraint_violation:.6g}"
+                + (
+                    f"; recession_direction={unregularized_objective:.6g}"
+                    if recession_direction
+                    else ""
+                )
             ),
+            fun=exact_objective,
+            objective_error=objective_error,
+            constraint_violation=constraint_violation,
+            recession_direction=recession_direction,
+        )
+        result.action_scale = compiled.action_scale
+        return result
+
+    def _certify_raw_convex_solution(
+        self,
+        compiled: _ConvexCostLassoProblem,
+        initial: FloatArray,
+        indices: NDArray[np.int64],
+        *,
+        signed_claim_quantity: float,
+        terminal_claim_values_pv: FloatArray,
+        solver_status: str | None,
+    ) -> tuple[FloatArray, bool, float, float, float]:
+        """Certify the exact point whose objective the convex solver reports."""
+        scaled_fitted = (
+            np.asarray(initial[: self.parameter_count], dtype=np.float64)
+            / compiled.action_scale
+            if compiled.scaled_positions.value is None
+            else np.asarray(compiled.scaled_positions.value, dtype=np.float64)
+        )
+        fitted = compiled.action_scale * scaled_fitted
+        constraint_violation = _maximum_constraint_violation(compiled.problem)
+        certified, exact_objective, objective_error = self._certify_conic_result(
+            fitted,
+            indices,
+            signed_claim_quantity=signed_claim_quantity,
+            terminal_claim_values_pv=terminal_claim_values_pv,
+            include_translation=False,
+            action_scale=compiled.action_scale,
+            solver_status=solver_status,
+            solver_objective=compiled.problem.value,
+            maximum_constraint_violation=constraint_violation,
+        )
+        return (
+            fitted,
+            certified,
+            exact_objective,
+            objective_error,
+            constraint_violation,
         )
 
     def _convex_cost_lasso_problem(
@@ -959,7 +1176,14 @@ class _WeeklyOpenLoopGeometry:
         turnover_matrix, turnover_offset, turnover_weights = (
             self._turnover_geometry(indices)
         )
-        positions = cp.Variable(self.parameter_count)
+        gain_rms = np.sqrt(np.mean(instrument_gains**2, axis=0))
+        action_scale = np.clip(
+            1.0 / np.maximum(gain_rms, self.config.scale_floor),
+            1.0e-6,
+            1.0e6,
+        )
+        scaled_positions = cp.Variable(self.parameter_count)
+        positions = cp.multiply(action_scale, scaled_positions)
         claim = cp.Parameter(len(indices))
         wealth_before_cost = claim + instrument_gains @ positions
         centered = wealth_before_cost - cp.sum(wealth_before_cost) / len(indices)
@@ -979,7 +1203,11 @@ class _WeeklyOpenLoopGeometry:
                 * cp.norm(centered, 2)
                 / math.sqrt(len(indices))
             )
-        ridge = 0.5 * self.config.quadratic_ridge * cp.sum_squares(positions)
+        ridge = (
+            0.5
+            * self.config.quadratic_ridge
+            * cp.sum_squares(scaled_positions)
+        )
         problem = cp.Problem(
             cp.Minimize(
                 -cp.sum(wealth_before_cost) / len(indices)
@@ -995,8 +1223,9 @@ class _WeeklyOpenLoopGeometry:
         if not problem.is_dpp():
             raise RuntimeError("weekly convex policy problem is not parameter-cacheable")
         cached = _ConvexCostLassoProblem(
-            positions=positions,
+            scaled_positions=scaled_positions,
             claim=claim,
+            action_scale=np.asarray(action_scale, dtype=np.float64),
             problem=problem,
         )
         self._convex_problems[key] = cached
@@ -1010,6 +1239,7 @@ class _WeeklyOpenLoopGeometry:
         signed_claim_quantity: float,
         terminal_claim_values_pv: FloatArray,
         include_translation: bool,
+        action_scale: FloatArray | None = None,
     ) -> float:
         if self.config.objective not in (
             HistoricalSanosObjective.MEAN_VARIANCE,
@@ -1025,6 +1255,9 @@ class _WeeklyOpenLoopGeometry:
                 include_translation=include_translation,
             )[0]
         values = np.asarray(parameters, dtype=np.float64)
+        index_values = np.asarray(indices, dtype=np.int64)
+        if action_scale is None:
+            action_scale = self._action_scale(index_values)
         if self.config.objective is HistoricalSanosObjective.ENTROPY:
             positions = values[: self.parameter_count]
             wealth = self._exact_scenario_wealth(
@@ -1036,7 +1269,9 @@ class _WeeklyOpenLoopGeometry:
             risk = self.config.risk_parameter
             return float(
                 (logsumexp(-risk * wealth) - math.log(len(wealth))) / risk
-                + 0.5 * self.config.quadratic_ridge * (positions @ positions)
+                + 0.5
+                * self.config.quadratic_ridge
+                * ((positions / action_scale) @ (positions / action_scale))
             )
         if self.config.objective is HistoricalSanosObjective.POWER_EXPONENTIAL:
             positions = values[: self.parameter_count]
@@ -1056,7 +1291,9 @@ class _WeeklyOpenLoopGeometry:
             )
             return float(
                 -(translation + np.mean(utility))
-                + 0.5 * self.config.quadratic_ridge * (positions @ positions)
+                + 0.5
+                * self.config.quadratic_ridge
+                * ((positions / action_scale) @ (positions / action_scale))
             )
         claim, instrument_gains = self._linear_wealth_geometry(
             np.asarray(indices, dtype=np.int64),
@@ -1083,9 +1320,132 @@ class _WeeklyOpenLoopGeometry:
             risk_penalty = self.config.risk_parameter * float(
                 np.sqrt(np.mean(centered**2))
             )
-        ridge = 0.5 * self.config.quadratic_ridge * float(positions @ positions)
+        scaled_positions = positions / action_scale
+        ridge = 0.5 * self.config.quadratic_ridge * float(
+            scaled_positions @ scaled_positions
+        )
         return -float(np.mean(wealth)) + risk_penalty + deterministic_cost + ridge
 
+    def _certify_conic_result(
+        self,
+        parameters: NDArray[np.floating],
+        indices: NDArray[np.int64],
+        *,
+        signed_claim_quantity: float,
+        terminal_claim_values_pv: FloatArray,
+        include_translation: bool,
+        action_scale: FloatArray,
+        solver_status: str | None,
+        solver_objective: float | None,
+        maximum_constraint_violation: float,
+    ) -> tuple[bool, float, float]:
+        """Verify an independently certified optimum and reconstruct its objective."""
+        values = np.asarray(parameters, dtype=np.float64)
+        if not np.all(np.isfinite(values)):
+            return False, math.inf, math.inf
+        exact_objective = self._objective_value(
+            values,
+            indices,
+            signed_claim_quantity=signed_claim_quantity,
+            terminal_claim_values_pv=terminal_claim_values_pv,
+            include_translation=include_translation,
+            action_scale=action_scale,
+        )
+        if solver_objective is None or not math.isfinite(float(solver_objective)):
+            return False, exact_objective, math.inf
+        objective_error = abs(float(solver_objective) - exact_objective)
+        objective_limit = self.config.objective_agreement_tolerance * (
+            1.0 + abs(exact_objective)
+        )
+        accepted_status = solver_status == cp.OPTIMAL
+        accepted = bool(
+            accepted_status
+            and objective_error <= objective_limit
+            and maximum_constraint_violation <= self.config.certificate_tolerance
+        )
+        if solver_status != cp.OPTIMAL or not accepted:
+            print(
+                "historical weekly solver certificate "
+                f"status={solver_status} accepted={accepted} "
+                f"objective_error={objective_error:.6g} "
+                f"objective_limit={objective_limit:.6g} "
+                f"constraint_violation={maximum_constraint_violation:.6g} "
+                f"scenarios={len(indices)} parameters={self.parameter_count}",
+                flush=True,
+            )
+        return (
+            accepted,
+            exact_objective,
+            objective_error,
+        )
+
+    def _resolve_inaccurate_conic_problem(
+        self,
+        problem: cp.Problem,
+    ) -> tuple[str | None, str, int]:
+        """Resolve an inaccurate primary result with independent SCS."""
+        primary_status = problem.status
+        primary_solver = str(problem.solver_stats.solver_name or "primary")
+        if primary_status != cp.OPTIMAL_INACCURATE:
+            return primary_status, f"{primary_solver}={primary_status}", 0
+        try:
+            problem.solve(
+                solver=cp.SCS,
+                warm_start=False,
+                max_iters=max(50_000, self.config.maximum_iterations),
+                eps=self.config.certificate_tolerance,
+                normalize=True,
+                verbose=False,
+            )
+        except cp.error.SolverError as error:
+            return (
+                None,
+                f"{primary_solver}={primary_status}; SCS failed: {error}",
+                0,
+            )
+        independent_status = problem.status
+        iterations = int(problem.solver_stats.num_iters or 0)
+        return (
+            independent_status,
+            f"{primary_solver}={primary_status}; SCS={independent_status}",
+            iterations,
+        )
+
+    def _canonicalize_positions(
+        self,
+        positions: NDArray[np.floating],
+        initial_positions: NDArray[np.floating],
+        *,
+        action_scale: FloatArray,
+    ) -> FloatArray:
+        """Canonicalize only in standardized coordinates."""
+        fitted = np.clip(
+            np.asarray(positions, dtype=np.float64),
+            -self.config.solver_position_cap,
+            self.config.solver_position_cap,
+        )
+        scaled = fitted / action_scale
+        scaled[np.abs(scaled) <= self.config.certificate_tolerance] = 0.0
+        scaled_initial = (
+            np.asarray(initial_positions, dtype=np.float64) / action_scale
+        )
+        retain_initial = (
+            np.abs(scaled - scaled_initial) <= self.config.certificate_tolerance
+        )
+        scaled[retain_initial] = scaled_initial[retain_initial]
+        return np.clip(
+            action_scale * scaled,
+            -self.config.solver_position_cap,
+            self.config.solver_position_cap,
+        )
+
+    def _action_scale(self, indices: NDArray[np.int64]) -> FloatArray:
+        gain_rms = np.sqrt(np.mean(self._instrument_gains[indices] ** 2, axis=0))
+        return np.clip(
+            1.0 / np.maximum(gain_rms, self.config.scale_floor),
+            1.0e-6,
+            1.0e6,
+        )
     def _linear_wealth_geometry(
         self,
         indices: NDArray[np.int64],
@@ -1332,6 +1692,21 @@ class _WeeklyOpenLoopGeometry:
         for index, pair in enumerate(self.option_parameter_pairs):
             options[pair] = values[self.scenarios.step_count + index]
         return spot, options
+
+
+def _maximum_constraint_violation(problem: cp.Problem) -> float:
+    """Return the largest finite primal constraint violation."""
+    maximum = 0.0
+    for constraint in problem.constraints:
+        try:
+            violation = np.asarray(constraint.violation(), dtype=np.float64)
+        except (ValueError, TypeError):
+            return math.inf
+        if not np.all(np.isfinite(violation)):
+            return math.inf
+        if violation.size:
+            maximum = max(maximum, float(np.max(np.abs(violation))))
+    return maximum
 
 
 def _weekly_objective(objective: HistoricalSanosObjective) -> WeeklyRiskObjective:

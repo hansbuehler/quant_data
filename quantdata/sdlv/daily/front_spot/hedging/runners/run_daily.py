@@ -777,6 +777,7 @@ def _build_model(
         ) from error
     historical_config = HistoricalSanosConfig(
         label=label,
+        rolling_observations=arguments.observation_count,
         objective=historical_objective,
         risk_parameter=arguments.risk_parameter,
         position_cap=(

@@ -6,6 +6,37 @@ This document is the implementation plan for the hedging benchmark built around
 the daily front-spot SDLV/GROMM model. It records the agreed experimental design
 and implementation order.
 
+**Current live state (2026-10-15).** Generated-model readiness passes all 18
+scopes (three models times six configurations). The strict Historical-SANOS
+daily CPU queue remains active from immutable version-1.13 commit
+`f4d42c2e893b5a814f954c21e92a60634e02e286`. Weekly production now runs from
+immutable version-1.14 commit `46d9f2205ac9bfddbc401f68db581505e2b214bb`;
+both services use no GPU. Version 1.14 adds an explicit weekly zero-claim
+mean-volatility recession certificate and preserves the previously found
+failure rather than treating a ridge-bounded optimizer as an economic optimum.
+An exact real-data replay of the frozen-weekly risk-1 origin `2023-01-20`
+reproduces 13/13 nonconverged target fits, 39 internal fit-cap hits, zero
+executed cap hits, and classifies the failure first as
+`mean-volatility-recession-direction`. No permissive convergence or cap
+override is enabled. The authenticated weekly matrix SHA-256 is
+`97dd10954e0982caea8ffdad86aa5aca5aeb9ea43297e303f606d3996517ace8`;
+its launcher SHA-256 is
+`cca51b4ed9c8973ea12d942c4f604a1927671a0399924b68fe51bc881f750090`.
+CPU-only service
+`quantdata-hedging-failure-canonicalization-v114-46d9f22.service` waits for the
+daily v1.13 and weekly v1.14 queues, then revalidates successful cells, reruns
+only failed cells under unchanged strict gates, and writes authenticated daily
+and weekly failure ledgers plus a hash-bound handoff manifest. Its launcher
+SHA-256 is
+`c607435d30327e5764342491c864b5664ddaf84411acb7574303ba4b16d16425`.
+The v1.14 detached preflight and 100 focused model, runner, matrix, and failure
+regressions pass. The three exact-Gaussian covariance power-exponential cases
+are complete. A conservative storage cleanup
+removed approximately 315 MiB of superseded target-notional runs, early GROMM
+smoke artifacts, old readiness revisions, and reproducible compiler/temp files.
+The 51 GiB legacy GROMM tree remains because current authenticated migration
+manifests bind it explicitly as their source lineage.
+
 **Current authenticated production chain (2026-10-14).** The `d22ec9a`
 generated-readiness run halted after numerically completing the first weekly
 AD--Seq--Vol scope because its validator compared the canonical matrix identity
@@ -29,6 +60,29 @@ readiness evidence and the remaining native prerequisites before it may compose
 and commit the daily and weekly matrices. Its reviewed launcher SHA-256 is
 `e6de16d5c645f1ae78e3f91b51376ff6496d029d1d5ae8066d8f72cb14207774`.
 The superseded coordinator was stopped before commitment.
+
+**Current Historical-SANOS numerical design (2026-10-15).** Version `1.14`
+retains the precommitted 252 uniformly weighted daily scenarios and increases
+the fitting ridge to $10^{-4}$ in unit-RMS instrument-return coordinates. It
+does not introduce a two-year or exponentially weighted daily window. Books
+with fewer than two observations per fitted action parameter are explicitly
+flagged as statistically thin and interpreted only as regularized estimates.
+Daily exact-cost fits use independently recomputed signed-action KKT residuals;
+mean-volatility receives an unchanged-objective exact refinement when the conic
+point misses that certificate. A negative homogeneous zero-claim
+mean-volatility objective is recorded as a recession certificate and cannot be
+accepted merely because the numerical ridge makes the surrogate finite. The
+same test is applied to the weekly zero-claim pricing policy and is propagated
+through resumable records into a dedicated strict-failure classification.
+Weekly mean-variance certifies the raw OSQP point and retries a failed
+certificate with CLARABEL. Other weekly conic fits reconstruct the exact
+objective and check primal feasibility; if the primary solver remains
+`optimal_inaccurate`, an independent SCS solve must report `optimal` before
+acceptance. Selection fits remain diagnostics, while the certified full-window
+fit controls production acceptance. Any remaining real failure stops that case,
+emits its numerical evidence, and requires independent quantitative review
+rather than a silent tolerance change. Higher-frequency histories are deferred
+to a separate follow-on model revision.
 
 **Current production correction (2026-10-14).** Historical-SANOS version
 `1.11` makes the final 252-observation fit, rather than its 80% warm-start
@@ -537,6 +591,21 @@ internals.
 - Fit only from the supplied training or generated scenarios.
 - Return a predictable action from the current state and existing positions.
 - Report objective value, convergence, caps, and numerical diagnostics.
+
+### Numerical stabilization and solver failures
+
+- Use scale normalization, stable parameterizations, explicit finite-value
+  checks, warm starts, and objective-appropriate regularization before treating
+  a numerical issue as a model failure.
+- Do not equate a solver status label with mathematical failure. Accept a
+  numerically good-enough result only when an independent, predeclared
+  residual, feasibility, KKT, and objective-reconstruction gate certifies the
+  solution at the benchmark tolerance; record both the raw status and the
+  independent certificate.
+- Never silently relax a gate or omit a failed origin. If the independent
+  certificate fails after the documented stabilization and fallback attempts,
+  stop the affected case, retain the complete diagnostics, request QuantAgent
+  review, and document an alternative numerical approach before rerunning it.
 
 ### Backtest
 

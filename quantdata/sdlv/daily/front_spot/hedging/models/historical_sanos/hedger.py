@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import warnings
 from dataclasses import dataclass
 
 import cvxpy as cp
@@ -32,6 +33,10 @@ class HistoricalSanosPolicyFit:
     converged: bool
     selection_maximum_absolute_gradient: float
     maximum_absolute_gradient: float
+    selection_solver_status: str
+    solver_status: str
+    selection_recession_direction: bool
+    recession_direction: bool
     selection_cap_hits: int
     cap_hits: int
 
@@ -87,6 +92,16 @@ def fit_historical_sanos_hedges(
     _validated_inputs(instruments, claims[:, 0], costs)
     if claims.shape[0] != len(instruments) or not np.all(np.isfinite(claims)):
         raise ValueError("historical SANOS claim book must align and be finite")
+    observation_parameter_ratio = len(instruments) / instruments.shape[1]
+    if observation_parameter_ratio < config.thin_sample_ratio:
+        warnings.warn(
+            "historical daily policy is statistically thin: "
+            f"observations={len(instruments)} parameters={instruments.shape[1]} "
+            f"ratio={observation_parameter_ratio:.3f}; the fitted policy is an "
+            "explicitly regularized estimate, not an unrestricted empirical optimum",
+            RuntimeWarning,
+            stacklevel=2,
+        )
     zero_policy = _fit_policy(
         instruments,
         np.zeros(len(instruments), dtype=np.float64),
@@ -147,6 +162,7 @@ def _compose_hedge_fit(
         costs,
         config=config,
         include_translation=include_translation,
+        action_scale=_action_scale(instruments, config=config),
     )[0]
     return HistoricalSanosHedgeFit(
         action=action,
@@ -174,6 +190,7 @@ def _fit_policy(
     include_translation = config.objective is HistoricalSanosObjective.POWER_EXPONENTIAL
     parameter_count = instruments.shape[1] + int(include_translation)
     initial = np.zeros(parameter_count, dtype=np.float64)
+    selection_action_scale = _action_scale(instruments[:split], config=config)
     selection = _minimize_policy(
         initial,
         instruments[:split],
@@ -181,6 +198,7 @@ def _fit_policy(
         costs,
         config=config,
         include_translation=include_translation,
+        action_scale=selection_action_scale,
     )
     selection = _retry_exact_cost_policy(
         selection,
@@ -189,6 +207,7 @@ def _fit_policy(
         costs,
         config=config,
         include_translation=include_translation,
+        action_scale=selection_action_scale,
     )
     validation_loss = _objective_and_gradient(
         selection.x,
@@ -197,7 +216,9 @@ def _fit_policy(
         costs,
         config=config,
         include_translation=include_translation,
+        action_scale=selection_action_scale,
     )[0]
+    final_action_scale = _action_scale(instruments, config=config)
     final = _minimize_policy(
         selection.x,
         instruments,
@@ -205,6 +226,7 @@ def _fit_policy(
         costs,
         config=config,
         include_translation=include_translation,
+        action_scale=final_action_scale,
     )
     final = _retry_exact_cost_policy(
         final,
@@ -213,6 +235,7 @@ def _fit_policy(
         costs,
         config=config,
         include_translation=include_translation,
+        action_scale=final_action_scale,
     )
     final_loss = _objective_and_gradient(
         final.x,
@@ -221,6 +244,7 @@ def _fit_policy(
         costs,
         config=config,
         include_translation=include_translation,
+        action_scale=final_action_scale,
     )[0]
     action = np.asarray(final.x[: instruments.shape[1]], dtype=np.float64)
     selection_action = np.asarray(
@@ -239,6 +263,10 @@ def _fit_policy(
     )
     selection_optimality = float(getattr(selection, "optimality", math.inf))
     optimality = float(getattr(final, "optimality", math.inf))
+    selection_recession_direction = bool(
+        getattr(selection, "recession_direction", False)
+    )
+    recession_direction = bool(getattr(final, "recession_direction", False))
     selection_converged = bool(selection.success and selection_cap_hits == 0)
     # The split fit only supplies a warm start and held-out diagnostic. The
     # executable policy and its numerical gate come from the full-window refit.
@@ -254,6 +282,10 @@ def _fit_policy(
         converged=final_converged,
         selection_maximum_absolute_gradient=selection_optimality,
         maximum_absolute_gradient=optimality,
+        selection_solver_status=str(selection.message),
+        solver_status=str(final.message),
+        selection_recession_direction=selection_recession_direction,
+        recession_direction=recession_direction,
         selection_cap_hits=selection_cap_hits,
         cap_hits=cap_hits,
     )
@@ -267,6 +299,7 @@ def _minimize_policy(
     *,
     config: HistoricalSanosConfig,
     include_translation: bool,
+    action_scale: FloatArray,
 ) -> OptimizeResult:
     if config.objective is HistoricalSanosObjective.MEAN_VARIANCE:
         return _minimize_mean_variance(
@@ -275,6 +308,7 @@ def _minimize_policy(
             claim,
             costs,
             config=config,
+            action_scale=action_scale,
         )
     if config.objective is HistoricalSanosObjective.MEAN_VOLATILITY:
         return _minimize_mean_volatility(
@@ -283,6 +317,7 @@ def _minimize_policy(
             claim,
             costs,
             config=config,
+            action_scale=action_scale,
         )
     if config.objective in (
         HistoricalSanosObjective.ENTROPY,
@@ -295,6 +330,7 @@ def _minimize_policy(
             costs,
             config=config,
             include_translation=include_translation,
+            action_scale=action_scale,
         )
     raise ValueError(f"unsupported historical SANOS objective {config.objective!r}")
 
@@ -307,6 +343,7 @@ def _retry_exact_cost_policy(
     *,
     config: HistoricalSanosConfig,
     include_translation: bool,
+    action_scale: FloatArray,
 ) -> OptimizeResult:
     """Restart a stalled split solve from its canonical signed action."""
     if result.success or config.objective not in (
@@ -321,6 +358,7 @@ def _retry_exact_cost_policy(
         costs,
         config=config,
         include_translation=include_translation,
+        action_scale=action_scale,
     )
     retry.nit = int(result.nit) + int(retry.nit)
     retry.message = f"canonical restart after {result.message}; {retry.message}"
@@ -335,6 +373,7 @@ def _minimize_exact_cost_policy(
     *,
     config: HistoricalSanosConfig,
     include_translation: bool,
+    action_scale: FloatArray,
 ) -> OptimizeResult:
     """Solve a cash-additive OCE with exact linear spread costs."""
     instrument_count = instruments.shape[1]
@@ -345,16 +384,19 @@ def _minimize_exact_cost_policy(
             [float(initial[-1]) + float(costs @ np.abs(initial_action))],
             dtype=np.float64,
         )
+    initial_scaled_action = initial_action / action_scale
     split_initial = np.concatenate(
         (
-            np.maximum(initial_action, 0.0),
-            np.maximum(-initial_action, 0.0),
+            np.maximum(initial_scaled_action, 0.0),
+            np.maximum(-initial_scaled_action, 0.0),
             cost_free_translation,
         )
     )
+    scaled_caps = config.solver_position_cap / action_scale
     split_bounds: list[tuple[float | None, float | None]] = [
-        (0.0, config.solver_position_cap)
-    ] * (2 * instrument_count)
+        *((0.0, float(cap)) for cap in scaled_caps),
+        *((0.0, float(cap)) for cap in scaled_caps),
+    ]
     if include_translation:
         split_bounds.append((None, None))
     zero_costs = np.zeros_like(costs)
@@ -363,7 +405,8 @@ def _minimize_exact_cost_policy(
         values = np.asarray(parameters, dtype=np.float64)
         positive = values[:instrument_count]
         negative = values[instrument_count : 2 * instrument_count]
-        action = positive - negative
+        scaled_action = positive - negative
+        action = action_scale * scaled_action
         risk_parameters = np.concatenate(
             (
                 action,
@@ -377,19 +420,21 @@ def _minimize_exact_cost_policy(
             zero_costs,
             config=config,
             include_translation=include_translation,
+            action_scale=action_scale,
         )
-        action_gradient = risk_gradient[:instrument_count]
+        action_gradient = action_scale * risk_gradient[:instrument_count]
+        scaled_costs = action_scale * costs
         gradient = np.concatenate(
             (
-                action_gradient + costs,
-                -action_gradient + costs,
+                action_gradient + scaled_costs,
+                -action_gradient + scaled_costs,
                 np.asarray([risk_gradient[-1]])
                 if include_translation
                 else np.empty(0),
             )
         )
         return (
-            float(risk_value + costs @ (positive + negative)),
+            float(risk_value + scaled_costs @ (positive + negative)),
             np.asarray(gradient, dtype=np.float64),
         )
 
@@ -408,7 +453,7 @@ def _minimize_exact_cost_policy(
         },
     )
     split_solution = np.asarray(result.x, dtype=np.float64)
-    action = (
+    action = action_scale * (
         split_solution[:instrument_count]
         - split_solution[instrument_count : 2 * instrument_count]
     )
@@ -427,12 +472,14 @@ def _minimize_exact_cost_policy(
         zero_costs,
         config=config,
         include_translation=include_translation,
+        action_scale=action_scale,
     )
     optimality = _maximum_kkt_violation(
         action,
         risk_gradient[:instrument_count],
         costs,
         position_cap=config.solver_position_cap,
+        coordinate_scale=action_scale,
     )
     if include_translation:
         optimality = max(optimality, abs(float(risk_gradient[-1])))
@@ -446,11 +493,11 @@ def _minimize_exact_cost_policy(
     result.fun = float(risk_value + costs @ np.abs(action))
     result.optimality = float(optimality)
     optimizer_success = bool(result.success)
-    result.success = bool(optimality <= config.gradient_tolerance)
+    result.success = bool(optimality <= config.certificate_tolerance)
     if not result.success:
         result.message = (
             f"{result.message}; KKT residual {optimality:.6g} exceeds "
-            f"{config.gradient_tolerance:.6g}"
+            f"{config.certificate_tolerance:.6g}"
         )
     elif not optimizer_success:
         result.message = (
@@ -467,6 +514,7 @@ def _minimize_mean_volatility(
     costs: FloatArray,
     *,
     config: HistoricalSanosConfig,
+    action_scale: FloatArray,
 ) -> OptimizeResult:
     """Solve the empirical mean-volatility cost-lasso as an exact SOCP."""
     observations, instrument_count = instruments.shape
@@ -474,17 +522,22 @@ def _minimize_mean_volatility(
     claim_center = float(np.mean(claim))
     centered_instruments = instruments - instrument_center
     centered_claim = claim - claim_center
-    action = cp.Variable(instrument_count)
+    scaled_action = cp.Variable(instrument_count)
+    action = cp.multiply(action_scale, scaled_action)
     expected_wealth = claim_center + instrument_center @ action - costs @ cp.abs(action)
     standard_deviation = cp.norm(
         centered_claim + centered_instruments @ action,
         2,
     ) / math.sqrt(observations)
     objective = cp.Minimize(
-        -expected_wealth + config.risk_parameter * standard_deviation
+        -expected_wealth
+        + config.risk_parameter * standard_deviation
+        + 0.5 * config.quadratic_ridge * cp.sum_squares(scaled_action)
     )
     problem = cp.Problem(objective)
-    action.value = np.asarray(initial[:instrument_count], dtype=np.float64)
+    scaled_action.value = (
+        np.asarray(initial[:instrument_count], dtype=np.float64) / action_scale
+    )
     try:
         problem.solve(
             solver=cp.CLARABEL,
@@ -502,7 +555,9 @@ def _minimize_mean_volatility(
                     action <= config.solver_position_cap,
                 ],
             )
-            action.value = np.asarray(initial[:instrument_count], dtype=np.float64)
+            scaled_action.value = (
+                np.asarray(initial[:instrument_count], dtype=np.float64) / action_scale
+            )
             problem.solve(
                 solver=cp.CLARABEL,
                 warm_start=True,
@@ -519,14 +574,24 @@ def _minimize_mean_volatility(
             optimality=math.inf,
             message=f"CLARABEL failed: {error}",
         )
-    if action.value is None:
-        fitted_action = np.asarray(initial[:instrument_count], dtype=np.float64)
-    else:
-        fitted_action = np.clip(
-            np.asarray(action.value, dtype=np.float64),
-            -config.solver_position_cap,
-            config.solver_position_cap,
+    primary_iterations = int(problem.solver_stats.num_iters or 0)
+    solver_status, solver_trace, independent_iterations = (
+        _resolve_inaccurate_conic_problem(problem, config=config)
+    )
+    if scaled_action.value is None:
+        fitted_scaled_action = (
+            np.asarray(initial[:instrument_count], dtype=np.float64) / action_scale
         )
+    else:
+        fitted_scaled_action = np.asarray(scaled_action.value, dtype=np.float64)
+    fitted_scaled_action[
+        np.abs(fitted_scaled_action) <= config.certificate_tolerance
+    ] = 0.0
+    fitted_action = np.clip(
+        action_scale * fitted_scaled_action,
+        -config.solver_position_cap,
+        config.solver_position_cap,
+    )
     residual = centered_claim + centered_instruments @ fitted_action
     residual_standard_deviation = math.sqrt(float(np.mean(residual**2)))
     zero_residual_tolerance = max(
@@ -539,24 +604,115 @@ def _minimize_mean_volatility(
             + config.risk_parameter
             * (centered_instruments.T @ residual)
             / (observations * residual_standard_deviation)
+            + config.quadratic_ridge * fitted_action / action_scale**2
         )
         optimality = _maximum_kkt_violation(
             fitted_action,
             smooth_gradient,
             costs,
             position_cap=config.solver_position_cap,
+            coordinate_scale=action_scale,
         )
     else:
-        # At zero residual volatility the Euclidean norm is nondifferentiable;
-        # CLARABEL's conic certificate is the relevant optimality test.
-        optimality = 0.0 if problem.status == cp.OPTIMAL else math.inf
-    return OptimizeResult(
+        # At zero residual volatility the Euclidean norm is nondifferentiable.
+        # Require a solver-certified optimum, including the independent SCS
+        # resolution above when CLARABEL reported an inaccurate status.
+        optimality = 0.0 if solver_status == cp.OPTIMAL else math.inf
+    exact_objective = _objective_and_gradient(
+        fitted_action,
+        instruments,
+        claim,
+        costs,
+        config=config,
+        include_translation=False,
+        action_scale=action_scale,
+    )[0]
+    objective_error = abs(float(problem.value) - exact_objective)
+    objective_limit = config.objective_agreement_tolerance * (
+        1.0 + abs(exact_objective)
+    )
+    unregularized_objective = exact_objective - (
+        0.5
+        * config.quadratic_ridge
+        * float(fitted_scaled_action @ fitted_scaled_action)
+    )
+    recession_direction = bool(
+        np.all(claim == 0.0)
+        and unregularized_objective < -config.certificate_tolerance
+    )
+    accepted_status = solver_status == cp.OPTIMAL
+    success = bool(
+        accepted_status
+        and np.all(np.isfinite(fitted_action))
+        and optimality <= config.certificate_tolerance
+        and objective_error <= objective_limit
+        and not recession_direction
+    )
+    conic_result = OptimizeResult(
         x=fitted_action,
-        nit=int(problem.solver_stats.num_iters or 0),
-        success=problem.status == cp.OPTIMAL,
+        nit=primary_iterations + independent_iterations,
+        success=success,
         optimality=optimality,
-        message=problem.status,
-        fun=float(problem.value) if problem.value is not None else math.inf,
+        message=(
+            f"{solver_trace}; certificate kkt={optimality:.6g} "
+            f"objective_error={objective_error:.6g}"
+            + (
+                f"; recession_direction={unregularized_objective:.6g}"
+                if recession_direction
+                else ""
+            )
+        ),
+        fun=exact_objective,
+        recession_direction=recession_direction,
+    )
+    if success or recession_direction:
+        return conic_result
+    refined = _minimize_exact_cost_policy(
+        fitted_action,
+        instruments,
+        claim,
+        costs,
+        config=config,
+        include_translation=False,
+        action_scale=action_scale,
+    )
+    refined.nit = int(conic_result.nit) + int(refined.nit)
+    refined.message = f"{conic_result.message}; exact refinement {refined.message}"
+    refined.recession_direction = False
+    return refined
+
+
+def _resolve_inaccurate_conic_problem(
+    problem: cp.Problem,
+    *,
+    config: HistoricalSanosConfig,
+) -> tuple[str | None, str, int]:
+    """Resolve an inaccurate CLARABEL status with independent SCS."""
+    primary_status = problem.status
+    primary_solver = str(problem.solver_stats.solver_name or "CLARABEL")
+    if primary_status != cp.OPTIMAL_INACCURATE:
+        return primary_status, f"{primary_solver}={primary_status}", 0
+    try:
+        problem.solve(
+            solver=cp.SCS,
+            warm_start=False,
+            max_iters=max(50_000, config.maximum_iterations),
+            eps=config.certificate_tolerance,
+            normalize=True,
+            verbose=False,
+        )
+    except cp.error.SolverError as error:
+        return (
+            None,
+            f"{primary_solver}={primary_status}; SCS failed: {error}",
+            0,
+        )
+    independent_status = problem.status
+    iterations = int(problem.solver_stats.num_iters or 0)
+    return (
+        independent_status,
+        f"{primary_solver}={primary_status}; SCS={independent_status}",
+        iterations,
     )
 
 
@@ -567,6 +723,7 @@ def _minimize_mean_variance(
     costs: FloatArray,
     *,
     config: HistoricalSanosConfig,
+    action_scale: FloatArray,
 ) -> OptimizeResult:
     """Solve the quadratic spread-cost problem by coordinate descent."""
     centered_instruments = instruments - np.mean(instruments, axis=0)
@@ -574,7 +731,9 @@ def _minimize_mean_variance(
     risk = config.risk_parameter
     covariance = centered_instruments.T @ centered_instruments / len(instruments)
     hessian = risk * covariance
-    hessian.flat[:: len(hessian) + 1] += config.quadratic_ridge
+    hessian.flat[:: len(hessian) + 1] += (
+        config.quadratic_ridge / action_scale**2
+    )
     linear = (
         risk * (centered_instruments.T @ centered_claim / len(instruments))
         - np.mean(instruments, axis=0)
@@ -607,8 +766,9 @@ def _minimize_mean_variance(
             gradient,
             costs,
             position_cap=config.solver_position_cap,
+            coordinate_scale=action_scale,
         )
-        if optimality <= config.gradient_tolerance:
+        if optimality <= config.certificate_tolerance:
             converged = True
             break
     return OptimizeResult(
@@ -630,6 +790,7 @@ def _maximum_kkt_violation(
     costs: FloatArray,
     *,
     position_cap: float,
+    coordinate_scale: FloatArray | None = None,
 ) -> float:
     derivative = smooth_gradient + costs * np.sign(action)
     zero = action == 0.0
@@ -638,6 +799,8 @@ def _maximum_kkt_violation(
     lower = action <= -position_cap
     derivative[upper] = np.maximum(derivative[upper], 0.0)
     derivative[lower] = np.minimum(derivative[lower], 0.0)
+    if coordinate_scale is not None:
+        derivative *= coordinate_scale
     return float(np.max(np.abs(derivative)))
 
 
@@ -649,10 +812,13 @@ def _objective_and_gradient(
     *,
     config: HistoricalSanosConfig,
     include_translation: bool,
+    action_scale: FloatArray | None = None,
 ) -> tuple[float, FloatArray]:
     values = np.asarray(parameters, dtype=np.float64)
     instrument_count = instruments.shape[1]
     action = values[:instrument_count]
+    if action_scale is None:
+        action_scale = _action_scale(instruments, config=config)
     cost = float(costs @ np.abs(action))
     cost_gradient = costs * np.sign(action)
     wealth = claim + instruments @ action - cost
@@ -665,11 +831,17 @@ def _objective_and_gradient(
         path_gradient = (-1.0 + risk * centered) / sample_count
     elif config.objective is HistoricalSanosObjective.MEAN_VOLATILITY:
         centered = wealth - np.mean(wealth)
-        standard_deviation = math.sqrt(
-            float(np.mean(centered**2)) + np.finfo(np.float64).eps
-        )
+        standard_deviation = math.sqrt(float(np.mean(centered**2)))
         loss = -np.mean(wealth) + risk * standard_deviation
-        path_gradient = (-1.0 + risk * centered / standard_deviation) / sample_count
+        if standard_deviation > 0.0:
+            path_gradient = (
+                -1.0 + risk * centered / standard_deviation
+            ) / sample_count
+        else:
+            # Zero is an admissible subgradient of the Euclidean norm at its
+            # origin; unlike an epsilon floor, it leaves the exact objective
+            # unchanged for the independent conic certificate.
+            path_gradient = np.full(sample_count, -1.0 / sample_count)
     elif config.objective is HistoricalSanosObjective.ENTROPY:
         exponent = -risk * wealth
         maximum = float(np.max(exponent))
@@ -697,12 +869,29 @@ def _objective_and_gradient(
     else:
         raise ValueError(f"unsupported historical SANOS objective {config.objective!r}")
     gradient = jacobian.T @ path_gradient
+    scaled_action = action / action_scale
+    loss += 0.5 * config.quadratic_ridge * float(scaled_action @ scaled_action)
+    gradient += config.quadratic_ridge * action / action_scale**2
     if include_translation:
         translation_gradient = -1.0 - float(np.sum(path_gradient))
         gradient = np.concatenate((gradient, np.asarray([translation_gradient])))
     if not math.isfinite(float(loss)) or not np.all(np.isfinite(gradient)):
         raise FloatingPointError("historical SANOS objective is non-finite")
     return float(loss), np.asarray(gradient, dtype=np.float64)
+
+
+def _action_scale(
+    instruments: FloatArray,
+    *,
+    config: HistoricalSanosConfig,
+) -> FloatArray:
+    """Return unit-RMS action coordinates with bounded numerical scaling."""
+    gain_rms = np.sqrt(np.mean(np.asarray(instruments, dtype=np.float64) ** 2, axis=0))
+    return np.clip(
+        1.0 / np.maximum(gain_rms, config.scale_floor),
+        1.0e-6,
+        1.0e6,
+    )
 
 
 def _optimal_power_cash_translation(

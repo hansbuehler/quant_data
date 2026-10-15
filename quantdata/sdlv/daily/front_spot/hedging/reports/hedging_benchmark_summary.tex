@@ -126,6 +126,12 @@ redistribution still requires a separate rights decision.
   \item Weekly evaluation starts an overlapping five-session episode on every
   eligible date. Frozen weekly fits once and keeps its inception contract book;
   restarted weekly refits daily. Both may react to the realized state.
+  \item The weekly target book contains ten five-day cash digitals, the
+  unannualized payoff
+  $\frac15\sum_{u=1}^5(S_u/S_{u-1}-1)^2$, a 95\% end-of-day down-and-out ATM
+  put, and a 105\% end-of-day up-and-out ATM call. The barriers are monitored
+  at the five future business-day closes and both barrier strikes are one in
+  inception-forward units.
 \end{itemize}
 
 \subsection{Common accounting and objectives}
@@ -199,7 +205,7 @@ Historical SANOS & P & \statuspending & Mean--variance $\lambda=0.1$ is complete
 Robust covariance & P & \statuspending & Mean--variance $\lambda\in\{0.1,1,10\}$ is complete on the current cohort; mean--volatility production is running. \\
 GROMM & Q only & \statusready & All 611 dated inputs are prepared; rolling Q fitting is running on the managed GPU. Compatible P remains rejected by its fixed gates. \\
 VolGAN & P & \statusready & Daily public readiness passes; corrected frozen-weekly public readiness is queued behind GROMM. Full production remains pending. \\
-AD--Seq--Vol / FT & P & \statusready & Full-geometry managed-GPU origin: 4,096 scenarios, 20 targets, 158.3 seconds, 2,636 MiB VRAM, no cap hit or nonconvergence; production pending. \\
+AD--Seq--Vol / FT (R. Xu coauthored) & P & \statusready & Full-geometry managed-GPU origin: 4,096 scenarios, 20 targets, 158.3 seconds, 2,636 MiB VRAM, no cap hit or nonconvergence; production pending. \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -310,7 +316,7 @@ update surface and return state. The implementation is project-native and uses
 no proprietary surfaces. Smoke, restart, and rolling warm-start gates pass;
 full production does not yet exist \citep{VuleticCont2024}.
 
-\subsection{AD--Seq--Vol / FT}
+\subsection{AD--Seq--Vol / FT (Renyuan Xu coauthored)}
 
 AD--Seq--Vol is a causal sequence diffusion model on 22-day histories of the
 same $9\times11$ surface plus forward-adjusted returns. Its eight-layer,
@@ -320,7 +326,8 @@ rank-four adapter with calendar, call-spread, and butterfly penalties. Both are
 historical-P generators and supply indifference prices rather than Q
 expectations. Exact restart, rolling warm-start, daily/weekly adapters, and one
 full-geometry GPU origin pass; production and batch-invariance remain pending.
-The architecture and published comparison are due to \citet{HanEtAl2026}.
+This is the requested Renyuan Xu coauthored generative hedging baseline; the
+architecture and published comparison are due to \citet{HanEtAl2026}.
 
 \vspace{0.4em}
 \hrule

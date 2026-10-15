@@ -16,6 +16,7 @@ NUMERICAL_GATE_CLASSIFICATIONS = frozenset(
         "position-cap-hit",
         "policy-fit-cap-hit",
         "nonconverged-fit",
+        "mean-volatility-recession-direction",
     }
 )
 
@@ -140,6 +141,7 @@ def _normalized_diagnostics(diagnostics: JsonObject) -> JsonObject:
         "fit_cap_hits",
         "nonconverged_fits",
         "nonconverged_results",
+        "recession_direction_fits",
     }
     unknown = set(diagnostics) - allowed
     if unknown:
@@ -156,11 +158,12 @@ def _normalized_diagnostics(diagnostics: JsonObject) -> JsonObject:
         "executed_cap_hits",
         "fit_cap_hits",
         "nonconverged_fits",
+        "recession_direction_fits",
     }
     fields = set(normalized)
     if fields == daily:
         return normalized
-    if fields == weekly:
+    if fields in (weekly, weekly - {"recession_direction_fits"}):
         if normalized["cap_hits"] != (
             normalized["fit_cap_hits"] + normalized["executed_cap_hits"]
         ):
@@ -171,6 +174,8 @@ def _normalized_diagnostics(diagnostics: JsonObject) -> JsonObject:
 
 def _triggered_gates(diagnostics: JsonObject) -> tuple[str, ...]:
     triggered: list[str] = []
+    if diagnostics.get("recession_direction_fits", 0):
+        triggered.append("mean-volatility-recession-direction")
     if diagnostics.get("executed_cap_hits", diagnostics.get("cap_hits", 0)):
         triggered.append("position-cap-hit")
     if diagnostics.get("fit_cap_hits", 0):

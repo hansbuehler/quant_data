@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import cvxpy as cp
 import numpy as np
 import pytest
 from scipy.optimize import OptimizeResult
@@ -32,6 +33,14 @@ from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.hedger impo
     fit_historical_sanos_hedge,
     fit_historical_sanos_hedges,
 )
+
+
+def test_historical_sanos_defaults_use_regularized_one_year_history() -> None:
+    config = HistoricalSanosConfig()
+
+    assert config.rolling_observations == 252
+    assert config.quadratic_ridge == pytest.approx(1.0e-4)
+    assert config.certificate_tolerance == pytest.approx(1.0e-6)
 
 
 @pytest.mark.parametrize("objective", tuple(HistoricalSanosObjective))
@@ -109,6 +118,67 @@ def test_historical_sanos_exact_cost_oce_converges_on_redundant_book(
         for fit in fits
     )
     assert fits[0].zero_policy.maximum_absolute_gradient <= config.gradient_tolerance
+
+
+@pytest.mark.parametrize("objective", tuple(HistoricalSanosObjective))
+def test_historical_sanos_standardized_ridge_is_scale_invariant(
+    objective: HistoricalSanosObjective,
+) -> None:
+    generator = np.random.default_rng(83)
+    instruments = generator.normal(size=(160, 3)) * np.asarray([0.01, 0.03, 0.002])
+    claim = -(0.35 * instruments[:, 0] - 0.15 * instruments[:, 1])
+    costs = np.asarray([2.0e-5, 4.0e-5, 1.0e-5])
+    coordinate_rescaling = np.asarray([0.1, 25.0, 4.0])
+    config = HistoricalSanosConfig(
+        rolling_observations=160,
+        objective=objective,
+        risk_parameter=2.0,
+        maximum_iterations=10_000,
+    )
+
+    base = fit_historical_sanos_hedge(
+        instrument_returns=instruments,
+        claim_returns=claim,
+        linear_transaction_costs=costs,
+        config=config,
+    )
+    rescaled = fit_historical_sanos_hedge(
+        instrument_returns=instruments * coordinate_rescaling,
+        claim_returns=claim,
+        linear_transaction_costs=costs * coordinate_rescaling,
+        config=config,
+    )
+
+    assert base.converged
+    assert rescaled.converged
+    np.testing.assert_allclose(
+        rescaled.action * coordinate_rescaling,
+        base.action,
+        atol=5.0e-5,
+        rtol=5.0e-5,
+    )
+
+
+def test_historical_sanos_flags_statistically_thin_daily_fit() -> None:
+    generator = np.random.default_rng(89)
+    instruments = generator.normal(scale=0.01, size=(40, 30))
+    claim = -0.2 * instruments[:, 0]
+    config = HistoricalSanosConfig(
+        rolling_observations=40,
+        objective=HistoricalSanosObjective.MEAN_VARIANCE,
+        risk_parameter=1.0,
+        maximum_iterations=2_000,
+    )
+
+    with pytest.warns(RuntimeWarning, match="statistically thin"):
+        fit = fit_historical_sanos_hedge(
+            instrument_returns=instruments,
+            claim_returns=claim,
+            linear_transaction_costs=np.zeros(instruments.shape[1]),
+            config=config,
+        )
+
+    assert fit.converged
 
 
 def test_historical_sanos_exact_cost_has_lasso_zero_threshold() -> None:
@@ -323,6 +393,69 @@ def test_historical_sanos_mean_volatility_solves_cost_lasso_socp() -> None:
     assert fit.zero_policy.maximum_absolute_gradient < 1.0e-6
 
 
+def test_mean_volatility_exact_zero_norm_is_not_a_false_failure() -> None:
+    instruments = np.asarray(
+        [
+            [-0.01],
+            [0.01],
+        ]
+        * 30,
+        dtype=np.float64,
+    )
+    fit = _fit_policy(
+        instruments,
+        np.zeros(len(instruments)),
+        np.zeros(1),
+        config=HistoricalSanosConfig(
+            rolling_observations=60,
+            objective=HistoricalSanosObjective.MEAN_VOLATILITY,
+            risk_parameter=10.0,
+        ),
+    )
+
+    assert fit.converged
+    assert fit.action == pytest.approx(np.zeros(1), abs=1.0e-12)
+    assert "objective_error=0" in fit.solver_status
+
+
+def test_mean_volatility_canonicalizes_scaled_solver_noise(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    generator = np.random.default_rng(103)
+    instruments = generator.normal(scale=0.01, size=(80, 2))
+    claim = -0.4 * instruments[:, 0]
+    original_solve = cp.Problem.solve
+
+    def inject_inactive_coordinate_noise(
+        problem: cp.Problem,
+        *args: object,
+        **kwargs: object,
+    ) -> float:
+        value = original_solve(problem, *args, **kwargs)
+        if kwargs.get("solver") == cp.CLARABEL:
+            scaled_action = problem.variables()[0]
+            fitted = np.asarray(scaled_action.value, dtype=np.float64).copy()
+            fitted[1] = 5.0e-10
+            scaled_action.value = fitted
+        return value
+
+    monkeypatch.setattr(cp.Problem, "solve", inject_inactive_coordinate_noise)
+    fit = _fit_policy(
+        instruments,
+        claim,
+        np.asarray([0.0, 0.05]),
+        config=HistoricalSanosConfig(
+            rolling_observations=80,
+            objective=HistoricalSanosObjective.MEAN_VOLATILITY,
+            risk_parameter=2.0,
+        ),
+    )
+
+    assert fit.converged
+    assert fit.action[1] == 0.0
+    assert fit.maximum_absolute_gradient <= 1.0e-6
+
+
 def test_historical_sanos_mean_volatility_reports_recession_cap() -> None:
     generator = np.random.default_rng(23)
     observations = 252
@@ -346,7 +479,44 @@ def test_historical_sanos_mean_volatility_reports_recession_cap() -> None:
     assert fit.internal_cap_hits == 2
     assert fit.executable_cap_hits == 0
     assert fit.action[0] == pytest.approx(0.0, abs=1.0e-5)
+    assert fit.claim_policy.recession_direction
+    assert fit.zero_policy.recession_direction
+    assert "recession_direction=" in fit.zero_policy.solver_status
     assert not fit.converged
+
+
+def test_mean_volatility_does_not_accept_uncertified_inaccurate_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    generator = np.random.default_rng(97)
+    instruments = generator.normal(scale=0.01, size=(60, 2))
+    claim = -0.3 * instruments[:, 0]
+    original_solve = cp.Problem.solve
+
+    def force_inaccurate_status(
+        problem: cp.Problem,
+        *args: object,
+        **kwargs: object,
+    ) -> float:
+        value = original_solve(problem, *args, **kwargs)
+        problem._status = cp.OPTIMAL_INACCURATE
+        return value
+
+    monkeypatch.setattr(cp.Problem, "solve", force_inaccurate_status)
+    fit = _fit_policy(
+        instruments,
+        claim,
+        np.zeros(instruments.shape[1]),
+        config=HistoricalSanosConfig(
+            rolling_observations=60,
+            objective=HistoricalSanosObjective.MEAN_VOLATILITY,
+            risk_parameter=1.0,
+        ),
+    )
+
+    assert not fit.final_converged
+    assert not fit.converged
+    assert "SCS=optimal_inaccurate" in fit.solver_status
 
 
 def test_virtual_policy_solver_cap_is_distinct_from_executable_cap() -> None:
@@ -366,6 +536,7 @@ def test_virtual_policy_solver_cap_is_distinct_from_executable_cap() -> None:
             maximum_iterations=10_000,
             position_cap=10.0,
             solver_position_cap=10_000.0,
+            quadratic_ridge=1.0e-12,
         ),
     )
 
@@ -488,6 +659,23 @@ def test_historical_sanos_daily_book_reuses_one_aligned_return_panel() -> None:
     assert all(
         "claim_policy_selection_maximum_optimality_residual" in result.diagnostics
         for result in results
+    )
+    assert all(
+        result.diagnostics["observation_parameter_ratio"] == pytest.approx(60.0)
+        for result in results
+    )
+    assert all(not result.diagnostics["statistically_thin"] for result in results)
+    assert all(
+        result.diagnostics["quadratic_ridge"] == pytest.approx(1.0e-4)
+        for result in results
+    )
+    assert all(
+        result.diagnostics["regularization_coordinates"]
+        == "unit-rms instrument gains"
+        for result in results
+    )
+    assert all(
+        result.diagnostics["claim_policy_solver_status"] for result in results
     )
 
 

@@ -881,8 +881,6 @@ def _daily_command(
         command.extend(("--dataset-manifest-sha256", dataset_sha256))
     if objective is not None:
         command.extend(("--objective", objective))
-    if objective == "mean-volatility":
-        command.append("--allow-nonconvergence")
     if risk_parameter is not None:
         command.extend(("--risk-parameter", f"{risk_parameter:g}"))
     if epochs is not None:

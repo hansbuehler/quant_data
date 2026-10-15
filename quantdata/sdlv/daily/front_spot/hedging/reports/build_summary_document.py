@@ -183,6 +183,12 @@ spot costs one basis point of traded notional, and cash settlement is free.
   \item Weekly evaluation starts a five-session episode at each of 528
   overlapping origins. Frozen-weekly policies retain the inception model and
   contract book; restarted-weekly policies refit daily.
+  \item The weekly target book contains ten five-day cash digitals, the
+  unannualized realized-variance payoff
+  $\frac15\sum_{{u=1}}^5(S_u/S_{{u-1}}-1)^2$, a 95\% end-of-day
+  down-and-out ATM put, and a 105\% end-of-day up-and-out ATM call. The
+  barrier is monitored at each future business-day close and the two barrier
+  options have strike one in inception-forward units.
   \item Hedge instruments are normalized spot plus all eligible OTM options
   strictly inside $(-2,2)$ NMS at episode inception with expiries through five
   business days, or the first later expiry if five days is absent. The resulting
@@ -1247,12 +1253,14 @@ def _model_catalogue(model_names: list[str]) -> str:
             r"\citep{VuleticCont2024}.",
         ),
         "diffusion-ad-seq-vol": (
-            "AD--Seq--Vol",
+            "AD--Seq--Vol (Renyuan Xu coauthored)",
             "AD--Seq--Vol is a causal sequence diffusion model on 22-session "
-            r"surface and normalized-return histories \citep{HanEtAl2026}.",
+            "surface and normalized-return histories. It is the requested "
+            "Renyuan Xu coauthored generative hedging baseline "
+            r"\citep{HanEtAl2026}.",
         ),
         "diffusion-ad-seq-vol-ft": (
-            "AD--Seq--Vol--FT",
+            "AD--Seq--Vol--FT (Renyuan Xu coauthored)",
             "The fine-tuned variant freezes the EMA base and trains a rank-four "
             "adapter with calendar, call-spread, and butterfly penalties "
             r"\citep{HanEtAl2026}.",
