@@ -14,6 +14,8 @@ import cvxpy as cp
 import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import OptimizeResult, lsq_linear, minimize
+from scipy.sparse import bmat, csc_matrix
+from scipy.sparse.linalg import MatrixRankWarning, spsolve
 from scipy.special import logsumexp
 
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly_scenarios import (
@@ -1152,7 +1154,7 @@ class _WeeklyOpenLoopGeometry:
             if self.config.objective is HistoricalSanosObjective.MEAN_VARIANCE:
                 compiled.problem.solve(
                     solver=cp.OSQP,
-                    warm_start=True,
+                    warm_start=False,
                     max_iter=max(10_000, self.config.maximum_iterations),
                     eps_abs=self.config.gradient_tolerance,
                     eps_rel=self.config.gradient_tolerance,
@@ -1199,11 +1201,8 @@ class _WeeklyOpenLoopGeometry:
                     self._resolve_inaccurate_conic_problem(compiled.problem)
                 )
                 iterations += independent_iterations
-            elif (
-                solver_status != cp.OPTIMAL
-                and self._polish_compact_mean_variance_solution(compiled)
-            ):
-                solver_trace = f"{solver_trace}; active-set KKT polish"
+            else:
+                self._canonicalize_compact_mean_variance_epigraph(compiled)
             (
                 fitted,
                 certified,
@@ -1242,7 +1241,7 @@ class _WeeklyOpenLoopGeometry:
             primal_dual_gap = math.inf
         if (
             self.config.objective is HistoricalSanosObjective.MEAN_VARIANCE
-            and not certified
+            and (not certified or solver_status == cp.USER_LIMIT)
             and self._polish_compact_mean_variance_solution(compiled)
         ):
             solver_trace = f"{solver_trace}; active-set KKT polish"
@@ -1268,24 +1267,23 @@ class _WeeklyOpenLoopGeometry:
         ):
             try:
                 compiled.problem.solve(
-                    solver=cp.HIGHS,
+                    solver=cp.CLARABEL,
                     warm_start=False,
-                    primal_feasibility_tolerance=self.config.gradient_tolerance,
-                    dual_feasibility_tolerance=self.config.gradient_tolerance,
-                    ipm_optimality_tolerance=self.config.gradient_tolerance,
+                    max_iter=self.config.maximum_iterations,
+                    tol_gap_abs=self.config.gradient_tolerance,
+                    tol_gap_rel=self.config.gradient_tolerance,
+                    tol_feas=self.config.gradient_tolerance,
                     time_limit=self.config.fallback_time_limit_seconds,
-                    threads=1,
                 )
                 iterations += int(compiled.problem.solver_stats.num_iters or 0)
                 fallback_status = compiled.problem.status
                 fallback_solver = str(
-                    compiled.problem.solver_stats.solver_name or "HIGHS"
+                    compiled.problem.solver_stats.solver_name or "CLARABEL"
                 )
                 solver_trace = (
                     f"{solver_trace}; fallback {fallback_solver}={fallback_status}"
                 )
-                if self._polish_compact_mean_variance_solution(compiled):
-                    solver_trace = f"{solver_trace}; active-set KKT polish"
+                self._canonicalize_compact_mean_variance_epigraph(compiled)
                 (
                     fitted,
                     certified,
@@ -1302,6 +1300,91 @@ class _WeeklyOpenLoopGeometry:
                     terminal_claim_values_pv=terminal_claim_values_pv,
                     solver_status=fallback_status,
                 )
+                if (
+                    not certified
+                    and self._polish_compact_mean_variance_solution(compiled)
+                ):
+                    solver_trace = f"{solver_trace}; active-set KKT polish"
+                    (
+                        fitted,
+                        certified,
+                        exact_objective,
+                        objective_error,
+                        constraint_violation,
+                        optimality,
+                        primal_dual_gap,
+                    ) = self._certify_raw_convex_solution(
+                        compiled,
+                        initial,
+                        indices,
+                        signed_claim_quantity=signed_claim_quantity,
+                        terminal_claim_values_pv=terminal_claim_values_pv,
+                        solver_status=fallback_status,
+                    )
+            except cp.error.SolverError as error:
+                solver_trace = (
+                    f"{solver_trace}; CLARABEL fallback failed: {error}"
+                )
+        if (
+            self.config.objective is HistoricalSanosObjective.MEAN_VARIANCE
+            and not certified
+        ):
+            try:
+                compiled.problem.solve(
+                    solver=cp.HIGHS,
+                    warm_start=False,
+                    primal_feasibility_tolerance=self.config.gradient_tolerance,
+                    dual_feasibility_tolerance=self.config.gradient_tolerance,
+                    ipm_optimality_tolerance=self.config.gradient_tolerance,
+                    time_limit=self.config.fallback_time_limit_seconds,
+                    threads=1,
+                )
+                iterations += int(compiled.problem.solver_stats.num_iters or 0)
+                fallback_status = compiled.problem.status
+                fallback_solver = str(
+                    compiled.problem.solver_stats.solver_name or "HIGHS"
+                )
+                solver_trace = (
+                    f"{solver_trace}; fallback {fallback_solver}={fallback_status}"
+                )
+                self._canonicalize_compact_mean_variance_epigraph(compiled)
+                (
+                    fitted,
+                    certified,
+                    exact_objective,
+                    objective_error,
+                    constraint_violation,
+                    optimality,
+                    primal_dual_gap,
+                ) = self._certify_raw_convex_solution(
+                    compiled,
+                    initial,
+                    indices,
+                    signed_claim_quantity=signed_claim_quantity,
+                    terminal_claim_values_pv=terminal_claim_values_pv,
+                    solver_status=fallback_status,
+                )
+                if (
+                    not certified
+                    and self._polish_compact_mean_variance_solution(compiled)
+                ):
+                    solver_trace = f"{solver_trace}; active-set KKT polish"
+                    (
+                        fitted,
+                        certified,
+                        exact_objective,
+                        objective_error,
+                        constraint_violation,
+                        optimality,
+                        primal_dual_gap,
+                    ) = self._certify_raw_convex_solution(
+                        compiled,
+                        initial,
+                        indices,
+                        signed_claim_quantity=signed_claim_quantity,
+                        terminal_claim_values_pv=terminal_claim_values_pv,
+                        solver_status=fallback_status,
+                    )
             except cp.error.SolverError as error:
                 solver_trace = f"{solver_trace}; HIGHS fallback failed: {error}"
         scaled_fitted = fitted / compiled.action_scale
@@ -1338,11 +1421,30 @@ class _WeeklyOpenLoopGeometry:
         result.action_scale = compiled.action_scale
         return result
 
+    def _canonicalize_compact_mean_variance_epigraph(
+        self,
+        compiled: _ConvexCostLassoProblem,
+    ) -> bool:
+        """Minimize the auxiliary epigraph exactly at fixed positions."""
+        certificate = compiled.compact_certificate
+        scaled_value = compiled.scaled_positions.value
+        if certificate is None or scaled_value is None:
+            return False
+        scaled_fitted = np.asarray(scaled_value, dtype=np.float64)
+        if not np.all(np.isfinite(scaled_fitted)):
+            return False
+        turnover = (
+            certificate.turnover_matrix @ scaled_fitted
+            - certificate.turnover_offset
+        )
+        certificate.turnover_epigraph.value = np.abs(turnover)
+        return True
+
     def _polish_compact_mean_variance_solution(
         self,
         compiled: _ConvexCostLassoProblem,
     ) -> bool:
-        """Solve the exact KKT system for the fallback solver's active set."""
+        """Iterate exact KKT solves until the lasso active set is valid."""
         certificate = compiled.compact_certificate
         scaled_value = compiled.scaled_positions.value
         if (
@@ -1359,124 +1461,193 @@ class _WeeklyOpenLoopGeometry:
             - certificate.turnover_offset
         )
         tolerance = self.config.certificate_tolerance
-        positive_turnover = turnover > tolerance
-        negative_turnover = turnover < -tolerance
-        zero_turnover = (
-            ~(positive_turnover | negative_turnover)
-            & (certificate.turnover_weights > 0.0)
-        )
-        turnover_subgradient = np.zeros_like(turnover)
-        turnover_subgradient[positive_turnover] = (
-            certificate.turnover_weights[positive_turnover]
-        )
-        turnover_subgradient[negative_turnover] = (
-            -certificate.turnover_weights[negative_turnover]
-        )
+        turnover_tolerance = np.full(len(turnover), tolerance)
+        turnover_status = np.zeros(len(turnover), dtype=np.int8)
+        turnover_status[turnover > turnover_tolerance] = 1
+        turnover_status[turnover < -turnover_tolerance] = -1
         cap = self.config.solver_position_cap
         position_tolerance = tolerance / compiled.action_scale
-        lower_active = scaled_fitted <= (
+        position_status = np.zeros(self.parameter_count, dtype=np.int8)
+        position_status[scaled_fitted <= (
             -certificate.scaled_position_cap + position_tolerance
-        )
-        upper_active = scaled_fitted >= (
+        )] = -1
+        position_status[scaled_fitted >= (
             certificate.scaled_position_cap - position_tolerance
-        )
-
-        equality_rows: list[FloatArray] = []
-        equality_values: list[float] = []
-        equality_kinds: list[tuple[str, int]] = []
-        for index in np.flatnonzero(zero_turnover):
-            equality_rows.append(certificate.turnover_matrix[index])
-            equality_values.append(certificate.turnover_offset[index])
-            equality_kinds.append(("turnover", int(index)))
-        for index in np.flatnonzero(lower_active):
-            row = np.zeros(self.parameter_count, dtype=np.float64)
-            row[index] = 1.0
-            equality_rows.append(row)
-            equality_values.append(-certificate.scaled_position_cap[index])
-            equality_kinds.append(("lower", int(index)))
-        for index in np.flatnonzero(upper_active):
-            row = np.zeros(self.parameter_count, dtype=np.float64)
-            row[index] = 1.0
-            equality_rows.append(row)
-            equality_values.append(certificate.scaled_position_cap[index])
-            equality_kinds.append(("upper", int(index)))
-
+        )] = 1
         linear = np.asarray(compiled.linear.value, dtype=np.float64)
-        smooth_linear = (
-            linear
-            + certificate.turnover_matrix.T @ turnover_subgradient
-        )
-        if equality_rows:
-            equality_matrix = np.asarray(equality_rows, dtype=np.float64)
-            equality_value = np.asarray(equality_values, dtype=np.float64)
-            kkt_matrix = np.block(
-                [
-                    [certificate.hessian, equality_matrix.T],
+        visited_active_sets: set[tuple[bytes, bytes]] = set()
+        for _ in range(25):
+            active_set = (
+                turnover_status.tobytes(),
+                position_status.tobytes(),
+            )
+            if active_set in visited_active_sets:
+                return False
+            visited_active_sets.add(active_set)
+            positive_turnover = turnover_status == 1
+            negative_turnover = turnover_status == -1
+            zero_turnover = (
+                (turnover_status == 0)
+                & (certificate.turnover_weights > 0.0)
+            )
+            turnover_subgradient = (
+                certificate.turnover_weights * turnover_status
+            )
+            equality_rows: list[FloatArray] = []
+            equality_values: list[float] = []
+            equality_kinds: list[tuple[str, int]] = []
+            for index in np.flatnonzero(zero_turnover):
+                equality_rows.append(certificate.turnover_matrix[index])
+                equality_values.append(certificate.turnover_offset[index])
+                equality_kinds.append(("turnover", int(index)))
+            for index in np.flatnonzero(position_status == -1):
+                row = np.zeros(self.parameter_count, dtype=np.float64)
+                row[index] = 1.0
+                equality_rows.append(row)
+                equality_values.append(-certificate.scaled_position_cap[index])
+                equality_kinds.append(("lower", int(index)))
+            for index in np.flatnonzero(position_status == 1):
+                row = np.zeros(self.parameter_count, dtype=np.float64)
+                row[index] = 1.0
+                equality_rows.append(row)
+                equality_values.append(certificate.scaled_position_cap[index])
+                equality_kinds.append(("upper", int(index)))
+            smooth_linear = (
+                linear
+                + certificate.turnover_matrix.T @ turnover_subgradient
+            )
+            if equality_rows:
+                equality_matrix = np.asarray(equality_rows, dtype=np.float64)
+                equality_value = np.asarray(equality_values, dtype=np.float64)
+                independent = self._independent_incidence_rows(equality_matrix)
+                equality_matrix = equality_matrix[independent]
+                equality_value = equality_value[independent]
+                equality_kinds = [equality_kinds[index] for index in independent]
+                kkt_matrix = bmat(
                     [
-                        equality_matrix,
-                        np.zeros(
-                            (len(equality_rows), len(equality_rows)),
-                            dtype=np.float64,
-                        ),
+                        [csc_matrix(certificate.hessian), csc_matrix(equality_matrix.T)],
+                        [
+                            csc_matrix(equality_matrix),
+                            csc_matrix(
+                                (len(equality_matrix), len(equality_matrix)),
+                            ),
+                        ],
                     ],
-                ]
-            )
-            kkt_rhs = np.concatenate((-smooth_linear, equality_value))
-        else:
-            equality_matrix = np.empty(
-                (0, self.parameter_count),
-                dtype=np.float64,
-            )
-            equality_value = np.empty(0, dtype=np.float64)
-            kkt_matrix = certificate.hessian
-            kkt_rhs = -smooth_linear
-        try:
-            polished = np.linalg.solve(kkt_matrix, kkt_rhs)
-        except np.linalg.LinAlgError:
-            polished, _, _, _ = np.linalg.lstsq(
-                kkt_matrix,
-                kkt_rhs,
-                rcond=None,
-            )
-        if not np.all(np.isfinite(polished)):
-            return False
-        kkt_residual = float(
-            np.max(np.abs(kkt_matrix @ polished - kkt_rhs))
-        )
-        if kkt_residual > tolerance:
-            return False
-        polished_scaled = polished[: self.parameter_count]
-        multipliers = polished[self.parameter_count :]
-        polished_turnover = (
-            certificate.turnover_matrix @ polished_scaled
-            - certificate.turnover_offset
-        )
-        polished_fitted = compiled.action_scale * polished_scaled
-        if (
-            np.any(polished_turnover[positive_turnover] < -tolerance)
-            or np.any(polished_turnover[negative_turnover] > tolerance)
-            or np.any(np.abs(polished_turnover[zero_turnover]) > tolerance)
-            or np.any(polished_fitted < -cap - tolerance)
-            or np.any(polished_fitted > cap + tolerance)
-        ):
-            return False
-        for multiplier, (kind, index) in zip(
-            multipliers,
-            equality_kinds,
-            strict=True,
-        ):
-            if kind == "turnover":
-                if abs(multiplier) > (
-                    certificate.turnover_weights[index] + tolerance
-                ):
-                    return False
-            elif kind == "lower" and multiplier > tolerance:
+                    format="csc",
+                )
+                kkt_rhs = np.concatenate((-smooth_linear, equality_value))
+            else:
+                kkt_matrix = certificate.hessian
+                kkt_rhs = -smooth_linear
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("error", MatrixRankWarning)
+                    polished = (
+                        spsolve(kkt_matrix, kkt_rhs)
+                        if equality_rows
+                        else np.linalg.solve(kkt_matrix, kkt_rhs)
+                    )
+            except (np.linalg.LinAlgError, MatrixRankWarning, RuntimeError):
+                polished, _, _, _ = np.linalg.lstsq(
+                    kkt_matrix.toarray() if equality_rows else kkt_matrix,
+                    kkt_rhs,
+                    rcond=None,
+                )
+            if not np.all(np.isfinite(polished)):
                 return False
-            elif kind == "upper" and multiplier < -tolerance:
+            if float(np.max(np.abs(kkt_matrix @ polished - kkt_rhs))) > tolerance:
                 return False
-        compiled.scaled_positions.value = polished_scaled
-        certificate.turnover_epigraph.value = np.abs(polished_turnover)
-        return True
+            polished_scaled = polished[: self.parameter_count]
+            multipliers = polished[self.parameter_count :]
+            polished_turnover = (
+                certificate.turnover_matrix @ polished_scaled
+                - certificate.turnover_offset
+            )
+            polished_fitted = compiled.action_scale * polished_scaled
+            revised_turnover_status = turnover_status.copy()
+            revised_position_status = position_status.copy()
+            for index in np.flatnonzero(positive_turnover):
+                if polished_turnover[index] <= turnover_tolerance[index]:
+                    revised_turnover_status[index] = (
+                        -1
+                        if polished_turnover[index] < -turnover_tolerance[index]
+                        else 0
+                    )
+            for index in np.flatnonzero(negative_turnover):
+                if polished_turnover[index] >= -turnover_tolerance[index]:
+                    revised_turnover_status[index] = (
+                        1
+                        if polished_turnover[index] > turnover_tolerance[index]
+                        else 0
+                    )
+            for index in np.flatnonzero(zero_turnover):
+                if abs(polished_turnover[index]) > turnover_tolerance[index]:
+                    revised_turnover_status[index] = (
+                        1 if polished_turnover[index] > 0.0 else -1
+                    )
+            for multiplier, (kind, index) in zip(
+                multipliers,
+                equality_kinds,
+                strict=True,
+            ):
+                if kind == "turnover":
+                    weight = certificate.turnover_weights[index]
+                    if multiplier > weight + tolerance:
+                        revised_turnover_status[index] = 1
+                    elif multiplier < -weight - tolerance:
+                        revised_turnover_status[index] = -1
+                elif kind == "lower" and multiplier > tolerance:
+                    revised_position_status[index] = 0
+                elif kind == "upper" and multiplier < -tolerance:
+                    revised_position_status[index] = 0
+            free_position = position_status == 0
+            revised_position_status[
+                free_position & (polished_fitted < -cap - tolerance)
+            ] = -1
+            revised_position_status[
+                free_position & (polished_fitted > cap + tolerance)
+            ] = 1
+            if (
+                np.array_equal(revised_turnover_status, turnover_status)
+                and np.array_equal(revised_position_status, position_status)
+            ):
+                compiled.scaled_positions.value = polished_scaled
+                certificate.turnover_epigraph.value = np.abs(polished_turnover)
+                return True
+            turnover_status = revised_turnover_status
+            position_status = revised_position_status
+        return False
+
+    def _independent_incidence_rows(
+        self,
+        rows: FloatArray,
+    ) -> NDArray[np.int64]:
+        """Select a spanning forest from turnover and bound equalities."""
+        ground = self.parameter_count
+        parent = np.arange(self.parameter_count + 1, dtype=np.int64)
+
+        def root(node: int) -> int:
+            while parent[node] != node:
+                parent[node] = parent[parent[node]]
+                node = int(parent[node])
+            return node
+
+        selected: list[int] = []
+        for row_index, row in enumerate(rows):
+            nonzero = np.flatnonzero(row)
+            if len(nonzero) == 0:
+                continue
+            if len(nonzero) > 2:
+                return np.arange(len(rows), dtype=np.int64)
+            left = int(nonzero[0])
+            right = ground if len(nonzero) == 1 else int(nonzero[1])
+            left_root = root(left)
+            right_root = root(right)
+            if left_root == right_root:
+                continue
+            parent[left_root] = right_root
+            selected.append(row_index)
+        return np.asarray(selected, dtype=np.int64)
 
     def _certify_raw_convex_solution(
         self,
@@ -1747,8 +1918,9 @@ class _WeeklyOpenLoopGeometry:
         if certificate is None:
             return None
         positive_dual = np.zeros_like(certificate.turnover_weights)
-        positive_turnover = turnover > self.config.certificate_tolerance
-        negative_turnover = turnover < -self.config.certificate_tolerance
+        turnover_tolerance = self.config.certificate_tolerance
+        positive_turnover = turnover > turnover_tolerance
+        negative_turnover = turnover < -turnover_tolerance
         positive_dual[positive_turnover] = certificate.turnover_weights[
             positive_turnover
         ]
@@ -2018,6 +2190,9 @@ class _WeeklyOpenLoopGeometry:
             linear.value = np.zeros(self.parameter_count)
             objective_constant.value = 0.0
             turnover = turnover_matrix @ positions - turnover_offset
+            physical_turnover_matrix = (
+                turnover_matrix * action_scale[None, :]
+            )
             turnover_epigraph = cp.Variable(len(turnover_weights))
             scaled_position_cap = (
                 self.config.solver_position_cap / action_scale
@@ -2048,7 +2223,7 @@ class _WeeklyOpenLoopGeometry:
             compact_certificate = _CompactMeanVarianceCertificate(
                 hessian=np.asarray(hessian, dtype=np.float64),
                 turnover_matrix=np.asarray(
-                    turnover_matrix * action_scale[None, :],
+                    physical_turnover_matrix,
                     dtype=np.float64,
                 ),
                 turnover_offset=np.asarray(turnover_offset, dtype=np.float64),

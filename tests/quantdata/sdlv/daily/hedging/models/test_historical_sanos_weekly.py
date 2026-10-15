@@ -125,6 +125,62 @@ def _scenario_set(*, scenario_count: int = 80) -> HistoricalWeeklyScenarioSet:
     )
 
 
+def _real_parameter_shape_scenarios() -> WeeklyScenarioBatch:
+    generator = np.random.default_rng(123)
+    scenario_count = 20
+    step_count = 5
+    contract_count = 133
+    spot_gains = generator.normal(
+        scale=0.01,
+        size=(scenario_count, step_count),
+    )
+    contract_scales = np.geomspace(1.0e-3, 0.02, contract_count)
+    option_gains = generator.normal(
+        size=(scenario_count, step_count, contract_count),
+    ) * contract_scales[None, None, :]
+    option_alive = np.ones((step_count + 1, contract_count), dtype=bool)
+    option_alive[4:, -1] = False
+    option_settles_next = np.zeros(
+        (step_count, contract_count),
+        dtype=bool,
+    )
+    option_settles_next[3, -1] = True
+    option_gains[:, 4:, -1] = 0.0
+    option_spreads = np.full(
+        (scenario_count, step_count + 1, contract_count),
+        2.0e-4,
+    )
+    option_spreads[:, 4:, -1] = 0.0
+    raw_claim = (
+        0.3 * np.sum(spot_gains, axis=1)
+        - 0.2 * np.sum(option_gains[:, :, 50], axis=1)
+        + 0.1 * np.sum(option_gains[:, :, 100], axis=1)
+    )
+    return WeeklyScenarioBatch(
+        inception_forward_paths=np.exp(
+            np.column_stack(
+                (
+                    np.zeros(scenario_count),
+                    np.cumsum(spot_gains, axis=1),
+                )
+            )
+        ),
+        spot_values_pv=np.ones((scenario_count, step_count + 1)),
+        spot_step_gains=spot_gains,
+        option_step_gains=option_gains,
+        option_half_spreads_pv=option_spreads,
+        option_alive=option_alive,
+        option_settles_next=option_settles_next,
+        terminal_claim_values_pv=raw_claim - np.min(raw_claim) + 0.01,
+        contract_ids=tuple(f"contract-{index}" for index in range(contract_count)),
+        target_label="real-parameter-shape",
+        fit_as_of_date=date(2022, 12, 30),
+        model_fit_identity="synthetic-real-parameter-shape",
+        measure="historical-P",
+        seed=123,
+    )
+
+
 @pytest.mark.parametrize("objective", tuple(HistoricalSanosObjective))
 def test_historical_weekly_gradient_matches_finite_differences(
     objective: HistoricalSanosObjective,
@@ -1074,7 +1130,7 @@ def test_weekly_mean_variance_polishes_failed_raw_certificate_before_fallback(
     assert "fallback HIGHS" not in result.message
 
 
-def test_weekly_mean_variance_retries_osqp_exception_with_highs(
+def test_weekly_mean_variance_retries_osqp_exception_with_clarabel(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     scenarios = _scenario_set().scenarios
@@ -1111,7 +1167,8 @@ def test_weekly_mean_variance_retries_osqp_exception_with_highs(
 
     assert result.success
     assert "OSQP failed: forced OSQP failure" in result.message
-    assert "fallback HIGHS=optimal" in result.message
+    assert "fallback CLARABEL=optimal" in result.message
+    assert "fallback HIGHS" not in result.message
 
 
 def test_weekly_mean_variance_polishes_genuine_osqp_user_limit() -> None:
@@ -1152,19 +1209,15 @@ def test_weekly_mean_variance_polishes_genuine_osqp_user_limit() -> None:
     )
 
     assert compiled.problem.status == cp.USER_LIMIT
-    assert geometry._polish_compact_mean_variance_solution(compiled)
-    scaled_fitted = np.asarray(compiled.scaled_positions.value)
-    certified = geometry._certify_compact_mean_variance_solution(
-        compiled,
-        scaled_fitted=scaled_fitted,
-        indices=indices,
+    result = geometry._minimize_convex_cost_lasso(
+        np.zeros(geometry.parameter_count),
+        indices,
         signed_claim_quantity=1.0,
         terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
-        solver_status=compiled.problem.status,
     )
 
-    assert certified[0]
-    assert certified[4] <= geometry.config.certificate_tolerance
+    assert result.success
+    assert result.optimality <= geometry.config.certificate_tolerance
 
 
 def test_weekly_mean_variance_certifies_extreme_scaling_with_zero_cost_rows() -> None:
@@ -1207,6 +1260,47 @@ def test_weekly_mean_variance_certifies_extreme_scaling_with_zero_cost_rows() ->
         certificate.scaled_position_cap,
         cap / compiled.action_scale,
     )
+
+    result = geometry._minimize_convex_cost_lasso(
+        np.zeros(geometry.parameter_count),
+        indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
+    )
+
+    assert result.success
+    assert result.constraint_violation <= geometry.config.certificate_tolerance
+    assert result.optimality <= geometry.config.certificate_tolerance
+
+
+def test_weekly_mean_variance_certifies_real_parameter_shape() -> None:
+    scenarios = _real_parameter_shape_scenarios()
+    geometry = _WeeklyOpenLoopGeometry(
+        scenarios,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(scenarios.contract_count),
+        config=HistoricalSanosConfig(
+            rolling_observations=scenarios.scenario_count,
+            objective=HistoricalSanosObjective.MEAN_VARIANCE,
+            risk_parameter=1.0,
+            maximum_iterations=5_000,
+            fallback_time_limit_seconds=10.0,
+        ),
+    )
+    indices = np.arange(scenarios.scenario_count, dtype=np.int64)
+    claim, instrument_gains = geometry._linear_wealth_geometry(
+        indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
+    )
+    compiled = geometry._convex_cost_lasso_problem(
+        indices,
+        instrument_gains=instrument_gains,
+    )
+    certificate = compiled.compact_certificate
+    assert geometry.parameter_count == 669
+    assert certificate is not None
+    assert certificate.turnover_matrix.shape == (802, 669)
 
     result = geometry._minimize_convex_cost_lasso(
         np.zeros(geometry.parameter_count),
