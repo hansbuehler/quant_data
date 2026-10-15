@@ -1926,19 +1926,6 @@ OptionMetrics under licence, and restrictions apply to their redistribution.
 
 \clearpage
 \appendix
-\section{Risk-neutral optimizer convergence}
-\label{app:rn-q2-convergence}
-
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.82\textwidth]{generated/q2-oce-convergence.png}
-  \caption{Full-population optimization of~\eqref{eq:rn-oce-q2-fit}.  The top
-  panel shows the OCE objective and the bottom panel its exact parameter-gradient
-  RMS against cumulative full-population objective/gradient evaluations.  The
-  vertical dashed line marks the switch from Adam to L-BFGS; the horizontal
-  dotted line is the terminal stopping target.}
-  \label{fig:rn-q2-convergence}
-\end{figure}
 
 \section{Training the affine state-space model}
 \label{app:affine-training}
@@ -2231,6 +2218,20 @@ $a_t^*=0$ almost surely; its first-order condition then gives $\mu_t=0$
 almost surely.
 \end{proof}
 
+\section{Risk-neutral optimizer convergence}
+\label{app:rn-q2-convergence}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.82\textwidth]{generated/q2-oce-convergence.png}
+  \caption{Full-population optimization of~\eqref{eq:rn-oce-q2-fit}.  The top
+  panel shows the OCE objective and the bottom panel its exact parameter-gradient
+  RMS against cumulative full-population objective/gradient evaluations.  The
+  vertical dashed line marks the switch from Adam to L-BFGS; the horizontal
+  dotted line is the terminal stopping target.}
+  \label{fig:rn-q2-convergence}
+\end{figure}
+
 
 \section{Data pipeline}\label{app:data-pipeline}
 
@@ -2438,9 +2439,9 @@ training weights and inside-spread objective are those in
 \eqref{eq:production-quote-loss}.  Appendix~\ref{app:affine-training}
 describes the complete optimization sequence.
 
-\clearpage
-\section{Option-surface Literature Classification}
+%\clearpage
+%\section{Option-surface Literature Classification}
 %\label{app:literature-tables}
-\input{../../../tex/models}
+%\input{../../../tex/models}
 
 \end{document}
