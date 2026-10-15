@@ -161,13 +161,13 @@ CPU and managed-GPU stages:
 ```bash
 python -m quantdata.sdlv.daily.front_spot.hedging.runners.fit_rolling_gromm2_range \
   --dataset "$QUANTDATA_ROOT/datasets/hedging/spx-2022-2025-hedging-public-candidate-v1" \
-  --artifact-root "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v3" \
+  --artifact-root "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v4" \
   --start 2023-01-01 --end 2025-12-31 --stage prepare
 
 gpuctl run --gpus 1 -- \
   python -m quantdata.sdlv.daily.front_spot.hedging.runners.fit_rolling_gromm2_range \
   --dataset "$QUANTDATA_ROOT/datasets/hedging/spx-2022-2025-hedging-public-candidate-v1" \
-  --artifact-root "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v3" \
+  --artifact-root "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v4" \
   --start 2023-01-01 --end 2025-12-31 --stage fit
 ```
 
@@ -272,11 +272,11 @@ Supply a completed GROMM range and the fixed 2022 policy architecture with:
 python -m quantdata.sdlv.daily.front_spot.hedging.runners.production_matrix \
   --output-root "$QUANTDATA_ROOT/experiments/hedging/daily" \
   --checkpoint-root "$QUANTDATA_ROOT/training/hedging/daily" \
-  --gromm-market-artifact-root "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v3" \
+  --gromm-market-artifact-root "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v4" \
   --gromm-architecture-selection \
-    "$QUANTDATA_ROOT/training/hedging/gromm/architecture-2022-v1/result-v2.json" \
+    "$QUANTDATA_ROOT/training/hedging/gromm/architecture-2022-v2-fe7c3a7/result.json" \
   --gromm-artifact-range-summary \
-    "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v3/range-fit-2023-2025.json"
+    "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v4/range-fit-2023-2025-v7.json"
 ```
 
 Build the corresponding frozen- and restarted-weekly matrix from the same
@@ -288,11 +288,11 @@ python -m quantdata.sdlv.daily.front_spot.hedging.runners.weekly_production_matr
   --checkpoint-root "$QUANTDATA_ROOT/training/hedging/weekly" \
   --weekly-input-preflight \
     "$QUANTDATA_ROOT/processing/hedging/target-notionals/weekly-preflight.json" \
-  --gromm-market-artifact-root "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v3" \
+  --gromm-market-artifact-root "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v4" \
   --gromm-architecture-selection \
-    "$QUANTDATA_ROOT/training/hedging/gromm/architecture-2022-v1/result-v2.json" \
+    "$QUANTDATA_ROOT/training/hedging/gromm/architecture-2022-v2-fe7c3a7/result.json" \
   --gromm-artifact-range-summary \
-    "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v3/range-fit-2023-2025.json"
+    "$QUANTDATA_ROOT/training/hedging/gromm2-rolling-v4/range-fit-2023-2025-v7.json"
 ```
 
 The matrix command also accepts authenticated generated-model inputs through

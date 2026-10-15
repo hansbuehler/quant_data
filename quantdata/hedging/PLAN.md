@@ -1442,11 +1442,12 @@ The four GROMM hedge-policy candidates are fixed as
 and the common affine action. The authenticated 2022-only selection study
 evaluated all four over 40 measure/target cases and applied the precommitted
 cheapest-within-one-standard-error rule.  It selected `(64,3,128)` with
-validation loss `0.0798512`; the one-standard-error threshold was `0.0875964`.
+validation loss `0.08181613770898842`; the one-standard-error threshold was
+`0.09032001233718524`.
 The selection artifact has SHA-256
-`3170f666a9bd750d91fe45143c87c5daf79c6f8b6ee57014f887f5b29420e3db` and is
+`ed68dd71a87465507191f476cf85eea691596751fa122d95ac21c7381abb166b` and is
 stored outside the source tree at
-`/home/hans/quantdata_data/training/hedging/gromm/architecture-2022-v1/result-v2.json`.
+`/home/hans/quantdata_data/training/hedging/gromm/architecture-2022-v2-fe7c3a7/result.json`.
 
 The episode risk unit, target-notional rule, 1,000-unit numerical position cap,
 common spot-cap convention, statistical PCA alignment tolerance, and
