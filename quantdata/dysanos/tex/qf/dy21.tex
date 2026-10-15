@@ -195,6 +195,10 @@ paths.\\
 A natural data-driven alternative is to treat the implied volatility surface itself
 as the simulation object, much as implied in~\citet{ContVol} and recently explored in
 ~\cite{ContVuletic2023,ChoudharyJaimungalBergeron2024,HanEtAl2026}.
+\citet{HanEtAl2026} recursively generate a daily SPX log return and an
+$11\times9$ log-IV grid, conditioning each step on the updated path history;
+fine-tuning penalizes static-arbitrage violations, and their hedging experiment
+uses one-day conditional scenarios.
 The fundamental difficulty is that there is no known parametrization  of
 the implied volatility surface which is strictly free of static
 arbitrage. There exist numerous attempts to rectify this with classic
@@ -412,7 +416,7 @@ The use of SANOS also allows to fit our model very efficiently to observed bid/a
 
 \noindent
 \textbf{Overview of Related Papers:} the current topic has been subject to extensive research for the last decades.
-We have therefore provide a table with the contributions we are aware in tables~\ref{tab:surface-interpolation-literature} to~\ref{tab:surface-dynamics-literature}
+We have therefore provided a table with the contributions we are aware in tables~\ref{tab:surface-interpolation-literature} to~\ref{tab:surface-dynamics-literature}
 starting on page~\pageref{tab:surface-interpolation-literature}.
 
 \subsection*{Key contributions}

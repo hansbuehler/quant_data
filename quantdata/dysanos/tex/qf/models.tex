@@ -222,7 +222,7 @@ Method & Representation & Native option coordinates & Off-grid & Latent/static a
 \citet{HaoJi2026}
   & Conditional diffusion plus SAAM refinement & $15\times17=255$ & Arbitrary target coordinates & A & SAAM uses residual regularization and reduces measured violations on a finite diagnostic grid; it is not an admissible parameterization. \\
 \citet{HanEtAl2026}
-  & Adaptive sequential diffusion & $11\times9=99$ & 0 & A & Nearly zero reported violations after fine-tuning. \\
+  & Joint return/direct-IV adaptive sequential diffusion & $11\times9=99$ IVs & 0 & A & Fine-tuning penalizes calendar-, call-, and butterfly-spread violations; reported violations are nearly zero, not structurally excluded. \\
 \citet{YangWangZhangLi2026}
   & Joint stock-return/option-IV diffusion across equities & $11\times9=99$ option IVs per stock & 0 & A & Transfers dynamics to unseen stocks on the same fixed grid. \\
 This paper
@@ -407,7 +407,7 @@ Method & Dynamic state/model & Static arb. under $\P$ & Multi-step $\P$ path & D
 \citet{HaoJi2026}
   & Conditional diffusion plus SAAM refinement & A & Yes (five one-minute steps) & --- & Yes & The daily experiment is next-day only; finite-grid violations remain. \\
 \citet{HanEtAl2026}
-  & Adaptive sequential diffusion & A & Yes (three days) & --- & Yes & Approximate static conditions. \\
+  & Joint daily return and direct-IV grid via adaptive sequential diffusion & A & Yes (reported three-day path) & --- & Yes ($\P$) & Each step conditions on the updated generated history; hedging uses one-day conditional scenarios. \\
 \citet{YangWangZhangLi2026}
   & Joint stock-return/option-IV diffusion across equities & A & No (next-day only) & --- & Yes & Jointly generates the next-day stock return and $11\times9$ option-IV increment; static option constraints are approximate. \\
 \citet{FrancoisEtAl2026}
