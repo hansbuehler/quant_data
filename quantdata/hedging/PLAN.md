@@ -31,39 +31,38 @@ GROMM cases ready. Quantitative review is recorded in
 `quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-15-gromm-architecture-remediation-review.md`
 (SHA-256
 `687f9b4ee61eb101318fb20e20364ee8af2d3cd9f6836d6e26ababd57342e96e`).
-The corrected final coordinator
-`quantdata-hedging-full-production-fe7c3a7.service` is active and waits for both
-generated readiness and the authenticated Historical-SANOS handoff before it
-may compose or commit production matrices. It binds every generated and GROMM
-case to reviewed evidence, authenticates the new architecture and its CPU-only
-launcher during preflight, runs weekly production under schema v3, and retains
-exact commit authentication. Its installed launcher SHA-256 is
-`d729a52ee477f1db48b1e8eb68cf608eeb185a7fb3cb680f0efaade89891973d`.
-The strict Historical-SANOS daily CPU queue remains active from immutable
-version-1.13 commit
-`f4d42c2e893b5a814f954c21e92a60634e02e286`. Weekly production now runs from
-immutable version-1.14 commit `46d9f2205ac9bfddbc401f68db581505e2b214bb`;
-both services use no GPU. Version 1.14 adds an explicit weekly zero-claim
-mean-volatility recession certificate and preserves the previously found
-failure rather than treating a ridge-bounded optimizer as an economic optimum.
-An exact real-data replay of the frozen-weekly risk-1 origin `2023-01-20`
-reproduces 13/13 nonconverged target fits, 39 internal fit-cap hits, zero
-executed cap hits, and classifies the failure first as
-`mean-volatility-recession-direction`. No permissive convergence or cap
-override is enabled. The authenticated weekly matrix SHA-256 is
-`97dd10954e0982caea8ffdad86aa5aca5aeb9ea43297e303f606d3996517ace8`;
-its launcher SHA-256 is
-`cca51b4ed9c8973ea12d942c4f604a1927671a0399924b68fe51bc881f750090`.
-CPU-only service
-`quantdata-hedging-failure-canonicalization-v114-46d9f22.service` waits for the
-daily v1.13 and weekly v1.14 queues, then revalidates successful cells, reruns
-only failed cells under unchanged strict gates, and writes authenticated daily
-and weekly failure ledgers plus a hash-bound handoff manifest. Its launcher
+Historical-SANOS version 1.15 is reviewed and committed at
+`5e21dc371a023b7a56a51802b2eb6f475dfbc66b`. It preserves the exact objectives
+and strict recession and cap gates, certifies raw solver actions before
+canonicalization, and uses independent unchanged-objective fallbacks for
+numerical failures. The focused suite passes 68 tests. Code-frozen real-data
+replays pass all 20 daily mean-variance targets, all 20 daily mean-volatility
+targets, and all 13 frozen-weekly entropy targets, with zero cap hits,
+nonconvergence, or recession flags. Independent review and source hashes are
+recorded in
+`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-15-historical-sanos-v115-solver-remediation.md`.
+The superseded v1.13/v1.14 queues are stopped. CPU-only services
+`quantdata-hedging-historical-v115-daily-5e21dc3.service` and
+`quantdata-hedging-historical-v115-weekly-5e21dc3.service` now run all 13 daily
+and 26 weekly cases from the clean pinned worktree. Their daily and weekly
+matrix SHA-256 values are
+`0bca7d95ddc0864d00e0c02f773962040e0327edfe0e3b0e6c59dbd5b04b4c5d` and
+`f5808abab18bff0f0fb46e0ea738a7d50c27bdd9f12cf00e36e615d381f461df`;
+their launcher SHA-256 values are
+`ccd9baa0efc94760407ad688612ca9ac929946df55b809a1946d3165cde6ea42` and
+`e2a3d0a512f86fa50ce7221f2c1837cd9f78f55f3f5c99effb980f60bbcc3c4c`.
+Service `quantdata-hedging-failure-canonicalization-v115-5e21dc3.service`
+waits for those queues and will write the authenticated failure ledgers and
+hash-bound handoff; its launcher SHA-256 is
+`67d1d1aca1dbff8b75df42e86cb3016b08869ad98baa3c6a03edac93755c97cb`.
+The replacement coordinator
+`quantdata-hedging-full-production-v115-5e21dc3.service` waits for that handoff
+and the unchanged generated-model readiness service before composing the final
+57 daily and 94 weekly cases. Its exact preflight passes and its launcher
 SHA-256 is
-`c607435d30327e5764342491c864b5664ddaf84411acb7574303ba4b16d16425`.
-The v1.14 detached preflight and 100 focused model, runner, matrix, and failure
-regressions pass. The three exact-Gaussian covariance power-exponential cases
-are complete. A conservative storage cleanup
+`098273cce0bde2f8b14bfe05c11bdf800a2de0940344b786a7af110dcbc1d4f4`.
+The three exact-Gaussian covariance power-exponential cases are complete. A
+conservative storage cleanup
 removed approximately 315 MiB of superseded target-notional runs, early GROMM
 smoke artifacts, old readiness revisions, and reproducible compiler/temp files.
 The 51 GiB legacy GROMM tree remains because current authenticated migration
