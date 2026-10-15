@@ -344,20 +344,16 @@ def _terminal_transaction_costs(
             quote.strike_over_forward
             * origin_day.forward_at_business_dte(initial_dte)
         )
-        costs[:, option_index] = np.asarray(
-            [
-                discount
-                * path_spot
-                * origin_day.half_spread_for_fixed_contract(
-                    business_dte=remaining_dte,
-                    fixed_strike_over_current_spot=(
-                        fixed_strike_over_origin / path_spot
-                    ),
-                    is_call=quote.contract.right is OptionRight.CALL,
-                )
-                for path_spot in spot_over_origin
-            ],
-            dtype=np.float64,
+        costs[:, option_index] = (
+            discount
+            * spot_over_origin
+            * origin_day.half_spreads_for_fixed_contracts(
+                business_dte=remaining_dte,
+                fixed_strikes_over_current_spot=(
+                    fixed_strike_over_origin / spot_over_origin
+                ),
+                is_call=quote.contract.right is OptionRight.CALL,
+            )
         )
     return costs
 

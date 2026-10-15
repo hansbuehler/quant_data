@@ -183,3 +183,54 @@ def test_synthetic_contract_repricing_interpolates_missing_expiry() -> None:
     assert quote.strike_over_forward == pytest.approx(1.002 / 1.002)
     assert quote.half_spread == pytest.approx(0.002)
     assert quote.contract is contract
+
+
+def test_vector_fixed_contract_spreads_match_scalar_interpolation() -> None:
+    from quantdata.sdlv.daily.front_spot.hedging.data.fixtures import (
+        synthetic_weekly_market_day,
+    )
+
+    day = synthetic_weekly_market_day()
+    fixed_strikes = np.linspace(0.75, 1.25, 101)
+    for business_dte in (1, 3, 5, 7):
+        for is_call in (False, True):
+            vectorized = day.half_spreads_for_fixed_contracts(
+                business_dte=business_dte,
+                fixed_strikes_over_current_spot=fixed_strikes,
+                is_call=is_call,
+            )
+            scalar_values = []
+            for fixed_strike in fixed_strikes:
+                expiry_dtes = []
+                expiry_spreads = []
+                for expiry_index, expiry_dte in enumerate(day.business_dtes):
+                    if day.is_am_settlement[expiry_index]:
+                        continue
+                    selection = (day.expiry_indices == expiry_index) & (
+                        day.is_call == is_call
+                    )
+                    if not np.any(selection):
+                        continue
+                    ordering = np.argsort(
+                        day.strikes_over_forward[selection],
+                        kind="stable",
+                    )
+                    expiry_dtes.append(float(expiry_dte))
+                    expiry_spreads.append(
+                        np.interp(
+                            fixed_strike
+                            / day.forward_over_spot[expiry_index],
+                            day.strikes_over_forward[selection][ordering],
+                            day.half_spreads_over_spot[selection][ordering],
+                        )
+                    )
+                ordering = np.argsort(expiry_dtes, kind="stable")
+                scalar_values.append(
+                    np.interp(
+                        business_dte,
+                        np.asarray(expiry_dtes)[ordering],
+                        np.asarray(expiry_spreads)[ordering],
+                    )
+                )
+            scalar = np.asarray(scalar_values)
+            np.testing.assert_allclose(vectorized, scalar, rtol=0.0, atol=0.0)

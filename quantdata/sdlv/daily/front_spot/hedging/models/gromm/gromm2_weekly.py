@@ -683,21 +683,17 @@ def _pathwise_spreads(
         remaining = int(initial_dte) - local_day
         if remaining <= 0:
             continue
-        values[:, index] = np.asarray(
-            [
-                discount
-                * path_spot
-                * state.market_day.half_spread_for_fixed_contract(
-                    business_dte=remaining,
-                    fixed_strike_over_current_spot=(
-                        contract_geometry.fixed_strike_over_episode_spot[index]
-                        / path_spot
-                    ),
-                    is_call=bool(contract_geometry.is_call[index]),
-                )
-                for path_spot in episode_spot
-            ],
-            dtype=np.float64,
+        values[:, index] = (
+            discount
+            * episode_spot
+            * state.market_day.half_spreads_for_fixed_contracts(
+                business_dte=remaining,
+                fixed_strikes_over_current_spot=(
+                    contract_geometry.fixed_strike_over_episode_spot[index]
+                    / episode_spot
+                ),
+                is_call=bool(contract_geometry.is_call[index]),
+            )
         )
     return values
 

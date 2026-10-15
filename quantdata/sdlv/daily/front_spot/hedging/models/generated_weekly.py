@@ -438,20 +438,17 @@ def build_generated_weekly_scenario_geometry(
                 raise FloatingPointError("weekly generated option marks are invalid")
             mark = np.maximum(mark, 0.0)
             option_marks[:, step, contract_index] = mark
-            raw_spread = np.asarray(
-                [
-                    discount_curve[step]
-                    * path_spot
-                    * day.half_spread_for_fixed_contract(
-                        business_dte=remaining_dte,
-                        fixed_strike_over_current_spot=(
-                            fixed_strikes[contract_index] / path_spot
-                        ),
-                        is_call=bool(is_call[contract_index]),
-                    )
-                    for path_spot in spot_paths[:, step]
-                ],
-                dtype=np.float64,
+            path_spots = spot_paths[:, step]
+            raw_spread = (
+                discount_curve[step]
+                * path_spots
+                * day.half_spreads_for_fixed_contracts(
+                    business_dte=remaining_dte,
+                    fixed_strikes_over_current_spot=(
+                        fixed_strikes[contract_index] / path_spots
+                    ),
+                    is_call=bool(is_call[contract_index]),
+                )
             )
             option_spreads[:, step, contract_index] = np.minimum(
                 raw_spread,

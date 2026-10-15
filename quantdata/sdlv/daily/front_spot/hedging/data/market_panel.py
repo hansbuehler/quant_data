@@ -477,18 +477,89 @@ class PublicMarketDay:
         is_call: bool,
     ) -> float:
         """Return the interpolated spot-one spread for a fixed contract."""
+        return float(
+            self.half_spreads_for_fixed_contracts(
+                business_dte=business_dte,
+                fixed_strikes_over_current_spot=np.asarray(
+                    [fixed_strike_over_current_spot],
+                    dtype=np.float64,
+                ),
+                is_call=is_call,
+            )[0]
+        )
+
+    def half_spreads_for_fixed_contracts(
+        self,
+        *,
+        business_dte: int,
+        fixed_strikes_over_current_spot: NDArray[np.floating],
+        is_call: bool,
+    ) -> FloatArray:
+        """Vectorize the exact fixed-contract spread interpolation over paths."""
         if business_dte <= 0:
             raise ValueError("fixed-contract business DTE must be positive")
+        fixed_strikes = np.asarray(
+            fixed_strikes_over_current_spot,
+            dtype=np.float64,
+        )
         if (
-            not np.isfinite(fixed_strike_over_current_spot)
-            or fixed_strike_over_current_spot <= 0.0
+            fixed_strikes.ndim != 1
+            or np.any(~np.isfinite(fixed_strikes))
+            or np.any(fixed_strikes <= 0.0)
         ):
-            raise ValueError("fixed strike over current spot must be finite-positive")
-        return self._interpolate_half_spread_at_dte(
-            business_dte=business_dte,
-            fixed_strike_over_current_spot=fixed_strike_over_current_spot,
+            raise ValueError(
+                "fixed strikes over current spot must be a finite-positive vector"
+            )
+        expiry_geometry: list[tuple[float, int]] = []
+        for expiry_index, expiry_business_dte in enumerate(self.business_dtes):
+            if self.is_am_settlement[expiry_index]:
+                continue
+            selection = (self.expiry_indices == expiry_index) & (
+                self.is_call == is_call
+            )
+            if np.any(selection):
+                expiry_geometry.append((float(expiry_business_dte), expiry_index))
+        if not expiry_geometry:
+            side = "call" if is_call else "put"
+            raise ValueError(f"{self.trading_date}: no {side} spreads available")
+        expiry_geometry.sort(key=lambda item: item[0])
+        expiry_dtes = np.asarray(
+            [item[0] for item in expiry_geometry],
+            dtype=np.float64,
+        )
+        upper = int(
+            np.searchsorted(expiry_dtes, float(business_dte), side="right")
+        )
+        if upper == 0:
+            return self._interpolate_half_spreads(
+                expiry_index=expiry_geometry[0][1],
+                strike_over_forward=(
+                    fixed_strikes
+                    / self.forward_over_spot[expiry_geometry[0][1]]
+                ),
+                is_call=is_call,
+            )
+        lower = upper - 1
+        lower_dte, lower_expiry = expiry_geometry[lower]
+        lower_spreads = self._interpolate_half_spreads(
+            expiry_index=lower_expiry,
+            strike_over_forward=(
+                fixed_strikes / self.forward_over_spot[lower_expiry]
+            ),
             is_call=is_call,
         )
+        if upper == len(expiry_geometry) or lower_dte == business_dte:
+            return lower_spreads
+        upper_dte, upper_expiry = expiry_geometry[upper]
+        upper_spreads = self._interpolate_half_spreads(
+            expiry_index=upper_expiry,
+            strike_over_forward=(
+                fixed_strikes / self.forward_over_spot[upper_expiry]
+            ),
+            is_call=is_call,
+        )
+        weight = (business_dte - lower_dte) / (upper_dte - lower_dte)
+        return lower_spreads + weight * (upper_spreads - lower_spreads)
 
     def _interpolate_half_spread_at_dte(
         self,
@@ -538,6 +609,24 @@ class PublicMarketDay:
         strike_over_forward: float,
         is_call: bool,
     ) -> float:
+        return float(
+            self._interpolate_half_spreads(
+                expiry_index=expiry_index,
+                strike_over_forward=np.asarray(
+                    [strike_over_forward],
+                    dtype=np.float64,
+                ),
+                is_call=is_call,
+            )[0]
+        )
+
+    def _interpolate_half_spreads(
+        self,
+        *,
+        expiry_index: int,
+        strike_over_forward: FloatArray,
+        is_call: bool,
+    ) -> FloatArray:
         selection = (self.expiry_indices == expiry_index) & (self.is_call == is_call)
         strikes = self.strikes_over_forward[selection]
         spreads = self.half_spreads_over_spot[selection]
@@ -547,12 +636,13 @@ class PublicMarketDay:
                 f"{self.trading_date}: no {side} spread books for expiry index {expiry_index}"
             )
         ordering = np.argsort(strikes, kind="stable")
-        return float(
+        return np.asarray(
             np.interp(
-                strike_over_forward,
+                np.asarray(strike_over_forward, dtype=np.float64),
                 strikes[ordering],
                 spreads[ordering],
-            )
+            ),
+            dtype=np.float64,
         )
 
 
