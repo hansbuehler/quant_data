@@ -85,6 +85,7 @@ class _CompactMeanVarianceCertificate:
     turnover_matrix: FloatArray
     turnover_offset: FloatArray
     turnover_weights: FloatArray
+    scaled_position_cap: FloatArray
     turnover_epigraph: cp.Variable
     positive_turnover_constraint: cp.constraints.constraint.Constraint
     negative_turnover_constraint: cp.constraints.constraint.Constraint
@@ -1360,7 +1361,10 @@ class _WeeklyOpenLoopGeometry:
         tolerance = self.config.certificate_tolerance
         positive_turnover = turnover > tolerance
         negative_turnover = turnover < -tolerance
-        zero_turnover = ~(positive_turnover | negative_turnover)
+        zero_turnover = (
+            ~(positive_turnover | negative_turnover)
+            & (certificate.turnover_weights > 0.0)
+        )
         turnover_subgradient = np.zeros_like(turnover)
         turnover_subgradient[positive_turnover] = (
             certificate.turnover_weights[positive_turnover]
@@ -1368,10 +1372,14 @@ class _WeeklyOpenLoopGeometry:
         turnover_subgradient[negative_turnover] = (
             -certificate.turnover_weights[negative_turnover]
         )
-        fitted = compiled.action_scale * scaled_fitted
         cap = self.config.solver_position_cap
-        lower_active = fitted <= -cap + tolerance
-        upper_active = fitted >= cap - tolerance
+        position_tolerance = tolerance / compiled.action_scale
+        lower_active = scaled_fitted <= (
+            -certificate.scaled_position_cap + position_tolerance
+        )
+        upper_active = scaled_fitted >= (
+            certificate.scaled_position_cap - position_tolerance
+        )
 
         equality_rows: list[FloatArray] = []
         equality_values: list[float] = []
@@ -1384,13 +1392,13 @@ class _WeeklyOpenLoopGeometry:
             row = np.zeros(self.parameter_count, dtype=np.float64)
             row[index] = 1.0
             equality_rows.append(row)
-            equality_values.append(-cap / compiled.action_scale[index])
+            equality_values.append(-certificate.scaled_position_cap[index])
             equality_kinds.append(("lower", int(index)))
         for index in np.flatnonzero(upper_active):
             row = np.zeros(self.parameter_count, dtype=np.float64)
             row[index] = 1.0
             equality_rows.append(row)
-            equality_values.append(cap / compiled.action_scale[index])
+            equality_values.append(certificate.scaled_position_cap[index])
             equality_kinds.append(("upper", int(index)))
 
         linear = np.asarray(compiled.linear.value, dtype=np.float64)
@@ -1642,7 +1650,6 @@ class _WeeklyOpenLoopGeometry:
                             scaled_fitted=scaled_fitted,
                             epigraph=epigraph,
                             turnover=turnover,
-                            fitted=fitted,
                             exact_objective=exact_objective,
                             objective_error=objective_error,
                             primal_violation=primal_violation,
@@ -1665,7 +1672,6 @@ class _WeeklyOpenLoopGeometry:
                 scaled_fitted=scaled_fitted,
                 epigraph=epigraph,
                 turnover=turnover,
-                fitted=fitted,
                 exact_objective=exact_objective,
                 objective_error=objective_error,
                 primal_violation=primal_violation,
@@ -1731,7 +1737,6 @@ class _WeeklyOpenLoopGeometry:
         scaled_fitted: FloatArray,
         epigraph: FloatArray,
         turnover: FloatArray,
-        fitted: FloatArray,
         exact_objective: float,
         objective_error: float,
         primal_violation: float,
@@ -1741,7 +1746,6 @@ class _WeeklyOpenLoopGeometry:
         certificate = compiled.compact_certificate
         if certificate is None:
             return None
-        cap = self.config.solver_position_cap
         positive_dual = np.zeros_like(certificate.turnover_weights)
         positive_turnover = turnover > self.config.certificate_tolerance
         negative_turnover = turnover < -self.config.certificate_tolerance
@@ -1752,11 +1756,14 @@ class _WeeklyOpenLoopGeometry:
             ~(positive_turnover | negative_turnover)
             & (certificate.turnover_weights > 0.0)
         )
-        lower_active = fitted <= (
-            -cap + self.config.certificate_tolerance
+        position_tolerance = (
+            self.config.certificate_tolerance / compiled.action_scale
         )
-        upper_active = fitted >= (
-            cap - self.config.certificate_tolerance
+        lower_active = scaled_fitted <= (
+            -certificate.scaled_position_cap + position_tolerance
+        )
+        upper_active = scaled_fitted >= (
+            certificate.scaled_position_cap - position_tolerance
         )
         dual_columns: list[FloatArray] = []
         dual_upper_bounds: list[float] = []
@@ -1767,13 +1774,13 @@ class _WeeklyOpenLoopGeometry:
             dual_kinds.append(("turnover", int(index)))
         for index in np.flatnonzero(lower_active):
             column = np.zeros(self.parameter_count)
-            column[index] = -compiled.action_scale[index]
+            column[index] = -1.0
             dual_columns.append(column)
             dual_upper_bounds.append(math.inf)
             dual_kinds.append(("lower", int(index)))
         for index in np.flatnonzero(upper_active):
             column = np.zeros(self.parameter_count)
-            column[index] = compiled.action_scale[index]
+            column[index] = 1.0
             dual_columns.append(column)
             dual_upper_bounds.append(math.inf)
             dual_kinds.append(("upper", int(index)))
@@ -1817,7 +1824,6 @@ class _WeeklyOpenLoopGeometry:
             scaled_fitted=scaled_fitted,
             epigraph=epigraph,
             turnover=turnover,
-            fitted=fitted,
             exact_objective=exact_objective,
             objective_error=objective_error,
             primal_violation=primal_violation,
@@ -1834,7 +1840,6 @@ class _WeeklyOpenLoopGeometry:
         scaled_fitted: FloatArray,
         epigraph: FloatArray,
         turnover: FloatArray,
-        fitted: FloatArray,
         exact_objective: float,
         objective_error: float,
         primal_violation: float,
@@ -1851,13 +1856,12 @@ class _WeeklyOpenLoopGeometry:
             or compiled.objective_constant is None
         ):
             raise RuntimeError("compact mean-variance certificate is missing")
-        cap = self.config.solver_position_cap
         linear = np.asarray(compiled.linear.value, dtype=np.float64)
         smooth_gradient = certificate.hessian @ scaled_fitted + linear
         turnover_gradient = certificate.turnover_matrix.T @ (
             positive_dual - negative_dual
         )
-        bound_gradient = compiled.action_scale * (upper_dual - lower_dual)
+        bound_gradient = upper_dual - lower_dual
         stationarity = smooth_gradient + turnover_gradient + bound_gradient
         stationarity_scale = max(
             1.0,
@@ -1883,8 +1887,22 @@ class _WeeklyOpenLoopGeometry:
                     )
                 )
             ),
-            float(np.max(np.abs(lower_dual * (fitted + cap)))),
-            float(np.max(np.abs(upper_dual * (cap - fitted)))),
+            float(
+                np.max(
+                    np.abs(
+                        lower_dual
+                        * (scaled_fitted + certificate.scaled_position_cap)
+                    )
+                )
+            ),
+            float(
+                np.max(
+                    np.abs(
+                        upper_dual
+                        * (certificate.scaled_position_cap - scaled_fitted)
+                    )
+                )
+            ),
         )
         complementarity_violation = complementarity / (
             1.0 + abs(exact_objective)
@@ -1932,7 +1950,7 @@ class _WeeklyOpenLoopGeometry:
             compiled.objective_constant.value
             - certificate.turnover_offset
             @ (positive_dual - negative_dual)
-            - cap * np.sum(lower_dual + upper_dual)
+            - certificate.scaled_position_cap @ (lower_dual + upper_dual)
             - 0.5
             * dual_linear
             @ dual_minimizer
@@ -2001,13 +2019,19 @@ class _WeeklyOpenLoopGeometry:
             objective_constant.value = 0.0
             turnover = turnover_matrix @ positions - turnover_offset
             turnover_epigraph = cp.Variable(len(turnover_weights))
+            scaled_position_cap = (
+                self.config.solver_position_cap / action_scale
+            )
             positive_turnover_constraint = turnover <= turnover_epigraph
             negative_turnover_constraint = -turnover <= turnover_epigraph
+            # Express the identical physical cap in optimizer coordinates.
+            # Physical rows can otherwise carry coefficients of 1e6 and make
+            # both first-order feasibility and fallback duals ill-conditioned.
             lower_position_constraint = (
-                positions >= -self.config.solver_position_cap
+                scaled_positions >= -scaled_position_cap
             )
             upper_position_constraint = (
-                positions <= self.config.solver_position_cap
+                scaled_positions <= scaled_position_cap
             )
             objective = (
                 0.5 * cp.quad_form(scaled_positions, cp.psd_wrap(hessian))
@@ -2029,6 +2053,10 @@ class _WeeklyOpenLoopGeometry:
                 ),
                 turnover_offset=np.asarray(turnover_offset, dtype=np.float64),
                 turnover_weights=np.asarray(turnover_weights, dtype=np.float64),
+                scaled_position_cap=np.asarray(
+                    scaled_position_cap,
+                    dtype=np.float64,
+                ),
                 turnover_epigraph=turnover_epigraph,
                 positive_turnover_constraint=positive_turnover_constraint,
                 negative_turnover_constraint=negative_turnover_constraint,

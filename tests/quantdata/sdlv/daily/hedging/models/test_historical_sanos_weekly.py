@@ -1167,6 +1167,59 @@ def test_weekly_mean_variance_polishes_genuine_osqp_user_limit() -> None:
     assert certified[4] <= geometry.config.certificate_tolerance
 
 
+def test_weekly_mean_variance_certifies_extreme_scaling_with_zero_cost_rows() -> None:
+    base = _scenario_set(scenario_count=20).scenarios
+    scenarios = replace(
+        base,
+        spot_step_gains=np.zeros_like(base.spot_step_gains),
+        option_step_gains=1.0e-8 * base.option_step_gains,
+        option_half_spreads_pv=np.zeros_like(base.option_half_spreads_pv),
+        target_label="extreme-scale-zero-cost-turnover",
+    )
+    cap = 1_000_000.0
+    geometry = _WeeklyOpenLoopGeometry(
+        scenarios,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=HistoricalSanosConfig(
+            rolling_observations=20,
+            objective=HistoricalSanosObjective.MEAN_VARIANCE,
+            risk_parameter=3.0,
+            position_cap=cap,
+            solver_position_cap=cap,
+            maximum_iterations=2_000,
+        ),
+    )
+    indices = np.arange(scenarios.scenario_count, dtype=np.int64)
+    claim, instrument_gains = geometry._linear_wealth_geometry(
+        indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
+    )
+    compiled = geometry._convex_cost_lasso_problem(
+        indices,
+        instrument_gains=instrument_gains,
+    )
+    certificate = compiled.compact_certificate
+    assert certificate is not None
+    assert np.any(certificate.turnover_weights == 0.0)
+    np.testing.assert_allclose(
+        certificate.scaled_position_cap,
+        cap / compiled.action_scale,
+    )
+
+    result = geometry._minimize_convex_cost_lasso(
+        np.zeros(geometry.parameter_count),
+        indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
+    )
+
+    assert result.success
+    assert result.constraint_violation <= geometry.config.certificate_tolerance
+    assert result.optimality <= geometry.config.certificate_tolerance
+
+
 def test_weekly_mean_variance_compact_objective_includes_all_turnover_costs() -> None:
     scenarios = _scenario_set().scenarios
     config = HistoricalSanosConfig(
