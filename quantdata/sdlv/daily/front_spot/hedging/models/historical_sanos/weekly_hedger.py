@@ -379,7 +379,6 @@ def fit_weekly_open_loop_hedge(
             and short_policy.converged
             and zero_policy.converged
             and pure_policy.converged
-            and cap_hits == 0
             and not recession_direction
         ),
         recession_direction=recession_direction,
@@ -568,9 +567,7 @@ class _WeeklyOpenLoopGeometry:
             validation_loss=float(validation_loss),
             certainty_equivalent=certainty_equivalent,
             iterations=int(selection.nit) + int(final.nit),
-            converged=bool(
-                final.success and cap_hits == 0 and not recession_direction
-            ),
+            converged=bool(final.success and not recession_direction),
             maximum_absolute_gradient=optimality,
             selection_solver_status=str(selection.message),
             solver_status=str(final.message),
@@ -844,7 +841,7 @@ class _WeeklyOpenLoopGeometry:
         result = OptimizeResult(
             x=fitted,
             nit=iterations,
-            success=certified and cap_hits == 0,
+            success=certified,
             optimality=math.inf,
             message=(
                 f"{solver_trace}; exact-objective-error={objective_error:.6g}; "
@@ -1053,7 +1050,7 @@ class _WeeklyOpenLoopGeometry:
         result = OptimizeResult(
             x=parameters,
             nit=iterations,
-            success=certified and cap_hits == 0,
+            success=certified,
             optimality=math.inf,
             message=(
                 f"{solver_trace}; exact-objective-error={objective_error:.6g}; "

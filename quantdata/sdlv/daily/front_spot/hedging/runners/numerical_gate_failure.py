@@ -32,6 +32,7 @@ def write_numerical_gate_failure(
     origin_date: date,
     diagnostics: JsonObject,
     schedule: str | None = None,
+    require_no_cap_hits: bool = True,
 ) -> Path:
     """Atomically record the exact strict gate rejected by an evaluation runner."""
     payload = numerical_gate_failure_payload(
@@ -43,6 +44,7 @@ def write_numerical_gate_failure(
         origin_date=origin_date,
         diagnostics=diagnostics,
         schedule=schedule,
+        require_no_cap_hits=require_no_cap_hits,
     )
     path = Path(output_directory) / NUMERICAL_GATE_FAILURE_FILENAME
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -65,6 +67,7 @@ def numerical_gate_failure_payload(
     origin_date: date,
     diagnostics: JsonObject,
     schedule: str | None = None,
+    require_no_cap_hits: bool = True,
 ) -> JsonObject:
     """Build and validate one deterministic numerical-gate failure payload."""
     _require_nonempty(run_identity, "run_identity")
@@ -74,8 +77,14 @@ def numerical_gate_failure_payload(
     _require_sha256(dataset_manifest_sha256, "dataset_manifest_sha256")
     if schedule is not None:
         _require_nonempty(schedule, "schedule")
+    if not isinstance(require_no_cap_hits, bool):
+        raise ValueError("require_no_cap_hits must be boolean")
     normalized_diagnostics = _normalized_diagnostics(diagnostics)
-    triggered_gates = _triggered_gates(normalized_diagnostics)
+    gate_policy = {"require_no_cap_hits": require_no_cap_hits}
+    triggered_gates = _triggered_gates(
+        normalized_diagnostics,
+        require_no_cap_hits=require_no_cap_hits,
+    )
     if not triggered_gates:
         raise ValueError("numerical-gate failure has no triggered gate")
     classification = triggered_gates[0]
@@ -91,6 +100,7 @@ def numerical_gate_failure_payload(
         "origin_date": origin_date.isoformat(),
         "classification": classification,
         "triggered_gates": list(triggered_gates),
+        "gate_policy": gate_policy,
         "summary": summary,
         "diagnostics": normalized_diagnostics,
     }
@@ -122,7 +132,21 @@ def load_numerical_gate_failure(path: Path) -> JsonObject:
     diagnostics = _normalized_diagnostics(diagnostics_value)
     if diagnostics != diagnostics_value:
         raise ValueError("numerical-gate diagnostics are not canonical")
-    triggered_gates = _triggered_gates(diagnostics)
+    gate_policy_value = payload.get(
+        "gate_policy",
+        {"require_no_cap_hits": True},
+    )
+    if not isinstance(gate_policy_value, dict):
+        raise ValueError("numerical-gate policy must be an object")
+    if set(gate_policy_value) != {"require_no_cap_hits"} or not isinstance(
+        gate_policy_value["require_no_cap_hits"],
+        bool,
+    ):
+        raise ValueError("numerical-gate policy is not canonical")
+    triggered_gates = _triggered_gates(
+        diagnostics,
+        require_no_cap_hits=gate_policy_value["require_no_cap_hits"],
+    )
     if not triggered_gates:
         raise ValueError("numerical-gate failure has no triggered gate")
     if payload.get("triggered_gates") != list(triggered_gates):
@@ -173,13 +197,20 @@ def _normalized_diagnostics(diagnostics: JsonObject) -> JsonObject:
     raise ValueError("numerical-gate diagnostics have an unsupported scope")
 
 
-def _triggered_gates(diagnostics: JsonObject) -> tuple[str, ...]:
+def _triggered_gates(
+    diagnostics: JsonObject,
+    *,
+    require_no_cap_hits: bool,
+) -> tuple[str, ...]:
     triggered: list[str] = []
     if diagnostics.get("recession_direction_fits", 0):
         triggered.append("mean-volatility-recession-direction")
-    if diagnostics.get("executed_cap_hits", diagnostics.get("cap_hits", 0)):
+    if require_no_cap_hits and diagnostics.get(
+        "executed_cap_hits",
+        diagnostics.get("cap_hits", 0),
+    ):
         triggered.append("position-cap-hit")
-    if diagnostics.get("fit_cap_hits", 0):
+    if require_no_cap_hits and diagnostics.get("fit_cap_hits", 0):
         triggered.append("policy-fit-cap-hit")
     if diagnostics.get("nonconverged_fits", diagnostics.get("nonconverged_results", 0)):
         triggered.append("nonconverged-fit")

@@ -319,7 +319,7 @@ def test_weekly_runner_authenticates_internal_fit_diagnostics_without_duplicatio
             origin_date,
             target_label=weekly_targets()[0].label,
             claim_quantity=0.5,
-            fit_converged=False,
+            fit_converged=True,
             fit_cap_hits=3,
         )
         return tuple(runs)
@@ -393,7 +393,7 @@ def test_weekly_runner_authenticates_internal_fit_diagnostics_without_duplicatio
     )
     assert summary.fit_cap_hits == 3
     assert summary.executed_cap_hits == 0
-    assert summary.nonconverged_fits == 1
+    assert summary.nonconverged_fits == 0
     assert summary.recession_direction_fits == 0
     assert summary.cap_hits == 3
     record = json.loads(
@@ -404,10 +404,64 @@ def test_weekly_runner_authenticates_internal_fit_diagnostics_without_duplicatio
     assert record["numerical_diagnostics"] == {
         "fit_cap_hits": 3,
         "executed_cap_hits": 0,
-        "nonconverged_fits": 1,
+        "nonconverged_fits": 0,
         "recession_direction_fits": 0,
         "cap_hits": 3,
     }
+
+    def permitted_nonconverged_book(
+        _panel: PublicHedgingPanel,
+        origin_date: date,
+    ):
+        runs = list(_book(origin_date))
+        runs[0] = _run(
+            origin_date,
+            target_label=weekly_targets()[0].label,
+            claim_quantity=0.5,
+            fit_converged=False,
+            fit_cap_hits=3,
+        )
+        return tuple(runs)
+
+    with pytest.raises(RuntimeError, match="1 nonconverged policy fits"):
+        run_weekly_evaluation(
+            panel,
+            spec=permitted,
+            run_book=permitted_nonconverged_book,
+            output_directory=tmp_path / "permitted-nonconverged",
+        )
+    nonconverged_failure = load_numerical_gate_failure(
+        tmp_path
+        / "permitted-nonconverged"
+        / NUMERICAL_GATE_FAILURE_FILENAME
+    )
+    assert nonconverged_failure["gate_policy"] == {
+        "require_no_cap_hits": False,
+    }
+    assert nonconverged_failure["classification"] == "nonconverged-fit"
+    assert nonconverged_failure["triggered_gates"] == ["nonconverged-fit"]
+    assert nonconverged_failure["diagnostics"]["fit_cap_hits"] == 3
+    with pytest.raises(RuntimeError, match="1 mean-volatility recession-direction"):
+        run_weekly_evaluation(
+            panel,
+            spec=permitted,
+            run_book=recession_book,
+            output_directory=tmp_path / "permitted-recession",
+        )
+    permitted_recession_failure = load_numerical_gate_failure(
+        tmp_path / "permitted-recession" / NUMERICAL_GATE_FAILURE_FILENAME
+    )
+    assert permitted_recession_failure["gate_policy"] == {
+        "require_no_cap_hits": False,
+    }
+    assert permitted_recession_failure["classification"] == (
+        "mean-volatility-recession-direction"
+    )
+    assert permitted_recession_failure["triggered_gates"] == [
+        "mean-volatility-recession-direction",
+        "nonconverged-fit",
+    ]
+    assert permitted_recession_failure["diagnostics"]["fit_cap_hits"] == 3
 
 
 def test_weekly_runner_rejects_changed_record_and_run_identity(

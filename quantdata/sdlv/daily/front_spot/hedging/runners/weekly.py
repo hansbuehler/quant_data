@@ -408,8 +408,8 @@ def _run_weekly_evaluation_locked(
                 origin_date=origin_date,
                 enforce_numerical_gate=False,
             )
-            if spec.require_no_cap_hits and (
-                diagnostics.cap_hits
+            if (
+                (spec.require_no_cap_hits and diagnostics.cap_hits)
                 or diagnostics.nonconverged_fits
                 or diagnostics.recession_direction_fits
             ):
@@ -431,8 +431,12 @@ def _run_weekly_evaluation_locked(
                         ),
                         "cap_hits": diagnostics.cap_hits,
                     },
+                    require_no_cap_hits=spec.require_no_cap_hits,
                 )
-                _enforce_weekly_numerical_gate(diagnostics)
+                _enforce_weekly_numerical_gate(
+                    diagnostics,
+                    require_no_cap_hits=spec.require_no_cap_hits,
+                )
             _write_weekly_record(
                 record_path,
                 spec=spec,
@@ -618,13 +622,18 @@ def _validate_runs(
         runs,
         position_cap=spec.position_cap,
     )
-    if spec.require_no_cap_hits and enforce_numerical_gate:
-        _enforce_weekly_numerical_gate(diagnostics)
+    if enforce_numerical_gate:
+        _enforce_weekly_numerical_gate(
+            diagnostics,
+            require_no_cap_hits=spec.require_no_cap_hits,
+        )
     return diagnostics
 
 
 def _enforce_weekly_numerical_gate(
     diagnostics: WeeklyNumericalDiagnostics,
+    *,
+    require_no_cap_hits: bool,
 ) -> None:
     if diagnostics.recession_direction_fits:
         raise RuntimeError(
@@ -632,7 +641,7 @@ def _enforce_weekly_numerical_gate(
             f"{diagnostics.recession_direction_fits} mean-volatility "
             "recession-direction fits"
         )
-    if diagnostics.cap_hits:
+    if require_no_cap_hits and diagnostics.cap_hits:
         raise RuntimeError(
             f"weekly numerical gate found {diagnostics.cap_hits} position-cap hits"
         )

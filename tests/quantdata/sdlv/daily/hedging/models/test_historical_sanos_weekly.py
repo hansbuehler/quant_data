@@ -1505,7 +1505,16 @@ def test_weekly_mean_variance_certifies_boundary_optimum_as_cap_hit() -> None:
     assert np.any(np.abs(result.x) >= 0.999 * cap)
     fit = geometry.fit_policy(signed_claim_quantity=1.0)
     assert fit.cap_hits > 0
-    assert not fit.converged
+    assert fit.converged
+    hedge = fit_weekly_open_loop_hedge(
+        scenarios,
+        claim_quantity=1.0,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=geometry.config,
+    )
+    assert hedge.internal_cap_hits > 0
+    assert hedge.converged
 
 
 def test_weekly_mean_variance_certifies_rank_deficient_zero_ridge() -> None:
