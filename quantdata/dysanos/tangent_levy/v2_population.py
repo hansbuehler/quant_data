@@ -15,7 +15,11 @@ from quantdata.biz_calendar import DAYS_PER_YEAR, NMS
 from .constraints import hjm_drift
 from .dynamics import DynamicsFit
 from .physical_measure import PhysicalMeasureFit
-from .pricing import average_density_from_forward, density_call_prices
+from .pricing import (
+    average_density_from_forward,
+    density_call_prices,
+    lattice_density_call_prices_batched,
+)
 from .v2_audit import RestrictedPopulation
 from .v2_config import TangentLevyV2AuditConfig
 from .v2_spot import sample_short_end_spot_step, short_end_characteristics
@@ -24,6 +28,7 @@ NORMALIZED_MONEYNESS = np.asarray(
     (-1.5, -1.3, -1.1, -0.9, -0.7, -0.5, -0.3, -0.1, 0.1, 0.3, 0.5),
     dtype=np.float64,
 )
+BOUNDARY_STANDARD_DEVIATIONS = 12.0
 
 
 @dataclass(frozen=True)
@@ -43,7 +48,11 @@ class PopulationDiagnostics:
     measure: str
     path_count: int
     minimum_gamma: float
+    mean_gamma: float
     boundary_limited_substeps: int
+    gamma_below_0_1: int
+    gamma_below_0_01: int
+    gamma_below_0_0001: int
     frozen_paths: int
 
 
@@ -58,6 +67,49 @@ class DeterministicQAudit:
     maximum_spot_moment_error: float
     tolerance: float
     passed: bool
+
+
+def _predictable_boundary_scale(
+    shifted_density: np.ndarray,
+    *,
+    factor_scale: np.ndarray,
+    q_drift: np.ndarray,
+    physical_drift: np.ndarray,
+    active_mask: np.ndarray,
+    dt: float,
+) -> np.ndarray:
+    """Return a pre-shock scalar time change with positivity headroom.
+
+    The factor loading is multiplied by ``gamma`` and the quadratic HJM drift
+    by ``gamma**2``.  The bound is computed before observing the Gaussian
+    increment and reserves ``BOUNDARY_STANDARD_DEVIATIONS`` conditional
+    standard deviations at every active density coordinate.
+    """
+
+    shifted = np.asarray(shifted_density, dtype=np.float64)
+    scale = np.asarray(factor_scale, dtype=np.float64)
+    alpha = np.asarray(q_drift, dtype=np.float64)
+    physical = np.asarray(physical_drift, dtype=np.float64)
+    active = np.asarray(active_mask, dtype=bool)
+    verify_inp(
+        shifted.ndim == 3
+        and scale.shape == alpha.shape == physical.shape == active.shape
+        and shifted.shape[1:] == scale.shape,
+        lambda: "boundary-scale arrays have incompatible density geometry",
+    )
+    # For gamma in [0,1], replacing gamma**2 by gamma in the adverse HJM
+    # drift is conservative.  The physical drift is genuinely linear in
+    # gamma because beta*theta scales with the factor loading.
+    denominator = (
+        BOUNDARY_STANDARD_DEVIATIONS * math.sqrt(dt) * scale
+        + dt * np.maximum(-alpha, 0.0)
+        + dt * np.maximum(-physical, 0.0)
+    )
+    constrained = active & (denominator > 0.0)
+    if not np.any(constrained):
+        return np.ones(shifted.shape[0], dtype=np.float64)
+    ratios = shifted[:, constrained] / denominator[constrained][None]
+    return np.minimum(1.0, np.min(ratios, axis=1))
 
 
 def analytic_deterministic_q_audit(
@@ -218,18 +270,13 @@ def _normalized_calls(
     eta = average_density_from_forward(
         tau=dynamics.tau, forward_density=codebooks
     )[:, maturity_days]
-    result = np.empty(
-        (codebooks.shape[0], relative_strikes.shape[1]), dtype=np.float64
-    )
     tau = maturity_days / DAYS_PER_YEAR
-    for path_index in range(codebooks.shape[0]):
-        result[path_index] = density_call_prices(
-            tau=tau,
-            log_strikes=np.log(relative_strikes[path_index]),
-            jump_x=dynamics.jump_x,
-            average_density=eta[path_index],
-        )
-    return result
+    return lattice_density_call_prices_batched(
+        tau=tau,
+        log_strikes=np.log(relative_strikes),
+        jump_x=dynamics.jump_x,
+        average_density=eta,
+    )
 
 
 def restricted_universe(
@@ -395,12 +442,20 @@ def simulate_restricted_population(
         if physical_fit is None
         else np.einsum("f,ftx->tx", physical_fit.theta, dynamics.beta)
     )
+    alpha[..., ~active_density_mask] = 0.0
+    physical_adjustment[..., ~active_density_mask] = 0.0
+    factor_scale = np.sqrt(np.sum(np.square(dynamics.beta), axis=0))
     generator = np.random.default_rng(config.seed)
     substep_dt = 1.0 / (DAYS_PER_YEAR * config.steps_per_day)
     sqrt_substep_dt = math.sqrt(substep_dt)
     started = time.perf_counter()
     minimum_gamma = 1.0
+    sum_gamma = 0.0
+    gamma_observations = 0
     boundary_limited_substeps = 0
+    gamma_below_0_1 = 0
+    gamma_below_0_01 = 0
+    gamma_below_0_0001 = 0
     frozen_path_flags = np.zeros(paths, dtype=bool)
     for completed in range(0, paths, batch_size):
         pair_count = batch_size // 2
@@ -495,11 +550,13 @@ def simulate_restricted_population(
                         )
                     )
                 else:
-                    shifted = (1.0 - shift_weight) * codebooks + shift_weight * np.concatenate(
-                        (codebooks[:, 1:], codebooks[:, -1:]), axis=1
+                    shifted = (
+                        (1.0 - shift_weight) * codebooks
+                        + shift_weight
+                        * np.concatenate(
+                            (codebooks[:, 1:], codebooks[:, -1:]), axis=1
+                        )
                     )
-                drift = alpha + physical_adjustment
-                drift[..., ~active_density_mask] = 0.0
                 shock = (
                     0.0
                     if dynamics.num_factors == 0
@@ -510,17 +567,28 @@ def simulate_restricted_population(
                         dynamics.beta,
                     )
                 )
-                minimum = np.min(codebooks, axis=(1, 2))
-                gamma = np.minimum(1.0, minimum / 1.0e-6)
+                gamma = _predictable_boundary_scale(
+                    shifted,
+                    factor_scale=factor_scale,
+                    q_drift=alpha,
+                    physical_drift=physical_adjustment,
+                    active_mask=active_density_mask,
+                    dt=substep_dt,
+                )
                 minimum_gamma = min(minimum_gamma, float(np.min(gamma)))
+                sum_gamma += float(np.sum(gamma))
+                gamma_observations += len(gamma)
                 boundary_limited_substeps += int(
                     np.count_nonzero(gamma < 1.0 - 1.0e-12)
                 )
-                if np.any(gamma == 0.0):
-                    frozen_path_flags[completed : completed + batch_size] = True
+                gamma_below_0_1 += int(np.count_nonzero(gamma < 0.1))
+                gamma_below_0_01 += int(np.count_nonzero(gamma < 0.01))
+                gamma_below_0_0001 += int(np.count_nonzero(gamma < 0.0001))
+                frozen_path_flags[completed : completed + batch_size] |= gamma == 0.0
                 candidate = (
                     shifted
-                    + np.square(gamma)[:, None, None] * drift * substep_dt
+                    + np.square(gamma)[:, None, None] * alpha * substep_dt
+                    + gamma[:, None, None] * physical_adjustment * substep_dt
                     + gamma[:, None, None] * shock
                 )
                 verify(
@@ -531,7 +599,11 @@ def simulate_restricted_population(
                     ),
                 )
                 codebooks = candidate
-                factor_history += sqrt_substep_dt * factor_normals[day_index, substep]
+                factor_history += (
+                    gamma[:, None]
+                    * sqrt_substep_dt
+                    * factor_normals[day_index, substep]
+                )
             options = _option_values(
                 codebooks,
                 spots,
@@ -560,7 +632,11 @@ def simulate_restricted_population(
         measure=measure,
         path_count=paths,
         minimum_gamma=minimum_gamma,
+        mean_gamma=sum_gamma / gamma_observations,
         boundary_limited_substeps=boundary_limited_substeps,
+        gamma_below_0_1=gamma_below_0_1,
+        gamma_below_0_01=gamma_below_0_01,
+        gamma_below_0_0001=gamma_below_0_0001,
         frozen_paths=frozen_paths,
     )
     verify(

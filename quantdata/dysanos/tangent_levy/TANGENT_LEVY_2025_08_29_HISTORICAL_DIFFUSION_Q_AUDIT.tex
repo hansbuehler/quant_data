@@ -1,0 +1,173 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=24mm]{geometry}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+
+\definecolor{passgreen}{RGB}{20,110,60}
+\definecolor{warnred}{RGB}{160,40,35}
+\newcommand{\pass}{\textcolor{passgreen}{\textbf{PASS}}}
+\newcommand{\fail}{\textcolor{warnred}{\textbf{FAIL}}}
+
+\title{Tangent L\'evy v2\\29 August 2025 Historical-Diffusion and $Q$-Drift Audit}
+\author{quantdata / Dysanos}
+\date{15 October 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note records a deliberately misspecified Tangent L\'evy experiment
+initialized on the same 29 August 2025 SPX session used by the SDLV study in
+\texttt{main2.tex}.  The double-exponential static family fits the market
+poorly and no retained historical reconstruction passes the production gate.
+Nevertheless, a target-local 16-factor diffusion is estimated from historical
+codebook changes and evolved under the convolutional Tangent L\'evy HJM drift.
+The requested unconditional and strategy-conditional $Q$ diagnostics are then
+applied to 100,000 simulated paths in the paper's restricted universe of spot
+plus 44 fixed-cash-strike options.  The no-arbitrage conclusion is reported
+separately from, and does not rehabilitate, the failed market fit.
+\end{abstract}
+
+\section{Data and initialization}
+
+The initial state is calibrated to the SPX option book dated 29 August 2025.
+The book contains 4,036 retained call-equivalent bid/ask observations over 32
+expiries.  Historical codebooks span 3 January 2022 through 31 December 2024.
+Of 729 requested sessions, 726 are retained and 698 adjacent transitions are
+valid one-session covariance observations.  Three sessions are excluded by
+the unchanged quote-book integrity gate: 10 May 2023, 17 November 2023, and
+11 December 2023.  No crossed or otherwise invalid observation is repaired.
+
+The target spot and all option values are generated consistently from the
+Tangent L\'evy codebook.  Spot follows the compensated compound-Poisson law
+implied by the current short-end L\'evy density.  Options are repriced from the
+simulated forward density with a lattice-consistent compound-Poisson FFT.
+
+\section{Static calibration result}
+
+The independent per-expiry optimization converges, but the family has poor
+capacity for this surface.  Only 1,375 of 4,036 observations (34.07\%) lie
+inside bid/ask.  The excess-price RMSE is 5.202 quoted half-spreads.  Enforcing
+calendar consistency leaves 898 observations (22.25\%) inside bid/ask and an
+RMSE of 6.704 half-spreads.  Reconstructing the 71-node daily forward-density
+grid leaves 224 observations (5.55\%) inside bid/ask and an RMSE of 25.427
+half-spreads.
+
+The target reconstruction requires relative $L^1$ modification 1.0498 and
+has a repricing RMSE of 6.938 half-spreads, so it is a \fail{} against the
+pre-registered reconstruction gate.  All 726 historical states fail the same
+gate.  This is the expected model-capacity result, not an optimizer failure.
+
+\section{Historical diffusion and measures}
+
+Daily forward-density changes are centered and projected into the discrete
+mass and exponential-moment constraint nullspace.  Admissible coordinates are
+selected relative to the 29 August 2025 initial density, while covariance is
+estimated solely from the 698 historical one-session transitions.  Sixteen
+factors retain 95.002\% of projected variance over 142 active coordinates out
+of 21,371.  The maximum factor-constraint residual is
+$3.23\times10^{-17}$.
+
+Under $Q$, the volatility fields determine the convolutional HJM drift.  A
+separate constant market-price-of-risk regression estimates the descriptive
+$P$ drift in the same factor span; it explains 99.995\% of the fitted target
+drift with residual RMSE 210.206 in codebook-drift units.  This $P$ regression
+is not used in either no-arbitrage test.
+
+The Gaussian factor system otherwise reaches the positivity boundary almost
+immediately.  Simulation therefore applies a predictable global scalar time
+change: factor loadings are multiplied by $\gamma$, their quadratic HJM drift
+by $\gamma^2$, and the $P$ risk-premium term (when used) by $\gamma$.  The
+scale is fixed before each shock and reserves twelve conditional standard
+deviations of coordinate-wise headroom.  Density clipping, shock resampling,
+and path deletion are forbidden.  The final $\gamma$ diagnostics are essential
+to interpreting the drift tests.
+
+\section{Risk-neutral audit design}
+
+The audit follows \texttt{main2.tex}: 100,000 paths form 50,000 independent
+antithetic pairs; each path covers 20 business days with eight substeps per
+day.  The trading universe is spot and eleven initially out-of-the-money
+fixed-cash-strike options at each of 5, 10, 15, and 20 business-day expiries.
+For each live contract the tested one-day return is the value change divided
+by pre-step spot.
+
+The unconditional diagnostic first averages every antithetic pair and then
+forms a studentized mean for each live day--instrument coordinate.  The two
+conditional diagnostics fit uncapped affine-plus-width-32 SiLU policies on one
+pair-preserving fold and evaluate their predictable portfolio return on the
+opposite fold.  One uses the squared objective and the other the entropy
+objective specified in \texttt{main2.tex}.  A conditional test passes at the
+5\% two-sided level when its out-of-fold $95\%$ interval contains zero.
+
+\section{Results}
+
+All 100,000 paths complete without clipping, deletion, or a frozen path.  The
+time change is nevertheless dominant: its minimum is
+$2.13\times10^{-10}$ and its mean is 0.05452.  Of 16,000,000 path--substeps,
+15,858,939 (99.12\%) are boundary-limited, 14,182,352 have $\gamma<0.1$,
+12,516,601 have $\gamma<0.01$, and 9,211,196 have
+$\gamma<10^{-4}$.
+
+The unconditional screen is a clear \fail{}.  Among all 570 live coordinates,
+the maximum absolute $z$ statistic is 40.632 and the 99th percentile is
+28.089.  There are 276 coordinates above 1.96, 229 above 2.576, and 134 above
+5.  These counts are far beyond the ordinary multiple-testing frequency under
+a standard-normal coordinate null.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrrl}
+\toprule
+Conditional test & Mean score & Pair SE & $t$ statistic & 95\% interval & Result \\
+\midrule
+Squared
+  & $1.770\times10^{-7}$ & $4.022\times10^{-8}$ & 4.400
+  & $[0.981,2.558]\times10^{-7}$ & \fail \\
+Entropy
+  & $3.478\times10^{-8}$ & $4.914\times10^{-9}$ & 7.078
+  & $[2.515,4.442]\times10^{-8}$ & \fail \\
+\bottomrule
+\end{tabular}
+\caption{Pair-preserving, two-fold out-of-fold conditional drift tests.}
+\end{table}
+
+Both strategy tests reject zero predictable drift at conventional levels:
+each complete held-out confidence interval is positive.  The squared test has
+$t=4.400$ and the entropy test has $t=7.078$.
+
+\section{Interpretation}
+
+The stochastic 29 August 2025 construction does \emph{not} pass the requested
+$Q$ no-arbitrage diagnostics.  This is not evidence that Tangent L\'evy theory
+is arbitrageable.  It is evidence that the present empirical/discretized
+construction---a very poor static reconstruction, historical factors defined
+on only 142 target-admissible coordinates, and an almost always active global
+boundary time change---does not preserve the fixed-contract martingale
+identities closely enough for the 100,000-path test.
+
+The predictable time change preserves the continuous-time HJM scaling
+algebraically, but it does not cure finite-step transport/pricing bias, and its
+near-freezing makes the fitted historical diffusion economically remote from
+the unscaled estimate.  Accordingly, neither the failed drift test nor any
+future non-rejection should be generalized beyond this restricted universe and
+strategy class.  The correct empirical conclusion is that this stochastic
+specification is unsuitable as a risk-neutral model in its current form.
+
+\section{Retained artifacts}
+
+{\raggedright
+The canonical external result root is
+\path{/home/hans/quantdata_data/training/dysanos/tangent-levy/v2/}
+\path{spx-2025-08-29-historical-diffusion-v2}.  It contains the target and
+historical checkpoints, calibration and measure reports, the canonical $Q$
+population, unconditional audit, conditional JSON reports, and resumable
+conditional-policy checkpoints.  Large parallel-generation chunks are
+deleted after the canonical arrays and audit are verified.
+\par}
+
+\end{document}

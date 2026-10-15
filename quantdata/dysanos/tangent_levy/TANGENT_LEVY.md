@@ -117,6 +117,25 @@ maturities do not form a valid Tangent Lévy code-book under the implemented
 nonnegative-forward-density requirement. Static RMSE alone must not be used to
 justify dynamics, simulation, or the discrete extension.
 
+### 29 August 2025 stochastic Q audit
+
+A separate v2 experiment initializes the Tangent Lévy codebook on 29 August
+2025, estimates 16 target-local factors from 698 valid one-session historical
+changes through 31 December 2024, and applies the restricted-universe drift
+tests from `quantdata/sdlv/tex/main2.tex`. The target fit is poor: 34.07% of
+independent-maturity prices and 5.55% of daily-grid reconstructed prices lie
+inside bid/ask, and all 726 retained historical reconstructions fail the gate.
+
+The 100,000-path stochastic Q construction fails all requested diagnostics.
+The unconditional screen has maximum absolute z-score 40.63, with 134 of 570
+coordinates above five. The out-of-fold squared and entropy strategy tests
+have t-statistics 4.400 and 7.078, respectively. The predictable positivity
+time change is active on 99.12% of path-substeps and has mean scale 0.0545,
+showing that the fitted raw diffusion is nearly frozen in simulation. The
+canonical numerical artifacts are under
+`/home/hans/quantdata_data/training/dysanos/tangent-levy/v2/spx-2025-08-29-historical-diffusion-v2`;
+the committed TeX/PDF report records the full scope and limitations.
+
 ## Primary references
 
 - [Requested arXiv preprint, version 1, 24 March 2015](https://arxiv.org/abs/1504.00334)

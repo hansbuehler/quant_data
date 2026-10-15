@@ -269,6 +269,107 @@ def lattice_density_call_prices(
     return calls.reshape(strike_shape)
 
 
+def lattice_density_call_prices_batched(
+    *,
+    tau: float,
+    log_strikes: np.ndarray,
+    jump_x: np.ndarray,
+    average_density: np.ndarray,
+    fft_size: int = 8_192,
+) -> np.ndarray:
+    """Price pathwise strikes and densities with batched lattice FFTs.
+
+    The leading axis is the path axis.  Each path has its own Lévy density and
+    strike vector, while all paths share the same uniform jump lattice.
+    """
+
+    jump = np.asarray(jump_x, dtype=np.float64)
+    eta = np.asarray(average_density, dtype=np.float64)
+    strike_logs = np.asarray(log_strikes, dtype=np.float64)
+    verify_inp(
+        eta.ndim == 2
+        and eta.shape[1] == jump.size
+        and strike_logs.ndim == 2
+        and strike_logs.shape[0] == eta.shape[0]
+        and np.all(np.isfinite(eta))
+        and np.all(eta >= 0.0)
+        and np.all(np.isfinite(strike_logs)),
+        lambda: (
+            "batched densities and log strikes must be finite with shapes "
+            f"(P,{jump.size}) and (P,K); got {eta.shape} and {strike_logs.shape}"
+        ),
+    )
+    verify_inp(
+        fft_size >= 1024 and fft_size % 2 == 0,
+        lambda: "FFT lattice size must be an even integer of at least 1024",
+    )
+    spacing = float(jump[1] - jump[0])
+    offsets = np.rint(jump / spacing).astype(np.int64)
+    verify_inp(
+        np.allclose(jump, offsets * spacing, rtol=0.0, atol=1.0e-10)
+        and np.max(np.abs(offsets)) < fft_size // 2,
+        lambda: "jump grid is not representable on the requested FFT lattice",
+    )
+    weighted = eta * trapezoid_weights(jump)[None]
+    intensity = np.sum(weighted, axis=1)
+    verify_inp(
+        np.all(intensity > 0.0),
+        lambda: "every batched Lévy density must have positive mass",
+    )
+    jump_probability = np.zeros((eta.shape[0], fft_size), dtype=np.float64)
+    jump_probability[:, offsets % fft_size] = weighted / intensity[:, None]
+    transform = np.fft.fft(jump_probability, axis=1)
+    probabilities = np.fft.ifft(
+        np.exp(tau * intensity[:, None] * (transform - 1.0)),
+        axis=1,
+    ).real
+    probabilities = np.maximum(probabilities, 0.0)
+    probabilities /= np.sum(probabilities, axis=1, keepdims=True)
+    indices = np.arange(fft_size, dtype=np.int64)
+    signed = np.where(indices <= fft_size // 2, indices, indices - fft_size)
+    share_intensity = weighted @ np.exp(jump)
+    maximum_jumps = np.maximum(
+        poisson.ppf(1.0 - 1.0e-14, tau * intensity),
+        poisson.ppf(1.0 - 1.0e-14, tau * share_intensity),
+    ).astype(np.int64)
+    maximum_offset = maximum_jumps * int(np.max(np.abs(offsets)))
+    verify_inp(
+        np.all(maximum_offset < fft_size // 2),
+        lambda: (
+            "batched FFT support is too short for the compound-Poisson tail: "
+            f"maximum offset {int(np.max(maximum_offset))}, half-size "
+            f"{fft_size // 2}"
+        ),
+    )
+    probabilities[
+        np.abs(signed)[None] > maximum_offset[:, None]
+    ] = 0.0
+    probabilities[probabilities < 1.0e-17] = 0.0
+    probabilities /= np.sum(probabilities, axis=1, keepdims=True)
+    order = np.argsort(signed)
+    base_gross = np.exp(signed[order] * spacing)
+    sorted_probability = probabilities[:, order]
+    tail_probability = np.cumsum(sorted_probability[:, ::-1], axis=1)[:, ::-1]
+    compensator = weighted @ np.expm1(jump)
+    gross_scale = np.exp(-tau * compensator)
+    tail_gross = np.cumsum(
+        (sorted_probability * base_gross[None])[:, ::-1], axis=1
+    )[:, ::-1]
+    strikes = np.exp(strike_logs)
+    first_in_money = np.searchsorted(
+        base_gross,
+        (strikes / gross_scale[:, None]).reshape(-1),
+        side="right",
+    ).reshape(strikes.shape)
+    active = first_in_money < fft_size
+    gather = np.minimum(first_in_money, fft_size - 1)
+    calls = gross_scale[:, None] * np.take_along_axis(
+        tail_gross, gather, axis=1
+    ) - strikes * np.take_along_axis(tail_probability, gather, axis=1)
+    calls[~active] = 0.0
+    return calls
+
+
 def average_density_from_forward(
     *,
     tau: np.ndarray,

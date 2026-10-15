@@ -207,8 +207,14 @@ def fit_v2_measures(
     *,
     config: TangentLevyV2Config,
     require_reconstruction_pass: bool = True,
+    reference_density: np.ndarray | None = None,
 ) -> V2MeasureFits:
-    """Estimate Q-consistent factors and the P factor risk premium."""
+    """Estimate Q-consistent factors and the P factor risk premium.
+
+    A supplied ``reference_density`` makes the factor admissibility screen
+    local to the simulation's initial state while covariance estimation still
+    uses only the selected historical transitions.
+    """
 
     verify_inp(
         len(history.dates) == len(history.audits)
@@ -243,7 +249,10 @@ def fit_v2_measures(
         require_reconstruction_pass=True,
     )
     q_dynamics = fit_dynamics(
-        selected, config=dynamics_config, consecutive_mask=consecutive
+        selected,
+        config=dynamics_config,
+        consecutive_mask=consecutive,
+        reference_density=reference_density,
     )
     p_fit = fit_constant_market_price_of_risk(
         selected,

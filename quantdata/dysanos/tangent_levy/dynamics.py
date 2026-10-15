@@ -54,8 +54,15 @@ def fit_dynamics(
     *,
     config: DynamicsConfig = DynamicsConfig(),
     consecutive_mask: np.ndarray | None = None,
+    reference_density: np.ndarray | None = None,
 ) -> DynamicsFit:
-    """Fit constrained constant factors to consecutive daily code-book changes."""
+    """Fit constrained constant factors to consecutive daily code-book changes.
+
+    ``reference_density`` selects coordinates with enough positivity headroom at
+    the state where the fitted local diffusion will be initialized.  When it is
+    omitted, the historical coordinate-wise minimum retains the conservative
+    legacy behavior.
+    """
 
     history = np.asarray(forward_density_history, dtype=np.float64)
     tau = np.asarray(config.tau_grid, dtype=np.float64)
@@ -91,11 +98,23 @@ def fit_dynamics(
         ),
     )
     empirical_scale = np.std(changes, axis=0, ddof=1)
-    minimum_history = np.min(history, axis=0)
+    if reference_density is None:
+        positivity_reference = np.min(history, axis=0)
+    else:
+        positivity_reference = np.asarray(reference_density, dtype=np.float64)
+        verify_inp(
+            positivity_reference.shape == (tau.size, jump_x.size)
+            and np.all(np.isfinite(positivity_reference))
+            and np.all(positivity_reference >= 0.0),
+            lambda: (
+                "reference density must be finite, nonnegative, and have shape "
+                f"{(tau.size, jump_x.size)}, got {positivity_reference.shape}"
+            ),
+        )
     active_mask = (
-        (minimum_history > config.inactive_density_threshold)
+        (positivity_reference > config.inactive_density_threshold)
         & (
-            minimum_history
+            positivity_reference
             > config.boundary_standard_deviations * empirical_scale
         )
     )
@@ -107,7 +126,7 @@ def fit_dynamics(
         )
         projected_scale = np.std(projected, axis=0, ddof=1)
         updated_mask = active_mask & (
-            minimum_history
+            positivity_reference
             > config.boundary_standard_deviations * projected_scale
         )
         if np.array_equal(updated_mask, active_mask):
