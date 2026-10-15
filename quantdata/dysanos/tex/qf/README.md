@@ -3,6 +3,10 @@
 `dy21.tex` is a publication-preparation copy of the current parent
 `../dy21.tex`. The parent source is intentionally unchanged.
 
+The shared literature tables and bibliography live in
+`quantdata/tex/models.tex` and `quantdata/tex/references.bib`. The manuscript
+references those files by their repository-relative paths.
+
 The copy follows the current submission requirements available for
 *Quantitative Finance*: A4 paper with 2.5 cm margins, an unstructured abstract
 below 200 words, six keywords, JEL codes, author--date citations, references
