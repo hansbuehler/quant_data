@@ -44,36 +44,28 @@ inadmissible objective setting rather than a generic solver failure.
 The complete hedging test tree passes 433 tests, and independent quantitative
 review passes after correcting the shared-fit count. Evidence is recorded in
 `quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-15-historical-sanos-v116-coordinate-remediation.md`.
-Historical-SANOS version 1.15 is reviewed and committed at
-`5e21dc371a023b7a56a51802b2eb6f475dfbc66b`. It preserves the exact objectives
-and strict recession and cap gates, certifies raw solver actions before
-canonicalization, and uses independent unchanged-objective fallbacks for
-numerical failures. The focused suite passes 68 tests. Code-frozen real-data
-replays pass all 20 daily mean-variance targets, all 20 daily mean-volatility
-targets, and all 13 frozen-weekly entropy targets, with zero cap hits,
-nonconvergence, or recession flags. Independent review and source hashes are
-recorded in
-`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-15-historical-sanos-v115-solver-remediation.md`.
-The superseded v1.13/v1.14 queues are stopped. CPU-only services
-`quantdata-hedging-historical-v115-daily-5e21dc3.service` and
-`quantdata-hedging-historical-v115-weekly-5e21dc3.service` now run all 13 daily
+Historical-SANOS version 1.16 is reviewed, passes the complete 433-test hedging
+suite, and is committed at
+`1b68b34d8c6ad0e83b65ee26c99dfa0f94c22481`. The superseded v1.15 service
+chain stopped cleanly before replacement. CPU-only services
+`quantdata-hedging-historical-v116-daily-1b68b34.service` and
+`quantdata-hedging-historical-v116-weekly-1b68b34.service` now run all 13 daily
 and 26 weekly cases from the clean pinned worktree. Their daily and weekly
 matrix SHA-256 values are
-`0bca7d95ddc0864d00e0c02f773962040e0327edfe0e3b0e6c59dbd5b04b4c5d` and
-`f5808abab18bff0f0fb46e0ea738a7d50c27bdd9f12cf00e36e615d381f461df`;
+`0d250de389ca5f2eac450a9adbcc3516440760588595ebed00790366ade88acd` and
+`fa522ced64a389090dda7610370a0f98bcbf34f64e832f50997d4f3a76770ef2`;
 their launcher SHA-256 values are
-`ccd9baa0efc94760407ad688612ca9ac929946df55b809a1946d3165cde6ea42` and
-`e2a3d0a512f86fa50ce7221f2c1837cd9f78f55f3f5c99effb980f60bbcc3c4c`.
-Service `quantdata-hedging-failure-canonicalization-v115-5e21dc3.service`
-waits for those queues and will write the authenticated failure ledgers and
-hash-bound handoff; its launcher SHA-256 is
-`67d1d1aca1dbff8b75df42e86cb3016b08869ad98baa3c6a03edac93755c97cb`.
-The replacement coordinator
-`quantdata-hedging-full-production-v115-5e21dc3.service` waits for that handoff
-and the unchanged generated-model readiness service before composing the final
-57 daily and 94 weekly cases. Its exact preflight passes and its launcher
-SHA-256 is
-`098273cce0bde2f8b14bfe05c11bdf800a2de0940344b786a7af110dcbc1d4f4`.
+`82c7c110a961bee18b0758fbcd12ef3ffbe84f017857060858b19141a512237d` and
+`09714ca7f8950836c4d63bfc631640140bcba693b94af7d27b09c3597c721c54`.
+Service `quantdata-hedging-failure-canonicalization-v116-1b68b34.service`
+waits for those queues and will write authenticated failure ledgers plus the
+hash-bound v1.16 handoff; its launcher SHA-256 is
+`79d4996e6e471d8090c836212d3130e997575b09e9a3afe1c15c89c19e3ec6e1`.
+Coordinator `quantdata-hedging-full-production-v116-1b68b34.service` passed its
+detached preflight and waits for that handoff plus the unchanged generated-model
+readiness service before composing the final 57 daily and 94 weekly cases. Its
+launcher SHA-256 is
+`404894e63a1be7329b4d917ad65fe7c98668c5d79d74710f8109a631953aed5b`.
 The three exact-Gaussian covariance power-exponential cases are complete. A
 conservative storage cleanup
 removed approximately 315 MiB of superseded target-notional runs, early GROMM
