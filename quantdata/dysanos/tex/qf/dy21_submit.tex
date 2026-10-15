@@ -1258,14 +1258,12 @@ skew/term-structure rotation, while PC3 couples skew and maturity.  Higher
 modes become increasingly localized, including at the explicit 1D--4D model
 expiries.
 
-\begin{landscape}
 \begin{figure}[p]
   \centering
-  \includegraphics[width=\linewidth]{generated/presentation_iv_pca_factors.png}
+  \includegraphics[width=\textwidth,height=0.88\textheight,keepaspectratio]{generated/presentation_iv_pca_factors.png}
   \caption{PCA factors 1--8 expressed in implied volatility space as shifts over the mean $b$ of~\eqref{eq:affine-decoder}.}
   \label{fig:pca-factors}
 \end{figure}
-\end{landscape}
 \clearpage
 
 For completeness we also illustrate the mean~$b$ from~\eqref{eq:affine-decoder}
@@ -1322,7 +1320,7 @@ the Cartesian panel of target locations
 \[
   T\in\{1,5,10,20,40,70\}\text{ business days},
   \qquad
-  K/S\in\{0.85,0.90,0.95,1.00,1.05,1.10,1.15\}.
+  K\in\{0.85,0.90,0.95,1.00,1.05,1.10,1.15\}.
 \]
 Each target expiry is mapped to the closest distinct model expiry.  The
 model therefore has $3\times6\times7=126$ features.  Coordinates are centered

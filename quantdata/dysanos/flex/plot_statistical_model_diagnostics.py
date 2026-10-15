@@ -582,7 +582,7 @@ def _plot_two_surfaces(
 
 
 def _plot_pca_factors(pca: DecodedIvPca, *, title: str, output: Path) -> None:
-    figure = plt.figure(figsize=(16.6, 8.4))
+    figure = plt.figure(figsize=(8.4, 12.0))
     xx, yy = np.meshgrid(
         np.sqrt(pca.expiry_business_days / DAYS_PER_YEAR),
         pca.nms,
@@ -592,7 +592,7 @@ def _plot_pca_factors(pca: DecodedIvPca, *, title: str, output: Path) -> None:
     explained = 100.0 * pca.explained_variance
     values_by_component = 100.0 * pca.one_standard_deviation_surfaces[:8]
     for index in range(8):
-        axis = figure.add_subplot(2, 4, index + 1, projection="3d")
+        axis = figure.add_subplot(4, 2, index + 1, projection="3d")
         values = values_by_component[index]
         component_maximum = max(float(np.max(np.abs(values))), 1.0e-8)
         axis.plot_surface(
@@ -624,14 +624,14 @@ def _plot_pca_factors(pca: DecodedIvPca, *, title: str, output: Path) -> None:
         axis.set_xlabel(
             r"$\sqrt{\mathrm{TTE}}$",
             fontsize=_PCA_FACTOR_LABEL_FONTSIZE,
-            labelpad=10,
+            labelpad=6,
             rotation=0,
         )
         axis.set_ylabel("NMS", fontsize=_PCA_FACTOR_LABEL_FONTSIZE)
         axis.set_zlabel(r"$\Delta$ IV", fontsize=_PCA_FACTOR_LABEL_FONTSIZE)
         axis.tick_params(labelsize=_PCA_FACTOR_TICK_FONTSIZE)
     figure.suptitle(title, fontsize=_PCA_FACTOR_SUPTITLE_FONTSIZE)
-    figure.tight_layout()
+    figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.98), h_pad=3.0, w_pad=1.0)
     _save_figure(figure, output)
 
 
