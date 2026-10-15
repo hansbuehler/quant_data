@@ -6,9 +6,28 @@ This document is the implementation plan for the hedging benchmark built around
 the daily front-spot SDLV/GROMM model. It records the agreed experimental design
 and implementation order.
 
-**Current live state (2026-10-15).** Generated-model readiness passes all 18
-scopes (three models times six configurations). The strict Historical-SANOS
-daily CPU queue remains active from immutable version-1.13 commit
+**Current live state (2026-10-15).** The earlier generated-model readiness
+passes all 18 scopes (three models times six configurations) at immutable commit
+`b20dea5bae0ebdce3c698565d74e4de2c729824f`, but its weekly evaluation and
+record artifacts use schema v2 and are not admissible under the current schema
+v3 source. Independent quantitative review rejected a split-commit executor.
+Service `quantdata-hedging-generated-readiness-fe7c3a7.service` therefore
+reauthenticates the unchanged model/checkpoint lineage and reruns all 18 scopes
+from immutable commit `fe7c3a7321345e8ced636c5f75518766b830e452` with 4,096
+CUDA scenarios, strict cap/convergence/recession gates, and four-minute progress
+logging. Its detached preflight and 72 focused generated-weekly, gate, matrix,
+and executor tests pass; the service currently waits for a managed GPU. The
+installed readiness launcher SHA-256 is
+`c8edb76fdbfa5f45dec274d24e9fc37466400ac381f513b9dd8bfafd6c5363aa`.
+The corrected final coordinator
+`quantdata-hedging-full-production-fe7c3a7.service` is active and waits for both
+this readiness service and the authenticated Historical-SANOS handoff before it
+may compose or commit production matrices. It binds every generated case to
+`fe7c3a7`, runs weekly production under schema v3, and retains exact commit
+authentication. Its installed launcher SHA-256 is
+`b9be5f4eda5b146129c4ac5bf153f1cf00a33220d1f87fcb94a082ee14064d1b`.
+The strict Historical-SANOS daily CPU queue remains active from immutable
+version-1.13 commit
 `f4d42c2e893b5a814f954c21e92a60634e02e286`. Weekly production now runs from
 immutable version-1.14 commit `46d9f2205ac9bfddbc401f68db581505e2b214bb`;
 both services use no GPU. Version 1.14 adds an explicit weekly zero-claim
