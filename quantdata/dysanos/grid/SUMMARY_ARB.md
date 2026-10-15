@@ -628,8 +628,6 @@ Do not return OCE to the main paper until it:
 - gendysanos/arb_tracing.py: direction/notional continuation.
 - gendysanos/case_c.py: fixed-risk-aversion notional experiments.
 - gendysanos/run_implied_cvar.py: latest empirical CVaR network search.
-- gendysanos/reports/implied-cvar/implied-cvar-radial-feedforward-summary.json:
-  final feed-forward CVaR summary.
 - rndysanos/RNDYSANOS.md: historical OCE specification and tests.
 
 ## Wording for the next paper

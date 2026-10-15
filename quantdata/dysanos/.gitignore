@@ -220,10 +220,16 @@ __marimo__/
 /docs/generated
 /docs/api_generated
 
-# Reproducible experiment output. Paper-source reports are retained separately
-# as compressed JSON under grid/gendysanos/reports/paper-source/.
-/grid/gendysanos/reports/required/
-/grid/gendysanos/reports/batched-multi-expiry-arbitrage/
+# Reproducible experiment output. Retain only the compressed paper sources,
+# current terminal-importance evidence, and the worked report example.
+/grid/gendysanos/reports/*
+!/grid/gendysanos/reports/RAW_PERIOD_ARBITRAGE_EXAMPLE.md
+!/grid/gendysanos/reports/paper-source/
+!/grid/gendysanos/reports/paper-source/**
+!/grid/gendysanos/reports/terminal-importance-arbitrage-tests-autonomous-alpha5-1000000/
+!/grid/gendysanos/reports/terminal-importance-arbitrage-tests-autonomous-alpha5-1000000/**
+!/grid/gendysanos/reports/terminal-importance-arbitrage-tests-autonomous-alphaNone-1000000/
+!/grid/gendysanos/reports/terminal-importance-arbitrage-tests-autonomous-alphaNone-1000000/**
 /grid/rndysanos/reports/
 
 # LaTeX build products; retain the source PDF explicitly.
