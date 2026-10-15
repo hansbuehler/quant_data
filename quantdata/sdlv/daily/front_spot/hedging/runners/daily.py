@@ -436,9 +436,32 @@ def daily_numerical_diagnostics(
     results: tuple[HedgeSmokeResult, ...],
 ) -> dict[str, object]:
     """Return the exact counts used by the strict daily numerical gate."""
+    claim_recession_fits = sum(
+        bool(
+            result.diagnostics.get(
+                "claim_policy_recession_direction",
+                False,
+            )
+        )
+        for result in results
+    )
+    shared_zero_recession_fit = int(
+        any(
+            bool(
+                result.diagnostics.get(
+                    "zero_policy_recession_direction",
+                    False,
+                )
+            )
+            for result in results
+        )
+    )
     return {
         "cap_hits": sum(result.cap_hits for result in results),
         "nonconverged_results": sum(not result.converged for result in results),
+        "recession_direction_fits": (
+            claim_recession_fits + shared_zero_recession_fit
+        ),
     }
 
 

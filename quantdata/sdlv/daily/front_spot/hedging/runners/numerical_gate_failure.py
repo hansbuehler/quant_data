@@ -153,6 +153,7 @@ def _normalized_diagnostics(diagnostics: JsonObject) -> JsonObject:
             raise ValueError(f"numerical-gate diagnostic {name} must be non-negative")
         normalized[name] = value
     daily = {"cap_hits", "nonconverged_results"}
+    daily_with_recession = daily | {"recession_direction_fits"}
     weekly = {
         "cap_hits",
         "executed_cap_hits",
@@ -161,7 +162,7 @@ def _normalized_diagnostics(diagnostics: JsonObject) -> JsonObject:
         "recession_direction_fits",
     }
     fields = set(normalized)
-    if fields == daily:
+    if fields in (daily, daily_with_recession):
         return normalized
     if fields in (weekly, weekly - {"recession_direction_fits"}):
         if normalized["cap_hits"] != (

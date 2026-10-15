@@ -30,6 +30,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.hedger impo
     _fit_policy,
     _objective_and_gradient,
     _optimal_power_cash_translation,
+    _refine_mean_variance_coordinate_descent,
     fit_historical_sanos_hedge,
     fit_historical_sanos_hedges,
 )
@@ -469,6 +470,62 @@ def test_mean_variance_preserves_all_solver_failures_after_bad_certificate(
     assert not result.success
     assert "OSQP=optimal" in result.message
     assert "CLARABEL failed: forced CLARABEL failure" in result.message
+
+
+def test_mean_variance_coordinate_refinement_certifies_lasso_qp() -> None:
+    generator = np.random.default_rng(131)
+    common = generator.normal(scale=0.01, size=120)
+    instruments = np.column_stack(
+        (
+            common + generator.normal(scale=1.0e-5, size=120),
+            common + generator.normal(scale=1.0e-5, size=120),
+            generator.normal(scale=0.01, size=120),
+            generator.normal(scale=0.01, size=120),
+        )
+    )
+    claim = -0.4 * instruments[:, 0] + 0.1 * instruments[:, 2]
+    costs = np.asarray([1.0e-5, 1.0e-5, 1.0e-5, 5.0e-3])
+    config = HistoricalSanosConfig(
+        rolling_observations=120,
+        objective=HistoricalSanosObjective.MEAN_VARIANCE,
+        risk_parameter=0.1,
+    )
+    action_scale = hedger._action_scale(instruments, config=config)
+    initial_action = np.asarray([0.2, 0.2, -0.1, 1.0e-3])
+    initial_objective = _objective_and_gradient(
+        initial_action,
+        instruments,
+        claim,
+        costs,
+        config=config,
+        include_translation=False,
+        action_scale=action_scale,
+    )[0]
+
+    refined_action, sweeps, maximum_violation = (
+        _refine_mean_variance_coordinate_descent(
+            initial_action,
+            instruments,
+            claim,
+            costs,
+            config=config,
+            action_scale=action_scale,
+        )
+    )
+    refined_objective = _objective_and_gradient(
+        refined_action,
+        instruments,
+        claim,
+        costs,
+        config=config,
+        include_translation=False,
+        action_scale=action_scale,
+    )[0]
+
+    assert 0 < sweeps <= config.maximum_iterations
+    assert maximum_violation <= config.certificate_tolerance
+    assert refined_objective <= initial_objective
+    assert refined_action[3] == 0.0
 
 
 def test_mean_volatility_retries_failed_certificate_with_scs(

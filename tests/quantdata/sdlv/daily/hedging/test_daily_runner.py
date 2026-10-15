@@ -55,6 +55,7 @@ def _result(
     claim: str,
     claim_quantity: float,
     converged: bool = True,
+    diagnostics: dict[str, object] | None = None,
 ):
     return HedgeSmokeResult(
         model="test-model",
@@ -75,6 +76,7 @@ def _result(
         converged=converged,
         cap_hits=0,
         claim_quantity=claim_quantity,
+        diagnostics={} if diagnostics is None else diagnostics,
     )
 
 
@@ -188,6 +190,51 @@ def test_daily_runner_rejects_incomplete_or_nonconverged_books(tmp_path) -> None
     assert failure["diagnostics"] == {
         "cap_hits": 0,
         "nonconverged_results": 1,
+        "recession_direction_fits": 0,
+    }
+
+
+def test_daily_runner_classifies_mean_volatility_recession(tmp_path) -> None:
+    (tmp_path / "manifest.json").write_text("{}\n", encoding="utf-8")
+    import hashlib
+
+    manifest_sha256 = hashlib.sha256(b"{}\n").hexdigest()
+    output = tmp_path / "recession"
+    with pytest.raises(RuntimeError, match="numerical gate failed"):
+        run_daily_evaluation(
+            _RunnerPanel(tmp_path),
+            spec=_spec(manifest_sha256),
+            run_book=lambda _panel, origin: (
+                _result(
+                    origin,
+                    claim="claim-a",
+                    claim_quantity=0.25,
+                    converged=False,
+                    diagnostics={"zero_policy_recession_direction": True},
+                ),
+                _result(
+                    origin,
+                    claim="claim-b",
+                    claim_quantity=0.5,
+                    converged=False,
+                    diagnostics={"zero_policy_recession_direction": True},
+                ),
+            ),
+            output_directory=output,
+        )
+    failure = load_numerical_gate_failure(
+        output / NUMERICAL_GATE_FAILURE_FILENAME
+    )
+
+    assert failure["classification"] == "mean-volatility-recession-direction"
+    assert failure["triggered_gates"] == [
+        "mean-volatility-recession-direction",
+        "nonconverged-fit",
+    ]
+    assert failure["diagnostics"] == {
+        "cap_hits": 0,
+        "nonconverged_results": 2,
+        "recession_direction_fits": 1,
     }
 
 

@@ -31,6 +31,19 @@ GROMM cases ready. Quantitative review is recorded in
 `quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-15-gromm-architecture-remediation-review.md`
 (SHA-256
 `687f9b4ee61eb101318fb20e20364ee8af2d3cd9f6836d6e26ababd57342e96e`).
+The first full v1.15 Historical-SANOS sweep then exposed two additional daily
+mean-variance points whose OSQP and CLARABEL solutions missed the unchanged
+$10^{-6}$ KKT gate, plus a genuine low-risk mean-volatility zero-policy
+recession direction. Version 1.16 adds an exact cyclic coordinate refinement of
+the same scaled box-constrained lasso QP only after both primary certificates
+fail. Public-data replays now pass all 20 targets at the two affected
+mean-variance origins with zero cap hits and nonconvergence. Daily failure
+evidence separately counts claim-policy recession fits and the one shared
+zero-policy fit, so mean-volatility $\lambda=0.1$ is classified as an
+inadmissible objective setting rather than a generic solver failure.
+The complete hedging test tree passes 433 tests, and independent quantitative
+review passes after correcting the shared-fit count. Evidence is recorded in
+`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-15-historical-sanos-v116-coordinate-remediation.md`.
 Historical-SANOS version 1.15 is reviewed and committed at
 `5e21dc371a023b7a56a51802b2eb6f475dfbc66b`. It preserves the exact objectives
 and strict recession and cap gates, certifies raw solver actions before

@@ -999,6 +999,26 @@ def _minimize_mean_variance(
         else:
             last_result = raw_result
     if last_result is not None:
+        refined_action, refinement_sweeps, refinement_optimality = (
+            _refine_mean_variance_coordinate_descent(
+                np.asarray(last_result.x, dtype=np.float64),
+                instruments,
+                claim,
+                costs,
+                config=config,
+                action_scale=action_scale,
+            )
+        )
+        refined_result = certify_action(refined_action)
+        refined_result.nit = iterations + refinement_sweeps
+        refined_result.message = (
+            f"{refined_result.message}; coordinate_refinement_sweeps="
+            f"{refinement_sweeps} coordinate_refinement_kkt="
+            f"{refinement_optimality:.6g}"
+        )
+        if refined_result.success:
+            return refined_result
+        last_result = refined_result
         _, separator, diagnostics = str(last_result.message).partition(
             "; certificate"
         )
@@ -1012,6 +1032,72 @@ def _minimize_mean_variance(
         success=False,
         optimality=math.inf,
         message="; ".join(traces) or "no mean-variance solver completed",
+    )
+
+
+def _refine_mean_variance_coordinate_descent(
+    initial_action: FloatArray,
+    instruments: FloatArray,
+    claim: FloatArray,
+    costs: FloatArray,
+    *,
+    config: HistoricalSanosConfig,
+    action_scale: FloatArray,
+) -> tuple[FloatArray, int, float]:
+    """Refine the exact box-constrained lasso QP in scaled coordinates."""
+    observations, instrument_count = instruments.shape
+    centered_instruments = instruments - np.mean(instruments, axis=0)
+    centered_claim = claim - np.mean(claim)
+    scaled_instruments = centered_instruments * action_scale[None, :]
+    hessian = (
+        config.risk_parameter
+        * (scaled_instruments.T @ scaled_instruments)
+        / observations
+        + config.quadratic_ridge * np.eye(instrument_count)
+    )
+    linear = (
+        -action_scale * np.mean(instruments, axis=0)
+        + config.risk_parameter
+        * (scaled_instruments.T @ centered_claim)
+        / observations
+    )
+    penalty = costs * action_scale
+    bound = config.solver_position_cap / action_scale
+    scaled_action = np.clip(initial_action / action_scale, -bound, bound)
+    gradient = hessian @ scaled_action + linear
+    maximum_violation = math.inf
+    for sweep in range(1, config.maximum_iterations + 1):
+        for index in range(instrument_count):
+            diagonal = hessian[index, index]
+            partial = gradient[index] - diagonal * scaled_action[index]
+            if partial < -penalty[index]:
+                replacement = (-partial - penalty[index]) / diagonal
+            elif partial > penalty[index]:
+                replacement = (-partial + penalty[index]) / diagonal
+            else:
+                replacement = 0.0
+            replacement = float(np.clip(replacement, -bound[index], bound[index]))
+            change = replacement - scaled_action[index]
+            if change != 0.0:
+                scaled_action[index] = replacement
+                gradient += hessian[:, index] * change
+        derivative = gradient + penalty * np.sign(scaled_action)
+        zero = scaled_action == 0.0
+        derivative[zero] = np.maximum(
+            np.abs(gradient[zero]) - penalty[zero],
+            0.0,
+        )
+        upper = scaled_action >= bound
+        lower = scaled_action <= -bound
+        derivative[upper] = np.maximum(derivative[upper], 0.0)
+        derivative[lower] = np.minimum(derivative[lower], 0.0)
+        maximum_violation = float(np.max(np.abs(derivative)))
+        if maximum_violation <= config.certificate_tolerance:
+            break
+    return (
+        np.asarray(action_scale * scaled_action, dtype=np.float64),
+        sweep,
+        maximum_violation,
     )
 
 
