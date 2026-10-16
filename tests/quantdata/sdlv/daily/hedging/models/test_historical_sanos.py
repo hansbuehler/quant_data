@@ -766,38 +766,145 @@ def test_historical_sanos_mean_volatility_reports_recession_cap(
     assert fit.converged is not expected_fatal
 
 
-def test_mean_volatility_accepts_certified_inaccurate_status(
+def test_mean_volatility_accepts_certified_inaccurate_status_without_scs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    generator = np.random.default_rng(97)
-    instruments = generator.normal(scale=0.01, size=(60, 2))
-    claim = -0.3 * instruments[:, 0]
+    generator = np.random.default_rng(2)
+    instruments = generator.normal(scale=0.01, size=(80, 3))
+    claim = -0.4 * instruments[:, 0] + generator.normal(scale=0.003, size=80)
+    costs = np.full(instruments.shape[1], 1.0e-5)
+    config = HistoricalSanosConfig(
+        rolling_observations=80,
+        objective=HistoricalSanosObjective.MEAN_VOLATILITY,
+        risk_parameter=0.1,
+    )
+    action_scale = hedger._action_scale(instruments, config=config)
     original_solve = cp.Problem.solve
+    scs_calls = 0
 
     def force_inaccurate_status(
         problem: cp.Problem,
         *args: object,
         **kwargs: object,
     ) -> float:
+        nonlocal scs_calls
         value = original_solve(problem, *args, **kwargs)
-        problem._status = cp.OPTIMAL_INACCURATE
+        if kwargs.get("solver") == cp.CLARABEL:
+            problem._status = cp.OPTIMAL_INACCURATE
+        elif kwargs.get("solver") == cp.SCS:
+            scs_calls += 1
         return value
 
     monkeypatch.setattr(cp.Problem, "solve", force_inaccurate_status)
-    fit = _fit_policy(
+    result = hedger._minimize_mean_volatility(
+        np.zeros(instruments.shape[1]),
         instruments,
         claim,
-        np.zeros(instruments.shape[1]),
-        config=HistoricalSanosConfig(
-            rolling_observations=60,
-            objective=HistoricalSanosObjective.MEAN_VOLATILITY,
-            risk_parameter=1.0,
-        ),
+        costs,
+        config=config,
+        action_scale=action_scale,
     )
 
-    assert fit.final_converged
-    assert fit.converged
-    assert "SCS=optimal_inaccurate" in fit.solver_status
+    assert result.success
+    assert scs_calls == 0
+    assert "CLARABEL=optimal_inaccurate" in result.message
+    assert "SCS=" not in result.message
+
+
+def test_mean_volatility_inaccurate_zero_norm_requires_scs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    instruments = np.asarray([[-0.01], [0.01]] * 30, dtype=np.float64)
+    claim = np.zeros(len(instruments))
+    costs = np.zeros(instruments.shape[1])
+    config = HistoricalSanosConfig(
+        rolling_observations=60,
+        objective=HistoricalSanosObjective.MEAN_VOLATILITY,
+        risk_parameter=10.0,
+    )
+    action_scale = hedger._action_scale(instruments, config=config)
+    original_solve = cp.Problem.solve
+    scs_calls = 0
+
+    def force_primary_inaccurate(
+        problem: cp.Problem,
+        *args: object,
+        **kwargs: object,
+    ) -> float:
+        nonlocal scs_calls
+        value = original_solve(problem, *args, **kwargs)
+        if kwargs.get("solver") == cp.CLARABEL:
+            problem._status = cp.OPTIMAL_INACCURATE
+        elif kwargs.get("solver") == cp.SCS:
+            scs_calls += 1
+        return value
+
+    monkeypatch.setattr(cp.Problem, "solve", force_primary_inaccurate)
+    result = hedger._minimize_mean_volatility(
+        np.zeros(instruments.shape[1]),
+        instruments,
+        claim,
+        costs,
+        config=config,
+        action_scale=action_scale,
+    )
+
+    assert result.success
+    assert scs_calls == 1
+    assert "SCS=optimal" in result.message
+
+
+@pytest.mark.parametrize("corruption", ["objective", "feasibility"])
+def test_mean_volatility_inaccurate_bad_certificate_requires_scs(
+    monkeypatch: pytest.MonkeyPatch,
+    corruption: str,
+) -> None:
+    generator = np.random.default_rng(197)
+    instruments = generator.normal(scale=0.01, size=(60, 2))
+    claim = -0.3 * instruments[:, 0] + generator.normal(scale=0.001, size=60)
+    costs = np.full(instruments.shape[1], 1.0e-5)
+    config = HistoricalSanosConfig(
+        rolling_observations=60,
+        objective=HistoricalSanosObjective.MEAN_VOLATILITY,
+        risk_parameter=1.0,
+    )
+    action_scale = hedger._action_scale(instruments, config=config)
+    original_solve = cp.Problem.solve
+    scs_calls = 0
+
+    def corrupt_primary_certificate(
+        problem: cp.Problem,
+        *args: object,
+        **kwargs: object,
+    ) -> float:
+        nonlocal scs_calls
+        value = original_solve(problem, *args, **kwargs)
+        if kwargs.get("solver") == cp.CLARABEL:
+            problem._status = cp.OPTIMAL_INACCURATE
+            if corruption == "objective":
+                problem._value = float(problem.value) + 1.0
+            else:
+                scaled_action = problem.variables()[0]
+                scaled_action.value = (
+                    2.0 * config.solver_position_cap / action_scale
+                )
+        elif kwargs.get("solver") == cp.SCS:
+            scs_calls += 1
+        return value
+
+    monkeypatch.setattr(cp.Problem, "solve", corrupt_primary_certificate)
+    result = hedger._minimize_mean_volatility(
+        np.zeros(instruments.shape[1]),
+        instruments,
+        claim,
+        costs,
+        config=config,
+        action_scale=action_scale,
+    )
+
+    assert result.success
+    assert scs_calls == 1
+    assert "SCS=optimal" in result.message
 
 
 def test_virtual_policy_solver_cap_is_distinct_from_executable_cap() -> None:

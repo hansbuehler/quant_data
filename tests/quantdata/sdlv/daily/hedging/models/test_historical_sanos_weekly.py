@@ -415,6 +415,18 @@ def test_weekly_power_certificate_reconstructs_auxiliary_epigraph() -> None:
     assert objective_error == pytest.approx(0.0)
     assert not rejected
     assert rejected_error == pytest.approx(1.0)
+    assert np.isinf(
+        geometry._reconstruct_power_epigraph(
+            compiled,
+            positions=positions,
+            cash_translation=np.inf,
+            indices=indices,
+            signed_claim_quantity=1.0,
+            terminal_claim_values_pv=(
+                scenario_set.scenarios.terminal_claim_values_pv
+            ),
+        )
+    )
 
 
 def test_weekly_inaccurate_primary_requires_independent_scs_resolution(

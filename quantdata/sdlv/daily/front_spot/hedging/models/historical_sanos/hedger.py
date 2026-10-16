@@ -772,9 +772,12 @@ def _minimize_mean_volatility(
         )
     else:
         primary_iterations = int(problem.solver_stats.num_iters or 0)
-        solver_status, solver_trace, independent_iterations = (
-            _resolve_inaccurate_conic_problem(problem, config=config)
+        solver_status = problem.status
+        primary_solver = str(
+            problem.solver_stats.solver_name or "CLARABEL"
         )
+        solver_trace = f"{primary_solver}={solver_status}"
+        independent_iterations = 0
     total_iterations = primary_iterations + independent_iterations
 
     def certify_action(
@@ -814,10 +817,16 @@ def _minimize_mean_volatility(
             )
         else:
             # At zero residual volatility the Euclidean norm is nondifferentiable.
-            # Require an independently accepted conic solver status.
+            # An inaccurate primary status is not an independent certificate for
+            # the norm subgradient, so retain the SCS fallback in this branch.
+            independently_resolved = "SCS=" in solver_trace
             optimality = (
                 0.0
-                if solver_status in {cp.OPTIMAL, cp.OPTIMAL_INACCURATE}
+                if solver_status == cp.OPTIMAL
+                or (
+                    independently_resolved
+                    and solver_status == cp.OPTIMAL_INACCURATE
+                )
                 else math.inf
             )
         exact_objective = _objective_and_gradient(
@@ -965,23 +974,6 @@ def _minimize_mean_volatility(
     refined.message = f"{conic_result.message}; exact refinement {refined.message}"
     refined.recession_direction = False
     return refined
-
-
-def _resolve_inaccurate_conic_problem(
-    problem: cp.Problem,
-    *,
-    config: HistoricalSanosConfig,
-) -> tuple[str | None, str, int]:
-    """Resolve an inaccurate CLARABEL status with independent SCS."""
-    primary_status = problem.status
-    primary_solver = str(problem.solver_stats.solver_name or "CLARABEL")
-    if primary_status != cp.OPTIMAL_INACCURATE:
-        return primary_status, f"{primary_solver}={primary_status}", 0
-    return _solve_conic_with_scs(
-        problem,
-        config=config,
-        primary_trace=f"{primary_solver}={primary_status}",
-    )
 
 
 def _solve_conic_with_scs(

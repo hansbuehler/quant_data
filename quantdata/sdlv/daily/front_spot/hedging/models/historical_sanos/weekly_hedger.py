@@ -1285,6 +1285,11 @@ class _WeeklyOpenLoopGeometry:
         terminal_claim_values_pv: FloatArray,
     ) -> float:
         """Canonicalize auxiliary epigraph variables before certification."""
+        if (
+            not np.all(np.isfinite(positions))
+            or not math.isfinite(cash_translation)
+        ):
+            return math.inf
         wealth = self._exact_scenario_wealth(
             positions,
             indices=indices,
