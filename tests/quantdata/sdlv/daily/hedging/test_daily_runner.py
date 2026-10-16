@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from dataclasses import replace
 from datetime import date
 
 import pytest
@@ -13,6 +15,9 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
     DailyEvaluationSpec,
     DailyEvaluationSummary,
     run_daily_evaluation,
+)
+from quantdata.sdlv.daily.front_spot.hedging.runners.merge_daily_shards import (
+    merge_daily_shards,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.numerical_gate_failure import (
     NUMERICAL_GATE_FAILURE_FILENAME,
@@ -271,6 +276,160 @@ def test_daily_runner_records_nonfatal_unregularized_recession_warning(
     assert summary.nonconverged_results == 0
     assert summary.unregularized_recession_direction_fits == 2
     assert not (tmp_path / "warning" / NUMERICAL_GATE_FAILURE_FILENAME).exists()
+
+
+def test_daily_shard_merge_materializes_complete_destination(tmp_path) -> None:
+    (tmp_path / "manifest.json").write_text("{}\n", encoding="utf-8")
+    import hashlib
+
+    manifest_sha256 = hashlib.sha256(b"{}\n").hexdigest()
+    panel = _RunnerPanel(tmp_path)
+    panel.dates = (
+        date(2022, 12, 27),
+        date(2022, 12, 28),
+        date(2022, 12, 29),
+        date(2022, 12, 30),
+        date(2023, 1, 3),
+        date(2023, 1, 4),
+        date(2023, 1, 5),
+        date(2023, 1, 6),
+    )
+    full_spec = replace(_spec(manifest_sha256), evaluation_end=date(2023, 1, 6))
+
+    def run_book(_panel, origin_date):
+        return (
+            _result(origin_date, claim="claim-a", claim_quantity=0.25),
+            _result(origin_date, claim="claim-b", claim_quantity=0.5),
+        )
+
+    destination = tmp_path / "destination"
+    run_daily_evaluation(
+        panel,
+        spec=full_spec,
+        run_book=run_book,
+        output_directory=destination,
+        stop_after=1,
+    )
+    shard_one = tmp_path / "shard-one"
+    run_daily_evaluation(
+        panel,
+        spec=replace(
+            full_spec,
+            evaluation_start=date(2023, 1, 4),
+            evaluation_end=date(2023, 1, 4),
+        ),
+        run_book=run_book,
+        output_directory=shard_one,
+    )
+    shard_two = tmp_path / "shard-two"
+    run_daily_evaluation(
+        panel,
+        spec=replace(full_spec, evaluation_start=date(2023, 1, 5)),
+        run_book=run_book,
+        output_directory=shard_two,
+    )
+
+    summary = merge_daily_shards(
+        panel,
+        destination=destination,
+        shards=(shard_one, shard_two),
+        require_aggregates=False,
+    )
+    repeated = merge_daily_shards(
+        panel,
+        destination=destination,
+        shards=(shard_one, shard_two),
+        require_aggregates=False,
+    )
+
+    assert summary == repeated
+    assert summary.completed_origins == (
+        "2023-01-03",
+        "2023-01-04",
+        "2023-01-05",
+    )
+    assert summary.result_count == 6
+    assert summary.nonconverged_results == 0
+    assert summary.cap_hits == 0
+    assert tuple(sorted(path.stem for path in (destination / "records").glob("*.json"))) == (
+        "2023-01-03",
+        "2023-01-04",
+        "2023-01-05",
+    )
+    merge_payload = json.loads((destination / "merge.json").read_text(encoding="utf-8"))
+    assert merge_payload["native_origin_count"] == 1
+    assert [item["origin_count"] for item in merge_payload["shards"]] == [1, 1]
+
+
+def test_daily_shard_merge_rejects_overlap_and_gap(tmp_path) -> None:
+    (tmp_path / "manifest.json").write_text("{}\n", encoding="utf-8")
+    import hashlib
+
+    manifest_sha256 = hashlib.sha256(b"{}\n").hexdigest()
+    panel = _RunnerPanel(tmp_path)
+    panel.dates = (
+        date(2022, 12, 27),
+        date(2022, 12, 28),
+        date(2022, 12, 29),
+        date(2022, 12, 30),
+        date(2023, 1, 3),
+        date(2023, 1, 4),
+        date(2023, 1, 5),
+        date(2023, 1, 6),
+    )
+    full_spec = replace(_spec(manifest_sha256), evaluation_end=date(2023, 1, 6))
+
+    def run_book(_panel, origin_date):
+        return (
+            _result(origin_date, claim="claim-a", claim_quantity=0.25),
+            _result(origin_date, claim="claim-b", claim_quantity=0.5),
+        )
+
+    destination = tmp_path / "destination"
+    run_daily_evaluation(
+        panel,
+        spec=full_spec,
+        run_book=run_book,
+        output_directory=destination,
+        stop_after=1,
+    )
+    shard = tmp_path / "shard"
+    run_daily_evaluation(
+        panel,
+        spec=replace(
+            full_spec,
+            evaluation_start=date(2023, 1, 4),
+            evaluation_end=date(2023, 1, 5),
+        ),
+        run_book=run_book,
+        output_directory=shard,
+    )
+
+    with pytest.raises(ValueError, match="overlap"):
+        merge_daily_shards(
+            panel,
+            destination=destination,
+            shards=(shard, shard),
+            require_aggregates=False,
+        )
+    gap_shard = tmp_path / "gap-shard"
+    run_daily_evaluation(
+        panel,
+        spec=replace(
+            full_spec,
+            evaluation_start=date(2023, 1, 4),
+            evaluation_end=date(2023, 1, 4),
+        ),
+        run_book=run_book,
+        output_directory=gap_shard,
+    )
+    with pytest.raises(ValueError, match="uncovered"):
+        merge_daily_shards(
+            panel,
+            destination=destination,
+            shards=(gap_shard,),
+            require_aggregates=False,
+        )
 
 
 def test_daily_runner_rejects_wrong_target_quantity(tmp_path) -> None:
