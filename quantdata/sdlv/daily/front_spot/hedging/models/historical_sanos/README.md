@@ -23,7 +23,9 @@
 - **Training:** deterministic full-batch optimization on 252 uniformly weighted
   daily scenarios. Mean-variance uses exact transaction-cost lasso coordinate
   descent with a declared quadratic ridge of $10^{-4}$ in unit-RMS instrument
-  coordinates and a KKT stopping rule; entropy and power-exponential use an exact
+  coordinates and a KKT stopping rule. A refined candidate is certified against
+  the conic objective evaluated at that same candidate, never against a stale
+  pre-refinement solver objective. Entropy and power-exponential use an exact
   positive/negative action split with analytic gradients and a KKT gate, while
   mean-volatility uses an exact conic program followed, only when its
   independently recomputed KKT residual misses tolerance, by an exact-cost

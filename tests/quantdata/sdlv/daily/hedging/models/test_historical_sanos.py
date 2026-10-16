@@ -528,6 +528,49 @@ def test_mean_variance_coordinate_refinement_certifies_lasso_qp() -> None:
     assert refined_action[3] == 0.0
 
 
+def test_mean_variance_refinement_reconstructs_its_own_objective(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    generator = np.random.default_rng(137)
+    instruments = generator.normal(scale=0.01, size=(100, 5))
+    claim = (
+        -0.7 * instruments[:, 0]
+        + 0.2 * instruments[:, 1]
+        + generator.normal(scale=1.0e-4, size=100)
+    )
+    costs = np.full(instruments.shape[1], 1.0e-5)
+    config = HistoricalSanosConfig(
+        rolling_observations=100,
+        objective=HistoricalSanosObjective.MEAN_VARIANCE,
+        risk_parameter=0.1,
+    )
+    action_scale = hedger._action_scale(instruments, config=config)
+    original_solve = cp.Problem.solve
+
+    def corrupt_cached_solver_objective(
+        problem: cp.Problem,
+        *args: object,
+        **kwargs: object,
+    ) -> float:
+        value = original_solve(problem, *args, **kwargs)
+        problem._value = float(problem.value) + 1.0e-3
+        return value
+
+    monkeypatch.setattr(cp.Problem, "solve", corrupt_cached_solver_objective)
+    result = hedger._minimize_mean_variance(
+        np.zeros(instruments.shape[1]),
+        instruments,
+        claim,
+        costs,
+        config=config,
+        action_scale=action_scale,
+    )
+
+    assert result.success
+    assert "coordinate_refinement_sweeps=" in result.message
+    assert result.optimality <= config.certificate_tolerance
+
+
 def test_mean_volatility_retries_failed_certificate_with_scs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

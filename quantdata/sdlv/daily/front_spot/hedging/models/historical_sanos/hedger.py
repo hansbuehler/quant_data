@@ -893,6 +893,7 @@ def _minimize_mean_variance(
             candidate: FloatArray,
             *,
             canonicalization_error: float | None = None,
+            reference_objective: float | None = None,
         ) -> OptimizeResult:
             feasibility = float(
                 np.max(
@@ -926,10 +927,16 @@ def _minimize_mean_variance(
                 include_translation=False,
                 action_scale=action_scale,
             )[0]
+            reported_objective = (
+                problem.value
+                if reference_objective is None
+                else reference_objective
+            )
             objective_error = (
                 math.inf
-                if problem.value is None or not math.isfinite(float(problem.value))
-                else abs(float(problem.value) - exact_objective)
+                if reported_objective is None
+                or not math.isfinite(float(reported_objective))
+                else abs(float(reported_objective) - exact_objective)
             )
             objective_limit = config.objective_agreement_tolerance * (
                 1.0 + abs(exact_objective)
@@ -1009,7 +1016,20 @@ def _minimize_mean_variance(
                 action_scale=action_scale,
             )
         )
-        refined_result = certify_action(refined_action)
+        previous_scaled_action = scaled_action.value
+        try:
+            scaled_action.value = refined_action / action_scale
+            refined_reference_objective = objective.value
+        finally:
+            scaled_action.value = previous_scaled_action
+        refined_result = certify_action(
+            refined_action,
+            reference_objective=(
+                None
+                if refined_reference_objective is None
+                else float(refined_reference_objective)
+            ),
+        )
         refined_result.nit = iterations + refinement_sweeps
         refined_result.message = (
             f"{refined_result.message}; coordinate_refinement_sweeps="
