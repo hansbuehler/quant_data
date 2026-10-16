@@ -325,6 +325,98 @@ def test_weekly_accepts_certified_inaccurate_status() -> None:
     assert rejected_error == pytest.approx(1.0)
 
 
+def test_weekly_power_certificate_reconstructs_auxiliary_epigraph() -> None:
+    scenario_set = _scenario_set(scenario_count=60)
+    config = HistoricalSanosConfig(
+        rolling_observations=60,
+        objective=HistoricalSanosObjective.POWER_EXPONENTIAL,
+        risk_parameter=0.1,
+    )
+    geometry = _WeeklyOpenLoopGeometry(
+        scenario_set,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=config,
+    )
+    indices = np.arange(scenario_set.scenarios.scenario_count, dtype=np.int64)
+    claim, instrument_gains = geometry._linear_wealth_geometry(
+        indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=(
+            scenario_set.scenarios.terminal_claim_values_pv
+        ),
+    )
+    compiled = geometry._power_cost_problem(
+        indices,
+        instrument_gains=instrument_gains,
+    )
+    positions = np.zeros(geometry.parameter_count)
+    cash_translation = 0.05
+    compiled.claim.value = claim
+    compiled.scaled_positions.value = positions / compiled.action_scale
+    compiled.cash_translation.value = cash_translation
+    compiled.loss_argument.value = np.full(len(indices), 2.0e-6)
+    compiled.negative_part.value = np.zeros(len(indices))
+    compiled.positive_part.value = np.full(len(indices), 2.0e-6)
+    compiled.scenario_loss.value = np.full(len(indices), 2.0e-6)
+
+    constraint_violation = geometry._reconstruct_power_epigraph(
+        compiled,
+        positions=positions,
+        cash_translation=cash_translation,
+        indices=indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=(
+            scenario_set.scenarios.terminal_claim_values_pv
+        ),
+    )
+    parameters = np.concatenate((positions, [cash_translation]))
+    exact_objective = geometry._objective_value(
+        parameters,
+        indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=(
+            scenario_set.scenarios.terminal_claim_values_pv
+        ),
+        include_translation=True,
+        action_scale=compiled.action_scale,
+    )
+    solver_objective = exact_objective
+    accepted, _, objective_error = geometry._certify_conic_result(
+        parameters,
+        indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=(
+            scenario_set.scenarios.terminal_claim_values_pv
+        ),
+        include_translation=True,
+        action_scale=compiled.action_scale,
+        solver_status=cp.OPTIMAL_INACCURATE,
+        solver_objective=solver_objective,
+        maximum_constraint_violation=constraint_violation,
+    )
+    rejected, _, rejected_error = geometry._certify_conic_result(
+        parameters,
+        indices,
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=(
+            scenario_set.scenarios.terminal_claim_values_pv
+        ),
+        include_translation=True,
+        action_scale=compiled.action_scale,
+        solver_status=cp.OPTIMAL_INACCURATE,
+        solver_objective=solver_objective + 1.0,
+        maximum_constraint_violation=constraint_violation,
+    )
+
+    assert constraint_violation <= config.certificate_tolerance
+    assert compiled.problem.objective.value == pytest.approx(exact_objective)
+    assert accepted
+    assert objective_error == pytest.approx(0.0)
+    assert not rejected
+    assert rejected_error == pytest.approx(1.0)
+
+
 def test_weekly_inaccurate_primary_requires_independent_scs_resolution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

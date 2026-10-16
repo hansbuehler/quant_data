@@ -158,6 +158,10 @@ class _PowerCostProblem:
     scaled_positions: cp.Variable
     cash_translation: cp.Variable
     claim: cp.Parameter
+    loss_argument: cp.Variable
+    negative_part: cp.Variable
+    positive_part: cp.Variable
+    scenario_loss: cp.Variable
     action_scale: FloatArray
     problem: cp.Problem
 
@@ -1134,7 +1138,15 @@ class _WeeklyOpenLoopGeometry:
                 )
             )
             parameters = np.concatenate((fitted, [cash_translation]))
-            constraint_violation = _maximum_constraint_violation(compiled.problem)
+            solver_objective = compiled.problem.value
+            constraint_violation = self._reconstruct_power_epigraph(
+                compiled,
+                positions=fitted,
+                cash_translation=cash_translation,
+                indices=indices,
+                signed_claim_quantity=signed_claim_quantity,
+                terminal_claim_values_pv=terminal_claim_values_pv,
+            )
             certified, exact_objective, objective_error = self._certify_conic_result(
                 parameters,
                 indices,
@@ -1143,7 +1155,7 @@ class _WeeklyOpenLoopGeometry:
                 include_translation=True,
                 action_scale=compiled.action_scale,
                 solver_status=solver_status,
-                solver_objective=compiled.problem.value,
+                solver_objective=solver_objective,
                 maximum_constraint_violation=constraint_violation,
             )
             return (
@@ -1252,11 +1264,64 @@ class _WeeklyOpenLoopGeometry:
             scaled_positions=scaled_positions,
             cash_translation=cash_translation,
             claim=claim,
+            loss_argument=loss_argument,
+            negative_part=negative_part,
+            positive_part=positive_part,
+            scenario_loss=scenario_loss,
             action_scale=np.asarray(action_scale, dtype=np.float64),
             problem=problem,
         )
         self._power_problems[key] = cached
         return cached
+
+    def _reconstruct_power_epigraph(
+        self,
+        compiled: _PowerCostProblem,
+        *,
+        positions: FloatArray,
+        cash_translation: float,
+        indices: NDArray[np.int64],
+        signed_claim_quantity: float,
+        terminal_claim_values_pv: FloatArray,
+    ) -> float:
+        """Canonicalize auxiliary epigraph variables before certification."""
+        wealth = self._exact_scenario_wealth(
+            positions,
+            indices=indices,
+            signed_claim_quantity=signed_claim_quantity,
+            terminal_claim_values_pv=terminal_claim_values_pv,
+        )
+        loss_argument = cash_translation - wealth
+        negative_part = np.minimum(loss_argument, 0.0)
+        positive_part = np.maximum(loss_argument, 0.0)
+        exponential_loss = (
+            np.expm1(self.config.risk_parameter * negative_part)
+            / self.config.risk_parameter
+            + positive_part
+        )
+        quadratic_loss = (
+            loss_argument
+            + 0.5
+            * self.config.risk_parameter
+            * np.square(positive_part)
+        )
+        reconstructed = (
+            loss_argument,
+            negative_part,
+            positive_part,
+            exponential_loss,
+            quadratic_loss,
+        )
+        if not all(np.all(np.isfinite(values)) for values in reconstructed):
+            return math.inf
+        compiled.loss_argument.value = loss_argument
+        compiled.negative_part.value = negative_part
+        compiled.positive_part.value = positive_part
+        compiled.scenario_loss.value = np.maximum(
+            exponential_loss,
+            quadratic_loss,
+        )
+        return _maximum_constraint_violation(compiled.problem)
 
     def _minimize_convex_cost_lasso(
         self,
