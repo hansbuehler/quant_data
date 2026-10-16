@@ -957,6 +957,56 @@ def test_mean_volatility_preserves_primary_candidate_when_scs_fails(
     assert result.optimality <= config.certificate_tolerance
 
 
+def test_mean_volatility_resolves_out_of_cap_unconstrained_point(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    generator = np.random.default_rng(197)
+    instruments = generator.normal(scale=0.01, size=(60, 2))
+    claim = -0.3 * instruments[:, 0] + generator.normal(scale=0.001, size=60)
+    costs = np.full(instruments.shape[1], 1.0e-5)
+    config = HistoricalSanosConfig(
+        rolling_observations=60,
+        objective=HistoricalSanosObjective.MEAN_VOLATILITY,
+        risk_parameter=1.0,
+        position_cap=10.0,
+        solver_position_cap=10.0,
+        maximum_solver_position_cap=100.0,
+    )
+    action_scale = hedger._action_scale(instruments, config=config)
+    original_solve = cp.Problem.solve
+    clarabel_calls = 0
+
+    def displace_first_unconstrained_point(
+        problem: cp.Problem,
+        *args: object,
+        **kwargs: object,
+    ) -> float:
+        nonlocal clarabel_calls
+        value = original_solve(problem, *args, **kwargs)
+        if kwargs.get("solver") == cp.CLARABEL:
+            clarabel_calls += 1
+            if clarabel_calls == 1:
+                problem.variables()[0].value = (
+                    2.0 * config.solver_position_cap / action_scale
+                )
+        return value
+
+    monkeypatch.setattr(cp.Problem, "solve", displace_first_unconstrained_point)
+    result = hedger._minimize_mean_volatility(
+        np.zeros(instruments.shape[1]),
+        instruments,
+        claim,
+        costs,
+        config=config,
+        action_scale=action_scale,
+    )
+
+    assert result.success
+    assert clarabel_calls == 2
+    assert np.max(np.abs(result.x)) <= config.solver_position_cap
+    assert "bounded_resolve_cap=10" in result.message
+
+
 def test_mean_volatility_rejects_corrupt_primary_when_scs_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

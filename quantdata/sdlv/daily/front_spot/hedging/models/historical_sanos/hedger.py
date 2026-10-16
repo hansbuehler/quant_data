@@ -734,6 +734,7 @@ def _minimize_mean_volatility(
         np.asarray(initial[:instrument_count], dtype=np.float64) / action_scale
     )
     primary_iterations = 0
+    bounded_primary = False
     try:
         problem.solve(
             solver=cp.CLARABEL,
@@ -743,7 +744,28 @@ def _minimize_mean_volatility(
             tol_gap_rel=config.gradient_tolerance,
             tol_feas=config.gradient_tolerance,
         )
-        if problem.status in {cp.UNBOUNDED, cp.UNBOUNDED_INACCURATE}:
+        unconstrained_iterations = int(problem.solver_stats.num_iters or 0)
+        primary_scaled_action = (
+            None
+            if scaled_action.value is None
+            else np.asarray(scaled_action.value, dtype=np.float64).copy()
+        )
+        primary_action = (
+            None
+            if primary_scaled_action is None
+            else action_scale * primary_scaled_action
+        )
+        if problem.status in {cp.UNBOUNDED, cp.UNBOUNDED_INACCURATE} or (
+            primary_action is not None
+            and (
+                not np.all(np.isfinite(primary_action))
+                or np.any(
+                    np.abs(primary_action)
+                    > config.solver_position_cap + config.certificate_tolerance
+                )
+            )
+        ):
+            bounded_primary = True
             problem = cp.Problem(
                 objective,
                 [
@@ -772,11 +794,17 @@ def _minimize_mean_volatility(
         )
     else:
         primary_iterations = int(problem.solver_stats.num_iters or 0)
+        if bounded_primary:
+            primary_iterations += unconstrained_iterations
         solver_status = problem.status
         primary_solver = str(
             problem.solver_stats.solver_name or "CLARABEL"
         )
         solver_trace = f"{primary_solver}={solver_status}"
+        if bounded_primary:
+            solver_trace += (
+                f"; bounded_resolve_cap={config.solver_position_cap:g}"
+            )
         independent_iterations = 0
     total_iterations = primary_iterations + independent_iterations
 
