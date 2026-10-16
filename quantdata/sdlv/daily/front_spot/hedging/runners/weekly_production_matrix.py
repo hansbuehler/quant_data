@@ -21,6 +21,13 @@ from quantdata.sdlv.daily.front_spot.hedging.models.checkpointing import file_sh
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.selection import (
     load_gromm_architecture_selection,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.config import (
+    HistoricalSanosObjective,
+)
+from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.weekly_ridge import (
+    load_weekly_ridge_bundle,
+    repository_source_commit,
+)
 from quantdata.sdlv.daily.front_spot.hedging.runners.fit_rolling_gromm2_range import (
     load_completed_rolling_gromm2_range,
 )
@@ -113,6 +120,8 @@ def build_weekly_production_matrix(
     output_root: Path,
     checkpoint_root: Path,
     weekly_input_preflight: Path | None,
+    historical_weekly_ridge_selection: Path | None = None,
+    historical_weekly_ridge_selection_sha256: str | None = None,
     config: WeeklyProductionMatrixConfig = WeeklyProductionMatrixConfig(),
     gromm: GrommProductionInputs = GrommProductionInputs(),
     generated: GeneratedProductionInputs = GeneratedProductionInputs(),
@@ -121,6 +130,14 @@ def build_weekly_production_matrix(
     target_artifact, target_sha256, common_reason = _weekly_input_evidence(
         dataset=dataset,
         preflight_path=weekly_input_preflight,
+    )
+    historical_reason = _historical_ridge_evidence(
+        dataset=dataset,
+        target_notional_sha256=target_sha256,
+        common_reason=common_reason,
+        selection_path=historical_weekly_ridge_selection,
+        selection_sha256=historical_weekly_ridge_selection_sha256,
+        config=config,
     )
     cases: list[DailyProductionCase] = []
     for schedule in _schedules():
@@ -158,8 +175,8 @@ def build_weekly_production_matrix(
                 )
                 cases.append(
                     _case(
-                        ready=common_reason is None,
-                        reason=common_reason,
+                        ready=historical_reason is None,
+                        reason=historical_reason,
                         case_id=case_id,
                         model="historical-sanos",
                         measure="historical-P",
@@ -179,6 +196,12 @@ def build_weekly_production_matrix(
                             config=config,
                             objective=objective,
                             risk_parameter=parameter,
+                            historical_weekly_ridge_selection=(
+                                historical_weekly_ridge_selection
+                            ),
+                            historical_weekly_ridge_selection_sha256=(
+                                historical_weekly_ridge_selection_sha256
+                            ),
                         ),
                     )
                 )
@@ -240,6 +263,42 @@ def _weekly_input_evidence(
     except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError) as error:
         return None, None, f"invalid weekly input evidence: {error}"
     return artifact, target_sha256, None
+
+
+def _historical_ridge_evidence(
+    *,
+    dataset: Path,
+    target_notional_sha256: str | None,
+    common_reason: str | None,
+    selection_path: Path | None,
+    selection_sha256: str | None,
+    config: WeeklyProductionMatrixConfig,
+) -> str | None:
+    if common_reason is not None:
+        return common_reason
+    if selection_path is None or selection_sha256 is None:
+        return "missing authenticated Historical-SANOS weekly ridge selection"
+    assert target_notional_sha256 is not None
+    try:
+        bundle = load_weekly_ridge_bundle(
+            selection_path,
+            expected_sha256=selection_sha256,
+            expected_dataset_manifest_sha256=file_sha256(
+                Path(dataset) / "manifest.json"
+            ),
+            expected_target_notional_artifact_sha256=target_notional_sha256,
+            expected_source_commit=repository_source_commit(),
+            expected_position_cap=config.position_cap,
+        )
+        for objective, parameters in _objective_grids(config):
+            for parameter in parameters:
+                bundle.selection_for(
+                    objective=HistoricalSanosObjective(objective),
+                    risk_parameter=parameter,
+                )
+    except (FileNotFoundError, OSError, RuntimeError, ValueError) as error:
+        return f"invalid Historical-SANOS weekly ridge evidence: {error}"
+    return None
 
 
 def _gromm_cases(
@@ -811,6 +870,8 @@ def _weekly_command(
     market_artifact_root: Path | None = None,
     market_artifact_range_summary: Path | None = None,
     architecture_selection: Path | None = None,
+    historical_weekly_ridge_selection: Path | None = None,
+    historical_weekly_ridge_selection_sha256: str | None = None,
 ) -> tuple[str, ...]:
     command = [
         "python",
@@ -876,6 +937,20 @@ def _weekly_command(
         )
     if architecture_selection is not None:
         command.extend(("--architecture-selection", str(architecture_selection)))
+    if historical_weekly_ridge_selection is not None:
+        command.extend(
+            (
+                "--historical-weekly-ridge-selection",
+                str(historical_weekly_ridge_selection),
+            )
+        )
+    if historical_weekly_ridge_selection_sha256 is not None:
+        command.extend(
+            (
+                "--historical-weekly-ridge-selection-sha256",
+                historical_weekly_ridge_selection_sha256,
+            )
+        )
     return tuple(command)
 
 
@@ -974,6 +1049,8 @@ def main() -> None:
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--checkpoint-root", type=Path, required=True)
     parser.add_argument("--weekly-input-preflight", type=Path)
+    parser.add_argument("--historical-weekly-ridge-selection", type=Path)
+    parser.add_argument("--historical-weekly-ridge-selection-sha256")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--gromm-market-artifact-root", type=Path)
     parser.add_argument("--gromm-architecture-selection", type=Path)
@@ -998,6 +1075,12 @@ def main() -> None:
         output_root=arguments.output_root,
         checkpoint_root=arguments.checkpoint_root,
         weekly_input_preflight=arguments.weekly_input_preflight,
+        historical_weekly_ridge_selection=(
+            arguments.historical_weekly_ridge_selection
+        ),
+        historical_weekly_ridge_selection_sha256=(
+            arguments.historical_weekly_ridge_selection_sha256
+        ),
         config=config,
         gromm=GrommProductionInputs(
             market_artifact_root=arguments.gromm_market_artifact_root,
@@ -1045,6 +1128,9 @@ def main() -> None:
             None
             if arguments.weekly_input_preflight is None
             else str(arguments.weekly_input_preflight)
+        ),
+        "historical_weekly_ridge_selection": _artifact_identity(
+            arguments.historical_weekly_ridge_selection
         ),
         "generated_production_gates": {
             "volgan": _artifact_identity(arguments.volgan_production_gate),

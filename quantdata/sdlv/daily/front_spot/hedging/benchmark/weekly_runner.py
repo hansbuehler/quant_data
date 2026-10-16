@@ -325,6 +325,7 @@ class WeeklyModelRun:
     fit_price_records: tuple[WeeklyPriceRecord, ...]
     policy_fit_converged: tuple[bool, ...]
     policy_fit_cap_hits: tuple[int, ...]
+    policy_fit_unregularized_recession_directions: tuple[bool, ...]
     policy_fit_recession_directions: tuple[bool, ...]
     fit_long_prices_origin_pv: FloatArray
     spot_positions: FloatArray
@@ -342,6 +343,8 @@ class WeeklyModelRun:
             or len(self.fit_price_records) != decision_count
             or len(self.policy_fit_converged) != decision_count
             or len(self.policy_fit_cap_hits) != decision_count
+            or len(self.policy_fit_unregularized_recession_directions)
+            != decision_count
             or len(self.policy_fit_recession_directions) != decision_count
         ):
             raise ValueError("weekly fit audit arrays do not align")
@@ -349,20 +352,35 @@ class WeeklyModelRun:
             type(value) is not bool for value in self.policy_fit_converged
         ) or any(
             type(value) is not bool
+            for value in self.policy_fit_unregularized_recession_directions
+        ) or any(
+            type(value) is not bool
             for value in self.policy_fit_recession_directions
         ) or any(
             type(value) is not int or value < 0 for value in self.policy_fit_cap_hits
         ):
             raise ValueError("weekly numerical fit diagnostics are invalid")
-        diagnostics_by_identity: dict[str, tuple[bool, int, bool]] = {}
-        for identity, converged, cap_hits, recession_direction in zip(
+        diagnostics_by_identity: dict[str, tuple[bool, int, bool, bool]] = {}
+        for (
+            identity,
+            converged,
+            cap_hits,
+            unregularized_recession_direction,
+            recession_direction,
+        ) in zip(
             self.policy_fit_identities,
             self.policy_fit_converged,
             self.policy_fit_cap_hits,
+            self.policy_fit_unregularized_recession_directions,
             self.policy_fit_recession_directions,
             strict=True,
         ):
-            diagnostics = (converged, cap_hits, recession_direction)
+            diagnostics = (
+                converged,
+                cap_hits,
+                unregularized_recession_direction,
+                recession_direction,
+            )
             previous = diagnostics_by_identity.setdefault(identity, diagnostics)
             if previous != diagnostics:
                 raise ValueError("reused weekly policy fit diagnostics changed")
@@ -447,6 +465,7 @@ def run_weekly_model(
     policy_artifact_fingerprints: list[tuple[str, ...]] = []
     policy_fit_converged: list[bool] = []
     policy_fit_cap_hits: list[int] = []
+    policy_fit_unregularized_recession_directions: list[bool] = []
     policy_fit_recession_directions: list[bool] = []
     fit_long_prices_origin_pv = np.empty(len(instructions), dtype=np.float64)
     spot_positions = np.empty(len(instructions), dtype=np.float64)
@@ -536,6 +555,9 @@ def run_weekly_model(
         policy_artifact_fingerprints.append(fit.artifact_fingerprints)
         policy_fit_converged.append(bool(fit.converged))
         policy_fit_cap_hits.append(int(fit.cap_hits))
+        policy_fit_unregularized_recession_directions.append(
+            bool(getattr(fit, "unregularized_recession_direction", False))
+        )
         policy_fit_recession_directions.append(
             bool(getattr(fit, "recession_direction", False))
         )
@@ -580,6 +602,9 @@ def run_weekly_model(
         fit_price_records=tuple(price_records),
         policy_fit_converged=tuple(policy_fit_converged),
         policy_fit_cap_hits=tuple(policy_fit_cap_hits),
+        policy_fit_unregularized_recession_directions=tuple(
+            policy_fit_unregularized_recession_directions
+        ),
         policy_fit_recession_directions=tuple(
             policy_fit_recession_directions
         ),

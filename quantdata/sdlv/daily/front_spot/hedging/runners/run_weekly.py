@@ -73,6 +73,10 @@ from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.config impo
 from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.weekly_adapter import (
     HistoricalSanosWeeklyAdapter,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.weekly_ridge import (
+    load_weekly_ridge_for_scope,
+    repository_source_commit,
+)
 from quantdata.sdlv.daily.front_spot.hedging.models.sanos_lv.config import SanosLvConfig
 from quantdata.sdlv.daily.front_spot.hedging.models.sanos_lv.weekly_adapter import (
     SanosLvWeeklyAdapter,
@@ -172,6 +176,8 @@ def main() -> None:
     parser.add_argument("--just-load", action="store_true")
     parser.add_argument("--target-notional-artifact-sha256")
     parser.add_argument("--target-notional-artifact", type=Path)
+    parser.add_argument("--historical-weekly-ridge-selection", type=Path)
+    parser.add_argument("--historical-weekly-ridge-selection-sha256")
     parser.add_argument("--stop-after", type=int)
     parser.add_argument("--progress-every", type=int, default=1)
     parser.add_argument("--allow-cap-hits", action="store_true")
@@ -182,6 +188,13 @@ def main() -> None:
         parser.error(
             "--target-notional-artifact-sha256 is required; run the CPU weekly "
             "input preflight first"
+        )
+    if arguments.model == "historical-sanos" and (
+        arguments.historical_weekly_ridge_selection is None
+        or arguments.historical_weekly_ridge_selection_sha256 is None
+    ):
+        parser.error(
+            "historical-sanos requires the authenticated weekly ridge selection"
         )
 
     panel = PublicHedgingPanel(arguments.dataset, validate=True)
@@ -412,13 +425,18 @@ def build_weekly_adapter(
             configurations={"model": config},
         )
     if arguments.model == "historical-sanos":
-        config = _historical_config(arguments, label=label)
+        config, ridge_evidence = _historical_config(
+            arguments,
+            label=label,
+            dataset_manifest_sha256=dataset_manifest_sha256,
+            require_weekly_ridge=True,
+        )
         adapter = HistoricalSanosWeeklyAdapter(config=config)
         return _adapter_build(
             adapter,
             rolling_observations=config.rolling_observations,
             position_cap=config.position_cap,
-            configurations={"model": config},
+            configurations={"model": config, **ridge_evidence},
         )
     if arguments.model == "gromm-q-dlv-vega":
         if arguments.market_artifact_range_summary is None:
@@ -577,7 +595,12 @@ def build_weekly_adapter(
         )
     if checkpoint_directory is None:
         raise ValueError(f"{arguments.model} requires a checkpoint directory")
-    policy_hedge = _historical_config(arguments, label=f"{label}-weekly-policy")
+    policy_hedge, _ = _historical_config(
+        arguments,
+        label=f"{label}-weekly-policy",
+        dataset_manifest_sha256=dataset_manifest_sha256,
+        require_weekly_ridge=False,
+    )
     policy_config = GeneratedWeeklyPolicyConfig(
         scenario_count=arguments.scenario_count,
         hedge=policy_hedge,
@@ -684,14 +707,59 @@ def _historical_config(
     arguments: argparse.Namespace,
     *,
     label: str,
-) -> HistoricalSanosConfig:
+    dataset_manifest_sha256: str,
+    require_weekly_ridge: bool,
+) -> tuple[HistoricalSanosConfig, dict[str, object]]:
+    ridge = HistoricalSanosConfig().quadratic_ridge
+    force_null_policy = False
+    evidence: dict[str, object] = {}
+    selection_path = getattr(arguments, "historical_weekly_ridge_selection", None)
+    selection_sha256 = getattr(
+        arguments,
+        "historical_weekly_ridge_selection_sha256",
+        None,
+    )
+    if require_weekly_ridge:
+        if selection_path is None or selection_sha256 is None:
+            raise ValueError(
+                "historical weekly policy requires an authenticated ridge selection"
+            )
+        target_sha256 = getattr(
+            arguments,
+            "target_notional_artifact_sha256",
+            None,
+        )
+        if target_sha256 is None:
+            raise ValueError("historical weekly ridge requires target-notional identity")
+        selection = load_weekly_ridge_for_scope(
+            selection_path,
+            expected_sha256=selection_sha256,
+            expected_dataset_manifest_sha256=dataset_manifest_sha256,
+            expected_target_notional_artifact_sha256=target_sha256,
+            expected_source_commit=repository_source_commit(),
+            expected_position_cap=arguments.position_cap,
+            expected_objective=HistoricalSanosObjective(arguments.objective),
+            expected_risk_parameter=arguments.risk_parameter,
+        )
+        force_null_policy = selection.selected_ridge is None
+        if selection.selected_ridge is not None:
+            ridge = selection.selected_ridge
+        evidence = {
+            "weekly_ridge_selection_file_sha256": selection_sha256,
+            "weekly_ridge_selection_sha256": selection.sha256,
+            "weekly_ridge_selected_policy": (
+                "null-baseline" if force_null_policy else "ridge"
+            ),
+        }
     return HistoricalSanosConfig(
         label=label,
         rolling_observations=arguments.observation_count,
         objective=HistoricalSanosObjective(arguments.objective),
         risk_parameter=arguments.risk_parameter,
         position_cap=arguments.position_cap,
-    )
+        quadratic_ridge=ridge,
+        force_null_policy=force_null_policy,
+    ), evidence
 
 
 def _gromm_train_config(arguments: argparse.Namespace) -> GrommTrainConfig:

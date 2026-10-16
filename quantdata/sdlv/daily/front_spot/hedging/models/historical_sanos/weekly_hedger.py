@@ -39,6 +39,8 @@ FloatArray = NDArray[np.float64]
 class HistoricalWeeklyOpenLoopFit:
     """One signed-claim open-loop schedule and diagnostics."""
 
+    selection_spot_positions: FloatArray
+    selection_option_positions: FloatArray
     spot_positions: FloatArray
     option_positions: FloatArray
     cash_translation: float | None
@@ -46,6 +48,7 @@ class HistoricalWeeklyOpenLoopFit:
     validation_loss: float
     certainty_equivalent: float
     iterations: int
+    selection_converged: bool
     converged: bool
     maximum_absolute_gradient: float
     selection_solver_status: str
@@ -58,8 +61,11 @@ class HistoricalWeeklyOpenLoopFit:
     parameter_count: int
     observation_parameter_ratio: float
     statistically_thin: bool
+    selection_unregularized_recession_direction: bool
+    unregularized_recession_direction: bool
     selection_recession_direction: bool
     recession_direction: bool
+    selection_cap_hits: int
     cap_hits: int
 
 
@@ -75,6 +81,7 @@ class HistoricalWeeklyHedgeFit:
     pure_policy: HistoricalWeeklyOpenLoopFit
     prices: WeeklyIndifferencePrices
     converged: bool
+    unregularized_recession_direction: bool
     recession_direction: bool
     internal_cap_hits: int
     executable_cap_hits: int
@@ -385,6 +392,10 @@ def fit_weekly_open_loop_hedge(
         + pure_policy.cap_hits
     )
     cap_hits = internal_cap_hits + executable_cap_hits
+    unregularized_recession_direction = any(
+        policy.unregularized_recession_direction
+        for policy in (long_policy, short_policy, zero_policy, pure_policy)
+    )
     recession_direction = any(
         policy.recession_direction
         for policy in (long_policy, short_policy, zero_policy, pure_policy)
@@ -403,6 +414,9 @@ def fit_weekly_open_loop_hedge(
             and zero_policy.converged
             and pure_policy.converged
             and not recession_direction
+        ),
+        unregularized_recession_direction=(
+            unregularized_recession_direction
         ),
         recession_direction=recession_direction,
         internal_cap_hits=internal_cap_hits,
@@ -505,6 +519,12 @@ class _WeeklyOpenLoopGeometry:
         split = observation_count - validation_count
         if split < 2:
             raise ValueError("historical weekly training split has fewer than two rows")
+        if self.config.force_null_policy:
+            return self._null_policy_fit(
+                claim_values=claim_values,
+                signed_claim_quantity=signed_claim_quantity,
+                split=split,
+            )
         include_translation = (
             self.config.objective is HistoricalSanosObjective.POWER_EXPONENTIAL
         )
@@ -562,6 +582,9 @@ class _WeeklyOpenLoopGeometry:
                 include_translation=include_translation,
             )
             optimality = float(np.max(np.abs(gradient)))
+        selection_spot, selection_options = self.unpack(
+            selection.x[: self.parameter_count]
+        )
         spot, options = self.unpack(final.x[: self.parameter_count])
         certainty_equivalent = self._policy_certainty_equivalent(
             final.x,
@@ -575,12 +598,30 @@ class _WeeklyOpenLoopGeometry:
                 np.abs(positions) >= 0.999 * self.config.solver_position_cap
             )
         )
+        selection_positions = np.concatenate(
+            (selection_spot[:, None], selection_options),
+            axis=1,
+        )
+        selection_cap_hits = int(
+            np.count_nonzero(
+                np.abs(selection_positions)
+                >= 0.999 * self.config.solver_position_cap
+            )
+        )
         selection_recession_direction = bool(
             getattr(selection, "recession_direction", False)
         )
         recession_direction = bool(getattr(final, "recession_direction", False))
+        selection_unregularized_recession_direction = bool(
+            getattr(selection, "unregularized_recession_direction", False)
+        )
+        unregularized_recession_direction = bool(
+            getattr(final, "unregularized_recession_direction", False)
+        )
         ratio = observation_count / self.parameter_count
         return HistoricalWeeklyOpenLoopFit(
+            selection_spot_positions=selection_spot,
+            selection_option_positions=selection_options,
             spot_positions=spot,
             option_positions=options,
             cash_translation=(
@@ -590,6 +631,9 @@ class _WeeklyOpenLoopGeometry:
             validation_loss=float(validation_loss),
             certainty_equivalent=certainty_equivalent,
             iterations=int(selection.nit) + int(final.nit),
+            selection_converged=bool(
+                selection.success and not selection_recession_direction
+            ),
             converged=bool(final.success and not recession_direction),
             maximum_absolute_gradient=optimality,
             selection_solver_status=str(selection.message),
@@ -608,9 +652,81 @@ class _WeeklyOpenLoopGeometry:
             parameter_count=self.parameter_count,
             observation_parameter_ratio=ratio,
             statistically_thin=ratio < self.config.thin_sample_ratio,
+            selection_unregularized_recession_direction=(
+                selection_unregularized_recession_direction
+            ),
+            unregularized_recession_direction=(
+                unregularized_recession_direction
+            ),
             selection_recession_direction=selection_recession_direction,
             recession_direction=recession_direction,
+            selection_cap_hits=selection_cap_hits,
             cap_hits=cap_hits,
+        )
+
+    def _null_policy_fit(
+        self,
+        *,
+        claim_values: FloatArray,
+        signed_claim_quantity: float,
+        split: int,
+    ) -> HistoricalWeeklyOpenLoopFit:
+        """Return the exact preselected zero-position policy and its CE."""
+        observation_count = self.scenarios.scenario_count
+        positions = np.zeros(self.parameter_count, dtype=np.float64)
+        spot, options = self.unpack(positions)
+
+        def certainty_equivalent(indices: NDArray[np.int64]) -> float:
+            wealth = self._exact_scenario_wealth(
+                positions,
+                indices=indices,
+                signed_claim_quantity=signed_claim_quantity,
+                terminal_claim_values_pv=claim_values,
+            )
+            return weekly_certainty_equivalent(
+                wealth,
+                objective=_weekly_objective(self.config.objective),
+                risk_parameter=self.config.risk_parameter,
+            )
+
+        validation_ce = certainty_equivalent(
+            np.arange(split, observation_count, dtype=np.int64)
+        )
+        full_ce = certainty_equivalent(
+            np.arange(observation_count, dtype=np.int64)
+        )
+        ratio = observation_count / self.parameter_count
+        return HistoricalWeeklyOpenLoopFit(
+            selection_spot_positions=spot.copy(),
+            selection_option_positions=options.copy(),
+            spot_positions=spot,
+            option_positions=options,
+            cash_translation=None,
+            training_loss=-full_ce,
+            validation_loss=-validation_ce,
+            certainty_equivalent=full_ce,
+            iterations=0,
+            selection_converged=True,
+            converged=True,
+            maximum_absolute_gradient=0.0,
+            selection_solver_status=(
+                "precommitted null policy; no numerical optimization"
+            ),
+            solver_status="precommitted null policy; no numerical optimization",
+            selection_objective_error=0.0,
+            objective_error=0.0,
+            selection_maximum_constraint_violation=0.0,
+            maximum_constraint_violation=0.0,
+            scenario_count=observation_count,
+            parameter_count=self.parameter_count,
+            observation_parameter_ratio=ratio,
+            statistically_thin=ratio < self.config.thin_sample_ratio,
+            selection_unregularized_recession_direction=False,
+            unregularized_recession_direction=False,
+            selection_recession_direction=False,
+            recession_direction=False,
+            selection_cap_hits=0,
+            cap_hits=0,
         )
 
     def _policy_certainty_equivalent(
@@ -1522,10 +1638,14 @@ class _WeeklyOpenLoopGeometry:
             * self.config.quadratic_ridge
             * float(scaled_fitted @ scaled_fitted)
         )
-        recession_direction = bool(
+        unregularized_recession_direction = bool(
             self.config.objective is HistoricalSanosObjective.MEAN_VOLATILITY
             and np.all(claim == 0.0)
             and unregularized_objective < -self.config.certificate_tolerance
+        )
+        recession_direction = bool(
+            unregularized_recession_direction
+            and self.config.quadratic_ridge == 0.0
         )
         result = OptimizeResult(
             x=fitted,
@@ -1537,14 +1657,18 @@ class _WeeklyOpenLoopGeometry:
                 f"constraint-violation={constraint_violation:.6g}; "
                 f"primal-dual-gap={primal_dual_gap:.6g}"
                 + (
-                    f"; recession_direction={unregularized_objective:.6g}"
-                    if recession_direction
+                    "; unregularized_recession_direction="
+                    f"{unregularized_objective:.6g}"
+                    if unregularized_recession_direction
                     else ""
                 )
             ),
             fun=exact_objective,
             objective_error=objective_error,
             constraint_violation=constraint_violation,
+            unregularized_recession_direction=(
+                unregularized_recession_direction
+            ),
             recession_direction=recession_direction,
         )
         result.action_scale = compiled.action_scale

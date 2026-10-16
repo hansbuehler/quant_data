@@ -166,6 +166,7 @@ def _normalized_diagnostics(diagnostics: JsonObject) -> JsonObject:
         "nonconverged_fits",
         "nonconverged_results",
         "recession_direction_fits",
+        "unregularized_recession_direction_fits",
     }
     unknown = set(diagnostics) - allowed
     if unknown:
@@ -178,17 +179,39 @@ def _normalized_diagnostics(diagnostics: JsonObject) -> JsonObject:
         normalized[name] = value
     daily = {"cap_hits", "nonconverged_results"}
     daily_with_recession = daily | {"recession_direction_fits"}
+    daily_with_warnings = daily | {"unregularized_recession_direction_fits"}
+    daily_with_recession_and_warnings = daily_with_recession | {
+        "unregularized_recession_direction_fits"
+    }
     weekly = {
         "cap_hits",
         "executed_cap_hits",
         "fit_cap_hits",
         "nonconverged_fits",
         "recession_direction_fits",
+        "unregularized_recession_direction_fits",
     }
     fields = set(normalized)
-    if fields in (daily, daily_with_recession):
+    if fields in (
+        daily,
+        daily_with_recession,
+        daily_with_warnings,
+        daily_with_recession_and_warnings,
+    ):
         return normalized
-    if fields in (weekly, weekly - {"recession_direction_fits"}):
+    optional_weekly = {
+        "recession_direction_fits",
+        "unregularized_recession_direction_fits",
+    }
+    if fields in tuple(
+        weekly - omitted
+        for omitted in (
+            set(),
+            {"recession_direction_fits"},
+            {"unregularized_recession_direction_fits"},
+            optional_weekly,
+        )
+    ):
         if normalized["cap_hits"] != (
             normalized["fit_cap_hits"] + normalized["executed_cap_hits"]
         ):

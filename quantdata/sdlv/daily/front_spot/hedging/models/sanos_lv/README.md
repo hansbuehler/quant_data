@@ -7,6 +7,10 @@
   risk-neutral; hedge evaluation uses the subsequent historical transition.
 - **Price:** the common market price is the SANOS digital mark. The model price
   and hedge Greeks come from the corresponding public DLV local-vol geometry.
+- **Scenarios and fitted quantities:** this reference does not fit a stochastic
+  scenario generator or a trainable hedge policy. It fits the rolling DLV
+  factor basis below, then obtains prices and Greeks from the local-volatility
+  repricer on the released geometry.
 - **Factors:** estimate one front-spot-projected DLV loading plus seven
   orthogonal residual principal components from the trailing 252 exact
   one-session transitions. Reported factor coverage is the fraction of
@@ -37,6 +41,10 @@
   the first date with 252 retained exact-session transitions, and evaluates the
   next untouched market transition. It checks both the one-day delta-only path
   and a three-day target with the full eight-factor option hedge.
+- **Validation:** factor estimation and hedge construction are deterministic;
+  no evaluation transition selects parameters. The smoke checks the next
+  untouched transition against a committed fixture, while the focused tests
+  cover pricing, factors, Greeks, and weekly policies.
 - **Terminal value:** for a one-day target the common `payoff` field is cash
   settlement. For a three-day target it is the discounted independently fitted
   next-date SANOS market value of the unfinished claim.
@@ -48,6 +56,8 @@ Run on CPU:
 python -m quantdata.sdlv.daily.front_spot.hedging.models.sanos_lv.smoke
 python -m quantdata.sdlv.daily.front_spot.hedging.models.sanos_lv.weekly_smoke
 python -m quantdata.sdlv.daily.front_spot.hedging.models.sanos_lv.weekly_policy_smoke
+pytest -q tests/quantdata/sdlv/daily/hedging/models/test_sanos_lv.py \
+  tests/quantdata/sdlv/daily/hedging/models/test_sanos_lv_greeks.py
 ```
 
 Programmatic full-book entry point:
@@ -55,3 +65,6 @@ Programmatic full-book entry point:
 ```python
 run_sanos_lv_daily_book(panel, origin_date=origin_date)
 ```
+
+Reference: Buehler, Horvath, Kratsios, Limmer, and Saqur,
+[SANOS: Smooth strictly arbitrage-free non-parametric option surfaces](https://arxiv.org/abs/2601.11209).

@@ -254,6 +254,18 @@ def evaluate_historical_sanos_daily_book(
                     "zero_policy_recession_direction": (
                         fit.zero_policy.recession_direction
                     ),
+                    "claim_policy_selection_unregularized_recession_direction": (
+                        fit.claim_policy.selection_unregularized_recession_direction
+                    ),
+                    "zero_policy_selection_unregularized_recession_direction": (
+                        fit.zero_policy.selection_unregularized_recession_direction
+                    ),
+                    "claim_policy_unregularized_recession_direction": (
+                        fit.claim_policy.unregularized_recession_direction
+                    ),
+                    "zero_policy_unregularized_recession_direction": (
+                        fit.zero_policy.unregularized_recession_direction
+                    ),
                     "claim_policy_selection_maximum_optimality_residual": (
                         fit.claim_policy.selection_maximum_absolute_gradient
                     ),
@@ -267,6 +279,50 @@ def evaluate_historical_sanos_daily_book(
                         fit.zero_policy.maximum_absolute_gradient
                     ),
                     "internal_solver_position_cap": config.solver_position_cap,
+                    "maximum_internal_solver_position_cap": (
+                        config.maximum_solver_position_cap
+                    ),
+                    "claim_policy_solver_position_cap": (
+                        fit.claim_policy.solver_position_cap
+                    ),
+                    "zero_policy_solver_position_cap": (
+                        fit.zero_policy.solver_position_cap
+                    ),
+                    "claim_policy_cap_expansions": fit.claim_policy.cap_expansions,
+                    "zero_policy_cap_expansions": fit.zero_policy.cap_expansions,
+                    "claim_policy_cap_stability_certified": (
+                        fit.claim_policy.cap_stability_certified
+                    ),
+                    "zero_policy_cap_stability_certified": (
+                        fit.zero_policy.cap_stability_certified
+                    ),
+                    "claim_policy_cap_stability_relative_l2": (
+                        fit.claim_policy.cap_stability_relative_l2
+                    ),
+                    "zero_policy_cap_stability_relative_l2": (
+                        fit.zero_policy.cap_stability_relative_l2
+                    ),
+                    "claim_policy_cap_stability_relative_linf": (
+                        fit.claim_policy.cap_stability_relative_linf
+                    ),
+                    "zero_policy_cap_stability_relative_linf": (
+                        fit.zero_policy.cap_stability_relative_linf
+                    ),
+                    "claim_policy_cap_stability_objective_error": (
+                        fit.claim_policy.cap_stability_objective_error
+                    ),
+                    "zero_policy_cap_stability_objective_error": (
+                        fit.zero_policy.cap_stability_objective_error
+                    ),
+                    "pure_hedge_cap_stability_certified": (
+                        fit.cap_stability_certified
+                    ),
+                    "pure_hedge_cap_stability_relative_l2": (
+                        fit.cap_stability_relative_l2
+                    ),
+                    "pure_hedge_cap_stability_absolute_linf": (
+                        fit.cap_stability_absolute_linf
+                    ),
                     "executable_position_cap": config.position_cap,
                     "claim_policy_selection_cap_hits": (
                         fit.claim_policy.selection_cap_hits

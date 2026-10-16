@@ -9,6 +9,8 @@
   accounting because the release contains no midpoint.
 - **Measure:** historical `P`.
 - **Price:** none independently; pure hedging uses the common SANOS market mark.
+- **Scenarios:** the 252 realized return rows are the scenario population; no
+  SANOS or neural generator augments them.
 - **Estimator:** one rolling, automatically regularized Tyler covariance over
   spot and the full current relative-option book, with robust marginal scales.
   Each target is then fitted independently by a fixed-weight robust regression;
@@ -42,6 +44,11 @@
 - **Training:** production configuration and the regression smoke use exactly
   252 valid prior one-session observations. The last training return may end at
   the decision-date close, but no endpoint after that close enters the fit.
+- **Trainable components and validation:** the estimator and convex hedge are
+  deterministic and contain no learned neural parameters. Every fitted action
+  must pass the predeclared boundedness, feasibility, KKT, and reconstructed-
+  objective gates; the next realized transition remains untouched by fitting
+  and hyperparameter selection.
 - **Current-state isolation:** the fitter receives the predictable current cost
   vector and current relative-coordinate definitions, not the future-bearing
   evaluation return.
@@ -55,4 +62,10 @@ Run on CPU:
 
 ```bash
 python -m quantdata.sdlv.daily.front_spot.hedging.models.covariance.smoke
+pytest -q tests/quantdata/sdlv/daily/hedging/models/test_covariance.py \
+  tests/quantdata/sdlv/daily/hedging/models/test_covariance_returns.py
 ```
+
+Methodological reference: Tyler,
+*A distribution-free M-estimator of multivariate scatter* (1987),
+[doi:10.1214/aos/1176350263](https://doi.org/10.1214/aos/1176350263).

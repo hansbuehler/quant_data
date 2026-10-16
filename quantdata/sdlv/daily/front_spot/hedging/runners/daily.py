@@ -24,7 +24,7 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.numerical_gate_failure impo
     write_numerical_gate_failure,
 )
 
-DAILY_EVALUATION_SCHEMA = "hedging-daily-evaluation-v2"
+DAILY_EVALUATION_SCHEMA = "hedging-daily-evaluation-v3"
 DAILY_RECORD_SCHEMA = "hedging-daily-record-v2"
 
 DailyBookFunction = Callable[
@@ -184,6 +184,7 @@ class DailyEvaluationSummary:
     result_count: int
     nonconverged_results: int
     cap_hits: int
+    unregularized_recession_direction_fits: int
 
     def __post_init__(self) -> None:
         if not self.run_identity.strip():
@@ -209,6 +210,7 @@ class DailyEvaluationSummary:
             self.result_count < 0
             or self.nonconverged_results < 0
             or self.cap_hits < 0
+            or self.unregularized_recession_direction_fits < 0
         ):
             raise ValueError("daily summary counts must be non-negative")
 
@@ -234,6 +236,10 @@ class DailyEvaluationSummary:
                 "nonconverged_results",
             ),
             cap_hits=_required_integer(payload, "cap_hits"),
+            unregularized_recession_direction_fits=_required_integer(
+                payload,
+                "unregularized_recession_direction_fits",
+            ),
         )
 
 
@@ -301,6 +307,7 @@ def run_daily_evaluation(
     result_count = 0
     nonconverged = 0
     cap_hits = 0
+    unregularized_recession_direction_fits = 0
     for index, origin_date in enumerate(selected_origins, start=1):
         record_path = records_directory / f"{origin_date.isoformat()}.json"
         was_reused = record_path.exists()
@@ -316,7 +323,7 @@ def run_daily_evaluation(
                 enforce_numerical_gate=False,
             )
             diagnostics = daily_numerical_diagnostics(results)
-            if spec.require_convergence and any(diagnostics.values()):
+            if spec.require_convergence and _daily_gate_failed(diagnostics):
                 write_numerical_gate_failure(
                     output_directory=output,
                     run_identity=spec.run_identity,
@@ -338,6 +345,11 @@ def run_daily_evaluation(
         result_count += len(results)
         nonconverged += sum(not result.converged for result in results)
         cap_hits += sum(result.cap_hits for result in results)
+        unregularized_recession_direction_fits += int(
+            daily_numerical_diagnostics(results)[
+                "unregularized_recession_direction_fits"
+            ]
+        )
         if progress is not None:
             progress(index, len(selected_origins), origin_date, was_reused)
 
@@ -349,6 +361,9 @@ def run_daily_evaluation(
         result_count=result_count,
         nonconverged_results=nonconverged,
         cap_hits=cap_hits,
+        unregularized_recession_direction_fits=(
+            unregularized_recession_direction_fits
+        ),
     )
     _atomic_write_json(output / "summary.json", summary.to_dict())
     return summary
@@ -456,25 +471,63 @@ def daily_numerical_diagnostics(
             for result in results
         )
     )
+    claim_unregularized_recession_fits = sum(
+        bool(
+            result.diagnostics.get(
+                "claim_policy_unregularized_recession_direction",
+                False,
+            )
+        )
+        for result in results
+    )
+    shared_zero_unregularized_recession_fit = int(
+        any(
+            bool(
+                result.diagnostics.get(
+                    "zero_policy_unregularized_recession_direction",
+                    False,
+                )
+            )
+            for result in results
+        )
+    )
     return {
         "cap_hits": sum(result.cap_hits for result in results),
         "nonconverged_results": sum(not result.converged for result in results),
         "recession_direction_fits": (
             claim_recession_fits + shared_zero_recession_fit
         ),
+        "unregularized_recession_direction_fits": (
+            claim_unregularized_recession_fits
+            + shared_zero_unregularized_recession_fit
+        ),
     }
+
+
+def _daily_gate_failed(diagnostics: dict[str, object]) -> bool:
+    """Return whether a daily diagnostic triggers the strict numerical gate."""
+    return any(
+        int(diagnostics.get(name, 0)) > 0
+        for name in (
+            "cap_hits",
+            "nonconverged_results",
+            "recession_direction_fits",
+        )
+    )
 
 
 def _enforce_daily_numerical_gate(
     results: tuple[HedgeSmokeResult, ...],
 ) -> None:
+    diagnostics = daily_numerical_diagnostics(results)
     failures = tuple(
         result.claim
         for result in results
         if not result.converged or result.cap_hits > 0
     )
-    if failures:
-        raise RuntimeError("daily numerical gate failed for " + ", ".join(failures))
+    if failures or int(diagnostics["recession_direction_fits"]) > 0:
+        labels = ", ".join(failures) if failures else "recession certificate"
+        raise RuntimeError("daily numerical gate failed for " + labels)
 
 
 def _atomic_write_json(path: Path, payload: dict[str, object]) -> None:

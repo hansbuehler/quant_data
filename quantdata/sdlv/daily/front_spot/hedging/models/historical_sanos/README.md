@@ -13,13 +13,18 @@
   power-exponential OCE, all with predictable spread costs. A negative
   homogeneous zero-claim mean-volatility objective is a direct recession
   certificate: the unregularized problem is unbounded along that direction.
-  Such a cell remains explicitly nonconverged even when the declared ridge
-  makes its numerical surrogate finite; cap hits and the recession flag remain
-  separate diagnostics.
-- **Hedge:** independently train fresh-book long, short, and zero policies for
-  internally consistent indifference prices. The executed hedge is a separate
-  drift-neutral policy fitted with centered instrument gains and the actual
-  carried position, so its turnover cost matches common realized accounting.
+  With zero ridge that certificate remains fatal. With positive ridge the
+  configured estimator is instead coercive and strongly convex: an
+  independently certified, cap-free optimum is accepted while the ridge-zero
+  recession certificate remains visible as a nonfatal
+  `unregularized_recession_direction` warning. Cap hits, certificate failures,
+  and configured-objective recession flags remain separate fatal diagnostics.
+- **Hedge:** independently train fresh-book claim and zero policies for the
+  daily claim-minus-zero hedge. Weekly buyer, seller, and zero policies supply
+  internally consistent indifference prices, while the weekly executed hedge
+  is a separate drift-neutral policy fitted with centered instrument gains and
+  the actual carried position so its turnover cost matches common realized
+  accounting.
 - **Training:** deterministic full-batch optimization on 252 uniformly weighted
   daily scenarios. Mean-variance uses exact transaction-cost lasso coordinate
   descent with a declared quadratic ridge of $10^{-4}$ in unit-RMS instrument
@@ -33,9 +38,14 @@
   power-exponential gate is the independently recomputed KKT residual of the
   original signed-action problem, not the optimizer's line-search status; a
   stalled split solve receives one restart from its canonical signed action
-  without changing the objective or tolerance. Away from the declared scale
-  floors and position caps, the common coordinate scaling and ridge make the
-  result invariant to a change of instrument-return units.
+  without changing the objective or tolerance. When the daily numerical bound
+  binds a finite ridge-regularized solution, the solver expands it by a factor
+  of ten and accepts the result only after a second, higher-bound solve returns
+  the same cap-free policy, objective, and pure hedge within the declared
+  tolerances. This safeguard changes neither the objective nor the executable
+  position cap. Away from the declared scale floors and position caps, the
+  common coordinate scaling and ridge make the result invariant to a change of
+  instrument-return units.
   The oldest 80% is fitted and
   the newest 20% is held out for a validation diagnostic; after validation the
   policy is refitted on all 252 observations. Selection-fit convergence and
@@ -59,9 +69,23 @@
   the current known forward curve. Weekly entropy and power-exponential OCEs
   use exact conic epigraphs for scenario-dependent turnover costs. Their
   declared quadratic ridge makes the over-parameterized empirical problem
-  finite; the same $10^{-4}$ unit-RMS ridge is a fitting regularizer and is
-  excluded from reported
-  certainty equivalents. Scaled action coordinates improve conditioning while
+  finite and is excluded from reported certainty equivalents. Before any
+  production outcome, each objective/risk-parameter scope selects its own ridge
+  from the frozen grid $10^{-4},\ldots,10^3$ plus the exact zero-position
+  baseline. Candidate regret relative to zero is evaluated on five untouched
+  chronological blocks, with equal aggregate weight on pricing policies, the
+  shared zero policy, and pure execution policies. The one-standard-error rule
+  chooses the strongest regularization, including the exact null policy, that
+  remains statistically tied with the best feasible candidate, but the null
+  policy cannot mask a study in which every finite-ridge fit failed. Both the
+  held-out fit and full-window refit must pass independent certificates, and
+  pure execution policies must remain strictly inside the precommitted
+  economic position cap of 1,000 in both fits. The complete
+  date blocks, objective, risk parameter, source commit, and selected policy
+  are authenticated in the resulting artifact. This single pre-outcome
+  schedule-family calibration is declared for both frozen-weekly and
+  restarted-weekly runs; it is never reused for daily fits. Scaled action
+  coordinates improve conditioning while
   solver certificate, an exact objective reconstruction, and an explicit primal
   constraint check supply the convergence gate. Weekly mean-variance normalizes
   each turnover epigraph row without changing its physical objective, solves
@@ -91,4 +115,11 @@ python -m quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.smoke
 
 python -m \
   quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.weekly_smoke
+
+pytest -q tests/quantdata/sdlv/daily/hedging/models/test_historical_sanos.py \
+  tests/quantdata/sdlv/daily/hedging/models/test_historical_sanos_weekly.py
 ```
+
+Reference for the released surface representation: Buehler, Horvath, Kratsios,
+Limmer, and Saqur,
+[SANOS: Smooth strictly arbitrage-free non-parametric option surfaces](https://arxiv.org/abs/2601.11209).

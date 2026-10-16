@@ -519,7 +519,7 @@ def build_weekly_episode_path(
     decision_dates = tuple(
         transition.origin.trading_date for transition in transition_tuple
     )
-    inception_quotes = _weekly_inception_quotes(
+    inception_quotes = weekly_inception_quotes(
         market_days[0],
         terminal_date=transition_tuple[-1].next_date,
         nms_range=nms_range,
@@ -647,7 +647,7 @@ def build_weekly_episode_path(
     )
 
 
-def _weekly_inception_quotes(
+def weekly_inception_quotes(
     origin: PublicMarketDay,
     *,
     terminal_date: date,
@@ -786,7 +786,7 @@ def overlapping_weekly_origins(
             current_date = origin_date
             for _ in range(WEEKLY_HORIZON):
                 current_date = panel.one_day_transition(current_date).next_date
-            inception_quotes = _weekly_inception_quotes(
+            inception_quotes = weekly_inception_quotes(
                 panel.market_day(origin_date),
                 terminal_date=current_date,
                 nms_range=nms_range,

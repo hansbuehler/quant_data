@@ -42,8 +42,12 @@ ATM one-day digital, emits `hedging-smoke-v2`, and checks a committed fixture:
 
 ```bash
 python -m quantdata.sdlv.daily.front_spot.hedging.models.diffusion.smoke
+pytest -q tests/quantdata/sdlv/daily/hedging/models/test_diffusion.py
 ```
 
 `DiffusionWeeklyAdapter` implements both frozen-weekly and restarted-weekly
 schedules for AD-Seq-Vol and AD-Seq-Vol-FT. Both remain `P` models and therefore
 do not report a risk-neutral expectation.
+
+Reference: Han, Zhang, Torres, Acero, and Xu,
+[Diffusion models for dynamic volatility surface generation and data-driven hedging](https://arxiv.org/abs/2609.13402).

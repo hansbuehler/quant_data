@@ -39,7 +39,7 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.numerical_gate_failure impo
     write_numerical_gate_failure,
 )
 
-WEEKLY_EVALUATION_SCHEMA = "hedging-weekly-evaluation-v3"
+WEEKLY_EVALUATION_SCHEMA = "hedging-weekly-evaluation-v4"
 
 
 def weekly_evaluation_model(model: str) -> str:
@@ -50,7 +50,7 @@ def weekly_evaluation_model(model: str) -> str:
     }.get(model, model)
 
 
-WEEKLY_RECORD_SCHEMA = "hedging-weekly-record-v3"
+WEEKLY_RECORD_SCHEMA = "hedging-weekly-record-v4"
 
 WeeklyBookFunction = Callable[
     [PublicHedgingPanel, date],
@@ -58,7 +58,7 @@ WeeklyBookFunction = Callable[
 ]
 
 
-@version("0.3")
+@version("0.4")
 @dataclass(frozen=True, kw_only=True)
 class WeeklyEvaluationSpec:
     """Immutable logical identity and numerical gates for one weekly run."""
@@ -238,6 +238,7 @@ class WeeklyEvaluationSummary:
     fit_cap_hits: int
     executed_cap_hits: int
     nonconverged_fits: int
+    unregularized_recession_direction_fits: int
     recession_direction_fits: int
     cap_hits: int
 
@@ -260,6 +261,7 @@ class WeeklyEvaluationSummary:
             self.fit_cap_hits,
             self.executed_cap_hits,
             self.nonconverged_fits,
+            self.unregularized_recession_direction_fits,
             self.recession_direction_fits,
             self.cap_hits,
         )
@@ -286,6 +288,9 @@ class WeeklyEvaluationSummary:
             fit_cap_hits=_required_integer(payload, "fit_cap_hits"),
             executed_cap_hits=_required_integer(payload, "executed_cap_hits"),
             nonconverged_fits=_required_integer(payload, "nonconverged_fits"),
+            unregularized_recession_direction_fits=_required_integer(
+                payload, "unregularized_recession_direction_fits"
+            ),
             recession_direction_fits=_required_integer(
                 payload, "recession_direction_fits"
             ),
@@ -300,6 +305,7 @@ class WeeklyNumericalDiagnostics:
     fit_cap_hits: int
     executed_cap_hits: int
     nonconverged_fits: int
+    unregularized_recession_direction_fits: int
     recession_direction_fits: int
 
     def __post_init__(self) -> None:
@@ -309,6 +315,7 @@ class WeeklyNumericalDiagnostics:
                 self.fit_cap_hits,
                 self.executed_cap_hits,
                 self.nonconverged_fits,
+                self.unregularized_recession_direction_fits,
                 self.recession_direction_fits,
             )
         ):
@@ -386,6 +393,7 @@ def _run_weekly_evaluation_locked(
     fit_cap_hits = 0
     executed_cap_hits = 0
     nonconverged_fits = 0
+    unregularized_recession_direction_fits = 0
     recession_direction_fits = 0
     cap_hits = 0
     for index, origin_date in enumerate(selected_origins, start=1):
@@ -426,6 +434,9 @@ def _run_weekly_evaluation_locked(
                         "fit_cap_hits": diagnostics.fit_cap_hits,
                         "executed_cap_hits": diagnostics.executed_cap_hits,
                         "nonconverged_fits": diagnostics.nonconverged_fits,
+                        "unregularized_recession_direction_fits": (
+                            diagnostics.unregularized_recession_direction_fits
+                        ),
                         "recession_direction_fits": (
                             diagnostics.recession_direction_fits
                         ),
@@ -453,6 +464,9 @@ def _run_weekly_evaluation_locked(
         fit_cap_hits += diagnostics.fit_cap_hits
         executed_cap_hits += diagnostics.executed_cap_hits
         nonconverged_fits += diagnostics.nonconverged_fits
+        unregularized_recession_direction_fits += (
+            diagnostics.unregularized_recession_direction_fits
+        )
         recession_direction_fits += diagnostics.recession_direction_fits
         cap_hits += diagnostics.cap_hits
         if progress is not None:
@@ -467,6 +481,9 @@ def _run_weekly_evaluation_locked(
         fit_cap_hits=fit_cap_hits,
         executed_cap_hits=executed_cap_hits,
         nonconverged_fits=nonconverged_fits,
+        unregularized_recession_direction_fits=(
+            unregularized_recession_direction_fits
+        ),
         recession_direction_fits=recession_direction_fits,
         cap_hits=cap_hits,
     )
@@ -501,6 +518,9 @@ def read_weekly_record(
         "fit_cap_hits": diagnostics.fit_cap_hits,
         "executed_cap_hits": diagnostics.executed_cap_hits,
         "nonconverged_fits": diagnostics.nonconverged_fits,
+        "unregularized_recession_direction_fits": (
+            diagnostics.unregularized_recession_direction_fits
+        ),
         "recession_direction_fits": diagnostics.recession_direction_fits,
         "cap_hits": diagnostics.cap_hits,
     }
@@ -537,6 +557,9 @@ def _write_weekly_record(
                 "fit_cap_hits": diagnostics.fit_cap_hits,
                 "executed_cap_hits": diagnostics.executed_cap_hits,
                 "nonconverged_fits": diagnostics.nonconverged_fits,
+                "unregularized_recession_direction_fits": (
+                    diagnostics.unregularized_recession_direction_fits
+                ),
                 "recession_direction_fits": diagnostics.recession_direction_fits,
                 "cap_hits": diagnostics.cap_hits,
             },
@@ -672,16 +695,28 @@ def weekly_numerical_diagnostics(
     *,
     position_cap: float,
 ) -> WeeklyNumericalDiagnostics:
-    fit_diagnostics: dict[str, tuple[bool, int, bool]] = {}
+    fit_diagnostics: dict[str, tuple[bool, int, bool, bool]] = {}
     for run in runs:
-        for identity, converged, cap_hits, recession_direction in zip(
+        for (
+            identity,
+            converged,
+            cap_hits,
+            unregularized_recession_direction,
+            recession_direction,
+        ) in zip(
             run.policy_fit_identities,
             run.policy_fit_converged,
             run.policy_fit_cap_hits,
+            run.policy_fit_unregularized_recession_directions,
             run.policy_fit_recession_directions,
             strict=True,
         ):
-            diagnostics = (converged, cap_hits, recession_direction)
+            diagnostics = (
+                converged,
+                cap_hits,
+                unregularized_recession_direction,
+                recession_direction,
+            )
             previous = fit_diagnostics.setdefault(identity, diagnostics)
             if previous != diagnostics:
                 raise ValueError("shared weekly policy fit diagnostics changed")
@@ -695,8 +730,11 @@ def weekly_numerical_diagnostics(
         fit_cap_hits=sum(value[1] for value in fit_diagnostics.values()),
         executed_cap_hits=executed_cap_hits,
         nonconverged_fits=sum(not value[0] for value in fit_diagnostics.values()),
-        recession_direction_fits=sum(
+        unregularized_recession_direction_fits=sum(
             value[2] for value in fit_diagnostics.values()
+        ),
+        recession_direction_fits=sum(
+            value[3] for value in fit_diagnostics.values()
         ),
     )
 
@@ -732,6 +770,9 @@ def _weekly_model_run_to_dict(run: WeeklyModelRun) -> dict[str, object]:
         "fit_price_records": [asdict(record) for record in run.fit_price_records],
         "policy_fit_converged": list(run.policy_fit_converged),
         "policy_fit_cap_hits": list(run.policy_fit_cap_hits),
+        "policy_fit_unregularized_recession_directions": list(
+            run.policy_fit_unregularized_recession_directions
+        ),
         "policy_fit_recession_directions": list(
             run.policy_fit_recession_directions
         ),
@@ -807,6 +848,9 @@ def _weekly_model_run_from_dict(payload: object) -> WeeklyModelRun:
         ),
         policy_fit_cap_hits=_required_integer_tuple(
             payload, "policy_fit_cap_hits"
+        ),
+        policy_fit_unregularized_recession_directions=_required_boolean_tuple(
+            payload, "policy_fit_unregularized_recession_directions"
         ),
         policy_fit_recession_directions=_required_boolean_tuple(
             payload, "policy_fit_recession_directions"

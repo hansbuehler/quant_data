@@ -185,6 +185,7 @@ def _write_authenticated_daily_output(
             0 if converged else len(origins) * len(target_labels)
         ),
         cap_hits=cap_hits * len(origins) * len(target_labels),
+        unregularized_recession_direction_fits=0,
     )
     _write_json(output / "summary.json", summary.to_dict())
     summarize_completed_daily_run(panel, run_directory=output).write_json(
@@ -355,6 +356,7 @@ def _write_authenticated_weekly_output(
         fit_cap_hits=cap_hits,
         executed_cap_hits=0,
         nonconverged_fits=int(cap_hits > 0),
+        unregularized_recession_direction_fits=0,
         recession_direction_fits=0,
         cap_hits=cap_hits,
     )

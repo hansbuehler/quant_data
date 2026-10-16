@@ -51,6 +51,9 @@ def _arguments(model: str, **updates) -> argparse.Namespace:
         "compile_model": False,
         "no_mixed_precision": False,
         "just_load": False,
+        "target_notional_artifact_sha256": "t" * 64,
+        "historical_weekly_ridge_selection": None,
+        "historical_weekly_ridge_selection_sha256": None,
     }
     values.update(updates)
     return argparse.Namespace(**values)
@@ -67,12 +70,25 @@ def _arguments(model: str, **updates) -> argparse.Namespace:
 )
 def test_weekly_adapter_builds_are_fully_identified(
     tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
     model: str,
     expected_model: str,
     expected_measure: str,
 ) -> None:
+    arguments = _arguments(model)
+    if model == "historical-sanos":
+        arguments.historical_weekly_ridge_selection = tmp_path / "ridge.json"
+        arguments.historical_weekly_ridge_selection_sha256 = "r" * 64
+        monkeypatch.setattr(
+            run_weekly,
+            "load_weekly_ridge_for_scope",
+            lambda *_args, **_kwargs: SimpleNamespace(
+                selected_ridge=0.1,
+                sha256="s" * 64,
+            ),
+        )
     build = build_weekly_adapter(
-        _arguments(model),
+        arguments,
         checkpoint_directory=tmp_path,
         dataset_manifest_sha256="d" * 64,
     )
@@ -295,6 +311,7 @@ def test_weekly_aggregation_requires_two_complete_origins(
         fit_cap_hits=0,
         executed_cap_hits=0,
         nonconverged_fits=0,
+        unregularized_recession_direction_fits=0,
         recession_direction_fits=0,
         cap_hits=0,
     )

@@ -94,6 +94,7 @@ def _run(
         fit_price_records=prices,
         policy_fit_converged=(True,) * 5,
         policy_fit_cap_hits=(0,) * 5,
+        policy_fit_unregularized_recession_directions=(False,) * 5,
         policy_fit_recession_directions=(False,) * 5,
         fit_long_prices_origin_pv=np.full(5, model_price),
         spot_positions=(

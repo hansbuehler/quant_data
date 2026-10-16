@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 from dataclasses import replace
+from datetime import date, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,6 +13,17 @@ import pytest
 from quantdata.sdlv.daily.front_spot.hedging.models.checkpointing import (
     CHECKPOINT_FORMAT_VERSION,
     file_sha256,
+)
+from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.config import (
+    HistoricalSanosConfig,
+    HistoricalSanosObjective,
+)
+from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.weekly_ridge import (
+    WeeklyRidgeBundle,
+    WeeklyRidgeCandidateResult,
+    WeeklyRidgeSelection,
+    repository_source_commit,
+    write_weekly_ridge_bundle,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners import weekly_production_matrix
 from quantdata.sdlv.daily.front_spot.hedging.runners.generated_evidence import (
@@ -63,13 +75,111 @@ def _weekly_evidence(tmp_path: Path) -> tuple[Path, Path]:
     return dataset, preflight
 
 
+def _weekly_ridge_evidence(
+    tmp_path: Path,
+    *,
+    dataset: Path,
+    preflight: Path,
+) -> tuple[Path, str]:
+    preflight_payload = json.loads(preflight.read_text(encoding="utf-8"))
+    first = date(2022, 1, 1)
+    training = tuple(first + timedelta(days=index) for index in range(252))
+    candidate = WeeklyRidgeCandidateResult(
+        ridge=0.1,
+        block_regrets=(-0.1, -0.09, -0.08, -0.07, -0.06),
+        pricing_block_regrets=(-0.1, -0.09, -0.08, -0.07, -0.06),
+        zero_block_regrets=(-0.1, -0.09, -0.08, -0.07, -0.06),
+        execution_block_regrets=(-0.1, -0.09, -0.08, -0.07, -0.06),
+        mean_regret=-0.08,
+        standard_error=0.007071067811865475,
+        feasible=True,
+        selection_converged_components=40,
+        final_converged_components=40,
+        converged_components=80,
+        component_count=80,
+        selection_cap_hits=0,
+        internal_cap_hits=0,
+        executable_cap_hits=0,
+        cap_hits=0,
+        unregularized_recession_directions=0,
+        recession_directions=0,
+        maximum_objective_error=1.0e-10,
+        maximum_constraint_violation=1.0e-9,
+        maximum_latent_coordinate=10.0,
+    )
+    selection = WeeklyRidgeSelection(
+        dataset_manifest_sha256=file_sha256(dataset / "manifest.json"),
+        target_notional_artifact_sha256=preflight_payload[
+            "target_notional_artifact_sha256"
+        ],
+        origin_date=date(2023, 1, 17),
+        training_origin_dates=training,
+        scenario_origin_dates=training[-230:],
+        fit_origin_dates=training[-230:-46],
+        validation_origin_dates=training[-46:],
+        validation_blocks=(
+            training[-46:-36],
+            training[-36:-27],
+            training[-27:-18],
+            training[-18:-9],
+            training[-9:],
+        ),
+        schedule_family=("frozen-weekly", "restarted-weekly"),
+        target_labels=("target",),
+        target_quantities=(1.0,),
+        objective=HistoricalSanosObjective.ENTROPY,
+        risk_parameter=0.1,
+        validation_fraction=0.2,
+        position_cap=1_000.0,
+        maximum_latent_coordinate=1.0e5,
+        candidates=(candidate,),
+        selected_ridge=0.1,
+        selected_by_one_standard_error=True,
+        source_commit=repository_source_commit(),
+        code_version=str(HistoricalSanosConfig.version),
+    )
+    config = WeeklyProductionMatrixConfig()
+    selections = tuple(
+        replace(
+            selection,
+            objective=HistoricalSanosObjective(objective),
+            risk_parameter=parameter,
+        )
+        for objective, parameters in (
+            ("mean-variance", config.mean_variance_parameters),
+            ("mean-volatility", config.mean_volatility_parameters),
+            ("entropy", config.entropy_parameters),
+            ("power-exponential", config.power_exponential_parameters),
+        )
+        for parameter in parameters
+    )
+    bundle = WeeklyRidgeBundle(
+        dataset_manifest_sha256=selection.dataset_manifest_sha256,
+        target_notional_artifact_sha256=(
+            selection.target_notional_artifact_sha256
+        ),
+        quant_review_sha256="3" * 64,
+        selections=selections,
+    )
+    path = tmp_path / "weekly-ridge-bundle.json"
+    write_weekly_ridge_bundle(bundle, output=path)
+    return path, file_sha256(path)
+
+
 def test_weekly_matrix_has_complete_unique_case_partition(tmp_path: Path) -> None:
     dataset, preflight = _weekly_evidence(tmp_path)
+    ridge_path, ridge_sha256 = _weekly_ridge_evidence(
+        tmp_path,
+        dataset=dataset,
+        preflight=preflight,
+    )
     cases = build_weekly_production_matrix(
         dataset=dataset,
         output_root=tmp_path / "outputs",
         checkpoint_root=tmp_path / "checkpoints",
         weekly_input_preflight=preflight,
+        historical_weekly_ridge_selection=ridge_path,
+        historical_weekly_ridge_selection_sha256=ridge_sha256,
     )
 
     assert len(cases) == 94
@@ -95,12 +205,19 @@ def test_weekly_native_commands_pin_protocol_and_authenticated_sizing(
     tmp_path: Path,
 ) -> None:
     dataset, preflight = _weekly_evidence(tmp_path)
+    ridge_path, ridge_sha256 = _weekly_ridge_evidence(
+        tmp_path,
+        dataset=dataset,
+        preflight=preflight,
+    )
     config = WeeklyProductionMatrixConfig()
     cases = build_weekly_production_matrix(
         dataset=dataset,
         output_root=tmp_path / "outputs",
         checkpoint_root=tmp_path / "checkpoints",
         weekly_input_preflight=preflight,
+        historical_weekly_ridge_selection=ridge_path,
+        historical_weekly_ridge_selection_sha256=ridge_sha256,
     )
 
     for case in (value for value in cases if value.resource is ProductionResource.CPU):
@@ -398,6 +515,11 @@ def test_weekly_production_matrix_cli_round_trips(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     dataset, preflight = _weekly_evidence(tmp_path)
+    ridge_path, ridge_sha256 = _weekly_ridge_evidence(
+        tmp_path,
+        dataset=dataset,
+        preflight=preflight,
+    )
     output = tmp_path / "weekly-matrix.json"
     monkeypatch.setattr(
         sys,
@@ -412,6 +534,10 @@ def test_weekly_production_matrix_cli_round_trips(
             str(tmp_path / "checkpoints"),
             "--weekly-input-preflight",
             str(preflight),
+            "--historical-weekly-ridge-selection",
+            str(ridge_path),
+            "--historical-weekly-ridge-selection-sha256",
+            ridge_sha256,
             "--output",
             str(output),
         ],

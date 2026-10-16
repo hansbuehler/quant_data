@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import cvxpy as cp
 import numpy as np
@@ -35,10 +35,25 @@ class HistoricalSanosPolicyFit:
     maximum_absolute_gradient: float
     selection_solver_status: str
     solver_status: str
+    selection_unregularized_recession_direction: bool
+    unregularized_recession_direction: bool
     selection_recession_direction: bool
     recession_direction: bool
     selection_cap_hits: int
     cap_hits: int
+    selection_solver_position_cap: float
+    solver_position_cap: float
+    selection_cap_expansions: int
+    cap_expansions: int
+    selection_cap_stability_certified: bool
+    cap_stability_certified: bool
+    selection_cap_stability_relative_l2: float
+    cap_stability_relative_l2: float
+    selection_cap_stability_relative_linf: float
+    cap_stability_relative_linf: float
+    selection_cap_stability_objective_error: float
+    cap_stability_objective_error: float
+    cap_stability_reference_action: FloatArray
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -53,6 +68,9 @@ class HistoricalSanosHedgeFit:
     internal_cap_hits: int
     executable_cap_hits: int
     cap_hits: int
+    cap_stability_certified: bool
+    cap_stability_relative_l2: float
+    cap_stability_absolute_linf: float
 
 
 def fit_historical_sanos_hedge(
@@ -140,6 +158,23 @@ def _compose_hedge_fit(
     executable_cap_hits = int(np.count_nonzero(action != raw_action))
     internal_cap_hits = claim_policy.cap_hits + zero_policy.cap_hits
     cap_hits = internal_cap_hits + executable_cap_hits
+    reference_raw_action = (
+        claim_policy.cap_stability_reference_action
+        - zero_policy.cap_stability_reference_action
+    )
+    stability_difference = raw_action - reference_raw_action
+    stability_relative_l2 = float(np.linalg.norm(stability_difference)) / max(
+        1.0,
+        float(np.linalg.norm(raw_action)),
+        float(np.linalg.norm(reference_raw_action)),
+    )
+    stability_absolute_linf = float(np.max(np.abs(stability_difference)))
+    cap_stability_certified = bool(
+        claim_policy.cap_stability_certified
+        and zero_policy.cap_stability_certified
+        and stability_relative_l2 <= 2.0 * config.certificate_tolerance
+        and stability_absolute_linf <= 1.0e-3
+    )
     include_translation = (
         config.objective is HistoricalSanosObjective.POWER_EXPONENTIAL
     )
@@ -169,10 +204,18 @@ def _compose_hedge_fit(
         claim_policy=claim_policy,
         zero_policy=zero_policy,
         objective=objective,
-        converged=claim_policy.converged and zero_policy.converged and cap_hits == 0,
+        converged=(
+            claim_policy.converged
+            and zero_policy.converged
+            and cap_hits == 0
+            and cap_stability_certified
+        ),
         internal_cap_hits=internal_cap_hits,
         executable_cap_hits=executable_cap_hits,
         cap_hits=cap_hits,
+        cap_stability_certified=cap_stability_certified,
+        cap_stability_relative_l2=stability_relative_l2,
+        cap_stability_absolute_linf=stability_absolute_linf,
     )
 
 
@@ -191,17 +234,8 @@ def _fit_policy(
     parameter_count = instruments.shape[1] + int(include_translation)
     initial = np.zeros(parameter_count, dtype=np.float64)
     selection_action_scale = _action_scale(instruments[:split], config=config)
-    selection = _minimize_policy(
+    selection = _minimize_policy_with_adaptive_cap(
         initial,
-        instruments[:split],
-        claim[:split],
-        costs,
-        config=config,
-        include_translation=include_translation,
-        action_scale=selection_action_scale,
-    )
-    selection = _retry_exact_cost_policy(
-        selection,
         instruments[:split],
         claim[:split],
         costs,
@@ -219,17 +253,8 @@ def _fit_policy(
         action_scale=selection_action_scale,
     )[0]
     final_action_scale = _action_scale(instruments, config=config)
-    final = _minimize_policy(
+    final = _minimize_policy_with_adaptive_cap(
         selection.x,
-        instruments,
-        claim,
-        costs,
-        config=config,
-        include_translation=include_translation,
-        action_scale=final_action_scale,
-    )
-    final = _retry_exact_cost_policy(
-        final,
         instruments,
         claim,
         costs,
@@ -253,12 +278,13 @@ def _fit_policy(
     )
     selection_cap_hits = int(
         np.count_nonzero(
-            np.abs(selection_action) >= 0.999 * config.solver_position_cap
+            np.abs(selection_action)
+            >= 0.999 * float(selection.solver_position_cap)
         )
     )
     cap_hits = int(
         np.count_nonzero(
-            np.abs(action) >= 0.999 * config.solver_position_cap
+            np.abs(action) >= 0.999 * float(final.solver_position_cap)
         )
     )
     selection_optimality = float(getattr(selection, "optimality", math.inf))
@@ -267,6 +293,12 @@ def _fit_policy(
         getattr(selection, "recession_direction", False)
     )
     recession_direction = bool(getattr(final, "recession_direction", False))
+    selection_unregularized_recession_direction = bool(
+        getattr(selection, "unregularized_recession_direction", False)
+    )
+    unregularized_recession_direction = bool(
+        getattr(final, "unregularized_recession_direction", False)
+    )
     selection_converged = bool(selection.success and selection_cap_hits == 0)
     # The split fit only supplies a warm start and held-out diagnostic. The
     # executable policy and its numerical gate come from the full-window refit.
@@ -284,11 +316,174 @@ def _fit_policy(
         maximum_absolute_gradient=optimality,
         selection_solver_status=str(selection.message),
         solver_status=str(final.message),
+        selection_unregularized_recession_direction=(
+            selection_unregularized_recession_direction
+        ),
+        unregularized_recession_direction=(
+            unregularized_recession_direction
+        ),
         selection_recession_direction=selection_recession_direction,
         recession_direction=recession_direction,
         selection_cap_hits=selection_cap_hits,
         cap_hits=cap_hits,
+        selection_solver_position_cap=float(selection.solver_position_cap),
+        solver_position_cap=float(final.solver_position_cap),
+        selection_cap_expansions=int(selection.cap_expansions),
+        cap_expansions=int(final.cap_expansions),
+        selection_cap_stability_certified=bool(
+            selection.cap_stability_certified
+        ),
+        cap_stability_certified=bool(final.cap_stability_certified),
+        selection_cap_stability_relative_l2=float(
+            selection.cap_stability_relative_l2
+        ),
+        cap_stability_relative_l2=float(final.cap_stability_relative_l2),
+        selection_cap_stability_relative_linf=float(
+            selection.cap_stability_relative_linf
+        ),
+        cap_stability_relative_linf=float(final.cap_stability_relative_linf),
+        selection_cap_stability_objective_error=float(
+            selection.cap_stability_objective_error
+        ),
+        cap_stability_objective_error=float(final.cap_stability_objective_error),
+        cap_stability_reference_action=np.asarray(
+            final.cap_stability_reference_x[: instruments.shape[1]],
+            dtype=np.float64,
+        ),
     )
+
+
+def _minimize_policy_with_adaptive_cap(
+    initial: FloatArray,
+    instruments: FloatArray,
+    claim: FloatArray,
+    costs: FloatArray,
+    *,
+    config: HistoricalSanosConfig,
+    include_translation: bool,
+    action_scale: FloatArray,
+) -> OptimizeResult:
+    """Expand a binding numerical bound and certify the interior solution."""
+    instrument_count = instruments.shape[1]
+    current_cap = config.solver_position_cap
+    current_initial = np.asarray(initial, dtype=np.float64)
+    comparison_initial = current_initial
+    expansions = 0
+    first_cap_free: OptimizeResult | None = None
+
+    while True:
+        current_config = replace(config, solver_position_cap=current_cap)
+        result = _minimize_policy(
+            current_initial,
+            instruments,
+            claim,
+            costs,
+            config=current_config,
+            include_translation=include_translation,
+            action_scale=action_scale,
+        )
+        result = _retry_exact_cost_policy(
+            result,
+            instruments,
+            claim,
+            costs,
+            config=current_config,
+            include_translation=include_translation,
+            action_scale=action_scale,
+        )
+        action = np.asarray(result.x[:instrument_count], dtype=np.float64)
+        cap_hits = int(np.count_nonzero(np.abs(action) >= 0.999 * current_cap))
+        result.solver_position_cap = float(current_cap)
+        result.cap_expansions = expansions
+        result.cap_stability_certified = cap_hits == 0
+        result.cap_stability_relative_l2 = 0.0
+        result.cap_stability_relative_linf = 0.0
+        result.cap_stability_objective_error = 0.0
+        result.cap_stability_reference_x = np.asarray(result.x, dtype=np.float64)
+
+        if bool(getattr(result, "recession_direction", False)):
+            return result
+        if cap_hits:
+            first_cap_free = None
+            comparison_initial = np.asarray(result.x, dtype=np.float64)
+        elif expansions == 0:
+            return result
+        elif first_cap_free is None:
+            first_cap_free = result
+        else:
+            _attach_cap_stability_certificate(
+                first_cap_free,
+                result,
+                config=config,
+            )
+            return result
+
+        if current_cap >= config.maximum_solver_position_cap:
+            result.success = False
+            result.cap_stability_certified = False
+            result.message = (
+                f"{result.message}; adaptive solver cap exhausted at "
+                f"{current_cap:.6g} without a higher-bound stability probe"
+            )
+            return result
+        current_initial = comparison_initial
+        current_cap = min(
+            config.maximum_solver_position_cap,
+            current_cap * config.solver_cap_expansion_factor,
+        )
+        expansions += 1
+
+
+def _attach_cap_stability_certificate(
+    reference: OptimizeResult,
+    candidate: OptimizeResult,
+    *,
+    config: HistoricalSanosConfig,
+) -> None:
+    """Certify that the cap-free optimum is unchanged at a higher bound."""
+    reference_values = np.asarray(reference.x, dtype=np.float64)
+    candidate_values = np.asarray(candidate.x, dtype=np.float64)
+    difference = candidate_values - reference_values
+    l2_scale = max(
+        1.0,
+        float(np.linalg.norm(reference_values)),
+        float(np.linalg.norm(candidate_values)),
+    )
+    linf_scale = max(
+        1.0,
+        float(np.max(np.abs(reference_values))),
+        float(np.max(np.abs(candidate_values))),
+    )
+    relative_l2 = float(np.linalg.norm(difference)) / l2_scale
+    relative_linf = float(np.max(np.abs(difference))) / linf_scale
+    objective_error = abs(float(candidate.fun) - float(reference.fun))
+    objective_tolerance = max(
+        config.objective_agreement_tolerance,
+        1.0e-8 * max(1.0, abs(float(reference.fun)), abs(float(candidate.fun))),
+    )
+    stable = bool(
+        reference.success
+        and candidate.success
+        and relative_l2 <= config.solver_cap_stability_tolerance
+        and relative_linf <= config.solver_cap_stability_tolerance
+        and objective_error <= objective_tolerance
+    )
+    candidate.cap_stability_certified = stable
+    candidate.cap_stability_relative_l2 = relative_l2
+    candidate.cap_stability_relative_linf = relative_linf
+    candidate.cap_stability_objective_error = objective_error
+    candidate.cap_stability_reference_x = np.asarray(
+        reference.x,
+        dtype=np.float64,
+    )
+    if not stable:
+        candidate.success = False
+        candidate.message = (
+            f"{candidate.message}; higher-bound stability certificate failed: "
+            f"relative_l2={relative_l2:.6g}, "
+            f"relative_linf={relative_linf:.6g}, "
+            f"objective_error={objective_error:.6g}"
+        )
 
 
 def _minimize_policy(
@@ -647,9 +842,13 @@ def _minimize_mean_volatility(
             * config.quadratic_ridge
             * float(candidate_scaled @ candidate_scaled)
         )
-        recession_direction = bool(
+        unregularized_recession_direction = bool(
             np.all(claim == 0.0)
             and unregularized_objective < -config.certificate_tolerance
+        )
+        recession_direction = bool(
+            unregularized_recession_direction
+            and config.quadratic_ridge == 0.0
         )
         success = bool(
             solver_status in {cp.OPTIMAL, cp.OPTIMAL_INACCURATE}
@@ -679,12 +878,16 @@ def _minimize_mean_volatility(
                 f"constraint_violation={feasibility:.6g}"
                 f"{canonicalization_trace}"
                 + (
-                    f"; recession_direction={unregularized_objective:.6g}"
-                    if recession_direction
+                    "; unregularized_recession_direction="
+                    f"{unregularized_objective:.6g}"
+                    if unregularized_recession_direction
                     else ""
                 )
             ),
             fun=exact_objective,
+            unregularized_recession_direction=(
+                unregularized_recession_direction
+            ),
             recession_direction=recession_direction,
         )
 

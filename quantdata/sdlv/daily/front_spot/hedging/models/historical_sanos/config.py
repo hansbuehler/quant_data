@@ -19,7 +19,7 @@ class HistoricalSanosObjective(StrEnum):
     POWER_EXPONENTIAL = "power-exponential"
 
 
-@version("1.22")
+@version("1.25")
 @dataclass(frozen=True, kw_only=True)
 class HistoricalSanosConfig:
     """Logical settings for rolling empirical SANOS hedging."""
@@ -36,8 +36,12 @@ class HistoricalSanosConfig:
     gradient_tolerance: float = 1.0e-8
     position_cap: float = 1_000_000.0
     solver_position_cap: float = 1_000_000.0
+    maximum_solver_position_cap: float = 100_000_000.0
+    solver_cap_expansion_factor: float = 10.0
+    solver_cap_stability_tolerance: float = 1.0e-6
     cost_smoothing: float = 1.0e-6
     quadratic_ridge: float = 1.0e-4
+    force_null_policy: bool = False
     certificate_tolerance: float = 1.0e-6
     objective_agreement_tolerance: float = 1.0e-7
     scale_floor: float = 1.0e-8
@@ -84,12 +88,34 @@ class HistoricalSanosConfig:
             ),
         )
         verify_inp(
+            math.isfinite(self.maximum_solver_position_cap)
+            and self.maximum_solver_position_cap >= self.solver_position_cap,
+            lambda: (
+                "maximum_solver_position_cap must be finite and at least "
+                "solver_position_cap"
+            ),
+        )
+        verify_inp(
+            math.isfinite(self.solver_cap_expansion_factor)
+            and self.solver_cap_expansion_factor > 1.0,
+            lambda: "solver_cap_expansion_factor must be finite and exceed one",
+        )
+        verify_inp(
+            math.isfinite(self.solver_cap_stability_tolerance)
+            and self.solver_cap_stability_tolerance > 0.0,
+            lambda: "solver_cap_stability_tolerance must be finite-positive",
+        )
+        verify_inp(
             math.isfinite(self.cost_smoothing) and self.cost_smoothing > 0.0,
             lambda: "cost_smoothing must be finite-positive",
         )
         verify_inp(
             math.isfinite(self.quadratic_ridge) and self.quadratic_ridge >= 0.0,
             lambda: "quadratic_ridge must be finite and non-negative",
+        )
+        verify_inp(
+            type(self.force_null_policy) is bool,
+            lambda: "force_null_policy must be boolean",
         )
         verify_inp(
             math.isfinite(self.certificate_tolerance)

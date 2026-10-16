@@ -69,8 +69,13 @@ class HistoricalSanosWeeklyPolicy:
 
     @property
     def recession_direction(self) -> bool:
-        """Return whether the unregularized objective has a recession direction."""
+        """Return whether the configured objective has a recession direction."""
         return self.hedge.recession_direction
+
+    @property
+    def unregularized_recession_direction(self) -> bool:
+        """Return whether the ridge-zero counterfactual has a recession direction."""
+        return self.hedge.unregularized_recession_direction
 
 
 class HistoricalSanosWeeklyAdapter:

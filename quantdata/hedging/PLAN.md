@@ -7,40 +7,56 @@ the daily front-spot SDLV/GROMM model. It records the agreed experimental design
 and implementation order.
 
 **Current live state (2026-10-16).** The distributable public-candidate dataset
-is the sole benchmark input. Historical-SANOS version 1.20 is committed at
-`50fc2c2d3ced9698da5283ea5158b24507a1eb36`; the complete hedging suite passes
-455 tests, and independent quantitative review passes in
-`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-16-historical-sanos-v120-diagnostic-semantics-review.md`.
-Version 1.20 separates numerical convergence from the economic position-cap
-diagnostic: a certified boundary optimum is converged, cap counts remain
-explicit, strict runs still reject them, and `--allow-cap-hits` permits only
-cap warnings while nonconvergence and recession directions remain fatal. An
-authenticated 4,096-scenario VolGAN historical-$P$ frozen-weekly replay at
-origin `2023-01-17` completes all 13 targets with 12,090 fitted-policy cap hits,
-zero executed cap hits, zero nonconverged fits, and zero recession directions.
-Its evidence is
-`/home/hans/quantdata_data/training/hedging/generated-readiness-50fc2c2-v120-volgan-frozen-public/scope-evidence.json`;
-the status is `complete-with-economic-cap-warnings`, not `pass`.
-The follow-on production-gate admission review passes in
-`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-16-generated-gate-cap-warning-review.md`:
-warning status is fail-closed, cannot conceal a failed scope or executed cap
-hit, and remains visible in the affected weekly production-matrix case.
+is the sole benchmark input. Its technical release gate is complete: the
+artifact contains 891 dates and 2,014,740 hedge coordinates, reconstructs from
+an otherwise empty data root, and contains no original WRDS prices, midpoints,
+or identifiers. Redistribution approval remains a separate legal question.
 
-Service
-`quantdata-hedging-generated-readiness-50fc2c2-v120-full.service` now executes
-the full three-model, six-scope readiness matrix from the immutable worktree
-`/tmp/quant_data/hedging/worktrees/production-50fc2c2`. It uses 4,096 CUDA
-scenarios, records progress at least every four minutes, continues after an
-individual failed scope, and distinguishes strict numerical failures from
-fitted-policy cap warnings in per-scope and aggregate evidence. The persisted
-launcher SHA-256 is
-`4c1820cbdf57fda733e4c4347327a21060b253a024a34412e5ad7a121f47c14d`.
-VolGAN daily-public readiness has passed. The attempted reuse of the earlier
-VolGAN frozen-weekly public run was rejected before computation because its
-persisted run identity belonged to the earlier one-scope output geometry. That
-scope remains failed in the current matrix and will be rerun from an empty,
-correctly identified output directory; it is an orchestration failure, not a
-model or numerical pass.
+The current immutable source is commit
+`8b7ca46c73ddf278ebcb23b7ddcb4eb9b12b8edf`. Historical-SANOS version 1.22
+retains the precommitted 252-transition window and $10^{-4}$ ridge, distinguishes
+certified numerical solutions from genuine recession directions, and applies
+independent final-fit certificates without relaxing the economic objective.
+Independent quantitative review is recorded in
+`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-16-historical-sanos-v122-solver-review.md`.
+The active CPU-only daily and weekly matrices have SHA-256 values
+`b99b930c5c76b5ec683ca784fcf19362649127a74565b40477b2dd6534976c5a`
+and
+`84824c192c9ef0ac5a275232ed75fab3de89b28f38f4342b16365edd3c1eb2a4`.
+Their launchers run four cases each, emit four-minute progress, and currently
+report no unexpected numerical failures. All three daily mean--variance cases
+are complete. One daily and four weekly mean-volatility cells have authenticated
+recession directions; these are economic non-existence results, not solver
+failures. Independent runtime review recommends leaving the active four-worker
+queues unchanged and is recorded in
+`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-16-historical-v122-weekly-runtime-review.md`.
+The reviewed handoff waiter will authenticate all terminal cases and their
+failure ledgers before publishing `handoff.json`.
+
+Service `quantdata-hedging-generated-readiness-8b7ca46-v122-full.service`
+completed the exact three-model by six-scope readiness matrix with 4,096 CUDA
+scenarios. All eighteen scopes pass their numerical gates. Eight weekly scopes
+retain fitted-policy cap warnings, but there are no executed cap hits,
+nonconverged fits, recession directions, or failed scopes. The immutable
+completion manifest has SHA-256
+`e6a00b1c56af607c50f3b5ab91b492c2f849b45421c8175e402a6c56073c2175`.
+Independent review passes at SHA-256
+`a5e66746fd118e6fcb1e24f6f631f8206cf0344a0946c58299cf004451901e12`
+after reconstructing all eighteen scopes, the exact 308-artifact inventory,
+and every referenced checkpoint and result hash.
+
+The r2 final-production coordinator is frozen at SHA-256
+`981734321acd116b2b7afb7239840558e4f9c670543be843e3b8e9ff95553590`.
+Independent review passes at SHA-256
+`8cd4391583f29b09a59022c78351b93c3821dedcaf5f80b9a16dc56d5081db43`:
+all prerequisite authentication, exact 57/94 population, source-immutability,
+resource, process-group, signal, and report-provenance tests pass. This revision
+pins the accepted r7 generated-readiness trust root and uses isolated r2 output
+roots without changing any production gate. The coordinator remains correctly
+fail-closed until the final Historical-SANOS handoff exists and its exact hash
+is supplied externally; the generated-readiness manifest and review are already
+published and authenticated. No final matrix commitment or production result
+has been written yet.
 
 **Superseded state (2026-10-15).** The earlier generated-model readiness
 passes all 18 scopes (three models times six configurations) at immutable commit

@@ -71,6 +71,9 @@ Standalone CPU test:
 ```bash
 JAX_PLATFORMS=cpu python -m \
   quantdata.sdlv.daily.front_spot.hedging.models.gromm.smoke
+JAX_PLATFORMS=cpu pytest -q \
+  tests/quantdata/sdlv/daily/hedging/models/test_gromm.py \
+  tests/quantdata/sdlv/daily/hedging/models/test_gromm_policy.py
 ```
 
 Rolling market preparation is CPU-only and uses only the distributable public
@@ -109,3 +112,7 @@ JAX_PLATFORMS=cpu python -m \
   --checkpoint-directory /tmp/quant_data/gromm-architecture/checkpoints \
   --output /tmp/quant_data/gromm-architecture/result.json
 ```
+
+Reference: Wiese, Buehler, and Horvath,
+*GROMM: Generative risk-neutral option market models* (2026), bibliography key
+`WieseBuehlerHorvath2026` in `quantdata/tex/references.bib`.

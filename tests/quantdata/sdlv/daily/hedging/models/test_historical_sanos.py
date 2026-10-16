@@ -42,6 +42,39 @@ def test_historical_sanos_defaults_use_regularized_one_year_history() -> None:
     assert config.rolling_observations == 252
     assert config.quadratic_ridge == pytest.approx(1.0e-4)
     assert config.certificate_tolerance == pytest.approx(1.0e-6)
+    assert config.solver_position_cap == pytest.approx(1.0e6)
+    assert config.maximum_solver_position_cap == pytest.approx(1.0e8)
+    assert config.solver_cap_expansion_factor == pytest.approx(10.0)
+    assert config.solver_cap_stability_tolerance == pytest.approx(1.0e-6)
+
+
+def test_entropy_fit_expands_binding_internal_bound_and_certifies_stability() -> None:
+    observations = 40
+    fit = fit_historical_sanos_hedge(
+        instrument_returns=np.full((observations, 1), 0.02),
+        claim_returns=np.zeros(observations),
+        linear_transaction_costs=np.zeros(1),
+        config=HistoricalSanosConfig(
+            objective=HistoricalSanosObjective.ENTROPY,
+            risk_parameter=0.1,
+            quadratic_ridge=0.1,
+            position_cap=100.0,
+            solver_position_cap=100.0,
+            maximum_solver_position_cap=10_000.0,
+        ),
+    )
+
+    assert fit.converged
+    assert fit.cap_hits == 0
+    assert fit.claim_policy.solver_position_cap == pytest.approx(10_000.0)
+    assert fit.zero_policy.solver_position_cap == pytest.approx(10_000.0)
+    assert fit.claim_policy.cap_expansions == 2
+    assert fit.zero_policy.cap_expansions == 2
+    assert fit.claim_policy.cap_stability_certified
+    assert fit.zero_policy.cap_stability_certified
+    assert fit.claim_policy.cap_stability_relative_l2 <= 1.0e-8
+    assert fit.zero_policy.cap_stability_relative_linf <= 1.0e-8
+    assert fit.action == pytest.approx(np.zeros(1))
 
 
 @pytest.mark.parametrize("objective", tuple(HistoricalSanosObjective))
@@ -691,7 +724,10 @@ def test_mean_volatility_canonicalizes_scaled_solver_noise(
     assert "canonicalization_error=" in fit.solver_status
 
 
-def test_historical_sanos_mean_volatility_reports_recession_cap() -> None:
+@pytest.mark.parametrize("quadratic_ridge", [1.0e-4, 0.0])
+def test_historical_sanos_mean_volatility_reports_recession_cap(
+    quadratic_ridge: float,
+) -> None:
     generator = np.random.default_rng(23)
     observations = 252
     instruments = (0.1 + 0.001 * generator.normal(size=observations))[:, None]
@@ -706,18 +742,28 @@ def test_historical_sanos_mean_volatility_reports_recession_cap() -> None:
             maximum_iterations=10_000,
             position_cap=10.0,
             solver_position_cap=100.0,
+            quadratic_ridge=quadratic_ridge,
         ),
     )
 
-    assert fit.claim_policy.action[0] == pytest.approx(100.0, abs=1.0e-5)
-    assert fit.zero_policy.action[0] == pytest.approx(100.0, abs=1.0e-5)
-    assert fit.internal_cap_hits == 2
+    expected_fatal = quadratic_ridge == 0.0
+    if expected_fatal:
+        assert fit.claim_policy.action[0] == pytest.approx(100.0, abs=1.0e-5)
+        assert fit.zero_policy.action[0] == pytest.approx(100.0, abs=1.0e-5)
+        assert fit.internal_cap_hits == 2
+    else:
+        assert fit.claim_policy.action[0] > 100.0
+        assert fit.zero_policy.action[0] > 100.0
+        assert fit.internal_cap_hits == 0
+        assert fit.claim_policy.cap_expansions > 0
     assert fit.executable_cap_hits == 0
     assert fit.action[0] == pytest.approx(0.0, abs=1.0e-5)
-    assert fit.claim_policy.recession_direction
-    assert fit.zero_policy.recession_direction
-    assert "recession_direction=" in fit.zero_policy.solver_status
-    assert not fit.converged
+    assert fit.claim_policy.unregularized_recession_direction
+    assert fit.zero_policy.unregularized_recession_direction
+    assert fit.claim_policy.recession_direction is expected_fatal
+    assert fit.zero_policy.recession_direction is expected_fatal
+    assert "unregularized_recession_direction=" in fit.zero_policy.solver_status
+    assert fit.converged is not expected_fatal
 
 
 def test_mean_volatility_accepts_certified_inaccurate_status(

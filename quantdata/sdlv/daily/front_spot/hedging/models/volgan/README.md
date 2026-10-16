@@ -34,8 +34,12 @@ ATM one-day digital, emits `hedging-smoke-v2`, and checks a committed fixture:
 
 ```bash
 python -m quantdata.sdlv.daily.front_spot.hedging.models.volgan.smoke
+pytest -q tests/quantdata/sdlv/daily/hedging/models/test_volgan.py
 ```
 
 `VolganWeeklyAdapter` implements both frozen-weekly and restarted-weekly fit
 schedules. VolGAN remains a `P` model and therefore reports buyer/seller
 indifference prices, not a risk-neutral expectation.
+
+Reference: Vuletić and Cont,
+[VolGAN: A generative model for arbitrage-free implied volatility surfaces](https://doi.org/10.1080/1350486X.2025.2471317).

@@ -122,6 +122,7 @@ def test_daily_runner_writes_atomic_records_and_resumes(tmp_path) -> None:
     assert calls == [date(2023, 1, 3)]
     assert first.result_count == 2
     assert first.reused_origins == ()
+    assert first.unregularized_recession_direction_fits == 0
     second = run_daily_evaluation(
         panel,
         spec=_spec(manifest_sha256),
@@ -191,6 +192,7 @@ def test_daily_runner_rejects_incomplete_or_nonconverged_books(tmp_path) -> None
         "cap_hits": 0,
         "nonconverged_results": 1,
         "recession_direction_fits": 0,
+        "unregularized_recession_direction_fits": 0,
     }
 
 
@@ -209,14 +211,12 @@ def test_daily_runner_classifies_mean_volatility_recession(tmp_path) -> None:
                     origin,
                     claim="claim-a",
                     claim_quantity=0.25,
-                    converged=False,
                     diagnostics={"zero_policy_recession_direction": True},
                 ),
                 _result(
                     origin,
                     claim="claim-b",
                     claim_quantity=0.5,
-                    converged=False,
                     diagnostics={"zero_policy_recession_direction": True},
                 ),
             ),
@@ -227,15 +227,50 @@ def test_daily_runner_classifies_mean_volatility_recession(tmp_path) -> None:
     )
 
     assert failure["classification"] == "mean-volatility-recession-direction"
-    assert failure["triggered_gates"] == [
-        "mean-volatility-recession-direction",
-        "nonconverged-fit",
-    ]
+    assert failure["triggered_gates"] == ["mean-volatility-recession-direction"]
     assert failure["diagnostics"] == {
         "cap_hits": 0,
-        "nonconverged_results": 2,
+        "nonconverged_results": 0,
         "recession_direction_fits": 1,
+        "unregularized_recession_direction_fits": 0,
     }
+
+
+def test_daily_runner_records_nonfatal_unregularized_recession_warning(
+    tmp_path,
+) -> None:
+    (tmp_path / "manifest.json").write_text("{}\n", encoding="utf-8")
+    import hashlib
+
+    manifest_sha256 = hashlib.sha256(b"{}\n").hexdigest()
+    summary = run_daily_evaluation(
+        _RunnerPanel(tmp_path),
+        spec=_spec(manifest_sha256),
+        run_book=lambda _panel, origin: (
+            _result(
+                origin,
+                claim="claim-a",
+                claim_quantity=0.25,
+                diagnostics={
+                    "claim_policy_unregularized_recession_direction": True,
+                    "zero_policy_unregularized_recession_direction": True,
+                },
+            ),
+            _result(
+                origin,
+                claim="claim-b",
+                claim_quantity=0.5,
+                diagnostics={
+                    "zero_policy_unregularized_recession_direction": True,
+                },
+            ),
+        ),
+        output_directory=tmp_path / "warning",
+    )
+
+    assert summary.nonconverged_results == 0
+    assert summary.unregularized_recession_direction_fits == 2
+    assert not (tmp_path / "warning" / NUMERICAL_GATE_FAILURE_FILENAME).exists()
 
 
 def test_daily_runner_rejects_wrong_target_quantity(tmp_path) -> None:

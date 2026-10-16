@@ -705,7 +705,9 @@ def test_weekly_selection_failure_does_not_reject_certified_final_policy(
     assert calls == 2
     assert fit.selection_solver_status == "selection failed"
     assert fit.solver_status == "optimal"
+    assert not fit.selection_converged
     assert fit.converged
+    assert fit.selection_cap_hits == 0
     assert fit.cap_hits == 0
 
 
@@ -1748,7 +1750,10 @@ def test_weekly_shared_pricing_context_rejects_concurrent_use() -> None:
             )
 
 
-def test_historical_weekly_records_virtual_recession_without_executable_cap() -> None:
+@pytest.mark.parametrize("quadratic_ridge", [1.0e-4, 0.0])
+def test_historical_weekly_records_virtual_recession_without_executable_cap(
+    quadratic_ridge: float,
+) -> None:
     generator = np.random.default_rng(109)
     scenario_count = 80
     fit_date = date(2022, 12, 30)
@@ -1795,19 +1800,23 @@ def test_historical_weekly_records_virtual_recession_without_executable_cap() ->
             position_cap=10.0,
             solver_position_cap=100.0,
             maximum_iterations=10_000,
+            quadratic_ridge=quadratic_ridge,
         ),
     )
 
     assert fit.long_policy.spot_positions[0] == pytest.approx(100.0, abs=1.0e-5)
     assert fit.short_policy.spot_positions[0] == pytest.approx(100.0, abs=1.0e-5)
     assert fit.zero_policy.spot_positions[0] == pytest.approx(100.0, abs=1.0e-5)
-    assert fit.zero_policy.recession_direction
-    assert "recession_direction=" in fit.zero_policy.solver_status
-    assert fit.recession_direction
+    expected_fatal = quadratic_ridge == 0.0
+    assert fit.zero_policy.unregularized_recession_direction
+    assert fit.zero_policy.recession_direction is expected_fatal
+    assert "unregularized_recession_direction=" in fit.zero_policy.solver_status
+    assert fit.unregularized_recession_direction
+    assert fit.recession_direction is expected_fatal
     assert fit.internal_cap_hits >= 3
     assert fit.executable_cap_hits == 0
     assert fit.spot_positions[0] == pytest.approx(0.0, abs=1.0e-5)
-    assert not fit.converged
+    assert fit.converged is not expected_fatal
 
     diagnostic_fit = replace(
         fit,
@@ -1831,8 +1840,47 @@ def test_historical_weekly_records_virtual_recession_without_executable_cap() ->
         hedge=diagnostic_fit,
     )
     assert policy.cap_hits == 2
-    assert policy.recession_direction
-    assert policy.converged is False
+    assert policy.unregularized_recession_direction
+    assert policy.recession_direction is expected_fatal
+    assert policy.converged is not expected_fatal
+
+
+def test_historical_weekly_null_policy_is_exact_and_optimizer_free() -> None:
+    scenarios = _scenario_set()
+    fit = fit_historical_weekly_hedge(
+        scenarios,
+        claim_quantity=1.0,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(
+            scenarios.scenarios.contract_count,
+            dtype=np.float64,
+        ),
+        config=HistoricalSanosConfig(
+            rolling_observations=scenarios.scenarios.scenario_count,
+            objective=HistoricalSanosObjective.ENTROPY,
+            risk_parameter=0.1,
+            force_null_policy=True,
+        ),
+    )
+
+    assert fit.converged
+    assert fit.cap_hits == 0
+    assert np.array_equal(fit.spot_positions, np.zeros_like(fit.spot_positions))
+    assert np.array_equal(
+        fit.option_positions,
+        np.zeros_like(fit.option_positions),
+    )
+    assert all(
+        policy.iterations == 0
+        and policy.converged
+        and "precommitted null policy" in policy.solver_status
+        for policy in (
+            fit.long_policy,
+            fit.short_policy,
+            fit.zero_policy,
+            fit.pure_policy,
+        )
+    )
 
 
 def test_historical_weekly_scenarios_use_complete_pre_asof_blocks() -> None:

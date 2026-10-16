@@ -83,6 +83,7 @@ def _run(
     spot_position: float = 0.0,
     fit_converged: bool = True,
     fit_cap_hits: int = 0,
+    fit_unregularized_recession_direction: bool = False,
     fit_recession_direction: bool = False,
 ) -> WeeklyModelRun:
     terminal_date = origin_date + timedelta(days=7)
@@ -143,6 +144,9 @@ def _run(
         fit_price_records=prices,
         policy_fit_converged=tuple(fit_converged for _ in range(5)),
         policy_fit_cap_hits=tuple(fit_cap_hits for _ in range(5)),
+        policy_fit_unregularized_recession_directions=tuple(
+            fit_unregularized_recession_direction for _ in range(5)
+        ),
         policy_fit_recession_directions=tuple(
             fit_recession_direction for _ in range(5)
         ),
@@ -296,6 +300,7 @@ def test_weekly_runner_rejects_incomplete_book_and_cap_hits(
         "executed_cap_hits": 5,
         "fit_cap_hits": 0,
         "nonconverged_fits": 0,
+        "unregularized_recession_direction_fits": 0,
         "recession_direction_fits": 0,
     }
 
@@ -405,6 +410,7 @@ def test_weekly_runner_authenticates_internal_fit_diagnostics_without_duplicatio
         "fit_cap_hits": 3,
         "executed_cap_hits": 0,
         "nonconverged_fits": 0,
+        "unregularized_recession_direction_fits": 0,
         "recession_direction_fits": 0,
         "cap_hits": 3,
     }
