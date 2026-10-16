@@ -20,9 +20,15 @@ from quantdata.torch import torch
 
 INITIALIZER_SCHEMA = "hedging-generated-initializer-v1"
 SELECTION_SCHEMA = "hedging-generated-epoch-selection-v1"
-PRODUCTION_GATE_SCHEMA = "hedging-generated-production-gate-v3"
+PRODUCTION_GATE_SCHEMA = "hedging-generated-production-gate-v4"
 QUANT_REVIEW_SCHEMA = "hedging-generated-quant-review-v1"
 GPU_READINESS_SCHEMA = "hedging-generated-gpu-readiness-v1"
+PASS_STATUS = "pass"
+ECONOMIC_CAP_WARNING_STATUS = "complete-with-economic-cap-warnings"
+ECONOMIC_CAP_WARNING_CLASSIFICATION = "fitted-policy-position-cap"
+PRODUCTION_READY_STATUSES = frozenset(
+    {PASS_STATUS, ECONOMIC_CAP_WARNING_STATUS}
+)
 BUDGET_SELECTION_OBSERVATION_COUNT = 126
 PRODUCTION_SCOPES = frozenset(
     {
@@ -75,6 +81,8 @@ class GeneratedProductionGateEvidence:
     """Authenticated review and GPU-readiness approval for one model."""
 
     model: str
+    status: str
+    warnings: dict[str, dict[str, object]]
     reviewed_commit: str
     quant_review_path: Path
     quant_review_sha256: str
@@ -96,6 +104,23 @@ class _CheckpointEvidence:
     precision: str
 
 
+def generated_scope_warning_json(
+    gate: GeneratedProductionGateEvidence,
+    *,
+    scope: str,
+) -> str | None:
+    """Return one authenticated scope warning as canonical immutable JSON."""
+    warning = gate.warnings.get(scope)
+    if warning is None:
+        return None
+    return json.dumps(
+        warning,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+
+
 def load_generated_production_gate(
     *,
     gate_path: Path,
@@ -113,13 +138,14 @@ def load_generated_production_gate(
         raise ValueError("generated production gate uses another model")
     if payload.get("dataset_manifest_sha256") != expected_dataset_manifest_sha256:
         raise ValueError("generated production gate uses another dataset")
-    if payload.get("status") != "pass":
-        raise ValueError("generated production gate has not passed")
+    status = _require_string(payload, "status")
+    if status not in PRODUCTION_READY_STATUSES:
+        raise ValueError("generated production gate is not production-ready")
     reviewed_commit = _require_hex_digest(payload, "reviewed_commit", lengths=(40,))
     if reviewed_commit != expected_reviewed_commit:
         raise ValueError("generated production gate reviews another commit")
     scope_bindings = _validated_scope_bindings(payload.get("scope_bindings"))
-    quant_review_path, quant_review_sha256 = _authenticated_gate_artifact(
+    quant_review_path, quant_review_sha256, _ = _authenticated_gate_artifact(
         payload,
         "quant_review",
         gate_path=path,
@@ -129,18 +155,39 @@ def load_generated_production_gate(
         expected_reviewed_commit=reviewed_commit,
         expected_scope_bindings=scope_bindings,
     )
-    gpu_readiness_path, gpu_readiness_sha256 = _authenticated_gate_artifact(
-        payload,
-        "gpu_readiness",
-        gate_path=path,
-        expected_schema=GPU_READINESS_SCHEMA,
-        expected_model=normalized_model,
-        expected_dataset_manifest_sha256=expected_dataset_manifest_sha256,
-        expected_reviewed_commit=reviewed_commit,
-        expected_scope_bindings=scope_bindings,
+    gpu_readiness_path, gpu_readiness_sha256, readiness = (
+        _authenticated_gate_artifact(
+            payload,
+            "gpu_readiness",
+            gate_path=path,
+            expected_schema=GPU_READINESS_SCHEMA,
+            expected_model=normalized_model,
+            expected_dataset_manifest_sha256=expected_dataset_manifest_sha256,
+            expected_reviewed_commit=reviewed_commit,
+            expected_scope_bindings=scope_bindings,
+            allowed_statuses=PRODUCTION_READY_STATUSES,
+        )
     )
+    readiness_status = _require_string(readiness, "status")
+    if readiness_status != status:
+        raise ValueError("generated production gate status differs from GPU readiness")
+    warnings = _validated_readiness_warnings(
+        readiness.get("warnings"),
+        status=readiness_status,
+        scope_bindings=scope_bindings,
+    )
+    if payload.get("warnings", {}) != warnings:
+        raise ValueError("generated production gate warnings differ from GPU readiness")
+    if readiness_status == ECONOMIC_CAP_WARNING_STATUS and "failures" not in readiness:
+        raise ValueError(
+            "warning GPU readiness must contain an explicit empty failures object"
+        )
+    if readiness.get("failures", {}) != {}:
+        raise ValueError("generated GPU readiness contains failed scopes")
     return GeneratedProductionGateEvidence(
         model=normalized_model,
+        status=status,
+        warnings=warnings,
         reviewed_commit=reviewed_commit,
         quant_review_path=quant_review_path,
         quant_review_sha256=quant_review_sha256,
@@ -767,7 +814,8 @@ def _authenticated_gate_artifact(
     expected_dataset_manifest_sha256: str,
     expected_reviewed_commit: str,
     expected_scope_bindings: dict[str, dict[str, object]],
-) -> tuple[Path, str]:
+    allowed_statuses: frozenset[str] = frozenset({PASS_STATUS}),
+) -> tuple[Path, str, dict[str, object]]:
     value = payload.get(name)
     if not isinstance(value, dict):
         raise ValueError(f"generated production gate has no {name} artifact")
@@ -780,8 +828,8 @@ def _authenticated_gate_artifact(
         raise ValueError(f"generated production gate {name} hash mismatch")
     if artifact.get("schema") != expected_schema:
         raise ValueError(f"generated production gate {name} schema is incompatible")
-    if artifact.get("status") != "pass":
-        raise ValueError(f"generated production gate {name} has not passed")
+    if artifact.get("status") not in allowed_statuses:
+        raise ValueError(f"generated production gate {name} is not admissible")
     if _normalized_model(_require_string(artifact, "model")) != expected_model:
         raise ValueError(f"generated production gate {name} uses another model")
     if artifact.get("dataset_manifest_sha256") != expected_dataset_manifest_sha256:
@@ -798,7 +846,71 @@ def _authenticated_gate_artifact(
     )
     if artifact_bindings != expected_scope_bindings:
         raise ValueError(f"generated production gate {name} covers other evidence")
-    return artifact_path, artifact_sha256
+    return artifact_path, artifact_sha256, artifact
+
+
+def _validated_readiness_warnings(
+    value: object,
+    *,
+    status: str,
+    scope_bindings: dict[str, dict[str, object]],
+) -> dict[str, dict[str, object]]:
+    if value is None:
+        warnings: dict[str, dict[str, object]] = {}
+    elif isinstance(value, dict) and all(
+        isinstance(scope, str) and isinstance(warning, dict)
+        for scope, warning in value.items()
+    ):
+        warnings = {scope: dict(warning) for scope, warning in value.items()}
+    else:
+        raise ValueError("generated GPU-readiness warnings are not an object")
+    unknown = set(warnings) - set(scope_bindings)
+    if unknown:
+        raise ValueError(
+            f"generated GPU-readiness warnings cover unknown scopes: {sorted(unknown)}"
+        )
+    expected_fields = {
+        "classification",
+        "fit_cap_hits",
+        "executed_cap_hits",
+        "message",
+    }
+    for scope, warning in warnings.items():
+        if not scope.startswith(("frozen-weekly-", "restarted-weekly-")):
+            raise ValueError(
+                f"generated GPU-readiness cap warning covers non-weekly scope: {scope}"
+            )
+        if set(warning) != expected_fields:
+            raise ValueError(
+                f"generated GPU-readiness warning has invalid fields: {scope}"
+            )
+        fit_cap_hits = warning.get("fit_cap_hits")
+        executed_cap_hits = warning.get("executed_cap_hits")
+        if warning.get("classification") != ECONOMIC_CAP_WARNING_CLASSIFICATION:
+            raise ValueError(
+                f"generated GPU-readiness warning has another classification: {scope}"
+            )
+        if (
+            not isinstance(fit_cap_hits, int)
+            or isinstance(fit_cap_hits, bool)
+            or fit_cap_hits <= 0
+        ):
+            raise ValueError(
+                f"generated GPU-readiness warning has no fitted cap hits: {scope}"
+            )
+        if executed_cap_hits != 0 or isinstance(executed_cap_hits, bool):
+            raise ValueError(
+                f"generated GPU-readiness warning has executed cap hits: {scope}"
+            )
+        if not isinstance(warning.get("message"), str) or not warning["message"].strip():
+            raise ValueError(
+                f"generated GPU-readiness warning has no explanatory message: {scope}"
+            )
+    if status == PASS_STATUS and warnings:
+        raise ValueError("passing GPU readiness contains economic warnings")
+    if status == ECONOMIC_CAP_WARNING_STATUS and not warnings:
+        raise ValueError("warning GPU readiness contains no economic warning")
+    return warnings
 
 
 def _validated_scope_bindings(value: object) -> dict[str, dict[str, object]]:

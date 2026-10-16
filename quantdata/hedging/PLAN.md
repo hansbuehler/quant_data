@@ -6,7 +6,43 @@ This document is the implementation plan for the hedging benchmark built around
 the daily front-spot SDLV/GROMM model. It records the agreed experimental design
 and implementation order.
 
-**Current live state (2026-10-15).** The earlier generated-model readiness
+**Current live state (2026-10-16).** The distributable public-candidate dataset
+is the sole benchmark input. Historical-SANOS version 1.20 is committed at
+`50fc2c2d3ced9698da5283ea5158b24507a1eb36`; the complete hedging suite passes
+455 tests, and independent quantitative review passes in
+`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-16-historical-sanos-v120-diagnostic-semantics-review.md`.
+Version 1.20 separates numerical convergence from the economic position-cap
+diagnostic: a certified boundary optimum is converged, cap counts remain
+explicit, strict runs still reject them, and `--allow-cap-hits` permits only
+cap warnings while nonconvergence and recession directions remain fatal. An
+authenticated 4,096-scenario VolGAN historical-$P$ frozen-weekly replay at
+origin `2023-01-17` completes all 13 targets with 12,090 fitted-policy cap hits,
+zero executed cap hits, zero nonconverged fits, and zero recession directions.
+Its evidence is
+`/home/hans/quantdata_data/training/hedging/generated-readiness-50fc2c2-v120-volgan-frozen-public/scope-evidence.json`;
+the status is `complete-with-economic-cap-warnings`, not `pass`.
+The follow-on production-gate admission review passes in
+`quantdata/sdlv/daily/front_spot/hedging/reviews/2026-10-16-generated-gate-cap-warning-review.md`:
+warning status is fail-closed, cannot conceal a failed scope or executed cap
+hit, and remains visible in the affected weekly production-matrix case.
+
+Service
+`quantdata-hedging-generated-readiness-50fc2c2-v120-full.service` now executes
+the full three-model, six-scope readiness matrix from the immutable worktree
+`/tmp/quant_data/hedging/worktrees/production-50fc2c2`. It uses 4,096 CUDA
+scenarios, records progress at least every four minutes, continues after an
+individual failed scope, and distinguishes strict numerical failures from
+fitted-policy cap warnings in per-scope and aggregate evidence. The persisted
+launcher SHA-256 is
+`4c1820cbdf57fda733e4c4347327a21060b253a024a34412e5ad7a121f47c14d`.
+VolGAN daily-public readiness has passed. The attempted reuse of the earlier
+VolGAN frozen-weekly public run was rejected before computation because its
+persisted run identity belonged to the earlier one-scope output geometry. That
+scope remains failed in the current matrix and will be rerun from an empty,
+correctly identified output directory; it is an orchestration failure, not a
+model or numerical pass.
+
+**Superseded state (2026-10-15).** The earlier generated-model readiness
 passes all 18 scopes (three models times six configurations) at immutable commit
 `b20dea5bae0ebdce3c698565d74e4de2c729824f`, but its weekly evaluation and
 record artifacts use schema v2 and are not admissible under the current schema

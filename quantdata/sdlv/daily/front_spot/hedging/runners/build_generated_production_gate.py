@@ -20,6 +20,7 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.generated_evidence import (
     PRODUCTION_GATE_SCHEMA,
+    PRODUCTION_READY_STATUSES,
     PRODUCTION_SCOPES,
     GeneratedProductionGateEvidence,
     GeneratedSelectionEvidence,
@@ -80,11 +81,19 @@ def write_generated_production_gate(
     forbidden = dict(forbidden_directories or {})
     _require_distinct_output(destination, protected)
     _require_outside_directories(destination, forbidden)
+    readiness_payload = json.loads(readiness_path.read_text(encoding="utf-8"))
+    if not isinstance(readiness_payload, dict):
+        raise ValueError("GPU readiness must be a JSON object")
+    readiness_status = readiness_payload.get("status")
+    if readiness_status not in PRODUCTION_READY_STATUSES:
+        raise ValueError("GPU readiness is not production-ready")
+    readiness_warnings = readiness_payload.get("warnings", {})
     payload = {
         "schema": PRODUCTION_GATE_SCHEMA,
         "model": model,
         "dataset_manifest_sha256": dataset_manifest_sha256_value,
-        "status": "pass",
+        "status": readiness_status,
+        "warnings": readiness_warnings,
         "reviewed_commit": reviewed_commit,
         "scope_bindings": scope_bindings,
         "quant_review": {
@@ -271,6 +280,8 @@ def main() -> None:
                 "gate": str(Path(arguments.output).resolve()),
                 "gate_sha256": gate.gate_sha256,
                 "model": gate.model,
+                "status": gate.status,
+                "warnings": gate.warnings,
                 "reviewed_commit": gate.reviewed_commit,
                 "scopes": sorted(gate.scope_bindings),
             },

@@ -27,6 +27,7 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.fit_rolling_gromm2_range im
 from quantdata.sdlv.daily.front_spot.hedging.runners.generated_evidence import (
     GeneratedProductionGateEvidence,
     GeneratedSelectionEvidence,
+    generated_scope_warning_json,
     load_generated_initializer_evidence,
     load_generated_production_gate,
     load_generated_selection_evidence,
@@ -667,6 +668,11 @@ def _generated_case(
             reviewed_commit=gate.reviewed_commit,
             production_gate_sha256=gate.gate_sha256,
             production_gate_path=str(Path(gate_path).resolve()),
+            production_gate_status=gate.status,
+            production_gate_warning_json=generated_scope_warning_json(
+                gate,
+                scope=scope,
+            ),
             **common,
         )
     if gate_path is not None:
@@ -1029,6 +1035,8 @@ def main() -> None:
         ),
     )
     payload = {
+        # The v1 matrix contract permits additive informational fields; queue
+        # readers select required fields and ignore authenticated audit metadata.
         "schema": WEEKLY_MATRIX_SCHEMA,
         "code_version": str(type(config).version),
         "config": config.to_dict(),
@@ -1056,6 +1064,9 @@ def main() -> None:
         ),
         "blocked_count": sum(
             case.readiness is ProductionReadiness.BLOCKED for case in cases
+        ),
+        "economic_cap_warning_case_count": sum(
+            case.production_gate_warning_json is not None for case in cases
         ),
         "cases": [case.to_dict() for case in cases],
     }

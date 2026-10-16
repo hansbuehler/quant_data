@@ -8,11 +8,13 @@ from pathlib import Path
 import pytest
 
 from quantdata.sdlv.daily.front_spot.hedging.models.checkpointing import file_sha256
+from quantdata.sdlv.daily.front_spot.hedging.runners import generated_evidence
 from quantdata.sdlv.daily.front_spot.hedging.runners.build_generated_production_gate import (
     generated_scope_bindings,
     write_generated_production_gate,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.generated_evidence import (
+    ECONOMIC_CAP_WARNING_STATUS,
     GPU_READINESS_SCHEMA,
     QUANT_REVIEW_SCHEMA,
     GeneratedSelectionEvidence,
@@ -122,7 +124,232 @@ def test_gate_writer_authenticates_review_and_readiness(tmp_path: Path) -> None:
     )
 
     assert gate.gate_sha256 == file_sha256(output)
+    assert gate.status == "pass"
+    assert gate.warnings == {}
     assert set(gate.scope_bindings) == {"daily-public", "daily-rolling"}
+
+
+def test_gate_writer_preserves_economic_cap_warning(tmp_path: Path) -> None:
+    model = "volgan"
+    dataset_sha256 = "6" * 64
+    commit = "a" * 40
+    bindings = generated_scope_bindings(
+        scopes=("frozen-weekly-public",),
+        selection=_selection(model=model, stem="volgan"),
+    )
+    review = tmp_path / "quant-review.json"
+    readiness = tmp_path / "gpu-readiness.json"
+    warnings = {
+        "frozen-weekly-public": {
+            "classification": "fitted-policy-position-cap",
+            "fit_cap_hits": 12090,
+            "executed_cap_hits": 0,
+            "message": "pricing policies reach the cap; the executed hedge does not",
+        }
+    }
+    review.write_text(
+        json.dumps(
+            {
+                "schema": QUANT_REVIEW_SCHEMA,
+                "model": model,
+                "dataset_manifest_sha256": dataset_sha256,
+                "status": "pass",
+                "reviewed_commit": commit,
+                "scope_bindings": bindings,
+            }
+        ),
+        encoding="utf-8",
+    )
+    readiness.write_text(
+        json.dumps(
+            {
+                "schema": GPU_READINESS_SCHEMA,
+                "model": model,
+                "dataset_manifest_sha256": dataset_sha256,
+                "status": ECONOMIC_CAP_WARNING_STATUS,
+                "reviewed_commit": commit,
+                "scope_bindings": bindings,
+                "warnings": warnings,
+                "failures": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    output = tmp_path / "production-gate.json"
+    gate = write_generated_production_gate(
+        output=output,
+        model=model,
+        dataset_manifest_sha256_value=dataset_sha256,
+        reviewed_commit=commit,
+        scope_bindings=bindings,
+        quant_review=review,
+        gpu_readiness=readiness,
+    )
+
+    assert gate.status == ECONOMIC_CAP_WARNING_STATUS
+    assert gate.warnings == warnings
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["status"] == ECONOMIC_CAP_WARNING_STATUS
+    assert payload["warnings"] == warnings
+
+
+def test_gate_writer_rejects_warning_readiness_with_failures(
+    tmp_path: Path,
+) -> None:
+    model = "volgan"
+    dataset_sha256 = "6" * 64
+    commit = "a" * 40
+    bindings = generated_scope_bindings(
+        scopes=("frozen-weekly-public",),
+        selection=_selection(model=model, stem="volgan"),
+    )
+    warning = {
+        "frozen-weekly-public": {
+            "classification": "fitted-policy-position-cap",
+            "fit_cap_hits": 1,
+            "executed_cap_hits": 0,
+            "message": "pricing policies reach the cap; the executed hedge does not",
+        }
+    }
+    common = {
+        "model": model,
+        "dataset_manifest_sha256": dataset_sha256,
+        "reviewed_commit": commit,
+        "scope_bindings": bindings,
+    }
+    review = tmp_path / "quant-review.json"
+    readiness = tmp_path / "gpu-readiness.json"
+    review.write_text(
+        json.dumps({"schema": QUANT_REVIEW_SCHEMA, "status": "pass", **common}),
+        encoding="utf-8",
+    )
+    readiness.write_text(
+        json.dumps(
+            {
+                "schema": GPU_READINESS_SCHEMA,
+                "status": ECONOMIC_CAP_WARNING_STATUS,
+                "warnings": warning,
+                "failures": {"daily-public": {"message": "failed"}},
+                **common,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="contains failed scopes"):
+        write_generated_production_gate(
+            output=tmp_path / "production-gate.json",
+            model=model,
+            dataset_manifest_sha256_value=dataset_sha256,
+            reviewed_commit=commit,
+            scope_bindings=bindings,
+            quant_review=review,
+            gpu_readiness=readiness,
+        )
+
+
+@pytest.mark.parametrize(
+    ("scope", "warning_update", "match"),
+    (
+        (
+            "daily-public",
+            {},
+            "non-weekly scope",
+        ),
+        (
+            "frozen-weekly-public",
+            {"executed_cap_hits": 1},
+            "executed cap hits",
+        ),
+        (
+            "frozen-weekly-public",
+            {"classification": "nonconverged-fit"},
+            "another classification",
+        ),
+        (
+            "frozen-weekly-public",
+            {"fit_cap_hits": 0},
+            "no fitted cap hits",
+        ),
+    ),
+)
+def test_warning_status_only_admits_nonexecuted_weekly_fit_caps(
+    scope: str,
+    warning_update: dict[str, object],
+    match: str,
+) -> None:
+    warning: dict[str, object] = {
+        "classification": "fitted-policy-position-cap",
+        "fit_cap_hits": 1,
+        "executed_cap_hits": 0,
+        "message": "pricing policies reach the cap; the executed hedge does not",
+    }
+    warning.update(warning_update)
+    bindings = {
+        scope: generated_evidence.generated_scope_binding(
+            selection=_selection(model="volgan", stem="volgan")
+        )
+    }
+
+    with pytest.raises(ValueError, match=match):
+        generated_evidence._validated_readiness_warnings(
+            {scope: warning},
+            status=ECONOMIC_CAP_WARNING_STATUS,
+            scope_bindings=bindings,
+        )
+
+
+def test_warning_gate_requires_explicit_empty_failures(tmp_path: Path) -> None:
+    model = "volgan"
+    dataset_sha256 = "6" * 64
+    commit = "a" * 40
+    bindings = generated_scope_bindings(
+        scopes=("frozen-weekly-public",),
+        selection=_selection(model=model, stem="volgan"),
+    )
+    common = {
+        "model": model,
+        "dataset_manifest_sha256": dataset_sha256,
+        "reviewed_commit": commit,
+        "scope_bindings": bindings,
+    }
+    warning = {
+        "frozen-weekly-public": {
+            "classification": "fitted-policy-position-cap",
+            "fit_cap_hits": 1,
+            "executed_cap_hits": 0,
+            "message": "pricing policies reach the cap; the executed hedge does not",
+        }
+    }
+    review = tmp_path / "quant-review.json"
+    readiness = tmp_path / "gpu-readiness.json"
+    review.write_text(
+        json.dumps({"schema": QUANT_REVIEW_SCHEMA, "status": "pass", **common}),
+        encoding="utf-8",
+    )
+    readiness.write_text(
+        json.dumps(
+            {
+                "schema": GPU_READINESS_SCHEMA,
+                "status": ECONOMIC_CAP_WARNING_STATUS,
+                "warnings": warning,
+                **common,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="explicit empty failures"):
+        write_generated_production_gate(
+            output=tmp_path / "production-gate.json",
+            model=model,
+            dataset_manifest_sha256_value=dataset_sha256,
+            reviewed_commit=commit,
+            scope_bindings=bindings,
+            quant_review=review,
+            gpu_readiness=readiness,
+        )
 
 
 def test_gate_writer_rejects_stale_readiness(tmp_path: Path) -> None:

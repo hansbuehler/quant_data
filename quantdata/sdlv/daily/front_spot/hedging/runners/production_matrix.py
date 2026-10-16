@@ -27,8 +27,11 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.fit_rolling_gromm2_range im
     load_completed_rolling_gromm2_range,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.generated_evidence import (
+    ECONOMIC_CAP_WARNING_STATUS,
+    PRODUCTION_READY_STATUSES,
     GeneratedProductionGateEvidence,
     GeneratedSelectionEvidence,
+    generated_scope_warning_json,
     load_generated_initializer_evidence,
     load_generated_production_gate,
     load_generated_selection_evidence,
@@ -135,7 +138,12 @@ class GeneratedProductionInputs:
 
 @dataclass(frozen=True, kw_only=True)
 class DailyProductionCase:
-    """One auditable model/objective/resource cell in the benchmark matrix."""
+    """One auditable model/objective/resource cell in the benchmark matrix.
+
+    Version-1 matrix readers treat unrecognized case fields as additive audit
+    metadata. Gate status and warning fields therefore preserve compatibility
+    while exposing authenticated economic cap warnings.
+    """
 
     case_id: str
     model: str
@@ -150,6 +158,8 @@ class DailyProductionCase:
     reviewed_commit: str | None = None
     production_gate_sha256: str | None = None
     production_gate_path: str | None = None
+    production_gate_status: str | None = None
+    production_gate_warning_json: str | None = None
 
     def __post_init__(self) -> None:
         verify_inp(bool(self.case_id.strip()), lambda: "case_id must be non-empty")
@@ -187,6 +197,21 @@ class DailyProductionCase:
             self.production_gate_path is None or bool(self.production_gate_path),
             lambda: "production_gate_path must be non-empty when supplied",
         )
+        verify_inp(
+            self.production_gate_status is None
+            or self.production_gate_status in PRODUCTION_READY_STATUSES,
+            lambda: "production_gate_status must be production-ready when supplied",
+        )
+        if self.production_gate_warning_json is not None:
+            warning = json.loads(self.production_gate_warning_json)
+            verify_inp(
+                isinstance(warning, dict) and bool(warning),
+                lambda: "production_gate_warning_json must encode a non-empty object",
+            )
+            verify_inp(
+                self.production_gate_status == ECONOMIC_CAP_WARNING_STATUS,
+                lambda: "production gate warning requires the warning status",
+            )
         if self.readiness is ProductionReadiness.READY:
             verify_inp(self.command is not None, lambda: "ready case requires a command")
             verify_inp(
@@ -215,6 +240,10 @@ class DailyProductionCase:
         payload["resource"] = self.resource.value
         payload["readiness"] = self.readiness.value
         payload["command"] = None if self.command is None else list(self.command)
+        warning_json = payload.pop("production_gate_warning_json")
+        payload["production_gate_warning"] = (
+            None if warning_json is None else json.loads(warning_json)
+        )
         return payload
 
 
@@ -981,6 +1010,11 @@ def _review_gated_case(
             reviewed_commit=gate.reviewed_commit,
             production_gate_sha256=gate.gate_sha256,
             production_gate_path=str(Path(gate_path).resolve()),
+            production_gate_status=gate.status,
+            production_gate_warning_json=generated_scope_warning_json(
+                gate,
+                scope=scope,
+            ),
             **kwargs,
         )
     reason = gate_reason or "awaiting generated-model production gate"
@@ -1065,6 +1099,8 @@ def main() -> None:
         ),
     )
     payload = {
+        # The v1 matrix contract permits additive informational fields; queue
+        # readers select required fields and ignore authenticated audit metadata.
         "schema": "hedging-daily-production-matrix-v1",
         "code_version": str(type(config).version),
         "config": config.to_dict(),
@@ -1087,6 +1123,9 @@ def main() -> None:
         ),
         "waiting_gate_count": sum(
             case.readiness is ProductionReadiness.WAITING_GATE for case in cases
+        ),
+        "economic_cap_warning_case_count": sum(
+            case.production_gate_warning_json is not None for case in cases
         ),
         "cases": [case.to_dict() for case in cases],
     }

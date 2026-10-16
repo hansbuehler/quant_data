@@ -13,8 +13,10 @@ from quantdata.sdlv.daily.front_spot.hedging.models.checkpointing import (
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners import production_matrix
 from quantdata.sdlv.daily.front_spot.hedging.runners.generated_evidence import (
+    ECONOMIC_CAP_WARNING_STATUS,
     GPU_READINESS_SCHEMA,
     PRODUCTION_GATE_SCHEMA,
+    PRODUCTION_SCOPES,
     QUANT_REVIEW_SCHEMA,
     generated_scope_binding,
     load_generated_initializer_evidence,
@@ -98,6 +100,23 @@ def test_native_commands_pin_common_daily_controls() -> None:
         assert case.command[case.command.index("--end") + 1] == "2025-12-31"
         assert "--validate-dataset" in case.command
         assert "--allow-nonconvergence" not in case.command
+
+
+def test_case_warning_metadata_requires_warning_gate_status() -> None:
+    case = next(
+        value
+        for value in _matrix()
+        if value.readiness is ProductionReadiness.READY
+    )
+
+    with pytest.raises(ValueError, match="requires the warning status"):
+        replace(
+            case,
+            production_gate_status="pass",
+            production_gate_warning_json=json.dumps(
+                {"classification": "fitted-policy-position-cap"}
+            ),
+        )
 
 
 @pytest.mark.parametrize(
@@ -246,6 +265,44 @@ def test_generated_production_gates_promote_only_authenticated_models(
         assert cases[case_id].production_gate_sha256 is not None
         assert len(cases[case_id].production_gate_sha256) == 64
         assert cases[case_id].production_gate_path is not None
+        assert cases[case_id].production_gate_status == "pass"
+        assert cases[case_id].production_gate_warning_json is None
+
+
+def test_generated_production_matrix_preserves_scope_cap_warning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset = tmp_path / "dataset"
+    dataset.mkdir()
+    (dataset / "manifest.json").write_text("{}\n", encoding="utf-8")
+    selected = _generated_inputs(tmp_path, dataset=dataset)
+    monkeypatch.setattr(
+        production_matrix,
+        "reviewable_repository_commit",
+        lambda: "a" * 40,
+    )
+    gates = _generated_gates(tmp_path, dataset=dataset, generated=selected)
+    _mark_gate_warning(
+        tmp_path,
+        stem="volgan",
+        scope="frozen-weekly-public",
+    )
+    generated = replace(selected, **gates)
+
+    cases = {
+        case.case_id: case
+        for case in _matrix(dataset=dataset, generated=generated)
+    }
+    public = cases["volgan-public-settings"]
+    rolling = cases["volgan-rolling-trained"]
+
+    assert public.readiness is ProductionReadiness.READY
+    assert public.production_gate_status == ECONOMIC_CAP_WARNING_STATUS
+    assert public.production_gate_warning_json is None
+    assert public.to_dict()["production_gate_warning"] is None
+    assert rolling.production_gate_status == ECONOMIC_CAP_WARNING_STATUS
+    assert rolling.production_gate_warning_json is None
 
 
 def test_generated_production_gate_rejects_tampered_readiness_artifact(
@@ -892,14 +949,11 @@ def _generated_gates(
     ):
         public_base = base if model.endswith("-ft") else None
         bindings = {
-            "daily-public": generated_scope_binding(
-                selection=None,
+            scope: generated_scope_binding(
+                selection=(evidence[model] if scope.endswith("-rolling") else None),
                 base_initializer=public_base,
-            ),
-            "daily-rolling": generated_scope_binding(
-                selection=evidence[model],
-                base_initializer=public_base,
-            ),
+            )
+            for scope in PRODUCTION_SCOPES
         }
         common = {
             "model": model,
@@ -938,6 +992,42 @@ def _generated_gates(
         )
         values[field] = gate
     return values
+
+
+def _mark_gate_warning(
+    tmp_path: Path,
+    *,
+    stem: str,
+    scope: str,
+) -> dict[str, object]:
+    warning: dict[str, object] = {
+        "classification": "fitted-policy-position-cap",
+        "fit_cap_hits": 12_090,
+        "executed_cap_hits": 0,
+        "message": "pricing policies reach the cap; the executed hedge does not",
+    }
+    warnings = {scope: warning}
+    readiness = tmp_path / f"{stem}-gpu-readiness.json"
+    readiness_payload = json.loads(readiness.read_text(encoding="utf-8"))
+    readiness_payload.update(
+        {
+            "status": ECONOMIC_CAP_WARNING_STATUS,
+            "warnings": warnings,
+            "failures": {},
+        }
+    )
+    readiness.write_text(json.dumps(readiness_payload), encoding="utf-8")
+    gate = tmp_path / f"{stem}-production-gate.json"
+    gate_payload = json.loads(gate.read_text(encoding="utf-8"))
+    gate_payload.update(
+        {
+            "status": ECONOMIC_CAP_WARNING_STATUS,
+            "warnings": warnings,
+        }
+    )
+    gate_payload["gpu_readiness"]["sha256"] = file_sha256(readiness)
+    gate.write_text(json.dumps(gate_payload), encoding="utf-8")
+    return warning
 
 
 def _generated_pair(
