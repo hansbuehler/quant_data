@@ -1086,7 +1086,7 @@ def test_weekly_mean_variance_certifies_raw_solver_point(
     assert fit.converged
 
 
-def test_weekly_mean_variance_polishes_failed_raw_certificate_before_fallback(
+def test_weekly_mean_variance_retries_failed_raw_certificate_with_osqp(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     scenarios = _scenario_set().scenarios
@@ -1126,11 +1126,11 @@ def test_weekly_mean_variance_polishes_failed_raw_certificate_before_fallback(
 
     assert certificate_calls == 2
     assert result.success
-    assert "active-set KKT polish" in result.message
+    assert "fallback OSQP=optimal" in result.message
     assert "fallback HIGHS" not in result.message
 
 
-def test_weekly_mean_variance_retries_osqp_exception_with_clarabel(
+def test_weekly_mean_variance_retries_clarabel_exception_with_osqp(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     scenarios = _scenario_set().scenarios
@@ -1147,17 +1147,17 @@ def test_weekly_mean_variance_retries_osqp_exception_with_clarabel(
     )
     original_solve = cp.Problem.solve
 
-    def fail_osqp(
+    def fail_clarabel(
         problem: cp.Problem,
         *args: object,
         solver: str | None = None,
         **kwargs: object,
     ) -> float:
-        if solver == cp.OSQP:
-            raise cp.error.SolverError("forced OSQP failure")
+        if solver == cp.CLARABEL:
+            raise cp.error.SolverError("forced CLARABEL failure")
         return original_solve(problem, *args, solver=solver, **kwargs)
 
-    monkeypatch.setattr(cp.Problem, "solve", fail_osqp)
+    monkeypatch.setattr(cp.Problem, "solve", fail_clarabel)
     result = geometry._minimize_convex_cost_lasso(
         np.zeros(geometry.parameter_count),
         np.arange(scenarios.scenario_count, dtype=np.int64),
@@ -1166,8 +1166,8 @@ def test_weekly_mean_variance_retries_osqp_exception_with_clarabel(
     )
 
     assert result.success
-    assert "OSQP failed: forced OSQP failure" in result.message
-    assert "fallback CLARABEL=optimal" in result.message
+    assert "CLARABEL failed: forced CLARABEL failure" in result.message
+    assert "fallback OSQP=optimal" in result.message
     assert "fallback HIGHS" not in result.message
 
 
@@ -1220,6 +1220,64 @@ def test_weekly_mean_variance_polishes_genuine_osqp_user_limit() -> None:
     assert result.optimality <= geometry.config.certificate_tolerance
 
 
+def test_weekly_mean_variance_retains_best_uncertified_candidate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scenarios = _scenario_set().scenarios
+    geometry = _WeeklyOpenLoopGeometry(
+        scenarios,
+        initial_spot_position=0.0,
+        initial_option_positions=np.zeros(2),
+        config=HistoricalSanosConfig(
+            rolling_observations=80,
+            objective=HistoricalSanosObjective.MEAN_VARIANCE,
+            risk_parameter=3.0,
+            maximum_iterations=2_000,
+        ),
+    )
+    certificate_calls = 0
+
+    def reject_with_worsening_certificate(
+        *_: object,
+        **__: object,
+    ) -> tuple[np.ndarray, bool, float, float, float, float, float]:
+        nonlocal certificate_calls
+        certificate_calls += 1
+        optimality = (2.0e-6, 0.1, 1.0)[min(certificate_calls - 1, 2)]
+        return (
+            np.full(geometry.parameter_count, float(certificate_calls)),
+            False,
+            float(certificate_calls),
+            optimality,
+            optimality,
+            optimality,
+            optimality,
+        )
+
+    monkeypatch.setattr(
+        geometry,
+        "_certify_raw_convex_solution",
+        reject_with_worsening_certificate,
+    )
+    monkeypatch.setattr(
+        geometry,
+        "_polish_compact_mean_variance_solution",
+        lambda *_: False,
+    )
+    result = geometry._minimize_convex_cost_lasso(
+        np.zeros(geometry.parameter_count),
+        np.arange(scenarios.scenario_count, dtype=np.int64),
+        signed_claim_quantity=1.0,
+        terminal_claim_values_pv=scenarios.terminal_claim_values_pv,
+    )
+
+    assert certificate_calls == 3
+    assert not result.success
+    assert result.optimality == pytest.approx(2.0e-6)
+    assert result.x == pytest.approx(np.ones(geometry.parameter_count))
+    assert "retained best uncertified candidate after fallbacks" in result.message
+
+
 def test_weekly_mean_variance_certifies_extreme_scaling_with_zero_cost_rows() -> None:
     base = _scenario_set(scenario_count=20).scenarios
     scenarios = replace(
@@ -1260,6 +1318,21 @@ def test_weekly_mean_variance_certifies_extreme_scaling_with_zero_cost_rows() ->
         certificate.scaled_position_cap,
         cap / compiled.action_scale,
     )
+    expected_row_scale = np.maximum.reduce(
+        (
+            np.ones_like(certificate.turnover_weights),
+            np.max(np.abs(certificate.turnover_matrix), axis=1),
+            np.abs(certificate.turnover_offset),
+        )
+    )
+    np.testing.assert_allclose(
+        certificate.turnover_row_scale,
+        expected_row_scale,
+    )
+    assert np.max(
+        np.abs(certificate.turnover_matrix)
+        / certificate.turnover_row_scale[:, None]
+    ) <= 1.0
 
     result = geometry._minimize_convex_cost_lasso(
         np.zeros(geometry.parameter_count),
@@ -1361,6 +1434,10 @@ def test_weekly_mean_variance_compact_objective_includes_all_turnover_costs() ->
         + float(compiled.objective_constant.value)
         + certificate.turnover_weights @ np.abs(turnover)
     )
+    compiled.scaled_positions.value = scaled_positions
+    certificate.turnover_epigraph.value = (
+        np.abs(turnover) / certificate.turnover_row_scale
+    )
     exact_objective = geometry._objective_value(
         positions,
         indices,
@@ -1371,6 +1448,10 @@ def test_weekly_mean_variance_compact_objective_includes_all_turnover_costs() ->
     )
 
     assert compact_objective == pytest.approx(exact_objective, abs=1.0e-12)
+    assert compiled.problem.objective.value == pytest.approx(
+        compact_objective,
+        abs=1.0e-12,
+    )
     assert certificate.turnover_offset[0] == pytest.approx(0.1)
     assert certificate.turnover_offset[1] == pytest.approx(0.0)
     assert certificate.turnover_offset[2] == pytest.approx(-0.1)
@@ -1466,7 +1547,9 @@ def test_weekly_mean_variance_rejects_feasible_non_kkt_point() -> None:
         - certificate.turnover_offset
     )
     compiled.scaled_positions.value = scaled_positions
-    certificate.turnover_epigraph.value = np.abs(turnover)
+    certificate.turnover_epigraph.value = (
+        np.abs(turnover) / certificate.turnover_row_scale
+    )
     accepted = geometry._certify_compact_mean_variance_solution(
         compiled,
         scaled_fitted=scaled_positions,

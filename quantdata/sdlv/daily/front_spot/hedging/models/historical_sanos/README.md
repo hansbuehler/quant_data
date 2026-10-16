@@ -63,10 +63,12 @@
   excluded from reported
   certainty equivalents. Scaled action coordinates improve conditioning while
   solver certificate, an exact objective reconstruction, and an explicit primal
-  constraint check supply the convergence gate. Weekly mean-variance certifies
-  the raw point associated with the solver-reported objective and retries a
-  failed OSQP certificate with CLARABEL; it never compares a sparsified point
-  against the stale raw objective. A primary conic solve labelled
+  constraint check supply the convergence gate. Weekly mean-variance normalizes
+  each turnover epigraph row without changing its physical objective, solves
+  first with CLARABEL, and retries an uncertified point independently with OSQP
+  and HiGHS. Every candidate is judged by the same unscaled physical certificate;
+  the implementation never compares a sparsified point against a stale solver
+  objective. A primary conic solve labelled
   `optimal_inaccurate` receives a cold retry and is then solved independently by
   SCS. A result labelled `optimal` or `optimal_inaccurate` is accepted only if
   all values are finite, the exact reconstructed objective agrees with the

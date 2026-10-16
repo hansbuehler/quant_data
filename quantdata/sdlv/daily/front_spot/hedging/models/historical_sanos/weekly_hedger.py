@@ -87,6 +87,7 @@ class _CompactMeanVarianceCertificate:
     turnover_matrix: FloatArray
     turnover_offset: FloatArray
     turnover_weights: FloatArray
+    turnover_row_scale: FloatArray
     scaled_position_cap: FloatArray
     turnover_epigraph: cp.Variable
     positive_turnover_constraint: cp.constraints.constraint.Constraint
@@ -102,6 +103,28 @@ class _CompactMeanVarianceDualMetrics:
     dual_violation: float
     stationarity_violation: float
     complementarity_violation: float
+
+
+@dataclass(frozen=True, kw_only=True)
+class _CompactMeanVarianceCandidate:
+    fitted: FloatArray
+    solver_status: str | None
+    solver_trace: str
+    exact_objective: float
+    objective_error: float
+    constraint_violation: float
+    optimality: float
+    primal_dual_gap: float
+
+    @property
+    def score(self) -> tuple[bool, float, float, float, float]:
+        return (
+            not math.isfinite(self.optimality),
+            self.optimality,
+            self.constraint_violation,
+            self.objective_error,
+            abs(self.primal_dual_gap),
+        )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -1146,16 +1169,49 @@ class _WeeklyOpenLoopGeometry:
             / compiled.action_scale
         )
         iterations = 0
+        best_mean_variance_candidate: _CompactMeanVarianceCandidate | None = None
+
+        def retain_mean_variance_candidate(
+            *,
+            fitted: FloatArray,
+            solver_status: str | None,
+            solver_trace: str,
+            exact_objective: float,
+            objective_error: float,
+            constraint_violation: float,
+            optimality: float,
+            primal_dual_gap: float,
+        ) -> None:
+            nonlocal best_mean_variance_candidate
+            if self.config.objective is not HistoricalSanosObjective.MEAN_VARIANCE:
+                return
+            candidate = _CompactMeanVarianceCandidate(
+                fitted=np.asarray(fitted, dtype=np.float64).copy(),
+                solver_status=solver_status,
+                solver_trace=solver_trace,
+                exact_objective=exact_objective,
+                objective_error=objective_error,
+                constraint_violation=constraint_violation,
+                optimality=optimality,
+                primal_dual_gap=primal_dual_gap,
+            )
+            if (
+                best_mean_variance_candidate is None
+                or candidate.score < best_mean_variance_candidate.score
+            ):
+                best_mean_variance_candidate = candidate
+
         primary_error: cp.error.SolverError | None = None
         try:
             if self.config.objective is HistoricalSanosObjective.MEAN_VARIANCE:
                 compiled.problem.solve(
-                    solver=cp.OSQP,
+                    solver=cp.CLARABEL,
                     warm_start=False,
-                    max_iter=max(10_000, self.config.maximum_iterations),
-                    eps_abs=self.config.gradient_tolerance,
-                    eps_rel=self.config.gradient_tolerance,
-                    polishing=True,
+                    max_iter=self.config.maximum_iterations,
+                    tol_gap_abs=self.config.gradient_tolerance,
+                    tol_gap_rel=self.config.gradient_tolerance,
+                    tol_feas=self.config.gradient_tolerance,
+                    time_limit=self.config.fallback_time_limit_seconds,
                 )
                 iterations += int(compiled.problem.solver_stats.num_iters or 0)
             else:
@@ -1216,9 +1272,19 @@ class _WeeklyOpenLoopGeometry:
                 terminal_claim_values_pv=terminal_claim_values_pv,
                 solver_status=solver_status,
             )
+            retain_mean_variance_candidate(
+                fitted=fitted,
+                solver_status=solver_status,
+                solver_trace=solver_trace,
+                exact_objective=exact_objective,
+                objective_error=objective_error,
+                constraint_violation=constraint_violation,
+                optimality=optimality,
+                primal_dual_gap=primal_dual_gap,
+            )
         else:
             solver_status = None
-            solver_trace = f"OSQP failed: {primary_error}"
+            solver_trace = f"CLARABEL failed: {primary_error}"
             fitted = np.asarray(
                 initial[: self.parameter_count],
                 dtype=np.float64,
@@ -1258,24 +1324,33 @@ class _WeeklyOpenLoopGeometry:
                 terminal_claim_values_pv=terminal_claim_values_pv,
                 solver_status=solver_status,
             )
+            retain_mean_variance_candidate(
+                fitted=fitted,
+                solver_status=solver_status,
+                solver_trace=solver_trace,
+                exact_objective=exact_objective,
+                objective_error=objective_error,
+                constraint_violation=constraint_violation,
+                optimality=optimality,
+                primal_dual_gap=primal_dual_gap,
+            )
         if (
             self.config.objective is HistoricalSanosObjective.MEAN_VARIANCE
             and not certified
         ):
             try:
                 compiled.problem.solve(
-                    solver=cp.CLARABEL,
+                    solver=cp.OSQP,
                     warm_start=False,
-                    max_iter=self.config.maximum_iterations,
-                    tol_gap_abs=self.config.gradient_tolerance,
-                    tol_gap_rel=self.config.gradient_tolerance,
-                    tol_feas=self.config.gradient_tolerance,
-                    time_limit=self.config.fallback_time_limit_seconds,
+                    max_iter=max(10_000, self.config.maximum_iterations),
+                    eps_abs=self.config.gradient_tolerance,
+                    eps_rel=self.config.gradient_tolerance,
+                    polishing=True,
                 )
                 iterations += int(compiled.problem.solver_stats.num_iters or 0)
                 fallback_status = compiled.problem.status
                 fallback_solver = str(
-                    compiled.problem.solver_stats.solver_name or "CLARABEL"
+                    compiled.problem.solver_stats.solver_name or "OSQP"
                 )
                 solver_trace = (
                     f"{solver_trace}; fallback {fallback_solver}={fallback_status}"
@@ -1296,6 +1371,16 @@ class _WeeklyOpenLoopGeometry:
                     signed_claim_quantity=signed_claim_quantity,
                     terminal_claim_values_pv=terminal_claim_values_pv,
                     solver_status=fallback_status,
+                )
+                retain_mean_variance_candidate(
+                    fitted=fitted,
+                    solver_status=fallback_status,
+                    solver_trace=solver_trace,
+                    exact_objective=exact_objective,
+                    objective_error=objective_error,
+                    constraint_violation=constraint_violation,
+                    optimality=optimality,
+                    primal_dual_gap=primal_dual_gap,
                 )
                 if (
                     not certified
@@ -1318,9 +1403,19 @@ class _WeeklyOpenLoopGeometry:
                         terminal_claim_values_pv=terminal_claim_values_pv,
                         solver_status=fallback_status,
                     )
+                    retain_mean_variance_candidate(
+                        fitted=fitted,
+                        solver_status=fallback_status,
+                        solver_trace=solver_trace,
+                        exact_objective=exact_objective,
+                        objective_error=objective_error,
+                        constraint_violation=constraint_violation,
+                        optimality=optimality,
+                        primal_dual_gap=primal_dual_gap,
+                    )
             except cp.error.SolverError as error:
                 solver_trace = (
-                    f"{solver_trace}; CLARABEL fallback failed: {error}"
+                    f"{solver_trace}; OSQP fallback failed: {error}"
                 )
         if (
             self.config.objective is HistoricalSanosObjective.MEAN_VARIANCE
@@ -1361,6 +1456,16 @@ class _WeeklyOpenLoopGeometry:
                     terminal_claim_values_pv=terminal_claim_values_pv,
                     solver_status=fallback_status,
                 )
+                retain_mean_variance_candidate(
+                    fitted=fitted,
+                    solver_status=fallback_status,
+                    solver_trace=solver_trace,
+                    exact_objective=exact_objective,
+                    objective_error=objective_error,
+                    constraint_violation=constraint_violation,
+                    optimality=optimality,
+                    primal_dual_gap=primal_dual_gap,
+                )
                 if (
                     not certified
                     and self._polish_compact_mean_variance_solution(compiled)
@@ -1382,8 +1487,35 @@ class _WeeklyOpenLoopGeometry:
                         terminal_claim_values_pv=terminal_claim_values_pv,
                         solver_status=fallback_status,
                     )
+                    retain_mean_variance_candidate(
+                        fitted=fitted,
+                        solver_status=fallback_status,
+                        solver_trace=solver_trace,
+                        exact_objective=exact_objective,
+                        objective_error=objective_error,
+                        constraint_violation=constraint_violation,
+                        optimality=optimality,
+                        primal_dual_gap=primal_dual_gap,
+                    )
             except cp.error.SolverError as error:
                 solver_trace = f"{solver_trace}; HIGHS fallback failed: {error}"
+        if (
+            self.config.objective is HistoricalSanosObjective.MEAN_VARIANCE
+            and not certified
+            and best_mean_variance_candidate is not None
+        ):
+            best = best_mean_variance_candidate
+            fitted = best.fitted
+            solver_status = best.solver_status
+            solver_trace = (
+                f"{best.solver_trace}; retained best uncertified candidate "
+                "after fallbacks"
+            )
+            exact_objective = best.exact_objective
+            objective_error = best.objective_error
+            constraint_violation = best.constraint_violation
+            optimality = best.optimality
+            primal_dual_gap = best.primal_dual_gap
         scaled_fitted = fitted / compiled.action_scale
         unregularized_objective = exact_objective - (
             0.5
@@ -1434,7 +1566,9 @@ class _WeeklyOpenLoopGeometry:
             certificate.turnover_matrix @ scaled_fitted
             - certificate.turnover_offset
         )
-        certificate.turnover_epigraph.value = np.abs(turnover)
+        certificate.turnover_epigraph.value = (
+            np.abs(turnover) / certificate.turnover_row_scale
+        )
         return True
 
     def _polish_compact_mean_variance_solution(
@@ -1473,13 +1607,30 @@ class _WeeklyOpenLoopGeometry:
         )] = 1
         linear = np.asarray(compiled.linear.value, dtype=np.float64)
         visited_active_sets: set[tuple[bytes, bytes]] = set()
+        initial_scaled = scaled_fitted.copy()
+        best_scaled = scaled_fitted.copy()
+        best_turnover = turnover.copy()
+
+        def primal_objective(
+            candidate: FloatArray,
+            candidate_turnover: FloatArray,
+        ) -> float:
+            return float(
+                0.5 * candidate @ certificate.hessian @ candidate
+                + linear @ candidate
+                + certificate.turnover_weights @ np.abs(candidate_turnover)
+            )
+
+        best_objective = primal_objective(best_scaled, best_turnover)
+        stop_reason = "maximum-iterations"
         for _ in range(25):
             active_set = (
                 turnover_status.tobytes(),
                 position_status.tobytes(),
             )
             if active_set in visited_active_sets:
-                return False
+                stop_reason = "active-set-cycle"
+                break
             visited_active_sets.add(active_set)
             positive_turnover = turnover_status == 1
             negative_turnover = turnover_status == -1
@@ -1551,9 +1702,11 @@ class _WeeklyOpenLoopGeometry:
                     rcond=None,
                 )
             if not np.all(np.isfinite(polished)):
-                return False
+                stop_reason = "nonfinite-kkt-solution"
+                break
             if float(np.max(np.abs(kkt_matrix @ polished - kkt_rhs))) > tolerance:
-                return False
+                stop_reason = "kkt-linear-residual"
+                break
             polished_scaled = polished[: self.parameter_count]
             multipliers = polished[self.parameter_count :]
             polished_turnover = (
@@ -1561,6 +1714,18 @@ class _WeeklyOpenLoopGeometry:
                 - certificate.turnover_offset
             )
             polished_fitted = compiled.action_scale * polished_scaled
+            if float(np.max(np.maximum(np.abs(polished_fitted) - cap, 0.0))) <= tolerance:
+                polished_objective = primal_objective(
+                    polished_scaled,
+                    polished_turnover,
+                )
+                objective_margin = np.finfo(np.float64).eps * (
+                    1.0 + abs(best_objective)
+                )
+                if polished_objective < best_objective - objective_margin:
+                    best_scaled = polished_scaled.copy()
+                    best_turnover = polished_turnover.copy()
+                    best_objective = polished_objective
             revised_turnover_status = turnover_status.copy()
             revised_position_status = position_status.copy()
             for index in np.flatnonzero(positive_turnover):
@@ -1609,11 +1774,26 @@ class _WeeklyOpenLoopGeometry:
                 and np.array_equal(revised_position_status, position_status)
             ):
                 compiled.scaled_positions.value = polished_scaled
-                certificate.turnover_epigraph.value = np.abs(polished_turnover)
+                certificate.turnover_epigraph.value = (
+                    np.abs(polished_turnover)
+                    / certificate.turnover_row_scale
+                )
                 return True
             turnover_status = revised_turnover_status
             position_status = revised_position_status
-        return False
+        if np.array_equal(best_scaled, initial_scaled):
+            return False
+        compiled.scaled_positions.value = best_scaled
+        certificate.turnover_epigraph.value = (
+            np.abs(best_turnover) / certificate.turnover_row_scale
+        )
+        print(
+            "historical weekly active-set polish "
+            f"status={stop_reason} retained_objective_improvement="
+            f"{primal_objective(initial_scaled, turnover) - best_objective:.6g}",
+            flush=True,
+        )
+        return True
 
     def _independent_incidence_rows(
         self,
@@ -1748,7 +1928,8 @@ class _WeeklyOpenLoopGeometry:
                 math.inf,
                 math.inf,
             )
-        epigraph = np.asarray(epigraph_value, dtype=np.float64)
+        normalized_epigraph = np.asarray(epigraph_value, dtype=np.float64)
+        epigraph = normalized_epigraph * certificate.turnover_row_scale
         arrays = (scaled_fitted, epigraph)
         if not all(np.all(np.isfinite(value)) for value in arrays):
             return (
@@ -1799,10 +1980,16 @@ class _WeeklyOpenLoopGeometry:
             certificate.upper_position_constraint.dual_value,
         )
         if all(value is not None for value in raw_dual_values):
-            raw_positive, raw_negative, raw_lower, raw_upper = (
-                np.asarray(value, dtype=np.float64)
-                for value in raw_dual_values
+            raw_positive = (
+                np.asarray(raw_dual_values[0], dtype=np.float64)
+                / certificate.turnover_row_scale
             )
+            raw_negative = (
+                np.asarray(raw_dual_values[1], dtype=np.float64)
+                / certificate.turnover_row_scale
+            )
+            raw_lower = np.asarray(raw_dual_values[2], dtype=np.float64)
+            raw_upper = np.asarray(raw_dual_values[3], dtype=np.float64)
             raw_arrays = (
                 raw_positive,
                 raw_negative,
@@ -2190,15 +2377,24 @@ class _WeeklyOpenLoopGeometry:
             physical_turnover_matrix = (
                 turnover_matrix * action_scale[None, :]
             )
+            turnover_row_scale = np.maximum.reduce(
+                (
+                    np.ones(len(turnover_weights), dtype=np.float64),
+                    np.max(np.abs(physical_turnover_matrix), axis=1),
+                    np.abs(turnover_offset),
+                )
+            )
+            normalized_turnover = turnover / turnover_row_scale
             turnover_epigraph = cp.Variable(len(turnover_weights))
             scaled_position_cap = (
                 self.config.solver_position_cap / action_scale
             )
-            positive_turnover_constraint = turnover <= turnover_epigraph
-            negative_turnover_constraint = -turnover <= turnover_epigraph
-            # Express the identical physical cap in optimizer coordinates.
-            # Physical rows can otherwise carry coefficients of 1e6 and make
-            # both first-order feasibility and fallback duals ill-conditioned.
+            positive_turnover_constraint = (
+                normalized_turnover <= turnover_epigraph
+            )
+            negative_turnover_constraint = (
+                -normalized_turnover <= turnover_epigraph
+            )
             lower_position_constraint = (
                 scaled_positions >= -scaled_position_cap
             )
@@ -2209,7 +2405,8 @@ class _WeeklyOpenLoopGeometry:
                 0.5 * cp.quad_form(scaled_positions, cp.psd_wrap(hessian))
                 + linear @ scaled_positions
                 + objective_constant
-                + turnover_weights @ turnover_epigraph
+                + (turnover_weights * turnover_row_scale)
+                @ turnover_epigraph
             )
             constraints = [
                 positive_turnover_constraint,
@@ -2225,6 +2422,10 @@ class _WeeklyOpenLoopGeometry:
                 ),
                 turnover_offset=np.asarray(turnover_offset, dtype=np.float64),
                 turnover_weights=np.asarray(turnover_weights, dtype=np.float64),
+                turnover_row_scale=np.asarray(
+                    turnover_row_scale,
+                    dtype=np.float64,
+                ),
                 scaled_position_cap=np.asarray(
                     scaled_position_cap,
                     dtype=np.float64,
