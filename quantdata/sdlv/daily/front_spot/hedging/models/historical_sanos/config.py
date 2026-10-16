@@ -19,7 +19,7 @@ class HistoricalSanosObjective(StrEnum):
     POWER_EXPONENTIAL = "power-exponential"
 
 
-@version("1.27")
+@version("1.28")
 @dataclass(frozen=True, kw_only=True)
 class HistoricalSanosConfig:
     """Logical settings for rolling empirical SANOS hedging."""

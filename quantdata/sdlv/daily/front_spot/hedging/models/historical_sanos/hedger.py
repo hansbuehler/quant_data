@@ -207,7 +207,7 @@ def _compose_hedge_fit(
         converged=(
             claim_policy.converged
             and zero_policy.converged
-            and cap_hits == 0
+            and internal_cap_hits == 0
             and cap_stability_certified
         ),
         internal_cap_hits=internal_cap_hits,
@@ -914,6 +914,7 @@ def _minimize_mean_volatility(
                 <= config.solver_position_cap + config.certificate_tolerance
             )
         )
+        raw_result.refinement_seed_eligible = raw_feasible
         if raw_result.success or (
             raw_result.recession_direction and raw_feasible
         ):
@@ -938,14 +939,21 @@ def _minimize_mean_volatility(
             include_translation=False,
             action_scale=action_scale,
         )[0]
-        return certify_action(
+        canonical_result = certify_action(
             canonical_action,
             canonicalization_error=abs(
                 canonical_objective - float(raw_result.fun)
             ),
         )
+        canonical_result.refinement_seed_eligible = raw_feasible
+        return canonical_result
 
-    conic_result = certify_current_solution()
+    primary_status = solver_status
+    primary_result = certify_current_solution()
+    conic_result = primary_result
+    refinement_candidates: list[tuple[str, str | None, OptimizeResult]] = [
+        ("primary", primary_status, primary_result),
+    ]
     if (
         not conic_result.success
         and not conic_result.recession_direction
@@ -959,21 +967,101 @@ def _minimize_mean_volatility(
         )
         total_iterations += fallback_iterations
         conic_result = certify_current_solution()
+        refinement_candidates.append(("SCS", solver_status, conic_result))
     if conic_result.success or conic_result.recession_direction:
         return conic_result
-    refined = _minimize_exact_cost_policy(
-        np.asarray(conic_result.x, dtype=np.float64),
-        instruments,
-        claim,
-        costs,
-        config=config,
-        include_translation=False,
-        action_scale=action_scale,
+    eligible_candidates = [
+        (name, candidate)
+        for name, status, candidate in refinement_candidates
+        if status in {cp.OPTIMAL, cp.OPTIMAL_INACCURATE}
+        and bool(getattr(candidate, "refinement_seed_eligible", False))
+        and _is_finite_feasible_action(
+            candidate.x,
+            instrument_count=instrument_count,
+            position_cap=config.solver_position_cap,
+            tolerance=config.certificate_tolerance,
+        )
+    ]
+    eligible_candidates.sort(
+        key=lambda item: _objective_and_gradient(
+            np.asarray(item[1].x, dtype=np.float64),
+            instruments,
+            claim,
+            costs,
+            config=config,
+            include_translation=False,
+            action_scale=action_scale,
+        )[0]
     )
-    refined.nit = int(conic_result.nit) + int(refined.nit)
-    refined.message = f"{conic_result.message}; exact refinement {refined.message}"
-    refined.recession_direction = False
-    return refined
+    failed_refinements: list[OptimizeResult] = []
+    for candidate_name, candidate in eligible_candidates:
+        refined = _minimize_exact_cost_policy(
+            np.asarray(candidate.x, dtype=np.float64),
+            instruments,
+            claim,
+            costs,
+            config=config,
+            include_translation=False,
+            action_scale=action_scale,
+        )
+        refined.nit = total_iterations + int(refined.nit)
+        refined.message = (
+            f"{solver_trace}; exact refinement from preserved "
+            f"{candidate_name} candidate after {candidate.message}; "
+            f"{refined.message}"
+        )
+        refined_scaled_action = (
+            np.asarray(refined.x[:instrument_count], dtype=np.float64)
+            / action_scale
+        )
+        unregularized_objective = float(refined.fun) - (
+            0.5
+            * config.quadratic_ridge
+            * float(refined_scaled_action @ refined_scaled_action)
+        )
+        refined.unregularized_recession_direction = bool(
+            np.all(claim == 0.0)
+            and unregularized_objective < -config.certificate_tolerance
+        )
+        refined.recession_direction = bool(
+            refined.unregularized_recession_direction
+            and config.quadratic_ridge == 0.0
+        )
+        if refined.unregularized_recession_direction:
+            refined.message = (
+                f"{refined.message}; unregularized_recession_direction="
+                f"{unregularized_objective:.6g}"
+            )
+        if refined.recession_direction:
+            refined.success = False
+        if refined.success:
+            return refined
+        failed_refinements.append(refined)
+    if failed_refinements:
+        return min(
+            failed_refinements,
+            key=lambda result: float(getattr(result, "optimality", math.inf)),
+        )
+    conic_result.message = (
+        f"{solver_trace}; no finite feasible conic candidate was eligible for "
+        "exact refinement; "
+        f"{conic_result.message}"
+    )
+    return conic_result
+
+
+def _is_finite_feasible_action(
+    parameters: NDArray[np.floating],
+    *,
+    instrument_count: int,
+    position_cap: float,
+    tolerance: float,
+) -> bool:
+    """Return whether a conic point can safely seed exact refinement."""
+    values = np.asarray(parameters, dtype=np.float64)
+    if values.shape != (instrument_count,) or not np.all(np.isfinite(values)):
+        return False
+    return bool(np.all(np.abs(values) <= position_cap + tolerance))
 
 
 def _solve_conic_with_scs(

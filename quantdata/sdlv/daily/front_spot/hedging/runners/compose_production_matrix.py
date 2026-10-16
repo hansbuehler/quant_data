@@ -303,14 +303,40 @@ def _completed_output_identity(
             raise ValueError("completed daily source uses the wrong target cohort")
         nonconverged = _required_integer(summary, "nonconverged_results")
         cap_hits = _required_integer(summary, "cap_hits")
+        fit_cap_hits = _optional_integer(summary, "fit_cap_hits", cap_hits)
+        executed_cap_hits = _optional_integer(
+            summary,
+            "executed_cap_hits",
+            0,
+        )
         numerical_gate_required = _required_boolean(run, "require_convergence")
+        require_no_fit_cap_hits = _optional_boolean(
+            run,
+            "require_no_fit_cap_hits",
+            numerical_gate_required,
+        )
+        require_no_executed_cap_hits = _optional_boolean(
+            run,
+            "require_no_executed_cap_hits",
+            numerical_gate_required,
+        )
     elif matrix_schema == execute_production_matrix.WEEKLY_MATRIX_SCHEMA:
         nonconverged = _required_integer(summary, "nonconverged_fits")
         cap_hits = _required_integer(summary, "cap_hits")
+        fit_cap_hits = _required_integer(summary, "fit_cap_hits")
+        executed_cap_hits = _required_integer(summary, "executed_cap_hits")
         numerical_gate_required = _required_boolean(run, "require_no_cap_hits")
+        require_no_fit_cap_hits = numerical_gate_required
+        require_no_executed_cap_hits = numerical_gate_required
     else:
         raise ValueError(f"unsupported production-matrix schema: {matrix_schema}")
-    if numerical_gate_required and (nonconverged or cap_hits):
+    if cap_hits != fit_cap_hits + executed_cap_hits:
+        raise ValueError("completed source cap-hit counts do not reconcile")
+    if numerical_gate_required and (
+        nonconverged
+        or (require_no_fit_cap_hits and fit_cap_hits)
+        or (require_no_executed_cap_hits and executed_cap_hits)
+    ):
         raise ValueError("completed source failed its numerical gates")
     target_cohort_identity = _canonical_sha256(
         {
@@ -321,7 +347,11 @@ def _completed_output_identity(
     )
     numerical_diagnostics: JsonObject = {
         "gate_required": numerical_gate_required,
+        "require_no_fit_cap_hits": require_no_fit_cap_hits,
+        "require_no_executed_cap_hits": require_no_executed_cap_hits,
         "nonconverged": nonconverged,
+        "fit_cap_hits": fit_cap_hits,
+        "executed_cap_hits": executed_cap_hits,
         "cap_hits": cap_hits,
     }
     return (
@@ -426,6 +456,20 @@ def _required_integer(payload: JsonObject, field: str) -> int:
 
 def _required_boolean(payload: JsonObject, field: str) -> bool:
     value = payload.get(field)
+    if not isinstance(value, bool):
+        raise ValueError(f"{field} must be boolean")
+    return value
+
+
+def _optional_integer(payload: JsonObject, field: str, default: int) -> int:
+    value = payload.get(field, default)
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{field} must be a non-negative integer")
+    return value
+
+
+def _optional_boolean(payload: JsonObject, field: str, default: bool) -> bool:
+    value = payload.get(field, default)
     if not isinstance(value, bool):
         raise ValueError(f"{field} must be boolean")
     return value

@@ -34,6 +34,7 @@ from quantdata.sdlv.daily.front_spot.hedging.data.public_only import (
 from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
     DailyEvaluationSpec,
     DailyEvaluationSummary,
+    daily_numerical_diagnostics,
     dataset_manifest_sha256,
     eligible_daily_origins,
     read_daily_record,
@@ -247,14 +248,18 @@ def summarize_completed_daily_run(
         raise ValueError("daily aggregation requires a complete evaluation run")
 
     results: list[HedgeSmokeResult] = []
+    fit_cap_hits = 0
+    executed_cap_hits = 0
     for origin in summary.completed_origins:
-        results.extend(
-            read_daily_record(
-                directory / "records" / f"{origin}.json",
-                spec=spec,
-                origin_date=date.fromisoformat(origin),
-            )
+        origin_results = read_daily_record(
+            directory / "records" / f"{origin}.json",
+            spec=spec,
+            origin_date=date.fromisoformat(origin),
         )
+        diagnostics = daily_numerical_diagnostics(origin_results)
+        fit_cap_hits += int(diagnostics["fit_cap_hits"])
+        executed_cap_hits += int(diagnostics["executed_cap_hits"])
+        results.extend(origin_results)
     if len(results) != summary.result_count:
         raise ValueError("daily record count does not match the completed summary")
     if summary.result_count != len(eligible) * len(spec.target_labels):
@@ -263,6 +268,12 @@ def summarize_completed_daily_run(
         raise ValueError("daily nonconvergence count does not match its records")
     if summary.cap_hits != sum(result.cap_hits for result in results):
         raise ValueError("daily cap-hit count does not match its records")
+    if (
+        summary.fit_cap_hits != fit_cap_hits
+        or summary.executed_cap_hits != executed_cap_hits
+        or summary.cap_hits != fit_cap_hits + executed_cap_hits
+    ):
+        raise ValueError("daily split cap-hit counts do not match its records")
 
     thresholds = initialization_volatility_thresholds(panel, config=config)
     volatility_by_origin = _volatility_by_origin(panel, results=tuple(results))

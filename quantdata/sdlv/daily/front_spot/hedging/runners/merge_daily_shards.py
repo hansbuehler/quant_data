@@ -218,6 +218,8 @@ def _load_complete_shard(
         or rebuilt.completed_origins != summary.completed_origins
         or rebuilt.result_count != summary.result_count
         or rebuilt.nonconverged_results != summary.nonconverged_results
+        or rebuilt.fit_cap_hits != summary.fit_cap_hits
+        or rebuilt.executed_cap_hits != summary.executed_cap_hits
         or rebuilt.cap_hits != summary.cap_hits
         or rebuilt.unregularized_recession_direction_fits
         != summary.unregularized_recession_direction_fits
@@ -238,6 +240,9 @@ def _complete_summary(
     records: dict[date, tuple[HedgeSmokeResult, ...]],
 ) -> DailyEvaluationSummary:
     results = tuple(result for origin in eligible for result in records[origin])
+    diagnostics = tuple(
+        daily_numerical_diagnostics(records[origin]) for origin in eligible
+    )
     return DailyEvaluationSummary(
         run_identity=spec.run_identity,
         eligible_origins=tuple(value.isoformat() for value in eligible),
@@ -245,14 +250,14 @@ def _complete_summary(
         reused_origins=tuple(value.isoformat() for value in eligible),
         result_count=len(results),
         nonconverged_results=sum(not result.converged for result in results),
-        cap_hits=sum(result.cap_hits for result in results),
+        fit_cap_hits=sum(int(value["fit_cap_hits"]) for value in diagnostics),
+        executed_cap_hits=sum(
+            int(value["executed_cap_hits"]) for value in diagnostics
+        ),
+        cap_hits=sum(int(value["cap_hits"]) for value in diagnostics),
         unregularized_recession_direction_fits=sum(
-            int(
-                daily_numerical_diagnostics(records[origin])[
-                    "unregularized_recession_direction_fits"
-                ]
-            )
-            for origin in eligible
+            int(value["unregularized_recession_direction_fits"])
+            for value in diagnostics
         ),
     )
 

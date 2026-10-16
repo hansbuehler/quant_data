@@ -6,7 +6,7 @@ import hashlib
 import json
 import math
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import date
 from pathlib import Path
 
@@ -24,7 +24,8 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.numerical_gate_failure impo
     write_numerical_gate_failure,
 )
 
-DAILY_EVALUATION_SCHEMA = "hedging-daily-evaluation-v3"
+DAILY_EVALUATION_SCHEMA = "hedging-daily-evaluation-v4"
+LEGACY_DAILY_EVALUATION_SCHEMA = "hedging-daily-evaluation-v3"
 DAILY_RECORD_SCHEMA = "hedging-daily-record-v2"
 
 DailyBookFunction = Callable[
@@ -33,7 +34,7 @@ DailyBookFunction = Callable[
 ]
 
 
-@version("1.1")
+@version("1.2")
 @dataclass(frozen=True, kw_only=True)
 class DailyEvaluationSpec:
     """Immutable logical identity and gates for one daily benchmark run."""
@@ -51,7 +52,19 @@ class DailyEvaluationSpec:
     target_quantities: tuple[float, ...]
     target_notional_identity: str
     require_convergence: bool = True
+    require_no_fit_cap_hits: bool = True
+    require_no_executed_cap_hits: bool = False
     user_version: str = "0.1"
+    metadata_schema: str = field(
+        default=DAILY_EVALUATION_SCHEMA,
+        repr=False,
+        compare=False,
+    )
+    metadata_code_version: str = field(
+        default="1.2",
+        repr=False,
+        compare=False,
+    )
 
     def __post_init__(self) -> None:
         labels = (
@@ -106,6 +119,20 @@ class DailyEvaluationSpec:
             ),
             lambda: "daily target quantities must be finite-positive and aligned",
         )
+        verify_inp(
+            type(self.require_convergence) is bool
+            and type(self.require_no_fit_cap_hits) is bool
+            and type(self.require_no_executed_cap_hits) is bool,
+            lambda: "daily numerical-gate controls must be boolean",
+        )
+        verify_inp(
+            (self.metadata_schema, self.metadata_code_version)
+            in {
+                (DAILY_EVALUATION_SCHEMA, str(type(self).version)),
+                (LEGACY_DAILY_EVALUATION_SCHEMA, "1.1"),
+            },
+            lambda: "daily metadata schema and code version are incompatible",
+        )
 
     @property
     def run_identity(self) -> str:
@@ -114,9 +141,9 @@ class DailyEvaluationSpec:
 
     def to_dict(self) -> dict[str, object]:
         """Return the immutable JSON run specification."""
-        return {
-            "schema": DAILY_EVALUATION_SCHEMA,
-            "code_version": str(type(self).version),
+        payload = {
+            "schema": self.metadata_schema,
+            "code_version": self.metadata_code_version,
             "label": self.label,
             "model": self.model,
             "measure": self.measure,
@@ -132,14 +159,23 @@ class DailyEvaluationSpec:
             "require_convergence": self.require_convergence,
             "user_version": self.user_version,
         }
+        if self.metadata_schema == DAILY_EVALUATION_SCHEMA:
+            payload["require_no_fit_cap_hits"] = self.require_no_fit_cap_hits
+            payload["require_no_executed_cap_hits"] = (
+                self.require_no_executed_cap_hits
+            )
+        return payload
 
     @classmethod
     def from_dict(cls, payload: dict[str, object]) -> DailyEvaluationSpec:
         """Reconstruct and authenticate an immutable JSON run specification."""
-        if payload.get("schema") != DAILY_EVALUATION_SCHEMA:
+        schema = payload.get("schema")
+        code_version = payload.get("code_version")
+        if (schema, code_version) not in {
+            (DAILY_EVALUATION_SCHEMA, str(cls.version)),
+            (LEGACY_DAILY_EVALUATION_SCHEMA, "1.1"),
+        }:
             raise ValueError("daily run metadata has an incompatible schema")
-        if payload.get("code_version") != str(cls.version):
-            raise ValueError("daily run metadata has an incompatible code version")
         model_config_snapshot = payload.get("model_config_snapshot")
         if not isinstance(model_config_snapshot, dict):
             raise ValueError("daily model configuration snapshot must be a JSON object")
@@ -166,7 +202,19 @@ class DailyEvaluationSpec:
                 "target_notional_identity",
             ),
             require_convergence=_required_boolean(payload, "require_convergence"),
+            require_no_fit_cap_hits=(
+                _required_boolean(payload, "require_no_fit_cap_hits")
+                if schema == DAILY_EVALUATION_SCHEMA
+                else True
+            ),
+            require_no_executed_cap_hits=(
+                _required_boolean(payload, "require_no_executed_cap_hits")
+                if schema == DAILY_EVALUATION_SCHEMA
+                else True
+            ),
             user_version=_required_string(payload, "user_version"),
+            metadata_schema=str(schema),
+            metadata_code_version=str(code_version),
         )
         if payload.get("run_identity") != spec.run_identity:
             raise ValueError("daily run metadata identity is not authentic")
@@ -183,6 +231,8 @@ class DailyEvaluationSummary:
     reused_origins: tuple[str, ...]
     result_count: int
     nonconverged_results: int
+    fit_cap_hits: int
+    executed_cap_hits: int
     cap_hits: int
     unregularized_recession_direction_fits: int
 
@@ -209,10 +259,14 @@ class DailyEvaluationSummary:
         if (
             self.result_count < 0
             or self.nonconverged_results < 0
+            or self.fit_cap_hits < 0
+            or self.executed_cap_hits < 0
             or self.cap_hits < 0
             or self.unregularized_recession_direction_fits < 0
         ):
             raise ValueError("daily summary counts must be non-negative")
+        if self.cap_hits != self.fit_cap_hits + self.executed_cap_hits:
+            raise ValueError("daily summary cap-hit counts do not reconcile")
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-compatible summary."""
@@ -223,8 +277,21 @@ class DailyEvaluationSummary:
     @classmethod
     def from_dict(cls, payload: dict[str, object]) -> DailyEvaluationSummary:
         """Reconstruct and validate one JSON completion summary."""
-        if payload.get("schema") != DAILY_EVALUATION_SCHEMA:
+        if payload.get("schema") not in {
+            DAILY_EVALUATION_SCHEMA,
+            LEGACY_DAILY_EVALUATION_SCHEMA,
+        }:
             raise ValueError("daily run summary has an incompatible schema")
+        cap_hits = _required_integer(payload, "cap_hits")
+        fit_cap_hits = payload.get("fit_cap_hits", cap_hits)
+        executed_cap_hits = payload.get("executed_cap_hits", 0)
+        if (
+            isinstance(fit_cap_hits, bool)
+            or not isinstance(fit_cap_hits, int)
+            or isinstance(executed_cap_hits, bool)
+            or not isinstance(executed_cap_hits, int)
+        ):
+            raise ValueError("daily summary split cap-hit counts must be integers")
         return cls(
             run_identity=_required_string(payload, "run_identity"),
             eligible_origins=_required_string_tuple(payload, "eligible_origins"),
@@ -235,7 +302,9 @@ class DailyEvaluationSummary:
                 payload,
                 "nonconverged_results",
             ),
-            cap_hits=_required_integer(payload, "cap_hits"),
+            fit_cap_hits=fit_cap_hits,
+            executed_cap_hits=executed_cap_hits,
+            cap_hits=cap_hits,
             unregularized_recession_direction_fits=_required_integer(
                 payload,
                 "unregularized_recession_direction_fits",
@@ -306,6 +375,8 @@ def run_daily_evaluation(
     reused: list[str] = []
     result_count = 0
     nonconverged = 0
+    fit_cap_hits = 0
+    executed_cap_hits = 0
     cap_hits = 0
     unregularized_recession_direction_fits = 0
     for index, origin_date in enumerate(selected_origins, start=1):
@@ -323,18 +394,34 @@ def run_daily_evaluation(
                 enforce_numerical_gate=False,
             )
             diagnostics = daily_numerical_diagnostics(results)
-            if spec.require_convergence and _daily_gate_failed(diagnostics):
+            if spec.require_convergence and _daily_gate_failed(
+                diagnostics,
+                require_no_fit_cap_hits=spec.require_no_fit_cap_hits,
+                require_no_executed_cap_hits=(
+                    spec.require_no_executed_cap_hits
+                ),
+            ):
                 write_numerical_gate_failure(
                     output_directory=output,
                     run_identity=spec.run_identity,
-                    evaluation_schema=DAILY_EVALUATION_SCHEMA,
+                    evaluation_schema=spec.metadata_schema,
                     model=spec.model,
                     measure=spec.measure,
                     dataset_manifest_sha256=spec.dataset_manifest_sha256,
                     origin_date=origin_date,
                     diagnostics=diagnostics,
+                    require_no_fit_cap_hits=spec.require_no_fit_cap_hits,
+                    require_no_executed_cap_hits=(
+                        spec.require_no_executed_cap_hits
+                    ),
                 )
-                _enforce_daily_numerical_gate(results)
+                _enforce_daily_numerical_gate(
+                    results,
+                    require_no_fit_cap_hits=spec.require_no_fit_cap_hits,
+                    require_no_executed_cap_hits=(
+                        spec.require_no_executed_cap_hits
+                    ),
+                )
             _write_daily_record(
                 record_path,
                 spec=spec,
@@ -344,11 +431,12 @@ def run_daily_evaluation(
         completed.append(origin_date.isoformat())
         result_count += len(results)
         nonconverged += sum(not result.converged for result in results)
-        cap_hits += sum(result.cap_hits for result in results)
+        diagnostics = daily_numerical_diagnostics(results)
+        fit_cap_hits += int(diagnostics["fit_cap_hits"])
+        executed_cap_hits += int(diagnostics["executed_cap_hits"])
+        cap_hits += int(diagnostics["cap_hits"])
         unregularized_recession_direction_fits += int(
-            daily_numerical_diagnostics(results)[
-                "unregularized_recession_direction_fits"
-            ]
+            diagnostics["unregularized_recession_direction_fits"]
         )
         if progress is not None:
             progress(index, len(selected_origins), origin_date, was_reused)
@@ -360,6 +448,8 @@ def run_daily_evaluation(
         reused_origins=tuple(reused),
         result_count=result_count,
         nonconverged_results=nonconverged,
+        fit_cap_hits=fit_cap_hits,
+        executed_cap_hits=executed_cap_hits,
         cap_hits=cap_hits,
         unregularized_recession_direction_fits=(
             unregularized_recession_direction_fits
@@ -444,7 +534,11 @@ def _validate_results(
         ):
             raise ValueError("daily result claim quantity does not match its run specification")
     if spec.require_convergence and enforce_numerical_gate:
-        _enforce_daily_numerical_gate(results)
+        _enforce_daily_numerical_gate(
+            results,
+            require_no_fit_cap_hits=spec.require_no_fit_cap_hits,
+            require_no_executed_cap_hits=spec.require_no_executed_cap_hits,
+        )
 
 
 def daily_numerical_diagnostics(
@@ -491,8 +585,32 @@ def daily_numerical_diagnostics(
             for result in results
         )
     )
+    fit_cap_hits = 0
+    executed_cap_hits = 0
+    for result in results:
+        fit_value = result.diagnostics.get("internal_solver_cap_hits")
+        executed_value = result.diagnostics.get("executable_cap_hits")
+        if fit_value is None:
+            fit_value = result.cap_hits if executed_value is None else 0
+        if executed_value is None:
+            executed_value = 0
+        if (
+            isinstance(fit_value, bool)
+            or not isinstance(fit_value, int)
+            or fit_value < 0
+            or isinstance(executed_value, bool)
+            or not isinstance(executed_value, int)
+            or executed_value < 0
+        ):
+            raise ValueError("daily split cap-hit diagnostics must be non-negative integers")
+        if fit_value + executed_value != result.cap_hits:
+            raise ValueError("daily split cap-hit diagnostics do not reconcile")
+        fit_cap_hits += fit_value
+        executed_cap_hits += executed_value
     return {
-        "cap_hits": sum(result.cap_hits for result in results),
+        "cap_hits": fit_cap_hits + executed_cap_hits,
+        "fit_cap_hits": fit_cap_hits,
+        "executed_cap_hits": executed_cap_hits,
         "nonconverged_results": sum(not result.converged for result in results),
         "recession_direction_fits": (
             claim_recession_fits + shared_zero_recession_fit
@@ -504,29 +622,57 @@ def daily_numerical_diagnostics(
     }
 
 
-def _daily_gate_failed(diagnostics: dict[str, object]) -> bool:
+def _daily_gate_failed(
+    diagnostics: dict[str, object],
+    *,
+    require_no_fit_cap_hits: bool,
+    require_no_executed_cap_hits: bool,
+) -> bool:
     """Return whether a daily diagnostic triggers the strict numerical gate."""
-    return any(
-        int(diagnostics.get(name, 0)) > 0
-        for name in (
-            "cap_hits",
-            "nonconverged_results",
-            "recession_direction_fits",
+    return bool(
+        int(diagnostics.get("nonconverged_results", 0))
+        or int(diagnostics.get("recession_direction_fits", 0))
+        or (
+            require_no_fit_cap_hits
+            and int(diagnostics.get("fit_cap_hits", 0))
+        )
+        or (
+            require_no_executed_cap_hits
+            and int(diagnostics.get("executed_cap_hits", 0))
         )
     )
 
 
 def _enforce_daily_numerical_gate(
     results: tuple[HedgeSmokeResult, ...],
+    *,
+    require_no_fit_cap_hits: bool,
+    require_no_executed_cap_hits: bool,
 ) -> None:
     diagnostics = daily_numerical_diagnostics(results)
     failures = tuple(
         result.claim
         for result in results
-        if not result.converged or result.cap_hits > 0
+        if not result.converged
     )
-    if failures or int(diagnostics["recession_direction_fits"]) > 0:
+    cap_failure = bool(
+        (
+            require_no_fit_cap_hits
+            and int(diagnostics["fit_cap_hits"]) > 0
+        )
+        or (
+            require_no_executed_cap_hits
+            and int(diagnostics["executed_cap_hits"]) > 0
+        )
+    )
+    if (
+        failures
+        or cap_failure
+        or int(diagnostics["recession_direction_fits"]) > 0
+    ):
         labels = ", ".join(failures) if failures else "recession certificate"
+        if cap_failure and not failures:
+            labels = "position-cap certificate"
         raise RuntimeError("daily numerical gate failed for " + labels)
 
 

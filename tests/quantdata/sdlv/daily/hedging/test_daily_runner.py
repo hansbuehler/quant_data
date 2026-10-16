@@ -12,6 +12,7 @@ from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
     PublicHedgingPanel,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
+    LEGACY_DAILY_EVALUATION_SCHEMA,
     DailyEvaluationSpec,
     DailyEvaluationSummary,
     run_daily_evaluation,
@@ -20,6 +21,7 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.merge_daily_shards import (
     merge_daily_shards,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.numerical_gate_failure import (
+    LEGACY_NUMERICAL_GATE_FAILURE_SCHEMA,
     NUMERICAL_GATE_FAILURE_FILENAME,
     load_numerical_gate_failure,
 )
@@ -60,6 +62,7 @@ def _result(
     claim: str,
     claim_quantity: float,
     converged: bool = True,
+    cap_hits: int = 0,
     diagnostics: dict[str, object] | None = None,
 ):
     return HedgeSmokeResult(
@@ -79,7 +82,7 @@ def _result(
         pure_hedge_error=-0.05,
         objective_value=0.2,
         converged=converged,
-        cap_hits=0,
+        cap_hits=cap_hits,
         claim_quantity=claim_quantity,
         diagnostics={} if diagnostics is None else diagnostics,
     )
@@ -156,6 +159,30 @@ def test_daily_run_spec_rejects_forged_identity(tmp_path) -> None:
         DailyEvaluationSpec.from_dict(payload)
 
 
+def test_daily_run_spec_authenticates_legacy_v3_identity(tmp_path) -> None:
+    (tmp_path / "manifest.json").write_text("{}\n", encoding="utf-8")
+    import hashlib
+
+    manifest_sha256 = hashlib.sha256(b"{}\n").hexdigest()
+    legacy_spec = replace(
+        _spec(manifest_sha256),
+        require_no_executed_cap_hits=True,
+        metadata_schema=LEGACY_DAILY_EVALUATION_SCHEMA,
+        metadata_code_version="1.1",
+    )
+    payload = {
+        **legacy_spec.to_dict(),
+        "run_identity": legacy_spec.run_identity,
+    }
+
+    assert "require_no_fit_cap_hits" not in payload
+    assert "require_no_executed_cap_hits" not in payload
+    restored = DailyEvaluationSpec.from_dict(payload)
+    assert restored.run_identity == legacy_spec.run_identity
+    assert restored.require_no_fit_cap_hits
+    assert restored.require_no_executed_cap_hits
+
+
 def test_daily_runner_rejects_incomplete_or_nonconverged_books(tmp_path) -> None:
     (tmp_path / "manifest.json").write_text("{}\n", encoding="utf-8")
     import hashlib
@@ -195,10 +222,68 @@ def test_daily_runner_rejects_incomplete_or_nonconverged_books(tmp_path) -> None
     assert failure["triggered_gates"] == ["nonconverged-fit"]
     assert failure["diagnostics"] == {
         "cap_hits": 0,
+        "executed_cap_hits": 0,
+        "fit_cap_hits": 0,
         "nonconverged_results": 1,
         "recession_direction_fits": 0,
         "unregularized_recession_direction_fits": 0,
     }
+
+
+def test_daily_runner_records_executable_cap_hits_without_failing(tmp_path) -> None:
+    (tmp_path / "manifest.json").write_text("{}\n", encoding="utf-8")
+    import hashlib
+
+    manifest_sha256 = hashlib.sha256(b"{}\n").hexdigest()
+    output = tmp_path / "executable-cap"
+    summary = run_daily_evaluation(
+        _RunnerPanel(tmp_path),
+        spec=_spec(manifest_sha256),
+        run_book=lambda _panel, origin: (
+            _result(
+                origin,
+                claim="claim-a",
+                claim_quantity=0.25,
+                cap_hits=3,
+                diagnostics={"executable_cap_hits": 3},
+            ),
+            _result(origin, claim="claim-b", claim_quantity=0.5),
+        ),
+        output_directory=output,
+    )
+
+    assert summary.nonconverged_results == 0
+    assert summary.cap_hits == 3
+    assert not (output / NUMERICAL_GATE_FAILURE_FILENAME).exists()
+
+
+def test_legacy_numerical_failure_loads_without_explicit_gate_policy(
+    tmp_path,
+) -> None:
+    path = tmp_path / NUMERICAL_GATE_FAILURE_FILENAME
+    payload = {
+        "schema": LEGACY_NUMERICAL_GATE_FAILURE_SCHEMA,
+        "run_identity": "legacy-run",
+        "evaluation_schema": LEGACY_DAILY_EVALUATION_SCHEMA,
+        "model": "historical-sanos",
+        "measure": "historical-P",
+        "schedule": None,
+        "dataset_manifest_sha256": "a" * 64,
+        "origin_date": "2023-05-30",
+        "classification": "nonconverged-fit",
+        "triggered_gates": ["nonconverged-fit"],
+        "summary": (
+            "strict numerical gate rejected nonconverged-fit "
+            "(cap_hits=0, nonconverged_results=1)"
+        ),
+        "diagnostics": {
+            "cap_hits": 0,
+            "nonconverged_results": 1,
+        },
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    assert load_numerical_gate_failure(path) == payload
 
 
 def test_daily_runner_classifies_mean_volatility_recession(tmp_path) -> None:
@@ -235,6 +320,8 @@ def test_daily_runner_classifies_mean_volatility_recession(tmp_path) -> None:
     assert failure["triggered_gates"] == ["mean-volatility-recession-direction"]
     assert failure["diagnostics"] == {
         "cap_hits": 0,
+        "executed_cap_hits": 0,
+        "fit_cap_hits": 0,
         "nonconverged_results": 0,
         "recession_direction_fits": 1,
         "unregularized_recession_direction_fits": 0,

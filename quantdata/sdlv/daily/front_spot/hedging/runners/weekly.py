@@ -442,7 +442,8 @@ def _run_weekly_evaluation_locked(
                         ),
                         "cap_hits": diagnostics.cap_hits,
                     },
-                    require_no_cap_hits=spec.require_no_cap_hits,
+                    require_no_fit_cap_hits=spec.require_no_cap_hits,
+                    require_no_executed_cap_hits=spec.require_no_cap_hits,
                 )
                 _enforce_weekly_numerical_gate(
                     diagnostics,

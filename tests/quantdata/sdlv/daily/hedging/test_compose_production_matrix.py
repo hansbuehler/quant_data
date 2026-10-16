@@ -85,7 +85,17 @@ def _complete(
     require_convergence: bool = True,
     nonconverged_results: int = 0,
     cap_hits: int = 0,
+    fit_cap_hits: int | None = None,
+    executed_cap_hits: int = 0,
+    require_no_fit_cap_hits: bool | None = None,
+    require_no_executed_cap_hits: bool | None = None,
 ) -> None:
+    if fit_cap_hits is None:
+        fit_cap_hits = cap_hits - executed_cap_hits
+    if require_no_fit_cap_hits is None:
+        require_no_fit_cap_hits = require_convergence
+    if require_no_executed_cap_hits is None:
+        require_no_executed_cap_hits = require_convergence
     labels = [target.label for target in daily_digital_targets()]
     run = {
         "run_identity": "run-identity",
@@ -94,6 +104,8 @@ def _complete(
         "target_labels": labels,
         "target_quantities": [1.0] * len(labels),
         "require_convergence": require_convergence,
+        "require_no_fit_cap_hits": require_no_fit_cap_hits,
+        "require_no_executed_cap_hits": require_no_executed_cap_hits,
     }
     results = {
         "schema": "hedging-daily-results-v2",
@@ -108,6 +120,8 @@ def _complete(
         output / "summary.json",
         {
             "nonconverged_results": nonconverged_results,
+            "fit_cap_hits": fit_cap_hits,
+            "executed_cap_hits": executed_cap_hits,
             "cap_hits": cap_hits,
         },
     )
@@ -197,6 +211,48 @@ def test_compose_uses_first_complete_source(tmp_path: Path) -> None:
 
     assert payload["composition"]["replacement_sources"] == {
         "native": str(second_path)
+    }
+
+
+def test_compose_accepts_flagged_daily_executable_cap_hits(tmp_path: Path) -> None:
+    output = tmp_path / "complete"
+    source = _case("native", model="historical-sanos", output=output)
+    base_path = tmp_path / "base.json"
+    source_path = tmp_path / "source.json"
+    _matrix(base_path, [source])
+    _matrix(source_path, [source])
+    _complete(
+        output,
+        model="historical-sanos",
+        require_convergence=True,
+        nonconverged_results=0,
+        cap_hits=4,
+        fit_cap_hits=0,
+        executed_cap_hits=4,
+        require_no_fit_cap_hits=True,
+        require_no_executed_cap_hits=False,
+    )
+
+    payload = compose_production_matrix(
+        base_matrix=base_path,
+        source_matrices=(source_path,),
+        replace_models=frozenset({"historical-sanos"}),
+        expected_result_count=7,
+        expected_results_schema="hedging-daily-results-v2",
+        dataset=tmp_path / "dataset",
+        output=tmp_path / "composed.json",
+    )
+
+    assert payload["composition"]["source_numerical_diagnostics"] == {
+        "native": {
+            "gate_required": True,
+            "require_no_fit_cap_hits": True,
+            "require_no_executed_cap_hits": False,
+            "nonconverged": 0,
+            "fit_cap_hits": 0,
+            "executed_cap_hits": 4,
+            "cap_hits": 4,
+        }
     }
 
 

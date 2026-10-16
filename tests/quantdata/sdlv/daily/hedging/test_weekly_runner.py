@@ -442,7 +442,8 @@ def test_weekly_runner_authenticates_internal_fit_diagnostics_without_duplicatio
         / NUMERICAL_GATE_FAILURE_FILENAME
     )
     assert nonconverged_failure["gate_policy"] == {
-        "require_no_cap_hits": False,
+        "require_no_fit_cap_hits": False,
+        "require_no_executed_cap_hits": False,
     }
     assert nonconverged_failure["classification"] == "nonconverged-fit"
     assert nonconverged_failure["triggered_gates"] == ["nonconverged-fit"]
@@ -458,7 +459,8 @@ def test_weekly_runner_authenticates_internal_fit_diagnostics_without_duplicatio
         tmp_path / "permitted-recession" / NUMERICAL_GATE_FAILURE_FILENAME
     )
     assert permitted_recession_failure["gate_policy"] == {
-        "require_no_cap_hits": False,
+        "require_no_fit_cap_hits": False,
+        "require_no_executed_cap_hits": False,
     }
     assert permitted_recession_failure["classification"] == (
         "mean-volatility-recession-direction"

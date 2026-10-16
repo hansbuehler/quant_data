@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import replace
 
 import cvxpy as cp
@@ -907,6 +908,100 @@ def test_mean_volatility_inaccurate_bad_certificate_requires_scs(
     assert "SCS=optimal" in result.message
 
 
+def test_mean_volatility_preserves_primary_candidate_when_scs_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    generator = np.random.default_rng(197)
+    instruments = generator.normal(scale=0.01, size=(60, 2))
+    claim = -0.3 * instruments[:, 0] + generator.normal(scale=0.001, size=60)
+    costs = np.full(instruments.shape[1], 1.0e-5)
+    config = HistoricalSanosConfig(
+        rolling_observations=60,
+        objective=HistoricalSanosObjective.MEAN_VOLATILITY,
+        risk_parameter=1.0,
+    )
+    action_scale = hedger._action_scale(instruments, config=config)
+    original_solve = cp.Problem.solve
+    scs_calls = 0
+
+    def invalidate_scs_state(
+        problem: cp.Problem,
+        *args: object,
+        **kwargs: object,
+    ) -> float:
+        nonlocal scs_calls
+        if kwargs.get("solver") == cp.SCS:
+            scs_calls += 1
+            problem._status = cp.UNBOUNDED_INACCURATE
+            problem._value = -math.inf
+            problem.variables()[0].value = None
+            return -math.inf
+        value = original_solve(problem, *args, **kwargs)
+        problem._value = float(problem.value) + 1.0
+        return value
+
+    monkeypatch.setattr(cp.Problem, "solve", invalidate_scs_state)
+    result = hedger._minimize_mean_volatility(
+        np.zeros(instruments.shape[1]),
+        instruments,
+        claim,
+        costs,
+        config=config,
+        action_scale=action_scale,
+    )
+
+    assert result.success
+    assert scs_calls == 1
+    assert "SCS=unbounded_inaccurate" in result.message
+    assert "preserved primary candidate" in result.message
+    assert result.optimality <= config.certificate_tolerance
+
+
+def test_mean_volatility_rejects_corrupt_primary_when_scs_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    generator = np.random.default_rng(197)
+    instruments = generator.normal(scale=0.01, size=(60, 2))
+    claim = -0.3 * instruments[:, 0] + generator.normal(scale=0.001, size=60)
+    costs = np.full(instruments.shape[1], 1.0e-5)
+    config = HistoricalSanosConfig(
+        rolling_observations=60,
+        objective=HistoricalSanosObjective.MEAN_VOLATILITY,
+        risk_parameter=1.0,
+    )
+    action_scale = hedger._action_scale(instruments, config=config)
+    original_solve = cp.Problem.solve
+
+    def corrupt_primary_and_fail_scs(
+        problem: cp.Problem,
+        *args: object,
+        **kwargs: object,
+    ) -> float:
+        if kwargs.get("solver") == cp.SCS:
+            problem._status = cp.UNBOUNDED_INACCURATE
+            problem._value = -math.inf
+            problem.variables()[0].value = None
+            return -math.inf
+        value = original_solve(problem, *args, **kwargs)
+        problem.variables()[0].value = (
+            2.0 * config.solver_position_cap / action_scale
+        )
+        return value
+
+    monkeypatch.setattr(cp.Problem, "solve", corrupt_primary_and_fail_scs)
+    result = hedger._minimize_mean_volatility(
+        np.zeros(instruments.shape[1]),
+        instruments,
+        claim,
+        costs,
+        config=config,
+        action_scale=action_scale,
+    )
+
+    assert not result.success
+    assert "no finite feasible conic candidate" in result.message
+
+
 def test_virtual_policy_solver_cap_is_distinct_from_executable_cap() -> None:
     generator = np.random.default_rng(31)
     observations = 252
@@ -960,7 +1055,7 @@ def test_executable_cap_is_enforced_after_policy_subtraction() -> None:
     assert fit.internal_cap_hits == 0
     assert fit.executable_cap_hits == 1
     assert fit.cap_hits == 1
-    assert not fit.converged
+    assert fit.converged
 
 
 class _OneDayPanel:

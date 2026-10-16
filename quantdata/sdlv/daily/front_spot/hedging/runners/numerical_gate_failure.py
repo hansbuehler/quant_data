@@ -9,7 +9,8 @@ from typing import TypeAlias
 
 JsonObject: TypeAlias = dict[str, object]
 
-NUMERICAL_GATE_FAILURE_SCHEMA = "hedging-numerical-gate-failure-v1"
+NUMERICAL_GATE_FAILURE_SCHEMA = "hedging-numerical-gate-failure-v2"
+LEGACY_NUMERICAL_GATE_FAILURE_SCHEMA = "hedging-numerical-gate-failure-v1"
 NUMERICAL_GATE_FAILURE_FILENAME = "numerical-gate-failure.json"
 NUMERICAL_GATE_CLASSIFICATIONS = frozenset(
     {
@@ -32,7 +33,8 @@ def write_numerical_gate_failure(
     origin_date: date,
     diagnostics: JsonObject,
     schedule: str | None = None,
-    require_no_cap_hits: bool = True,
+    require_no_fit_cap_hits: bool = True,
+    require_no_executed_cap_hits: bool = True,
 ) -> Path:
     """Atomically record the exact strict gate rejected by an evaluation runner."""
     payload = numerical_gate_failure_payload(
@@ -44,7 +46,8 @@ def write_numerical_gate_failure(
         origin_date=origin_date,
         diagnostics=diagnostics,
         schedule=schedule,
-        require_no_cap_hits=require_no_cap_hits,
+        require_no_fit_cap_hits=require_no_fit_cap_hits,
+        require_no_executed_cap_hits=require_no_executed_cap_hits,
     )
     path = Path(output_directory) / NUMERICAL_GATE_FAILURE_FILENAME
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -67,7 +70,8 @@ def numerical_gate_failure_payload(
     origin_date: date,
     diagnostics: JsonObject,
     schedule: str | None = None,
-    require_no_cap_hits: bool = True,
+    require_no_fit_cap_hits: bool = True,
+    require_no_executed_cap_hits: bool = True,
 ) -> JsonObject:
     """Build and validate one deterministic numerical-gate failure payload."""
     _require_nonempty(run_identity, "run_identity")
@@ -77,13 +81,20 @@ def numerical_gate_failure_payload(
     _require_sha256(dataset_manifest_sha256, "dataset_manifest_sha256")
     if schedule is not None:
         _require_nonempty(schedule, "schedule")
-    if not isinstance(require_no_cap_hits, bool):
-        raise ValueError("require_no_cap_hits must be boolean")
+    if (
+        not isinstance(require_no_fit_cap_hits, bool)
+        or not isinstance(require_no_executed_cap_hits, bool)
+    ):
+        raise ValueError("numerical cap-hit gate controls must be boolean")
     normalized_diagnostics = _normalized_diagnostics(diagnostics)
-    gate_policy = {"require_no_cap_hits": require_no_cap_hits}
+    gate_policy = {
+        "require_no_fit_cap_hits": require_no_fit_cap_hits,
+        "require_no_executed_cap_hits": require_no_executed_cap_hits,
+    }
     triggered_gates = _triggered_gates(
         normalized_diagnostics,
-        require_no_cap_hits=require_no_cap_hits,
+        require_no_fit_cap_hits=require_no_fit_cap_hits,
+        require_no_executed_cap_hits=require_no_executed_cap_hits,
     )
     if not triggered_gates:
         raise ValueError("numerical-gate failure has no triggered gate")
@@ -111,7 +122,11 @@ def load_numerical_gate_failure(path: Path) -> JsonObject:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError("numerical-gate failure artifact must be an object")
-    if payload.get("schema") != NUMERICAL_GATE_FAILURE_SCHEMA:
+    schema = payload.get("schema")
+    if schema not in {
+        NUMERICAL_GATE_FAILURE_SCHEMA,
+        LEGACY_NUMERICAL_GATE_FAILURE_SCHEMA,
+    }:
         raise ValueError("unexpected numerical-gate failure schema")
     _require_nonempty(payload.get("run_identity"), "run_identity")
     _require_nonempty(payload.get("evaluation_schema"), "evaluation_schema")
@@ -132,20 +147,40 @@ def load_numerical_gate_failure(path: Path) -> JsonObject:
     diagnostics = _normalized_diagnostics(diagnostics_value)
     if diagnostics != diagnostics_value:
         raise ValueError("numerical-gate diagnostics are not canonical")
-    gate_policy_value = payload.get(
-        "gate_policy",
-        {"require_no_cap_hits": True},
-    )
+    gate_policy_value = payload.get("gate_policy")
+    if (
+        schema == LEGACY_NUMERICAL_GATE_FAILURE_SCHEMA
+        and gate_policy_value is None
+    ):
+        gate_policy_value = {"require_no_cap_hits": True}
     if not isinstance(gate_policy_value, dict):
         raise ValueError("numerical-gate policy must be an object")
-    if set(gate_policy_value) != {"require_no_cap_hits"} or not isinstance(
-        gate_policy_value["require_no_cap_hits"],
-        bool,
-    ):
-        raise ValueError("numerical-gate policy is not canonical")
+    if schema == LEGACY_NUMERICAL_GATE_FAILURE_SCHEMA:
+        if set(gate_policy_value) != {"require_no_cap_hits"} or not isinstance(
+            gate_policy_value["require_no_cap_hits"],
+            bool,
+        ):
+            raise ValueError("legacy numerical-gate policy is not canonical")
+        require_no_fit_cap_hits = gate_policy_value["require_no_cap_hits"]
+        require_no_executed_cap_hits = gate_policy_value["require_no_cap_hits"]
+    else:
+        expected_policy_fields = {
+            "require_no_fit_cap_hits",
+            "require_no_executed_cap_hits",
+        }
+        if set(gate_policy_value) != expected_policy_fields or not all(
+            isinstance(gate_policy_value[name], bool)
+            for name in expected_policy_fields
+        ):
+            raise ValueError("numerical-gate policy is not canonical")
+        require_no_fit_cap_hits = gate_policy_value["require_no_fit_cap_hits"]
+        require_no_executed_cap_hits = gate_policy_value[
+            "require_no_executed_cap_hits"
+        ]
     triggered_gates = _triggered_gates(
         diagnostics,
-        require_no_cap_hits=gate_policy_value["require_no_cap_hits"],
+        require_no_fit_cap_hits=require_no_fit_cap_hits,
+        require_no_executed_cap_hits=require_no_executed_cap_hits,
     )
     if not triggered_gates:
         raise ValueError("numerical-gate failure has no triggered gate")
@@ -183,6 +218,12 @@ def _normalized_diagnostics(diagnostics: JsonObject) -> JsonObject:
     daily_with_recession_and_warnings = daily_with_recession | {
         "unregularized_recession_direction_fits"
     }
+    daily_split = {
+        "cap_hits",
+        "executed_cap_hits",
+        "fit_cap_hits",
+        "nonconverged_results",
+    }
     weekly = {
         "cap_hits",
         "executed_cap_hits",
@@ -198,6 +239,24 @@ def _normalized_diagnostics(diagnostics: JsonObject) -> JsonObject:
         daily_with_warnings,
         daily_with_recession_and_warnings,
     ):
+        return normalized
+    optional_daily_split = {
+        "recession_direction_fits",
+        "unregularized_recession_direction_fits",
+    }
+    if fields in tuple(
+        daily_split | included
+        for included in (
+            set(),
+            {"recession_direction_fits"},
+            {"unregularized_recession_direction_fits"},
+            optional_daily_split,
+        )
+    ):
+        if normalized["cap_hits"] != (
+            normalized["fit_cap_hits"] + normalized["executed_cap_hits"]
+        ):
+            raise ValueError("daily numerical-gate cap-hit counts do not reconcile")
         return normalized
     optional_weekly = {
         "recession_direction_fits",
@@ -223,17 +282,18 @@ def _normalized_diagnostics(diagnostics: JsonObject) -> JsonObject:
 def _triggered_gates(
     diagnostics: JsonObject,
     *,
-    require_no_cap_hits: bool,
+    require_no_fit_cap_hits: bool,
+    require_no_executed_cap_hits: bool,
 ) -> tuple[str, ...]:
     triggered: list[str] = []
     if diagnostics.get("recession_direction_fits", 0):
         triggered.append("mean-volatility-recession-direction")
-    if require_no_cap_hits and diagnostics.get(
+    if require_no_executed_cap_hits and diagnostics.get(
         "executed_cap_hits",
         diagnostics.get("cap_hits", 0),
     ):
         triggered.append("position-cap-hit")
-    if require_no_cap_hits and diagnostics.get("fit_cap_hits", 0):
+    if require_no_fit_cap_hits and diagnostics.get("fit_cap_hits", 0):
         triggered.append("policy-fit-cap-hit")
     if diagnostics.get("nonconverged_fits", diagnostics.get("nonconverged_results", 0)):
         triggered.append("nonconverged-fit")

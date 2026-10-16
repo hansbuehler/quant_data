@@ -184,6 +184,8 @@ def _write_authenticated_daily_output(
         nonconverged_results=(
             0 if converged else len(origins) * len(target_labels)
         ),
+        fit_cap_hits=cap_hits * len(origins) * len(target_labels),
+        executed_cap_hits=0,
         cap_hits=cap_hits * len(origins) * len(target_labels),
         unregularized_recession_direction_fits=0,
     )
@@ -517,7 +519,11 @@ def test_composition_retains_precommitted_mean_volatility_diagnostics(
     assert diagnostics == {
         "historical-sanos-mean-volatility-0p1": {
             "gate_required": False,
+            "require_no_fit_cap_hits": True,
+            "require_no_executed_cap_hits": False,
             "nonconverged": 40,
+            "fit_cap_hits": 40,
+            "executed_cap_hits": 0,
             "cap_hits": 40,
         }
     }
