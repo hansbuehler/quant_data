@@ -7,16 +7,36 @@
 
 Our Tangent Levy benchmark follows the codebook construction of
 \citet{TangentLevy}, but is an in-repository implementation rather than the
-authors' software.  At each observed expiry we fit a double-exponential jump
-density to forward-normalized call-equivalent bid--ask intervals.  We then
-project the cumulative intensities onto calendar-consistent non-negative
-density curves and reconstruct forward L\'evy densities on a daily maturity
-grid from zero to 70 business days and a 301-node jump grid on
-$[-0.75,0.75]$.  Simulation evolves this codebook using the discrete
-convolutional HJM drift and uses the compensated shortest-maturity density for
-spot.  The historical diffusion span is the leading 16 constrained PCA
-directions, estimated only through 31 December 2024, with 5\% covariance
-shrinkage; the audit uses eight substeps per business day.
+authors' software.  It is paper-aligned rather than a literal reproduction.
+At each observed expiry we first fit a double-exponential jump density to
+forward-normalized call-equivalent bid--ask intervals.  For each jump node, the
+forward L\'evy density is then represented by 12 non-negative cubic B-spline
+coefficients in maturity.  Analytic spline integrals map these coefficients to
+the fitted average L\'evy measures; non-negative least squares with a curvature
+penalty supplies a smooth positive reconstruction.  We evaluate it on a daily
+maturity grid from zero to 70 business days and a 301-node jump grid on
+$[-0.75,0.75]$.
+
+The historical diffusion fit uses every other daily maturity and the seven
+nonzero jump nodes with highest average training intensity.  Linear
+prolongation maps this reduced grid to the full codebook, and the reduced
+factors are projected onto the discrete exponential-moment constraint before
+PCA.  The leading 16 directions are estimated from 698 consecutive-session
+changes ending on 31 December 2024, explain 95.23\% of reduced-grid variation,
+and use 5\% covariance shrinkage.  Simulation integrates the full-grid
+loadings into eight substep cells per business day, applies the exact cell
+shift, computes the quadratic convolutional HJM drift on its complete support,
+and drives spot with the compensated shortest-maturity jump law.  The maximum
+fitted moment-constraint residual is $5.13\times10^{-16}$.
+
+To retain non-negative finite-step densities, each path uses a predictable
+scalar time change $\gamma$: factor loadings are multiplied by $\gamma$ and
+the quadratic HJM drift by $\gamma^2$.  The scale is fixed before observing the
+Gaussian increment by solving the exact quadratic positivity bound with
+12 conditional-standard-deviation headroom.  This preserves the HJM identity
+but can materially slow the fitted dynamics near the boundary.  In the
+100,000-path audit the mean and minimum scales are 0.133 and 0.0264; no substep
+has $\gamma<0.01$ and no path freezes.
 
 The initial-fit results in Figures~\ref{fig:initial-fit-iv}
 and~\ref{fig:initial-fit-spread} use the final daily-grid reconstruction
@@ -28,6 +48,13 @@ calibration error.  The
 subsequent risk-neutral diagnostics therefore test the implemented projected
 Q dynamics conditional on this retained initial state; they do not turn the
 failed static reconstruction into a successful market calibration.
+
+The restricted-universe audit uses 100,000 paths arranged as 50,000
+antithetic pairs over 20 business days.  Across its 570 live
+day--instrument coordinates, the maximum and 99th-percentile absolute
+$z$-scores are 2.191 and 2.126, with no coordinate above 2.576.  The two-fold
+out-of-fold conditional statistics are $T_{\mathrm{sqr}}=-0.768$ and
+$T_{\mathrm{ent}}=-0.575$; both 95\% confidence intervals contain zero.
 
 \subsection{Matched initial-fit convention}
 

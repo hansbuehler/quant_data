@@ -968,7 +968,7 @@ forthcoming reference fit.
   \caption{Initial implied-volatility excess across the common 29 August 2025
   surface.  Colours show signed distance beyond the nearest bid--ask boundary
   in Black-volatility percentage points.  Quotes inside the spread are not
-  plotted; both populated panels use the same scale.}
+  plotted; both populated panels use the same scale. {\color{red} TODO CRC is missing}}
   \label{fig:initial-fit-iv}
 \end{figure}
 
@@ -978,7 +978,7 @@ forthcoming reference fit.
   \caption{Initial signed price excess across the same surface, measured from
   the nearest bid--ask boundary in half-spread units.  Quotes inside the spread
   are not plotted; the common symmetric-log colour scale has its linear region
-  at one half-spread.}
+  at one half-spread. {\color{red} TODO CRC is missing}}
   \label{fig:initial-fit-spread}
 \end{figure}
 
@@ -1130,8 +1130,8 @@ Table~\ref{tab:numerics-restricted-q} shows the $\Q$ results for the restricted
 trading universe.  Orange marks a moderate departure from the Gaussian
 benchmark and red would mark a five-standard-error violation in the
 coordinate-wise screen.  The separate conditional-statistic rule is given
-above.  All eight GROMM conditional entries are black; both Tangent Levy
-conditional entries reject at the red threshold.
+above.  All eight GROMM conditional entries and both Tangent Levy conditional
+entries are black.
 
 \begin{table}[H]
 \centering
@@ -1150,29 +1150,37 @@ B: rank 16, one step   & 570 & {\color{orange}3.663} & {\color{orange}3.618}
 C: rank 8, eight steps & 570 & 2.793 & 2.373 &  4 & 0 & 1.755 & 1.753\\
 D: rank 16, eight steps& 570 & 2.996 & {\color{orange}2.967}
   & {\color{orange}22} & 0 & 0.039 & 0.040\\
-Tangent Levy & 570 & {\color{red}40.632} & {\color{red}28.089}
-  & {\color{red}229} & {\color{red}134}
-  & {\color{red}4.400} & {\color{red}7.078}\\
+Tangent Levy & 570 & 2.191 & 2.126
+  & 0 & 0
+  & $-0.768$ & $-0.575$\\
+CRC & 570 & {\color{red}?} & {\color{red}?}
+  & {\color{red}?} & {\color{red}?}
+  & {\color{red}?} & {\color{red}?}\\
 \bottomrule
 \end{tabular}
 \caption{Restricted-universe, 100,000-path $\Q$ diagnostics.  The first five
 numeric columns are coordinate-wise unconditional statistics; the final two
 are the two-fold out-of-fold conditional statistics.  Here $N_c$ is the number
-of coordinates with $\abs{z}>c$. {\color{red} Tangent Levy needs to be confirmed -- looks too bad to be true}}
+of coordinates with $\abs{z}>c$. {\color{red} TODO CRC is missing}}
 \label{tab:numerics-restricted-q}
 \end{table}
 
 For the four GROMM specifications, no restricted coordinate exceeds five
 standard errors and no conditional statistic exceeds 1.755 in absolute value.
 Model~D has the richest factor representation, the finer time discretisation,
-and the conditional statistic closest to zero.  Tangent Levy fails both
-screens: 134 coordinates exceed five standard errors, while
-$T_{\mathrm{sqr}}=4.400$ and $T_{\mathrm{ent}}=7.078$.  These results use its
-retained projected daily-grid state discussed in
-Appendix~\ref{app:tangent-levy}.  Table~\ref{tab:numerics-restricted-p} applies
-the same diagnostics to paths generated with the fitted physical drift.  The
-entries are deliberately not colour coded: nonzero physical expected returns
-are intended evidence of the measure change, not arbitrage failures.
+and the conditional statistic closest to zero.  The repaired Tangent Levy
+implementation is also consistent with the risk-neutral null: its maximum and
+99th-percentile coordinate statistics are 2.191 and 2.126, no coordinate
+exceeds 2.576, and the two conditional statistics are
+$T_{\mathrm{sqr}}=-0.768$ and $T_{\mathrm{ent}}=-0.575$.  Both corresponding
+95\% confidence intervals contain zero.  These results use the paper-aligned
+daily-grid state and constrained reduced-node diffusion described in
+Appendix~\ref{app:tangent-levy}; the poor initial market fit reported above is
+therefore distinct from the absence of a rejection in these dynamic tests.
+Table~\ref{tab:numerics-restricted-p} applies the same diagnostics to GROMM
+paths generated with the fitted physical drift.  The entries are deliberately
+not colour coded: nonzero physical expected returns are intended evidence of
+the measure change, not arbitrage failures.
 
 \begin{table}[H]
 \centering

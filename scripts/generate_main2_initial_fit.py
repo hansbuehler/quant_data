@@ -42,7 +42,7 @@ DEFAULT_GROMM_DATASET = (
 DEFAULT_TANGENT_CHECKPOINT = (
     DEFAULT_DATA_ROOT
     / "training/dysanos/tangent-levy/v2/"
-    "spx-2025-08-29-historical-diffusion-v2/initial-day/2025-08-29.npz"
+    "spx-2025-08-29-paper-aligned-v2/initial-day/2025-08-29.npz"
 )
 DEFAULT_OUTPUT = REPOSITORY / "quantdata/sdlv/tex/generated"
 GROMM_RUN_LABEL = "direct-continuation-1000-v1"
@@ -170,7 +170,7 @@ def _tangent_prices(
     business_dtes: FloatArray,
 ) -> FloatArray:
     _, forward_density, _ = _load_day(checkpoint_path)
-    config = TangentLevyV2Config(label="spx-2025-08-29-historical-diffusion-v2")
+    config = TangentLevyV2Config(label="spx-2025-08-29-paper-aligned-v2")
     tau_grid = np.asarray(config.dynamics.maturity_grid, dtype=np.float64)
     jump_x = np.asarray(config.dynamics.jump_grid, dtype=np.float64)
     average_density = average_density_from_forward(
@@ -389,8 +389,10 @@ def _write_metrics_table(output: Path, metrics: dict[str, dict[str, float | int]
             r"\bottomrule",
             r"\end{tabular}",
             r"\caption{Initial-fit excess on the common 29 August 2025 quote book.",
-            r"Quotes with excess is the percentage with $e>0$; the final two",
-            r"columns report the mean and median of $e$ conditional on $e>0$.}",
+            r"Quotes with excess is the percentage with $e>0$~\eqref{eq:excess}; the final two",
+            r"columns report the mean and median of $e$ conditional on $e>0$.",
+            r"The GROMM row uses the same checkpoint as",
+            r"Table~\ref{tab:numerics-static-market-fit}, restricted to this date.}",
             r"\label{tab:initial-fit-excess}",
             r"\end{table}",
         ]

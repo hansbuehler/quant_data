@@ -15,7 +15,7 @@
     "conditional_median_excess_half_spreads": 0.45028775930404663,
     "midpoint_mae_half_spreads": 0.23675066232681274
   },
-  "tangent_checkpoint": "/home/hans/quantdata_data/training/dysanos/tangent-levy/v2/spx-2025-08-29-historical-diffusion-v2/initial-day/2025-08-29.npz",
+  "tangent_checkpoint": "/home/hans/quantdata_data/training/dysanos/tangent-levy/v2/spx-2025-08-29-paper-aligned-v2/initial-day/2025-08-29.npz",
   "tangent_state": "final daily-grid reconstruction used by the v2 Q audit",
   "metrics": {
     "GROMM": {
@@ -26,9 +26,9 @@
     },
     "Tangent Levy": {
       "quotes": 2662,
-      "percent_positive_excess": 94.40270473328324,
-      "conditional_mean_excess_half_spreads": 67.06129621826993,
-      "conditional_median_excess_half_spreads": 59.04975779839176
+      "percent_positive_excess": 98.87302779864763,
+      "conditional_mean_excess_half_spreads": 112.48605008500701,
+      "conditional_median_excess_half_spreads": 102.04607252355711
     }
   }
 }
