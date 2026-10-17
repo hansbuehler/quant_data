@@ -56,6 +56,73 @@ $z$-scores are 2.191 and 2.126, with no coordinate above 2.576.  The two-fold
 out-of-fold conditional statistics are $T_{\mathrm{sqr}}=-0.768$ and
 $T_{\mathrm{ent}}=-0.575$; both 95\% confidence intervals contain zero.
 
+\subsection{Bates CRC}
+\label{app:bates-crc}
+
+Our CRC benchmark is an in-repository implementation of the generalized
+Bates construction and Algorithm~1 of
+\citet{DysLitGambaraTeichmann2021}, not the authors' software.  The state has
+Heston stochastic variance and compensated compound-Poisson Gaussian log
+jumps.  Ten increasing target maturities are grouped into five adjacent
+pairs; each pair has its own jump mean and standard deviation, while the
+Poisson intensity and Heston mean-reversion speed are held fixed across
+recalibrations.  Carr--Madan inversion with damping parameter $1.5$ supplies
+the option prices.  We retain a scalar direct solve as an inverse-map oracle
+and subject the learned map to independent exact-pricer reset gates.  The path
+simulation also records its fixed-option price discontinuities, so a failed
+numerical inversion is not silently reported as an exact CRC reset.
+
+All historical inputs end strictly before 29 August 2025.  From the 890
+earlier sessions we estimate $\kappa=15.0$ and jump intensity
+$\lambda=4.25197$ per year.  The target-date calibration then fits $V_0$,
+$\theta$, $\xi$, $\rho$, and the five jump mean/standard-deviation pairs to
+the same 2,662 quotes used in Figure~\ref{fig:initial-fit-iv}.  It converges to
+$V_0=0.007474$, $\theta=0.0100$, $\xi=0.5000$, and $\rho=-0.9900$; the latter
+three are on their calibration bounds, consistent with the limited static
+fit shown in Figures~\ref{fig:initial-fit-iv}
+and~\ref{fig:initial-fit-spread}.
+
+The exogenous reset law is estimated from 764 daily proxy states from 7 July
+2022 through 28 August 2025.  Each row uses a trailing 63-session window ending
+on that date: $\theta$ is the median 20-business-day ATM implied variance,
+$\xi$ is the RMS CIR-normalized variance innovation, and $\rho$ is the
+spot/variance-innovation correlation.  We fit a Gaussian law to
+$(\Delta\log\theta,\Delta\log\xi,\Delta\operatorname{atanh}\rho)$, cap each
+relative update at 5\%, keep $\kappa$ fixed, and impose the Feller condition
+after every update.  These are backward-only dynamic proxies, not daily
+full-surface Bates calibrations.
+
+We train the two inverse-recalibration maps on 600,000 synthetic
+generalized-Bates surfaces generated on the target calibration's exact ten
+maturities and 13 relative-strike nodes, using 240-point Gauss--Legendre
+Fourier integration on $[0,600]$; 540,000 surfaces form the training split and
+60,000 whole-shard observations are held out.  Of the 78 million generated
+surface nodes, 193,840 (0.249\%) required clipping back inside the Black price
+bounds; the generator rejects a surface if that correction exceeds
+$5\times10^{-4}$ in normalized price.  NN1 maps the fourteen
+model coordinates $(V,\theta,\xi,\rho,\mu_1,\ldots,\mu_5,
+\sigma_1,\ldots,\sigma_5)$ to the 130 raw Black volatilities.  NN2 receives
+the updated $(\theta,\xi,\rho)$ and the protected 130-node surface and returns
+the ten jump coordinates through a sigmoid stretched to their training
+bounds: $[-0.30,0.15]$ for each mean and $[0.005,0.30]$ for each standard
+deviation.  Both maps are plain four-hidden-layer, width-1,024 ELU networks.  We
+first train NN1 with raw implied-volatility MSE and then freeze it while
+training NN2 through NN1, using batches of 1,000.  This preserves the
+input--output construction of Algorithm~1, but does not reproduce the
+authors' batch-normalized residual cell and is another reason we describe the
+benchmark as paper-aligned rather than a literal software reproduction.
+
+The restricted audit uses the same geometry as the other reference models:
+100,000 paths arranged as 50,000 adjacent antithetic pairs, 20 business days,
+eight substeps per day, and the fixed spot-plus-44-option universe.  Between
+daily resets we use full-truncation Heston variance and compensated Gaussian
+jumps from the shortest live jump bucket.  At each day boundary the old
+codebook is shifted by one day, its ten-by-13 continuation surface is repriced,
+the backward-estimated parameter innovation is applied, and NN2 reconstructs
+the new five jump means and standard deviations.  The implementation records
+the resulting fixed-option price discontinuity explicitly before any
+no-arbitrage statistic is accepted.
+
 \subsection{Matched initial-fit convention}
 
 For the comparison we use the exact 2,662 quotes retained by the GROMM
@@ -64,8 +131,9 @@ $25\times200$ state from the
 \texttt{direct-continuation-\allowbreak1000-v1} run after
 1,000 end-to-end epochs with a 5\% annual Black backbone; this is the same
 checkpoint as the direct fit in Table~\ref{tab:numerics-static-market-fit}.
-Tangent Levy is repriced at precisely those strikes and expiries
-from its daily-grid density.  Put observations are converted to normalized
+Tangent Levy is repriced at precisely those strikes and expiries from its
+daily-grid density, and CRC from its retained generalized-Bates target fit.
+Put observations are converted to normalized
 call-equivalent prices by parity before Black-volatility inversion.  If $b$,
 $a$, and $h=(a-b)/2$ are the bid, ask, and half-spread, respectively, the
 signed price surface reports
@@ -81,5 +149,5 @@ signed price surface reports
 The volatility surface applies the same construction after transforming the
 bid and ask to Black volatility.  Thus ``quotes with excess'' is the fraction
 with $e>0$, and the conditional mean and median are computed only over those
-failed quotes.  Both models use the same observations, spreads, axes, and
-colour scales.
+failed quotes.  All three models use the same observations, spreads, axes, and
+colour scales across all three panels.

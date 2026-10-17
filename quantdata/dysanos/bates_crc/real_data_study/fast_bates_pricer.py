@@ -16,6 +16,7 @@ ordinary-Bates (no-reserve) case, and are cross-checked against
 from __future__ import annotations
 
 import math
+from functools import lru_cache
 
 import numpy as np
 
@@ -42,7 +43,9 @@ def _riccati_D_grid(u_col: np.ndarray, tau_row: np.ndarray, heston: HestonParams
 _ALPHA = 1.5
 
 
+@lru_cache(maxsize=16)
 def _u_grid(n_quad: int, u_max: float) -> tuple[np.ndarray, np.ndarray]:
+    """Return immutable-by-convention quadrature arrays cached by geometry."""
     nodes, weights = np.polynomial.legendre.leggauss(n_quad)
     half = 0.5 * u_max
     return half * (nodes + 1.0), half * weights

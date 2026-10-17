@@ -1,8 +1,9 @@
 """Generate the matched 2025-08-29 initial-fit figures for ``main2.tex``.
 
-The comparison deliberately uses the exact GROMM paper quote slice for both
-models.  Tangent Levy is valued from the final daily-grid reconstruction used
-by its Q simulation, rather than from its independent per-maturity fits.
+The comparison deliberately uses the exact GROMM paper quote slice for all
+three models.  Tangent Levy is valued from the final daily-grid reconstruction
+used by its Q simulation, rather than from its independent per-maturity fits.
+CRC prices come from the retained generalized-Bates target-date calibration.
 """
 
 from __future__ import annotations
@@ -45,6 +46,10 @@ DEFAULT_TANGENT_CHECKPOINT = (
     DEFAULT_DATA_ROOT
     / "training/dysanos/tangent-levy/v2/"
     "spx-2025-08-29-paper-aligned-v2/initial-day/2025-08-29.npz"
+)
+DEFAULT_CRC_RUN = (
+    DEFAULT_DATA_ROOT
+    / "training/dysanos/bates-crc/spx-2025-08-29-gambara-teichmann-v4-accurate"
 )
 DEFAULT_OUTPUT = REPOSITORY / "quantdata/sdlv/tex/generated"
 GROMM_RUN_LABEL = "direct-continuation-1000-v1"
@@ -205,6 +210,44 @@ def _tangent_prices(
     return prices
 
 
+def _crc_prices(
+    run_directory: Path,
+    *,
+    strikes: FloatArray,
+    is_call: NDArray[np.bool_],
+    bids: FloatArray,
+    asks: FloatArray,
+    business_dtes: FloatArray,
+) -> tuple[FloatArray, dict[str, object]]:
+    """Load a provenance-checked generalized-Bates target-date fit."""
+
+    report_path = run_directory / "fit_report.json"
+    prices_path = run_directory / "initial_fit_prices.npz"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    if report.get("schema") != "gambara-teichmann-generalized-bates-target-fit-v1":
+        raise RuntimeError(f"unexpected CRC report schema in {report_path}")
+    if report.get("target_date") != TARGET_DATE or report.get("quote_count") != len(strikes):
+        raise RuntimeError("CRC fit does not use the common target-date quote book")
+    if report.get("finite_dlv_chain_used") is not False:
+        raise RuntimeError("CRC comparison must use generalized Bates without a DLV chain")
+    with np.load(prices_path, allow_pickle=False) as archive:
+        expected = {
+            "strikes": strikes,
+            "is_call": is_call,
+            "bids": bids,
+            "asks": asks,
+            "business_dtes": business_dtes,
+        }
+        for name, values in expected.items():
+            observed = np.asarray(archive[name])
+            if observed.shape != values.shape or not np.array_equal(observed, values):
+                raise RuntimeError(f"CRC artifact field {name!r} differs from the common book")
+        prices = np.asarray(archive["model_prices"], dtype=np.float64)
+    if prices.shape != strikes.shape or np.any(~np.isfinite(prices)):
+        raise RuntimeError("CRC artifact contains invalid target-date prices")
+    return prices, report
+
+
 def _normalized_moneyness(
     *,
     strikes: FloatArray,
@@ -279,40 +322,12 @@ def _signed_iv_excess(
     return 100.0 * excess
 
 
-def _reserved_axis(axis: plt.Axes) -> None:
-    axis.set_facecolor("#f2f2f2")
-    axis.text(
-        0.5,
-        0.54,
-        "Third initial fit",
-        transform=axis.transAxes,
-        ha="center",
-        va="center",
-        fontsize=10,
-        color="#555555",
-    )
-    axis.text(
-        0.5,
-        0.43,
-        "reserved",
-        transform=axis.transAxes,
-        ha="center",
-        va="center",
-        fontsize=9,
-        color="#777777",
-    )
-    axis.set_xticks([])
-    axis.set_yticks([])
-    for spine in axis.spines.values():
-        spine.set_color("#bdbdbd")
-
-
 def _surface_figure(
     output: Path,
     *,
     nms: FloatArray,
     business_dtes: FloatArray,
-    values: tuple[FloatArray, FloatArray],
+    values: tuple[FloatArray, FloatArray, FloatArray],
     title: str,
     colorbar_label: str,
     norm: TwoSlopeNorm | SymLogNorm,
@@ -331,13 +346,11 @@ def _surface_figure(
     )
     axes = [figure.add_subplot(grid[0, 0])]
     axes.append(figure.add_subplot(grid[0, 1], sharex=axes[0], sharey=axes[0]))
-    # The reserved panel must not share axes: clearing its ticks would also
-    # clear the ticks on both populated panels through Matplotlib's share group.
-    axes.append(figure.add_subplot(grid[0, 2]))
+    axes.append(figure.add_subplot(grid[0, 2], sharex=axes[0], sharey=axes[0]))
     last = None
     for axis, model, model_values in zip(
-        axes[:2],
-        ("GROMM", "Tangent Levy"),
+        axes,
+        ("GROMM", "Tangent Levy", "CRC"),
         values,
         strict=True,
     ):
@@ -359,14 +372,13 @@ def _surface_figure(
             f"{outside_percentage:.2f}% outside",
             loc="right",
             fontsize=10,
-            color="#b2182b" if model == "Tangent Levy" else "black",
+            color="#b2182b" if model in {"Tangent Levy", "CRC"} else "black",
         )
         axis.set_xlabel("normalized log-moneyness")
         axis.grid(alpha=0.14, linewidth=0.4)
     axes[0].set_ylabel("business days to expiry")
-    _reserved_axis(axes[2])
     assert last is not None
-    colorbar_axis = figure.add_subplot(grid[1, :2])
+    colorbar_axis = figure.add_subplot(grid[1, :])
     colorbar = figure.colorbar(last, cax=colorbar_axis, orientation="horizontal")
     colorbar.set_label(colorbar_label)
     figure.suptitle(title, fontsize=11)
@@ -384,10 +396,10 @@ def _write_metrics_table(output: Path, metrics: dict[str, dict[str, float | int]
         r"Model & Quotes with excess & Conditional mean & Conditional median\\",
         r"\midrule",
     ]
-    for label in ("GROMM", "Tangent Levy"):
+    for label in ("GROMM", "Tangent Levy", "CRC"):
         values = metrics[label]
         percentage = f"{values['percent_positive_excess']:.2f}\\%"
-        if label == "Tangent Levy":
+        if label in {"Tangent Levy", "CRC"}:
             percentage = rf"\textcolor{{red}}{{{percentage}}}"
         lines.append(
             f"{label} & {percentage} & "
@@ -396,7 +408,6 @@ def _write_metrics_table(output: Path, metrics: dict[str, dict[str, float | int]
         )
     lines.extend(
         [
-            r"Third initial fit & --- & --- & ---\\",
             r"\bottomrule",
             r"\end{tabular}",
             r"\caption{Initial-fit excess on the common 29 August 2025 quote book.",
@@ -411,7 +422,13 @@ def _write_metrics_table(output: Path, metrics: dict[str, dict[str, float | int]
     output.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def generate(*, dataset_path: Path, tangent_checkpoint: Path, output: Path) -> None:
+def generate(
+    *,
+    dataset_path: Path,
+    tangent_checkpoint: Path,
+    crc_run: Path,
+    output: Path,
+) -> None:
     output.mkdir(parents=True, exist_ok=True)
     gromm_report = _verified_gromm_report(dataset_path)
     data, metadata, date_index, quote_count = _target_gromm_book(dataset_path)
@@ -440,6 +457,14 @@ def generate(*, dataset_path: Path, tangent_checkpoint: Path, output: Path) -> N
         is_call=is_call,
         business_dtes=business_dtes,
     )
+    crc_prices, crc_report = _crc_prices(
+        crc_run,
+        strikes=strikes,
+        is_call=is_call,
+        bids=bids,
+        asks=asks,
+        business_dtes=business_dtes,
+    )
 
     market_calls = np.where(is_call, mids, mids + 1.0 - strikes)
     bid_calls = np.where(is_call, bids, bids + 1.0 - strikes)
@@ -450,6 +475,7 @@ def generate(*, dataset_path: Path, tangent_checkpoint: Path, output: Path) -> N
         tangent_prices,
         tangent_prices + 1.0 - strikes,
     )
+    crc_calls = np.where(is_call, crc_prices, crc_prices + 1.0 - strikes)
     market_iv = _implied_volatility(market_calls, strikes, tau)
     bid_iv = _implied_volatility(bid_calls, strikes, tau)
     ask_iv = _implied_volatility(ask_calls, strikes, tau)
@@ -465,7 +491,8 @@ def generate(*, dataset_path: Path, tangent_checkpoint: Path, output: Path) -> N
     )
     gromm_iv = _implied_volatility(gromm_calls, strikes, tau)
     tangent_iv = _implied_volatility(tangent_calls, strikes, tau)
-    if not np.all(np.isfinite(np.stack((market_iv, gromm_iv, tangent_iv)))):
+    crc_iv = _implied_volatility(crc_calls, strikes, tau)
+    if not np.all(np.isfinite(np.stack((market_iv, gromm_iv, tangent_iv, crc_iv)))):
         raise RuntimeError("initial-fit comparison contains a non-invertible Black price")
     nms = _normalized_moneyness(
         strikes=strikes,
@@ -476,6 +503,7 @@ def generate(*, dataset_path: Path, tangent_checkpoint: Path, output: Path) -> N
     signed_half_spread_excess = (
         _signed_price_excess(gromm_prices, bids=bids, asks=asks),
         _signed_price_excess(tangent_prices, bids=bids, asks=asks),
+        _signed_price_excess(crc_prices, bids=bids, asks=asks),
     )
     iv_excess_percentage_points = (
         _signed_iv_excess(
@@ -489,6 +517,14 @@ def generate(*, dataset_path: Path, tangent_checkpoint: Path, output: Path) -> N
         _signed_iv_excess(
             tangent_iv,
             tangent_prices,
+            bid_iv=bid_iv,
+            ask_iv=ask_iv,
+            bids=bids,
+            asks=asks,
+        ),
+        _signed_iv_excess(
+            crc_iv,
+            crc_prices,
             bid_iv=bid_iv,
             ask_iv=ask_iv,
             bids=bids,
@@ -536,10 +572,11 @@ def generate(*, dataset_path: Path, tangent_checkpoint: Path, output: Path) -> N
     metrics = {
         "GROMM": _metrics(gromm_prices, bids=bids, asks=asks),
         "Tangent Levy": _metrics(tangent_prices, bids=bids, asks=asks),
+        "CRC": _metrics(crc_prices, bids=bids, asks=asks),
     }
     _write_metrics_table(output / "initial_fit_metrics.tex", metrics)
     report = {
-        "schema": "main2-initial-fit-comparison-v2",
+        "schema": "main2-initial-fit-comparison-v3",
         "target_date": TARGET_DATE,
         "quote_population": "GROMM daily-25 retained market book",
         "quote_count": quote_count,
@@ -550,6 +587,9 @@ def generate(*, dataset_path: Path, tangent_checkpoint: Path, output: Path) -> N
         "gromm_pooled_statistics": gromm_report["final_statistics"],
         "tangent_checkpoint": str(tangent_checkpoint.resolve()),
         "tangent_state": "final daily-grid reconstruction used by the v2 Q audit",
+        "crc_run": str(crc_run.resolve()),
+        "crc_model": crc_report["model_family"],
+        "crc_dynamic_audit": crc_report["dynamic_audit"],
         "metrics": metrics,
     }
     temporary = output / ".initial_fit_metrics.json.tmp"
@@ -565,11 +605,13 @@ def main() -> None:
         type=Path,
         default=DEFAULT_TANGENT_CHECKPOINT,
     )
+    parser.add_argument("--crc-run", type=Path, default=DEFAULT_CRC_RUN)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     arguments = parser.parse_args()
     generate(
         dataset_path=arguments.dataset,
         tangent_checkpoint=arguments.tangent_checkpoint,
+        crc_run=arguments.crc_run,
         output=arguments.output,
     )
 

@@ -132,9 +132,10 @@ illustrate below.
 In contrast, our model prices can be fit very efficiently within nearly all\footnote{In below experiments, above 95\%.} of observed market bid/ask prices
 using the  linear programming SANOS~\cite{DLV, SANOS2026} calibration method.
 
- In \cite{DysLitGambaraTeichmann2021} the authors
-propose a piece-wise dynamically arbitrage free model via ``regridding''. However, as we will show below that
-this approach does not guarantee fully absence of dynamic arbitrage in our experiments.
+In \cite{DysLitGambaraTeichmann2021} the authors propose a piecewise
+dynamically arbitrage-free model via ``regridding''.  Below we implement their
+generalized-Bates example and submit its numerical realization to the same
+unconditional and conditional diagnostics as GROMM and Tangent Levy.
 
 There are few works on generative equity option market dynamics which do not exhibit static arbitrage -- our
 own~2019 work \cite{wiese2019simulate}, the multi-asset version~\cite{wiese2021multiassetspotoptionmarket} and
@@ -943,12 +944,16 @@ In addition to GROMM we also ran the two reference models from the literature
   with spot driven by the compensated short-end jump law.  We use 16 historical
   PCA factors and eight simulation steps per day; Appendix~\ref{app:tangent-levy}
   records the calibration, reconstruction, and positivity choices.
-  \item \textbf{CRC}~\cite{DysLitGambaraTeichmann2021}:
+  \item \textbf{CRC}~\cite{DysLitGambaraTeichmann2021}: a generalized-Bates
+  consistent-recalibration model with Heston variance and five
+  maturity-bucketed compensated Gaussian jump laws.  We estimate the reset
+  law strictly before the reference date and use the inverse recalibration
+  map described in Appendix~\ref{app:bates-crc}.
 \end{itemize}
 
 \subsection{Initial Fit}
 
-We compare both available initial states on the same retained quote book from
+We compare all three initial states on the same retained quote book from
 29 August 2025: 2,662 call and put intervals with at most 25 business days to
 expiry and the GROMM normalized-moneyness range.  Figure~\ref{fig:initial-fit-iv}
 shows signed Black implied-volatility excess beyond the bid--ask volatility
@@ -957,10 +962,8 @@ price excess~\eqref{eq:excess} in half-spread units.  The figures plot only
 quotes with actual excess beyond a boundary; quotes fitted inside the spread
 are omitted.  Each panel title reports its percentage outside the spread.  The
 price plot uses a symmetric-log colour
-scale, linear
-between $-1$ and $1$, so small excess remains visible despite the much larger
-Tangent Levy errors.  The third panel is deliberately reserved for the
-forthcoming reference fit.
+scale, linear between $-1$ and $1$, so small excess remains visible despite
+the much larger Tangent Levy errors.
 
 \begin{figure}[H]
   \centering
@@ -968,9 +971,8 @@ forthcoming reference fit.
   \caption{Initial implied-volatility excess across the common 29 August 2025
   surface.  Colours show signed distance beyond the nearest bid--ask boundary
   in Black-volatility percentage points.  Quotes inside the spread are not
-  plotted; both populated panels use the same scale.  The red Tangent Levy
-  percentage identifies its poor static fit; it is not a dynamic no-arbitrage
-  test. {\color{red} TODO CRC is missing}}
+  plotted; all three panels use the same scale.  Red percentages identify
+  poor static fits; they are not dynamic no-arbitrage tests.}
   \label{fig:initial-fit-iv}
 \end{figure}
 
@@ -980,15 +982,17 @@ forthcoming reference fit.
   \caption{Initial signed price excess across the same surface, measured from
   the nearest bid--ask boundary in half-spread units.  Quotes inside the spread
   are not plotted; the common symmetric-log colour scale has its linear region
-  at one half-spread.  The red percentage identifies the poor static fit only.
-  {\color{red} TODO CRC is missing}}
+  at one half-spread.  Red percentages identify poor static fits only.}
   \label{fig:initial-fit-spread}
 \end{figure}
 
 \input{generated/initial_fit_metrics}
 
-Since the Tangent Levy model is essentially an independent-increment model, it
-has, as expected, a hard time fitting the observed option prices.
+Tangent Levy, which is essentially an independent-increment model, has the
+hardest time fitting the observed option prices.  The more flexible but parametric CRC
+model improves substantially on that fit, but still leaves 65.21\% of
+quotes outside the spread; neither poor static fit is interpreted as a
+dynamic no-arbitrage rejection.
 
 \subsection{Risk-Neutral Diagnostics}
 \label{sec:numerics-audit-definition}
@@ -1031,9 +1035,11 @@ coordinates.
 \paragraph{Conditional diagnostics.}
 We split complete antithetic pairs into two equal path sets $A$ and $B$, and
 write $\mathcal I_A$ for all live path--time observations from paths in $A$.
-The state $X_{p,n}$ contains the cumulative Brownian-factor histories, log
-spot, the live log option-price-to-spot ratios, calendar time, and time to each
-expiry.  On set $A$ we fit the uncapped affine-plus-deep action
+The state $X_{p,n}$ contains the model's current predictable state---the
+cumulative Brownian-factor histories for GROMM and Tangent Levy, or current
+variance and structural parameters for CRC---together with log spot, the live
+log option-price-to-spot ratios, calendar time, and time to each expiry.  On
+set $A$ we fit the uncapped affine-plus-deep action
 \begin{equation}\label{eq:numerics-action-map}
   a_\theta(X_n)
   =D_n\left[b+L\widetilde X_n+g_\theta(\widetilde X_n)\right],

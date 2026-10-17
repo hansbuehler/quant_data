@@ -1,5 +1,5 @@
 {
-  "schema": "main2-initial-fit-comparison-v2",
+  "schema": "main2-initial-fit-comparison-v3",
   "target_date": "2025-08-29",
   "quote_population": "GROMM daily-25 retained market book",
   "quote_count": 2662,
@@ -17,6 +17,25 @@
   },
   "tangent_checkpoint": "/home/hans/quantdata_data/training/dysanos/tangent-levy/v2/spx-2025-08-29-paper-aligned-v2/initial-day/2025-08-29.npz",
   "tangent_state": "final daily-grid reconstruction used by the v2 Q audit",
+  "crc_run": "/home/hans/quantdata_data/training/dysanos/bates-crc/spx-2025-08-29-gambara-teichmann-v4-accurate",
+  "crc_model": "Gambara-Teichmann generalized Bates Algorithm 1 background",
+  "crc_dynamic_audit": {
+    "full_q_audit": "not-run",
+    "model": "Gambara-Teichmann generalized Bates Algorithm 1",
+    "requested_geometry": {
+      "antithetic_pairs": 50000,
+      "business_days": 20,
+      "conditional_tests": [
+        "squared",
+        "entropy"
+      ],
+      "paths": 100000,
+      "restricted_options": 44
+    },
+    "required_before_full_q_audit": "train and validate the paper's learned inverse map on synthetic generalized-Bates surfaces, including a held-out fixed-contract price-preservation gate",
+    "small_direct_inverse_smoke": "implemented-with-hard-tolerance-gate",
+    "static_target_fit": "implemented"
+  },
   "metrics": {
     "GROMM": {
       "quotes": 2662,
@@ -29,6 +48,12 @@
       "percent_positive_excess": 98.87302779864763,
       "conditional_mean_excess_half_spreads": 112.48605008500701,
       "conditional_median_excess_half_spreads": 102.04607252355711
+    },
+    "CRC": {
+      "quotes": 2662,
+      "percent_positive_excess": 65.21412471825695,
+      "conditional_mean_excess_half_spreads": 9.738779835347332,
+      "conditional_median_excess_half_spreads": 7.129456211556023
     }
   }
 }
