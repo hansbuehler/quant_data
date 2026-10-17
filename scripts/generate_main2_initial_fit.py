@@ -13,6 +13,8 @@ import os
 from pathlib import Path
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/quant_data/matplotlib")
+os.environ.setdefault("JAX_PLATFORMS", "cpu")
+os.environ.setdefault("JAX_ENABLE_X64", "0")
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -352,7 +354,13 @@ def _surface_figure(
             rasterized=True,
         )
         outside_percentage = 100.0 * np.mean(outside)
-        axis.set_title(f"{model} ({outside_percentage:.2f}% outside)", fontsize=10)
+        axis.set_title(model, loc="left", fontsize=10)
+        axis.set_title(
+            f"{outside_percentage:.2f}% outside",
+            loc="right",
+            fontsize=10,
+            color="#b2182b" if model == "Tangent Levy" else "black",
+        )
         axis.set_xlabel("normalized log-moneyness")
         axis.grid(alpha=0.14, linewidth=0.4)
     axes[0].set_ylabel("business days to expiry")
@@ -378,8 +386,11 @@ def _write_metrics_table(output: Path, metrics: dict[str, dict[str, float | int]
     ]
     for label in ("GROMM", "Tangent Levy"):
         values = metrics[label]
+        percentage = f"{values['percent_positive_excess']:.2f}\\%"
+        if label == "Tangent Levy":
+            percentage = rf"\textcolor{{red}}{{{percentage}}}"
         lines.append(
-            f"{label} & {values['percent_positive_excess']:.2f}\\% & "
+            f"{label} & {percentage} & "
             f"{values['conditional_mean_excess_half_spreads']:.3f} & "
             f"{values['conditional_median_excess_half_spreads']:.3f}\\\\"
         )
@@ -556,9 +567,6 @@ def main() -> None:
     )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     arguments = parser.parse_args()
-    # Prevent a documentation build from taking an unallocated accelerator.
-    os.environ.setdefault("JAX_PLATFORMS", "cpu")
-    os.environ.setdefault("JAX_ENABLE_X64", "0")
     generate(
         dataset_path=arguments.dataset,
         tangent_checkpoint=arguments.tangent_checkpoint,
