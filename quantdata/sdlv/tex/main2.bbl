@@ -1,35 +1,30 @@
-\begin{thebibliography}{76}
+\begin{thebibliography}{77}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
   \providecommand{\doi}[1]{doi: #1}\else
   \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
 
-\bibitem[Ackerer et~al.(2020)Ackerer, Tagasovska, and
-  Vatter]{AckererTagasovskaVatter2020}
+\bibitem[Ackerer et~al.(2020)Ackerer, Tagasovska, and Vatter]{AckererTagasovskaVatter2020}
 Damien Ackerer, Natasa Tagasovska, and Thibault Vatter.
 \newblock Deep smoothing of the implied volatility surface.
-\newblock In \emph{Advances in Neural Information Processing Systems},
-  volume~33, pages 11552--11563, 2020.
+\newblock In \emph{Advances in Neural Information Processing Systems}, volume~33, pages 11552--11563, 2020.
 
 \bibitem[Andreasen and Huge(2011)]{AndreasenHuge}
 Jesper Andreasen and Brian Huge.
 \newblock Volatility interpolation.
 \newblock \emph{Risk}, 24\penalty0 (3):\penalty0 76--79, 2011.
 
-\bibitem[Andr{\`e}s et~al.(2026)Andr{\`e}s, Boumezoued, and
-  Jourdain]{AndresBoumezouedJourdain2023}
+\bibitem[Andr{\`e}s et~al.(2026)Andr{\`e}s, Boumezoued, and Jourdain]{AndresBoumezouedJourdain2023}
 Herv{\'e} Andr{\`e}s, Alexandre Boumezoued, and Benjamin Jourdain.
 \newblock The implied volatility surface (also) is path-dependent.
 \newblock \emph{Quant. Finance}, 26\penalty0 (7):\penalty0 1017--1047, 2026.
 \newblock \doi{10.1080/14697688.2026.2637739}.
 
-\bibitem[Avellaneda et~al.(2020)Avellaneda, Healy, Papanicolaou, and
-  Papanicolaou]{AvellanedaEtAl2020}
+\bibitem[Avellaneda et~al.(2020)Avellaneda, Healy, Papanicolaou, and Papanicolaou]{AvellanedaEtAl2020}
 Marco Avellaneda, Brian~F. Healy, Andrew Papanicolaou, and George Papanicolaou.
 \newblock {PCA} for implied volatility surfaces.
-\newblock \emph{J. Financial Data Sci.}, 2\penalty0 (2):\penalty0 85--109,
-  2020.
+\newblock \emph{J. Financial Data Sci.}, 2\penalty0 (2):\penalty0 85--109, 2020.
 \newblock \doi{10.3905/jfds.2020.1.032}.
 
 \bibitem[Bayer and Stemper(2018)]{BayerStemper2018}
@@ -37,10 +32,8 @@ Christian Bayer and Benjamin Stemper.
 \newblock Deep calibration of rough stochastic volatility models, 2018.
 \newblock URL \url{https://arxiv.org/abs/1810.03399}.
 
-\bibitem[Bayer et~al.(2019)Bayer, Horvath, Muguruza, Stemper, and
-  Tomas]{BayerEtAl2019DeepCalibration}
-Christian Bayer, Blanka Horvath, Aitor Muguruza, Benjamin Stemper, and Mehdi
-  Tomas.
+\bibitem[Bayer et~al.(2019)Bayer, Horvath, Muguruza, Stemper, and Tomas]{BayerEtAl2019DeepCalibration}
+Christian Bayer, Blanka Horvath, Aitor Muguruza, Benjamin Stemper, and Mehdi Tomas.
 \newblock On deep calibration of (rough) stochastic volatility models, 2019.
 \newblock URL \url{https://arxiv.org/abs/1908.08806}.
 
@@ -50,8 +43,7 @@ Christian Bender and Matthias Thiel.
 \newblock \emph{Stat. Risk Model.}, 37\penalty0 (1--2):\penalty0 55--78, 2020.
 \newblock \doi{10.1515/strm-2018-0026}.
 
-\bibitem[Bergeron et~al.(2021)Bergeron, Fung, Hull, and
-  Poulos]{BergeronEtAl2021}
+\bibitem[Bergeron et~al.(2021)Bergeron, Fung, Hull, and Poulos]{BergeronEtAl2021}
 Maxime Bergeron, Nicholas Fung, John Hull, and Zissis Poulos.
 \newblock Variational autoencoders: A hands-off approach to volatility, 2021.
 
@@ -67,16 +59,13 @@ Alan Brace, Dariusz Gatarek, and Marek Musiela.
 \newblock \emph{Mathematical Finance}, 7\penalty0 (2):\penalty0 127--155, 1997.
 \newblock \doi{10.1111/1467-9965.00028}.
 
-\bibitem[Brooks et~al.(2026)Brooks, Bajalica, Liu, and
-  Ben~Tahar]{BrooksEtAl2026}
+\bibitem[Brooks et~al.(2026)Brooks, Bajalica, Liu, and Ben~Tahar]{BrooksEtAl2026}
 Oscar Brooks, Dusica Bajalica, Yating Liu, and Imen Ben~Tahar.
-\newblock Latent flow matching for arbitrage-aware implied volatility surface
-  generation, 2026.
+\newblock Latent flow matching for arbitrage-aware implied volatility surface generation, 2026.
 
 \bibitem[Buchegger and Gonon(2026)]{BucheggerGonon2026}
 Dominik~Manuel Buchegger and Lukas Gonon.
-\newblock Arbitrage-aware multi-step forecasting of implied volatility
-  surfaces: Modelling surface trajectories using latent diffusion, 2026.
+\newblock Arbitrage-aware multi-step forecasting of implied volatility surfaces: Modelling surface trajectories using latent diffusion, 2026.
 \newblock URL \url{https://arxiv.org/abs/2608.22478}.
 
 \bibitem[Buehler and Ryskin(2015)]{DLV}
@@ -89,29 +78,22 @@ Hans Buehler and Evgeny Ryskin.
 Hans Buehler, Phillip Murray, Mikko~S. Pakkanen, and Ben Wood.
 \newblock Deep hedging: Learning to remove the drift.
 \newblock \emph{Risk}, February 2022.
-\newblock URL
-  \url{https://www.risk.net/cutting-edge/banking/7932226/deep-hedging-learning-to-remove-the-drift}.
+\newblock URL \url{https://www.risk.net/cutting-edge/banking/7932226/deep-hedging-learning-to-remove-the-drift}.
 
-\bibitem[Buehler et~al.(2026{\natexlab{a}})Buehler, Horvath, and
-  Kratsios]{DYSANOS2026}
+\bibitem[Buehler et~al.(2026{\natexlab{a}})Buehler, Horvath, and Kratsios]{DYSANOS2026}
 Hans Buehler, Blanka Horvath, and Anastasis Kratsios.
-\newblock {DYSANOS}: Generative dynamic smooth arbitrage-free non-parametric
-  option surfaces, 2026{\natexlab{a}}.
+\newblock {DYSANOS}: Generative dynamic smooth arbitrage-free non-parametric option surfaces, 2026{\natexlab{a}}.
 \newblock URL \url{https://arxiv.org/abs/2608.12587}.
 
-\bibitem[Buehler et~al.(2026{\natexlab{b}})Buehler, Horvath, Kratsios, Limmer,
-  and Saqur]{SANOS2026}
-Hans Buehler, Blanka Horvath, Anastasis Kratsios, Yannick Limmer, and Raeid
-  Saqur.
-\newblock {SANOS}: Smooth strictly arbitrage-free non-parametric option
-  surfaces, January 2026{\natexlab{b}}.
+\bibitem[Buehler et~al.(2026{\natexlab{b}})Buehler, Horvath, Kratsios, Limmer, and Saqur]{SANOS2026}
+Hans Buehler, Blanka Horvath, Anastasis Kratsios, Yannick Limmer, and Raeid Saqur.
+\newblock {SANOS}: Smooth strictly arbitrage-free non-parametric option surfaces, January 2026{\natexlab{b}}.
 \newblock URL \url{https://arxiv.org/abs/2601.11209}.
 \newblock submitted.
 
 \bibitem[Cao et~al.(2020)Cao, Chen, and Hull]{CaoChenHull2020}
 Jay Cao, Jacky Chen, and John Hull.
-\newblock A neural network approach to understanding implied volatility
-  movements.
+\newblock A neural network approach to understanding implied volatility movements.
 \newblock \emph{Quant. Finance}, 20\penalty0 (9):\penalty0 1405--1413, 2020.
 \newblock \doi{10.1080/14697688.2020.1750679}.
 
@@ -127,30 +109,21 @@ Ren{\'e} Carmona and Sergey Nadtochiy.
 \newblock \emph{Finance Stoch.}, 16:\penalty0 63--104, 2012.
 \newblock \doi{10.1007/s00780-011-0158-8}.
 
-\bibitem[Carmona et~al.(2017)Carmona, Ma, and
-  Nadtochiy]{CarmonaMaNadtochiy2017}
+\bibitem[Carmona et~al.(2017)Carmona, Ma, and Nadtochiy]{CarmonaMaNadtochiy2017}
 Ren{\'e} Carmona, Yi~Ma, and Sergey Nadtochiy.
-\newblock Simulation of implied volatility surfaces via tangent {L\'evy}
-  models.
-\newblock \emph{SIAM J. Financial Math.}, 8\penalty0 (1):\penalty0 171--213,
-  2017.
+\newblock Simulation of implied volatility surfaces via tangent {L\'evy} models.
+\newblock \emph{SIAM J. Financial Math.}, 8\penalty0 (1):\penalty0 171--213, 2017.
 \newblock \doi{10.1137/15M1015510}.
 
-\bibitem[Chataigner et~al.(2021)Chataigner, Cousin, Cr{\'e}pey, Dixon, and
-  Gueye]{ChataignerEtAl2022}
-Marc Chataigner, Areski Cousin, St{\'e}phane Cr{\'e}pey, Matthew Dixon, and
-  Djibril Gueye.
-\newblock Beyond surrogate modeling: Learning the local volatility via shape
-  constraints.
-\newblock \emph{SIAM J. Financial Math.}, 12\penalty0 (3):\penalty0 SC58--SC69,
-  2021.
+\bibitem[Chataigner et~al.(2021)Chataigner, Cousin, Cr{\'e}pey, Dixon, and Gueye]{ChataignerEtAl2022}
+Marc Chataigner, Areski Cousin, St{\'e}phane Cr{\'e}pey, Matthew Dixon, and Djibril Gueye.
+\newblock Beyond surrogate modeling: Learning the local volatility via shape constraints.
+\newblock \emph{SIAM J. Financial Math.}, 12\penalty0 (3):\penalty0 SC58--SC69, 2021.
 \newblock \doi{10.1137/20M1381538}.
 
-\bibitem[Choudhary et~al.(2024)Choudhary, Jaimungal, and
-  Bergeron]{ChoudharyJaimungalBergeron2024}
+\bibitem[Choudhary et~al.(2024)Choudhary, Jaimungal, and Bergeron]{ChoudharyJaimungalBergeron2024}
 Vedant Choudhary, Sebastian Jaimungal, and Maxime Bergeron.
-\newblock {FuNVol}: A multi-asset implied volatility market simulator using
-  functional principal components and neural {SDEs}.
+\newblock {FuNVol}: A multi-asset implied volatility market simulator using functional principal components and neural {SDEs}.
 \newblock \emph{Quant. Finance}, 24\penalty0 (8):\penalty0 1077--1103, 2024.
 \newblock \doi{10.1080/14697688.2024.2396977}.
 
@@ -178,18 +151,14 @@ Rama Cont, Jos{\'e} da~Fonseca, and Valdo Durrleman.
 \newblock \emph{Econ. Notes}, 31\penalty0 (2):\penalty0 361--377, 2002.
 \newblock \doi{10.1111/1468-0300.00090}.
 
-\bibitem[Corbetta et~al.(2019)Corbetta, Cohort, Laachir, and
-  Martini]{CorbettaEtAl2019}
+\bibitem[Corbetta et~al.(2019)Corbetta, Cohort, Laachir, and Martini]{CorbettaEtAl2019}
 Jacopo Corbetta, Pierre Cohort, Ismail Laachir, and Claude Martini.
 \newblock Robust calibration and arbitrage-free interpolation of {SSVI} slices.
-\newblock \emph{Decis. Econ. Finance}, 42\penalty0 (2):\penalty0 665--677,
-  2019.
+\newblock \emph{Decis. Econ. Finance}, 42\penalty0 (2):\penalty0 665--677, 2019.
 
-\bibitem[Cuchiero et~al.(2020)Cuchiero, Khosrawi, and
-  Teichmann]{CuchieroKhosrawiTeichmann2020}
+\bibitem[Cuchiero et~al.(2020)Cuchiero, Khosrawi, and Teichmann]{CuchieroKhosrawiTeichmann2020}
 Christa Cuchiero, Wahid Khosrawi, and Josef Teichmann.
-\newblock A generative adversarial network approach to calibration of local
-  stochastic volatility models.
+\newblock A generative adversarial network approach to calibration of local stochastic volatility models.
 \newblock \emph{Risks}, 8\penalty0 (4):\penalty0 101, 2020.
 \newblock \doi{10.3390/risks8040101}.
 
@@ -204,8 +173,7 @@ Fabrice Desch{\^a}tres.
 \newblock URL \url{https://papers.ssrn.com/abstract=4831218}.
 \newblock Revised 2026.
 
-\bibitem[Dimitroff et~al.(2018)Dimitroff, R{\"o}der, and
-  Fries]{DimitroffRoederFries2018}
+\bibitem[Dimitroff et~al.(2018)Dimitroff, R{\"o}der, and Fries]{DimitroffRoederFries2018}
 Georgi Dimitroff, Dirk R{\"o}der, and Christian~P. Fries.
 \newblock Volatility model calibration with convolutional neural networks.
 \newblock SSRN working paper 3252432, 2018.
@@ -217,36 +185,33 @@ Matthias~R. Fengler.
 \newblock \emph{Quant. Finance}, 9\penalty0 (4):\penalty0 417--428, 2009.
 \newblock \doi{10.1080/14697680802595585}.
 
-\bibitem[Fengler et~al.(2003)Fengler, H{\"a}rdle, and
-  Villa]{FenglerHardleVilla2003}
+\bibitem[Fengler et~al.(2003)Fengler, H{\"a}rdle, and Villa]{FenglerHardleVilla2003}
 Matthias~R. Fengler, Wolfgang~K. H{\"a}rdle, and Christophe Villa.
-\newblock The dynamics of implied volatilities: A common principal components
-  approach.
+\newblock The dynamics of implied volatilities: A common principal components approach.
 \newblock \emph{Rev. Deriv. Res.}, 6\penalty0 (3):\penalty0 179--202, 2003.
 \newblock \doi{10.1023/B:REDR.0000004823.77464.2D}.
 
-\bibitem[Fengler et~al.(2007)Fengler, H{\"a}rdle, and
-  Mammen]{FenglerHardleMammen2007}
+\bibitem[Fengler et~al.(2007)Fengler, H{\"a}rdle, and Mammen]{FenglerHardleMammen2007}
 Matthias~R. Fengler, Wolfgang~K. H{\"a}rdle, and Enno Mammen.
-\newblock A semiparametric factor model for implied volatility surface
-  dynamics.
-\newblock \emph{J. Financial Econometrics}, 5\penalty0 (2):\penalty0 189--218,
-  2007.
+\newblock A semiparametric factor model for implied volatility surface dynamics.
+\newblock \emph{J. Financial Econometrics}, 5\penalty0 (2):\penalty0 189--218, 2007.
 \newblock \doi{10.1093/jjfinec/nbm005}.
 
-\bibitem[Fran{\c{c}}ois et~al.(2026)Fran{\c{c}}ois, Galarneau-Vincent,
-  Gauthier, and Godin]{FrancoisEtAl2026}
-Pascal Fran{\c{c}}ois, R{\'e}mi Galarneau-Vincent, Genevi{\`e}ve Gauthier, and
-  Fr{\'e}d{\'e}ric Godin.
-\newblock Joint dynamics for the underlying asset and its implied volatility
-  surface: A new methodology for option risk management.
+\bibitem[Fran{\c{c}}ois et~al.(2026)Fran{\c{c}}ois, Galarneau-Vincent, Gauthier, and Godin]{FrancoisEtAl2026}
+Pascal Fran{\c{c}}ois, R{\'e}mi Galarneau-Vincent, Genevi{\`e}ve Gauthier, and Fr{\'e}d{\'e}ric Godin.
+\newblock Joint dynamics for the underlying asset and its implied volatility surface: A new methodology for option risk management.
 \newblock \emph{J. Futures Mark.}, 46\penalty0 (3):\penalty0 545--561, 2026.
 \newblock \doi{10.1002/fut.70068}.
 
+\bibitem[Gambara and Teichmann(2021)]{DysLitGambaraTeichmann2021}
+Matteo Gambara and Josef Teichmann.
+\newblock Consistent recalibration models and deep calibration.
+\newblock \url{https://arxiv.org/abs/2006.09455}, 2021.
+\newblock arXiv:2006.09455, version 3; first posted 2020.
+
 \bibitem[Gatheral(2004)]{Gatheral2004SVI}
 Jim Gatheral.
-\newblock A parsimonious arbitrage-free implied volatility parameterization
-  with application to the valuation of volatility derivatives.
+\newblock A parsimonious arbitrage-free implied volatility parameterization with application to the valuation of volatility derivatives.
 \newblock Presentation at Global Derivatives \& Risk Management, Madrid, 2004.
 
 \bibitem[Gatheral and Jacquier(2014)]{GatheralJacquier2014}
@@ -255,26 +220,21 @@ Jim Gatheral and Antoine Jacquier.
 \newblock \emph{Quant. Finance}, 14\penalty0 (1):\penalty0 59--71, 2014.
 \newblock \doi{10.1080/14697688.2013.819986}.
 
-\bibitem[Golubitsky et~al.(2026)Golubitsky, Davison, and
-  Caraman]{GolubitskyDavisonCaraman2026}
+\bibitem[Golubitsky et~al.(2026)Golubitsky, Davison, and Caraman]{GolubitskyDavisonCaraman2026}
 Letitia Golubitsky, Matt Davison, and Alex Caraman.
-\newblock Unsupervised learning of equity market dynamics: A variational
-  autoencoder approach.
+\newblock Unsupervised learning of equity market dynamics: A variational autoencoder approach.
 \newblock SSRN working paper 6726284, 2026.
 \newblock URL \url{https://papers.ssrn.com/abstract=6726284}.
 
-\bibitem[Guo et~al.(2016)Guo, Jacquier, Martini, and
-  Neufcourt]{GuoJacquierMartiniNeufcourt2016}
+\bibitem[Guo et~al.(2016)Guo, Jacquier, Martini, and Neufcourt]{GuoJacquierMartiniNeufcourt2016}
 Gaoyue Guo, Antoine Jacquier, Claude Martini, and Leo Neufcourt.
 \newblock Generalized arbitrage-free {SVI} volatility surfaces.
-\newblock \emph{SIAM J. Financial Math.}, 7\penalty0 (1):\penalty0 619--641,
-  2016.
+\newblock \emph{SIAM J. Financial Math.}, 7\penalty0 (1):\penalty0 619--641, 2016.
 \newblock \doi{10.1137/120900320}.
 
 \bibitem[Hafner(2004)]{Hafner2004}
 Reinhold Hafner.
-\newblock \emph{Stochastic Implied Volatility: A Factor-Based Model}, volume
-  545 of \emph{Lecture Notes in Economics and Mathematical Systems}.
+\newblock \emph{Stochastic Implied Volatility: A Factor-Based Model}, volume 545 of \emph{Lecture Notes in Economics and Mathematical Systems}.
 \newblock Springer Berlin Heidelberg, 2004.
 \newblock ISBN 978-3-540-22183-8.
 \newblock \doi{10.1007/978-3-642-17117-8}.
@@ -282,14 +242,12 @@ Reinhold Hafner.
 
 \bibitem[Han et~al.(2026)Han, Zhang, Torres, Acero, and Xu]{HanEtAl2026}
 Yinbin Han, Jack~Yuxiang Zhang, Manuel Torres, Fernando Acero, and Renyuan Xu.
-\newblock Diffusion models for dynamic volatility surface generation and
-  data-driven hedging, 2026.
+\newblock Diffusion models for dynamic volatility surface generation and data-driven hedging, 2026.
 \newblock URL \url{https://arxiv.org/abs/2609.13402}.
 
 \bibitem[Hao and Ji(2026)]{HaoJi2026}
 Lifeng Hao and Shaolin Ji.
-\newblock Decoupled probabilistic forecasting and arbitrage-aware refinement of
-  implied volatility surfaces, 2026.
+\newblock Decoupled probabilistic forecasting and arbitrage-aware refinement of implied volatility surfaces, 2026.
 \newblock URL \url{https://arxiv.org/abs/2607.29220}.
 
 \bibitem[Hendriks and Martini(2019)]{HendriksMartini2019}
@@ -304,22 +262,19 @@ Andres Hernandez.
 \newblock SSRN working paper 2812140, 2016.
 \newblock URL \url{https://papers.ssrn.com/abstract=2812140}.
 
-\bibitem[Horvath et~al.(2019)Horvath, Muguruza, and
-  Tomas]{HorvathMuguruzaTomas2019}
+\bibitem[Horvath et~al.(2019)Horvath, Muguruza, and Tomas]{HorvathMuguruzaTomas2019}
 Blanka Horvath, Aitor Muguruza, and Mehdi Tomas.
 \newblock Deep learning volatility, 2019.
 \newblock URL \url{https://arxiv.org/abs/1901.09647}.
 
 \bibitem[Itkin(2019)]{Itkin2019}
 Andrey Itkin.
-\newblock Deep learning calibration of option pricing models: Some pitfalls and
-  solutions, 2019.
+\newblock Deep learning calibration of option pricing models: Some pitfalls and solutions, 2019.
 \newblock URL \url{https://arxiv.org/abs/1906.03507}.
 
 \bibitem[Jin and Agarwal(2025)]{JinAgarwal2025}
 Chen Jin and Ankush Agarwal.
-\newblock Forecasting implied volatility surface with generative diffusion
-  models, 2025.
+\newblock Forecasting implied volatility surface with generative diffusion models, 2025.
 
 \bibitem[Kahal{\'e}(2004)]{Kahale2004}
 Nabil Kahal{\'e}.
@@ -332,8 +287,7 @@ Jan Kallsen and Paul Kr{\"u}hner.
 \newblock \emph{Finance Stoch.}, 19\penalty0 (3):\penalty0 583--615, 2015.
 \newblock \doi{10.1007/s00780-015-0263-1}.
 
-\bibitem[Liu et~al.(2019)Liu, Borovykh, Grzelak, and
-  Oosterlee]{LiuEtAl2019Calibration}
+\bibitem[Liu et~al.(2019)Liu, Borovykh, Grzelak, and Oosterlee]{LiuEtAl2019Calibration}
 Shuaiqiang Liu, Anastasia Borovykh, Lech~A. Grzelak, and Cornelis~W. Oosterlee.
 \newblock A neural network-based framework for financial model calibration.
 \newblock \emph{J. Math. Ind.}, 9:\penalty0 9, 2019.
@@ -342,43 +296,34 @@ Shuaiqiang Liu, Anastasia Borovykh, Lech~A. Grzelak, and Cornelis~W. Oosterlee.
 \bibitem[Martini and Mingone(2022)]{MartiniMingone2022}
 Claude Martini and Arianna Mingone.
 \newblock No arbitrage {SVI}.
-\newblock \emph{SIAM J. Financial Math.}, 13\penalty0 (1):\penalty0 227--261,
-  2022.
+\newblock \emph{SIAM J. Financial Math.}, 13\penalty0 (1):\penalty0 227--261, 2022.
 
 \bibitem[Medvedev and Wang(2022)]{MedvedevWang2022}
 Nikita Medvedev and Zhiguang Wang.
-\newblock Multistep forecast of the implied volatility surface using deep
-  learning.
+\newblock Multistep forecast of the implied volatility surface using deep learning.
 \newblock \emph{J. Futures Mark.}, 42\penalty0 (4):\penalty0 645--667, 2022.
 \newblock \doi{10.1002/fut.22302}.
 
 \bibitem[Mingone(2022)]{Mingone2022}
 Arianna Mingone.
-\newblock No arbitrage global parametrization for the {eSSVI} volatility
-  surface.
+\newblock No arbitrage global parametrization for the {eSSVI} volatility surface.
 \newblock \emph{Quant. Finance}, 22\penalty0 (12):\penalty0 2205--2217, 2022.
 
-\bibitem[Ning et~al.(2023)Ning, Jaimungal, Zhang, and
-  Bergeron]{vae_ning2023arbitrage}
+\bibitem[Ning et~al.(2023)Ning, Jaimungal, Zhang, and Bergeron]{vae_ning2023arbitrage}
 Brian Ning, Sebastian Jaimungal, Xiaorong Zhang, and Maxime Bergeron.
-\newblock Arbitrage-free implied volatility surface generation with variational
-  autoencoders.
-\newblock \emph{SIAM J. Financial Math.}, 14\penalty0 (4):\penalty0 1004--1027,
-  2023.
+\newblock Arbitrage-free implied volatility surface generation with variational autoencoders.
+\newblock \emph{SIAM J. Financial Math.}, 14\penalty0 (4):\penalty0 1004--1027, 2023.
 \newblock \doi{10.1137/21M1443546}.
 
 \bibitem[Orosi(2015)]{Orosi2015}
 Gergely Orosi.
-\newblock Arbitrage-free call option surface construction using regression
-  splines.
-\newblock \emph{Appl. Stoch. Models Bus. Ind.}, 31\penalty0 (4):\penalty0
-  515--527, 2015.
+\newblock Arbitrage-free call option surface construction using regression splines.
+\newblock \emph{Appl. Stoch. Models Bus. Ind.}, 31\penalty0 (4):\penalty0 515--527, 2015.
 \newblock \doi{10.1002/asmb.2045}.
 
 \bibitem[Panigirtzoglou and Skiadopoulos(2004)]{PanigirtzoglouSkiadopoulos2004}
 Nikolaos Panigirtzoglou and George Skiadopoulos.
-\newblock A new approach to modeling the dynamics of implied distributions:
-  Theory and evidence from the {S\&P 500} options.
+\newblock A new approach to modeling the dynamics of implied distributions: Theory and evidence from the {S\&P 500} options.
 \newblock \emph{J. Bank. Finance}, 28\penalty0 (7):\penalty0 1499--1520, 2004.
 \newblock \doi{10.1016/S0378-4266(03)00127-4}.
 
@@ -395,14 +340,12 @@ Hao Qin, Ruozhong Yang, Charlie~Y. Che, and Liming Feng.
 
 \bibitem[Roeder and Dimitroff(2020)]{RoederDimitroff2020}
 Dirk Roeder and Georgi Dimitroff.
-\newblock Volatility model calibration with neural networks: A comparison
-  between direct and indirect methods, 2020.
+\newblock Volatility model calibration with neural networks: A comparison between direct and indirect methods, 2020.
 \newblock URL \url{https://arxiv.org/abs/2007.03494}.
 
 \bibitem[Roos(2025)]{Roos2025}
 Thomas Roos.
-\newblock Simple, flexible, analytic, arbitrage free option price
-  interpolation.
+\newblock Simple, flexible, analytic, arbitrage free option price interpolation.
 \newblock SSRN working paper 5215592, 2025.
 \newblock URL \url{https://papers.ssrn.com/abstract=5215592}.
 \newblock Revised 2026.
@@ -421,28 +364,22 @@ Sebastian Schlenkrich.
 \bibitem[Sch{\"o}nbucher(1999)]{Schonbucher1999}
 Philipp~J. Sch{\"o}nbucher.
 \newblock A market model for stochastic implied volatility.
-\newblock \emph{Philos. Trans. R. Soc. Lond. A}, 357\penalty0 (1758):\penalty0
-  2071--2092, 1999.
+\newblock \emph{Philos. Trans. R. Soc. Lond. A}, 357\penalty0 (1758):\penalty0 2071--2092, 1999.
 \newblock \doi{10.1098/rsta.1999.0418}.
 
 \bibitem[Schweizer and Wissel(2008{\natexlab{a}})]{SchweizerWissel2008}
 Martin Schweizer and Johannes Wissel.
-\newblock Arbitrage-free market models for option prices: The multi-strike
-  case.
-\newblock \emph{Finance Stoch.}, 12\penalty0 (4):\penalty0 469--505,
-  2008{\natexlab{a}}.
+\newblock Arbitrage-free market models for option prices: The multi-strike case.
+\newblock \emph{Finance Stoch.}, 12\penalty0 (4):\penalty0 469--505, 2008{\natexlab{a}}.
 \newblock \doi{10.1007/s00780-008-0068-6}.
 
 \bibitem[Schweizer and Wissel(2008{\natexlab{b}})]{SchweizerWisselTerm2008}
 Martin Schweizer and Johannes Wissel.
-\newblock Term structures of implied volatilities: Absence of arbitrage and
-  existence results.
-\newblock \emph{Math. Finance}, 18\penalty0 (1):\penalty0 77--114,
-  2008{\natexlab{b}}.
+\newblock Term structures of implied volatilities: Absence of arbitrage and existence results.
+\newblock \emph{Math. Finance}, 18\penalty0 (1):\penalty0 77--114, 2008{\natexlab{b}}.
 \newblock \doi{10.1111/j.1467-9965.2007.00323.x}.
 
-\bibitem[Skiadopoulos et~al.(2000)Skiadopoulos, Hodges, and
-  Clewlow]{SkiadopoulosHodgesClewlow2000}
+\bibitem[Skiadopoulos et~al.(2000)Skiadopoulos, Hodges, and Clewlow]{SkiadopoulosHodgesClewlow2000}
 George~S. Skiadopoulos, Stewart~D. Hodges, and Les Clewlow.
 \newblock The dynamics of the {S\&P 500} implied volatility surface.
 \newblock \emph{Rev. Deriv. Res.}, 3\penalty0 (3):\penalty0 263--282, 2000.
@@ -450,19 +387,16 @@ George~S. Skiadopoulos, Stewart~D. Hodges, and Les Clewlow.
 
 \bibitem[Sridi and Bilokon(2023)]{SridiBilokon2023}
 Abir Sridi and Paul Bilokon.
-\newblock Applying deep learning to calibrate stochastic volatility models,
-  2023.
+\newblock Applying deep learning to calibrate stochastic volatility models, 2023.
 \newblock URL \url{https://arxiv.org/abs/2309.07843}.
 
 \bibitem[Vuleti{\'c} and Cont(2024)]{VuleticCont2024}
 Milena Vuleti{\'c} and Rama Cont.
-\newblock {VolGAN}: A generative model for arbitrage-free implied volatility
-  surfaces.
+\newblock {VolGAN}: A generative model for arbitrage-free implied volatility surfaces.
 \newblock \emph{Appl. Math. Finance}, 31\penalty0 (4):\penalty0 203--238, 2024.
 \newblock \doi{10.1080/1350486X.2025.2471317}.
 
-\bibitem[Wiedemann et~al.(2025)Wiedemann, Jacquier, and
-  Gonon]{GononJacquierWiedemann2025}
+\bibitem[Wiedemann et~al.(2025)Wiedemann, Jacquier, and Gonon]{GononJacquierWiedemann2025}
 Ruben Wiedemann, Antoine Jacquier, and Lukas Gonon.
 \newblock Operator deep smoothing for implied volatility.
 \newblock In \emph{International Conference on Learning Representations}, 2025.
@@ -473,10 +407,8 @@ Magnus Wiese, Lianjun Bai, Ben Wood, and Hans Buehler.
 \newblock Deep hedging: Learning to simulate equity option markets, 2019.
 \newblock URL \url{https://arxiv.org/abs/1911.01700}.
 
-\bibitem[Wiese et~al.(2021)Wiese, Wood, Pachoud, Korn, Buehler, Murray, and
-  Bai]{wiese2021multiassetspotoptionmarket}
-Magnus Wiese, Ben Wood, Alexandre Pachoud, Ralf Korn, Hans Buehler, Phillip
-  Murray, and Lianjun Bai.
+\bibitem[Wiese et~al.(2021)Wiese, Wood, Pachoud, Korn, Buehler, Murray, and Bai]{wiese2021multiassetspotoptionmarket}
+Magnus Wiese, Ben Wood, Alexandre Pachoud, Ralf Korn, Hans Buehler, Phillip Murray, and Lianjun Bai.
 \newblock Multi-asset spot and option market simulation, 2021.
 \newblock URL \url{https://arxiv.org/abs/2112.06823}.
 
@@ -487,28 +419,22 @@ Johannes Wissel.
 
 \bibitem[Yang et~al.(2026)Yang, Wang, Zhang, and Li]{YangWangZhangLi2026}
 Mingzhi Yang, Sheng Wang, Chao Zhang, and Ruikun Li.
-\newblock Universal diffusion models for implied volatility surfaces: Learning
-  shared dynamics across stocks, 2026.
+\newblock Universal diffusion models for implied volatility surfaces: Learning shared dynamics across stocks, 2026.
 
-\bibitem[Yang et~al.(2025)Yang, Chen, Shu, and
-  Hospedales]{YangChenShuHospedales2025}
+\bibitem[Yang et~al.(2025)Yang, Chen, Shu, and Hospedales]{YangChenShuHospedales2025}
 Yongxin Yang, Wenqi Chen, Chao Shu, and Timothy~M. Hospedales.
 \newblock {HyperIV}: Real-time implied volatility smoothing.
-\newblock In \emph{Proceedings of the 42nd International Conference on Machine
-  Learning}, volume 267 of \emph{Proceedings of Machine Learning Research},
-  pages 70550--70564. PMLR, 2025.
+\newblock In \emph{Proceedings of the 42nd International Conference on Machine Learning}, volume 267 of \emph{Proceedings of Machine Learning Research}, pages 70550--70564. PMLR, 2025.
 \newblock URL \url{https://proceedings.mlr.press/v267/yang25d.html}.
 
-\bibitem[Zhang et~al.(2024)Zhang, Amici, and
-  Morandotti]{ZhangAmiciMorandotti2024}
+\bibitem[Zhang et~al.(2024)Zhang, Amici, and Morandotti]{ZhangAmiciMorandotti2024}
 Chen Zhang, Giovanni Amici, and Marco Morandotti.
 \newblock Calibrating the {Heston} model with deep differential networks, 2024.
 \newblock URL \url{https://arxiv.org/abs/2407.15536}.
 
 \bibitem[Zhang et~al.(2023)Zhang, Li, and Zhang]{ZhangLiZhang2021}
 Wenyong Zhang, Lingfei Li, and Gongqiu Zhang.
-\newblock A two-step framework for arbitrage-free prediction of the implied
-  volatility surface.
+\newblock A two-step framework for arbitrage-free prediction of the implied volatility surface.
 \newblock \emph{Quant. Finance}, 23\penalty0 (1):\penalty0 21--34, 2023.
 \newblock \doi{10.1080/14697688.2022.2135454}.
 

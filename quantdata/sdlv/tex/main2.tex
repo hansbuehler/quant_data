@@ -51,7 +51,7 @@
 \author{Magnus Wiese\qquad Hans Buehler$^{*}$\qquad Blanka Horvath$^{*,\#}$\\[0.6em]
   {\small $^{*}$Mathematical Institute, University of Oxford, 
   $^{\#}$Oxford-Man Institute, University of Oxford}}
-\date{\today}
+\date{Version 1.1\\ \today}
 
 \begin{document}
 \maketitle
@@ -98,18 +98,20 @@ on this data set more than 95\% of calibrated
 model prices fit within observed market bid/ask spreads even with the simplistic grid architecture we present here.
 
 We then show that model dynamics under the risk-neutral indeed have numerically zero conditional and unconditional drift. We test this first
-with a restricted universe of 570 tradable instruments in a number of different set ups. We then also show that even using all 5001 instruments
-the risk-neutrality is preserved. Ours is the first model being able to show such a result for a number of instruments which far exceeds
+with a restricted universe of 570 tradable instruments over several time steps in a number of different set ups. We then also show that even using all 5001 instruments
+ risk-neutrality is preserved. Ours is the first model being able to show such a result for a number of instruments which far exceeds
 the number of driving stochastic factors.
 
-The model presented here is distinct from our own DYSANOS~\cite{DYSANOS2026}. There, we focused on learning
+The model presented here is distinct from our own DYSANOS~\cite{DYSANOS2026}. There, we focused a re-parametrization of SANOS into machine-learnable parameters
+and then on learning
 realistic market dynamics for smooth statically arbitrage-free SANOS
 surfaces under~$\PP$.
 We did also construct an equivalent risk-neutral measure~$\Q$ numerically using the \emph{martingale measure} approach introduced in~\cite{removedrift}.
 While this method is model-free and can in theory be applied to any option market model under~$\PP$, it is numerically heavy and in practice
 restricted to making only a fairly limited number of the overall tradable instruments
-dynamically arbitrage-free.\footnote{In~\cite{DYSANOS2026} we used 49 instruments per simulated date.} In the current work we cover all options with
-an explicit construction of the risk-neutral drift, which is far more efficient than the numerical martingale measure approach.
+dynamically arbitrage-free.\footnote{In~\cite{DYSANOS2026} we used 49 instruments per simulated date.} In GROMM we cover \emph{all} options with
+an explicit construction of the risk-neutral drift, which is far more efficient than the numerical martingale measure approach. The price we pay is a reduction
+in the parameter space available to fitting to historic data compared to DYSANOS.
 
 \subsubsection*{Related Work}
 
@@ -128,9 +130,11 @@ In particular, our model prices can be fit very efficiently within nearly all\fo
 using the  linear programming SANOS~\cite{SANOS2026} calibration method.
 
 There are a number of works on generative equity option market dynamics -- not least our
-own~2019 work \cite{wiese2019simulate} and the multi-asset version~\cite{wiese2021multiassetspotoptionmarket} -- which simulate
-discrete strictly arbitrage-free option surfaces. However, most other approaches
-are not strictly free of arbitrage and do not have analytical corresponding risk-neutral dynamics.
+own~2019 work \cite{wiese2019simulate} and the multi-asset version~\cite{wiese2021multiassetspotoptionmarket} as well as~\cite{Cohen02012023} -- which simulate
+discrete strictly arbitrage-free option surfaces. Most other approaches such as~\citealp{vae_ning2023arbitrage,AckererTagasovskaVatter2020,YangChenShuHospedales2025,GononJacquierWiedemann2025}
+are not strictly free of arbitrage and do not have analytical corresponding risk-neutral dynamics. In \cite{DysLitGambaraTeichmann2021} the authors
+propose a piece-wise dynamically arbitrage free model but as we show below, this does approach does not guarantee fully absence of dynamic arbitrage.
+
 To address the absence of an analytical risk-neutral measure, we presented in~\cite{removedrift} 
 a model-free approach
 to learning such a measure. However,  that method is numerically challenging
@@ -671,9 +675,9 @@ for motivation and further results.
 
 For model price $C$, quoted interval $[b,a]$, midpoint $m=(a+b)/2$, and
 half-spread $h=(a-b)/2$, define the bid--ask \emph{excess}
-\[
+\begin{equation}\label{eq:excess}
   e(C;b,a)=\frac{\max(C-a,0)+\max(b-C,0)}{h}.
-\]
+\end{equation}
 Writing $n_d$ for the number of quotes on date $d$, the quote component of the
 training objective is
 \begin{equation}
@@ -897,7 +901,7 @@ with four matched Model~D paths (Section~\ref{sec:numerics}).
 \section{BHW No Dynamic Arbitrage Test}\label{sec:numerics}
 
 In this section we assess whether the model is indeed free of dynamic arbitrage.
-We are not aware of an accessible benchmark for dynamic arbitrage in the literature, so
+We are not aware of an accessible numerical benchmark for dynamic arbitrage in the literature, so
 the methodology described here is a contribution in its own right, first presented in~\cite{DYSANOS2026}.
 
 We compare four model specifications:
@@ -924,6 +928,57 @@ one-day return used in both diagnostics is
 where $Z$ is spot and $V^i$ is either spot or an option price.  Division by the
 pre-step spot is predictable and therefore preserves the zero-conditional-mean
 property under~$\Q$.
+
+In addition to GROMM we also ran the two reference models from the literature
+\begin{itemize}
+  \item \textbf{Tangent Levy}~\cite{TangentLevy}: a finite-grid jump codebook
+  whose conditional L\'evy density obeys the convolutional HJM drift restriction,
+  with spot driven by the compensated short-end jump law.  We use 16 historical
+  PCA factors and eight simulation steps per day; Appendix~\ref{app:tangent-levy}
+  records the calibration, reconstruction, and positivity choices.
+  \item \textbf{CRC}~\cite{DysLitGambaraTeichmann2021}:
+\end{itemize}
+
+\subsection{Initial Fit}
+
+We compare both available initial states on the same retained quote book from
+29 August 2025: 2,662 call and put intervals with at most 25 business days to
+expiry and the GROMM normalized-moneyness range.  Figure~\ref{fig:initial-fit-iv}
+shows signed Black implied-volatility excess beyond the bid--ask volatility
+interval, and Figure~\ref{fig:initial-fit-spread} shows the analogous signed
+price excess~\eqref{eq:excess} in half-spread units.  The figures plot only
+quotes with actual excess beyond a boundary; quotes fitted inside the spread
+are omitted.  Each panel title reports its percentage outside the spread.  The
+price plot uses a symmetric-log colour
+scale, linear
+between $-1$ and $1$, so small excess remains visible despite the much larger
+Tangent Levy errors.  The third panel is deliberately reserved for the
+forthcoming reference fit.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{generated/initial_fit_iv_errors.pdf}
+  \caption{Initial implied-volatility excess across the common 29 August 2025
+  surface.  Colours show signed distance beyond the nearest bid--ask boundary
+  in Black-volatility percentage points.  Quotes inside the spread are not
+  plotted; both populated panels use the same scale.}
+  \label{fig:initial-fit-iv}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{generated/initial_fit_half_spread_errors.pdf}
+  \caption{Initial signed price excess across the same surface, measured from
+  the nearest bid--ask boundary in half-spread units.  Quotes inside the spread
+  are not plotted; the common symmetric-log colour scale has its linear region
+  at one half-spread.}
+  \label{fig:initial-fit-spread}
+\end{figure}
+
+\input{generated/initial_fit_metrics}
+
+Since the Tangent Levy model is essentially an independent-increment model, it
+has, as expected, a hard time fitting the observed option prices.
 
 \subsection{Risk-Neutral Diagnostics}
 \label{sec:numerics-audit-definition}
@@ -1068,7 +1123,8 @@ Table~\ref{tab:numerics-restricted-q} shows the $\Q$ results for the restricted
 trading universe.  Orange marks a moderate departure from the Gaussian
 benchmark and red would mark a five-standard-error violation in the
 coordinate-wise screen.  The separate conditional-statistic rule is given
-above; all eight conditional entries are black.
+above.  All eight GROMM conditional entries are black; both Tangent Levy
+conditional entries reject at the red threshold.
 
 \begin{table}[H]
 \centering
@@ -1087,6 +1143,9 @@ B: rank 16, one step   & 570 & {\color{orange}3.663} & {\color{orange}3.618}
 C: rank 8, eight steps & 570 & 2.793 & 2.373 &  4 & 0 & 1.755 & 1.753\\
 D: rank 16, eight steps& 570 & 2.996 & {\color{orange}2.967}
   & {\color{orange}22} & 0 & 0.039 & 0.040\\
+Tangent Levy & 570 & {\color{red}40.632} & {\color{red}28.089}
+  & {\color{red}229} & {\color{red}134}
+  & {\color{red}4.400} & {\color{red}7.078}\\
 \bottomrule
 \end{tabular}
 \caption{Restricted-universe, 100,000-path $\Q$ diagnostics.  The first five
@@ -1096,11 +1155,15 @@ of coordinates with $\abs{z}>c$.}
 \label{tab:numerics-restricted-q}
 \end{table}
 
-No restricted coordinate exceeds five standard errors, and no conditional
-statistic exceeds 1.755 in absolute value.  Model~D has the richest
-factor representation, the finer time discretisation, and the conditional
-statistic closest to zero.  Table~\ref{tab:numerics-restricted-p} applies the
-same diagnostics to paths generated with the fitted physical drift.  The
+For the four GROMM specifications, no restricted coordinate exceeds five
+standard errors and no conditional statistic exceeds 1.755 in absolute value.
+Model~D has the richest factor representation, the finer time discretisation,
+and the conditional statistic closest to zero.  Tangent Levy fails both
+screens: 134 coordinates exceed five standard errors, while
+$T_{\mathrm{sqr}}=4.400$ and $T_{\mathrm{ent}}=7.078$.  These results use its
+retained projected daily-grid state discussed in
+Appendix~\ref{app:tangent-levy}.  Table~\ref{tab:numerics-restricted-p} applies
+the same diagnostics to paths generated with the fitted physical drift.  The
 entries are deliberately not colour coded: nonzero physical expected returns
 are intended evidence of the measure change, not arbitrage failures.
 
@@ -1120,7 +1183,7 @@ C: rank 8, eight steps & 570 & 61.002 & 58.398 & 570 & 570 & 89.205\\
 D: rank 16, eight steps& 570 & 336.819 & 325.038 & 570 & 570 & 624.560\\
 \bottomrule
 \end{tabular}
-\caption{Restricted-universe, 100,000-path $\PP$ diagnostics, reported against
+\caption{Restricted-universe, 100,000-path statistical measure $\PP$ diagnostics, reported against
 zero to display the predictable drift created by the fitted
 measure change.}
 \label{tab:numerics-restricted-p}
@@ -1227,6 +1290,7 @@ BH thankfully acknowledges financial support from UKRI1010: High order mathemati
 \appendix
 \input{sec_factor_figures}
 \input{sec_pipeline}
+\input{sec_reference_models}
 
 \clearpage
 \section{Option-surface Literature Classification}

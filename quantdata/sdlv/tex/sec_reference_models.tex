@@ -1,0 +1,58 @@
+\clearpage
+\section{Reference-model implementation details}
+\label{app:reference-models}
+
+\subsection{Tangent Levy}
+\label{app:tangent-levy}
+
+Our Tangent Levy benchmark follows the codebook construction of
+\citet{TangentLevy}, but is an in-repository implementation rather than the
+authors' software.  At each observed expiry we fit a double-exponential jump
+density to forward-normalized call-equivalent bid--ask intervals.  We then
+project the cumulative intensities onto calendar-consistent non-negative
+density curves and reconstruct forward L\'evy densities on a daily maturity
+grid from zero to 70 business days and a 301-node jump grid on
+$[-0.75,0.75]$.  Simulation evolves this codebook using the discrete
+convolutional HJM drift and uses the compensated shortest-maturity density for
+spot.  The historical diffusion span is the leading 16 constrained PCA
+directions, estimated only through 31 December 2024, with 5\% covariance
+shrinkage; the audit uses eight substeps per business day.
+
+The initial-fit results in Figures~\ref{fig:initial-fit-iv}
+and~\ref{fig:initial-fit-spread} use the final daily-grid reconstruction
+supplied to the simulator.  This distinction is important: independent
+maturity fits are not a dynamically admissible initial codebook.  The
+reconstruction on 29 August 2025 did not pass its pre-specified repricing gate,
+so the poor fit shown there is a reported numerical limitation, not suppressed
+calibration error.  The
+subsequent risk-neutral diagnostics therefore test the implemented projected
+Q dynamics conditional on this retained initial state; they do not turn the
+failed static reconstruction into a successful market calibration.
+
+\subsection{Matched initial-fit convention}
+
+For the comparison we use the exact 2,662 quotes retained by the GROMM
+25-expiry calibration on 29 August 2025.  GROMM is the unrestricted
+$25\times200$ state from the
+\texttt{direct-continuation-\allowbreak1000-v1} run after
+1,000 end-to-end epochs with a 5\% annual Black backbone; this is the same
+checkpoint as the direct fit in Table~\ref{tab:numerics-static-market-fit}.
+Tangent Levy is repriced at precisely those strikes and expiries
+from its daily-grid density.  Put observations are converted to normalized
+call-equivalent prices by parity before Black-volatility inversion.  If $b$,
+$a$, and $h=(a-b)/2$ are the bid, ask, and half-spread, respectively, the
+signed price surface reports
+\[
+  \widetilde e=
+  \begin{cases}
+    (C-a)/h,&C>a,\\
+    0,&b\leq C\leq a,\\
+    (C-b)/h,&C<b,
+  \end{cases}
+  \qquad e=|\widetilde e|.
+\]
+The volatility surface applies the same construction after transforming the
+bid and ask to Black volatility.  Thus ``quotes with excess'' is the fraction
+with $e>0$, and the conditional mean and median are computed only over those
+failed quotes.  Both models use the same observations, spreads, axes, and
+colour scales.
