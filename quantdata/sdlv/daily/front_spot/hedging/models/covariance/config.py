@@ -9,27 +9,31 @@ from enum import StrEnum
 from cdxcore.err import verify_inp
 from cdxcore.version import version
 
+from quantdata.hedging.mean_reduction import MeanReduction
+
 
 class CovarianceObjective(StrEnum):
     """Supported robust historical risk objectives."""
 
     MEAN_VARIANCE = "mean-variance"
     MEAN_VOLATILITY = "mean-volatility"
+    ENTROPY = "entropy"
     POWER_EXPONENTIAL = "power-exponential"
 
 
-@version("3.3")
+@version("3.6")
 @dataclass(frozen=True, kw_only=True)
 class CovarianceHedgeConfig:
     """Logical and numerical settings for the rolling covariance hedge."""
 
     label: str = "covariance-daily-smoke"
     group: str = "hedging/covariance"
-    user_version: str = "0.2"
+    user_version: str = "0.3"
     rolling_observations: int = 252
     objective: CovarianceObjective = CovarianceObjective.MEAN_VARIANCE
     risk_parameter: float = 10.0
     cost_multiplier: float = 1.0
+    mean_reduction: MeanReduction = MeanReduction.DEMEAN
     mean_z_threshold: float | None = None
     mean_hac_lags: int | None = None
     recession_tolerance: float = 1.0e-8
@@ -41,6 +45,7 @@ class CovarianceHedgeConfig:
     minimum_standard_deviation: float = 1.0e-10
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "mean_reduction", MeanReduction(self.mean_reduction))
         verify_inp(bool(self.label.strip()), lambda: "label must be non-empty")
         verify_inp(bool(self.group.strip()), lambda: "group must be non-empty")
         verify_inp(

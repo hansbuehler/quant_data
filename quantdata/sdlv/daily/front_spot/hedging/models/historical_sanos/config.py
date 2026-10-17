@@ -9,6 +9,8 @@ from enum import StrEnum
 from cdxcore.err import verify_inp
 from cdxcore.version import version
 
+from quantdata.hedging.mean_reduction import MeanReduction, MeanReductionConfig
+
 
 class HistoricalSanosObjective(StrEnum):
     """Supported empirical risk objectives."""
@@ -19,7 +21,7 @@ class HistoricalSanosObjective(StrEnum):
     POWER_EXPONENTIAL = "power-exponential"
 
 
-@version("1.29")
+@version("1.30", dependencies=[MeanReductionConfig])
 @dataclass(frozen=True, kw_only=True)
 class HistoricalSanosConfig:
     """Logical settings for rolling empirical SANOS hedging."""
@@ -28,6 +30,7 @@ class HistoricalSanosConfig:
     group: str = "hedging/historical-sanos"
     user_version: str = "0.1"
     rolling_observations: int = 252
+    mean_reduction: MeanReduction = MeanReduction.DEMEAN
     objective: HistoricalSanosObjective = HistoricalSanosObjective.MEAN_VARIANCE
     risk_parameter: float = 10.0
     validation_fraction: float = 0.2
@@ -50,6 +53,10 @@ class HistoricalSanosConfig:
     def __post_init__(self) -> None:
         verify_inp(bool(self.label.strip()), lambda: "label must be non-empty")
         verify_inp(bool(self.group.strip()), lambda: "group must be non-empty")
+        verify_inp(
+            isinstance(self.mean_reduction, MeanReduction),
+            lambda: "mean_reduction must be a MeanReduction",
+        )
         verify_inp(
             self.rolling_observations >= 20,
             lambda: "rolling_observations must be at least twenty",

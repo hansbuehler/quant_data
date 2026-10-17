@@ -563,6 +563,18 @@ def test_volgan_daily_book_fits_and_generates_once(
         )
 
     monkeypatch.setattr(volgan_adapter, "sample_volgan_transitions", generate)
+    monkeypatch.setattr(
+        volgan_adapter,
+        "build_generated_daily_scenarios",
+        lambda *args, **kwargs: SimpleNamespace(),
+    )
+    monkeypatch.setattr(
+        volgan_adapter,
+        "fit_generated_objective_book",
+        lambda scenarios, sample, **kwargs: tuple(
+            SimpleNamespace() for _ in scenarios
+        ),
+    )
 
     def evaluate(sample, **kwargs):
         calls["evaluate"] += 1

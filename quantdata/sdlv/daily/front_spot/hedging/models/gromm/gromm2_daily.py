@@ -20,6 +20,7 @@ from quantdata.gromm2.dynamics import EstimatedDynamics, load_estimated_dynamics
 from quantdata.gromm2.pricing import price_active_calls
 from quantdata.gromm2.simulation import SimulationState, one_day_risk_neutral_step
 from quantdata.hedging.contracts import OptionQuote, OptionRight
+from quantdata.hedging.mean_reduction import MeanReduction, MeanReductionConfig
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.digital_daily import (
     DailyDigitalSample,
     DailyDigitalTarget,
@@ -41,6 +42,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2 import 
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.training import (
     GrommTrainingData,
+    reduce_gromm_one_day_training_data,
 )
 
 FloatArray = NDArray[np.float64]
@@ -606,6 +608,9 @@ def generate_gromm2_daily_scenarios(
 
 def gromm2_daily_training_data(
     scenarios: Gromm2DailyScenarios,
+    *,
+    mean_reduction: MeanReduction = MeanReduction.DEMEAN,
+    mean_reduction_config: MeanReductionConfig = MeanReductionConfig(),
 ) -> GrommTrainingData:
     """Convert dated GROMM2 scenarios to the common policy-training tensors."""
     state = scenarios.market_state
@@ -643,7 +648,7 @@ def gromm2_daily_training_data(
     features = np.broadcast_to(
         feature, (scenarios.path_count, 1, len(feature))
     ).copy()
-    return GrommTrainingData(
+    raw = GrommTrainingData(
         features=features,
         instrument_returns=scenarios.instrument_returns[:, None],
         claim_returns=scenarios.claim_returns[:, None],
@@ -651,6 +656,11 @@ def gromm2_daily_training_data(
         linear_transaction_costs=scenarios.linear_transaction_costs[None],
         settles_next=scenarios.settles_next[None],
         terminal_transaction_costs=scenarios.terminal_transaction_costs,
+    )
+    return reduce_gromm_one_day_training_data(
+        raw,
+        mean_reduction=mean_reduction,
+        mean_reduction_config=mean_reduction_config,
     )
 
 

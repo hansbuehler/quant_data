@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 
 from quantdata.hedging.contracts import OptionRight
+from quantdata.hedging.mean_reduction import adaptive_scenario_count
 from quantdata.hedging.metrics import HedgeSmokeResult
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.digital_daily import (
     DailyDigitalSample,
@@ -44,9 +45,11 @@ from quantdata.sdlv.daily.front_spot.hedging.models.diffusion.training import (
     fit_diffusion,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.generated_scenarios import (
+    GeneratedDailyScenarios,
     GeneratedHedgeConfig,
+    GeneratedObjectiveFit,
     build_generated_daily_scenarios,
-    fit_generated_cost_lasso,
+    fit_generated_objective_book,
 )
 from quantdata.torch import BaseEnvironment
 
@@ -144,6 +147,7 @@ def run_diffusion_one_day(
 def run_diffusion_daily_book(
     panel: PublicHedgingPanel,
     *,
+    target_maturity: int | None = None,
     origin_date: date,
     model_config: DiffusionModelConfig,
     checkpoint_directory: Path,
@@ -162,7 +166,7 @@ def run_diffusion_daily_book(
     return _run_diffusion_targets(
         panel,
         origin_date=origin_date,
-        targets=daily_digital_targets(),
+        targets=daily_digital_targets(maturity_business_days=target_maturity),
         model_config=model_config,
         checkpoint_directory=checkpoint_directory,
         observation_count=observation_count,
@@ -230,21 +234,39 @@ def _run_diffusion_targets(
     )
     if live.forecast_date != samples[0].transition.next_date:
         raise RuntimeError("diffusion forecast date does not match hedge endpoint")
+    scenario_count = adaptive_scenario_count(
+        1 + len(samples[0].hedge_quotes),
+        minimum=hedge_config.scenario_count,
+    )
     generated = sample_diffusion_transitions(
         public_fit.result,
         observed_sequence=live.sequence,
-        path_count=hedge_config.scenario_count,
+        path_count=scenario_count,
         seed=hedge_config.seed,
     )
     fit_checkpoint_sha256 = file_sha256(public_fit.result.checkpoint_path)
+    scenarios = tuple(
+        build_generated_daily_scenarios(
+            sample,
+            forward_log_returns=generated.forward_log_returns,
+            next_log_implied_volatilities=generated.next_log_implied_volatilities,
+            grid=model_config.grid,
+        )
+        for sample in samples
+    )
+    hedges = fit_generated_objective_book(
+        scenarios,
+        samples[0],
+        config=hedge_config,
+        claim_quantities=quantities,
+    )
     results = tuple(
         _evaluate_diffusion_target(
             sample,
             public_fit=public_fit,
+            scenarios=scenarios[index],
+            hedge=hedges[index],
             generated_forward_log_returns=generated.forward_log_returns,
-            generated_log_implied_volatilities=(
-                generated.next_log_implied_volatilities
-            ),
             return_channel_max_dispersion=(
                 generated.return_channel_max_dispersion
             ),
@@ -265,8 +287,9 @@ def _evaluate_diffusion_target(
     sample: DailyDigitalSample,
     *,
     public_fit: DiffusionPublicFit,
+    scenarios: GeneratedDailyScenarios,
+    hedge: GeneratedObjectiveFit,
     generated_forward_log_returns: np.ndarray,
-    generated_log_implied_volatilities: np.ndarray,
     return_channel_max_dispersion: float,
     model_config: DiffusionModelConfig,
     hedge_config: GeneratedHedgeConfig,
@@ -274,19 +297,6 @@ def _evaluate_diffusion_target(
     claim_quantity: float,
     fit_checkpoint_sha256: str,
 ) -> HedgeSmokeResult:
-    scenarios = build_generated_daily_scenarios(
-        sample,
-        forward_log_returns=generated_forward_log_returns,
-        next_log_implied_volatilities=generated_log_implied_volatilities,
-        grid=model_config.grid,
-    )
-    hedge = fit_generated_cost_lasso(
-        scenarios,
-        sample,
-        cost_multiplier=hedge_config.cost_multiplier,
-        position_cap=hedge_config.position_cap,
-        claim_quantity=claim_quantity,
-    )
     return evaluate_daily_digital_hedge(
         sample,
         model=f"diffusion-{model_config.variant.value}",
@@ -294,7 +304,7 @@ def _evaluate_diffusion_target(
         spot_action=float(hedge.action[0]),
         option_actions=hedge.action[1:],
         model_price=sample.market_price,
-        objective_value=hedge.uncapped.objective,
+        objective_value=hedge.objective_value,
         converged=(public_fit.result.converged and hedge.converged),
         cap_hits=hedge.cap_hits,
         claim_quantity=claim_quantity,
@@ -306,7 +316,7 @@ def _evaluate_diffusion_target(
             "validation_loss": public_fit.result.validation_loss,
             "warm_start_sha256": public_fit.result.warm_start_sha256,
             "fit_checkpoint_sha256": fit_checkpoint_sha256,
-            "generated_paths": hedge_config.scenario_count,
+            "generated_paths": len(generated_forward_log_returns),
             "generated_mean_forward_log_return": float(
                 np.mean(generated_forward_log_returns)
             ),
@@ -318,12 +328,33 @@ def _evaluate_diffusion_target(
                 scenarios.digital_probability_clip_count
             ),
             "hedge_instrument_count": scenarios.instrument_returns.shape[1],
+            "objective": hedge_config.objective.value,
+            "risk_parameter": hedge_config.risk_parameter,
+            "mean_reduction": hedge_config.mean_reduction.value,
+            "mean_reduction_constraint_rank": (
+                hedge.mean_reduction.constraint_rank
+            ),
+            "mean_reduction_effective_sample_size": (
+                hedge.mean_reduction.effective_sample_size
+            ),
+            "mean_reduction_kl_divergence": (
+                hedge.mean_reduction.kl_divergence
+            ),
+            "mean_reduction_raw_max_standardized_mean": (
+                hedge.mean_reduction.raw_max_standardized_mean
+            ),
+            "mean_reduction_reduced_max_standardized_mean": (
+                hedge.mean_reduction.reduced_max_standardized_mean
+            ),
+            "mean_reduction_moment_residual": (
+                hedge.mean_reduction.moment_residual
+            ),
             "cost_multiplier": hedge_config.cost_multiplier,
-            "covariance_shrinkage": hedge.uncapped.covariance_shrinkage,
-            "covariance_iterations": hedge.uncapped.covariance_iterations,
+            "optimizer_iterations": hedge.optimizer.iterations,
+            "optimizer_kkt_residual": hedge.optimizer.maximum_kkt_residual,
             "policy_semantics": (
-                "spread-weighted minimum-variance cost-lasso on generated "
-                "fixed-contract returns"
+                "drift-reduced weighted scenario objective with exact linear "
+                "entry costs on generated fixed-contract returns"
             ),
             "price_semantics": (
                 "common released SANOS market mark; diffusion supplies P "

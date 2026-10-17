@@ -78,6 +78,7 @@ def fit_historical_sanos_hedge(
     instrument_returns: NDArray[np.floating],
     claim_returns: NDArray[np.floating],
     linear_transaction_costs: NDArray[np.floating],
+    scenario_weights: NDArray[np.floating] | None = None,
     config: HistoricalSanosConfig = HistoricalSanosConfig(),
 ) -> HistoricalSanosHedgeFit:
     """Fit claim and zero empirical policies and return their difference."""
@@ -86,10 +87,12 @@ def fit_historical_sanos_hedge(
         claim_returns,
         linear_transaction_costs,
     )
+    weights = _validated_scenario_weights(scenario_weights, len(instruments))
     return fit_historical_sanos_hedges(
         instrument_returns=instruments,
         claim_returns=claim[:, None],
         linear_transaction_costs=costs,
+        scenario_weights=weights,
         config=config,
     )[0]
 
@@ -99,6 +102,7 @@ def fit_historical_sanos_hedges(
     instrument_returns: NDArray[np.floating],
     claim_returns: NDArray[np.floating],
     linear_transaction_costs: NDArray[np.floating],
+    scenario_weights: NDArray[np.floating] | None = None,
     config: HistoricalSanosConfig = HistoricalSanosConfig(),
 ) -> tuple[HistoricalSanosHedgeFit, ...]:
     """Fit a claim book while reusing its common zero-claim policy."""
@@ -108,6 +112,7 @@ def fit_historical_sanos_hedges(
     if claims.ndim != 2 or claims.shape[1] == 0:
         raise ValueError("claim_returns must be a non-empty matrix")
     _validated_inputs(instruments, claims[:, 0], costs)
+    weights = _validated_scenario_weights(scenario_weights, len(instruments))
     if claims.shape[0] != len(instruments) or not np.all(np.isfinite(claims)):
         raise ValueError("historical SANOS claim book must align and be finite")
     observation_parameter_ratio = len(instruments) / instruments.shape[1]
@@ -124,6 +129,7 @@ def fit_historical_sanos_hedges(
         instruments,
         np.zeros(len(instruments), dtype=np.float64),
         costs,
+        weights,
         config=config,
     )
     return tuple(
@@ -131,10 +137,12 @@ def fit_historical_sanos_hedges(
             instruments,
             claims[:, index],
             costs,
+            weights,
             claim_policy=_fit_policy(
                 instruments,
                 claims[:, index],
                 costs,
+                weights,
                 config=config,
             ),
             zero_policy=zero_policy,
@@ -148,6 +156,7 @@ def _compose_hedge_fit(
     instruments: FloatArray,
     claim: FloatArray,
     costs: FloatArray,
+    scenario_weights: FloatArray,
     *,
     claim_policy: HistoricalSanosPolicyFit,
     zero_policy: HistoricalSanosPolicyFit,
@@ -183,6 +192,7 @@ def _compose_hedge_fit(
         wealth = claim + instruments @ action - float(costs @ np.abs(action))
         translation = _optimal_power_cash_translation(
             wealth,
+            scenario_weights=scenario_weights,
             risk_parameter=config.risk_parameter,
         )
     objective = _objective_and_gradient(
@@ -195,9 +205,14 @@ def _compose_hedge_fit(
         instruments,
         claim,
         costs,
+        scenario_weights,
         config=config,
         include_translation=include_translation,
-        action_scale=_action_scale(instruments, config=config),
+        action_scale=_action_scale(
+            instruments,
+            scenario_weights=scenario_weights,
+            config=config,
+        ),
     )[0]
     return HistoricalSanosHedgeFit(
         action=action,
@@ -223,9 +238,14 @@ def _fit_policy(
     instruments: FloatArray,
     claim: FloatArray,
     costs: FloatArray,
+    scenario_weights: FloatArray | None = None,
     *,
     config: HistoricalSanosConfig,
 ) -> HistoricalSanosPolicyFit:
+    scenario_weights = _validated_scenario_weights(
+        scenario_weights,
+        len(instruments),
+    )
     validation_count = max(1, int(round(len(instruments) * config.validation_fraction)))
     split = len(instruments) - validation_count
     if split < 2:
@@ -233,12 +253,20 @@ def _fit_policy(
     include_translation = config.objective is HistoricalSanosObjective.POWER_EXPONENTIAL
     parameter_count = instruments.shape[1] + int(include_translation)
     initial = np.zeros(parameter_count, dtype=np.float64)
-    selection_action_scale = _action_scale(instruments[:split], config=config)
+    selection_weights = _normalize_scenario_weights(scenario_weights[:split])
+    validation_weights = _normalize_scenario_weights(scenario_weights[split:])
+    final_weights = _normalize_scenario_weights(scenario_weights)
+    selection_action_scale = _action_scale(
+        instruments[:split],
+        scenario_weights=selection_weights,
+        config=config,
+    )
     selection = _minimize_policy_with_adaptive_cap(
         initial,
         instruments[:split],
         claim[:split],
         costs,
+        selection_weights,
         config=config,
         include_translation=include_translation,
         action_scale=selection_action_scale,
@@ -248,16 +276,22 @@ def _fit_policy(
         instruments[split:],
         claim[split:],
         costs,
+        validation_weights,
         config=config,
         include_translation=include_translation,
         action_scale=selection_action_scale,
     )[0]
-    final_action_scale = _action_scale(instruments, config=config)
+    final_action_scale = _action_scale(
+        instruments,
+        scenario_weights=final_weights,
+        config=config,
+    )
     final = _minimize_policy_with_adaptive_cap(
         selection.x,
         instruments,
         claim,
         costs,
+        final_weights,
         config=config,
         include_translation=include_translation,
         action_scale=final_action_scale,
@@ -267,6 +301,7 @@ def _fit_policy(
         instruments,
         claim,
         costs,
+        final_weights,
         config=config,
         include_translation=include_translation,
         action_scale=final_action_scale,
@@ -358,6 +393,7 @@ def _minimize_policy_with_adaptive_cap(
     instruments: FloatArray,
     claim: FloatArray,
     costs: FloatArray,
+    scenario_weights: FloatArray,
     *,
     config: HistoricalSanosConfig,
     include_translation: bool,
@@ -378,6 +414,7 @@ def _minimize_policy_with_adaptive_cap(
             instruments,
             claim,
             costs,
+            scenario_weights,
             config=current_config,
             include_translation=include_translation,
             action_scale=action_scale,
@@ -387,6 +424,7 @@ def _minimize_policy_with_adaptive_cap(
             instruments,
             claim,
             costs,
+            scenario_weights,
             config=current_config,
             include_translation=include_translation,
             action_scale=action_scale,
@@ -491,6 +529,7 @@ def _minimize_policy(
     instruments: FloatArray,
     claim: FloatArray,
     costs: FloatArray,
+    scenario_weights: FloatArray,
     *,
     config: HistoricalSanosConfig,
     include_translation: bool,
@@ -502,6 +541,7 @@ def _minimize_policy(
             instruments,
             claim,
             costs,
+            scenario_weights,
             config=config,
             action_scale=action_scale,
         )
@@ -511,6 +551,7 @@ def _minimize_policy(
             instruments,
             claim,
             costs,
+            scenario_weights,
             config=config,
             action_scale=action_scale,
         )
@@ -523,6 +564,7 @@ def _minimize_policy(
             instruments,
             claim,
             costs,
+            scenario_weights,
             config=config,
             include_translation=include_translation,
             action_scale=action_scale,
@@ -535,6 +577,7 @@ def _retry_exact_cost_policy(
     instruments: FloatArray,
     claim: FloatArray,
     costs: FloatArray,
+    scenario_weights: FloatArray,
     *,
     config: HistoricalSanosConfig,
     include_translation: bool,
@@ -551,6 +594,7 @@ def _retry_exact_cost_policy(
         instruments,
         claim,
         costs,
+        scenario_weights,
         config=config,
         include_translation=include_translation,
         action_scale=action_scale,
@@ -565,6 +609,7 @@ def _minimize_exact_cost_policy(
     instruments: FloatArray,
     claim: FloatArray,
     costs: FloatArray,
+    scenario_weights: FloatArray,
     *,
     config: HistoricalSanosConfig,
     include_translation: bool,
@@ -613,6 +658,7 @@ def _minimize_exact_cost_policy(
             instruments,
             claim,
             zero_costs,
+            scenario_weights,
             config=config,
             include_translation=include_translation,
             action_scale=action_scale,
@@ -665,6 +711,7 @@ def _minimize_exact_cost_policy(
         instruments,
         claim,
         zero_costs,
+        scenario_weights,
         config=config,
         include_translation=include_translation,
         action_scale=action_scale,
@@ -707,23 +754,34 @@ def _minimize_mean_volatility(
     instruments: FloatArray,
     claim: FloatArray,
     costs: FloatArray,
+    scenario_weights: FloatArray | None = None,
     *,
     config: HistoricalSanosConfig,
     action_scale: FloatArray,
 ) -> OptimizeResult:
     """Solve the empirical mean-volatility cost-lasso as an exact SOCP."""
+    scenario_weights = _validated_scenario_weights(
+        scenario_weights,
+        len(instruments),
+    )
     observations, instrument_count = instruments.shape
-    instrument_center = np.mean(instruments, axis=0)
-    claim_center = float(np.mean(claim))
+    instrument_center = scenario_weights @ instruments
+    claim_center = float(scenario_weights @ claim)
     centered_instruments = instruments - instrument_center
     centered_claim = claim - claim_center
     scaled_action = cp.Variable(instrument_count)
     action = cp.multiply(action_scale, scaled_action)
     expected_wealth = claim_center + instrument_center @ action - costs @ cp.abs(action)
-    standard_deviation = cp.norm(
-        centered_claim + centered_instruments @ action,
-        2,
-    ) / math.sqrt(observations)
+    residual_expression = centered_claim + centered_instruments @ action
+    if _is_uniform_scenario_weights(scenario_weights):
+        standard_deviation = cp.norm(residual_expression, 2) / math.sqrt(
+            observations
+        )
+    else:
+        standard_deviation = cp.norm(
+            cp.multiply(np.sqrt(scenario_weights), residual_expression),
+            2,
+        )
     objective = cp.Minimize(
         -expected_wealth
         + config.risk_parameter * standard_deviation
@@ -823,17 +881,22 @@ def _minimize_mean_volatility(
             )
         )
         residual = centered_claim + centered_instruments @ candidate
-        residual_standard_deviation = math.sqrt(float(np.mean(residual**2)))
+        residual_standard_deviation = math.sqrt(
+            float(scenario_weights @ residual**2)
+        )
         zero_residual_tolerance = max(
             config.gradient_tolerance,
             np.finfo(np.float64).eps,
-        ) * max(1.0, float(np.std(claim, ddof=0)))
+        ) * max(
+            1.0,
+            math.sqrt(float(scenario_weights @ centered_claim**2)),
+        )
         if residual_standard_deviation > zero_residual_tolerance:
             smooth_gradient = (
                 -instrument_center
                 + config.risk_parameter
-                * (centered_instruments.T @ residual)
-                / (observations * residual_standard_deviation)
+                * (centered_instruments.T @ (scenario_weights * residual))
+                / residual_standard_deviation
                 + config.quadratic_ridge * candidate / action_scale**2
             )
             optimality = _maximum_kkt_violation(
@@ -862,6 +925,7 @@ def _minimize_mean_volatility(
             instruments,
             claim,
             costs,
+            scenario_weights,
             config=config,
             include_translation=False,
             action_scale=action_scale,
@@ -963,6 +1027,7 @@ def _minimize_mean_volatility(
             instruments,
             claim,
             costs,
+            scenario_weights,
             config=config,
             include_translation=False,
             action_scale=action_scale,
@@ -1016,6 +1081,7 @@ def _minimize_mean_volatility(
             instruments,
             claim,
             costs,
+            scenario_weights,
             config=config,
             include_translation=False,
             action_scale=action_scale,
@@ -1028,6 +1094,7 @@ def _minimize_mean_volatility(
             instruments,
             claim,
             costs,
+            scenario_weights,
             config=config,
             include_translation=False,
             action_scale=action_scale,
@@ -1131,25 +1198,35 @@ def _minimize_mean_variance(
     instruments: FloatArray,
     claim: FloatArray,
     costs: FloatArray,
+    scenario_weights: FloatArray | None = None,
     *,
     config: HistoricalSanosConfig,
     action_scale: FloatArray,
 ) -> OptimizeResult:
     """Solve the quadratic spread-cost problem and certify original actions."""
+    scenario_weights = _validated_scenario_weights(
+        scenario_weights,
+        len(instruments),
+    )
     observations, instrument_count = instruments.shape
-    centered_instruments = instruments - np.mean(instruments, axis=0)
-    centered_claim = claim - np.mean(claim)
-    instrument_center = np.mean(instruments, axis=0)
+    instrument_center = scenario_weights @ instruments
+    claim_center = float(scenario_weights @ claim)
+    centered_instruments = instruments - instrument_center
+    centered_claim = claim - claim_center
     scaled_action = cp.Variable(instrument_count)
     action = cp.multiply(action_scale, scaled_action)
     residual = centered_claim + centered_instruments @ action
+    weighted_residual_squares = (
+        cp.sum_squares(residual) / observations
+        if _is_uniform_scenario_weights(scenario_weights)
+        else cp.sum_squares(cp.multiply(np.sqrt(scenario_weights), residual))
+    )
     objective = cp.Minimize(
-        -float(np.mean(claim))
+        -claim_center
         - instrument_center @ action
         + 0.5
         * config.risk_parameter
-        * cp.sum_squares(residual)
-        / observations
+        * weighted_residual_squares
         + costs @ cp.abs(action)
         + 0.5 * config.quadratic_ridge * cp.sum_squares(scaled_action)
     )
@@ -1218,8 +1295,7 @@ def _minimize_mean_variance(
             smooth_gradient = (
                 -instrument_center
                 + config.risk_parameter
-                * (centered_instruments.T @ residual_value)
-                / observations
+                * (centered_instruments.T @ (scenario_weights * residual_value))
                 + config.quadratic_ridge * candidate / action_scale**2
             )
             optimality = _maximum_kkt_violation(
@@ -1234,6 +1310,7 @@ def _minimize_mean_variance(
                 instruments,
                 claim,
                 costs,
+                scenario_weights,
                 config=config,
                 include_translation=False,
                 action_scale=action_scale,
@@ -1300,6 +1377,7 @@ def _minimize_mean_variance(
                 instruments,
                 claim,
                 costs,
+                scenario_weights,
                 config=config,
                 include_translation=False,
                 action_scale=action_scale,
@@ -1323,6 +1401,7 @@ def _minimize_mean_variance(
                 instruments,
                 claim,
                 costs,
+                scenario_weights,
                 config=config,
                 action_scale=action_scale,
             )
@@ -1371,26 +1450,30 @@ def _refine_mean_variance_coordinate_descent(
     instruments: FloatArray,
     claim: FloatArray,
     costs: FloatArray,
+    scenario_weights: FloatArray | None = None,
     *,
     config: HistoricalSanosConfig,
     action_scale: FloatArray,
 ) -> tuple[FloatArray, int, float]:
     """Refine the exact box-constrained lasso QP in scaled coordinates."""
-    observations, instrument_count = instruments.shape
-    centered_instruments = instruments - np.mean(instruments, axis=0)
-    centered_claim = claim - np.mean(claim)
+    scenario_weights = _validated_scenario_weights(
+        scenario_weights,
+        len(instruments),
+    )
+    _, instrument_count = instruments.shape
+    instrument_center = scenario_weights @ instruments
+    centered_instruments = instruments - instrument_center
+    centered_claim = claim - float(scenario_weights @ claim)
     scaled_instruments = centered_instruments * action_scale[None, :]
     hessian = (
         config.risk_parameter
-        * (scaled_instruments.T @ scaled_instruments)
-        / observations
+        * (scaled_instruments.T @ (scenario_weights[:, None] * scaled_instruments))
         + config.quadratic_ridge * np.eye(instrument_count)
     )
     linear = (
-        -action_scale * np.mean(instruments, axis=0)
+        -action_scale * instrument_center
         + config.risk_parameter
-        * (scaled_instruments.T @ centered_claim)
-        / observations
+        * (scaled_instruments.T @ (scenario_weights * centered_claim))
     )
     penalty = costs * action_scale
     bound = config.solver_position_cap / action_scale
@@ -1441,7 +1524,12 @@ def _maximum_kkt_violation(
     coordinate_scale: FloatArray | None = None,
 ) -> float:
     derivative = smooth_gradient + costs * np.sign(action)
-    zero = action == 0.0
+    zero_scale = (
+        np.ones_like(action)
+        if coordinate_scale is None
+        else np.maximum(1.0, coordinate_scale)
+    )
+    zero = np.abs(action) <= 1e-15 * zero_scale
     derivative[zero] = np.maximum(np.abs(smooth_gradient[zero]) - costs[zero], 0.0)
     upper = action >= position_cap
     lower = action <= -position_cap
@@ -1457,46 +1545,59 @@ def _objective_and_gradient(
     instruments: FloatArray,
     claim: FloatArray,
     costs: FloatArray,
+    scenario_weights: FloatArray | None = None,
     *,
     config: HistoricalSanosConfig,
     include_translation: bool,
     action_scale: FloatArray | None = None,
 ) -> tuple[float, FloatArray]:
+    scenario_weights = _validated_scenario_weights(
+        scenario_weights,
+        len(instruments),
+    )
     values = np.asarray(parameters, dtype=np.float64)
     instrument_count = instruments.shape[1]
     action = values[:instrument_count]
     if action_scale is None:
-        action_scale = _action_scale(instruments, config=config)
+        action_scale = _action_scale(
+            instruments,
+            scenario_weights=scenario_weights,
+            config=config,
+        )
     cost = float(costs @ np.abs(action))
     cost_gradient = costs * np.sign(action)
     wealth = claim + instruments @ action - cost
     jacobian = instruments - cost_gradient[None, :]
-    sample_count = len(wealth)
     risk = config.risk_parameter
     if config.objective is HistoricalSanosObjective.MEAN_VARIANCE:
-        centered = wealth - np.mean(wealth)
-        loss = -np.mean(wealth) + 0.5 * risk * np.mean(centered**2)
-        path_gradient = (-1.0 + risk * centered) / sample_count
+        mean = float(scenario_weights @ wealth)
+        centered = wealth - mean
+        loss = -mean + 0.5 * risk * float(scenario_weights @ centered**2)
+        path_gradient = scenario_weights * (-1.0 + risk * centered)
     elif config.objective is HistoricalSanosObjective.MEAN_VOLATILITY:
-        centered = wealth - np.mean(wealth)
-        standard_deviation = math.sqrt(float(np.mean(centered**2)))
-        loss = -np.mean(wealth) + risk * standard_deviation
+        mean = float(scenario_weights @ wealth)
+        centered = wealth - mean
+        standard_deviation = math.sqrt(
+            float(scenario_weights @ centered**2)
+        )
+        loss = -mean + risk * standard_deviation
         if standard_deviation > 0.0:
-            path_gradient = (
+            path_gradient = scenario_weights * (
                 -1.0 + risk * centered / standard_deviation
-            ) / sample_count
+            )
         else:
             # Zero is an admissible subgradient of the Euclidean norm at its
             # origin; unlike an epsilon floor, it leaves the exact objective
             # unchanged for the independent conic certificate.
-            path_gradient = np.full(sample_count, -1.0 / sample_count)
+            path_gradient = -scenario_weights
     elif config.objective is HistoricalSanosObjective.ENTROPY:
         exponent = -risk * wealth
         maximum = float(np.max(exponent))
-        weights = np.exp(exponent - maximum)
-        weights /= np.sum(weights)
-        loss = (maximum + math.log(float(np.mean(np.exp(exponent - maximum))))) / risk
-        path_gradient = -weights
+        tilted_weights = scenario_weights * np.exp(exponent - maximum)
+        normalizer = float(np.sum(tilted_weights))
+        tilted_weights /= normalizer
+        loss = (maximum + math.log(normalizer)) / risk
+        path_gradient = -tilted_weights
     elif config.objective is HistoricalSanosObjective.POWER_EXPONENTIAL:
         if not include_translation or len(values) != instrument_count + 1:
             raise ValueError("power-exponential objective requires cash translation")
@@ -1512,8 +1613,8 @@ def _objective_and_gradient(
             np.exp(-risk * np.maximum(residual, 0.0)),
             1.0 - risk * residual,
         )
-        loss = -(translation + float(np.mean(utility)))
-        path_gradient = -marginal / sample_count
+        loss = -(translation + float(scenario_weights @ utility))
+        path_gradient = -scenario_weights * marginal
     else:
         raise ValueError(f"unsupported historical SANOS objective {config.objective!r}")
     gradient = jacobian.T @ path_gradient
@@ -1531,10 +1632,17 @@ def _objective_and_gradient(
 def _action_scale(
     instruments: FloatArray,
     *,
+    scenario_weights: FloatArray | None = None,
     config: HistoricalSanosConfig,
 ) -> FloatArray:
     """Return unit-RMS action coordinates with bounded numerical scaling."""
-    gain_rms = np.sqrt(np.mean(np.asarray(instruments, dtype=np.float64) ** 2, axis=0))
+    scenario_weights = _validated_scenario_weights(
+        scenario_weights,
+        len(instruments),
+    )
+    gain_rms = np.sqrt(
+        scenario_weights @ np.asarray(instruments, dtype=np.float64) ** 2
+    )
     return np.clip(
         1.0 / np.maximum(gain_rms, config.scale_floor),
         1.0e-6,
@@ -1545,8 +1653,13 @@ def _action_scale(
 def _optimal_power_cash_translation(
     wealth: FloatArray,
     *,
+    scenario_weights: FloatArray | None = None,
     risk_parameter: float,
 ) -> float:
+    scenario_weights = _validated_scenario_weights(
+        scenario_weights,
+        len(wealth),
+    )
     width = 50.0 / risk_parameter
     lower = float(np.min(wealth) - width)
     upper = float(np.max(wealth) + width)
@@ -1558,9 +1671,41 @@ def _optimal_power_cash_translation(
             np.exp(-risk_parameter * np.maximum(residual, 0.0)),
             1.0 - risk_parameter * residual,
         )
-        return 1.0 - float(np.mean(marginal))
+        return 1.0 - float(scenario_weights @ marginal)
 
     return float(brentq(first_order_condition, lower, upper))
+
+
+def _validated_scenario_weights(
+    scenario_weights: NDArray[np.floating] | None,
+    observation_count: int,
+) -> FloatArray:
+    if scenario_weights is None:
+        return np.full(observation_count, 1.0 / observation_count, dtype=np.float64)
+    weights = np.asarray(scenario_weights, dtype=np.float64)
+    if weights.shape != (observation_count,) or np.any(
+        ~np.isfinite(weights) | (weights < 0.0)
+    ):
+        raise ValueError("scenario_weights must be finite, non-negative, and aligned")
+    return _normalize_scenario_weights(weights)
+
+
+def _normalize_scenario_weights(scenario_weights: FloatArray) -> FloatArray:
+    total = float(np.sum(scenario_weights))
+    if not math.isfinite(total) or total <= 0.0:
+        raise ValueError("scenario_weights must have finite-positive mass")
+    return np.asarray(scenario_weights / total, dtype=np.float64)
+
+
+def _is_uniform_scenario_weights(scenario_weights: FloatArray) -> bool:
+    return bool(
+        np.allclose(
+            scenario_weights,
+            1.0 / len(scenario_weights),
+            rtol=0.0,
+            atol=4.0 * np.finfo(np.float64).eps,
+        )
+    )
 
 
 def _validated_inputs(

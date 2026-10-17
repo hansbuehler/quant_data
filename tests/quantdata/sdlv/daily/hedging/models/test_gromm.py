@@ -140,6 +140,7 @@ def test_architecture_study_combines_independent_case_blocks() -> None:
         second.features,
     )
     np.testing.assert_array_equal(combined.active_mask, first.active_mask)
+    np.testing.assert_allclose(np.sum(combined.normalized_scenario_weights), 1.0)
 
 
 def test_architecture_study_rejects_inconsistent_cost_geometry() -> None:

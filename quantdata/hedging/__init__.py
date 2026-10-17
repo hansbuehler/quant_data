@@ -34,6 +34,18 @@ from quantdata.hedging.inference import (
     paired_episode_differences,
     summarize_episode_losses,
 )
+from quantdata.hedging.mean_reduction import (
+    MeanReduction,
+    MeanReductionConfig,
+    MeanReductionDiagnostics,
+    MeanReductionError,
+    MeanReductionResult,
+    MEMMBoundaryError,
+    MEMMConvergenceError,
+    MEMMInfeasibleError,
+    adaptive_scenario_count,
+    reduce_one_day_means,
+)
 from quantdata.hedging.metrics import HedgeSmokeResult, assert_smoke_fixture
 from quantdata.hedging.objectives import (
     CostLassoConfig,
@@ -44,6 +56,12 @@ from quantdata.hedging.objectives import (
     regularized_tyler_covariance,
 )
 from quantdata.hedging.protocols import BenchmarkConfig, EpisodeSpec, HedgeSchedule
+from quantdata.hedging.scenario_optimization import (
+    ScenarioHedgeFit,
+    ScenarioObjective,
+    ScenarioOptimizationConfig,
+    fit_static_scenario_hedge,
+)
 
 __all__ = [
     "BarrierOptionClaim",
@@ -59,12 +77,24 @@ __all__ = [
     "HedgeSchedule",
     "HedgeSmokeResult",
     "MarketSnapshot",
+    "MEMMBoundaryError",
+    "MEMMConvergenceError",
+    "MEMMInfeasibleError",
     "MeanConfidenceInterval",
+    "MeanReduction",
+    "MeanReductionConfig",
+    "MeanReductionDiagnostics",
+    "MeanReductionError",
+    "MeanReductionResult",
+    "adaptive_scenario_count",
     "LinearHedge",
     "OptionContract",
     "OptionQuote",
     "OptionRight",
     "RealizedVarianceClaim",
+    "ScenarioHedgeFit",
+    "ScenarioObjective",
+    "ScenarioOptimizationConfig",
     "TradeExecution",
     "TylerConfig",
     "claim_pnl_breakdown",
@@ -73,6 +103,7 @@ __all__ = [
     "eligible_option_quotes",
     "execute_option_trade",
     "execute_spot_trade",
+    "fit_static_scenario_hedge",
     "hac_standard_error_of_mean",
     "hac_long_run_variance",
     "irregular_hac_long_run_variance",
@@ -81,6 +112,7 @@ __all__ = [
     "normalized_strike_from_nms",
     "paired_episode_differences",
     "regularized_tyler_covariance",
+    "reduce_one_day_means",
     "settlement_cashflow",
     "summarize_episode_losses",
 ]

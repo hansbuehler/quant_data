@@ -4,12 +4,17 @@ import numpy as np
 import pytest
 import torch
 
+from quantdata.hedging.mean_reduction import MeanReduction
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm import (
     training as gromm_training,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.config import (
     GrommObjective,
     GrommTrainConfig,
+)
+from quantdata.sdlv.daily.front_spot.hedging.models.gromm.objectives import (
+    gromm_hedging_objective,
+    power_exponential_utility,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.policy import (
     GrommPolicyConfig,
@@ -18,6 +23,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.training import (
     GrommTrainingData,
     _paired_split,
     fit_gromm_policy,
+    reduce_gromm_one_day_training_data,
 )
 from quantdata.torch import BaseEnvironment
 from quantdata.torch.ffw import FeedForwardConfig
@@ -54,6 +60,57 @@ def test_paired_split_keeps_antithetic_paths_together() -> None:
         pair = {first, first + 1}
         assert pair <= training_set or pair <= validation_set
     assert training_set.isdisjoint(validation_set)
+
+
+@pytest.mark.parametrize("method", tuple(MeanReduction))
+def test_one_day_mean_reduction_is_common_across_targets(
+    method: MeanReduction,
+) -> None:
+    paths = 8
+    instrument_returns = np.asarray(
+        [[-2.0], [-1.0], [-0.5], [-0.25], [0.25], [0.5], [1.0], [3.0]]
+    )
+    first = GrommTrainingData(
+        features=np.ones((paths, 1, 1)),
+        instrument_returns=instrument_returns[:, None],
+        claim_returns=np.arange(paths, dtype=np.float64)[:, None],
+        active_mask=np.ones((1, 1), dtype=bool),
+        linear_transaction_costs=np.zeros((1, 1)),
+    )
+    second = GrommTrainingData(
+        features=first.features,
+        instrument_returns=first.instrument_returns,
+        claim_returns=2.0 * first.claim_returns + 1.0,
+        active_mask=first.active_mask,
+        linear_transaction_costs=first.linear_transaction_costs,
+    )
+
+    reduced_first = reduce_gromm_one_day_training_data(
+        first, mean_reduction=method
+    )
+    reduced_second = reduce_gromm_one_day_training_data(
+        second, mean_reduction=method
+    )
+
+    np.testing.assert_allclose(
+        reduced_first.instrument_returns,
+        reduced_second.instrument_returns,
+    )
+    np.testing.assert_allclose(
+        reduced_first.normalized_scenario_weights,
+        reduced_second.normalized_scenario_weights,
+    )
+    weights = reduced_first.normalized_scenario_weights
+    np.testing.assert_allclose(
+        weights @ reduced_first.instrument_returns[:, 0],
+        np.zeros(1),
+        atol=2.0e-11,
+    )
+    np.testing.assert_allclose(
+        weights @ reduced_first.claim_returns,
+        np.zeros(1),
+        atol=2.0e-11,
+    )
 
 
 def test_gromm_training_recovers_linear_hedge_and_restarts(tmp_path) -> None:
@@ -202,6 +259,100 @@ def test_gromm_checkpoint_identity_includes_exact_training_data(tmp_path) -> Non
     )
 
     assert original.checkpoint_path != perturbed.checkpoint_path
+
+
+def test_gromm_checkpoint_identity_includes_scenario_weights(tmp_path) -> None:
+    data = _synthetic_training_data()
+    weights = np.ones(data.path_count)
+    weights[:2] = 2.0
+    weighted = GrommTrainingData(
+        features=data.features,
+        instrument_returns=data.instrument_returns,
+        claim_returns=data.claim_returns,
+        active_mask=data.active_mask,
+        linear_transaction_costs=data.linear_transaction_costs,
+        scenario_weights=weights,
+    )
+    policy_config = GrommPolicyConfig(
+        label="weight-identity",
+        feature_count=3,
+        instrument_count=2,
+    )
+    train_config = GrommTrainConfig(
+        maximum_epochs=1,
+        minimum_epochs=1,
+        patience_epochs=10,
+        batch_pairs=128,
+        checkpoint_epochs=1,
+        seed=4,
+    )
+    environment = BaseEnvironment(precision=64, device="cpu", debug=True)
+
+    uniform = fit_gromm_policy(
+        data,
+        policy_config=policy_config,
+        objective=GrommObjective.MEAN_VARIANCE,
+        risk_parameter=1.0,
+        checkpoint_directory=tmp_path,
+        train_config=train_config,
+        environment=environment,
+    )
+    nonuniform = fit_gromm_policy(
+        weighted,
+        policy_config=policy_config,
+        objective=GrommObjective.MEAN_VARIANCE,
+        risk_parameter=1.0,
+        checkpoint_directory=tmp_path,
+        train_config=train_config,
+        environment=environment,
+    )
+
+    assert uniform.checkpoint_path != nonuniform.checkpoint_path
+
+
+@pytest.mark.parametrize("objective", tuple(GrommObjective))
+def test_gromm_objectives_use_scenario_weights(objective: GrommObjective) -> None:
+    dtype = torch.float64
+    claim = torch.tensor([[1.0], [3.0]], dtype=dtype)
+    weights = torch.tensor([0.75, 0.25], dtype=dtype)
+    cash_translation = (
+        torch.tensor(0.4, dtype=dtype)
+        if objective is GrommObjective.POWER_EXPONENTIAL
+        else None
+    )
+    result = gromm_hedging_objective(
+        actions=torch.zeros((2, 1, 1), dtype=dtype),
+        instrument_returns=torch.zeros((2, 1, 1), dtype=dtype),
+        claim_returns=claim,
+        linear_transaction_costs=torch.zeros((1, 1), dtype=dtype),
+        objective=objective,
+        risk_parameter=2.0,
+        scenario_weights=weights,
+        cash_translation=cash_translation,
+    )
+    mean = torch.sum(weights * claim[:, 0])
+    if objective is GrommObjective.MEAN_VARIANCE:
+        expected = -mean + torch.sum(weights * (claim[:, 0] - mean).square())
+    elif objective is GrommObjective.MEAN_VOLATILITY:
+        expected = -mean + 2.0 * torch.sqrt(
+            torch.sum(weights * (claim[:, 0] - mean).square())
+            + torch.finfo(dtype).eps
+        )
+    elif objective is GrommObjective.ENTROPY:
+        expected = torch.log(torch.sum(weights * torch.exp(-2.0 * claim[:, 0]))) / 2.0
+    else:
+        assert cash_translation is not None
+        expected = -(
+            cash_translation
+            + torch.sum(
+                weights
+                * power_exponential_utility(
+                    claim[:, 0] - cash_translation,
+                    risk_parameter=2.0,
+                )
+            )
+        )
+    torch.testing.assert_close(result.loss, expected)
 
 
 def test_gromm_budget_extension_matches_uninterrupted_training(

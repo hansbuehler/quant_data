@@ -2,6 +2,43 @@
 
 ## Status
 
+### Rolling 1D stage — 2026-10-17
+
+The first rolling launch stopped because the 1D target selection received
+quantities for the full 20-target family. This was corrected and verified on
+one real origin. The second launch produced 60 covariance origins and 12
+Historical-SANOS origins before the latter stopped at 2023-02-02: a
+$1.8\times10^{-18}$ zero-claim action was treated as an active coordinate by
+the nonsmooth KKT certificate. A roundoff-scale zero test now certifies that
+origin; the exact solver warning is retained in the diagnostic run. The
+Historical-SANOS entropy, risk-1 rolling cell restarted in an isolated run.
+Neither the failed launch nor the 13-date replay is a full rolling P&L result.
+
+The active scope is now rolling one-business-day digital targets only, over
+2023–2025, using 252 historical transitions available through each origin.
+Do not launch 3D claims or weekly/restarted-weekly experiments in this stage.
+The earlier status entries below are historical records, not launch instructions.
+
+Compare all four objectives and the agreed risk grids across non-LV models,
+with demeaning and feasible exact MEMM. Historical empirical MEMM infeasibility
+is an explicit outcome, never replaced silently by approximate weights.
+Generative books use at least max(10,000, 10 times instrument count) scenarios.
+Use the public-candidate dataset exclusively, common target sizes and costs,
+and retain dated model/scenario identities. Resolve model compatibility and
+regularization discrepancies before interpreting cross-model comparisons.
+
+Launch ready CPU cells first, with bounded concurrency; launch generated cells
+only with compatible artifacts and managed GPU allocations. Save each completed
+origin and monitor convergence, exact warnings, zero-claim positions, gross and
+maximum exposure, cap hits, costs, and MEMM residual/ESS/weight concentration.
+Investigate problematic cells without silently relaxing numerical gates or
+selecting settings using realized future returns.
+
+Report rolling out-of-sample net P&L, tracking errors, drawdowns and the four
+objective values by model/objective/risk/mean reduction/target, with coverage
+and failed or unavailable dates explicit. The three diagnostic dates establish
+portfolio reasonableness only; they are not standalone performance evidence.
+
 This document is the implementation plan for the hedging benchmark built around
 the daily front-spot SDLV/GROMM model. It records the agreed experimental design
 and implementation order.

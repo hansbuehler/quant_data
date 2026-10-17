@@ -13,7 +13,19 @@ from numpy.typing import NDArray
 
 from quantdata.biz_calendar import DAYS_PER_YEAR
 from quantdata.hedging.contracts import OptionRight
+from quantdata.hedging.mean_reduction import (
+    MeanReduction,
+    MeanReductionConfig,
+    MeanReductionDiagnostics,
+    reduce_one_day_means,
+)
 from quantdata.hedging.objectives import LinearHedge, cost_lasso_minimum_variance_hedge
+from quantdata.hedging.scenario_optimization import (
+    ScenarioHedgeFit,
+    ScenarioObjective,
+    ScenarioOptimizationConfig,
+    fit_static_scenario_hedge,
+)
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.digital_daily import (
     DailyDigitalSample,
 )
@@ -24,13 +36,17 @@ from quantdata.sdlv.daily.front_spot.hedging.data.generative_surfaces import (
 FloatArray = NDArray[np.float64]
 
 
-@version("1.0")
+@version("2.1", dependencies=[MeanReductionConfig, ScenarioOptimizationConfig])
 @dataclass(frozen=True, kw_only=True)
 class GeneratedHedgeConfig:
-    """Common Monte Carlo and cost-lasso controls for generated hedges."""
+    """Common Monte Carlo, objective, drift, and cost controls."""
 
-    scenario_count: int = 4_096
+    scenario_count: int = 10_000
     seed: int = 20_261_013
+    objective: ScenarioObjective = ScenarioObjective.MEAN_VARIANCE
+    risk_parameter: float = 10.0
+    mean_reduction: MeanReduction = MeanReduction.DEMEAN
+    mean_reduction_config: MeanReductionConfig = MeanReductionConfig()
     cost_multiplier: float = 1.0
     position_cap: float = 1_000_000.0
 
@@ -42,6 +58,18 @@ class GeneratedHedgeConfig:
         verify_inp(
             isinstance(self.seed, int) and not isinstance(self.seed, bool),
             lambda: "seed must be an integer",
+        )
+        verify_inp(
+            isinstance(self.objective, ScenarioObjective),
+            lambda: "objective must be a ScenarioObjective",
+        )
+        verify_inp(
+            math.isfinite(self.risk_parameter) and self.risk_parameter > 0.0,
+            lambda: "risk_parameter must be finite-positive",
+        )
+        verify_inp(
+            isinstance(self.mean_reduction, MeanReduction),
+            lambda: "mean_reduction must be a MeanReduction",
         )
         verify_inp(
             math.isfinite(self.cost_multiplier) and self.cost_multiplier >= 0.0,
@@ -103,6 +131,80 @@ class GeneratedCostLassoFit:
     uncapped: LinearHedge
     cap_hits: int
     converged: bool
+
+
+@dataclass(frozen=True, kw_only=True)
+class GeneratedObjectiveFit:
+    """One generated-scenario objective fit under a shared reduced law."""
+
+    action: FloatArray
+    objective_value: float
+    optimizer: ScenarioHedgeFit
+    mean_reduction: MeanReductionDiagnostics
+    cap_hits: int
+    converged: bool
+
+
+def fit_generated_objective_book(
+    scenarios: tuple[GeneratedDailyScenarios, ...],
+    sample: DailyDigitalSample,
+    *,
+    config: GeneratedHedgeConfig,
+    claim_quantities: NDArray[np.floating],
+) -> tuple[GeneratedObjectiveFit, ...]:
+    """Fit all targets under one instrument-derived drift reduction.
+
+    The instrument matrix determines one demeaning transformation or MEMM law.
+    That law is reused across every target in the generated book; targets never
+    enter the measure-change constraints.
+    """
+    if not scenarios:
+        raise ValueError("at least one generated target scenario is required")
+    instruments = scenarios[0].instrument_returns
+    if any(
+        item.instrument_returns.shape != instruments.shape
+        or not np.array_equal(item.instrument_returns, instruments)
+        for item in scenarios[1:]
+    ):
+        raise ValueError("generated targets must share one instrument scenario book")
+    quantities = np.asarray(claim_quantities, dtype=np.float64)
+    if quantities.shape != (len(scenarios),) or np.any(
+        ~np.isfinite(quantities) | (quantities == 0.0)
+    ):
+        raise ValueError("claim_quantities must be finite, nonzero, and aligned")
+    targets = np.column_stack(tuple(item.claim_returns for item in scenarios))
+    reduced = reduce_one_day_means(
+        instruments,
+        targets,
+        method=config.mean_reduction,
+        config=config.mean_reduction_config,
+    )
+    costs = config.cost_multiplier * generated_linear_transaction_costs(sample)
+    optimizer_config = ScenarioOptimizationConfig(
+        objective=config.objective,
+        risk_parameter=config.risk_parameter,
+        position_cap=config.position_cap,
+    )
+    fits: list[GeneratedObjectiveFit] = []
+    for index, quantity in enumerate(quantities):
+        optimizer = fit_static_scenario_hedge(
+            instrument_returns=reduced.instrument_returns,
+            claim_returns=quantity * reduced.target_returns[:, index],
+            scenario_weights=reduced.weights,
+            linear_transaction_costs=costs,
+            config=optimizer_config,
+        )
+        fits.append(
+            GeneratedObjectiveFit(
+                action=optimizer.action,
+                objective_value=optimizer.objective_value,
+                optimizer=optimizer,
+                mean_reduction=reduced.diagnostics,
+                cap_hits=optimizer.cap_hits,
+                converged=optimizer.converged,
+            )
+        )
+    return tuple(fits)
 
 
 def build_generated_daily_scenarios(

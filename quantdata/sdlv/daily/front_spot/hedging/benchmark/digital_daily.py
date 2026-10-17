@@ -64,8 +64,10 @@ class DailyDigitalTarget:
         )
 
 
-def daily_digital_targets() -> tuple[DailyDigitalTarget, ...]:
+def daily_digital_targets(*, maturity_business_days: int | None = None) -> tuple[DailyDigitalTarget, ...]:
     """Return the 20 agreed one-day and three-day digital targets."""
+    if maturity_business_days not in (None, 1, 3):
+        raise ValueError("target maturity must be one or three business days")
     one_maturity = (
         DailyDigitalTarget(
             maturity_business_days=1,
@@ -100,7 +102,7 @@ def daily_digital_targets() -> tuple[DailyDigitalTarget, ...]:
             right=target.right,
             nms=target.nms,
         )
-        for maturity in (1, 3)
+        for maturity in ((1, 3) if maturity_business_days is None else (maturity_business_days,))
         for target in one_maturity
     )
 

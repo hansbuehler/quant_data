@@ -13,6 +13,7 @@ from pathlib import Path
 from cdxcore.err import verify_inp
 from cdxcore.version import version
 
+from quantdata.hedging.mean_reduction import MeanReduction
 from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
     default_public_candidate_path,
 )
@@ -55,7 +56,7 @@ class ProductionReadiness(StrEnum):
     BLOCKED = "blocked"
 
 
-@version("1.3", dependencies=[DailyResultsConfig])
+@version("1.5", dependencies=[DailyResultsConfig])
 @dataclass(frozen=True, kw_only=True)
 class DailyProductionMatrixConfig:
     """Precommitted objective grids and shared daily run controls."""
@@ -65,7 +66,7 @@ class DailyProductionMatrixConfig:
     entropy_parameters: tuple[float, ...] = (0.1, 1.0, 10.0)
     power_exponential_parameters: tuple[float, ...] = (0.1, 1.0, 10.0)
     observation_count: int = 252
-    scenario_count: int = 4_096
+    scenario_count: int = 10_000
     position_cap: float = 1_000.0
     evaluation_start: date = date(2023, 1, 1)
     evaluation_end: date = date(2025, 12, 31)
@@ -155,6 +156,7 @@ class DailyProductionCase:
     readiness: ProductionReadiness
     blocked_reason: str | None
     command: tuple[str, ...] | None
+    mean_reduction: str | None = None
     reviewed_commit: str | None = None
     production_gate_sha256: str | None = None
     production_gate_path: str | None = None
@@ -170,6 +172,11 @@ class DailyProductionCase:
             self.risk_parameter is None
             or (math.isfinite(self.risk_parameter) and self.risk_parameter > 0.0),
             lambda: "risk_parameter must be finite-positive when supplied",
+        )
+        verify_inp(
+            self.mean_reduction is None
+            or self.mean_reduction in {method.value for method in MeanReduction},
+            lambda: "mean_reduction must be a supported method when supplied",
         )
         verify_inp(
             self.reviewed_commit is None
@@ -277,58 +284,70 @@ def build_daily_production_matrix(
             ),
         )
     )
-    for objective, parameters in (
-        ("mean-variance", config.mean_variance_parameters),
-        ("mean-volatility", config.mean_volatility_parameters),
-        ("power-exponential", config.power_exponential_parameters),
-    ):
-        for parameter in parameters:
-            case_id = _risk_case_id("covariance", objective, parameter)
-            cases.append(
-                _ready_case(
-                    case_id=case_id,
-                    model="robust-covariance",
-                    measure="historical-P",
-                    variant="independent-shrinkage-tyler",
-                    objective=objective,
-                    risk_parameter=parameter,
-                    resource=ProductionResource.CPU,
-                    command=_daily_command(
-                        model="covariance",
+    for mean_reduction in MeanReduction:
+        for objective, parameters in _objective_grids(config):
+            for parameter in parameters:
+                case_id = _risk_case_id(
+                    "covariance",
+                    objective,
+                    parameter,
+                    mean_reduction=mean_reduction,
+                )
+                cases.append(
+                    _ready_case(
                         case_id=case_id,
-                        dataset=dataset,
-                        output_root=output_root,
-                        checkpoint_root=checkpoint_root,
-                        config=config,
+                        model="robust-covariance",
+                        measure="historical-P",
+                        variant="independent-shrinkage-tyler",
                         objective=objective,
                         risk_parameter=parameter,
-                    ),
+                        mean_reduction=mean_reduction.value,
+                        resource=ProductionResource.CPU,
+                        command=_daily_command(
+                            model="covariance",
+                            case_id=case_id,
+                            dataset=dataset,
+                            output_root=output_root,
+                            checkpoint_root=checkpoint_root,
+                            config=config,
+                            objective=objective,
+                            risk_parameter=parameter,
+                            mean_reduction=mean_reduction,
+                        ),
+                    )
                 )
-            )
-    for objective, parameters in _objective_grids(config):
-        for parameter in parameters:
-            case_id = _risk_case_id("historical-sanos", objective, parameter)
-            cases.append(
-                _ready_case(
-                    case_id=case_id,
-                    model="historical-sanos",
-                    measure="historical-P",
-                    variant="rolling-fixed-contract-scenarios",
-                    objective=objective,
-                    risk_parameter=parameter,
-                    resource=ProductionResource.CPU,
-                    command=_daily_command(
+    for mean_reduction in MeanReduction:
+        for objective, parameters in _objective_grids(config):
+            for parameter in parameters:
+                case_id = _risk_case_id(
+                    "historical-sanos",
+                    objective,
+                    parameter,
+                    mean_reduction=mean_reduction,
+                )
+                cases.append(
+                    _ready_case(
+                        case_id=case_id,
                         model="historical-sanos",
-                        case_id=case_id,
-                        dataset=dataset,
-                        output_root=output_root,
-                        checkpoint_root=checkpoint_root,
-                        config=config,
+                        measure="historical-P",
+                        variant="rolling-fixed-contract-scenarios",
                         objective=objective,
                         risk_parameter=parameter,
-                    ),
+                        mean_reduction=mean_reduction.value,
+                        resource=ProductionResource.CPU,
+                        command=_daily_command(
+                            model="historical-sanos",
+                            case_id=case_id,
+                            dataset=dataset,
+                            output_root=output_root,
+                            checkpoint_root=checkpoint_root,
+                            config=config,
+                            objective=objective,
+                            risk_parameter=parameter,
+                            mean_reduction=mean_reduction,
+                        ),
+                    )
                 )
-            )
     cases.extend(
         _gromm_cases(
             dataset=dataset,
@@ -430,59 +449,67 @@ def _gromm_cases(
             )
         )
     for measure in ("P", "Q"):
-        for objective, parameters in _objective_grids(config):
-            for parameter in parameters:
-                case_id = _risk_case_id(
-                    f"gromm-{measure.lower()}", objective, parameter
-                )
-                common = {
-                    "case_id": case_id,
-                    "model": "gromm",
-                    "measure": measure,
-                    "variant": "rolling-16-factor-eight-substep-deep-hedge",
-                    "objective": objective,
-                    "risk_parameter": parameter,
-                    "resource": ProductionResource.GPU,
-                }
-                if architecture_reason is not None:
-                    cases.append(_blocked_case(reason=architecture_reason, **common))
-                    continue
-                assert range_summary is not None
-                if (
-                    measure == "P"
-                    and range_summary.physical_accepted_count
-                    != range_summary.eligible_origin_count
-                ):
+        for mean_reduction in MeanReduction:
+            for objective, parameters in _objective_grids(config):
+                for parameter in parameters:
+                    case_id = _risk_case_id(
+                        f"gromm-{measure.lower()}",
+                        objective,
+                        parameter,
+                        mean_reduction=mean_reduction,
+                    )
+                    common = {
+                        "case_id": case_id,
+                        "model": "gromm",
+                        "measure": measure,
+                        "variant": "rolling-16-factor-eight-substep-deep-hedge",
+                        "objective": objective,
+                        "risk_parameter": parameter,
+                        "mean_reduction": mean_reduction.value,
+                        "resource": ProductionResource.GPU,
+                    }
+                    if architecture_reason is not None:
+                        cases.append(
+                            _blocked_case(reason=architecture_reason, **common)
+                        )
+                        continue
+                    assert range_summary is not None
+                    if (
+                        measure == "P"
+                        and range_summary.physical_accepted_count
+                        != range_summary.eligible_origin_count
+                    ):
+                        cases.append(
+                            _blocked_case(
+                                reason=(
+                                    "rolling physical-drift gate passed for only "
+                                    f"{range_summary.physical_accepted_count}/"
+                                    f"{range_summary.eligible_origin_count} origins"
+                                ),
+                                **common,
+                            )
+                        )
+                        continue
                     cases.append(
-                        _blocked_case(
-                            reason=(
-                                "rolling physical-drift gate passed for only "
-                                f"{range_summary.physical_accepted_count}/"
-                                f"{range_summary.eligible_origin_count} origins"
+                        _ready_case(
+                            command=_daily_command(
+                                model="gromm",
+                                case_id=case_id,
+                                dataset=dataset,
+                                output_root=output_root,
+                                checkpoint_root=checkpoint_root,
+                                config=config,
+                                objective=objective,
+                                risk_parameter=parameter,
+                                mean_reduction=mean_reduction,
+                                device="cuda",
+                                measure=measure,
+                                market_artifact_root=inputs.market_artifact_root,
+                                architecture_selection=inputs.architecture_selection,
                             ),
                             **common,
                         )
                     )
-                    continue
-                cases.append(
-                    _ready_case(
-                        command=_daily_command(
-                            model="gromm",
-                            case_id=case_id,
-                            dataset=dataset,
-                            output_root=output_root,
-                            checkpoint_root=checkpoint_root,
-                            config=config,
-                            objective=objective,
-                            risk_parameter=parameter,
-                            device="cuda",
-                            measure=measure,
-                            market_artifact_root=inputs.market_artifact_root,
-                            architecture_selection=inputs.architecture_selection,
-                        ),
-                        **common,
-                    )
-                )
     return tuple(cases)
 
 
@@ -556,6 +583,7 @@ def _generated_cases(
             variant="published-settings-full-rolling-fit",
             objective="mean-variance",
             risk_parameter=1.0,
+            mean_reduction=MeanReduction.DEMEAN.value,
             resource=ProductionResource.GPU,
             command=_daily_command(
                 model="volgan",
@@ -567,11 +595,12 @@ def _generated_cases(
                 device="cuda",
                 objective="mean-variance",
                 risk_parameter=1.0,
+                mean_reduction=MeanReduction.DEMEAN,
             ),
         )
     )
-    cases.append(
-        _rolling_generated_case(
+    cases.extend(
+        _rolling_generated_cases(
             case_id="volgan-rolling-trained",
             model="volgan",
             variant="fixed-2022-source-selected-update",
@@ -598,6 +627,7 @@ def _generated_cases(
             variant="published-settings-full-rolling-fit",
             objective="mean-variance",
             risk_parameter=1.0,
+            mean_reduction=MeanReduction.DEMEAN.value,
             resource=ProductionResource.GPU,
             command=_daily_command(
                 model="diffusion-ad-seq-vol",
@@ -609,11 +639,12 @@ def _generated_cases(
                 device="cuda",
                 objective="mean-variance",
                 risk_parameter=1.0,
+                mean_reduction=MeanReduction.DEMEAN,
             ),
         )
     )
-    cases.append(
-        _rolling_generated_case(
+    cases.extend(
+        _rolling_generated_cases(
             case_id="diffusion-ad-seq-vol-rolling-trained",
             model="diffusion-ad-seq-vol",
             variant="fixed-2022-source-selected-update",
@@ -638,6 +669,7 @@ def _generated_cases(
                 variant="published-settings-full-rolling-fit",
                 objective="mean-variance",
                 risk_parameter=1.0,
+                mean_reduction=MeanReduction.DEMEAN.value,
                 resource=ProductionResource.GPU,
                 reason=(
                     diffusion_base_reason
@@ -659,6 +691,7 @@ def _generated_cases(
                 variant="published-settings-full-rolling-fit",
                 objective="mean-variance",
                 risk_parameter=1.0,
+                mean_reduction=MeanReduction.DEMEAN.value,
                 resource=ProductionResource.GPU,
                 command=_daily_command(
                     model="diffusion-ad-seq-vol-ft",
@@ -670,6 +703,7 @@ def _generated_cases(
                     device="cuda",
                     objective="mean-variance",
                     risk_parameter=1.0,
+                    mean_reduction=MeanReduction.DEMEAN,
                     base_checkpoint=diffusion_base.initializer_checkpoint,
                     base_checkpoint_sha256=(
                         diffusion_base.initializer_checkpoint_sha256
@@ -677,8 +711,8 @@ def _generated_cases(
                 ),
             )
         )
-    cases.append(
-        _rolling_generated_case(
+    cases.extend(
+        _rolling_generated_cases(
             case_id="diffusion-ad-seq-vol-ft-rolling-trained",
             model="diffusion-ad-seq-vol-ft",
             variant="fixed-2022-source-selected-update",
@@ -696,7 +730,7 @@ def _generated_cases(
     return tuple(cases)
 
 
-def _rolling_generated_case(
+def _rolling_generated_cases(
     *,
     case_id: str,
     model: str,
@@ -710,51 +744,77 @@ def _rolling_generated_case(
     output_root: Path,
     checkpoint_root: Path,
     config: DailyProductionMatrixConfig,
-) -> DailyProductionCase:
-    if evidence is None:
-        return _blocked_case(
-            case_id=case_id,
-            model=model,
-            measure="historical-P",
-            variant=variant,
-            objective="mean-variance",
-            risk_parameter=1.0,
-            resource=ProductionResource.GPU,
-            reason=evidence_reason or "missing authenticated generated evidence",
-        )
-    return _review_gated_case(
-        gate=gate,
-        gate_path=gate_path,
-        gate_reason=gate_reason,
-        scope="daily-rolling",
-        evidence=evidence,
-        case_id=case_id,
-        model=model,
-        measure="historical-P",
-        variant=variant,
-        objective="mean-variance",
-        risk_parameter=1.0,
-        resource=ProductionResource.GPU,
-        command=_daily_command(
-            model=model,
-            case_id=case_id,
-            dataset=dataset,
-            output_root=output_root,
-            checkpoint_root=checkpoint_root,
-            config=config,
-            device="cuda",
-            objective="mean-variance",
-            risk_parameter=1.0,
-            epochs=evidence.selected_epochs,
-            model_label=evidence.initializer_model_label,
-            warm_start_checkpoint=evidence.initializer_checkpoint,
-            warm_start_checkpoint_sha256=(
-                evidence.initializer_checkpoint_sha256
-            ),
-            base_checkpoint=evidence.base_checkpoint,
-            base_checkpoint_sha256=evidence.base_checkpoint_sha256,
-        ),
-    )
+) -> tuple[DailyProductionCase, ...]:
+    cases: list[DailyProductionCase] = []
+    for mean_reduction in MeanReduction:
+        for objective, parameters in _objective_grids(config):
+            for parameter in parameters:
+                tensor_case_id = _risk_case_id(
+                    case_id,
+                    objective,
+                    parameter,
+                    mean_reduction=mean_reduction,
+                )
+                if (
+                    mean_reduction is MeanReduction.DEMEAN
+                    and objective == "mean-variance"
+                    and parameter == 1.0
+                ):
+                    tensor_case_id = case_id
+                common = {
+                    "case_id": tensor_case_id,
+                    "model": model,
+                    "measure": "historical-P",
+                    "variant": variant,
+                    "objective": objective,
+                    "risk_parameter": parameter,
+                    "mean_reduction": mean_reduction.value,
+                    "resource": ProductionResource.GPU,
+                }
+                if evidence is None:
+                    cases.append(
+                        _blocked_case(
+                            reason=(
+                                evidence_reason
+                                or "missing authenticated generated evidence"
+                            ),
+                            **common,
+                        )
+                    )
+                    continue
+                cases.append(
+                    _review_gated_case(
+                        gate=gate,
+                        gate_path=gate_path,
+                        gate_reason=gate_reason,
+                        scope="daily-rolling",
+                        evidence=evidence,
+                        command=_daily_command(
+                            model=model,
+                            case_id=tensor_case_id,
+                            dataset=dataset,
+                            output_root=output_root,
+                            checkpoint_root=checkpoint_root,
+                            checkpoint_case_id=case_id,
+                            config=config,
+                            device="cuda",
+                            objective=objective,
+                            risk_parameter=parameter,
+                            mean_reduction=mean_reduction,
+                            epochs=evidence.selected_epochs,
+                            model_label=evidence.initializer_model_label,
+                            warm_start_checkpoint=evidence.initializer_checkpoint,
+                            warm_start_checkpoint_sha256=(
+                                evidence.initializer_checkpoint_sha256
+                            ),
+                            base_checkpoint=evidence.base_checkpoint,
+                            base_checkpoint_sha256=evidence.base_checkpoint_sha256,
+                            retain_fit_checkpoints=True,
+                        ),
+                        **common,
+                    )
+                )
+    return tuple(cases)
 
 
 def _dataset_manifest_sha256(dataset: Path) -> str | None:
@@ -864,9 +924,11 @@ def _daily_command(
     dataset: Path,
     output_root: Path,
     checkpoint_root: Path,
+    checkpoint_case_id: str | None = None,
     config: DailyProductionMatrixConfig,
     objective: str | None = None,
     risk_parameter: float | None = None,
+    mean_reduction: MeanReduction | None = None,
     device: str = "cpu",
     epochs: int | None = None,
     model_label: str | None = None,
@@ -878,6 +940,7 @@ def _daily_command(
     market_artifact_root: Path | None = None,
     market_artifact_range_summary: Path | None = None,
     architecture_selection: Path | None = None,
+    retain_fit_checkpoints: bool = False,
 ) -> tuple[str, ...]:
     command = [
         "python",
@@ -891,7 +954,7 @@ def _daily_command(
         "--output",
         str(output_root / case_id),
         "--checkpoint-directory",
-        str(checkpoint_root / case_id),
+        str(checkpoint_root / (checkpoint_case_id or case_id)),
         "--observation-count",
         str(config.observation_count),
         "--position-cap",
@@ -912,6 +975,8 @@ def _daily_command(
         command.extend(("--objective", objective))
     if risk_parameter is not None:
         command.extend(("--risk-parameter", f"{risk_parameter:g}"))
+    if mean_reduction is not None:
+        command.extend(("--mean-reduction", mean_reduction.value))
     if epochs is not None:
         command.extend(("--epochs", str(epochs)))
     if model_label is not None:
@@ -936,6 +1001,8 @@ def _daily_command(
         )
     if architecture_selection is not None:
         command.extend(("--architecture-selection", str(architecture_selection)))
+    if retain_fit_checkpoints:
+        command.append("--retain-fit-checkpoints")
     return tuple(command)
 
 
@@ -950,8 +1017,15 @@ def _objective_grids(
     )
 
 
-def _risk_case_id(prefix: str, objective: str, parameter: float) -> str:
-    return f"{prefix}-{objective}-{parameter:g}".replace(".", "p")
+def _risk_case_id(
+    prefix: str,
+    objective: str,
+    parameter: float,
+    *,
+    mean_reduction: MeanReduction | None = None,
+) -> str:
+    reduction = "" if mean_reduction is None else f"-{mean_reduction.value}"
+    return f"{prefix}-{objective}-{parameter:g}{reduction}".replace(".", "p")
 
 
 def _artifact_identity(path: Path | None) -> dict[str, str | None] | None:

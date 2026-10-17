@@ -142,9 +142,9 @@ def fit_covariance_book_actions(
 
     Tyler scatter is fitted once to instruments only. Each claim receives a
     separate robust cross-scatter estimate using fixed instrument-derived row
-    weights. Expected returns are sample means, not Tyler's robust marginal
-    center, and the instrument mean is soft-screened using Newey--West errors
-    of the observed covariance-eigenportfolio returns.
+    weights. Drift estimation is outside the hedging benchmark: instrument and
+    claim expected returns are therefore set to zero in every objective. The
+    empirical instrument mean is retained only as a Newey--West diagnostic.
     """
     instruments = np.asarray(returns.instrument_returns, dtype=np.float64)
     targets = np.asarray(returns.target_returns, dtype=np.float64)
@@ -164,7 +164,7 @@ def fit_covariance_book_actions(
     raw_instrument_center = np.mean(instruments, axis=0)
     covariance = estimate.covariance
     (
-        instrument_center,
+        diagnostic_instrument_center,
         mean_z_threshold,
         mean_hac_lags,
         retained_mean_directions,
@@ -175,6 +175,7 @@ def fit_covariance_book_actions(
             configured_threshold=config.mean_z_threshold,
             configured_hac_lags=config.mean_hac_lags,
         )
+    instrument_center = np.zeros(instrument_count, dtype=np.float64)
     penalty = config.cost_multiplier * costs
     recession_ratio = 0.0
     if config.objective is CovarianceObjective.MEAN_VOLATILITY:
@@ -201,7 +202,7 @@ def fit_covariance_book_actions(
     actions: list[CovarianceBookAction] = []
     for target_index in range(targets.shape[1]):
         target = targets[:, target_index]
-        claim_center = float(np.mean(target))
+        claim_center = 0.0
         claim_cross_covariance, claim_variance = _robust_target_scatter(
             instruments,
             target,
@@ -264,7 +265,9 @@ def fit_covariance_book_actions(
         retained_mean_directions=retained_mean_directions,
         maximum_absolute_mean_t=maximum_absolute_mean_t,
         raw_instrument_center_norm=float(np.linalg.norm(raw_instrument_center)),
-        screened_instrument_center_norm=float(np.linalg.norm(instrument_center)),
+        screened_instrument_center_norm=float(
+            np.linalg.norm(diagnostic_instrument_center)
+        ),
     )
 
 
@@ -443,7 +446,10 @@ def _fit_policy(
     bounded: bool,
     recession_ratio: float,
 ) -> RobustPolicyFit:
-    if config.objective is CovarianceObjective.MEAN_VARIANCE:
+    if config.objective in {
+        CovarianceObjective.MEAN_VARIANCE,
+        CovarianceObjective.ENTROPY,
+    }:
         action, iterations, converged, cap_hits = _solve_quadratic_lasso(
             instrument_center=instrument_center,
             covariance=covariance,
@@ -852,7 +858,10 @@ def _policy_statistics(
         claim_variance=claim_variance,
     )
     standard_deviation = math.sqrt(variance)
-    if config.objective is CovarianceObjective.MEAN_VARIANCE:
+    if config.objective in {
+        CovarianceObjective.MEAN_VARIANCE,
+        CovarianceObjective.ENTROPY,
+    }:
         risk = 0.5 * config.risk_parameter * variance
     elif config.objective is CovarianceObjective.MEAN_VOLATILITY:
         risk = config.risk_parameter * standard_deviation

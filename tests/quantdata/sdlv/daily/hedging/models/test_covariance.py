@@ -9,6 +9,7 @@ import pytest
 from scipy.integrate import quad
 from scipy.optimize import minimize_scalar
 
+from quantdata.hedging.mean_reduction import MeanReduction
 from quantdata.hedging.objectives import regularized_tyler_covariance
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.daily import one_day_market_sample
 from quantdata.sdlv.daily.front_spot.hedging.data.fixtures import (
@@ -97,12 +98,35 @@ def test_book_mean_variance_recovers_pure_factor_hedge() -> None:
     assert action.standard_deviation < 0.2 * np.sqrt(fit.estimate.covariance[-1, -1])
 
 
+def test_covariance_mean_reduction_labels_are_analytically_equivalent() -> None:
+    panel = _one_factor_return_panel()
+    fits = tuple(
+        fit_covariance_book_actions(
+            panel,
+            linear_transaction_costs=np.zeros(1),
+            config=CovarianceHedgeConfig(
+                rolling_observations=len(panel.training_origin_dates),
+                objective=CovarianceObjective.MEAN_VARIANCE,
+                risk_parameter=1.0,
+                cost_multiplier=0.0,
+                mean_reduction=method,
+            ),
+        )
+        for method in MeanReduction
+    )
+
+    np.testing.assert_allclose(fits[0].actions[0].action, fits[1].actions[0].action)
+    assert fits[0].actions[0].objective == pytest.approx(
+        fits[1].actions[0].objective
+    )
+
+
 def test_virtual_policy_solver_cap_is_distinct_from_executable_cap() -> None:
     generator = np.random.default_rng(31)
     observations = 500
     centered_instrument = generator.normal(size=observations)
     instrument = 2_000.0 + centered_instrument
-    target = 2.0 * centered_instrument + 0.01 * generator.normal(size=observations)
+    target = 20.0 * centered_instrument + 0.01 * generator.normal(size=observations)
     first = date(2022, 1, 3)
     panel = HistoricalReturnPanel(
         training_origin_dates=tuple(
@@ -133,12 +157,12 @@ def test_virtual_policy_solver_cap_is_distinct_from_executable_cap() -> None:
     action = fit.actions[0]
     assert action.action is not None
     assert abs(action.claim_policy.action[0]) > 10.0
-    assert abs(action.zero_policy.action[0]) > 10.0
-    assert abs(action.action[0]) < 10.0
+    assert action.zero_policy.action[0] == pytest.approx(0.0)
+    assert abs(action.action[0]) == pytest.approx(10.0)
     assert action.internal_cap_hits == 0
-    assert action.executable_cap_hits == 0
-    assert action.cap_hits == 0
-    assert action.converged
+    assert action.executable_cap_hits == 1
+    assert action.cap_hits == 1
+    assert not action.converged
 
 
 @pytest.mark.parametrize("risk_parameter", [0.1, 1.0, 2.0, 3.0])
@@ -185,6 +209,39 @@ def test_book_gaussian_power_recovers_pure_factor_hedge(
     assert action.action is not None
     np.testing.assert_allclose(action.action, [-2.0], atol=0.08)
     assert action.standard_deviation < 0.2 * np.sqrt(fit.estimate.covariance[-1, -1])
+
+
+def test_gaussian_entropy_is_mean_variance_with_the_same_risk_parameter() -> None:
+    panel = _one_factor_return_panel()
+    common = dict(
+        rolling_observations=len(panel.training_origin_dates),
+        risk_parameter=1.0,
+        cost_multiplier=0.0,
+    )
+    mean_variance = fit_covariance_book_actions(
+        panel,
+        linear_transaction_costs=np.zeros(1),
+        config=CovarianceHedgeConfig(
+            objective=CovarianceObjective.MEAN_VARIANCE,
+            **common,
+        ),
+    )
+    entropy = fit_covariance_book_actions(
+        panel,
+        linear_transaction_costs=np.zeros(1),
+        config=CovarianceHedgeConfig(
+            objective=CovarianceObjective.ENTROPY,
+            **common,
+        ),
+    )
+
+    np.testing.assert_allclose(
+        entropy.actions[0].action,
+        mean_variance.actions[0].action,
+    )
+    assert entropy.actions[0].objective == pytest.approx(
+        mean_variance.actions[0].objective
+    )
 
 
 @pytest.mark.parametrize(
@@ -345,7 +402,7 @@ def test_gaussian_power_solver_matches_direct_scalar_spread_problem() -> None:
     assert objective(action[0]) == pytest.approx(float(numerical.fun), abs=1.0e-11)
 
 
-def test_mean_volatility_caps_and_flags_unbounded_policy() -> None:
+def test_mean_volatility_zero_drift_removes_speculative_recession() -> None:
     generator = np.random.default_rng(29)
     observations = 500
     instrument = 0.1 + 0.01 * generator.normal(size=observations)
@@ -376,15 +433,17 @@ def test_mean_volatility_caps_and_flags_unbounded_policy() -> None:
         ),
     )
     action = fit.actions[0]
-    assert not action.bounded
-    assert not action.zero_policy.bounded
+    assert action.bounded
+    assert action.zero_policy.bounded
     assert action.action is not None
-    assert action.zero_policy.iterations > 0
-    assert action.cap_hits > 0
-    assert not action.converged
+    assert action.zero_policy.action == pytest.approx(np.zeros(1))
+    assert action.zero_policy.expected_profit == pytest.approx(0.0)
+    assert action.zero_policy.recession_ratio == pytest.approx(0.0)
+    assert action.cap_hits == 0
+    assert action.converged
 
 
-def test_expected_return_uses_mean_not_componentwise_median() -> None:
+def test_expected_return_sample_mean_is_diagnostic_only() -> None:
     observations = 100
     instrument = np.concatenate((np.zeros(90), np.full(10, 10.0)))
     target = 0.5 * instrument
@@ -415,6 +474,8 @@ def test_expected_return_uses_mean_not_componentwise_median() -> None:
     assert np.median(instrument) == 0.0
     assert fit.raw_instrument_center_norm == pytest.approx(np.mean(instrument))
     assert fit.screened_instrument_center_norm == pytest.approx(np.mean(instrument))
+    assert fit.actions[0].zero_policy.action == pytest.approx(np.zeros(1))
+    assert fit.actions[0].zero_policy.expected_profit == pytest.approx(0.0)
 
 
 def test_target_action_is_invariant_to_unrelated_target_catalog() -> None:

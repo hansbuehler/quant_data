@@ -743,6 +743,18 @@ def test_diffusion_daily_book_fits_and_generates_once(
         )
 
     monkeypatch.setattr(diffusion_adapter, "sample_diffusion_transitions", generate)
+    monkeypatch.setattr(
+        diffusion_adapter,
+        "build_generated_daily_scenarios",
+        lambda *args, **kwargs: SimpleNamespace(),
+    )
+    monkeypatch.setattr(
+        diffusion_adapter,
+        "fit_generated_objective_book",
+        lambda scenarios, sample, **kwargs: tuple(
+            SimpleNamespace() for _ in scenarios
+        ),
+    )
 
     def evaluate(sample, **kwargs):
         calls["evaluate"] += 1

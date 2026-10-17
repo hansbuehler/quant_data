@@ -17,11 +17,17 @@
   its cross-covariance is constructed from the instrument covariance and its
   residual variance, so the joint block is positive definite and a target's
   hedge is invariant to unrelated targets in the benchmark catalog.
-- **Expected returns:** sample means are kept separate from Tyler's marginal
-  medians. Instrument means are projected onto the covariance eigenportfolios
-  and soft-thresholded using Newey--West standard errors at the rolling
-  universal threshold `sqrt(2 log p)`. The automatic HAC lag and threshold are
-  recomputed in every rolling window rather than fixed from 2022.
+- **Expected returns:** drift or alpha estimation is outside the hedging
+  benchmark, so all instrument and target expected returns are fixed at zero
+  in the optimization. Sample instrument means are still projected onto the
+  covariance eigenportfolios and soft-thresholded using Newey--West standard
+  errors at the rolling universal threshold `sqrt(2 log p)`, but only as a
+  diagnostic. The automatic HAC lag and threshold are recomputed in every
+  rolling window rather than fixed from 2022. For this Gaussian moment model,
+  coordinate demeaning and the Gaussian minimum-entropy martingale projection
+  both produce the same zero-mean law and unchanged covariance; both tensor
+  labels therefore reuse the identical fit rather than fabricating empirical
+  scenario weights.
 - **Objectives:** mean--variance and mean--volatility use the fitted first two
   moments directly. Gaussian entropy is exactly the mean--variance policy at
   the same risk parameter. Power-exponential uses its distinct exact Gaussian

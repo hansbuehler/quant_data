@@ -9,6 +9,7 @@ from enum import StrEnum
 from cdxcore.err import verify_inp
 from cdxcore.version import version
 
+from quantdata.hedging.mean_reduction import MeanReduction, MeanReductionConfig
 from quantdata.sdlv.daily.front_spot.hedging.data.rolling_calibration import (
     RollingDlvCalibrationConfig,
 )
@@ -30,7 +31,10 @@ class GrommObjective(StrEnum):
     POWER_EXPONENTIAL = "power-exponential"
 
 
-@version("0.2", dependencies=[RollingDlvCalibrationConfig])
+@version(
+    "0.4",
+    dependencies=[RollingDlvCalibrationConfig, MeanReductionConfig],
+)
 @dataclass(frozen=True, kw_only=True)
 class GrommConfig:
     """Logical and numerical settings for daily GROMM scenarios."""
@@ -42,12 +46,14 @@ class GrommConfig:
     measure: GrommMeasure = GrommMeasure.Q
     objective: GrommObjective = GrommObjective.MEAN_VARIANCE
     risk_parameter: float = 1.0
-    path_count: int = 1_024
-    batch_size: int = 1_024
+    path_count: int = 10_000
+    batch_size: int = 10_000
     dlv_substeps: int = 8
     time_power: float = 1.0
     seed: int = 20_261_012
     position_cap: float = 1_000.0
+    mean_reduction: MeanReduction = MeanReduction.DEMEAN
+    mean_reduction_config: MeanReductionConfig = MeanReductionConfig()
 
     def __post_init__(self) -> None:
         verify_inp(bool(self.label.strip()), lambda: "label must be non-empty")
@@ -91,6 +97,10 @@ class GrommConfig:
         verify_inp(
             math.isfinite(self.position_cap) and self.position_cap > 0.0,
             lambda: "position_cap must be finite and positive",
+        )
+        verify_inp(
+            isinstance(self.mean_reduction, MeanReduction),
+            lambda: "mean_reduction must be a MeanReduction",
         )
 
 

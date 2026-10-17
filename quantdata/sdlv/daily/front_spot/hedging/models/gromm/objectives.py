@@ -45,6 +45,7 @@ def gromm_hedging_objective(
     linear_transaction_costs: torch.Tensor,
     objective: GrommObjective,
     risk_parameter: float,
+    scenario_weights: torch.Tensor | None = None,
     cash_translation: torch.Tensor | None = None,
     initial_positions: torch.Tensor | None = None,
     settles_next: torch.Tensor | None = None,
@@ -62,6 +63,24 @@ def gromm_hedging_objective(
         raise ValueError("transaction costs do not align with actions")
     if not math.isfinite(risk_parameter) or risk_parameter <= 0.0:
         raise ValueError("risk_parameter must be finite-positive")
+    if scenario_weights is None:
+        weights = torch.full(
+            (actions.shape[0],),
+            1.0 / actions.shape[0],
+            dtype=actions.dtype,
+            device=actions.device,
+        )
+    else:
+        if scenario_weights.shape != (actions.shape[0],):
+            raise ValueError("scenario weights must align with the path axis")
+        if not bool(
+            torch.all(torch.isfinite(scenario_weights) & (scenario_weights >= 0.0))
+        ):
+            raise ValueError("scenario weights must be finite and non-negative")
+        total_weight = torch.sum(scenario_weights)
+        if not bool(total_weight > 0.0):
+            raise ValueError("scenario weights must have positive mass")
+        weights = scenario_weights / total_weight
     costs = linear_transaction_costs
     if costs.ndim == 2:
         costs = costs[None]
@@ -112,29 +131,33 @@ def gromm_hedging_objective(
     gain = torch.sum(actions * instrument_returns, dim=(-2, -1))
     claim = torch.sum(claim_returns, dim=-1)
     wealth = claim + gain - transaction_cost
+    mean_wealth = torch.sum(weights * wealth)
 
     if objective is GrommObjective.MEAN_VARIANCE:
-        centered = wealth - torch.mean(wealth)
-        loss = -torch.mean(wealth) + 0.5 * risk_parameter * torch.mean(centered.square())
+        centered = wealth - mean_wealth
+        loss = -mean_wealth + 0.5 * risk_parameter * torch.sum(
+            weights * centered.square()
+        )
     elif objective is GrommObjective.MEAN_VOLATILITY:
         standard_deviation = torch.sqrt(
-            torch.mean((wealth - torch.mean(wealth)).square())
+            torch.sum(weights * (wealth - mean_wealth).square())
             + torch.finfo(wealth.dtype).eps
         )
-        loss = -torch.mean(wealth) + risk_parameter * standard_deviation
+        loss = -mean_wealth + risk_parameter * standard_deviation
     elif objective is GrommObjective.ENTROPY:
         exponent = -risk_parameter * wealth
-        loss = (
-            torch.logsumexp(exponent, dim=0) - math.log(len(exponent))
+        positive = weights > 0.0
+        loss = torch.logsumexp(
+            exponent[positive] + torch.log(weights[positive]), dim=0
         ) / risk_parameter
     elif objective is GrommObjective.POWER_EXPONENTIAL:
         if cash_translation is None or cash_translation.numel() != 1:
             raise ValueError("power-exponential OCE requires one cash translation")
         residual = wealth - cash_translation
-        oce = cash_translation + torch.mean(
-            power_exponential_utility(
-                residual,
-                risk_parameter=risk_parameter,
+        oce = cash_translation + torch.sum(
+            weights
+            * power_exponential_utility(
+                residual, risk_parameter=risk_parameter
             )
         )
         loss = -oce

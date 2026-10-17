@@ -13,6 +13,8 @@ from typing import Any
 
 from cdxcore.uniquehash import named_unique_filename48_8
 
+from quantdata.hedging.mean_reduction import MeanReduction
+from quantdata.hedging.scenario_optimization import ScenarioObjective
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.digital_daily import (
     daily_digital_targets,
 )
@@ -27,6 +29,12 @@ from quantdata.sdlv.daily.front_spot.hedging.benchmark.sizing import (
 from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
     PublicHedgingPanel,
     default_public_candidate_path,
+)
+from quantdata.sdlv.daily.front_spot.hedging.models.bs_greeks.adapter import (
+    run_bs_greeks_daily_book,
+)
+from quantdata.sdlv.daily.front_spot.hedging.models.bs_greeks.config import (
+    BsGreeksConfig,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.checkpointing import file_sha256
 from quantdata.sdlv.daily.front_spot.hedging.models.covariance.adapter import (
@@ -114,6 +122,7 @@ def main() -> None:
         "--model",
         choices=(
             "sanos-lv",
+            "bs-greeks",
             "covariance",
             "historical-sanos",
             "gromm",
@@ -132,7 +141,13 @@ def main() -> None:
     parser.add_argument("--start", type=date.fromisoformat, default=date(2023, 1, 1))
     parser.add_argument("--end", type=date.fromisoformat, default=date(2025, 12, 31))
     parser.add_argument("--objective", default="mean-variance")
+    parser.add_argument("--target-maturity", type=int, choices=(1, 3))
     parser.add_argument("--risk-parameter", type=float, default=10.0)
+    parser.add_argument(
+        "--mean-reduction",
+        choices=tuple(method.value for method in MeanReduction),
+        default=MeanReduction.DEMEAN.value,
+    )
     parser.add_argument("--measure", choices=("P", "Q"), default="Q")
     parser.add_argument("--position-cap", type=float)
     parser.add_argument("--checkpoint-directory", type=Path)
@@ -146,7 +161,7 @@ def main() -> None:
     parser.add_argument("--observation-count", type=int, default=252)
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--batch-size", type=int)
-    parser.add_argument("--scenario-count", type=int, default=4_096)
+    parser.add_argument("--scenario-count", type=int, default=10_000)
     parser.add_argument("--training-progress-seconds", type=float, default=240.0)
     parser.add_argument("--checkpoint-epochs", type=int)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
@@ -215,7 +230,12 @@ def main() -> None:
             panel,
             config=notional_config,
         )
-    claim_quantities = target_notionals.quantity_by_label
+    claim_quantities = {
+        target.label: target_notionals.quantity_by_label[target.label]
+        for target in daily_digital_targets(
+            maturity_business_days=arguments.target_maturity
+        )
+    }
     checkpoint_directory = arguments.checkpoint_directory
     if checkpoint_directory is None:
         root = os.environ.get("QUANTDATA_ROOT")
@@ -264,9 +284,9 @@ def main() -> None:
         evaluation_start=arguments.start,
         evaluation_end=arguments.end,
         rolling_observations=rolling_observations,
-        target_labels=tuple(target.label for target in daily_digital_targets()),
+        target_labels=tuple(target.label for target in daily_digital_targets(maturity_business_days=arguments.target_maturity)),
         target_quantities=tuple(
-            claim_quantities[target.label] for target in daily_digital_targets()
+            claim_quantities[target.label] for target in daily_digital_targets(maturity_business_days=arguments.target_maturity)
         ),
         target_notional_identity=(
             f"{type(notional_config).version.unique_id48}:"
@@ -335,11 +355,15 @@ def _build_model(
     checkpoint_directory: Path | None,
     expected_dataset_manifest_sha256: str | None = None,
 ) -> tuple[str, str, int, Any, DailyBookFunction]:
+    mean_reduction = MeanReduction(
+        getattr(arguments, "mean_reduction", MeanReduction.DEMEAN.value)
+    )
     label = arguments.label or (
         f"{arguments.model}-rolling-public-settings"
         if _is_generated_model(arguments.model)
         else (
             f"{arguments.model}-{arguments.objective}-"
+            f"{mean_reduction.value}-"
             f"lambda-{arguments.risk_parameter:g}"
         )
     )
@@ -359,6 +383,29 @@ def _build_model(
             config,
             lambda panel, origin: run_sanos_lv_daily_book(
                 panel,
+                target_maturity=getattr(arguments, "target_maturity", None),
+                origin_date=origin,
+                config=config,
+                claim_quantities=claim_quantities,
+            ),
+        )
+    if arguments.model == "bs-greeks":
+        config = BsGreeksConfig(
+            label=label,
+            position_cap=(
+                default_position_cap
+                if arguments.position_cap is None
+                else arguments.position_cap
+            ),
+        )
+        return (
+            "bs-delta-vega",
+            "Q-price/historical-transition",
+            1,
+            config,
+            lambda panel, origin: run_bs_greeks_daily_book(
+                panel,
+                target_maturity=getattr(arguments, "target_maturity", None),
                 origin_date=origin,
                 config=config,
                 claim_quantities=claim_quantities,
@@ -369,13 +416,14 @@ def _build_model(
             objective = CovarianceObjective(arguments.objective)
         except ValueError as error:
             raise ValueError(
-                "covariance supports mean-variance, mean-volatility, and "
-                "Gaussian power-exponential"
+                "covariance supports Gaussian mean-variance, entropy, "
+                "mean-volatility, and power-exponential objectives"
             ) from error
         config = CovarianceHedgeConfig(
             label=label,
             objective=objective,
             risk_parameter=arguments.risk_parameter,
+            mean_reduction=mean_reduction,
             position_cap=(
                 default_position_cap
                 if arguments.position_cap is None
@@ -389,6 +437,7 @@ def _build_model(
             config,
             lambda panel, origin: run_covariance_daily_book(
                 panel,
+                target_maturity=getattr(arguments, "target_maturity", None),
                 origin_date=origin,
                 config=config,
                 claim_quantities=claim_quantities,
@@ -487,6 +536,7 @@ def _build_model(
             measure=measure,
             objective=objective,
             risk_parameter=arguments.risk_parameter,
+            mean_reduction=mean_reduction,
             path_count=arguments.scenario_count,
             batch_size=scenario_batch,
             position_cap=(
@@ -554,6 +604,7 @@ def _build_model(
             run_config,
             lambda panel, origin: run_gromm2_daily_book(
                 panel,
+                target_maturity=getattr(arguments, "target_maturity", None),
                 origin_date=origin,
                 artifact_root=artifact_root,
                 checkpoint_directory=checkpoint_directory,
@@ -606,6 +657,9 @@ def _build_model(
         )
         hedge_config = GeneratedHedgeConfig(
             scenario_count=arguments.scenario_count,
+            objective=ScenarioObjective(arguments.objective),
+            risk_parameter=arguments.risk_parameter,
+            mean_reduction=mean_reduction,
             position_cap=(
                 default_position_cap
                 if arguments.position_cap is None
@@ -644,6 +698,7 @@ def _build_model(
             run_config,
             lambda panel, origin: run_volgan_daily_book(
                 panel,
+                target_maturity=getattr(arguments, "target_maturity", None),
                 origin_date=origin,
                 model_config=model_config,
                 checkpoint_directory=checkpoint_directory,
@@ -705,6 +760,9 @@ def _build_model(
         )
         hedge_config = GeneratedHedgeConfig(
             scenario_count=arguments.scenario_count,
+            objective=ScenarioObjective(arguments.objective),
+            risk_parameter=arguments.risk_parameter,
+            mean_reduction=mean_reduction,
             position_cap=(
                 default_position_cap
                 if arguments.position_cap is None
@@ -753,6 +811,7 @@ def _build_model(
             run_config,
             lambda panel, origin: run_diffusion_daily_book(
                 panel,
+                target_maturity=getattr(arguments, "target_maturity", None),
                 origin_date=origin,
                 model_config=model_config,
                 checkpoint_directory=checkpoint_directory,
@@ -780,6 +839,7 @@ def _build_model(
         rolling_observations=arguments.observation_count,
         objective=historical_objective,
         risk_parameter=arguments.risk_parameter,
+        mean_reduction=mean_reduction,
         position_cap=(
             default_position_cap
             if arguments.position_cap is None
@@ -793,6 +853,7 @@ def _build_model(
         historical_config,
         lambda panel, origin: run_historical_sanos_daily_book(
             panel,
+            target_maturity=getattr(arguments, "target_maturity", None),
             origin_date=origin,
             config=historical_config,
             claim_quantities=claim_quantities,

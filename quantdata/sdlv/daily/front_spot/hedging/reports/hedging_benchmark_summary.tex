@@ -88,6 +88,17 @@
 
 \section{Approach}
 
+\subsection{Scope: hedging without alpha}
+
+Estimating predictable market drift (``alpha'') is outside the scope of this
+benchmark. Every estimator therefore removes drift in a way consistent with
+its own model before constructing a hedge. The reported comparison measures
+the reduction of target risk, not a method's ability to finance the hedge with
+a speculative expected-return position. In the independent covariance
+baseline this convention is exact and transparent: the expected returns of
+all hedge instruments and targets are set to zero, while empirical sample
+means and their Newey--West statistics are retained only as diagnostics.
+
 \subsection{Data boundary and common market}
 
 The sole runtime input is the distributable-candidate dataset
@@ -162,6 +173,9 @@ mean of target-level expected shortfalls. Economic book MDD is the maximum
 drawdown of the cumulative P\&L of an equal-weighted 20-target daily book.
 Losses, costs, and drawdowns are in basis points of inception normalized spot;
 gross exposure is normalized entry notional.
+The covariance rows were produced before the zero-drift convention above was
+adopted and are retained only as superseded provenance pending their rerun;
+they are not final benchmark comparisons.
 
 \begin{table}[H]
 \centering
@@ -281,8 +295,9 @@ This baseline deliberately avoids a SANOS scenario generator. It replays the
 current relative option book over 252 historical public transitions, fits
 robust scales and a regularized Tyler scatter matrix
 \citep{Tyler1987,ChenWieselHero2011}, and estimates each target
-cross-moment separately by robust regression. Expected returns are HAC-screened
-in covariance eigenportfolios. Mean--variance and mean--volatility hedges use
+cross-moment separately by robust regression. All expected returns are fixed
+at zero; HAC-screened empirical means in covariance eigenportfolios are
+reported only as diagnostics. Mean--variance and mean--volatility hedges use
 spread-weighted lasso costs; the latter is checked analytically for recession
 directions. The implementation gate passes. Mean--variance at
 $\lambda\in\{0.1,1,10\}$ is complete on the current cohort; mean--volatility

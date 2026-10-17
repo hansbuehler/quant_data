@@ -10,9 +10,11 @@ from pathlib import Path
 import numpy as np
 
 from quantdata.hedging.contracts import OptionRight
+from quantdata.hedging.mean_reduction import adaptive_scenario_count
 from quantdata.hedging.metrics import HedgeSmokeResult
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.digital_daily import (
     DailyDigitalTarget,
+    build_daily_digital_sample,
     daily_claim_quantity_vector,
     daily_digital_targets,
     evaluate_daily_digital_hedge,
@@ -47,6 +49,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.simulation import (
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.training import (
     daily_gromm_training_data,
+    reduce_gromm_one_day_training_data,
 )
 from quantdata.torch import BaseEnvironment
 
@@ -74,7 +77,11 @@ def run_gromm_one_day(
         target=target,
         config=config,
     )
-    data = daily_gromm_training_data(scenarios)
+    data = daily_gromm_training_data(
+        scenarios,
+        mean_reduction=config.mean_reduction,
+        mean_reduction_config=config.mean_reduction_config,
+    )
     if config.measure is GrommMeasure.Q:
         pure_data = data
     else:
@@ -84,11 +91,16 @@ def run_gromm_one_day(
             target=target,
             config=replace(config, measure=GrommMeasure.Q),
         )
-        pure_data = replace(
-            data,
-            instrument_returns=daily_gromm_training_data(
-                q_scenarios
-            ).instrument_returns,
+        pure_data = reduce_gromm_one_day_training_data(
+            replace(
+                data,
+                instrument_returns=q_scenarios.instrument_returns[:, None],
+                scenario_weights=None,
+                mean_reduction=None,
+                mean_reduction_diagnostics=None,
+            ),
+            mean_reduction=config.mean_reduction,
+            mean_reduction_config=config.mean_reduction_config,
         )
     if policy_config is None:
         policy_config = GrommPolicyConfig(
@@ -145,6 +157,19 @@ def run_gromm_one_day(
             "factor_rank": scenarios.calibration.factors.factor_rank,
             "objective": config.objective.value,
             "risk_parameter": config.risk_parameter,
+            "mean_reduction": config.mean_reduction.value,
+            "raw_max_standardized_instrument_mean": (
+                data.mean_reduction_diagnostics.raw_max_standardized_mean
+            ),
+            "reduced_max_standardized_instrument_mean": (
+                data.mean_reduction_diagnostics.reduced_max_standardized_mean
+            ),
+            "mean_reduction_effective_sample_size": (
+                data.mean_reduction_diagnostics.effective_sample_size
+            ),
+            "raw_q_max_standardized_instrument_mean": (
+                pure_data.mean_reduction_diagnostics.raw_max_standardized_mean
+            ),
             "claim_best_epoch": fit.claim.best_epoch,
             "short_best_epoch": fit.short.best_epoch,
             "zero_best_epoch": fit.zero.best_epoch,
@@ -177,6 +202,7 @@ def run_gromm_one_day(
 def run_gromm2_daily_book(
     panel: PublicHedgingPanel,
     *,
+    target_maturity: int | None = None,
     origin_date: date,
     artifact_root: Path,
     checkpoint_directory: Path,
@@ -189,7 +215,7 @@ def run_gromm2_daily_book(
 ) -> tuple[HedgeSmokeResult, ...]:
     """Load one dated GROMM2 state and hedge the complete daily target book."""
     require_public_hedging_panel(panel)
-    targets = daily_digital_targets()
+    targets = daily_digital_targets(maturity_business_days=target_maturity)
     quantities = daily_claim_quantity_vector(targets, claim_quantities)
     artifacts = load_rolling_gromm2(
         artifact_root,
@@ -198,11 +224,19 @@ def run_gromm2_daily_book(
         dataset_manifest_sha256=panel.dataset_manifest_sha256,
     )
     market_state = load_gromm2_market_state(artifacts)
+    representative_sample = build_daily_digital_sample(
+        panel,
+        origin_date=origin_date,
+        target=targets[0],
+    )
+    path_count = adaptive_scenario_count(
+        1 + len(representative_sample.hedge_quotes),
+        minimum=config.path_count,
+        multiple=config.batch_size,
+    )
+    scenario_config = replace(config, path_count=path_count)
     results: list[HedgeSmokeResult] = []
-    for target_index, (target, claim_quantity) in enumerate(
-        zip(targets, quantities, strict=True)
-    ):
-        scenario_config = replace(config, seed=config.seed + target_index)
+    for target, claim_quantity in zip(targets, quantities, strict=True):
         scenarios = generate_gromm2_daily_scenarios(
             panel,
             origin_date=origin_date,
@@ -210,11 +244,22 @@ def run_gromm2_daily_book(
             market_state=market_state,
             config=scenario_config,
         )
-        data = gromm2_daily_training_data(scenarios)
+        data = gromm2_daily_training_data(
+            scenarios,
+            mean_reduction=config.mean_reduction,
+            mean_reduction_config=config.mean_reduction_config,
+        )
         data = replace(data, claim_returns=claim_quantity * data.claim_returns)
-        pure_data = replace(
-            data,
-            instrument_returns=scenarios.pure_instrument_returns[:, None],
+        pure_data = reduce_gromm_one_day_training_data(
+            replace(
+                data,
+                instrument_returns=scenarios.pure_instrument_returns[:, None],
+                scenario_weights=None,
+                mean_reduction=None,
+                mean_reduction_diagnostics=None,
+            ),
+            mean_reduction=config.mean_reduction,
+            mean_reduction_config=config.mean_reduction_config,
         )
         current_policy = (
             GrommPolicyConfig(
@@ -338,6 +383,19 @@ def run_gromm2_daily_book(
                     "drift_taming_fraction": scenarios.drift_taming_fraction,
                     "objective": config.objective.value,
                     "risk_parameter": config.risk_parameter,
+                    "mean_reduction": config.mean_reduction.value,
+                    "raw_max_standardized_instrument_mean": (
+                        data.mean_reduction_diagnostics.raw_max_standardized_mean
+                    ),
+                    "reduced_max_standardized_instrument_mean": (
+                        data.mean_reduction_diagnostics.reduced_max_standardized_mean
+                    ),
+                    "mean_reduction_effective_sample_size": (
+                        data.mean_reduction_diagnostics.effective_sample_size
+                    ),
+                    "raw_q_max_standardized_instrument_mean": (
+                        pure_data.mean_reduction_diagnostics.raw_max_standardized_mean
+                    ),
                     "claim_best_epoch": fit.claim.best_epoch,
                     "short_best_epoch": fit.short.best_epoch,
                     "zero_best_epoch": fit.zero.best_epoch,

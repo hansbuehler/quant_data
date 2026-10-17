@@ -10,6 +10,8 @@ from scipy.special import ndtr
 
 from quantdata.hedging.claims import DigitalClaim
 from quantdata.hedging.contracts import OptionRight
+from quantdata.hedging.mean_reduction import MeanReduction
+from quantdata.hedging.scenario_optimization import ScenarioObjective
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.digital_daily import (
     DailyDigitalSample,
     DailyDigitalTarget,
@@ -21,9 +23,12 @@ from quantdata.sdlv.daily.front_spot.hedging.data.generative_surfaces import (
     GenerativeSurfaceGrid,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.generated_scenarios import (
+    GeneratedDailyScenarios,
+    GeneratedHedgeConfig,
     _integral_business_dte,
     _smile_consistent_digital_probability,
     build_generated_daily_scenarios,
+    fit_generated_objective_book,
     generated_linear_transaction_costs,
     interpolate_generated_implied_volatility,
 )
@@ -151,6 +156,47 @@ def test_generated_costs_use_expiry_date_not_rounded_dte() -> None:
 
     assert quote.contract.expiry_date == sample.transition.next_date
     assert costs[1] == pytest.approx(quote.half_spread)
+
+
+@pytest.mark.parametrize("mean_reduction", tuple(MeanReduction))
+@pytest.mark.parametrize("objective", tuple(ScenarioObjective))
+def test_generated_objective_book_supports_full_tensor(
+    mean_reduction: MeanReduction,
+    objective: ScenarioObjective,
+) -> None:
+    sample = _one_day_sample()
+    spot = np.asarray([-1.0, -0.5, 0.0, 0.5, 1.0])
+    option = np.asarray([-0.2, 0.4, -0.5, 0.3, 0.1])
+    target_one = -(0.7 * spot - 0.25 * option)
+    target_two = 0.4 * spot + 0.1 * option
+
+    def scenarios(target: np.ndarray) -> GeneratedDailyScenarios:
+        return GeneratedDailyScenarios(
+            spot_returns=spot,
+            option_returns=option[:, None],
+            claim_returns=target,
+            claim_terminal_values=np.ones(len(spot)),
+        )
+
+    fits = fit_generated_objective_book(
+        (scenarios(target_one), scenarios(target_two)),
+        sample,
+        config=GeneratedHedgeConfig(
+            scenario_count=len(spot),
+            objective=objective,
+            risk_parameter=1.0,
+            mean_reduction=mean_reduction,
+            cost_multiplier=0.0,
+        ),
+        claim_quantities=np.asarray([1.0, 2.0]),
+    )
+
+    assert len(fits) == 2
+    assert all(fit.converged for fit in fits)
+    assert fits[0].mean_reduction == fits[1].mean_reduction
+    assert fits[0].mean_reduction.method is mean_reduction
+    np.testing.assert_allclose(fits[0].action, [0.7, -0.25], atol=5.0e-7)
+    np.testing.assert_allclose(fits[1].action, [-0.8, -0.2], atol=5.0e-7)
 
 
 @pytest.mark.parametrize(

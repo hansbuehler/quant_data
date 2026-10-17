@@ -56,13 +56,14 @@ def run_covariance_one_day(
 def run_covariance_daily_book(
     panel: PublicHedgingPanel,
     *,
+    target_maturity: int | None = None,
     origin_date: date,
     config: CovarianceHedgeConfig = CovarianceHedgeConfig(),
     claim_quantities: Mapping[str, float] | None = None,
 ) -> tuple[HedgeSmokeResult, ...]:
     """Fit one robust same-coordinate panel and evaluate all daily digitals."""
     require_public_hedging_panel(panel)
-    targets = daily_digital_targets()
+    targets = daily_digital_targets(maturity_business_days=target_maturity)
     quantities = daily_claim_quantity_vector(targets, claim_quantities)
     samples = tuple(
         build_daily_digital_sample(
@@ -152,6 +153,7 @@ def run_covariance_daily_book(
                     ),
                     "objective": config.objective.value,
                     "risk_parameter": config.risk_parameter,
+                    "mean_reduction": config.mean_reduction.value,
                     "bounded": action.bounded,
                     "recession_ratio": action.zero_policy.recession_ratio,
                     "expected_profit": action.expected_profit,
@@ -184,8 +186,12 @@ def run_covariance_daily_book(
                     ),
                     "policy_semantics": "claim policy minus zero-claim policy",
                     "mean_semantics": (
-                        "sample instrument means soft-screened using Newey-West "
-                        "errors of covariance eigenportfolio returns"
+                        "instrument and claim expected returns fixed at zero; "
+                        f"{config.mean_reduction.value} is the tensor label and "
+                        "is analytically equivalent for the zero-mean Gaussian "
+                        "moment model; "
+                        "sample instrument means and Newey-West screening retained "
+                        "for diagnostics only"
                     ),
                     "scatter_semantics": (
                         "instrument-only Tyler scatter with independent fixed-weight "

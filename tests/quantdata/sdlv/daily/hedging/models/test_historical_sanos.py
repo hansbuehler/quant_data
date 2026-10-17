@@ -9,6 +9,7 @@ import pytest
 from scipy.optimize import OptimizeResult
 
 from quantdata.hedging.contracts import OptionRight
+from quantdata.hedging.mean_reduction import MeanReduction
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.digital_daily import (
     DailyDigitalTarget,
     build_daily_digital_sample,
@@ -35,6 +36,17 @@ from quantdata.sdlv.daily.front_spot.hedging.models.historical_sanos.hedger impo
     fit_historical_sanos_hedge,
     fit_historical_sanos_hedges,
 )
+
+
+def test_kkt_certificate_treats_roundoff_zero_as_l1_kink() -> None:
+    residual = hedger._maximum_kkt_violation(
+        np.array([1.8e-18]),
+        np.array([0.0]),
+        np.array([0.003]),
+        position_cap=1e6,
+        coordinate_scale=np.array([1.0]),
+    )
+    assert residual == pytest.approx(0.0)
 
 
 def test_historical_sanos_defaults_use_regularized_one_year_history() -> None:
@@ -94,6 +106,35 @@ def test_historical_sanos_fits_all_objectives(objective: HistoricalSanosObjectiv
         claim_returns=claim,
         linear_transaction_costs=np.zeros(3),
         config=config,
+    )
+
+    assert fit.converged
+    assert fit.action[0] == pytest.approx(0.4, abs=3.0e-3)
+    assert fit.action[1] == pytest.approx(-0.2, abs=3.0e-3)
+    assert fit.action[2] == pytest.approx(0.0, abs=3.0e-3)
+
+
+@pytest.mark.parametrize("objective", tuple(HistoricalSanosObjective))
+def test_historical_sanos_fits_all_objectives_with_scenario_weights(
+    objective: HistoricalSanosObjective,
+) -> None:
+    generator = np.random.default_rng(107)
+    scenario_weights = np.linspace(0.2, 2.0, 160)
+    scenario_weights /= np.sum(scenario_weights)
+    instruments = generator.normal(size=(160, 3))
+    instruments -= scenario_weights @ instruments
+    claim = -(0.4 * instruments[:, 0] - 0.2 * instruments[:, 1])
+    fit = fit_historical_sanos_hedge(
+        instrument_returns=instruments,
+        claim_returns=claim,
+        linear_transaction_costs=np.zeros(3),
+        scenario_weights=scenario_weights,
+        config=HistoricalSanosConfig(
+            rolling_observations=160,
+            objective=objective,
+            risk_parameter=1.0,
+            maximum_iterations=2_000,
+        ),
     )
 
     assert fit.converged
@@ -1209,6 +1250,93 @@ def test_historical_sanos_daily_book_reuses_one_aligned_return_panel() -> None:
     )
     assert all(
         result.diagnostics["claim_policy_solver_status"] for result in results
+    )
+    assert all(
+        result.diagnostics["mean_reduction"] == MeanReduction.DEMEAN.value
+        for result in results
+    )
+    assert all(
+        result.diagnostics["mean_reduction_effective_sample_size"]
+        == pytest.approx(120.0)
+        for result in results
+    )
+
+
+def test_historical_sanos_daily_book_applies_one_common_memm() -> None:
+    panel = _OneDayPanel()
+    targets = (
+        DailyDigitalTarget(
+            maturity_business_days=1,
+            right=OptionRight.PUT,
+            nms=0.0,
+        ),
+        DailyDigitalTarget(
+            maturity_business_days=1,
+            right=OptionRight.CALL,
+            nms=0.0,
+        ),
+    )
+    samples = tuple(
+        build_daily_digital_sample(
+            panel,
+            origin_date=panel.transition.origin.trading_date,
+            target=target,
+        )
+        for target in targets
+    )
+    generator = np.random.default_rng(109)
+    instrument_returns = generator.normal(scale=0.01, size=(120, 2))
+    instrument_returns += np.asarray([2.0e-4, -1.0e-4])
+    target_returns = np.column_stack(
+        (
+            -0.3 * instrument_returns[:, 0] + 1.0e-4,
+            0.2 * instrument_returns[:, 0]
+            - 0.1 * instrument_returns[:, 1]
+            - 2.0e-4,
+        )
+    )
+    dates = tuple(
+        panel.transition.origin.trading_date
+        for _ in range(len(instrument_returns))
+    )
+    terminal_dates = tuple(
+        panel.transition.next_date for _ in range(len(instrument_returns))
+    )
+    returns = HistoricalReturnPanel(
+        training_origin_dates=dates,
+        training_terminal_dates=terminal_dates,
+        instrument_ids=(
+            "spot",
+            samples[0].hedge_quotes[0].contract.contract_id,
+        ),
+        target_labels=tuple(target.label for target in targets),
+        instrument_returns=instrument_returns,
+        target_returns=target_returns,
+    )
+
+    results = evaluate_historical_sanos_daily_book(
+        samples,
+        returns=returns,
+        config=HistoricalSanosConfig(
+            rolling_observations=120,
+            mean_reduction=MeanReduction.MEMM,
+            maximum_iterations=2_000,
+        ),
+    )
+
+    assert all(result.converged for result in results)
+    assert all(
+        result.diagnostics["mean_reduction"] == MeanReduction.MEMM.value
+        for result in results
+    )
+    assert all(
+        result.diagnostics["mean_reduction_reduced_max_standardized_mean"]
+        <= 1.0e-10
+        for result in results
+    )
+    assert (
+        results[0].diagnostics["mean_reduction_effective_sample_size"]
+        == results[1].diagnostics["mean_reduction_effective_sample_size"]
     )
 
 

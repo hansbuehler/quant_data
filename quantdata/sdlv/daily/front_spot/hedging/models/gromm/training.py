@@ -15,6 +15,12 @@ from filelock import FileLock
 from numpy.typing import NDArray
 
 from quantdata.hedging.contracts import OptionRight
+from quantdata.hedging.mean_reduction import (
+    MeanReduction,
+    MeanReductionConfig,
+    MeanReductionDiagnostics,
+    reduce_one_day_means,
+)
 from quantdata.sdlv.daily.front_spot.hedging.models.checkpointing import (
     CHECKPOINT_FORMAT_VERSION,
     train_config_snapshot,
@@ -52,6 +58,9 @@ class GrommTrainingData:
     claim_returns: FloatArray
     active_mask: BoolArray
     linear_transaction_costs: FloatArray
+    scenario_weights: FloatArray | None = None
+    mean_reduction: MeanReduction | None = None
+    mean_reduction_diagnostics: MeanReductionDiagnostics | None = None
     initial_positions: FloatArray | None = None
     settles_next: BoolArray | None = None
     terminal_transaction_costs: FloatArray | None = None
@@ -85,6 +94,20 @@ class GrommTrainingData:
             raise ValueError("GROMM training arrays must be finite")
         if np.any(self.linear_transaction_costs < 0.0):
             raise ValueError("GROMM transaction costs must be non-negative")
+        if self.scenario_weights is not None and (
+            self.scenario_weights.shape != (path_count,)
+            or not np.all(np.isfinite(self.scenario_weights))
+            or np.any(self.scenario_weights < 0.0)
+            or not float(np.sum(self.scenario_weights)) > 0.0
+        ):
+            raise ValueError(
+                "GROMM scenario weights must align and have finite-positive mass"
+            )
+        if self.mean_reduction_diagnostics is not None and (
+            self.mean_reduction is None
+            or self.mean_reduction_diagnostics.method is not self.mean_reduction
+        ):
+            raise ValueError("GROMM mean-reduction diagnostics do not match method")
         instrument_count = self.instrument_returns.shape[-1]
         if self.initial_positions is not None and self.initial_positions.shape not in {
             (instrument_count,),
@@ -120,6 +143,13 @@ class GrommTrainingData:
     def instrument_count(self) -> int:
         return self.instrument_returns.shape[-1]
 
+    @property
+    def normalized_scenario_weights(self) -> FloatArray:
+        """Return explicit probability weights for the scenario path axis."""
+        if self.scenario_weights is None:
+            return np.full(self.path_count, 1.0 / self.path_count, dtype=np.float64)
+        return self.scenario_weights / np.sum(self.scenario_weights)
+
 
 @dataclass(frozen=True, kw_only=True)
 class GrommTrainingResult:
@@ -139,6 +169,9 @@ class GrommTrainingResult:
 
 def daily_gromm_training_data(
     scenarios: GrommDailyScenarios,
+    *,
+    mean_reduction: MeanReduction = MeanReduction.DEMEAN,
+    mean_reduction_config: MeanReductionConfig = MeanReductionConfig(),
 ) -> GrommTrainingData:
     """Convert one public-panel scenario set to the common training schema."""
     calibration = scenarios.calibration
@@ -182,7 +215,7 @@ def daily_gromm_training_data(
         feature,
         (scenarios.path_count, 1, len(feature)),
     ).copy()
-    return GrommTrainingData(
+    raw = GrommTrainingData(
         features=features,
         instrument_returns=scenarios.instrument_returns[:, None, :],
         claim_returns=scenarios.claim_returns[:, None],
@@ -190,6 +223,49 @@ def daily_gromm_training_data(
         linear_transaction_costs=scenarios.linear_transaction_costs[None, :],
         settles_next=scenarios.settles_next[None],
         terminal_transaction_costs=scenarios.terminal_transaction_costs,
+    )
+    return reduce_gromm_one_day_training_data(
+        raw,
+        mean_reduction=mean_reduction,
+        mean_reduction_config=mean_reduction_config,
+    )
+
+
+def reduce_gromm_one_day_training_data(
+    data: GrommTrainingData,
+    *,
+    mean_reduction: MeanReduction,
+    mean_reduction_config: MeanReductionConfig = MeanReductionConfig(),
+    instrument_returns: FloatArray | None = None,
+) -> GrommTrainingData:
+    """Apply one common drift reduction to one-day instruments and targets."""
+    if data.instrument_returns.shape[1] != 1:
+        raise ValueError("mean reduction is defined here only for one-day GROMM data")
+    raw_instruments = (
+        data.instrument_returns[:, 0]
+        if instrument_returns is None
+        else np.asarray(instrument_returns, dtype=np.float64)
+    )
+    if raw_instruments.shape != data.instrument_returns[:, 0].shape:
+        raise ValueError("replacement instrument returns do not match GROMM data")
+    reduction = reduce_one_day_means(
+        raw_instruments,
+        data.claim_returns,
+        method=mean_reduction,
+        config=mean_reduction_config,
+    )
+    return GrommTrainingData(
+        features=data.features,
+        instrument_returns=reduction.instrument_returns[:, None],
+        claim_returns=reduction.target_returns,
+        active_mask=data.active_mask,
+        linear_transaction_costs=data.linear_transaction_costs,
+        scenario_weights=reduction.weights,
+        mean_reduction=mean_reduction,
+        mean_reduction_diagnostics=reduction.diagnostics,
+        initial_positions=data.initial_positions,
+        settles_next=data.settles_next,
+        terminal_transaction_costs=data.terminal_transaction_costs,
     )
 
 
@@ -257,8 +333,20 @@ def _fit_locked(
         validation_fraction=train_config.validation_fraction,
         seed=train_config.seed,
     )
-    feature_mean = np.mean(data.features[train_indices], axis=(0, 1))
-    feature_scale = np.std(data.features[train_indices], axis=(0, 1), ddof=0)
+    training_features = data.features[train_indices]
+    training_weights = data.normalized_scenario_weights[train_indices]
+    training_weights = training_weights / np.sum(training_weights)
+    feature_mean = np.sum(
+        training_weights[:, None]
+        * np.mean(training_features, axis=1),
+        axis=0,
+    )
+    feature_variance = np.sum(
+        training_weights[:, None, None]
+        * np.square(training_features - feature_mean),
+        axis=(0, 1),
+    ) / training_features.shape[1]
+    feature_scale = np.sqrt(feature_variance)
     feature_scale = np.maximum(feature_scale, 1.0e-8)
     torch.manual_seed(train_config.seed)
     policy = GrommPolicy(
@@ -588,6 +676,11 @@ def _training_tensors(
             dtype=environment.fdtype,
             device=environment.device,
         ),
+        "scenario_weights": torch.as_tensor(
+            data.normalized_scenario_weights,
+            dtype=environment.fdtype,
+            device=environment.device,
+        ),
     }
     if data.initial_positions is not None:
         tensors["initial_positions"] = torch.as_tensor(
@@ -631,6 +724,7 @@ def _objective_for_indices(
         ),
         objective=objective,
         risk_parameter=risk_parameter,
+        scenario_weights=tensors["scenario_weights"][indices],
         cash_translation=cash_translation,
         initial_positions=(
             None
@@ -716,6 +810,7 @@ def _gromm_data_fingerprint(data: GrommTrainingData) -> str:
             "features": data.features,
             "instrument_returns": data.instrument_returns,
             "linear_transaction_costs": data.linear_transaction_costs,
+            "scenario_weights": data.normalized_scenario_weights,
             **(
                 {}
                 if data.initial_positions is None
@@ -734,7 +829,12 @@ def _gromm_data_fingerprint(data: GrommTrainingData) -> str:
                 }
             ),
         },
-        metadata={"schema": "gromm-training-data-v2"},
+        metadata={
+            "schema": "gromm-training-data-v3",
+            "mean_reduction": (
+                None if data.mean_reduction is None else data.mean_reduction.value
+            ),
+        },
     )
 
 
@@ -754,6 +854,11 @@ def _training_result(
 ) -> GrommTrainingResult:
     policy.eval()
     tensors = _training_tensors(data, environment=policy.env)
+    validation_tensor_indices = torch.as_tensor(
+        validation_indices,
+        dtype=torch.long,
+        device=policy.device,
+    )
     with torch.no_grad():
         training = _objective_for_indices(
             policy,
@@ -766,7 +871,7 @@ def _training_result(
         validation = _objective_for_indices(
             policy,
             tensors=tensors,
-            indices=torch.as_tensor(validation_indices, device=policy.device),
+            indices=validation_tensor_indices,
             objective=objective,
             risk_parameter=risk_parameter,
             cash_translation=cash_translation,
@@ -776,6 +881,7 @@ def _training_result(
             objective=objective,
             risk_parameter=risk_parameter,
             cash_translation=cash_translation,
+            scenario_weights=tensors["scenario_weights"][validation_tensor_indices],
         ).detach().cpu().numpy()
         if len(validation_influence) % 2:
             raise RuntimeError("validation paths do not preserve antithetic pairs")
@@ -816,23 +922,43 @@ def _objective_influence(
     objective: GrommObjective,
     risk_parameter: float,
     cash_translation: torch.Tensor | None,
+    scenario_weights: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Return centered first-order contributions to objective uncertainty."""
-    centered = wealth - torch.mean(wealth)
+    if scenario_weights is None:
+        weights = torch.full_like(wealth, 1.0 / len(wealth))
+    else:
+        if scenario_weights.shape != wealth.shape:
+            raise ValueError("scenario weights must align with objective influence")
+        total_weight = torch.sum(scenario_weights)
+        if not bool(total_weight > 0.0):
+            raise ValueError("scenario weights must have positive mass")
+        weights = scenario_weights / total_weight
+    effective_weights = len(wealth) * weights
+    mean_wealth = torch.sum(weights * wealth)
+    centered = wealth - mean_wealth
     if objective is GrommObjective.MEAN_VARIANCE:
-        variance = torch.mean(centered.square())
-        influence = -centered + 0.5 * risk_parameter * (
+        variance = torch.sum(weights * centered.square())
+        influence = effective_weights * (-centered + 0.5 * risk_parameter * (
             centered.square() - variance
-        )
+        ))
     elif objective is GrommObjective.MEAN_VOLATILITY:
-        variance = torch.mean(centered.square())
+        variance = torch.sum(weights * centered.square())
         standard_deviation = torch.sqrt(variance + torch.finfo(wealth.dtype).eps)
-        influence = -centered + risk_parameter * (
+        influence = effective_weights * (-centered + risk_parameter * (
             centered.square() - variance
         ) / (2.0 * standard_deviation)
+        )
     elif objective is GrommObjective.ENTROPY:
         exponent = -risk_parameter * wealth
-        normalized = torch.exp(exponent - torch.logsumexp(exponent, dim=0))
+        positive = weights > 0.0
+        log_normalizer = torch.logsumexp(
+            exponent[positive] + torch.log(weights[positive]), dim=0
+        )
+        normalized = torch.zeros_like(weights)
+        normalized[positive] = torch.exp(
+            exponent[positive] + torch.log(weights[positive]) - log_normalizer
+        )
         influence = (len(wealth) * normalized - 1.0) / risk_parameter
     elif objective is GrommObjective.POWER_EXPONENTIAL:
         if cash_translation is None:
@@ -841,7 +967,8 @@ def _objective_influence(
             wealth - cash_translation,
             risk_parameter=risk_parameter,
         )
-        influence = -(utility - torch.mean(utility))
+        mean_utility = torch.sum(weights * utility)
+        influence = -effective_weights * (utility - mean_utility)
     else:
         raise ValueError(f"unsupported GROMM objective {objective!r}")
     return influence

@@ -66,6 +66,7 @@ def run_sanos_lv_one_day(
 def run_sanos_lv_daily_book(
     panel: PublicHedgingPanel,
     *,
+    target_maturity: int | None = None,
     origin_date: date,
     config: SanosLvConfig = SanosLvConfig(),
     claim_quantities: Mapping[str, float] | None = None,
@@ -77,7 +78,7 @@ def run_sanos_lv_daily_book(
         as_of_date=origin_date,
         config=config.rolling_factors,
     )
-    targets = daily_digital_targets()
+    targets = daily_digital_targets(maturity_business_days=target_maturity)
     quantities = daily_claim_quantity_vector(targets, claim_quantities)
     samples = tuple(
         build_daily_digital_sample(

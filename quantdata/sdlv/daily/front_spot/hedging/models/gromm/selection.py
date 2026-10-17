@@ -271,6 +271,7 @@ def combine_gromm_training_data(
         if (
             case.feature_count != reference.feature_count
             or case.instrument_count != reference.instrument_count
+            or case.mean_reduction is not reference.mean_reduction
             or not np.array_equal(case.active_mask, reference.active_mask)
             or not np.array_equal(
                 case.linear_transaction_costs,
@@ -288,6 +289,11 @@ def combine_gromm_training_data(
         ),
         active_mask=reference.active_mask.copy(),
         linear_transaction_costs=reference.linear_transaction_costs.copy(),
+        scenario_weights=np.concatenate(
+            [case.normalized_scenario_weights for case in cases], axis=0
+        )
+        / len(cases),
+        mean_reduction=reference.mean_reduction,
     )
 
 

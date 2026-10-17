@@ -66,6 +66,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.training import (
     GrommTrainingResult,
     daily_gromm_training_data,
     fit_gromm_policy,
+    reduce_gromm_one_day_training_data,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.weekly_adapter import (
     GrommWeeklyAdapter,
@@ -99,6 +100,7 @@ __all__ = [
     "build_gromm_architecture_study_data",
     "combine_gromm_training_data",
     "fit_gromm_policy",
+    "reduce_gromm_one_day_training_data",
     "generate_gromm2_daily_scenarios",
     "generate_gromm2_weekly_scenarios",
     "fit_gromm_claim_minus_zero",

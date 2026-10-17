@@ -50,9 +50,9 @@ def _matrix(
 
 def test_daily_production_matrix_is_complete_unique_and_resource_partitioned() -> None:
     cases = _matrix()
-    assert len(cases) == 57
+    assert len(cases) == 187
     assert len({case.case_id for case in cases}) == len(cases)
-    assert sum(case.model == "gromm" for case in cases) == 26
+    assert sum(case.model == "gromm" for case in cases) == 52
     assert sum(case.model == "gromm-q-dlv-vega" for case in cases) == 1
     covariance_power = tuple(
         case
@@ -60,7 +60,15 @@ def test_daily_production_matrix_is_complete_unique_and_resource_partitioned() -
         if case.model == "robust-covariance"
         and case.objective == "power-exponential"
     )
-    assert tuple(case.risk_parameter for case in covariance_power) == (0.1, 1.0, 10.0)
+    assert tuple(case.risk_parameter for case in covariance_power) == (
+        0.1,
+        1.0,
+        10.0,
+        0.1,
+        1.0,
+        10.0,
+    )
+    assert {case.mean_reduction for case in covariance_power} == {"demean", "memm"}
     assert all(
         case.resource is ProductionResource.GPU
         for case in cases
@@ -70,6 +78,34 @@ def test_daily_production_matrix_is_complete_unique_and_resource_partitioned() -
         case.readiness is ProductionReadiness.BLOCKED
         for case in cases
         if case.model == "gromm"
+    )
+
+
+def test_generated_tensor_reuses_one_rolling_checkpoint_directory(
+    tmp_path: Path,
+) -> None:
+    dataset = tmp_path / "dataset"
+    dataset.mkdir()
+    (dataset / "manifest.json").write_text("{}\n", encoding="utf-8")
+    cases = tuple(
+        case
+        for case in _matrix(
+            dataset=dataset,
+            generated=_generated_inputs(tmp_path, dataset=dataset),
+        )
+        if case.model == "volgan" and "rolling-trained" in case.case_id
+    )
+    checkpoint_directories = {
+        case.command[case.command.index("--checkpoint-directory") + 1]
+        for case in cases
+        if case.command is not None
+    }
+
+    assert len(cases) == 26
+    assert checkpoint_directories == {"/checkpoints/volgan-rolling-trained"}
+    assert all(
+        case.command is None or "--retain-fit-checkpoints" in case.command
+        for case in cases
     )
 
 

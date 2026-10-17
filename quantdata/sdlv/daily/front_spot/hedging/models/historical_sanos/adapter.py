@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import asdict
 from datetime import date
 
 import numpy as np
 
+from quantdata.hedging.mean_reduction import reduce_one_day_means
 from quantdata.hedging.metrics import HedgeSmokeResult
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.digital_daily import (
     DailyDigitalSample,
@@ -72,6 +74,7 @@ def run_historical_sanos_one_day(
 def run_historical_sanos_daily_book(
     panel: PublicHedgingPanel,
     *,
+    target_maturity: int | None = None,
     origin_date: date,
     config: HistoricalSanosConfig = HistoricalSanosConfig(),
     claim_quantities: Mapping[str, float] | None = None,
@@ -81,7 +84,7 @@ def run_historical_sanos_daily_book(
     return _run_historical_sanos_targets(
         panel,
         origin_date=origin_date,
-        targets=daily_digital_targets(),
+        targets=daily_digital_targets(maturity_business_days=target_maturity),
         config=config,
         claim_quantities=claim_quantities,
     )
@@ -168,10 +171,16 @@ def evaluate_historical_sanos_daily_book(
         ],
         dtype=np.float64,
     )
+    reduction = reduce_one_day_means(
+        returns.instrument_returns,
+        returns.target_returns * quantities[None, :],
+        method=config.mean_reduction,
+    )
     fits = fit_historical_sanos_hedges(
-        instrument_returns=returns.instrument_returns,
-        claim_returns=returns.target_returns * quantities[None, :],
+        instrument_returns=reduction.instrument_returns,
+        claim_returns=reduction.target_returns,
         linear_transaction_costs=costs,
+        scenario_weights=reduction.weights,
         config=config,
     )
     observation_parameter_ratio = (
@@ -213,6 +222,15 @@ def evaluate_historical_sanos_daily_book(
                     "claim_quantity": float(claim_quantity),
                     "objective": config.objective.value,
                     "risk_parameter": config.risk_parameter,
+                    "mean_reduction": config.mean_reduction.value,
+                    "mean_reduction_scope": (
+                        "one common instrument-only law per origin; targets "
+                        "excluded from MEMM constraints"
+                    ),
+                    **{
+                        f"mean_reduction_{key}": value
+                        for key, value in asdict(reduction.diagnostics).items()
+                    },
                     "quadratic_ridge": config.quadratic_ridge,
                     "regularization_coordinates": "unit-rms instrument gains",
                     "certificate_tolerance": config.certificate_tolerance,

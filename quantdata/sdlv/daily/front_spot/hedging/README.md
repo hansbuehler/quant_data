@@ -36,6 +36,11 @@ training dependencies.
   scaling fixes the numerical cause without relaxing the hedge tolerance, and
   the clean versioned 2023--2025 rerun completed all 611 origins and 12,220
   target records without a cap hit or nonconvergence.
+- The independent Black delta-and-vega baseline uses the two eligible vanilla
+  strikes bracketing each digital, trades them in strike-distance weights to
+  neutralize a parallel ATM-volatility vega, and neutralizes their combined
+  spot delta with the one-day forward-adjusted spot instrument. See
+  `models/bs_greeks/README.md` for its assumptions and standalone test.
 - The full-universe covariance Phase-3 implementation, CPU smoke, and
   independent quant re-review passed; its 611-origin production run is in
   progress.
