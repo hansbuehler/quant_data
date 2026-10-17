@@ -254,6 +254,8 @@ def main() -> None:
             covariance_shrinkage=dynamics.covariance_shrinkage,
             dt=dynamics.dt,
             active_mask=dynamics.active_mask,
+            maturity_node_indices=dynamics.maturity_node_indices,
+            jump_node_indices=dynamics.jump_node_indices,
             p_theta=physical.theta,
             p_ridge=physical.ridge,
             p_residual_rmse=physical.residual_rmse,

@@ -10,7 +10,7 @@ from cdxcore.err import verify, verify_inp
 
 from .config import DynamicsConfig, StaticFitConfig
 from .double_exponential import call_prices
-from .dynamics import DynamicsFit, fit_dynamics
+from .dynamics import DynamicsFit, fit_reduced_dynamics
 from .physical_measure import PhysicalMeasureFit, fit_constant_market_price_of_risk
 from .pricing import density_call_prices
 from .static_fit import (
@@ -19,7 +19,7 @@ from .static_fit import (
     SymmetryCurve,
     fit_maturity,
     fitted_average_density,
-    reconstruct_forward_density,
+    reconstruct_forward_density_positive_spline,
 )
 from .v2_config import TangentLevyV2Config
 from .v2_market import V2MarketDay
@@ -174,13 +174,18 @@ def reconstruct_v2_day(
         fitted_density = np.concatenate(
             (fitted_density, fitted_density[-1:]), axis=0
         )
-    reconstruction = reconstruct_forward_density(
+    reconstruction = reconstruct_forward_density_positive_spline(
         fitted_tau=fitted_tau,
         fitted_average_density=fitted_density,
         target_tau=tau,
         jump_x=jump_x,
         relative_tolerance=config.dynamics.reconstruction_relative_tolerance,
         forward_density_floor=static_config.forward_density_floor,
+        basis_count=config.dynamics.reconstruction_basis_count,
+        curvature_penalty=config.dynamics.reconstruction_curvature_penalty,
+        relative_weight_floor=(
+            config.dynamics.reconstruction_relative_weight_floor
+        ),
     )
     repricing_rmse, maximum_price_error = _repricing_audit(
         market,
@@ -207,14 +212,8 @@ def fit_v2_measures(
     *,
     config: TangentLevyV2Config,
     require_reconstruction_pass: bool = True,
-    reference_density: np.ndarray | None = None,
 ) -> V2MeasureFits:
-    """Estimate Q-consistent factors and the P factor risk premium.
-
-    A supplied ``reference_density`` makes the factor admissibility screen
-    local to the simulation's initial state while covariance estimation still
-    uses only the selected historical transitions.
-    """
+    """Estimate reduced-node Q factors and the P factor risk premium."""
 
     verify_inp(
         len(history.dates) == len(history.audits)
@@ -248,11 +247,12 @@ def fit_v2_measures(
         covariance_shrinkage=config.dynamics.covariance_shrinkage,
         require_reconstruction_pass=True,
     )
-    q_dynamics = fit_dynamics(
+    q_dynamics = fit_reduced_dynamics(
         selected,
         config=dynamics_config,
         consecutive_mask=consecutive,
-        reference_density=reference_density,
+        maturity_stride=config.dynamics.reduced_maturity_stride,
+        jump_node_count=config.dynamics.reduced_jump_node_count,
     )
     p_fit = fit_constant_market_price_of_risk(
         selected,

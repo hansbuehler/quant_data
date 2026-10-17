@@ -172,19 +172,219 @@ def hjm_drift(
                 - beta_bar[factor, maturity] * beta_integral[factor, maturity]
                 - beta[factor, maturity] * beta_bar_integral[factor, maturity]
             )
-    # Cropping the full convolution back to finite jump support introduces a
-    # small exponential-moment residual.  Remove that quadrature artifact so
-    # the numerical drift remains tangent to the configured state manifold.
-    drift = project_factor_constraints(
-        drift,
-        jump_x=jump_x,
-        active_mask=active_mask,
-    )
+    if active_mask is not None:
+        mask = np.asarray(active_mask, dtype=bool)
+        verify_inp(
+            mask.shape == drift.shape,
+            lambda: (
+                "active mask must match the HJM drift shape "
+                f"{drift.shape}, got {mask.shape}"
+            ),
+        )
+    # The factor support does not constrain the drift support: convolution can
+    # create non-zero alpha at jump locations where every beta is zero.  Do not
+    # project or mask alpha after applying the HJM formula, since either action
+    # destroys the characteristic-generator identity.  Callers must instead
+    # choose factor support whose convolution fits inside the configured grid.
     verify(
         np.all(np.isfinite(drift)),
         lambda: "HJM drift calculation produced non-finite values",
     )
     return drift
+
+
+def levy_characteristic_operator(
+    values: np.ndarray,
+    *,
+    jump_x: np.ndarray,
+    frequencies: np.ndarray,
+) -> np.ndarray:
+    """Apply the compensated exponential-Levy operator on the jump lattice.
+
+    The quadrature and compensator match the finite-grid pricing convention.
+    ``values`` may have arbitrary leading dimensions and a trailing jump axis;
+    the result replaces that axis by the frequency axis.
+    """
+
+    values = np.asarray(values, dtype=np.float64)
+    jump_x = np.asarray(jump_x, dtype=np.float64)
+    frequencies = np.asarray(frequencies, dtype=np.float64)
+    verify_inp(
+        values.ndim >= 1
+        and values.shape[-1] == jump_x.size
+        and np.all(np.isfinite(values)),
+        lambda: (
+            "values must be finite with trailing jump dimension "
+            f"{jump_x.size}, got {values.shape}"
+        ),
+    )
+    verify_inp(
+        frequencies.ndim == 1 and np.all(np.isfinite(frequencies)),
+        lambda: "frequencies must be a finite one-dimensional array",
+    )
+    kernel = (
+        np.exp(1j * frequencies[:, None] * jump_x[None])
+        - 1.0
+        - 1j * frequencies[:, None] * np.expm1(jump_x)[None]
+    )
+    kernel *= trapezoid_weights(jump_x)[None]
+    return np.einsum("...x,ux->...u", values, kernel)
+
+
+def hjm_characteristic_residual(
+    *,
+    tau: np.ndarray,
+    jump_x: np.ndarray,
+    beta: np.ndarray,
+    alpha: np.ndarray,
+    frequencies: np.ndarray,
+) -> np.ndarray:
+    """Return the finite-grid Tangent Levy HJM generator residual.
+
+    A dynamically consistent lattice satisfies this identity at every
+    maturity and Fourier frequency, not merely the exponential-moment
+    constraint on each factor.
+    """
+
+    beta = np.asarray(beta, dtype=np.float64)
+    alpha = np.asarray(alpha, dtype=np.float64)
+    verify_inp(
+        beta.ndim == 3 and alpha.shape == beta.shape[1:],
+        lambda: (
+            "beta and alpha must have shapes (F,T,X) and (T,X), got "
+            f"{beta.shape} and {alpha.shape}"
+        ),
+    )
+    beta_bar = maturity_integral(np.asarray(tau, dtype=np.float64), beta)
+    alpha_operator = levy_characteristic_operator(
+        alpha,
+        jump_x=jump_x,
+        frequencies=frequencies,
+    )
+    beta_operator = levy_characteristic_operator(
+        beta,
+        jump_x=jump_x,
+        frequencies=frequencies,
+    )
+    beta_bar_operator = levy_characteristic_operator(
+        beta_bar,
+        jump_x=jump_x,
+        frequencies=frequencies,
+    )
+    return alpha_operator + np.sum(
+        beta_operator * beta_bar_operator,
+        axis=0,
+    )
+
+
+def hjm_cell_drift(
+    beta_cells: np.ndarray,
+    *,
+    jump_x: np.ndarray,
+) -> np.ndarray:
+    """Return cell-integrated HJM drift from cell-integrated factors.
+
+    Cell measures make maturity transport an exact index shift.  Constructing
+    cumulative alpha from the quadratic HJM identity also avoids imposing a
+    false trapezoidal product rule on the maturity grid.
+    """
+
+    beta_cells = np.asarray(beta_cells, dtype=np.float64)
+    jump_x = np.asarray(jump_x, dtype=np.float64)
+    verify_inp(
+        beta_cells.ndim == 3
+        and beta_cells.shape[-1] == jump_x.size
+        and np.all(np.isfinite(beta_cells)),
+        lambda: (
+            "beta cells must be finite with shape (F,C,X), got "
+            f"{beta_cells.shape}"
+        ),
+    )
+    verify_inp(
+        jump_x.size >= 3
+        and jump_x.size % 2 == 1
+        and np.allclose(jump_x, -jump_x[::-1])
+        and np.allclose(np.diff(jump_x), np.diff(jump_x)[0]),
+        "jump grid must be odd, symmetric, and uniform for convolution",
+    )
+    center = jump_x.size // 2
+    tolerance = 1.0e-14 * max(
+        1.0,
+        float(np.max(np.abs(beta_cells), initial=0.0)),
+    )
+    for factor in range(beta_cells.shape[0]):
+        support = np.flatnonzero(
+            np.any(np.abs(beta_cells[factor]) > tolerance, axis=0)
+        )
+        if support.size == 0:
+            continue
+        verify_inp(
+            2 * int(support[0]) - center >= 0
+            and 2 * int(support[-1]) - center < jump_x.size,
+            lambda: (
+                "factor support is not closed under self-convolution on the "
+                f"configured jump grid (factor {factor}, support indices "
+                f"{support[0]}:{support[-1]}, centre {center})"
+            ),
+        )
+    cumulative_beta = np.concatenate(
+        (
+            np.zeros_like(beta_cells[:, :1]),
+            np.cumsum(beta_cells, axis=1),
+        ),
+        axis=1,
+    )
+    weights = trapezoid_weights(jump_x)
+    dx = float(jump_x[1] - jump_x[0])
+    cumulative_alpha = np.zeros(cumulative_beta.shape[1:], dtype=np.float64)
+    for factor in range(beta_cells.shape[0]):
+        for boundary in range(cumulative_beta.shape[1]):
+            integrated = cumulative_beta[factor, boundary]
+            convolution = np.convolve(integrated, integrated, mode="same") * dx
+            mass = integrated @ weights
+            cumulative_alpha[boundary] -= 0.5 * (
+                convolution - 2.0 * integrated * mass
+            )
+    return np.diff(cumulative_alpha, axis=0)
+
+
+def hjm_integrated_characteristic_residual(
+    *,
+    beta_cells: np.ndarray,
+    alpha_cells: np.ndarray,
+    jump_x: np.ndarray,
+    frequencies: np.ndarray,
+) -> np.ndarray:
+    """Return the cumulative lattice HJM residual at every cell boundary."""
+
+    beta_cells = np.asarray(beta_cells, dtype=np.float64)
+    alpha_cells = np.asarray(alpha_cells, dtype=np.float64)
+    verify_inp(
+        beta_cells.ndim == 3 and alpha_cells.shape == beta_cells.shape[1:],
+        lambda: (
+            "beta and alpha cells must have shapes (F,C,X) and (C,X), got "
+            f"{beta_cells.shape} and {alpha_cells.shape}"
+        ),
+    )
+    cumulative_beta = np.concatenate(
+        (np.zeros_like(beta_cells[:, :1]), np.cumsum(beta_cells, axis=1)),
+        axis=1,
+    )
+    cumulative_alpha = np.concatenate(
+        (np.zeros_like(alpha_cells[:1]), np.cumsum(alpha_cells, axis=0)),
+        axis=0,
+    )
+    alpha_operator = levy_characteristic_operator(
+        cumulative_alpha,
+        jump_x=jump_x,
+        frequencies=frequencies,
+    )
+    beta_operator = levy_characteristic_operator(
+        cumulative_beta,
+        jump_x=jump_x,
+        frequencies=frequencies,
+    )
+    return alpha_operator + 0.5 * np.sum(beta_operator * beta_operator, axis=0)
 
 
 def musiela_drift(

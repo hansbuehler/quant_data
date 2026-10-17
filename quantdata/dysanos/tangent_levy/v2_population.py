@@ -12,7 +12,10 @@ from scipy.special import ndtri
 
 from quantdata.biz_calendar import DAYS_PER_YEAR, NMS
 
-from .constraints import hjm_drift
+from .constraints import (
+    hjm_cell_drift,
+    hjm_integrated_characteristic_residual,
+)
 from .dynamics import DynamicsFit
 from .physical_measure import PhysicalMeasureFit
 from .pricing import (
@@ -97,19 +100,25 @@ def _predictable_boundary_scale(
         and shifted.shape[1:] == scale.shape,
         lambda: "boundary-scale arrays have incompatible density geometry",
     )
-    # For gamma in [0,1], replacing gamma**2 by gamma in the adverse HJM
-    # drift is conservative.  The physical drift is genuinely linear in
-    # gamma because beta*theta scales with the factor loading.
-    denominator = (
+    quadratic = dt * np.maximum(-alpha, 0.0)
+    linear = (
         BOUNDARY_STANDARD_DEVIATIONS * math.sqrt(dt) * scale
-        + dt * np.maximum(-alpha, 0.0)
         + dt * np.maximum(-physical, 0.0)
     )
-    constrained = active & (denominator > 0.0)
+    affected = active | (np.abs(alpha) > 0.0) | (np.abs(physical) > 0.0)
+    constrained = affected & ((quadratic > 0.0) | (linear > 0.0))
     if not np.any(constrained):
         return np.ones(shifted.shape[0], dtype=np.float64)
-    ratios = shifted[:, constrained] / denominator[constrained][None]
-    return np.minimum(1.0, np.min(ratios, axis=1))
+    available = shifted[:, constrained]
+    a = quadratic[constrained][None]
+    b = linear[constrained][None]
+    # Solve a*gamma^2 + b*gamma <= available with the stable positive-root
+    # formula.  This avoids the severe over-suppression caused by replacing
+    # gamma^2 with gamma in alpha-only cells.
+    roots = 2.0 * available / (
+        b + np.sqrt(np.square(b) + 4.0 * a * available)
+    )
+    return np.minimum(1.0, np.min(roots, axis=1))
 
 
 def analytic_deterministic_q_audit(
@@ -279,6 +288,57 @@ def _normalized_calls(
     )
 
 
+def _cell_integrals(values: np.ndarray, *, steps_per_day: int) -> np.ndarray:
+    """Integrate a piecewise-linear daily maturity curve on substep cells."""
+
+    values = np.asarray(values, dtype=np.float64)
+    verify_inp(
+        values.ndim >= 2 and values.shape[-2] >= 2 and steps_per_day > 0,
+        lambda: "cell integration requires a maturity axis and positive steps",
+    )
+    dt = 1.0 / (DAYS_PER_YEAR * steps_per_day)
+    cells = []
+    for substep in range(steps_per_day):
+        midpoint = (substep + 0.5) / steps_per_day
+        cells.append(
+            dt
+            * (
+                (1.0 - midpoint) * values[..., :-1, :]
+                + midpoint * values[..., 1:, :]
+            )
+        )
+    stacked = np.stack(cells, axis=-2)
+    cell_count = (values.shape[-2] - 1) * steps_per_day
+    shape = (*values.shape[:-2], cell_count, values.shape[-1])
+    return stacked.reshape(shape)
+
+
+def _normalized_calls_from_cells(
+    cell_measures: np.ndarray,
+    *,
+    maturity_cells: int,
+    relative_strikes: np.ndarray,
+    jump_x: np.ndarray,
+    substep_dt: float,
+) -> np.ndarray:
+    """Price normalized calls from integrated maturity-cell Levy measures."""
+
+    integrated = np.sum(cell_measures[..., :maturity_cells, :], axis=-2)
+    average_density = integrated / (maturity_cells * substep_dt)
+    relative_strikes = np.asarray(relative_strikes, dtype=np.float64)
+    if average_density.shape[0] == 1 and relative_strikes.shape[0] > 1:
+        average_density = np.broadcast_to(
+            average_density,
+            (relative_strikes.shape[0], average_density.shape[1]),
+        )
+    return lattice_density_call_prices_batched(
+        tau=maturity_cells * substep_dt,
+        log_strikes=np.log(relative_strikes),
+        jump_x=jump_x,
+        average_density=average_density,
+    )
+
+
 def restricted_universe(
     initial_forward_density: np.ndarray,
     dynamics: DynamicsFit,
@@ -317,6 +377,56 @@ def restricted_universe(
     # node is a put and the positive nodes are calls; cash strikes never move.
     is_put = np.broadcast_to(
         NORMALIZED_MONEYNESS[None] < 0.0, strikes.shape
+    ).copy()
+    labels = tuple(
+        f"{expiry}D NMS {score:g} {'put' if score < 0.0 else 'call'}"
+        for expiry in expiry_days
+        for score in NORMALIZED_MONEYNESS
+    )
+    return RestrictedUniverse(
+        expiry_days=expiry_days,
+        strikes=strikes,
+        is_put=is_put,
+        labels=("spot", *labels),
+    )
+
+
+def _restricted_universe_from_cells(
+    initial_cells: np.ndarray,
+    dynamics: DynamicsFit,
+    *,
+    config: TangentLevyV2AuditConfig,
+    substep_dt: float,
+) -> RestrictedUniverse:
+    expiry_days = np.asarray(config.option_expiry_days, dtype=np.int64)
+    atm_calls = np.asarray(
+        [
+            _normalized_calls_from_cells(
+                initial_cells[None],
+                maturity_cells=int(expiry) * config.steps_per_day,
+                relative_strikes=np.ones((1, 1), dtype=np.float64),
+                jump_x=dynamics.jump_x,
+                substep_dt=substep_dt,
+            )[0, 0]
+            for expiry in expiry_days
+        ]
+    )
+    probabilities = np.clip(0.5 * (atm_calls + 1.0), 0.5, 1.0 - 1.0e-14)
+    total_volatility = 2.0 * ndtri(probabilities)
+    epsilon_volatility = total_volatility[0] / math.sqrt(
+        expiry_days[0] / DAYS_PER_YEAR
+    )
+    nms_scale = np.sqrt(
+        (
+            epsilon_volatility**2 * float(NMS.EPS)
+            + np.square(total_volatility)
+        )
+        / (1.0 + float(NMS.EPS))
+    )
+    strikes = np.exp(nms_scale[:, None] * NORMALIZED_MONEYNESS[None])
+    is_put = np.broadcast_to(
+        NORMALIZED_MONEYNESS[None] < 0.0,
+        strikes.shape,
     ).copy()
     labels = tuple(
         f"{expiry}D NMS {score:g} {'put' if score < 0.0 else 'call'}"
@@ -375,6 +485,51 @@ def _option_values(
     return np.maximum(result, 0.0)
 
 
+def _option_values_from_cells(
+    cell_measures: np.ndarray,
+    spots: np.ndarray,
+    universe: RestrictedUniverse,
+    *,
+    day_index: int,
+    dynamics: DynamicsFit,
+    config: TangentLevyV2AuditConfig,
+    substep_dt: float,
+) -> np.ndarray:
+    result = np.zeros(
+        (len(spots), len(universe.expiry_days), universe.strikes.shape[1]),
+        dtype=np.float64,
+    )
+    for expiry_index, expiry_day in enumerate(universe.expiry_days):
+        remaining = int(expiry_day) - day_index
+        strikes = universe.strikes[expiry_index]
+        if remaining < 0:
+            continue
+        if remaining == 0:
+            calls = np.maximum(spots[:, None] - strikes[None], 0.0)
+            puts = np.maximum(strikes[None] - spots[:, None], 0.0)
+        else:
+            relative = strikes[None] / spots[:, None]
+            normalized_calls = _normalized_calls_from_cells(
+                cell_measures,
+                maturity_cells=remaining * config.steps_per_day,
+                relative_strikes=relative,
+                jump_x=dynamics.jump_x,
+                substep_dt=substep_dt,
+            )
+            calls = spots[:, None] * normalized_calls
+            puts = calls - spots[:, None] + strikes[None]
+        result[:, expiry_index] = np.where(
+            universe.is_put[expiry_index][None],
+            puts,
+            calls,
+        )
+    verify(
+        np.all(np.isfinite(result)) and np.min(result) >= -2.0e-10,
+        lambda: "cell-grid option repricing produced invalid values",
+    )
+    return np.maximum(result, 0.0)
+
+
 def _active_mask(config: TangentLevyV2AuditConfig) -> np.ndarray:
     mask = np.zeros(
         (config.horizon_days, config.instrument_count), dtype=bool
@@ -410,7 +565,66 @@ def simulate_restricted_population(
         lambda: "path count must be divisible by four and batches must preserve pairs",
     )
     verify_inp(paths % batch_size == 0, lambda: "batch size must divide path count")
-    universe = restricted_universe(initial_forward_density, dynamics, config=config)
+    substep_dt = 1.0 / (DAYS_PER_YEAR * config.steps_per_day)
+    expected_tau = np.arange(dynamics.tau.size, dtype=np.float64) / DAYS_PER_YEAR
+    verify_inp(
+        np.allclose(dynamics.tau, expected_tau, rtol=0.0, atol=1.0e-14),
+        lambda: "the maturity-cell audit requires daily maturities j/252",
+    )
+    initial_cells = _cell_integrals(
+        initial_forward_density,
+        steps_per_day=config.steps_per_day,
+    )
+    required_cells = max(config.option_expiry_days) * config.steps_per_day
+    verify_inp(
+        required_cells <= initial_cells.shape[-2],
+        lambda: (
+            "the longest option expiry exceeds the maturity-cell horizon: "
+            f"requires {required_cells} cells, found {initial_cells.shape[-2]}"
+        ),
+    )
+    # The restricted audit prices no claim beyond its longest fixed expiry.
+    # Retaining unused maturity cells would let an irrelevant far-boundary
+    # spline coefficient govern the global positivity time change.
+    initial_cells = initial_cells[..., :required_cells, :]
+    beta_cells = _cell_integrals(
+        dynamics.beta,
+        steps_per_day=config.steps_per_day,
+    )[..., :required_cells, :]
+    zero_jump = int(np.argmin(np.abs(dynamics.jump_x)))
+    verify_inp(
+        dynamics.jump_x[zero_jump] == 0.0,
+        lambda: "the symmetric jump lattice must contain the zero-jump node",
+    )
+    # A point mass at jump size zero is a gauge coordinate: it is annihilated
+    # by both the compensated Levy generator and every option payoff.  Keeping
+    # its arbitrary fitted intensity in the positivity screen can freeze all
+    # economically active factors, so remove it from the numerical measure.
+    initial_cells = initial_cells.copy()
+    beta_cells = beta_cells.copy()
+    initial_cells[..., zero_jump] = 0.0
+    beta_cells[..., zero_jump] = 0.0
+    alpha_cells = hjm_cell_drift(beta_cells, jump_x=dynamics.jump_x)
+    alpha_cells[..., zero_jump] = 0.0
+    integrated_residual = hjm_integrated_characteristic_residual(
+        beta_cells=beta_cells,
+        alpha_cells=alpha_cells,
+        jump_x=dynamics.jump_x,
+        frequencies=np.linspace(-40.0, 40.0, 161),
+    )
+    verify(
+        np.max(np.abs(integrated_residual), initial=0.0) <= 1.0e-10,
+        lambda: (
+            "the maturity-cell factors do not satisfy the integrated HJM "
+            f"identity: maximum residual={np.max(np.abs(integrated_residual)):.6g}"
+        ),
+    )
+    universe = _restricted_universe_from_cells(
+        initial_cells,
+        dynamics,
+        config=config,
+        substep_dt=substep_dt,
+    )
     feature_count = (
         dynamics.num_factors
         + 1
@@ -426,27 +640,15 @@ def simulate_restricted_population(
         (paths, config.horizon_days, config.instrument_count), dtype=np.float64
     )
     active_mask = _active_mask(config)
-    active_density_mask = (
-        np.ones_like(initial_forward_density, dtype=bool)
-        if dynamics.active_mask is None
-        else np.asarray(dynamics.active_mask, dtype=bool)
-    )
-    alpha = hjm_drift(
-        tau=dynamics.tau,
-        jump_x=dynamics.jump_x,
-        beta=dynamics.beta,
-        active_mask=active_density_mask,
-    )
     physical_adjustment = (
-        np.zeros_like(initial_forward_density)
+        np.zeros_like(initial_cells)
         if physical_fit is None
-        else np.einsum("f,ftx->tx", physical_fit.theta, dynamics.beta)
+        else np.einsum("f,fcx->cx", physical_fit.theta, beta_cells)
     )
-    alpha[..., ~active_density_mask] = 0.0
-    physical_adjustment[..., ~active_density_mask] = 0.0
-    factor_scale = np.sqrt(np.sum(np.square(dynamics.beta), axis=0))
+    factor_scale = np.sqrt(np.sum(np.square(beta_cells), axis=0))
+    affected_cells = (factor_scale > 0.0) | (np.abs(alpha_cells) > 0.0)
+    stochastic_dynamics = bool(np.any(dynamics.beta != 0.0))
     generator = np.random.default_rng(config.seed)
-    substep_dt = 1.0 / (DAYS_PER_YEAR * config.steps_per_day)
     sqrt_substep_dt = math.sqrt(substep_dt)
     started = time.perf_counter()
     minimum_gamma = 1.0
@@ -460,26 +662,44 @@ def simulate_restricted_population(
     for completed in range(0, paths, batch_size):
         pair_count = batch_size // 2
         codebooks = (
-            initial_forward_density[None].copy()
+            initial_cells[None].copy()
             if dynamics.num_factors == 0
             else np.broadcast_to(
-                initial_forward_density,
-                (batch_size,) + initial_forward_density.shape,
+                initial_cells,
+                (batch_size,) + initial_cells.shape,
             ).copy()
         )
         spots = np.ones(batch_size, dtype=np.float64)
-        options = _option_values(
-            codebooks, spots, universe, day_index=0, dynamics=dynamics
+        options = _option_values_from_cells(
+            codebooks,
+            spots,
+            universe,
+            day_index=0,
+            dynamics=dynamics,
+            config=config,
+            substep_dt=substep_dt,
         )
         factor_history = np.zeros(
             (batch_size, dynamics.num_factors), dtype=np.float64
         )
-        independent = generator.standard_normal(
-            (
-                config.horizon_days,
-                config.steps_per_day,
-                pair_count,
-                dynamics.num_factors,
+        independent = (
+            generator.standard_normal(
+                (
+                    config.horizon_days,
+                    config.steps_per_day,
+                    pair_count,
+                    dynamics.num_factors,
+                )
+            )
+            if stochastic_dynamics
+            else np.zeros(
+                (
+                    config.horizon_days,
+                    config.steps_per_day,
+                    pair_count,
+                    dynamics.num_factors,
+                ),
+                dtype=np.float64,
             )
         )
         factor_normals = np.stack((independent, -independent), axis=3).reshape(
@@ -513,16 +733,8 @@ def simulate_restricted_population(
             )
             previous_spots = spots.copy()
             previous_options = options.copy()
-            day_start_codebooks = codebooks.copy()
             for substep in range(config.steps_per_day):
-                if dynamics.num_factors == 0:
-                    midpoint = (substep + 0.5) / config.steps_per_day
-                    short_end_density = (
-                        (1.0 - midpoint) * day_start_codebooks[:, 0]
-                        + midpoint * day_start_codebooks[:, 1]
-                    )
-                else:
-                    short_end_density = codebooks[:, 0]
+                short_end_density = codebooks[:, 0] / substep_dt
                 spot_step = sample_short_end_spot_step(
                     np.broadcast_to(
                         short_end_density, (batch_size, codebooks.shape[-1])
@@ -532,47 +744,26 @@ def simulate_restricted_population(
                     rng=generator,
                 )
                 spots *= spot_step.gross_return
-                # Split the transport from the HJM source term.  On the daily
-                # uniform maturity grid this linear semi-Lagrangian shift is
-                # positivity preserving, unlike an explicit derivative Euler
-                # step at sharp reconstructed maturity profiles.
-                shift_weight = substep_dt / float(
-                    dynamics.tau[1] - dynamics.tau[0]
+                shifted = np.concatenate(
+                    (codebooks[:, 1:], codebooks[:, -1:]),
+                    axis=1,
                 )
-                if dynamics.num_factors == 0:
-                    fraction = (substep + 1) / config.steps_per_day
-                    shifted = (
-                        (1.0 - fraction) * day_start_codebooks
-                        + fraction
-                        * np.concatenate(
-                            (day_start_codebooks[:, 1:], day_start_codebooks[:, -1:]),
-                            axis=1,
-                        )
-                    )
-                else:
-                    shifted = (
-                        (1.0 - shift_weight) * codebooks
-                        + shift_weight
-                        * np.concatenate(
-                            (codebooks[:, 1:], codebooks[:, -1:]), axis=1
-                        )
-                    )
                 shock = (
                     0.0
-                    if dynamics.num_factors == 0
+                    if not stochastic_dynamics
                     else sqrt_substep_dt
                     * np.einsum(
-                        "pf,ftx->ptx",
+                        "pf,fcx->pcx",
                         factor_normals[day_index, substep],
-                        dynamics.beta,
+                        beta_cells,
                     )
                 )
                 gamma = _predictable_boundary_scale(
                     shifted,
                     factor_scale=factor_scale,
-                    q_drift=alpha,
+                    q_drift=alpha_cells,
                     physical_drift=physical_adjustment,
-                    active_mask=active_density_mask,
+                    active_mask=affected_cells,
                     dt=substep_dt,
                 )
                 minimum_gamma = min(minimum_gamma, float(np.min(gamma)))
@@ -587,7 +778,7 @@ def simulate_restricted_population(
                 frozen_path_flags[completed : completed + batch_size] |= gamma == 0.0
                 candidate = (
                     shifted
-                    + np.square(gamma)[:, None, None] * alpha * substep_dt
+                    + np.square(gamma)[:, None, None] * alpha_cells * substep_dt
                     + gamma[:, None, None] * physical_adjustment * substep_dt
                     + gamma[:, None, None] * shock
                 )
@@ -595,7 +786,9 @@ def simulate_restricted_population(
                     np.all(np.isfinite(candidate)) and np.min(candidate) >= 0.0,
                     lambda: (
                         "a Tangent Levy codebook path failed positivity; the entire "
-                        "audit population is invalid"
+                        "audit population is invalid: "
+                        f"day={day_index + 1}, substep={substep + 1}, "
+                        f"minimum={np.nanmin(candidate):.6g}"
                     ),
                 )
                 codebooks = candidate
@@ -604,12 +797,14 @@ def simulate_restricted_population(
                     * sqrt_substep_dt
                     * factor_normals[day_index, substep]
                 )
-            options = _option_values(
+            options = _option_values_from_cells(
                 codebooks,
                 spots,
                 universe,
                 day_index=day_index + 1,
                 dynamics=dynamics,
+                config=config,
+                substep_dt=substep_dt,
             )
             option_returns = (options - previous_options) / previous_spots[:, None, None]
             returns[completed : completed + batch_size, day_index, 0] = (

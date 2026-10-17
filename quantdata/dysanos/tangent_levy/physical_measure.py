@@ -82,7 +82,6 @@ def fit_constant_market_price_of_risk(
         tau=dynamics.tau,
         jump_x=dynamics.jump_x,
         beta=dynamics.beta,
-        active_mask=active_mask,
     )
     q_drift = musiela_drift(
         tau=dynamics.tau,

@@ -7,8 +7,8 @@ from dataclasses import dataclass
 
 import numpy as np
 from cdxcore.err import verify, verify_inp
-from scipy.interpolate import PchipInterpolator
-from scipy.optimize import OptimizeResult, isotonic_regression, minimize
+from scipy.interpolate import BSpline, PchipInterpolator
+from scipy.optimize import OptimizeResult, isotonic_regression, minimize, nnls
 
 from .config import StaticFitConfig
 from .coordinates import log_moneyness_from_strike, normalized_call_intrinsic
@@ -599,6 +599,164 @@ def reconstruct_forward_density(
         projected_fitted_average_density=(projected_a[1:] / fitted_tau[:, None]),
         forward_density=kappa,
         maximum_relative_projection=maximum_relative,
+        relative_l1_projection=relative_l1,
+        maximum_absolute_projection=float(np.max(absolute_projection)),
+        passed_tolerance=relative_l1 <= relative_tolerance,
+    )
+
+
+def reconstruct_forward_density_positive_spline(
+    *,
+    fitted_tau: np.ndarray,
+    fitted_average_density: np.ndarray,
+    target_tau: np.ndarray,
+    jump_x: np.ndarray,
+    relative_tolerance: float = 0.25,
+    forward_density_floor: float = 0.0,
+    basis_count: int = 12,
+    curvature_penalty: float = 1.0,
+    relative_weight_floor: float = 0.05,
+) -> ForwardDensityReconstruction:
+    """Fit an intrinsically nonnegative forward density in maturity.
+
+    This is the paper-aligned production alternative to differentiating an
+    isotonic cumulative curve.  For each jump node, ``kappa`` is represented
+    by a common nonnegative cubic B-spline basis.  Analytic basis integrals map
+    its nonnegative coefficients to the calibrated average density ``eta``.
+    A normalized curvature penalty avoids the plateau/spike derivatives that
+    can result from an isotonic projection.
+    """
+
+    fitted_tau = np.asarray(fitted_tau, dtype=np.float64)
+    eta_fit = np.asarray(fitted_average_density, dtype=np.float64)
+    target_tau = np.asarray(target_tau, dtype=np.float64)
+    jump_x = np.asarray(jump_x, dtype=np.float64)
+    verify_inp(
+        fitted_tau.ndim == 1
+        and fitted_tau.size >= 4
+        and np.all(fitted_tau > 0.0)
+        and np.all(np.diff(fitted_tau) > 0.0),
+        lambda: "spline reconstruction requires four increasing maturities",
+    )
+    verify_inp(
+        eta_fit.shape == (fitted_tau.size, jump_x.size)
+        and np.all(np.isfinite(eta_fit))
+        and np.all(eta_fit >= 0.0),
+        lambda: "fitted average density is incompatible with the spline grid",
+    )
+    verify_inp(
+        target_tau.ndim == 1
+        and target_tau.size >= 2
+        and target_tau[0] == 0.0
+        and np.all(np.diff(target_tau) > 0.0)
+        and target_tau[-1] <= fitted_tau[-1],
+        lambda: "target maturities must start at zero and stay in the fitted range",
+    )
+    verify_inp(
+        basis_count >= 6
+        and basis_count <= fitted_tau.size
+        and math.isfinite(curvature_penalty)
+        and curvature_penalty >= 0.0
+        and 0.0 < relative_weight_floor <= 1.0
+        and math.isfinite(forward_density_floor)
+        and forward_density_floor >= 0.0,
+        lambda: "invalid positive-spline reconstruction controls",
+    )
+    degree = 3
+    interior_count = basis_count - degree - 1
+    upper = float(fitted_tau[-1])
+    # Squared spacing allocates more flexibility to the short end, where the
+    # paper reports the fastest maturity variation in jump intensity.
+    interior = upper * np.square(
+        np.linspace(0.0, 1.0, interior_count + 2)[1:-1]
+    )
+    knots = np.concatenate(
+        (
+            np.zeros(degree + 1),
+            interior,
+            np.full(degree + 1, upper),
+        )
+    )
+    basis: list[BSpline] = []
+    for index in range(basis_count):
+        coefficient = np.zeros(basis_count, dtype=np.float64)
+        coefficient[index] = 1.0
+        basis.append(BSpline(knots, coefficient, degree, extrapolate=False))
+
+    target_basis = np.column_stack([value(target_tau) for value in basis])
+    integrated_basis = np.column_stack(
+        [
+            value.antiderivative()(fitted_tau)
+            - value.antiderivative()(0.0)
+            for value in basis
+        ]
+    )
+    average_map = integrated_basis / fitted_tau[:, None]
+    curvature_grid = np.linspace(0.0, upper, 4 * basis_count + 1)[1:-1]
+    curvature = np.column_stack(
+        [value.derivative(2)(curvature_grid) for value in basis]
+    )
+    curvature_norm = float(np.linalg.norm(curvature, ord=2))
+    if curvature_norm > 0.0:
+        curvature /= curvature_norm
+
+    coefficients = np.empty((basis_count, jump_x.size), dtype=np.float64)
+    floor_coefficients = np.full(basis_count, forward_density_floor)
+    floor_average = average_map @ floor_coefficients
+    penalty_rows = math.sqrt(curvature_penalty) * curvature
+    for jump_index in range(jump_x.size):
+        target = eta_fit[:, jump_index]
+        scale = max(
+            relative_weight_floor * float(np.max(target, initial=0.0)),
+            1.0e-12,
+        )
+        weights = 1.0 / np.maximum(target, scale)
+        design = np.vstack((weights[:, None] * average_map, penalty_rows))
+        response = np.concatenate(
+            (
+                weights * (target - floor_average),
+                np.zeros(penalty_rows.shape[0]),
+            )
+        )
+        nonnegative, _ = nnls(design, response, maxiter=100 * basis_count)
+        coefficients[:, jump_index] = floor_coefficients + nonnegative
+
+    kappa = target_basis @ coefficients
+    projected_eta = average_map @ coefficients
+    target_integrated_basis = np.column_stack(
+        [
+            value.antiderivative()(target_tau)
+            - value.antiderivative()(0.0)
+            for value in basis
+        ]
+    )
+    target_a = target_integrated_basis @ coefficients
+    eta = np.empty_like(kappa)
+    eta[0] = kappa[0]
+    eta[1:] = target_a[1:] / target_tau[1:, None]
+    verify(
+        np.all(np.isfinite(kappa))
+        and np.min(kappa) >= forward_density_floor - 1.0e-12,
+        lambda: "positive-spline reconstruction produced an invalid density",
+    )
+    source_a = fitted_tau[:, None] * eta_fit
+    projected_a = fitted_tau[:, None] * projected_eta
+    absolute_projection = np.abs(projected_a - source_a)
+    material_floor = 1.0e-6 * max(1.0, float(np.max(np.abs(source_a))))
+    relative_projection = absolute_projection / np.maximum(
+        np.abs(source_a), material_floor
+    )
+    relative_l1 = float(
+        np.sum(absolute_projection)
+        / max(float(np.sum(np.abs(source_a))), 1.0e-15)
+    )
+    return ForwardDensityReconstruction(
+        tau=target_tau,
+        jump_x=jump_x,
+        average_density=eta,
+        projected_fitted_average_density=projected_eta,
+        forward_density=np.maximum(kappa, forward_density_floor),
+        maximum_relative_projection=float(np.max(relative_projection)),
         relative_l1_projection=relative_l1,
         maximum_absolute_projection=float(np.max(absolute_projection)),
         passed_tolerance=relative_l1 <= relative_tolerance,

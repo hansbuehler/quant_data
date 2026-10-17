@@ -104,7 +104,6 @@ def simulate_codebooks(
         tau=tau,
         jump_x=jump_x,
         beta=beta,
-        active_mask=active_mask,
     )
     rng = np.random.default_rng(config.seed)
     current = np.broadcast_to(initial, (config.num_paths,) + initial.shape).copy()
@@ -136,7 +135,6 @@ def simulate_codebooks(
                 hjm_alpha=alpha,
             )
             drift += physical_adjustment
-            drift[..., ~active_mask] = 0.0
             normal = rng.standard_normal((active_index.size, dynamics.num_factors))
             shock = sqrt_dt * np.einsum("pf,ftx->ptx", normal, beta)
             candidate = (

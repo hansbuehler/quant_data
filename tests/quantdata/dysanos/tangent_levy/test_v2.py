@@ -6,10 +6,12 @@ from datetime import date
 
 import numpy as np
 
+from quantdata.biz_calendar import DAYS_PER_YEAR
 from quantdata.dysanos.tangent_levy.config import DynamicsConfig
 from quantdata.dysanos.tangent_levy.dynamics import DynamicsFit, fit_dynamics
 from quantdata.dysanos.tangent_levy.pricing import (
     density_call_prices,
+    density_characteristic_function,
     lattice_density_call_prices_batched,
 )
 from quantdata.dysanos.tangent_levy.run_v2_same_date import (
@@ -22,6 +24,7 @@ from quantdata.dysanos.tangent_levy.v2_config import (
     TangentLevyV2MarketConfig,
 )
 from quantdata.dysanos.tangent_levy.v2_population import (
+    _cell_integrals,
     _predictable_boundary_scale,
     analytic_deterministic_q_audit,
     simulate_restricted_population,
@@ -263,6 +266,57 @@ def test_measured_factor_population_uses_batched_pricing_path() -> None:
     assert diagnostics.frozen_paths == 0
 
 
+def test_zero_loading_factor_uses_exact_deterministic_transport() -> None:
+    tau = np.arange(4, dtype=np.float64) / 252.0
+    jump_x = np.linspace(-0.2, 0.2, 81)
+    maturity_shape = 1.0 + 0.1 * np.arange(len(tau))[:, None]
+    density = maturity_shape * np.exp(-12.0 * np.abs(jump_x))[None]
+    common = {
+        "tau": tau,
+        "jump_x": jump_x,
+        "mean_change": np.zeros_like(density),
+        "observations": 0,
+        "maximum_constraint_residual": 0.0,
+        "covariance_shrinkage": 0.0,
+        "dt": 1.0 / 252.0,
+        "active_mask": np.ones_like(density, dtype=bool),
+    }
+    deterministic = DynamicsFit(
+        beta=np.zeros((0, len(tau), len(jump_x))),
+        eigenvalues_one_session=np.zeros(0),
+        explained_variance_ratio=np.zeros(0),
+        **common,
+    )
+    zero_loading = DynamicsFit(
+        beta=np.zeros((1, len(tau), len(jump_x))),
+        eigenvalues_one_session=np.zeros(1),
+        explained_variance_ratio=np.zeros(1),
+        **common,
+    )
+    config = TangentLevyV2AuditConfig(
+        path_count=100,
+        horizon_days=2,
+        option_expiry_days=(1, 2),
+        steps_per_day=4,
+        seed=113,
+    )
+
+    exact, _, _ = simulate_restricted_population(
+        density,
+        deterministic,
+        config=config,
+        batch_size=100,
+    )
+    represented, _, _ = simulate_restricted_population(
+        density,
+        zero_loading,
+        config=config,
+        batch_size=100,
+    )
+
+    np.testing.assert_allclose(represented.returns, exact.returns, atol=2.0e-13)
+
+
 def test_predictable_boundary_scale_reserves_density_headroom() -> None:
     shifted = np.asarray([[[0.02, 0.08]], [[0.04, 0.08]]])
     factor_scale = np.asarray([[1.0, 0.5]])
@@ -291,3 +345,90 @@ def test_predictable_boundary_scale_reserves_density_headroom() -> None:
     assert np.all(gamma > 0.0)
     assert np.all(gamma <= 1.0)
     assert np.all(adverse >= -1.0e-15)
+
+
+def test_boundary_scale_covers_hjm_drift_outside_factor_support() -> None:
+    shifted = np.asarray([[[0.5, 1.0e-6]]])
+    factor_scale = np.asarray([[0.1, 0.0]])
+    alpha = np.asarray([[0.0, -2.0]])
+    physical = np.zeros_like(alpha)
+    active = np.asarray([[True, False]])
+    dt = 1.0 / (252.0 * 8.0)
+
+    gamma = _predictable_boundary_scale(
+        shifted,
+        factor_scale=factor_scale,
+        q_drift=alpha,
+        physical_drift=physical,
+        active_mask=active,
+        dt=dt,
+    )
+    candidate = shifted + np.square(gamma)[:, None, None] * alpha * dt
+
+    expected = np.sqrt(shifted[0, 0, 1] / (-alpha[0, 1] * dt))
+    assert np.isclose(gamma[0], expected)
+    assert np.all(candidate >= 0.0)
+
+
+def test_cell_integrals_preserve_piecewise_linear_daily_measures() -> None:
+    values = np.asarray(
+        (
+            (1.0, 4.0),
+            (3.0, 2.0),
+            (2.0, 8.0),
+        ),
+        dtype=np.float64,
+    )
+    expected_daily = 0.5 * (values[:-1] + values[1:]) / DAYS_PER_YEAR
+
+    for steps_per_day in (1, 2, 4):
+        cells = _cell_integrals(values, steps_per_day=steps_per_day)
+        daily = cells.reshape(2, steps_per_day, 2).sum(axis=1)
+
+        np.testing.assert_allclose(daily, expected_daily, atol=1.0e-18)
+        np.testing.assert_allclose(
+            cells.sum(axis=0), expected_daily.sum(axis=0), atol=1.0e-18
+        )
+
+
+def test_cell_shift_conserves_each_fixed_expiry_measure() -> None:
+    values = np.asarray(
+        (
+            (1.0, 2.0),
+            (3.0, 1.0),
+            (2.0, 5.0),
+            (4.0, 3.0),
+        ),
+        dtype=np.float64,
+    )
+    cells = _cell_integrals(values, steps_per_day=4)
+    maturity_cells = 11
+
+    for consumed in range(maturity_cells + 1):
+        consumed_measure = cells[:consumed].sum(axis=0)
+        shifted_measure = cells[consumed:maturity_cells].sum(axis=0)
+        np.testing.assert_allclose(
+            consumed_measure + shifted_measure,
+            cells[:maturity_cells].sum(axis=0),
+            atol=1.0e-18,
+        )
+
+
+def test_zero_jump_atom_is_invisible_to_characteristic_exponent() -> None:
+    jump_x = np.linspace(-0.2, 0.2, 81)
+    density = 3.0 * np.exp(-10.0 * np.abs(jump_x))
+    without_zero = density.copy()
+    without_zero[len(jump_x) // 2] = 0.0
+    frequencies = np.linspace(-30.0, 30.0, 121)
+    original = density_characteristic_function(
+        tau=10.0 / DAYS_PER_YEAR,
+        jump_x=jump_x,
+        average_density=density,
+    )(frequencies)
+    reduced = density_characteristic_function(
+        tau=10.0 / DAYS_PER_YEAR,
+        jump_x=jump_x,
+        average_density=without_zero,
+    )(frequencies)
+
+    np.testing.assert_allclose(reduced, original, rtol=0.0, atol=1.0e-15)

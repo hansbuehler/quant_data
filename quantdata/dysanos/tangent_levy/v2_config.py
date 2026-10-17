@@ -66,7 +66,7 @@ class TangentLevyV2MarketConfig:
         )
 
 
-@version("2.0")
+@version("2.1")
 @dataclass(frozen=True, kw_only=True)
 class TangentLevyV2DynamicsConfig:
     """Common diffusion and measure-change geometry for v2."""
@@ -79,6 +79,11 @@ class TangentLevyV2DynamicsConfig:
     training_end: date = date(2024, 12, 31)
     reconstruction_relative_tolerance: float = 0.25
     reconstruction_repricing_tolerance: float = 2.0
+    reconstruction_basis_count: int = 12
+    reconstruction_curvature_penalty: float = 1.0
+    reconstruction_relative_weight_floor: float = 0.05
+    reduced_maturity_stride: int = 2
+    reduced_jump_node_count: int = 7
 
     def __post_init__(self) -> None:
         tau = np.asarray(self.maturity_grid, dtype=np.float64)
@@ -111,6 +116,17 @@ class TangentLevyV2DynamicsConfig:
             self.reconstruction_relative_tolerance >= 0.0
             and self.reconstruction_repricing_tolerance >= 0.0,
             lambda: "reconstruction tolerances must be non-negative",
+        )
+        verify_inp(
+            self.reconstruction_basis_count >= 6
+            and self.reconstruction_curvature_penalty >= 0.0
+            and 0.0 < self.reconstruction_relative_weight_floor <= 1.0,
+            lambda: "invalid positive-spline reconstruction controls",
+        )
+        verify_inp(
+            self.reduced_maturity_stride > 0
+            and self.reduced_jump_node_count >= 3,
+            lambda: "invalid reduced-node PCA controls",
         )
 
 

@@ -9,6 +9,7 @@ from cdxcore.err import verify, verify_inp
 
 from .config import DynamicsConfig
 from .constraints import constraint_residuals, project_factor_constraints
+from .coordinates import trapezoid_weights
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,8 @@ class DynamicsFit:
     covariance_shrinkage: float
     dt: float
     active_mask: np.ndarray | None = None
+    maturity_node_indices: np.ndarray | None = None
+    jump_node_indices: np.ndarray | None = None
 
     @property
     def num_factors(self) -> int:
@@ -195,4 +198,159 @@ def fit_dynamics(
         covariance_shrinkage=config.covariance_shrinkage,
         dt=config.dt,
         active_mask=active_mask,
+    )
+
+
+def _linear_interpolation_map(
+    source: np.ndarray,
+    target: np.ndarray,
+    *,
+    compact_support: bool,
+) -> np.ndarray:
+    """Return the matrix for one-dimensional linear interpolation."""
+
+    result = np.empty((target.size, source.size), dtype=np.float64)
+    for index in range(source.size):
+        ordinate = np.zeros(source.size, dtype=np.float64)
+        ordinate[index] = 1.0
+        result[:, index] = np.interp(
+            target,
+            source,
+            ordinate,
+            left=0.0 if compact_support else ordinate[0],
+            right=0.0 if compact_support else ordinate[-1],
+        )
+    return result
+
+
+def fit_reduced_dynamics(
+    forward_density_history: np.ndarray,
+    *,
+    config: DynamicsConfig,
+    consecutive_mask: np.ndarray | None = None,
+    maturity_stride: int = 2,
+    jump_node_count: int = 7,
+) -> DynamicsFit:
+    """Fit paper-style reduced-node PCA and interpolate to the full grid."""
+
+    history = np.asarray(forward_density_history, dtype=np.float64)
+    tau = np.asarray(config.tau_grid, dtype=np.float64)
+    jump_x = np.asarray(config.jump_x_grid, dtype=np.float64)
+    verify_inp(
+        history.ndim == 3
+        and history.shape[1:] == (tau.size, jump_x.size)
+        and history.shape[0] >= 3
+        and np.all(np.isfinite(history))
+        and np.all(history >= 0.0),
+        lambda: "reduced dynamics history is incompatible with the model grid",
+    )
+    verify_inp(
+        maturity_stride > 0 and 3 <= jump_node_count < jump_x.size,
+        lambda: "invalid reduced-node PCA geometry",
+    )
+    changes = np.diff(history, axis=0)
+    if consecutive_mask is not None:
+        consecutive_mask = np.asarray(consecutive_mask, dtype=bool)
+        verify_inp(
+            consecutive_mask.shape == (changes.shape[0],),
+            lambda: "consecutive mask must have one entry per transition",
+        )
+        changes = changes[consecutive_mask]
+    verify_inp(
+        changes.shape[0] >= config.minimum_observations,
+        lambda: "too few consecutive changes for reduced-node PCA",
+    )
+    maturity_indices = np.arange(0, tau.size, maturity_stride, dtype=np.int64)
+    if maturity_indices[-1] != tau.size - 1:
+        maturity_indices = np.append(maturity_indices, tau.size - 1)
+    mean_intensity = np.mean(history[:, maturity_indices], axis=(0, 1))
+    zero_jump = int(np.argmin(np.abs(jump_x)))
+    mean_intensity[zero_jump] = -np.inf
+    jump_indices = np.sort(
+        np.argpartition(mean_intensity, -jump_node_count)[-jump_node_count:]
+    )
+    jump_map = _linear_interpolation_map(
+        jump_x[jump_indices],
+        jump_x,
+        compact_support=True,
+    )
+    jump_map[zero_jump] = 0.0
+    maturity_map = _linear_interpolation_map(
+        tau[maturity_indices],
+        tau,
+        compact_support=False,
+    )
+    reduced = changes[:, maturity_indices][:, :, jump_indices]
+    full_constraint = trapezoid_weights(jump_x) * np.expm1(jump_x)
+    reduced_constraint = full_constraint @ jump_map
+    constraint_norm = float(reduced_constraint @ reduced_constraint)
+    verify(
+        constraint_norm > 0.0,
+        lambda: "reduced jump interpolation has a degenerate RA3 functional",
+    )
+    reduced -= (
+        np.einsum("dmj,j->dm", reduced, reduced_constraint)
+        / constraint_norm
+    )[:, :, None] * reduced_constraint[None, None]
+    mean_reduced = np.mean(reduced, axis=0)
+    centered = reduced - mean_reduced
+    flat = centered.reshape(centered.shape[0], -1)
+    _, singular_values, right_vectors = np.linalg.svd(flat, full_matrices=False)
+    components = _orient_components(right_vectors)
+    eigenvalues = np.square(singular_values) / (flat.shape[0] - 1)
+    total_variance = float(np.sum(eigenvalues))
+    average_variance = total_variance / flat.shape[1]
+    shrunk = (
+        (1.0 - config.covariance_shrinkage) * eigenvalues
+        + config.covariance_shrinkage * average_variance
+    )
+    positive = eigenvalues > (
+        np.finfo(np.float64).eps * max(1.0, float(eigenvalues[0]))
+    )
+    retained = min(config.num_factors, int(np.count_nonzero(positive)))
+    verify(retained > 0, lambda: "reduced changes have no positive PCA mode")
+    reduced_modes = components[:retained].reshape(
+        retained,
+        maturity_indices.size,
+        jump_node_count,
+    )
+    reduced_beta = (
+        np.sqrt(shrunk[:retained] / config.dt)[:, None, None]
+        * reduced_modes
+    )
+    beta = np.einsum(
+        "tm,xj,fmj->ftx",
+        maturity_map,
+        jump_map,
+        reduced_beta,
+    )
+    mean_change = np.einsum(
+        "tm,xj,mj->tx",
+        maturity_map,
+        jump_map,
+        mean_reduced,
+    )
+    residual = constraint_residuals(beta, jump_x=jump_x)
+    active_mask = np.broadcast_to(
+        np.any(np.abs(jump_map) > 0.0, axis=1)[None],
+        (tau.size, jump_x.size),
+    ).copy()
+    return DynamicsFit(
+        tau=tau,
+        jump_x=jump_x,
+        beta=beta,
+        eigenvalues_one_session=shrunk[:retained],
+        explained_variance_ratio=(
+            shrunk[:retained] / total_variance
+            if total_variance > 0.0
+            else np.zeros(retained)
+        ),
+        mean_change=mean_change,
+        observations=int(changes.shape[0]),
+        maximum_constraint_residual=float(np.max(np.abs(residual))),
+        covariance_shrinkage=config.covariance_shrinkage,
+        dt=config.dt,
+        active_mask=active_mask,
+        maturity_node_indices=maturity_indices,
+        jump_node_indices=jump_indices,
     )

@@ -16,7 +16,10 @@ from quantdata.dysanos.tangent_levy.config import (
 )
 from quantdata.dysanos.tangent_levy.constraints import (
     constraint_residuals,
+    hjm_cell_drift,
+    hjm_characteristic_residual,
     hjm_drift,
+    hjm_integrated_characteristic_residual,
     project_factor_constraints,
 )
 from quantdata.dysanos.tangent_levy.double_exponential import (
@@ -27,7 +30,11 @@ from quantdata.dysanos.tangent_levy.double_exponential import (
     density,
     symmetry_index,
 )
-from quantdata.dysanos.tangent_levy.dynamics import DynamicsFit, fit_dynamics
+from quantdata.dysanos.tangent_levy.dynamics import (
+    DynamicsFit,
+    fit_dynamics,
+    fit_reduced_dynamics,
+)
 from quantdata.dysanos.tangent_levy.experiment import validate_reconstruction_gate
 from quantdata.dysanos.tangent_levy.markets import (
     MarketAudit,
@@ -49,6 +56,7 @@ from quantdata.dysanos.tangent_levy.simulator import simulate_codebooks
 from quantdata.dysanos.tangent_levy.static_fit import (
     fit_maturity,
     reconstruct_forward_density,
+    reconstruct_forward_density_positive_spline,
 )
 
 
@@ -399,6 +407,78 @@ def test_forward_density_reconstruction_honors_positive_floor_in_tails() -> None
     assert np.min(result.projected_fitted_average_density) >= 1.0e-6
 
 
+def test_reduced_node_dynamics_preserve_full_grid_ra3() -> None:
+    generator = np.random.default_rng(91)
+    tau = np.arange(7, dtype=np.float64) / 252.0
+    jump_x = np.linspace(-0.2, 0.2, 41)
+    shape = 2.0 + 8.0 * np.exp(-20.0 * np.abs(jump_x))[None, None]
+    history = np.broadcast_to(shape, (80, len(tau), len(jump_x))).copy()
+    history += 0.01 * np.cumsum(
+        generator.standard_normal(history.shape), axis=0
+    )
+    history -= np.min(history) - 0.1
+    config = DynamicsConfig(
+        tau_grid=tuple(tau),
+        jump_x_grid=tuple(jump_x),
+        num_factors=3,
+        minimum_observations=20,
+    )
+
+    fitted = fit_reduced_dynamics(
+        history,
+        config=config,
+        maturity_stride=2,
+        jump_node_count=7,
+    )
+
+    assert fitted.num_factors == 3
+    assert fitted.maturity_node_indices is not None
+    assert fitted.jump_node_indices is not None
+    assert len(fitted.jump_node_indices) == 7
+    assert len(fitted.maturity_node_indices) == 4
+    assert fitted.maximum_constraint_residual < 1.0e-12
+    assert not np.any(fitted.beta[..., len(jump_x) // 2])
+
+
+def test_positive_spline_reconstruction_recovers_smooth_forward_density() -> None:
+    fitted_tau = np.linspace(0.04, 0.5, 12)
+    target_tau = np.linspace(0.0, 0.5, 31)
+    jump_x = np.asarray((-0.1, 0.1))
+    forward = np.stack(
+        (
+            2.0 + 0.5 * target_tau + 0.2 * np.square(target_tau),
+            1.0 + 0.3 * target_tau + 0.1 * np.square(target_tau),
+        ),
+        axis=1,
+    )
+    # Analytic averages of the two quadratic forward-density curves.
+    eta = np.stack(
+        (
+            2.0 + 0.25 * fitted_tau + (0.2 / 3.0) * np.square(fitted_tau),
+            1.0 + 0.15 * fitted_tau + (0.1 / 3.0) * np.square(fitted_tau),
+        ),
+        axis=1,
+    )
+    result = reconstruct_forward_density_positive_spline(
+        fitted_tau=fitted_tau,
+        fitted_average_density=eta,
+        target_tau=target_tau,
+        jump_x=jump_x,
+        basis_count=8,
+        curvature_penalty=1.0e-8,
+        relative_tolerance=1.0e-5,
+    )
+
+    assert result.passed_tolerance
+    assert np.min(result.forward_density) >= 0.0
+    np.testing.assert_allclose(result.forward_density, forward, rtol=2.0e-4)
+    np.testing.assert_allclose(
+        result.projected_fitted_average_density,
+        eta,
+        rtol=2.0e-5,
+    )
+
+
 def test_reconstruction_gate_checks_training_and_simulation_origin() -> None:
     dates = tuple(date(2025, 1, day) for day in (2, 3, 6, 7))
     history = SimpleNamespace(
@@ -483,19 +563,72 @@ def test_hjm_zero_factors_and_simulator_replay() -> None:
     assert first.failed_path_fraction == 0.0
 
 
-def test_hjm_drift_remains_in_finite_grid_constraint_space() -> None:
+def test_hjm_drift_preserves_full_convolution_support_and_generator() -> None:
     tau = np.asarray([0.0, 0.1, 0.25, 0.5])
     jump_x = np.linspace(-0.75, 0.75, 61)
+    active = np.broadcast_to(
+        (np.abs(jump_x) <= 0.2)[None],
+        (tau.size, jump_x.size),
+    ).copy()
     beta = project_factor_constraints(
         np.random.default_rng(7).normal(size=(3, tau.size, jump_x.size)),
         jump_x=jump_x,
+        active_mask=active,
     )
-    alpha = hjm_drift(tau=tau, jump_x=jump_x, beta=beta)
+    alpha = hjm_drift(
+        tau=tau,
+        jump_x=jump_x,
+        beta=beta,
+        active_mask=active,
+    )
+    frequencies = np.linspace(-20.0, 20.0, 81)
+    residual = hjm_characteristic_residual(
+        tau=tau,
+        jump_x=jump_x,
+        beta=beta,
+        alpha=alpha,
+        frequencies=frequencies,
+    )
+
+    assert np.any(np.abs(alpha[~active]) > 1.0e-10)
     np.testing.assert_allclose(
         constraint_residuals(alpha, jump_x=jump_x),
         0.0,
         atol=2.0e-15,
     )
+    np.testing.assert_allclose(residual, 0.0, atol=2.0e-13)
+
+    masked_alpha = np.where(active, alpha, 0.0)
+    masked_residual = hjm_characteristic_residual(
+        tau=tau,
+        jump_x=jump_x,
+        beta=beta,
+        alpha=masked_alpha,
+        frequencies=frequencies,
+    )
+    assert np.max(np.abs(masked_residual)) > 1.0e-4
+
+
+def test_cell_hjm_drift_satisfies_integrated_generator_identity() -> None:
+    jump_x = np.linspace(-0.75, 0.75, 61)
+    support = np.abs(jump_x) <= 0.2
+    active = np.broadcast_to(support[None], (8, jump_x.size)).copy()
+    beta_cells = project_factor_constraints(
+        np.random.default_rng(19).normal(scale=0.01, size=(2, 8, jump_x.size)),
+        jump_x=jump_x,
+        active_mask=active,
+    )
+
+    alpha_cells = hjm_cell_drift(beta_cells, jump_x=jump_x)
+    residual = hjm_integrated_characteristic_residual(
+        beta_cells=beta_cells,
+        alpha_cells=alpha_cells,
+        jump_x=jump_x,
+        frequencies=np.linspace(-20.0, 20.0, 81),
+    )
+
+    np.testing.assert_allclose(residual, 0.0, atol=2.0e-15)
+    assert np.any(np.abs(alpha_cells[:, ~support]) > 1.0e-10)
 
 
 def test_static_and_probabilistic_metrics() -> None:

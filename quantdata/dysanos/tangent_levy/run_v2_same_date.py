@@ -22,7 +22,7 @@ from .run_v2 import _load_day, _save_day
 from .static_fit import (
     DayFit,
     fitted_average_density,
-    reconstruct_forward_density,
+    reconstruct_forward_density_positive_spline,
 )
 from .v2_audit import (
     RestrictedPopulation,
@@ -43,7 +43,7 @@ from .v2_training import (
 TARGET_DATE = date(2025, 8, 29)
 DEFAULT_OUTPUT = Path(
     "/home/hans/quantdata_data/training/dysanos/tangent-levy/v2/"
-    "spx-2025-08-29-historical-diffusion-v2"
+    "spx-2025-08-29-paper-aligned-v2"
 )
 POPULATION_CHUNK_COUNT = 8
 
@@ -132,13 +132,18 @@ def _target_quote_metrics(
         fitted_density = np.concatenate(
             (fitted_density, fitted_density[-1:]), axis=0
         )
-    calendar_projection = reconstruct_forward_density(
+    calendar_projection = reconstruct_forward_density_positive_spline(
         fitted_tau=fitted_tau,
         fitted_average_density=fitted_density,
         target_tau=tau_grid,
         jump_x=jump_x,
         relative_tolerance=config.dynamics.reconstruction_relative_tolerance,
         forward_density_floor=static_config.forward_density_floor,
+        basis_count=config.dynamics.reconstruction_basis_count,
+        curvature_penalty=config.dynamics.reconstruction_curvature_penalty,
+        relative_weight_floor=(
+            config.dynamics.reconstruction_relative_weight_floor
+        ),
     ).projected_fitted_average_density[: len(target_fit.fits)]
     books = {round(book.tau, 12): book for book in market.books}
     raw_prices = []
@@ -373,6 +378,116 @@ def calibrate_history(
     return history
 
 
+def rebuild_paper_aligned_history(
+    *,
+    output: Path,
+    static_fit_source: Path,
+    target_date: date = TARGET_DATE,
+) -> None:
+    """Reuse calibrated daily eta fits and rebuild the positive codebook chart."""
+
+    verify_source = static_fit_source.resolve()
+    if verify_source == output.resolve():
+        raise ValueError("static-fit source and rebuilt output must differ")
+    config = TangentLevyV2Config(label=f"spx-{target_date}-paper-aligned-v2")
+    tau = np.asarray(config.dynamics.maturity_grid, dtype=np.float64)
+    jump_x = np.asarray(config.dynamics.jump_grid, dtype=np.float64)
+    static_config = StaticFitConfig()
+
+    def rebuild(day_fit: DayFit) -> tuple[np.ndarray, V2ReconstructionAudit]:
+        fitted_tau = day_fit.maturities
+        fitted_density = fitted_average_density(day_fit, jump_x)
+        if fitted_tau[-1] < tau[-1]:
+            fitted_tau = np.append(fitted_tau, tau[-1])
+            fitted_density = np.concatenate(
+                (fitted_density, fitted_density[-1:]), axis=0
+            )
+        reconstruction = reconstruct_forward_density_positive_spline(
+            fitted_tau=fitted_tau,
+            fitted_average_density=fitted_density,
+            target_tau=tau,
+            jump_x=jump_x,
+            relative_tolerance=config.dynamics.reconstruction_relative_tolerance,
+            forward_density_floor=static_config.forward_density_floor,
+            basis_count=config.dynamics.reconstruction_basis_count,
+            curvature_penalty=config.dynamics.reconstruction_curvature_penalty,
+            relative_weight_floor=(
+                config.dynamics.reconstruction_relative_weight_floor
+            ),
+        )
+        return reconstruction.forward_density, V2ReconstructionAudit(
+            maximum_relative_projection=reconstruction.maximum_relative_projection,
+            relative_l1_projection=reconstruction.relative_l1_projection,
+            repricing_rmse_half_spreads=float("nan"),
+            maximum_absolute_price_error=float("nan"),
+            passed=False,
+        )
+
+    source_target = _target_checkpoint(static_fit_source, target_date)
+    target_fit, _, _ = _load_day(source_target)
+    target_market = load_market_day(target_date, config=config.market, verbose=None)
+    if target_market is None:
+        raise RuntimeError(f"missing target market {target_date}")
+    target_density, target_audit = reconstruct_v2_day(
+        target_market,
+        target_fit,
+        config=config,
+    )
+    _save_day(
+        _target_checkpoint(output, target_date),
+        target_fit,
+        target_density,
+        target_audit,
+    )
+
+    source_history = static_fit_source / "history-days"
+    destination = output / "history-days"
+    requested_dates = _training_dates(config)
+    started = time.perf_counter()
+    retained = 0
+    excluded = 0
+    for index, market_date in enumerate(requested_dates):
+        source_checkpoint = source_history / f"{market_date}.npz"
+        source_exclusion = _history_exclusion_path(source_history, market_date)
+        if source_checkpoint.exists():
+            day_fit, _, _ = _load_day(source_checkpoint)
+            density, audit = rebuild(day_fit)
+            _save_day(destination / f"{market_date}.npz", day_fit, density, audit)
+            retained += 1
+        elif source_exclusion.exists():
+            _atomic_json(
+                json.loads(source_exclusion.read_text(encoding="utf-8")),
+                _history_exclusion_path(destination, market_date),
+            )
+            excluded += 1
+        else:
+            raise RuntimeError(f"missing source static checkpoint {market_date}")
+        completed = index + 1
+        if completed % 25 == 0 or completed == len(requested_dates):
+            elapsed = time.perf_counter() - started
+            eta = elapsed * (len(requested_dates) - completed) / completed
+            print(
+                "tangent-levy paper-aligned reconstruction "
+                f"requested={completed}/{len(requested_dates)} "
+                f"retained={retained} excluded={excluded} "
+                f"elapsed={elapsed:.1f}s eta={eta:.1f}s",
+                flush=True,
+            )
+    _atomic_json(
+        {
+            "schema": "tangent-levy-v2-paper-aligned-reconstruction",
+            "target_date": str(target_date),
+            "static_fit_source": str(verify_source),
+            "requested_training_dates": len(requested_dates),
+            "retained_training_dates": retained,
+            "excluded_training_dates": excluded,
+            "historical_repricing_audit": "not recomputed; target date only",
+            "target_reconstruction": asdict(target_audit),
+        },
+        output / "reconstruction-report.json",
+    )
+
+
 def load_history(
     *,
     output: Path,
@@ -380,7 +495,7 @@ def load_history(
 ) -> tuple[V2HistoricalFit, np.ndarray, V2ReconstructionAudit]:
     """Load a completed target calibration and all required historical states."""
 
-    config = TangentLevyV2Config(label=f"spx-{target_date}-historical-diffusion-v2")
+    config = TangentLevyV2Config(label=f"spx-{target_date}-paper-aligned-v2")
     target_fit, target_density, target_audit = _load_day(
         _target_checkpoint(output, target_date)
     )
@@ -418,8 +533,8 @@ def load_history(
 def fit_measures(*, output: Path, target_date: date = TARGET_DATE) -> None:
     """Estimate target-local Q factors and the historical P risk premium."""
 
-    config = TangentLevyV2Config(label=f"spx-{target_date}-historical-diffusion-v2")
-    history, target_density, _ = load_history(
+    config = TangentLevyV2Config(label=f"spx-{target_date}-paper-aligned-v2")
+    history, _, _ = load_history(
         output=output,
         target_date=target_date,
     )
@@ -427,7 +542,6 @@ def fit_measures(*, output: Path, target_date: date = TARGET_DATE) -> None:
         history,
         config=config,
         require_reconstruction_pass=False,
-        reference_density=target_density,
     )
     dynamics = measures.q_dynamics
     physical = measures.p_market_price_of_risk
@@ -447,6 +561,8 @@ def fit_measures(*, output: Path, target_date: date = TARGET_DATE) -> None:
         covariance_shrinkage=dynamics.covariance_shrinkage,
         dt=dynamics.dt,
         active_mask=dynamics.active_mask,
+        maturity_node_indices=dynamics.maturity_node_indices,
+        jump_node_indices=dynamics.jump_node_indices,
         p_theta=physical.theta,
         p_ridge=physical.ridge,
         p_residual_rmse=physical.residual_rmse,
@@ -505,6 +621,16 @@ def _load_dynamics(path: Path) -> DynamicsFit:
             covariance_shrinkage=float(payload["covariance_shrinkage"].item()),
             dt=float(payload["dt"].item()),
             active_mask=np.asarray(payload["active_mask"], dtype=bool),
+            maturity_node_indices=(
+                np.asarray(payload["maturity_node_indices"], dtype=np.int64)
+                if "maturity_node_indices" in payload
+                else None
+            ),
+            jump_node_indices=(
+                np.asarray(payload["jump_node_indices"], dtype=np.int64)
+                if "jump_node_indices" in payload
+                else None
+            ),
         )
 
 
@@ -764,6 +890,7 @@ def main() -> None:
     parser.add_argument(
         "stage",
         choices=(
+            "reconstruction",
             "calibration",
             "measures",
             "population",
@@ -773,13 +900,22 @@ def main() -> None:
         ),
     )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--static-fit-source", type=Path)
     parser.add_argument("--target-date", type=date.fromisoformat, default=TARGET_DATE)
     parser.add_argument("--objective", choices=("squared", "entropy"))
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--chunk-index", type=int)
     parser.add_argument("--chunk-count", type=int, default=POPULATION_CHUNK_COUNT)
     arguments = parser.parse_args()
-    if arguments.stage == "calibration":
+    if arguments.stage == "reconstruction":
+        if arguments.static_fit_source is None:
+            parser.error("reconstruction stage requires --static-fit-source")
+        rebuild_paper_aligned_history(
+            output=arguments.output,
+            static_fit_source=arguments.static_fit_source,
+            target_date=arguments.target_date,
+        )
+    elif arguments.stage == "calibration":
         calibrate_history(output=arguments.output, target_date=arguments.target_date)
     elif arguments.stage == "measures":
         fit_measures(output=arguments.output, target_date=arguments.target_date)
