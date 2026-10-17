@@ -22,6 +22,7 @@ from quantdata.gromm2.factor_law import (
     FactorLawDataset,
     FactorLawFit,
     _bounded_spot_correlations,
+    _gru_forward,
     _lstm_forward,
     _mamba_forward,
     _q_point_spot_correlated_negative_log_likelihood,
@@ -37,12 +38,14 @@ MODEL_NAMES = (
     "ar1",
     "lstm",
     "mamba",
+    "gru",
     "lstm_corr",
     "mamba_corr",
+    "gru_corr",
 )
 
 
-@version("0.2")
+@version("0.3")
 @dataclass(frozen=True, kw_only=True)
 class FactorLawEvaluationConfig:
     """Controls for rolling-origin fitting and paired block inference."""
@@ -176,12 +179,25 @@ def _predict(
 
     parameters = {name: jnp.asarray(value) for name, value in fit.parameters.items()}
     base_architecture = fit.architecture.removesuffix("_corr")
-    forward = _lstm_forward if base_architecture == "lstm" else _mamba_forward
-    outputs, _ = forward(
-        parameters,
-        jnp.asarray(data.inputs),
-        jnp.asarray(data.reset),
-    )
+    if base_architecture == "lstm":
+        outputs, _ = _lstm_forward(
+            parameters,
+            jnp.asarray(data.inputs),
+            jnp.asarray(data.reset),
+        )
+    elif base_architecture == "mamba":
+        outputs, _ = _mamba_forward(
+            parameters,
+            jnp.asarray(data.inputs),
+            jnp.asarray(data.reset),
+        )
+    else:
+        outputs, _ = _gru_forward(
+            parameters,
+            jnp.asarray(data.inputs),
+            jnp.asarray(data.reset),
+            step_year_fraction=config.recurrent_step_year_fraction,
+        )
     outputs_array = np.asarray(outputs)
     drift = (
         data.risk_price_mean
@@ -215,6 +231,7 @@ def _fit_models(
         fit_ar1_factor_law(data, config=config),
         fit_recurrent_factor_law(data, architecture="lstm", config=config),
         fit_recurrent_factor_law(data, architecture="mamba", config=config),
+        fit_recurrent_factor_law(data, architecture="gru", config=config),
         fit_recurrent_factor_law(
             data,
             architecture="lstm",
@@ -224,6 +241,12 @@ def _fit_models(
         fit_recurrent_factor_law(
             data,
             architecture="mamba",
+            config=config,
+            learn_spot_correlation=True,
+        ),
+        fit_recurrent_factor_law(
+            data,
+            architecture="gru",
             config=config,
             learn_spot_correlation=True,
         ),
@@ -448,6 +471,7 @@ def evaluate_factor_laws(
             for diagonal, correlated in (
                 ("lstm", "lstm_corr"),
                 ("mamba", "mamba_corr"),
+                ("gru", "gru_corr"),
             )
         },
     }

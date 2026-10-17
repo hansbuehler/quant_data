@@ -29,6 +29,21 @@ _CAP_BARRIER_LOG_STD = 0.35
 
 
 @dataclass(frozen=True, kw_only=True)
+class CallKernelSpecification:
+    """Static or date-varying call kernels used by the DLV decoder."""
+
+    kernels: FloatArray
+    identity: str
+    metadata: str
+    lower_indices: NDArray[np.int32] | None = None
+    interpolation_weights: FloatArray | None = None
+
+    @property
+    def is_date_varying(self) -> bool:
+        return self.lower_indices is not None
+
+
+@dataclass(frozen=True, kw_only=True)
 class DlvCalibrationConfig:
     """Controls matching the retained DYSANOS affine JAX fit."""
 
@@ -107,6 +122,169 @@ def _black_call_kernels(
     d1 += 0.5 * total_volatility[:, None, None]
     d2 = d1 - total_volatility[:, None, None]
     return supports[:, None, :] * ndtr(d1) - strikes[:, :, None] * ndtr(d2)
+
+
+def _load_call_kernel_specification(
+    path: Path,
+    *,
+    dates: NDArray[np.str_],
+    expected_shape: tuple[int, int, int],
+) -> CallKernelSpecification:
+    """Load a static v1 or interpolated date-varying v2 kernel bundle."""
+    with np.load(path, allow_pickle=False) as values:
+        schema = str(values["schema"].item())
+        identity = str(values["identity"].item())
+        metadata = str(values["metadata"].item())
+        kernels = np.asarray(values["call_kernels"], dtype=np.float32)
+        if schema == "gromm2-call-kernels-v1":
+            if kernels.shape != expected_shape:
+                raise ValueError(
+                    f"call kernels have shape {kernels.shape}, expected {expected_shape}"
+                )
+            lower_indices = None
+            interpolation_weights = None
+        elif schema == "gromm2-call-kernels-v2":
+            if kernels.ndim != 4 or kernels.shape[1:] != expected_shape:
+                raise ValueError(
+                    "call-kernel grid has shape "
+                    f"{kernels.shape}, expected (G,{expected_shape[0]},"
+                    f"{expected_shape[1]},{expected_shape[2]})"
+                )
+            variance_grid = np.asarray(values["variance_grid"], dtype=np.float64)
+            date_variances = np.asarray(values["date_variances"], dtype=np.float64)
+            kernel_dates = np.asarray(values["dates"]).astype("U10")
+            if (
+                variance_grid.shape != (len(kernels),)
+                or len(variance_grid) < 2
+                or np.any(~np.isfinite(variance_grid))
+                or np.any(variance_grid <= 0.0)
+                or np.any(np.diff(variance_grid) <= 0.0)
+            ):
+                raise ValueError("invalid call-kernel variance grid")
+            if len(kernel_dates) < len(dates) or not np.array_equal(
+                kernel_dates[: len(dates)], dates
+            ):
+                raise ValueError("call-kernel dates do not match calibration dates")
+            date_variances = date_variances[: len(dates)]
+            if (
+                date_variances.shape != (len(dates),)
+                or np.any(~np.isfinite(date_variances))
+                or np.any(date_variances < variance_grid[0])
+                or np.any(date_variances > variance_grid[-1])
+            ):
+                raise ValueError("date variances fall outside the call-kernel grid")
+            lower_indices = np.searchsorted(
+                variance_grid, date_variances, side="right"
+            ) - 1
+            lower_indices = np.clip(lower_indices, 0, len(variance_grid) - 2)
+            lower_variance = variance_grid[lower_indices]
+            upper_variance = variance_grid[lower_indices + 1]
+            interpolation_weights = (
+                (date_variances - lower_variance)
+                / (upper_variance - lower_variance)
+            )
+            lower_indices = lower_indices.astype(np.int32)
+        else:
+            raise ValueError(f"unexpected call-kernel schema in {path}")
+    if np.any(~np.isfinite(kernels)):
+        raise ValueError("call kernels contain non-finite values")
+    return CallKernelSpecification(
+        kernels=kernels,
+        identity=identity,
+        metadata=metadata,
+        lower_indices=lower_indices,
+        interpolation_weights=interpolation_weights,
+    )
+
+
+def _price_call_kernels(
+    kernels: jax.Array,
+    densities: jax.Array,
+    *,
+    lower_indices: jax.Array | None,
+    interpolation_weights: jax.Array | None,
+) -> jax.Array:
+    """Price densities with static kernels or streamed variance interpolation."""
+    kernels = jnp.asarray(kernels)
+    densities = jnp.asarray(densities)
+    if lower_indices is None:
+        return jnp.einsum("jkn,djn->djk", kernels, densities)
+    assert interpolation_weights is not None
+    lower_indices = jnp.asarray(lower_indices)
+    interpolation_weights = jnp.asarray(interpolation_weights)
+
+    return _price_interpolated_call_kernels(
+        kernels,
+        densities,
+        lower_indices,
+        interpolation_weights,
+    )
+
+
+def _price_interpolated_call_kernels_impl(
+    kernels: jax.Array,
+    densities: jax.Array,
+    lower_indices: jax.Array,
+    interpolation_weights: jax.Array,
+) -> jax.Array:
+    """Price with date-varying kernels without materializing date kernels."""
+
+    def price_date(arguments: tuple[jax.Array, jax.Array, jax.Array]) -> jax.Array:
+        density, lower_index, weight = arguments
+        lower_calls = jnp.einsum("jkn,jn->jk", kernels[lower_index], density)
+        upper_calls = jnp.einsum("jkn,jn->jk", kernels[lower_index + 1], density)
+        return lower_calls + weight * (upper_calls - lower_calls)
+
+    return jax.lax.map(
+        price_date,
+        (densities, lower_indices, interpolation_weights),
+    )
+
+
+def _price_interpolated_call_kernels_forward(
+    kernels: jax.Array,
+    densities: jax.Array,
+    lower_indices: jax.Array,
+    interpolation_weights: jax.Array,
+) -> tuple[jax.Array, tuple[jax.Array, jax.Array, jax.Array]]:
+    calls = _price_interpolated_call_kernels_impl(
+        kernels,
+        densities,
+        lower_indices,
+        interpolation_weights,
+    )
+    return calls, (kernels, lower_indices, interpolation_weights)
+
+
+def _price_interpolated_call_kernels_backward(
+    residuals: tuple[jax.Array, jax.Array, jax.Array],
+    call_cotangents: jax.Array,
+) -> tuple[None, jax.Array, None, None]:
+    kernels, lower_indices, interpolation_weights = residuals
+
+    def density_gradient(
+        arguments: tuple[jax.Array, jax.Array, jax.Array],
+    ) -> jax.Array:
+        lower_index, weight, call_cotangent = arguments
+        kernel = kernels[lower_index] + weight * (
+            kernels[lower_index + 1] - kernels[lower_index]
+        )
+        return jnp.einsum("jk,jkn->jn", call_cotangent, kernel)
+
+    density_cotangents = jax.lax.map(
+        density_gradient,
+        (lower_indices, interpolation_weights, call_cotangents),
+    )
+    return None, density_cotangents, None, None
+
+
+_price_interpolated_call_kernels = jax.custom_vjp(
+    _price_interpolated_call_kernels_impl
+)
+_price_interpolated_call_kernels.defvjp(
+    _price_interpolated_call_kernels_forward,
+    _price_interpolated_call_kernels_backward,
+)
 
 
 def _unique_curve(x: FloatArray, y: FloatArray) -> tuple[FloatArray, FloatArray]:
@@ -361,24 +539,55 @@ def _initial_parameters(
     return {"mean": mean, "codes": codes, "loadings": loadings}
 
 
+def _load_warm_start_parameters(
+    path: Path,
+    *,
+    expected_shapes: dict[str, tuple[int, ...]],
+) -> tuple[dict[str, FloatArray], str]:
+    with np.load(path, allow_pickle=False) as values:
+        if str(values["schema"].item()) != "gromm2-affine-jax-checkpoint-v1":
+            raise ValueError(f"unexpected warm-start checkpoint schema in {path}")
+        parameters = {
+            name: np.asarray(values[f"parameter_{name}"], dtype=np.float32)
+            for name in ("mean", "codes", "loadings")
+        }
+        source_identity = str(values["identity"].item())
+        completed_epochs = int(values["completed_epochs"])
+    for name, expected_shape in expected_shapes.items():
+        actual_shape = parameters[name].shape
+        if actual_shape != expected_shape:
+            raise ValueError(
+                f"warm-start {name} shape {actual_shape} does not match "
+                f"expected {expected_shape}"
+            )
+        if not np.all(np.isfinite(parameters[name])):
+            raise ValueError(f"warm-start {name} contains non-finite values")
+    identity = f"{source_identity}:completed-epochs={completed_epochs}"
+    return parameters, identity
+
+
 def _raw_states(parameters: dict[str, jax.Array]) -> jax.Array:
     return parameters["mean"][None] + jnp.einsum(
         "dr,rjn->djn", parameters["codes"], parameters["loadings"]
     )
 
 
-def _checkpoint_identity(config: DlvCalibrationConfig) -> str:
-    return json.dumps(
-        {
-            "rank": config.rank,
-            "minimum_dlvsq": config.minimum_dlvsq,
-            "maximum_dlvsq": config.maximum_dlvsq,
-            "backbone_annual_volatility": config.backbone_annual_volatility,
-            "fit_weight": config.fit_weight,
-            "cap_penalty_weight": config.cap_penalty_weight,
-        },
-        sort_keys=True,
-    )
+def _checkpoint_identity(
+    config: DlvCalibrationConfig,
+    *,
+    data_identity: str = "black-default",
+) -> str:
+    identity = {
+        "rank": config.rank,
+        "minimum_dlvsq": config.minimum_dlvsq,
+        "maximum_dlvsq": config.maximum_dlvsq,
+        "backbone_annual_volatility": config.backbone_annual_volatility,
+        "fit_weight": config.fit_weight,
+        "cap_penalty_weight": config.cap_penalty_weight,
+    }
+    if data_identity != "black-default":
+        identity["data_identity"] = data_identity
+    return json.dumps(identity, sort_keys=True)
 
 
 def _save_checkpoint(
@@ -390,11 +599,14 @@ def _save_checkpoint(
     step: jax.Array,
     completed_epochs: int,
     config: DlvCalibrationConfig,
+    data_identity: str = "black-default",
 ) -> None:
     payload: dict[str, np.ndarray] = {
         "schema": np.asarray("gromm2-affine-jax-checkpoint-v1"),
         "config": np.asarray(json.dumps(asdict(config), sort_keys=True)),
-        "identity": np.asarray(_checkpoint_identity(config)),
+        "identity": np.asarray(
+            _checkpoint_identity(config, data_identity=data_identity)
+        ),
         "completed_epochs": np.asarray(completed_epochs, dtype=np.int32),
         "step": np.asarray(step),
     }
@@ -412,6 +624,7 @@ def _load_checkpoint(
     path: Path,
     *,
     config: DlvCalibrationConfig,
+    data_identity: str = "black-default",
 ) -> tuple[
     dict[str, np.ndarray],
     dict[str, np.ndarray],
@@ -422,7 +635,10 @@ def _load_checkpoint(
     with np.load(path, allow_pickle=False) as values:
         if str(values["schema"].item()) != "gromm2-affine-jax-checkpoint-v1":
             raise ValueError(f"unexpected checkpoint schema in {path}")
-        if str(values["identity"].item()) != _checkpoint_identity(config):
+        if str(values["identity"].item()) != _checkpoint_identity(
+            config,
+            data_identity=data_identity,
+        ):
             raise ValueError("checkpoint model identity does not match")
         parameters = {
             name: np.asarray(values[f"parameter_{name}"])
@@ -451,6 +667,9 @@ def fit_affine_history(
     output: Path,
     checkpoint: Path,
     config: DlvCalibrationConfig,
+    call_kernels: Path | None = None,
+    end_date_exclusive: str | None = None,
+    warm_start_checkpoint: Path | None = None,
 ) -> None:
     """Fit the affine DLV history with the DYSANOS bid--ask objective."""
     if jax.default_backend() not in {"cuda", "gpu"}:
@@ -474,15 +693,80 @@ def fit_affine_history(
         geometry_config = str(stream.attrs["geometry_config"])
         source_history = str(stream.attrs["source_history"])
         source_dataset = str(stream.attrs["source_dataset"])
+    decoded_dates = dates.astype("U10")
+    if end_date_exclusive is not None:
+        retained = decoded_dates < end_date_exclusive
+        retained_count = int(np.count_nonzero(retained))
+        expected = np.arange(len(dates)) < retained_count
+        if retained_count == 0 or retained_count == len(dates):
+            raise ValueError(
+                "end_date_exclusive must retain a non-empty strict prefix"
+            )
+        if not np.array_equal(retained, expected):
+            raise ValueError("end_date_exclusive must define a chronological prefix")
+        dates = dates[retained]
+        decoded_dates = decoded_dates[retained]
+        mids = mids[retained]
+        half_spreads = half_spreads[retained]
+        mask = mask[retained]
+        raw_initial = raw_initial[retained]
+        terminal_dte = terminal_dte[retained]
+        terminal_extrapolated = terminal_extrapolated[retained]
     if config.rank >= len(dates):
         raise ValueError("affine rank must be smaller than the number of dates")
     intervals = np.diff(expiries_y, prepend=np.float32(0.0))
-    kernels = _black_call_kernels(
-        supports.astype(np.float64),
-        strikes.astype(np.float64),
-        expiries_y.astype(np.float64),
-        annual_volatility=config.backbone_annual_volatility,
-    ).astype(np.float32)
+    if call_kernels is None:
+        kernels = _black_call_kernels(
+            supports.astype(np.float64),
+            strikes.astype(np.float64),
+            expiries_y.astype(np.float64),
+            annual_volatility=config.backbone_annual_volatility,
+        ).astype(np.float32)
+        kernel_identity = (
+            f"black-annual-volatility={config.backbone_annual_volatility:.17g}"
+        )
+        kernel_metadata = json.dumps(
+            {
+                "model": "Black",
+                "annual_volatility": config.backbone_annual_volatility,
+            },
+            sort_keys=True,
+        )
+        lower_indices = None
+        interpolation_weights = None
+    else:
+        expected_shape = (len(expiries_y), strikes.shape[1], supports.shape[1])
+        specification = _load_call_kernel_specification(
+            call_kernels,
+            dates=decoded_dates,
+            expected_shape=expected_shape,
+        )
+        kernels = specification.kernels
+        kernel_identity = specification.identity
+        kernel_metadata = specification.metadata
+        lower_indices = specification.lower_indices
+        interpolation_weights = specification.interpolation_weights
+    warm_start_parameters = None
+    warm_start_identity = "none"
+    if warm_start_checkpoint is not None:
+        warm_start_parameters, warm_start_identity = _load_warm_start_parameters(
+            warm_start_checkpoint,
+            expected_shapes={
+                "mean": raw_initial.shape[1:],
+                "codes": (len(raw_initial), config.rank),
+                "loadings": (config.rank, *raw_initial.shape[1:]),
+            },
+        )
+    data_identity = json.dumps(
+        {
+            "kernel": kernel_identity,
+            "first_date": str(decoded_dates[0]),
+            "last_date": str(decoded_dates[-1]),
+            "date_count": len(decoded_dates),
+            "warm_start": warm_start_identity,
+        },
+        sort_keys=True,
+    )
     is_call = strikes >= 1.0
     arrays = {
         "supports": jax.device_put(jnp.asarray(supports)),
@@ -495,6 +779,11 @@ def fit_affine_history(
         "half_spreads": jax.device_put(jnp.asarray(half_spreads)),
         "mask": jax.device_put(jnp.asarray(mask)),
     }
+    if lower_indices is not None:
+        arrays["kernel_lower_indices"] = jax.device_put(jnp.asarray(lower_indices))
+        arrays["kernel_interpolation_weights"] = jax.device_put(
+            jnp.asarray(interpolation_weights, dtype=jnp.float32)
+        )
     maximum_raw = math.log(config.maximum_dlvsq - config.minimum_dlvsq)
 
     def decode(parameters: dict[str, jax.Array]) -> tuple[jax.Array, jax.Array]:
@@ -503,7 +792,12 @@ def fit_affine_history(
         densities = decode_density_tower(
             arrays["supports"], arrays["transports"], dlvsq, arrays["intervals"]
         )
-        calls = jnp.einsum("jkn,djn->djk", arrays["kernels"], densities)
+        calls = _price_call_kernels(
+            arrays["kernels"],
+            densities,
+            lower_indices=arrays.get("kernel_lower_indices"),
+            interpolation_weights=arrays.get("kernel_interpolation_weights"),
+        )
         prices = jnp.where(
             arrays["is_call"][None],
             calls,
@@ -581,11 +875,17 @@ def fit_affine_history(
 
     if checkpoint.exists():
         parameters_cpu, first_cpu, second_cpu, step_cpu, completed_epochs = (
-            _load_checkpoint(checkpoint, config=config)
+            _load_checkpoint(
+                checkpoint,
+                config=config,
+                data_identity=data_identity,
+            )
         )
     else:
-        parameters_cpu = _initial_parameters(
-            raw_initial, rank=config.rank, seed=config.seed
+        parameters_cpu = (
+            warm_start_parameters
+            if warm_start_parameters is not None
+            else _initial_parameters(raw_initial, rank=config.rank, seed=config.seed)
         )
         first_cpu = jax.tree.map(np.zeros_like, parameters_cpu)
         second_cpu = jax.tree.map(np.zeros_like, parameters_cpu)
@@ -623,6 +923,7 @@ def fit_affine_history(
                 step=step,
                 completed_epochs=epoch,
                 config=config,
+                data_identity=data_identity,
             )
         if epoch == 1 or epoch % config.report_every == 0 or epoch == config.epochs:
             elapsed = perf_counter() - started
@@ -652,6 +953,11 @@ def fit_affine_history(
             stream.attrs["geometry_config"] = geometry_config
             stream.attrs["source_history"] = source_history
             stream.attrs["source_dataset"] = source_dataset
+            stream.attrs["call_kernel_identity"] = kernel_identity
+            stream.attrs["call_kernel_metadata"] = kernel_metadata
+            stream.attrs["warm_start_identity"] = warm_start_identity
+            if end_date_exclusive is not None:
+                stream.attrs["end_date_exclusive"] = end_date_exclusive
             stream.attrs["percent_inside_spread"] = float(
                 100.0 * np.mean(excess == 0.0)
             )
@@ -705,6 +1011,9 @@ def main() -> None:
     fit.add_argument("--epochs", type=int, default=1_000)
     fit.add_argument("--learning-rate", type=float, default=0.01)
     fit.add_argument("--checkpoint-every", type=int, default=10)
+    fit.add_argument("--call-kernels", type=Path)
+    fit.add_argument("--end-date-exclusive")
+    fit.add_argument("--warm-start-checkpoint", type=Path)
     arguments = parser.parse_args()
     if arguments.command == "prepare":
         prepare_synthetic_books(
@@ -723,6 +1032,9 @@ def main() -> None:
                 learning_rate=arguments.learning_rate,
                 checkpoint_every=arguments.checkpoint_every,
             ),
+            call_kernels=arguments.call_kernels,
+            end_date_exclusive=arguments.end_date_exclusive,
+            warm_start_checkpoint=arguments.warm_start_checkpoint,
         )
 
 

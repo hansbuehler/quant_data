@@ -29,12 +29,14 @@ Architecture = Literal[
     "ar1",
     "lstm",
     "mamba",
+    "gru",
     "lstm_corr",
     "mamba_corr",
+    "gru_corr",
 ]
 
 
-@version("0.2")
+@version("0.3")
 @dataclass(frozen=True, kw_only=True)
 class FactorLawConfig:
     """Configuration shared by every conditional factor-law estimate."""
@@ -50,6 +52,8 @@ class FactorLawConfig:
     drift_loss_weight: float = 1.0
     ridge: float = 1.0e-3
     squared_score_floor: float = 0.05**2
+    recurrent_step_year_fraction: float = 1.0 / 252.0
+    gru_initial_annual_decay: float = 25.0
     seed: int = 20261013
     progress_every: int = 100
 
@@ -89,6 +93,14 @@ class FactorLawConfig:
         verify_inp(
             self.squared_score_floor > 0.0,
             lambda: "squared_score_floor must be positive",
+        )
+        verify_inp(
+            self.recurrent_step_year_fraction > 0.0,
+            lambda: "recurrent_step_year_fraction must be positive",
+        )
+        verify_inp(
+            self.gru_initial_annual_decay > 0.0,
+            lambda: "gru_initial_annual_decay must be positive",
         )
         verify_inp(
             self.progress_every > 0,
@@ -556,14 +568,59 @@ def _lstm_forward(
     return outputs, terminal
 
 
+def _gru_forward(
+    parameters: dict[str, jax.Array],
+    inputs: jax.Array,
+    reset: jax.Array,
+    *,
+    step_year_fraction: float,
+) -> tuple[jax.Array, tuple[jax.Array, ...]]:
+    """Continuous-time GRU with exponential retention over one time step."""
+    hidden_size = parameters["decay_bias"].shape[0]
+
+    def step(
+        hidden: jax.Array,
+        current: tuple[jax.Array, jax.Array],
+    ) -> tuple[jax.Array, jax.Array]:
+        values, current_reset = current
+        hidden = jnp.where(current_reset, jnp.zeros_like(hidden), hidden)
+        annual_decay = jax.nn.softplus(
+            values @ parameters["decay_input_weight"]
+            + hidden @ parameters["decay_hidden_weight"]
+            + parameters["decay_bias"]
+        )
+        retention = jnp.exp(-annual_decay * step_year_fraction)
+        reset_gate = jax.nn.sigmoid(
+            values @ parameters["reset_input_weight"]
+            + hidden @ parameters["reset_hidden_weight"]
+            + parameters["reset_bias"]
+        )
+        candidate = jnp.tanh(
+            values @ parameters["candidate_input_weight"]
+            + (reset_gate * hidden) @ parameters["candidate_hidden_weight"]
+            + parameters["candidate_bias"]
+        )
+        hidden = retention * hidden + (1.0 - retention) * candidate
+        output = hidden @ parameters["output_weight"] + parameters["output_bias"]
+        return hidden, output
+
+    terminal, outputs = jax.lax.scan(
+        step,
+        jnp.zeros((hidden_size,), dtype=inputs.dtype),
+        (inputs, reset),
+    )
+    return outputs, (terminal,)
+
+
 def _initial_recurrent_parameters(
     *,
-    architecture: Literal["lstm", "mamba"],
+    architecture: Literal["lstm", "mamba", "gru"],
     input_size: int,
     hidden_size: int,
     factor_count: int,
     learn_spot_correlation: bool,
     seed: int,
+    gru_initial_annual_decay: float,
 ) -> dict[str, FloatArray]:
     generator = np.random.default_rng(seed)
     correlation_count = factor_count - 1 if learn_spot_correlation else 0
@@ -580,6 +637,38 @@ def _initial_recurrent_parameters(
             "candidate_weight": generator.normal(
                 scale=0.10 / math.sqrt(input_size),
                 size=(input_size, hidden_size),
+            ),
+            "candidate_bias": np.zeros((hidden_size,)),
+            "output_weight": output_weight,
+            "output_bias": output_bias,
+        }
+    if architecture == "gru":
+        return {
+            "decay_input_weight": generator.normal(
+                scale=0.03 / math.sqrt(input_size),
+                size=(input_size, hidden_size),
+            ),
+            "decay_hidden_weight": generator.normal(
+                scale=0.03 / math.sqrt(hidden_size),
+                size=(hidden_size, hidden_size),
+            ),
+            "decay_bias": np.full((hidden_size,), gru_initial_annual_decay),
+            "reset_input_weight": generator.normal(
+                scale=0.10 / math.sqrt(input_size),
+                size=(input_size, hidden_size),
+            ),
+            "reset_hidden_weight": generator.normal(
+                scale=0.10 / math.sqrt(hidden_size),
+                size=(hidden_size, hidden_size),
+            ),
+            "reset_bias": np.zeros((hidden_size,)),
+            "candidate_input_weight": generator.normal(
+                scale=0.10 / math.sqrt(input_size),
+                size=(input_size, hidden_size),
+            ),
+            "candidate_hidden_weight": generator.normal(
+                scale=0.10 / math.sqrt(hidden_size),
+                size=(hidden_size, hidden_size),
             ),
             "candidate_bias": np.zeros((hidden_size,)),
             "output_weight": output_weight,
@@ -662,7 +751,7 @@ def _split_recurrent_outputs(
 def fit_recurrent_factor_law(
     data: FactorLawDataset,
     *,
-    architecture: Literal["lstm", "mamba"],
+    architecture: Literal["lstm", "mamba", "gru"],
     config: FactorLawConfig,
     learn_spot_correlation: bool = False,
 ) -> FactorLawFit:
@@ -681,9 +770,10 @@ def fit_recurrent_factor_law(
         learn_spot_correlation=learn_spot_correlation,
         seed=(
             config.seed
-            + (0 if architecture == "lstm" else 1)
+            + {"lstm": 0, "mamba": 1, "gru": 4}[architecture]
             + (2 if learn_spot_correlation else 0)
         ),
+        gru_initial_annual_decay=config.gru_initial_annual_decay,
     )
     parameters_jax = jax.tree.map(jnp.asarray, parameters)
     inputs = jnp.asarray(data.inputs)
@@ -695,7 +785,17 @@ def fit_recurrent_factor_law(
         / data.risk_price_scale
     )
     split = data.train_count
-    forward = _lstm_forward if architecture == "lstm" else _mamba_forward
+    if architecture == "lstm":
+        forward = _lstm_forward
+    elif architecture == "mamba":
+        forward = _mamba_forward
+    else:
+        forward = lambda parameters, values, current_reset: _gru_forward(
+            parameters,
+            values,
+            current_reset,
+            step_year_fraction=config.recurrent_step_year_fraction,
+        )
 
     def losses(current: dict[str, jax.Array]) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
         outputs, _ = forward(current, inputs, reset)
@@ -836,9 +936,10 @@ def fit_recurrent_factor_law(
             learn_spot_correlation=learn_spot_correlation,
             seed=(
                 config.seed
-                + (0 if architecture == "lstm" else 1)
+                + {"lstm": 0, "mamba": 1, "gru": 4}[architecture]
                 + (2 if learn_spot_correlation else 0)
             ),
+            gru_initial_annual_decay=config.gru_initial_annual_decay,
         ),
     )
     production_optimizer_state = optimizer.init(production_parameters)
@@ -928,7 +1029,7 @@ def estimate_factor_laws(
     output: Path,
     config: FactorLawConfig = FactorLawConfig(),
 ) -> dict[str, Any]:
-    """Fit and serialize fixed, AR(1), LSTM and selective-SSM factor laws."""
+    """Fit and serialize fixed, AR(1), LSTM, Mamba and GRU factor laws."""
     data = build_factor_law_dataset(
         base_estimate=base_estimate,
         history_path=history_path,
@@ -940,6 +1041,7 @@ def estimate_factor_laws(
         fit_ar1_factor_law(data, config=config),
         fit_recurrent_factor_law(data, architecture="lstm", config=config),
         fit_recurrent_factor_law(data, architecture="mamba", config=config),
+        fit_recurrent_factor_law(data, architecture="gru", config=config),
     )
     arrays: dict[str, np.ndarray] = {
         "schema": np.asarray("gromm2-factor-laws-v1"),
@@ -986,6 +1088,7 @@ def estimate_factor_laws(
                 "equivalent market price of risk is coefficient/s"
             ),
             "mamba": "bounded selective state-space recurrence",
+            "gru": "reset-gated candidate with exponential continuous-time retention",
         },
         "models": {fit.architecture: _fit_report(fit) for fit in fits},
     }

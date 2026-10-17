@@ -39,12 +39,148 @@ def _sanos_diagonals(support: Array, dlvsq_dt: Array) -> tuple[Array, Array, Arr
     return lower, diagonal, upper
 
 
+def _solve_tridiagonal_thomas(
+    lower: Array,
+    diagonal: Array,
+    upper: Array,
+    right_hand_side: Array,
+) -> Array:
+    """Solve batched tridiagonal systems without a device-specific kernel."""
+    lower_rows = jnp.moveaxis(lower, -1, 0)
+    diagonal_rows = jnp.moveaxis(diagonal, -1, 0)
+    upper_rows = jnp.moveaxis(upper, -1, 0)
+    right_hand_side_rows = jnp.moveaxis(right_hand_side, -2, 0)
+
+    first_denominator = diagonal_rows[0]
+    first_upper = upper_rows[0] / first_denominator
+    first_right_hand_side = (
+        right_hand_side_rows[0] / first_denominator[..., None]
+    )
+
+    def forward_step(
+        carry: tuple[Array, Array],
+        inputs: tuple[Array, Array, Array, Array],
+    ) -> tuple[tuple[Array, Array], tuple[Array, Array]]:
+        previous_upper, previous_right_hand_side = carry
+        current_lower, current_diagonal, current_upper, current_right_hand_side = inputs
+        denominator = current_diagonal - current_lower * previous_upper
+        normalized_upper = current_upper / denominator
+        normalized_right_hand_side = (
+            current_right_hand_side
+            - current_lower[..., None] * previous_right_hand_side
+        ) / denominator[..., None]
+        next_carry = normalized_upper, normalized_right_hand_side
+        return next_carry, next_carry
+
+    _, (remaining_upper, remaining_right_hand_side) = jax.lax.scan(
+        forward_step,
+        (first_upper, first_right_hand_side),
+        (
+            lower_rows[1:],
+            diagonal_rows[1:],
+            upper_rows[1:],
+            right_hand_side_rows[1:],
+        ),
+    )
+    normalized_upper = jnp.concatenate(
+        (first_upper[None], remaining_upper), axis=0
+    )
+    normalized_right_hand_side = jnp.concatenate(
+        (first_right_hand_side[None], remaining_right_hand_side), axis=0
+    )
+
+    def backward_step(
+        next_value: Array,
+        inputs: tuple[Array, Array],
+    ) -> tuple[Array, Array]:
+        current_upper, current_right_hand_side = inputs
+        current_value = (
+            current_right_hand_side - current_upper[..., None] * next_value
+        )
+        return current_value, current_value
+
+    last_value = normalized_right_hand_side[-1]
+    _, reversed_values = jax.lax.scan(
+        backward_step,
+        last_value,
+        (
+            normalized_upper[:-1][::-1],
+            normalized_right_hand_side[:-1][::-1],
+        ),
+    )
+    values = jnp.concatenate(
+        (reversed_values[::-1], last_value[None]), axis=0
+    )
+    return jnp.moveaxis(values, 0, -2)
+
+
+def _solve_sanos_symmetrized(
+    lower: Array,
+    diagonal: Array,
+    upper: Array,
+    right_hand_side: Array,
+) -> Array:
+    """Solve the SANOS system through its symmetric positive interior block."""
+    interior_lower = lower[..., 2:-1]
+    interior_upper = upper[..., 1:-2]
+    log_scale_increments = 0.5 * (
+        jnp.log(-interior_lower) - jnp.log(-interior_upper)
+    )
+    log_scale = jnp.concatenate(
+        (
+            jnp.zeros_like(diagonal[..., 1:2]),
+            jnp.cumsum(log_scale_increments, axis=-1),
+        ),
+        axis=-1,
+    )
+    log_scale -= 0.5 * (
+        jnp.max(log_scale, axis=-1, keepdims=True)
+        + jnp.min(log_scale, axis=-1, keepdims=True)
+    )
+    scale = jnp.exp(log_scale)
+    off_diagonal = -jnp.sqrt(interior_lower * interior_upper)
+    symmetric_zero = jnp.zeros_like(diagonal[..., 1:2])
+    symmetric_lower = jnp.concatenate(
+        (symmetric_zero, off_diagonal), axis=-1
+    )
+    symmetric_upper = jnp.concatenate(
+        (off_diagonal, symmetric_zero), axis=-1
+    )
+    interior_right_hand_side = (
+        right_hand_side[..., 1:-1, :] / scale[..., :, None]
+    )
+    transformed = _solve_tridiagonal_thomas(
+        symmetric_lower,
+        diagonal[..., 1:-1],
+        symmetric_upper,
+        interior_right_hand_side,
+    )
+    interior = transformed * scale[..., :, None]
+    left = (
+        right_hand_side[..., :1, :]
+        - upper[..., :1, None] * interior[..., :1, :]
+    )
+    right = (
+        right_hand_side[..., -1:, :]
+        - lower[..., -1:, None] * interior[..., -1:, :]
+    )
+    return jnp.concatenate((left, interior, right), axis=-2)
+
+
 def solve_sanos_step(support: Array, previous: Array, dlvsq_dt: Array) -> Array:
     """Solve one variable-support SANOS step for vector or matrix RHS."""
-    lower, diagonal, upper = _sanos_diagonals(support, dlvsq_dt)
+    result_dtype = previous.dtype
+    solve_dtype = jnp.float64 if jax.config.x64_enabled else result_dtype
+    solve_support = support.astype(solve_dtype)
+    lower, diagonal, upper = _sanos_diagonals(
+        solve_support,
+        dlvsq_dt.astype(solve_dtype),
+    )
     vector_rhs = previous.ndim == dlvsq_dt.ndim
-    rhs = previous[..., :, None] if vector_rhs else previous
-    result = jax.lax.linalg.tridiagonal_solve(lower, diagonal, upper, rhs)
+    solve_previous = previous.astype(solve_dtype)
+    rhs = solve_previous[..., :, None] if vector_rhs else solve_previous
+    result = _solve_sanos_symmetrized(lower, diagonal, upper, rhs)
+    result = result.astype(result_dtype)
     return result[..., 0] if vector_rhs else result
 
 
@@ -66,6 +202,11 @@ def decode_density_tower(
     interval_years: Array,
 ) -> Array:
     """Decode an expiry tower with an expanding support at each expiry."""
+    calculation_dtype = jnp.float64 if jax.config.x64_enabled else dlvsq.dtype
+    supports = supports.astype(calculation_dtype)
+    transports = transports.astype(calculation_dtype)
+    dlvsq = dlvsq.astype(calculation_dtype)
+    interval_years = interval_years.astype(calculation_dtype)
     initial_density = density0_from_support(supports[0])
     initial_density = jnp.broadcast_to(
         initial_density,
@@ -94,6 +235,14 @@ def decode_density_tower_from_front(
     interval_years: Array,
 ) -> Array:
     """Decode a variable-support tower from its current front density."""
+    calculation_dtype = (
+        jnp.float64 if jax.config.x64_enabled else future_dlvsq.dtype
+    )
+    supports = supports.astype(calculation_dtype)
+    transports = transports.astype(calculation_dtype)
+    front_density = front_density.astype(calculation_dtype)
+    future_dlvsq = future_dlvsq.astype(calculation_dtype)
+    interval_years = interval_years.astype(calculation_dtype)
 
     def step(previous: Array, inputs: tuple[Array, Array, Array, Array]) -> tuple[Array, Array]:
         support, transport, local_variance, interval = inputs
@@ -136,6 +285,16 @@ def risk_neutral_log_drift(
     interval. ``transports`` maps each preceding support to the next. The
     diffusion relation is solved exactly before applying the Itô correction.
     """
+    calculation_dtype = (
+        jnp.float64 if jax.config.x64_enabled else future_dlvsq.dtype
+    )
+    supports = supports.astype(calculation_dtype)
+    transports = transports.astype(calculation_dtype)
+    front_density = front_density.astype(calculation_dtype)
+    future_dlvsq = future_dlvsq.astype(calculation_dtype)
+    interval_years = interval_years.astype(calculation_dtype)
+    log_dlvsq_loadings = log_dlvsq_loadings.astype(calculation_dtype)
+    front_density_loading = front_density_loading.astype(calculation_dtype)
     factor_count = log_dlvsq_loadings.shape[-1]
     if front_density_loading.shape[-1] != factor_count:
         raise ValueError("front and DLV loadings must have the same factor count")

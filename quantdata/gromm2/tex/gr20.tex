@@ -54,9 +54,9 @@
 
 \begin{abstract}
    We refine the GROMM model presented in~\cite{GROMM2026} such that it has an expanding strike and expory grid, and
-   its parameters can be estimated based on prevailing grid geometry. We compare LSTM and compact Mamba-style selective
-   state-space backbones for its discrete local-volatility factor law, including variants with state-dependent spot--volatility
-   correlation.
+   its parameters can be estimated based on prevailing grid geometry. We compare LSTM, continuous-time GRU, and compact
+   Mamba-style selective state-space backbones for its discrete local-volatility factor law, including variants with
+   state-dependent spot--volatility correlation.
 
    The resulting model has a near-perfect
    fit to observed option prices and outperforms comparable models in $\PP$-measure simulations.
@@ -69,10 +69,10 @@
 
 \section{Introduction}\label{sec:intro}
 
-\section{Factor-Law Evaluation and Portfolio-Conditional Entropic Hedging}
+\section{Factor-Law Evaluation and Conditional Arbitrage Check}
 \label{sec:factor-law-and-hedging}
 
-\subsection{Small-sample predictive evaluation}
+\subsection{Out-of-sample Factor-Law Evaluation}
 \label{sec:factor-law-evaluation}
 
 The historical sample is too short to justify selecting a conditional
@@ -148,9 +148,9 @@ sample standard deviation.  We report
 Unlike~\eqref{eq:q-factor-log-score}, this evaluates an estimated attainable
 drift target.  It is not a realized hedging profit-and-loss statistic.
 
-\subsubsection{LSTM and Mamba-style selective state-space factor laws}
+\subsubsection{LSTM, continuous-time GRU, and Mamba-style factor laws}
 
-Both recurrent models receive the same causal input $x_t$: the standardized
+All three recurrent models receive the same causal input $x_t$: the standardized
 current DLV-level coordinates concatenated with the previous day's factor
 innovation.  The latter is set to zero whenever the historical panel is not
 contiguous.  From a common hidden state, the output layer predicts the $F$
@@ -172,6 +172,25 @@ For the LSTM, with $\sigma$ denoting the logistic function, we use
 \end{align}
 The hidden and cell states are reset at a break in the daily sequence.
 
+The continuous-time GRU uses a conventional reset-gated candidate but replaces
+the usual sigmoid update gate by an exponential decay over the actual time
+step.  Specifically,
+\begin{align}
+  r_t&=\sigma(W_rx_t+U_rh_{t-1}+b_r),
+  &\lambda_t&=\operatorname{softplus}
+    (W_\lambda x_t+U_\lambda h_{t-1}+b_\lambda), \\
+  \widetilde h_t&=\tanh\!\left(
+    W_cx_t+U_c(r_t\odot h_{t-1})+b_c
+  \right),
+  &a_t&=\exp(-\lambda_t\Delta t), \\
+  h_t&=a_t\odot h_{t-1}+(1-a_t)\odot\widetilde h_t,
+  &y_t&=W_oh_t+b_o.
+  \label{eq:continuous-time-gru-factor-law}
+\end{align}
+Here $\Delta t=1/252$ on the daily panel.  The annual decay is initialized at
+$25$, corresponding to one-day retention $\exp(-25/252)=0.906$, and is then
+learned as a positive state-dependent quantity.
+
 The model denoted ``Mamba'' in the experiments is a compact Mamba-style
 selective state-space recurrence rather than a full stacked Mamba3 network.
 Its input-dependent retention gate and candidate state are
@@ -183,7 +202,7 @@ Its input-dependent retention gate and candidate state are
   \label{eq:selective-ssm-factor-law}
 \end{align}
 This has fewer recurrent interactions than the LSTM and provides a useful
-small-sample test of whether input-dependent memory is sufficient.  Both
+small-sample test of whether input-dependent memory is sufficient.  All three
 models use 32 hidden coordinates.  Their output vector is partitioned as
 \begin{equation}
   y_t=
@@ -218,7 +237,9 @@ history.
   \small
   \caption{Rolling-origin factor-law evaluation.  Lower mean scores are
   better.  Improvements and confidence intervals are measured relative to
-  AR(1); positive improvements are favourable.}
+  AR(1); positive improvements are favourable.  The reported
+  $\lVert\rho_t\rVert_2$ is a latent loading norm, not an observable
+  spot--volatility correlation.}
   \label{tab:factor-law-rolling-evaluation}
   \resizebox{\textwidth}{!}{%
   \begin{tabular}{@{}lrrrrrrr@{}}
@@ -251,6 +272,14 @@ history.
       & 0.6125 & $-0.0973$ & $[-0.3397,\;0.0475]$
       & 0.9007
       & 0.2927 & $\phantom{-}0.1145$ & $[0.0663,\;0.1572]$ \\
+    Continuous-time GRU
+      & 0.4826 & $\phantom{-}0.0325$ & $[-0.0118,\;0.0938]$
+      & 0
+      & 0.3388 & $\phantom{-}0.0684$ & $[0.0135,\;0.1148]$ \\
+    Continuous-time GRU with $\rho_t$
+      & 0.4994 & $\phantom{-}0.0157$ & $[-0.0713,\;0.0844]$
+      & 0.8852
+      & 0.3629 & $\phantom{-}0.0443$ & $[-0.0060,\;0.0852]$ \\
     Mamba SSM
       & 0.4859 & $\phantom{-}0.0292$
       & $[-0.0229,\;0.0794]$
@@ -267,13 +296,23 @@ history.
 \end{table}
 
 The correlated Mamba-style selective state-space model has the best average $\Q$ score.
+The diagonal continuous-time GRU is close: its score of $0.4826$ is slightly
+better than the diagonal Mamba score of $0.4859$, but their paired improvement
+is only $0.0033$, with a 95\% interval of $[-0.0483,0.0663]$.  The GRU therefore
+provides a competitive continuous-time memory parameterization, not a
+statistically established improvement.
 Relative to its diagonal version, however, its mean improvement is only
 $0.0063$, with a direct paired 95\% interval of
 $[-0.0429,0.0484]$.  The extra correlation state is therefore learnable but
 does not yet deliver a statistically established predictive gain.  The
 correlated LSTM is materially worse in $\Q$, especially in the third test
 block, which is direct evidence of overfitting.  The LSTM improvement in the
-attainable $\PP$-drift target remains the clearest result.  These diagnostics
+attainable $\PP$-drift target remains the clearest result.
+The GRU correlation head also deteriorates its diagonal model: the direct
+$\Q$ improvement is $-0.0168$, with a 95\% interval of
+$[-0.1325,0.0637]$, and its attainable-$\PP$ error increases from $0.3388$
+to $0.3629$.  Thus an exponential memory gate alone does not resolve the
+spot-correlation overfitting problem.  These diagnostics
 evaluate the dynamics model; final model selection must be based on
 out-of-sample hedging performance for economically relevant portfolios.
 
@@ -300,10 +339,10 @@ term structure.  The full curve contains 890 daily transitions from January
 13 August 2024 onward.
 
 For the model curves, we start from the calibrated state on 29 August 2025
-and simulate one business day under $\Q$ using eight DLV substeps and 1,000
-antithetic paths.  The constant model keeps the unconditional factor
+and simulate one business day under $\Q$ using eight DLV substeps and 5,000
+paths arranged as 2,500 antithetic pairs.  The constant model keeps the unconditional factor
 loadings, while the Mamba-style selective SSM applies its state-dependent
-factor amplitudes.  At the next date, ATM prices are inverted to Black
+  factor amplitudes.  At the next date, ATM prices are inverted to Black
 volatilities at the same rolling tenor.  When that tenor lies between two
 surviving fixed expiries, total variance is interpolated linearly.  The 125D
 simulation point is omitted because a one-day rolling 125D volatility
@@ -323,7 +362,9 @@ requires the birth of an expiry beyond the terminal model date.
   \centering
   \small
   \caption{Selected points from
-  Figure~\ref{fig:spot-atm-volatility-correlation}.}
+  Figure~\ref{fig:spot-atm-volatility-correlation}.  The model columns are
+  total observable correlations, including the DLV and 5\% Black background
+  contributions.}
   \label{tab:spot-atm-volatility-correlation}
   \begin{tabular}{@{}rrrrr@{}}
     \toprule
@@ -333,30 +374,195 @@ requires the birth of an expiry beyond the terminal model date.
     & Constant $\Q$
     & Mamba SSM $\Q$ \\
     \midrule
-      1 & $-0.382$ & $-0.510$ & $-0.632$ & $-0.679$ \\
-      5 & $-0.689$ & $-0.790$ & $-0.614$ & $-0.674$ \\
-     10 & $-0.766$ & $-0.861$ & $-0.662$ & $-0.729$ \\
-     20 & $-0.806$ & $-0.894$ & $-0.663$ & $-0.741$ \\
-     30 & $-0.762$ & $-0.881$ & $-0.603$ & $-0.678$ \\
-     60 & $-0.752$ & $-0.869$ & $-0.599$ & $-0.650$ \\
-     90 & $-0.742$ & $-0.856$ & $-0.586$ & $-0.621$ \\
-    120 & $-0.733$ & $-0.845$ & $-0.568$ & $-0.594$ \\
+      1 & $-0.382$ & $-0.510$ & $-0.619$ & $-0.667$ \\
+      5 & $-0.689$ & $-0.790$ & $-0.589$ & $-0.653$ \\
+     10 & $-0.766$ & $-0.861$ & $-0.645$ & $-0.714$ \\
+     20 & $-0.806$ & $-0.894$ & $-0.652$ & $-0.731$ \\
+     30 & $-0.762$ & $-0.881$ & $-0.601$ & $-0.678$ \\
+     60 & $-0.752$ & $-0.869$ & $-0.597$ & $-0.651$ \\
+     90 & $-0.742$ & $-0.856$ & $-0.584$ & $-0.623$ \\
+    120 & $-0.733$ & $-0.845$ & $-0.567$ & $-0.596$ \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 The selective backbone improves the root-mean-square discrepancy from the
-full historical curve from $0.142$ to $0.098$.  It is close to the
-full-sample 5D correlation ($-0.674$ versus $-0.689$), but does not reproduce
+full historical curve from $0.148$ to $0.098$.  It is close to the
+full-sample 5D correlation ($-0.653$ versus $-0.689$), but does not reproduce
 the stronger recent value of $-0.790$.  More generally, it is too negative
 at 1--3D and too weak beyond roughly one month.  The corresponding discrepancy
-from the recent curve is $0.185$, compared with $0.239$ for the constant
+from the recent curve is $0.188$, compared with $0.246$ for the constant
 model.  Thus the selective state improves the observable leverage effect,
 but the maturity shape and recent regime remain material targets for the
 state-dependent correlation head in
 Equation~\eqref{eq:conditional-spot-factor-correlation}.
 
-\subsection{Portfolio-conditional entropic hedging}
+The 5D gap has a more specific mechanical explanation.  During estimation,
+the first factor is the Gaussian score of the observed product-spot
+distribution, including the 5\% Black background.  In the current simulator,
+that factor settles the residual front density, after which the Black
+background is sampled independently.  This preserves the two marginal laws
+but not the fitted product-spot copula.  On 29 August 2025 the one-day ATM
+volatility is $9.56\%$, so the independent 5\% background contributes $27.4\%$
+of one-day spot variance.  In the corresponding first-order decomposition it
+attenuates spot correlation by
+\begin{equation}
+  \sqrt{1-\frac{0.05^2}{0.0956^2}}=0.852.
+  \label{eq:background-correlation-attenuation}
+\end{equation}
+Applying this attenuation to the recent 5D historical correlation gives
+$-0.790\times0.852=-0.673$, close to the simulated value of $-0.653$.
+The principal 5D discrepancy is therefore the independent product-lift
+coupling, not the choice between Mamba and GRU memory.  A corrected simulator
+should either bridge the observed product spot directly and sample the latent
+components conditionally, or estimate and simulate a genuinely latent spot
+score.  The learned $\rho_t$ head must then be propagated into the path
+covariance; it is not used by the present constant/selective curves.  The
+remaining short- and long-maturity shape differences are separate loading-basis
+and state-dependence questions.
+
+\subsubsection{Background-factor identification and estimates}
+\label{sec:background-factor-estimates}
+
+The product representation does not identify a unique latent background
+process.  At one expiry, many joint laws of $(X_T,Y_T)$ produce the same law
+of $S_T=X_TY_T$.  Option prices therefore identify the product law but not the
+allocation of its risk between the discrete factor and the smoothing factor.
+We distinguish three specifications rather than treating them as mutually
+identified estimates.
+
+First, the production baseline fixes
+\begin{equation}
+  \frac{\dd Y_t}{Y_t}=\sigma_Y\,\dd B_t,
+  \qquad \sigma_Y=5\%,
+  \label{eq:fixed-black-background}
+\end{equation}
+with $B$ independent of the DLV factors.  This is a modeling convention, not
+an estimated process.  It retains the simple Black convolution and the
+current closed risk-neutral drift equations.
+
+Second, the released SANOS state provides an observable model-component proxy
+for a floating background: its Black-kernel total-variance curve.  We retain
+the published smoothness multiplier and interpolate total variance to the
+GROMM2 expiry grid.  Figure~\ref{fig:background-process-estimates} summarizes
+its history.  Median annualized kernel volatility is between $7.35\%$ and
+$7.57\%$ across the grid, compared with the fixed $5\%$ convention, and its
+10--90\% range at 5D is $4.86\%$--$13.20\%$.  The first kernel-volatility
+factor explains $77.6\%$ of daily log-change variance; two factors explain
+$90.3\%$, four explain $96.3\%$, and eight explain $98.6\%$.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{background_process_estimates.pdf}
+  \caption{Historical estimates for the released SANOS Black-kernel process.
+  Left: the kernel-volatility term structure.  Centre: its daily correlation
+  with forward-adjusted spot returns.  Right: cumulative PCA power of daily
+  log-kernel-volatility changes.  Beyond the released terminal kernel node,
+  the curve follows the documented flat annualized-volatility extrapolation.}
+  \label{fig:background-process-estimates}
+\end{figure}
+
+Third, as a parsimonious stochastic-volatility benchmark, we fit under $\PP$ the
+one-factor CIR/Heston variance law~\cite{Heston1993}
+\begin{equation}
+  \dd v_t=\kappa_P(\theta_P-v_t)\,\dd t
+    +\nu\sqrt{v_t}\,\dd B_t^v
+  \label{eq:heston-background-proxy}
+\end{equation}
+to the released one-business-day kernel variance, using the exact CIR
+conditional first two moments in a Gaussian quasi-likelihood.  The estimates
+are $\kappa_P=19.74$, $\sqrt{\theta_P}=9.36\%$, and $\nu=0.935$.  The Feller
+ratio $2\kappa_P\theta_P/\nu^2$ is $0.395$, so a positivity-preserving scheme
+would be required.  The standardized variance innovation has correlation
+$-0.320$ with the observed product-spot score; a ten-day moving-block
+bootstrap gives the 95\% interval $[-0.413,-0.207]$.  This last number is a
+reduced-form observable correlation, not an identified correlation between
+the unobserved $Y$ return and its variance shock.
+
+We also test an independent Heston background directly in the surface
+calibration.  On 29 August 2025, a Heston model is fitted to the SANOS surface,
+scaled to $5\%$ instantaneous volatility, and its correlation is set to
+$\rho=-0.612$.  The resulting background has material downside skew.  At
+representative strikes
+$K_z=\exp\{z\,9.56\%\sqrt{T}\}$, its left-minus-right implied-volatility
+spread between $z=-1$ and $z=1$ is $2.12$, $2.59$, $2.61$, and $2.51$
+volatility points at 5D, 20D, 60D, and 120D, respectively.  This is a
+reallocation of the observed skew between the background and residual DLV
+components: recalibration still targets the same total option surface.
+
+For a historical comparison, we keep the fitted Heston parameters fixed,
+allow its initial variance to follow the scaled released one-day kernel
+variance, and recalibrate the rank-200 residual DLV history using the
+corresponding date-specific Heston pricing kernels.  Table~\ref{tab:heston-background-fit}
+compares this rolling-kernel extraction with the otherwise identical $5\%$
+Black extraction.  Heston does not improve the fit: the fraction inside spread
+falls by $0.48$ percentage points, while mean excess outside spread and
+midpoint error both increase.  This is a like-for-like comparison on the new
+six-month synthetic book: 7,547,934 SANOS-generated quotes over 45 expiries.
+It is not directly comparable with the earlier affine-200 result of $95.02\%$
+inside bid--ask, which used 2,192,458 retained market quotes on the original
+25-daily-expiry grid.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Full-history residual-DLV calibration under Black and Heston
+  background kernels on the same six-month synthetic SANOS book.  Errors are
+  measured in synthetic half-spreads.}
+  \label{tab:heston-background-fit}
+  \begin{tabular}{@{}lrrr@{}}
+    \toprule
+    Background & Inside spread & Mean excess & Midpoint MAE \\
+    \midrule
+    Black, fixed $5\%$ & $83.59\%$ & $0.170$ & $0.635$ \\
+    Heston, date-specific variance & $83.11\%$ & $0.270$ & $0.755$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+More importantly, the rolling extraction does not separate Heston variance
+from residual DLV risk.  After removing the estimated front factor, the Heston
+variance score still explains $23.0\%$ of residual DLV innovation energy.  Its
+largest absolute correlations with the retained DLV factors are $0.767$ in
+training and $0.668$ on the chronological holdout.  Thus the Heston kernel
+adds static skew, but this particular decomposition supplies no evidence of a
+cleaner dynamic spot--volatility representation.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{Status of the background specifications.  ``Estimated'' refers to
+  historical $\PP$ estimation; none of the stochastic alternatives yet has a
+  separately identified $\Q$ drift.}
+  \label{tab:background-process-estimates}
+  \begin{tabular}{@{}p{0.22\textwidth}p{0.36\textwidth}p{0.31\textwidth}@{}}
+    \toprule
+    Specification & Historical result & Risk-neutral status \\
+    \midrule
+    Independent Black
+      & Fixed $\sigma_Y=5\%$; not estimated
+      & Current closed construction \\
+    Floating SANOS kernel
+      & Median $7.35$--$7.57\%$; two PCA factors explain $90.3\%$
+      & Variance-risk premium not identified \\
+    CIR/Heston proxy
+      & $(\kappa_P,\sqrt{\theta_P},\nu)=(19.74,9.36\%,0.935)$
+      & $\Q$ variance drift and latent leverage not identified \\
+    Independent Heston pilot
+      & Adds $2.1$--$2.6$ volatility points of downside background skew;
+        $83.11\%$ inside spread historically
+      & Residual DLV innovations remain materially correlated with variance \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The floating-kernel and Heston estimates are therefore informative
+$\PP$-models of a background state, but neither experiment identifies the
+background market price of variance risk separately from the DLV surface.
+The risk-neutral constructions considered below retain the fixed independent
+Black background.
+
+\subsection{Conditional Arbitrage Check}
 \label{sec:portfolio-conditional-entropic-hedging}
 
 Let $H$ be the remaining terminal liability of the current option portfolio,

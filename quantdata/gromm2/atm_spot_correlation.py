@@ -20,7 +20,11 @@ from quantdata.gromm2.dynamics import (
     load_estimated_dynamics,
     selective_factor_scales,
 )
+from quantdata.gromm2.pricing import price_active_calls
 from quantdata.gromm2.simulation import SimulationState, one_day_risk_neutral_step
+
+_AUDIT_BUSINESS_DTES = np.asarray([5.0, 10.0, 20.0, 60.0, 120.0])
+_AUDIT_NMS = np.asarray([-1.0, 0.0, 1.0])
 
 
 def _historical_correlations(
@@ -154,7 +158,8 @@ def _simulation_correlations(
     batch_size: int,
     substeps: int,
     seed: int,
-) -> tuple[np.ndarray, dict[str, np.ndarray]]:
+    initial_projected_total_variances: np.ndarray,
+) -> tuple[np.ndarray, dict[str, np.ndarray], dict[str, dict[str, float]]]:
     if path_count <= 0 or path_count % batch_size or batch_size % 2:
         raise ValueError("path_count must be divisible by an even batch_size")
     if not jax.config.x64_enabled:
@@ -188,13 +193,32 @@ def _simulation_correlations(
         "constant": base_loadings,
         "selective": base_loadings * selective_scales[None, None, :],
     }
+    audit_indices = np.searchsorted(business_dtes, _AUDIT_BUSINESS_DTES)
+    if np.any(audit_indices == len(business_dtes)) or np.any(
+        business_dtes[audit_indices] != _AUDIT_BUSINESS_DTES
+    ):
+        raise ValueError("history does not contain every background audit expiry")
+    audit_strikes = np.exp(
+        np.sqrt(initial_projected_total_variances[audit_indices])[:, None]
+        * _AUDIT_NMS[None, :]
+    )
+    initial_audit_values = np.asarray(
+        price_active_calls(
+            jnp.asarray(supports[audit_indices]),
+            jnp.asarray(initial_tower[audit_indices])[None],
+            jnp.ones(1),
+            jnp.asarray(_AUDIT_BUSINESS_DTES / 252.0),
+            jnp.asarray(audit_strikes),
+        )
+    )[0]
     daily_step = jax.jit(one_day_risk_neutral_step, static_argnames=("substeps",))
     generator = np.random.default_rng(seed)
     spot_samples = {name: [] for name in loadings_by_model}
     volatility_samples = {name: [] for name in loadings_by_model}
+    audit_pair_gains = {name: [] for name in loadings_by_model}
     started = perf_counter()
     for batch_index in range(path_count // batch_size):
-        factor_normals, background_normals = _antithetic_normals(
+        factor_normals, independent_background_normals = _antithetic_normals(
             generator=generator,
             substeps=substeps,
             half_batch_size=batch_size // 2,
@@ -223,7 +247,7 @@ def _simulation_correlations(
                 state,
                 loadings,
                 jnp.asarray(factor_normals),
-                jnp.asarray(background_normals),
+                jnp.asarray(independent_background_normals),
                 remaining_front_days=jnp.asarray(1),
                 substeps=substeps,
             )
@@ -243,7 +267,22 @@ def _simulation_correlations(
             )
             spot_samples[name].append(spots - 1.0)
             volatility_samples[name].append(np.log(target_volatilities))
+            next_audit_values = np.asarray(
+                price_active_calls(
+                    jnp.asarray(supports[audit_indices]),
+                    result.density_tower[..., audit_indices, :],
+                    result.state.background_level,
+                    jnp.asarray((_AUDIT_BUSINESS_DTES - 1.0) / 252.0),
+                    jnp.asarray(audit_strikes),
+                )
+            )
+            gains = next_audit_values - initial_audit_values[None]
+            half = batch_size // 2
+            audit_pair_gains[name].append(
+                0.5 * (gains[:half] + gains[half:])
+            )
     correlations: dict[str, np.ndarray] = {}
+    audits: dict[str, dict[str, float]] = {}
     for name in loadings_by_model:
         spots = np.concatenate(spot_samples[name])
         log_volatilities = np.concatenate(volatility_samples[name])
@@ -253,7 +292,27 @@ def _simulation_correlations(
                 for expiry in range(len(target_business_dtes))
             ]
         )
-    return target_business_dtes, correlations
+        pair_gains = np.concatenate(audit_pair_gains[name])
+        means = np.mean(pair_gains, axis=0)
+        standard_errors = np.std(pair_gains, axis=0, ddof=1) / np.sqrt(
+            len(pair_gains)
+        )
+        z_scores = np.divide(
+            means,
+            standard_errors,
+            out=np.zeros_like(means),
+            where=standard_errors > 0.0,
+        )
+        audits[name] = {
+            "maximum_absolute_mean_call_gain_over_spot": float(
+                np.max(np.abs(means))
+            ),
+            "root_mean_square_call_gain_over_spot": float(np.sqrt(np.mean(means**2))),
+            "maximum_absolute_z": float(np.max(np.abs(z_scores))),
+            "coordinates_above_2_576": int(np.count_nonzero(np.abs(z_scores) > 2.576)),
+            "coordinate_count": int(z_scores.size),
+        }
+    return target_business_dtes, correlations, audits
 
 
 def _write_figure(
@@ -334,13 +393,18 @@ def run_diagnostic(
         dataset_path=dataset_path,
         recent_start_date=recent_start_date,
     )
-    simulation_business_dtes, simulated = _simulation_correlations(
+    with h5py.File(source_history_path, "r") as stream:
+        initial_projected_total_variances = np.asarray(
+            stream["projected_atm_total_variances"][-1], dtype=np.float64
+        )
+    simulation_business_dtes, simulated, audits = _simulation_correlations(
         history_path=history_path,
         estimate_path=estimate_path,
         path_count=path_count,
         batch_size=batch_size,
         substeps=substeps,
         seed=seed,
+        initial_projected_total_variances=initial_projected_total_variances,
     )
     _write_figure(
         output=output_figure,
@@ -351,7 +415,7 @@ def run_diagnostic(
         simulated=simulated,
     )
     report: dict[str, object] = {
-        "schema": "gromm2-atm-vol-spot-correlation-v1",
+        "schema": "gromm2-atm-vol-spot-correlation-v2",
         "definition": "correlation of daily forward-adjusted spot return with the daily log change in rolling-tenor ATM Black implied volatility",
         "history_path": str(history_path.resolve()),
         "source_history_path": str(source_history_path.resolve()),
@@ -365,12 +429,17 @@ def run_diagnostic(
         "simulation_path_count": path_count,
         "simulation_substeps_per_day": substeps,
         "simulation_seed": seed,
+        "background_annual_volatility": 0.05,
         "historical_business_dtes": business_dtes.tolist(),
         "historical_full_correlations": historical_full.tolist(),
         "historical_recent_correlations": historical_recent.tolist(),
         "simulation_business_dtes": simulation_business_dtes.tolist(),
         "constant_correlations": simulated["constant"].tolist(),
         "selective_correlations": simulated["selective"].tolist(),
+        "one_day_call_martingale_audit": audits,
+        "one_day_call_martingale_audit_business_dtes": _AUDIT_BUSINESS_DTES.tolist(),
+        "one_day_call_martingale_audit_nms": _AUDIT_NMS.tolist(),
+        "one_day_call_martingale_audit_sampling_unit": "antithetic pair",
         "terminal_expiry_note": "The simulated 125D point is omitted because a one-day rolling 125D statistic requires a newly born expiry beyond the terminal model date.",
     }
     output_json.parent.mkdir(parents=True, exist_ok=True)

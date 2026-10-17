@@ -9,12 +9,14 @@ from quantdata.gromm2.dlv import (
     density0_from_support,
     infer_dlvsq_from_densities,
     risk_neutral_log_drift,
+    solve_sanos_step,
 )
 from quantdata.gromm2.geometry import (
     Gromm2GeometryConfig,
     expanding_supports,
     transport_tower,
 )
+from quantdata.gromm2.market import solve_sanos_step_numpy
 
 jax.config.update("jax_enable_x64", True)
 
@@ -41,6 +43,72 @@ def test_variable_grid_decoder_preserves_mass_and_mean() -> None:
     assert np.min(tower) >= -1.0e-12
     assert np.allclose(np.sum(tower, axis=1), 1.0, atol=2.0e-10, rtol=0.0)
     assert np.allclose(np.sum(tower * supports, axis=1), 1.0, atol=2.0e-10, rtol=0.0)
+
+
+def test_batched_sanos_solve_matches_independent_float64_solves() -> None:
+    support = np.exp(np.linspace(np.log(0.25), np.log(2.5), 202))
+    initial = np.asarray(density0_from_support(jnp.asarray(support)))
+    dlvsq_dt = np.stack(
+        (
+            np.linspace(0.01, 8.0, 200),
+            np.linspace(8.0, 0.01, 200),
+        )
+    ) / 252.0
+    previous = np.broadcast_to(initial, (2, len(support)))
+
+    batched = np.asarray(
+        solve_sanos_step(
+            jnp.asarray(support),
+            jnp.asarray(previous),
+            jnp.asarray(dlvsq_dt),
+        )
+    )
+    independent = np.stack(
+        [
+            solve_sanos_step_numpy(
+                support,
+                previous[index],
+                dlvsq_dt[index],
+            )
+            for index in range(len(previous))
+        ]
+    )
+
+    assert np.allclose(batched, independent, atol=2.0e-12, rtol=2.0e-12)
+    assert np.allclose(np.sum(batched, axis=1), 1.0, atol=2.0e-10, rtol=0.0)
+
+
+def test_sanos_solve_preserves_mass_and_mean_for_matrix_rhs() -> None:
+    support = np.exp(np.linspace(np.log(0.25), np.log(2.5), 202))
+    right_hand_side = np.stack(
+        (
+            np.linspace(-1.0, 1.0, len(support)),
+            np.linspace(2.0, -0.5, len(support)),
+        ),
+        axis=-1,
+    )
+    dlvsq_dt = np.linspace(0.01, 8.0, 200) / 252.0
+
+    result = np.asarray(
+        solve_sanos_step(
+            jnp.asarray(support),
+            jnp.asarray(right_hand_side),
+            jnp.asarray(dlvsq_dt),
+        )
+    )
+
+    assert np.allclose(
+        np.sum(result, axis=0),
+        np.sum(right_hand_side, axis=0),
+        atol=2.0e-10,
+        rtol=0.0,
+    )
+    assert np.allclose(
+        np.sum(result * support[:, None], axis=0),
+        np.sum(right_hand_side * support[:, None], axis=0),
+        atol=2.0e-10,
+        rtol=0.0,
+    )
 
 
 def test_dlv_inversion_recovers_constant_local_variance() -> None:

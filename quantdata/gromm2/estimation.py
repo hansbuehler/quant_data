@@ -24,6 +24,10 @@ from scipy.special import ndtr, ndtri
 
 from quantdata.gromm2.bridge import front_density_volatility
 from quantdata.gromm2.dlv import decode_density_tower, risk_neutral_log_drift
+from quantdata.gromm2.heston_background_pilot import (
+    HestonBackground,
+    heston_return_cdf_grid_fft,
+)
 from quantdata.gromm2.market import solve_sanos_step_numpy
 
 FloatArray = NDArray[np.float64]
@@ -83,16 +87,29 @@ def _spot_gaussian_score(
     density: FloatArray,
     expiry_y: float,
     backbone_annual_volatility: float,
+    background_cdf_grid: tuple[FloatArray, FloatArray] | None = None,
 ) -> float:
-    variance = backbone_annual_volatility**2 * expiry_y
-    standard_deviation = math.sqrt(variance)
-    if standard_deviation == 0.0:
-        cumulative = float(np.sum(density[support <= normalized_spot]))
+    if background_cdf_grid is not None:
+        log_grid, cumulative_grid = background_cdf_grid
+        log_ratios = np.log(normalized_spot / support)
+        if np.min(log_ratios) < log_grid[0] or np.max(log_ratios) > log_grid[-1]:
+            raise ValueError("front-spot ratios exceed the Heston CDF grid")
+        conditional_cumulative = np.interp(
+            log_ratios,
+            log_grid,
+            cumulative_grid,
+        )
+        cumulative = float(density @ conditional_cumulative)
     else:
-        z = (
-            np.log(normalized_spot / support) + 0.5 * variance
-        ) / standard_deviation
-        cumulative = float(density @ ndtr(z))
+        variance = backbone_annual_volatility**2 * expiry_y
+        standard_deviation = math.sqrt(variance)
+        if standard_deviation == 0.0:
+            cumulative = float(np.sum(density[support <= normalized_spot]))
+        else:
+            z = (
+                np.log(normalized_spot / support) + 0.5 * variance
+            ) / standard_deviation
+            cumulative = float(density @ ndtr(z))
     probability = float(np.clip(cumulative, 1.0e-7, 1.0 - 1.0e-7))
     return float(ndtri(probability))
 
@@ -200,6 +217,16 @@ def load_estimation_panel(
         transports = np.asarray(stream["transports"], dtype=np.float64)
         expiries = np.asarray(stream["model_expiries_y"], dtype=np.float64)
         nms_nodes = np.asarray(stream["nms_nodes"], dtype=np.float64)
+        call_kernel_metadata = stream.attrs.get("call_kernel_metadata")
+    background_cdf_grid = None
+    if call_kernel_metadata is not None:
+        metadata = json.loads(str(call_kernel_metadata))
+        if metadata.get("model") == "independent-Heston":
+            background = HestonBackground(**metadata["background"])
+            background_cdf_grid = heston_return_cdf_grid_fft(
+                background,
+                expiry_y=float(expiries[0]),
+            )
     observations = pl.read_parquet(
         dataset / "observations.parquet",
         columns=[
@@ -286,6 +313,7 @@ def load_estimation_panel(
                 density=density,
                 expiry_y=float(expiries[0]),
                 backbone_annual_volatility=backbone_annual_volatility,
+                background_cdf_grid=background_cdf_grid,
             )
         )
         origin_indices.append(endpoint - 1)

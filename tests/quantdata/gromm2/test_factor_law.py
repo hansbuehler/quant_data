@@ -173,7 +173,7 @@ def test_recurrent_factor_laws_have_finite_outputs() -> None:
         progress_every=20,
     )
 
-    for architecture in ("lstm", "mamba"):
+    for architecture in ("lstm", "mamba", "gru"):
         fit = fit_recurrent_factor_law(
             data,
             architecture=architecture,
@@ -194,3 +194,13 @@ def test_recurrent_factor_laws_have_finite_outputs() -> None:
     assert correlated.architecture == "mamba_corr"
     assert correlated.parameters["output_bias"].shape == (3 * data.factor_count - 1,)
     assert np.isfinite(correlated.validation_q_negative_log_likelihood)
+
+    correlated_gru = fit_recurrent_factor_law(
+        data,
+        architecture="gru",
+        config=config,
+        learn_spot_correlation=True,
+    )
+    assert correlated_gru.architecture == "gru_corr"
+    assert correlated_gru.parameters["decay_bias"].shape == (config.hidden_size,)
+    assert np.isfinite(correlated_gru.validation_q_negative_log_likelihood)
