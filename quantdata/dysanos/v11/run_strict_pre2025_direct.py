@@ -68,6 +68,9 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--decoder-epochs", type=int, default=600)
+    parser.add_argument("--decoder-warm-start", type=Path)
+    parser.add_argument("--state-learning-rate", type=float, default=3.0e-4)
+    parser.add_argument("--network-learning-rate", type=float, default=1.0e-4)
     parser.add_argument("--joint-epochs", type=int, default=300)
     return parser.parse_args()
 
@@ -105,6 +108,44 @@ def _gpu_weights_only_checkpoint(source: Path, *, device: str) -> Path:
     return target
 
 
+def _continuation_checkpoint(source: Path, target: Path) -> Path:
+    """Retain fitted weights while starting a new market optimizer schedule."""
+    if not source.exists():
+        raise FileNotFoundError(source)
+    source_digest = checkpoint_digest(source)
+    if target.exists():
+        existing = torch.load(target, map_location="cpu", weights_only=False)
+        if existing.get("weights_only_source_sha256") != source_digest:
+            raise ValueError("Existing decoder continuation has another source")
+        return target
+    payload = torch.load(source, map_location="cpu", weights_only=False)
+    if payload.get("phase") not in {"market", "complete"}:
+        raise ValueError("Decoder continuation requires fitted market weights")
+    state = payload.get("training_state")
+    signature = state.get("resume_signature") if isinstance(state, dict) else None
+    if payload.get("phase") == "market" and not (
+        isinstance(state, dict)
+        and isinstance(signature, dict)
+        and int(state.get("completed_epochs", -1))
+        == int(signature.get("num_epochs", -2))
+    ):
+        raise ValueError("Decoder continuation requires a completed prior schedule")
+    payload["phase"] = "supervised_complete"
+    payload["training_state"] = None
+    payload["market_history"] = []
+    payload["training_audits"] = {
+        name: audit
+        for name, audit in payload.get("training_audits", {}).items()
+        if name == "supervised"
+    }
+    payload["weights_only_source"] = str(source)
+    payload["weights_only_source_sha256"] = source_digest
+    temporary = target.with_suffix(target.suffix + ".tmp")
+    torch.save(payload, temporary)
+    temporary.replace(target)
+    return target
+
+
 def run(
     *,
     ticker: str,
@@ -115,6 +156,9 @@ def run(
     workers: int,
     device: str,
     decoder_epochs: int,
+    decoder_warm_start: Path | None,
+    state_learning_rate: float,
+    network_learning_rate: float,
     joint_epochs: int,
 ) -> dict[str, object]:
     """Fit the reusable strict representation and its weekly joint baseline."""
@@ -168,8 +212,8 @@ def run(
     decoder_train = FlexTrainConfig(
         num_epochs=decoder_epochs,
         day_batch_size=16,
-        learning_rate=3.0e-4,
-        decoder_learning_rate=1.0e-4,
+        learning_rate=state_learning_rate,
+        decoder_learning_rate=network_learning_rate,
         learning_rate_schedule="cosine",
         minimum_learning_rate_fraction=0.1,
         device=device,
@@ -182,9 +226,16 @@ def run(
     )
     checkpoint_directory.mkdir(parents=True, exist_ok=True)
     report_directory.mkdir(parents=True, exist_ok=True)
-    decoder_checkpoint = _gpu_weights_only_checkpoint(
-        checkpoint_directory / "direct-200-decoder.pt",
-        device=device,
+    decoder_checkpoint = (
+        _gpu_weights_only_checkpoint(
+            checkpoint_directory / "direct-200-decoder.pt",
+            device=device,
+        )
+        if decoder_warm_start is None
+        else _continuation_checkpoint(
+            decoder_warm_start,
+            checkpoint_directory / "direct-200-decoder-continuation.pt",
+        )
     )
     with FileLock(str(decoder_checkpoint.with_suffix(".lock"))):
         decoder_fit = fit_latent_states(
@@ -259,6 +310,9 @@ def run(
         "joint_history_tail": history[-50:],
         "joint_fit": compact_evaluation(evaluate_model(joint_model, torch_days, env=env, objective_config=FlexObjectiveConfig(fit_weight=0.05), day_batch_size=16, equal_date_weighting=True)),
         "decoder_checkpoint": str(decoder_checkpoint),
+        "decoder_warm_start": (
+            None if decoder_warm_start is None else str(decoder_warm_start)
+        ),
         "joint_checkpoint": str(joint_checkpoint),
         "target_history": str(targets),
     }
