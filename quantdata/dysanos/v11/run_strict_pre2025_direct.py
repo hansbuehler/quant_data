@@ -133,9 +133,14 @@ def _continuation_checkpoint(source: Path, target: Path) -> Path:
     payload["phase"] = "supervised_complete"
     payload["training_state"] = None
     payload["market_history"] = []
+    audits = payload.get("training_audits")
+    if audits is None:
+        audits = {}
+    elif not isinstance(audits, dict):
+        raise ValueError("Decoder checkpoint training_audits must be a dictionary or None")
     payload["training_audits"] = {
         name: audit
-        for name, audit in payload.get("training_audits", {}).items()
+        for name, audit in audits.items()
         if name == "supervised"
     }
     payload["weights_only_source"] = str(source)

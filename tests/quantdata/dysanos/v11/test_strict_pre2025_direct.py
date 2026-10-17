@@ -62,3 +62,22 @@ def test_continuation_rejects_incomplete_prior_schedule(tmp_path) -> None:
     )
     with pytest.raises(ValueError, match="completed prior schedule"):
         _continuation_checkpoint(source, tmp_path / "continuation.pt")
+
+
+def test_continuation_accepts_absent_training_audits(tmp_path) -> None:
+    source = tmp_path / "source.pt"
+    target = tmp_path / "continuation.pt"
+    torch.save(
+        {
+            "phase": "market",
+            "training_state": {
+                "completed_epochs": 600,
+                "resume_signature": {"num_epochs": 600},
+            },
+            "training_audits": None,
+        },
+        source,
+    )
+    _continuation_checkpoint(source, target)
+    payload = torch.load(target, map_location="cpu", weights_only=False)
+    assert payload["training_audits"] == {}
