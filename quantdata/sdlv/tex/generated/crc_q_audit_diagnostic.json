@@ -1,0 +1,36 @@
+{
+  "conditional": {
+    "entropy_t_statistic": 209.84485538970313,
+    "squared_t_statistic": 42.56238802111332
+  },
+  "exact_reset_gate": {
+    "accepted_count": 0,
+    "maximum_abs_price_error": 0.0015332814406726278,
+    "median_abs_price_error": 0.00033570231847352555,
+    "sample_count": 1000,
+    "status": "rejected",
+    "tolerance": 2e-06
+  },
+  "population": {
+    "horizon_days": 20,
+    "maximum_reset_price_error": 0.0029081637039780617,
+    "pair_count": 50000,
+    "path_count": 100000,
+    "steps_per_day": 8
+  },
+  "provenance": {
+    "checkpoint": "/home/hans/quantdata_data/training/dysanos/bates-crc/inverse-networks-v7-converged-gpu-stable/checkpoint.pt",
+    "exact_gate_schema": "gambara-teichmann-crc-exact-reset-validation-v1",
+    "population_schema": "gambara-teichmann-crc-restricted-population-v1",
+    "q_audit_schema": "gambara-teichmann-crc-q-audit-v1",
+    "target_fit_report": "/home/hans/quantdata_data/training/dysanos/bates-crc/spx-2025-08-29-gambara-teichmann-v4-accurate/fit_report.json"
+  },
+  "schema": "main2-crc-q-audit-diagnostic-v1",
+  "unconditional": {
+    "count_above_2_576": 371,
+    "count_above_5": 320,
+    "maximum_absolute_z": 140.25013709996085,
+    "p99_absolute_z": 110.77449193842442,
+    "tested_coordinates": 570
+  }
+}

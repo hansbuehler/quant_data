@@ -123,18 +123,19 @@ the new five jump means and standard deviations.  The implementation records
 the resulting fixed-option price discontinuity explicitly before any
 no-arbitrage statistic is accepted.
 
-That gate fails for the retained NN2 checkpoint: none of 1,000 independently
-drawn reset states meets the $2\times10^{-6}$ spot-normalized exact-pricing
-tolerance.  The median maximum error across its calibration and inter-node
-held-out options is $3.36\times10^{-4}$ and the maximum is
-$1.53\times10^{-3}$.  We nevertheless retain the 100,000-path restricted
-audit as a negative control for the diagnostics.  It has maximum and
-99th-percentile coordinate $z$-scores 140.250 and 110.774; 371 of 570
-coordinates exceed 2.576 and 320 exceed five.  The two-fold out-of-fold
-conditional statistics are $T_{\mathrm{sqr}}=42.562$ and
-$T_{\mathrm{ent}}=209.845$.  These rejections detect the reset-repricing
-defect; they do not establish that an exact consistent-recalibration model is
-arbitrageable.
+That gate fails for the retained NN2 checkpoint: none of
+\CrcResetGateSamples\ independently drawn reset states meets the
+$\CrcResetGateTolerance$ spot-normalized exact-pricing tolerance.  The median
+maximum error across its calibration and inter-node held-out options is
+$\CrcResetGateMedianError$ and the maximum is $\CrcResetGateMaximumError$.
+We nevertheless retain the \CrcQPathCount-path restricted audit as a negative
+control for the diagnostics.  It has maximum and 99th-percentile coordinate
+$z$-scores \CrcQMaximumAbsZ\ and \CrcQP99AbsZ; \CrcQAboveTwoFiveSevenSix\ of
+\CrcQCoordinates\ coordinates exceed 2.576 and \CrcQAboveFive\ exceed five.
+The two-fold out-of-fold conditional statistics are
+$T_{\mathrm{sqr}}=\CrcQSquaredT$ and $T_{\mathrm{ent}}=\CrcQEntropyT$.
+These rejections detect the reset-repricing defect; they do not establish that
+an exact consistent-recalibration model is arbitrageable.
 
 \subsection{Matched initial-fit convention}
 

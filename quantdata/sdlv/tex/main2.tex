@@ -1135,6 +1135,8 @@ with the corresponding standard-normal frequency.
 
 \subsection{Restricted Universe}
 
+\input{generated/crc_q_audit_diagnostic}
+
 Table~\ref{tab:numerics-restricted-q} shows the $\Q$ results for the restricted
 trading universe.  Orange marks a moderate departure from the Gaussian
 benchmark and red would mark a five-standard-error violation in the
@@ -1162,9 +1164,9 @@ D: rank 16, eight steps& 570 & 2.996 & {\color{orange}2.967}
 Tangent Levy & 570 & 2.191 & 2.126
   & 0 & 0
   & $-0.768$ & $-0.575$\\
-CRC (diagnostic) & 570 & {\color{red}140.250} & {\color{red}110.774}
-  & {\color{red}371} & {\color{red}320}
-  & {\color{red}42.562} & {\color{red}209.845}\\
+CRC (diagnostic) & \CrcQCoordinates & {\color{red}\CrcQMaximumAbsZ} & {\color{red}\CrcQP99AbsZ}
+  & {\color{red}\CrcQAboveTwoFiveSevenSix} & {\color{red}\CrcQAboveFive}
+  & {\color{red}\CrcQSquaredT} & {\color{red}\CrcQEntropyT}\\
 \bottomrule
 \end{tabular}
 \caption{Restricted-universe, 100,000-path $\Q$ diagnostics.  The first five
@@ -1190,12 +1192,14 @@ Appendix~\ref{app:tangent-levy}; the poor initial market fit reported above is
 therefore distinct from the absence of a rejection in these dynamic tests.
 In contrast, the generalized-Bates CRC implementation is a negative control
 for the diagnostics.  Its learned daily reset map fails the independent exact
-repricing gate on all 1,000 tested resets at tolerance $2\times10^{-6}$ in
-spot-normalized price (median maximum error $3.36\times10^{-4}$; maximum
-$1.53\times10^{-3}$).  The resulting 100,000-path diagnostic population
+repricing gate on all \CrcResetGateSamples\ tested resets at tolerance
+$\CrcResetGateTolerance$ in spot-normalized price (median maximum error
+$\CrcResetGateMedianError$; maximum $\CrcResetGateMaximumError$).  The resulting
+\CrcQPathCount-path diagnostic population
 therefore has artificial reset repricing, and the tests reject it strongly:
-371 of 570 coordinates exceed 2.576 standard errors, 320 exceed five, and
-$T_{\mathrm{sqr}}=42.562$, $T_{\mathrm{ent}}=209.845$.  This is the expected
+\CrcQAboveTwoFiveSevenSix\ of \CrcQCoordinates\ coordinates exceed 2.576 standard
+errors, \CrcQAboveFive\ exceed five, and $T_{\mathrm{sqr}}=\CrcQSquaredT$,
+$T_{\mathrm{ent}}=\CrcQEntropyT$.  This is the expected
 failure mode rather than a claim about the arbitrage status of exact CRC.
 Table~\ref{tab:numerics-restricted-p} applies the same diagnostics to GROMM
 paths generated with the fitted physical drift.  The entries are deliberately
