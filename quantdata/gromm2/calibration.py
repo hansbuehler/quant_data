@@ -58,6 +58,7 @@ class DlvCalibrationConfig:
     minimum_learning_rate_fraction: float = 0.1
     checkpoint_every: int = 10
     report_every: int = 5
+    plateau_review_epochs: int = 0
     seed: int = 20261012
 
     def __post_init__(self) -> None:
@@ -77,6 +78,8 @@ class DlvCalibrationConfig:
             raise ValueError("minimum learning-rate fraction must lie in [0,1]")
         if self.checkpoint_every <= 0 or self.report_every <= 0:
             raise ValueError("checkpoint and report intervals must be positive")
+        if self.plateau_review_epochs < 0:
+            raise ValueError("plateau_review_epochs must be non-negative")
 
 
 def _atomic_npz(path: Path, payload: dict[str, np.ndarray]) -> None:
@@ -896,6 +899,10 @@ def fit_affine_history(
     second = jax.device_put(jax.tree.map(jnp.asarray, second_cpu))
     step = jax.device_put(jnp.asarray(step_cpu))
     started = perf_counter()
+    best_objective = math.inf
+    best_objective_epoch = completed_epochs
+    final_epoch = completed_epochs
+    stopped_for_plateau_review = False
     for epoch in range(completed_epochs + 1, config.epochs + 1):
         fraction = (epoch - 1) / max(config.epochs - 1, 1)
         learning_rate = config.learning_rate * (
@@ -906,6 +913,10 @@ def fit_affine_history(
         )
         (objective, auxiliary), gradients = value_and_gradient(parameters)
         quote_loss, cap_penalty = auxiliary
+        objective_value = float(objective)
+        if objective_value < best_objective:
+            best_objective = objective_value
+            best_objective_epoch = epoch
         parameters, first, second, step, gradient_norm = adam_update(
             parameters,
             first,
@@ -936,6 +947,30 @@ def fit_affine_history(
                 f"elapsed={elapsed:.1f}s eta={eta:.1f}s",
                 flush=True,
             )
+        final_epoch = epoch
+        if (
+            config.plateau_review_epochs > 0
+            and epoch - best_objective_epoch >= config.plateau_review_epochs
+        ):
+            _save_checkpoint(
+                checkpoint,
+                parameters=parameters,
+                first=first,
+                second=second,
+                step=step,
+                completed_epochs=epoch,
+                config=config,
+                data_identity=data_identity,
+            )
+            print(
+                f"affine rank={config.rank} plateau review after "
+                f"{config.plateau_review_epochs} epochs without a new "
+                f"objective minimum; best={best_objective:.7g} "
+                f"at epoch={best_objective_epoch}; checkpoint saved",
+                flush=True,
+            )
+            stopped_for_plateau_review = True
+            break
     raw, prices = decode_only(parameters)
     raw_np = np.asarray(raw)
     dlvsq = config.minimum_dlvsq + np.exp(np.minimum(raw_np, maximum_raw))
@@ -950,6 +985,8 @@ def fit_affine_history(
             stream.attrs["calibration_config"] = json.dumps(
                 asdict(config), sort_keys=True
             )
+            stream.attrs["completed_epochs"] = final_epoch
+            stream.attrs["stopped_for_plateau_review"] = stopped_for_plateau_review
             stream.attrs["geometry_config"] = geometry_config
             stream.attrs["source_history"] = source_history
             stream.attrs["source_dataset"] = source_dataset
@@ -1011,6 +1048,7 @@ def main() -> None:
     fit.add_argument("--epochs", type=int, default=1_000)
     fit.add_argument("--learning-rate", type=float, default=0.01)
     fit.add_argument("--checkpoint-every", type=int, default=10)
+    fit.add_argument("--plateau-review-epochs", type=int, default=0)
     fit.add_argument("--call-kernels", type=Path)
     fit.add_argument("--end-date-exclusive")
     fit.add_argument("--warm-start-checkpoint", type=Path)
@@ -1031,6 +1069,7 @@ def main() -> None:
                 epochs=arguments.epochs,
                 learning_rate=arguments.learning_rate,
                 checkpoint_every=arguments.checkpoint_every,
+                plateau_review_epochs=arguments.plateau_review_epochs,
             ),
             call_kernels=arguments.call_kernels,
             end_date_exclusive=arguments.end_date_exclusive,
