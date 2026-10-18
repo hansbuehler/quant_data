@@ -32,6 +32,7 @@
 \newcommand{\MW}[1]{{\color{red}#1}}
 \DeclareMathOperator{\diag}{diag}
 \DeclareMathOperator{\tr}{tr}
+\renewrobustcmd{\P}{\mathbb{P}}
 
 \theoremstyle{plain}
 \newtheorem{theorem}{Theorem}[section]
@@ -138,18 +139,19 @@ generalized-Bates example and submit its numerical realization to the same
 unconditional and conditional diagnostics as GROMM and Tangent Levy. Our trained version of this
 model exhibits dynamic arbitrage.
 
-In order to have strict absence of dynamic arbitrage a model must alse be free of static arbitrage.
+\subsubsection*{Generative Models under the Statistical Measure}
+
+In order to have strict absence of dynamic arbitrage a model must alse be free of \emph{static arbitrage}.
 There are few works on generative equity option market dynamics which satisfy this requirement -- apart from the above quoted works, the main
 examples are \cite{wiese2019simulate}, the multi-asset version~\cite{wiese2021multiassetspotoptionmarket} and
 the neural-SDE based~\cite{Cohen02012023}. These models generate
-discrete strictly arbitrage-free option surfaces for a limited number of options. They do not introduce a risk-neutral measure.
-
+discrete strictly arbitrage-free option surfaces for a limited number of options. Neither work introduced a risk-neutral measure.
 To address the absence of an analytical risk-neutral measure, we presented in~\cite{removedrift} 
 a model-free approach
 to learning such a measure. However,  that method is numerically challenging
 for a large number of tradable options as discussed in~\cite{DYSANOS2026}.
 
-Most other approaches to generative option markets such as~\cite{ContVuletic2023,ChoudharyJaimungalBergeron2024,HanEtAl2026}
+Most other approaches to generative option markets such as~\cite{ContVuletic2023,ChoudharyJaimungalBergeron2024,HanEtAl2026,BucheggerGonon2026}
 are not strictly free of arbitrage and also do not construct corresponding risk-neutral dynamics. Table~\ref{tab:surface-dynamics-literature}
 on page~\pageref{tab:surface-dynamics-literature} provides a summary of the literature on the topic.
 

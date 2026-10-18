@@ -21,7 +21,7 @@ symbols throughout the tables:
   \item \textbf{U}: arbitrage freedom is claimed, but the available construction
         does not suffice to verify its continuum scope.
 \end{itemize}
-
+Please contact the authors for any suggestions, corrections, or additions.
 
 % Entries introduced by the backward-reference audit use the same styling.
 \newcommand{\auditnew}[1]{#1}
@@ -40,7 +40,7 @@ algorithm. Constraints imposed during fitting are distinguished from post-fit re
 \label{tab:surface-interpolation-literature}
 \begin{tabular}{@{}L{4.2cm}L{3.8cm}L{2.2cm}L{3.2cm}L{2.0cm}L{8.0cm}@{}}
 \toprule
-Method & Representation & Static arb. & Native inputs & Off-grid & Scope and qualification \\
+Method & Representation & No static arb. & Native inputs & Off-grid & Scope and qualification \\
 \midrule
 \auditnew{\citet{Gatheral2004SVI}}
   & \auditnew{SVI smile} & \auditnew{N by itself}
@@ -92,7 +92,7 @@ interpolation methods.  Soft-penalty methods are approximate even when reported
 violations are negligible.}
 \label{tab:nonparametric-surface-interpolation-literature}\\
 \toprule
-Method & Representation & Static arb. & Native inputs & Off-grid & Scope and qualification \\
+Method & Representation & No static arb. & Native inputs & Off-grid & Scope and qualification \\
 \midrule
 \endfirsthead
 \multicolumn{6}{c}{\tablename\ \thetable\ -- continued}\\
@@ -172,7 +172,7 @@ to its stated domain and tail assumptions.
 \label{tab:surface-representation-literature}
 \begin{tabular}{@{}L{4.3cm}L{4.2cm}L{3.6cm}L{2.7cm}L{3.0cm}L{6.0cm}@{}}
 \toprule
-Method & Representation & Native option coordinates & Off-grid & Latent/static arb. & Qualification \\
+Method & Representation & Native option coordinates & Off-grid & No static arb. & Qualification \\
 \midrule
 \citet{SkiadopoulosHodgesClewlow2000}
   & Direct-IV PCA & Not reported; three maturity groups & 0 & N & PCA factors do not preserve static inequalities. \\
@@ -303,7 +303,7 @@ could in principle be iterated.  ``Implemented'' refers to the stated dynamic
 construction, not merely static preprocessing.}
 \label{tab:surface-dynamics-literature}\\
 \toprule
-Method & Dynamic state/model & Static arb. under $\P$ & Multi-step $\P$ path & Direct market-model dynamics under $\Q$ & Implemented & Qualification \\
+Method & Dynamic state/model & Static no-arb. under $\P$ & Multi-step $\P$ path & Direct market-model dynamics under $\Q$ & Implemented & Qualification \\
 \midrule
 \endfirsthead
 \multicolumn{7}{c}{\tablename\ \thetable\ -- continued}\\
