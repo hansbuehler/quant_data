@@ -146,7 +146,7 @@ def _tex(summary: dict[str, Any]) -> str:
         "CrcPopulationMaximumResetError": _format_tex_scientific(population["maximum_reset_price_error"]),
         "CrcQCoordinates": str(unconditional["tested_coordinates"]),
         "CrcQMaximumAbsZ": _format_float(unconditional["maximum_absolute_z"]),
-        "CrcQP99AbsZ": _format_float(unconditional["p99_absolute_z"]),
+        "CrcQPercentileNineNineAbsZ": _format_float(unconditional["p99_absolute_z"]),
         "CrcQAboveTwoFiveSevenSix": str(unconditional["count_above_2_576"]),
         "CrcQAboveFive": str(unconditional["count_above_5"]),
         "CrcQSquaredT": _format_float(conditional["squared_t_statistic"]),

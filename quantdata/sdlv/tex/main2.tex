@@ -135,18 +135,23 @@ using the  linear programming SANOS~\cite{DLV, SANOS2026} calibration method.
 In \cite{DysLitGambaraTeichmann2021} the authors propose a piecewise
 dynamically arbitrage-free model via ``regridding''.  Below we implement their
 generalized-Bates example and submit its numerical realization to the same
-unconditional and conditional diagnostics as GROMM and Tangent Levy.
+unconditional and conditional diagnostics as GROMM and Tangent Levy. Our trained version of this
+model exhibits dynamic arbitrage.
 
-There are few works on generative equity option market dynamics which do not exhibit static arbitrage -- our
-own~2019 work \cite{wiese2019simulate}, the multi-asset version~\cite{wiese2021multiassetspotoptionmarket} and
+In order to have strict absence of dynamic arbitrage a model must alse be free of static arbitrage.
+There are few works on generative equity option market dynamics which satisfy this requirement -- apart from the above quoted works, the main
+examples are \cite{wiese2019simulate}, the multi-asset version~\cite{wiese2021multiassetspotoptionmarket} and
 the neural-SDE based~\cite{Cohen02012023}. These models generate
-discrete strictly arbitrage-free option surfaces. Most other approaches such as~\citealp{vae_ning2023arbitrage,AckererTagasovskaVatter2020,YangChenShuHospedales2025,GononJacquierWiedemann2025}
-are not strictly free of arbitrage and do not have analytical corresponding risk-neutral dynamics.
+discrete strictly arbitrage-free option surfaces for a limited number of options. They do not introduce a risk-neutral measure.
 
 To address the absence of an analytical risk-neutral measure, we presented in~\cite{removedrift} 
 a model-free approach
 to learning such a measure. However,  that method is numerically challenging
 for a large number of tradable options as discussed in~\cite{DYSANOS2026}.
+
+Most other approaches to generative option markets such as~\cite{ContVuletic2023,ChoudharyJaimungalBergeron2024,HanEtAl2026}
+are not strictly free of arbitrage and also do not construct corresponding risk-neutral dynamics. Table~\ref{tab:surface-dynamics-literature}
+on page~\pageref{tab:surface-dynamics-literature} provides a summary of the literature on the topic.
 
 For interest rate option markets the reference model in the same class is the BGM Model~\cite{BGM}.
 
@@ -941,14 +946,21 @@ In addition to GROMM we also ran the two reference models from the literature
 \begin{itemize}
   \item \textbf{Tangent Levy}~\cite{TangentLevy}: a finite-grid jump codebook
   whose conditional L\'evy density obeys the convolutional HJM drift restriction,
-  with spot driven by the compensated short-end jump law.  We use 16 historical
+  with spot driven by the compensated short-end jump law. This model is theoretically
+  free of dynamic arbitrage.
+
+  We use 16 historical
   PCA factors and eight simulation steps per day; Appendix~\ref{app:tangent-levy}
   records the calibration, reconstruction, and positivity choices.
+
   \item \textbf{CRC}~\cite{DysLitGambaraTeichmann2021}: a generalized-Bates
   consistent-recalibration model with Heston variance and five
   maturity-bucketed compensated Gaussian jump laws.  We estimate the reset
   law strictly before the reference date and use the inverse recalibration
-  map described in Appendix~\ref{app:bates-crc}.
+  map described in Appendix~\ref{app:bates-crc}. This model class would be free of arbitrage
+  if the calibrated model satisfied definition~6.3, which for our setup is
+  not the case. This reflects the challenge that the model relies in solving
+  ``an inverse problem that is ill-posed in the sense of Hadamard'', page~26.
 \end{itemize}
 
 \subsection{Initial Fit}
@@ -990,7 +1002,7 @@ the much larger Tangent Levy errors.
 
 Tangent Levy, which is essentially an independent-increment model, has the
 hardest time fitting the observed option prices.  The more flexible but parametric CRC
-model improves substantially on that fit, but still leaves 65.21\% of
+model improves  on that fit, but still leaves 65.21\% of
 quotes outside the spread; neither poor static fit is interpreted as a
 dynamic no-arbitrage rejection.
 
@@ -1164,7 +1176,7 @@ D: rank 16, eight steps& 570 & 2.996 & {\color{orange}2.967}
 Tangent Levy & 570 & 2.191 & 2.126
   & 0 & 0
   & $-0.768$ & $-0.575$\\
-CRC (diagnostic) & \CrcQCoordinates & {\color{red}\CrcQMaximumAbsZ} & {\color{red}\CrcQP99AbsZ}
+CRC (diagnostic) & \CrcQCoordinates & {\color{red}\CrcQMaximumAbsZ} & {\color{red}\CrcQPercentileNineNineAbsZ}
   & {\color{red}\CrcQAboveTwoFiveSevenSix} & {\color{red}\CrcQAboveFive}
   & {\color{red}\CrcQSquaredT} & {\color{red}\CrcQEntropyT}\\
 \bottomrule
@@ -1172,9 +1184,8 @@ CRC (diagnostic) & \CrcQCoordinates & {\color{red}\CrcQMaximumAbsZ} & {\color{re
 \caption{Restricted-universe, 100,000-path $\Q$ diagnostics.  The first five
 numeric columns are coordinate-wise unconditional statistics; the final two
 are the two-fold out-of-fold conditional statistics.  Here $N_c$ is the number
-of coordinates with $\abs{z}>c$.  The red CRC row is an intentionally
-failed reset-repricing negative control: its diagnostics are not a
-no-arbitrage certification.}
+of coordinates with $\abs{z}>c$.  The red CRC row reflects that with our trained
+data the model prices did not all match at the model's reset dates.}
 \label{tab:numerics-restricted-q}
 \end{table}
 
@@ -1190,22 +1201,27 @@ $T_{\mathrm{sqr}}=-0.768$ and $T_{\mathrm{ent}}=-0.575$.  Both corresponding
 daily-grid state and constrained reduced-node diffusion described in
 Appendix~\ref{app:tangent-levy}; the poor initial market fit reported above is
 therefore distinct from the absence of a rejection in these dynamic tests.
-In contrast, the generalized-Bates CRC implementation is a negative control
-for the diagnostics.  Its learned daily reset map fails the independent exact
-repricing gate on all \CrcResetGateSamples\ tested resets at tolerance
-$\CrcResetGateTolerance$ in spot-normalized price (median maximum error
-$\CrcResetGateMedianError$; maximum $\CrcResetGateMaximumError$).  The resulting
-\CrcQPathCount-path diagnostic population
-therefore has artificial reset repricing, and the tests reject it strongly:
+In contrast, the generalized-Bates CRC implementation fails the no-arbitrage tests
+in our implementation and calibration of the model.
+Its learned daily reset map fails the independent exact
+repricing of the options on all \CrcResetGateSamples\ tested resets.\footnote{The test was performed at tolerance
+  $\CrcResetGateTolerance$ in spot-normalized price (median maximum error
+$\CrcResetGateMedianError$; maximum $\CrcResetGateMaximumError$).}  The resulting
+\CrcQPathCount paths
+therefore has artificial resets in option prices which our tests detect:
 \CrcQAboveTwoFiveSevenSix\ of \CrcQCoordinates\ coordinates exceed 2.576 standard
 errors, \CrcQAboveFive\ exceed five, and $T_{\mathrm{sqr}}=\CrcQSquaredT$,
-$T_{\mathrm{ent}}=\CrcQEntropyT$.  This is the expected
-failure mode rather than a claim about the arbitrage status of exact CRC.
-Table~\ref{tab:numerics-restricted-p} applies the same diagnostics to GROMM
-paths generated with the fitted physical drift.  The entries are deliberately
-not colour coded: nonzero physical expected returns are intended evidence of
-the measure change, not arbitrage failures.
+$T_{\mathrm{ent}}=\CrcQEntropyT$.  This is somewhat expected as our model as calibrated does not satisfy
+the condition~(i) of definition~6.3 in~\cite{DysLitGambaraTeichmann2021}.
 
+\begin{remark}
+We also applied our no-arbitrage tests on the statistical GROMM measure.
+In this case we \emph{expect} the tests to fail.
+Table~\ref{tab:numerics-restricted-p} confirms the failure:
+all 570 coordinates exceed five standard errors under every physical-measure
+specification, and the out-of-fold entropy statistics range from 89.205 to
+646.645.  Thus the same diagnostics that remain small under~$\Q$ recover both
+unconditional and state-predictable drift after the fitted change to~$\PP$.
 \begin{table}[H]
 \centering
 \small
@@ -1227,11 +1243,7 @@ zero to display the predictable drift created by the fitted
 measure change.}
 \label{tab:numerics-restricted-p}
 \end{table}
-
-All 570 coordinates exceed five standard errors under every physical-measure
-specification, and the out-of-fold entropy statistics range from 89.205 to
-646.645.  Thus the same diagnostics that remain small under~$\Q$ recover both
-unconditional and state-predictable drift after the fitted change to~$\PP$.
+\end{remark}
 
 \subsection{Full Instrument Grid}
 \label{sec:numerics-full-instrument-grid}
