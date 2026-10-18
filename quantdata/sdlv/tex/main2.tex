@@ -1313,16 +1313,21 @@ discrete local volatility representation of European option markets, extending t
 SANOS surface of~\cite{SANOS2026} to a dynamically arbitrage-free model. The resulting SDLV
 process admits a closed-form risk-neutral drift for every discrete local volatility coordinate
 and an exact front-density/spot diffusion, in place of the numerical martingale measure
-used in~\cite{DYSANOS2026}. We further proved that the DLV dynamics admit a unique strong solution under the assumption of a square-integrable bound on the vol-of-vol (Theorem~\ref{thm:existence_bh}). 
+used in~\cite{DYSANOS2026}. We further proved that the DLV dynamics admit a unique strong solution under
+the assumption of a square-integrable bound on the vol-of-vol (Theorem~\ref{thm:existence_bh}).
 
 Estimated on 891 trading days of S\&P~500 index option data, the model's static fit covers more
 than 95\% of quoted bid/ask intervals, and the restricted-universe $\Q$ diagnostics of
 Section~\ref{sec:numerics} confirm the theoretical martingale property up to time-discretisation
 error.  On the full dynamically eligible instrument grid, both the
-coordinate-wise unconditional screen and the two out-of-fold conditional
-diagnostics remain consistent with the risk-neutral null.  We
-further estimate the physical dynamics and the implied market price of risk, recovering a
+coordinate-wise unconditional screen and the two conditional
+diagnostics remain consistent with the risk-neutral null.
+We further estimate the physical dynamics and the implied market price of risk, recovering a
 stable low-rank factor structure for the DLV vol-of-vol.
+
+We reviewed the two published related models, Tangent Levy~\cite{TangentLevy} and CRC~\cite{DysLitGambaraTeichmann2021}. The former is free of dynamic arbitrage
+but does not fit well to observed option prices. Our implementation of the latter neither fits observed option prices
+well, nor did we manage to construct a risk-neutral regridding process as stipulated in~\cite{DysLitGambaraTeichmann2021}.
 
 Natural next steps include applying the full-instrument diagnostic to the
 remaining factor ranks and time discretisations, studying the discrete-branch
