@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import date, timedelta
 from types import SimpleNamespace
 
@@ -19,7 +19,9 @@ from quantdata.dysanos.flex.config import (
 from quantdata.dysanos.flex.joint_direct import (
     JointDirectTrainConfig,
     _convergence_audit,
+    _learning_rate_multiplier,
     _restart_train_config_identity,
+    _restore_checkpoint,
     _save_checkpoint,
     factor_gauge_penalty,
     initialize_joint_model,
@@ -288,6 +290,102 @@ def test_joint_restart_identity_ignores_operational_day_batch_size() -> None:
     assert _restart_train_config_identity(first) == _restart_train_config_identity(
         second
     )
+
+
+def test_joint_checkpoint_extends_epochs_without_restarting_schedule(tmp_path) -> None:
+    env = BaseEnvironment(precision=64, device="cpu", debug=True)
+    model_config = JointDirectDynamicsConfig(
+        label="joint-direct-epoch-extension-test",
+        state_size=4,
+        geometry=_geometry(),
+    )
+    original = JointDirectTrainConfig(
+        num_epochs=2,
+        warmup_epochs=0,
+        dynamics_ramp_epochs=0,
+    )
+    extended = replace(original, num_epochs=4)
+    fingerprints = tuple(str(index) for index in range(8))
+    checkpoint = tmp_path / "joint.pt"
+    model = JointDirectDynamicsModel(env, num_days=8, config=model_config)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-4)
+    scheduler = torch.optim.lr_scheduler.LambdaLR(
+        optimizer, lambda epoch: _learning_rate_multiplier(epoch, original)
+    )
+    for _ in range(2):
+        optimizer.step()
+        scheduler.step()
+    _save_checkpoint(
+        model,
+        optimizer,
+        scheduler,
+        [{"epoch": 1.0}, {"epoch": 2.0}],
+        checkpoint,
+        train_config=original,
+        market_fingerprints=fingerprints,
+        source_decoder_sha256="a" * 64,
+        phase="training",
+    )
+
+    target = JointDirectDynamicsModel(env, num_days=8, config=model_config)
+    target_optimizer = torch.optim.Adam(target.parameters(), lr=1.0e-4)
+    schedule_config = extended
+    target_scheduler = torch.optim.lr_scheduler.LambdaLR(
+        target_optimizer, lambda epoch: _learning_rate_multiplier(epoch, schedule_config)
+    )
+    restored = _restore_checkpoint(
+        target,
+        target_optimizer,
+        target_scheduler,
+        checkpoint,
+        train_config=extended,
+        market_fingerprints=fingerprints,
+        source_decoder_sha256="a" * 64,
+    )
+    assert restored is not None
+    assert restored[0] == 2
+    assert restored[2:] == ("training", 2)
+    assert _restart_train_config_identity(original) == _restart_train_config_identity(
+        extended
+    )
+    assert _learning_rate_multiplier(3, replace(extended, num_epochs=restored[3])) == (
+        original.minimum_learning_rate_fraction
+    )
+    schedule_config = replace(extended, num_epochs=restored[3])
+    target_optimizer.step()
+    target_scheduler.step()
+    np.testing.assert_allclose(
+        target_optimizer.param_groups[0]["lr"],
+        1.0e-4 * original.minimum_learning_rate_fraction,
+    )
+
+    continued = tmp_path / "continued.pt"
+    _save_checkpoint(
+        target,
+        target_optimizer,
+        target_scheduler,
+        [{"epoch": float(epoch)} for epoch in range(1, 4)],
+        continued,
+        train_config=extended,
+        market_fingerprints=fingerprints,
+        source_decoder_sha256="a" * 64,
+        phase="training",
+        schedule_horizon=restored[3],
+    )
+    continued_payload = torch.load(continued, map_location="cpu", weights_only=False)
+    assert continued_payload["schedule_horizon"] == 2
+    assert continued_payload["train_config"]["num_epochs"] == 4
+
+    with np.testing.assert_raises_regex(ValueError, "only extend"):
+        _restore_checkpoint(
+            target,
+            target_optimizer,
+            target_scheduler,
+            checkpoint,
+            train_config=replace(original, num_epochs=1),
+            market_fingerprints=fingerprints,
+            source_decoder_sha256="a" * 64,
+        )
 
 
 def test_convergence_audit_compares_only_fully_weighted_epochs() -> None:

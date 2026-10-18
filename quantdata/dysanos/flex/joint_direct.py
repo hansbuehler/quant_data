@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import date
 from pathlib import Path
 from time import perf_counter
@@ -384,13 +384,14 @@ def _atomic_torch_save(payload: object, path: Path) -> None:
 def _restart_train_config_identity(
     config: JointDirectTrainConfig | dict[str, object],
 ) -> dict[str, object]:
-    """Exclude the operational batch size from checkpoint compatibility."""
+    """Allow operational batch changes and longer runs with unchanged losses."""
     values = (
         asdict(config)
         if isinstance(config, JointDirectTrainConfig)
         else dict(config)
     )
     values.pop("day_batch_size", None)
+    values.pop("num_epochs", None)
     return values
 
 
@@ -405,6 +406,7 @@ def _save_checkpoint(
     market_fingerprints: tuple[str, ...],
     source_decoder_sha256: str,
     phase: str,
+    schedule_horizon: int | None = None,
 ) -> None:
     payload: dict[str, object] = {
         "schema": "flex-joint-direct-dynamics-v1",
@@ -417,6 +419,9 @@ def _save_checkpoint(
         "optimizer_state_dict": optimizer.state_dict(),
         "scheduler_state_dict": scheduler.state_dict(),
         "completed_epochs": len(history),
+        "schedule_horizon": (
+            train_config.num_epochs if schedule_horizon is None else schedule_horizon
+        ),
         "history": history,
         "market_fingerprints": list(market_fingerprints),
         "source_decoder_sha256": source_decoder_sha256,
@@ -439,7 +444,7 @@ def _restore_checkpoint(
     train_config: JointDirectTrainConfig,
     market_fingerprints: tuple[str, ...],
     source_decoder_sha256: str,
-) -> tuple[int, list[dict[str, float]], str] | None:
+) -> tuple[int, list[dict[str, float]], str, int] | None:
     if not path.exists():
         return None
     payload = torch.load(path, map_location=model.device, weights_only=False)
@@ -458,6 +463,13 @@ def _restore_checkpoint(
         saved_train_config
     ) != _restart_train_config_identity(train_config):
         raise ValueError("Joint Direct checkpoint training configuration mismatch")
+    saved_epochs = int(saved_train_config["num_epochs"])
+    completed_epochs = int(payload["completed_epochs"])
+    schedule_horizon = int(payload.get("schedule_horizon", saved_epochs))
+    if train_config.num_epochs < max(saved_epochs, completed_epochs):
+        raise ValueError("Joint Direct restart may only extend the epoch count")
+    if not 0 < schedule_horizon <= saved_epochs:
+        raise ValueError("Invalid Joint Direct checkpoint schedule horizon")
     if tuple(payload.get("market_fingerprints", ())) != market_fingerprints:
         raise ValueError("Joint Direct checkpoint market identity mismatch")
     if payload.get("source_decoder_sha256") != source_decoder_sha256:
@@ -475,7 +487,7 @@ def _restore_checkpoint(
         {str(key): float(value) for key, value in item.items()}
         for item in payload.get("history", [])
     ]
-    return int(payload["completed_epochs"]), history, str(payload["phase"])
+    return completed_epochs, history, str(payload["phase"]), schedule_horizon
 
 
 def fit_joint_direct_model(
@@ -517,9 +529,10 @@ def fit_joint_direct_model(
             },
         ]
     )
+    schedule_config = train_config
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer,
-        lr_lambda=lambda epoch: _learning_rate_multiplier(epoch, train_config),
+        lr_lambda=lambda epoch: _learning_rate_multiplier(epoch, schedule_config),
     )
     market_fingerprints = tuple(day.training_fingerprint for day in market_days)
     restored = _restore_checkpoint(
@@ -535,11 +548,16 @@ def fit_joint_direct_model(
         start_epoch = 0
         history: list[dict[str, float]] = []
     else:
-        start_epoch, history, phase = restored
-        if phase == "complete":
+        start_epoch, history, phase, schedule_horizon = restored
+        # Extending a finished cosine schedule keeps its terminal learning rate.
+        # Recomputing it over the longer run would create an unintended LR jump.
+        schedule_config = replace(train_config, num_epochs=schedule_horizon)
+        if phase == "complete" and start_epoch == train_config.num_epochs:
             return history, _convergence_audit(history, config=train_config)
-        if phase != "training":
+        if phase not in {"training", "complete"}:
             raise ValueError(f"Unexpected joint checkpoint phase {phase!r}")
+    if restored is None:
+        schedule_horizon = train_config.num_epochs
 
     rng = np.random.default_rng(train_config.seed)
     # The only NumPy draw is one date permutation per completed epoch. Advance
@@ -658,6 +676,7 @@ def fit_joint_direct_model(
                 market_fingerprints=market_fingerprints,
                 source_decoder_sha256=source_decoder_sha256,
                 phase="training",
+                schedule_horizon=schedule_horizon,
             )
 
     if train_config.compile_sanos_solver:
@@ -674,6 +693,7 @@ def fit_joint_direct_model(
             market_fingerprints=market_fingerprints,
             source_decoder_sha256=source_decoder_sha256,
             phase="training",
+            schedule_horizon=schedule_horizon,
         )
         raise TrainingConvergenceError(
             f"Joint Direct training failed convergence: {json.dumps(audit)}"
@@ -688,6 +708,7 @@ def fit_joint_direct_model(
         market_fingerprints=market_fingerprints,
         source_decoder_sha256=source_decoder_sha256,
         phase="complete",
+        schedule_horizon=schedule_horizon,
     )
     return history, audit
 
