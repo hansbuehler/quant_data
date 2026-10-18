@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import date
 from pathlib import Path
 from typing import cast
@@ -115,6 +115,18 @@ def _continuation_checkpoint(source: Path, target: Path) -> Path:
     source_digest = checkpoint_digest(source)
     if target.exists():
         existing = torch.load(target, map_location="cpu", weights_only=False)
+        if existing.get("phase") == "complete":
+            # The final trainer checkpoint replaces the provisional payload and
+            # no longer retains the warm-start source hash.  Its own completed
+            # audits and market identity are checked again by fit_latent_states.
+            audits = existing.get("training_audits")
+            if not isinstance(audits, dict) or not all(
+                isinstance(audits.get(name), dict)
+                and audits[name].get("converged") is True
+                for name in ("supervised", "market")
+            ):
+                raise ValueError("Existing complete decoder lacks passing audits")
+            return target
         if existing.get("weights_only_source_sha256") != source_digest:
             raise ValueError("Existing decoder continuation has another source")
         return target
@@ -149,6 +161,16 @@ def _continuation_checkpoint(source: Path, target: Path) -> Path:
     torch.save(payload, temporary)
     temporary.replace(target)
     return target
+
+
+def _decoder_train_config_for_checkpoint(
+    config: FlexTrainConfig, checkpoint: Path
+) -> FlexTrainConfig:
+    """Explicitly load a completed decoder during a joint-only restart."""
+    if not checkpoint.exists():
+        return config
+    payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    return replace(config, just_load=True) if payload.get("phase") == "complete" else config
 
 
 def run(
@@ -249,7 +271,9 @@ def run(
             config=decoder_config,
             objective_config=FlexObjectiveConfig(fit_weight=0.05),
             supervised_train_config=decoder_train,
-            market_train_config=decoder_train,
+            market_train_config=_decoder_train_config_for_checkpoint(
+                decoder_train, decoder_checkpoint
+            ),
             checkpoint_path=decoder_checkpoint,
         )
     standardized = standardize_affine_direct_model(decoder_fit.model)

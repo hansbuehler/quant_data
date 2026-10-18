@@ -5,8 +5,10 @@ from datetime import date
 import pytest
 import torch
 
+from quantdata.dysanos.flex.training import FlexTrainConfig
 from quantdata.dysanos.v11.run_strict_pre2025_direct import (
     _continuation_checkpoint,
+    _decoder_train_config_for_checkpoint,
     _train_count,
 )
 
@@ -81,3 +83,49 @@ def test_continuation_accepts_absent_training_audits(tmp_path) -> None:
     _continuation_checkpoint(source, target)
     payload = torch.load(target, map_location="cpu", weights_only=False)
     assert payload["training_audits"] == {}
+
+
+def test_continuation_reuses_completed_decoder_without_source_hash(tmp_path) -> None:
+    source = tmp_path / "source.pt"
+    target = tmp_path / "continuation.pt"
+    torch.save({"phase": "market"}, source)
+    torch.save(
+        {
+            "phase": "complete",
+            "training_audits": {
+                "supervised": {"converged": True},
+                "market": {"converged": True},
+            },
+        },
+        target,
+    )
+    before = target.read_bytes()
+    assert _continuation_checkpoint(source, target) == target
+    assert target.read_bytes() == before
+
+
+def test_continuation_rejects_completed_decoder_with_failed_audit(tmp_path) -> None:
+    source = tmp_path / "source.pt"
+    target = tmp_path / "continuation.pt"
+    torch.save({"phase": "market"}, source)
+    torch.save(
+        {
+            "phase": "complete",
+            "training_audits": {"market": {"converged": False}},
+        },
+        target,
+    )
+    with pytest.raises(ValueError, match="lacks passing audits"):
+        _continuation_checkpoint(source, target)
+
+
+def test_completed_decoder_is_explicitly_loaded_for_joint_restart(tmp_path) -> None:
+    checkpoint = tmp_path / "decoder.pt"
+    config = FlexTrainConfig(num_epochs=250)
+    assert _decoder_train_config_for_checkpoint(config, checkpoint) is config
+    torch.save({"phase": "market"}, checkpoint)
+    assert _decoder_train_config_for_checkpoint(config, checkpoint) is config
+    torch.save({"phase": "complete"}, checkpoint)
+    loaded_config = _decoder_train_config_for_checkpoint(config, checkpoint)
+    assert loaded_config.just_load is True
+    assert loaded_config.num_epochs == config.num_epochs
