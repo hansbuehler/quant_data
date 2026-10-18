@@ -1162,15 +1162,17 @@ D: rank 16, eight steps& 570 & 2.996 & {\color{orange}2.967}
 Tangent Levy & 570 & 2.191 & 2.126
   & 0 & 0
   & $-0.768$ & $-0.575$\\
-CRC & 570 & {\color{red}?} & {\color{red}?}
-  & {\color{red}?} & {\color{red}?}
-  & {\color{red}?} & {\color{red}?}\\
+CRC (diagnostic) & 570 & {\color{red}140.250} & {\color{red}110.774}
+  & {\color{red}371} & {\color{red}320}
+  & {\color{red}42.562} & {\color{red}209.845}\\
 \bottomrule
 \end{tabular}
 \caption{Restricted-universe, 100,000-path $\Q$ diagnostics.  The first five
 numeric columns are coordinate-wise unconditional statistics; the final two
 are the two-fold out-of-fold conditional statistics.  Here $N_c$ is the number
-of coordinates with $\abs{z}>c$. {\color{red} TODO CRC is missing}}
+of coordinates with $\abs{z}>c$.  The red CRC row is an intentionally
+failed reset-repricing negative control: its diagnostics are not a
+no-arbitrage certification.}
 \label{tab:numerics-restricted-q}
 \end{table}
 
@@ -1186,6 +1188,15 @@ $T_{\mathrm{sqr}}=-0.768$ and $T_{\mathrm{ent}}=-0.575$.  Both corresponding
 daily-grid state and constrained reduced-node diffusion described in
 Appendix~\ref{app:tangent-levy}; the poor initial market fit reported above is
 therefore distinct from the absence of a rejection in these dynamic tests.
+In contrast, the generalized-Bates CRC implementation is a negative control
+for the diagnostics.  Its learned daily reset map fails the independent exact
+repricing gate on all 1,000 tested resets at tolerance $2\times10^{-6}$ in
+spot-normalized price (median maximum error $3.36\times10^{-4}$; maximum
+$1.53\times10^{-3}$).  The resulting 100,000-path diagnostic population
+therefore has artificial reset repricing, and the tests reject it strongly:
+371 of 570 coordinates exceed 2.576 standard errors, 320 exceed five, and
+$T_{\mathrm{sqr}}=42.562$, $T_{\mathrm{ent}}=209.845$.  This is the expected
+failure mode rather than a claim about the arbitrage status of exact CRC.
 Table~\ref{tab:numerics-restricted-p} applies the same diagnostics to GROMM
 paths generated with the fitted physical drift.  The entries are deliberately
 not colour coded: nonzero physical expected returns are intended evidence of
