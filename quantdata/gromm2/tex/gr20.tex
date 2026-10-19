@@ -490,32 +490,47 @@ volatility points at 5D, 20D, 60D, and 120D, respectively.  This is a
 reallocation of the observed skew between the background and residual DLV
 components: recalibration still targets the same total option surface.
 
-For a historical comparison, we keep the fitted Heston parameters fixed,
-allow its initial variance to follow the scaled released one-day kernel
-variance, and recalibrate the rank-200 residual DLV history using the
-corresponding date-specific Heston pricing kernels.  Table~\ref{tab:heston-background-fit}
-compares this rolling-kernel extraction with the otherwise identical $5\%$
-Black extraction.  Heston does not improve the fit: the fraction inside spread
-falls by $0.48$ percentage points, while mean excess outside spread and
-midpoint error both increase.  This is a like-for-like comparison on the new
-six-month synthetic book: 7,547,934 SANOS-generated quotes over 45 expiries.
-It is not directly comparable with the earlier affine-200 result of $95.02\%$
-inside bid--ask, which used 2,192,458 retained market quotes on the original
-25-daily-expiry grid.
+Table~\ref{tab:heston-background-fit} records the fit evidence.  The one-date
+control already shows the central issue: under the same residual-DLV
+extraction, the scaled Heston background loses 6.13 percentage points of
+inside-spread fit relative to the $5\%$ Black background.  The Heston
+background is not close to Black after scaling: preserving its relative
+variance-of-variance together with $\rho=-0.612$ imposes substantial downside
+skew.  The residual DLV would have to deconvolve this shape, but a
+non-negative local variance cannot implement an arbitrary signed
+deconvolution.  On the reference date, $3.86\%$ of residual DLV nodes reach
+the lower variance floor under Heston, versus $2.13\%$ under Black; neither
+specification reaches the upper cap.
+
+The rolling experiment uses the reference-date Heston parameters at every
+historical date and changes only the initial variance.  It therefore also
+imposes one skew and term-structure family on all historical surfaces.  The
+date-varying FFT-kernel interpolation has maximum validated absolute price
+error $2.7\times10^{-5}$, so interpolation alone cannot explain the gap.
+The historical Heston run in the table predates the current symmetrized
+M-matrix solver and is consequently not a controlled comparison with the
+current-solver Black result.  A reduced-learning-rate continuation made only
+69 current-solver steps before the 50-epoch plateau-review rule stopped it;
+it did not improve materially.  A full current-solver Heston refit remains
+necessary before drawing a long-history quantitative conclusion.
 
 \begin{table}[htbp]
   \centering
   \small
-  \caption{Full-history residual-DLV calibration under Black and Heston
-  background kernels on the same six-month synthetic SANOS book.  Errors are
-  measured in synthetic half-spreads.}
+  \caption{Evidence on the independent Heston background.  Static controls
+  use the 29 August 2025 SANOS surface; historical results use the six-month,
+  45-expiry synthetic SANOS book.  Errors are measured in synthetic
+  half-spreads.}
   \label{tab:heston-background-fit}
-  \begin{tabular}{@{}lrrr@{}}
+  \begin{tabular}{@{}llrr@{}}
     \toprule
-    Background & Inside spread & Mean excess & Midpoint MAE \\
+    Experiment & Background & Inside spread & Mean excess \\
     \midrule
-    Black, fixed $5\%$ & $83.59\%$ & $0.170$ & $0.635$ \\
-    Heston, date-specific variance & $83.11\%$ & $0.270$ & $0.755$ \\
+    One-date control & Black, fixed $5\%$ & $95.10\%$ & $0.058$ \\
+    One-date control & Heston, scaled $5\%$ & $88.97\%$ & $0.228$ \\
+    Historical, current solver & Black, fixed $5\%$ & $91.22\%$ & $0.078$ \\
+    Historical, old solver & Heston, date-varying $v_0$ & $83.11\%$ & $0.270$ \\
+    Historical, current solver & Heston continuation (69 steps) & $83.30\%$ & $0.269$ \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -550,8 +565,9 @@ cleaner dynamic spot--volatility representation.
       & $\Q$ variance drift and latent leverage not identified \\
     Independent Heston pilot
       & Adds $2.1$--$2.6$ volatility points of downside background skew;
-        $83.11\%$ inside spread historically
-      & Residual DLV innovations remain materially correlated with variance \\
+        one-date fit falls from $95.10\%$ to $88.97\%$
+      & Residual DLV must counteract the imposed skew; full current-solver
+        historical refit outstanding \\
     \bottomrule
   \end{tabular}
 \end{table}
