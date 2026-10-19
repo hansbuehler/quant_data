@@ -430,23 +430,26 @@ Assume that $W$ is a $d$-dimensional Brownian motion. We designate $W^1$ as the
 
 \subsubsection{Existence}
 \label{sec:existence}
-We have just described a set of risk-neutral model dynamics for a discrete process $X_t$ whose future densities themselves are martingales driven by stochastic discrete local volatilities. Our construction is concise and lends itself to efficient numerical implementation and model parameter estimation. 
+We have just described a set of risk-neutral model dynamics for a discrete process $X_t$ whose future densities themselves are martingales driven by stochastic discrete local volatilities. Our construction is concise and lends itself to efficient numerical implementation and model parameter estimation. We now turn to proving the existence of the process. 
 
-With $L_t^{j,i}\coloneqq\log\Sigma_t^{j,i}$, \eqref{eq:dlv_sde_hb} and the drift restriction \eqref{eq:drift_hb}, the Itô dynamics of the log of the DLV squared are governed by 
+Let $L_t^{j,i}\coloneqq\log\Sigma_t^{j,i}$. Given \eqref{eq:dlv_sde_hb} and the drift restriction \eqref{eq:drift_hb}, the Itô dynamics of the log of the DLV squared are given by 
 \begin{equation}
   \label{eq:log_dlv_sde_mw}
   dL_t^{j,i}=\left(-\sum_{f=1}^d\xi_t^{j,i;f}\eta_t^{j,i;f}
-    -\frac12\sum_{f=1}^d(\xi_t^{j,i;f})^2\right)dt+\sum_{f=1}^d\xi_t^{j,i;f}\,dW_t^f .
+    -\frac12\sum_{f=1}^d(\xi_t^{j,i;f})^2\right)dt+\sum_{f=1}^d\xi_t^{j,i;f}\,dW_t^f \, .
 \end{equation}
-Thus, the only term that can blow up the drift is $\eta^{j, i; f} = E^{j, i; f} / q^{j, i}$, as the density entries at the wings become small. 
-For the Gaussian bridge front (Section~\ref{sec:front-density}), $\eta_t$ grows asymptotically at the rate $(T_k - t)^{-1}$ on strikes it abandons. 
-Thus, we cannot derive bounds for $\Sigma$ directly, and instead investigate the relationship of the density $q$ and $R = \Sigma q$, which in turn will allow us to read off the DLV. 
+Upon inspection of \eqref{eq:log_dlv_sde_mw}, the drift restriction can cause instabilities: as time approaches the front's expiry $T_k$, the densities of the future expiries lose mass on the wing nodes the front abandons, which causes $\eta^{j, i; f} = E^{j, i; f} / q^{j, i}$ to blow up. 
+Moreover, for the Gaussian bridge front as introduced in Section~\ref{sec:front-density}, $\eta_t^{k}$ grows asymptotically at the rate $(T_k - t)^{-1}$ on nodes it abandons\footnote{}, invalidating a proof that relies on the integrability of the relative density volatility. We therefore turn towards investigating the relationship between (a positive multiple of) the calendar spread $R^{j, i} = \Sigma^{j, i} q^{j, i}$ and (a positive multiple of) the butterfly spread $q^{j, i}$ near settlement, which in turn will allow us to read off the DLV. 
 
-Throughout, fix $k$, $T_k$ being the front, and let $B_t = W_t^1 - W_{T_{k-1}}^1$ be the Brownian motion centered at the origin. We assume that the front follows the Gaussian construction from Section \ref{sec:front-density} with mass distributed along interior strikes, i.e. $\sum_{i=1}^N q_{T_{k-1}}^{k, i} > 0$, and that $\xi$ is locally Lipschitz in $(B, L)$ and bounded by a deterministic function $c(t)$ that is square-integrable, i.e. $\|\xi \|_\infty \leq c(t)$ with $\int_{T_{k-1}}^{T_k}c^2<\infty$. The constant loadings that are estimated in Section~\ref{sec:estimation} satisfy this. We will denote by $J$ the node at which the spot settles at time $T_k$, i.e. $X_{T_k} = K^J$. 
+Throughout this section fix the front expiration $k$ with expiration time $T_k$, and let $B_t = W_t^1 - W_{T_{k-1}}^1$ be the Brownian motion centered at the origin. For this front, we assume the density to have mass on the interior strikes $\sum_{i=1}^N q_{T_{k-1}}^{k, i} > 0$ which is a non-restrictive assumption, as long as the process is not on an exterior absorbing node. For the vol-of-vol $\xi^{j, i}$ of tenor $j$ and strike $i$, we assume local Lipschitz continuity in $(B, L)$ and square-integrability for all $i, j, f$: 
+\begin{equation*}
+  |\xi^{j, i; f}|_\infty \leq c(t) \quad \textrm{where} \quad \int_{T_{k-1}}^{T_k}c^2<\infty
+\end{equation*}
+which is consistent with the constant loadings that we estimate for our GROMM in Section~\ref{sec:estimation}. By $J$ we denote the node at which spot settles: $X_{T_k} = K^J$. 
 
 \begin{theorem}[Existence]
 \label{thm:existence_bh}
-Let $L_{T_{k-1}} = \log \Sigma_{T_{k-1}} $ be finite.
+Let $L_{T_{k-1}} $ be finite.
 \begin{enumerate}[label=(\roman*)]
   \item There is a unique strong solution for $L$ on $[T_{k-1},T_k)$, and every $\Sigma^{j,i}$ stays
     finite and strictly positive.
@@ -456,7 +459,7 @@ Let $L_{T_{k-1}} = \log \Sigma_{T_{k-1}} $ be finite.
 \end{enumerate}
 \end{theorem}
 
-
+Before we proof the existence statement, we demonstrate that two positive local martingales that only differ by a square integrable relative volatility, vanish together: 
 \begin{lemma}
 \label{lem:zero_sets_bh}  
 Let $\tau\le T_k$ be a stopping time and let $U, V$ be two positive continuous local martingales defined on the interval $[T_{k-1},\tau)$. Assume that $U, V$ have relative volatilities $u$ and $u+v$ respectively, i.e. $dU / U = u \,dW$ and $dV / V = (u+v) \, dW$. Following holds true: 
