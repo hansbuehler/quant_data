@@ -2,6 +2,7 @@
 \documentclass[11pt]{article}
 \usepackage[margin=1.1in]{geometry}
 \usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{etoolbox}
 \usepackage[T1]{fontenc}
 \usepackage{microtype}
 \usepackage{booktabs}
@@ -156,6 +157,8 @@ are not strictly free of arbitrage and also do not construct corresponding risk-
 on page~\pageref{tab:surface-dynamics-literature} provides a summary of the literature on the topic.
 
 For interest rate option markets the reference model in the same class is the BGM Model~\cite{BGM}.
+A detailed review of the literature, organised by surface codebook, is given in Appendix~\ref{app:literature-review};
+Appendix~\ref{app:literature-classification} summarises it in tables.
 
 \section{Stochastic Smooth Discrete Local Volatility}
 
@@ -1349,6 +1352,9 @@ BH thankfully acknowledges financial support from UKRI1010: High order mathemati
 \input{sec_factor_figures}
 \input{sec_pipeline}
 \input{sec_reference_models}
+
+\clearpage
+\input{sec_literature_review}
 
 \clearpage
 \section{Option-surface Literature Classification}
