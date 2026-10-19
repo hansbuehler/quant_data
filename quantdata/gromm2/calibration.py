@@ -673,6 +673,7 @@ def fit_affine_history(
     call_kernels: Path | None = None,
     end_date_exclusive: str | None = None,
     warm_start_checkpoint: Path | None = None,
+    evaluate_only: bool = False,
 ) -> None:
     """Fit the affine DLV history with the DYSANOS bid--ask objective."""
     if jax.default_backend() not in {"cuda", "gpu"}:
@@ -894,6 +895,8 @@ def fit_affine_history(
         second_cpu = jax.tree.map(np.zeros_like, parameters_cpu)
         step_cpu = np.asarray(0, dtype=np.int32)
         completed_epochs = 0
+    if evaluate_only and completed_epochs == 0:
+        raise ValueError("evaluate_only requires an existing compatible checkpoint")
     parameters = jax.device_put(jax.tree.map(jnp.asarray, parameters_cpu))
     first = jax.device_put(jax.tree.map(jnp.asarray, first_cpu))
     second = jax.device_put(jax.tree.map(jnp.asarray, second_cpu))
@@ -904,6 +907,8 @@ def fit_affine_history(
     final_epoch = completed_epochs
     stopped_for_plateau_review = False
     for epoch in range(completed_epochs + 1, config.epochs + 1):
+        if evaluate_only:
+            break
         fraction = (epoch - 1) / max(config.epochs - 1, 1)
         learning_rate = config.learning_rate * (
             config.minimum_learning_rate_fraction
@@ -1049,6 +1054,7 @@ def main() -> None:
     fit.add_argument("--learning-rate", type=float, default=0.01)
     fit.add_argument("--checkpoint-every", type=int, default=10)
     fit.add_argument("--plateau-review-epochs", type=int, default=0)
+    fit.add_argument("--evaluate-only", action="store_true")
     fit.add_argument("--call-kernels", type=Path)
     fit.add_argument("--end-date-exclusive")
     fit.add_argument("--warm-start-checkpoint", type=Path)
@@ -1074,6 +1080,7 @@ def main() -> None:
             call_kernels=arguments.call_kernels,
             end_date_exclusive=arguments.end_date_exclusive,
             warm_start_checkpoint=arguments.warm_start_checkpoint,
+            evaluate_only=arguments.evaluate_only,
         )
 
 
