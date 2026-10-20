@@ -33,6 +33,7 @@ COLORS = {
     "Covariance": "#7357a6",
     "Historical-SANOS": "#1764ab",
 }
+RISK_COLORS = ("#31688e", "#35b779", "#fde725", "#8a52a5")
 
 
 def _case_key(model: str, objective: str, risk: float) -> str:
@@ -100,7 +101,14 @@ def _target_label(target: str) -> str:
     )
 
 
-def _bars(axis: plt.Axes, values: dict[str, np.ndarray], targets: list[str], title: str) -> None:
+def _bars(
+    axis: plt.Axes,
+    values: dict[str, np.ndarray],
+    targets: list[str],
+    title: str,
+    *,
+    colors: dict[str, str] = COLORS,
+) -> None:
     positions = np.arange(len(targets))
     width = 0.8 / len(values)
     for index, (name, statistic) in enumerate(values.items()):
@@ -108,7 +116,7 @@ def _bars(axis: plt.Axes, values: dict[str, np.ndarray], targets: list[str], tit
             positions + (index - (len(values) - 1) / 2) * width,
             statistic / 1_000,
             width=0.94 * width,
-            color=COLORS[name],
+            color=colors[name],
             label=name,
         )
     axis.set_xticks(positions, [_target_label(target) for target in targets])
@@ -117,46 +125,83 @@ def _bars(axis: plt.Axes, values: dict[str, np.ndarray], targets: list[str], tit
     axis.grid(axis="y", alpha=0.2)
 
 
-def _case_page(
+def _intervals(
+    axis: plt.Axes,
+    values: dict[str, np.ndarray],
+    targets: list[str],
+    *,
+    colors: dict[str, str] = COLORS,
+) -> None:
+    positions = np.arange(len(targets))
+    width = 0.8 / len(values)
+    for index, (name, pnl) in enumerate(values.items()):
+        low, median, high = np.percentile(np.abs(pnl), (10, 50, 90), axis=0) / 1_000
+        axis.errorbar(
+            positions + (index - (len(values) - 1) / 2) * width,
+            median,
+            yerr=np.vstack((median - low, high - median)),
+            fmt="o",
+            capsize=2,
+            color=colors[name],
+            label=name,
+        )
+    axis.set_xticks(positions, [_target_label(target) for target in targets])
+    axis.set_ylabel("USD thousands per $1m payout")
+    axis.set_title("10–90% range of absolute daily P&L")
+    axis.grid(axis="y", alpha=0.2)
+
+
+def _objective_page(
     pdf: PdfPages,
     *,
     model: str,
     objective: str,
-    risk: float,
-    case_books: dict[str, dict[str, dict[str, object]]] | None,
+    case_books: dict[float, dict[str, dict[str, dict[str, object]]]],
     references: dict[str, dict[str, dict[str, dict[str, object]]]],
     targets: list[str],
-) -> dict[str, object]:
-    figure, axes = plt.subplots(2, 1, figsize=(16, 9), layout="constrained")
-    title = f"{model} · {objective.replace('-', ' ')} · risk aversion {risk:g}"
-    if case_books is None:
+) -> dict[float, dict[str, object]]:
+    figure, axes = plt.subplots(3, 1, figsize=(16, 13), layout="constrained")
+    title = f"{model} · {objective.replace('-', ' ')} · all risk settings"
+    if not case_books:
         for axis in axes:
             axis.axis("off")
         axes[0].text(0.5, 0.5, "Corrected zero-mean run pending", ha="center", va="center", fontsize=18)
         figure.suptitle(title)
         pdf.savefig(figure)
         plt.close(figure)
-        return {"status": "pending"}
+        return {}
 
-    dates = sorted(set(case_books).intersection(*(set(books) for books in references.values())))
+    dates = sorted(set.intersection(*(set(books) for books in (*case_books.values(), *references.values()))))
     if not dates:
         raise RuntimeError(f"no common dates for {title}")
     values = {"Unhedged": _unhedged(references["SANOS-LV"], dates, targets)}
     for name, books in references.items():
         values[name] = _pnl(books, dates, targets)
-    values[model] = _pnl(case_books, dates, targets)
-    for name, books in {**references, model: case_books}.items():
+    colors = {name: COLORS[name] for name in values}
+    for index, (risk, books) in enumerate(sorted(case_books.items())):
+        name = f"{model} λ={risk:g}"
+        values[name] = _pnl(books, dates, targets)
+        colors[name] = RISK_COLORS[index]
+    comparison_books = {
+        **references,
+        **{f"λ={risk:g}": books for risk, books in case_books.items()},
+    }
+    for name, books in comparison_books.items():
         candidate = _unhedged(books, dates, targets)
         if not np.allclose(candidate, values["Unhedged"], rtol=1e-10, atol=1e-5):
             raise RuntimeError(f"market cashflow mismatch: {title}, {name}")
     absolute = {name: np.abs(array) for name, array in values.items()}
-    _bars(axes[0], {name: array.mean(axis=0) for name, array in absolute.items()}, targets, "Mean absolute daily P&L")
-    _bars(axes[1], {name: np.median(array, axis=0) for name, array in absolute.items()}, targets, "Median absolute daily P&L")
-    axes[0].legend(ncol=4, fontsize=10)
+    _bars(axes[0], {name: array.mean(axis=0) for name, array in absolute.items()}, targets, "Mean absolute daily P&L", colors=colors)
+    _bars(axes[1], {name: np.median(array, axis=0) for name, array in absolute.items()}, targets, "Median absolute daily P&L", colors=colors)
+    _intervals(axes[2], values, targets, colors=colors)
+    axes[0].legend(ncol=4, fontsize=9)
     figure.suptitle(f"{title} · {len(dates)} common completed dates, {dates[0]}–{dates[-1]}")
     pdf.savefig(figure)
     plt.close(figure)
-    return {"status": "complete", "common_dates": len(dates), "first_date": dates[0], "last_date": dates[-1]}
+    return {
+        risk: {"status": "complete", "common_dates": len(dates), "first_date": dates[0], "last_date": dates[-1]}
+        for risk in case_books
+    }
 
 
 def _best_half(
@@ -179,7 +224,10 @@ def main() -> None:
     parser.add_argument("--sanos-lv", required=True, type=Path)
     parser.add_argument("--bs-greeks", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--min-common-dates", type=int, default=100)
     arguments = parser.parse_args()
+    if arguments.min_common_dates < 1:
+        parser.error("--min-common-dates must be positive")
     reference_metadata = _metadata(arguments.sanos_lv)
     references = {
         "BS delta + vega": _load_run(arguments.bs_greeks),
@@ -205,11 +253,17 @@ def main() -> None:
     with PdfPages(arguments.output / "STATISTICAL_DETAILS.pdf") as pdf:
         for model in MODELS:
             for objective, risks in RISK_GRID.items():
+                objective_cases = {
+                    risk: cases[_case_key(model, objective, risk)]
+                    for risk in risks if _case_key(model, objective, risk) in cases
+                }
+                page_coverage = _objective_page(
+                    pdf, model=model, objective=objective,
+                    case_books=objective_cases, references=references, targets=targets,
+                )
                 for risk in risks:
-                    key = _case_key(model, objective, risk)
-                    coverage[key] = _case_page(
-                        pdf, model=model, objective=objective, risk=risk,
-                        case_books=cases.get(key), references=references, targets=targets,
+                    coverage[_case_key(model, objective, risk)] = page_coverage.get(
+                        risk, {"status": "pending"}
                     )
 
     complete = len(cases) == len(MODELS) * sum(map(len, RISK_GRID.values()))
@@ -223,15 +277,15 @@ def main() -> None:
     }
     if complete:
         dates = sorted(set.intersection(*(set(books) for books in (*cases.values(), *references.values()))))
-        if len(dates) < 100:
+        if len(dates) < arguments.min_common_dates:
             raise RuntimeError(f"only {len(dates)} dates common to the corrected tensor")
         benchmark = _unhedged(references["SANOS-LV"], dates, targets)
         for books in (*cases.values(), *references.values()):
             if not np.allclose(_unhedged(books, dates, targets), benchmark, rtol=1e-10, atol=1e-5):
                 raise RuntimeError("market cashflows differ across the corrected tensor")
-        figure, axes = plt.subplots(2, 1, figsize=(16, 9), layout="constrained")
+        figure, axes = plt.subplots(3, 1, figsize=(16, 13), layout="constrained")
         selections: dict[str, dict[str, list[str]]] = {model: {} for model in MODELS}
-        for axis, statistic in zip(axes, ("mean", "median"), strict=True):
+        for axis, statistic in zip(axes[:2], ("mean", "median"), strict=True):
             reduction = np.mean if statistic == "mean" else np.median
             values = {"Unhedged": reduction(np.abs(benchmark), axis=0)}
             for name, books in references.items():
@@ -245,6 +299,17 @@ def main() -> None:
                 selections[model][statistic] = selected
             _bars(axis, values, targets, f"{statistic.title()} absolute daily P&L; best 7 of 13 cases per statistical model")
             axis.legend(ncol=5, fontsize=9)
+        selected_values = {
+            "Unhedged": benchmark,
+            **{name: _pnl(books, dates, targets) for name, books in references.items()},
+        }
+        for model in MODELS:
+            selected_values[model] = np.concatenate(
+                [_pnl(cases[key], dates, targets) for key in selections[model]["median"]],
+                axis=0,
+            )
+        _intervals(axes[2], selected_values, targets)
+        axes[2].set_title("10–90% absolute P&L; pooled median-selected cases")
         figure.suptitle(f"Corrected statistical tensor · {len(dates)} identical dates · ex-post best-half selection")
         with PdfPages(arguments.output / "STATISTICAL_SUMMARY.pdf") as pdf:
             pdf.savefig(figure)

@@ -11,6 +11,7 @@ from quantdata.sdlv.daily.front_spot.hedging.data.fixtures import (
 from quantdata.sdlv.daily.front_spot.hedging.data.rolling_factors import (
     RollingDlvFactorFit,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.sanos_lv.config import SanosLvConfig
 from quantdata.sdlv.daily.front_spot.hedging.models.sanos_lv.greeks import (
     DlvGreeks,
     dlv_digital_greeks,
@@ -53,6 +54,24 @@ def test_front_digital_has_zero_future_dlv_factor_vega() -> None:
     assert greeks.model_prices.shape == (1,)
     assert greeks.spot_deltas[0] > 0.0
     assert greeks.factor_vegas == pytest.approx(np.zeros((1, 2)))
+
+
+def test_future_spot_bump_is_one_percent_with_legacy_override() -> None:
+    assert SanosLvConfig().relative_spot_step == pytest.approx(0.01)
+    assert SanosLvConfig(relative_spot_step=1.0e-4).relative_spot_step == pytest.approx(
+        1.0e-4
+    )
+    day = synthetic_one_day_transition().origin
+    query = {
+        "business_dtes": np.asarray([1.0]),
+        "strikes_over_forward": np.asarray([1.0]),
+        "is_call": np.asarray([True]),
+        "discount_factors": np.asarray([1.0]),
+        "factors": _factor_fit(),
+    }
+    default_greeks = dlv_digital_greeks(day, **query)
+    explicit_greeks = dlv_digital_greeks(day, **query, relative_spot_step=0.01)
+    assert default_greeks.spot_deltas == pytest.approx(explicit_greeks.spot_deltas)
 
 
 def test_cost_weighted_hedge_neutralizes_delta_and_factor_exposure() -> None:

@@ -14,16 +14,22 @@
   Long, short, zero, and drift-neutral pure-hedge policies are distinct.
 - **Generator:** the public two-layer Softplus architecture with noise dimension
   32 and hidden dimension 16. The discriminator uses one Softplus hidden layer.
-- **Training:** public defaults are 10,000 epochs, batch size 100, learning rate
-  `1e-4`, and gradient-matched strike/maturity smoothness penalties. The newest
+- **Training:** public optimizer and parameter defaults are RMSProp, 10,000
+  epochs, batch size 100, learning rate `1e-4` for both networks, and 25
+  gradient-matching epochs for strike/maturity smoothness penalties. The newest
   20% of exact-session examples is untouched validation data. Normalization is
   fitted on training rows only.
 - **Artifacts:** version-checked restartable Torch checkpoints containing both
   networks, both optimizers, CPU/CUDA RNG state, progress, gradient-matching
   state, and the train-only normalization buffers. Changed validation splits
-  are incompatible; other changed training controls require an explicit
-  warm-start opt-in and additional epochs.
-- **Deviation from the public code:** surfaces are forward-moneyness SANOS
+  or optimizers are incompatible; other changed training controls require an
+  explicit warm-start opt-in and additional epochs.
+- **Deviation from the public code:** the gradient-matching phase currently
+  continues from its updated weights rather than restarting from the initial
+  weights; the 25 epochs are included in the 10,000 total. The model also uses
+  train-only standardization, unlike the paper's unnormalized inputs. These
+  remain methodology differences even when optimizer and parameter settings
+  match. Surfaces are forward-moneyness SANOS
   reconstructions because proprietary OptionMetrics surfaces are unavailable
   and prohibited. The original repository has no stated license, so this is a
   project-native implementation of the published architecture rather than

@@ -23,7 +23,7 @@ FloatArray = NDArray[np.float64]
 
 @dataclass(frozen=True, kw_only=True)
 class DiffusionTrainingData:
-    """Exact-session 22-day sequences with two public-data channels."""
+    """Observed-date sequences with exact one-session targets."""
 
     start_dates: tuple[date, ...]
     target_dates: tuple[date, ...]
@@ -70,7 +70,7 @@ def build_diffusion_training_data(
     observation_count: int = 252,
     grid: GenerativeSurfaceGrid = GenerativeSurfaceGrid(),
 ) -> DiffusionTrainingData:
-    """Build trailing exact-session sequences ending no later than ``end_date``."""
+    """Build trailing observed-date sequences with one-session targets."""
     require_public_hedging_panel(panel)
     history = build_sanos_fixed_grid_history(
         panel,
@@ -87,7 +87,7 @@ def build_diffusion_live_context(
     as_of_date: date,
     grid: GenerativeSurfaceGrid = GenerativeSurfaceGrid(),
 ) -> DiffusionLiveContext:
-    """Build a 21-day context ending exactly at ``as_of_date``."""
+    """Build a 21-observation context ending exactly at ``as_of_date``."""
     require_public_hedging_panel(panel)
     history = build_sanos_fixed_grid_history(
         panel,
@@ -115,10 +115,11 @@ def diffusion_live_context_from_history(
         raise ValueError(
             f"diffusion history ends on {history.dates[-1]}, not as-of date {as_of_date}"
         )
-    if not np.all(history.sessions_from_previous_observation[-21:] == 1):
-        raise ValueError("diffusion live context is not a consecutive-session chain")
+    sessions = history.sessions_from_previous_observation[-21:]
+    if np.any(sessions <= 0) or np.any(sessions[-2:] != 1):
+        raise ValueError("diffusion live context lacks exact recent sessions")
     surfaces = history.log_implied_volatilities[-21:]
-    returns = history.forward_log_returns_into_date[-21:]
+    returns = history.forward_log_returns_into_date[-21:] / np.sqrt(sessions)
     sequence = np.stack(
         (
             surfaces,
@@ -136,19 +137,22 @@ def diffusion_live_context_from_history(
 def diffusion_sequences_from_history(
     history: SanosFixedGridHistory,
 ) -> DiffusionTrainingData:
-    """Convert a fixed-grid history into overlapping 21-to-1 examples."""
+    """Convert observed histories into overlapping one-session forecasts."""
     sequences: list[FloatArray] = []
     start_dates: list[date] = []
     target_dates: list[date] = []
     for target_index in range(22, len(history.dates)):
         start_index = target_index - 21
-        if not np.all(
-            history.sessions_from_previous_observation[start_index : target_index + 1]
-            == 1
-        ):
+        sessions = history.sessions_from_previous_observation[
+            start_index : target_index + 1
+        ]
+        if np.any(sessions <= 0) or np.any(sessions[-3:] != 1):
             continue
         surfaces = history.log_implied_volatilities[start_index : target_index + 1]
-        returns = history.forward_log_returns_into_date[start_index : target_index + 1]
+        returns = (
+            history.forward_log_returns_into_date[start_index : target_index + 1]
+            / np.sqrt(sessions)
+        )
         broadcast_returns = np.broadcast_to(
             returns[:, None, None],
             surfaces.shape,

@@ -171,11 +171,14 @@ def _fit_locked(
         ),
     )
     discriminator = VolganDiscriminator(environment, config=model_config)
-    generator_optimizer = torch.optim.Adam(
+    optimizer_class = (
+        torch.optim.RMSprop if train_config.optimizer == "rmsprop" else torch.optim.Adam
+    )
+    generator_optimizer = optimizer_class(
         generator.parameters(),
         lr=train_config.generator_learning_rate,
     )
-    discriminator_optimizer = torch.optim.Adam(
+    discriminator_optimizer = optimizer_class(
         discriminator.parameters(),
         lr=train_config.discriminator_learning_rate,
     )
@@ -237,7 +240,7 @@ def _fit_locked(
                         "just_load",
                     }
                 ),
-                immutable_fields=frozenset({"seed", "validation_fraction"}),
+                immutable_fields=frozenset({"seed", "validation_fraction", "optimizer"}),
                 allow_warm_start=train_config.allow_changed_config_warm_start,
                 model_name="VolGAN",
             )
@@ -287,6 +290,7 @@ def _fit_locked(
             expected_sha256=warm_start_sha256,
             model_config_identity=model_config_identity,
             precision=precision,
+            optimizer=train_config.optimizer,
             current_training_end_date=data.target_dates[-1],
             expected_dataset_manifest_sha256=dataset_manifest_sha256,
         )
@@ -716,6 +720,7 @@ def _load_rolling_warm_start(
     expected_sha256: str | None,
     model_config_identity: str,
     precision: str,
+    optimizer: str,
     current_training_end_date: date,
     expected_dataset_manifest_sha256: str | None,
 ) -> tuple[float, float, int, float, float]:
@@ -748,6 +753,8 @@ def _load_rolling_warm_start(
         and payload.get("model_user_version") == generator.config.user_version
         and payload.get("model_config_identity") == model_config_identity
         and payload.get("precision") == precision
+        and isinstance(source_train_config, dict)
+        and source_train_config.get("optimizer", "adam") == optimizer
         and payload.get("dataset_manifest_sha256")
         == expected_dataset_manifest_sha256
         and isinstance(source_epochs, int)

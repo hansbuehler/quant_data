@@ -26,6 +26,9 @@ from quantdata.sdlv.daily.front_spot.hedging.models.covariance.hedger import (
     fit_covariance_action,
     fit_covariance_book_actions,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.covariance.pca import (
+    spot_residual_pca_covariance,
+)
 from quantdata.sdlv.daily.front_spot.hedging.models.covariance.returns import (
     HistoricalReturnPanel,
 )
@@ -96,6 +99,70 @@ def test_book_mean_variance_recovers_pure_factor_hedge() -> None:
     assert action.action is not None
     np.testing.assert_allclose(action.action, [-2.0], atol=0.08)
     assert action.standard_deviation < 0.2 * np.sqrt(fit.estimate.covariance[-1, -1])
+
+
+def test_spot_residual_pca_keeps_spot_and_eight_option_factors() -> None:
+    generator = np.random.default_rng(41)
+    samples = generator.normal(size=(500, 13))
+    samples[:, 1:] += 0.4 * samples[:, :1]
+    covariance = np.cov(samples, rowvar=False) + 0.01 * np.eye(13)
+    fit = spot_residual_pca_covariance(covariance, rank=8)
+
+    np.testing.assert_allclose(fit.covariance[0], covariance[0])
+    np.testing.assert_allclose(np.diag(fit.covariance), np.diag(covariance), rtol=1e-6)
+    assert np.linalg.eigvalsh(fit.covariance)[0] > 0.0
+    residual = (
+        fit.covariance[1:, 1:]
+        - fit.covariance[0, 0] * np.outer(fit.spot_beta, fit.spot_beta)
+        - np.diag(fit.idiosyncratic_variance)
+    )
+    assert np.linalg.matrix_rank(residual, tol=1e-9) == 8
+    assert 0.0 < fit.explained_residual_variance < 1.0
+
+    cross = covariance @ generator.normal(size=13)
+    projected = fit.project_claim_cross_covariance(cross)
+    option_residual_cross = projected[1:] - fit.spot_beta * projected[0]
+    np.testing.assert_allclose(
+        option_residual_cross,
+        fit.loadings @ (fit.loadings.T @ option_residual_cross),
+        atol=1e-12,
+    )
+
+
+def test_book_pca_variant_uses_same_zero_mean_hedge_objective() -> None:
+    generator = np.random.default_rng(43)
+    observations = 252
+    factors = generator.normal(size=(observations, 10))
+    spot = factors[:, 0]
+    options = 0.5 * spot[:, None] + factors[:, 1:] + 0.1 * generator.normal(
+        size=(observations, 9)
+    )
+    target = 2.0 * spot + options[:, 0] + 0.1 * generator.normal(size=observations)
+    first = date(2022, 1, 3)
+    panel = HistoricalReturnPanel(
+        training_origin_dates=tuple(first + timedelta(days=index) for index in range(observations)),
+        training_terminal_dates=tuple(first + timedelta(days=index + 1) for index in range(observations)),
+        instrument_ids=("spot", *(f"option-{index}" for index in range(9))),
+        target_labels=("synthetic-target",),
+        instrument_returns=np.column_stack((spot, options)),
+        target_returns=target[:, None],
+    )
+    fit = fit_covariance_book_actions(
+        panel,
+        linear_transaction_costs=np.zeros(10),
+        config=CovarianceHedgeConfig(
+            rolling_observations=observations,
+            objective=CovarianceObjective.MEAN_VARIANCE,
+            risk_parameter=1.0,
+            cost_multiplier=0.0,
+            spot_residual_pca_rank=8,
+        ),
+    )
+    assert fit.spot_residual_pca_rank == 8
+    assert fit.explained_residual_variance is not None
+    assert fit.actions[0].converged
+    assert fit.actions[0].action is not None
+    assert abs(fit.actions[0].action[0]) > 0.1
 
 
 def test_covariance_mean_reduction_labels_are_analytically_equivalent() -> None:

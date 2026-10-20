@@ -124,6 +124,7 @@ def main() -> None:
             "sanos-lv",
             "bs-greeks",
             "covariance",
+            "covariance-pca",
             "historical-sanos",
             "gromm",
             "gromm-q-dlv-vega",
@@ -160,6 +161,7 @@ def main() -> None:
     parser.add_argument("--warm-start-checkpoint-sha256")
     parser.add_argument("--observation-count", type=int, default=252)
     parser.add_argument("--epochs", type=int)
+    parser.add_argument("--volgan-optimizer", choices=("rmsprop", "adam"))
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--scenario-count", type=int, default=10_000)
     parser.add_argument("--training-progress-seconds", type=float, default=240.0)
@@ -411,7 +413,7 @@ def _build_model(
                 claim_quantities=claim_quantities,
             ),
         )
-    if arguments.model == "covariance":
+    if arguments.model in {"covariance", "covariance-pca"}:
         try:
             objective = CovarianceObjective(arguments.objective)
         except ValueError as error:
@@ -429,9 +431,16 @@ def _build_model(
                 if arguments.position_cap is None
                 else arguments.position_cap
             ),
+            spot_residual_pca_rank=(
+                8 if arguments.model == "covariance-pca" else None
+            ),
         )
         return (
-            "robust-covariance",
+            (
+                "robust-covariance-pca"
+                if arguments.model == "covariance-pca"
+                else "robust-covariance"
+            ),
             "historical-P",
             config.rolling_observations,
             config,
@@ -644,6 +653,11 @@ def _build_model(
             ),
             generator_learning_rate=train_defaults.generator_learning_rate,
             discriminator_learning_rate=train_defaults.discriminator_learning_rate,
+            optimizer=(
+                train_defaults.optimizer
+                if arguments.volgan_optimizer is None
+                else arguments.volgan_optimizer
+            ),
             validation_fraction=train_defaults.validation_fraction,
             seed=train_defaults.seed,
             progress_seconds=arguments.training_progress_seconds,

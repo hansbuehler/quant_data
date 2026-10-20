@@ -123,15 +123,26 @@ def volgan_live_condition_from_history(
         raise ValueError(
             f"VolGAN history ends on {history.dates[-1]}, not as-of date {as_of_date}"
         )
-    if not np.all(history.sessions_from_previous_observation[-21:] == 1):
-        raise ValueError("VolGAN live condition is not a consecutive-session chain")
+    trailing_sessions = history.sessions_from_previous_observation[-21:]
+    if np.any(trailing_sessions <= 0) or np.any(trailing_sessions[-2:] != 1):
+        raise ValueError("VolGAN live condition lacks exact recent sessions")
     annualization = np.sqrt(252.0)
     trailing_returns = history.forward_log_returns_into_date[-21:]
     current_surface = history.log_implied_volatilities[-1]
     values = np.concatenate(
         (
             annualization * trailing_returns[[-1, -2]],
-            np.asarray([float(np.std(trailing_returns, ddof=0) * annualization)]),
+            np.asarray(
+                [
+                    float(
+                        np.std(
+                            trailing_returns / np.sqrt(trailing_sessions),
+                            ddof=0,
+                        )
+                        * annualization
+                    )
+                ]
+            ),
             current_surface.ravel(),
         )
     )
@@ -147,7 +158,7 @@ def volgan_live_condition_from_history(
 
 
 def volgan_examples_from_history(history: SanosFixedGridHistory) -> VolganTrainingData:
-    """Create exact-session VolGAN examples from one fixed-grid history."""
+    """Create one-session targets with interval-aware conditioning volatility."""
     conditions: list[FloatArray] = []
     targets: list[FloatArray] = []
     condition_dates: list[date] = []
@@ -156,15 +167,22 @@ def volgan_examples_from_history(history: SanosFixedGridHistory) -> VolganTraini
     for target_index in range(22, len(history.dates)):
         condition_index = target_index - 1
         chain_start = condition_index - 20
-        if not np.all(
-            history.sessions_from_previous_observation[chain_start : target_index + 1]
-            == 1
+        trailing_sessions = history.sessions_from_previous_observation[
+            chain_start : condition_index + 1
+        ]
+        if (
+            np.any(trailing_sessions <= 0)
+            or np.any(trailing_sessions[-2:] != 1)
+            or history.sessions_from_previous_observation[target_index] != 1
         ):
             continue
         trailing_returns = history.forward_log_returns_into_date[
             chain_start : condition_index + 1
         ]
-        realized_volatility = float(np.std(trailing_returns, ddof=0) * annualization)
+        realized_volatility = float(
+            np.std(trailing_returns / np.sqrt(trailing_sessions), ddof=0)
+            * annualization
+        )
         current_surface = history.log_implied_volatilities[condition_index]
         next_surface = history.log_implied_volatilities[target_index]
         conditions.append(

@@ -203,6 +203,28 @@ def test_diffusion_live_context_ends_at_declared_as_of_date() -> None:
         )
 
 
+def test_diffusion_context_scales_older_observation_gaps() -> None:
+    full = _history()
+    sessions = full.sessions_from_previous_observation.copy()
+    sessions[12] = 2
+    history = replace(full, sessions_from_previous_observation=sessions)
+    training = diffusion_sequences_from_history(history)
+    live_history = _prefix_history(history, len(history.dates) - 1)
+    live = diffusion_live_context_from_history(
+        live_history,
+        as_of_date=live_history.dates[-1],
+        forecast_date=history.dates[-1],
+    )
+
+    assert training.target_dates[-1] == history.dates[-1]
+    np.testing.assert_allclose(live.sequence, training.sequences[-1, :-1])
+    np.testing.assert_allclose(
+        live.sequence[:, 1, 0, 0],
+        live_history.forward_log_returns_into_date[-21:]
+        / np.sqrt(live_history.sessions_from_previous_observation[-21:]),
+    )
+
+
 def test_static_arbitrage_penalty_is_differentiable() -> None:
     config = DiffusionModelConfig(
         label="diffusion-penalty",

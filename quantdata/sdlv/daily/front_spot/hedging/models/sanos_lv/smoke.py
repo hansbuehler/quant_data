@@ -15,6 +15,7 @@ from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
 from quantdata.sdlv.daily.front_spot.hedging.models.sanos_lv.adapter import (
     run_sanos_lv_daily_book,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.sanos_lv.config import SanosLvConfig
 
 _DEFAULT_ORIGIN = date(2023, 1, 17)
 _FIXTURE = Path(__file__).with_name("fixtures") / "smoke_expected.json"
@@ -32,7 +33,11 @@ def main() -> None:
     parser.add_argument("--skip-fixture-check", action="store_true")
     arguments = parser.parse_args()
     panel = PublicHedgingPanel(arguments.dataset)
-    results = run_sanos_lv_daily_book(panel, origin_date=arguments.origin_date)
+    results = run_sanos_lv_daily_book(
+        panel,
+        origin_date=arguments.origin_date,
+        config=SanosLvConfig(relative_spot_step=1.0e-4),
+    )
     result_by_claim = {result.claim: result for result in results}
     result = result_by_claim[_PRIMARY_CLAIM]
     if arguments.origin_date == _DEFAULT_ORIGIN and not arguments.skip_fixture_check:

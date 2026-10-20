@@ -60,7 +60,7 @@ class VolganModelConfig:
         return named_unique_filename48_8(self.label, self)
 
 
-@version("1.1")
+@version("1.2")
 @dataclass(frozen=True, kw_only=True)
 class VolganTrainConfig:
     """Operational VolGAN training controls."""
@@ -70,6 +70,7 @@ class VolganTrainConfig:
     batch_size: int = 100
     generator_learning_rate: float = 1.0e-4
     discriminator_learning_rate: float = 1.0e-4
+    optimizer: str = "rmsprop"
     validation_fraction: float = 0.2
     seed: int = 20_261_012
     progress_seconds: float = 240.0
@@ -85,6 +86,7 @@ class VolganTrainConfig:
             lambda: "gradient_matching_epochs must lie in [0,epochs]",
         )
         verify_inp(self.batch_size >= 2, lambda: "batch_size must be at least two")
+        verify_inp(self.optimizer in {"rmsprop", "adam"}, lambda: "invalid optimizer")
         for name, value in (
             ("generator_learning_rate", self.generator_learning_rate),
             ("discriminator_learning_rate", self.discriminator_learning_rate),

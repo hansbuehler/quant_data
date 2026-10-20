@@ -17,6 +17,14 @@
   its cross-covariance is constructed from the instrument covariance and its
   residual variance, so the joint block is positive definite and a target's
   hedge is invariant to unrelated targets in the benchmark catalog.
+- **Spot-first PCA variant:** retain the Tyler spot variance and spot/option
+  covariances, regress each option risk on spot, then keep the leading eight
+  eigenvectors of the residual-option covariance. Replace omitted residual
+  off-diagonal covariance by zero while retaining its diagonal idiosyncratic
+  variance. Project each target's option cross-covariance onto the same eight
+  factors. This changes only the risk matrix, not rolling data, transaction
+  costs, zero-mean convention, objective, or solver. Run with
+  `--model covariance-pca`; the standard `covariance` model is unchanged.
 - **Expected returns:** drift or alpha estimation is outside the hedging
   benchmark, so all instrument and target expected returns are fixed at zero
   in the optimization. Sample instrument means are still projected onto the

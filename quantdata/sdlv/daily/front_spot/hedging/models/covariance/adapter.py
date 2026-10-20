@@ -122,7 +122,11 @@ def run_covariance_daily_book(
         results.append(
             evaluate_daily_digital_hedge(
                 sample,
-                model="robust-covariance",
+                model=(
+                    "robust-covariance-pca"
+                    if config.spot_residual_pca_rank is not None
+                    else "robust-covariance"
+                ),
                 measure="historical-P",
                 spot_action=float(final_action[0]),
                 option_actions=final_action[1:],
@@ -143,6 +147,8 @@ def run_covariance_daily_book(
                     "claim_quantity": float(claim_quantity),
                     "tyler_shrinkage": fit.estimate.shrinkage,
                     "tyler_iterations": fit.estimate.iterations,
+                    "spot_residual_pca_rank": fit.spot_residual_pca_rank,
+                    "explained_residual_variance": fit.explained_residual_variance,
                     "mean_z_threshold": fit.mean_z_threshold,
                     "mean_hac_lags": fit.mean_hac_lags,
                     "retained_mean_directions": fit.retained_mean_directions,
@@ -195,7 +201,12 @@ def run_covariance_daily_book(
                     ),
                     "scatter_semantics": (
                         "instrument-only Tyler scatter with independent fixed-weight "
-                        "target cross-scatter blocks"
+                        "target cross-scatter blocks; spot is removed before "
+                        "option PCA, omitted option covariance is diagonal, and "
+                        "claim cross-covariance is projected onto retained factors"
+                        if config.spot_residual_pca_rank is not None
+                        else "instrument-only Tyler scatter with independent "
+                        "fixed-weight target cross-scatter blocks"
                     ),
                     "optimization_cost_semantics": (
                         "two basis points for spot; one current half-spread for "

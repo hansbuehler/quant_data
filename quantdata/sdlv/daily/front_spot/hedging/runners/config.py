@@ -109,12 +109,11 @@ class GeneratedDailyRunConfig:
 
 
 @version(
-    "0.2",
+    "0.3",
     dependencies=[
         GrommConfig,
         GrommTrainConfig,
         GrommPolicyArchitecture,
-        RollingGromm2Config,
     ],
 )
 @dataclass(frozen=True, kw_only=True)

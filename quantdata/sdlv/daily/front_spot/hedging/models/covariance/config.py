@@ -21,7 +21,7 @@ class CovarianceObjective(StrEnum):
     POWER_EXPONENTIAL = "power-exponential"
 
 
-@version("3.6")
+@version("3.7")
 @dataclass(frozen=True, kw_only=True)
 class CovarianceHedgeConfig:
     """Logical and numerical settings for the rolling covariance hedge."""
@@ -43,6 +43,7 @@ class CovarianceHedgeConfig:
     maximum_reweighting_iterations: int = 100
     action_tolerance: float = 1.0e-8
     minimum_standard_deviation: float = 1.0e-10
+    spot_residual_pca_rank: int | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "mean_reduction", MeanReduction(self.mean_reduction))
@@ -104,4 +105,9 @@ class CovarianceHedgeConfig:
             math.isfinite(self.minimum_standard_deviation)
             and self.minimum_standard_deviation > 0.0,
             lambda: "minimum_standard_deviation must be finite and positive",
+        )
+        verify_inp(
+            self.spot_residual_pca_rank is None
+            or self.spot_residual_pca_rank > 0,
+            lambda: "spot_residual_pca_rank must be positive or None",
         )

@@ -32,6 +32,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.gromm2_daily import (
     generate_gromm2_daily_scenarios,
     gromm2_daily_training_data,
     load_gromm2_market_state,
+    price_gromm2_daily_target,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.hedger import (
     fit_gromm_claim_minus_zero,
@@ -235,15 +236,71 @@ def run_gromm2_daily_book(
         multiple=config.batch_size,
     )
     scenario_config = replace(config, path_count=path_count)
-    results: list[HedgeSmokeResult] = []
-    for target, claim_quantity in zip(targets, quantities, strict=True):
-        scenarios = generate_gromm2_daily_scenarios(
+    shared_scenarios = None
+    terminal_spot = None
+    if all(target.maturity_business_days == 1 for target in targets):
+        shared_scenarios = generate_gromm2_daily_scenarios(
             panel,
             origin_date=origin_date,
-            target=target,
+            target=targets[0],
             market_state=market_state,
             config=scenario_config,
         )
+        bridge = (
+            shared_scenarios.sample.transition.discount_factor
+            * shared_scenarios.sample.transition.forward_over_spot
+        )
+        terminal_spot = 1.0 + shared_scenarios.instrument_returns[:, 0] / bridge
+        first_claim = _one_day_terminal_claim(
+            terminal_spot,
+            strike=shared_scenarios.sample.target_strike_over_forward,
+            discount_factor=shared_scenarios.sample.target_discount_factor,
+            right=targets[0].right,
+        )
+        if not np.allclose(
+            first_claim,
+            shared_scenarios.claim_terminal_values,
+            rtol=0.0,
+            atol=1.0e-12,
+        ):
+            raise RuntimeError("GROMM2 settlement is not determined by terminal spot")
+    results: list[HedgeSmokeResult] = []
+    for target, claim_quantity in zip(targets, quantities, strict=True):
+        if shared_scenarios is None:
+            scenarios = generate_gromm2_daily_scenarios(
+                panel,
+                origin_date=origin_date,
+                target=target,
+                market_state=market_state,
+                config=scenario_config,
+            )
+        elif target == targets[0]:
+            scenarios = shared_scenarios
+        else:
+            sample = build_daily_digital_sample(
+                panel,
+                origin_date=origin_date,
+                target=target,
+            )
+            if sample.hedge_quotes != shared_scenarios.sample.hedge_quotes:
+                raise RuntimeError("GROMM2 daily targets do not share a hedge book")
+            terminal_claim = _one_day_terminal_claim(
+                terminal_spot,
+                strike=sample.target_strike_over_forward,
+                discount_factor=sample.target_discount_factor,
+                right=target.right,
+            )
+            scenarios = replace(
+                shared_scenarios,
+                target=target,
+                sample=sample,
+                claim_terminal_values=terminal_claim,
+                claim_returns=terminal_claim - sample.market_price,
+                claim_model_price=price_gromm2_daily_target(
+                    market_state,
+                    sample=sample,
+                ),
+            )
         data = gromm2_daily_training_data(
             scenarios,
             mean_reduction=config.mean_reduction,
@@ -261,6 +318,7 @@ def run_gromm2_daily_book(
             mean_reduction=config.mean_reduction,
             mean_reduction_config=config.mean_reduction_config,
         )
+        pure_data = replace(pure_data, claim_returns=data.claim_returns)
         current_policy = (
             GrommPolicyConfig(
                 label=(
@@ -430,3 +488,14 @@ def run_gromm2_daily_book(
             )
         )
     return tuple(results)
+
+
+def _one_day_terminal_claim(
+    terminal_spot: np.ndarray,
+    *,
+    strike: float,
+    discount_factor: float,
+    right: OptionRight,
+) -> np.ndarray:
+    call = np.asarray(terminal_spot) > strike
+    return discount_factor * (call if right is OptionRight.CALL else ~call)

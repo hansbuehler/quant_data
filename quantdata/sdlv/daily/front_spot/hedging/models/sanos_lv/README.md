@@ -23,7 +23,9 @@
   coordinates. A linear program chooses the exact factor-vega hedge with
   minimum predictable option transaction cost; normalized spot then neutralizes
   the remaining delta. The 1D target has zero future-DLV factor vega, while 3D
-  targets use at most eight hedge options.
+  targets use at most eight hedge options. Future spot deltas use a central
+  \(\pm1\%\) relative-spot bump; previously generated results retain their
+  original \(\pm0.01\%\) bump and are not recalculated.
 - **Weekly policy:** reprice the fixed inception claim conditionally from the
   immutable realized path prefix and the current DLV state. Frozen weekly uses
   the origin rolling factor basis at all five decisions; restarted weekly fits
@@ -37,7 +39,8 @@
   half-spread for next-date settlement and twice the current half-spread as a
   predictable round-trip proxy for contracts that remain alive; realized
   accounting uses the actual next-date synthetic closing spread.
-- **Fixture:** the committed rolling-factor smoke starts on 17 January 2023,
+- **Fixture:** the committed rolling-factor smoke explicitly retains the legacy
+  \(0.01\%\) spot bump and starts on 17 January 2023,
   the first date with 252 retained exact-session transitions, and evaluates the
   next untouched market transition. It checks both the one-day delta-only path
   and a three-day target with the full eight-factor option hedge.

@@ -35,6 +35,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.checkpointing import (
     file_sha256,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_gromm2 import (
+    COMPATIBLE_ROLLING_GROMM2_V5_SOURCE_IDENTITIES,
     LEGACY_PHYSICAL_PROJECTION_FRACTION,
     RollingGromm2Config,
     fit_rolling_gromm2_market,
@@ -167,7 +168,7 @@ def load_legacy_rolling_gromm2_range(
     artifact_root: Path,
     config: RollingGromm2Config = RollingGromm2Config(),
 ) -> LegacyRollingGromm2RangeEvidence:
-    """Authenticate a complete v2 range and every legacy dated manifest."""
+    """Authenticate a complete v2 or compatible v3 range and dated manifests."""
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError("legacy rolling GROMM2 range must be a JSON object")
@@ -180,16 +181,26 @@ def load_legacy_rolling_gromm2_range(
     legacy_config = json.loads(
         json.dumps(asdict(config), sort_keys=True, allow_nan=False)
     )
-    legacy_config["minimum_physical_projection_fraction"] = (
-        LEGACY_PHYSICAL_PROJECTION_FRACTION
-    )
+    source_schema = payload.get("schema")
+    if source_schema == LEGACY_ROLLING_GROMM2_RANGE_SCHEMA:
+        legacy_config["minimum_physical_projection_fraction"] = (
+            LEGACY_PHYSICAL_PROJECTION_FRACTION
+        )
+    source_config = payload.get("config")
+    if isinstance(source_config, dict) and isinstance(source_config.get("calibration"), dict):
+        source_config = dict(source_config)
+        source_config["calibration"] = dict(source_config["calibration"])
+        source_config["calibration"].setdefault("plateau_review_epochs", 0)
     if (
-        payload.get("schema") != LEGACY_ROLLING_GROMM2_RANGE_SCHEMA
+        source_schema not in {
+            LEGACY_ROLLING_GROMM2_RANGE_SCHEMA,
+            ROLLING_GROMM2_RANGE_SCHEMA,
+        }
         or payload.get("status") != "complete"
         or payload.get("stage") != RollingGromm2RangeStage.FIT.value
         or payload.get("dataset_manifest_sha256") != dataset_manifest_sha256
         or payload.get("artifact_root") != str(artifact_root.resolve())
-        or payload.get("config") != legacy_config
+        or source_config != legacy_config
         or not isinstance(source_identity, str)
         or len(source_identity) != 64
         or any(character not in "0123456789abcdef" for character in source_identity)
@@ -245,6 +256,12 @@ def load_legacy_rolling_gromm2_range(
         raise ValueError("legacy rolling GROMM2 dates are not chronological")
     if manifest_source_identity is None:
         raise ValueError("legacy rolling GROMM2 range has no dated source identity")
+    if (
+        source_schema == ROLLING_GROMM2_RANGE_SCHEMA
+        and manifest_source_identity
+        not in COMPATIBLE_ROLLING_GROMM2_V5_SOURCE_IDENTITIES
+    ):
+        raise ValueError("rolling GROMM2 v5 migration source is not compatible")
     return LegacyRollingGromm2RangeEvidence(
         artifact_root=artifact_root,
         source_identity=source_identity,

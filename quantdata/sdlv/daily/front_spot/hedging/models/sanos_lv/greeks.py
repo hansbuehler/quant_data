@@ -77,7 +77,7 @@ def dlv_digital_greeks(
     is_call: NDArray[np.bool_],
     discount_factors: NDArray[np.floating],
     factors: RollingDlvFactorFit,
-    relative_spot_step: float = 1.0e-4,
+    relative_spot_step: float = 0.01,
 ) -> DlvGreeks:
     """Price fixed-cash digitals and compute homogeneous spot/factor Greeks."""
     dtes, strikes, sides, discounts = _validate_queries(
@@ -135,7 +135,7 @@ def dlv_option_greeks(
     *,
     quotes: tuple[OptionQuote, ...],
     factors: RollingDlvFactorFit,
-    relative_spot_step: float = 1.0e-4,
+    relative_spot_step: float = 0.01,
 ) -> DlvGreeks:
     """Price fixed-contract vanilla options and compute spot/factor Greeks."""
     if not quotes:

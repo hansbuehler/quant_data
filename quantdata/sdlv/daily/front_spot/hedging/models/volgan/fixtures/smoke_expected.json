@@ -7,11 +7,11 @@
     "diagnostics": {
       "completed_epochs": 40,
       "generated_mean_claim_value": 0.0,
-      "generated_mean_forward_log_return": -0.001693401088307075,
-      "generated_paths": 128,
+      "generated_mean_forward_log_return": -0.003217125032858581,
+      "generated_paths": 1630,
       "hedge_instrument_count": 163,
-      "training_examples": 146,
-      "validation_loss": 1.1131898007499499
+      "training_examples": 218,
+      "validation_loss": 1.128477685207944
     },
     "market_price": 0.5419907143863331,
     "measure": "historical-P",

@@ -34,6 +34,15 @@ def test_fixed_grid_sanos_day_repairs_only_noninterior_tail_nodes() -> None:
     assert 0 < np.count_nonzero(state.implied_vol_is_interior) < state.implied_vol_is_interior.size
 
 
+def test_short_expiry_recovers_interior_nodes_from_sanos_geometry() -> None:
+    panel = PublicHedgingPanel(PUBLIC_CANDIDATE)
+    state = fixed_grid_sanos_day(panel.market_day(date(2023, 6, 20)))
+
+    assert np.count_nonzero(state.implied_vol_is_interior[0]) == 1
+    assert np.all(np.isfinite(state.log_implied_volatilities[0]))
+    assert state.implied_volatilities[0, 4] > state.implied_volatilities[0, 5]
+
+
 def test_fixed_grid_history_uses_only_trailing_public_dates() -> None:
     panel = PublicHedgingPanel(PUBLIC_CANDIDATE)
     history = build_sanos_fixed_grid_history(

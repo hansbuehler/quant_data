@@ -69,6 +69,7 @@ class Gromm2MarketState:
     physical_fallback_used: bool
     physical_selected_model: str
     physical_accepted: bool
+    density_source_epsilon: float = np.finfo(np.float64).eps
 
     def __post_init__(self) -> None:
         expiry_count, support_count = self.supports.shape
@@ -87,6 +88,8 @@ class Gromm2MarketState:
             or self.physical_selected_model
             not in {"candidate", "front-only-null", "unavailable"}
             or not isinstance(self.physical_accepted, bool)
+            or not math.isfinite(self.density_source_epsilon)
+            or self.density_source_epsilon <= 0.0
             or self.physical_fallback_used
             != (self.physical_selected_model == "front-only-null")
             or self.physical_accepted
@@ -208,17 +211,16 @@ def load_gromm2_market_state(
     if factor_scores.ndim != 2 or len(factor_scores) == 0:
         raise ValueError("rolling GROMM2 dynamics contain no factor-score history")
     intervals = np.diff(expiries, prepend=0.0)
-    decoded_tower = np.asarray(
-        decode_density_tower(
-            jnp.asarray(supports),
-            jnp.asarray(transports),
-            jnp.asarray(dlvsq),
-            jnp.asarray(intervals),
-        )
+    decoded_tower = _decode_market_density_tower(
+        supports=supports,
+        transports=transports,
+        dlvsq=dlvsq,
+        intervals=intervals,
     )
+    source_epsilon = max(float(np.finfo(dtype).eps) for dtype in serialized_dtypes)
     tower, mass_error, mass_tolerance = _normalize_decoded_density_tower(
         decoded_tower,
-        source_epsilon=max(float(np.finfo(dtype).eps) for dtype in serialized_dtypes),
+        source_epsilon=source_epsilon,
     )
     print(
         json.dumps(
@@ -253,6 +255,7 @@ def load_gromm2_market_state(
         physical_fallback_used=artifacts.physical_fallback_used,
         physical_selected_model=artifacts.physical_selected_model,
         physical_accepted=artifacts.physical_accepted,
+        density_source_epsilon=source_epsilon,
     )
 
 
@@ -297,20 +300,39 @@ def gromm2_market_state_with_dlvsq(
     ):
         raise ValueError("replacement GROMM2 DLV state is invalid")
     intervals = np.diff(market_state.expiries_y, prepend=0.0)
-    decoded = np.asarray(
-        decode_density_tower(
-            jnp.asarray(market_state.supports),
-            jnp.asarray(market_state.transports),
-            jnp.asarray(values),
-            jnp.asarray(intervals),
-        )
+    decoded = _decode_market_density_tower(
+        supports=market_state.supports,
+        transports=market_state.transports,
+        dlvsq=values,
+        intervals=intervals,
     )
-    tower, _, _ = _normalize_decoded_density_tower(decoded)
+    tower, _, _ = _normalize_decoded_density_tower(
+        decoded,
+        source_epsilon=market_state.density_source_epsilon,
+    )
     return replace(
         market_state,
         dlvsq=values.copy(),
         density_tower=tower,
     )
+
+
+def _decode_market_density_tower(
+    *,
+    supports: FloatArray,
+    transports: FloatArray,
+    dlvsq: FloatArray,
+    intervals: FloatArray,
+) -> NDArray[np.floating]:
+    with jax.enable_x64():
+        return np.asarray(
+            decode_density_tower(
+                jnp.asarray(supports),
+                jnp.asarray(transports),
+                jnp.asarray(dlvsq),
+                jnp.asarray(intervals),
+            )
+        )
 
 
 def _normalize_decoded_density_tower(

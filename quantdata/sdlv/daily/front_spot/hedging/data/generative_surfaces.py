@@ -146,7 +146,9 @@ def fixed_grid_sanos_day(
     Prices at exact Black bounds do not identify finite implied volatility.
     Those nodes retain ``False`` in ``implied_vol_is_interior`` and are filled
     by linear interpolation in log strike, with flat tail extrapolation, from
-    the same expiry's numerically interior SANOS nodes.
+    the same expiry's numerically interior SANOS nodes. A short expiry with
+    fewer than two interior coarse nodes is repriced on a denser ATM-centered
+    strike grid before interpolation.
     """
     strikes = np.asarray(grid.strikes_over_forward, dtype=np.float64)
     expiries = np.asarray(grid.expiries_y, dtype=np.float64)
@@ -176,17 +178,49 @@ def fixed_grid_sanos_day(
     for expiry_index in range(len(expiries)):
         valid = interior[expiry_index]
         if np.count_nonzero(valid) < 2:
-            raise FloatingPointError(
-                f"{day.trading_date}: SANOS expiry {expiries[expiry_index]:g} "
-                "has fewer than two interior implied-volatility nodes"
+            expiry = expiries[expiry_index]
+            atm_total_variance = np.interp(
+                expiry,
+                day.sanos_model_expiries_y,
+                day.sanos_kernel_total_variances,
             )
-        valid_volatilities = implied_volatilities[expiry_index, valid]
+            local_strikes = np.exp(
+                np.linspace(-5.0, 5.0, 41)
+                * np.sqrt(max(atm_total_variance, 1.0e-12))
+            )
+            local_prices = price_sanos_surface(
+                query_expiries_y=np.full_like(local_strikes, expiry),
+                query_strikes=local_strikes,
+                is_call=local_strikes >= 1.0,
+                model_expiries_y=day.sanos_model_expiries_y,
+                atm_variances=day.sanos_kernel_total_variances,
+                support_strikes=day.sanos_support_strikes,
+                densities=day.sanos_densities,
+                smoothness=day.sanos_smoothness,
+                one_minute_y=day.one_minute_y,
+            )
+            local_volatilities, local_interior = implied_volatilities_with_validity(
+                expiries_y=np.full_like(local_strikes, expiry),
+                normalized_strikes=local_strikes,
+                normalized_prices=local_prices,
+                is_call=local_strikes >= 1.0,
+            )
+            if np.count_nonzero(local_interior) < 2:
+                raise FloatingPointError(
+                    f"{day.trading_date}: SANOS expiry {expiry:g} "
+                    "has fewer than two interior implied-volatility nodes"
+                )
+            valid_log_strikes = np.log(local_strikes[local_interior])
+            valid_volatilities = local_volatilities[local_interior]
+        else:
+            valid_log_strikes = log_strikes[valid]
+            valid_volatilities = implied_volatilities[expiry_index, valid]
         if np.any(~np.isfinite(valid_volatilities) | (valid_volatilities <= 0.0)):
             raise FloatingPointError("interior SANOS implied volatilities are invalid")
         repaired[expiry_index] = np.exp(
             np.interp(
                 log_strikes,
-                log_strikes[valid],
+                valid_log_strikes,
                 np.log(valid_volatilities),
             )
         )

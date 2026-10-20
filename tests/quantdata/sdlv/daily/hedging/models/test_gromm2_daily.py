@@ -33,6 +33,9 @@ from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm import (
     gromm2_daily as gromm2_daily_module,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.gromm.adapter import (
+    _one_day_terminal_claim,
+)
 from quantdata.sdlv.daily.front_spot.hedging.models.gromm.config import (
     GrommConfig,
     GrommMeasure,
@@ -150,6 +153,29 @@ def test_density_normalization_only_accepts_bounded_decode_roundoff() -> None:
         )
 
 
+def test_reused_one_day_claim_respects_digital_strike_boundary() -> None:
+    terminal_spot = np.asarray([0.9, 1.0, 1.1])
+
+    np.testing.assert_array_equal(
+        _one_day_terminal_claim(
+            terminal_spot,
+            strike=1.0,
+            discount_factor=0.99,
+            right=OptionRight.CALL,
+        ),
+        np.asarray([0.0, 0.0, 0.99]),
+    )
+    np.testing.assert_array_equal(
+        _one_day_terminal_claim(
+            terminal_spot,
+            strike=1.0,
+            discount_factor=0.99,
+            right=OptionRight.PUT,
+        ),
+        np.asarray([0.99, 0.99, 0.0]),
+    )
+
+
 def test_loader_normalizes_float32_artifact_before_q_replay(
     tmp_path,
     monkeypatch,
@@ -239,6 +265,12 @@ def test_loader_normalizes_float32_artifact_before_q_replay(
     state = load_gromm2_market_state(artifacts)
 
     assert state.density_tower.dtype == np.float64
+    assert state.density_source_epsilon == np.finfo(np.float32).eps
+    bumped_state = gromm2_daily_module.gromm2_market_state_with_dlvsq(
+        state,
+        dlvsq=state.dlvsq,
+    )
+    np.testing.assert_allclose(bumped_state.density_tower, state.density_tower)
     np.testing.assert_allclose(
         np.sum(state.density_tower, axis=-1),
         1.0,

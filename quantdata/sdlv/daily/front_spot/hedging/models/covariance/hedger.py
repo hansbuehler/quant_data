@@ -21,6 +21,9 @@ from quantdata.sdlv.daily.front_spot.hedging.models.covariance.config import (
     CovarianceHedgeConfig,
     CovarianceObjective,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.covariance.pca import (
+    spot_residual_pca_covariance,
+)
 from quantdata.sdlv.daily.front_spot.hedging.models.covariance.returns import (
     HistoricalReturnPanel,
 )
@@ -86,6 +89,8 @@ class CovarianceBookFit:
     maximum_absolute_mean_t: float
     raw_instrument_center_norm: float
     screened_instrument_center_norm: float
+    spot_residual_pca_rank: int | None
+    explained_residual_variance: float | None
 
 
 def fit_covariance_action(
@@ -163,6 +168,13 @@ def fit_covariance_book_actions(
     instrument_count = instruments.shape[1]
     raw_instrument_center = np.mean(instruments, axis=0)
     covariance = estimate.covariance
+    pca = None
+    if config.spot_residual_pca_rank is not None:
+        pca = spot_residual_pca_covariance(
+            covariance,
+            rank=config.spot_residual_pca_rank,
+        )
+        covariance = pca.covariance
     (
         diagnostic_instrument_center,
         mean_z_threshold,
@@ -208,6 +220,10 @@ def fit_covariance_book_actions(
             target,
             estimate=estimate,
         )
+        if pca is not None:
+            claim_cross_covariance = pca.project_claim_cross_covariance(
+                claim_cross_covariance
+            )
         claim_policy = _fit_policy(
             instrument_center=instrument_center,
             covariance=covariance,
@@ -267,6 +283,10 @@ def fit_covariance_book_actions(
         raw_instrument_center_norm=float(np.linalg.norm(raw_instrument_center)),
         screened_instrument_center_norm=float(
             np.linalg.norm(diagnostic_instrument_center)
+        ),
+        spot_residual_pca_rank=config.spot_residual_pca_rank,
+        explained_residual_variance=(
+            None if pca is None else pca.explained_residual_variance
         ),
     )
 

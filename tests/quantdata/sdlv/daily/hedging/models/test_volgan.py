@@ -96,6 +96,42 @@ def test_volgan_training_checkpoint_and_sampling(tmp_path: Path) -> None:
     assert generated.next_log_implied_volatilities.shape == (5, 9, 11)
 
 
+def test_volgan_published_optimizer_and_checkpoint_identity(tmp_path: Path) -> None:
+    assert VolganTrainConfig().optimizer == "rmsprop"
+    data = volgan_examples_from_history(_history())
+    config = VolganModelConfig(label="volgan-rmsprop-unit")
+    common = dict(
+        epochs=2,
+        gradient_matching_epochs=1,
+        batch_size=4,
+        checkpoint_epochs=1,
+        progress_seconds=300.0,
+    )
+    fit = fit_volgan(
+        data,
+        model_config=config,
+        checkpoint_directory=tmp_path,
+        train_config=VolganTrainConfig(**common),
+        environment=BaseEnvironment(precision=64, device="cpu", debug=True),
+    )
+    checkpoint = torch.load(fit.checkpoint_path, map_location="cpu", weights_only=False)
+    assert checkpoint["train_config"]["optimizer"] == "rmsprop"
+    assert "square_avg" in next(iter(checkpoint["generator_optimizer"]["state"].values()))
+
+    with pytest.raises(ValueError, match="optimizer"):
+        fit_volgan(
+            data,
+            model_config=config,
+            checkpoint_directory=tmp_path,
+            train_config=VolganTrainConfig(
+                **common,
+                optimizer="adam",
+                allow_changed_config_warm_start=True,
+            ),
+            environment=BaseEnvironment(precision=64, device="cpu", debug=True),
+        )
+
+
 def test_volgan_weekly_recursion_matches_one_step_and_advances(tmp_path: Path) -> None:
     full = _history()
     history = _prefix_history(full, len(full.dates) - 1)
@@ -176,6 +212,29 @@ def test_volgan_live_condition_ends_at_declared_as_of_date() -> None:
             as_of_date=full.dates[-1],
             forecast_date=full.dates[-1] + timedelta(days=1),
         )
+
+
+def test_volgan_condition_scales_older_observation_gaps() -> None:
+    full = _history()
+    sessions = full.sessions_from_previous_observation.copy()
+    sessions[12] = 2
+    history = replace(full, sessions_from_previous_observation=sessions)
+    training = volgan_examples_from_history(history)
+    live_history = _prefix_history(history, len(history.dates) - 1)
+    live = volgan_live_condition_from_history(
+        live_history,
+        as_of_date=live_history.dates[-1],
+        forecast_date=history.dates[-1],
+    )
+
+    assert training.target_dates[-1] == history.dates[-1]
+    np.testing.assert_allclose(live.values, training.conditions[-1])
+    expected_volatility = np.std(
+        live_history.forward_log_returns_into_date[-21:]
+        / np.sqrt(live_history.sessions_from_previous_observation[-21:]),
+        ddof=0,
+    ) * np.sqrt(252.0)
+    assert live.values[2] == pytest.approx(expected_volatility)
 
 
 def test_volgan_checkpoint_identity_includes_exact_training_data() -> None:

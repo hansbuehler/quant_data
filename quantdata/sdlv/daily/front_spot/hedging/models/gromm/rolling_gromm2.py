@@ -52,6 +52,13 @@ from quantdata.sdlv.daily.front_spot.hedging.models.gromm.rolling_dynamics impor
 
 ROLLING_GROMM2_SCHEMA = "hedging-rolling-gromm2-v5"
 LEGACY_ROLLING_GROMM2_SCHEMA = "hedging-rolling-gromm2-v4"
+COMPATIBLE_ROLLING_GROMM2_V5_SOURCE_IDENTITY = (
+    "dbaaff6ac9bc36c8e08b202e56d5fc6ca6e9804cca1843aa027ca68d6a2df5bf"
+)
+COMPATIBLE_ROLLING_GROMM2_V5_SOURCE_IDENTITIES = frozenset({
+    COMPATIBLE_ROLLING_GROMM2_V5_SOURCE_IDENTITY,
+    "bae743d2dc838740cca7fbd0c9570864a618d58586ba160491d940c7d798855e",
+})
 LEGACY_PHYSICAL_PROJECTION_FRACTION = 0.5
 _CALIBRATION_EPOCH_MULTIPLIERS = (1, 2, 4)
 _ROLLING_GROMM2_SOURCE_FILES = (
@@ -375,10 +382,15 @@ def migrate_legacy_rolling_gromm2_affine_fit(
     if file_sha256(source_paths.manifest) != source_manifest_sha256:
         raise ValueError("legacy rolling GROMM2 manifest hash is inconsistent")
     source_manifest = _read_manifest(source_paths.manifest)
+    source_schema = source_manifest.get("schema")
     legacy_config = _config_snapshot(config)
-    legacy_config["minimum_physical_projection_fraction"] = (
-        LEGACY_PHYSICAL_PROJECTION_FRACTION
-    )
+    if source_schema == LEGACY_ROLLING_GROMM2_SCHEMA:
+        legacy_config["minimum_physical_projection_fraction"] = (
+            LEGACY_PHYSICAL_PROJECTION_FRACTION
+        )
+    elif source_schema != ROLLING_GROMM2_SCHEMA:
+        raise ValueError("unsupported rolling GROMM2 migration source schema")
+    source_config = _normalize_legacy_config(source_manifest.get("config"))
     origin_dates, endpoint_dates = _manifest_transition_dates(
         source_manifest,
         window_transitions=config.window_transitions,
@@ -387,8 +399,11 @@ def migrate_legacy_rolling_gromm2_affine_fit(
         sorted(set(origin_dates) | set(endpoint_dates) | {as_of_date})
     )
     if (
-        source_manifest.get("schema") != LEGACY_ROLLING_GROMM2_SCHEMA
-        or source_manifest.get("status") != "complete"
+        source_manifest.get("status") != "complete"
+        or (
+            source_schema == ROLLING_GROMM2_SCHEMA
+            and source_identity not in COMPATIBLE_ROLLING_GROMM2_V5_SOURCE_IDENTITIES
+        )
         or source_manifest.get("as_of_date") != as_of_date.isoformat()
         or source_manifest.get("training_end_date") != as_of_date.isoformat()
         or source_manifest.get("training_start_date")
@@ -398,7 +413,7 @@ def migrate_legacy_rolling_gromm2_affine_fit(
         or source_manifest.get("dataset_manifest_sha256")
         != dataset_manifest_sha256
         or source_manifest.get("source_identity") != source_identity
-        or source_manifest.get("config") != legacy_config
+        or source_config != legacy_config
     ):
         raise ValueError("legacy rolling GROMM2 manifest is incompatible")
     source_files = {
@@ -448,12 +463,8 @@ def migrate_legacy_rolling_gromm2_affine_fit(
         != calibration_epochs_completed
         or source_manifest.get("calibration_retry_count")
         != calibration_retry_count
-        or manifest_calibration
-        != json.loads(
-            json.dumps(
-                asdict(fitted_calibration), sort_keys=True, allow_nan=False
-            )
-        )
+        or _normalize_legacy_calibration(manifest_calibration)
+        != json.loads(json.dumps(asdict(fitted_calibration), sort_keys=True))
     ):
         raise ValueError("legacy rolling GROMM2 affine fit violates the current gate")
     target_paths.directory.mkdir(parents=True, exist_ok=True)
@@ -842,15 +853,31 @@ def _validate_affine_calibration_payload(
     allowed: list[tuple[int, DlvCalibrationConfig]] = []
     for retry_count, multiplier in enumerate(_CALIBRATION_EPOCH_MULTIPLIERS):
         candidate = replace(baseline, epochs=baseline.epochs * multiplier)
-        candidate_payload = json.loads(
-            json.dumps(asdict(candidate), sort_keys=True, allow_nan=False)
-        )
-        if payload == candidate_payload:
+        candidate_payload = json.loads(json.dumps(asdict(candidate), sort_keys=True))
+        if _normalize_legacy_calibration(payload) == candidate_payload:
             allowed.append((retry_count, candidate))
     if len(allowed) != 1:
         raise ValueError("rolling GROMM2 affine calibration config is incompatible")
     retry_count, fitted = allowed[0]
     return fitted.epochs, retry_count, fitted
+
+
+def _normalize_legacy_calibration(payload: object) -> object:
+    if not isinstance(payload, dict):
+        return payload
+    normalized = dict(payload)
+    normalized.setdefault("plateau_review_epochs", 0)
+    return normalized
+
+
+def _normalize_legacy_config(payload: object) -> object:
+    if not isinstance(payload, dict):
+        return payload
+    normalized = dict(payload)
+    normalized["calibration"] = _normalize_legacy_calibration(
+        payload.get("calibration")
+    )
+    return normalized
 
 
 def _write_source_history(
