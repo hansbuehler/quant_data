@@ -25,6 +25,28 @@ Please contact the authors for any suggestions, corrections, or additions.
 
 % Entries introduced by the backward-reference audit use the same styling.
 \newcommand{\auditnew}[1]{#1}
+
+% Paper switch: the GROMM/SDLV paper (main2.tex) defines \GROMMpaper before
+% \input-ing this file; the DYSANOS papers do not and get their original rows.
+\ifdefined\GROMMpaper
+\newcommand{\OwnRowsRepresentation}{%
+\citet{DYSANOS2026}
+  & Smooth SANOS plus affine latent state & $18\times200=3{,}600$ prices; 3,620 controls & $\infty$ & S$\infty$ & The decoded continuum remains in the SANOS admissible family. \\
+This paper
+  & Smooth SANOS and stochastic DLV/PCA factors & $25\times200=5{,}000$ options plus spot & $\infty$ & S$\infty$ & Full smooth continuum representation. \\}
+\newcommand{\OwnRowsDynamics}{%
+\citet{DYSANOS2026}
+  & SANOS, affine latent state, and AR(1) & S$\infty$ & Yes & Limited SG: 48 options plus spot & Yes & The implemented $\Q$ construction is finite-dimensional. \\
+This paper
+  & Smooth SANOS and stochastic DLV/PCA factors & S$\infty$ & Yes & S$\infty$ with explicit full-surface drift & Yes & Direct smooth full-surface construction. \\}
+\else
+\newcommand{\OwnRowsRepresentation}{%
+This paper
+  & Smooth SANOS plus affine latent state & $18\times200=3{,}600$ prices; 3,620 controls & $\infty$ & S$\infty$ & The decoded continuum remains in the SANOS admissible family. \\}
+\newcommand{\OwnRowsDynamics}{%
+This paper
+  & SANOS, affine latent state, and AR(1) & S$\infty$ & Yes & Limited SG: 48 options plus spot & Yes & The implemented $\Q$ construction is finite-dimensional. \\}
+\fi
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 
 \begin{landscape}
@@ -225,11 +247,7 @@ Method & Representation & Native option coordinates & Off-grid & No static arb. 
   & Joint return/direct-IV adaptive sequential diffusion & $11\times9=99$ IVs & 0 & A & Fine-tuning penalizes calendar-, call-, and butterfly-spread violations; reported violations are nearly zero, not structurally excluded. \\
 \citet{YangWangZhangLi2026}
   & Joint stock-return/option-IV diffusion across equities & $11\times9=99$ option IVs per stock & 0 & A & Transfers dynamics to unseen stocks on the same fixed grid. \\
-This paper
-  & Smooth SANOS plus affine latent state & $18\times200=3{,}600$ prices; 3,620 controls & $\infty$ & S$\infty$ & The decoded continuum remains in the SANOS admissible family. \\
-% GROMM is the next paper and is intentionally omitted from this review.
-%\citet{WieseBuehlerHorvath2026}
-%  & Smooth SANOS and stochastic DLV/PCA factors & $25\times200=5{,}000$ options plus spot & $\infty$ & S$\infty$ & Full smooth continuum representation. \\
+\OwnRowsRepresentation
 \bottomrule
 \end{tabular}
 \end{table}
@@ -414,10 +432,6 @@ Method & Dynamic state/model & Static arb. under $\P$ & Multi-step $\P$ path & D
   & Five-factor IV surface jointly with SPX returns & A & No (five-day terminal scenarios) & --- & Yes ($\P$) & Rare empirical violations, not an invariant state space. \\
 \citet{BucheggerGonon2026}
   & Latent diffusion for returns and IV surfaces & A & Yes (30-day trajectories) & --- & Yes ($\P$) & Penalty-based arbitrage awareness; violations remain. \\
-This paper
-  & SANOS, affine latent state, and AR(1) & S$\infty$ & Yes & Limited SG: 48 options plus spot & Yes & The implemented $\Q$ construction is finite-dimensional. \\
-% GROMM is the next paper and is intentionally omitted from this review.
-%\citet{WieseBuehlerHorvath2026}
-%  & Smooth SANOS and stochastic DLV/PCA factors & S$\infty$ & S$\infty$ with explicit full-surface drift & Yes & Direct smooth full-surface construction. \\
+\OwnRowsDynamics
 \end{longtable}
 \end{landscape}
