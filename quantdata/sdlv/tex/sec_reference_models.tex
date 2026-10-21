@@ -2,14 +2,14 @@
 \section{Reference-model implementation details}
 \label{app:reference-models}
 
-\subsection{Tangent Levy}
+\subsection{Tangent L\'evy}
 \label{app:tangent-levy}
 
-Our Tangent Levy benchmark follows the codebook construction of
+Our Tangent L\'evy benchmark follows the code book construction of
 \citet{TangentLevy}, but is an in-repository implementation rather than the
 authors' software.  It is paper-aligned rather than a literal reproduction.
 At each observed expiry we first fit a double-exponential jump density to
-forward-normalized call-equivalent bid--ask intervals.  For each jump node, the
+forward-normalized call-equivalent bid-ask intervals.  For each jump node, the
 forward L\'evy density is then represented by 12 non-negative cubic B-spline
 coefficients in maturity.  Analytic spline integrals map these coefficients to
 the fitted average L\'evy measures; non-negative least squares with a curvature
@@ -19,7 +19,7 @@ $[-0.75,0.75]$.
 
 The historical diffusion fit uses every other daily maturity and the seven
 nonzero jump nodes with highest average training intensity.  Linear
-prolongation maps this reduced grid to the full codebook, and the reduced
+prolongation maps this reduced grid to the full code book, and the reduced
 factors are projected onto the discrete exponential-moment constraint before
 PCA.  The leading 16 directions are estimated from 698 consecutive-session
 changes ending on 31 December 2024, explain 95.23\% of reduced-grid variation,
@@ -41,7 +41,7 @@ has $\gamma<0.01$ and no path freezes.
 The initial-fit results in Figures~\ref{fig:initial-fit-iv}
 and~\ref{fig:initial-fit-spread} use the final daily-grid reconstruction
 supplied to the simulator.  This distinction is important: independent
-maturity fits are not a dynamically admissible initial codebook.  The
+maturity fits are not a dynamically admissible initial code book.  The
 reconstruction on 29 August 2025 did not pass its pre-specified repricing gate,
 so the poor fit shown there is a reported numerical limitation, not suppressed
 calibration error.  The
@@ -117,7 +117,7 @@ The restricted audit uses the same geometry as the other reference models:
 eight substeps per day, and the fixed spot-plus-44-option universe.  Between
 daily resets we use full-truncation Heston variance and compensated Gaussian
 jumps from the shortest live jump bucket.  At each day boundary the old
-codebook is shifted by one day, its ten-by-13 continuation surface is repriced,
+code book is shifted by one day, its ten-by-13 continuation surface is repriced,
 the backward-estimated parameter innovation is applied, and NN2 reconstructs
 the new five jump means and standard deviations.  The implementation records
 the resulting fixed-option price discontinuity explicitly before any
@@ -145,7 +145,7 @@ $25\times200$ state from the
 \texttt{direct-continuation-\allowbreak1000-v1} run after
 1,000 end-to-end epochs with a 5\% annual Black backbone; this is the same
 checkpoint as the direct fit in Table~\ref{tab:numerics-static-market-fit}.
-Tangent Levy is repriced at precisely those strikes and expiries from its
+Tangent L\'evy is repriced at precisely those strikes and expiries from its
 daily-grid density, and CRC from its retained generalized-Bates target fit.
 Put observations are converted to normalized
 call-equivalent prices by parity before Black-volatility inversion.  If $b$,

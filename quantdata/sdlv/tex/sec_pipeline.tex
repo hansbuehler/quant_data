@@ -65,7 +65,7 @@ nominal per-day quote cap is 100,000 and is therefore non-binding here.
 
 For data-quality control and to construct a stable ATM curve, every daily book
 is passed through the linear SANOS preprocessing of \cite{SANOS2026}. The
-strike grid is extended, each expiry is fitted inside the quoted bid--ask
+strike grid is extended, each expiry is fitted inside the quoted bid-ask
 intervals, negligible-density redundant strikes are removed, and the joint
 surface fit enforces both butterfly and calendar-spread constraints. The
 smoothness parameter is $0.25$. Expiries and strikes for which this
@@ -75,7 +75,7 @@ calibration.
 This auxiliary SANOS surface determines eligibility, the ATM term structure,
 and the floating model support. It is not the calibration target: the JAX fits
 in Section~\ref{sec:estimation-fit} use the original retained call and put
-bid--ask intervals. No linear-programming state or fitted midpoint is supplied
+bid-ask intervals. No linear-programming state or fitted midpoint is supplied
 as a target.
 
 The final selection keeps European quotes no farther than 25 business days
@@ -112,7 +112,7 @@ market quote's exact expiry. Puts follow from put--call parity.
 \subsection{Optimization and retained artifacts}
 \label{app:pipeline-optimization}
 
-The direct and affine parameterizations are those in
+The direct and affine parametrizations are those in
 Section~\ref{sec:estimation-fit}. Direct states are initialized from the
 date-specific ATM term structure and are constant across strike at
 initialization. Affine means use the average of these initial states; codes and
