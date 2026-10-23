@@ -68,17 +68,11 @@
 \maketitle
 
 \begin{abstract}
-    We present a statically and dynamically arbitrage-free European option market model with smooth
-    interpolation between option prices, based on the SANOS~\citep{SANOS2026} framework, and prove that its dynamics admit a unique strong solution. 
-
-    %In spirit,
+    We present a statically and dynamically arbitrage-free European option market model with smooth interpolation between option prices, based on the SANOS~\citep{SANOS2026} framework, and prove that its dynamics admit a unique strong solution. On S\&P Index Option data from January 2022 to August 2025, we demonstrate that the model's initial state fits within bid-ask for more than 95\% of relevant market option prices. We then train the model dynamics under~$\PP$ and~$\Q$ and show that the model is free of arbitrage while fitting the dynamics of the market well. Absence of arbitrage is verified with the proposed BHW tests. 
+      %In spirit,
     %it is a stochastic model for local volatility when the latter is used as a representation of a European option price surface, not as a pricing model.
-
-  We illustrate the strength of our approach on S\&P Index Option data from January 2022 to August 2025.
-  We show that the model's initial state fits within bid-ask for more than 95\% of relevant market option prices. %\footnote{
+  %\footnote{
         %The model presented was trained for daily expiries up to 25 business days and strikes between $[\exp(-2.5 \sigma_{atm} \sqrt{t}), \exp(+1.5 \sigma_{atm} \sqrt{t})]$.}
-    We then train the model dynamics under~$\PP$ and~$\Q$ and show that the model is indeed free of arbitrage
-    while fitting the dynamics of the market well.
     %We also propose a range of BHW-tests to test for absence of arbitrage. 
 \keywords{Option market models \and Static and dynamic arbitrage \and Discrete local volatility \and HJM drift restriction \and Generative models}
 \subclass{91G20 \and 60H10 \and 91G60 \and 68T07}
