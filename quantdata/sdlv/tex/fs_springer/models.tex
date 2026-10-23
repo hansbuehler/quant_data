@@ -1,0 +1,444 @@
+% Literature tables for option-surface construction and dynamics.
+% This file is included from dy21.tex after the introductory literature review.
+Tables~\ref{tab:surface-interpolation-literature},
+\ref{tab:nonparametric-surface-interpolation-literature},
+\ref{tab:surface-representation-literature},
+\ref{tab:inverse-calibration-literature}, and
+\ref{tab:surface-dynamics-literature} separate four questions which are often
+conflated: constructing an option or implied volatility surface, compressing or generating a
+market state, solving an underlying-model inverse problem, and learning a
+surface's evolution through time.  We use common classification
+symbols throughout the tables:
+\begin{itemize}[leftmargin=*,nosep]
+  \item \textbf{S$\infty$}: a theorem- or architecture-level guarantee on the
+        full continuous surface.
+  \item \textbf{S$\Omega$}: the same guarantee only on a stated bounded fitting
+        domain.
+  \item \textbf{SG}: a strict guarantee only on the modelled finite grid.
+  \item \textbf{A}: approximate, using penalties, reweighting, rejection, or
+        empirical violation rates.
+  \item \textbf{N}: no static-arbitrage guarantee.
+  \item \textbf{U}: arbitrage freedom is claimed, but the available construction
+        does not suffice to verify its continuum scope.
+\end{itemize}
+Please contact the authors for any suggestions, corrections, or additions.
+
+% Entries introduced by the backward-reference audit use the same styling.
+\newcommand{\auditnew}[1]{#1}
+
+% Paper switch: the GROMM/SDLV paper (main2.tex) defines \GROMMpaper before
+% \input-ing this file; the DYSANOS papers do not and get their original rows.
+\ifdefined\GROMMpaper
+\newcommand{\OwnRowsRepresentation}{%
+\citet{DYSANOS2026}
+  & Smooth SANOS plus affine latent state & $18\times200=3{,}600$ prices; 3,620 controls & $\infty$ & S$\infty$ & The decoded continuum remains in the SANOS admissible family. \\
+This paper
+  & Smooth SANOS and stochastic DLV/PCA factors & $25\times200=5{,}000$ options plus spot & $\infty$ & S$\infty$ & Full smooth continuum representation. \\}
+\newcommand{\OwnRowsDynamics}{%
+\citet{DYSANOS2026}
+  & SANOS, affine latent state, and AR(1) & S$\infty$ & Yes & Limited SG: 48 options plus spot & Yes & The implemented $\Q$ construction is finite-dimensional. \\
+This paper
+  & Smooth SANOS and stochastic DLV/PCA factors & S$\infty$ & Yes & S$\infty$ in strike at the 25 model expiries; explicit continuous-time DLV drift & Yes & Direct smooth full-surface construction. \\}
+\else
+\newcommand{\OwnRowsRepresentation}{%
+This paper
+  & Smooth SANOS plus affine latent state & $18\times200=3{,}600$ prices; 3,620 controls & $\infty$ & S$\infty$ & The decoded continuum remains in the SANOS admissible family. \\}
+\newcommand{\OwnRowsDynamics}{%
+This paper
+  & SANOS, affine latent state, and AR(1) & S$\infty$ & Yes & Limited SG: 48 options plus spot & Yes & The implemented $\Q$ construction is finite-dimensional. \\}
+\fi
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\begin{landscape}
+\begin{table}[p]
+\centering
+\fontsize{7}{7.8}\selectfont
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.04}
+\caption{Selected parametric implied-volatility and option-price interpolation
+methods.  ``Parametric'' means that the surface is restricted to a prescribed
+finite-dimensional functional family; it does not describe the calibration
+algorithm. Constraints imposed during fitting are distinguished from post-fit repair.}
+\label{tab:surface-interpolation-literature}
+\begin{tabular}{@{}L{3.19cm}L{2.89cm}L{1.67cm}L{2.43cm}L{1.52cm}L{6.08cm}@{}}
+\toprule
+Method & Representation & No static arb. & Native inputs & Off-grid & Scope and qualification \\
+\midrule
+\auditnew{\citet{Gatheral2004SVI}}
+  & \auditnew{SVI smile} & \auditnew{N by itself}
+  & \auditnew{Arbitrary, one expiry} & \auditnew{$\infty$ per expiry}
+  & \auditnew{Introduces raw SVI and its wing asymptotics, but does not supply the later cross-expiry SSVI construction or a complete admissible parameter domain.} \\
+\citet{Hafner2004}
+  & Polynomial IV surface & N & Variable daily DAX transactions & $\infty$ on bounded domain
+  & Weighted least-squares fit followed by finite-grid screening: dates violating hedge, bull-spread, butterfly, or calendar tests on a 200-point grid are discarded.  The fitted family itself is unconstrained. \\
+\citet{Bloch2013MixVar}
+  & Mixture family & U & Arbitrary & $\infty$
+  & Claimed arbitrage-free by construction; the continuum conditions were not verified. \\
+\citet{GatheralJacquier2014}
+  & SVI/SSVI & S$\infty$ & Arbitrary & $\infty$
+  & Strict for admissible parameters; a central low-dimensional benchmark. \\
+\citet{GuoJacquierMartiniNeufcourt2016}
+  & Generalized SVI & S$\infty$ & Arbitrary & $\infty$
+  & Extends the strict SVI/SSVI constructions. \\
+\auditnew{\citet{CorbettaEtAl2019}}
+  & \auditnew{SSVI slices} & \auditnew{S$\infty$}
+  & \auditnew{Arbitrary maturities and strikes} & \auditnew{$\infty$}
+  & \auditnew{Calibrates butterfly- and calendar-consistent slices, then proves that its parameter interpolation and extrapolation preserve those conditions over the continuous surface.} \\
+\auditnew{\citet{HendriksMartini2019}}
+  & \auditnew{eSSVI} & \auditnew{S$\infty$ (conditional)}
+  & \auditnew{Arbitrary} & \auditnew{$\infty$}
+  & \auditnew{Explicit butterfly and calendar conditions; strictness requires admissible parameter curves.} \\
+\auditnew{\citet{MartiniMingone2022}}
+  & \auditnew{SVI smile} & \auditnew{S$\infty$ per expiry}
+  & \auditnew{Arbitrary, one expiry} & \auditnew{$\infty$ per expiry}
+  & \auditnew{Characterizes the no-butterfly domain of raw SVI and calibrates directly on it; calendar consistency across independently fitted expiries is not automatic.} \\
+\auditnew{\citet{Mingone2022}}
+  & \auditnew{eSSVI surface} & \auditnew{S$\infty$}
+  & \auditnew{Arbitrary} & \auditnew{$\infty$}
+  & \auditnew{A global eSSVI parametrization whose admissible parameter domain enforces butterfly and calendar-spread conditions.} \\
+\citet{Roos2025}
+  & Discrete-time local-vol family & U & Arbitrary coterminal set & $\infty$
+  & The abstract claims analytic strike interpolation and expiry extension; the continuum inequalities were not verified. \\
+\bottomrule
+\end{tabular}
+\end{table}
+\end{landscape}
+
+\begin{landscape}
+\fontsize{7}{7.7}\selectfont
+\setlength{\tabcolsep}{2.5pt}
+\renewcommand{\arraystretch}{1.04}
+\begin{longtable}{@{}L{3.19cm}L{3.04cm}L{1.67cm}L{2.58cm}L{1.52cm}L{5.78cm}@{}}
+\caption{Selected non-parametric implied-volatility and option-price
+interpolation methods.  Soft-penalty methods are approximate even when reported
+violations are negligible.}
+\label{tab:nonparametric-surface-interpolation-literature}\\
+\toprule
+Method & Representation & No static arb. & Native inputs & Off-grid & Scope and qualification \\
+\midrule
+\endfirsthead
+\multicolumn{6}{c}{\tablename\ \thetable\ -- continued}\\
+\toprule
+Method & Representation & Static arb. & Native inputs & Off-grid & Scope and qualification \\
+\midrule
+\endhead
+\midrule
+\multicolumn{6}{r}{Continued on next page}\\
+\endfoot
+\bottomrule
+\endlastfoot
+\auditnew{\citet{Kahale2004}}
+  & \auditnew{Piecewise analytic call/IV interpolation}
+  & \auditnew{S$\Omega$ (conditional)} & \auditnew{Arbitrage-free discrete quotes}
+  & \auditnew{$\infty$ for $T\leq T_{\max}$}
+  & \auditnew{Convex-envelope construction on the bounded maturity domain; no extension beyond the last input expiry.} \\
+\citet{fengler2009}
+  & Constrained spline & S$\Omega$ per expiry; SG calendar & Arbitrary & $\infty$ on fitted strike domain
+  & Strike constraints hold over each fitted spline; calendar constraints only at knots and input maturities. \\
+\citet{AndreasenHuge}
+  & One-step implicit FD; basis for DLV & SG numerically; S$\infty$ for exact local-vol model & Arbitrary quotes & $\infty$
+  & Sequential local-vol calibration; the finite-difference scheme preserves monotonicity and convexity on its grid. \\
+\citet{Orosi2015}
+  & Thin-plate regression splines/QP & U & Arbitrary & $\infty$
+  & Quadratic-program constraints; their continuum scope was not verified. \\
+\citet{AckererTagasovskaVatter2020}
+  & Neural network & A & Irregular daily panel & $\infty$
+  & Static conditions enter through soft penalties; violation rates depend on the penalty weight. \\
+\auditnew{\citet{BenderThiel2020}}
+  & \auditnew{Reference-model distortion of call prices}
+  & \auditnew{S$\infty$ (conditional)} & \auditnew{Arbitrage-free discrete quotes}
+  & \auditnew{$\infty$}
+  & \auditnew{Smooth strike interpolation and arbitrage-free maturity interpolation.} \\
+\citet{ZhangLiZhang2021}
+  & PCA/VAE/samples plus neural surface & A & $14\times11=154$ & $\infty$
+  & Calendar, butterfly, and wing conditions enter as penalties; occasional spikes remain. \\
+\citet{ChataignerEtAl2022}
+  & Constrained GP or penalized NN & GP: S$\Omega$; NN: A & Arbitrary & $\infty$
+  & Nodal inequalities imply monotonicity and convexity throughout the GP's bounded piecewise-multilinear domain.  The NN and fitted SSVI alternatives use penalties. \\
+\auditnew{\citet{Deschatres2024}}
+  & \auditnew{Variance-space cubic/B-spline QP} & \auditnew{A}
+  & \auditnew{Arbitrary; 14,500 quotes in the SPX example} & \auditnew{$\infty$}
+  & \auditnew{Calendar constraints are linear, but butterfly constraints are linearized and the QP is iterated.  Under the present convention this is approximate rather than a single exact admissible fit.} \\
+\citet{YangChenShuHospedales2025}
+  & Hypernetwork plus compact neural surface & A & 9 observations & $\infty$
+  & Reconstructs index-option IV surfaces from sparse option quotes.  Calendar and density conditions are finite-grid auxiliary losses; the paper explicitly states that they provide no hard guarantee. \\
+\auditnew{\citet{GononJacquierWiedemann2025}}
+  & \auditnew{Graph neural operator} & \auditnew{A}
+  & \auditnew{Irregular intraday panels} & \auditnew{$\infty$ on its output domain}
+  & \auditnew{Calendar and butterfly conditions are finite-difference penalty losses evaluated at sampled coordinates; the paper describes the output as virtually arbitrage-free, not structurally invariant.} \\
+\citet{Schlenkrich2025}
+  & Piecewise shifted-Black/Bachelier model & S$\infty$ per expiry; calendar N & Arbitrary & $\infty$ per expiry
+  & Whole-strike construction for one terminal distribution; calendar consistency is not addressed. \\
+\citet{QinYangCheFeng2026}
+  & Piecewise-quadratic calls/RN marginals & S$\infty$ in strike at quoted expiries & Arbitrage-free discrete quotes & $\infty$ in strike only
+  & Explicit sequential completion of risk-neutral marginals; no interpolation between expiries. \\
+\citet{SANOS2026}
+  & Smooth non-parametric DLV & S$\infty$ & Arbitrary; about 1,000 in example & $\infty$
+  & Bid--ask-aware smooth surface with positivity as the essential parameter constraint. \\
+\end{longtable}
+\end{landscape}
+
+\begin{landscape}
+\fontsize{7}{7.8}\selectfont
+\setlength{\tabcolsep}{2.5pt}
+\renewcommand{\arraystretch}{1.06}
+\begin{longtable}{@{}L{3.27cm}L{3.19cm}L{2.74cm}L{2.05cm}L{2.28cm}L{4.56cm}@{}}
+\caption{PCA, autoencoder, and other latent representations of option surfaces.
+``Off-grid'' counts options not represented by native model coordinates;
+external interpolation is not credited to the representation.
+  An off-grid count of
+$\infty$ means that the representation can be evaluated on a continuum, subject
+to its stated domain and tail assumptions.
+}
+\label{tab:surface-representation-literature}\\
+\toprule
+Method & Representation & Native option coordinates & Off-grid & No static arb. & Qualification \\
+\midrule
+\endfirsthead
+\multicolumn{6}{c}{\tablename\ \thetable\ -- continued}\\
+\toprule
+Method & Representation & Native option coordinates & Off-grid & No static arb. & Qualification \\
+\midrule
+\endhead
+\midrule
+\multicolumn{6}{r}{Continued on next page}\\
+\endfoot
+\bottomrule
+\endlastfoot
+\citet{SkiadopoulosHodgesClewlow2000}
+  & Direct-IV PCA & Not reported; three maturity groups & 0 & N & PCA factors do not preserve static inequalities. \\
+\citet{ContVol}
+  & Functional/direct-IV PCA & Not reported & Any number within the fitted domain & N & Functional interpolation does not make the PCA cone invariant. \\
+\auditnew{\citet{FenglerHardleVilla2003}}
+  & \auditnew{Common PCA of direct IV changes} & \auditnew{$6\times6=36$: moneyness 0.85--1.10 at 1, 2, 3, 6, 9, and 12 months (DAX)}
+  & \auditnew{0} & \auditnew{N}
+  & \auditnew{Common factors summarize smile dynamics but do not define an invariant no-arbitrage state space.} \\
+\citet{Hafner2004}
+  & Four parametric IV factors: level, slope, curvature, and term slope & Variable daily DAX transactions; 200-point diagnostic grid & $\infty$ on its bounded domain & N & The daily regression
+   family is not constrained.  Dates failing finite-grid hedge, bull-spread, butterfly, or calendar tests are discarded ex post. \\
+\citet{PanigirtzoglouSkiadopoulos2004}
+  & Separate implied-distribution PCA by expiry & $3\times21=63$: 21 deltas at 1, 3, and 6 months & 0 & PDF: S$\infty$ per expiry; CDF: N; joint surface: N & The PDF construction is strict per expiry; neither construction enforces calendar consistency. \\
+\citet{DellaportasMijatovic2014}
+  & Parametric SABR encoding & SABR triplet for one expiry & Any strike in fitted interval & U & SABR may violate arbitrage conditions in the extreme wings. \\
+\citet{wiese2019simulate}
+  & DLV, PCA, and GAN & $8\times4=32$ & 0 & SG & Finite DLV lattice. \\
+\auditnew{\citet{AvellanedaEtAl2020}}
+  & \auditnew{PCA of normalized IV-surface deformations} & \auditnew{$8\times7=56$ per name: 8 maturities and 7 deltas}
+  & \auditnew{0} & \auditnew{N}
+  & \auditnew{A data-driven factor representation; no static-arbitrage invariant decoder is imposed.} \\
+\auditnew{\citet{BergeronEtAl2021}}
+  & \auditnew{VAE representation of IV surfaces} & \auditnew{$8\times5=40$: 8 maturities and 5 deltas (FX)}
+  & \auditnew{Any (delta, maturity) in the domain via the pointwise decoder} & \auditnew{N}
+  & \auditnew{A hands-off latent representation and generator, without a hard static-arbitrage architecture.} \\
+\citet{wiese2021multiassetspotoptionmarket}
+  & DLV, constrained autoencoder, and flow & $9\times4=36$ per asset & 0 & SG & Decoder is constrained on the finite lattice. \\
+\citet{ZhangLiZhang2021}
+  & PCA/VAE/samples plus neural reconstruction & 154 & $\infty$ & A & Reconstruction uses static-arbitrage penalties. \\
+\citet{AndresBoumezouedJourdain2023}
+  & Four-parameter SSVI state & 384 (Euro Stoxx 50); 1,944 (SPX, before filtering) & $\infty$ & S$\infty$ & Admissible SSVI parameter conditions hold for each state. \\
+\citet{Cohen02012023}
+  & Affine factors of normalized call prices & 46 options on an irregular rolling $(\tau,m)$ lattice & 0 & SG & Linear no-static-arbitrage inequalities define a factor polytope. \\
+\citet{ContVuletic2023}
+  & Direct-IV PCA/factors plus path reweighting & Fixed IV grid & 0 & Raw PCA: N; output: A & Arbitrage scenarios are downweighted, not excluded structurally. \\
+\citet{ChoudharyJaimungalBergeron2024}
+  & Functional PCA and neural SDE & $17\times11=187$ per asset & Any number within the fitted domain & N & Static-arbitrage violations are measured only ex post. \\
+\citet{VuleticCont2024}
+  & Direct-IV GAN plus penalties/reweighting & $10\times8=80$ & 0 & A & Approximate output correction. \\
+\citet{JinAgarwal2025}
+  & Direct-IV conditional diffusion & $9\times9=81$ & 0 & A & Penalty-based. \\
+\citet{GolubitskyDavisonCaraman2026}
+  & VAE latent representation & $2\times11\times17=374$ & 0 & A & Static constraints are approximate. \\
+\citet{BrooksEtAl2026}
+  & Arbitrage-penalized VAE and latent flow & $32\times16=512$ & 0 & A; 90.8\% pass all tests & Empirical pass rate, not a guarantee. \\
+\citet{HaoJi2026}
+  & Conditional diffusion plus SAAM refinement & $15\times17=255$ & Arbitrary target coordinates & A & SAAM uses residual regularization and reduces measured violations on a finite diagnostic grid; it is not an admissible parameterization. \\
+\citet{HanEtAl2026}
+  & Joint return/direct-IV adaptive sequential diffusion & $11\times9=99$ IVs & 0 & A & Fine-tuning penalizes calendar-, call-, and butterfly-spread violations; reported violations are nearly zero, not structurally excluded. \\
+\citet{YangWangZhangLi2026}
+  & Joint stock-return/option-IV diffusion across equities & $11\times9=99$ option IVs per stock & 0 & A & Transfers dynamics to unseen stocks on the same fixed grid. \\
+\OwnRowsRepresentation
+\end{longtable}
+\end{landscape}
+
+\begin{landscape}
+\begin{table}[p]
+\centering
+\fontsize{7}{7.8}\selectfont
+\setlength{\tabcolsep}{2pt}
+\renewcommand{\arraystretch}{1.08}
+\caption{Machine-learning methods for underlying-model inverse problems.
+These methods infer or optimize parameters of a pre-specified pricing model;
+they do not make the observed option market itself the dynamic state.  Static
+arbitrage properties are inherited from the pricing model, subject to decoded
+parameters remaining admissible.}
+\label{tab:inverse-calibration-literature}
+\begin{tabular}{@{}L{3.42cm}L{3.80cm}L{3.95cm}L{3.19cm}L{3.95cm}@{}}
+\toprule
+Method & Underlying pricing family & Role of ML & Online inverse step & Why separate from a market-state model \\
+\midrule
+\citet{Hernandez2016}
+  & Hull--White/G2++ examples & Direct inverse map trained on model-generated examples & One network evaluation & Maps quotes to parameters of a prescribed model. \\
+\auditnew{\citet{DimitroffRoederFries2018}}
+  & \auditnew{Heston}
+  & \auditnew{Convolutional network maps volatility grids to model parameters}
+  & \auditnew{One network evaluation}
+  & \auditnew{Amortized inversion into a prescribed pricing family.} \\
+\citet{BayerStemper2018}
+  & Rough Bergomi and related rough-volatility models & Learns the forward parameter-to-IV map & Classical Levenberg--Marquardt optimization through the surrogate & The NN accelerates a conventional model calibration. \\
+\citet{HorvathMuguruzaTomas2019,BayerEtAl2019DeepCalibration}
+  & Broad class including rough-volatility models & Learns a fast forward pricing/IV map & Classical numerical or Bayesian inversion of the surrogate & Explicitly retains the two-step pricing-model-plus-calibration architecture. \\
+\auditnew{\citet{LiuEtAl2019Calibration}}
+  & \auditnew{Heston and Bates}
+  & \auditnew{Learns a forward parameter-to-observable map}
+  & \auditnew{Differential evolution through the surrogate}
+  & \auditnew{The learned map accelerates conventional parameter calibration.} \\
+\citet{Itkin2019}
+  & Black--Scholes examples & Compares direct and surrogate calibration & Direct map or numerical solver & Studies smooth Greeks, soft arbitrage penalties, and inverse-map stability. \\
+\citet{RoederDimitroff2020}
+  & Volatility-model examples used in deep-calibration benchmarks & Compares a direct IV-to-parameter map with the two-step forward surrogate & None for the direct version; solver for the indirect version & Both outputs are parameters of an exogenously specified pricing model. \\
+\auditnew{\citet{CuchieroKhosrawiTeichmann2020}}
+  & \auditnew{Local stochastic-volatility models}
+  & \auditnew{Neural leverage function}
+  & \auditnew{Monte Carlo SGD; adversarial optimization only for robust bid--ask calibration}
+  & \auditnew{The generator remains an underlying-first LSV model.} \\
+\citet{RosenbaumZhang2021}
+  & Quadratic rough Heston & Neural pricing/calibration engine based on a multifactor approximation & Optimization against the learned engine & The calibrated state is a rough-volatility parameter vector. \\
+\citet{vae_ning2023arbitrage}
+  & Time-inhomogeneous CTMC; additive Gaussian-mixture and CGMY/KoBoL L\'evy models & VAE/PCA learns the cross-date distribution of already calibrated parameters & Regularized inverse calibration is done first, date by date; CTMC maturities are fitted sequentially & The VAE generates model parameters, and prices are recovered through the model's characteristic function. \\
+\citet{SridiBilokon2023}
+  & Heston & Neural pricing surrogate & Differential evolution and Nelder--Mead & Heston supplies the risk-neutral structure. \\
+\citet{ZhangAmiciMorandotti2024}
+  & Heston & Differential network learns prices and sensitivities & Gradient calibration through the learned pricer & Heston supplies the risk-neutral structure. \\
+\bottomrule
+\end{tabular}
+\end{table}
+\end{landscape}
+
+\begin{landscape}
+\fontsize{7}{7.8}\selectfont
+\setlength{\tabcolsep}{2.2pt}
+\renewcommand{\arraystretch}{1.06}
+\begin{longtable}{@{}L{2.75cm}L{2.5cm}L{2.0cm}L{1.6cm}L{3.0cm}L{1.6cm}L{4.03cm}@{}}
+\caption{Option-surface dynamics under the historical measure $\P$ and direct
+market-model dynamics under $\Q$.  The $\Q$ column excludes underlying-first
+pricing families such as Heston, local volatility, and Bates.  ``Multi-step
+$\P$ path'' records whether the cited work actually reports a simulated or
+forecast path spanning more than one transition, rather than whether its model
+could in principle be iterated.  ``Implemented'' refers to the stated dynamic
+construction, not merely static preprocessing.}
+\label{tab:surface-dynamics-literature}\\
+\toprule
+Method & Dynamic state/model & Static no-arb. under $\P$ & Multi-step $\P$ path & Direct market-model dynamics under $\Q$ & Implemented & Qualification \\
+\midrule
+\endfirsthead
+\multicolumn{7}{c}{\tablename\ \thetable\ -- continued}\\
+\toprule
+Method & Dynamic state/model & Static arb. under $\P$ & Multi-step $\P$ path & Direct market-model dynamics under $\Q$ & Implemented & Qualification \\
+\midrule
+\endhead
+\midrule
+\multicolumn{7}{r}{Continued on next page}\\
+\endfoot
+\bottomrule
+\endlastfoot
+\auditnew{\citet{Schonbucher1999}}
+  & \auditnew{One fixed-strike term structure of implied volatilities}
+  & \auditnew{---} & \auditnew{---} & \auditnew{Exact drift restrictions across maturities for one strike}
+  & \auditnew{MC implementation strategy only}
+  & \auditnew{The setup initially permits a generic finite option set, but the developed discrete and continuous constructions vary maturity at one strike.  Independent dynamics across strikes at the same maturity are explicitly left for future research; this is not a full-surface model.} \\
+\citet{SkiadopoulosHodgesClewlow2000}
+  & Direct-IV PCA factors & N & No & --- & Yes & No static invariant state space. \\
+\citet{ContVol}
+  & Functional/direct-IV PCA factors & N & No & --- ($\P$ only) & Empirical PCA only & No constructed admissible $\Q$ dynamics. \\
+\auditnew{\citet{ContDaFonseca2002Dynamics}}
+  & \auditnew{Functional PCA factors of direct IV surfaces} & \auditnew{N}
+  & \auditnew{No} & \auditnew{---} & \auditnew{Yes ($\P$)}
+  & \auditnew{Empirical factor dynamics; distinct from the three-author stochastic-surface paper and not a constructed risk-neutral model.} \\
+\auditnew{\citet{FenglerHardleVilla2003}}
+  & \auditnew{Common PCA factors of direct IV changes} & \auditnew{N}
+  & \auditnew{No} & \auditnew{---} & \auditnew{Yes ($\P$)}
+  & \auditnew{Empirical CPCA of observed daily surfaces.  The factors are proposed as a starting point for VaR Monte Carlo, but the paper does not report synthetic multi-step IV paths.  There is no invariant static-arbitrage state space.} \\
+\citet{Hafner2004}
+  & Four IV factors with correlated OU dynamics & N; screened sample only & No (1-, 5-, and 10-day forecasts) & A/local & Yes & The fitted OU model violates the global drift condition; the $\Q$ construction is local and approximate. \\
+\citet{PanigirtzoglouSkiadopoulos2004}
+  & Separate distribution factors by constant maturity & PDF: S$\infty$ per expiry; CDF: N & Yes (14 days) & N for a joint surface & Yes & Neither construction enforces calendar consistency. \\
+\auditnew{\citet{FenglerHardleMammen2007}}
+  & \auditnew{Semiparametric IV-factor surface} & \auditnew{N}
+  & \auditnew{No} & \auditnew{---} & \auditnew{Yes ($\P$)}
+  & \auditnew{Estimates and forecasts historical surface factors without a hard static-arbitrage invariant.} \\
+\citet{SchweizerWissel2008}
+  & Price level and local implied-volatility field & S$\infty$, theoretical & --- & S$\infty$: solvability theorem and explicit admissible coefficient examples & No & One fixed expiry and all strikes; not a finite option lattice or full maturity surface. \\
+\auditnew{\citet{SchweizerWisselTerm2008}}
+  & \auditnew{Term structure for one fixed payoff} & \auditnew{S$\infty$, theoretical}
+  & \auditnew{No} & \auditnew{Strict theoretical drift/existence results}
+  & \auditnew{No}
+  & \auditnew{Existence for fixed-strike calls and a power payoff; not a full-surface model.} \\
+\auditnew{\citet{CarmonaNadtochiy2009}}
+  & \auditnew{Local-volatility surface as option-market codebook} & \auditnew{---}
+  & \auditnew{---} & \auditnew{Drift and spot-consistency characterization}
+  & \auditnew{Static empirical fit only}
+  & \auditnew{Direct HJM-style codebook dynamics; general model existence is not proved.} \\
+\auditnew{\citet{TangentLevy}}
+  & \auditnew{Tangent L\'evy option-market codebook} & \auditnew{---}
+  & \auditnew{---} & \auditnew{S$\infty$ under the consistency conditions}
+  & \auditnew{Theory}
+  & \auditnew{Constructs direct risk-neutral dynamics for all strikes and maturities from admissible tangent L\'evy characteristics.} \\
+\citet{DellaportasMijatovic2014}
+  & Single-expiry SABR parameter process & U & No (1--3-day point forecasts) & --- & Yes ($\P$) & No joint surface; extreme-wing arbitrage is not excluded. \\
+\auditnew{\citet{KallsenKruhner2015}}
+  & \auditnew{Time-inhomogeneous L\'evy option codebook} & \auditnew{---}
+  & \auditnew{---} & \auditnew{S$\infty$: necessary/sufficient conditions and existence}
+  & \auditnew{No numerical implementation}
+  & \auditnew{Constructive existence and uniqueness from stated building blocks, but a theoretical HJM framework rather than a calibrated simulator.} \\
+\auditnew{\citet{CarmonaMaNadtochiy2017}}
+  & \auditnew{Finite-dimensional tangent L\'evy specifications} & \auditnew{---}
+  & \auditnew{No} & \auditnew{S$\infty$ under model admissibility}
+  & \auditnew{Yes}
+  & \auditnew{Risk-neutral HJM drift with PCA-estimated volatility; eight-day $\Q$ paths.} \\
+\pagebreak[4]
+\citet{wiese2019simulate}
+  & DLV PCA/GAN state & SG & Yes & --- & Yes & Finite-grid historical dynamics. \\
+\auditnew{\citet{CaoChenHull2020}}
+  & \auditnew{Neural regression of one-day IV changes} & \auditnew{N}
+  & \auditnew{No} & \auditnew{---} & \auditnew{Yes ($\P$)}
+  & \auditnew{Expected changes depend on return, delta/moneyness, maturity, and VIX; no arbitrage constraint.} \\
+\citet{wiese2021multiassetspotoptionmarket}
+  & Constrained DLV latent flow & SG & Yes & --- & Yes & Finite-grid historical dynamics. \\
+\citet{ZhangLiZhang2021}
+  & LSTM latent evolution and neural reconstruction & A & No (next-day only) & --- & Yes & Static-arbitrage penalties only. \\
+\auditnew{\citet{removedrift}}
+  & \auditnew{General $\P$-simulator plus an OCE/entropy path-density model}
+  & \auditnew{Inherited from the input simulator}
+  & \auditnew{Input-dependent}
+  & \auditnew{Numerical near-martingale measure for a finite trading universe}
+  & \auditnew{Yes}
+  & \auditnew{Reweights an input simulator; with frictions, drift is targeted within transaction costs for selected instruments.} \\
+\citet{MedvedevWang2022}
+  & Direct-IV LSTM/ConvLSTM & N & No (multihorizon forecasts) & --- & Yes ($\P$) & No static-arbitrage constraint. \\
+\citet{AndresBoumezouedJourdain2023}
+  & Path-dependent SSVI factors & S$\infty$ for every simulated snapshot & Yes & No market-measure dynamics & Yes ($\P$) & Static arbitrage freedom does not imply dynamic no-arbitrage. \\
+\citet{Cohen02012023}
+  & Rolling normalized-call lattice, affine factors, and neural SDE & SG under $\P$: exact for model SDE & Yes & --- (not implemented) & Yes ($\P$ only) & The drift points inward and the normal diffusion vanishes at every face, so the continuous-time factor process remains in the finite-lattice no-static-arbitrage polytope $\P$-a.s.  The coordinates float with fixed $(\tau,m)$ rather than tracking fixed contracts.  The HJM expression is only a factor-selection criterion and residual diagnostic, not an implemented $\Q$ model. \\
+\citet{ContVuletic2023}
+  & Direct-IV factors plus path reweighting & A & Yes & --- & Yes & Reweighting reduces violations. \\
+\citet{ChoudharyJaimungalBergeron2024}
+  & Functional PCA and neural SDE & N & Yes & --- & Yes & Violations are measured only ex post. \\
+\citet{VuleticCont2024}
+  & Direct-IV GAN dynamics & A & No (next-day only) & --- & Yes & Penalties and reweighting. \\
+\citet{JinAgarwal2025}
+  & Conditional diffusion on IV grids & A & No (next-day only) & --- & Yes & Penalty-based. \\
+\citet{BrooksEtAl2026}
+  & Arbitrage-penalized VAE and latent flow matching & A & No & --- & Yes & Only 90.8\% of generated surfaces pass all reported tests. \\
+\citet{HaoJi2026}
+  & Conditional diffusion plus SAAM refinement & A & Yes (five one-minute steps) & --- & Yes & The daily experiment is next-day only; finite-grid violations remain. \\
+\citet{HanEtAl2026}
+  & Joint daily return and direct-IV grid via adaptive sequential diffusion & A & Yes (reported three-day path) & --- & Yes ($\P$) & Each step conditions on the updated generated history; hedging uses one-day conditional scenarios. \\
+\citet{YangWangZhangLi2026}
+  & Joint stock-return/option-IV diffusion across equities & A & No (next-day only) & --- & Yes & Jointly generates the next-day stock return and $11\times9$ option-IV increment; static option constraints are approximate. \\
+\citet{FrancoisEtAl2026}
+  & Five-factor IV surface jointly with SPX returns & A & No (five-day terminal scenarios) & --- & Yes ($\P$) & Rare empirical violations, not an invariant state space. \\
+\citet{BucheggerGonon2026}
+  & Latent diffusion for returns and IV surfaces & A & Yes (30-day trajectories) & --- & Yes ($\P$) & Penalty-based arbitrage awareness; violations remain. \\
+\OwnRowsDynamics
+\end{longtable}
+\end{landscape}
