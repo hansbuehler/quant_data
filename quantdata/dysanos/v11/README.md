@@ -33,3 +33,30 @@ dynamics.
 
 Generated panels, checkpoints, logs and reports belong under unique run
 directories in the configured external data root, not in this source tree.
+
+## Current model disposition
+
+The current selected dynamics benchmark is the **daily joint Direct-200 model
+with Gaussian innovations**.  Its daily state/spot construction materially
+improves independent 2025 predictive calibration relative to the weekly law.
+
+The following are retained research comparators, not selected production
+models:
+
+- daily and weekly Tail Diffusion laws, which fit heavier innovation-radius
+  tails but whose current stationary-scale daily specification is
+  over-dispersed on the 2025 forward holdout;
+- LSTM and selective-SSM conditional laws, which improve conditional NLL but
+  have not shown a material improvement in the targeted multistep path
+  statistics;
+- the pre-2025 weekly Direct-200 fit, which remains the paper-compatible
+  baseline and source of the weekly-comparison reports.
+
+Do not extend the direct daily-spot MLP pilot, either the regularised or the
+rolling decoded DLV/backbone spot-loading correction, or the DLV-only
+experiment.  They are retained as diagnostics: the first did not generalize;
+the spot-loading corrections improved their local feature regression but not
+the output leverage term structure; and the third established that the fixed
+Black backbone is not the sole source of the leverage shortfall.  Retiring a
+line means no new runs or checkpoint deletion; its reproducible report
+remains part of the research record.
