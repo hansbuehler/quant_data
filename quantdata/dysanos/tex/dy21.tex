@@ -5,9 +5,10 @@
 \usepackage{amsmath,amssymb,amsthm,mathtools}
 \usepackage{bm}
 \usepackage[T1]{fontenc}
-\usepackage{lmodern,microtype}
-\usepackage[numbers]{natbib}
-\usepackage{booktabs,array,multirow,rotating}
+\usepackage{mathptmx,microtype}
+\usepackage[authoryear]{natbib}
+\bibpunct{(}{)}{;}{a}{,}{,}
+\usepackage{booktabs,array,longtable,multirow,rotating}
 \usepackage{enumitem}
 \usepackage{xcolor}
 \usepackage{tcolorbox}
@@ -15,10 +16,11 @@
 \usepackage{pdflscape}
 \usepackage{graphicx}
 \usepackage{float} % explicit dependency for the [H] placement specifier used throughout
-\usepackage[colorlinks=true,
-            linkcolor=blue!60!black,
-            citecolor=blue!60!black,
-            urlcolor=blue!60!black]{hyperref}
+\usepackage[hidelinks,
+            pdftitle={DYSANOS: Generative Dynamic Smooth Arbitrage-free Non-parametric Option Surfaces},
+            pdfauthor={Hans Buehler, Blanka Horvath, Anastasis Kratsios, and Magnus Wiese},
+            pdfsubject={Quantitative Finance manuscript},
+            pdfkeywords={option pricing, implied volatility, generative models, static arbitrage, risk-neutral measure, machine learning}]{hyperref}
 
 %% ── Theorem environments ─────────────────────────────────────
 \newtheorem{definition}{Definition}[section]
@@ -60,16 +62,12 @@
 
 
 %% ── Title ────────────────────────────────────────────────────
-\title{%
-  \textbf{DYSANOS}\\[6pt]
-  \large 
-Generative Dynamic Smooth Arbitrage-free Non-parametric Option Surfaces
-}
+\title{DYSANOS: Generative Dynamic Smooth Arbitrage-free Non-parametric
+Option Surfaces}
 \author{%
   Hans Buehler\thanks{%
-    Mathematical Institute,
-    University of Oxford.
-    \texttt{hans.buehler@maths.ox.ac.uk}}
+    Corresponding author. Mathematical Institute,
+    University of Oxford. Email: \texttt{hans.buehler@maths.ox.ac.uk}}
   \and
   Blanka Horvath\thanks{%
     Mathematical Institute and Oxford-Man Institute,
@@ -82,7 +80,7 @@ Generative Dynamic Smooth Arbitrage-free Non-parametric Option Surfaces
     Mathematical Institute,
     University of Oxford. \texttt{magnus.wiese@maths.ox.ac.uk}}
 }
-\date{\today\\Version 2.1}
+\date{}
 
 %% ============================================================
 \begin{document}
@@ -103,15 +101,19 @@ reconstruction, stability, and tail behavior. We illustrate model performance
 on 891 Option Metrics IvyDB S\&P Index surfaces from 2022-01-03 through to
 2025-08-29.
 
-We also demonstrate how to use the methods of~\cite{removedrift} to construct
+We also demonstrate how to use the methods of~\citet{removedrift} to construct
 numerically a risk-neutral density. As part of this we develop a new test for zero conditional means under a given measure.
 We show that for a set of 100,000 simulated paths
 a trading universe of 48 options and spot is numerically free of dynamic arbitrage.
 \end{abstract}
 
-\tableofcontents
-%\bigskip\hrule\bigskip
-\pagebreak
+\noindent\textbf{Keywords:} option pricing; implied volatility; generative
+models; static arbitrage; risk-neutral measure; machine learning
+
+\medskip
+\noindent\textbf{JEL classification:} C45; C58; G13
+
+\bigskip
 
 %% ============================================================
 
@@ -125,7 +127,7 @@ Vega risk when risk managing option portfolios.
 Modelling the dynamics of a full continuous surface of options
 in a way that is simultaneously \emph{statistically realistic} and \emph{statically
 arbitrage-free} at every simulated date has remained an open problem since the
-foundational work of~\cite{ContVol} on dynamics of the implied volatility surface.
+foundational work of~\citet{ContVol} on dynamics of the implied volatility surface.
 
 \begin{figure}[H]
     \centering
@@ -136,13 +138,13 @@ foundational work of~\cite{ContVol} on dynamics of the implied volatility surfac
     \label{fig:initialexample}
 \end{figure}
 
-The most advanced approach until recently were the simulators~\cite{wiese2019simulate,wiese2021multiassetspotoptionmarket,Cohen02012023} 
-for realistic dynamics of
+The most advanced approach until recently were the
+simulators of~\citet{wiese2019simulate,wiese2021multiassetspotoptionmarket,Cohen02012023}
+for trained generative dynamics of
 a \emph{discrete floating grid} of options which are strictly
  arbitrage-free at each simulation date. These simulators are using, in essence, the discrete local volatility
-representation pioneered in~\cite{DLV} to ensure absence of static arbitrage in every simulated
+representation pioneered in~\citet{DLV} to ensure absence of static arbitrage in every simulated
 option surface. 
-
 
 However, the restriction of the above models to a discrete set of floating option strikes and time-to-expiries
 means that the simulators do not have access to the daily returns $dC_t(\tau,k)$
@@ -153,7 +155,7 @@ returns, which are required to validate simulated dynamics against observed
 market returns.
 Since the discrete option prices are free of arbitrage, one method would be
 to interpolate option prices linearly, which means all options would be free of static arbitrage.
-However, as shown in~\cite{buehler2006expensive} and illustrated in~\cite{SANOS2026}
+However, as shown in~\citet{buehler2006expensive} and illustrated in~\citet{SANOS2026},
 linear interpolation yields the most expensive possible arbitrage-free price for any
 option off the grid, rendering the approach unsuitable in practice. Being linear
 also means that the implied probability density is piecewise constant and zero between strikes.
@@ -169,7 +171,6 @@ This article presents a model framework for
     \item  \textbf{(iv) a risk-neutral density}.
 \end{itemize}
 %
-This article is a refinement of material presented at The XIII Bachelier World Congress in Bologna,~2026.\footnote{\url{https://quantitative-research.de/dl/DYSANOS.pdf}}
 
 \subsection*{Historic Context and Literature Review}
 
@@ -179,7 +180,7 @@ Quantitative finance has traditionally approached this problem by specifying
 analytically tractable risk-neutral dynamics for the underlying asset ---
 Heston, rough volatility, SABR --- and then \emph{calibrating} model parameters
 to fit each day's option surface independently. They are then overlaid with 
-a local volatility surface using the seminal~\cite{Guyon2011TheSC}. The latter
+a local volatility surface using the seminal construction of~\citet{Guyon2011TheSC}. The latter
 guarantees that all options are initially priced correctly.
 
 In this paradigm, realistic surface dynamics are an afterthought: calibration is repeated
@@ -191,11 +192,15 @@ paths.\\
 \noindent
 \textbf{Simulating Implied Volatility:}
 A natural data-driven alternative is to treat the implied volatility surface itself
-as the simulation object, much as implied in~\cite{ContVol}.
+as the simulation object, insipired first by~\citep{ContVol} and then implemented for example
+by~\cite{ContVuletic2023,ChoudharyJaimungalBergeron2024,HanEtAl2026}.
 The fundamental difficulty is that there is no known parametrization  of
 the implied volatility surface which is strictly free of static
-arbitrage. There exist numerous attempts to rectify this with classic (e.g.~\cite{fengler2009}) and machine learned
-methods (e.g.~\cite{vae_ning2023arbitrage}) but to our knowledge none of them can strictly guarantee absence of static arbitrage.
+arbitrage. There exist numerous attempts to rectify this with classic approaches
+(e.g.~\citealp{Kahale2004,fengler2009,GatheralJacquier2014,GuoJacquierMartiniNeufcourt2016,Orosi2015})
+and machine-learned methods
+(e.g.~\citealp{vae_ning2023arbitrage,AckererTagasovskaVatter2020,YangChenShuHospedales2025,GononJacquierWiedemann2025}),
+but to our knowledge none of them can strictly guarantee absence of static arbitrage.
 
 If a simulated surface admits a butterfly spread or calendar spread arbitrage,
 then a learning agent can exploit an artificial profit which is unrelated to the
@@ -205,22 +210,173 @@ in the literature (we repeat them below).
 
 Most published works also simplify the problem by only considering few strikes and expiries.\\
 
+
+\iffalse % Tables are maintained in models.tex.
+Tables~\ref{tab:surface-interpolation-literature} and
+\ref{tab:surface-dynamics-literature} separate two questions which are often
+conflated in this literature: constructing one admissible surface, and learning
+the evolution of a surface through time.  We use \textbf{S$\infty$} for a
+theorem- or architecture-level guarantee on the full continuous surface,
+\textbf{S$\Omega$} for such a guarantee only on a stated bounded fitting domain,
+\textbf{SG} for a strict guarantee only on the modelled finite grid, \textbf{A}
+for an approximate treatment based on penalties, reweighting, rejection, or
+empirical violation rates, \textbf{N} when no static-arbitrage guarantee is
+provided, and \textbf{U} when the paper claims arbitrage freedom but the
+available construction does not suffice for us to verify its continuum scope.
+We also distinguish constraints imposed inside the fit from a projection or
+iterative repair applied after an unconstrained fit; only the former makes the
+fitted family itself constrained.
+The option counts refer to native surface coordinates rather than the number of
+option-day observations.  An extrapolation count of $\infty$ means that the
+representation can be evaluated on a continuum of strikes and maturities,
+subject to its stated domain and tail assumptions.
+
+\begin{landscape}
+\begin{table}[p]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.12}
+\caption{Selected implied-volatility and option-price interpolation methods.
+``Parametric'' describes the surface representation, not the calibration
+algorithm.  Soft-penalty methods are classified as approximate even when their
+reported numerical violations are negligible.}
+\label{tab:surface-interpolation-literature}
+\begin{tabular}{@{}p{4.5cm}p{3.3cm}p{1.45cm}p{2.9cm}p{2.0cm}p{8.0cm}@{}}
+\toprule
+Method & Representation & Static arb. & Native inputs & Off-grid & Scope and qualification \\
+\midrule
+\citet{AndreasenHuge}
+  & Non-parametric; basis for DLV & SG/S$\infty$ & Arbitrary grid & $\infty$
+  & Basis for DLV, with exact grid constraints and prescribed piecewise interpolation; not a globally smooth density. \\
+\citet{fengler2009}
+  & Constrained non-parametric spline & S$\infty$ & Arbitrary & $\infty$
+  & Shape-constrained smoothing on the fitted domain; tails depend on the boundary specification. \\
+\citet{GatheralJacquier2014}
+  & Parametric SVI/SSVI & S$\infty$ & Arbitrary & $\infty$
+  & Strict for admissible parameters; a central low-dimensional benchmark. \\
+\citet{GuoJacquierMartiniNeufcourt2016}
+  & Parametric generalized SVI & S$\infty$ & Arbitrary & $\infty$
+  & Extends the strict SVI/SSVI constructions. \\
+\citet{Bloch2013MixVar}
+  & Parametric mixture & S$\infty$ (conditional) & Arbitrary & $\infty$
+  & Positive mixtures of strike-shifted Black--Scholes calls; strike arbitrage is structural and calendar arbitrage requires non-decreasing component total variances and the stated parameter restrictions. \\
+\citet{Orosi2015}
+  & Thin-plate regression splines/QP & U & Arbitrary & $\infty$
+  & Constraints are integrated into a quadratic-program fit, rather than added as a soft loss, but we have not verified a basis-level theorem extending them from the constrained locations to the whole continuum. \\
+\citet{AckererTagasovskaVatter2020}
+  & Non-parametric neural network & A & Irregular daily panel & $\infty$
+  & Static conditions enter through soft penalties; violation rates depend on penalty weight. \\
+\citet{ZhangLiZhang2021}
+  & PCA/VAE/samples plus neural surface & A & $14\times11=154$ & $\infty$
+  & Calendar, butterfly, and wing conditions enter as penalties; occasional spikes remain. \\
+\citet{ChataignerEtAl2022}
+  & Constrained GP or penalized NN & GP: S$\Omega$; NN: A & Arbitrary & $\infty$
+  & The GP is a piecewise-multilinear finite-element surface: linear inequalities on nodal coefficients imply monotonicity and convexity everywhere on its bounded rectangle.  The NN and fitted SSVI alternatives use penalties. \\
+\citet{SANOS2026}
+  & Smooth non-parametric DLV & S$\infty$ & Arbitrary; about 1,000 in example & $\infty$
+  & Bid--ask-aware smooth surface with positivity as the essential parameter constraint. \\
+\citet{YangChenShuHospedales2025}
+  & Hypernetwork plus compact neural surface & A & 9 observations & $\infty$
+  & Calendar and density conditions are auxiliary losses evaluated on finite grids; the paper explicitly notes that these do not provide a hard guarantee. \\
+\citet{Roos2025}
+  & Parametric/discrete-time local-vol interpretation & U & Arbitrary coterminal set & $\infty$
+  & The abstract advertises analytic $C^2$ strike interpolation, explicit wings, and an expiry extension, but the continuum inequalities cannot be audited without the construction and proof. \\
+\citet{Schlenkrich2025}
+  & Parametric piecewise & S$\infty$ & Arbitrary & $\infty$
+  & Static interpolation and extrapolation proposed also as a generator building block. \\
+\citet{QinYangCheFeng2026}
+  & Non-parametric risk-neutral marginals & S$\infty$ & Arbitrary discrete quotes & $\infty$
+  & Exact price reproduction on the observed range and explicit power-law tails; no dynamics. \\
+\bottomrule
+\end{tabular}
+\end{table}
+\end{landscape}
+
+\begin{landscape}
+\begin{table}[p]
+\centering
+\fontsize{7}{7.8}\selectfont
+\setlength{\tabcolsep}{2.6pt}
+\renewcommand{\arraystretch}{1.04}
+\caption{PCA, latent-surface, and option-market dynamics.  ``Off-grid'' counts
+options not represented by native model coordinates; interpolation performed
+only as an external preprocessing or postprocessing step is not counted.
+The $\Q$ column excludes classic underlying-first pricing models such as
+Heston, local volatility, and Bates.  The final column records whether the
+stated dynamic construction, rather than only its static preprocessing, is
+implemented numerically.}
+\label{tab:surface-dynamics-literature}
+\begin{tabular}{@{}p{3.8cm}p{3.0cm}p{2.5cm}p{1.3cm}p{2.2cm}p{2.2cm}p{3.2cm}p{1.7cm}@{}}
+\toprule
+Method & Representation & Native option coordinates & Off-grid & PCA/latent static arb. & Dynamics under $\P$ & Direct market-model dynamics under $\Q$ & Numerical implementation \\
+\midrule
+\citet{SkiadopoulosHodgesClewlow2000}
+  & Direct-IV PCA & Not reported; three maturity groups & 0 & N & N & --- & Yes \\
+\citet{ContVol}
+  & Functional/direct-IV PCA & Not reported & Functional, no guarantee & N & N & Drift restrictions only & Yes ($\P$) \\
+\citet{PanigirtzoglouSkiadopoulos2004}
+  & Separate PCA of implied CDFs by expiry & $3\times21=63$: 21 deltas at each of 1, 3, and 6 months & 0 & N for a full surface & Bounded martingale probabilities at each delta and expiry & No proof of CDF monotonicity across deltas or calendar consistency across expiries & Yes \\
+\citet{SchweizerWissel2008}
+  & Local implied volatilities and price level & One fixed expiry; continuum of strikes & No other expiries & S$\infty$ in strike & S$\infty$, theoretical & S$\infty$: solvability theorem and explicit admissible coefficient examples & No \\
+\citet{DellaportasMijatovic2014}
+  & Parametric SABR/RN-measure encoding & $n\geq40$, one maturity & $\infty$ within smile & S$\infty$ & S$\infty$, one-step & Excluded: pricing-family parameters & Yes \\
+\citet{wiese2019simulate}
+  & DLV, PCA, and GAN & $8\times4=32$ & 0 & SG & SG & --- & Yes \\
+\citet{wiese2021multiassetspotoptionmarket}
+  & DLV, arbitrage-free autoencoder, and flow & $9\times4=36$ per asset & 0 & SG & SG & --- & Yes \\
+\citet{vae_ning2023arbitrage}
+  & Parametric RN-model parameters plus VAE/PCA & $5\times8=40$ per FX pair & Model-price continuum & CTMC-VAE: S$\infty$; other decoders conditional & Snapshot generator & Excluded: surfaces are prices of imposed CTMC/L\'evy models & Yes \\
+\citet{ZhangLiZhang2021}
+  & PCA/VAE/samples, LSTM, and neural surface & 154 & $\infty$ & A & A & --- & Yes \\
+\citet{Cohen02012023}
+  & Constrained option-price factors and neural SDE & $13\times10=130$ in applications & 0 & SG & SG: hard invariant polytope & N: HJM compatibility diagnostic, not enforced & Yes ($\P$ only) \\
+\citet{ContVuletic2023}
+  & Direct-IV PCA/factors plus path reweighting & $10\times8=80$ & 0 & Raw PCA: N; output: A & A & --- & Yes \\
+\citet{ChoudharyJaimungalBergeron2024}
+  & Functional PCA and neural SDE & $17\times11=187$ per asset & Functional continuum & A & A & --- & Yes \\
+\citet{VuleticCont2024}
+  & Direct-IV GAN plus penalties/reweighting & $10\times8=80$ & 0 & A & A & --- & Yes \\
+\citet{AndresBoumezouedJourdain2023}
+  & Parsimonious SSVI with path-dependent, Jacobi-confined factors & $24\times16\simeq384$ & $\infty$ & S$\infty$ & S$\infty$ for each simulated snapshot & No market-measure dynamics & Yes ($\P$) \\
+\citet{GolubitskyDavisonCaraman2026}
+  & VAE latent representation & $2\times11\times17=374$ & 337 in 90\% missing test & A & No temporal path model & --- & Yes (snapshots) \\
+\citet{JinAgarwal2025}
+  & Direct-IV conditional diffusion & $9\times9=81$ & 0 & A & A & --- & Yes \\
+\citet{BrooksEtAl2026}
+  & Arbitrage-penalized VAE and latent flow & $32\times16=512$ & 0 & A; 90.8\% pass all tests & Snapshot generator & --- & Yes \\
+\citet{HanEtAl2026}
+  & Adaptive sequential diffusion & $11\times9=99$ & 0 & A; nearly zero after fine-tuning & A & --- & Yes \\
+\citet{YangWangZhangLi2026}
+  & Universal cross-stock diffusion & $11\times9=99$ per stock & 99 coordinates on unseen stocks, not off-grid & A & A & --- & Yes \\
+This paper
+  & Smooth non-parametric SANOS, affine latent state, and AR(1) & $18\times200=3{,}600$ prices; 3,620 controls & $\infty$ & S$\infty$ & S$\infty$ & Limited SG: 48 options plus spot & Yes \\
+% GROMM is the next paper and is intentionally omitted from this review.
+% \citet{WieseBuehlerHorvath2026}
+%   & Smooth SANOS and stochastic DLV/PCA factors & $25\times200=5{,}000$ options plus spot & $\infty$ & S$\infty$ & S$\infty$ & S$\infty$ with explicit full-surface drift & Yes \\
+\bottomrule
+\end{tabular}
+\end{table}
+\end{landscape}
+\fi
+
 \noindent
 \textbf{Constrained Parameter Spaces and Code Books:}
 The core challenge of any representation of an option price surface is that no-static-arbitrage conditions are essentially
 linear conditions on call prices, which are difficult to enforce directly in a generative machine learning model. 
 This challenge is shared by most representations including most parametrizations of implied volatility.
 
-The idea of a ``code book'' as introduced in~\cite{TangentLevy} is to find a representation of the option price surface
+The idea of a `code book' as introduced in~\citet{TangentLevy} is to find a representation of the option price surface
 which is numerically tractable for simulation and for which required parameter constraints are straightforward to enforce.
-Indeed, the seminal~\cite{TangentLevy} achieves that goal. In addition, the authors are able to also
+Indeed, the seminal construction of~\citet{TangentLevy} achieves that goal. In addition, the authors are able to also
 construct a risk-neutral measure consistent with the code book representation.
 They achieve this, essentially, by writing the spot price as a product of independent increments. That construction unfortunately also restricts
-the dynamics their model can represent. It tends to fit poorly to statistical data due to the strong cross-expiry correlation of implied forward volatilities.\\
+the dynamics their model can represent. It tends to fit poorly to statistical data due to the strong cross-expiry correlation of implied forward volatilities.
+\\
 
 \noindent
 \textbf{Local Volatility as a Code Book:}
-An intuitive alternative is to use Dupire's local volatility as ``code book'' instead 
+An intuitive alternative is to use Dupire's local volatility as a `code book' instead
 \emph{(not as dynamical model)}. Given a non-negative local volatility function
 $\sigma_t(T,K)$ for $(T,K)\in\R^2_{\geq 0}$ defined on some day~$t$
 we can define 
@@ -239,23 +395,29 @@ fine grid which is slow, particularly when used within batch-based gradient desc
 
 The idea to address this conundrum is to use a grid of options and define a discrete version
 of local volatility on that grid, which is what we called
-\emph{discrete local volatility (DLV)} in~\cite{DLV}. 
+\emph{discrete local volatility (DLV)} in~\citet{DLV}.
 It is essentially the discretized local volatility which is consistent with using an implicit forward-PDE operator on a sparse inhomogeneous grid of options,
-as explained in~\cite{AndreasenHuge}.
+as explained in~\citet{AndreasenHuge}.
 However,
-its native option prices for strikes not on its base grid are the result of linear interpolation and therefore, as mentioned above, ``too expensive''.
+its native option prices for strikes not on its base grid are the result of linear interpolation and therefore, as mentioned above, `too expensive'.
 We therefore use
-our smooth SANOS extension~\cite{SANOS2026}.
+our smooth SANOS extension~\citep{SANOS2026}.
 
-The use of SANOS also allows to fit our model very efficiently to observed bid/ask spreads over the entire observed option surface.
+The use of SANOS also allows to fit our model very efficiently to observed bid/ask spreads over the entire observed option surface.\\
+
+\noindent
+\textbf{Overview of Related Papers:}
+Related work is summarized in Tables~\ref{tab:surface-interpolation-literature}
+and~\ref{tab:surface-dynamics-literature}, starting on
+page~\pageref{tab:surface-interpolation-literature}.
 
 \subsection*{Key contributions}
 
 \noindent
 \textbf{SANOS Decoder:}
     We show how to implement and learn a coordinate transformation of
-    our SANOS~\cite{SANOS2026} model 
-    such that the ``ML-SANOS'' state parameters $h_t$ live in an unconstrained space 
+    our SANOS model~\citep{SANOS2026}
+    such that the `ML-SANOS' state parameters $h_t$ live in an unconstrained space
     $\R^{d}$.  The call
     prices 
     $$
@@ -289,15 +451,15 @@ The use of SANOS also allows to fit our model very efficiently to observed bid/a
     \noindent
 \textbf{Risk-Neutral Dynamics:}
 Every decoded SANOS surface is free of static arbitrage by construction.
-We show that we can ``remove the drift'' in the sense of~\cite{removedrift} for a subset of the (infinite) tradable instruments
+We show that we can `remove the drift' in the sense of~\citet{removedrift} for a subset of the (infinite) tradable instruments
 by finding a martingale measure~$\Q$ equivalent to the learned~$\P$.
 We test the resulting measure against two no-arbitrage criteria: zero
-unconditional mean and zero conditional expected return. To assess the latter, we develop a novel ``no-arb'' test.
+unconditional mean and zero conditional expected return. To assess the latter, we develop a novel `no-arb' test.
 This is of independent interest.
 
-The ``remove the drift'' procedure deployed here is frittle: it is senstive to numerical instabilities,
+The `remove the drift' procedure deployed here is brittle: it is sensitive to numerical instabilities,
 errors, overfitting and other numerical challenges. While we did manage to find a risk-neutral
-meausure for the paths we generate, it was an iterative process. As it is the method is not suitable
+measure for the paths we generate, it was an iterative process. As it is the method is not suitable
 for a production environment.
 
 
@@ -365,9 +527,9 @@ where~$\mathcal{N}$ denotes the normal distribution function.
   Puts are defined equivalently.
   This results can  be extended to the presence of cash dividends and deterministic survival probabilities.\footnote{
     If cash dividends 
-    are present and if its survival probabilities are deterministic functions $\tilde Q_t(T)\equiv \exp( - \lambda_t(T)T )\in [0,1]$ then it was shown in~\cite{BuehlerVolAndDivs}
+    are present and if its survival probabilities are deterministic functions $\tilde Q_t(T)\equiv \exp( - \lambda_t(T)T )\in [0,1]$ then it was shown in~\citet{BuehlerVolAndDivs}
     that spot at $t+T$ as seen from time $t$ must be given as $\tilde S_T^{(t)}=\big(\tilde F_t(T)-\tilde D_t(T)\big) X_T^{(t)} + \tilde D_t(T)$, conditional on survival.
-    The deterministic function $\tilde D_t(T)$ represents floor enforced on the spot price by the presence of future cash dividends, c.f.~\cite{BuehlerVolAndDivs} 
+    The deterministic function $\tilde D_t(T)$ represents floor enforced on the spot price by the presence of future cash dividends, cf.~\citet{BuehlerVolAndDivs}.
     for specifics.
 
     The driftless strike now becomes 
@@ -378,7 +540,7 @@ where~$\mathcal{N}$ denotes the normal distribution function.
     $$
       C_t( T,K) := \frac{\tilde{C}_t\Big( T,\, K\big(\tilde F_t(T)-\tilde D_t(T)\big) + \tilde D_t(T)\Big)}{\tilde B_t(T) \, \tilde Q_t(T)\,\big(\tilde F_t(T)-\tilde D_t(T)\big)} \ .
     $$
-    For puts a similar formula applies after applying put-call parity, see~\cite{BuehlerVolAndDivs}.}
+    For puts a similar formula applies after applying put-call parity; see~\citet{BuehlerVolAndDivs}.}
 \end{remark}
 
 \begin{remark}[Conversion to driftless spot returns]\label{rem:driftlessspot}
@@ -394,7 +556,7 @@ A~call price function is simply a function $C:\R^2_{\geq} \longrightarrow  \R_{\
 which computes call prices $C(T,K)$ for time-to-expiries $T\geq 0$ and relative
 strikes $K\geq 0$ (i.e.~the call prices are normalized to a spot price of~$1$). 
 The objective of this section and the next is to generate such functions $C_t$ for each
-simulated date~$t$ such that each $C_t$ is ``free of static arbitrage'' in the following sense:
+simulated date~$t$ such that each $C_t$ is `free of static arbitrage' in the following sense:
 
 \begin{definition}
 A call price surface $C: \R^2_{\geq 0}\to \R_{\geq 0}$ is \emph{free of static arbitrage} if there is no trade
@@ -414,7 +576,7 @@ $C(T,0)=1$, $C(0,K)=(1-K)^+$, $\lim_{K\uparrow\infty} C(T,K)=0$ and $\partial_K 
 The stricter condition~$\partial_K C(T,0)=-1$ applies if the stock price cannot become zero.
 \end{theorem}
 
-This has been proven in~\cite{buehler2006expensive}. Remark~\ref{rem:actionable_arbitrage} 
+This has been proven in~\citet{buehler2006expensive}. Remark~\ref{rem:actionable_arbitrage}
 shows that these conditions each are not superfluous: we give a practical
 guide on how to construct \emph{actionable} arbitrage strategies if any of the above
 are violated. 
@@ -487,13 +649,13 @@ All of the below are meant as practical heuristics.
 \subsection{Smooth Arbitrage-free Non-parametric Option Surfaces}
 \label{sec:sanos}
 
-In~\cite{SANOS2026} we introduced a  non-parametric family
+In~\citet{SANOS2026} we introduced a non-parametric family
 of call price functions which are all statically arbitrage-free. For clarity, let us briefly fix $t$ and drop it from the notation of market data
 and model parameters.
 
 Each call price function is given in terms of model expiries
 $0 = \hat T^0 < \hat T^1 < \cdots < \hat T^M$ and, for each model expiry,
-$N^j>0$ inner strikes.\footnote{Note that we changed notation slightly vs.~\cite{SANOS2026}.}  Including the two boundary strikes, write
+$N^j>0$ inner strikes.\footnote{Note that we changed notation slightly from~\citet{SANOS2026}.}  Including the two boundary strikes, write
 $\hat K^j = (\hat K^{j,i})_{i=0,\ldots,N^j+1}$. It is recommended that the two outer strikes
 are far away from the inner strikes.\footnote{
     In our experiments, the inner strikes
@@ -501,7 +663,7 @@ are far away from the inner strikes.\footnote{
     were chosen first and then extended by $\hat K^{j,0}:=\hat K^{j,1}/2$ and
     $\hat K^{j,N^j+1} = 1.5\,\hat K^{j,N^j}$.
 }  Model strikes and expiries do not need to match
-market strikes or expiries. See~\cite{SANOS2026} for general comments on grid construction.
+market strikes or expiries. See~\citet{SANOS2026} for general comments on grid construction.
 
 We say that $q=(q^1,\ldots,q^M)$ with $q^j\in\R^{N^j+2}$ is a \emph{martingale density} if
 it satisfies the linear constraints
@@ -560,7 +722,7 @@ For $W(T)>0$ it is $C^\infty$ in $K$. The function is as smooth as~$\alpha$ in~$
 \end{theorem}
 
 \begin{remark}
-    Contrary to~\cite{SANOS2026} we interpolate the Black \& Scholes backbone in total volatility linearly, not variance.
+    Contrary to~\citet{SANOS2026}, we interpolate the Black \& Scholes backbone in total volatility linearly, not variance.
     This is a mechanical choice to avoid taking square roots of variables during training
     which can lead to exploding gradients. If forward volatilities are bounded well away from
     zero, linear interpolation in variance is suitable, too.
@@ -568,7 +730,7 @@ For $W(T)>0$ it is $C^\infty$ in $K$. The function is as smooth as~$\alpha$ in~$
 
 \begin{remark}
     The Black~\&~Scholes formula in~\eqref{eq:sanos_interp} can be replaced
-    by the call price function for any martingale in~$T$, for example the FFT Heston price formula~\cite{carrmadan1999}.
+    by the call price function for any martingale in~$T$, for example the FFT Heston price formula~\citep{carrmadan1999}.
     For practical implementations, the
     function should be fast on a GPU.
 \end{remark}
@@ -591,7 +753,7 @@ subject to the linear constraints~\eqref{eq:qocnd} encoding non-negativity, norm
 arbitrage. We note that the model strikes and time-to-expiries do not need to correspond
 to market strikes or expiries.\\
 
-As discussed in~\cite{SANOS2026} the primary application of this model is \emph{interpolation}: if the model strikes
+As discussed in~\citet{SANOS2026}, the primary application of this model is \emph{interpolation}: if the model strikes
 are a superset of \emph{all} strikes of relevant market instruments then the model can practically be fit to the
 vast majority of options across the entire surface from 1 day to expiries to several years. Stronger, if the model is
 linear ($W=0$) the existence of the densities $q$ is equivalent to absence of arbitrage with respect to the market bid/asks (usually
@@ -601,7 +763,7 @@ On S\&P~500 Index data with 1000 options across 48 expiries (2-day to 657 busine
 the LP solves in sub-seconds on a desktop PC, achieving 91.4\% of options within
 bid--ask on a representative date (2025-05-06), with a median error of 21\% of the
 half-spread on the remaining options. Figure~\ref{fig:sanos_fit} illustrates
-the quality of the fit. The example is from~\cite{SANOS2026}; refer to that work for further details.
+the quality of the fit. The example is from~\citet{SANOS2026}; refer to that work for further details.
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\linewidth]{fit-short.png}\\
@@ -634,7 +796,7 @@ As a first step we therefore fix a common strike grid $\hat K$ with $0<\hat K^0<
 The call price for strike $\hat K^i$ given the density $q^j$ is given as $c^{j,i} = (q^j)'(\hat K - \hat K^i)^+$.
 The convex order condition in~\eqref{eq:qocnd} therefore becomes simply $c^{j,i} \geq c^{j-1,i}$ for all $i$.
 
-We now reparameterize our densities in terms of \emph{discrete local volatilities (DLVs)}~\cite{DLV}: let
+We now reparameterize our densities in terms of \emph{discrete local volatilities (DLVs)}~\citep{DLV}: let
 $$     
     \omega^{i\pm} := \pm    \frac{ (\hat K^{i})^2 }{ (\hat K^{i+1} - \hat K^{i-1})\,(\hat K^{i\pm 1} - \hat K^{i}) }  \geq 0
 $$
@@ -666,11 +828,11 @@ the operator
 \eqend
 is a tridiagonal operator with positive main diagonal and negative off diagonals. 
 It is basically the discrete implicit scheme for the forward equation of the continuous time Dupire SDE.
-It is well known~\cite{DLV}
+It is well known~\citep{DLV}
 that this operator is invertible, and the inverse~$\Xi^j$ can be efficiently computed on GPU using a compiled
 Thomas' algorithm. It is also
 a martingale transition operator in
- the sense of~\cite{DLV} which means that the densities $q^1,\ldots,q^M$ generated 
+ the sense of~\citet{DLV}, which means that the densities $q^1,\ldots,q^M$ generated
  iteratively starting in $q^0=(1)$ by
 \begin{equation}\label{eq:densitytrans}
     q^j = \Big( 1+  \Omega\ \mathrm{diag}(\Sigma^j) (\hat T_j - \hat T_{j-1}) \Big)^{-1} q^{j-1} 
@@ -824,7 +986,7 @@ Then define our loss as
 \subsection{Affine Compression}
 
 Considering the large state space we employ an affine compression to reduce dimensionality while retaining most of the relevant information.
-This ``affine-200'' representation is defined by the decoder
+This `affine-200' representation is defined by the decoder
 \eq{affine-decoder-preview}
 u_t=b+B h_t 
 \eqend
@@ -1000,7 +1162,7 @@ before the evaluation period.
 The normalized floating option surface can be simulated without considering spot. 
 However, for most  applications we will still need a spot path. We will essentially aim to draw
 spot from the front expiry marginal distribution. This means that generated spot paths will be consistent with the one day to expiry option prices.
-In order to ensure a correct joint distribution between spot and the surface, we use a  ``copula'' approach.
+In order to ensure a correct joint distribution between spot and the surface, we use a `copula' approach.
 
 Assume that we have historic samples of daily driftless spot returns $S_{t+1}/S_t$  as defined in~\eqref{eq:driftlessspotret}.  
 Let
@@ -1062,7 +1224,7 @@ In this section we review the PCA dynamics implied by our model.
 Although $h_t$ for our affine-200 model has 200 coordinates, the actual variation is
 much lower-dimensional.  Indeed, the PCA of the AR(1) state process reveals that only a few principal components capture most of the variation in the decoded
 implied-volatility space as figure~\ref{fig:pca-spectrum} and table~\ref{tab:decoded-pca} show. Practically eight PCA vectors are sufficient to drive the entire surface over the
-time period of 891 dates from 2022-01-03 to 2025-08-29. This is in line with other works~\cite{ContVol}.
+time period of 891 dates from 2022-01-03 to 2025-08-29. This is in line with other works~\citep{ContVol}.
 
 \begin{table}[H]
 \centering
@@ -1082,7 +1244,7 @@ PC1--8 & 99.76\%\\
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.7\textwidth]{generated/presentation_decoded_iv_pca_spectrum.png}
+  \includegraphics[width=0.7\textwidth]{generated/presentation_decoded_iv_pca_spectrum.pdf}
   \caption{Variance explained by PCA of decoded implied-volatility levels
   under the fitted invariant state law.  The 200 affine coordinates are not
   themselves these PCs.}
@@ -1096,14 +1258,12 @@ skew/term-structure rotation, while PC3 couples skew and maturity.  Higher
 modes become increasingly localized, including at the explicit 1D--4D model
 expiries.
 
-\begin{landscape}
 \begin{figure}[p]
   \centering
-  \includegraphics[width=\linewidth]{generated/presentation_iv_pca_factors.png}
+  \includegraphics[width=\textwidth,height=0.88\textheight,keepaspectratio]{generated/presentation_iv_pca_factors.png}
   \caption{PCA factors 1--8 expressed in implied volatility space as shifts over the mean $b$ of~\eqref{eq:affine-decoder}.}
   \label{fig:pca-factors}
 \end{figure}
-\end{landscape}
 \clearpage
 
 For completeness we also illustrate the mean~$b$ from~\eqref{eq:affine-decoder}
@@ -1111,7 +1271,7 @@ in figure~\ref{fig:base-vol-surfaces}.
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.7\textwidth]{generated/presentation_invariant_mean_iv_surfaces.png}
+  \includegraphics[width=0.7\textwidth]{generated/presentation_invariant_mean_iv_surfaces.pdf}
   \caption{Mean implied-volatility~$b$ from~\eqref{eq:affine-decoder}.}
   \label{fig:base-vol-surfaces}
 \end{figure}
@@ -1151,7 +1311,7 @@ $h_0\sim\mathcal N(m,P)$ when a stationary initialization is appropriate.
 Horizon radii test the latent innovation law but do not directly test paths
 of decoded option prices.  We therefore form every available sequence of four
 fitted market-state surfaces separated by one full trading week, giving three
-consecutive one-week changes.  Here ``observed'' means the date-specific latent
+consecutive one-week changes.  Here `observed' means the date-specific latent
 state fitted to that day's irregular quote book and then passed through the
 common SANOS decoder; it is not a second interpolation of the raw quotes.
 Every candidate simulator starts from that fitted surface at the same origin
@@ -1160,7 +1320,7 @@ the Cartesian panel of target locations
 \[
   T\in\{1,5,10,20,40,70\}\text{ business days},
   \qquad
-  K/S\in\{0.85,0.90,0.95,1.00,1.05,1.10,1.15\}.
+  K\in\{0.85,0.90,0.95,1.00,1.05,1.10,1.15\}.
 \]
 Each target expiry is mapped to the closest distinct model expiry.  The
 model therefore has $3\times6\times7=126$ features.  Coordinates are centered
@@ -1225,13 +1385,13 @@ Static arbitrage-freedom of each decoded surface does not by itself impose a
 martingale restriction on the option prices. We show that a numerical martingale
 measure can nevertheless be constructed for a subset of tradable contracts by
 applying the OCE drift-removal construction of
-\cite{removedrift} directly to simulated DYSANOS paths.  We do not
+\citet{removedrift} directly to simulated DYSANOS paths.  We do not
 claim risk-neutrality of the full surface; extending the construction to
 \emph{all} options is ongoing work.
 
-We also like to stress that the ``remove the drift'' procedure deployed here is frittle: it is senstive to numerical
+We also stress that the `remove the drift' procedure deployed here is brittle: it is sensitive to numerical
 errors, overfitting and other numerical challenges. While we did manage to find a risk-neutral
-meausure for the paths we generate, it was an iterative process. As it is the method is not suitable
+measure for the paths we generate, it was an iterative process. As it is the method is not suitable
 for a production environment.
 
 \subsection{Universe}
@@ -1310,8 +1470,8 @@ Table~\ref{tab:rn-precondition} shows summary results of this step.
 
 The next step is to construct a measure which has numerically zero conditional
 expected returns, i.e., a risk-neutral measure.  To this end, recall the
-Minimal Equivalent Martingale Measure (MEMM)~\cite{MEMM}, which is a special
-case of our~\cite{removedrift} construction:
+Minimal Equivalent Martingale Measure (MEMM)~\citep{MEMM}, which is a special
+case of the construction in~\citet{removedrift}:
 
 \begin{theorem}
 Assume our option/spot returns $R$ are $L^1(\Q_1)$ and let $\calA$ be the set of bounded variables $a=(a_0,\ldots,a_{24})$
@@ -1342,7 +1502,9 @@ defines an equivalent measure.
 
 In our example, we parameterize the action set $a$ as follows:
 for expiry $k$, let
-$x_{t,k}=(t,h_t,\log\Pi_t^{k,1},\ldots,\log\Pi_t^{k,12})$.
+\[
+  x_{t,k}=(t,h_t,\log\Pi_t^{k,1},\ldots,\log\Pi_t^{k,12}).
+\]
 The action network has a two-hidden-layer width-128 SiLU component
 $F_\theta:\R^{213}\to\R^{13}$ shared across expiries and an
 expiry-specific affine skip $b_{\theta,k}+W_{\theta,k}x_{t,k}$.  Writing
@@ -1686,7 +1848,7 @@ The model-free reweighting step also relies on having many more simulated paths
 than tradable instruments.  Extending the construction to the full surface is
 the natural next step.
 
-As part of our implementatin work we had to manually intervene to adjust
+As part of our implementation work we had to manually intervene to adjust
 the optimization process to obtain the desired density. This means the method described
 here can serve as a research tool, but is not a practical method for production use. A more robust
 approach is subject to further research.
@@ -1719,25 +1881,49 @@ therefore detect no residual conditional drift under $\Q_2$ in the tested book
 and strategy class.  This remains a reduced, computationally heavy
 demonstration rather than a full-surface risk-neutral construction.
 
-\section{Thanks}
+\section*{Acknowledgements}
 
 We want to thank the team at Wharton for their WRDS \url{https://wrds-www.wharton.upenn.edu} portal and Option Metrics \url{https://optionmetrics.com/united-states} 
 for providing their IvyDB data via this service. Without this data our work would not have been possible.
 
-\appendix
-\section{Risk-neutral optimizer convergence}
-\label{app:rn-q2-convergence}
+\section*{Declaration of Funding}
 
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.82\textwidth]{generated/q2-oce-convergence.png}
-  \caption{Full-population optimization of~\eqref{eq:rn-oce-q2-fit}.  The top
-  panel shows the OCE objective and the bottom panel its exact parameter-gradient
-  RMS against cumulative full-population objective/gradient evaluations.  The
-  vertical dashed line marks the switch from Adam to L-BFGS; the horizontal
-  dotted line is the terminal stopping target.}
-  \label{fig:rn-q2-convergence}
-\end{figure}
+B.~Horvath thankfully acknowledges financial support from UKRI1010: High order mathematical and
+computational infrastructure for streamed data that enhance contemporary generative and large language models.\\
+
+\noindent
+A.~Kratsios gratefully acknowledges financial support from an NSERC Discovery Grant No. RGPIN-2023-04482 and No. DGECR-2023-00230.
+
+\section*{Disclosure of Interest}
+
+There are no interests to declare.
+
+\section*{Declaration of generative AI use}
+
+OpenAI Codex (GPT-5) was used to assist with software implementation,
+testing and numerical verification of the models reported in this article,
+and with copy-editing and language refinement of author-written text. The
+research design, mathematical arguments, interpretation of results and final
+manuscript were determined and approved by the authors. The authors verified
+the originality and accuracy of all generated code, numerical results,
+references and text, checked the tool's terms of use and confirmed its
+suitability for publication, and take full responsibility for the integrity
+of the article.
+
+\section*{Data availability statement}
+
+The market data supporting the findings of this study are proprietary
+OptionMetrics IvyDB data accessed through WRDS. They are available from
+OptionMetrics under licence, and restrictions apply to their redistribution.
+
+%% ============================================================
+%% Bibliography
+%% ============================================================
+\bibliographystyle{plainnat}
+\bibliography{../../tex/references}
+
+\clearpage
+\appendix
 
 \section{Training the affine state-space model}
 \label{app:affine-training}
@@ -1866,7 +2052,7 @@ therefore not identified without another dimension-reduction or covariance
 model.
 
 
-\section{Appendix: Tail Dynamics}\label{app:tail-dynamics}
+\section{Tail dynamics}\label{app:tail-dynamics}
 
 This section provides alternatives to the Gaussian diffusion of $h_{t+\Delta}$
 in~\eqref{eq:affine-state-space-transition} aimed to better capture tail behavior.
@@ -1936,7 +2122,10 @@ innovations.  Since
 we use a Kalman likelihood whose measurement mean and variance are the exact
 first two moments of $\log(\chi^2_{200}/200)$; only its Gaussian shape is an
 approximation.  The fit gives
-$(\rho,\phi,v_g)=(0.878,0.139,0.0649)$.  On the 158 2025 innovations,
+\[
+  (\rho,\phi,v_g)=(0.878,0.139,0.0649).
+\]
+On the 158 2025 innovations,
 log-radius negative log likelihood falls from 2.453 to 0.125 relative to a
 pre-2025-scaled Gaussian benchmark.
 
@@ -1947,7 +2136,7 @@ score-driven law reduces full-vector negative log likelihood per dimension
 from 1.351 to 1.332; the improvement over IID Student-$t$ is negligible.
 
 Table~\ref{tab:tails} reports the probability of exceeding the pre-2025
-empirical 95\% radius at each horizon.  ``Market'' is the realized 2025 rate;
+empirical 95\% radius at each horizon.  `Market' is the realized 2025 rate;
 every simulated estimate uses one million paths.
 
 \begin{table}[H]
@@ -2027,8 +2216,22 @@ $a_t^*=0$ almost surely; its first-order condition then gives $\mu_t=0$
 almost surely.
 \end{proof}
 
+\section{Risk-neutral optimizer convergence}
+\label{app:rn-q2-convergence}
 
-\section{Appendix: Data Pipeline}\label{app:data-pipeline}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.82\textwidth]{generated/q2-oce-convergence.png}
+  \caption{Full-population optimization of~\eqref{eq:rn-oce-q2-fit}.  The top
+  panel shows the OCE objective and the bottom panel its exact parameter-gradient
+  RMS against cumulative full-population objective/gradient evaluations.  The
+  vertical dashed line marks the switch from Adam to L-BFGS; the horizontal
+  dotted line is the terminal stopping target.}
+  \label{fig:rn-q2-convergence}
+\end{figure}
+
+
+\section{Data pipeline}\label{app:data-pipeline}
 
 In the interest of full transparency we here discuss main elements of the data pipeline used
 in our experiments. \\
@@ -2096,7 +2299,7 @@ The cleaned quotes are enriched with
                  { \sum_K \gamma(K)^{-1} }
             $$
           }
-    \item using the new forward, define ``market'' mid call prices between the actual call
+    \item using the new forward, define `market' mid call prices between the actual call
     prices and synthetic call prices from the puts;
     \item compute implied volatilities; forward- and discount-adjusted prices, strikes, and Greeks.
 \end{itemize}
@@ -2114,7 +2317,7 @@ An expiration is retained only if it satisfies the default liquidity and quality
 
 \subsection{Arbitrage-Free Preprocessing}
 
-Before the final option filter is applied, an arbitrage-free representation of the daily market is constructed using~\cite{SANOS2026}. The default configuration uses surface mode and performs the following operations:
+Before the final option filter is applied, an arbitrage-free representation of the daily market is constructed using~\citet{SANOS2026}. The default configuration uses surface mode and performs the following operations:
 %
 \begin{enumerate}
     \item Extend the strike grid to improve boundary treatment.
@@ -2158,7 +2361,7 @@ Additional requirements are
 \end{aligned}
 \]
 
-Here, ``$\mathrm{VegaSqrtVar}$'' refers to Vega divided by sqrt of expiry. It is therefore
+Here, `$\mathrm{VegaSqrtVar}$' refers to Vega divided by sqrt of expiry. It is therefore
 the sensitivity to total volatility of the option.
 
 Each retained expiry must contain at least \(10\) options.
@@ -2234,15 +2437,9 @@ training weights and inside-spread objective are those in
 \eqref{eq:production-quote-loss}.  Appendix~\ref{app:affine-training}
 describes the complete optimization sequence.
 
-
-
-
-%% ============================================================
-%% Bibliography
-%% ============================================================
-\newpage 
-   \bibliography{sorted}
-   \bibliographystyle{alpha}
-
+\clearpage
+\section{Option-surface Literature Classification}
+\label{app:literature-tables}
+\input{../../tex/models}
 
 \end{document}

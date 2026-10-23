@@ -189,16 +189,28 @@ def initialize_joint_model(
     *,
     origin_indices: np.ndarray,
     endpoint_indices: np.ndarray,
+    diagonal_transition: bool = False,
+    covariance_shrinkage: float = 0.0,
 ) -> dict[str, float | int]:
     """Install the exact decoder gauge and a real stable dynamics warm start."""
+    if not 0.0 <= covariance_shrinkage <= 1.0:
+        raise ValueError("covariance shrinkage must be in [0,1]")
     states = initialization.states.numpy()
     origin = states[origin_indices]
     endpoint = states[endpoint_indices]
-    design = np.concatenate(
-        (np.ones((len(origin), 1), dtype=np.float64), origin), axis=1
-    )
-    coefficients = np.linalg.lstsq(design, endpoint, rcond=None)[0]
-    discrete_transition = coefficients[1:]
+    if diagonal_transition:
+        centered_origin = origin - np.mean(origin, axis=0, keepdims=True)
+        centered_endpoint = endpoint - np.mean(endpoint, axis=0, keepdims=True)
+        diagonal = np.sum(centered_origin * centered_endpoint, axis=0) / (
+            np.sum(centered_origin * centered_origin, axis=0) + 1.0e-8
+        )
+        discrete_transition = np.diag(np.clip(diagonal, 0.05, 0.999))
+    else:
+        design = np.concatenate(
+            (np.ones((len(origin), 1), dtype=np.float64), origin), axis=1
+        )
+        coefficients = np.linalg.lstsq(design, endpoint, rcond=None)[0]
+        discrete_transition = coefficients[1:]
 
     # I-B is the real first-order logarithm approximation. Project only its
     # symmetric part to the dissipative cone; retain the fitted skew component.
@@ -221,6 +233,10 @@ def initialize_joint_model(
         equilibrium + (origin - equilibrium) @ transition
     )
     covariance = np.cov(residual, rowvar=False, bias=True)
+    covariance = (
+        (1.0 - covariance_shrinkage) * covariance
+        + covariance_shrinkage * np.diag(np.diag(covariance))
+    )
     covariance += 1.0e-6 * np.eye(model.config.state_size)
     innovation_factor = np.linalg.cholesky(covariance)
 
@@ -258,6 +274,8 @@ def initialize_joint_model(
 
     return {
         "num_weekly_pairs": len(origin_indices),
+        "initial_diagonal_transition": int(diagonal_transition),
+        "initial_covariance_shrinkage": covariance_shrinkage,
         "unrestricted_weekly_spectral_radius": float(
             np.max(np.abs(np.linalg.eigvals(discrete_transition)))
         ),
@@ -277,13 +295,23 @@ def joint_dynamics_loss(
     model: JointDirectDynamicsModel,
     origin_indices: torch.Tensor,
     endpoint_indices: torch.Tensor,
+    *,
+    spot_scores: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """Return exact-week Gaussian transition NLL per state dimension."""
+    """Return Gaussian transition NLL, optionally profiling a spot-score loading."""
     states = model.daily_states
     transition = model.weekly_transition()
     mean = model.equilibrium_mean
     prediction = mean + (states[origin_indices] - mean) @ transition
     residual = states[endpoint_indices] - prediction
+    if spot_scores is not None:
+        if spot_scores.shape != (len(origin_indices),):
+            raise ValueError("spot scores must align with transition pairs")
+        centered_spot = spot_scores - torch.mean(spot_scores)
+        loading = torch.sum(
+            residual * centered_spot[:, None], dim=0
+        ) / (torch.sum(centered_spot.square()) + 1.0e-6)
+        residual = residual - centered_spot[:, None] * loading[None, :]
     factor = model.innovation_cholesky()
     white = torch.linalg.solve_triangular(
         factor,
@@ -500,13 +528,36 @@ def fit_joint_direct_model(
     checkpoint_path: Path,
     source_decoder_sha256: str,
     env: BaseEnvironment,
+    transition_pair_indices: tuple[np.ndarray, np.ndarray] | None = None,
+    transition_spot_scores: np.ndarray | None = None,
 ) -> tuple[list[dict[str, float]], dict[str, object]]:
-    """Alternate equal-date quote steps with exact-week dynamics steps."""
+    """Alternate equal-date quote steps with selected transition steps."""
     if dates != tuple(day.trading_date for day in market_days):
         raise ValueError("Joint training dates and markets are not aligned")
-    origin_np, endpoint_np = exact_weekly_pairs(dates, weeks=1)
+    origin_np, endpoint_np = (
+        exact_weekly_pairs(dates, weeks=1)
+        if transition_pair_indices is None
+        else transition_pair_indices
+    )
+    if (
+        origin_np.ndim != 1
+        or endpoint_np.shape != origin_np.shape
+        or len(origin_np) == 0
+        or np.any(origin_np < 0)
+        or np.any(endpoint_np >= len(dates))
+        or np.any(origin_np >= endpoint_np)
+    ):
+        raise ValueError("invalid joint transition pair indices")
     origin = torch.as_tensor(origin_np, dtype=torch.long, device=model.device)
     endpoint = torch.as_tensor(endpoint_np, dtype=torch.long, device=model.device)
+    spot_scores_t = None
+    if transition_spot_scores is not None:
+        scores = np.asarray(transition_spot_scores, dtype=np.float64)
+        if scores.shape != (len(origin_np),) or np.any(~np.isfinite(scores)):
+            raise ValueError("transition spot scores do not align with pairs")
+        spot_scores_t = torch.as_tensor(
+            scores, dtype=model.fdtype, device=model.device
+        )
     torch_days = tuple(materialize_day(day, env=env) for day in market_days)
     optimizer = torch.optim.Adam(
         [
@@ -608,7 +659,9 @@ def fit_joint_direct_model(
         gauge_value = math.nan
         for _ in range(train_config.dynamics_steps_per_epoch):
             optimizer.zero_grad(set_to_none=True)
-            dynamics = joint_dynamics_loss(model, origin, endpoint)
+            dynamics = joint_dynamics_loss(
+                model, origin, endpoint, spot_scores=spot_scores_t
+            )
             gauge = factor_gauge_penalty(model.daily_states)
             dynamics_objective = (
                 dynamics_ramp * train_config.dynamics_weight * dynamics
@@ -657,12 +710,17 @@ def fit_joint_direct_model(
         history.append(item)
         if (epoch + 1) % train_config.report_every == 0 or epoch == start_epoch:
             elapsed = perf_counter() - started
+            completed_here = epoch + 1 - start_epoch
+            remaining_estimate = elapsed * (
+                train_config.num_epochs - epoch - 1
+            ) / completed_here
             print(
                 "joint-direct "
                 f"epoch={epoch + 1}/{train_config.num_epochs} "
                 f"quote={quote_value:.7g} dynamics={dynamics_value:.7g} "
                 f"gauge={gauge_value:.7g} total={joint_value:.7g} "
-                f"elapsed={elapsed:.1f}s",
+                f"elapsed={elapsed:.1f}s "
+                f"remaining_estimate={remaining_estimate:.1f}s",
                 flush=True,
             )
         if (epoch + 1) % train_config.checkpoint_every == 0:

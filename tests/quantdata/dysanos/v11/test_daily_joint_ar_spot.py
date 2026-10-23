@@ -36,6 +36,18 @@ def test_fit_daily_joint_ar_spot_is_stable_and_spot_aware() -> None:
     assert fit.spot_direction_fraction > 0.0
 
 
+def test_diagonal_daily_ar_avoids_dense_transition_overfit() -> None:
+    states, scores = _synthetic_daily_joint_data()
+    fit = fit_daily_joint_ar_spot(
+        states[:260],
+        scores[:259],
+        rank=6,
+        transition_structure="diagonal",
+    )
+    assert np.allclose(fit.factor_transition, np.diag(np.diag(fit.factor_transition)))
+    assert fit.spectral_radius < 1.0
+
+
 def test_sample_daily_joint_ar_spot_is_antithetic() -> None:
     states, scores = _synthetic_daily_joint_data()
     fit = fit_daily_joint_ar_spot(states, scores, rank=3)

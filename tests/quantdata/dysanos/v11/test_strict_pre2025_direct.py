@@ -1,12 +1,16 @@
 """Regression checks for strict DYSANOS 1.1 temporal split helpers."""
 
+from dataclasses import asdict
 from datetime import date
 
 import pytest
 import torch
 
-from quantdata.dysanos.flex.training import FlexTrainConfig
+from quantdata.dysanos.flex.config import JointDirectDynamicsConfig
+from quantdata.dysanos.flex.joint_direct import JointDirectTrainConfig
+from quantdata.dysanos.flex.training import FlexTrainConfig, TrainingConvergenceError
 from quantdata.dysanos.v11.run_strict_pre2025_direct import (
+    _capped_joint_checkpoint,
     _continuation_checkpoint,
     _decoder_train_config_for_checkpoint,
     _train_count,
@@ -129,3 +133,46 @@ def test_completed_decoder_is_explicitly_loaded_for_joint_restart(tmp_path) -> N
     loaded_config = _decoder_train_config_for_checkpoint(config, checkpoint)
     assert loaded_config.just_load is True
     assert loaded_config.num_epochs == config.num_epochs
+
+
+def test_capped_joint_checkpoint_preserves_failed_convergence_audit(tmp_path) -> None:
+    checkpoint = tmp_path / "joint.pt"
+    model_config = JointDirectDynamicsConfig(label="test", state_size=2)
+    train_config = JointDirectTrainConfig(
+        num_epochs=3,
+        warmup_epochs=0,
+        dynamics_ramp_epochs=0,
+        convergence_window=2,
+    )
+    history = [
+        {"epoch": float(epoch), "joint_objective": value, "dynamics_ramp": 1.0}
+        for epoch, value in enumerate((1.0, 0.9, 0.8), start=1)
+    ]
+    torch.save(
+        {
+            "schema": "flex-joint-direct-dynamics-v1",
+            "phase": "training",
+            "model_config": asdict(model_config),
+            "model_config_version": model_config.version.unique_id48,
+            "model_user_version": model_config.user_version,
+            "train_config": asdict(train_config),
+            "market_fingerprints": ["market"],
+            "source_decoder_sha256": "decoder",
+            "completed_epochs": 3,
+            "history": history,
+            "model_state_dict": {"weight": torch.tensor([1.0])},
+        },
+        checkpoint,
+    )
+    weights, saved_history, audit = _capped_joint_checkpoint(
+        checkpoint,
+        train_config=train_config,
+        model_config=model_config,
+        market_fingerprints=("market",),
+        source_decoder_sha256="decoder",
+        error=TrainingConvergenceError("Joint Direct training failed convergence: {}"),
+    )
+    assert torch.equal(weights["weight"], torch.tensor([1.0]))
+    assert saved_history == history
+    assert audit["converged"] is False
+    assert audit["accepted_at_epoch_cap"] is True

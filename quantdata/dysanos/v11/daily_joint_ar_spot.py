@@ -72,6 +72,7 @@ def fit_daily_joint_ar_spot(
     ridge: float = 1e-4,
     covariance_shrinkage: float = 0.05,
     maximum_spectral_radius: float = 0.995,
+    transition_structure: str = "dense",
 ) -> DailyJointArSpotFit:
     """Fit a daily stable low-rank state transition jointly with spot score.
 
@@ -90,6 +91,8 @@ def fit_daily_joint_ar_spot(
         raise ValueError("insufficient daily observations for requested rank")
     if not 0.0 <= covariance_shrinkage < 1.0:
         raise ValueError("covariance_shrinkage must be in [0, 1)")
+    if transition_structure not in {"dense", "diagonal"}:
+        raise ValueError("transition_structure must be dense or diagonal")
 
     state_mean = states[:-1].mean(axis=0)
     increments = np.diff(states, axis=0)
@@ -100,12 +103,31 @@ def fit_daily_joint_ar_spot(
 
     factors_now = (states[:-1] - state_mean) @ basis
     factors_next = (states[1:] - state_mean) @ basis
-    design = np.column_stack((np.ones(len(factors_now)), factors_now))
-    penalty = np.eye(rank + 1) * ridge
-    penalty[0, 0] = 0.0
-    coefficients = np.linalg.solve(design.T @ design + penalty, design.T @ factors_next)
-    intercept = coefficients[0]
-    transition, spectral_radius = _stable_transition(coefficients[1:], maximum_spectral_radius)
+    if transition_structure == "dense":
+        design = np.column_stack((np.ones(len(factors_now)), factors_now))
+        penalty = np.eye(rank + 1) * ridge
+        penalty[0, 0] = 0.0
+        coefficients = np.linalg.solve(
+            design.T @ design + penalty, design.T @ factors_next
+        )
+        intercept = coefficients[0]
+        transition, spectral_radius = _stable_transition(
+            coefficients[1:], maximum_spectral_radius
+        )
+    else:
+        centered_now = factors_now - np.mean(factors_now, axis=0)
+        centered_next = factors_next - np.mean(factors_next, axis=0)
+        diagonal = np.sum(centered_now * centered_next, axis=0) / (
+            np.sum(centered_now * centered_now, axis=0) + ridge
+        )
+        diagonal = np.clip(
+            diagonal, -maximum_spectral_radius, maximum_spectral_radius
+        )
+        transition = np.diag(diagonal)
+        spectral_radius = float(np.max(np.abs(diagonal)))
+        intercept = np.mean(factors_next, axis=0) - np.mean(
+            factors_now, axis=0
+        ) * diagonal
     residuals = factors_next - intercept - factors_now @ transition
 
     covariance = np.cov(residuals, rowvar=False, ddof=1)

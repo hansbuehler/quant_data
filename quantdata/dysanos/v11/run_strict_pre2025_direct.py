@@ -29,6 +29,7 @@ from quantdata.dysanos.flex.config import (
 from quantdata.dysanos.flex.failure_reporting import run_guarded_cli
 from quantdata.dysanos.flex.joint_direct import (
     JointDirectTrainConfig,
+    _convergence_audit,
     compact_evaluation,
     fit_joint_direct_model,
     initialize_joint_model,
@@ -48,6 +49,7 @@ from quantdata.dysanos.flex.run_shared_strikes_full_encoder import (
 from quantdata.dysanos.flex.training import (
     FlexTrainConfig,
     NativeStateFitResult,
+    TrainingConvergenceError,
     evaluate_model,
     fit_latent_states,
     materialize_day,
@@ -72,6 +74,7 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--state-learning-rate", type=float, default=3.0e-4)
     parser.add_argument("--network-learning-rate", type=float, default=1.0e-4)
     parser.add_argument("--joint-epochs", type=int, default=300)
+    parser.add_argument("--accept-joint-epoch-cap", action="store_true")
     return parser.parse_args()
 
 
@@ -173,6 +176,45 @@ def _decoder_train_config_for_checkpoint(
     return replace(config, just_load=True) if payload.get("phase") == "complete" else config
 
 
+def _capped_joint_checkpoint(
+    checkpoint_path: Path,
+    *,
+    train_config: JointDirectTrainConfig,
+    model_config: JointDirectDynamicsConfig,
+    market_fingerprints: tuple[str, ...],
+    source_decoder_sha256: str,
+    error: TrainingConvergenceError,
+) -> tuple[dict[str, torch.Tensor], list[dict[str, float]], dict[str, object]]:
+    """Accept only a fully saved epoch-cap checkpoint, without calling it converged."""
+    if not str(error).startswith("Joint Direct training failed convergence:"):
+        raise error
+    payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    if (
+        payload.get("schema") != "flex-joint-direct-dynamics-v1"
+        or payload.get("phase") != "training"
+        or payload.get("model_config") != asdict(model_config)
+        or payload.get("model_config_version") != model_config.version.unique_id48
+        or payload.get("model_user_version") != model_config.user_version
+        or payload.get("train_config") != asdict(train_config)
+        or tuple(payload.get("market_fingerprints", ())) != market_fingerprints
+        or payload.get("source_decoder_sha256") != source_decoder_sha256
+        or payload.get("completed_epochs") != train_config.num_epochs
+    ):
+        raise ValueError("Capped joint checkpoint does not match this completed run") from error
+    history = payload.get("history")
+    state_dict = payload.get("model_state_dict")
+    if (
+        not isinstance(history, list)
+        or len(history) != train_config.num_epochs
+        or not isinstance(state_dict, dict)
+    ):
+        raise ValueError("Capped joint checkpoint has incomplete history or weights") from error
+    convergence = _convergence_audit(history, config=train_config)
+    if convergence.get("reason") != "trailing_window_not_converged":
+        raise ValueError("Capped joint checkpoint failed for another reason") from error
+    return state_dict, history, {**convergence, "accepted_at_epoch_cap": True}
+
+
 def run(
     *,
     ticker: str,
@@ -187,6 +229,7 @@ def run(
     state_learning_rate: float,
     network_learning_rate: float,
     joint_epochs: int,
+    accept_joint_epoch_cap: bool = False,
 ) -> dict[str, object]:
     """Fit the reusable strict representation and its weekly joint baseline."""
     completion = json.loads(native_completion.read_text(encoding="utf-8"))
@@ -303,17 +346,35 @@ def run(
         checkpoint_every=5,
     )
     joint_checkpoint = checkpoint_directory / "joint-direct-200.pt"
+    source_decoder_sha256 = checkpoint_digest(decoder_checkpoint)
     with FileLock(str(joint_checkpoint.with_suffix(".lock"))):
-        history, convergence = fit_joint_direct_model(
-            joint_model,
-            train_days,
-            dates=dates[:train_count],
-            objective_config=FlexObjectiveConfig(fit_weight=0.05),
-            train_config=joint_config,
-            checkpoint_path=joint_checkpoint,
-            source_decoder_sha256=checkpoint_digest(decoder_checkpoint),
-            env=env,
-        )
+        try:
+            history, convergence = fit_joint_direct_model(
+                joint_model,
+                train_days,
+                dates=dates[:train_count],
+                objective_config=FlexObjectiveConfig(fit_weight=0.05),
+                train_config=joint_config,
+                checkpoint_path=joint_checkpoint,
+                source_decoder_sha256=source_decoder_sha256,
+                env=env,
+            )
+        except TrainingConvergenceError as error:
+            if not accept_joint_epoch_cap:
+                raise
+            weights, history, convergence = _capped_joint_checkpoint(
+                joint_checkpoint,
+                train_config=joint_config,
+                model_config=model_config,
+                market_fingerprints=tuple(day.training_fingerprint for day in train_days),
+                source_decoder_sha256=source_decoder_sha256,
+                error=error,
+            )
+            joint_model.load_state_dict(weights)
+            print(
+                f"joint-direct accepted at {joint_epochs}-epoch cap without convergence",
+                flush=True,
+            )
     targets = checkpoint_directory / "joint-direct-200-targets.pt"
     torch.save(
         {
@@ -327,7 +388,7 @@ def run(
     )
     report: dict[str, object] = {
         "schema": "dysanos-v11-pre2025-direct-v1",
-        "status": "complete",
+        "status": "complete" if convergence.get("converged") is True else "capped",
         "training_semantics": "Decoder and weekly joint dynamics fitted through 2024-12-31 only; 2025 is untouched.",
         "train_range": [dates[0].isoformat(), dates[train_count - 1].isoformat()],
         "validation_range": [dates[train_count].isoformat(), dates[-1].isoformat()],
@@ -352,7 +413,10 @@ def run(
 def main() -> None:
     arguments = _arguments()
     report = run(**vars(arguments))
-    print(f"strict pre-2025 Direct fit complete: {report['joint_checkpoint']}", flush=True)
+    print(
+        f"strict pre-2025 Direct fit {report['status']}: {report['joint_checkpoint']}",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":
