@@ -7,6 +7,9 @@
   risk-neutral; hedge evaluation uses the subsequent historical transition.
 - **Price:** the common market price is the SANOS digital mark. The model price
   and hedge Greeks come from the corresponding public DLV local-vol geometry.
+  For the daily European sensitivity test, `--sanos-lv-backbone-vol 0` removes
+  only the DLV pricer's Black-Scholes backbone; it leaves SANOS market marks,
+  rolling factor estimation, spreads, and realized cashflows unchanged.
 - **Scenarios and fitted quantities:** this reference does not fit a stochastic
   scenario generator or a trainable hedge policy. It fits the rolling DLV
   factor basis below, then obtains prices and Greeks from the local-volatility

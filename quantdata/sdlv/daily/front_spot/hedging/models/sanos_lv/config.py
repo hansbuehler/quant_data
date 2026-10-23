@@ -13,7 +13,7 @@ from quantdata.sdlv.daily.front_spot.hedging.data.rolling_factors import (
 )
 
 
-@version("2.5", dependencies=[RollingDlvFactorConfig])
+@version("2.6", dependencies=[RollingDlvFactorConfig])
 @dataclass(frozen=True, kw_only=True)
 class SanosLvConfig:
     """Numerical controls for the deterministic reference hedge."""
@@ -24,6 +24,7 @@ class SanosLvConfig:
     position_cap: float = 1_000.0
     exposure_residual_tolerance: float = 1.0e-8
     relative_spot_step: float = 0.01
+    daily_backbone_annual_volatility: float | None = None
     weekly_background_grid_size: int = 2049
     weekly_background_stddev_width: float = 10.0
     rolling_factors: RollingDlvFactorConfig = RollingDlvFactorConfig()
@@ -44,6 +45,14 @@ class SanosLvConfig:
             math.isfinite(self.relative_spot_step)
             and 0.0 < self.relative_spot_step < 1.0,
             lambda: "relative_spot_step must lie strictly between zero and one",
+        )
+        verify_inp(
+            self.daily_backbone_annual_volatility is None
+            or (
+                math.isfinite(self.daily_backbone_annual_volatility)
+                and self.daily_backbone_annual_volatility >= 0.0
+            ),
+            lambda: "daily_backbone_annual_volatility must be non-negative",
         )
         verify_inp(
             257 <= self.weekly_background_grid_size <= 4097

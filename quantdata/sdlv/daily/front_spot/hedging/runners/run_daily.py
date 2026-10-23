@@ -151,6 +151,7 @@ def main() -> None:
     )
     parser.add_argument("--measure", choices=("P", "Q"), default="Q")
     parser.add_argument("--position-cap", type=float)
+    parser.add_argument("--sanos-lv-backbone-vol", type=float)
     parser.add_argument("--checkpoint-directory", type=Path)
     parser.add_argument("--market-artifact-root", type=Path)
     parser.add_argument("--market-artifact-range-summary", type=Path)
@@ -372,6 +373,9 @@ def _build_model(
     if arguments.model == "sanos-lv":
         config = SanosLvConfig(
             label=label,
+            daily_backbone_annual_volatility=getattr(
+                arguments, "sanos_lv_backbone_vol", None
+            ),
             position_cap=(
                 default_position_cap
                 if arguments.position_cap is None

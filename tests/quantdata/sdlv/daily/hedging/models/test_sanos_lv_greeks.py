@@ -11,6 +11,9 @@ from quantdata.sdlv.daily.front_spot.hedging.data.fixtures import (
 from quantdata.sdlv.daily.front_spot.hedging.data.rolling_factors import (
     RollingDlvFactorFit,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.sanos_lv.adapter import (
+    _daily_pricing_day,
+)
 from quantdata.sdlv.daily.front_spot.hedging.models.sanos_lv.config import SanosLvConfig
 from quantdata.sdlv.daily.front_spot.hedging.models.sanos_lv.greeks import (
     DlvGreeks,
@@ -72,6 +75,20 @@ def test_future_spot_bump_is_one_percent_with_legacy_override() -> None:
     default_greeks = dlv_digital_greeks(day, **query)
     explicit_greeks = dlv_digital_greeks(day, **query, relative_spot_step=0.01)
     assert default_greeks.spot_deltas == pytest.approx(explicit_greeks.spot_deltas)
+
+
+def test_zero_backbone_ablation_only_changes_daily_pricing_view() -> None:
+    day = synthetic_one_day_transition().origin
+    assert day.backbone_annual_volatility > 0.0
+    assert _daily_pricing_day(day, config=SanosLvConfig()) is day
+    pricing_day = _daily_pricing_day(
+        day,
+        config=SanosLvConfig(daily_backbone_annual_volatility=0.0),
+    )
+    assert pricing_day.backbone_annual_volatility == 0.0
+    assert day.backbone_annual_volatility > 0.0
+    with pytest.raises(ValueError):
+        SanosLvConfig(daily_backbone_annual_volatility=-0.01)
 
 
 def test_cost_weighted_hedge_neutralizes_delta_and_factor_exposure() -> None:

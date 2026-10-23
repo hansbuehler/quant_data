@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 from datetime import date
 
 import numpy as np
@@ -17,7 +18,10 @@ from quantdata.sdlv.daily.front_spot.hedging.benchmark.digital_daily import (
     daily_digital_targets,
     evaluate_daily_digital_hedge,
 )
-from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import PublicHedgingPanel
+from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
+    PublicHedgingPanel,
+    PublicMarketDay,
+)
 from quantdata.sdlv.daily.front_spot.hedging.data.public_only import (
     require_public_hedging_panel,
 )
@@ -88,14 +92,15 @@ def run_sanos_lv_daily_book(
         )
         for target in targets
     )
+    pricing_day = _daily_pricing_day(samples[0].transition.origin, config=config)
     hedge_greeks = dlv_option_greeks(
-        samples[0].transition.origin,
+        pricing_day,
         quotes=samples[0].hedge_quotes,
         factors=factors,
         relative_spot_step=config.relative_spot_step,
     )
     all_target_greeks = dlv_digital_greeks(
-        samples[0].transition.origin,
+        pricing_day,
         business_dtes=np.asarray(
             [float(target.maturity_business_days) for target in targets]
         ),
@@ -152,8 +157,9 @@ def _run_sanos_lv_target(
         origin_date=origin_date,
         target=target,
     )
+    pricing_day = _daily_pricing_day(sample.transition.origin, config=config)
     target_greeks = dlv_digital_greeks(
-        sample.transition.origin,
+        pricing_day,
         business_dtes=np.asarray([float(target.maturity_business_days)]),
         strikes_over_forward=np.asarray([sample.target_strike_over_forward]),
         is_call=np.asarray([target.right is OptionRight.CALL]),
@@ -162,7 +168,7 @@ def _run_sanos_lv_target(
         relative_spot_step=config.relative_spot_step,
     )
     hedge_greeks = dlv_option_greeks(
-        sample.transition.origin,
+        pricing_day,
         quotes=sample.hedge_quotes,
         factors=factors,
         relative_spot_step=config.relative_spot_step,
@@ -180,6 +186,19 @@ def _run_sanos_lv_target(
         factors=factors,
         config=config,
         claim_quantity=claim_quantity,
+    )
+
+
+def _daily_pricing_day(
+    day: PublicMarketDay,
+    *,
+    config: SanosLvConfig,
+) -> PublicMarketDay:
+    if config.daily_backbone_annual_volatility is None:
+        return day
+    return replace(
+        day,
+        backbone_annual_volatility=config.daily_backbone_annual_volatility,
     )
 
 
