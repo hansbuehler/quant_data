@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
 import numpy as np
+import polars as pl
 from cdxcore.bs import bs
 from numpy.polynomial.hermite import hermgauss
 from numpy.typing import NDArray
@@ -20,8 +22,6 @@ from quantdata.gromm2.geometry import (
     project_total_variance,
     transport_tower,
 )
-from quantdata.hedging.data.pricing import price_sanos_surface
-from quantdata.hedging.data.public_dataset import PublicHedgingDataset
 
 FloatArray = NDArray[np.float64]
 
@@ -59,10 +59,12 @@ class ReconstructedDay:
 
 def load_public_sanos_days(dataset_path: Path) -> list[PublicSanosDay]:
     """Load the published SANOS parameters without refitting market data."""
-    dataset = PublicHedgingDataset(Path(dataset_path))
-    geometry = dataset.geometry
-    geometry_rows = dataset.read("sanos_geometry.parquet")
-    state_rows = dataset.read("sanos_state.parquet")
+    directory = Path(dataset_path)
+    if not directory.is_dir():
+        raise ValueError(f"Public SANOS dataset directory does not exist: {directory}")
+    geometry = json.loads((directory / "geometry.json").read_text(encoding="utf-8"))
+    geometry_rows = pl.read_parquet(directory / "sanos_geometry.parquet")
+    state_rows = pl.read_parquet(directory / "sanos_state.parquet")
     if geometry_rows.height != state_rows.height:
         raise ValueError("published SANOS geometry and state rows do not align")
     days: list[PublicSanosDay] = []
@@ -109,17 +111,41 @@ def public_sanos_prices(
         np.asarray(strikes, dtype=np.float64),
     )
     shape = expiry_array.shape
-    result = price_sanos_surface(
-        query_expiries_y=expiry_array.reshape(-1),
-        query_strikes=strike_array.reshape(-1),
-        is_call=np.ones(expiry_array.size, dtype=bool),
-        model_expiries_y=day.model_expiries_y,
-        atm_variances=day.kernel_total_variances,
-        support_strikes=day.support_strikes,
-        densities=day.densities,
-        smoothness=day.smoothness,
-        one_minute_y=day.one_minute_y,
-    )
+    flat_expiries = expiry_array.reshape(-1)
+    flat_strikes = strike_array.reshape(-1)
+    if (
+        np.any(~np.isfinite(flat_expiries))
+        or np.any(flat_expiries < 0.0)
+        or np.any(~np.isfinite(flat_strikes))
+        or np.any(flat_strikes <= 0.0)
+    ):
+        raise ValueError("SANOS query expiries and strikes must be finite and positive")
+    result = np.empty_like(flat_strikes)
+    for expiry_y in np.unique(flat_expiries):
+        selected = flat_expiries == expiry_y
+        strikes_at_expiry = flat_strikes[selected]
+        if expiry_y < day.one_minute_y:
+            result[selected] = np.maximum(1.0 - strikes_at_expiry, 0.0)
+            continue
+        call_prices = np.zeros_like(strikes_at_expiry)
+        for weight, support, density in _latent_mixture(day, float(expiry_y)):
+            if day.smoothness == 0.0:
+                kernel = np.maximum(
+                    support[None, :] - strikes_at_expiry[:, None], 0.0
+                )
+            else:
+                annual_volatility = _source_kernel_volatility(day, float(expiry_y))
+                kernel = np.asarray(
+                    bs.price(
+                        k=strikes_at_expiry[:, None] / support[None, :],
+                        vol=annual_volatility,
+                        sqrtT=math.sqrt(float(expiry_y)),
+                        eps=1.0e-10,
+                    ),
+                    dtype=np.float64,
+                ) * support[None, :]
+            call_prices += weight * (kernel @ density)
+        result[selected] = call_prices
     return result.reshape(shape)
 
 
