@@ -33,3 +33,13 @@ unusually large files. Keep only relevant source, configuration,
 specifications, tests, and deliberately retained project artifacts in Git
 roots. Never remove user files merely because they are large without first
 identifying ownership and obtaining any required approval.
+
+Keep generated raw and intermediate data, training datasets, checkpoints,
+logs, caches, temporary outputs, and disposable experiment artifacts outside
+every Git working tree. Store them below the configured external project data
+root, not beside the source that produced them. Every training, evaluation, or
+simulation run must use its own uniquely identified run directory so that
+concurrent users, agents, and linked Git worktrees cannot overwrite one
+another's outputs. A generated result may enter Git only when it is a
+deliberately retained project artifact and is added intentionally with its
+provenance clear.
