@@ -17,11 +17,29 @@ from quantdata.dysanos.bates_crc.real_data_study.fast_bates_pricer import (
 )
 from quantdata.gromm2.calibration import (
     DlvCalibrationConfig,
+    _black_call_kernels,
     _checkpoint_identity,
     _load_call_kernel_specification,
     _load_warm_start_parameters,
     _price_call_kernels,
 )
+
+
+def test_zero_black_backbone_kernel_is_intrinsic_value() -> None:
+    supports = np.asarray([[0.8, 1.0, 1.2]])
+    strikes = np.asarray([[0.9, 1.1]])
+    kernels = _black_call_kernels(
+        supports,
+        strikes,
+        np.asarray([5.0 / 252.0]),
+        annual_volatility=0.0,
+    )
+    expected = np.maximum(supports[:, None, :] - strikes[:, :, None], 0.0)
+    assert np.array_equal(kernels, expected)
+
+
+def test_zero_backbone_is_a_valid_calibration_configuration() -> None:
+    assert DlvCalibrationConfig(backbone_annual_volatility=0.0).backbone_annual_volatility == 0.0
 from quantdata.gromm2.heston_background_pilot import (
     HestonBackground,
     _heston_calls_one_expiry,

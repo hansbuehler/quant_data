@@ -203,6 +203,7 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--num-inner-strikes", type=int, default=200)
+    parser.add_argument("--backbone-annual-volatility", type=float, default=0.05)
     arguments = parser.parse_args()
     if arguments.workers <= 0:
         raise ValueError("--workers must be positive")
@@ -211,7 +212,10 @@ def main() -> None:
     build_history(
         dataset=arguments.dataset,
         output=arguments.output,
-        geometry=Gromm2GeometryConfig(num_inner_strikes=arguments.num_inner_strikes),
+        geometry=Gromm2GeometryConfig(
+            num_inner_strikes=arguments.num_inner_strikes,
+            backbone_annual_volatility=arguments.backbone_annual_volatility,
+        ),
         workers=arguments.workers,
         limit=arguments.limit,
     )

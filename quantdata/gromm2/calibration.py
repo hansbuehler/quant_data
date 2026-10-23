@@ -66,8 +66,8 @@ class DlvCalibrationConfig:
             raise ValueError("rank and epochs must be positive")
         if not 0.0 < self.minimum_dlvsq < self.maximum_dlvsq:
             raise ValueError("DLV-squared bounds are invalid")
-        if self.backbone_annual_volatility <= 0.0:
-            raise ValueError("backbone volatility must be positive")
+        if self.backbone_annual_volatility < 0.0:
+            raise ValueError("backbone volatility must be non-negative")
         if not 0.0 <= self.fit_weight <= 1.0:
             raise ValueError("fit_weight must lie in [0,1]")
         if self.cap_penalty_weight < 0.0:
@@ -119,6 +119,8 @@ def _black_call_kernels(
     *,
     annual_volatility: float,
 ) -> FloatArray:
+    if annual_volatility == 0.0:
+        return np.maximum(supports[:, None, :] - strikes[:, :, None], 0.0)
     total_volatility = annual_volatility * np.sqrt(expiries_y)
     log_ratio = np.log(supports[:, None, :] / strikes[:, :, None])
     d1 = log_ratio / total_volatility[:, None, None]
@@ -1052,6 +1054,7 @@ def main() -> None:
     fit.add_argument("--rank", type=int, default=200)
     fit.add_argument("--epochs", type=int, default=1_000)
     fit.add_argument("--learning-rate", type=float, default=0.01)
+    fit.add_argument("--backbone-annual-volatility", type=float, default=0.05)
     fit.add_argument("--checkpoint-every", type=int, default=10)
     fit.add_argument("--plateau-review-epochs", type=int, default=0)
     fit.add_argument("--evaluate-only", action="store_true")
@@ -1074,6 +1077,7 @@ def main() -> None:
                 rank=arguments.rank,
                 epochs=arguments.epochs,
                 learning_rate=arguments.learning_rate,
+                backbone_annual_volatility=arguments.backbone_annual_volatility,
                 checkpoint_every=arguments.checkpoint_every,
                 plateau_review_epochs=arguments.plateau_review_epochs,
             ),
