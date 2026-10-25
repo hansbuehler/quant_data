@@ -264,6 +264,7 @@ class WeeklyHedgeResult:
                 self.transaction_cost,
                 self.spot_transaction_cost,
                 self.option_transaction_cost,
+                self.formal_exit_cost,
             )
         ):
             raise ValueError("weekly transaction costs must be non-negative")

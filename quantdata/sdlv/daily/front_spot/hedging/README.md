@@ -16,6 +16,13 @@ model prices, normalized half-spreads, forward/discount curves, ATM curves, and
 forward-adjusted spot returns. It contains no raw WRDS price, midpoint, spot,
 identifier, symbol, volume, open-interest, vendor-IV, or vendor-Greek field.
 
+For the revised one-day comparison, normalized spot trades at its model mid
+with zero assumed spread because no spot bid/ask is available. Options pay
+their entry half-spread. No terminal exit charge enters hedge optimization or
+reported P&L; the hypothetical exit half-spread is reported separately as
+`formal_exit_cost`. Earlier result artifacts use the former round-trip
+convention and are not directly comparable.
+
 This candidate is the default runtime and training data source. The temporary
 restriction on using original source data to regenerate the candidate has been
 lifted; such use must preserve provenance and must not add original records to

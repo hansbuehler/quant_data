@@ -162,20 +162,71 @@ def fit_static_scenario_hedge(
         )
         return float(value + scaled_costs @ (positive + negative)), gradient
 
-    result = minimize(
-        split_value_and_gradient,
-        initial,
-        method="L-BFGS-B",
-        jac=True,
-        bounds=bounds,
-        options={
-            "maxiter": config.maximum_iterations,
-            "maxfun": 4 * config.maximum_iterations,
-            "gtol": config.gradient_tolerance,
-            "ftol": 0.0,
-            "maxls": 50,
-        },
-    )
+    iterations = 0
+    best_result = None
+    best_kkt = math.inf
+    for attempt in range(3):
+        result = minimize(
+            split_value_and_gradient,
+            initial,
+            method="L-BFGS-B",
+            jac=True,
+            bounds=bounds,
+            options={
+                "maxiter": config.maximum_iterations,
+                "maxfun": 4 * config.maximum_iterations,
+                "gtol": config.gradient_tolerance,
+                "ftol": 0.0,
+                "maxls": 50 + 25 * attempt,
+            },
+        )
+        iterations += int(result.nit)
+        parameters = np.asarray(result.x, dtype=np.float64)
+        action = action_scale * (
+            parameters[:instrument_count]
+            - parameters[instrument_count : 2 * instrument_count]
+        )
+        cash_translation = float(parameters[-1]) if include_translation else None
+        _, smooth_gradient, translation_gradient = _risk_and_gradient(
+            action,
+            cash_translation,
+            instruments=instruments,
+            claim=claim,
+            weights=weights,
+            config=config,
+        )
+        kkt = _maximum_kkt_residual(
+            action,
+            smooth_gradient,
+            costs,
+            position_cap=config.position_cap,
+            coordinate_scale=action_scale,
+        )
+        if include_translation:
+            kkt = max(kkt, abs(translation_gradient))
+        if kkt < best_kkt:
+            best_result = result
+            best_kkt = kkt
+        if kkt <= config.certificate_tolerance:
+            break
+        if best_result is None:
+            raise RuntimeError("scenario optimizer did not produce a candidate")
+        parameters = np.asarray(best_result.x, dtype=np.float64)
+        action = action_scale * (
+            parameters[:instrument_count]
+            - parameters[instrument_count : 2 * instrument_count]
+        )
+        canonical = action / action_scale
+        initial = np.concatenate(
+            (
+                np.maximum(canonical, 0.0),
+                np.maximum(-canonical, 0.0),
+                parameters[-1:] if include_translation else np.empty(0),
+            )
+        )
+    if best_result is None:
+        raise RuntimeError("scenario optimizer did not produce a candidate")
+    result = best_result
     parameters = np.asarray(result.x, dtype=np.float64)
     action = action_scale * (
         parameters[:instrument_count]
@@ -210,7 +261,7 @@ def fit_static_scenario_hedge(
         action=np.asarray(action, dtype=np.float64),
         cash_translation=cash_translation,
         objective_value=float(risk_value + costs @ np.abs(action)),
-        iterations=int(result.nit),
+        iterations=iterations,
         maximum_kkt_residual=float(kkt),
         cap_hits=cap_hits,
         converged=converged,

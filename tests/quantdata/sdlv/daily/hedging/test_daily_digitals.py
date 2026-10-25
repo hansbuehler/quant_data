@@ -160,6 +160,27 @@ def test_daily_sample_settles_one_day_and_marks_three_day_claim() -> None:
     )
     assert len(one_day.hedge_quotes) == 10
     assert np.count_nonzero(one_day.closing_half_spreads_pv == 0.0) == 2
+    surviving_index = int(np.flatnonzero(one_day.closing_half_spreads_pv > 0.0)[0])
+    option_actions = np.zeros(len(one_day.hedge_quotes))
+    option_actions[surviving_index] = 1.0
+    entry_only = evaluate_daily_digital_hedge(
+        one_day,
+        model="test",
+        measure="Q",
+        spot_action=1.0,
+        option_actions=option_actions,
+        model_price=one_day.market_price,
+        objective_value=0.0,
+        converged=True,
+        cap_hits=0,
+    )
+    assert entry_only.transaction_cost == pytest.approx(
+        one_day.hedge_quotes[surviving_index].half_spread
+    )
+    assert entry_only.diagnostics["formal_option_exit_cost"] == pytest.approx(
+        one_day.closing_half_spreads_pv[surviving_index]
+    )
+    assert entry_only.diagnostics["formal_spot_exit_cost"] == 0.0
 
     three_day = build_daily_digital_sample(
         panel,

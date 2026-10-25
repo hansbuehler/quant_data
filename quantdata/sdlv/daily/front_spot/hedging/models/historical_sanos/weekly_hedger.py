@@ -2998,7 +2998,7 @@ class _WeeklyOpenLoopGeometry:
                 offset = 0.0
             rows.append(row)
             offsets.append(offset)
-            weights.append(scenarios.spot_values_pv[:, step] * 1.0e-4)
+            weights.append(np.zeros(scenarios.scenario_count, dtype=np.float64))
 
             for contract in np.flatnonzero(scenarios.option_alive[step]):
                 parameter_index = self._option_parameter_index[(step, int(contract))]
@@ -3022,7 +3022,7 @@ class _WeeklyOpenLoopGeometry:
         terminal_spot[scenarios.step_count - 1] = 1.0
         rows.append(terminal_spot)
         offsets.append(0.0)
-        weights.append(scenarios.spot_values_pv[:, -1] * 1.0e-4)
+        weights.append(np.zeros(scenarios.scenario_count, dtype=np.float64))
         for contract in np.flatnonzero(scenarios.option_alive[-1]):
             row = np.zeros(self.parameter_count, dtype=np.float64)
             row[
@@ -3032,7 +3032,7 @@ class _WeeklyOpenLoopGeometry:
             ] = 1.0
             rows.append(row)
             offsets.append(0.0)
-            weights.append(scenarios.option_half_spreads_pv[:, -1, contract])
+            weights.append(np.zeros(scenarios.scenario_count, dtype=np.float64))
         return (
             np.stack(rows),
             np.asarray(offsets, dtype=np.float64),

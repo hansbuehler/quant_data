@@ -755,6 +755,7 @@ def _weekly_model_run_to_dict(run: WeeklyModelRun) -> dict[str, object]:
             "option_transaction_cost": result.option_transaction_cost,
             "spot_gain": result.spot_gain,
             "option_gain": result.option_gain,
+            "formal_exit_cost": result.formal_exit_cost,
             "step_transaction_costs": result.step_transaction_costs.tolist(),
             "step_hedge_gains": result.step_hedge_gains.tolist(),
             "breakdown": asdict(result.breakdown),
@@ -806,6 +807,7 @@ def _weekly_model_run_from_dict(payload: object) -> WeeklyModelRun:
         ),
         spot_gain=_required_float(result_payload, "spot_gain"),
         option_gain=_required_float(result_payload, "option_gain"),
+        formal_exit_cost=float(result_payload.get("formal_exit_cost", 0.0)),
         step_transaction_costs=np.asarray(
             _required_float_tuple(result_payload, "step_transaction_costs"),
             dtype=np.float64,

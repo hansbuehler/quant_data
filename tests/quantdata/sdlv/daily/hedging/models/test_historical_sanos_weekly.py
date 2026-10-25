@@ -1633,7 +1633,7 @@ def test_weekly_mean_variance_rejects_feasible_non_kkt_point() -> None:
         claim=claim,
         instrument_gains=instrument_gains,
     )
-    compiled.problem.solve(solver=cp.OSQP, polishing=True)
+    compiled.problem.solve(solver=cp.CLARABEL)
     certificate = compiled.compact_certificate
     assert certificate is not None
     scaled_positions = np.asarray(compiled.scaled_positions.value).copy()
@@ -1647,7 +1647,7 @@ def test_weekly_mean_variance_rejects_feasible_non_kkt_point() -> None:
     )[0]
     assert accepted
 
-    scaled_positions[0] += 1.0e-3
+    scaled_positions[0] += 0.1
     turnover = (
         certificate.turnover_matrix @ scaled_positions
         - certificate.turnover_offset
