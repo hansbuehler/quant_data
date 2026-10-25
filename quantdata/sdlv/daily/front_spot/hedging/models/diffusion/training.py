@@ -39,6 +39,8 @@ from quantdata.sdlv.daily.front_spot.hedging.models.diffusion.process import (
 )
 from quantdata.torch import BaseEnvironment, torch
 
+NORMALIZATION_POLICY = "source-fixed-v1"
+
 
 @dataclass(frozen=True, kw_only=True)
 class DiffusionTrainingResult:
@@ -75,7 +77,7 @@ def fit_diffusion(
         model_config.sequence_length,
         model_config.channel_count,
         len(model_config.grid.expiries_y),
-        len(model_config.grid.strikes_over_forward),
+        model_config.grid.strike_count,
     )
     if data.sequences.shape[1:] != expected_tail:
         raise ValueError("diffusion data geometry does not match model config")
@@ -237,6 +239,11 @@ def _fit_locked(
             map_location="cpu",
             weights_only=False,
         )
+        if (
+            payload.get("warm_start_source_sha256") is not None
+            and payload.get("normalization_policy") != NORMALIZATION_POLICY
+        ):
+            raise ValueError("rolling diffusion checkpoint has an unsupported normalization policy")
         compatible = (
             payload.get("checkpoint_format_version") == CHECKPOINT_FORMAT_VERSION
             and payload.get("model_code_version") == model_config.version.unique_id48
@@ -530,11 +537,7 @@ def _load_base_for_fine_tuning(
         raise ValueError("fine-tuning base checkpoint is incomplete or incompatible")
     if source_end > current_training_end_date:
         raise ValueError("fine-tuning base checkpoint uses future training data")
-    rebased = _rebase_denoiser_state(
-        payload["ema_model"],
-        current_state=model.state_dict(),
-    )
-    missing, unexpected = model.load_state_dict(rebased, strict=False)
+    missing, unexpected = model.load_state_dict(payload["ema_model"], strict=False)
     expected_missing = {
         "output_adapter.down.weight",
         "output_adapter.up.weight",
@@ -685,6 +688,7 @@ def _save_checkpoint(
         "training_start_date": training_start_date.isoformat(),
         "training_end_date": training_end_date.isoformat(),
         "warm_start_source_sha256": warm_start_source_sha256,
+        "normalization_policy": NORMALIZATION_POLICY,
         "dataset_manifest_sha256": dataset_manifest_sha256,
         "train_config": train_config,
         "model": model.state_dict(),
@@ -761,17 +765,14 @@ def _load_rolling_warm_start(
         raise ValueError(
             "diffusion warm-start checkpoint must predate the current training window end"
         )
+    if (
+        (source_end.year > 2022 or payload.get("warm_start_source_sha256") is not None)
+        and payload.get("normalization_policy") != NORMALIZATION_POLICY
+    ):
+        raise ValueError("diffusion warm-start checkpoint has an unsupported normalization policy")
 
-    current_state = model.state_dict()
-    model.load_state_dict(
-        _rebase_denoiser_state(payload["model"], current_state=current_state)
-    )
-    ema_model.load_state_dict(
-        _rebase_denoiser_state(
-            payload["ema_model"],
-            current_state=ema_model.state_dict(),
-        )
-    )
+    model.load_state_dict(payload["model"])
+    ema_model.load_state_dict(payload["ema_model"])
 
 
 def _base_compatibility_identity(config: DiffusionModelConfig) -> str:
@@ -795,7 +796,7 @@ def _rebase_denoiser_state(
     *,
     current_state: dict[str, torch.Tensor],
 ) -> dict[str, torch.Tensor]:
-    """Preserve the economic denoising map after normalization changes."""
+    """Preserve the deterministic map, but not the DDPM sampling law."""
     state = {name: value.detach().clone() for name, value in source_state.items()}
     old_mean = state["channel_mean"]
     old_scale = state["channel_scale"]

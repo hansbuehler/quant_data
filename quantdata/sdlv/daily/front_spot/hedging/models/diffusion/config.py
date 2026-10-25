@@ -78,7 +78,7 @@ class DiffusionModelConfig:
 
     @property
     def surface_size(self) -> int:
-        return len(self.grid.expiries_y) * len(self.grid.strikes_over_forward)
+        return len(self.grid.expiries_y) * self.grid.strike_count
 
     @property
     def day_dimension(self) -> int:

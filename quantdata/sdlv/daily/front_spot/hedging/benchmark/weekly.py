@@ -243,6 +243,7 @@ class WeeklyHedgeResult:
     step_transaction_costs: FloatArray
     step_hedge_gains: FloatArray
     breakdown: ClaimPnlBreakdown
+    formal_exit_cost: float = 0.0
 
     def __post_init__(self) -> None:
         values = (
@@ -253,6 +254,7 @@ class WeeklyHedgeResult:
             self.option_transaction_cost,
             self.spot_gain,
             self.option_gain,
+            self.formal_exit_cost,
         )
         if any(not math.isfinite(value) for value in values):
             raise ValueError("weekly hedge result must be finite")
@@ -808,9 +810,9 @@ def evaluate_weekly_hedge(
     market_price: float,
     model_price: float,
     claim_quantity: float = 1.0,
-    spot_cost_bps: float = 1.0,
+    spot_cost_bps: float = 0.0,
 ) -> WeeklyHedgeResult:
-    """Apply predictable positions with daily rebalancing and terminal liquidation."""
+    """Apply predictable positions with daily rebalancing and no exit charge."""
     spot = np.asarray(spot_positions, dtype=np.float64)
     options = np.asarray(option_positions, dtype=np.float64)
     contract_count = len(episode.contracts)
@@ -883,9 +885,7 @@ def evaluate_weekly_hedge(
             * episode.option_alive[-1]
         )
     )
-    step_costs[-1] = terminal_spot_cost + terminal_option_cost
-    spot_cost += terminal_spot_cost
-    option_cost += terminal_option_cost
+    step_costs[-1] = 0.0
     hedge_gain = spot_gain + option_gain
     transaction_cost = spot_cost + option_cost
     terminal_value = episode.discount_to_origin[-1] * claim.payoff(episode)
@@ -912,4 +912,5 @@ def evaluate_weekly_hedge(
         step_transaction_costs=step_costs,
         step_hedge_gains=step_gains,
         breakdown=breakdown,
+        formal_exit_cost=terminal_spot_cost + terminal_option_cost,
     )

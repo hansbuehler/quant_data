@@ -32,6 +32,9 @@ from quantdata.sdlv.daily.front_spot.hedging.benchmark.weekly_sizing import (
     weekly_target_notional_artifact_path,
     weekly_target_notional_calibration_sha256,
 )
+from quantdata.sdlv.daily.front_spot.hedging.data.generative_surfaces import (
+    GenerativeSurfaceGrid,
+)
 from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
     PublicHedgingPanel,
     default_public_candidate_path,
@@ -86,6 +89,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.sanos_lv.weekly_pricing impo
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.volgan.config import (
     VolganModelConfig,
+    VolganPcaModelConfig,
     VolganTrainConfig,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.volgan.weekly_adapter import (
@@ -144,6 +148,8 @@ def main() -> None:
         required=True,
     )
     parser.add_argument("--dataset", type=Path, default=default_public_candidate_path())
+    parser.add_argument("--surface-grid", choices=("published", "short-end-nms"), default="published")
+    parser.add_argument("--volgan-pca-rank", type=int)
     parser.add_argument("--dataset-manifest-sha256")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--label")
@@ -154,7 +160,7 @@ def main() -> None:
     parser.add_argument("--risk-parameter", type=float, default=1.0)
     parser.add_argument("--measure", choices=("P", "Q"), default="Q")
     parser.add_argument("--position-cap", type=float, default=1_000.0)
-    parser.add_argument("--spot-cost-bps", type=float, default=1.0)
+    parser.add_argument("--spot-cost-bps", type=float, default=0.0)
     parser.add_argument("--checkpoint-directory", type=Path)
     parser.add_argument("--market-artifact-root", type=Path)
     parser.add_argument("--market-artifact-range-summary", type=Path)
@@ -606,8 +612,19 @@ def build_weekly_adapter(
         hedge=policy_hedge,
     )
     if arguments.model == "volgan":
-        model_config = VolganModelConfig(
-            label=getattr(arguments, "model_label", None) or label
+        grid = (
+                GenerativeSurfaceGrid.short_end_nms()
+                if getattr(arguments, "surface_grid", "published") == "short-end-nms"
+                else GenerativeSurfaceGrid()
+        )
+        model_config = (
+            VolganModelConfig(label=getattr(arguments, "model_label", None) or label, grid=grid)
+            if getattr(arguments, "volgan_pca_rank", None) is None
+            else VolganPcaModelConfig(
+                label=getattr(arguments, "model_label", None) or label,
+                grid=grid,
+                pca_rank=arguments.volgan_pca_rank,
+            )
         )
         train_config = _volgan_train_config(arguments)
         warm_start_sha256 = _authenticated_file_fingerprint(
@@ -654,6 +671,11 @@ def build_weekly_adapter(
     model_config = DiffusionModelConfig(
         label=getattr(arguments, "model_label", None) or label,
         variant=variant,
+        grid=(
+            GenerativeSurfaceGrid.short_end_nms()
+            if getattr(arguments, "surface_grid", "published") == "short-end-nms"
+            else GenerativeSurfaceGrid()
+        ),
     )
     train_config = _diffusion_train_config(arguments)
     base_sha256 = _authenticated_file_fingerprint(

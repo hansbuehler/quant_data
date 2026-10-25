@@ -286,7 +286,7 @@ def evaluate_daily_digital_hedge(
     claim_quantity: float = 1.0,
     diagnostics: dict[str, object] | None = None,
 ) -> HedgeSmokeResult:
-    """Apply common entry/exit costs and emit one model-neutral record."""
+    """Charge entry costs and report formal exit costs separately."""
     if not math.isfinite(claim_quantity) or claim_quantity == 0.0:
         raise ValueError("claim_quantity must be finite and nonzero")
     actions = np.asarray(option_actions, dtype=np.float64)
@@ -316,10 +316,9 @@ def evaluate_daily_digital_hedge(
     )
     transaction_cost = (
         spot_open.transaction_cost
-        + spot_close.transaction_cost
         + opening_option_cost
-        + closing_option_cost
     )
+    formal_exit_cost = spot_close.transaction_cost + closing_option_cost
     hedge_gain = float(
         spot_action * sample.transition.discounted_spot_gain
         + actions @ sample.hedge_returns
@@ -359,7 +358,13 @@ def evaluate_daily_digital_hedge(
         converged=converged,
         cap_hits=cap_hits,
         claim_quantity=claim_quantity,
-        diagnostics={} if diagnostics is None else diagnostics,
+        diagnostics={
+            **({} if diagnostics is None else diagnostics),
+            "formal_exit_cost": formal_exit_cost,
+            "formal_spot_exit_cost": spot_close.transaction_cost,
+            "formal_option_exit_cost": closing_option_cost,
+            "cost_convention": "entry-only; formal exit excluded from P&L",
+        },
     )
 
 

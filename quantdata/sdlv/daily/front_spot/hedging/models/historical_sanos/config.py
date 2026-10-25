@@ -21,7 +21,7 @@ class HistoricalSanosObjective(StrEnum):
     POWER_EXPONENTIAL = "power-exponential"
 
 
-@version("1.30", dependencies=[MeanReductionConfig])
+@version("1.31", dependencies=[MeanReductionConfig])
 @dataclass(frozen=True, kw_only=True)
 class HistoricalSanosConfig:
     """Logical settings for rolling empirical SANOS hedging."""

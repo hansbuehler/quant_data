@@ -8,6 +8,9 @@ from dataclasses import asdict
 from datetime import date
 from pathlib import Path
 
+from quantdata.sdlv.daily.front_spot.hedging.data.generative_surfaces import (
+    GenerativeSurfaceGrid,
+)
 from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
     PublicHedgingPanel,
     default_public_candidate_path,
@@ -28,7 +31,11 @@ from quantdata.sdlv.daily.front_spot.hedging.models.volgan.adapter import (
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.volgan.config import (
     VolganModelConfig,
+    VolganPcaModelConfig,
     VolganTrainConfig,
+)
+from quantdata.sdlv.daily.front_spot.hedging.models.volgan.diagnostics import (
+    audit_volgan_conditional_dispersion,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
     dataset_manifest_sha256,
@@ -48,6 +55,9 @@ def main() -> None:
         required=True,
     )
     parser.add_argument("--dataset", type=Path, default=default_public_candidate_path())
+    parser.add_argument(
+        "--surface-grid", choices=("published", "short-end-nms"), default="published"
+    )
     parser.add_argument("--as-of", type=date.fromisoformat, default=_LAST_PRE_EVALUATION_DATE)
     parser.add_argument("--observation-count", type=int, default=_PRE_EVALUATION_OBSERVATIONS)
     parser.add_argument("--label", required=True)
@@ -56,6 +66,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--batch-size", type=int)
+    parser.add_argument("--volgan-pca-rank", type=int)
     parser.add_argument("--checkpoint-epochs", type=int)
     parser.add_argument("--progress-seconds", type=float, default=240.0)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
@@ -75,13 +86,26 @@ def main() -> None:
             f"initializer has {available} available dates, fewer than "
             f"--observation-count={arguments.observation_count}"
         )
+    surface_grid = (
+        GenerativeSurfaceGrid.short_end_nms()
+        if arguments.surface_grid == "short-end-nms"
+        else GenerativeSurfaceGrid()
+    )
     if arguments.model == "volgan":
         if arguments.base_checkpoint is not None:
             parser.error("VolGAN does not use --base-checkpoint")
         defaults = VolganTrainConfig()
         epochs = defaults.epochs if arguments.epochs is None else arguments.epochs
         precision = 64 if arguments.precision is None else arguments.precision
-        model_config = VolganModelConfig(label=arguments.label)
+        model_config = (
+            VolganModelConfig(label=arguments.label, grid=surface_grid)
+            if arguments.volgan_pca_rank is None
+            else VolganPcaModelConfig(
+                label=arguments.label,
+                grid=surface_grid,
+                pca_rank=arguments.volgan_pca_rank,
+            )
+        )
         train_config = VolganTrainConfig(
             epochs=epochs,
             gradient_matching_epochs=min(defaults.gradient_matching_epochs, epochs),
@@ -118,6 +142,15 @@ def main() -> None:
         training_examples = len(fitted.data.condition_dates)
         result = fitted.result
         variant = "volgan"
+        conditional_audit = (
+            None
+            if model_config.pca_rank is None
+            else audit_volgan_conditional_dispersion(
+                fitted.data,
+                result,
+                validation_fraction=train_config.validation_fraction,
+            ).as_dict()
+        )
     else:
         variant_enum = DiffusionVariant(arguments.model.removeprefix("diffusion-"))
         if variant_enum is DiffusionVariant.AD_SEQ_VOL_FT and arguments.base_checkpoint is None:
@@ -129,6 +162,7 @@ def main() -> None:
         model_config = DiffusionModelConfig(
             label=arguments.label,
             variant=variant_enum,
+            grid=surface_grid,
         )
         train_config = DiffusionTrainConfig(
             epochs=defaults.epochs if arguments.epochs is None else arguments.epochs,
@@ -175,10 +209,12 @@ def main() -> None:
         training_examples = len(fitted.data.start_dates)
         result = fitted.result
         variant = variant_enum.value
+        conditional_audit = None
 
     manifest = {
         "schema": "hedging-generated-initializer-v1",
         "model": variant,
+        "surface_grid": arguments.surface_grid,
         "label": arguments.label,
         "dataset_manifest_sha256": dataset_manifest_sha256(panel),
         "as_of_date": arguments.as_of.isoformat(),
@@ -204,6 +240,7 @@ def main() -> None:
         "validation_loss": result.validation_loss,
         "best_validation_loss": result.best_validation_loss,
         "converged": result.converged,
+        "conditional_audit": conditional_audit,
     }
     output = (
         arguments.checkpoint_directory / "initializer-manifest.json"

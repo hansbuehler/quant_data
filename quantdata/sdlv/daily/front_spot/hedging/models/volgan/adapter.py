@@ -294,6 +294,7 @@ def _evaluate_volgan_target(
             "validation_loss": public_fit.result.validation_loss,
             "warm_start_sha256": public_fit.result.warm_start_sha256,
             "fit_checkpoint_sha256": fit_checkpoint_sha256,
+            "fit_checkpoint_path": str(public_fit.result.checkpoint_path),
             "generated_paths": len(generated_forward_log_returns),
             "generated_mean_forward_log_return": float(
                 np.mean(generated_forward_log_returns)

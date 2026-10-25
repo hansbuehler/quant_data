@@ -665,12 +665,8 @@ def test_weekly_accounting_rebalances_and_settles_without_expiry_cost(
     assert result.terminal_value == pytest.approx(
         episode.discount_to_origin[-1] * expected_variance
     )
-    expected_spot_cost = 1.0e-4 * (
-        1.0
-        + episode.discount_to_origin[-1] * episode.spot_over_episode_origin[-1]
-    )
     expected_option_cost = episode.option_half_spreads_pv[0, first_expiry_index]
-    assert result.spot_transaction_cost == pytest.approx(expected_spot_cost)
+    assert result.spot_transaction_cost == 0.0
     assert result.option_transaction_cost == pytest.approx(expected_option_cost)
     assert result.option_gain == pytest.approx(
         episode.option_step_gains[0, first_expiry_index]
@@ -920,9 +916,9 @@ def test_weekly_first_later_expiry_is_closed_at_terminal() -> None:
     )
     assert result.option_transaction_cost == pytest.approx(
         episode.option_half_spreads_pv[0, first_later_index]
-        + episode.option_half_spreads_pv[-1, first_later_index]
     )
-    assert result.step_transaction_costs[-1] == pytest.approx(
+    assert result.step_transaction_costs[-1] == 0.0
+    assert result.formal_exit_cost == pytest.approx(
         episode.option_half_spreads_pv[-1, first_later_index]
     )
 

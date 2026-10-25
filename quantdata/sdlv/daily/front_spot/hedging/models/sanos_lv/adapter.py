@@ -218,11 +218,6 @@ def _evaluate_sanos_lv_target(
         option_cost_weights=np.asarray(
             [
                 quote.half_spread
-                * (
-                    1.0
-                    if quote.contract.expiry_date == sample.transition.next_date
-                    else 2.0
-                )
                 for quote in sample.hedge_quotes
             ]
         ),

@@ -43,8 +43,11 @@ This document is the implementation plan for the hedging benchmark built around
 the daily front-spot SDLV/GROMM model. It records the agreed experimental design
 and implementation order.
 
-**Current live state (2026-10-16).** The distributable public-candidate dataset
-is the sole benchmark input. Its technical release gate is complete: the
+**Current live state (2026-10-24).** The distributable public-candidate dataset
+is the default benchmark input. The temporary prohibition on using original
+source data for regeneration has been lifted; any such use must retain separate
+provenance and must not put original records into released artifacts or Git.
+The dataset's technical release gate is complete: the
 artifact contains 891 dates and 2,014,740 hedge coordinates, reconstructs from
 an otherwise empty data root, and contains no original WRDS prices, midpoints,
 or identifiers. Redistribution approval remains a separate legal question.
@@ -448,11 +451,13 @@ and results are stable.
 
 ### Runtime data boundary
 
-- The distributable `hedging-public-candidate-v1` dataset is the sole market
-  data input to every model fit, training job, scenario generator, valuation,
-  and benchmark run.
-- Runtime model and training code must not import the private dataset exporter,
-  WRDS/WIDB loaders, DySANOS research pipelines, or legacy raw SDLV arrays.
+- The distributable `hedging-public-candidate-v1` dataset is the default market
+  data input to model fits, training jobs, scenarios, valuation, and benchmark
+  runs. For the current regeneration, original source data may be used to
+  rebuild it; alternate direct-source experiments require explicit provenance
+  and separate result identities.
+- Runtime model and training code remains independent of the private dataset
+  exporter and raw-data loaders; the offline exporter reconstructs the candidate.
 - Stored SANOS states are the reference market interpolation whenever a price,
   target mark, or fixed contract is required away from a released instrument
   coordinate. Stored DLV states remain model inputs and are not substituted for

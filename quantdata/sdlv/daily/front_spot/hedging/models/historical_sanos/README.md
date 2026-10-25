@@ -4,6 +4,11 @@
   historical option/digital returns reconstructed from the released SANOS
   states at the current book's initial DTE, NMS, and side. Raw source data are
   neither read nor required.
+- **Return-source provenance:** daily runs with model-config version 1.31 or
+  later explicitly reprice historical options and digitals from SANOS states.
+  Earlier version-1.30 daily runs inadvertently used the DLV replay shared
+  with the covariance baseline and must be labelled legacy DLV-replay results,
+  not SANOS-statistical results. Weekly SANOS repricing is separate.
 - **Measure:** historical `P`.
 - **Price:** the released SANOS mark is the common market price; this baseline
   does not assert an independent risk-neutral price.

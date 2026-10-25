@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import os
+import tempfile
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
 
@@ -161,6 +165,7 @@ def run_diffusion_daily_book(
     retain_fit_checkpoint: bool = True,
     environment: BaseEnvironment | None = None,
     claim_quantities: Mapping[str, float] | None = None,
+    scenario_artifact_directory: Path | None = None,
 ) -> tuple[HedgeSmokeResult, ...]:
     """Fit and generate once, then hedge all 20 daily digital targets."""
     return _run_diffusion_targets(
@@ -179,6 +184,7 @@ def run_diffusion_daily_book(
         retain_fit_checkpoint=retain_fit_checkpoint,
         environment=environment,
         claim_quantities=claim_quantities,
+        scenario_artifact_directory=scenario_artifact_directory,
     )
 
 
@@ -199,6 +205,7 @@ def _run_diffusion_targets(
     retain_fit_checkpoint: bool,
     environment: BaseEnvironment | None,
     claim_quantities: Mapping[str, float] | None,
+    scenario_artifact_directory: Path | None = None,
 ) -> tuple[HedgeSmokeResult, ...]:
     require_public_hedging_panel(panel)
     samples = tuple(
@@ -245,6 +252,26 @@ def _run_diffusion_targets(
         seed=hedge_config.seed,
     )
     fit_checkpoint_sha256 = file_sha256(public_fit.result.checkpoint_path)
+    scenario_artifact_path = None
+    scenario_artifact_sha256 = None
+    if scenario_artifact_directory is not None:
+        scenario_artifact_path = (
+            scenario_artifact_directory / f"{origin_date.isoformat()}.npz"
+        )
+        scenario_artifact_sha256 = _save_generated_scenarios(
+            scenario_artifact_path,
+            forward_log_returns=generated.forward_log_returns,
+            next_log_implied_volatilities=generated.next_log_implied_volatilities,
+            origin_date=origin_date,
+            forecast_date=live.forecast_date,
+            dataset_manifest_sha256=panel.dataset_manifest_sha256,
+            fit_checkpoint_sha256=fit_checkpoint_sha256,
+            warm_start_checkpoint_sha256=expected_warm_start_sha256,
+            base_checkpoint_sha256=expected_base_checkpoint_sha256,
+            model_config=model_config,
+            train_config=train_config,
+            hedge_config=hedge_config,
+        )
     scenarios = tuple(
         build_generated_daily_scenarios(
             sample,
@@ -275,12 +302,90 @@ def _run_diffusion_targets(
             target_count=len(samples),
             claim_quantity=float(quantities[index]),
             fit_checkpoint_sha256=fit_checkpoint_sha256,
+            scenario_artifact_path=scenario_artifact_path,
+            scenario_artifact_sha256=scenario_artifact_sha256,
         )
         for index, sample in enumerate(samples)
     )
     if not retain_fit_checkpoint:
         remove_completed_checkpoint(public_fit.result.checkpoint_path)
     return results
+
+
+def _save_generated_scenarios(
+    path: Path,
+    *,
+    forward_log_returns: np.ndarray,
+    next_log_implied_volatilities: np.ndarray,
+    origin_date: date,
+    forecast_date: date,
+    dataset_manifest_sha256: str,
+    fit_checkpoint_sha256: str,
+    warm_start_checkpoint_sha256: str | None,
+    base_checkpoint_sha256: str | None,
+    model_config: DiffusionModelConfig,
+    train_config: DiffusionTrainConfig,
+    hedge_config: GeneratedHedgeConfig,
+) -> str:
+    config_json = json.dumps(
+        {
+            "model": asdict(model_config),
+            "training": asdict(train_config),
+            "simulation": {
+                "seed": hedge_config.seed,
+                "path_count": len(forward_log_returns),
+            },
+        },
+        default=str,
+        sort_keys=True,
+    )
+    metadata_json = json.dumps(
+        {
+            "schema": "diffusion-generated-scenarios-v1",
+            "origin_date": origin_date.isoformat(),
+            "forecast_date": forecast_date.isoformat(),
+            "dataset_manifest_sha256": dataset_manifest_sha256,
+            "fit_checkpoint_sha256": fit_checkpoint_sha256,
+            "warm_start_checkpoint_sha256": warm_start_checkpoint_sha256,
+            "base_checkpoint_sha256": base_checkpoint_sha256,
+            "config_sha256": hashlib.sha256(config_json.encode()).hexdigest(),
+            "configuration": json.loads(config_json),
+            "seed": hedge_config.seed,
+            "path_count": len(forward_log_returns),
+        },
+        sort_keys=True,
+    )
+    if path.exists():
+        with np.load(path, allow_pickle=False) as saved:
+            if (
+                saved["metadata_json"].item() != metadata_json
+                or not np.array_equal(
+                    saved["forward_log_returns"], forward_log_returns
+                )
+                or not np.array_equal(
+                    saved["next_log_implied_volatilities"],
+                    next_log_implied_volatilities,
+                )
+            ):
+                raise RuntimeError(f"generated scenario artifact differs: {path}")
+        return file_sha256(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(dir=path.parent, suffix=".npz", delete=False) as handle:
+        temporary = Path(handle.name)
+        try:
+            np.savez_compressed(
+                handle,
+                metadata_json=metadata_json,
+                forward_log_returns=forward_log_returns,
+                next_log_implied_volatilities=next_log_implied_volatilities,
+            )
+            handle.flush()
+            os.fsync(handle.fileno())
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+    os.replace(temporary, path)
+    return file_sha256(path)
 
 
 def _evaluate_diffusion_target(
@@ -296,6 +401,8 @@ def _evaluate_diffusion_target(
     target_count: int,
     claim_quantity: float,
     fit_checkpoint_sha256: str,
+    scenario_artifact_path: Path | None = None,
+    scenario_artifact_sha256: str | None = None,
 ) -> HedgeSmokeResult:
     return evaluate_daily_digital_hedge(
         sample,
@@ -315,10 +422,21 @@ def _evaluate_diffusion_target(
             "completed_epochs": public_fit.result.completed_epochs,
             "validation_loss": public_fit.result.validation_loss,
             "warm_start_sha256": public_fit.result.warm_start_sha256,
+            "fit_checkpoint_path": str(public_fit.result.checkpoint_path),
             "fit_checkpoint_sha256": fit_checkpoint_sha256,
+            "scenario_artifact_path": (
+                str(scenario_artifact_path) if scenario_artifact_path else None
+            ),
+            "scenario_artifact_sha256": scenario_artifact_sha256,
             "generated_paths": len(generated_forward_log_returns),
             "generated_mean_forward_log_return": float(
                 np.mean(generated_forward_log_returns)
+            ),
+            "generated_std_forward_log_return": float(
+                np.std(generated_forward_log_returns)
+            ),
+            "generated_negative_return_fraction": float(
+                np.mean(generated_forward_log_returns < 0.0)
             ),
             "return_channel_max_dispersion": return_channel_max_dispersion,
             "generated_mean_claim_value": float(

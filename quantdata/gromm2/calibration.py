@@ -548,6 +548,8 @@ def _load_warm_start_parameters(
     path: Path,
     *,
     expected_shapes: dict[str, tuple[int, ...]],
+    source_dates: np.ndarray | None = None,
+    target_dates: np.ndarray | None = None,
 ) -> tuple[dict[str, FloatArray], str]:
     with np.load(path, allow_pickle=False) as values:
         if str(values["schema"].item()) != "gromm2-affine-jax-checkpoint-v1":
@@ -567,7 +569,26 @@ def _load_warm_start_parameters(
             )
         if not np.all(np.isfinite(parameters[name])):
             raise ValueError(f"warm-start {name} contains non-finite values")
+    if (source_dates is None) != (target_dates is None):
+        raise ValueError("warm-start source and target dates must be supplied together")
+    if source_dates is not None and target_dates is not None:
+        source = np.asarray(source_dates).astype("U10")
+        target = np.asarray(target_dates).astype("U10")
+        if (
+            source.shape != target.shape
+            or source.shape != (parameters["codes"].shape[0],)
+            or not np.array_equal(source[1:], target[:-1])
+            or len(set(source)) != len(source)
+            or len(set(target)) != len(target)
+        ):
+            raise ValueError("warm-start rolling date windows do not align")
+        previous_codes = parameters["codes"]
+        parameters["codes"] = np.concatenate(
+            (previous_codes[1:], previous_codes[-1:]), axis=0
+        )
     identity = f"{source_identity}:completed-epochs={completed_epochs}"
+    if source_dates is not None and target_dates is not None:
+        identity += f":rolled={source[-1]}->{target[-1]}"
     return parameters, identity
 
 
@@ -675,6 +696,7 @@ def fit_affine_history(
     call_kernels: Path | None = None,
     end_date_exclusive: str | None = None,
     warm_start_checkpoint: Path | None = None,
+    warm_start_prepared_books: Path | None = None,
     evaluate_only: bool = False,
 ) -> None:
     """Fit the affine DLV history with the DYSANOS bid--ask objective."""
@@ -752,9 +774,17 @@ def fit_affine_history(
         kernel_metadata = specification.metadata
         lower_indices = specification.lower_indices
         interpolation_weights = specification.interpolation_weights
+    if warm_start_prepared_books is not None and warm_start_checkpoint is None:
+        raise ValueError("warm-start books require a warm-start checkpoint")
     warm_start_parameters = None
     warm_start_identity = "none"
     if warm_start_checkpoint is not None:
+        source_dates = None
+        if warm_start_prepared_books is not None:
+            with h5py.File(warm_start_prepared_books, "r") as source_stream:
+                if source_stream.attrs.get("schema") != "gromm2-synthetic-sanos-books-v1":
+                    raise ValueError("warm-start prepared-book schema is incompatible")
+                source_dates = np.asarray(source_stream["dates"])
         warm_start_parameters, warm_start_identity = _load_warm_start_parameters(
             warm_start_checkpoint,
             expected_shapes={
@@ -762,6 +792,8 @@ def fit_affine_history(
                 "codes": (len(raw_initial), config.rank),
                 "loadings": (config.rank, *raw_initial.shape[1:]),
             },
+            source_dates=source_dates,
+            target_dates=decoded_dates if source_dates is not None else None,
         )
     data_identity = json.dumps(
         {

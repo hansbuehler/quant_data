@@ -5,13 +5,19 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import date
+from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
 
 from quantdata.biz_calendar import DAYS_PER_YEAR, NMS
 from quantdata.hedging.contracts import OptionQuote, OptionRight
-from quantdata.hedging.data.pricing import price_dlv_digitals, price_dlv_surface
+from quantdata.hedging.data.pricing import (
+    price_dlv_digitals,
+    price_dlv_surface,
+    price_sanos_digitals,
+    price_sanos_surface,
+)
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.digital_daily import (
     DailyDigitalTarget,
 )
@@ -23,6 +29,7 @@ from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
 
 FloatArray = NDArray[np.float64]
 COVARIANCE_RETURN_GEOMETRY_IDENTITY = "released-dlv-state-v1"
+ReturnPriceSource = Literal["dlv", "sanos"]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -123,19 +130,21 @@ def build_historical_return_panel(
     option_quotes: tuple[OptionQuote, ...],
     targets: tuple[DailyDigitalTarget, ...],
     count: int,
+    price_source: ReturnPriceSource = "dlv",
 ) -> HistoricalReturnPanel:
     """Replay a rolling window at the current relative option coordinates.
 
     The current option identities determine only DTE, NMS, and side. Each
     historical transition constructs a new fixed-strike option at that same
-    relative coordinate and follows it for one session using only the released
-    DLV state. No SANOS mark, current return, or future return enters the
-    training panel.
+    relative coordinate and follows it for one session using the selected
+    released model state. No current or future return enters the training panel.
     """
     if count < 2:
         raise ValueError("historical covariance panel requires at least two rows")
     if not option_quotes or not targets:
         raise ValueError("historical covariance panel requires options and targets")
+    if price_source not in ("dlv", "sanos"):
+        raise ValueError("historical return price source must be DLV or SANOS")
     coordinates = tuple(
         RelativeOptionCoordinate.from_quote(quote) for quote in option_quotes
     )
@@ -149,6 +158,7 @@ def build_historical_return_panel(
                 endpoint=panel.market_day(transition.next_date),
                 coordinates=coordinates,
                 targets=targets,
+                price_source=price_source,
             )
         )
     return HistoricalReturnPanel(
@@ -173,6 +183,7 @@ def relative_return_observation(
     endpoint: PublicMarketDay,
     coordinates: tuple[RelativeOptionCoordinate, ...],
     targets: tuple[DailyDigitalTarget, ...],
+    price_source: ReturnPriceSource = "dlv",
 ) -> RelativeReturnObservation:
     """Evaluate one historical transition at fixed relative coordinates."""
     if endpoint.trading_date != transition.next_date:
@@ -181,11 +192,13 @@ def relative_return_observation(
         transition,
         endpoint=endpoint,
         coordinates=coordinates,
+        price_source=price_source,
     )
     target_returns = _relative_digital_returns(
         transition,
         endpoint=endpoint,
         targets=targets,
+        price_source=price_source,
     )
     return RelativeReturnObservation(
         origin_date=transition.origin.trading_date,
@@ -202,6 +215,7 @@ def _relative_option_returns(
     *,
     endpoint: PublicMarketDay,
     coordinates: tuple[RelativeOptionCoordinate, ...],
+    price_source: ReturnPriceSource,
 ) -> FloatArray:
     if not coordinates:
         return np.empty(0, dtype=np.float64)
@@ -239,11 +253,12 @@ def _relative_option_returns(
         method="discount_at_business_dte",
     )
     fixed_strikes = origin_forwards * strikes_over_forward
-    origin_prices = origin_discounts * origin_forwards * _dlv_option_prices(
+    origin_prices = origin_discounts * origin_forwards * _option_prices(
         origin,
         business_dtes=business_dtes,
         strikes_over_forward=strikes_over_forward,
         is_call=is_call,
+        price_source=price_source,
     )
 
     gross_spot_return = (
@@ -272,11 +287,12 @@ def _relative_option_returns(
         endpoint_strikes = fixed_strikes[remains] / (
             gross_spot_return * endpoint_forwards
         )
-        endpoint_prices = _dlv_option_prices(
+        endpoint_prices = _option_prices(
             endpoint,
             business_dtes=remaining_dtes,
             strikes_over_forward=endpoint_strikes,
             is_call=is_call[remains],
+            price_source=price_source,
         )
         terminal_values[remains] = (
             transition.discount_factor
@@ -293,6 +309,7 @@ def _relative_digital_returns(
     *,
     endpoint: PublicMarketDay,
     targets: tuple[DailyDigitalTarget, ...],
+    price_source: ReturnPriceSource,
 ) -> FloatArray:
     if not targets:
         return np.empty(0, dtype=np.float64)
@@ -329,11 +346,12 @@ def _relative_digital_returns(
         method="discount_at_business_dte",
     )
     fixed_strikes = origin_forwards * strikes_over_forward
-    origin_prices = origin_discounts * _dlv_digital_prices(
+    origin_prices = origin_discounts * _digital_prices(
         origin,
         business_dtes=business_dtes,
         strikes_over_forward=strikes_over_forward,
         is_call=is_call,
+        price_source=price_source,
     )
 
     gross_spot_return = (
@@ -357,11 +375,12 @@ def _relative_digital_returns(
         endpoint_strikes = fixed_strikes[remains] / (
             gross_spot_return * endpoint_forwards
         )
-        endpoint_probabilities = _dlv_digital_prices(
+        endpoint_probabilities = _digital_prices(
             endpoint,
             business_dtes=remaining_dtes,
             strikes_over_forward=endpoint_strikes,
             is_call=is_call[remains],
+            price_source=price_source,
         )
         endpoint_discounts = _curve_values(
             endpoint,
@@ -386,6 +405,64 @@ def _curve_values(
     return np.asarray(
         [evaluator(int(business_dte)) for business_dte in business_dtes],
         dtype=np.float64,
+    )
+
+
+def _option_prices(
+    day: PublicMarketDay,
+    *,
+    business_dtes: NDArray[np.integer],
+    strikes_over_forward: FloatArray,
+    is_call: NDArray[np.bool_],
+    price_source: ReturnPriceSource,
+) -> FloatArray:
+    if price_source == "sanos":
+        return price_sanos_surface(
+            query_expiries_y=np.asarray(business_dtes, dtype=np.float64)
+            / DAYS_PER_YEAR,
+            query_strikes=strikes_over_forward,
+            is_call=is_call,
+            model_expiries_y=day.sanos_model_expiries_y,
+            atm_variances=day.sanos_kernel_total_variances,
+            support_strikes=day.sanos_support_strikes,
+            densities=day.sanos_densities,
+            smoothness=day.sanos_smoothness,
+            one_minute_y=day.one_minute_y,
+        )
+    return _dlv_option_prices(
+        day,
+        business_dtes=business_dtes,
+        strikes_over_forward=strikes_over_forward,
+        is_call=is_call,
+    )
+
+
+def _digital_prices(
+    day: PublicMarketDay,
+    *,
+    business_dtes: NDArray[np.integer],
+    strikes_over_forward: FloatArray,
+    is_call: NDArray[np.bool_],
+    price_source: ReturnPriceSource,
+) -> FloatArray:
+    if price_source == "sanos":
+        return price_sanos_digitals(
+            query_expiries_y=np.asarray(business_dtes, dtype=np.float64)
+            / DAYS_PER_YEAR,
+            query_strikes=strikes_over_forward,
+            is_call=is_call,
+            model_expiries_y=day.sanos_model_expiries_y,
+            atm_variances=day.sanos_kernel_total_variances,
+            support_strikes=day.sanos_support_strikes,
+            densities=day.sanos_densities,
+            smoothness=day.sanos_smoothness,
+            one_minute_y=day.one_minute_y,
+        )
+    return _dlv_digital_prices(
+        day,
+        business_dtes=business_dtes,
+        strikes_over_forward=strikes_over_forward,
+        is_call=is_call,
     )
 
 

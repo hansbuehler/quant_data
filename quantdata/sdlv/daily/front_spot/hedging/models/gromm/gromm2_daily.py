@@ -450,7 +450,7 @@ def generate_gromm2_daily_scenarios(
     )
     linear_costs = np.asarray(
         [
-            1.0e-4,
+            0.0,
             *(quote.half_spread for quote in sample.hedge_quotes),
         ],
         dtype=np.float64,
@@ -677,7 +677,7 @@ def gromm2_daily_training_data(
         active_mask=np.ones((1, scenarios.instrument_returns.shape[1]), dtype=bool),
         linear_transaction_costs=scenarios.linear_transaction_costs[None],
         settles_next=scenarios.settles_next[None],
-        terminal_transaction_costs=scenarios.terminal_transaction_costs,
+        terminal_transaction_costs=None,
     )
     return reduce_gromm_one_day_training_data(
         raw,
@@ -700,7 +700,7 @@ def _terminal_transaction_costs(
     )
     discount = origin_day.discount_at_business_dte(1)
     costs = np.zeros((path_count, 1 + len(quotes)), dtype=np.float64)
-    costs[:, 0] = 1.0e-4 * discount * spot_over_origin
+    costs[:, 0] = 0.0
     for option_index, quote in enumerate(quotes, start=1):
         if settles_next[option_index]:
             continue

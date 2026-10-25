@@ -11,7 +11,7 @@ from cdxcore.err import verify_inp
 from cdxcore.version import version
 from numpy.typing import NDArray
 
-from quantdata.biz_calendar import DAYS_PER_YEAR
+from quantdata.biz_calendar import DAYS_PER_YEAR, NMS
 from quantdata.hedging.contracts import OptionRight
 from quantdata.hedging.mean_reduction import (
     MeanReduction,
@@ -226,7 +226,7 @@ def build_generated_daily_scenarios(
     expected_surface_shape = (
         len(log_returns),
         len(grid.expiries_y),
-        len(grid.strikes_over_forward),
+        grid.strike_count,
     )
     if (
         log_returns.ndim != 1
@@ -360,19 +360,11 @@ def fit_generated_cost_lasso(
 def generated_linear_transaction_costs(
     sample: DailyDigitalSample,
 ) -> FloatArray:
-    """Return entry-plus-exit costs for the generated fixed-contract book."""
+    """Return entry-only costs for the generated fixed-contract book."""
     return np.asarray(
         [
-            2.0e-4,
-            *(
-                quote.half_spread
-                * (
-                    1.0
-                    if quote.contract.expiry_date == sample.transition.next_date
-                    else 2.0
-                )
-                for quote in sample.hedge_quotes
-            ),
+            0.0,
+            *(quote.half_spread for quote in sample.hedge_quotes),
         ],
         dtype=np.float64,
     )
@@ -388,9 +380,8 @@ def interpolate_generated_implied_volatility(
     """Interpolate pathwise log strike and total variance on the fixed grid."""
     surfaces = np.asarray(log_implied_volatilities, dtype=np.float64)
     strikes = np.asarray(query_strikes_over_forward, dtype=np.float64)
-    grid_strikes = np.asarray(grid.strikes_over_forward, dtype=np.float64)
     grid_expiries = np.asarray(grid.expiries_y, dtype=np.float64)
-    expected_shape = (len(strikes), len(grid_expiries), len(grid_strikes))
+    expected_shape = (len(strikes), len(grid_expiries), grid.strike_count)
     if (
         surfaces.shape != expected_shape
         or strikes.ndim != 1
@@ -400,24 +391,40 @@ def interpolate_generated_implied_volatility(
         or not np.all(np.isfinite(surfaces))
     ):
         raise ValueError("generated implied-volatility interpolation inputs are invalid")
-    log_grid_strikes = np.log(grid_strikes)
     log_queries = np.log(strikes)
-    lower = np.searchsorted(log_grid_strikes, log_queries, side="right") - 1
-    lower = np.clip(lower, 0, len(grid_strikes) - 2)
-    upper = lower + 1
-    denominator = log_grid_strikes[upper] - log_grid_strikes[lower]
-    weight = np.clip(
-        (log_queries - log_grid_strikes[lower]) / denominator,
-        0.0,
-        1.0,
-    )
     path_indices = np.arange(len(strikes))[:, None]
     expiry_indices = np.arange(len(grid_expiries))[None, :]
-    lower_values = surfaces[path_indices, expiry_indices, lower[:, None]]
-    upper_values = surfaces[path_indices, expiry_indices, upper[:, None]]
-    log_volatility_by_expiry = (
-        lower_values + weight[:, None] * (upper_values - lower_values)
-    )
+    if grid.nms_nodes is None:
+        log_grid_strikes = np.log(np.asarray(grid.strikes_over_forward, dtype=np.float64))
+        lower = np.searchsorted(log_grid_strikes, log_queries, side="right") - 1
+        lower = np.clip(lower, 0, grid.strike_count - 2)
+        upper = lower + 1
+        weight = np.clip(
+            (log_queries - log_grid_strikes[lower])
+            / (log_grid_strikes[upper] - log_grid_strikes[lower]),
+            0.0,
+            1.0,
+        )[:, None]
+        lower = lower[:, None]
+        upper = upper[:, None]
+    else:
+        nodes = np.asarray(grid.nms_nodes, dtype=np.float64)
+        atm_volatility = np.exp(surfaces[:, :, grid.nms_nodes.index(0.0)])
+        scale = np.sqrt(
+            (NMS.SCALE**2 * NMS.EPS + atm_volatility**2 * grid_expiries[None, :])
+            / (NMS.EPS + 1.0)
+        )
+        query_nms = log_queries[:, None] / scale
+        lower = np.clip(np.searchsorted(nodes, query_nms, side="right") - 1, 0, len(nodes) - 2)
+        upper = lower + 1
+        weight = np.clip(
+            (query_nms - nodes[lower]) / (nodes[upper] - nodes[lower]),
+            0.0,
+            1.0,
+        )
+    lower_values = surfaces[path_indices, expiry_indices, lower]
+    upper_values = surfaces[path_indices, expiry_indices, upper]
+    log_volatility_by_expiry = lower_values + weight * (upper_values - lower_values)
     volatility_by_expiry = np.exp(log_volatility_by_expiry)
     total_variance = volatility_by_expiry**2 * grid_expiries[None, :]
     upper_expiry = int(np.searchsorted(grid_expiries, query_expiry_y, side="left"))

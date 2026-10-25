@@ -28,7 +28,7 @@ def sample_volgan_weekly_paths(
     """Sample a VolGAN recursively while updating every path's live condition."""
     generator = fit.generator
     config = generator.config
-    if live.values.shape != (config.condition_dimension,):
+    if live.values.shape != (config.full_condition_dimension,):
         raise ValueError("VolGAN weekly live condition has the wrong shape")
     if path_count < 2:
         raise ValueError("VolGAN weekly sampling requires at least two paths")
@@ -36,7 +36,7 @@ def sample_volgan_weekly_paths(
         raise ValueError("VolGAN weekly step count must lie in [1,5]")
 
     expiry_count = len(config.grid.expiries_y)
-    strike_count = len(config.grid.strikes_over_forward)
+    strike_count = config.grid.strike_count
     trailing_returns = np.broadcast_to(
         live.trailing_forward_log_returns,
         (path_count, 21),
@@ -75,8 +75,8 @@ def sample_volgan_weekly_paths(
                 dtype=generator.fdtype,
                 device=generator.device,
             )
-            decoded = generator.decode(
-                generator(noise, condition_tensor)
+            decoded = generator.decode_full_targets(
+                generator(noise, generator.encode_full_conditions(condition_tensor))
             ).cpu().numpy()
             next_returns = decoded[:, 0] / annualization
             next_surfaces = current_surfaces + decoded[:, 1:].reshape(

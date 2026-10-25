@@ -35,7 +35,7 @@ GeneratedTrainConfig = VolganTrainConfig | DiffusionTrainConfig
 
 
 @version(
-    "1.1",
+    "1.2",
     dependencies=[
         VolganModelConfig,
         VolganTrainConfig,
@@ -57,9 +57,14 @@ class GeneratedDailyRunConfig:
     precision: int = 32
     base_checkpoint_sha256: str | None = None
     warm_start_checkpoint_sha256: str | None = None
+    rolling_warm_start: bool = False
 
     def __post_init__(self) -> None:
         verify_inp(bool(self.label.strip()), lambda: "run label must be non-empty")
+        verify_inp(
+            type(self.rolling_warm_start) is bool,
+            lambda: "rolling_warm_start must be boolean",
+        )
         verify_inp(
             (
                 isinstance(self.model_config, VolganModelConfig)

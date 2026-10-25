@@ -531,6 +531,24 @@ def fit_rolling_gromm2_market(
         config=config,
         dataset_manifest_sha256=dataset_manifest_sha256,
     )
+    origin_dates, _ = _manifest_transition_dates(
+        prepared,
+        window_transitions=config.window_transitions,
+    )
+    previous_date = origin_dates[-1]
+    panel = PublicHedgingPanel(Path(dataset))
+    try:
+        panel.prior_one_day_origins(previous_date, count=config.window_transitions)
+    except ValueError:
+        previous_paths = None
+    else:
+        previous = load_rolling_gromm2(
+            artifact_root,
+            as_of_date=previous_date,
+            config=config,
+            dataset_manifest_sha256=dataset_manifest_sha256,
+        )
+        previous_paths = previous.paths
     (
         percent_inside,
         calibration_epochs_completed,
@@ -540,6 +558,12 @@ def fit_rolling_gromm2_market(
         paths=paths,
         calibration=config.calibration,
         minimum_inside_spread_percent=config.minimum_inside_spread_percent,
+        warm_start_checkpoint=(
+            previous_paths.affine_checkpoint if previous_paths is not None else None
+        ),
+        warm_start_prepared_books=(
+            previous_paths.prepared_books if previous_paths is not None else None
+        ),
     )
     with jax.enable_x64(True):
         origin_dates, endpoint_dates = _manifest_transition_dates(
@@ -572,6 +596,14 @@ def fit_rolling_gromm2_market(
         ),
         "calibration_epochs_completed": calibration_epochs_completed,
         "calibration_retry_count": calibration_retry_count,
+        "warm_start_date": (
+            previous_date.isoformat() if previous_paths is not None else None
+        ),
+        "warm_start_checkpoint_sha256": (
+            file_sha256(previous_paths.affine_checkpoint)
+            if previous_paths is not None
+            else None
+        ),
         "dynamics_sha256": file_sha256(paths.dynamics),
         "dynamics_report_sha256": file_sha256(paths.dynamics.with_suffix(".json")),
         "percent_inside_spread": percent_inside,
@@ -784,6 +816,8 @@ def _fit_affine_market_until_gate(
     paths: RollingGromm2Paths,
     calibration: DlvCalibrationConfig,
     minimum_inside_spread_percent: float,
+    warm_start_checkpoint: Path | None = None,
+    warm_start_prepared_books: Path | None = None,
 ) -> tuple[float, int, int, DlvCalibrationConfig]:
     """Continue a borderline affine fit without weakening its market-fit gate."""
     last_percent_inside = float("nan")
@@ -813,6 +847,8 @@ def _fit_affine_market_until_gate(
                 output=paths.affine_history,
                 checkpoint=paths.affine_checkpoint,
                 config=fitted_calibration,
+                warm_start_checkpoint=warm_start_checkpoint,
+                warm_start_prepared_books=warm_start_prepared_books,
             )
         with h5py.File(paths.affine_history, "r") as stream:
             last_percent_inside = float(stream.attrs["percent_inside_spread"])

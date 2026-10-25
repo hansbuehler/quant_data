@@ -51,7 +51,7 @@ class GeneratedWeeklyPaths:
             scenario_count,
             step_count,
             len(self.grid.expiries_y),
-            len(self.grid.strikes_over_forward),
+            self.grid.strike_count,
         )
         if scenario_count < 2 or not 1 <= step_count <= WEEKLY_HORIZON:
             raise ValueError("weekly generated paths have invalid dimensions")

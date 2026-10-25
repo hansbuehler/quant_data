@@ -15,6 +15,7 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
     LEGACY_DAILY_EVALUATION_SCHEMA,
     DailyEvaluationSpec,
     DailyEvaluationSummary,
+    eligible_daily_origins,
     run_daily_evaluation,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.merge_daily_shards import (
@@ -144,6 +145,17 @@ def test_daily_runner_writes_atomic_records_and_resumes(tmp_path) -> None:
     run_payload = {**_spec(manifest_sha256).to_dict(), "run_identity": first.run_identity}
     assert DailyEvaluationSpec.from_dict(run_payload) == _spec(manifest_sha256)
     assert DailyEvaluationSummary.from_dict(second.to_dict()) == second
+
+
+def test_daily_origin_filter_skips_model_ineligible_dates(tmp_path) -> None:
+    panel = _RunnerPanel(tmp_path)
+    spec = _spec("a" * 64)
+    assert eligible_daily_origins(panel, spec=spec) == (date(2023, 1, 3),)
+    assert eligible_daily_origins(
+        panel,
+        spec=spec,
+        origin_filter=lambda _panel, _origin: False,
+    ) == ()
 
 
 def test_daily_run_spec_rejects_forged_identity(tmp_path) -> None:

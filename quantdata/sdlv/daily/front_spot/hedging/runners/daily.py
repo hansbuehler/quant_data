@@ -330,6 +330,7 @@ def eligible_daily_origins(
     panel: PublicHedgingPanel,
     *,
     spec: DailyEvaluationSpec,
+    origin_filter: Callable[[PublicHedgingPanel, date], bool] | None = None,
 ) -> tuple[date, ...]:
     """Return chronological gap-free origins with a complete training window."""
     require_public_hedging_panel(panel)
@@ -345,6 +346,8 @@ def eligible_daily_origins(
             panel.one_day_transition(origin_date)
         except ValueError:
             continue
+        if origin_filter is not None and not origin_filter(panel, origin_date):
+            continue
         origins.append(origin_date)
     return tuple(origins)
 
@@ -357,6 +360,7 @@ def run_daily_evaluation(
     output_directory: Path,
     progress: Callable[[int, int, date, bool], None] | None = None,
     stop_after: int | None = None,
+    origin_filter: Callable[[PublicHedgingPanel, date], bool] | None = None,
 ) -> DailyEvaluationSummary:
     """Run or resume one complete daily evaluation with atomic date records."""
     require_public_hedging_panel(panel)
@@ -369,7 +373,7 @@ def run_daily_evaluation(
     records_directory.mkdir(parents=True, exist_ok=True)
     _initialize_run(output / "run.json", spec)
 
-    origins = eligible_daily_origins(panel, spec=spec)
+    origins = eligible_daily_origins(panel, spec=spec, origin_filter=origin_filter)
     selected_origins = origins if stop_after is None else origins[:stop_after]
     completed: list[str] = []
     reused: list[str] = []

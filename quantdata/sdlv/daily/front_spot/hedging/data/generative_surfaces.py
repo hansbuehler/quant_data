@@ -11,6 +11,7 @@ from cdxcore.err import verify_inp
 from cdxcore.version import version
 from numpy.typing import NDArray
 
+from quantdata.biz_calendar import NMS
 from quantdata.hedging.data.pricing import (
     implied_volatilities_with_validity,
     price_sanos_surface,
@@ -28,10 +29,10 @@ BoolArray = NDArray[np.bool_]
 IntArray = NDArray[np.int64]
 
 
-@version("1.0")
+@version("1.1")
 @dataclass(frozen=True, kw_only=True)
 class GenerativeSurfaceGrid:
-    """Forward-moneyness and maturity grid shared by generative baselines."""
+    """Forward-strike or normalized-moneyness grid shared by generators."""
 
     strikes_over_forward: tuple[float, ...] = (
         0.60,
@@ -46,6 +47,7 @@ class GenerativeSurfaceGrid:
         1.30,
         1.40,
     )
+    nms_nodes: tuple[float, ...] | None = None
     expiries_y: tuple[float, ...] = (
         1.0 / 252.0,
         1.0 / 52.0,
@@ -62,16 +64,42 @@ class GenerativeSurfaceGrid:
         strikes = np.asarray(self.strikes_over_forward, dtype=np.float64)
         expiries = np.asarray(self.expiries_y, dtype=np.float64)
         verify_inp(
-            len(strikes) >= 3
+            (self.nms_nodes is not None or len(strikes) >= 3)
             and np.all(np.isfinite(strikes) & (strikes > 0.0))
             and np.all(np.diff(strikes) > 0.0),
             lambda: "strikes_over_forward must be finite-positive and increasing",
         )
+        if self.nms_nodes is not None:
+            nodes = np.asarray(self.nms_nodes, dtype=np.float64)
+            verify_inp(
+                len(nodes) >= 3
+                and np.all(np.isfinite(nodes))
+                and np.all(np.diff(nodes) > 0.0)
+                and np.any(nodes == 0.0),
+                lambda: "nms_nodes must be increasing, finite, and contain ATM",
+            )
         verify_inp(
             len(expiries) >= 2
             and np.all(np.isfinite(expiries) & (expiries > 0.0))
             and np.all(np.diff(expiries) > 0.0),
             lambda: "expiries_y must be finite-positive and increasing",
+        )
+
+    @property
+    def strike_count(self) -> int:
+        """Number of coordinates along either strike representation."""
+        return len(self.nms_nodes) if self.nms_nodes is not None else len(self.strikes_over_forward)
+
+    @classmethod
+    def short_end_nms(cls) -> GenerativeSurfaceGrid:
+        """One-to-ten-session competitor grid with ATM-dense NMS nodes."""
+        return cls(
+            strikes_over_forward=(),
+            nms_nodes=(
+                -3.5, -3.0, -2.5, -2.0, -1.5, -1.0, -0.75, -0.5, -0.25,
+                0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5,
+            ),
+            expiries_y=tuple(days / 252.0 for days in (1, 2, 3, 4, 5, 7, 10)),
         )
 
 
@@ -150,9 +178,38 @@ def fixed_grid_sanos_day(
     fewer than two interior coarse nodes is repriced on a denser ATM-centered
     strike grid before interpolation.
     """
-    strikes = np.asarray(grid.strikes_over_forward, dtype=np.float64)
     expiries = np.asarray(grid.expiries_y, dtype=np.float64)
-    expiry_mesh, strike_mesh = np.meshgrid(expiries, strikes, indexing="ij")
+    if grid.nms_nodes is None:
+        strike_mesh = np.broadcast_to(
+            np.asarray(grid.strikes_over_forward, dtype=np.float64),
+            (len(expiries), grid.strike_count),
+        )
+    else:
+        atm_prices = price_sanos_surface(
+            query_expiries_y=expiries,
+            query_strikes=np.ones_like(expiries),
+            is_call=np.ones_like(expiries, dtype=bool),
+            model_expiries_y=day.sanos_model_expiries_y,
+            atm_variances=day.sanos_kernel_total_variances,
+            support_strikes=day.sanos_support_strikes,
+            densities=day.sanos_densities,
+            smoothness=day.sanos_smoothness,
+            one_minute_y=day.one_minute_y,
+        )
+        atm_volatilities, atm_valid = implied_volatilities_with_validity(
+            expiries_y=expiries,
+            normalized_strikes=np.ones_like(expiries),
+            normalized_prices=atm_prices,
+            is_call=np.ones_like(expiries, dtype=bool),
+        )
+        if not np.all(atm_valid & np.isfinite(atm_volatilities) & (atm_volatilities > 0.0)):
+            raise FloatingPointError("SANOS ATM volatilities do not define an NMS grid")
+        strike_mesh = NMS.from_nms(
+            np.asarray(grid.nms_nodes, dtype=np.float64)[None, :],
+            expiries[:, None],
+            vol=atm_volatilities[:, None],
+        )
+    expiry_mesh = np.broadcast_to(expiries[:, None], strike_mesh.shape)
     sides = strike_mesh >= 1.0
     normalized_prices = price_sanos_surface(
         query_expiries_y=expiry_mesh.ravel(),
@@ -173,9 +230,9 @@ def fixed_grid_sanos_day(
     )
     implied_volatilities = implied_volatilities.reshape(expiry_mesh.shape)
     interior = interior.reshape(expiry_mesh.shape)
-    log_strikes = np.log(strikes)
     repaired = np.empty_like(implied_volatilities)
     for expiry_index in range(len(expiries)):
+        log_strikes = np.log(strike_mesh[expiry_index])
         valid = interior[expiry_index]
         if np.count_nonzero(valid) < 2:
             expiry = expiries[expiry_index]

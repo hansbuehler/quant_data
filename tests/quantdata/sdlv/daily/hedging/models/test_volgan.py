@@ -8,14 +8,17 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import torch
+from cdxcore.uniquehash import named_unique_filename48_8
 
 from quantdata.sdlv.daily.front_spot.hedging.data.generative_surfaces import (
+    GenerativeSurfaceGrid,
     SanosFixedGridHistory,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.volgan import adapter as volgan_adapter
 from quantdata.sdlv.daily.front_spot.hedging.models.volgan import training as volgan_training
 from quantdata.sdlv.daily.front_spot.hedging.models.volgan.config import (
     VolganModelConfig,
+    VolganPcaModelConfig,
     VolganTrainConfig,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.volgan.data import (
@@ -29,6 +32,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.volgan.model import (
     VolganDiscriminator,
     VolganGenerator,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.volgan.pca import VolganSurfacePca
 from quantdata.sdlv.daily.front_spot.hedging.models.volgan.training import fit_volgan
 from quantdata.sdlv.daily.front_spot.hedging.models.volgan.weekly_paths import (
     sample_volgan_weekly_paths,
@@ -36,8 +40,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.volgan.weekly_paths import (
 from quantdata.torch import BaseEnvironment
 
 
-def _history() -> SanosFixedGridHistory:
-    count = 30
+def _history(count: int = 30) -> SanosFixedGridHistory:
     dates = tuple(date(2022, 1, 3) + timedelta(days=index) for index in range(count))
     surfaces = np.log(0.2 + 0.001 * np.arange(count)[:, None, None]) * np.ones(
         (count, 9, 11)
@@ -52,6 +55,130 @@ def _history() -> SanosFixedGridHistory:
             (np.asarray([0]), np.ones(count - 1, dtype=np.int64))
         ),
     )
+
+
+def test_volgan_pca_uses_training_rows_only() -> None:
+    rng = np.random.default_rng(123)
+    conditions = rng.normal(size=(24, 102))
+    targets = rng.normal(size=(24, 100))
+    original = VolganSurfacePca.fit(
+        conditions=conditions, targets=targets, train_count=18, rank=8
+    )
+    changed_conditions = conditions.copy()
+    changed_targets = targets.copy()
+    changed_conditions[18:] *= 1_000.0
+    changed_targets[18:] *= -1_000.0
+    changed = VolganSurfacePca.fit(
+        conditions=changed_conditions, targets=changed_targets, train_count=18, rank=8
+    )
+    np.testing.assert_allclose(changed.level_components, original.level_components)
+    np.testing.assert_allclose(changed.increment_components, original.increment_components)
+    assert original.encode_conditions(conditions).shape == (24, 11)
+    assert original.encode_targets(targets).shape == (24, 9)
+    assert 0 < original.level_explained_fraction <= 1
+    assert 0 < original.increment_explained_fraction <= 1
+
+
+def test_volgan_full_surface_checkpoint_identity_is_unchanged() -> None:
+    config = VolganModelConfig(
+        label="volgan-short-end-nms35-2022",
+        grid=GenerativeSurfaceGrid.short_end_nms(),
+    )
+    assert named_unique_filename48_8(config.label, config) == (
+        "volgan-short-end-nms35-2022 8d8b9ba5"
+    )
+
+
+def test_volgan_pca_train_and_sample_full_surface(tmp_path: Path) -> None:
+    data = volgan_examples_from_history(_history(60))
+    config = VolganPcaModelConfig(label="volgan-pca-unit", pca_rank=8)
+    fit = fit_volgan(
+        data,
+        model_config=config,
+        checkpoint_directory=tmp_path,
+        train_config=VolganTrainConfig(
+            epochs=2,
+            gradient_matching_epochs=1,
+            batch_size=16,
+            checkpoint_epochs=1,
+            progress_seconds=300.0,
+        ),
+        environment=BaseEnvironment(precision=64, device="cpu", debug=True),
+    )
+    generated = sample_volgan_transitions(
+        fit, condition=data.conditions[-1], path_count=6, seed=19
+    )
+    assert fit.converged
+    assert fit.level_pca_explained_fraction is not None
+    assert fit.increment_pca_explained_fraction is not None
+    assert generated.next_log_implied_volatilities.shape == (6, 9, 11)
+    assert generated.forward_log_returns.shape == (6,)
+    reloaded = fit_volgan(
+        data,
+        model_config=config,
+        checkpoint_directory=tmp_path,
+        train_config=VolganTrainConfig(
+            epochs=2,
+            gradient_matching_epochs=1,
+            batch_size=16,
+            checkpoint_epochs=1,
+            progress_seconds=300.0,
+            just_load=True,
+        ),
+    )
+    np.testing.assert_allclose(
+        sample_volgan_transitions(
+            reloaded, condition=data.conditions[-1], path_count=6, seed=19
+        ).next_log_implied_volatilities,
+        generated.next_log_implied_volatilities,
+    )
+
+    source = fit.generator
+    environment = BaseEnvironment(precision=64, device="cpu", debug=True)
+    rebased = VolganGenerator(
+        environment,
+        config=config,
+        condition_mean=source.condition_mean + 0.2 * source.condition_scale,
+        condition_scale=source.condition_scale * 1.1,
+        target_mean=source.target_mean - 0.1 * source.target_scale,
+        target_scale=source.target_scale * 0.9,
+        level_mean=source.level_mean,
+        level_components=source.level_components,
+        increment_mean=source.increment_mean,
+        increment_components=source.increment_components,
+    )
+    rebased.load_state_dict(
+        volgan_training._rebase_generator_state(
+            source.state_dict(),
+            current_state=rebased.state_dict(),
+            noise_dimension=config.noise_dimension,
+        )
+    )
+    with torch.no_grad():
+        condition_tensor = torch.as_tensor(data.conditions[:3], dtype=torch.float64)
+        latent_conditions = source.encode_full_conditions(condition_tensor)
+        noise = torch.randn(3, config.noise_dimension, dtype=torch.float64)
+        source_output = source.decode_full_targets(source(noise, latent_conditions))
+        rebased_output = rebased.decode_full_targets(rebased(noise, latent_conditions))
+    assert torch.allclose(source_output, rebased_output, atol=1.0e-11, rtol=1.0e-11)
+
+    later_data = volgan_examples_from_history(_history(61))
+    later = fit_volgan(
+        later_data,
+        model_config=config,
+        checkpoint_directory=tmp_path / "rolling",
+        train_config=VolganTrainConfig(
+            epochs=2,
+            gradient_matching_epochs=0,
+            batch_size=16,
+            checkpoint_epochs=1,
+            progress_seconds=300.0,
+        ),
+        warm_start_checkpoint=fit.checkpoint_path,
+        environment=environment,
+    )
+    assert torch.equal(later.generator.level_components, source.level_components)
+    assert torch.equal(later.generator.increment_components, source.increment_components)
 
 
 def _prefix_history(history: SanosFixedGridHistory, count: int) -> SanosFixedGridHistory:

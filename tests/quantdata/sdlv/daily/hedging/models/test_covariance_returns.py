@@ -263,3 +263,101 @@ def test_relative_replay_uses_dlv_and_not_sanos_history() -> None:
         rtol=0.0,
         atol=1.0e-10,
     )
+
+
+def test_relative_replay_can_use_sanos_instead_of_dlv_history() -> None:
+    origin_date = date(2022, 12, 27)
+    endpoint_date = date(2022, 12, 28)
+    origin = _market_day(
+        trading_date=origin_date,
+        expiry_dates=(
+            endpoint_date,
+            date(2022, 12, 29),
+            date(2022, 12, 30),
+        ),
+    )
+    endpoint = _market_day(
+        trading_date=endpoint_date,
+        expiry_dates=(
+            date(2022, 12, 29),
+            date(2022, 12, 30),
+        ),
+    )
+    transition = OneDayTransition(
+        origin=origin,
+        next_date=endpoint_date,
+        forward_adjusted_spot_return=0.01,
+        discount_factor=0.999,
+        forward_over_spot=1.001,
+    )
+    target = DailyDigitalTarget(
+        maturity_business_days=3,
+        right=OptionRight.PUT,
+        nms=-0.5,
+    )
+    sample = build_daily_digital_sample(
+        _SyntheticPanel(transition=transition, endpoint=endpoint),
+        origin_date=origin_date,
+        target=target,
+    )
+    coordinates = tuple(
+        RelativeOptionCoordinate.from_quote(quote) for quote in sample.hedge_quotes
+    )
+    observation = relative_return_observation(
+        transition,
+        endpoint=endpoint,
+        coordinates=coordinates,
+        targets=(target,),
+        price_source="sanos",
+    )
+    changed_dlv = relative_return_observation(
+        transition,
+        endpoint=replace(
+            endpoint,
+            dlv_raw_log_excess_dlvsq=np.log(
+                np.full_like(
+                    endpoint.dlv_raw_log_excess_dlvsq,
+                    0.35**2 - endpoint.minimum_dlvsq,
+                )
+            ),
+        ),
+        coordinates=coordinates,
+        targets=(target,),
+        price_source="sanos",
+    )
+    np.testing.assert_allclose(
+        changed_dlv.instrument_returns,
+        observation.instrument_returns,
+        rtol=0.0,
+        atol=0.0,
+    )
+    np.testing.assert_allclose(
+        changed_dlv.target_returns,
+        observation.target_returns,
+        rtol=0.0,
+        atol=0.0,
+    )
+    changed_sanos = relative_return_observation(
+        transition,
+        endpoint=replace(
+            endpoint,
+            sanos_kernel_total_variances=(
+                2.0 * endpoint.sanos_kernel_total_variances
+            ),
+        ),
+        coordinates=coordinates,
+        targets=(target,),
+        price_source="sanos",
+    )
+    assert not np.allclose(
+        changed_sanos.instrument_returns,
+        observation.instrument_returns,
+        rtol=0.0,
+        atol=1.0e-10,
+    )
+    assert not np.allclose(
+        changed_sanos.target_returns,
+        observation.target_returns,
+        rtol=0.0,
+        atol=1.0e-10,
+    )

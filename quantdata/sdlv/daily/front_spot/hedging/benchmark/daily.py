@@ -109,11 +109,10 @@ def evaluate_one_day_hedge(
     cap_hits: int = 0,
     diagnostics: dict[str, object] | None = None,
 ) -> HedgeSmokeResult:
-    """Apply common round-trip costs and origin-PV claim decomposition.
+    """Charge option entry costs and report formal exit cost separately.
 
     Options are cash settled and therefore incur only their opening half-spread.
-    The normalized spot hedge is opened at the origin and liquidated at the
-    terminal close, with one basis point charged on each transaction.
+    The normalized spot hedge trades at mid without a transaction cost.
     """
     spot_trade = execute_spot_trade(
         quantity_change=spot_action,
@@ -131,7 +130,6 @@ def evaluate_one_day_hedge(
     option_trade = execute_option_trade(sample.hedge_option, option_action)
     transaction_cost = (
         spot_trade.transaction_cost
-        + spot_close.transaction_cost
         + option_trade.transaction_cost
     )
     hedge_gain = (
@@ -166,7 +164,13 @@ def evaluate_one_day_hedge(
         objective_value=objective_value,
         converged=converged,
         cap_hits=cap_hits,
-        diagnostics={} if diagnostics is None else diagnostics,
+        diagnostics={
+            **({} if diagnostics is None else diagnostics),
+            "formal_exit_cost": spot_close.transaction_cost,
+            "formal_spot_exit_cost": spot_close.transaction_cost,
+            "formal_option_exit_cost": 0.0,
+            "cost_convention": "entry-only; formal exit excluded from P&L",
+        },
     )
 
 

@@ -491,15 +491,8 @@ def gromm2_weekly_training_data(
     claim_returns[:, -1] = claim_quantity * scenarios.terminal_claim_values_pv
     costs = np.concatenate(
         (
-            1.0e-4 * scenarios.spot_values_pv[:, :-1, None],
+            np.zeros_like(scenarios.spot_values_pv[:, :-1, None]),
             scenarios.option_half_spreads_pv[:, :-1],
-        ),
-        axis=-1,
-    )
-    terminal_costs = np.concatenate(
-        (
-            1.0e-4 * scenarios.spot_values_pv[:, -1, None],
-            scenarios.option_half_spreads_pv[:, -1],
         ),
         axis=-1,
     )
@@ -525,7 +518,7 @@ def gromm2_weekly_training_data(
         linear_transaction_costs=costs,
         initial_positions=generated.initial_positions,
         settles_next=settles,
-        terminal_transaction_costs=terminal_costs,
+        terminal_transaction_costs=None,
     )
 
 
@@ -763,7 +756,7 @@ def _weekly_features(
         (spot_values_pv[:, None], option_marks_pv), axis=1
     ) / spot_values_pv[:, None]
     instrument_spreads = np.concatenate(
-        (1.0e-4 * spot_values_pv[:, None], option_spreads_pv), axis=1
+        (np.zeros_like(spot_values_pv[:, None]), option_spreads_pv), axis=1
     ) / spot_values_pv[:, None]
     active = np.broadcast_to(
         np.concatenate(([True], option_alive)).astype(np.float64),

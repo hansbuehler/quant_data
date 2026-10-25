@@ -33,7 +33,7 @@ class BenchmarkConfig:
     evaluation_end: date = date(2025, 12, 31)
     maximum_option_business_dte: float = 5.0
     nms_range: tuple[float, float] = (-2.0, 2.0)
-    spot_cost_bps: float = 1.0
+    spot_cost_bps: float = 0.0
     dlv_factor_rank: int = 16
     greek_factor_rank: int = 8
     brownian_substeps_per_day: int = 8

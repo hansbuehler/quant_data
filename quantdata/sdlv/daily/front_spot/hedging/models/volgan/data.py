@@ -89,6 +89,18 @@ def build_volgan_training_data(
     return volgan_examples_from_history(history)
 
 
+def has_exact_one_day_target(panel: PublicHedgingPanel, origin_date: date) -> bool:
+    """Check that the latest VolGAN training and live-condition lags are one session."""
+    try:
+        index = panel.dates.index(origin_date)
+    except ValueError:
+        return False
+    return index >= 2 and all(
+        panel.observations.row(offset, named=True)["business_sessions_from_previous_observation"] == 1
+        for offset in range(index - 2, index + 1)
+    )
+
+
 def build_volgan_live_condition(
     panel: PublicHedgingPanel,
     *,

@@ -254,11 +254,11 @@ def weekly_scenario_accounting(
     spot_positions: NDArray[np.floating],
     option_positions: NDArray[np.floating],
     signed_claim_quantity: float,
-    spot_cost_bps: float = 1.0,
+    spot_cost_bps: float = 0.0,
     initial_spot_position: float = 0.0,
     initial_option_positions: NDArray[np.floating] | None = None,
 ) -> WeeklyScenarioAccounting:
-    """Apply predictable positions with exact turnover and liquidation costs."""
+    """Apply predictable positions with turnover costs and no exit charge."""
     if not math.isfinite(signed_claim_quantity):
         raise ValueError("signed claim quantity must be finite")
     if not math.isfinite(spot_cost_bps) or spot_cost_bps < 0.0:
@@ -343,18 +343,7 @@ def weekly_scenario_accounting(
             0.0,
             options[:, step],
         )
-    step_costs[:, -1] = (
-        np.abs(previous_spot)
-        * scenarios.spot_values_pv[:, -1]
-        * spot_cost_bps
-        * 1.0e-4
-        + np.sum(
-            np.abs(previous_options)
-            * scenarios.option_half_spreads_pv[:, -1]
-            * scenarios.option_alive[-1][None, :],
-            axis=1,
-        )
-    )
+    step_costs[:, -1] = 0.0
     hedge_gains = np.sum(step_gains, axis=1)
     transaction_costs = np.sum(step_costs, axis=1)
     signed_claim_values = (

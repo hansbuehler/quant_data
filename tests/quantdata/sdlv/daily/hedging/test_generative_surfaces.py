@@ -43,6 +43,16 @@ def test_short_expiry_recovers_interior_nodes_from_sanos_geometry() -> None:
     assert state.implied_volatilities[0, 4] > state.implied_volatilities[0, 5]
 
 
+def test_short_end_nms_grid_preserves_interior_one_day_smile() -> None:
+    panel = PublicHedgingPanel(PUBLIC_CANDIDATE)
+    grid = GenerativeSurfaceGrid.short_end_nms()
+    state = fixed_grid_sanos_day(panel.market_day(date(2023, 6, 20)), grid=grid)
+
+    assert state.log_implied_volatilities.shape == (7, 19)
+    assert np.count_nonzero(state.implied_vol_is_interior[0]) >= 17
+    assert np.all(np.isfinite(state.log_implied_volatilities))
+
+
 def test_fixed_grid_history_uses_only_trailing_public_dates() -> None:
     panel = PublicHedgingPanel(PUBLIC_CANDIDATE)
     history = build_sanos_fixed_grid_history(

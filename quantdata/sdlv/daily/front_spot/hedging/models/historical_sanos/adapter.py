@@ -115,6 +115,7 @@ def _run_historical_sanos_targets(
         option_quotes=hedge_quotes,
         targets=targets,
         count=config.rolling_observations,
+        price_source="sanos",
     )
     quantities = daily_claim_quantity_vector(targets, claim_quantities)
     return evaluate_historical_sanos_daily_book(
@@ -158,16 +159,8 @@ def evaluate_historical_sanos_daily_book(
         raise ValueError("historical SANOS claim quantities do not align")
     costs = np.asarray(
         [
-            2.0e-4,
-            *(
-                quote.half_spread
-                * (
-                    1.0
-                    if quote.contract.expiry_date == samples[0].transition.next_date
-                    else 2.0
-                )
-                for quote in hedge_quotes
-            ),
+            0.0,
+            *(quote.half_spread for quote in hedge_quotes),
         ],
         dtype=np.float64,
     )
@@ -223,6 +216,7 @@ def evaluate_historical_sanos_daily_book(
                     "objective": config.objective.value,
                     "risk_parameter": config.risk_parameter,
                     "mean_reduction": config.mean_reduction.value,
+                    "historical_return_price_source": "sanos",
                     "mean_reduction_scope": (
                         "one common instrument-only law per origin; targets "
                         "excluded from MEMM constraints"

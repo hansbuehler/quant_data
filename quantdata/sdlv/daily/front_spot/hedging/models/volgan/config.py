@@ -42,15 +42,27 @@ class VolganModelConfig:
         verify_inp(self.hidden_dimension > 0, lambda: "hidden_dimension must be positive")
 
     @property
+    def pca_rank(self) -> int | None:
+        return None
+
+    @property
     def surface_size(self) -> int:
-        return len(self.grid.expiries_y) * len(self.grid.strikes_over_forward)
+        return len(self.grid.expiries_y) * self.grid.strike_count
 
     @property
     def condition_dimension(self) -> int:
-        return 3 + self.surface_size
+        return 3 + (self.surface_size if self.pca_rank is None else self.pca_rank)
 
     @property
     def output_dimension(self) -> int:
+        return 1 + (self.surface_size if self.pca_rank is None else self.pca_rank)
+
+    @property
+    def full_condition_dimension(self) -> int:
+        return 3 + self.surface_size
+
+    @property
+    def full_output_dimension(self) -> int:
         return 1 + self.surface_size
 
     @property
@@ -58,6 +70,21 @@ class VolganModelConfig:
         if self.label.startswith("*"):
             return label_unique_filename48_8(self.label[1:])
         return named_unique_filename48_8(self.label, self)
+
+
+@version("1.0", dependencies=[VolganModelConfig])
+@dataclass(frozen=True, kw_only=True)
+class VolganPcaModelConfig(VolganModelConfig):
+    """Paper-inspired eight-PC adaptation, separate from published full VolGAN."""
+
+    pca_rank: int = 8
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        verify_inp(
+            1 <= self.pca_rank <= self.surface_size,
+            lambda: f"invalid VolGAN PCA rank {self.pca_rank!r}",
+        )
 
 
 @version("1.2")

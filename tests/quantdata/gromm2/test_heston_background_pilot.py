@@ -243,6 +243,46 @@ def test_warm_start_checkpoint_loads_parameters_and_validates_shapes(
         )
 
 
+def test_rolling_warm_start_shifts_date_codes_causally(tmp_path: Path) -> None:
+    checkpoint = tmp_path / "warm-start.npz"
+    np.savez(
+        checkpoint,
+        schema=np.asarray("gromm2-affine-jax-checkpoint-v1"),
+        identity=np.asarray("prior-fit"),
+        completed_epochs=np.asarray(20, dtype=np.int32),
+        parameter_mean=np.ones((2, 3), dtype=np.float32),
+        parameter_codes=np.arange(12, dtype=np.float32).reshape(4, 3),
+        parameter_loadings=np.ones((3, 2, 3), dtype=np.float32),
+    )
+    expected_shapes = {"mean": (2, 3), "codes": (4, 3), "loadings": (3, 2, 3)}
+    source_dates = np.asarray(
+        ["2024-03-25", "2024-03-26", "2024-03-27", "2024-03-28"]
+    )
+    target_dates = np.asarray(
+        ["2024-03-26", "2024-03-27", "2024-03-28", "2024-04-01"]
+    )
+    parameters, identity = _load_warm_start_parameters(
+        checkpoint,
+        expected_shapes=expected_shapes,
+        source_dates=source_dates,
+        target_dates=target_dates,
+    )
+    np.testing.assert_array_equal(
+        parameters["codes"],
+        np.asarray([[3, 4, 5], [6, 7, 8], [9, 10, 11], [9, 10, 11]]),
+    )
+    assert identity == "prior-fit:completed-epochs=20:rolled=2024-03-28->2024-04-01"
+    with pytest.raises(ValueError, match="date windows do not align"):
+        _load_warm_start_parameters(
+            checkpoint,
+            expected_shapes=expected_shapes,
+            source_dates=source_dates,
+            target_dates=np.asarray(
+                ["2024-03-25", "2024-03-27", "2024-03-28", "2024-04-01"]
+            ),
+        )
+
+
 def test_date_varying_kernel_bundle_interpolates_prices(tmp_path: Path) -> None:
     background = HestonBackground(
         mean_reversion=4.0,

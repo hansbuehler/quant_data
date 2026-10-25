@@ -14,6 +14,7 @@ import numpy as np
 from cdxcore.uniquehash import named_unique_filename48_8
 from filelock import FileLock
 
+from quantdata.biz_calendar import NMS
 from quantdata.sdlv.daily.front_spot.hedging.models.checkpointing import (
     CHECKPOINT_FORMAT_VERSION,
     file_sha256,
@@ -32,6 +33,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.volgan.model import (
     VolganDiscriminator,
     VolganGenerator,
 )
+from quantdata.sdlv.daily.front_spot.hedging.models.volgan.pca import VolganSurfacePca
 from quantdata.torch import BaseEnvironment, torch
 
 
@@ -53,6 +55,8 @@ class VolganTrainingResult:
     warm_start_sha256: str | None
     training_end_date: date
     converged: bool
+    level_pca_explained_fraction: float | None = None
+    increment_pca_explained_fraction: float | None = None
 
 
 def fit_volgan(
@@ -67,9 +71,9 @@ def fit_volgan(
     environment: BaseEnvironment | None = None,
 ) -> VolganTrainingResult:
     """Fit the published conditional GAN with exact restart state."""
-    if data.conditions.shape[1] != model_config.condition_dimension:
+    if data.conditions.shape[1] != model_config.full_condition_dimension:
         raise ValueError("VolGAN condition dimension does not match model config")
-    if data.targets.shape[1] != model_config.output_dimension:
+    if data.targets.shape[1] != model_config.full_output_dimension:
         raise ValueError("VolGAN target dimension does not match model config")
     if environment is None:
         environment = BaseEnvironment(precision=64, device="cpu", debug=False)
@@ -133,14 +137,53 @@ def _fit_locked(
     )
     if train_count < 2:
         raise ValueError("VolGAN split has fewer than two training rows")
-    condition_mean = np.mean(data.conditions[:train_count], axis=0)
+    if model_config.pca_rank is None:
+        surface_pca = None
+    elif warm_start_checkpoint is None:
+        surface_pca = VolganSurfacePca.fit(
+            conditions=data.conditions,
+            targets=data.targets,
+            train_count=train_count,
+            rank=model_config.pca_rank,
+        )
+    else:
+        source = torch.load(warm_start_checkpoint, map_location="cpu", weights_only=False)
+        source_state = source.get("generator", {})
+        required = (
+            "level_mean",
+            "level_components",
+            "increment_mean",
+            "increment_components",
+        )
+        if any(name not in source_state for name in required):
+            raise ValueError("VolGAN PCA warm start lacks a frozen source basis")
+        if (
+            source_state["level_components"].shape != (model_config.pca_rank, model_config.surface_size)
+            or source_state["increment_components"].shape != (model_config.pca_rank, model_config.surface_size)
+        ):
+            raise ValueError("VolGAN PCA warm-start basis has incompatible geometry")
+        surface_pca = VolganSurfacePca.from_frozen_basis(
+            conditions=data.conditions,
+            targets=data.targets,
+            train_count=train_count,
+            **{name: source_state[name].cpu().numpy() for name in required},
+        )
+    encoded_conditions = (
+        data.conditions
+        if surface_pca is None
+        else surface_pca.encode_conditions(data.conditions)
+    )
+    encoded_targets = (
+        data.targets if surface_pca is None else surface_pca.encode_targets(data.targets)
+    )
+    condition_mean = np.mean(encoded_conditions[:train_count], axis=0)
     condition_scale = np.maximum(
-        np.std(data.conditions[:train_count], axis=0, ddof=0),
+        np.std(encoded_conditions[:train_count], axis=0, ddof=0),
         1.0e-8,
     )
-    target_mean = np.mean(data.targets[:train_count], axis=0)
+    target_mean = np.mean(encoded_targets[:train_count], axis=0)
     target_scale = np.maximum(
-        np.std(data.targets[:train_count], axis=0, ddof=0),
+        np.std(encoded_targets[:train_count], axis=0, ddof=0),
         1.0e-8,
     )
     torch.manual_seed(train_config.seed)
@@ -169,6 +212,19 @@ def _fit_locked(
             dtype=environment.fdtype,
             device=environment.device,
         ),
+        **(
+            {}
+            if surface_pca is None
+            else {
+                name: torch.as_tensor(value, dtype=environment.fdtype, device=environment.device)
+                for name, value in (
+                    ("level_mean", surface_pca.level_mean),
+                    ("level_components", surface_pca.level_components),
+                    ("increment_mean", surface_pca.increment_mean),
+                    ("increment_components", surface_pca.increment_components),
+                )
+            }
+        ),
     )
     discriminator = VolganDiscriminator(environment, config=model_config)
     optimizer_class = (
@@ -183,12 +239,17 @@ def _fit_locked(
         lr=train_config.discriminator_learning_rate,
     )
     conditions = torch.as_tensor(
-        data.conditions,
+        encoded_conditions,
         dtype=environment.fdtype,
         device=environment.device,
     )
     targets = torch.as_tensor(
-        data.targets,
+        encoded_targets,
+        dtype=environment.fdtype,
+        device=environment.device,
+    )
+    full_conditions = torch.as_tensor(
+        data.conditions,
         dtype=environment.fdtype,
         device=environment.device,
     )
@@ -308,6 +369,8 @@ def _fit_locked(
             standardized_conditions=standardized_conditions,
             standardized_targets=standardized_targets,
             raw_conditions=conditions,
+            full_conditions=full_conditions,
+            surface_pca=surface_pca,
             train_count=train_count,
             model_config=model_config,
             completed_epochs=start_epoch,
@@ -329,6 +392,7 @@ def _fit_locked(
             indices = permutation[batch_start : batch_start + train_config.batch_size]
             condition_batch = standardized_conditions[indices]
             raw_condition_batch = conditions[indices]
+            full_condition_batch = full_conditions[indices]
             real_batch = standardized_targets[indices]
             noise = torch.randn(
                 (len(indices), model_config.noise_dimension),
@@ -366,7 +430,7 @@ def _fit_locked(
             )
             moneyness_penalty, maturity_penalty = _surface_penalties(
                 generator,
-                raw_conditions=raw_condition_batch,
+                raw_conditions=full_condition_batch,
                 standardized_targets=fake_batch,
                 model_config=model_config,
             )
@@ -399,6 +463,7 @@ def _fit_locked(
             standardized_conditions=standardized_conditions[train_count:],
             standardized_targets=standardized_targets[train_count:],
             raw_conditions=conditions[train_count:],
+            full_conditions=full_conditions[train_count:],
             model_config=model_config,
             seed=train_config.seed,
             moneyness_weight=moneyness_weight,
@@ -484,6 +549,8 @@ def _fit_locked(
         standardized_conditions=standardized_conditions,
         standardized_targets=standardized_targets,
         raw_conditions=conditions,
+        full_conditions=full_conditions,
+        surface_pca=surface_pca,
         train_count=train_count,
         model_config=model_config,
         completed_epochs=train_config.epochs,
@@ -505,16 +572,27 @@ def _surface_penalties(
     standardized_targets: torch.Tensor,
     model_config: VolganModelConfig,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    decoded = generator.decode(standardized_targets)
+    decoded = generator.decode_full_targets(standardized_targets)
     current = raw_conditions[:, 3:].reshape(
         -1,
         len(model_config.grid.expiries_y),
-        len(model_config.grid.strikes_over_forward),
+        model_config.grid.strike_count,
     )
     next_surface = current + decoded[:, 1:].reshape_as(current)
-    strike_grid = next_surface.new_tensor(model_config.grid.strikes_over_forward).log()
     expiry_grid = next_surface.new_tensor(model_config.grid.expiries_y)
-    strike_slopes = torch.diff(next_surface, dim=-1) / torch.diff(strike_grid)[None, None]
+    if model_config.grid.nms_nodes is None:
+        strike_grid = next_surface.new_tensor(model_config.grid.strikes_over_forward).log()
+        strike_steps = torch.diff(strike_grid)[None, None]
+    else:
+        nodes = next_surface.new_tensor(model_config.grid.nms_nodes)
+        atm_index = model_config.grid.nms_nodes.index(0.0)
+        atm_volatility = torch.exp(next_surface[..., atm_index])
+        scale = torch.sqrt(
+            (NMS.SCALE**2 * NMS.EPS + atm_volatility.square() * expiry_grid[None, :])
+            / (NMS.EPS + 1.0)
+        )
+        strike_steps = torch.diff(nodes)[None, None, :] * scale[..., None]
+    strike_slopes = torch.diff(next_surface, dim=-1) / strike_steps
     expiry_slopes = torch.diff(next_surface, dim=-2) / torch.diff(expiry_grid)[None, :, None]
     return torch.mean(strike_slopes.square()), torch.mean(expiry_slopes.square())
 
@@ -537,6 +615,7 @@ def _validation_loss(
     standardized_conditions: torch.Tensor,
     standardized_targets: torch.Tensor,
     raw_conditions: torch.Tensor,
+    full_conditions: torch.Tensor,
     model_config: VolganModelConfig,
     seed: int,
     moneyness_weight: float,
@@ -561,7 +640,7 @@ def _validation_loss(
         )
         moneyness, maturity = _surface_penalties(
             generator,
-            raw_conditions=raw_conditions,
+            raw_conditions=full_conditions,
             standardized_targets=fake,
             model_config=model_config,
         )
@@ -585,6 +664,8 @@ def _training_result(
     standardized_conditions: torch.Tensor,
     standardized_targets: torch.Tensor,
     raw_conditions: torch.Tensor,
+    full_conditions: torch.Tensor,
+    surface_pca: VolganSurfacePca | None,
     train_count: int,
     model_config: VolganModelConfig,
     completed_epochs: int,
@@ -631,6 +712,7 @@ def _training_result(
         standardized_conditions=standardized_conditions[train_count:],
         standardized_targets=standardized_targets[train_count:],
         raw_conditions=raw_conditions[train_count:],
+        full_conditions=full_conditions[train_count:],
         model_config=model_config,
         seed=20_261_012,
         moneyness_weight=moneyness_weight,
@@ -651,6 +733,12 @@ def _training_result(
         warm_start_sha256=warm_start_sha256,
         training_end_date=training_end_date,
         converged=converged,
+        level_pca_explained_fraction=(
+            None if surface_pca is None else surface_pca.level_explained_fraction
+        ),
+        increment_pca_explained_fraction=(
+            None if surface_pca is None else surface_pca.increment_explained_fraction
+        ),
     )
 
 
@@ -772,6 +860,15 @@ def _load_rolling_warm_start(
         current_state=generator.state_dict(),
         noise_dimension=generator.config.noise_dimension,
     )
+    if generator.config.pca_rank is not None:
+        for name in (
+            "level_mean",
+            "level_components",
+            "increment_mean",
+            "increment_components",
+        ):
+            if not torch.equal(generator_state[name], generator.state_dict()[name]):
+                raise ValueError(f"VolGAN PCA warm-start basis changed: {name}")
     discriminator_state = _rebase_discriminator_state(
         payload["discriminator"],
         source_generator_state=payload["generator"],

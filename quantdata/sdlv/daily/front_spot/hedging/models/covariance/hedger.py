@@ -101,8 +101,7 @@ def fit_covariance_action(
 ) -> CovarianceAction:
     """Fit the independent rolling hedge without a future-bearing input.
 
-    The one-day spot position pays one basis point when opened and one basis
-    point when liquidated. The expiring option is cash settled and pays only
+    Spot trades at mid. The expiring option is cash settled and pays only
     its opening half-spread.
     """
     if len(training_samples) != config.rolling_observations:
@@ -120,7 +119,7 @@ def fit_covariance_action(
     if not np.isfinite(current_option_half_spread) or current_option_half_spread < 0.0:
         raise ValueError("current_option_half_spread must be finite and non-negative")
     linear_transaction_costs = np.asarray(
-        [2.0e-4, current_option_half_spread], dtype=np.float64
+        [0.0, current_option_half_spread], dtype=np.float64
     )
     fit = cost_lasso_minimum_variance_hedge(
         instrument_returns=instrument_returns,

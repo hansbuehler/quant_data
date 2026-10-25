@@ -6,9 +6,13 @@ Volatility Surface Generation and Data-Driven Hedging* (2026). The benchmark
 and reports retain the published model names and stable internal identities;
 "Renyuan" is not a separate duplicate model.
 
-- **Inputs:** 22-day exact-session sequences reconstructed solely from released
-  SANOS states. Each day has a log-IV channel and the released normalized
-  forward log return broadcast over the common 9-by-11 grid. The first 21 days
+- **Inputs:** 22-day exact-session sequences reconstructed from SANOS states.
+  Each day has a log-IV channel and the normalized forward log return broadcast
+  over a common surface grid. The published-grid benchmark uses nine expiries
+  and eleven fixed forward-moneyness strikes; the short-end adaptation uses
+  1, 2, 3, 4, 5, 7, and 10 business days and nineteen fixed NMS
+  coordinates from -3.5 to 3.5. Their actual strikes float with that day's
+  expiry-specific SANOS ATM volatility. The first 21 days
   condition the generated day 22.
 - **Measure:** historical `P`; neither diffusion variant is risk-neutral.
 - **Price:** generated states define scenario values. Observed and off-grid
@@ -27,15 +31,28 @@ and reports retain the published model names and stable internal identities;
 - **Training:** published settings use batch size 256, learning rate `7e-5`,
   weight decay 0.01, 1,600 warm-up steps, cosine decay, 3,000 epochs, EMA 0.995,
   and CUDA mixed precision. The newest 20% of sequences is held out; channel
-  normalization is fitted on training sequences only.
+  normalization is fitted on training sequences only. Rolling fits retain the
+  initial checkpoint's normalization because the DDPM noise law is defined in
+  normalized coordinates. Rebasing normalization can preserve a deterministic
+  denoiser map while changing the generated distribution.
 - **Artifacts:** version-checked restartable checkpoints store model, EMA,
   optimizer, scheduler, scaler, CPU/CUDA RNG states, epoch, global step, and
-  validation history. Changed validation splits are incompatible; other
+  validation history. Dated rolling checkpoints record the source-fixed
+  normalization policy and reject older rebased checkpoints. Changed validation
+  splits are incompatible; other
   changed training controls require an explicit warm-start opt-in and
   additional epochs.
-- **Data adaptation:** the published licensed price/IV files are deliberately
-  not used. The fixed surface is reconstructed from the distributable SANOS
-  state on forward-moneyness coordinates.
+  Retained daily fits also write `generated-scenarios/YYYY-MM-DD.npz` below
+  their external checkpoint directory. Each artifact contains the sampled
+  forward log returns and next-day log-IV surfaces, together with origin and
+  forecast dates, dataset/config/dated-checkpoint hashes, source-checkpoint
+  hashes, and sampling seed. The daily record authenticates the artifact SHA,
+  allowing later hedge objectives to reuse exactly the same paths.
+- **Data adaptation:** the published price/IV files are not used in this
+  benchmark. The surface is reconstructed from the SANOS state; this changes
+  the training distribution relative to the published study. The generated
+  spot and IV process omits stochastic forward-curve and discount-factor moves,
+  which can materially affect next-day fixed-strike digital marks.
 
 The CPU smoke trains on the public panel through 2023-01-17, hedges the common
 ATM one-day digital, emits `hedging-smoke-v2`, and checks a committed fixture:

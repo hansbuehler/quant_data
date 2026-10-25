@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import time
 from dataclasses import dataclass
 
 import numpy as np
@@ -59,7 +61,7 @@ def sample_diffusion_transitions(
         config.sequence_length - 1,
         config.channel_count,
         len(config.grid.expiries_y),
-        len(config.grid.strikes_over_forward),
+        config.grid.strike_count,
     )
     if observed.shape != expected:
         raise ValueError(f"observed diffusion sequence must have shape {expected}")
@@ -99,7 +101,7 @@ def _sample_diffusion_next_states(
         config.sequence_length - 1,
         config.channel_count,
         len(config.grid.expiries_y),
-        len(config.grid.strikes_over_forward),
+        config.grid.strike_count,
     )
     if observed.ndim != 5 or observed.shape[1:] != expected_tail:
         raise ValueError(
@@ -135,7 +137,7 @@ def _sample_diffusion_next_states(
                 config.sequence_length,
                 config.channel_count,
                 len(config.grid.expiries_y),
-                len(config.grid.strikes_over_forward),
+                config.grid.strike_count,
             ),
             generator=generator,
             dtype=model.fdtype,
@@ -148,6 +150,8 @@ def _sample_diffusion_next_states(
         )
         alphas = 1.0 - betas
         cumulative = torch.cumprod(alphas, dim=0)
+        sampling_started = time.monotonic()
+        last_progress = sampling_started
         for step in range(config.diffusion_steps - 1, -1, -1):
             alpha_bar = cumulative[step]
             values[:, :-1] = (
@@ -185,6 +189,28 @@ def _sample_diffusion_next_states(
                 )
             else:
                 values = mean
+            now = time.monotonic()
+            completed_steps = config.diffusion_steps - step
+            if now - last_progress >= 240.0 or step == 0:
+                elapsed = now - sampling_started
+                print(
+                    json.dumps(
+                        {
+                            "stage": "diffusion-sampling",
+                            "completed_steps": completed_steps,
+                            "total_steps": config.diffusion_steps,
+                            "paths": path_count,
+                            "elapsed_seconds": round(elapsed, 1),
+                            "eta_seconds": round(
+                                elapsed * (config.diffusion_steps - completed_steps)
+                                / completed_steps,
+                                1,
+                            ),
+                        }
+                    ),
+                    flush=True,
+                )
+                last_progress = now
         values[:, :-1] = observed_normalized
         return np.asarray(
             model.denormalize(values)[:, -1].cpu().numpy(),

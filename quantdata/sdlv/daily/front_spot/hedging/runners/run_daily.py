@@ -26,6 +26,9 @@ from quantdata.sdlv.daily.front_spot.hedging.benchmark.sizing import (
     load_authenticated_daily_target_notionals,
     load_or_calibrate_daily_target_notionals,
 )
+from quantdata.sdlv.daily.front_spot.hedging.data.generative_surfaces import (
+    GenerativeSurfaceGrid,
+)
 from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
     PublicHedgingPanel,
     default_public_candidate_path,
@@ -84,12 +87,22 @@ from quantdata.sdlv.daily.front_spot.hedging.models.sanos_lv.adapter import (
     run_sanos_lv_daily_book,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.sanos_lv.config import SanosLvConfig
+from quantdata.sdlv.daily.front_spot.hedging.models.sanos_parametric.adapter import (
+    run_sanos_parametric_daily_book,
+)
+from quantdata.sdlv.daily.front_spot.hedging.models.sanos_parametric.config import (
+    SanosParametricConfig,
+)
 from quantdata.sdlv.daily.front_spot.hedging.models.volgan.adapter import (
     run_volgan_daily_book,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.volgan.config import (
     VolganModelConfig,
+    VolganPcaModelConfig,
     VolganTrainConfig,
+)
+from quantdata.sdlv.daily.front_spot.hedging.models.volgan.data import (
+    has_exact_one_day_target,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.config import (
     GeneratedDailyRunConfig,
@@ -101,6 +114,7 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
     DailyEvaluationSpec,
     dataset_manifest_sha256,
     eligible_daily_origins,
+    read_daily_record,
     run_daily_evaluation,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.daily_results import (
@@ -112,6 +126,9 @@ from quantdata.sdlv.daily.front_spot.hedging.runners.fit_rolling_gromm2_range im
 from quantdata.sdlv.daily.front_spot.hedging.runners.progress import (
     EvaluationProgressHeartbeat,
 )
+from quantdata.sdlv.daily.front_spot.hedging.runners.volgan_rolling_chain import (
+    VolganRollingChain,
+)
 from quantdata.torch import BaseEnvironment
 
 
@@ -122,9 +139,11 @@ def main() -> None:
         "--model",
         choices=(
             "sanos-lv",
+            "sanos-parametric",
             "bs-greeks",
             "covariance",
             "covariance-pca",
+            "sanos-normal-statistical",
             "historical-sanos",
             "gromm",
             "gromm-q-dlv-vega",
@@ -135,6 +154,8 @@ def main() -> None:
         required=True,
     )
     parser.add_argument("--dataset", type=Path, default=default_public_candidate_path())
+    parser.add_argument("--surface-grid", choices=("published", "short-end-nms"), default="published")
+    parser.add_argument("--volgan-pca-rank", type=int)
     parser.add_argument("--dataset-manifest-sha256")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--label")
@@ -160,6 +181,7 @@ def main() -> None:
     parser.add_argument("--base-checkpoint-sha256")
     parser.add_argument("--warm-start-checkpoint", type=Path)
     parser.add_argument("--warm-start-checkpoint-sha256")
+    parser.add_argument("--rolling-warm-start", action="store_true")
     parser.add_argument("--observation-count", type=int, default=252)
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--volgan-optimizer", choices=("rmsprop", "adam"))
@@ -256,6 +278,22 @@ def main() -> None:
         and arguments.dataset_manifest_sha256 != manifest_sha256
     ):
         raise ValueError("public dataset manifest changed after matrix construction")
+    if arguments.rolling_warm_start:
+        if arguments.model != "volgan" or arguments.warm_start_checkpoint is None:
+            parser.error("--rolling-warm-start requires VolGAN and an initial checkpoint")
+        if checkpoint_directory is None:
+            parser.error("--rolling-warm-start requires a checkpoint directory")
+        initial_sha256 = _authenticated_file_fingerprint(
+            arguments.warm_start_checkpoint,
+            expected_sha256=arguments.warm_start_checkpoint_sha256,
+            label="initial VolGAN checkpoint",
+        )
+        arguments.volgan_rolling_chain = VolganRollingChain(
+            initial_checkpoint=arguments.warm_start_checkpoint,
+            initial_sha256=initial_sha256,
+            checkpoint_directory=checkpoint_directory,
+            dataset_manifest_sha256=manifest_sha256,
+        )
     model, measure, rolling_observations, config, run_book = _build_model(
         arguments,
         claim_quantities=claim_quantities,
@@ -298,11 +336,27 @@ def main() -> None:
         require_convergence=not arguments.allow_nonconvergence,
     )
     started = time.monotonic()
-    origin_count = len(eligible_daily_origins(panel, spec=spec))
+    origin_filter = has_exact_one_day_target if arguments.rolling_warm_start else None
+    origin_count = len(eligible_daily_origins(panel, spec=spec, origin_filter=origin_filter))
     if arguments.stop_after is not None:
         origin_count = min(origin_count, arguments.stop_after)
 
     def progress(index: int, total: int, origin_date: date, reused: bool) -> None:
+        if arguments.rolling_warm_start:
+            _carry_volgan_ineligible_dates(
+                arguments.volgan_rolling_chain,
+                panel=panel,
+                output=output,
+                first_date=arguments.start,
+                next_origin=origin_date,
+                observation_count=arguments.observation_count,
+            )
+            results = read_daily_record(
+                output / "records" / f"{origin_date.isoformat()}.json",
+                spec=spec,
+                origin_date=origin_date,
+            )
+            arguments.volgan_rolling_chain.advance(origin_date, results)
         heartbeat.update(index, last_unit=origin_date.isoformat())
         if index != total and index % arguments.progress_every != 0:
             return
@@ -328,6 +382,17 @@ def main() -> None:
             output_directory=output,
             progress=progress,
             stop_after=arguments.stop_after,
+            origin_filter=origin_filter,
+        )
+    if arguments.rolling_warm_start and arguments.stop_after is None:
+        _carry_volgan_ineligible_dates(
+            arguments.volgan_rolling_chain,
+            panel=panel,
+            output=output,
+            first_date=arguments.start,
+            next_origin=arguments.end,
+            observation_count=arguments.observation_count,
+            include_next_origin=True,
         )
     print(json.dumps(summary.to_dict(), indent=2, sort_keys=True), flush=True)
     if arguments.stop_after is None and not arguments.skip_results:
@@ -395,6 +460,32 @@ def _build_model(
                 claim_quantities=claim_quantities,
             ),
         )
+    if arguments.model == "sanos-parametric":
+        config = SanosParametricConfig(
+            label=label,
+            greeks=SanosLvConfig(
+                label=label,
+                position_cap=(
+                    default_position_cap
+                    if arguments.position_cap is None
+                    else arguments.position_cap
+                ),
+            ),
+            risk_parameter=arguments.risk_parameter,
+        )
+        return (
+            "sanos-parametric",
+            "historical-P-factor-covariance",
+            config.greeks.rolling_factors.window_sessions,
+            config,
+            lambda panel, origin: run_sanos_parametric_daily_book(
+                panel,
+                target_maturity=getattr(arguments, "target_maturity", None),
+                origin_date=origin,
+                config=config,
+                claim_quantities=claim_quantities,
+            ),
+        )
     if arguments.model == "bs-greeks":
         config = BsGreeksConfig(
             label=label,
@@ -417,7 +508,11 @@ def _build_model(
                 claim_quantities=claim_quantities,
             ),
         )
-    if arguments.model in {"covariance", "covariance-pca"}:
+    if arguments.model in {
+        "covariance",
+        "covariance-pca",
+        "sanos-normal-statistical",
+    }:
         try:
             objective = CovarianceObjective(arguments.objective)
         except ValueError as error:
@@ -438,12 +533,21 @@ def _build_model(
             spot_residual_pca_rank=(
                 8 if arguments.model == "covariance-pca" else None
             ),
+            return_price_source=(
+                "sanos"
+                if arguments.model == "sanos-normal-statistical"
+                else "dlv"
+            ),
         )
         return (
             (
-                "robust-covariance-pca"
-                if arguments.model == "covariance-pca"
-                else "robust-covariance"
+                "sanos-normal-statistical"
+                if arguments.model == "sanos-normal-statistical"
+                else (
+                    "robust-covariance-pca"
+                    if arguments.model == "covariance-pca"
+                    else "robust-covariance"
+                )
             ),
             "historical-P",
             config.rolling_observations,
@@ -632,8 +736,19 @@ def _build_model(
     if arguments.model == "volgan":
         if checkpoint_directory is None:
             raise ValueError("VolGAN requires a checkpoint directory")
-        model_config = VolganModelConfig(
-            label=getattr(arguments, "model_label", None) or label
+        grid = (
+                GenerativeSurfaceGrid.short_end_nms()
+                if getattr(arguments, "surface_grid", "published") == "short-end-nms"
+                else GenerativeSurfaceGrid()
+        )
+        model_config = (
+            VolganModelConfig(label=getattr(arguments, "model_label", None) or label, grid=grid)
+            if getattr(arguments, "volgan_pca_rank", None) is None
+            else VolganPcaModelConfig(
+                label=getattr(arguments, "model_label", None) or label,
+                grid=grid,
+                pca_rank=arguments.volgan_pca_rank,
+            )
         )
         train_defaults = VolganTrainConfig()
         train_config = VolganTrainConfig(
@@ -703,6 +818,7 @@ def _build_model(
             device=arguments.device,
             precision=precision,
             warm_start_checkpoint_sha256=warm_start_fingerprint,
+            rolling_warm_start=arguments.rolling_warm_start,
         )
         environment = BaseEnvironment(
             precision=precision,
@@ -723,9 +839,19 @@ def _build_model(
                 observation_count=arguments.observation_count,
                 train_config=train_config,
                 hedge_config=hedge_config,
-                warm_start_checkpoint=arguments.warm_start_checkpoint,
-                expected_warm_start_sha256=warm_start_fingerprint,
-                retain_fit_checkpoint=arguments.retain_fit_checkpoints,
+                warm_start_checkpoint=(
+                    arguments.volgan_rolling_chain.source(origin)[0]
+                    if arguments.rolling_warm_start
+                    else arguments.warm_start_checkpoint
+                ),
+                expected_warm_start_sha256=(
+                    arguments.volgan_rolling_chain.source(origin)[1]
+                    if arguments.rolling_warm_start
+                    else warm_start_fingerprint
+                ),
+                retain_fit_checkpoint=(
+                    arguments.rolling_warm_start or arguments.retain_fit_checkpoints
+                ),
                 environment=environment,
                 claim_quantities=claim_quantities,
             ),
@@ -741,6 +867,11 @@ def _build_model(
         model_config = DiffusionModelConfig(
             label=getattr(arguments, "model_label", None) or label,
             variant=variant,
+            grid=(
+                GenerativeSurfaceGrid.short_end_nms()
+                if getattr(arguments, "surface_grid", "published") == "short-end-nms"
+                else GenerativeSurfaceGrid()
+            ),
         )
         train_defaults = DiffusionTrainConfig()
         train_config = DiffusionTrainConfig(
@@ -841,6 +972,11 @@ def _build_model(
                 expected_base_checkpoint_sha256=base_fingerprint,
                 expected_warm_start_sha256=warm_start_fingerprint,
                 retain_fit_checkpoint=arguments.retain_fit_checkpoints,
+                scenario_artifact_directory=(
+                    checkpoint_directory / "generated-scenarios"
+                    if arguments.retain_fit_checkpoints
+                    else None
+                ),
                 environment=environment,
                 claim_quantities=claim_quantities,
             ),
@@ -877,6 +1013,56 @@ def _build_model(
             claim_quantities=claim_quantities,
         ),
     )
+
+
+def _carry_volgan_ineligible_dates(
+    chain: VolganRollingChain,
+    *,
+    panel: PublicHedgingPanel,
+    output: Path,
+    first_date: date,
+    next_origin: date,
+    observation_count: int,
+    include_next_origin: bool = False,
+) -> None:
+    """Record dates without a valid one-session target, without updating weights."""
+    for candidate in panel.dates:
+        if candidate < first_date or candidate <= chain.last_processed_date:
+            continue
+        if candidate > next_origin or (
+            candidate == next_origin and not include_next_origin
+        ):
+            break
+        try:
+            panel.prior_one_day_origins(candidate, count=observation_count)
+            panel.one_day_transition(candidate)
+        except (IndexError, KeyError, ValueError) as error:
+            reason = f"{type(error).__name__}: {error}"
+        else:
+            if has_exact_one_day_target(panel, candidate):
+                raise RuntimeError(f"eligible VolGAN rolling date was skipped: {candidate}")
+            reason = "latest VolGAN spot/IV target lacks three exact one-session lags"
+        record = {
+            "origin_date": candidate.isoformat(),
+            "reason": reason,
+            "carried_checkpoint": str(chain.checkpoint),
+            "carried_sha256": chain.sha256,
+        }
+        path = output / "gaps" / f"{candidate.isoformat()}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists():
+            if json.loads(path.read_text(encoding="utf-8")) != record:
+                raise ValueError(f"VolGAN rolling no-update gap changed: {path}")
+        else:
+            temporary = path.with_suffix(path.suffix + ".tmp")
+            temporary.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            temporary.replace(path)
+        chain.carry_gap(candidate)
+        print(
+            f"VolGAN no-update gap origin={candidate} "
+            f"source_sha256={chain.sha256} reason={reason}",
+            flush=True,
+        )
 
 
 def _is_generated_model(model: str) -> bool:

@@ -35,7 +35,7 @@ def sample_diffusion_weekly_paths(
         config.sequence_length - 1,
         config.channel_count,
         len(config.grid.expiries_y),
-        len(config.grid.strikes_over_forward),
+        config.grid.strike_count,
     )
     if live.sequence.shape != expected:
         raise ValueError("diffusion weekly live context has the wrong shape")
@@ -59,7 +59,7 @@ def sample_diffusion_weekly_paths(
             path_count,
             step_count,
             len(config.grid.expiries_y),
-            len(config.grid.strikes_over_forward),
+            config.grid.strike_count,
         ),
         dtype=np.float64,
     )

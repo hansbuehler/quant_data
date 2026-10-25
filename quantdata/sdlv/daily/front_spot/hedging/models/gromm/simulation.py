@@ -161,7 +161,7 @@ def generate_gromm_daily_scenarios(
     instrument_model_prices = np.concatenate(([1.0], option_model_prices))
     linear_costs = np.asarray(
         [
-            1.0e-4,
+            0.0,
             *(quote.half_spread for quote in sample.hedge_quotes),
         ],
         dtype=np.float64,
@@ -334,7 +334,7 @@ def _terminal_transaction_costs(
     )
     discount = origin_day.discount_at_business_dte(1)
     costs = np.zeros((path_count, 1 + len(quotes)), dtype=np.float64)
-    costs[:, 0] = 1.0e-4 * discount * spot_over_origin
+    costs[:, 0] = 0.0
     for option_index, quote in enumerate(quotes, start=1):
         if settles_next[option_index]:
             continue

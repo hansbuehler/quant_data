@@ -20,6 +20,10 @@ class VolganGenerator(BaseModel):
         condition_scale: torch.Tensor,
         target_mean: torch.Tensor,
         target_scale: torch.Tensor,
+        level_mean: torch.Tensor | None = None,
+        level_components: torch.Tensor | None = None,
+        increment_mean: torch.Tensor | None = None,
+        increment_components: torch.Tensor | None = None,
     ) -> None:
         super().__init__(env)
         self.config = config
@@ -27,6 +31,16 @@ class VolganGenerator(BaseModel):
         self.register_buffer("condition_scale", condition_scale.detach().clone())
         self.register_buffer("target_mean", target_mean.detach().clone())
         self.register_buffer("target_scale", target_scale.detach().clone())
+        if config.pca_rank is not None:
+            if any(
+                value is None
+                for value in (level_mean, level_components, increment_mean, increment_components)
+            ):
+                raise ValueError("PCA VolGAN requires both fitted surface bases")
+            self.register_buffer("level_mean", level_mean.detach().clone())
+            self.register_buffer("level_components", level_components.detach().clone())
+            self.register_buffer("increment_mean", increment_mean.detach().clone())
+            self.register_buffer("increment_components", increment_components.detach().clone())
         self.linear1 = tnn.Linear(
             config.condition_dimension + config.noise_dimension,
             config.hidden_dimension,
@@ -63,6 +77,23 @@ class VolganGenerator(BaseModel):
     def decode(self, standardized_targets: torch.Tensor) -> torch.Tensor:
         """Map generated standardized targets back to economic units."""
         return self.target_mean + self.target_scale * standardized_targets
+
+    def encode_full_conditions(self, full_conditions: torch.Tensor) -> torch.Tensor:
+        """Project a full live log-IV surface onto frozen train-only coordinates."""
+        if full_conditions.shape[-1] != self.config.full_condition_dimension:
+            raise ValueError("VolGAN full condition has the wrong dimension")
+        if self.config.pca_rank is None:
+            return full_conditions
+        scores = (full_conditions[..., 3:] - self.level_mean) @ self.level_components.T
+        return torch.cat((full_conditions[..., :3], scores), dim=-1)
+
+    def decode_full_targets(self, standardized_targets: torch.Tensor) -> torch.Tensor:
+        """Recover a full log-IV increment for pricing and smoothness penalties."""
+        decoded = self.decode(standardized_targets)
+        if self.config.pca_rank is None:
+            return decoded
+        increments = self.increment_mean + decoded[..., 1:] @ self.increment_components
+        return torch.cat((decoded[..., :1], increments), dim=-1)
 
 
 class VolganDiscriminator(BaseModel):

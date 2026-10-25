@@ -82,19 +82,12 @@ def run_covariance_daily_book(
         option_quotes=hedge_quotes,
         targets=targets,
         count=config.rolling_observations,
+        price_source=config.return_price_source,
     )
     costs = np.asarray(
         [
-            2.0e-4,
-            *(
-                quote.half_spread
-                * (
-                    1.0
-                    if quote.contract.expiry_date == samples[0].transition.next_date
-                    else 2.0
-                )
-                for quote in hedge_quotes
-            ),
+            0.0,
+            *(quote.half_spread for quote in hedge_quotes),
         ],
         dtype=np.float64,
     )
@@ -123,9 +116,13 @@ def run_covariance_daily_book(
             evaluate_daily_digital_hedge(
                 sample,
                 model=(
-                    "robust-covariance-pca"
-                    if config.spot_residual_pca_rank is not None
-                    else "robust-covariance"
+                    "sanos-normal-statistical"
+                    if config.return_price_source == "sanos"
+                    else (
+                        "robust-covariance-pca"
+                        if config.spot_residual_pca_rank is not None
+                        else "robust-covariance"
+                    )
                 ),
                 measure="historical-P",
                 spot_action=float(final_action[0]),
@@ -160,6 +157,7 @@ def run_covariance_daily_book(
                     "objective": config.objective.value,
                     "risk_parameter": config.risk_parameter,
                     "mean_reduction": config.mean_reduction.value,
+                    "historical_return_price_source": config.return_price_source,
                     "bounded": action.bounded,
                     "recession_ratio": action.zero_policy.recession_ratio,
                     "expected_profit": action.expected_profit,
@@ -186,7 +184,8 @@ def run_covariance_daily_book(
                         "historical origin"
                     ),
                     "price_semantics": (
-                        "historical returns reconstructed from released DLV states; "
+                        "historical returns reconstructed from released "
+                        f"{config.return_price_source.upper()} states; "
                         "current execution and realized accounting use common SANOS "
                         "market marks; no generated scenarios"
                     ),

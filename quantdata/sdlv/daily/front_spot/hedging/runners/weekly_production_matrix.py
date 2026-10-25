@@ -68,7 +68,7 @@ class WeeklyProductionMatrixConfig:
     observation_count: int = 252
     scenario_count: int = 4_096
     position_cap: float = 1_000.0
-    spot_cost_bps: float = 1.0
+    spot_cost_bps: float = 0.0
     evaluation_start: date = date(2023, 1, 1)
     evaluation_end: date = date(2025, 12, 31)
 

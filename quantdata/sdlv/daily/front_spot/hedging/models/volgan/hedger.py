@@ -46,7 +46,7 @@ def sample_volgan_transitions(
     generator = fit.generator
     config = generator.config
     condition_array = np.asarray(condition, dtype=np.float64)
-    if condition_array.shape != (config.condition_dimension,):
+    if condition_array.shape != (config.full_condition_dimension,):
         raise ValueError("VolGAN sampling condition has the wrong shape")
     if path_count < 1:
         raise ValueError("VolGAN path_count must be positive")
@@ -64,15 +64,17 @@ def sample_volgan_transitions(
             dtype=generator.fdtype,
             device=generator.device,
         )
-        decoded = generator.decode(generator(noise, conditions)).cpu().numpy()
+        decoded = generator.decode_full_targets(
+            generator(noise, generator.encode_full_conditions(conditions))
+        ).cpu().numpy()
     current = condition_array[3:].reshape(
         len(config.grid.expiries_y),
-        len(config.grid.strikes_over_forward),
+        config.grid.strike_count,
     )
     next_surfaces = current[None] + decoded[:, 1:].reshape(
         path_count,
         len(config.grid.expiries_y),
-        len(config.grid.strikes_over_forward),
+        config.grid.strike_count,
     )
     return VolganGeneratedTransitions(
         forward_log_returns=decoded[:, 0] / np.sqrt(252.0),

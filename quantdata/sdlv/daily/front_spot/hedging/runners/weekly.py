@@ -78,7 +78,7 @@ class WeeklyEvaluationSpec:
     target_quantities: tuple[float, ...]
     target_notional_identity: str
     position_cap: float
-    spot_cost_bps: float = 1.0
+    spot_cost_bps: float = 0.0
     require_no_cap_hits: bool = True
     user_version: str = "0.1"
 

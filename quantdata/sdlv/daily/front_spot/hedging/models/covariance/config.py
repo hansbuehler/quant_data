@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Literal
 
 from cdxcore.err import verify_inp
 from cdxcore.version import version
@@ -21,7 +22,7 @@ class CovarianceObjective(StrEnum):
     POWER_EXPONENTIAL = "power-exponential"
 
 
-@version("3.7")
+@version("3.8")
 @dataclass(frozen=True, kw_only=True)
 class CovarianceHedgeConfig:
     """Logical and numerical settings for the rolling covariance hedge."""
@@ -44,6 +45,7 @@ class CovarianceHedgeConfig:
     action_tolerance: float = 1.0e-8
     minimum_standard_deviation: float = 1.0e-10
     spot_residual_pca_rank: int | None = None
+    return_price_source: Literal["dlv", "sanos"] = "dlv"
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "mean_reduction", MeanReduction(self.mean_reduction))
@@ -110,4 +112,8 @@ class CovarianceHedgeConfig:
             self.spot_residual_pca_rank is None
             or self.spot_residual_pca_rank > 0,
             lambda: "spot_residual_pca_rank must be positive or None",
+        )
+        verify_inp(
+            self.return_price_source in ("dlv", "sanos"),
+            lambda: "return_price_source must be DLV or SANOS",
         )

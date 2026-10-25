@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -11,6 +12,8 @@ from quantdata.sdlv.daily.front_spot.hedging.models.checkpointing import (
 from quantdata.sdlv.daily.front_spot.hedging.runners.select_generated_budget import (
     _evenly_spaced_dates,
     _parse_epoch_candidates,
+    _require_no_future_diffusion_training,
+    _require_validation_start_after_source,
     select_epoch_budget,
 )
 
@@ -56,3 +59,20 @@ def test_completed_checkpoint_cleanup_preserves_lock(tmp_path: Path) -> None:
     assert not checkpoint.exists()
     assert not checkpoint.with_suffix(".pt.tmp").exists()
     assert checkpoint.with_suffix(".pt.lock").exists()
+
+
+def test_validation_boundary_and_diffusion_fit_reject_future_data() -> None:
+    source_end = date(2022, 7, 5)
+    with pytest.raises(ValueError, match="strictly follow"):
+        _require_validation_start_after_source(date(2022, 7, 1), source_end)
+    _require_validation_start_after_source(date(2022, 7, 6), source_end)
+
+    origin = date(2022, 7, 6)
+    fitted = SimpleNamespace(
+        data=SimpleNamespace(target_dates=(origin,)),
+        result=SimpleNamespace(training_end_date=origin),
+    )
+    _require_no_future_diffusion_training(fitted, origin)
+    fitted.result.training_end_date = date(2022, 7, 7)
+    with pytest.raises(RuntimeError, match="future training"):
+        _require_no_future_diffusion_training(fitted, origin)

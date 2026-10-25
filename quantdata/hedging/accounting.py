@@ -107,7 +107,7 @@ def execute_spot_trade(
     *,
     quantity_change: float,
     normalized_spot: float,
-    cost_bps: float = 1.0,
+    cost_bps: float = 0.0,
     instrument_id: str = "spot",
 ) -> TradeExecution:
     """Execute normalized spot with an explicit cost on traded notional."""

@@ -24,9 +24,5 @@ def test_one_day_benchmark_reconciles_common_accounting() -> None:
     assert sample.payoff == 1.0
     assert result.pricing_difference == 0.0
     assert result.hedged_pnl == result.pure_hedge_error
-    expected_round_trip_cost = abs(sample.target_spot_delta) * 1.0e-4 * (
-        1.0
-        + sample.transition.discounted_forward_over_spot
-        * sample.transition.terminal_normalized_spot
-    )
-    assert result.transaction_cost == expected_round_trip_cost
+    assert result.transaction_cost == 0.0
+    assert result.diagnostics["formal_exit_cost"] == 0.0

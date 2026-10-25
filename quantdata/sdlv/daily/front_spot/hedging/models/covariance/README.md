@@ -46,9 +46,8 @@
   transaction-cost-weighted lasso. Mean-variance, mean-volatility, and
   Gaussian power-exponential are supported. The deterministic regression uses
   mean-variance risk aversion 10 and a loose numerical cap of one million. The
-  spot penalty contains its one-basis-point entry and liquidation costs; the
-  option penalty uses one current half-spread for next-date cash settlement and
-  twice the current half-spread as a predictable round-trip proxy otherwise.
+  spot penalty is zero because spot trades at mid; each option pays only its
+  current opening half-spread. Formal exit cost is a separate diagnostic.
 - **Mean-volatility boundedness:** the objective is positively homogeneous. A
   covariance-metric distance-to-cost-box calculation checks its recession
   condition before optimization. An unbounded fit is solved under the

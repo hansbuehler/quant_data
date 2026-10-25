@@ -16,10 +16,12 @@ model prices, normalized half-spreads, forward/discount curves, ATM curves, and
 forward-adjusted spot returns. It contains no raw WRDS price, midpoint, spot,
 identifier, symbol, volume, open-interest, vendor-IV, or vendor-Greek field.
 
-This candidate is the exclusive runtime and training data source. Stored SANOS
-states provide the reference interpolation for every off-grid market mark or
-target price. The private exporter and legacy raw-data loaders are not model or
-training dependencies.
+This candidate is the default runtime and training data source. The temporary
+restriction on using original source data to regenerate the candidate has been
+lifted; such use must preserve provenance and must not add original records to
+the released artifact. Stored SANOS states provide the reference interpolation
+for every off-grid market mark or target price. The private exporter and legacy
+raw-data loaders are not dependencies of the model implementations.
 
 ## Current status
 

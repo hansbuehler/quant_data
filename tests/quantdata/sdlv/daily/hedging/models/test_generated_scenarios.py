@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 from scipy.special import ndtr
 
+from quantdata.biz_calendar import NMS
 from quantdata.hedging.claims import DigitalClaim
 from quantdata.hedging.contracts import OptionRight
 from quantdata.hedging.mean_reduction import MeanReduction
@@ -104,6 +105,41 @@ def test_generated_volatility_interpolation_preserves_flat_surface() -> None:
     )
 
     np.testing.assert_allclose(volatility, 0.27, rtol=1.0e-14, atol=1.0e-14)
+
+
+def test_short_end_nms_interpolation_preserves_flat_surface() -> None:
+    grid = GenerativeSurfaceGrid.short_end_nms()
+    surfaces = np.full((4, len(grid.expiries_y), grid.strike_count), np.log(0.27))
+    strikes = np.asarray([0.96, 0.99, 1.01, 1.04])
+
+    volatility = interpolate_generated_implied_volatility(
+        surfaces,
+        query_expiry_y=6.0 / 252.0,
+        query_strikes_over_forward=strikes,
+        grid=grid,
+    )
+
+    np.testing.assert_allclose(volatility, 0.27, rtol=1.0e-14, atol=1.0e-14)
+
+
+def test_short_end_nms_interpolation_uses_each_paths_atm_volatility() -> None:
+    grid = GenerativeSurfaceGrid.short_end_nms()
+    expiry_y = 5.0 / 252.0
+    atm_volatilities = np.asarray([0.15, 0.3, 0.45])
+    nodes = np.asarray(grid.nms_nodes)
+    surfaces = np.log(atm_volatilities)[:, None, None] + 0.12 * nodes[None, None, :]
+    surfaces = np.broadcast_to(surfaces, (3, len(grid.expiries_y), len(nodes)))
+    query_nms = 0.5
+    strikes = NMS.from_nms(query_nms, expiry_y, vol=atm_volatilities)
+
+    volatility = interpolate_generated_implied_volatility(
+        surfaces,
+        query_expiry_y=expiry_y,
+        query_strikes_over_forward=strikes,
+        grid=grid,
+    )
+
+    np.testing.assert_allclose(volatility, atm_volatilities * np.exp(0.12 * query_nms))
 
 
 def test_generated_digital_includes_smile_slope() -> None:

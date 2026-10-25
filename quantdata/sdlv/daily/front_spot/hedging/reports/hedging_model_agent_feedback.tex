@@ -1,0 +1,232 @@
+\documentclass[10pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[a4paper,margin=19mm]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\hypersetup{colorlinks=true,urlcolor=blue,linkcolor=blue,
+  pdftitle={Hedging model inventory and AI-agent feedback}}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.45em}
+\renewcommand{\arraystretch}{1.14}
+
+\begin{document}
+
+\begin{center}
+  {\LARGE Hedging model inventory and implementation status}\par
+  {\large AI-agent feedback, 24 October 2026}
+\end{center}
+
+\noindent\fcolorbox{black}{gray!10}{\parbox{0.96\linewidth}{
+\textbf{Provenance and status.} This is provisional feedback prepared by AI
+coding agents and checked by an independent QuantAgent. It records implementation
+observations, not a peer-reviewed result or a claim that unfinished models hedge
+well. Measured outcomes, small execution smokes, and agent assessments are kept
+separate. The older \texttt{hedging\_benchmark\_summary.tex} concerns a different
+611-origin/20-target cohort and must not be merged with the current April--May
+short-end experiment.}}
+
+\section{Dataset and experiment}
+
+The only training and evaluation input for this benchmark is the normalized
+public-candidate dataset:
+\begin{center}
+\texttt{spx-2022-2025-hedging-public-candidate-v1}
+\end{center}
+It has 891 retained dates from 3 January 2022 to 29 August 2025 and
+2,014,740 recommended hedge-screen quote-side coordinates. Its manifest
+SHA-256 is:
+\begin{center}\small
+\texttt{2add65d6a1dda4146214479788cdd8e5df652562812510f607a5e8331b313541}
+\end{center}
+It stores reconstructable SANOS and DLV states/geometries and separate fitted
+model price and Black-IV arrays, including ATM volatility by expiry. It also
+stores normalized half-spreads, forward/spot ratios, discount factors, and
+forward-adjusted spot returns. Fitted SANOS prices are the common reference
+marks; they are \emph{not} unavailable market midpoints. The artifact excludes
+original WRDS bids, asks, prices, identifiers, volume, open interest, vendor
+Greeks, and vendor IVs. Its \texttt{public\_candidate} label is a technical
+classification, \emph{not} redistribution permission.
+
+The current short-end generator grid has business-day expiries
+$1,2,3,4,5,7,10$ and 19 fixed normalized-moneyness (NMS) nodes from $-3.5$
+to $3.5$. Actual forward-relative strikes float by date and expiry using that
+expiry's SANOS ATM volatility. The eligible hedge book uses spot and OTM
+options inside $(-2,2)$ NMS at expiries through five business days, or the
+first later expiry if needed. April and May 2024 each contain 22 completed
+daily origins and ten one-day digital targets in the current comparison.
+Historical rolling estimates use information available through the decision
+date, without future returns; model initialization uses 2022. A newly stated
+rolling requirement is that every neural model's date-$t$ weights start from
+the immediately previous fitted date, with authenticated checkpoint lineage.
+The 2022 initializer is used only at the first rolling origin. This requirement
+must be verified before accepting new rolling results.
+
+\section{Models and what they do}
+
+\begin{tabularx}{\linewidth}{@{}p{28mm}X p{29mm}@{}}
+\toprule
+Method & Construction and hedge & April--May evidence \\
+\midrule
+Unhedged; BS delta+vega & No hedge; or spot delta plus the two vanilla options
+bracketing the digital strike, weighted for vega and re-delta-hedged. & Baselines complete \\
+SANOS Greek & DLV local-vol repricing gives spot delta and eight rolling DLV
+factor vegas; a minimum-spread-cost factor hedge uses eligible options, then
+spot removes residual delta. For a settling 1D digital, future-DLV vega is
+zero, so this hedge trades spot only. & Complete \\
+SANOS parametric & Uses the same Greeks and a 252-transition spot/factor
+covariance to minimize one-day P\&L variance plus executable cost. & 44-date
+run complete \\
+SANOS statistical & Replays historical SANOS-based hedge and target returns;
+optimizes the empirical scenario objective with spread costs and no Gaussian
+return assumption. & Corrected 44-date run complete \\
+SANOS normal-statistical & Normal approximation using covariance of
+SANOS returns and the same cost-aware objective. Legacy DLV covariance runs
+are \emph{not} this method. & 44-date run complete \\
+GROMM Greek & Proposed Q expectation and spot plus eight rolling DLV-factor
+Greeks from the GROMM stochastic-DLV simulator. & No result yet \\
+GROMM parametric & Proposed covariance-weighted GROMM spot/factor Greek hedge.
+& No result yet \\
+GROMM statistical & Proposed optimization on GROMM simulated P or Q
+instrument/target scenarios, with the declared measure identified. & No result yet \\
+GROMM normal-statistical & Proposed Gaussian approximation to those GROMM
+scenario returns. & No result yet \\
+VolGAN & Conditional GAN jointly generates next-day normalized spot returns
+and implied-volatility changes under historical P. The original full surface
+and a separately labelled eight-PC adaptation are retained. & Both 2022
+initializers trained; PCA-8 rolling cell complete \\
+AD--Seq--Vol; FT & Conditional sequential diffusion generates spot/IV paths
+under P. FT adds post-training static-arbitrage penalties to the frozen base.
+& Base trained; FT running \\
+FuNVol & Functional-basis/PCA reduction of IV surfaces with a joint spot/factor
+neural SDE under P. The present implementation is a single-asset research
+adaptation of the published multi-asset model. & Rolling gate under review \\
+\bottomrule
+\end{tabularx}
+
+\section{Measured April--May evidence}
+
+The table reports equal-weight mean across ten one-day digital targets of
+each target's mean absolute \emph{pure-hedge} error, in inception-spot units.
+These are 22-date monthly results with the common SANOS reference mark and
+realized accounting. The legacy statistical and DLV-replay covariance cells
+shown are mean--variance with risk parameter 10 and sample demeaning; this is
+not the full objective/risk tensor. The DLV-replay rows are completed auxiliary methods,
+not the proposed SANOS normal-statistical method. VolGAN uses the same
+mean--variance risk parameter and demeaning, but with 10,000 generated paths
+per origin and causally linked daily checkpoints. It is the exploratory
+eight-PC adaptation, not the original full-surface implementation.
+
+\begin{center}
+\begin{tabular}{@{}llrr@{}}
+\toprule
+Model & Hedge method & April 2024 & May 2024 \\
+\midrule
+Baseline & Unhedged & 0.011128 & 0.010825 \\
+Baseline & Black delta+vega & 0.006416 & 0.005733 \\
+SANOS & Greek & 0.007284 & 0.007479 \\
+SANOS & Parametric & 0.010585 & 0.008980 \\
+SANOS & Statistical & 0.003707 & 0.005035 \\
+SANOS & Normal-statistical & 0.007735 & 0.005843 \\
+Legacy DLV & Statistical replay & 0.003706 & 0.005034 \\
+Legacy DLV & Covariance & 0.007889 & 0.005903 \\
+Legacy DLV & Covariance, PCA-8 & 0.007892 & 0.005940 \\
+VolGAN (PCA-8) & Scenario hedge & 0.011301 & 0.010843 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The earlier daily ``Historical-SANOS'' implementation actually replayed DLV,
+not SANOS, model states. Its measured result above is retained only as a
+clearly labelled legacy diagnostic; the corrected SANOS-state replay completed
+all 440 target-date cells in a separate, authenticated cohort, with no solver
+nonconvergence or cap hit. The two replays produce similar, but not identical,
+results. The SANOS normal-statistical fit also completed all 440 cells with no
+solver nonconvergence or cap hit. The SANOS parametric fit likewise completed
+440 cells with no solver nonconvergence or cap hit, but its hedge error exceeds
+the Greek hedge in both months. SANOS Greek is the method
+previously named SANOS--LV, not a different model.
+For a settling 1D digital, both the earlier and current Greek runs have zero
+future-DLV factor vega and trade spot only; statistical replay may also trade
+options. This difference in hedge instruments does \emph{not} explain a change
+in ranking between the two runs. The earlier 283-date comparison used a
+different period, an entropy-$\lambda=1$ historical policy rather than the
+present mean--variance risk-10 policy, and a $0.01\%$ rather than $1\%$
+relative-spot finite-difference bump for the Greek delta. On the matched
+April dates, the earlier Greek and statistical mean absolute errors were
+$0.007738$ and $0.007388$; the current errors are $0.007284$ and $0.003706$.
+On the matched May dates, the corresponding pairs were $0.006855$, $0.007571$
+and $0.007479$, $0.005034$. The ranking reversal is therefore not a model
+rename or evidence of a new Greek hedge. VolGAN has 440 completed target-date results, zero
+numerical nonconvergences and zero cap hits, but its hedge error is marginally
+above unhedged and its conditional shocks are under-dispersed. AD--Seq--Vol,
+its FT variant, FuNVol, and GROMM variants have no validated
+April--May hedge result yet. An absent result is not a zero or an omitted
+favourable measurement.
+
+\section{Implementation notes and difficulties}
+
+\textbf{VolGAN.} The published-length full-surface adaptation trained for
+10,000 CPU epochs on 213 one-session examples. It generated too little
+spot-return variation when the condition was held fixed. Eight PCs explain
+99.21\% of training and 97.35\% of validation log-IV \emph{levels}, and 96.65\%
+and 91.54\% of log-IV \emph{increments}. The separately labelled eight-PC
+variant also completed 10,000 epochs. Across 20 validation states it generated
+0.515\% within-state daily spot-return standard deviation, against 1.435\%
+out-of-sample residual standard deviation from a predictor fitted only on the
+training block. Generated IV-change RMS was 0.0411 versus 0.1228 for those
+residuals in log-IV units. Its final validation loss was 1.047 versus best
+observed 0.896; the initializer checkpoint stores final rather than best
+weights. The 44-origin April--May eight-PC rolling hedge has completed with
+10,000 paths per origin, but remains \emph{exploratory}, not evidence that
+VolGAN is conditionally calibrated. Compressing the IV output improved but did
+not cure conditional under-dispersion.
+
+\textbf{AD--Seq--Vol and FT.} The base completed 3,000 CPU epochs, with best
+validation loss 0.047693. FT is training on CPU from the SHA-checked base checkpoint in a
+separate directory; no FT or rolling hedge outcome is yet reported here.
+
+\textbf{FuNVol.} The CPU implementation, fixed-contract repricer, 2022
+initializer, and causal 2023--March rolling predecessor chain are in place.
+The 1 April 2024 generated one-day spot standard deviation was $0.3327\%$,
+versus $0.7777\%$ in the trailing historical comparison, below the
+precommitted minimum ratio of $0.5$. No April--May hedge record was published;
+the conditional-state versus model-underdispersion cause is under review.
+Positive IV alone is not a static- or dynamic-arbitrage guarantee.
+
+\textbf{Shared limitations.} Generated spot/IV models currently hold
+forward/spot ratios and discount factors fixed within simulated transitions.
+On a 40-date diagnostic, the median same-strike fixed-grid IV approximation
+error in digital marks was 0.000711, versus 0.006461 from using a frozen
+rather than realized next-day forward. This is a model-law issue, not merely
+grid resolution. P-scenario generators are not automatically Q pricing models;
+measure claims and drift removal must remain explicit. Rolling optimization
+also needs true previous-date checkpoint inheritance, solver/cap diagnostics,
+and identical executable spread costs before comparison.
+
+\section{AI-agent assessment and next checks}
+
+\textbf{AI-agent assessment, not a measured result:} the tiny 2022 sample
+relative to a high-dimensional spot/IV output is a plausible contributor to
+VolGAN's conditional under-dispersion, but PCA coverage alone cannot establish
+the cause. The next diagnostic should compare conditional spot and IV residual
+scales, cross-dependence, static-arbitrage rates, and held-out digital marks on
+each dated checkpoint before interpreting hedge errors.
+
+\textbf{QuantAgent review:} the older generated summary concerns a distinct
+full-period experiment. Keep its table and the current April--May short-end
+table separate; never merge counts or rankings. The April--May rolling jobs
+must also prove previous-date weight lineage rather than repeatedly loading
+the 2022 initializer. These are verification requirements, not completed
+performance findings.
+
+\vspace{0.5em}
+\textit{Primary references:} Vuleti\'c--Cont, \href{https://doi.org/10.1080/1350486X.2025.2471317}{VolGAN};
+Han et al., \href{https://arxiv.org/abs/2609.13402}{AD--Seq--Vol};
+Choudhary--Jaimungal--Bergeron, \href{https://doi.org/10.1080/14697688.2024.2396977}{FuNVol}.
+
+\end{document}

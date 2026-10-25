@@ -439,7 +439,7 @@ def run_weekly_model(
     claim: WeeklyClaimDefinition,
     adapter: WeeklyModelAdapter,
     claim_quantity: float = 1.0,
-    spot_cost_bps: float = 1.0,
+    spot_cost_bps: float = 0.0,
     market_fit_cache: dict[str, WeeklyMarketFit] | None = None,
     policy_fit_cache: dict[str, WeeklyFittedPolicy] | None = None,
 ) -> WeeklyModelRun:

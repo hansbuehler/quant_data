@@ -36,12 +36,10 @@
   future current-forward-normalized state back to the claim's settlement basis.
 - **Targets:** ATM call/put and the agreed OTM NMS grid at 1D and 3D, for 20
   targets in total.
-- **Costs:** one basis point at spot entry and liquidation; options pay their
-  opening half-spread, plus the discounted closing half-spread when unexpired.
-  Cash settlement is free. Hedge optimization uses the current opening
-  half-spread for next-date settlement and twice the current half-spread as a
-  predictable round-trip proxy for contracts that remain alive; realized
-  accounting uses the actual next-date synthetic closing spread.
+- **Costs:** spot trades at mid with zero assumed spread. Options pay their
+  opening half-spread in optimization and realized P&L. Formal next-date
+  closing half-spreads are reported separately and are not charged; cash
+  settlement is free.
 - **Fixture:** the committed rolling-factor smoke explicitly retains the legacy
   \(0.01\%\) spot bump and starts on 17 January 2023,
   the first date with 252 retained exact-session transitions, and evaluates the

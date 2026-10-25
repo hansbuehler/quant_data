@@ -11,6 +11,9 @@ from pathlib import Path
 
 import numpy as np
 
+from quantdata.sdlv.daily.front_spot.hedging.data.generative_surfaces import (
+    GenerativeSurfaceGrid,
+)
 from quantdata.sdlv.daily.front_spot.hedging.data.market_panel import (
     PublicHedgingPanel,
     default_public_candidate_path,
@@ -32,7 +35,11 @@ from quantdata.sdlv.daily.front_spot.hedging.models.volgan.adapter import (
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.volgan.config import (
     VolganModelConfig,
+    VolganPcaModelConfig,
     VolganTrainConfig,
+)
+from quantdata.sdlv.daily.front_spot.hedging.models.volgan.data import (
+    has_exact_one_day_target,
 )
 from quantdata.sdlv.daily.front_spot.hedging.runners.daily import (
     dataset_manifest_sha256,
@@ -98,6 +105,8 @@ def main() -> None:
     )
     parser.add_argument("--dataset", type=Path, default=default_public_candidate_path())
     parser.add_argument("--label", required=True)
+    parser.add_argument("--surface-grid", choices=("published", "short-end-nms"), default="published")
+    parser.add_argument("--volgan-pca-rank", type=int)
     parser.add_argument("--warm-start-checkpoint", type=Path, required=True)
     parser.add_argument("--base-checkpoint", type=Path)
     parser.add_argument("--validation-start", type=date.fromisoformat, required=True)
@@ -125,20 +134,39 @@ def main() -> None:
         parser.error("validation start follows validation end")
     if arguments.validation_end.year > 2022:
         parser.error("generated-model budget selection must not use post-2022 dates")
-    if arguments.observation_count != BUDGET_SELECTION_OBSERVATION_COUNT:
+    if (
+        arguments.observation_count != BUDGET_SELECTION_OBSERVATION_COUNT
+        and not (arguments.model == "volgan" and arguments.volgan_pca_rank is not None)
+    ):
         parser.error(
             "generated-model budget selection requires the precommitted "
             f"{BUDGET_SELECTION_OBSERVATION_COUNT}-observation window"
         )
+    if arguments.observation_count < 23:
+        parser.error("epoch selection requires at least 23 observations")
+    if arguments.model != "volgan" and arguments.volgan_pca_rank is not None:
+        parser.error("VolGAN PCA rank cannot be used for diffusion")
     if arguments.origin_count < 2:
         parser.error("--origin-count must be at least two")
 
     panel = PublicHedgingPanel(arguments.dataset)
+    source_metadata = _checkpoint_metadata(arguments.warm_start_checkpoint)
+    source_sha256 = file_sha256(arguments.warm_start_checkpoint)
+    source_end_date = date.fromisoformat(str(source_metadata["training_end_date"]))
+    _require_validation_start_after_source(
+        arguments.validation_start,
+        source_end_date,
+    )
     eligible = tuple(
         value
         for index, value in enumerate(panel.dates)
         if arguments.validation_start <= value <= arguments.validation_end
         and index + 1 >= arguments.observation_count
+        and value > source_end_date
+        and (
+            arguments.model != "volgan"
+            or has_exact_one_day_target(panel, value)
+        )
     )
     if len(eligible) < arguments.origin_count:
         parser.error(
@@ -146,14 +174,11 @@ def main() -> None:
             f"--origin-count={arguments.origin_count}"
         )
     origins = _evenly_spaced_dates(eligible, arguments.origin_count)
-    source_metadata = _checkpoint_metadata(arguments.warm_start_checkpoint)
-    source_sha256 = file_sha256(arguments.warm_start_checkpoint)
     base_sha256 = (
         None
         if arguments.base_checkpoint is None
         else file_sha256(arguments.base_checkpoint)
     )
-    source_end_date = date.fromisoformat(str(source_metadata["training_end_date"]))
     if source_end_date >= origins[0]:
         parser.error("warm-start checkpoint must predate every validation origin")
 
@@ -181,6 +206,8 @@ def main() -> None:
                 panel,
                 model=arguments.model,
                 label=arguments.label,
+                surface_grid=arguments.surface_grid,
+                volgan_pca_rank=arguments.volgan_pca_rank,
                 origin=origin,
                 observation_count=arguments.observation_count,
                 epochs=epochs,
@@ -215,6 +242,8 @@ def main() -> None:
         "warm_start_training_end_date": source_end_date.isoformat(),
         "validation_origins": [value.isoformat() for value in origins],
         "observation_count": arguments.observation_count,
+        "surface_grid": arguments.surface_grid,
+        "volgan_pca_rank": arguments.volgan_pca_rank,
         "one_standard_error_rule": True,
         "selected_epochs": selected,
         "scores": [
@@ -252,6 +281,8 @@ def _fit_candidate(
     *,
     model: str,
     label: str,
+    surface_grid: str,
+    volgan_pca_rank: int | None,
     origin: date,
     observation_count: int,
     epochs: int,
@@ -273,10 +304,20 @@ def _fit_candidate(
             raise ValueError("VolGAN does not use a base checkpoint")
         defaults = VolganTrainConfig()
         actual_precision = 64 if precision is None else precision
+        grid = (
+            GenerativeSurfaceGrid.short_end_nms()
+            if surface_grid == "short-end-nms"
+            else GenerativeSurfaceGrid()
+        )
+        model_config = (
+            VolganModelConfig(label=label, grid=grid)
+            if volgan_pca_rank is None
+            else VolganPcaModelConfig(label=label, grid=grid, pca_rank=volgan_pca_rank)
+        )
         fitted = fit_public_volgan(
             panel,
             as_of_date=origin,
-            model_config=VolganModelConfig(label=label),
+            model_config=model_config,
             checkpoint_directory=checkpoint_directory,
             observation_count=observation_count,
             train_config=VolganTrainConfig(
@@ -315,7 +356,15 @@ def _fit_candidate(
     fitted = fit_public_diffusion(
         panel,
         as_of_date=origin,
-        model_config=DiffusionModelConfig(label=label, variant=variant),
+        model_config=DiffusionModelConfig(
+            label=label,
+            variant=variant,
+            grid=(
+                GenerativeSurfaceGrid.short_end_nms()
+                if surface_grid == "short-end-nms"
+                else GenerativeSurfaceGrid()
+            ),
+        ),
         checkpoint_directory=checkpoint_directory,
         observation_count=observation_count,
         train_config=DiffusionTrainConfig(
@@ -352,7 +401,27 @@ def _fit_candidate(
             debug=False,
         ),
     )
+    _require_no_future_diffusion_training(fitted, origin)
     return fitted.result.validation_loss, fitted.result.checkpoint_path
+
+
+def _require_validation_start_after_source(
+    validation_start: date,
+    source_training_end: date,
+) -> None:
+    if validation_start <= source_training_end:
+        raise ValueError(
+            "validation start must strictly follow source training end date"
+        )
+
+
+def _require_no_future_diffusion_training(fitted: object, origin: date) -> None:
+    if (
+        not fitted.data.target_dates
+        or fitted.data.target_dates[-1] > origin
+        or fitted.result.training_end_date > origin
+    ):
+        raise RuntimeError("diffusion budget fit used future training data")
 
 
 def _parse_epoch_candidates(value: str) -> tuple[int, ...]:

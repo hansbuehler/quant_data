@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from datetime import date, timedelta
 from pathlib import Path
@@ -10,6 +11,7 @@ import pytest
 import torch
 
 from quantdata.sdlv.daily.front_spot.hedging.data.generative_surfaces import (
+    GenerativeSurfaceGrid,
     SanosFixedGridHistory,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.diffusion import (
@@ -242,6 +244,25 @@ def test_static_arbitrage_penalty_is_differentiable() -> None:
     assert torch.all(torch.isfinite(surface.grad))
 
 
+def test_short_end_nms_arbitrage_penalty_is_differentiable() -> None:
+    grid = GenerativeSurfaceGrid.short_end_nms()
+    config = DiffusionModelConfig(
+        label="diffusion-short-end-penalty",
+        grid=grid,
+        model_dimension=16,
+        transformer_layers=1,
+        attention_heads=4,
+        diffusion_steps=4,
+    )
+    surface = torch.full((2, 7, 19), np.log(0.2), dtype=torch.float64, requires_grad=True)
+    penalty = static_arbitrage_penalty(surface, config=config)
+    penalty.backward()
+
+    assert torch.isfinite(penalty)
+    assert surface.grad is not None
+    assert torch.all(torch.isfinite(surface.grad))
+
+
 def test_diffusion_fine_tuning_loads_base_and_trains_only_adapter(
     tmp_path: Path,
 ) -> None:
@@ -297,7 +318,7 @@ def test_diffusion_fine_tuning_loads_base_and_trains_only_adapter(
     assert torch.any(fine_tuned.model.output_adapter.up.weight != 0.0)
 
 
-def test_diffusion_fine_tuning_rebases_historical_base_and_rejects_future(
+def test_diffusion_fine_tuning_keeps_historical_normalization_and_rejects_future(
     tmp_path: Path,
 ) -> None:
     history = _history()
@@ -341,13 +362,12 @@ def test_diffusion_fine_tuning_rebases_historical_base_and_rejects_future(
         dataset_manifest_sha256=manifest_sha256,
         environment=environment,
     )
-    validation_count = max(1, int(round(len(current_data.sequences) * 0.2)))
-    current_mean = np.mean(
-        current_data.sequences[:-validation_count],
-        axis=(0, 1, 3, 4),
+    torch.testing.assert_close(
+        fine_tuned.model.channel_mean, historical_base.ema_model.channel_mean
     )
-
-    np.testing.assert_allclose(fine_tuned.model.channel_mean, current_mean)
+    torch.testing.assert_close(
+        fine_tuned.model.channel_scale, historical_base.ema_model.channel_scale
+    )
     payload = torch.load(fine_tuned.checkpoint_path, weights_only=False)
     assert payload["dataset_manifest_sha256"] == manifest_sha256
 
@@ -506,19 +526,34 @@ def test_diffusion_warm_start_is_historical_and_auditable(tmp_path: Path) -> Non
         warm_start_checkpoint=source.checkpoint_path,
         environment=environment,
     )
-    validation_count = max(1, int(round(len(current_data.sequences) * 0.2)))
-    expected_mean = np.mean(
-        current_data.sequences[:-validation_count],
-        axis=(0, 1, 3, 4),
-    )
-
     assert current.warm_start_checkpoint == source.checkpoint_path
     assert current.warm_start_sha256 is not None
     assert current.training_end_date == current_data.target_dates[-1]
-    np.testing.assert_allclose(current.model.channel_mean, expected_mean)
+    torch.testing.assert_close(current.model.channel_mean, source.model.channel_mean)
+    torch.testing.assert_close(current.model.channel_scale, source.model.channel_scale)
     payload = torch.load(current.checkpoint_path, weights_only=False)
     assert payload["warm_start_source_sha256"] == current.warm_start_sha256
+    assert payload["normalization_policy"] == "source-fixed-v1"
     assert payload["training_end_date"] == current_data.target_dates[-1].isoformat()
+
+    legacy_checkpoint = tmp_path / "legacy-rolling.pt"
+    legacy_payload = dict(payload)
+    legacy_payload.pop("normalization_policy")
+    torch.save(legacy_payload, legacy_checkpoint)
+    next_data = replace(
+        current_data,
+        start_dates=tuple(value + timedelta(days=1) for value in current_data.start_dates),
+        target_dates=tuple(value + timedelta(days=1) for value in current_data.target_dates),
+    )
+    with pytest.raises(ValueError, match="unsupported normalization policy"):
+        fit_diffusion(
+            next_data,
+            model_config=config,
+            checkpoint_directory=tmp_path / "legacy-rejected",
+            train_config=train_config,
+            warm_start_checkpoint=legacy_checkpoint,
+            environment=environment,
+        )
 
     with pytest.raises(ValueError, match="must predate"):
         fit_diffusion(
@@ -784,7 +819,7 @@ def test_diffusion_daily_book_fits_and_generates_once(
 
     monkeypatch.setattr(diffusion_adapter, "_evaluate_diffusion_target", evaluate)
     results = diffusion_adapter.run_diffusion_daily_book(
-        object(),
+        SimpleNamespace(dataset_manifest_sha256="dataset-sha"),
         origin_date=date(2025, 1, 2),
         model_config=DiffusionModelConfig(
             label="diffusion-book",
@@ -794,6 +829,48 @@ def test_diffusion_daily_book_fits_and_generates_once(
             diffusion_steps=4,
         ),
         checkpoint_directory=tmp_path,
+        scenario_artifact_directory=tmp_path / "generated-scenarios",
     )
     assert len(results) == 20
     assert calls == {"fit": 1, "generate": 1, "evaluate": 20}
+    assert (tmp_path / "generated-scenarios" / "2025-01-02.npz").is_file()
+
+
+def test_diffusion_generated_scenario_artifact_is_authenticated(tmp_path: Path) -> None:
+    path = tmp_path / "generated-scenarios" / "2024-04-01.npz"
+    returns = np.asarray([-0.01, 0.02])
+    surfaces = np.ones((2, 7, 19))
+    arguments = {
+        "forward_log_returns": returns,
+        "next_log_implied_volatilities": surfaces,
+        "origin_date": date(2024, 4, 1),
+        "forecast_date": date(2024, 4, 2),
+        "dataset_manifest_sha256": "dataset-sha",
+        "fit_checkpoint_sha256": "fit-sha",
+        "warm_start_checkpoint_sha256": "parent-sha",
+        "base_checkpoint_sha256": None,
+        "model_config": DiffusionModelConfig(label="diffusion-artifact"),
+        "train_config": DiffusionTrainConfig(),
+        "hedge_config": diffusion_adapter.GeneratedHedgeConfig(),
+    }
+    first_sha = diffusion_adapter._save_generated_scenarios(path, **arguments)
+    assert first_sha == diffusion_adapter.file_sha256(path)
+    assert diffusion_adapter._save_generated_scenarios(path, **arguments) == first_sha
+    assert diffusion_adapter._save_generated_scenarios(
+        path,
+        **{
+            **arguments,
+            "hedge_config": replace(arguments["hedge_config"], risk_parameter=20.0),
+        },
+    ) == first_sha
+    with np.load(path, allow_pickle=False) as saved:
+        assert np.array_equal(saved["forward_log_returns"], returns)
+        assert np.array_equal(saved["next_log_implied_volatilities"], surfaces)
+        metadata = json.loads(saved["metadata_json"].item())
+        assert metadata["warm_start_checkpoint_sha256"] == "parent-sha"
+        assert metadata["configuration"]["model"]["grid"]["expiries_y"]
+    with pytest.raises(RuntimeError, match="artifact differs"):
+        diffusion_adapter._save_generated_scenarios(
+            path,
+            **{**arguments, "forward_log_returns": -returns},
+        )

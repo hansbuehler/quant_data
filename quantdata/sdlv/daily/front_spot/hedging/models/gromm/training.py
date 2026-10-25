@@ -222,7 +222,7 @@ def daily_gromm_training_data(
         active_mask=np.ones((1, scenarios.instrument_returns.shape[1]), dtype=bool),
         linear_transaction_costs=scenarios.linear_transaction_costs[None, :],
         settles_next=scenarios.settles_next[None],
-        terminal_transaction_costs=scenarios.terminal_transaction_costs,
+        terminal_transaction_costs=None,
     )
     return reduce_gromm_one_day_training_data(
         raw,

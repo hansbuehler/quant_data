@@ -143,7 +143,7 @@ class SequentialVolatilityDenoiser(BaseModel):
             self.config.sequence_length,
             self.config.channel_count,
             len(self.config.grid.expiries_y),
-            len(self.config.grid.strikes_over_forward),
+            self.config.grid.strike_count,
         )
         if noisy_sequences.shape[1:] != expected_tail:
             raise ValueError(
