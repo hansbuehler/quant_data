@@ -34,6 +34,16 @@ def test_expanding_support_and_transport_preserve_affine_payoffs() -> None:
     assert np.any(config.nms_nodes == 0.0)
 
 
+def test_wide_default_grid_has_a_downweighted_outer_fit_band() -> None:
+    config = Gromm2GeometryConfig()
+    assert config.grid_nms_range == (-4.0, 3.0)
+    assert config.fit_nms_range == (-4.0, 3.0)
+    assert config.core_fit_nms_range == (-3.5, 2.5)
+    assert config.outer_fit_weight == 0.10
+    assert config.nms_nodes[0] == -4.0
+    assert config.nms_nodes[-1] == 3.0
+
+
 def test_barycentric_transport_rejects_extrapolation() -> None:
     source = np.asarray([0.5, 1.0, 1.5])
     target = np.asarray([0.6, 1.0, 1.4])

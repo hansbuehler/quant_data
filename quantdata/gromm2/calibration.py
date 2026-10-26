@@ -309,7 +309,9 @@ def _spread_surface(
     target_business_dtes: FloatArray,
     target_strikes: FloatArray,
     fit_nms_range: tuple[float, float],
-) -> tuple[FloatArray, np.ndarray, FloatArray]:
+    core_fit_nms_range: tuple[float, float],
+    outer_fit_weight: float,
+) -> tuple[FloatArray, np.ndarray, FloatArray, FloatArray]:
     observed_dtes = np.asarray(expiry_row["business_dtes"], dtype=np.float64)
     forward_over_spot = np.asarray(
         expiry_row["forward_over_spot"], dtype=np.float64
@@ -330,16 +332,24 @@ def _spread_surface(
         instrument_row["standardized_log_moneyness"], dtype=np.float64
     )
     is_call = np.asarray(instrument_row["is_call"], dtype=bool)
-    retained = np.asarray(
-        instrument_row["in_paper_retained_population"], dtype=bool
-    )
     half_spreads = np.asarray(
         instrument_row["half_spreads_over_spot"], dtype=np.float64
     )
     half_spreads /= (
         discount_factors[expiry_indices] * forward_over_spot[expiry_indices]
     )
-    retained &= (is_call & (strikes >= 1.0)) | (~is_call & (strikes < 1.0))
+    # Unlike the original paper population, retain every available OTM quote
+    # in the active range.  The public data set already comprises its retained
+    # end-of-day quote books; no legacy paper-population mask is applied here.
+    retained = (
+        np.isfinite(strikes)
+        & np.isfinite(nms)
+        & np.isfinite(half_spreads)
+        & (half_spreads > 0.0)
+        & ((is_call & (strikes >= 1.0)) | (~is_call & (strikes < 1.0)))
+        & (nms >= fit_nms_range[0])
+        & (nms <= fit_nms_range[1])
+    )
     curves: list[tuple[FloatArray, FloatArray] | None] = []
     for expiry_index in range(len(observed_dtes)):
         selected = retained & (expiry_indices == expiry_index)
@@ -391,7 +401,12 @@ def _spread_surface(
     )
     result = np.maximum(result, positive_floor)
     mask = (target_nms >= fit_nms_range[0]) & (target_nms <= fit_nms_range[1])
-    return result, mask, target_nms
+    core = (
+        (target_nms >= core_fit_nms_range[0])
+        & (target_nms <= core_fit_nms_range[1])
+    )
+    weights = np.where(core, 1.0, outer_fit_weight) * mask
+    return result, mask, target_nms, weights
 
 
 def prepare_synthetic_books(
@@ -444,6 +459,7 @@ def prepare_synthetic_books(
     mids = np.empty((len(dates),) + target_strikes.shape, dtype=np.float32)
     half_spreads = np.empty_like(mids)
     masks = np.empty_like(mids, dtype=bool)
+    quote_weights = np.empty_like(mids)
     target_nms = np.empty_like(mids)
     started = perf_counter()
     for index, trading_date in enumerate(dates):
@@ -457,16 +473,21 @@ def prepare_synthetic_books(
             calls,
             calls - 1.0 + target_strikes,
         )
-        spreads, active, daily_nms = _spread_surface(
+        spreads, active, daily_nms, weights = _spread_surface(
             expiry_row=expiry_rows[trading_date],
             instrument_row=instrument_rows[trading_date],
             target_business_dtes=business_dtes,
             target_strikes=target_strikes,
             fit_nms_range=tuple(geometry_config["fit_nms_range"]),
+            core_fit_nms_range=tuple(
+                geometry_config.get("core_fit_nms_range", geometry_config["fit_nms_range"])
+            ),
+            outer_fit_weight=float(geometry_config.get("outer_fit_weight", 1.0)),
         )
         half_spreads[index] = spreads
         masks[index] = active
         target_nms[index] = daily_nms
+        quote_weights[index] = weights
         if index == 0 or (index + 1) % 25 == 0 or index + 1 == len(dates):
             elapsed = perf_counter() - started
             rate = (index + 1) / max(elapsed, 1.0e-9)
@@ -509,6 +530,7 @@ def prepare_synthetic_books(
                 ("mids", mids),
                 ("half_spreads", half_spreads),
                 ("mask", masks),
+                ("quote_weights", quote_weights),
                 ("target_nms", target_nms),
                 ("raw_initial", raw_initial),
             ):
@@ -693,6 +715,11 @@ def fit_affine_history(
         mids = np.asarray(stream["mids"], dtype=np.float32)
         half_spreads = np.asarray(stream["half_spreads"], dtype=np.float32)
         mask = np.asarray(stream["mask"], dtype=bool)
+        quote_weights = (
+            np.asarray(stream["quote_weights"], dtype=np.float32)
+            if "quote_weights" in stream
+            else mask.astype(np.float32)
+        )
         raw_initial = np.asarray(stream["raw_initial"], dtype=np.float32)
         terminal_dte = np.asarray(stream["source_terminal_business_dte"])
         terminal_extrapolated = np.asarray(stream["terminal_extrapolated"])
@@ -715,6 +742,7 @@ def fit_affine_history(
         mids = mids[retained]
         half_spreads = half_spreads[retained]
         mask = mask[retained]
+        quote_weights = quote_weights[retained]
         raw_initial = raw_initial[retained]
         terminal_dte = terminal_dte[retained]
         terminal_extrapolated = terminal_extrapolated[retained]
@@ -784,6 +812,7 @@ def fit_affine_history(
         "mids": jax.device_put(jnp.asarray(mids)),
         "half_spreads": jax.device_put(jnp.asarray(half_spreads)),
         "mask": jax.device_put(jnp.asarray(mask)),
+        "quote_weights": jax.device_put(jnp.asarray(quote_weights)),
     }
     if lower_indices is not None:
         arrays["kernel_lower_indices"] = jax.device_put(jnp.asarray(lower_indices))
@@ -817,7 +846,7 @@ def fit_affine_history(
         raw, prices = decode(parameters)
         absolute_error = jnp.abs(prices - arrays["mids"])
         scaled_error = absolute_error / arrays["half_spreads"]
-        valid = arrays["mask"].astype(prices.dtype)
+        valid = arrays["quote_weights"].astype(prices.dtype)
         quote_loss = jnp.sum(
             (jax.nn.relu(scaled_error - 1.0) + config.fit_weight * scaled_error)
             * valid

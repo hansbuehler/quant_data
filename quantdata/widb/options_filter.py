@@ -229,7 +229,7 @@ def SCHEMA_OPTION_DAY( mk_arb_free: MkArbFree|None, normalized : bool ) -> list[
 
     return source_schema
 
-@version( "0.2", dependencies=[enrich_day, mk_arb_free_day, OptionsFilter, normalize_day] )
+@version( "0.3", dependencies=[enrich_day, mk_arb_free_day, OptionsFilter, normalize_day] )
 def filter_options_day(
     ticker: str,
     d: dt.date,
@@ -284,6 +284,15 @@ def filter_options_day(
         return create_empty_df(schema)
 
     data = options_filter._filter(ticker, d, data)
+    legacy_strings = {
+        column: object
+        for column, dtype in schema.items()
+        if column in data.columns
+        and pd.api.types.is_object_dtype(dtype)
+        and isinstance(data[column].dtype, pd.StringDtype)
+    }
+    if legacy_strings:
+        data = data.astype(legacy_strings)
     verify_schema(data, schema, lambda : f"{ticker} {d}")
     return data
 

@@ -24,6 +24,22 @@ explicit project interpreter and working directory, and must set
 material work, validate imports and data-root discovery in the same
 detached environment that will run the job.
 
+## Rolling-model initialization
+
+Initialize each rolling model's trainable weights from the previous rolling
+date's fitted weights, rather than starting each date independently. Keep
+this causal and record the initialization date. If changing geometry requires
+mapping weights, preserve the new date's specified grid and report any
+incompatible weights instead of silently cold-starting.
+
+Apply this prospectively. Do not rerun completed estimates or restart active
+jobs solely to retrofit this initialization rule unless explicitly requested.
+
+## Market interpolation
+
+When market interpolation is required, reuse the already fitted historical
+SANOS parameters for the corresponding market date rather than refitting them.
+
 ## Git working tree hygiene
 
 Treat Git working trees under `~/python`, including this repository, as

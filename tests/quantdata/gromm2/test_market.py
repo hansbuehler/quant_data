@@ -7,10 +7,12 @@ from cdxcore.bs import bs
 
 from quantdata.gromm2.market import (
     PublicSanosDay,
+    SavedSanosPricer,
     _black_call_kernel,
     _project_points_to_support,
     public_sanos_prices,
 )
+from quantdata.sanos.arbfree import ArbFreePricer
 
 
 def test_point_projection_preserves_mass_and_mean_without_clipping() -> None:
@@ -34,6 +36,34 @@ def test_black_kernel_zero_volatility_is_intrinsic() -> None:
     )
     expected = np.maximum(support[None, :] - strikes[:, None], 0.0)
     assert np.array_equal(actual, expected)
+
+
+def test_saved_sanos_native_terminal_rule_reuses_density_without_fitting() -> None:
+    pricer = ArbFreePricer(smoothness=0.25)
+    pricer.expiries = np.asarray([0.1, 0.2])
+    pricer.variances = 0.2**2 * pricer.expiries
+    pricer.mstrikes = [np.asarray([0.8, 1.0, 1.2])] * 2
+    pricer.mdensities = [np.asarray([0.25, 0.5, 0.25])] * 2
+    pricer.fitsX = [np.zeros(3)] * 2
+    strikes = np.asarray([0.8, 1.0, 1.2])
+    expiry = 125.0 / 252.0
+    expected = (bs.price(k=strikes[:, None] / pricer.mstrikes[-1][None], vol=0.1, sqrtT=np.sqrt(expiry)) * pricer.mstrikes[-1][None]) @ pricer.mdensities[-1]
+    np.testing.assert_allclose(pricer.price(expiries=expiry, strikes=strikes, mode="surface"), expected, atol=1.0e-13)
+
+
+def test_read_only_dataset_pricer_matches_saved_parameters() -> None:
+    day = PublicSanosDay(
+        trading_date=date(2024, 8, 28), model_expiries_y=np.asarray([0.1, 0.2]),
+        kernel_total_variances=0.2**2 * np.asarray([0.1, 0.2]),
+        support_strikes=(np.asarray([0.8, 1.0, 1.2]),) * 2,
+        densities=(np.asarray([0.25, 0.5, 0.25]),) * 2,
+        smoothness=0.25, one_minute_y=1.0e-6,
+    )
+    pricer = SavedSanosPricer(day=day)
+    strikes = np.asarray([0.9, 1.0, 1.1])
+    expected = public_sanos_prices(day, expiries_y=0.5, strikes=strikes)
+    np.testing.assert_allclose(pricer.price(expiries=0.5, strikes=strikes), expected)
+    np.testing.assert_allclose(pricer.interpolate_atm_vols(np.asarray([0.01, 0.15, 0.5])), 0.2)
 
 
 def test_public_sanos_price_interpolates_node_laws_and_kernel_variance() -> None:

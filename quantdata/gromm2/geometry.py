@@ -18,8 +18,14 @@ class Gromm2GeometryConfig:
     """Numerical geometry of the six-month GROMM2 state."""
 
     num_inner_strikes: int = 200
-    fit_nms_range: tuple[float, float] = (-2.5, 1.5)
-    grid_nms_range: tuple[float, float] = (-3.0, 2.0)
+    # The DLV interior is calibrated over every observed OTM quote in this
+    # range.  Boundary nodes provide the additional deconvolution buffer.
+    fit_nms_range: tuple[float, float] = (-4.0, 3.0)
+    grid_nms_range: tuple[float, float] = (-4.0, 3.0)
+    # Quotes in the active outer band stabilize the tails without allowing
+    # sparse, wide-spread observations to dominate the central surface fit.
+    core_fit_nms_range: tuple[float, float] = (-3.5, 2.5)
+    outer_fit_weight: float = 0.10
     lower_boundary_multiplier: float = 0.5
     upper_boundary_multiplier: float = 1.5
     forward_volatility_floor: float = 0.01
@@ -31,12 +37,21 @@ class Gromm2GeometryConfig:
             lambda: "num_inner_strikes must be at least 16",
         )
         verify_inp(
-            self.grid_nms_range[0] < self.fit_nms_range[0] < 0.0,
-            lambda: "grid lower NMS must strictly contain the fit range",
+            self.grid_nms_range[0] <= self.fit_nms_range[0] < 0.0,
+            lambda: "grid lower NMS must contain the fit range",
         )
         verify_inp(
-            0.0 < self.fit_nms_range[1] < self.grid_nms_range[1],
-            lambda: "grid upper NMS must strictly contain the fit range",
+            0.0 < self.fit_nms_range[1] <= self.grid_nms_range[1],
+            lambda: "grid upper NMS must contain the fit range",
+        )
+        verify_inp(
+            self.fit_nms_range[0] <= self.core_fit_nms_range[0] < 0.0
+            and 0.0 < self.core_fit_nms_range[1] <= self.fit_nms_range[1],
+            lambda: "core fit NMS range must be contained in the active range",
+        )
+        verify_inp(
+            0.0 < self.outer_fit_weight <= 1.0,
+            lambda: "outer fit weight must lie in (0, 1]",
         )
         verify_inp(
             0.0 < self.lower_boundary_multiplier < 1.0,

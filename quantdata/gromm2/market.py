@@ -149,6 +149,50 @@ def public_sanos_prices(
     return result.reshape(shape)
 
 
+def load_public_sanos_day(dataset_path: Path, trading_date: date) -> PublicSanosDay:
+    """Read one existing parameter row without fitting or copying its dataset."""
+    directory = Path(dataset_path)
+    metadata = json.loads((directory / "geometry.json").read_text())
+    geometry = pl.scan_parquet(directory / "sanos_geometry.parquet").filter(pl.col("date") == trading_date).collect()
+    state = pl.scan_parquet(directory / "sanos_state.parquet").filter(pl.col("date") == trading_date).collect()
+    if geometry.height != 1 or state.height != 1:
+        raise ValueError(f"expected one saved SANOS parameter set for {trading_date}")
+    geometry_row, state_row = geometry.row(0, named=True), state.row(0, named=True)
+    return PublicSanosDay(
+        trading_date=trading_date,
+        model_expiries_y=np.asarray(geometry_row["model_expiries_y"], dtype=np.float64),
+        kernel_total_variances=np.asarray(state_row["kernel_total_variances"], dtype=np.float64),
+        support_strikes=tuple(np.asarray(value, dtype=np.float64) for value in geometry_row["support_strikes"]),
+        densities=tuple(np.asarray(value, dtype=np.float64) for value in state_row["densities"]),
+        smoothness=float(metadata["sanos_smoothness"]), one_minute_y=float(metadata["one_minute_y"]),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class SavedSanosPricer:
+    """Read-only pricing interface to an already fitted dataset parameter row."""
+
+    day: PublicSanosDay
+
+    @property
+    def expiries(self) -> FloatArray:
+        return self.day.model_expiries_y
+
+    @property
+    def smoothness(self) -> float:
+        return self.day.smoothness
+
+    def interpolate_atm_vols(self, expiries: float | FloatArray) -> float | FloatArray:
+        clipped = np.clip(np.asarray(expiries), self.expiries[0], self.expiries[-1])
+        volatility = np.sqrt(np.interp(clipped, self.expiries, self.day.kernel_total_variances) / clipped)
+        return float(volatility) if np.ndim(expiries) == 0 else volatility
+
+    def price(self, *, expiries: float | FloatArray, strikes: FloatArray, mode: str = "surface") -> FloatArray:
+        if mode != "surface":
+            raise ValueError("saved dataset parameters contain the surface law only")
+        return public_sanos_prices(self.day, expiries_y=expiries, strikes=strikes)
+
+
 def public_sanos_atm_total_variances(
     day: PublicSanosDay,
     expiries_y: FloatArray,

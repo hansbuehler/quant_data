@@ -93,7 +93,8 @@ def localize_loadings_by_density(
     interior = jnp.maximum(future_densities[..., 1:-1], 0.0)
     scale = jnp.max(interior, axis=-1, keepdims=True)
     floor = relative_floor * scale
-    weight = interior / (interior + floor)
+    denominator = jnp.maximum(interior + floor, jnp.finfo(interior.dtype).tiny)
+    weight = interior / denominator
     return log_dlvsq_loadings * weight[..., None]
 
 
