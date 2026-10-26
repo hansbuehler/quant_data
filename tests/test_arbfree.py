@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import fields
 from pathlib import Path
 
 import h5py
@@ -9,8 +10,34 @@ from cdxcore.verbose import Context
 
 from quantdata.sanos.arbfree import MkArbFree
 
-
 DATA_FILE = Path(__file__).resolve().parent / "stored_data" / "training" / "grid_sanos_four_samples.h5"
+
+
+def test_mk_arbfree_to_linear_preserves_all_other_settings() -> None:
+    original = MkArbFree(
+        no_arb_mode="surface",
+        smoothness=0.37,
+        surface_expiry_linear=False,
+        min_half_spread=2.0e-4,
+        mid_fit_weight=0.25,
+        min_atm_vol=0.07,
+        min_dlv=0.03,
+        max_dlv=0.8,
+        timeout_seconds=123.0,
+        min_strikes_per_expiry=7,
+        min_density=2.0e-4,
+        min_dC_eps=2.0e-3,
+        _remove_no_arb_strikes=False,
+    )
+
+    linear = original.to_linear()
+
+    assert linear is not original
+    assert linear.is_linear()
+    assert linear.smoothness is None
+    for field in fields(MkArbFree):
+        if field.name != "smoothness":
+            assert getattr(linear, field.name) == getattr(original, field.name)
 
 
 def _load_training_data() -> dict[str, np.ndarray]:

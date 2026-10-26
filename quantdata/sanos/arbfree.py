@@ -437,7 +437,7 @@ class MkArbFree:
     """
     no_arb_mode             : str = "surface"  # Whether to enforce no-arbirage: "expiry" or "surface".
     smoothness              : float|None = None # Whether to impose SANOS smoothness.
-    surface_expiry_linear   : bool = True  # In 'surface' mode, whether to run 'expiry' in linear mode.
+    surface_expiry_linear   : bool = True  # In 'surface' mode, if smoothness is > 0, whether to run per 'expiry' in linear mode.
 
     # control over process parameters
     min_half_spread         : float = 1E-4 #: Minimum bid/ask spread. The optimization is weighted by inverse half spread.
@@ -489,6 +489,15 @@ class MkArbFree:
         if self.no_arb_mode!="surface" or self.smoothness is None:
             r.pop("surface_expiry_linear", None)
         return unique_hash(r, debug_trace=debug_trace)
+
+    def to_linear(self) -> MkArbFree:
+        """ Return a version of this object configured for linear arbitrage-free fitting """
+        r = asdict(self)
+        r["smoothness"] = None
+        return MkArbFree(**r)
+
+    def is_linear(self) -> bool:
+        return self.smoothness is None or self.smoothness == 0.
 
     def __call__(self,
                 expiries       : np.ndarray, 
