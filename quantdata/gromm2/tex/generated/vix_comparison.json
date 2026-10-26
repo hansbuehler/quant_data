@@ -1,0 +1,58 @@
+{
+  "schema": "gromm2-cboe-discrete-vix-v1",
+  "source_chunks": [
+    "/home/hans/quantdata_data/experiments/gromm2/vix-discrete-5pct-20261023-v1/chunk-0000",
+    "/home/hans/quantdata_data/experiments/gromm2/vix-discrete-5pct-20261023-v1/chunk-0180",
+    "/home/hans/quantdata_data/experiments/gromm2/vix-discrete-5pct-20261023-v1/chunk-0360",
+    "/home/hans/quantdata_data/experiments/gromm2/vix-discrete-5pct-20261023-v1/chunk-0540",
+    "/home/hans/quantdata_data/experiments/gromm2/vix-discrete-5pct-20261023-v1/chunk-0720"
+  ],
+  "observations": 891,
+  "complete_observations": 882,
+  "method": "Cboe discrete OTM strips with raw-book two-zero-bid cutoffs and total-variance interpolation",
+  "marginal_proxy": "terminal simple-return variance at exactly 30 calendar days; not a VIX calculation",
+  "gromm2_discrete": {
+    "mean_difference_vol_points": 3.170387309223879,
+    "median_absolute_difference_vol_points": 2.591804016703958,
+    "rmse_vol_points": 3.874656554559217,
+    "maximum_absolute_difference_vol_points": 13.918065508651715,
+    "fraction_absolute_difference_above_one_vol_point": 0.8786848072562359,
+    "correlation_with_official_close": 0.996467465305492
+  },
+  "market_discrete": {
+    "mean_difference_vol_points": 0.026232538784422155,
+    "median_absolute_difference_vol_points": 0.08663980627355627,
+    "rmse_vol_points": 0.2548188352313444,
+    "maximum_absolute_difference_vol_points": 4.059705645073116,
+    "fraction_absolute_difference_above_one_vol_point": 0.009070294784580499,
+    "correlation_with_official_close": 0.9990670029383381
+  },
+  "marginal_variance_proxy": {
+    "mean_difference_vol_points": 1.205154568066098,
+    "median_absolute_difference_vol_points": 0.7106540354152502,
+    "rmse_vol_points": 2.2506578768671095,
+    "maximum_absolute_difference_vol_points": 9.119115010462572,
+    "fraction_absolute_difference_above_one_vol_point": 0.41383219954648526,
+    "correlation_with_official_close": 0.9898010860922416
+  },
+  "paper_figure": "generated/vix_comparison.pdf",
+  "figure_run_directory": "/home/hans/quantdata_data/experiments/gromm2/vix-paper-20261026T1810-v1",
+  "source_results_sha256": "aab5e82ae2249efa6b72591c120f541630dabee0eb00b085961537cc4da4c3cb",
+  "date_range": [
+    "2022-01-03",
+    "2025-08-29"
+  ],
+  "model_specification": {
+    "history": "/home/hans/quantdata_data/experiments/gromm2/six-month-v1/affine-200-history.h5",
+    "rank": 200,
+    "interior_strikes": 200,
+    "grid_nms_range": [
+      -3,
+      2
+    ],
+    "background_annual_volatility": 0.05,
+    "current_rolling_4_3_model": false
+  },
+  "marginal_proxy_clock": "Model time 30/365, not the two actual settlement clocks used in the discrete-strip reconstruction.",
+  "retention": "Deliberately retained paper figure and summary; raw observations, history and intermediate data remain external."
+}

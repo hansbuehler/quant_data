@@ -6,6 +6,7 @@
 \usepackage{microtype}
 \usepackage{booktabs}
 \usepackage{graphicx}
+\usepackage{float}
 \usepackage{xcolor}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
@@ -692,6 +693,96 @@ costs, position limits, and risk-aversion levels.  Factor-law likelihood is a
 useful dynamics diagnostic, but improvement in
 Equation~\eqref{eq:empirical-entropic-hedging-risk} is the economically
 relevant test.
+
+\section{VIX Reconstruction}
+\label{sec:vix-reconstruction}
+
+We compare the published Cboe VIX close with an end-of-day market
+reconstruction and the corresponding GROMM2 prices.  This experiment uses
+the earlier six-month affine-200 history, with 200 interior strikes over
+NMS $(-3,2)$ and an independent $5\%$ Black background; it is not a result
+for the ongoing rolling Gromm v2 4,3 calibration.  The sample spans
+3 January 2022 to 29 August 2025.  All statistics below use the same 882
+matched dates out of 891 observations; nine dates lack eligible expiries
+bracketing 30 calendar days.
+
+For each date, we select the two eligible Friday expiries around 30
+calendar days and apply the discrete-strike VIX calculation.\footnote{See
+the Cboe Volatility Index Methodology,
+\url{https://cdn.cboe.com/resources/vix/VIX_Methodology.pdf}, accessed
+26 October 2026.}
+The observed option book determines the implied forward, the strike $K_0$
+immediately below it, and the out-of-the-money put and call strips.  Zero-bid
+options are excluded, and each wing stops after two consecutive zero bids.
+The price at $K_0$ averages its call and put.  GROMM2 reprices precisely
+these contracts, retaining the same forwards, discount factors and maturity
+weights as the market reconstruction; we do not integrate over all model
+strikes.  AM and PM settlement clocks are retained.  The reconstruction
+uses OptionMetrics end-of-day quotes and its cached zero curve rather
+than Cboe's contemporaneous constituent snapshot and official rate inputs.
+
+Writing $D_j$ for the discount factor, $F_j$ for the forward and $O_j(K_i)$
+for the selected option price at expiry $T_j$, its total variance is
+\begin{equation}
+  w_j
+  =\frac{2}{D_j}\sum_i\frac{\Delta K_i}{K_i^2}O_j(K_i)
+   -\left(\frac{F_j}{K_{0,j}}-1\right)^2.
+  \label{eq:vix-strip-total-variance}
+\end{equation}
+For calendar-year maturities $T_1\leq\tau<T_2$, where $\tau=30/365$,
+\begin{equation}
+  \mathrm{VIX}
+  =100\sqrt{\frac{1}{\tau}
+    \frac{(T_2-\tau)w_1+(\tau-T_1)w_2}{T_2-T_1}}.
+  \label{eq:vix-constant-maturity}
+\end{equation}
+
+We also show an analytic terminal-marginal variance proxy, computed without
+Monte Carlo.  At model time $\tau_*=30/365$, let $p_i$ be the latent
+probabilities on support $k_i$ and let $\sigma_B=0.05$.  Independence of the
+Black background gives
+\begin{equation}
+  V_{\mathrm{marg}}
+  :=100\sqrt{\frac{
+      e^{\sigma_B^2\tau_*}\sum_i p_i k_i^2
+      -\left(\sum_i p_i k_i\right)^2}{\tau_*}}.
+  \label{eq:vix-marginal-proxy}
+\end{equation}
+This is the annualized standard deviation of the terminal normalized
+simple return, not the VIX log-contract statistic.  It uses a single model
+horizon rather than the two actual settlement clocks.
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{VIX comparison on 882 matched dates.  Bias is model minus Cboe
+  VIX close; error columns are annualized volatility points.}
+  \label{tab:vix-reconstruction}
+  \begin{tabular}{lrrrr}
+    \toprule
+    Series & Bias & Median absolute error & RMSE & Correlation \\
+    \midrule
+    Market reconstruction & $+0.026$ & $0.087$ & $0.255$ & $0.9991$ \\
+    GROMM2, same strips   & $+3.170$ & $2.592$ & $3.875$ & $0.9965$ \\
+    GROMM2 marginal proxy & $+1.205$ & $0.711$ & $2.251$ & $0.9898$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{generated/vix_comparison.pdf}
+  \caption{Published VIX, the market-strip reconstruction, GROMM2 repricing
+  of the same strips, and the analytic terminal-marginal variance proxy.
+  All curves use the matched dates in Table~\ref{tab:vix-reconstruction}.}
+  \label{fig:vix-reconstruction}
+\end{figure}
+
+The market reconstruction closely tracks the published close.  The earlier
+GROMM2 calibration substantially overstates the VIX level despite strong
+co-movement.  The marginal proxy is numerically closer, but it is a
+different statistic and cannot replace the VIX comparison.  This is a
+surface-fit diagnostic, not a dynamic no-arbitrage test.
 
 \section{Acknowledgements}
 
