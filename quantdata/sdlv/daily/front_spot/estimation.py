@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 
 import numpy as np
+from cdxcore.err import verify_inp
 from numpy.typing import NDArray
 from scipy.ndimage import gaussian_filter
 from scipy.special import ndtr, ndtri
@@ -156,10 +158,28 @@ def decode_dlvsq(raw_grids: NDArray[np.float32]) -> NDArray[np.float64]:
     )
 
 
+def rolling_history_indices(dates: tuple[str, ...], *, reference_date: date, date_count: int = 252) -> NDArray[np.int64]:
+    """Select exactly the last fitted dates strictly before a reference date.
+
+    This counts observed trading dates, not calendar days or increments.
+    One-session pairing must still exclude gaps inside the chosen window.
+    """
+    verify_inp(isinstance(date_count, int) and date_count >= 2, "date_count must be at least two")
+    parsed = np.asarray([date.fromisoformat(value) for value in dates], dtype=object)
+    verify_inp(len(parsed) > 0 and np.all(parsed[1:] > parsed[:-1]), "Dates must be unique and increasing")
+    eligible = np.flatnonzero(parsed < reference_date)
+    if len(eligible) < date_count:
+        raise ValueError(f"Only {len(eligible)} historical dates before {reference_date}; need {date_count}")
+    return np.asarray(eligible[-date_count:], dtype=np.int64)
+
+
 def align_fixed_contract_history(
     *,
     fit_label: str = "full",
     training_end: date = date(2024, 12, 31),
+    training_start: date | None = None,
+    dataset_path: Path = DATASET_PATH,
+    raw_grids: NDArray[np.float32] | None = None,
 ) -> AlignedDlvHistory:
     """Build locally fixed-expiry/fixed-strike one-session observations.
 
@@ -169,7 +189,7 @@ def align_fixed_contract_history(
     Across pairs the cash grid is allowed to float with the origin spot and
     fitted support.
     """
-    with np.load(DATASET_PATH, allow_pickle=False) as dataset:
+    with np.load(dataset_path, allow_pickle=False) as dataset:
         dates = tuple(str(value) for value in dataset["dates"])
         supports = np.asarray(dataset["supports"], dtype=np.float64)
         spots = np.asarray(dataset["spot_ref"], dtype=np.float64)
@@ -177,13 +197,19 @@ def align_fixed_contract_history(
         raise ValueError("Dataset reference spots are missing or invalid")
     parsed_dates = np.asarray([date.fromisoformat(value) for value in dates], dtype=object)
     origin, endpoint = one_session_pairs(list(dates))
+    if training_start is not None and training_start > training_end:
+        raise ValueError("training_start must not follow training_end")
     selected = parsed_dates[endpoint] <= training_end
+    if training_start is not None:
+        selected &= parsed_dates[origin] >= training_start
     origin = np.asarray(origin[selected], dtype=np.int64)
     endpoint = np.asarray(endpoint[selected], dtype=np.int64)
     if len(origin) < 100:
         raise ValueError("Too few exact one-session training pairs")
 
-    dlvsq = decode_dlvsq(load_raw_grids(fit_label))
+    dlvsq = decode_dlvsq(load_raw_grids(fit_label) if raw_grids is None else raw_grids)
+    if dlvsq.shape != (len(dates), 25, supports.shape[-1] - 2):
+        raise ValueError("Fitted grids do not match the historical dataset geometry")
     log_dlvsq = np.log(dlvsq)
     pair_count = len(origin)
     expiry_count = dlvsq.shape[1] - 1

@@ -23,14 +23,14 @@ from matplotlib.colors import SymLogNorm, TwoSlopeNorm
 from numpy.typing import NDArray
 from scipy.special import ndtr
 
-from quantdata.dysanos.tangent_levy.pricing import (
+from quantdata.sdlv.daily.artifacts import load_raw_grid
+from quantdata.sdlv.daily.train import _load_data, _make_loss_functions
+from quantdata.sdlv.tangent_levy.pricing import (
     average_density_from_forward,
     density_call_prices,
 )
-from quantdata.dysanos.tangent_levy.run_v2 import _load_day
-from quantdata.dysanos.tangent_levy.v2_config import TangentLevyV2Config
-from quantdata.sdlv.daily.artifacts import load_raw_grid
-from quantdata.sdlv.daily.train import _load_data, _make_loss_functions
+from quantdata.sdlv.tangent_levy.run_v2 import _load_day
+from quantdata.sdlv.tangent_levy.v2_config import TangentLevyV2Config
 
 FloatArray = NDArray[np.float64]
 

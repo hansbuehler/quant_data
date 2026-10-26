@@ -256,8 +256,9 @@ def market_day_from_payload(
     ticker: str = "UNKNOWN",
     geometry: FlexGeometryConfig = FlexGeometryConfig(),
     config: FlexMarketConfig = FlexMarketConfig(),
+    restrict_nms: bool = True,
 ) -> FlexMarketDay | None:
-    """Extract the exact-horizon, canonical-NMS FLEX universe from a payload."""
+    """Extract eligible books, optionally retaining strikes beyond the NMS grid."""
     if not payload:
         return None
     market = payload["market"]
@@ -350,7 +351,8 @@ def market_day_from_payload(
             if not within_horizon:
                 continue
             horizon_eligible_books += int(np.sum(active))
-            active &= within_nms
+            if restrict_nms:
+                active &= within_nms
             nms_eligible_books += int(np.sum(active))
             if not np.any(active):
                 continue
@@ -442,6 +444,7 @@ def load_market_day(
     config: FlexMarketConfig = FlexMarketConfig(),
     override_cache_mode: CacheMode | str | None = None,
     verbose: Context | None = Context.all,
+    restrict_nms: bool = True,
 ) -> FlexMarketDay | None:
     """Load one market and apply FLEX's exact floating horizon and NMS range."""
     payload = smooth_interpolated_market(
@@ -470,4 +473,5 @@ def load_market_day(
         ticker=ticker,
         geometry=geometry,
         config=config,
+        restrict_nms=restrict_nms,
     )

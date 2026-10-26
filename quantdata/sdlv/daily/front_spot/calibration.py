@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -75,6 +76,8 @@ def estimate_historical_risk_neutral_drift(
     fit_label: str = "full",
     batch_size: int = 64,
     dt: float = 1.0 / DAYS_PER_YEAR,
+    dataset_path: Path = DATASET_PATH,
+    raw_grids: NDArray[np.float32] | None = None,
 ) -> HistoricalRiskNeutralDrift:
     """Evaluate the Q drift at every aligned historical origin state."""
     if not jax.config.x64_enabled:
@@ -84,9 +87,9 @@ def estimate_historical_risk_neutral_drift(
     if dt <= 0.0 or not np.isfinite(dt):
         raise ValueError(f"dt must be finite and positive, found {dt}")
 
-    with np.load(DATASET_PATH, allow_pickle=False) as dataset:
+    with np.load(dataset_path, allow_pickle=False) as dataset:
         supports = np.asarray(dataset["supports"], dtype=np.float64)
-    dlvsq = decode_dlvsq(load_raw_grids(fit_label))
+    dlvsq = decode_dlvsq(load_raw_grids(fit_label) if raw_grids is None else raw_grids)
     origins = history.origin_indices
     origin_supports = supports[origins]
     origin_dlvsq = dlvsq[origins]
@@ -162,9 +165,13 @@ def calibrate_front_spot_model(
     batch_size: int = 64,
     correct_lag1_fit_noise: bool = False,
     smoothing_sigma: tuple[float, float] | None = (1.0, 2.0),
+    dataset_path: Path = DATASET_PATH,
+    raw_grids: NDArray[np.float32] | None = None,
 ) -> FrontSpotCalibration:
     """Estimate joint innovations, Q drift, and achievable P drift."""
-    history = align_fixed_contract_history(fit_label=fit_label)
+    history = align_fixed_contract_history(
+        fit_label=fit_label, dataset_path=dataset_path, raw_grids=raw_grids,
+    )
     innovations = fit_joint_innovations(
         history,
         factor_rank=factor_rank,
@@ -176,6 +183,8 @@ def calibrate_front_spot_model(
         innovations,
         fit_label=fit_label,
         batch_size=batch_size,
+        dataset_path=dataset_path,
+        raw_grids=raw_grids,
     )
     physical = fit_achievable_physical_drift(
         history,

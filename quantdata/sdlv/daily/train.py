@@ -75,7 +75,7 @@ def _atomic_write_npz(payload: dict[str, np.ndarray], path: Path) -> None:
             temporary_path.unlink()
 
 
-def _geometry(num_inner_strikes: int) -> Any:
+def _geometry(num_inner_strikes: int, nms_range: tuple[float, float] = (-2.5, 1.5)) -> Any:
     """Build the exact daily LP geometry lazily for preparation only."""
     from quantdata.dysanos.flex.config import (
         SharedStrikeCappedUnboundedDlvFlexGeometryConfig,
@@ -83,7 +83,7 @@ def _geometry(num_inner_strikes: int) -> Any:
 
     return SharedStrikeCappedUnboundedDlvFlexGeometryConfig(
         num_inner_strikes=num_inner_strikes,
-        nms_range=(-2.5, 1.5),
+        nms_range=nms_range,
         num_model_expiries=25,
         first_model_business_dte=1.0,
         model_expiry_step_business_days=1.0,
@@ -107,21 +107,28 @@ def _prepare_one_day(
     *,
     ticker: str,
     num_inner_strikes: int,
+    grid_nms_range: tuple[float, float] = (-2.5, 1.5),
+    core_nms_range: tuple[float, float] = (-2.5, 1.5),
+    tail_weight: float | None = None,
+    cache_only: bool = False,
 ) -> dict[str, np.ndarray | str]:
     """Load one real book and compile only immutable JAX calibration inputs."""
     from cdxcore.verbose import Context
 
+    from quantdata.biz_calendar import NMS
     from quantdata.dysanos.flex.config import FlexMarketConfig
     from quantdata.dysanos.flex.market import load_market_day
     from quantdata.dysanos.flex.sanos import make_supports_from_total_vols
 
-    geometry = _geometry(num_inner_strikes)
+    geometry = _geometry(num_inner_strikes, grid_nms_range)
     day = load_market_day(
         ticker,
         trading_date,
         geometry=geometry,
         config=FlexMarketConfig(excluded_business_dtes=(0.2,)),
         verbose=Context.quiet,
+        override_cache_mode="cacheonly" if cache_only else None,
+        restrict_nms=tail_weight is None,
     )
     if day is None:
         raise RuntimeError(f"No eligible market day for {trading_date}")
@@ -147,7 +154,7 @@ def _prepare_one_day(
     )
     if not np.allclose(supports, supports[:1], rtol=0.0, atol=1.0e-12):
         raise RuntimeError("Shared-strike geometry unexpectedly changed support by expiry")
-    return {
+    result = {
         "date": trading_date.isoformat(),
         "support": supports[0].astype(np.float32),
         "raw_initial": raw_initial.astype(np.float32),
@@ -161,7 +168,19 @@ def _prepare_one_day(
         "alpha": alpha.astype(np.float32),
         "before_first": before_first.astype(np.bool_),
         "business_dtes": np.asarray(day.quote_business_dtes, dtype=np.float32),
+        "spot_ref": np.asarray(day.spot_ref, dtype=np.float32),
     }
+    if tail_weight is not None:
+        if not np.isfinite(tail_weight) or not 0 < tail_weight <= 1:
+            raise ValueError("Tail weight must lie in (0,1]")
+        nms = NMS.to_nms(
+            day.strikes, t=expiry_y,
+            vol=day.atm_annual_vols[day.expiry_index], eps_vol=float(annual_atm[0]),
+        )
+        core = (nms >= core_nms_range[0]) & (nms <= core_nms_range[1])
+        result.update(quote_nms=np.asarray(nms, dtype=np.float32),
+                      quote_weights=np.where(core, 1.0, tail_weight).astype(np.float32))
+    return result
 
 
 def prepare_dataset(
@@ -172,6 +191,10 @@ def prepare_dataset(
     num_inner_strikes: int,
     quote_chunk_size: int,
     workers: int,
+    grid_nms_range: tuple[float, float] = (-2.5, 1.5),
+    core_nms_range: tuple[float, float] = (-2.5, 1.5),
+    tail_weight: float | None = None,
+    cache_only: bool = False,
 ) -> None:
     """Materialize a padded immutable real-market calibration tensor.
 
@@ -179,16 +202,30 @@ def prepare_dataset(
     the fitted JAX function scan a static shape while retaining the exact
     all-quote objective through the boolean mask.
     """
-    if quote_chunk_size <= 0:
+    if quote_chunk_size <= 0 or not 1 <= workers <= 4:
         raise ValueError("'quote_chunk_size' must be positive")
+    for bounds in (grid_nms_range, core_nms_range):
+        if len(bounds) != 2 or not np.all(np.isfinite(bounds)) or not bounds[0] < 0 < bounds[1]:
+            raise ValueError("NMS ranges must be finite and straddle zero")
+    if tail_weight is not None and not 0 < tail_weight <= 1:
+        raise ValueError("Tail weight must lie in (0,1]")
     dates = _load_dates(market_dates_report)
     loader = partial(
         _prepare_one_day,
         ticker=ticker,
         num_inner_strikes=num_inner_strikes,
+        grid_nms_range=grid_nms_range, core_nms_range=core_nms_range,
+        tail_weight=tail_weight, cache_only=cache_only,
     )
+    started = perf_counter()
+    days = []
     with ProcessPoolExecutor(max_workers=workers) as executor:
-        days = list(executor.map(loader, dates))
+        for day in executor.map(loader, dates):
+            days.append(day)
+            if len(days) == 1 or len(days) % 25 == 0 or len(days) == len(dates):
+                elapsed = perf_counter() - started
+                print(json.dumps(dict(stage="prepare", completed=len(days), total=len(dates),
+                                      elapsed_seconds=elapsed, estimated_remaining_seconds=elapsed * (len(dates) / len(days) - 1))), flush=True)
     quote_counts = np.asarray([len(day["strikes"]) for day in days], dtype=np.int32)
     max_quotes = int(np.max(quote_counts))
     padded_quotes = quote_chunk_size * int(
@@ -209,6 +246,8 @@ def prepare_dataset(
     before_first = np.ones(quote_shape, dtype=np.bool_)
     business_dtes = np.zeros(quote_shape, dtype=np.float32)
     mask = np.zeros(quote_shape, dtype=np.bool_)
+    weighted_fields = {name: np.zeros(quote_shape, dtype=np.float32)
+                       for name in ("quote_weights", "quote_nms")} if tail_weight is not None else {}
     for index, day in enumerate(days):
         count = int(quote_counts[index])
         for name, array in (
@@ -225,14 +264,24 @@ def prepare_dataset(
         ):
             array[index, :count] = np.asarray(day[name])
         mask[index, :count] = True
-    geometry = _geometry(num_inner_strikes)
+        for name, array in weighted_fields.items():
+            array[index, :count] = day[name]
+    geometry = _geometry(num_inner_strikes, grid_nms_range)
+    weighted_metadata = {
+        "grid_nms_range": np.asarray(grid_nms_range), "core_nms_range": np.asarray(core_nms_range),
+        "tail_weight": np.asarray(tail_weight),
+    } if tail_weight is not None else {}
+    schema = "daily25-jax-market-weighted-v1" if tail_weight is not None else "daily25-jax-market-v1"
     _atomic_write_npz(
         {
-            "schema": np.asarray("daily25-jax-market-v1"),
+            "schema": np.asarray(schema),
             "dates": np.asarray([str(day["date"]) for day in days]),
             "model_times_y": np.asarray(geometry.model_expiries_y, dtype=np.float32),
             "supports": supports,
             "raw_initial": raw_initial,
+            "spot_ref": np.asarray([day["spot_ref"] for day in days], dtype=np.float32),
+            **weighted_fields,
+            **weighted_metadata,
             "strikes": strikes,
             "is_call": is_call,
             "bids": bids,
@@ -256,7 +305,7 @@ def prepare_dataset(
     )
     _atomic_write_json(
         {
-            "schema": "daily25-jax-market-v1",
+            "schema": schema,
             "status": "complete",
             "source": "direct market books; no LP artifacts used",
             "ticker": ticker,
@@ -268,8 +317,11 @@ def prepare_dataset(
             "max_quotes_before_padding": max_quotes,
             "padded_quotes": padded_quotes,
             "num_quotes": int(np.sum(quote_counts)),
-            "nms_range": [-2.5, 1.5],
-            "objective": "mean_date[(bid_ask_excess + 0.05*abs(mid_error))/half_spread]",
+            "grid_nms_range": list(grid_nms_range),
+            "core_nms_range": list(core_nms_range) if tail_weight is not None else list(grid_nms_range),
+            "tail_weight": tail_weight,
+            "strike_selection": "all otherwise eligible cached market strikes" if tail_weight is not None else "grid NMS range",
+            "objective": "mean_date[sum_quote(w*(bid_ask_excess + 0.05*abs(mid_error))/half_spread)/sum_quote(w)]",
             "backbone_annual_vol": _BACKBONE_ANNUAL_VOL,
         },
         output.with_suffix(".json"),
@@ -338,6 +390,8 @@ def _make_loss_functions(
     model_times_y = data["model_times_y"]
     if data["strikes"].shape[-1] % quote_chunk_size != 0:
         raise ValueError("Padded quote count must be divisible by quote chunk size")
+    # Legacy datasets retain exactly unit weight on every valid quote.
+    data = {**data, "quote_weights": data.get("quote_weights", jnp.ones_like(data["strikes"]))}
     quote_blocks = {
         name: value.reshape(
             value.shape[0], -1, quote_chunk_size
@@ -355,6 +409,7 @@ def _make_loss_functions(
             "alpha",
             "before_first",
             "mask",
+            "quote_weights",
         }
     }
     model_dts_y = jnp.diff(model_times_y, prepend=jnp.zeros((1,), dtype=jnp.float32))
@@ -467,6 +522,19 @@ def _make_loss_functions(
         value = spot * jsp.special.ndtr(d1) - strike * jsp.special.ndtr(d2)
         return jnp.where(total_vol > 0.0, value, jnp.maximum(spot - strike, 0.0))
 
+    def black_put(spot: Any, strike: Any, total_vol: Any) -> Any:
+        # Avoid call-minus-intrinsic cancellation in the newly retained far puts.
+        safe_vol = jnp.maximum(total_vol, 1.0e-8)
+        d1 = jnp.log(spot / strike) / safe_vol + 0.5 * safe_vol
+        d2 = d1 - safe_vol
+        value = strike * jsp.special.ndtr(-d2) - spot * jsp.special.ndtr(-d1)
+        return jnp.where(total_vol > 0.0, value, jnp.maximum(strike - spot, 0.0))
+
+    def option_kernel(strikes: Any, is_call: Any, total_vol: Any) -> Any:
+        calls = black_call(supports[:, None, :], strikes[..., None], total_vol[..., None])
+        puts = black_put(supports[:, None, :], strikes[..., None], total_vol[..., None])
+        return jnp.where(is_call[..., None], calls, puts)
+
     def gather_density(densities: Any, indices: Any) -> Any:
         return jax.vmap(lambda value, index: value[index])(densities, indices)
 
@@ -490,28 +558,23 @@ def _make_loss_functions(
                 0.0,
             )
         )
-        kernel = black_call(
-            supports[:, None, :],
-            strikes[..., None],
-            total_vol[..., None],
-        )
-        calls = (1.0 - block["alpha"]) * jnp.sum(kernel * lower_density, axis=-1)
-        calls += block["alpha"] * jnp.sum(kernel * upper_density, axis=-1)
-        prices = jnp.where(block["is_call"], calls, calls - 1.0 + strikes)
+        kernel = option_kernel(strikes, block["is_call"], total_vol)
+        prices = (1.0 - block["alpha"]) * jnp.sum(kernel * lower_density, axis=-1)
+        prices += block["alpha"] * jnp.sum(kernel * upper_density, axis=-1)
         half_spreads = 0.5 * (block["asks"] - block["bids"])
         quote_loss = (
             jax.nn.relu(prices - block["asks"])
             + jax.nn.relu(block["bids"] - prices)
             + _FIT_WEIGHT * jnp.abs(prices - block["mids"])
         ) / half_spreads
-        valid = block["mask"].astype(prices.dtype)
+        valid = block["mask"].astype(prices.dtype) * block["quote_weights"]
         return (sums + jnp.sum(quote_loss * valid, axis=1), counts + jnp.sum(valid, axis=1)), None
 
     # Reverse mode over every quote block retains all Black kernels and exceeds
     # GPU activation memory.  We instead sum each static quote block's gradient
     # at the same parameters and apply Adam once: exact population gradient,
     # without stochastic minibatching.
-    quote_counts = jnp.sum(data["mask"], axis=1).astype(jnp.float32)
+    quote_counts = jnp.sum(data["mask"] * data["quote_weights"], axis=1).astype(jnp.float32)
     num_quote_blocks = next(iter(quote_blocks.values())).shape[0]
 
     def block_loss(
@@ -600,14 +663,9 @@ def _make_loss_functions(
                 0.0,
             )
         )
-        kernel = black_call(
-            supports[:, None, :],
-            strikes[..., None],
-            total_vol[..., None],
-        )
-        calls = (1.0 - block["alpha"]) * jnp.sum(kernel * lower_density, axis=-1)
-        calls += block["alpha"] * jnp.sum(kernel * upper_density, axis=-1)
-        return jnp.where(block["is_call"], calls, calls - 1.0 + strikes)
+        kernel = option_kernel(strikes, block["is_call"], total_vol)
+        prices = (1.0 - block["alpha"]) * jnp.sum(kernel * lower_density, axis=-1)
+        return prices + block["alpha"] * jnp.sum(kernel * upper_density, axis=-1)
 
     return block_value_and_grad, adam_update, decode_only, predict_block, quote_blocks
 
@@ -615,15 +673,27 @@ def _make_loss_functions(
 def _load_data(path: Path) -> tuple[dict[str, np.ndarray], dict[str, object]]:
     with np.load(path, allow_pickle=False) as loaded:
         payload = {name: np.asarray(loaded[name]) for name in loaded.files}
-    if str(payload.pop("schema").item()) != "daily25-jax-market-v1":
+    schema = str(payload.pop("schema").item())
+    if schema not in {"daily25-jax-market-v1", "daily25-jax-market-weighted-v1"}:
         raise ValueError(f"Unexpected JAX market schema in {path}")
     metadata = {
+        "schema": schema,
         "dates": payload.pop("dates"),
         "quote_counts": payload.pop("quote_counts"),
         "quote_chunk_size": int(payload.pop("quote_chunk_size").item()),
         "fit_weight": float(payload.pop("fit_weight").item()),
         "backbone_annual_vol": float(payload.pop("backbone_annual_vol").item()),
     }
+    for name in ("grid_nms_range", "core_nms_range", "tail_weight"):
+        if name in payload:
+            metadata[name] = payload.pop(name).tolist()
+    if schema == "daily25-jax-market-weighted-v1":
+        weights = payload["quote_weights"]
+        mask = payload["mask"]
+        if weights.shape != mask.shape or not np.all(np.isfinite(weights)) or not np.all(weights[mask] > 0):
+            raise ValueError("Weighted dataset has invalid quote weights")
+        if not np.all(np.isfinite(payload["quote_nms"][mask])):
+            raise ValueError("Weighted dataset has invalid quote NMS")
     if not (
         np.isclose(metadata["fit_weight"], _FIT_WEIGHT, rtol=0.0, atol=1.0e-7)
         and np.isclose(

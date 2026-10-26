@@ -8,13 +8,6 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from quantdata.dysanos.bates_crc.heston_riccati import (
-    GaussianJumpParams,
-    HestonParams,
-)
-from quantdata.dysanos.bates_crc.real_data_study.fast_bates_pricer import (
-    price_calls_ordinary_bates,
-)
 from quantdata.gromm2.calibration import (
     DlvCalibrationConfig,
     _black_call_kernels,
@@ -22,6 +15,13 @@ from quantdata.gromm2.calibration import (
     _load_call_kernel_specification,
     _load_warm_start_parameters,
     _price_call_kernels,
+)
+from quantdata.sdlv.bates_crc.heston_riccati import (
+    GaussianJumpParams,
+    HestonParams,
+)
+from quantdata.sdlv.bates_crc.real_data_study.fast_bates_pricer import (
+    price_calls_ordinary_bates,
 )
 
 

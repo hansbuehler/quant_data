@@ -735,6 +735,17 @@ def test_market_adapter_excludes_configured_business_dte(monkeypatch) -> None:
     assert day.num_quotes == unfiltered.num_quotes - excluded_quotes
 
 
+def test_market_adapter_can_retain_full_strike_range(monkeypatch) -> None:
+    monkeypatch.setattr(flex_market.ArbFreePricer, "from_dict", lambda _: _FakeArbFreePricer())
+    narrow = market_day_from_payload(_market_payload())
+    full = market_day_from_payload(_market_payload(), restrict_nms=False)
+    assert full is not None and narrow is not None
+    assert full.num_quotes > narrow.num_quotes
+    assert full.strikes.min() == 0.5 and full.strikes.max() == 2.0
+    assert full.audit.nms_eligible_books == full.audit.horizon_eligible_books
+    assert np.max(full.quote_business_dtes) <= 69.8
+
+
 def test_shorter_geometry_reuses_canonical_weekly_market_cache(monkeypatch) -> None:
     geometry = FlexGeometryConfig(
         num_model_expiries=9,

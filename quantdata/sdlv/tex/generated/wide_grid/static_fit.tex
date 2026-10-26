@@ -1,0 +1,17 @@
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lrrrr}
+\toprule
+Fit / quote subset & Quotes & \% excess & Mean excess & Cond. mean \\
+\midrule
+Original v1, original range & 2,192,458 & 2.679\% & 0.03450 & 1.28797 \\
+Wider fit, original range & 2,192,458 & 2.636\% & 0.03435 & 1.30311 \\
+Wider fit, core & 2,465,684 & 2.701\% & 0.03484 & 1.28996 \\
+Wider fit, wings & 675,426 & 31.635\% & 1.31125 & 4.14489 \\
+Wider fit, all quotes & 3,141,110 & 8.923\% & 0.30930 & 3.46650 \\
+Wider fit, 29 Aug. (all) & 4,190 & 15.012\% & 0.62411 & 4.15740 \\
+\bottomrule
+\end{tabular}
+\caption{Static-fit errors beyond the bid--ask interval, in half-spread units. All statistics are unweighted quote-level summaries, not the weighted training objective. Conditional means include only quotes with positive excess. The original-range rows cover the same 2,192,458 retained quotes; the final row is a separate single-date summary.}
+\label{tab:wide-static-fit}
+\end{table}

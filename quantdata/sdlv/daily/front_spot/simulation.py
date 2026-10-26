@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -51,18 +52,24 @@ def load_initial_model_state(
     fit_label: str = "full",
     date_index: int = -1,
     dt: float = 1.0 / DAYS_PER_YEAR,
+    dataset_path: Path = DATASET_PATH,
+    raw_grids: NDArray[np.float32] | None = None,
 ) -> InitialModelState:
     """Load and decode one fitted 25-by-200 market state."""
     if not jax.config.x64_enabled:
         raise RuntimeError("Front-spot simulation requires JAX 64-bit mode")
-    with np.load(DATASET_PATH, allow_pickle=False) as dataset:
+    with np.load(dataset_path, allow_pickle=False) as dataset:
         dates = tuple(str(value) for value in dataset["dates"])
         supports = np.asarray(dataset["supports"], dtype=np.float64)
     resolved_index = date_index if date_index >= 0 else len(dates) + date_index
     if not 0 <= resolved_index < len(dates):
         raise IndexError(f"date_index {date_index} is outside {len(dates)} states")
     support = supports[resolved_index]
-    dlvsq = decode_dlvsq(load_raw_grid(fit_label, resolved_index))
+    if raw_grids is not None and raw_grids.shape != (len(dates), 25, supports.shape[-1] - 2):
+        raise ValueError("Fitted grids do not match the initial-state dataset geometry")
+    dlvsq = decode_dlvsq(
+        load_raw_grid(fit_label, resolved_index) if raw_grids is None else raw_grids[resolved_index]
+    )
     density_tower = np.asarray(
         decode_density_tower(
             jnp.asarray(support, dtype=jnp.float64),

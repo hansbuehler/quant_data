@@ -1,0 +1,17 @@
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lrrrrr}
+\toprule
+Series & Bias & MAE & RMSE & Corr. & 29 Aug. \\
+\midrule
+Raw-market strip & +0.028 & 0.142 & 0.265 & 0.99903 & 15.405 \\
+Filtered SANOS input & -0.181 & 0.235 & 0.349 & 0.99873 & 15.197 \\
+GROMM v1, discrete & +1.999 & 2.005 & 2.094 & 0.99446 & 18.434 \\
+GROMM v1, analytic & +2.062 & 2.068 & 2.149 & 0.99481 & 18.432 \\
+GROMM v1-4,3, discrete & +0.461 & 0.495 & 0.568 & 0.99848 & 16.314 \\
+GROMM v1-4,3, analytic & +0.497 & 0.528 & 0.595 & 0.99853 & 16.318 \\
+\bottomrule
+\end{tabular}
+\caption{Historical VIX comparison on the same 696 complete dates. Errors and the reference-date levels are in volatility percentage points; the benchmark is the official Cboe close (15.360 on 29 August 2025). Analytic values use the full-strike log contract at the same two expiries and the same calendar interpolation as the discrete strip, not direct evaluation at a different 30-day business maturity.}
+\label{tab:wide-vix}
+\end{table}

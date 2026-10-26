@@ -1,0 +1,46 @@
+% !TEX root = main21.tex
+% Standalone addendum; the full paper remains in main2.tex, unchanged.
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{xurl}
+\usepackage[colorlinks=true,linkcolor=black,urlcolor=black]{hyperref}
+\hypersetup{pdftitle={GROMM v1-4,3: Wider-grid calibration and VIX addendum}}
+
+\newcommand{\E}{\mathbb E}
+\newcommand{\Q}{\mathbb Q}
+
+\title{\textbf{GROMM v1-4,3}\\[6pt]
+  \large Wider-grid calibration and VIX\\
+  Addendum to \emph{Generative Risk-neutral Option Market Models}}
+\author{Magnus Wiese\qquad Hans Buehler\qquad Blanka Horvath}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+This addendum reports only the new wider-grid experiment and its comparison
+with the original GROMM v1. The main paper, \texttt{main2.tex}, is unchanged
+and contains the model theory, proofs and earlier experiments. Here we
+record the new calibration, fresh risk-neutral diagnostics and historical
+VIX comparison; implementation details and reproducibility information
+are collected in Appendix~\ref{app:wide-grid-details}.
+
+\input{sec_wide_grid}
+
+\clearpage
+\appendix
+\begingroup
+\small
+\input{sec_wide_grid_details}
+\endgroup
+
+\clearpage
+\input{sec_wide_grid_factors}
+
+\end{document}

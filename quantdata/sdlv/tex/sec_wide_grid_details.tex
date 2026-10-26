@@ -1,0 +1,142 @@
+% !TEX root = main21.tex
+\section{Wider-grid calibration and VIX implementation}
+\label{app:wide-grid-details}
+
+\subsection{State representation and checks}
+The wider model has 200 interior strikes plus two boundary nodes; the
+boundary levels remain one half of the smallest interior strike and one
+and a half times the largest. All 25 expiries share that support on a given
+historical date. The support floats between historical dates but cash
+strikes remain fixed within a simulated path and within each historical
+one-session alignment. The DLV-squared parameterization retains minimum
+$10^{-4}$ and upper cap $9$, with the original log-space barrier. The
+completed fit's largest DLV-squared value is $6.319$, with no coordinate
+at the cap. Across all historical states, independent float64 reconstruction
+has minimum probability $3.46\times10^{-24}$ and maximum mass/forward errors
+below $4.3\times10^{-14}$.
+
+Training uses float32 as in the baseline. Its finite-difference point-mass
+initializer has a small signed boundary roundoff of about
+$-1.79\times10^{-7}$. Such checkpoints are accepted only when negative
+mass is bounded by that initializer's roundoff and independent float64
+reconstruction passes strict positivity, unit-mass and unit-forward checks.
+The Q simulation and its initial-state reconstruction use float64.
+This numerical calibration check is separate from the dynamic drift tests.
+
+\subsection{Diffusion and audit conventions}
+\label{sec:wide-audit-definition}
+Historical log-DLV changes are aligned at fixed expiry and cash strike;
+the endpoint surface is interpolated at origin relative strike divided by
+the realized gross spot return. A nodewise physical AR fit removes the
+conditional mean before smoothing and the joint spot/surface PCA.
+For the Q audit the drift is recalculated from the density recursion,
+not obtained by setting the empirical physical drift to zero.
+The simulator retains the paper's log-Euler step and its exceptional
+relative-drift taming threshold $0.5$; it is not an exact finite-step
+martingale correction. The independent 5\% Black factor has zero Q drift.
+The two conditional objectives, fold construction and spot normalization
+are those of the main paper; each
+fold uses a 30-epoch affine warm start and 30-epoch affine-plus-deep fit,
+with two width-32 SiLU layers, learning rate $10^{-3}$ and batch size 2,048.
+The simulation seed is 20261024. Constant physical risk prices are also
+re-estimated, but the new reported path diagnostics are under Q only.
+
+For each live day--instrument coordinate, the return is
+$R_{p,n}^i=(V_{p,n+1}^i-V_{p,n}^i)/Z_{p,n}$, where $Z$ is pre-step spot
+and $V^i$ is spot or an option price. The unconditional score is its sample
+mean divided by the standard error computed across 50,000 antithetic-pair
+averages. Table~\ref{tab:wide-q-audit} reports the maximum and empirical
+99th percentile of $|z|$ over the 570 coordinates, together with counts
+$N_c$ for $|z|>c$. These coordinatewise thresholds are not family-wise
+$p$-values.
+
+Conditional policies use current Brownian-factor histories, log spot,
+live log option-price-to-spot ratios, time and remaining maturities. For
+an action $a(X)$, write $r=a(X)^\top R$. The squared objective maximizes
+the training mean of $r-\tfrac12\lVert a\rVert^2-\tfrac12r^2$; the entropy
+objective minimizes $\log\operatorname{mean}\exp(-r+\tfrac12\lVert a\rVert^2)$.
+Complete antithetic pairs are split into two equal folds; input
+standardization and action fitting use only the training fold, and each
+frozen policy is evaluated on the other fold. The folds are then exchanged.
+For either objective, the reported $T$ is the mean out-of-fold daily
+portfolio return divided by its pair-based standard error, after averaging
+over the 20 days within each path. The main paper's per-test colour rule is
+black for $|T|\leq1.96$, orange for $1.96<|T|\leq2.576$ and red above
+$2.576$. Both new conditional statistics are therefore black.
+
+\subsection{Market-selected discrete variance}
+For each eligible expiry let $D_T$ be the discount factor, $F_T$ the
+put--call-parity forward, $K_0$ the greatest available strike not exceeding
+$F_T$, and $O_T(K)$ the selected OTM midpoint price (the average of call
+and put prices at $K_0$). The Cboe total-variance formula is
+\begin{equation}\label{eq:wide-vix-strip}
+  v_T^{\mathrm{strip}}
+  =\frac{2}{D_T}\sum_i\frac{\Delta K_i}{K_i^2}O_T(K_i)
+   -\left(\frac{F_T}{K_0}-1\right)^2.
+\end{equation}
+Interior $\Delta K_i$ are half the neighbouring-strike difference; endpoints
+use the adjacent-strike difference. Selection walks outward from $K_0$,
+omits zero-bid contracts and stops after two consecutive zero bids on each
+side. Friday expiries strictly between 23 and 37 calendar days are selected
+with their AM/PM settlement convention. For minute counts $N_1<N_{30}<N_2$,
+\begin{equation}\label{eq:wide-vix-interpolation}
+  \mathrm{VIX}
+  =100\sqrt{\frac{N_{365}}{N_{30}}\left[
+    \frac{N_2-N_{30}}{N_2-N_1}v_{T_1}
+    +\frac{N_{30}-N_1}{N_2-N_1}v_{T_2}\right]},
+\end{equation}
+where $N_{30}=43,200$ and $N_{365}=525,600$.
+These conventions follow the \href{https://cdn.cboe.com/resources/vix/VIX_Methodology.pdf}
+{Cboe VIX methodology}, pp.~2--7.
+
+The model replaces only the option prices in
+\eqref{eq:wide-vix-strip}; the observed raw bid cutoffs, forward, $K_0$,
+discount factors, contracts and interpolation times are shared by both
+GROMM variants. No fictitious model bid/ask quotes are introduced.
+Filtered-market VIX uses the synthetic call-equivalent bid/ask midpoints
+passed to SANOS, including parity conversion for puts, not fitted option
+prices. Since preprocessing has removed zero bids, the filtered-strip
+calculation respects the observed raw-book cutoffs, then computes its own
+forward, $K_0$ and strike quadrature on the surviving input quotes.
+
+\subsection{Analytic full-strike variance}
+For the forward-normalized mixture $S_T/F_T=s_JB_T$, with probabilities
+$p_j(T)$ on positive support $s_j$ and independent mean-one Black factor
+of business-time variance $0.05^2\tau_b(T)$, the model gives
+\begin{equation}\label{eq:wide-analytic-variance}
+  v_T^{\mathrm{analytic}}
+  =-2\E^\Q\!\left[\log(S_T/F_T)\right]
+  =-2\sum_jp_j(T)\log s_j+0.05^2\tau_b(T).
+\end{equation}
+This is the full-strike log-contract/variance-swap quantity, not a discrete
+VIX strip. We substitute these two expiry values into
+\eqref{eq:wide-vix-interpolation}; a direct 30-calendar-day model evaluation
+has a different maturity convention and is not used in
+Table~\ref{tab:wide-vix} or Figure~\ref{fig:wide-vix-comparison}.
+
+Calendar time is measured from 16:15 New York to 09:30 for AM settlement
+or 16:00 for PM settlement. Model business time uses the NYSE session
+calendar divided by 252 and the implementation's $0.8$-day AM subtraction.
+Fractional model maturities interpolate adjacent daily densities. Discount
+factors use the cached OptionMetrics zero curve with linear rate
+interpolation, not Cboe's Treasury spline. No maturity beyond 25 business
+days is extrapolated. These clock and input differences are retained in
+the reported comparisons, not calibrated away by a VIX rescaling.
+
+\subsection{Reproducibility}
+The fresh calibration is run by
+\path{quantdata/sdlv/daily/wide_fit.py}; the Q audit by
+\path{quantdata/sdlv/daily/wide_audit.py}; and the VIX calculations by
+\path{quantdata/sdlv/daily/vix_comparison.py} and
+\path{quantdata/dysanos/filtered_vix.py}, using the shared formula in
+\path{quantdata/vixdata/formula.py}.
+The source for the new tables and figure is
+\path{quantdata/sdlv/daily/paper_wide_grid.py}.
+The retained \path{generated/wide_grid/metrics.json} records the completed
+fit and audit, source paths and SHA-256 hashes; the accompanying
+\path{vix_series.csv} supplies the plotted observations. Large training
+data, checkpoints and simulation chunks remain outside the Git tree.
+This experiment uses training run \path{20261023-kVyePV} and Q-audit
+run \path{q-audit-20261024-4mkznc}. The VIX and Q results are checked
+to refer to the identical final 1,000-epoch checkpoint; no interim VIX
+snapshot is used in this addendum.

@@ -30,6 +30,7 @@ from quantdata.sdlv.daily.front_spot.calibration import (  # noqa: E402
     FrontSpotCalibration,
     calibrate_front_spot_model,
 )
+from quantdata.sdlv.daily.front_spot.estimation import JointInnovationFit  # noqa: E402
 from quantdata.sdlv.daily.front_spot.jax_model import (  # noqa: E402
     RiskNeutralState,
     black_mixture_call_prices,
@@ -45,6 +46,7 @@ from quantdata.sdlv.daily.front_spot.oce import (  # noqa: E402
     regularized_transition_gain,
 )
 from quantdata.sdlv.daily.front_spot.simulation import (  # noqa: E402
+    InitialModelState,
     load_initial_model_state,
 )
 from quantdata.torch import BaseEnvironment  # noqa: E402
@@ -504,7 +506,7 @@ def unconditional_spot_scaled_martingale_audit(
 
 
 def generate_front_spot_oce_population(
-    calibration: FrontSpotCalibration,
+    calibration: FrontSpotCalibration | None,
     *,
     path_count: int = 100_000,
     batch_size: int = 128,
@@ -515,6 +517,9 @@ def generate_front_spot_oce_population(
     seed: int = 20261004,
     instrument_universe: str = "restricted",
     measure: str = "Q",
+    initial_state: InitialModelState | None = None,
+    innovations: JointInnovationFit | None = None,
+    record_features: bool = True,
 ) -> FrontSpotOcePopulation:
     """Generate the rank-specific Q population used by the OCE experiment."""
 
@@ -526,14 +531,25 @@ def generate_front_spot_oce_population(
         raise ValueError("at least one DLV substep is required")
     if measure not in {"P", "Q"}:
         raise ValueError(f"measure must be P or Q, found {measure!r}")
+    if innovations is not None and calibration is not None:
+        raise ValueError("Supply calibration or innovations, not both")
+    if innovations is None:
+        if calibration is None:
+            raise ValueError("A fitted diffusion is required")
+        innovations = calibration.innovations
+    if measure == "P" and calibration is None:
+        raise ValueError("Physical simulation requires a complete calibration")
     started = time.perf_counter()
-    initial = load_initial_model_state(fit_label=fit_label, date_index=date_index)
-    factor_rank = calibration.innovations.factor_rank
+    initial = (
+        load_initial_model_state(fit_label=fit_label, date_index=date_index)
+        if initial_state is None else initial_state
+    )
+    factor_rank = innovations.factor_rank
     horizon = max(EXPIRY_DAYS)
     support = jnp.asarray(initial.support, dtype=jnp.float64)
     initial_tower = jnp.asarray(initial.density_tower, dtype=jnp.float64)
     loadings = jnp.asarray(
-        calibration.innovations.annualized_loadings,
+        innovations.annualized_loadings,
         dtype=jnp.float64,
     )
     if instrument_universe == "restricted":
@@ -548,7 +564,7 @@ def generate_front_spot_oce_population(
     strike_count = strikes.shape[1]
     instrument_count = 1 + len(EXPIRY_DAYS) * strike_count
     feature_count = factor_rank + 1 + instrument_count - 1 + 1 + len(EXPIRY_DAYS)
-    features = np.empty((path_count, horizon, feature_count), dtype=np.float32)
+    features = np.empty((path_count, horizon, feature_count if record_features else 0), dtype=np.float32)
     returns = np.empty((path_count, horizon, instrument_count), dtype=np.float32)
     active_mask = _active_mask(strike_count)
     selected_initial_tower = initial_tower[np.asarray(EXPIRY_DAYS) - 1]
@@ -624,29 +640,28 @@ def generate_front_spot_oce_population(
 
         for day_index in range(horizon):
             valid_option_mask = np.asarray(EXPIRY_DAYS) > day_index
-            normalized_option = current_options / current_spot[:, None, None]
-            log_option = np.where(
-                valid_option_mask[:, None],
-                np.log(np.maximum(normalized_option, 1.0e-12)),
-                0.0,
-            )
-            time_to_expiry = np.maximum(
-                np.asarray(EXPIRY_DAYS, dtype=np.float64) - day_index,
-                0.0,
-            ) / horizon
-            batch_features = np.concatenate(
-                (
-                    factor_history,
-                    np.log(current_spot)[:, None],
-                    log_option.reshape(batch_size, -1),
-                    np.full((batch_size, 1), day_index / horizon),
-                    np.broadcast_to(time_to_expiry, (batch_size, len(EXPIRY_DAYS))),
-                ),
-                axis=1,
-            )
-            features[completed : completed + valid_count, day_index] = batch_features[
-                :valid_count
-            ]
+            if record_features:
+                normalized_option = current_options / current_spot[:, None, None]
+                log_option = np.where(
+                    valid_option_mask[:, None],
+                    np.log(np.maximum(normalized_option, 1.0e-12)),
+                    0.0,
+                )
+                time_to_expiry = np.maximum(
+                    np.asarray(EXPIRY_DAYS, dtype=np.float64) - day_index,
+                    0.0,
+                ) / horizon
+                batch_features = np.concatenate(
+                    (
+                        factor_history,
+                        np.log(current_spot)[:, None],
+                        log_option.reshape(batch_size, -1),
+                        np.full((batch_size, 1), day_index / horizon),
+                        np.broadcast_to(time_to_expiry, (batch_size, len(EXPIRY_DAYS))),
+                    ),
+                    axis=1,
+                )
+                features[completed : completed + valid_count, day_index] = batch_features[:valid_count]
 
             future_count = q_state.future_dlvsq.shape[-2]
             if measure == "Q":
@@ -745,6 +760,9 @@ def generate_front_spot_oce_population(
                     "completed_paths": completed,
                     "path_count": path_count,
                     "elapsed_seconds": time.perf_counter() - started,
+                    "estimated_remaining_seconds": (
+                        (time.perf_counter() - started) * (path_count - completed) / completed
+                    ),
                 }
             ),
             flush=True,

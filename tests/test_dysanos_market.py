@@ -11,9 +11,9 @@ from cdxcore.subdir import SubDir
 from cdxcore.verbose import Context
 
 from quantdata.dysanos import market as dysanos_market
-from quantdata.dysanos.tangent_levy.config import MarketConfig
-from quantdata.dysanos.tangent_levy.markets import market_day_from_payload
 from quantdata.sanos.arbfree import ArbFreePricer
+from quantdata.sdlv.tangent_levy.config import MarketConfig
+from quantdata.sdlv.tangent_levy.markets import market_day_from_payload
 
 
 @pytest.mark.parametrize(
