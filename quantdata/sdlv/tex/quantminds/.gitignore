@@ -1,6 +1,7 @@
-# track only the deck source and its figures
+# Track the deck source, retained PDF, and its figures.
 *
 !.gitignore
 !quantminds2026_slides.tex
+!quantminds2026_slides.pdf
 !figs/
 !figs/*
