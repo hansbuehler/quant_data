@@ -1,0 +1,109 @@
+{
+  "model": "Gromm-v1-4,3",
+  "tenor_calendar_days": 14,
+  "origin": "2025-08-29",
+  "sample_date": "2025-09-03",
+  "market_unavailable": {},
+  "simulation": {
+    "expiry_business_calendar_days": [
+      [
+        9,
+        9.270833333333334
+      ],
+      [
+        13.2,
+        16
+      ]
+    ],
+    "alpha": 0.7027863777089783,
+    "paths_per_measure": 8192,
+    "substeps_per_day": 8,
+    "seed": 20261028,
+    "sample_business_days": 1.2
+  },
+  "statistics": {
+    "Market history": {
+      "n": 891,
+      "mean": 19.152571317605595,
+      "median": 17.473130729110405,
+      "population_std": 6.589005567593899,
+      "p05": 11.84203456563225,
+      "p95": 31.043336735805656,
+      "maximum": 63.08193073969455
+    },
+    "GROMM Q": {
+      "n": 8192,
+      "mean": 17.036819796427423,
+      "median": 16.577577612324063,
+      "population_std": 3.021303978125783,
+      "p05": 14.076911861032507,
+      "p95": 21.091517594542264,
+      "maximum": 99.98245478280046,
+      "mean_mc_se": 0.02337185066910974
+    },
+    "GROMM P": {
+      "n": 8192,
+      "mean": 16.373426013914226,
+      "median": 16.04380782170414,
+      "population_std": 2.3751987243408053,
+      "p05": 13.781378941056445,
+      "p95": 19.80315243111928,
+      "maximum": 89.78701959432127,
+      "mean_mc_se": 0.016514589674039345
+    }
+  },
+  "frozen_diffusion": "/home/hans/quantdata_data/experiments/quant_data/sdlv/Gromm-v1-4,3/20261023-kVyePV/rolling252-full-q-20261026-wpxWhA/full/diffusion.npz",
+  "frozen_diffusion_sha256": "cd45b039b570424ed277cd168e5af9ffae9029dade8c3c5c280032f927762cbb",
+  "source_sha256": "5b27befd67cce9a8dae06e998bf90547481c8783ea22f43b90c7774cec1fdc05",
+  "limitations": [
+    "Custom 14-day index, not published Cboe 30-day VIX.",
+    "Market observations use raw quote mids; sampled index uses continuous full-strike log variance.",
+    "Historic unconditional distribution is not the same estimand as conditional P/Q distributions.",
+    "P uses the existing constant risk-price projection method, newly estimated on the same causal rolling window."
+  ],
+  "initial_state": {
+    "date": "2025-08-29",
+    "market_2w": 13.61566240214272,
+    "gromm_full_strike_2w": 13.915691086073947,
+    "expiries": [
+      "2025-09-12",
+      "2025-09-19"
+    ]
+  },
+  "physical_fit": {
+    "training_start": "2024-08-20",
+    "training_end": "2025-08-28",
+    "pair_count": 249,
+    "diffusion_matches_frozen": true,
+    "constant_market_price_of_risk": [
+      2.5405375035672715,
+      14.435810168283783,
+      -10.025014695405961,
+      3.254607637070421,
+      -8.89554069637057,
+      -2.9638373363225696,
+      4.93126014032229,
+      -0.7097696393012423
+    ],
+    "constant_achievable_fraction": 0.4576872819471799,
+    "statewise_achievable_fraction": 0.6271457860159334,
+    "convention": "dW_Q = dW_P + lambda dt; constant density-weighted projection of historical AR drift",
+    "source": "New P projection on the same strictly prior rolling history; existing Q surface and diffusion unchanged."
+  },
+  "raw_market_cache": "/mnt/nas/quantdata/widb/",
+  "market_source": "Cached WRDS OptionMetrics raw SPX options (secid 108105) and contemporaneous zero curves",
+  "validation": "4 focused tests passed; syntax compilation and import sorting passed; no historical SANOS parameters refitted.",
+  "retention": "Histogram PDFs and compact report deliberately retained at user request; raw quotes, simulation draws, logs and fitted parameters remain in external project storage.",
+  "external_run_directory": "/home/hans/quantdata_data/experiments/quant_data/vix_2w/20261027-market-pq-v1",
+  "retained_pdf_sha256": {
+    "quantdata/sdlv/results/gromm_v1_4_3_2w_vix_histograms.pdf": "01f7788484c4a395dfd9667d89eca2a9c65203897a03902bfc3522883b2eabce",
+    "quantdata/sdlv/results/gromm_v1_4_3_2w_vix_histograms_full_range.pdf": "498054991e75f546d27c4206e5d09b8004a3ee49f9486c28ac18c318c76c3ed6"
+  },
+  "external_output_sha256": {
+    "historical_market_2w.csv": "643d7bc5f7d64dd3ea5677568ab0d661903995af9900b503d48af768c9815703",
+    "market_expiry_audit.csv": "005ac33cbba8f259badcc697e86ba51738f04508881eb1667ad36c07dcabdd21",
+    "sampled_P_2w.npy": "e7dacc6cfd089a0ea61a042eb986daac17f3a009173f042dd1886c5f52f26f35",
+    "sampled_Q_2w.npy": "813c1872af7eca7c406792873fb3abe7468a114e1bb4d1740ed54a53060b1671",
+    "physical_fit.npz": "ebb87c003f6ba9b3fa85ad23eecf1da4fa2af860414e0b6fbfe5db11c5026c6c"
+  }
+}
