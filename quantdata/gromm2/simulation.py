@@ -73,6 +73,8 @@ def _decode_active_tower(
     front_density: Array,
     future_dlvsq: Array,
     interval_years: Array,
+    *,
+    linear_solver: str = "thomas",
 ) -> Array:
     return decode_density_tower_from_front(
         supports,
@@ -80,6 +82,7 @@ def _decode_active_tower(
         front_density,
         future_dlvsq,
         interval_years,
+        linear_solver=linear_solver,
     )
 
 
@@ -112,6 +115,7 @@ def one_day_risk_neutral_step(
     day_year_fraction: float = 1.0 / 252.0,
     background_annual_volatility: float = 0.05,
     density_loading_floor: float = 1.0e-4,
+    linear_solver: str = "thomas",
 ) -> DailyStepResult:
     """Advance one day using the exact front bridge and Q DLV drift."""
     if factor_normals.shape[0] != substeps:
@@ -139,6 +143,7 @@ def one_day_risk_neutral_step(
             current_front,
             current_dlvsq,
             interval_years,
+            linear_solver=linear_solver,
         )
         effective_loadings = localize_loadings_by_density(
             active_log_dlvsq_loadings,
@@ -154,6 +159,7 @@ def one_day_risk_neutral_step(
             interval_years,
             effective_loadings,
             front_loading,
+            linear_solver=linear_solver,
         )
         diffusion = jnp.einsum(
             "...jnf,...f->...jn", effective_loadings, factor_normal
@@ -193,6 +199,7 @@ def one_day_risk_neutral_step(
         updated_front,
         updated_future,
         interval_years,
+        linear_solver=linear_solver,
     )
     if tower.shape[-2] > 1:
         next_front = jax.lax.cond(

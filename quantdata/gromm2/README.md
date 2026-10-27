@@ -126,3 +126,120 @@ The watcher waits for the requested origin and never requests a GPU in CPU
 mode. It saves chunk-level restart state and per-date statistics under
 `rolling/YYYY-MM-DD/unconditional_q/`, with an aggregate JSON summary in the
 calibration root. No conditional policy is trained for these daily audits.
+
+## Forward-start straddle hedging
+
+`forward_hedging.py` generates 100,000 training and 100,000 independently
+seeded validation paths over twenty business days, with eight Brownian
+substeps per day. The claim pays `abs(S_20 / S_10 - 1)` in inception-spot
+cash units. The primary Monte Carlo price and its antithetic-pair standard
+error use the training sample; the independent validation price is reported
+separately. These are simulations of the model's discretized Q dynamics,
+without empirical return recentering or measure adjustment.
+
+The fixed hedge book contains spot and one inception-OTM side per strike:
+puts below one, calls at or above one. Expiries are 5, 10, 15 and 20 business
+days, each with strikes `0.98, 0.99, 1, 1.01, 1.02`; the 20-day expiry also
+has `0.95` and `1.05`. There are 22 options plus spot. Options cash-settle
+once and cannot be traded at or after expiry. There are no transaction
+costs. Daily marks, claim payoffs and P&L retain float64 precision.
+
+The observable features contain time, spot, all fixed option prices, live
+instrument masks, and the day-10 fixing once it is known. Additional latent
+inputs are the live front density, sixteen spatial projections of current
+log-DLV levels, maturity-level log-DLV means, cumulative past factor
+Brownian increments and the independent Black background level. This is a
+compact latent feature set, not an assertion that sixteen projections alone
+are the complete Markov state. No future shock or future fixing is exposed.
+
+Each action is an affine head plus a deep head, both applied to the current
+features, previous holdings and LSTM hidden output. Only after choosing the
+new holdings does the LSTM consume current features and old/new holdings
+to update the next day's memory. The default numerical cap is ten units per
+instrument, with a smooth tanh cap and a separate penalty beyond eight raw
+units. Cap frequencies, the unpenalized economic objective and the numerical
+penalty are reported separately; the penalty is not an economic trading cost.
+
+For each risk aversion `lambda=1,10`, fit an empty-liability policy and then
+a short-one-claim policy. The power-exponential utility is
+`u(x)=(1-exp(-lambda*x))/lambda` for nonnegative `x`, and
+`u(x)=x-lambda*x*x/2` otherwise. The training objective is its OCE,
+`sup_m {m + E[u(P&L-m)]}`, less the numerical action penalty. Normalization,
+checkpoint selection, learning-rate reviews and convergence checks use only
+the 100,000 training paths. All four policies are frozen before opening the
+separate validation sample. Final statistics use complete antithetic pairs;
+the zero-liability control must not be interpreted as proving arbitrage
+absence beyond its information set, strategy class and numerical scheme.
+
+```bash
+JAX_PLATFORMS=cpu /home/hans/vqdata/bin/python \
+  -m quantdata.gromm2.forward_hedging \
+  --calibration-root /path/to/quality-gated/repaired/calibration \
+  --run-directory /path/to/external/unique/forward-straddle-run \
+  --origin 2025-08-29 --paths 100000 --batch-size 256 --substeps 8 --wait
+```
+
+The rolling-model route waits for the repaired model's complete
+`ar1.npz` and quality-passing report. It does not silently substitute an older
+model or waive failed historical fits. HDF5 files checkpoint complete path
+batches, and policy checkpoints retain optimizer, scheduler, RNG,
+normalization, epoch and minibatch state. Maximum epochs are a safety
+ceiling, not a convergence certificate. The default backend remains CPU.
+
+The separately labelled saved-model route uses the earlier `(-3,2)`
+affine-200 history and its fitted sixteen-factor AR(1) law. This was explicitly
+selected for the first hedging experiment while the `(-4,3)` rolling repair
+continues. It is not a result for the repaired rolling model. At each day's
+start, the saved AR(1) intercept and slope predict log-squared factor scores;
+the bounded, calibrated scales multiply the DLV loading columns, not the
+Gaussian shocks or the front bridge. The realized daily factor scores update
+the AR(1) state only after that day's transition. Physical drift coefficients
+are not used under Q. Loading surfaces are interpolated in remaining maturity
+each day. The AR(1) state and predictable scales are included in policy inputs.
+
+```bash
+JAX_PLATFORMS=cpu /home/hans/vqdata/bin/python \
+  -m quantdata.gromm2.forward_hedging \
+  --legacy-history /path/to/affine-200-history.h5 \
+  --legacy-estimate /path/to/affine-200-models-rank16-final.npz \
+  --legacy-factor-law /path/to/factor-laws.npz \
+  --run-directory /path/to/external/unique/legacy-ar1-straddle-run \
+  --origin 2025-08-29 --paths 100000 --batch-size 256 --substeps 8
+```
+
+Each scenario report includes unconditional screens of raw daily gains,
+spot-scaled daily gains and inception-to-settlement option gains, using
+independent antithetic pairs. Expired contracts are excluded, and settlement
+is counted once. These pointwise screens diagnose finite-step bias; neither
+the continuous-time Q drift nor a fitted covariance law guarantees that the
+daily numerical scheme is exactly martingale.
+
+Following the explicit revocation of the CPU-only instruction, the same saved
+AR(1) experiment also supports `--backend gpu`. Its forward sampler uses JAX
+CUDA and its hedge training uses `TrainConfig(device="cuda")`. Both require
+allocation-provided `CUDA_VISIBLE_DEVICES`, refuse silent CPU fallback, and
+perform a JAX float64/Torch gradient preflight after allocation. GPU RNG state
+is included in policy restart files. The financial model and 5% background
+are unchanged by selecting a different compute device.
+
+`gpu_forward_queue.py` is a standard-library-only waiting parent. It retries
+only the GPU manager's explicit busy responses and does not import or probe
+CUDA while waiting. A uniquely identified GPU run directory keeps CPU and GPU
+scenario files separate. Once allocated, it asks the previous owned CPU worker
+to checkpoint and exit, then runs the GPU command through that allocation.
+Unrelated GPU owners are never interrupted. Queue state and progress are saved
+in `gpu_queue_status.json`; ordinary completion releases the claim. A resource
+STOP halts the owned child within 60 seconds and keeps the claim pending
+explicit allocation-specific release approval.
+
+The optional `--linear-solver pcr` uses parallel cyclic reduction for the same
+float64 symmetric tridiagonal systems; the default remains Thomas. A saved
+full-path check uses identical Gaussian draws for CPU/Thomas and GPU/PCR, with
+twenty days and eight substeps: option-price differences are below `1.5e-15`,
+payoffs agree, and density conservation errors remain below `7e-14`. On the
+allocated RTX 5090, a warmed 256-path batch takes approximately 3.2 seconds,
+compared with roughly thirteen minutes for the sequential GPU solver. This is
+a numerical implementation change, not a model, volatility or time-step change.
+The faster production run has its own directory and code/config identity; the
+earlier completed prefix remains separate. Provisional price and unconditional
+diagnostic snapshots are written after the first batch and every 4,096 paths.

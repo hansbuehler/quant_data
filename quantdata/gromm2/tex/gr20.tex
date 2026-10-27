@@ -694,6 +694,19 @@ useful dynamics diagnostic, but improvement in
 Equation~\eqref{eq:empirical-entropic-hedging-risk} is the economically
 relevant test.
 
+\paragraph{GPU linear algebra.}
+We solve the same float64 tridiagonal systems by parallel cyclic reduction
+on the GPU, retaining the sequential solver as a reference.  On an RTX~5090,
+a warmed batch of 256 complete twenty-day paths, with eight Brownian
+substeps per day, takes $3.23$ seconds instead of approximately thirteen
+minutes with sequential elimination.  A complete-path comparison using
+identical Gaussian draws gives option-price differences below
+$1.5\times10^{-15}$, identical forward-start straddle payoffs, and
+mass and forward-mean errors below $7\times10^{-14}$.  The model parameters,
+grid and time steps are unchanged.  These checks establish numerical
+equivalence of the implementation; they do not replace the unconditional
+and held-out strategy-conditional martingale diagnostics.
+
 \section{VIX Reconstruction}
 \label{sec:vix-reconstruction}
 
