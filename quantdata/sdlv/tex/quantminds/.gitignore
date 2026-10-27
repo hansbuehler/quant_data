@@ -1,0 +1,6 @@
+# track only the deck source and its figures
+*
+!.gitignore
+!quantminds2026_slides.tex
+!figs/
+!figs/*
