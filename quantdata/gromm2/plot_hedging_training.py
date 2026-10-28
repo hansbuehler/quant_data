@@ -134,8 +134,14 @@ def plot_independent_losses(policy_directory: Path, *, output: Path) -> dict[str
     report = json.loads((policy_directory / "training_report.json").read_text())
     rows = json.loads((policy_directory / "training_history.json").read_text())["epochs"]
     epochs = np.asarray([entry["epoch"] for entry in rows])
-    figure, axes = plt.subplots(3, 1, figsize=(11, 12), constrained_layout=True)
-    for axis, name, title in zip(axes, ("zero", "short", "long"),
+    figure, axes = plt.subplots(4, 1, figsize=(11, 15), constrained_layout=True)
+    for split, color in (("train", "#c93c55"), ("validation", "#258b57")):
+        axes[0].plot(epochs, [sum(entry[split][name]["risk_at_training_translation"]
+            for name in ("zero", "short", "long")) for entry in rows], color=color, label=split.title())
+    axes[0].set(title="Sum of the three risks; independent policy weights", xlabel="Epoch", ylabel="Net-of-cost OCE risk")
+    axes[0].grid(alpha=0.25)
+    axes[0].legend(fontsize=10)
+    for axis, name, title in zip(axes[1:], ("zero", "short", "long"),
                                  ("Zero portfolio", "Short payoff: seller hedge", "Long payoff: buyer hedge"), strict=True):
         axis.plot(epochs, [entry["train"][name]["risk_at_training_translation"] for entry in rows],
             color="#c93c55", label=f"Training: {report['training_paths']:,} paths")
@@ -146,7 +152,8 @@ def plot_independent_losses(policy_directory: Path, *, output: Path) -> dict[str
         axis.set(title=title, xlabel="Epoch", ylabel="Net-of-cost OCE risk; lower is better")
         axis.grid(alpha=0.25)
         axis.legend(fontsize=10)
-    background = report["scenario_model"].get("background_volatility", 0.0)
+    background = report["scenario_model"].get("simulated_background_volatility",
+        report["scenario_model"].get("background_volatility", 0.0))
     figure.suptitle(f"GROMM2 independent portfolio policies · λ={report['config']['risk_aversion']:g}\n"
         f"{report['config']['label']} · Black smoothing {100 * background:g}% · original Q, equal weights", fontsize=15)
     output.parent.mkdir(parents=True, exist_ok=True)

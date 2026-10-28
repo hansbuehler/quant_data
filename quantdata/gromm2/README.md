@@ -1,5 +1,13 @@
 # Gromm v2 4,3
 
+For the current forward-start **deep-hedging review and paired real-contract
+experiment**, see [DH_TEST.md](../../DH_TEST.md), especially Sections 9-10.
+That experiment explicitly uses the selected earlier `(-3,2)` AR(1) model,
+not the newer `(-4,3)` rolling calibration described below. Its runner is
+`paired_experiment.py`: shared latent paths for the 5%/zero Black controls,
+the static/locked-cohort book and the spot/PCA-basket/daily-ATM-call book,
+with independent zero/short/long policies. No synthetic latent asset is traded.
+
 The current calibration uses the consolidated source market books and saved
 DYSANOS smooth surface parameters. Each observed contract retains its own
 strike, expiry, call/put identity, and observed half-spread. Its fitting band is

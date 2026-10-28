@@ -70,10 +70,10 @@ class IndependentHedges(BaseModel):
     """All three policies have independent recurrent, affine, deep and translation weights."""
 
     def __init__(self, env: BaseEnvironment, *, config: BornOptionConfig,
-                 normalization: tuple[np.ndarray, np.ndarray]) -> None:
+                 normalization: tuple[np.ndarray, np.ndarray], policy_class: type = BornOptionPolicy) -> None:
         super().__init__(env=env)
         self.config = config
-        self.policies = torch.nn.ModuleDict({name: BornOptionPolicy(env,
+        self.policies = torch.nn.ModuleDict({name: policy_class(env,
             config=replace(config, label=f"{config.label}-{name}"), normalization=normalization) for name in LIABILITIES})
 
 
@@ -84,6 +84,7 @@ def portfolio_quote_statistics(payoff: np.ndarray, gains: dict[str, np.ndarray],
     for name, sign in LIABILITIES.items():
         scores[name], _ = risk_path_scores(gains[name] - sign * payoff, risk_aversion=risk_aversion)
     records = {name: pair_statistics(values) for name, values in scores.items()}
+    records["DH_sum"] = pair_statistics(scores["zero"] + scores["short"] + scores["long"])
     records["expectation"] = pair_statistics(payoff)
     records["ask"] = pair_statistics(scores["short"] - scores["zero"])
     records["bid"] = pair_statistics(scores["zero"] - scores["long"])
@@ -133,7 +134,8 @@ def evaluate_portfolios(model: IndependentHedges, data, *, batch_size: int, prog
 
 
 def train_independent_portfolios(train, validation, *, directory: Path, config: BornOptionConfig,
-                                 train_config: JointTrainConfig = JointTrainConfig(), just_load: bool = False):
+                                 train_config: JointTrainConfig = JointTrainConfig(), just_load: bool = False,
+                                 policy_class: type = BornOptionPolicy):
     """Train on common minibatches, with separate optimizers, checkpoints and stopping decisions."""
     check_resource_headroom()
     directory.mkdir(parents=True, exist_ok=True)
@@ -146,7 +148,7 @@ def train_independent_portfolios(train, validation, *, directory: Path, config: 
     progress.thread.start()
     try:
         normalization = feature_normalization(train.features, floor=config.normalization_floor)
-        model = IndependentHedges(env, config=config, normalization=normalization)
+        model = IndependentHedges(env, config=config, normalization=normalization, policy_class=policy_class)
         optimizers = {name: torch.optim.Adam(policy.parameters(), lr=train_config.learning_rate)
             for name, policy in model.policies.items()}
         forwards = {name: torch.compile(policy) if train_config.compile else policy

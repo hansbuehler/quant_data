@@ -9,8 +9,12 @@ import jax.numpy as jnp
 
 from quantdata.gromm2.bridge import advance_front_density, front_density_volatility
 from quantdata.gromm2.dlv import (
+    SparseTransport,
+    apply_sanos_matrix,
+    apply_transport,
     decode_density_tower_from_front,
     risk_neutral_log_drift,
+    solve_sanos_step,
 )
 
 Array = jax.Array
@@ -101,6 +105,46 @@ def localize_loadings_by_density(
     return log_dlvsq_loadings * weight[..., None]
 
 
+def fused_risk_neutral_increments(
+    supports: Array, transports: Array | SparseTransport, front_density: Array,
+    future_dlvsq: Array, interval_years: Array, loading_field: Array,
+    front_loading: Array, factor_normal: Array, factor_scales: Array, *,
+    density_loading_floor: float, linear_solver: str,
+) -> tuple[Array, Array, Array]:
+    """Stream the unchanged Q recursion, retaining scalar increments per node.
+
+    The loading field is unbatched. Path-dependent amplitudes and density
+    localization are applied inside each expiry, rather than materializing
+    path-by-expiry-by-strike-by-factor tensors for the whole tower.
+    """
+    factor_count = loading_field.shape[-1]
+
+    def maturity(carry, inputs):
+        previous_density, previous_loading = carry
+        support, transport, local_variance, interval, base_loading = inputs
+        density = solve_sanos_step(support, apply_transport(transport, previous_density),
+            local_variance * interval, linear_solver=linear_solver)
+        loading = localize_loadings_by_density(base_loading * factor_scales[..., None, :],
+            density, relative_floor=density_loading_floor)
+        zeros = jnp.zeros(loading.shape[:-2] + (1, factor_count), dtype=loading.dtype)
+        loading_density = jnp.concatenate((zeros, loading, zeros), axis=-2) * density[..., :, None]
+        density_loading = solve_sanos_step(support,
+            apply_transport(transport, previous_loading, matrix=True) + loading_density
+            - apply_sanos_matrix(support, loading_density, local_variance * interval),
+            local_variance * interval, linear_solver=linear_solver)
+        relative_loading = density_loading[..., 1:-1, :] / jnp.maximum(
+            density[..., 1:-1, None], jnp.finfo(density.dtype).tiny)
+        relative_drift = -jnp.sum(loading * relative_loading, axis=-1)
+        variance = jnp.sum(loading**2, axis=-1)
+        diffusion = jnp.einsum("...nf,...f->...n", loading, factor_normal)
+        return (density, density_loading), (relative_drift, variance, diffusion)
+
+    _, outputs = jax.lax.scan(maturity, (front_density, front_loading),
+        (supports[1:], transports, jnp.moveaxis(future_dlvsq, -2, 0),
+         interval_years, loading_field))
+    return tuple(jnp.moveaxis(value, 0, -2) for value in outputs)
+
+
 def one_day_risk_neutral_step(
     supports: Array,
     transports: Array,
@@ -116,6 +160,7 @@ def one_day_risk_neutral_step(
     background_annual_volatility: float = 0.05,
     density_loading_floor: float = 1.0e-4,
     linear_solver: str = "thomas",
+    factor_scales: Array | None = None,
 ) -> DailyStepResult:
     """Advance one day using the exact front bridge and Q DLV drift."""
     if factor_normals.shape[0] != substeps:
@@ -137,34 +182,26 @@ def one_day_risk_neutral_step(
             remaining_time=remaining_time,
             factor_count=factor_count,
         )
-        current_tower = _decode_active_tower(
-            supports,
-            transports,
-            current_front,
-            current_dlvsq,
-            interval_years,
-            linear_solver=linear_solver,
-        )
-        effective_loadings = localize_loadings_by_density(
-            active_log_dlvsq_loadings,
-            current_tower[..., 1:, :],
-            relative_floor=density_loading_floor,
-        )
-        factor_variance = jnp.sum(effective_loadings**2, axis=-1)
-        _, _, log_drift = risk_neutral_log_drift(
-            supports,
-            transports,
-            current_front,
-            current_dlvsq,
-            interval_years,
-            effective_loadings,
-            front_loading,
-            linear_solver=linear_solver,
-        )
-        diffusion = jnp.einsum(
-            "...jnf,...f->...jn", effective_loadings, factor_normal
-        )
-        relative_drift = log_drift + 0.5 * factor_variance
+        if factor_scales is not None:
+            relative_drift, factor_variance, diffusion = fused_risk_neutral_increments(
+                supports, transports, current_front, current_dlvsq, interval_years,
+                active_log_dlvsq_loadings, front_loading, factor_normal, factor_scales,
+                density_loading_floor=density_loading_floor, linear_solver=linear_solver)
+        else:
+            current_tower = _decode_active_tower(
+                supports, transports, current_front, current_dlvsq,
+                interval_years, linear_solver=linear_solver)
+            effective_loadings = localize_loadings_by_density(
+                active_log_dlvsq_loadings, current_tower[..., 1:, :],
+                relative_floor=density_loading_floor)
+            factor_variance = jnp.sum(effective_loadings**2, axis=-1)
+            _, _, log_drift = risk_neutral_log_drift(
+                supports, transports, current_front, current_dlvsq,
+                interval_years, effective_loadings, front_loading,
+                linear_solver=linear_solver)
+            diffusion = jnp.einsum(
+                "...jnf,...f->...jn", effective_loadings, factor_normal)
+            relative_drift = log_drift + 0.5 * factor_variance
         drift_increment, tamed = stabilized_relative_drift_increment(
             relative_drift, substep_size
         )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from pathlib import Path
 
 import h5py
@@ -22,13 +23,28 @@ def scenario_digest(path: Path) -> str:
         if report["identity"] == identity:
             return str(report["sha256"])
     digest = hashlib.sha256()
+    started = last_report = time.monotonic()
+    completed = 0
+    print(json.dumps({"event": "scenario_digest_started", "path": str(path),
+        "completed_bytes": 0, "total_bytes": stat.st_size, "elapsed_seconds": 0.0}), flush=True)
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(8 * 1024 * 1024), b""):
             digest.update(block)
+            completed += len(block)
+            now = time.monotonic()
+            if now - last_report >= 60:
+                elapsed = now - started
+                print(json.dumps({"event": "scenario_digest_progress", "path": str(path),
+                    "completed_bytes": completed, "total_bytes": stat.st_size, "elapsed_seconds": elapsed,
+                    "remaining_seconds": elapsed * (stat.st_size - completed) / max(completed, 1)}), flush=True)
+                last_report = now
     if path.stat().st_mtime_ns != stat.st_mtime_ns:
         raise RuntimeError("scenario file changed while calculating its digest")
     value = digest.hexdigest()
     _write_json(target, {"identity": identity, "sha256": value})
+    print(json.dumps({"event": "scenario_digest_complete", "path": str(path),
+        "completed_bytes": completed, "total_bytes": stat.st_size,
+        "elapsed_seconds": time.monotonic() - started}), flush=True)
     return value
 
 

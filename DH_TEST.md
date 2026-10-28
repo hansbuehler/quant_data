@@ -5,11 +5,12 @@ following `581a54b` and `e543868`. This document records the latest agreed
 experiment, what the committed code actually implements, and how to review
 and test it. It is not a declaration that the latest experiment has completed.
 
-**Important:** the latest floating-option, held-to-expiry book below is
-**not implemented yet**. The preceding million-path pipeline was stopped
-before hedge training because it uses the superseded trading universe.
-Do not restart that pipeline and interpret its results as the new experiment.
-No model dynamics or paper text were changed to prepare this review.
+**Reading this evolving review:** Sections 1-8 preserve the pre-implementation
+snapshot above. Sections 9-10 record the subsequent factor-book decision and
+implementation. The preceding million-path pipeline was stopped before hedge
+training because it uses the superseded trading universe. Do not restart it
+and interpret its results as the new experiment. The new sampler preserves
+the model dynamics, rather than correcting gains by changing the measure.
 
 ## 1. Objective and latest agreed experiment
 
@@ -561,3 +562,191 @@ market/model inputs, complete/partial path samples, checkpoints and runtime
 logs intentionally remain outside Git at the documented host paths. This
 snapshot does not claim those data are publicly redistributable or portable
 to another machine without arranging access.
+
+## 9. Additional factor-portfolio benchmark: daily ATM call
+
+This specifies a **separate 1,000,000-training plus 1,000,000-validation-path
+experiment**, implemented in the new pipeline described in Section 10. The
+trading book comprises spot, portfolios of real vanilla options chosen to
+span the model factors, and a new **floating one-business-day ATM call** each
+day. No directly tradable latent X, background Y, or artificial Brownian
+factor security is introduced. Option portfolios must be financed and marked
+as actual underlying contract holdings, not as changes in PCA coordinates.
+
+At each trading date t = 0,...,19:
+
+- Quote a new call with cash strike K_t = S_t and expiry t+1.
+- Choose its position using information available at t only.
+- Pay its inception premium and the experiment's applicable option entry cost.
+- Hold this contract to next-day cash settlement, then remove the position.
+- Offer a different ATM call at the next date; do not reset the strike of the
+  old contract or take a price difference between the two contracts.
+
+For position n_t in that day's call, the trading gain before entry costs is
+
+\[
+n_t\left[(S_{t+1}-S_t)^+-C_t(S_t,t+1)\right].
+\]
+
+Expiry settlement carries no exit cost. All such calls settle by day 20,
+including the call entered on day 19. The earlier restriction stopping new
+**10-DTE** floating entries after day 10 does not stop these daily 1-DTE
+entries. If a factor portfolio contains the same call, net its holdings with
+the directly chosen call position before computing turnover, costs and caps.
+
+This call replaces the proposed synthetic-Y trading control, not the need
+to verify spanning. Compute its joint diffusion exposures alongside spot and
+the option portfolios, and report loading rank, singular values and residual
+factor risk. Adding it does not by itself establish completeness or exact
+daily replication. At zero Black smoothing Y is constant and S=X; with a
+nonzero background, separation must come from the actual option exposures.
+
+Retain the target H, original equal-Q weights, independent zero/short/long
+policies, risk aversion 100, and paired Monte Carlo uncertainty conventions
+defined above. Accounting, causality and numerical-equivalence checks are
+recorded in Section 10. Initial loading rank is not a certificate of rank
+along every future path or of exact replication under daily trading.
+
+## 10. Paired real-contract implementation
+
+The new entry point is
+[`paired_experiment.py`](quantdata/gromm2/paired_experiment.py), with
+[`paired_forward.py`](quantdata/gromm2/paired_forward.py) for sampling,
+[`market_books.py`](quantdata/gromm2/market_books.py) for contract identities
+and factor baskets, and
+[`market_hedging.py`](quantdata/gromm2/market_hedging.py) for execution and
+the independent recurrent policies. The old million-path runner is not used.
+Paper text is unchanged.
+
+### Sampling optimizations
+
+- The 5% and zero-background controls use one identical latent trajectory per
+  path. Only their independent Black levels, cash spots, option marks and
+  payoff differ. This is possible because the requested zero-background
+  control does not refit the saved DLVs or AR(1) law.
+- `simulation.fused_risk_neutral_increments` streams the same density/loading
+  recursion by expiry, retaining only scalar drift, variance and diffusion
+  increments over the full tower. It does not broadcast all factor loadings
+  across every path and maturity at once. The original implementation remains
+  the numerical reference when the new `factor_scales` argument is absent.
+- Each day's JIT kernel receives only still-active model expiry rows; there
+  are no dummy expired maturity solves. Kernels are reused across batches
+  and across the independent training/validation splits.
+- Latent features are stored once per split. Both books and both smoothing
+  controls reuse them through read-only memory-mapped batch views. There is
+  no second complete latent simulation for another hedge book.
+
+The reference/equivalence harness is
+[`benchmark_paired_forward.py`](quantdata/gromm2/benchmark_paired_forward.py).
+At 1,024 paths, the initial two-split GPU comparison gave payoff discrepancies
+below `9e-16`, common option-mark discrepancies below `7e-14`, and differences
+below `1.4e-7` after normalizing float32 latent features using population SD
+with floor `1e-4`. Raw float32 feature differences reached `3.8e-6`; these
+are not being described as bitwise-identical features. The larger reference
+implementation exhausted GPU memory at batch 4,096, so that reference is
+evaluated in 1,024-path chunks when testing larger optimized batches.
+
+### Two actual-option hedge books
+
+**Cohort book:** 14 static 10D/20D contracts and 70 additional contracts born
+on days 1-10. The day-0 10D cohort is the existing static book, not seven extra
+instruments. Cohorts remain locked to expiry except for the agreed day-10 ATM
+call, which can be rebalanced through day 19. If a day-10 contract exactly
+duplicates a static contract pathwise, its duplicate action is disabled;
+the static contract retains its trading permissions. No spot is traded in
+this book. All contracts settle by day 20.
+
+**Factor book:** spot, 15 fixed-inception PCA-mimicking option baskets and
+the new 1D ATM call each day. The basket candidate pool comprises fixed
+positive-strike calls/puts at inception-relative strikes 0.90 through 1.10
+in increments of 0.02, with model expiries 25,30,...,125 business days.
+An inception-only, column-normalized pivoted-QR selection retains a smaller
+common contract subset for both background controls before fitting the
+minimum-norm basket exposures. Exact contracts and weights are saved in
+`factor_baskets.json`; this file is required to resume an existing sample.
+The baskets use one unit of gross contract notional each. Weights are fixed
+after inception, so their subsequent factor exposures can rotate; these are
+**financed option portfolios**, not securities paying Gaussian factor shocks.
+
+These are model-priced vanilla contract types usable as a real-instrument
+benchmark, not a completed replay of historical listed quotes. A historical
+replay must select the actual available listed strikes and calendar expiries
+causally; the simulated relative strike labels alone do not prove listing or
+liquidity on a market date.
+
+The complete 231-candidate inception pilot achieved loading rank **16** with
+zero background and **17** with 5% background after including spot and the
+daily ATM call. The selected subset's rank and conditioning are recorded
+separately in its report. Do not turn an inception rank result into a claim
+of global completeness. Daily hedging, costs and finite-step Q defects remain.
+
+The selected production pool contains **44 contracts** and retains combined
+inception rank **17/17** with 5% smoothing and **16/16 active drivers** with
+zero smoothing. The retained
+[equivalence summary](quantdata/gromm2/results/paired_forward_equivalence_2026_10_28.json)
+records an additional 4,096-path comparison for each split. Common option
+marks differ by less than `9.3e-14`, payoff differences are at most `1.2e-15`,
+and floor-normalized float32 feature differences are below `4.2e-7`.
+The zero-background payoff comparison is exact in this check. Warm generation
+and pricing for **both backgrounds and both books together** takes about
+**24.5 seconds per 4,096 paths**; the original one-background reference takes
+about 29.3 seconds for that many paths in smaller chunks. The books differ,
+so these are labelled workload timings, not an identical-work speedup claim.
+
+Both books observe the same causal feature view, including current contract
+marks, known birth strikes, live masks and compact latent information.
+The factor book charges the 0.1 bp option cost on **net underlying contract
+turnover**, including liquidation of its still-live baskets at day 20. It
+does not charge a separate fictitious cost for each PCA label. Daily call
+settlement is free. Spot cost is explicitly configurable and currently zero
+for this factor-spanning diagnostic. Raw head caps and net underlying option
+caps are ten units, with soft-cap penalties and cap-frequency reporting.
+
+### Estimation, outputs and validation
+
+The three policies have separate LSTMs, affine/deep heads, translations,
+optimizers, schedulers and selected states. They are trained on the same
+minibatch sequence, which is equivalent to optimizing the sum of their
+independent objectives; it does not share parameters. Training batch size
+remains **256** regardless of the generation batch size. Validation plateau
+stopping and learning-rate review remain as described in Section 4; production
+training is not stopped at the two-epoch smoke-test ceiling.
+
+The reports include `DH_sum = DH(H)+DH(-H)+DH(0)`, each separate risk, the
+seller ask and buyer bid, gaps to Q expectation, and paired three-SE bounds.
+Loss plots show training/validation curves for the sum and all three subtasks.
+Both background controls are explicitly labelled, including the zero case.
+Generation also records unconditional spot-scaled gain screens for the real
+contract book and for basket/spot/daily-call gains. Birth and post-expiry
+coordinates are excluded from the fixed-contract screens.
+
+New regression coverage is in
+[`test_fused_simulation.py`](tests/quantdata/gromm2/test_fused_simulation.py),
+[`test_market_hedging.py`](tests/quantdata/gromm2/test_market_hedging.py) and
+[`test_paired_forward.py`](tests/quantdata/gromm2/test_paired_forward.py).
+Tests cover the streamed versus reference drift, cash settlement, locked
+holdings, birth-price exclusion, exact-contract netting, matched information,
+free daily-call settlement, real-leg costs, shared sampling, mapped storage
+and source-identity rejection. The release focused CPU run passed **176 tests**
+with one allocation-dependent GPU test skipped. Both book implementations
+also completed two-epoch compiled GPU smoke tests on 2,048 training and 2,048
+validation paths; these are execution checks, **not converged hedge results**.
+
+The new external run root is
+`/home/hans/quantdata_data/experiments/gromm2/paired-real-books-20261028-v1`.
+It contains equivalence reports, test logs, execution plan/status, completed
+batch counters, generation summaries, and the eventual independent-policy
+checkpoints and quotes. The full population price/hedge results must be read
+from that run's completion reports, not inferred from its pilot or from the
+older stopped pipeline.
+
+Production is launched under
+`quant-data-gromm2-paired-real-books-20261028-v1.service`, with generation batch
+4,096 and training batch 256. It first completes the million-path training
+and independent million-path validation samples, then runs the zero-background
+factor/cohort hedges and the 5%-background factor/cohort hedges. Every case
+fits all three independent policies. The status and price files are
+`execution_status.json`, `train_progress.json`, `validation_progress.json`,
+`train_report.json`, `validation_report.json` and the per-model `quotes.json`.
+The GPU supervisor releases its allocation at completion. No full-population
+DH prices were available when this implementation note was written.
