@@ -135,9 +135,9 @@ The LSTM in this experiment is the **hedging policy**, not the dynamics law.
 
 ### Dynamics and numerical caveats
 
-Read [`bridge.py`](quantdata/gromm2/bridge.py),
-[`simulation.py`](quantdata/gromm2/simulation.py) and
-[`dlv.py`](quantdata/gromm2/dlv.py) together.
+Read [`bridge.py`](bridge.py),
+[`simulation.py`](simulation.py) and
+[`dlv.py`](dlv.py) together.
 
 - `advance_front_density` implements the Gaussian information bridge,
   driven by the first joint factor, including final node sampling. Its
@@ -308,25 +308,25 @@ external. Review the implementation, not only the launcher defaults.
 
 | File | Main review targets |
 |---|---|
-| [`legacy_forward_model.py`](quantdata/gromm2/legacy_forward_model.py) | `load_legacy_ar1_model`: source hashes, dates, saved geometry, transport precision, decoded density checks, AR-state initialization. |
-| [`forward_hedging.py`](quantdata/gromm2/forward_hedging.py) | `ForwardScenarioConfig`, `instrument_book`, `independent_normal_block`, both pricing functions, `scenario_function`, `generate_scenarios`: timing, causality, birth/settlement, RNG namespaces and HDF5 checkpoints. |
-| [`bridge.py`](quantdata/gromm2/bridge.py) | `front_density_volatility`, `advance_front_density`: front information process and exact settlement-node sampling. |
-| [`simulation.py`](quantdata/gromm2/simulation.py) | `one_day_risk_neutral_step`, density localization, drift taming, independent Black process. |
-| [`dlv.py`](quantdata/gromm2/dlv.py) | Sparse transport, tower recursion, `risk_neutral_log_drift`, absolute versus relative density loadings. |
-| [`dynamics.py`](quantdata/gromm2/dynamics.py), [`geometry.py`](quantdata/gromm2/geometry.py) | Remaining-maturity interpolation and mass/mean-preserving transport. |
-| [`tridiagonal.py`](quantdata/gromm2/tridiagonal.py), [`quantdata/jax/tridiagonal.py`](quantdata/jax/tridiagonal.py) | Thomas/PCR dispatch and shared differentiable batched solver. |
-| [`scenario_statistics.py`](quantdata/gromm2/scenario_statistics.py) | Streaming centered pair moments, payoff price, raw/scaled daily and settlement screens. |
-| [`hedging_data.py`](quantdata/gromm2/hedging_data.py) | Read-only contiguous HDF5 mapping, completion checks, digest cache, matched information across books. |
-| [`hedging_policy.py`](quantdata/gromm2/hedging_policy.py) | `HedgingPolicy`, training-only normalization, utility/OCE, paired SEs, precision, checkpoint helpers and progress/resource handling. Its original spot-trading runner is **not** the latest options-only trainer. |
-| [`joint_hedging.py`](quantdata/gromm2/joint_hedging.py) | Reused `OptionsOnlyPolicy`, `OptionsPolicyConfig`, `JointTrainConfig`; earlier shared-LSTM experiment remains here. |
-| [`portfolio_hedging.py`](quantdata/gromm2/portfolio_hedging.py) | `BornOptionPolicy`, `IndependentHedges`, `train_independent_portfolios`, `portfolio_quote_statistics`: independent weights, loss signs, costs, stopping/resume, both quote sides. |
-| [`hedging_uncertainty.py`](quantdata/gromm2/hedging_uncertainty.py) | OCE envelope scores and paired covariance-aware MC errors. |
-| [`plot_hedging_training.py`](quantdata/gromm2/plot_hedging_training.py) | `plot_independent_losses`; train/validation axes and selected epochs. |
-| [`million_forward_experiment.py`](quantdata/gromm2/million_forward_experiment.py) | Superseded six-stage book specification; still relevant for isolation of sampling/training and signal propagation. |
-| [`gpu_forward_queue.py`](quantdata/gromm2/gpu_forward_queue.py), [`runtime.py`](quantdata/gromm2/runtime.py) | Allocation ownership, fail-closed GPU selection, resource checks, progress, graceful stop and release. |
-| [`rolling_audit.py`](quantdata/gromm2/rolling_audit.py), [`rolling_calibration.py`](quantdata/gromm2/rolling_calibration.py) | Shared pair/resource/report utilities; separate newer rolling-model route and its fit-quality gate. |
-| [`quantdata/torch/`](quantdata/torch/), [`pyproject.toml`](pyproject.toml) | `BaseModel`, `BaseEnvironment`, shared feed-forward layers and dependencies. |
-| [`hedging_measure.py`](quantdata/gromm2/hedging_measure.py) | Earlier empirical-measure experiment only. It must **not** supply weights to the current equal-Q experiment. |
+| [`legacy_forward_model.py`](legacy_forward_model.py) | `load_legacy_ar1_model`: source hashes, dates, saved geometry, transport precision, decoded density checks, AR-state initialization. |
+| [`forward_hedging.py`](forward_hedging.py) | `ForwardScenarioConfig`, `instrument_book`, `independent_normal_block`, both pricing functions, `scenario_function`, `generate_scenarios`: timing, causality, birth/settlement, RNG namespaces and HDF5 checkpoints. |
+| [`bridge.py`](bridge.py) | `front_density_volatility`, `advance_front_density`: front information process and exact settlement-node sampling. |
+| [`simulation.py`](simulation.py) | `one_day_risk_neutral_step`, density localization, drift taming, independent Black process. |
+| [`dlv.py`](dlv.py) | Sparse transport, tower recursion, `risk_neutral_log_drift`, absolute versus relative density loadings. |
+| [`dynamics.py`](dynamics.py), [`geometry.py`](geometry.py) | Remaining-maturity interpolation and mass/mean-preserving transport. |
+| [`tridiagonal.py`](tridiagonal.py), [`quantdata/jax/tridiagonal.py`](../jax/tridiagonal.py) | Thomas/PCR dispatch and shared differentiable batched solver. |
+| [`scenario_statistics.py`](scenario_statistics.py) | Streaming centered pair moments, payoff price, raw/scaled daily and settlement screens. |
+| [`hedging_data.py`](hedging_data.py) | Read-only contiguous HDF5 mapping, completion checks, digest cache, matched information across books. |
+| [`hedging_policy.py`](hedging_policy.py) | `HedgingPolicy`, training-only normalization, utility/OCE, paired SEs, precision, checkpoint helpers and progress/resource handling. Its original spot-trading runner is **not** the latest options-only trainer. |
+| [`joint_hedging.py`](joint_hedging.py) | Reused `OptionsOnlyPolicy`, `OptionsPolicyConfig`, `JointTrainConfig`; earlier shared-LSTM experiment remains here. |
+| [`portfolio_hedging.py`](portfolio_hedging.py) | `BornOptionPolicy`, `IndependentHedges`, `train_independent_portfolios`, `portfolio_quote_statistics`: independent weights, loss signs, costs, stopping/resume, both quote sides. |
+| [`hedging_uncertainty.py`](hedging_uncertainty.py) | OCE envelope scores and paired covariance-aware MC errors. |
+| [`plot_hedging_training.py`](plot_hedging_training.py) | `plot_independent_losses`; train/validation axes and selected epochs. |
+| [`million_forward_experiment.py`](million_forward_experiment.py) | Superseded six-stage book specification; still relevant for isolation of sampling/training and signal propagation. |
+| [`gpu_forward_queue.py`](gpu_forward_queue.py), [`runtime.py`](runtime.py) | Allocation ownership, fail-closed GPU selection, resource checks, progress, graceful stop and release. |
+| [`rolling_audit.py`](rolling_audit.py), [`rolling_calibration.py`](rolling_calibration.py) | Shared pair/resource/report utilities; separate newer rolling-model route and its fit-quality gate. |
+| [`quantdata/torch/`](../torch/), [`pyproject.toml`](../../pyproject.toml) | `BaseModel`, `BaseEnvironment`, shared feed-forward layers and dependencies. |
+| [`hedging_measure.py`](hedging_measure.py) | Earlier empirical-measure experiment only. It must **not** supply weights to the current equal-Q experiment. |
 
 ## 6. Existing data, results and stopped-run state
 
@@ -397,13 +397,13 @@ screens cover the fixed book, **not** the old five born options or the latest
 floating cohorts. All newly tradable contracts need appropriate gain checks.
 
 The deliberately retained earlier 100k result is
-[`forward_straddle_lambda100_100k_2026_10_28.json`](quantdata/gromm2/results/forward_straddle_lambda100_100k_2026_10_28.json).
+[`forward_straddle_lambda100_100k_2026_10_28.json`](results/forward_straddle_lambda100_100k_2026_10_28.json).
 Its validation expectation is approximately **1.97076%** of initial spot and
 its learned seller price **2.15832%**, with respective one-SE errors about
 **0.00941%** and **0.00893%** of initial spot. It uses the old shared-LSTM
 joint hedge and must not be reported as the pending independent/cohort result.
 The shared solver validation artifact is
-[`pcr_solver_validation_2026_10_27.json`](quantdata/gromm2/results/pcr_solver_validation_2026_10_27.json).
+[`pcr_solver_validation_2026_10_27.json`](results/pcr_solver_validation_2026_10_27.json).
 
 ## 7. Testing environment and reproducible checks
 
@@ -487,7 +487,7 @@ they are not convergence evidence. GPU execution was not rerun for this review.
 
 ### Test map
 
-All files below are in [`tests/quantdata/gromm2/`](tests/quantdata/gromm2/),
+All files below are in [`tests/quantdata/gromm2/`](../../tests/quantdata/gromm2/),
 except the shared SDLV solver test in the command above.
 
 - `test_forward_hedging.py`: independent RNG namespaces, causal observations,
@@ -610,11 +610,11 @@ along every future path or of exact replication under daily trading.
 ## 10. Paired real-contract implementation
 
 The new entry point is
-[`paired_experiment.py`](quantdata/gromm2/paired_experiment.py), with
-[`paired_forward.py`](quantdata/gromm2/paired_forward.py) for sampling,
-[`market_books.py`](quantdata/gromm2/market_books.py) for contract identities
+[`paired_experiment.py`](paired_experiment.py), with
+[`paired_forward.py`](paired_forward.py) for sampling,
+[`market_books.py`](market_books.py) for contract identities
 and factor baskets, and
-[`market_hedging.py`](quantdata/gromm2/market_hedging.py) for execution and
+[`market_hedging.py`](market_hedging.py) for execution and
 the independent recurrent policies. The old million-path runner is not used.
 Paper text is unchanged.
 
@@ -637,7 +637,7 @@ Paper text is unchanged.
   no second complete latent simulation for another hedge book.
 
 The reference/equivalence harness is
-[`benchmark_paired_forward.py`](quantdata/gromm2/benchmark_paired_forward.py).
+[`benchmark_paired_forward.py`](benchmark_paired_forward.py).
 At 1,024 paths, the initial two-split GPU comparison gave payoff discrepancies
 below `9e-16`, common option-mark discrepancies below `7e-14`, and differences
 below `1.4e-7` after normalizing float32 latent features using population SD
@@ -683,7 +683,7 @@ of global completeness. Daily hedging, costs and finite-step Q defects remain.
 The selected production pool contains **44 contracts** and retains combined
 inception rank **17/17** with 5% smoothing and **16/16 active drivers** with
 zero smoothing. The retained
-[equivalence summary](quantdata/gromm2/results/paired_forward_equivalence_2026_10_28.json)
+[equivalence summary](results/paired_forward_equivalence_2026_10_28.json)
 records an additional 4,096-path comparison for each split. Common option
 marks differ by less than `9.3e-14`, payoff differences are at most `1.2e-15`,
 and floor-normalized float32 feature differences are below `4.2e-7`.
@@ -721,9 +721,9 @@ contract book and for basket/spot/daily-call gains. Birth and post-expiry
 coordinates are excluded from the fixed-contract screens.
 
 New regression coverage is in
-[`test_fused_simulation.py`](tests/quantdata/gromm2/test_fused_simulation.py),
-[`test_market_hedging.py`](tests/quantdata/gromm2/test_market_hedging.py) and
-[`test_paired_forward.py`](tests/quantdata/gromm2/test_paired_forward.py).
+[`test_fused_simulation.py`](../../tests/quantdata/gromm2/test_fused_simulation.py),
+[`test_market_hedging.py`](../../tests/quantdata/gromm2/test_market_hedging.py) and
+[`test_paired_forward.py`](../../tests/quantdata/gromm2/test_paired_forward.py).
 Tests cover the streamed versus reference drift, cash settlement, locked
 holdings, birth-price exclusion, exact-contract netting, matched information,
 free daily-call settlement, real-leg costs, shared sampling, mapped storage
@@ -750,3 +750,60 @@ fits all three independent policies. The status and price files are
 `train_report.json`, `validation_report.json` and the per-model `quotes.json`.
 The GPU supervisor releases its allocation at completion. No full-population
 DH prices were available when this implementation note was written.
+
+### 10.7 Frozen-policy transaction-cost comparison
+
+[`hedging_cost_comparison.py`](hedging_cost_comparison.py)
+evaluates the same saved best policy for each of the zero, short-claim and
+long-claim portfolios both with and without transaction costs. For each path,
+it adds the actual accumulated costs back to net trading gains before
+computing the power-exponential OCE. It does not subtract an average cost
+from an already computed risk measure. Holdings, neural weights, normalization,
+checkpoint selection and equally weighted Q paths remain unchanged. Only the
+scalar evaluation translation is optimized, as required by the OCE definition.
+
+Reports contain both sets of bid/ask quotes, individual portfolio risks,
+the combined DH sum, and covariance-aware antithetic-pair Monte Carlo errors.
+This is a cost-removed evaluation of cost-trained strategies, not a newly
+optimized frictionless hedge. An independent CPU worker snapshots the current
+checkpoint without interrupting GPU training, then `--follow-finals` evaluates
+each of the four finalized book/background cases when its quotes are ready.
+The snapshot records its checkpoint hash and each portfolio's selected epoch.
+Outputs live below the external run's `cost-comparisons/` directory.
+
+The retained [frozen PCA cost-comparison snapshot](results/pca_hedge_cost_removal_snapshot_2026_10_28.json)
+records the million-path training/validation prices and three-SE bounds quoted
+in this thread. These are provisional paused PCA checkpoints under the original
+spot-notional costs, not converged results from the subsequent unit-L1 book.
+
+Focused tests are in
+[`test_hedging_cost_comparison.py`](../../tests/quantdata/gromm2/test_hedging_cost_comparison.py).
+
+### 10.8 Unit-turnover normalizer for subsequent runs
+
+The alternative-book run and future PCA runs use a pure L1 turnover normalizer
+with coefficient `0.1e-4`, without multiplying by current spot. For the
+alternative book this is charged per traded option contract; cash settlement
+at expiry remains free. For PCA runs this is charged per basket, not on the
+net underlying option legs. New daily calls incur one entry charge and no
+expiry charge. The still-live PCA baskets incur terminal liquidation turnover.
+Spot's normalizer remains zero by default.
+
+`UnitTurnoverBookConfig` and `UnitTurnoverBookPolicy` preserve these conventions
+under a new checkpoint identity and a `-unit-l1` label suffix. Archived PCA
+checkpoints and their reported prices remain unchanged. The original
+`MarketBookConfig` and `MarketBookPolicy` retain the old spot-notional costs;
+use `--legacy-spot-costs` explicitly to load or resume them. Frozen cost-removal
+evaluation supports both identities. The early alternative-book attempt with
+the old costs is retained separately, not mixed with the new loss history.
+
+The lightweight `hedging_price_monitor.py` worker reads saved validation
+histories once per minute, combining each of the three independently selected
+checkpoints to track bid, ask and the unchanged Q expectation. It flags a
+crossed book or a Q expectation outside the point quotes without treating that
+alone as a significance test. It does not read path arrays or run policies.
+Interim epoch histories have no bid/ask MC errors; those are added from the
+final frozen-policy quote report when available. Q's three-SE interval is
+available throughout. Changes are retained in `price-monitor/history.jsonl`
+and the current snapshot in `price-monitor/latest.json` under the active
+run's control directory. Monitoring stops when that GPU job ends.

@@ -140,6 +140,41 @@ class MarketBookPolicy(BornOptionPolicy):
             holdings.square().sum(dim=-1).mean(dim=-1), torch.stack(caps, dim=1).mean(dim=1), holdings, costs, gross)
 
 
+@version("0.1", dependencies=[MarketBookConfig])
+@dataclass(frozen=True, kw_only=True)
+class UnitTurnoverBookConfig(MarketBookConfig):
+    """Normalize option-contract or PCA-basket turnover without a spot multiplier."""
+
+    turnover_cost_basis: str = "unit_l1"
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        verify_inp(self.turnover_cost_basis == "unit_l1", lambda: "unit turnover requires the unit_l1 cost convention")
+
+
+class UnitTurnoverBookPolicy(MarketBookPolicy):
+    """Keep the original trading constraints, replacing execution costs by unit L1 turnover."""
+
+    def forward(self, features: torch.Tensor, prices: torch.Tensor) -> OptionsOutput:
+        output = super().forward(features, prices)
+        holdings = output.positions.to(prices.dtype)
+        prior = torch.cat((torch.zeros_like(holdings[:, :1]), holdings[:, :-1]), dim=1)
+        if self.config.kind == "cohorts":
+            alive = torch.arange(holdings.shape[1], device=self.device)[:, None] < self.option_expiries
+            turnover = ((holdings - prior).abs() * alive).sum(dim=(1, 2))
+            costs = self.config.transaction_cost_bps * 1e-4 * turnover
+        else:
+            basket_turnover = (holdings[:, :, :-2] - prior[:, :, :-2]).abs().sum(dim=(1, 2))
+            basket_turnover += holdings[:, -1, :-2].abs().sum(dim=-1)
+            call_entries = holdings[:, :, -1].abs().sum(dim=-1)
+            costs = self.config.transaction_cost_bps * 1e-4 * (basket_turnover + call_entries)
+            spot_turnover = (holdings[:, :, -2] - prior[:, :, -2]).abs().sum(dim=-1)
+            spot_turnover += holdings[:, -1, -2].abs()
+            costs += self.config.spot_cost_bps * 1e-4 * spot_turnover
+        return OptionsOutput(output.gross_gain - costs, output.penalty, output.action_squared,
+            output.cap_fraction, output.positions, costs, output.gross_gain)
+
+
 class MarketView:
     """Map shared latent paths and materialize only the requested neural batch."""
 
@@ -201,14 +236,17 @@ def load_market_scenarios(path: Path, *, split: str, case: str, kind: str) -> tu
 
 def run_market_hedges(directory: Path, *, case: str, kind: str, device: str,
                       compile_policies: bool = True, maximum_epochs: int = 2000,
-                      just_load: bool = False) -> dict[str, object]:
+                      just_load: bool = False, legacy_spot_costs: bool = False) -> dict[str, object]:
     train, book = load_market_scenarios(directory / "train.h5", split="train", case=case, kind=kind)
     validation, _ = load_market_scenarios(directory / "validation.h5", split="validation", case=case, kind=kind)
     if train.sha256 == validation.sha256 or train.identity["model"] != validation.identity["model"]:
         raise ValueError("training and validation must be independent samples of the same model")
     report = json.loads((directory / "factor_baskets.json").read_text())
     weights = report["weights"][0 if case == "black5" else 1]
-    config = MarketBookConfig(label=f"{case}-{kind}-lambda100", kind=kind,
+    config_class = MarketBookConfig if legacy_spot_costs else UnitTurnoverBookConfig
+    policy_class = MarketBookPolicy if legacy_spot_costs else UnitTurnoverBookPolicy
+    suffix = "" if legacy_spot_costs else "-unit-l1"
+    config = config_class(label=f"{case}-{kind}-lambda100{suffix}", kind=kind,
         feature_count=train.features.shape[-1], option_expiry_days=train.option_expiry_days,
         option_start_days=tuple(map(int, book["starts"])) if kind == "cohorts" else (0,) * len(train.option_expiry_days),
         call_sides=tuple(map(bool, book["calls"])) if kind == "cohorts" else (),
@@ -217,7 +255,7 @@ def run_market_hedges(directory: Path, *, case: str, kind: str, device: str,
         risk_aversion=100.0)
     return train_independent_portfolios(train, validation, directory=directory / "hedges" / case / kind / config.filename,
         config=config, train_config=JointTrainConfig(device=device, compile=compile_policies, maximum_epochs=maximum_epochs),
-        policy_class=MarketBookPolicy, just_load=just_load)
+        policy_class=policy_class, just_load=just_load)
 
 
 def main() -> None:
@@ -229,9 +267,11 @@ def main() -> None:
     parser.add_argument("--maximum-epochs", type=int, default=2000)
     parser.add_argument("--compile", action="store_true")
     parser.add_argument("--just-load", action="store_true")
+    parser.add_argument("--legacy-spot-costs", action="store_true", help="Load or resume the archived spot-notional cost convention")
     args = parser.parse_args()
     run_market_hedges(args.run_directory, case=args.case, kind=args.kind, device=args.device,
-        compile_policies=args.compile, maximum_epochs=args.maximum_epochs, just_load=args.just_load)
+        compile_policies=args.compile, maximum_epochs=args.maximum_epochs, just_load=args.just_load,
+        legacy_spot_costs=args.legacy_spot_costs)
 
 
 if __name__ == "__main__":
