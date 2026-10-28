@@ -207,6 +207,10 @@ class HedgingPolicy(BaseModel):
                 if final.bias is not None:
                     final.bias.zero_()
 
+    def live_instruments(self, day: int) -> torch.Tensor:
+        """Return the tradable mask, including spot in the original control."""
+        return torch.cat((torch.ones(1, dtype=torch.bool, device=self.device), day < self.option_expiries))
+
     def forward(self, features: torch.Tensor, prices: torch.Tensor) -> HedgeOutput:
         """Return self-financing gains, including exactly one settlement cashflow."""
         assert features.ndim == 3 and features.shape[-1] == self.config.feature_count
@@ -219,14 +223,14 @@ class HedgingPolicy(BaseModel):
         cell = torch.zeros_like(hidden)
         positions, penalties, cap_fractions = [], [], []
         for day in range(periods):
-            alive = torch.cat((torch.ones(1, dtype=torch.bool, device=self.device), day < self.option_expiries))
+            alive = self.live_instruments(day)
             previous = previous * alive
             combined = torch.cat((normalized[:, day], hidden, previous / self.config.position_cap), dim=-1)
             raw = self.affine(combined) + self.deep(combined)
             new_position = self.config.position_cap * torch.tanh(raw / self.config.position_cap) * alive
             excess = torch.relu(raw.abs() - self.config.soft_cap_fraction * self.config.position_cap) * alive
-            penalties.append(excess.square().sum(dim=-1) / alive.sum())
-            cap_fractions.append(((new_position.abs() >= 0.95 * self.config.position_cap) & alive).sum(dim=-1).to(dtype=self.fdtype) / alive.sum())
+            penalties.append(excess.square().sum(dim=-1) / alive.sum().clamp_min(1))
+            cap_fractions.append(((new_position.abs() >= 0.95 * self.config.position_cap) & alive).sum(dim=-1).to(dtype=self.fdtype) / alive.sum().clamp_min(1))
             positions.append(new_position)
             recurrent_input = torch.cat((normalized[:, day], previous / self.config.position_cap, new_position / self.config.position_cap), dim=-1)
             hidden, cell = self.memory(recurrent_input, (hidden, cell))
@@ -606,8 +610,11 @@ def evaluate_policy(model: HedgingPolicy, data: ScenarioData, *, claim_price: fl
 
 def run_hedging_experiment(run_directory: Path, *, train_config: TrainConfig = TrainConfig(),
                            risk_aversions: tuple[float, ...] = (1.0, 10.0),
-                           policy_config: HedgingPolicyConfig | None = None, just_load: bool = False) -> dict[str, object]:
+                           policy_config: HedgingPolicyConfig | None = None, just_load: bool = False,
+                           freeze_empty_risk_aversions: tuple[float, ...] = ()) -> dict[str, object]:
     """Train empty/claim policies first, then use an independent, untouched sample."""
+    if any(value not in risk_aversions for value in freeze_empty_risk_aversions):
+        raise ValueError("frozen empty policies must belong to the requested risk aversions")
     check_resource_headroom()
     train = load_scenarios(run_directory / "train.h5", expected_split="train")
     base = policy_config or HedgingPolicyConfig(label="forward-straddle", feature_count=train.features.shape[-1], option_expiry_days=train.option_expiry_days)
@@ -621,9 +628,15 @@ def run_hedging_experiment(run_directory: Path, *, train_config: TrainConfig = T
         for liability_units, suffix in ((0.0, "empty"), (1.0, "claim")):
             config = replace(base, label=f"{base.label}-{suffix}-lambda{risk_aversion:g}", risk_aversion=risk_aversion, liability_units=liability_units)
             directory = run_directory / "policies" / config.filename
+            frozen_empty = liability_units == 0.0 and risk_aversion in freeze_empty_risk_aversions
             model, training = fit_policy(train, directory=directory, config=config, train_config=train_config,
-                claim_price=claim_price, normalization=normalization, initial_model=empty_model if liability_units else None, just_load=just_load)
-            if training["stop_reason"] not in {"training_objective_plateau_at_minimum_learning_rate", "maximum_epoch_safety_limit_not_certified_converged"}:
+                claim_price=claim_price, normalization=normalization, initial_model=empty_model if liability_units else None,
+                just_load=just_load or frozen_empty)
+            if frozen_empty:
+                training = {**training, "frozen_by_user_request": True,
+                    "freeze_interpretation": "Best training-only checkpoint frozen without asserting convergence; payoff policy starts from these weights."}
+                _write_json(directory / "user_frozen_policy.json", training)
+            if not frozen_empty and training["stop_reason"] not in {"training_objective_plateau_at_minimum_learning_rate", "maximum_epoch_safety_limit_not_certified_converged"}:
                 raise RuntimeError("the policy schedule must finish before opening the final untouched validation sample")
             if liability_units == 0.0:
                 empty_model = model
@@ -674,9 +687,12 @@ def main() -> None:
     parser.add_argument("--maximum-epochs", default=2000, type=int)
     parser.add_argument("--compile", action="store_true")
     parser.add_argument("--just-load", action="store_true")
+    parser.add_argument("--freeze-empty-risk-aversions", nargs="+", type=float, default=(),
+                        help="Explicitly freeze existing empty-policy checkpoints at these risk aversions, then train their payoff hedges")
     arguments = parser.parse_args()
     run_hedging_experiment(arguments.run_directory, train_config=TrainConfig(cpu_threads=arguments.threads,
-        device=arguments.device, batch_size=arguments.batch_size, maximum_epochs=arguments.maximum_epochs, compile=arguments.compile), just_load=arguments.just_load)
+        device=arguments.device, batch_size=arguments.batch_size, maximum_epochs=arguments.maximum_epochs, compile=arguments.compile),
+        just_load=arguments.just_load, freeze_empty_risk_aversions=tuple(arguments.freeze_empty_risk_aversions))
 
 
 if __name__ == "__main__":

@@ -346,6 +346,51 @@ def test_end_to_end_validation_is_opened_only_after_all_policies_are_frozen(tmp_
     assert (tmp_path / "hedging_report.json").is_file()
 
 
+@pytest.mark.parametrize("freeze_empty", [False, True])
+def test_stopped_empty_policy_requires_explicit_freeze_before_payoff_training(tmp_path: Path, monkeypatch, freeze_empty: bool) -> None:
+    data, base = _data(), _config()
+    _write_scenarios(tmp_path / "train.h5", data)
+    _write_scenarios(tmp_path / "validation.h5", _data(seed=124, split="validation"))
+    data = hedging.load_scenarios(tmp_path / "train.h5", expected_split="train")
+    config = replace(base, label=f"{base.label}-empty-lambda1", risk_aversion=1.0)
+    directory = tmp_path / "policies" / config.filename
+    hedging.fit_policy(data, directory=directory, config=config, train_config=_training(maximum_epochs=1),
+        claim_price=float(data.payoff.mean()), normalization=hedging.feature_normalization(data.features, floor=base.normalization_floor))
+    checkpoint_path = directory / "checkpoint.pt"
+    checkpoint = torch.load(checkpoint_path, weights_only=False)
+    checkpoint["report"].update(stop_reason="checkpointed_stop", converged=False)
+    torch.save(checkpoint, checkpoint_path)
+    original_bytes = checkpoint_path.read_bytes()
+    calls, original_fit = [], hedging.fit_policy
+
+    def fit(*args, **kwargs):
+        calls.append((kwargs["config"].liability_units, kwargs["just_load"]))
+        if kwargs["config"].liability_units == 0.0:
+            kwargs["just_load"] = True
+        return original_fit(*args, **kwargs)
+
+    monkeypatch.setattr(hedging, "fit_policy", fit)
+    kwargs = dict(train_config=_training(maximum_epochs=1), risk_aversions=(1.0,), policy_config=base,
+                  freeze_empty_risk_aversions=(1.0,) if freeze_empty else ())
+    if not freeze_empty:
+        with pytest.raises(RuntimeError, match="schedule must finish"):
+            hedging.run_hedging_experiment(tmp_path, **kwargs)
+        assert len(calls) == 1
+    else:
+        report = hedging.run_hedging_experiment(tmp_path, **kwargs)
+        assert calls == [(0.0, True), (1.0, False)]
+        assert report["policies"][0]["training"]["frozen_by_user_request"]
+        assert not report["policies"][0]["training"]["converged"]
+        assert report["policies"][1]["training"]["initialization"] == "corresponding-empty-policy"
+        assert (directory / "user_frozen_policy.json").is_file()
+    assert checkpoint_path.read_bytes() == original_bytes
+
+
+def test_frozen_empty_risk_aversion_must_belong_to_the_experiment(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="requested risk aversions"):
+        hedging.run_hedging_experiment(tmp_path, risk_aversions=(1.0,), freeze_empty_risk_aversions=(10.0,))
+
+
 @pytest.mark.parametrize("overrides", [{"position_cap": 0.0}, {"risk_aversion": 0.0}, {"feature_count": 0}, {"group": "../bad"}])
 def test_invalid_policy_parameters_are_rejected(overrides) -> None:
     with pytest.raises(ValueError):
