@@ -113,6 +113,55 @@ def test_invalid_sampling_geometry_is_rejected() -> None:
         replace(ForwardScenarioConfig(), linear_solver="unknown")
 
 
+def test_zero_black_smoothing_uses_exact_intrinsic_kernels() -> None:
+    model = small_model()
+    book = {name: jnp.asarray(value) for name, value in instrument_book().items()}
+    book["background_volatility"] = jnp.asarray(0.0)
+    prices = np.asarray(price_fixed_book(supports=jnp.asarray(model["supports"]),
+        densities=jnp.asarray(model["densities"])[None], background=jnp.ones(1),
+        spot=jnp.ones(1), day=jnp.asarray(0), book=book))
+    for contract, expiry in enumerate(book["option_expiry_days"]):
+        side = 1.0 if book["option_is_call"][contract] else -1.0
+        payoff = np.maximum(side * (model["supports"][expiry - 1] - book["option_strikes"][contract]), 0.0)
+        expected = model["densities"][expiry - 1] @ payoff
+        assert prices[0, contract + 1] == pytest.approx(expected, abs=1.0e-14)
+
+
+def test_fixing_options_are_causal_and_settle_at_the_day_ten_cash_strikes() -> None:
+    model = small_model()
+    config = ForwardScenarioConfig(paths=4, batch_size=4, substeps=1,
+        fixing_hedge_moneyness=(0.98, 0.99, 1.0, 1.01, 1.02))
+    simulate, _ = scenario_function(**model, config=config)
+    factors, background = independent_normal_block(config=config, split="train", completed=0, count=4, factors=2)
+    observed, prices, payoff, diagnostics, fixing = map(np.asarray, simulate(jnp.asarray(factors), jnp.asarray(background)))
+    assert fixing.shape == (4, 21, 5)
+    np.testing.assert_array_equal(fixing[:, :10], 0.0)
+    levels = np.asarray(config.fixing_hedge_moneyness)
+    strikes = prices[:, 10, :1] * levels[None]
+    expected = np.maximum(np.where(levels >= 1.0, 1.0, -1.0) * (prices[:, 20, :1] - strikes), 0.0)
+    np.testing.assert_allclose(fixing[:, 20], expected, atol=1.0e-14)
+    ordinary, _ = scenario_function(**model, config=replace(config, fixing_hedge_moneyness=()))
+    base = ordinary(jnp.asarray(factors), jnp.asarray(background))
+    for actual, original in zip((observed, prices, payoff, diagnostics), base, strict=True):
+        np.testing.assert_array_equal(actual, np.asarray(original))
+    changed = factors.copy()
+    changed[10:] *= -1.0
+    other = simulate(jnp.asarray(changed), jnp.asarray(background))
+    np.testing.assert_array_equal(fixing[:, :11], np.asarray(other[4])[:, :11])
+
+
+def test_zero_smoothing_removes_only_the_background_shocks_without_refitting() -> None:
+    model = small_model()
+    model["background_volatility"] = 0.0
+    config = ForwardScenarioConfig(paths=4, batch_size=4, substeps=1, fixing_hedge_moneyness=(0.99, 1.0, 1.01))
+    simulate, _ = scenario_function(**model, config=config)
+    factors, background = independent_normal_block(config=config, split="train", completed=0, count=4, factors=2)
+    original = simulate(jnp.asarray(factors), jnp.asarray(background))
+    altered = simulate(jnp.asarray(factors), jnp.asarray(-background))
+    for first, second in zip(original, altered, strict=True):
+        np.testing.assert_array_equal(np.asarray(first), np.asarray(second))
+
+
 def test_ar1_scales_are_predictable_and_use_saved_log_squared_state() -> None:
     model = small_model()
     ar1 = {"variance_intercept": np.asarray([-0.7, -0.5]), "variance_slope": np.asarray([0.2, 0.1]),

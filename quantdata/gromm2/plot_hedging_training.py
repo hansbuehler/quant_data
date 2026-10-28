@@ -129,6 +129,35 @@ def plot_joint_losses(policy_directory: Path, *, output: Path) -> dict[str, obje
     return {"epochs": int(epochs[-1]), "plot": str(output), "individual_plots": individual}
 
 
+def plot_independent_losses(policy_directory: Path, *, output: Path) -> dict[str, object]:
+    """Show the independently selected zero, short-claim and long-claim loss curves."""
+    report = json.loads((policy_directory / "training_report.json").read_text())
+    rows = json.loads((policy_directory / "training_history.json").read_text())["epochs"]
+    epochs = np.asarray([entry["epoch"] for entry in rows])
+    figure, axes = plt.subplots(3, 1, figsize=(11, 12), constrained_layout=True)
+    for axis, name, title in zip(axes, ("zero", "short", "long"),
+                                 ("Zero portfolio", "Short payoff: seller hedge", "Long payoff: buyer hedge"), strict=True):
+        axis.plot(epochs, [entry["train"][name]["risk_at_training_translation"] for entry in rows],
+            color="#c93c55", label=f"Training: {report['training_paths']:,} paths")
+        axis.plot(epochs, [entry["validation"][name]["risk_at_training_translation"] for entry in rows],
+            color="#258b57", label=f"Validation: {report['validation_paths']:,} paths")
+        best = report["policies"][name]["best_epoch"]
+        axis.axvline(best, color="#8b43b0", linestyle="--", label=f"Selected checkpoint: epoch {best}")
+        axis.set(title=title, xlabel="Epoch", ylabel="Net-of-cost OCE risk; lower is better")
+        axis.grid(alpha=0.25)
+        axis.legend(fontsize=10)
+    background = report["scenario_model"].get("background_volatility", 0.0)
+    figure.suptitle(f"GROMM2 independent portfolio policies · λ={report['config']['risk_aversion']:g}\n"
+        f"{report['config']['label']} · Black smoothing {100 * background:g}% · original Q, equal weights", fontsize=15)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output, dpi=170)
+    plt.close(figure)
+    result = {"plot": str(output), "completed_epochs": int(epochs[-1]),
+        "best_epochs": {name: record["best_epoch"] for name, record in report["policies"].items()}}
+    output.with_suffix(".json").write_text(json.dumps(result, indent=2) + "\n")
+    return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--policy-directory", type=Path, required=True)

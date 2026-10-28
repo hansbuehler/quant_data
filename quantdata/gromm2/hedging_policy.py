@@ -354,9 +354,11 @@ def _write_json(path: Path, value: dict[str, object]) -> None:
 
 
 def _batch(data: ScenarioData, indices: slice | np.ndarray, *, env: BaseEnvironment) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    return (torch.as_tensor(data.features[indices], dtype=env.fdtype, device=env.device),
-            torch.as_tensor(data.prices[indices], dtype=torch.float64, device=env.device),
-            torch.as_tensor(data.payoff[indices], dtype=torch.float64, device=env.device))
+    values = [data.features[indices], data.prices[indices], data.payoff[indices]]
+    arrays = [value if value.flags.writeable else value.copy() for value in values]
+    return (torch.as_tensor(arrays[0], dtype=env.fdtype, device=env.device),
+            torch.as_tensor(arrays[1], dtype=torch.float64, device=env.device),
+            torch.as_tensor(arrays[2], dtype=torch.float64, device=env.device))
 
 
 def _require_cuda_visibility() -> str:

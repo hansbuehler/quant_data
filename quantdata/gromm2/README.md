@@ -328,3 +328,47 @@ expiring at day 20 with fixed strikes
 `S_10 * [0.98, 0.99, 1, 1.01, 1.02]` and the original ten-day book's OTM sides,
 then repeats without these added contracts on the same paths. This is a new
 experiment specification, not a completed result or a shared-backbone fit.
+
+## Million-path forward-start comparison
+
+`million_forward_experiment.py` supervises this experiment using the saved
+legacy AR(1) dynamics and eight Brownian substeps per day. Each Black-smoothing
+case has 1,000,000 training and 1,000,000 independent validation paths. The
+5% and zero-smoothing cases use common random numbers; no historical DLV or
+factor-law parameters are refitted. Setting smoothing to zero also reprices
+the initial model book, so it is an ablation, not a calibration to the same
+inception option surface. Both sample sets and the earlier 100,000-path runs
+are retained separately.
+
+Five ordinary cash-strike options are introduced at day 10 with expiry day 20:
+`K = S_10 * [0.98, 0.99, 1, 1.01, 1.02]`. They are puts below relative ATM and
+calls at/above ATM, matching the initial ten-day book. Their strikes stay
+fixed after listing. They are not forward-start instruments tradable at
+inception, and no holdings may earn their day-10 birth price. Cash settlement
+is free; entering and changing positions incurs the same 0.1 bp spot-notional
+cost as the original options. The target remains `abs(S_20/S_10-1)`.
+
+`portfolio_hedging.py` first uses this extended book and then restricts trading
+to the original book, on identical paths and with identical causal price and
+latent-state information. Each of the zero, short-payoff and long-payoff
+policies has independent LSTM/affine/deep weights, optimizer, scheduler and
+validation-selected checkpoint. No neural parameters or empirical path
+weights are shared or fitted across policies. They train concurrently on the
+same minibatch schedule, with 256-path optimization batches and independent
+validation-plateau stopping. Optional `--compile` accelerates their Torch
+forward/backward graphs without changing the financial sampler.
+
+The seller ask is `DH(H)-DH(0)` and the buyer bid is `DH(0)-DH(-H)`.
+`quotes.json` reports each optimized risk, Q expectation, price and their
+antithetic-pair Monte Carlo errors. The expanded bracket is
+`[bid - 3 SE(bid), ask + 3 SE(ask)]`; the Q expectation also has a three-error
+band. Differences use paired influence scores, preserving covariance.
+These bounds exclude fitting and validation-selection uncertainty; they
+are not a simultaneous confidence guarantee or certified global optima.
+
+`hedging_data.py` maps completed contiguous HDF5 tensors read-only and creates
+only minibatch-sized augmented views. `scenario_statistics.py` merges pair
+moments once per simulated batch, avoiding repeated reads of growing path
+prefixes. Raw paths, checkpoints, progress logs and loss plots stay in the
+unique external run directory. Interrupts save a complete simulation batch
+or complete three-policy optimizer batch; resumed stages validate identities.

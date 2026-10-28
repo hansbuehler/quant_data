@@ -31,10 +31,11 @@ from quantdata.gromm2.rolling_audit import (
 )
 from quantdata.gromm2.rolling_calibration import write_json
 from quantdata.gromm2.runtime import configure_backend, gpu_preflight
+from quantdata.gromm2.scenario_statistics import ScenarioStatistics
 from quantdata.gromm2.simulation import SimulationState, one_day_risk_neutral_step
 
 
-@version("0.5")
+@version("0.6")
 @dataclass(frozen=True, kw_only=True)
 class ForwardScenarioConfig:
     """Sampling plan; times are business days and prices have inception spot one."""
@@ -48,6 +49,8 @@ class ForwardScenarioConfig:
     density_loading_floor: float = 1.0e-4
     backend: str = "cpu"
     linear_solver: str = "thomas"
+    fixing_hedge_moneyness: tuple[float, ...] = ()
+    contiguous_storage: bool = False
 
     def __post_init__(self) -> None:
         verify_inp(self.paths >= 4 and self.paths % 2 == 0, lambda: "paths must contain complete antithetic pairs")
@@ -57,6 +60,10 @@ class ForwardScenarioConfig:
         verify_inp(0.0 < self.density_loading_floor < 1.0, lambda: "invalid density loading floor")
         verify_inp(self.backend in {"cpu", "gpu"}, lambda: "backend must be cpu or gpu")
         verify_inp(self.linear_solver in {"thomas", "pcr"}, lambda: "linear_solver must be thomas or pcr")
+        verify_inp(all(np.isfinite(value) and value > 0.0 for value in self.fixing_hedge_moneyness),
+                   lambda: "fixing hedge moneyness must be finite and positive")
+        verify_inp(all(left < right for left, right in zip(self.fixing_hedge_moneyness, self.fixing_hedge_moneyness[1:])),
+                   lambda: "fixing hedge moneyness must be strictly increasing")
 
 
 def instrument_book() -> dict[str, np.ndarray]:
@@ -105,12 +112,38 @@ def price_fixed_book(*, supports: jax.Array, densities: jax.Array, background: j
     d2 = d1 - safe_deviation
     calls = latent * jsp.special.ndtr(d1) - strikes * jsp.special.ndtr(d2)
     puts = strikes * jsp.special.ndtr(-d2) - latent * jsp.special.ndtr(-d1)
+    calls = jnp.where(deviation[None, :, None] > 0.0, calls, jnp.maximum(latent - strikes, 0.0))
+    puts = jnp.where(deviation[None, :, None] > 0.0, puts, jnp.maximum(strikes - latent, 0.0))
     kernels = jnp.where(book["option_is_call"][None, :, None], calls, puts)
     options = jnp.sum(jnp.maximum(kernels, 0.0) * density, axis=-1)
     signed_intrinsic = jnp.where(book["option_is_call"][None], spot[:, None] - strikes[..., 0], strikes[..., 0] - spot[:, None])
     options = jnp.where(remaining[None] == 0, jnp.maximum(signed_intrinsic, 0.0), options)
     options = jnp.where(remaining[None] < 0, 0.0, options)
     return jnp.concatenate((spot[:, None], options), axis=-1)
+
+
+def price_fixing_book(*, supports: jax.Array, densities: jax.Array, background: jax.Array,
+                      spot: jax.Array, fixing: jax.Array, day: jax.Array, front_day: jax.Array,
+                      background_volatility: float, config: ForwardScenarioConfig) -> jax.Array:
+    """New vanilla contracts have strikes S_fixing times fixed relative levels, not future fixings."""
+    levels = jnp.asarray(config.fixing_hedge_moneyness)
+    strikes = fixing[:, None, None] * levels[None, :, None]
+    index = jnp.clip(config.terminal_day - front_day - 1, 0, len(supports) - 1)
+    latent = background[:, None, None] * supports[index][None, None]
+    remaining = config.terminal_day - day
+    deviation = background_volatility * jnp.sqrt(jnp.maximum(remaining, 1) / 252.0)
+    safe = jnp.maximum(deviation, jnp.finfo(latent.dtype).eps)
+    d1 = jnp.log(latent / strikes) / safe + 0.5 * safe
+    d2 = d1 - safe
+    calls = latent * jsp.special.ndtr(d1) - strikes * jsp.special.ndtr(d2)
+    puts = strikes * jsp.special.ndtr(-d2) - latent * jsp.special.ndtr(-d1)
+    calls = jnp.where(deviation > 0.0, calls, jnp.maximum(latent - strikes, 0.0))
+    puts = jnp.where(deviation > 0.0, puts, jnp.maximum(strikes - latent, 0.0))
+    kernel = jnp.where((levels >= 1.0)[None, :, None], calls, puts)
+    prices = jnp.sum(jnp.maximum(kernel, 0.0) * densities[:, index, None], axis=-1)
+    intrinsic = jnp.maximum(jnp.where((levels >= 1.0)[None], 1.0, -1.0) * (spot[:, None] - strikes[..., 0]), 0.0)
+    prices = jnp.where(remaining == 0, intrinsic, prices)
+    return jnp.where((day >= config.fixing_day) & (remaining >= 0), prices, 0.0)
 
 
 def scenario_function(*, supports: np.ndarray, transports: np.ndarray, expiries_y: np.ndarray,
@@ -213,12 +246,19 @@ def scenario_function(*, supports: np.ndarray, transports: np.ndarray, expiries_
             next_carry = (next_state, next_support, next_transport, next_intervals, next_loadings, next_reference,
                           next_projection, cumulative + factor_normal.sum(axis=0) / jnp.sqrt(252.0 * config.substeps), next_fixing, next_prices,
                           next_ar1_state)
-            return next_carry, (observed, next_prices, diagnostics)
+            fixing_prices = price_fixing_book(supports=support, densities=result.density_tower,
+                background=result.state.background_level, spot=result.spot, fixing=next_fixing,
+                day=day + 1, front_day=day, background_volatility=background_volatility, config=config)
+            return next_carry, (observed, next_prices, diagnostics, fixing_prices)
 
-        final, (observations, prices, diagnostics) = jax.lax.scan(step, initial_carry, (jnp.arange(config.terminal_day), normals, background_normals))
+        final, (observations, prices, diagnostics, fixing_prices) = jax.lax.scan(step, initial_carry, (jnp.arange(config.terminal_day), normals, background_normals))
         payoff = jnp.abs(prices[-1, :, 0] / final[8] - 1.0)
         full_prices = jnp.concatenate((initial_prices[None], prices))
-        return jnp.swapaxes(observations, 0, 1), jnp.swapaxes(full_prices, 0, 1), payoff, diagnostics
+        output = jnp.swapaxes(observations, 0, 1), jnp.swapaxes(full_prices, 0, 1), payoff, diagnostics
+        if config.fixing_hedge_moneyness:
+            full_fixing_prices = jnp.concatenate((jnp.zeros_like(fixing_prices[:1]), fixing_prices))
+            return (*output, jnp.swapaxes(full_fixing_prices, 0, 1))
+        return output
 
     return simulate, book_numpy
 
@@ -295,7 +335,7 @@ def generate_scenarios(*, calibration_root: Path | None, origin: str, run_direct
     else:
         arrays, metadata = model_inputs
     software = {name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
-                for name in ("forward_hedging.py", "simulation.py", "dlv.py", "bridge.py", "dynamics.py", "runtime.py", "tridiagonal.py")}
+                for name in ("forward_hedging.py", "simulation.py", "dlv.py", "bridge.py", "dynamics.py", "runtime.py", "tridiagonal.py", "scenario_statistics.py")}
     software["quantdata/jax/tridiagonal.py"] = hashlib.sha256((Path(__file__).parents[1] / "jax" / "tridiagonal.py").read_bytes()).hexdigest()
     if model_inputs is not None:
         software["legacy_forward_model.py"] = hashlib.sha256(Path(__file__).with_name("legacy_forward_model.py").read_bytes()).hexdigest()
@@ -338,25 +378,35 @@ def generate_scenarios(*, calibration_root: Path | None, origin: str, run_direct
             completed = int(stream.attrs.get("completed_paths", 0))
             initial_completed = completed
             progress.update(completed=completed)
+            statistics = ScenarioStatistics(book=book, days=config.terminal_day)
+            for start in range(0, completed, 4096):
+                stop = min(start + 4096, completed)
+                statistics.update(stream["prices"][start:stop], stream["payoff"][start:stop])
             while completed < config.paths:
                 count = min(config.batch_size, config.paths - completed)
                 factors, background = independent_normal_block(config=config, split=split, completed=completed, count=count, factors=arrays["loadings"].shape[-1])
                 progress["stage"] = "compiling_or_simulating"
-                observed, prices, payoff, diagnostics = map(np.asarray, simulate(jnp.asarray(factors), jnp.asarray(background)))
-                if not all(np.all(np.isfinite(value)) for value in (observed, prices, payoff, diagnostics)):
+                observed, prices, payoff, diagnostics, *extra = map(np.asarray, simulate(jnp.asarray(factors), jnp.asarray(background)))
+                values = [("features", observed), ("prices", prices), ("payoff", payoff)]
+                if extra:
+                    values.append(("fixing_option_prices", extra[0]))
+                if not all(np.all(np.isfinite(value)) for value in (observed, prices, payoff, diagnostics, *extra)):
                     raise FloatingPointError("non-finite Q scenario; no bad paths are silently discarded")
                 if np.max(diagnostics[:, 1:3]) > 1.0e-8 or np.min(diagnostics[:, 3]) < -1.0e-12:
                     raise FloatingPointError("Q scenario failed density mass, mean or positivity checks")
                 if "features" not in stream:
-                    for name, value in (("features", observed), ("prices", prices), ("payoff", payoff)):
-                        stream.create_dataset(name, shape=(config.paths,) + value.shape[1:], dtype="f4" if name == "features" else "f8", chunks=(min(config.batch_size, config.paths),) + value.shape[1:])
+                    for name, value in values:
+                        chunks = None if config.contiguous_storage else (min(config.batch_size, config.paths),) + value.shape[1:]
+                        stream.create_dataset(name, shape=(config.paths,) + value.shape[1:], dtype="f4" if name == "features" else "f8", chunks=chunks)
                     stream.create_dataset("diagnostics", shape=(config.paths // 2, config.terminal_day, 4), dtype="f8")
                     for name, value in book.items():
                         stream.create_dataset(name, data=value)
                     stream.attrs["latent_inputs"] = "Live front density; current log-DLV spatial factor projections and maturity means; cumulative past Brownian factors; Black background; saved AR1 log-squared score state and predictable factor scales when present. No future shocks."
                     stream.attrs["dummy_terminal_features"] = "Appended padding rows have zero projected coordinates and zero maturity means."
-                for name, value in (("features", observed), ("prices", prices), ("payoff", payoff)):
+                    stream.attrs["fixing_options"] = "Not tradable before fixing day; cash-strike vanillas with K=S_fixing*k; calls for k>=1, puts below. Unit cash payoffs, not divided by fixing spot."
+                for name, value in values:
                     stream[name][completed:completed + count] = value
+                statistics.update(prices, payoff)
                 stream["diagnostics"][completed // 2:(completed + count) // 2] = np.broadcast_to(diagnostics, (count // 2,) + diagnostics.shape)
                 completed += count
                 progress.update(stage="writing_complete_batch", completed=completed)
@@ -365,8 +415,8 @@ def generate_scenarios(*, calibration_root: Path | None, origin: str, run_direct
                 if completed >= 4 and (completed == count or completed == config.paths or completed // 4096 > (completed - count) // 4096):
                     write_json(run_directory / f"{split}_progress.json", {
                         "stage": "provisional_path_prefix_not_final_results", "completed_paths": completed, "total_paths": config.paths,
-                        "price": sample_summary(stream["payoff"][:completed]),
-                        "unconditional_martingale_diagnostics": unconditional_price_diagnostics(stream["prices"][:completed], book),
+                        "price": statistics.payoff.scalar_summary(),
+                        "unconditional_martingale_diagnostics": statistics.audit(),
                         "linear_solver": config.linear_solver, "backend": config.backend})
                 elapsed = time.monotonic() - started
                 if time.monotonic() - last_progress >= 60 or completed == count or completed == config.paths:
@@ -378,14 +428,11 @@ def generate_scenarios(*, calibration_root: Path | None, origin: str, run_direct
                     last_progress = time.monotonic()
                 if stopped.is_set():
                     raise InterruptedError("forward scenarios checkpointed at a complete path batch")
-            spot_paths = stream["prices"][:, :, 0]
-            report = {"model": metadata, "config": asdict(config), "split": split, "price": sample_summary(stream["payoff"][:]),
+            report = {"model": metadata, "config": asdict(config), "split": split, "price": statistics.payoff.scalar_summary(),
                       "payoff": f"abs(S_{config.terminal_day}/S_{config.fixing_day}-1)", "instrument_count_including_spot": 1 + len(book["option_strikes"]),
-                      "terminal_spot_range": [float(np.min(spot_paths[:, -1])), float(np.max(spot_paths[:, -1]))],
-                      "spot_exploration": {"fraction_ever_below_0_95": float(np.mean(np.any(spot_paths < 0.95, axis=1))),
-                                           "fraction_ever_above_1_05": float(np.mean(np.any(spot_paths > 1.05, axis=1))),
-                                           "minimum": float(np.min(spot_paths)), "maximum": float(np.max(spot_paths))}}
-            report["unconditional_martingale_diagnostics"] = unconditional_price_diagnostics(stream["prices"][:], book)
+                      "terminal_spot_range": [statistics.terminal_minimum, statistics.terminal_maximum],
+                      "spot_exploration": statistics.exploration()}
+            report["unconditional_martingale_diagnostics"] = statistics.audit()
             write_json(run_directory / f"{split}_scenarios.json", report)
     finally:
         done.set()
@@ -410,6 +457,10 @@ def main() -> None:
     parser.add_argument("--linear-solver", choices=("thomas", "pcr"), default="thomas")
     parser.add_argument("--wait", action="store_true")
     parser.add_argument("--scenarios-only", action="store_true")
+    parser.add_argument("--fixing-hedge-moneyness", nargs="+", type=float, default=())
+    parser.add_argument("--contiguous-storage", action="store_true")
+    parser.add_argument("--background-volatility", type=float)
+    parser.add_argument("--seed", type=int, default=20261027)
     arguments = parser.parse_args()
     configure_backend(arguments.backend)
     if arguments.backend == "gpu":
@@ -427,6 +478,14 @@ def main() -> None:
                                              factor_law=arguments.legacy_factor_law, origin=arguments.origin, backend=arguments.backend)
     elif arguments.legacy_estimate is not None or arguments.legacy_factor_law is not None:
         parser.error("legacy estimate and factor law require --legacy-history")
+    if arguments.background_volatility is not None:
+        if model_inputs is None or not np.isfinite(arguments.background_volatility) or arguments.background_volatility < 0.0:
+            parser.error("a nonnegative simulator-only background override requires explicit legacy model inputs")
+        arrays, metadata = model_inputs
+        metadata = {**metadata, "calibrated_background_volatility": metadata["background_volatility"],
+            "background_volatility": arguments.background_volatility,
+            "background_override": "Simulator-only ablation; fitted DLVs, geometry and AR1 law unchanged, initial option marks repriced."}
+        model_inputs = arrays, metadata
     if arguments.wait:
         model_directory = arguments.calibration_root / "rolling" / arguments.origin
         while not all((model_directory / name).is_file() for name in ("ar1.npz", "report.json")):
@@ -434,7 +493,8 @@ def main() -> None:
             print(json.dumps({"event": "waiting_for_quality_gated_q_model", "origin": arguments.origin}), flush=True)
             time.sleep(60)
     config = ForwardScenarioConfig(paths=arguments.paths, batch_size=arguments.batch_size, substeps=arguments.substeps,
-                                   backend=arguments.backend, linear_solver=arguments.linear_solver)
+        backend=arguments.backend, linear_solver=arguments.linear_solver, seed=arguments.seed,
+        fixing_hedge_moneyness=tuple(arguments.fixing_hedge_moneyness), contiguous_storage=arguments.contiguous_storage)
     for split in ("train", "validation"):
         generate_scenarios(calibration_root=arguments.calibration_root, origin=arguments.origin,
                            run_directory=arguments.run_directory, config=config, split=split, model_inputs=model_inputs)
