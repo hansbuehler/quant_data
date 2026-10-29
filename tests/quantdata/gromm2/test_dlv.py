@@ -3,6 +3,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from quantdata.gromm2.dlv import (
     decode_density_tower,
@@ -28,7 +29,8 @@ def _geometry() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return expiries, supports, transport_tower(supports)
 
 
-def test_variable_grid_decoder_preserves_mass_and_mean() -> None:
+@pytest.mark.parametrize("linear_solver", ["thomas", "pcr"])
+def test_variable_grid_decoder_preserves_mass_and_mean(linear_solver: str) -> None:
     expiries, supports, transports = _geometry()
     intervals = np.diff(expiries, prepend=0.0)
     dlvsq = np.full((3, supports.shape[1] - 2), 0.18**2)
@@ -38,6 +40,7 @@ def test_variable_grid_decoder_preserves_mass_and_mean() -> None:
             jnp.asarray(transports),
             jnp.asarray(dlvsq),
             jnp.asarray(intervals),
+            linear_solver=linear_solver,
         )
     )
     assert np.min(tower) >= -1.0e-12
@@ -45,7 +48,8 @@ def test_variable_grid_decoder_preserves_mass_and_mean() -> None:
     assert np.allclose(np.sum(tower * supports, axis=1), 1.0, atol=2.0e-10, rtol=0.0)
 
 
-def test_batched_sanos_solve_matches_independent_float64_solves() -> None:
+@pytest.mark.parametrize("linear_solver", ["thomas", "pcr"])
+def test_batched_sanos_solve_matches_independent_float64_solves(linear_solver: str) -> None:
     support = np.exp(np.linspace(np.log(0.25), np.log(2.5), 202))
     initial = np.asarray(density0_from_support(jnp.asarray(support)))
     dlvsq_dt = np.stack(
@@ -61,6 +65,7 @@ def test_batched_sanos_solve_matches_independent_float64_solves() -> None:
             jnp.asarray(support),
             jnp.asarray(previous),
             jnp.asarray(dlvsq_dt),
+            linear_solver=linear_solver,
         )
     )
     independent = np.stack(
@@ -78,7 +83,8 @@ def test_batched_sanos_solve_matches_independent_float64_solves() -> None:
     assert np.allclose(np.sum(batched, axis=1), 1.0, atol=2.0e-10, rtol=0.0)
 
 
-def test_sanos_solve_preserves_mass_and_mean_for_matrix_rhs() -> None:
+@pytest.mark.parametrize("linear_solver", ["thomas", "pcr"])
+def test_sanos_solve_preserves_mass_and_mean_for_matrix_rhs(linear_solver: str) -> None:
     support = np.exp(np.linspace(np.log(0.25), np.log(2.5), 202))
     right_hand_side = np.stack(
         (
@@ -94,6 +100,7 @@ def test_sanos_solve_preserves_mass_and_mean_for_matrix_rhs() -> None:
             jnp.asarray(support),
             jnp.asarray(right_hand_side),
             jnp.asarray(dlvsq_dt),
+            linear_solver=linear_solver,
         )
     )
 
@@ -136,7 +143,8 @@ def test_dlv_inversion_recovers_constant_local_variance() -> None:
         assert np.allclose(inferred, expected[index], atol=3.0e-9, rtol=2.0e-7)
 
 
-def test_q_drift_cancels_density_drift_to_first_order() -> None:
+@pytest.mark.parametrize("linear_solver", ["thomas", "pcr"])
+def test_q_drift_cancels_density_drift_to_first_order(linear_solver: str) -> None:
     expiries, supports, transports = _geometry()
     intervals = np.diff(expiries, prepend=0.0)
     dlvsq = np.full((3, supports.shape[1] - 2), 0.16**2)
@@ -146,6 +154,7 @@ def test_q_drift_cancels_density_drift_to_first_order() -> None:
             jnp.asarray(transports),
             jnp.asarray(dlvsq),
             jnp.asarray(intervals),
+            linear_solver=linear_solver,
         )
     )
     factor_count = 2
@@ -161,6 +170,7 @@ def test_q_drift_cancels_density_drift_to_first_order() -> None:
         jnp.asarray(intervals[1:]),
         jnp.asarray(loadings),
         jnp.asarray(front_loading),
+        linear_solver=linear_solver,
     )
     assert densities.shape == (2, supports.shape[1])
     assert density_loadings.shape == (2, supports.shape[1], factor_count)

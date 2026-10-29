@@ -2,13 +2,78 @@
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
 import jax
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import NDArray
 
+from quantdata.gromm2.tridiagonal import solve_tridiagonal_pcr
+
 Array = jax.Array
 FloatArray = NDArray[np.float64]
+
+
+class SparseTransport(NamedTuple):
+    """Exact square barycentric map: two destination rows per source column."""
+
+    indices: Array
+    weights: Array
+
+
+def prepare_sparse_transports(transports: NDArray[np.floating]) -> SparseTransport:
+    """Encode square maps without dropping any nonzero coefficient.
+
+    Accept a single ``(N, N)`` map or a ``(J, N, N)`` tower.  The returned
+    leaves have shape ``(2, N)`` or ``(J, 2, N)`` and are ordinary JAX pytrees,
+    allowing the existing expiry scan to consume them without a new equation.
+    """
+    dense = np.asarray(transports)
+    if dense.ndim not in (2, 3) or dense.shape[-1] != dense.shape[-2] or dense.shape[-1] == 0:
+        raise ValueError("sparse transports require nonempty square matrices")
+    if not np.all(np.isfinite(dense)):
+        raise ValueError("sparse transports require finite coefficients")
+    nonzero = dense != 0.0
+    if np.any(np.sum(nonzero, axis=-2) > 2):
+        raise ValueError("sparse transports permit at most two nonzeros per source column")
+    node_count = dense.shape[-1]
+    flattened = dense.reshape(-1, node_count, node_count)
+    indices = np.zeros((len(flattened), 2, node_count), dtype=np.int32)
+    weights = np.zeros_like(indices, dtype=dense.dtype)
+    for index, matrix in enumerate(flattened):
+        rows, columns = np.nonzero(matrix)
+        occupied = np.zeros(node_count, dtype=np.int32)
+        for row, column in zip(rows, columns, strict=True):
+            slot = occupied[column]
+            indices[index, slot, column] = row
+            weights[index, slot, column] = matrix[row, column]
+            occupied[column] += 1
+    shape = dense.shape[:-2] + (2, node_count)
+    return SparseTransport(jnp.asarray(indices.reshape(shape)), jnp.asarray(weights.reshape(shape)))
+
+
+def apply_transport(transport: Array | SparseTransport, values: Array, *, matrix: bool = False) -> Array:
+    """Apply one unbatched map to batched density vectors or loading matrices."""
+    if not isinstance(transport, SparseTransport):
+        return jnp.einsum("ij,...jf->...if" if matrix else "ij,...j->...i", transport, values)
+    right_hand_side = values if matrix else values[..., None]
+    if transport.indices.ndim != 2 or transport.weights.shape != transport.indices.shape:
+        raise ValueError("apply_transport requires one sparse map, not an expiry tower")
+    node_count = transport.weights.shape[-1]
+    if right_hand_side.shape[-2] != node_count:
+        raise ValueError("sparse transport and right-hand side have incompatible node counts")
+    result = jnp.zeros_like(right_hand_side)
+    for slot in range(2):
+        contribution = right_hand_side * transport.weights[slot, :, None]
+        result = result.at[..., transport.indices[slot], :].add(contribution)
+    return result if matrix else result[..., 0]
+
+
+def _cast_transports(transports: Array | SparseTransport, dtype) -> Array | SparseTransport:
+    if isinstance(transports, SparseTransport):
+        return SparseTransport(transports.indices, transports.weights.astype(dtype))
+    return transports.astype(dtype)
 
 
 def density0_from_support(support: Array) -> Array:
@@ -119,6 +184,8 @@ def _solve_sanos_symmetrized(
     diagonal: Array,
     upper: Array,
     right_hand_side: Array,
+    *,
+    linear_solver: str = "thomas",
 ) -> Array:
     """Solve the SANOS system through its symmetric positive interior block."""
     interior_lower = lower[..., 2:-1]
@@ -149,7 +216,13 @@ def _solve_sanos_symmetrized(
     interior_right_hand_side = (
         right_hand_side[..., 1:-1, :] / scale[..., :, None]
     )
-    transformed = _solve_tridiagonal_thomas(
+    if linear_solver == "thomas":
+        solve = _solve_tridiagonal_thomas
+    elif linear_solver == "pcr":
+        solve = solve_tridiagonal_pcr
+    else:
+        raise ValueError(f"unknown tridiagonal solver: {linear_solver}")
+    transformed = solve(
         symmetric_lower,
         diagonal[..., 1:-1],
         symmetric_upper,
@@ -167,7 +240,7 @@ def _solve_sanos_symmetrized(
     return jnp.concatenate((left, interior, right), axis=-2)
 
 
-def solve_sanos_step(support: Array, previous: Array, dlvsq_dt: Array) -> Array:
+def solve_sanos_step(support: Array, previous: Array, dlvsq_dt: Array, *, linear_solver: str = "thomas") -> Array:
     """Solve one variable-support SANOS step for vector or matrix RHS."""
     result_dtype = previous.dtype
     solve_dtype = jnp.float64 if jax.config.x64_enabled else result_dtype
@@ -179,7 +252,7 @@ def solve_sanos_step(support: Array, previous: Array, dlvsq_dt: Array) -> Array:
     vector_rhs = previous.ndim == dlvsq_dt.ndim
     solve_previous = previous.astype(solve_dtype)
     rhs = solve_previous[..., :, None] if vector_rhs else solve_previous
-    result = _solve_sanos_symmetrized(lower, diagonal, upper, rhs)
+    result = _solve_sanos_symmetrized(lower, diagonal, upper, rhs, linear_solver=linear_solver)
     result = result.astype(result_dtype)
     return result[..., 0] if vector_rhs else result
 
@@ -197,14 +270,16 @@ def apply_sanos_matrix(support: Array, value: Array, dlvsq_dt: Array) -> Array:
 
 def decode_density_tower(
     supports: Array,
-    transports: Array,
+    transports: Array | SparseTransport,
     dlvsq: Array,
     interval_years: Array,
+    *,
+    linear_solver: str = "thomas",
 ) -> Array:
     """Decode an expiry tower with an expanding support at each expiry."""
     calculation_dtype = jnp.float64 if jax.config.x64_enabled else dlvsq.dtype
     supports = supports.astype(calculation_dtype)
-    transports = transports.astype(calculation_dtype)
+    transports = _cast_transports(transports, calculation_dtype)
     dlvsq = dlvsq.astype(calculation_dtype)
     interval_years = interval_years.astype(calculation_dtype)
     initial_density = density0_from_support(supports[0])
@@ -216,6 +291,7 @@ def decode_density_tower(
         supports[0],
         initial_density,
         dlvsq[..., 0, :] * interval_years[0],
+        linear_solver=linear_solver,
     )
 
     return decode_density_tower_from_front(
@@ -224,33 +300,37 @@ def decode_density_tower(
         first,
         dlvsq[..., 1:, :],
         interval_years[1:],
+        linear_solver=linear_solver,
     )
 
 
 def decode_density_tower_from_front(
     supports: Array,
-    transports: Array,
+    transports: Array | SparseTransport,
     front_density: Array,
     future_dlvsq: Array,
     interval_years: Array,
+    *,
+    linear_solver: str = "thomas",
 ) -> Array:
     """Decode a variable-support tower from its current front density."""
     calculation_dtype = (
         jnp.float64 if jax.config.x64_enabled else future_dlvsq.dtype
     )
     supports = supports.astype(calculation_dtype)
-    transports = transports.astype(calculation_dtype)
+    transports = _cast_transports(transports, calculation_dtype)
     front_density = front_density.astype(calculation_dtype)
     future_dlvsq = future_dlvsq.astype(calculation_dtype)
     interval_years = interval_years.astype(calculation_dtype)
 
     def step(previous: Array, inputs: tuple[Array, Array, Array, Array]) -> tuple[Array, Array]:
         support, transport, local_variance, interval = inputs
-        transported = jnp.einsum("ij,...j->...i", transport, previous)
+        transported = apply_transport(transport, previous)
         current = solve_sanos_step(
             support,
             transported,
             local_variance * interval,
+            linear_solver=linear_solver,
         )
         return current, current
 
@@ -272,12 +352,14 @@ def decode_density_tower_from_front(
 
 def risk_neutral_log_drift(
     supports: Array,
-    transports: Array,
+    transports: Array | SparseTransport,
     front_density: Array,
     future_dlvsq: Array,
     interval_years: Array,
     log_dlvsq_loadings: Array,
     front_density_loading: Array,
+    *,
+    linear_solver: str = "thomas",
 ) -> tuple[Array, Array, Array]:
     """Return densities, density loadings and the Q drift of log-DLV-squared.
 
@@ -289,7 +371,7 @@ def risk_neutral_log_drift(
         jnp.float64 if jax.config.x64_enabled else future_dlvsq.dtype
     )
     supports = supports.astype(calculation_dtype)
-    transports = transports.astype(calculation_dtype)
+    transports = _cast_transports(transports, calculation_dtype)
     front_density = front_density.astype(calculation_dtype)
     future_dlvsq = future_dlvsq.astype(calculation_dtype)
     interval_years = interval_years.astype(calculation_dtype)
@@ -305,14 +387,13 @@ def risk_neutral_log_drift(
     ) -> tuple[tuple[Array, Array], tuple[Array, Array, Array]]:
         previous_density, previous_loading = carry
         support, transport, local_variance, interval, current_xi = inputs
-        transported_density = jnp.einsum("ij,...j->...i", transport, previous_density)
-        transported_loading = jnp.einsum(
-            "ij,...jf->...if", transport, previous_loading
-        )
+        transported_density = apply_transport(transport, previous_density)
+        transported_loading = apply_transport(transport, previous_loading, matrix=True)
         current_density = solve_sanos_step(
             support,
             transported_density,
             local_variance * interval,
+            linear_solver=linear_solver,
         )
         boundary_zeros = jnp.zeros(
             current_xi.shape[:-2] + (1, factor_count),
@@ -331,6 +412,7 @@ def risk_neutral_log_drift(
             support,
             transported_loading + xi_density - matrix_value,
             local_variance * interval,
+            linear_solver=linear_solver,
         )
         safe_density = jnp.maximum(
             current_density[..., 1:-1, None],

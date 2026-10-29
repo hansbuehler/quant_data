@@ -1,0 +1,43 @@
+{
+  "purpose": "Retained numerical-equivalence and timing evidence for the GROMM2 GPU solver change; not a martingale audit or completed hedging result.",
+  "date": "2026-10-27",
+  "model": {
+    "origin": "2025-08-29",
+    "representation": "saved GROMM2 (-3,2), affine-200, rank-16 AR(1)",
+    "background_annual_volatility": 0.05,
+    "business_days": 20,
+    "brownian_substeps_per_day": 8,
+    "precision": "float64"
+  },
+  "implementation": {
+    "gpu": "NVIDIA GeForce RTX 5090",
+    "reference_solver": "CPU Thomas",
+    "candidate_solver": "GPU parallel cyclic reduction",
+    "shared_source": "quantdata/jax/tridiagonal.py",
+    "shared_source_sha256": "6aaf0ac1b54300e4a5889eed6b2f5f3b76c61dbc170add523d09bbaa3b007cea",
+    "unchanged": ["model parameters", "grid", "time steps", "Gaussian draws"]
+  },
+  "identical_draw_comparison": {
+    "paths": 8,
+    "maximum_absolute_option_price_difference": 1.4137996329210978e-15,
+    "maximum_absolute_straddle_payoff_difference": 0.0,
+    "maximum_absolute_feature_difference": 2.1698120633573126e-8,
+    "cpu_maximum_conservation_error": 2.5757174171303632e-14,
+    "gpu_maximum_conservation_error": 3.574918139293004e-14,
+    "minimum_probability_mass": 0.0
+  },
+  "complete_path_timing": {
+    "paths_per_batch": 256,
+    "gpu_pcr_first_batch_seconds_including_compilation": 26.687275887001306,
+    "gpu_pcr_warmed_batch_seconds": 3.230160688981414,
+    "gpu_pcr_maximum_conservation_error": 6.838973831690964e-14,
+    "previous_gpu_thomas_second_batch_seconds": 782.3233504319797,
+    "interpretation": "Single measured complete-path batches, not repeated timing averages. Numerical equivalence is established separately on eight identical-draw paths."
+  },
+  "provenance": {
+    "full_path_reports_directory": "/home/hans/quantdata_data/experiments/gromm2/full-path-pcr-check-20261027-v1",
+    "full_path_reports": ["cpu_0.json", "gpu_0.json", "gpu_1.json", "gpu_2.json"],
+    "previous_gpu_log": "/home/hans/quantdata_data/experiments/gromm2/forward-straddle-legacy-ar1-gpu-20261027-v1/run.log",
+    "raw_arrays_retained_outside_git": true
+  }
+}

@@ -580,119 +580,54 @@ The risk-neutral constructions considered below retain the fixed independent
 Black background.
 
 \subsection{Conditional Arbitrage Check}
-\label{sec:portfolio-conditional-entropic-hedging}
+\label{sec:conditional-arbitrage-check}
 
-Let $H$ be the remaining terminal liability of the current option portfolio,
-$h$ the vector of current hedge holdings, $a$ the post-trade holdings, $R$
-the future gains of the hedge instruments, and $C(a-h)$ the cost of changing
-the hedge.  Conditional on the market state $X_t=x$, define the entropic risk
-of a residual liability $Y$ by
+The check starts from an empty portfolio, with no target liability.  Let
+$R_{t+1}$ be the vector of next-day discounted instrument gains and let
+$a_t=\pi_\theta(X_t,h_t)$ be predictable holdings, where $X_t$ contains only
+information available before trading and $h_t$ records the current holdings.
+The strategy's terminal trading gain is
 \begin{equation}
-  \rho_{\gamma,t}(Y)
-  :=
-  \frac{1}{\gamma}
-  \log\E\!\left[\exp(\gamma Y)\mid X_t=x\right],
-  \qquad \gamma>0.
-  \label{eq:conditional-entropic-risk}
+  G_\theta:=\sum_{t=0}^{T-1}a_t^\top R_{t+1}.
+  \label{eq:conditional-check-trading-gain}
 \end{equation}
-The optimal one-period hedge is
+For risk aversion $\lambda>0$, the frictionless entropic diagnostic minimizes
 \begin{equation}
-  a^*_{\gamma,t}(H,h,x)
-  :=
-  \arg\min_a
-  \rho_{\gamma,t}\!\left(H-a^\top R+C(a-h)\right).
-  \label{eq:portfolio-entropic-hedge}
+  L_{\mathrm{ent}}(\theta)
+  :=\frac{1}{\lambda}\log\E^\Q\!\left[
+    \exp(-\lambda G_\theta)\right].
+  \label{eq:conditional-check-entropic-loss}
 \end{equation}
-Equation~\eqref{eq:portfolio-entropic-hedge} defines one hedge rule for
-arbitrary portfolios, but not one portfolio-independent hedge position.  In
-general, the rule must be conditioned on the remaining liability $H$.
-Current cash wealth does not affect the optimizer because exponential utility
-has constant absolute risk aversion.  Current risky holdings $h$ do matter in
-the presence of transaction costs, position limits, or other trading
-frictions.
+Under the conditional martingale null
+$\E^\Q[R_{t+1}\mid\mathcal F_t]=0$, every integrable predictable strategy
+has zero expected gain.  Jensen's inequality then gives
+$L_{\mathrm{ent}}(\theta)\geq0$, and the zero-action strategy attains zero.
+An improvement significantly below zero on independent evaluation paths is evidence
+against this null within the chosen strategy class, not a proof of a
+sure-profit arbitrage.  Nonnegative trading costs may be subtracted from
+$G_\theta$, but make the diagnostic less sensitive to small drift defects.
 
-Without trading costs, an interior optimizer satisfies
-\begin{equation}
-  \E\!\left[
-    R\exp\!\left(\gamma(H-a^{*\top}R)\right)
-    \mid X_t=x
-  \right]
-  =0.
-  \label{eq:entropic-hedge-first-order-condition}
-\end{equation}
-The exponentially tilted measure in
-Equation~\eqref{eq:entropic-hedge-first-order-condition} depends on $H$.
-Consequently, hedges of two portfolios do not generally add, and changing
-the portfolio notional changes the effective risk aversion.  In the
-frictionless homogeneous case,
-\begin{equation}
-  a^*_{\gamma,t}(cH)=c\,a^*_{c\gamma,t}(H),
-  \qquad c>0.
-  \label{eq:entropic-notional-scaling}
-\end{equation}
-Thus claim size and risk aversion must be specified together in a hedging
-benchmark.
+Training and evaluation paths must remain separate.  After fitting, freeze
+the policy and evaluate its mean trading gain and risk-adjusted performance
+against the zero-action baseline.  For uncertainty estimates, retain whole
+paths as sampling units and average antithetic partners before computing
+standard errors.  If validation paths are used for checkpoint selection or
+early stopping, report validation-selected performance rather than an
+untouched significance test.  Hedging or pricing a nonzero target payoff is
+a separate experiment and is not part of this conditional arbitrage check.
 
-There is a useful special case.  Suppose that $(H,R)$ is conditionally jointly
-Gaussian, write $\mu_R:=\E[R\mid X_t=x]$, and let
-$\Sigma_R:=\Var(R\mid X_t=x)$ be positive definite.  Then
-\begin{equation}
-  a^*_{\gamma,t}(H)
-  =
-  \Sigma_R^{-1}\operatorname{Cov}(R,H\mid X_t=x)
-  +\frac{1}{\gamma}\Sigma_R^{-1}\mu_R.
-  \label{eq:gaussian-entropic-hedge}
-\end{equation}
-The second term is the position that the optimizer would hold without the
-liability.  Hence the incremental hedge is
-\begin{equation}
-  a^*_{\gamma,t}(H)-a^*_{\gamma,t}(0)
-  =
-  \Sigma_R^{-1}\operatorname{Cov}(R,H\mid X_t=x).
-  \label{eq:gaussian-incremental-hedge}
-\end{equation}
-It is linear in $H$ and independent of $\gamma$.  Under $\Q$, where the
-discounted gains have zero conditional mean, the zero-liability speculative
-position vanishes.  Outside the Gaussian or complete-market setting,
-Equations~\eqref{eq:gaussian-entropic-hedge} and
-\eqref{eq:gaussian-incremental-hedge} no longer hold in general.
-
-For GROMM, a universal hedging implementation should therefore learn or solve
-the portfolio-conditioned policy
-\begin{equation}
-  \pi_\gamma\!\left(X_t,h_t,\Phi(H)\right),
-  \label{eq:universal-portfolio-policy}
-\end{equation}
-where $\Phi(H)$ is a representation of the remaining portfolio.  A natural
-choice is its vector of discounted payoffs on common GROMM scenarios,
-possibly compressed into a payoff basis.  The reported hedge is the
-incremental action
-\begin{equation}
-  \pi_\gamma\!\left(X_t,h_t,\Phi(H)\right)
-  -
-  \pi_\gamma\!\left(X_t,h_t,0\right).
-  \label{eq:incremental-entropic-policy}
-\end{equation}
-This subtraction removes the speculative position under $\PP$ and should be
-zero under $\Q$ in the absence of costs, constraints, and numerical error.
-
-The ultimate performance statistic is the out-of-sample entropic risk of the
-realized residual hedge loss.  For held-out episodes $p=1,\ldots,P$, with
-residual losses $Y_p$, its empirical value is
-\begin{equation}
-  \widehat\rho_\gamma(Y)
-  :=
-  \frac{1}{\gamma}
-  \log\left(
-    \frac{1}{P}\sum_{p=1}^P \exp(\gamma Y_p)
-  \right).
-  \label{eq:empirical-entropic-hedging-risk}
-\end{equation}
-Comparisons should use identical market episodes, claim notionals, trading
-costs, position limits, and risk-aversion levels.  Factor-law likelihood is a
-useful dynamics diagnostic, but improvement in
-Equation~\eqref{eq:empirical-entropic-hedging-risk} is the economically
-relevant test.
+\paragraph{GPU linear algebra.}
+We solve the same float64 tridiagonal systems by parallel cyclic reduction
+on the GPU, retaining the sequential solver as a reference.  On an RTX~5090,
+a warmed batch of 256 complete twenty-day paths, with eight Brownian
+substeps per day, takes $3.23$ seconds instead of approximately thirteen
+minutes with sequential elimination.  A complete-path comparison using
+identical Gaussian draws gives option-price differences below
+$1.5\times10^{-15}$, identical forward-start straddle payoffs, and
+mass and forward-mean errors below $7\times10^{-14}$.  The model parameters,
+grid and time steps are unchanged.  These checks establish numerical
+equivalence of the implementation; they do not replace the unconditional
+and held-out strategy-conditional martingale diagnostics.
 
 \section{VIX Reconstruction}
 \label{sec:vix-reconstruction}

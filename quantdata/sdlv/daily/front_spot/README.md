@@ -39,6 +39,13 @@ substeps, recomputes the Q drift along the bridge, reconstructs all future
 densities algebraically, and drops the expired slab.  Mass and forward errors
 in CPU pilots were below `2e-13`.
 
+The SANOS tridiagonal solver keeps the existing native implementation on CPU
+and uses the shared parallel cyclic reduction solver on GPU. Both solve the
+same operator without changing the model, grid or time steps. The explicit
+`linear_solver="native"` and `linear_solver="pcr"` choices support numerical
+cross-checks; regression tests cover multiple right-hand sides, conservation
+and derivatives on both devices.
+
 Raw nodewise DLV squared can become very large in low-probability regions under
 Q.  This is reported rather than clipped.  In the current CPU pilots the
 density-weighted variance remained much smaller, but tail behavior must remain

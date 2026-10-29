@@ -80,12 +80,13 @@ class ObservedFitConfig:
 def extract_observed_quotes(
     payload: dict[str, object], *, geometry: Gromm2GeometryConfig,
     pricer: ArbFreePricer | SavedSanosPricer | None = None,
+    reference_nms_curve: tuple[np.ndarray, np.ndarray] | None = None,
 ) -> dict[str, np.ndarray]:
     """Retain real call/put books and recenter their widths on saved fair values."""
     market = payload["market"]
     pricer = ArbFreePricer.from_dict(payload["af_pricer"]) if pricer is None else pricer
     expiries = np.asarray(market["expiries"], dtype=np.float64)
-    epsilon_vol = float(pricer.interpolate_atm_vols(1.0 / 252.0))
+    epsilon_vol = float(pricer.interpolate_atm_vols(1.0 / 252.0)) if reference_nms_curve is None else None
     fields = {name: [] for name in (
         "strikes", "expiries_y", "is_call", "fair_values", "half_spreads",
         "market_bids", "market_asks", "nms", "quote_weights", "is_am",
@@ -94,8 +95,11 @@ def extract_observed_quotes(
         if expiry * 252.0 <= 0.2001 or expiry > geometry.model_business_dtes[-1] / 252.0 + 1.0e-7:
             continue
         strikes = np.asarray(market["strikes"][expiry_index], dtype=np.float64)
-        annual_vol = float(pricer.interpolate_atm_vols(float(expiry)))
-        nms = NMS.to_nms(strikes, t=float(expiry), vol=annual_vol, eps_vol=epsilon_vol)
+        if reference_nms_curve is None:
+            annual_vol = float(pricer.interpolate_atm_vols(float(expiry)))
+            nms = NMS.to_nms(strikes, t=float(expiry), vol=annual_vol, eps_vol=epsilon_vol)
+        else:
+            nms = reference_grid_nms(strikes, expiry=float(expiry), reference_nms_curve=reference_nms_curve)
         european = ~np.asarray(market["is_american"][expiry_index], dtype=bool)
         in_range = (nms >= geometry.fit_nms_range[0]) & (nms <= geometry.fit_nms_range[1])
         for is_call, side in ((True, "call"), (False, "put")):
@@ -124,6 +128,20 @@ def extract_observed_quotes(
     if not len(result["strikes"]):
         raise ValueError("no observed quotes remain in the requested range")
     return result
+
+
+@version("0.1")
+def reference_grid_nms(strikes: np.ndarray, *, expiry: float, reference_nms_curve: tuple[np.ndarray, np.ndarray]) -> np.ndarray:
+    """Measure relative strike on the saved origin grid's total-variance scale."""
+    expiries, variances = (np.asarray(value, dtype=np.float64) for value in reference_nms_curve)
+    if (expiries.ndim != 1 or variances.shape != expiries.shape or not len(expiries)
+            or np.any(~np.isfinite(expiries)) or np.any(~np.isfinite(variances))
+            or np.any(expiries <= 0.0) or np.any(variances <= 0.0)
+            or np.any(np.diff(expiries) <= 0.0) or np.any(np.diff(variances) < 0.0)
+            or not 0.0 < expiry <= expiries[-1] + 1.0e-7):
+        raise ValueError("invalid reference-date NMS total-variance curve or expiry")
+    variance = np.interp(expiry, np.r_[0.0, expiries], np.r_[0.0, variances])
+    return np.log(strikes) / np.sqrt(variance)
 
 
 def _observed_market(payload: dict[str, object], pricer: ArbFreePricer) -> dict[str, object]:
@@ -211,6 +229,7 @@ def prepare_observed_fit(
     source_market: Path, *, config: ObservedFitConfig,
     fixed_grid: Path | None = None,
     initializer: Path | None = None,
+    reference_nms_curve: tuple[np.ndarray, np.ndarray] | None = None,
 ) -> dict[str, np.ndarray]:
     """Build the tower from date-t information and keep its quote book separate."""
     payload, pricer = load_saved_source(source_market)
@@ -232,7 +251,8 @@ def prepare_observed_fit(
                 raise ValueError("historical fixed-grid fits must precede the reference date")
         if supports.shape != (len(expiries), geometry.num_inner_strikes + 2):
             raise ValueError("reference and fitting strike-grid dimensions differ")
-    quotes = extract_observed_quotes({**payload, "market": _observed_market(payload, pricer)}, geometry=geometry, pricer=pricer)
+    quotes = extract_observed_quotes({**payload, "market": _observed_market(payload, pricer)}, geometry=geometry, pricer=pricer,
+                                    reference_nms_curve=reference_nms_curve)
     lower, upper, alpha, before = quote_interpolation(expiries, quotes["expiries_y"])
     kernel_arguments = dict(
         strikes=quotes["strikes"], expiries_y=quotes["expiries_y"],
@@ -255,7 +275,13 @@ def prepare_observed_fit(
     forward_times = curve.index.to_numpy(dtype=np.float64)
     forward_ratios = curve["fwd"].to_numpy(dtype=np.float64) / curve["spot"].to_numpy(dtype=np.float64)
     forwards = np.exp(np.interp(expiries, np.r_[0.0, forward_times], np.r_[0.0, np.log(forward_ratios)]))
+    reference_fields = {} if reference_nms_curve is None else {
+        "quote_range_policy": np.asarray("reference-date-relative-strike-range"),
+        "quote_range_reference_expiries_y": np.asarray(reference_nms_curve[0]),
+        "quote_range_reference_total_variances": np.asarray(reference_nms_curve[1]),
+    }
     return {
+        **reference_fields,
         **quotes, "supports": supports, "transports": transport_tower(supports),
         "model_expiries_y": expiries, "projected_total_variances": variances,
         "initial_raw": initial_raw,

@@ -1,0 +1,275 @@
+{
+  "case": "black0",
+  "kind": "factors",
+  "risk_aversion": 100,
+  "checkpoint_epoch": 8,
+  "best_epochs": {
+    "long": 4,
+    "short": 8,
+    "zero": 0
+  },
+  "checkpoint_sha256": "474d52788f69ae5d2a2036b3d1debccc8fe75b39019f8675f9d53376122dcd17",
+  "policy_directory": "/home/hans/quantdata_data/experiments/gromm2/paired-real-books-20261028-v1/hedges/black0/factors/black0-factors-lambda100 ecff36a1",
+  "method": "Identical frozen holdings and path weights; add actual per-path costs back, then recompute OCE translations. No retraining or checkpoint reselection.",
+  "caveat": "Cost-removed evaluation of cost-trained policies, not a newly optimized zero-cost hedge. MC errors exclude fitting and validation-selection uncertainty.",
+  "units": "inception spot",
+  "schema": "gromm2-frozen-pca-cost-removal-snapshot-v1",
+  "status": "Provisional selected checkpoints; PCA training was subsequently paused, not certified converged.",
+  "source_report": "/home/hans/quantdata_data/experiments/gromm2/paired-real-books-20261028-v1/cost-comparisons/20261028-v1/current/cost_comparison.json",
+  "measure": "Original equally weighted Q-targeted simulation; no empirical measure change",
+  "cost_basis": "legacy spot-notional turnover; this is not the subsequent unit-L1 alternative-book run",
+  "option_cost_coefficient": 0.00001,
+  "background_annual_volatility": 0,
+  "historical_refit_for_zero_background": false,
+  "hedge_book": "Spot, 15 fixed real-option PCA baskets and a daily 1D ATM call",
+  "training_paths": 1000000,
+  "validation_paths": 1000000,
+  "splits": {
+    "train": {
+      "with_costs": {
+        "zero": {
+          "mean": 0,
+          "standard_error": 0,
+          "three_se_lower": 0,
+          "three_se_upper": 0
+        },
+        "short": {
+          "mean": 0.01952596324500358,
+          "standard_error": 0.0000074574975960975404,
+          "three_se_lower": 0.019503590752215288,
+          "three_se_upper": 0.019548335737791873
+        },
+        "long": {
+          "mean": -0.015769985354607698,
+          "standard_error": 0.0000052366463226355475,
+          "three_se_lower": -0.015785695293575604,
+          "three_se_upper": -0.01575427541563979
+        },
+        "expectation": {
+          "mean": 0.01762072534332385,
+          "standard_error": 0.00002816676058256389,
+          "three_se_lower": 0.017536225061576156,
+          "three_se_upper": 0.01770522562507154
+        },
+        "ask": {
+          "mean": 0.01952596324500358,
+          "standard_error": 0.0000074574975960975404,
+          "three_se_lower": 0.019503590752215288,
+          "three_se_upper": 0.019548335737791873
+        },
+        "bid": {
+          "mean": 0.015769985354607698,
+          "standard_error": 0.0000052366463226355475,
+          "three_se_lower": 0.01575427541563979,
+          "three_se_upper": 0.015785695293575604
+        },
+        "DH_sum": {
+          "mean": 0.0037559778903958805,
+          "standard_error": 0.0000069958258941536815,
+          "three_se_lower": 0.0037349904127134195,
+          "three_se_upper": 0.0037769653680783414
+        },
+        "ask_minus_expectation": {
+          "mean": 0.001905237901679729,
+          "standard_error": 0.000028044423795516917,
+          "three_se_lower": 0.0018211046302931784,
+          "three_se_upper": 0.00198937117306628
+        },
+        "expectation_minus_bid": {
+          "mean": 0.001850739988716151,
+          "standard_error": 0.00002786836336920397,
+          "three_se_lower": 0.001767134898608539,
+          "three_se_upper": 0.001934345078823763
+        }
+      },
+      "costs_removed": {
+        "zero": {
+          "mean": 0,
+          "standard_error": 0,
+          "three_se_lower": 0,
+          "three_se_upper": 0
+        },
+        "short": {
+          "mean": 0.019235195674599446,
+          "standard_error": 0.000007429300369492139,
+          "three_se_lower": 0.01921290777349097,
+          "three_se_upper": 0.01925748357570792
+        },
+        "long": {
+          "mean": -0.016005396913533487,
+          "standard_error": 0.0000052133799587167,
+          "three_se_lower": -0.016021037053409636,
+          "three_se_upper": -0.015989756773657337
+        },
+        "expectation": {
+          "mean": 0.01762072534332385,
+          "standard_error": 0.00002816676058256389,
+          "three_se_lower": 0.017536225061576156,
+          "three_se_upper": 0.01770522562507154
+        },
+        "ask": {
+          "mean": 0.019235195674599446,
+          "standard_error": 0.000007429300369492139,
+          "three_se_lower": 0.01921290777349097,
+          "three_se_upper": 0.01925748357570792
+        },
+        "bid": {
+          "mean": 0.016005396913533487,
+          "standard_error": 0.0000052133799587167,
+          "three_se_lower": 0.015989756773657337,
+          "three_se_upper": 0.016021037053409636
+        },
+        "DH_sum": {
+          "mean": 0.0032297987610659584,
+          "standard_error": 0.0000069507495896991185,
+          "three_se_lower": 0.003208946512296861,
+          "three_se_upper": 0.0032506510098350557
+        },
+        "ask_minus_expectation": {
+          "mean": 0.001614470331275598,
+          "standard_error": 0.000028046279267336943,
+          "three_se_lower": 0.001530331493473587,
+          "three_se_upper": 0.0016986091690776087
+        },
+        "expectation_minus_bid": {
+          "mean": 0.0016153284297903603,
+          "standard_error": 0.000027855714278684106,
+          "three_se_lower": 0.001531761286954308,
+          "three_se_upper": 0.0016988955726264126
+        }
+      },
+      "cost_removed_expanded_three_se_bracket": [
+        0.015989756773657337,
+        0.01925748357570792
+      ],
+      "mean_cost_by_portfolio": {
+        "long": 0.0002391131547003254,
+        "short": 0.00028631949085876145,
+        "zero": 0
+      }
+    },
+    "validation": {
+      "with_costs": {
+        "zero": {
+          "mean": 0,
+          "standard_error": 0,
+          "three_se_lower": 0,
+          "three_se_upper": 0
+        },
+        "short": {
+          "mean": 0.019952861304220124,
+          "standard_error": 0.00010136136560548399,
+          "three_se_lower": 0.019648777207403673,
+          "three_se_upper": 0.020256945401036574
+        },
+        "long": {
+          "mean": -0.015686647556108765,
+          "standard_error": 0.000005863763021312991,
+          "three_se_lower": -0.015704238845172705,
+          "three_se_upper": -0.015669056267044824
+        },
+        "expectation": {
+          "mean": 0.017565935290586893,
+          "standard_error": 0.000027486196032391292,
+          "three_se_lower": 0.01748347670248972,
+          "three_se_upper": 0.017648393878684065
+        },
+        "ask": {
+          "mean": 0.019952861304220124,
+          "standard_error": 0.00010136136560548399,
+          "three_se_lower": 0.019648777207403673,
+          "three_se_upper": 0.020256945401036574
+        },
+        "bid": {
+          "mean": 0.015686647556108765,
+          "standard_error": 0.000005863763021312991,
+          "three_se_lower": 0.015669056267044824,
+          "three_se_upper": 0.015704238845172705
+        },
+        "DH_sum": {
+          "mean": 0.004266213748111361,
+          "standard_error": 0.00010133017375713759,
+          "three_se_lower": 0.003962223226839948,
+          "three_se_upper": 0.0045702042693827735
+        },
+        "ask_minus_expectation": {
+          "mean": 0.002386926013633235,
+          "standard_error": 0.00010424870267920765,
+          "three_se_lower": 0.002074179905595612,
+          "three_se_upper": 0.0026996721216708576
+        },
+        "expectation_minus_bid": {
+          "mean": 0.001879287734478125,
+          "standard_error": 0.00002744083383663977,
+          "three_se_lower": 0.0017969652329682057,
+          "three_se_upper": 0.001961610235988044
+        }
+      },
+      "costs_removed": {
+        "zero": {
+          "mean": 0,
+          "standard_error": 0,
+          "three_se_lower": 0,
+          "three_se_upper": 0
+        },
+        "short": {
+          "mean": 0.01966107479948386,
+          "standard_error": 0.0001012094850311497,
+          "three_se_lower": 0.019357446344390412,
+          "three_se_upper": 0.01996470325457731
+        },
+        "long": {
+          "mean": -0.01592253729410976,
+          "standard_error": 0.000005828043793961485,
+          "three_se_lower": -0.015940021425491648,
+          "three_se_upper": -0.015905053162727875
+        },
+        "expectation": {
+          "mean": 0.017565935290586893,
+          "standard_error": 0.000027486196032391292,
+          "three_se_lower": 0.01748347670248972,
+          "three_se_upper": 0.017648393878684065
+        },
+        "ask": {
+          "mean": 0.01966107479948386,
+          "standard_error": 0.0001012094850311497,
+          "three_se_lower": 0.019357446344390412,
+          "three_se_upper": 0.01996470325457731
+        },
+        "bid": {
+          "mean": 0.01592253729410976,
+          "standard_error": 0.000005828043793961485,
+          "three_se_lower": 0.015905053162727875,
+          "three_se_upper": 0.015940021425491648
+        },
+        "DH_sum": {
+          "mean": 0.0037385375053740964,
+          "standard_error": 0.00010117610559839645,
+          "three_se_lower": 0.003435009188578907,
+          "three_se_upper": 0.004042065822169286
+        },
+        "ask_minus_expectation": {
+          "mean": 0.0020951395088969686,
+          "standard_error": 0.00010410522731890435,
+          "three_se_lower": 0.0017828238269402556,
+          "three_se_upper": 0.0024074551908536816
+        },
+        "expectation_minus_bid": {
+          "mean": 0.0016433979964771282,
+          "standard_error": 0.00002742441178677827,
+          "three_se_lower": 0.0015611247611167934,
+          "three_se_upper": 0.001725671231837463
+        }
+      },
+      "cost_removed_expanded_three_se_bracket": [
+        0.015905053162727875,
+        0.01996470325457731
+      ],
+      "mean_cost_by_portfolio": {
+        "long": 0.0002390907636685252,
+        "short": 0.00028632528346040395,
+        "zero": 0
+      }
+    }
+  }
+}

@@ -9,6 +9,7 @@ import jax.numpy as jnp
 import jax.scipy as jsp
 
 from quantdata.biz_calendar import DAYS_PER_YEAR
+from quantdata.jax.tridiagonal import solve_tridiagonal_pcr
 from quantdata.sdlv.daily.front_spot.estimation import BACKGROUND_ANNUAL_VOL
 
 Array = jax.Array
@@ -133,12 +134,28 @@ def _sanos_diagonals(support: Array, dlvsq_dt: Array) -> tuple[Array, Array, Arr
     return lower, diagonal, upper
 
 
-def solve_sanos_step(support: Array, previous: Array, dlvsq_dt: Array) -> Array:
-    """Solve one SANOS tridiagonal step for one or more right-hand sides."""
+def solve_sanos_step(
+    support: Array,
+    previous: Array,
+    dlvsq_dt: Array,
+    *,
+    linear_solver: str = "auto",
+) -> Array:
+    """Solve exactly using native CPU or parallel-reduction GPU linear algebra.
+
+    ``auto`` retains the existing native solver on CPU and selects PCR on GPU.
+    Explicit ``native`` and ``pcr`` choices allow numerical cross-checks without
+    changing the SANOS operator, financial dynamics or timestep.
+    """
+    if linear_solver not in {"auto", "native", "pcr"}:
+        raise ValueError("linear_solver must be auto, native or pcr")
+    if linear_solver == "auto":
+        linear_solver = "pcr" if jax.default_backend() == "gpu" else "native"
     lower, diagonal, upper = _sanos_diagonals(support, dlvsq_dt)
     vector_rhs = previous.ndim == dlvsq_dt.ndim
     rhs = previous[..., :, None] if vector_rhs else previous
-    result = jax.lax.linalg.tridiagonal_solve(lower, diagonal, upper, rhs)
+    solver = solve_tridiagonal_pcr if linear_solver == "pcr" else jax.lax.linalg.tridiagonal_solve
+    result = solver(lower, diagonal, upper, rhs)
     return result[..., 0] if vector_rhs else result
 
 

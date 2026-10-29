@@ -1,0 +1,121 @@
+{
+  "schema": "gromm2-paired-forward-equivalence-v1",
+  "date": "2026-10-28",
+  "source_report": "/home/hans/quantdata_data/experiments/gromm2/paired-real-books-20261028-v1/benchmark-selected4096/equivalence.json",
+  "source_report_sha256": "843a1e6b2c19f6ad5f15b4e8da3a9132973250231c27c1c1f46b5293084be800",
+  "passed": true,
+  "records": [
+    {
+      "split": "train",
+      "paths": 4096,
+      "reference_seconds": 46.7468972170027,
+      "paired_both_backgrounds_seconds": 140.89024230500218,
+      "maximum_price_error": 3.434405537738883e-14,
+      "maximum_feature_error": 9.5367431640625e-07,
+      "maximum_floor_normalized_feature_error": 4.125502495678017e-07,
+      "maximum_payoff_error": 1.1102230246251565e-15,
+      "maximum_mass_or_mean_error": 9.847678228425139e-14
+    },
+    {
+      "split": "validation",
+      "paths": 4096,
+      "reference_seconds": 29.274195574980695,
+      "paired_both_backgrounds_seconds": 24.50570516602602,
+      "maximum_price_error": 9.284933932818262e-14,
+      "maximum_feature_error": 7.62939453125e-06,
+      "maximum_floor_normalized_feature_error": 3.6206167309378437e-07,
+      "maximum_payoff_error": 8.881784197001252e-16,
+      "maximum_mass_or_mean_error": 7.771561172376096e-14
+    }
+  ],
+  "zero_background_payoff_error": 0.0,
+  "model": {
+    "origin": "2025-08-29",
+    "measure": "Q",
+    "model_label": "GROMM2 legacy (-3,2) affine-200 AR(1)",
+    "background_volatility": 0.05,
+    "historical_fit_coverage": {
+      "percent_inside_spread": 83.5880520417905,
+      "mean_excess_half_spreads": 0.16978494822978973,
+      "midpoint_mae_half_spreads": 0.6349013447761536
+    },
+    "history_start": "2022-01-03",
+    "history_end": "2025-08-29",
+    "history_dates": 891,
+    "factor_transition_count": 863,
+    "last_factor_origin_date": "2025-08-28",
+    "initialization": "Saved last observed log-squared factor scores; no physical drift under Q",
+    "calibration_protocol": "Earlier joint whole-history affine calibration through the origin, not the new 252-day rolling protocol",
+    "transport_precision": "Barycentric transport reconstructed in float64 from unchanged saved supports",
+    "maximum_archived_transport_difference": 0.0005146996510791424,
+    "maximum_transport_precision_tolerance": 0.007074815501337466,
+    "initial_density_mass_error": 5.773159728050814e-15,
+    "initial_density_forward_error": 5.773159728050814e-15,
+    "source_sha256": {
+      "/home/hans/quantdata_data/training/gromm2/inputs/2025-08-29-affine200/affine-200-history.h5": "487f781cd786ceaf3461a4cfd1d8b4e8883a95b452960a912e46058bb037f492",
+      "/home/hans/quantdata_data/training/gromm2/inputs/2025-08-29-affine200/affine-200-models-rank16-final.npz": "4e5e594187dae7cefe77eb12ae4f3eb04612c420783a1426b2efdf6fe1b73937",
+      "/home/hans/quantdata_data/training/gromm2/factor-laws/2025-08-29-affine200-v1/factor-laws.npz": "bbbb27d180ff621f261ca3cde23a5b0649dd14851002cdd51f25351c4b45654b",
+      "/home/hans/quantdata_data/training/gromm2/inputs/2025-08-29-affine200/affine-200-models-rank16-final.json": "c1c9a8966d44ae3b041bee672ab1a64957c2d544cd33047a5898c932dd255582",
+      "/home/hans/quantdata_data/training/gromm2/factor-laws/2025-08-29-affine200-v1/factor-laws.json": "f86d5a8019e90e91293944fa1dd37b2d0fa2280e1af9c60483f30f144b94394b"
+    }
+  },
+  "basket_initial_checks": [
+    {
+      "case": "black5",
+      "selected_candidate_count": 44,
+      "full_candidate_count": 231,
+      "combined_initial_rank": 17,
+      "expected_drivers": 17,
+      "maximum_exposure_residual": 5.104873468890634e-18,
+      "combined_initial_singular_values": [
+        0.10569466812823157,
+        0.008038107916091533,
+        0.00013963045805034607,
+        0.00010783937904406638,
+        5.189570161661027e-05,
+        4.518390554944814e-05,
+        3.8721548060395736e-05,
+        3.297296234683426e-05,
+        2.3761623032367656e-05,
+        2.1212806701062117e-05,
+        1.9764418196249723e-05,
+        1.8004799390905283e-05,
+        1.5869815343024863e-05,
+        1.4533797923103434e-05,
+        1.3733157901155471e-05,
+        1.170678329759193e-05,
+        1.0317668047057068e-05
+      ],
+      "active_condition_number": 10244.046197859516
+    },
+    {
+      "case": "black0",
+      "selected_candidate_count": 44,
+      "full_candidate_count": 231,
+      "combined_initial_rank": 16,
+      "expected_drivers": 16,
+      "maximum_exposure_residual": 2.236139083669944e-18,
+      "combined_initial_singular_values": [
+        0.08917070576841242,
+        0.0013471357670125762,
+        0.00046259311229563044,
+        0.0003843930770529783,
+        0.0003231944412896419,
+        0.00026344358880791646,
+        0.00022227917239285791,
+        0.00016002596327987216,
+        0.00015407028232677155,
+        0.00014727917633239684,
+        0.0001422807450987675,
+        0.00011719214461882924,
+        8.694124785531566e-05,
+        8.330249485689615e-05,
+        7.742230929605042e-05,
+        6.436416715589364e-05,
+        0.0
+      ],
+      "active_condition_number": 1385.4091446943755
+    }
+  ],
+  "interpretation": "Reference is evaluated in 1024-path chunks. Optimized timings include both backgrounds and the larger two-book quote set; reference timings cover one background and its original fixed book. First timings include compilation. Inception rank is not a pathwise completeness or daily-replication certificate."
+}

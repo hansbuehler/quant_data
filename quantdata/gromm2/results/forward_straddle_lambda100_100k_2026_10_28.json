@@ -1,0 +1,354 @@
+{
+  "experiment": {
+    "initialization": "Fresh zero-action heads, shared LSTM, no optimizer or policy warm start from a different risk aversion.",
+    "learning_rate": 0.00025,
+    "objective": "Sum of empty-portfolio and exotic power-exponential OCE losses, each with lambda=100.",
+    "optimization_batch_size": 256,
+    "path_weighting": "Equal weights 1/100000 in both sets; no entropy weights are loaded or fitted.",
+    "preconditioned": false,
+    "previous_run": "/home/hans/quantdata_data/experiments/gromm2/joint-options-0p1bp-unweighted-b256-20261028-v1",
+    "price": "DH(Z)-DH(0)",
+    "risk_aversions": [
+      100
+    ],
+    "schema": "gromm2-joint-original-q-high-risk-aversion-v1",
+    "source_scenarios": "/home/hans/quantdata_data/experiments/gromm2/forward-straddle-legacy-ar1-gpu-pcr-20261027-v1",
+    "third_sample": false,
+    "tradable_options": 22,
+    "tradable_spot": false,
+    "training_paths": 100000,
+    "transaction_cost_bps_of_spot_notional": 0.1,
+    "user_request": "Use a much higher risk aversion. Lambda=100",
+    "validation_paths": 100000,
+    "validation_stopping": {
+      "include_zero_action_baseline": true,
+      "learning_rate_patience": 25,
+      "stop_patience": 50
+    }
+  },
+  "provenance": {
+    "checkpoint_identity": {
+      "code_version": "0.1 { HedgingPolicyConfig: 0.1 { Hedgin 7f19dfcb",
+      "config": {
+        "deep": {
+          "activation": "SiLU",
+          "num_depth": 2,
+          "num_width": 64,
+          "use_bias": true
+        },
+        "feature_count": 360,
+        "group": "gromm2/joint-options-hedging",
+        "hidden_size": 32,
+        "label": "joint-options-lambda100",
+        "liability_units": 0,
+        "normalization_floor": 0.0001,
+        "option_expiry_days": [
+          5,
+          5,
+          5,
+          5,
+          5,
+          10,
+          10,
+          10,
+          10,
+          10,
+          15,
+          15,
+          15,
+          15,
+          15,
+          20,
+          20,
+          20,
+          20,
+          20,
+          20,
+          20
+        ],
+        "penalty_weight": 0.0001,
+        "position_cap": 10,
+        "risk_aversion": 100,
+        "soft_cap_fraction": 0.8,
+        "transaction_cost_bps": 0.1,
+        "user_version": "0.1"
+      },
+      "training_scenarios_sha256": "902f5d56181a67df4e6165bdf241135a6bdd1a2b48b7eb08316b3b6f59270054",
+      "training_weights_sha256": "f4db1e92a4d6a542fa9bbff398fe71cc4ccbfd55b69126293b9ebd1bfdd24d9e",
+      "user_version": "0.1",
+      "validation_scenarios_sha256": "42b53903c5659d3b9b2fd6b57281d6fa8654ec0f45dc9430892fab556469d1f9",
+      "validation_weights_sha256": "f4db1e92a4d6a542fa9bbff398fe71cc4ccbfd55b69126293b9ebd1bfdd24d9e"
+    },
+    "checkpoint_sha256": "0e8b4c19b33036fd69b8f91c17098d12c84bf59c8df05f1853831f967b2cd7ca",
+    "scenario_model": "Saved GROMM2 legacy (-3,2), affine-200 AR(1), 16 factors; not the newer (-4,3) rolling-calibration model.",
+    "source_result": "/home/hans/quantdata_data/experiments/gromm2/joint-options-0p1bp-unweighted-lambda100-b256-20261028-v1/policies/joint-options-lambda100 55065768/result.json",
+    "source_uncertainty": "/home/hans/quantdata_data/experiments/gromm2/lambda100-frozen-uncertainty-20261028-v1/evaluation/uncertainty_report.json"
+  },
+  "retained_date": "2026-10-28",
+  "schema": "gromm2-retained-forward-straddle-risk100-v1",
+  "selected_checkpoint_results": {
+    "train": {
+      "DH_price": 0.020743820915818,
+      "claim": {
+        "DH": 0.02099970916064384,
+        "evaluation_translation": -0.020274751421823542,
+        "loss_at_training_translation": 0.021003773845167904,
+        "mean_gross_trading_gain": 0.001030371350188901,
+        "mean_net_trading_gain": 0.0008133513805145774,
+        "mean_pnl": -0.01878451117209954,
+        "mean_transaction_cost": 0.00021701996967432322,
+        "near_cap_fraction": 0
+      },
+      "economic_objective": 0.021263996045351657,
+      "empty": {
+        "DH": 0.0002558882448258384,
+        "evaluation_translation": 0.00006861026199687693,
+        "loss_at_training_translation": 0.000260222200183754,
+        "mean_gross_trading_gain": 0.000872645124352035,
+        "mean_net_trading_gain": 0.0007709183684945363,
+        "mean_pnl": 0.0007709183684945363,
+        "mean_transaction_cost": 0.00010172675585749696,
+        "near_cap_fraction": 0
+      },
+      "objective": 0.021264243552752252,
+      "penalty": 0.002475074005946517,
+      "price_convention": "DH(Z)-DH(0), with DH negative optimized OCE and no initial claim premium in training.",
+      "weighted_Q_expectation": 0.01959786255261414
+    },
+    "validation": {
+      "DH_price": 0.021583161067084928,
+      "claim": {
+        "DH": 0.02238839712817672,
+        "evaluation_translation": -0.02110510890172358,
+        "loss_at_training_translation": 0.022399156918266987,
+        "mean_gross_trading_gain": 0.000199548452128268,
+        "mean_net_trading_gain": -0.00001781483448397094,
+        "mean_pnl": -0.019725363860658412,
+        "mean_transaction_cost": 0.00021736328661223914,
+        "near_cap_fraction": 0
+      },
+      "economic_objective": 0.023204673848365463,
+      "empty": {
+        "DH": 0.0008052360610917925,
+        "evaluation_translation": -0.0003212639329796142,
+        "loss_at_training_translation": 0.000805516930098476,
+        "mean_gross_trading_gain": 0.0003093951996657982,
+        "mean_net_trading_gain": 0.0002074359890250799,
+        "mean_pnl": 0.0002074359890250799,
+        "mean_transaction_cost": 0.00010195921064071854,
+        "near_cap_fraction": 0
+      },
+      "objective": 0.023204885102250748,
+      "penalty": 0.0021125388528406624,
+      "price_convention": "DH(Z)-DH(0), with DH negative optimized OCE and no initial claim premium in training.",
+      "weighted_Q_expectation": 0.01970754902617442
+    }
+  },
+  "status": "completed_validation_stopping",
+  "training": {
+    "backend": "cuda",
+    "best_epoch": 13,
+    "best_validation_objective": 0.023204885102250748,
+    "device": "cuda:0",
+    "early_stopped": true,
+    "epoch": 63,
+    "initialization": "zero actions for the new options-only joint geometry",
+    "normalization": "Training features only; population mean and SD",
+    "policy_config": {
+      "deep": {
+        "activation": "SiLU",
+        "num_depth": 2,
+        "num_width": 64,
+        "use_bias": true
+      },
+      "feature_count": 360,
+      "group": "gromm2/joint-options-hedging",
+      "hidden_size": 32,
+      "label": "joint-options-lambda100",
+      "liability_units": 0,
+      "normalization_floor": 0.0001,
+      "option_expiry_days": [
+        5,
+        5,
+        5,
+        5,
+        5,
+        10,
+        10,
+        10,
+        10,
+        10,
+        15,
+        15,
+        15,
+        15,
+        15,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20
+      ],
+      "penalty_weight": 0.0001,
+      "position_cap": 10,
+      "risk_aversion": 100,
+      "soft_cap_fraction": 0.8,
+      "transaction_cost_bps": 0.1,
+      "user_version": "0.1"
+    },
+    "preconditioned": false,
+    "preconditioning": "Disabled: original Q-generated samples with equal path weights",
+    "selection": "Best joint validation loss; halve LR after 25 stalled epochs, stop after 50 by default. No third sample.",
+    "shared_parameters": "LSTM weights only; separate action heads, translations, positions and recurrent states",
+    "statistical_interpretation": "Validation-selected performance, not an untouched conditional-arbitrage significance test.",
+    "stop_reason": "validation_plateau_user_requested_stopping",
+    "train_config": {
+      "absolute_improvement": 1e-7,
+      "batch_size": 256,
+      "compile": false,
+      "convergence_patience": 50,
+      "cpu_threads": 4,
+      "device": "cuda",
+      "evaluation_batch_size": 4096,
+      "gradient_clip": 5,
+      "heartbeat_seconds": 60,
+      "learning_rate": 0.00025,
+      "learning_rate_patience": 25,
+      "maximum_epochs": 2000,
+      "minimum_epochs": 1,
+      "minimum_learning_rate": 0.000001,
+      "plot_every_epochs": 5,
+      "precision": 32,
+      "relative_improvement": 0.0001,
+      "seed": 20261028
+    },
+    "training_paths": 100000,
+    "transaction_cost": "Spot-notional cost on initial entry and live option turnover; cash settlement is free",
+    "validation_paths": 100000,
+    "zero_action_baseline_evaluated": true
+  },
+  "uncertainty": {
+    "best_epoch": 13,
+    "caveat": "Plug-in Monte Carlo errors with fitted policies held fixed; exclude training and validation-selection uncertainty.",
+    "device": "cuda:0",
+    "method": "OCE envelope/influence-function SE; sample SD of adjacent antithetic-pair scores divided by sqrt(pair count).",
+    "policy_directory": "/home/hans/quantdata_data/experiments/gromm2/joint-options-0p1bp-unweighted-lambda100-b256-20261028-v1/policies/joint-options-lambda100 55065768",
+    "risk_aversion": 100,
+    "schema": "gromm2-frozen-hedging-uncertainty-v1",
+    "splits": {
+      "train": {
+        "DH_claim": {
+          "confidence_95_lower": 0.020941695830125995,
+          "confidence_95_upper": 0.021057722491161692,
+          "mean": 0.020999709160643844,
+          "pair_count": 50000,
+          "path_standard_deviation": 0.009389295690497363,
+          "standard_error": 0.000029599181911224544
+        },
+        "DH_empty": {
+          "confidence_95_lower": 0.00019889153245127077,
+          "confidence_95_upper": 0.000312884957200406,
+          "mean": 0.0002558882448258384,
+          "pair_count": 50000,
+          "path_standard_deviation": 0.009224557919264735,
+          "standard_error": 0.00002908048965396834
+        },
+        "DH_price": {
+          "confidence_95_lower": 0.02066772363375854,
+          "confidence_95_upper": 0.02081991819787746,
+          "mean": 0.020743820915818,
+          "pair_count": 50000,
+          "path_standard_deviation": 0.012237456754481955,
+          "standard_error": 0.0000388258573421267
+        },
+        "DH_price_minus_expectation": {
+          "confidence_95_lower": 0.0009598055634610428,
+          "confidence_95_upper": 0.0013321111629466939,
+          "mean": 0.0011459583632038683,
+          "pair_count": 50000,
+          "path_standard_deviation": 0.02950996715495358,
+          "standard_error": 0.00009497766347298984
+        },
+        "DH_unhedged_payoff": {
+          "confidence_95_lower": 0.05328409524503776,
+          "confidence_95_upper": 0.060768923897903074,
+          "mean": 0.057026509571470416,
+          "pair_count": 50000,
+          "path_standard_deviation": 0.6045143158192893,
+          "standard_error": 0.0019094301507335553
+        },
+        "evaluation_translations": {
+          "claim": -0.020274751421823545,
+          "empty": 0.00006861026199687795,
+          "unhedged": -0.0251049315233055
+        },
+        "expectation": {
+          "confidence_95_lower": 0.019418909750369685,
+          "confidence_95_upper": 0.01977681535485858,
+          "mean": 0.019597862552614132,
+          "pair_count": 50000,
+          "path_standard_deviation": 0.028230360917016133,
+          "standard_error": 0.00009130412785949318
+        }
+      },
+      "validation": {
+        "DH_claim": {
+          "confidence_95_lower": 0.02219604656801749,
+          "confidence_95_upper": 0.02258074768833595,
+          "mean": 0.02238839712817672,
+          "pair_count": 50000,
+          "path_standard_deviation": 0.031024211047865038,
+          "standard_error": 0.0000981398442402337
+        },
+        "DH_empty": {
+          "confidence_95_lower": 0.000720603922341396,
+          "confidence_95_upper": 0.0008898681998421888,
+          "mean": 0.0008052360610917924,
+          "pair_count": 50000,
+          "path_standard_deviation": 0.013649877027486568,
+          "standard_error": 0.00004318045607876673
+        },
+        "DH_price": {
+          "confidence_95_lower": 0.021408169889562286,
+          "confidence_95_upper": 0.021758152244607563,
+          "mean": 0.021583161067084924,
+          "pair_count": 50000,
+          "path_standard_deviation": 0.02822967603422851,
+          "standard_error": 0.00008928285361514149
+        },
+        "DH_price_minus_expectation": {
+          "confidence_95_lower": 0.0016558272204125932,
+          "confidence_95_upper": 0.0020953968614083962,
+          "mean": 0.0018756120409104949,
+          "pair_count": 50000,
+          "path_standard_deviation": 0.034984239183902845,
+          "standard_error": 0.00011213717304579892
+        },
+        "DH_unhedged_payoff": {
+          "confidence_95_lower": 0.05562492546948645,
+          "confidence_95_upper": 0.06343754471143817,
+          "mean": 0.059531235090462306,
+          "pair_count": 50000,
+          "path_standard_deviation": 0.6310005810765207,
+          "standard_error": 0.0019930517355361273
+        },
+        "evaluation_translations": {
+          "claim": -0.02110510890172357,
+          "empty": -0.00032126393297961323,
+          "unhedged": -0.025342461043943554
+        },
+        "expectation": {
+          "confidence_95_lower": 0.019523163487450642,
+          "confidence_95_upper": 0.019891934564898222,
+          "mean": 0.019707549026174432,
+          "pair_count": 50000,
+          "path_standard_deviation": 0.02908978132346304,
+          "standard_error": 0.00009407598311917976
+        }
+      }
+    },
+    "units": "inception spot"
+  }
+}
