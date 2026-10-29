@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 from scipy.integrate import quad
 from scipy.optimize import minimize_scalar
+from scipy.stats import norm
 
 from quantdata.hedging.mean_reduction import MeanReduction
 from quantdata.hedging.objectives import regularized_tyler_covariance
@@ -23,6 +24,7 @@ from quantdata.sdlv.daily.front_spot.hedging.models.covariance.hedger import (
     _gaussian_power_risk,
     _robust_target_scatter,
     _solve_power_exponential,
+    _solve_quadratic_lasso,
     fit_covariance_action,
     fit_covariance_book_actions,
 )
@@ -61,6 +63,44 @@ def test_covariance_model_uses_both_spot_and_option_returns() -> None:
     assert action.fit.converged
     assert abs(action.spot) > 0.1
     assert abs(action.option) > 0.1
+
+
+def test_quadratic_solver_accepts_kkt_certified_last_sweep() -> None:
+    action, iterations, converged, cap_hits = _solve_quadratic_lasso(
+        instrument_center=np.zeros(2),
+        covariance=np.eye(2),
+        claim_cross_covariance=np.array([0.5, -0.25]),
+        penalty=np.zeros(2),
+        variance_aversion=1.0,
+        initial_action=np.zeros(2),
+        config=CovarianceHedgeConfig(maximum_solver_iterations=1),
+    )
+    np.testing.assert_allclose(action, [-0.5, 0.25], atol=1.0e-10)
+    assert iterations == 1
+    assert converged
+    assert cap_hits == 0
+
+
+def test_quadratic_solver_polishes_slow_coordinate_sweep() -> None:
+    covariance = np.array([[1.0, 0.9], [0.9, 1.0]])
+    cross_covariance = np.array([0.5, -0.25])
+    action, iterations, converged, cap_hits = _solve_quadratic_lasso(
+        instrument_center=np.zeros(2),
+        covariance=covariance,
+        claim_cross_covariance=cross_covariance,
+        penalty=np.zeros(2),
+        variance_aversion=1.0,
+        initial_action=np.zeros(2),
+        config=CovarianceHedgeConfig(maximum_solver_iterations=1),
+    )
+    np.testing.assert_allclose(
+        action,
+        -np.linalg.solve(covariance, cross_covariance),
+        atol=1.0e-8,
+    )
+    assert iterations > 1
+    assert converged
+    assert cap_hits == 0
 
 
 def _one_factor_return_panel(*, observations: int = 500) -> HistoricalReturnPanel:
@@ -255,6 +295,40 @@ def test_book_mean_volatility_recovers_pure_factor_hedge(
     assert action.standard_deviation < 0.2 * np.sqrt(fit.estimate.covariance[-1, -1])
 
 
+@pytest.mark.parametrize("risk_parameter", [1.0, 10.0, 100.0])
+def test_gaussian_cvar_matches_equivalent_mean_volatility(
+    risk_parameter: float,
+) -> None:
+    panel = _one_factor_return_panel()
+    alpha = 1.0 / (1.0 + risk_parameter)
+    tail_loading = float(norm.pdf(norm.ppf(alpha)) / alpha)
+    common = dict(
+        rolling_observations=len(panel.training_origin_dates),
+        cost_multiplier=1.0,
+    )
+    cvar = fit_covariance_book_actions(
+        panel,
+        linear_transaction_costs=np.asarray([0.1]),
+        config=CovarianceHedgeConfig(
+            objective=CovarianceObjective.CVAR_OCE,
+            risk_parameter=risk_parameter,
+            **common,
+        ),
+    )
+    mean_volatility = fit_covariance_book_actions(
+        panel,
+        linear_transaction_costs=np.asarray([0.1]),
+        config=CovarianceHedgeConfig(
+            objective=CovarianceObjective.MEAN_VOLATILITY,
+            risk_parameter=tail_loading,
+            **common,
+        ),
+    )
+    assert cvar.actions[0].converged
+    np.testing.assert_allclose(cvar.actions[0].action, mean_volatility.actions[0].action)
+    assert cvar.actions[0].objective == pytest.approx(mean_volatility.actions[0].objective)
+
+
 @pytest.mark.parametrize("risk_parameter", [0.1, 1.0, 10.0])
 def test_book_gaussian_power_recovers_pure_factor_hedge(
     risk_parameter: float,
@@ -309,6 +383,38 @@ def test_gaussian_entropy_is_mean_variance_with_the_same_risk_parameter() -> Non
     assert entropy.actions[0].objective == pytest.approx(
         mean_variance.actions[0].objective
     )
+
+
+def test_gaussian_entropy_raw_ridge_uses_unscaled_actions() -> None:
+    panel = _one_factor_return_panel()
+    ridge = 0.001
+    config = CovarianceHedgeConfig(
+        rolling_observations=len(panel.training_origin_dates),
+        objective=CovarianceObjective.ENTROPY,
+        risk_parameter=1.0,
+        cost_multiplier=0.0,
+        entropy_raw_ridge=ridge,
+    )
+    fit = fit_covariance_book_actions(
+        panel,
+        linear_transaction_costs=np.zeros(1),
+        config=config,
+    )
+    cross, variance = _robust_target_scatter(
+        panel.instrument_returns,
+        panel.target_returns[:, 0],
+        estimate=fit.estimate,
+    )
+    covariance = fit.estimate.covariance[0, 0]
+    expected_action = -cross[0] / (covariance + ridge)
+    action = fit.actions[0].action
+    assert action is not None
+    assert action[0] == pytest.approx(expected_action, abs=1.0e-7)
+    expected_objective = (
+        0.5 * (variance + 2.0 * cross[0] * action[0] + covariance * action[0] ** 2)
+        + 0.5 * ridge * action[0] ** 2
+    )
+    assert fit.actions[0].objective == pytest.approx(expected_objective)
 
 
 @pytest.mark.parametrize(

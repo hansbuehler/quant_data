@@ -308,6 +308,7 @@ def main() -> None:
     parser.add_argument("--checkpoint-directory", type=Path, required=True)
     parser.add_argument("--observation-count", type=int, default=252)
     parser.add_argument("--scenario-count", type=int, default=10000)
+    parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     parser.add_argument("--stop-after", type=int)
     arguments = parser.parse_args()
     if not arguments.start <= arguments.evaluation_start <= arguments.end:
@@ -440,7 +441,7 @@ def main() -> None:
                 "--observation-count", str(arguments.observation_count),
                 "--epochs", str(epochs),
                 "--scenario-count", str(arguments.scenario_count),
-                "--device", "cpu",
+                "--device", arguments.device,
                 "--precision", "32",
                 "--no-mixed-precision",
                 "--progress-every", "1",

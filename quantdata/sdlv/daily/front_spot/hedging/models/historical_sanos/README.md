@@ -15,7 +15,12 @@
 - **Scenarios:** the empirical rolling return rows themselves, without a
   parametric generator.
 - **Objectives:** mean-variance, mean-volatility, entropy OCE, and the benchmark
-  power-exponential OCE, all with predictable spread costs. A negative
+  power-exponential OCE, all with predictable spread costs. An optional
+  entropy-only raw-action ridge adds
+  $\epsilon\|a\|_2^2/2$ outside the log moment, equivalently inside each
+  scenario's wealth. It is distinct from the default unit-RMS-coordinate
+  ridge, which should be set to zero when the raw-action objective alone is
+  requested. A negative
   homogeneous zero-claim mean-volatility objective is a direct recession
   certificate: the unregularized problem is unbounded along that direction.
   With zero ridge that certificate remains fatal. With positive ridge the

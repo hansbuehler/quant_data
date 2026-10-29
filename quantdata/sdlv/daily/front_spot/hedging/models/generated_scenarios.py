@@ -36,7 +36,7 @@ from quantdata.sdlv.daily.front_spot.hedging.data.generative_surfaces import (
 FloatArray = NDArray[np.float64]
 
 
-@version("2.1", dependencies=[MeanReductionConfig, ScenarioOptimizationConfig])
+@version("2.3", dependencies=[MeanReductionConfig, ScenarioOptimizationConfig])
 @dataclass(frozen=True, kw_only=True)
 class GeneratedHedgeConfig:
     """Common Monte Carlo, objective, drift, and cost controls."""
@@ -49,6 +49,8 @@ class GeneratedHedgeConfig:
     mean_reduction_config: MeanReductionConfig = MeanReductionConfig()
     cost_multiplier: float = 1.0
     position_cap: float = 1_000_000.0
+    raw_action_ridge: float = 0.0
+    certificate_tolerance: float = 2.0e-6
 
     def __post_init__(self) -> None:
         verify_inp(
@@ -64,8 +66,8 @@ class GeneratedHedgeConfig:
             lambda: "objective must be a ScenarioObjective",
         )
         verify_inp(
-            math.isfinite(self.risk_parameter) and self.risk_parameter > 0.0,
-            lambda: "risk_parameter must be finite-positive",
+            not math.isnan(self.risk_parameter) and self.risk_parameter > 0.0,
+            lambda: "risk_parameter must be positive or infinity",
         )
         verify_inp(
             isinstance(self.mean_reduction, MeanReduction),
@@ -78,6 +80,16 @@ class GeneratedHedgeConfig:
         verify_inp(
             math.isfinite(self.position_cap) and self.position_cap > 0.0,
             lambda: "position_cap must be finite-positive",
+        )
+        verify_inp(
+            math.isfinite(self.raw_action_ridge)
+            and self.raw_action_ridge >= 0.0,
+            lambda: "raw_action_ridge must be finite and non-negative",
+        )
+        verify_inp(
+            math.isfinite(self.certificate_tolerance)
+            and self.certificate_tolerance > 0.0,
+            lambda: "certificate_tolerance must be finite-positive",
         )
 
 
@@ -184,16 +196,21 @@ def fit_generated_objective_book(
         objective=config.objective,
         risk_parameter=config.risk_parameter,
         position_cap=config.position_cap,
+        raw_action_ridge=config.raw_action_ridge,
+        certificate_tolerance=config.certificate_tolerance,
     )
     fits: list[GeneratedObjectiveFit] = []
     for index, quantity in enumerate(quantities):
-        optimizer = fit_static_scenario_hedge(
-            instrument_returns=reduced.instrument_returns,
-            claim_returns=quantity * reduced.target_returns[:, index],
-            scenario_weights=reduced.weights,
-            linear_transaction_costs=costs,
-            config=optimizer_config,
-        )
+        try:
+            optimizer = fit_static_scenario_hedge(
+                instrument_returns=reduced.instrument_returns,
+                claim_returns=quantity * reduced.target_returns[:, index],
+                scenario_weights=reduced.weights,
+                linear_transaction_costs=costs,
+                config=optimizer_config,
+            )
+        except Exception as error:
+            raise RuntimeError(f"generated objective failed for target index {index}: {error}") from error
         fits.append(
             GeneratedObjectiveFit(
                 action=optimizer.action,

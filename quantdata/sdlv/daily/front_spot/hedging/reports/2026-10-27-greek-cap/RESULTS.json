@@ -1,211 +1,276 @@
 {
-  "cohort": "2024-04-01 through 2024-05-31; 44 dates; ten one-day digitals",
-  "units": "USD thousands per USD 1 million digital payout",
-  "source": "/home/hans/quantdata_data/experiments/hedging/sanos-full-aprmay-20261026-v1/results/2024-*.json",
+  "schema": "reoptimized-sanos-greek-cost-cap-v1",
+  "dataset_manifest_sha256": "2add65d6a1dda4146214479788cdd8e5df652562812510f607a5e8331b313541",
+  "source_original_results": "/home/hans/quantdata_data/experiments/hedging/sanos-full-aprmay-20261026-v1/results",
+  "state_directory": "/home/hans/quantdata_data/datasets/hedging/sanos-dysanos-derived-v2-build-20261026T1400/days",
+  "dates": [
+    "2024-04-01",
+    "2024-04-02",
+    "2024-04-03",
+    "2024-04-04",
+    "2024-04-05",
+    "2024-04-08",
+    "2024-04-09",
+    "2024-04-10",
+    "2024-04-11",
+    "2024-04-12",
+    "2024-04-15",
+    "2024-04-16",
+    "2024-04-17",
+    "2024-04-18",
+    "2024-04-19",
+    "2024-04-22",
+    "2024-04-23",
+    "2024-04-24",
+    "2024-04-25",
+    "2024-04-26",
+    "2024-04-29",
+    "2024-04-30",
+    "2024-05-01",
+    "2024-05-02",
+    "2024-05-03",
+    "2024-05-06",
+    "2024-05-07",
+    "2024-05-08",
+    "2024-05-09",
+    "2024-05-10",
+    "2024-05-13",
+    "2024-05-14",
+    "2024-05-15",
+    "2024-05-16",
+    "2024-05-17",
+    "2024-05-20",
+    "2024-05-21",
+    "2024-05-22",
+    "2024-05-23",
+    "2024-05-24",
+    "2024-05-28",
+    "2024-05-29",
+    "2024-05-30",
+    "2024-05-31"
+  ],
   "maximum_original_entry_cost_kusd": 9.012815803090122,
-  "method": "Scale each existing Greek spot and option action by min(1, budget/original cost) for the global cap, or by the stated fraction for each-hedge caps. Entry costs and hedge gains scale linearly; no Greek exposures are reoptimized.",
-  "curves": {
-    "global_cap": [
-      {
-        "cap_percentage": 100,
-        "global_cost_cap_kusd": 9.012815803090122,
-        "binding_fraction": 0.0,
-        "pnl_sd_kusd": 215.71996101835992,
-        "mean_downside_loss_kusd": 83.68280669553423,
-        "mean_entry_cost_kusd": 3.3075520004642334
-      },
-      {
-        "cap_percentage": 90,
-        "global_cost_cap_kusd": 8.11153422278111,
-        "binding_fraction": 0.006818181818181818,
-        "pnl_sd_kusd": 215.73674720913195,
-        "mean_downside_loss_kusd": 83.70257465373592,
-        "mean_entry_cost_kusd": 3.302197968184762
-      },
-      {
-        "cap_percentage": 80,
-        "global_cost_cap_kusd": 7.210252642472098,
-        "binding_fraction": 0.006818181818181818,
-        "pnl_sd_kusd": 215.75236208830256,
-        "mean_downside_loss_kusd": 83.72145600207156,
-        "mean_entry_cost_kusd": 3.2960528665008373
-      },
-      {
-        "cap_percentage": 70,
-        "global_cost_cap_kusd": 6.308971062163085,
-        "binding_fraction": 0.013636363636363636,
-        "pnl_sd_kusd": 215.78641480450614,
-        "mean_downside_loss_kusd": 83.75482293921745,
-        "mean_entry_cost_kusd": 3.2891074762652446
-      },
-      {
-        "cap_percentage": 60,
-        "global_cost_cap_kusd": 5.4076894818540735,
-        "binding_fraction": 0.04318181818181818,
-        "pnl_sd_kusd": 215.5539134021527,
-        "mean_downside_loss_kusd": 83.4478045858025,
-        "mean_entry_cost_kusd": 3.2647003407440205
-      },
-      {
-        "cap_percentage": 50,
-        "global_cost_cap_kusd": 4.506407901545061,
-        "binding_fraction": 0.1340909090909091,
-        "pnl_sd_kusd": 214.39062024404112,
-        "mean_downside_loss_kusd": 82.5864018963788,
-        "mean_entry_cost_kusd": 3.1903831766785515
-      },
-      {
-        "cap_percentage": 40,
-        "global_cost_cap_kusd": 3.605126321236049,
-        "binding_fraction": 0.3181818181818182,
-        "pnl_sd_kusd": 215.3990789171644,
-        "mean_downside_loss_kusd": 83.3286490804716,
-        "mean_entry_cost_kusd": 2.9921875451161797
-      },
-      {
-        "cap_percentage": 30,
-        "global_cost_cap_kusd": 2.7038447409270367,
-        "binding_fraction": 0.6704545454545454,
-        "pnl_sd_kusd": 227.7285016938557,
-        "mean_downside_loss_kusd": 91.52154934397738,
-        "mean_entry_cost_kusd": 2.536366484809631
-      },
-      {
-        "cap_percentage": 20,
-        "global_cost_cap_kusd": 1.8025631606180246,
-        "binding_fraction": 0.9454545454545454,
-        "pnl_sd_kusd": 270.0871631619657,
-        "mean_downside_loss_kusd": 115.48731869787771,
-        "mean_entry_cost_kusd": 1.7951981426127754
-      },
-      {
-        "cap_percentage": 10,
-        "global_cost_cap_kusd": 0.9012815803090123,
-        "binding_fraction": 1.0,
-        "pnl_sd_kusd": 344.13685513167064,
-        "mean_downside_loss_kusd": 154.59803605900746,
-        "mean_entry_cost_kusd": 0.9012815803090123
-      },
-      {
-        "cap_percentage": 0,
-        "global_cost_cap_kusd": 0.0,
-        "binding_fraction": 1.0,
-        "pnl_sd_kusd": 435.8845380834438,
-        "mean_downside_loss_kusd": 197.14306399198998,
-        "mean_entry_cost_kusd": 0.0
-      }
-    ],
-    "per_hedge_fraction": [
-      {
-        "cap_percentage": 100,
-        "global_cost_cap_kusd": 9.012815803090122,
-        "binding_fraction": 0.0,
-        "pnl_sd_kusd": 215.71996101835992,
-        "mean_downside_loss_kusd": 83.68280669553423,
-        "mean_entry_cost_kusd": 3.3075520004642334
-      },
-      {
-        "cap_percentage": 90,
-        "global_cost_cap_kusd": 8.11153422278111,
-        "binding_fraction": 1.0,
-        "pnl_sd_kusd": 217.8648448412951,
-        "mean_downside_loss_kusd": 83.37917263647698,
-        "mean_entry_cost_kusd": 2.97679680041781
-      },
-      {
-        "cap_percentage": 80,
-        "global_cost_cap_kusd": 7.210252642472098,
-        "binding_fraction": 1.0,
-        "pnl_sd_kusd": 226.71734206801275,
-        "mean_downside_loss_kusd": 87.73280825956567,
-        "mean_entry_cost_kusd": 2.6460416003713867
-      },
-      {
-        "cap_percentage": 70,
-        "global_cost_cap_kusd": 6.308971062163085,
-        "binding_fraction": 1.0,
-        "pnl_sd_kusd": 241.58733680671153,
-        "mean_downside_loss_kusd": 96.98997926722745,
-        "mean_entry_cost_kusd": 2.3152864003249634
-      },
-      {
-        "cap_percentage": 60,
-        "global_cost_cap_kusd": 5.4076894818540735,
-        "binding_fraction": 1.0,
-        "pnl_sd_kusd": 261.42005162765673,
-        "mean_downside_loss_kusd": 110.06786389248978,
-        "mean_entry_cost_kusd": 1.9845312002785402
-      },
-      {
-        "cap_percentage": 50,
-        "global_cost_cap_kusd": 4.506407901545061,
-        "binding_fraction": 1.0,
-        "pnl_sd_kusd": 285.12627791453417,
-        "mean_downside_loss_kusd": 124.25068228856844,
-        "mean_entry_cost_kusd": 1.6537760002321167
-      },
-      {
-        "cap_percentage": 40,
-        "global_cost_cap_kusd": 3.605126321236049,
-        "binding_fraction": 1.0,
-        "pnl_sd_kusd": 311.7753645988168,
-        "mean_downside_loss_kusd": 138.58319869754635,
-        "mean_entry_cost_kusd": 1.3230208001856933
-      },
-      {
-        "cap_percentage": 30,
-        "global_cost_cap_kusd": 2.7038447409270367,
-        "binding_fraction": 1.0,
-        "pnl_sd_kusd": 340.6447768907002,
-        "mean_downside_loss_kusd": 153.2190956057708,
-        "mean_entry_cost_kusd": 0.9922656001392701
-      },
-      {
-        "cap_percentage": 20,
-        "global_cost_cap_kusd": 1.8025631606180246,
-        "binding_fraction": 1.0,
-        "pnl_sd_kusd": 371.1974777628974,
-        "mean_downside_loss_kusd": 167.8604184011772,
-        "mean_entry_cost_kusd": 0.6615104000928467
-      },
-      {
-        "cap_percentage": 10,
-        "global_cost_cap_kusd": 0.9012815803090123,
-        "binding_fraction": 1.0,
-        "pnl_sd_kusd": 403.040141250164,
-        "mean_downside_loss_kusd": 182.50174119658362,
-        "mean_entry_cost_kusd": 0.33075520004642334
-      },
-      {
-        "cap_percentage": 0,
-        "global_cost_cap_kusd": 0.0,
-        "binding_fraction": 1.0,
-        "pnl_sd_kusd": 435.8845380834438,
-        "mean_downside_loss_kusd": 197.14306399198998,
-        "mean_entry_cost_kusd": 0.0
-      }
-    ]
-  },
-  "baselines": {
-    "Unhedged": {
-      "pnl_sd_kusd": 435.8845380834438,
-      "mean_downside_loss_kusd": 197.14306399198998,
-      "mean_entry_cost_kusd": 0.0
+  "method": "minimize ordinary eight-factor linearized variance, exactly neutralize spot delta, constrain option entry cost",
+  "curves": [
+    {
+      "method": "global_cap",
+      "cap_percentage": 0,
+      "mean_entry_cost_kusd": 0.0,
+      "pnl_sd_kusd": 299.2575972255925,
+      "mean_downside_loss_kusd": 131.08522311600672,
+      "mean_absolute_error_kusd": 255.63293178566875,
+      "mean_predicted_factor_variance_kusd2": 16418.18008554141,
+      "binding_fraction": 1.0
     },
-    "BS delta": {
-      "pnl_sd_kusd": 290.2206724837016,
-      "mean_downside_loss_kusd": 125.72634730141468,
-      "mean_entry_cost_kusd": 0.0
+    {
+      "method": "global_cap",
+      "cap_percentage": 10,
+      "mean_entry_cost_kusd": 0.9012815803882204,
+      "pnl_sd_kusd": 255.67258283453347,
+      "mean_downside_loss_kusd": 94.16743136548703,
+      "mean_absolute_error_kusd": 198.86805791748847,
+      "mean_predicted_factor_variance_kusd2": 216.21166130890518,
+      "binding_fraction": 1.0
     },
-    "BS delta + vega": {
-      "pnl_sd_kusd": 276.42083698944737,
-      "mean_downside_loss_kusd": 105.0543131534155,
-      "mean_entry_cost_kusd": 1.1293624062264298
+    {
+      "method": "global_cap",
+      "cap_percentage": 20,
+      "mean_entry_cost_kusd": 1.795198142226803,
+      "pnl_sd_kusd": 226.7723126260707,
+      "mean_downside_loss_kusd": 82.26270178100229,
+      "mean_absolute_error_kusd": 167.37355530740155,
+      "mean_predicted_factor_variance_kusd2": 35.448671283648444,
+      "binding_fraction": 0.9454545454545454
     },
-    "SANOS Greek": {
+    {
+      "method": "global_cap",
+      "cap_percentage": 30,
+      "mean_entry_cost_kusd": 2.536366483458198,
+      "pnl_sd_kusd": 215.47078984353024,
+      "mean_downside_loss_kusd": 81.59564590238206,
+      "mean_absolute_error_kusd": 158.57487318778868,
+      "mean_predicted_factor_variance_kusd2": 6.769833209144409,
+      "binding_fraction": 0.6704545454545454
+    },
+    {
+      "method": "global_cap",
+      "cap_percentage": 40,
+      "mean_entry_cost_kusd": 2.9921875444879706,
+      "pnl_sd_kusd": 215.34780103751672,
+      "mean_downside_loss_kusd": 82.66521018606237,
+      "mean_absolute_error_kusd": 157.64006170319357,
+      "mean_predicted_factor_variance_kusd2": 1.5114521525137083,
+      "binding_fraction": 0.3181818181818182
+    },
+    {
+      "method": "global_cap",
+      "cap_percentage": 50,
+      "mean_entry_cost_kusd": 3.1903831712264212,
+      "pnl_sd_kusd": 215.9728574106843,
+      "mean_downside_loss_kusd": 83.59557749843063,
+      "mean_absolute_error_kusd": 158.68797878396668,
+      "mean_predicted_factor_variance_kusd2": 0.44053409505965624,
+      "binding_fraction": 0.1340909090909091
+    },
+    {
+      "method": "global_cap",
+      "cap_percentage": 60,
+      "mean_entry_cost_kusd": 3.2647003407059527,
+      "pnl_sd_kusd": 215.9070803767758,
+      "mean_downside_loss_kusd": 83.67545095729568,
+      "mean_absolute_error_kusd": 158.89803089229412,
+      "mean_predicted_factor_variance_kusd2": 0.17683604906035236,
+      "binding_fraction": 0.04318181818181818
+    },
+    {
+      "method": "global_cap",
+      "cap_percentage": 70,
+      "mean_entry_cost_kusd": 3.2891074761923647,
+      "pnl_sd_kusd": 215.99396788845416,
+      "mean_downside_loss_kusd": 83.69881262887999,
+      "mean_absolute_error_kusd": 158.99920127428808,
+      "mean_predicted_factor_variance_kusd2": 0.08149760509618015,
+      "binding_fraction": 0.013636363636363636
+    },
+    {
+      "method": "global_cap",
+      "cap_percentage": 80,
+      "mean_entry_cost_kusd": 3.296052866492316,
+      "pnl_sd_kusd": 215.8783606831893,
+      "mean_downside_loss_kusd": 83.69583923158433,
+      "mean_absolute_error_kusd": 158.96173036916971,
+      "mean_predicted_factor_variance_kusd2": 0.03241202886464759,
+      "binding_fraction": 0.006818181818181818
+    },
+    {
+      "method": "global_cap",
+      "cap_percentage": 90,
+      "mean_entry_cost_kusd": 3.302197968173168,
+      "pnl_sd_kusd": 215.77029349087053,
+      "mean_downside_loss_kusd": 83.68659630660781,
+      "mean_absolute_error_kusd": 158.9215025273784,
+      "mean_predicted_factor_variance_kusd2": 0.006300708074884114,
+      "binding_fraction": 0.006818181818181818
+    },
+    {
+      "method": "global_cap",
+      "cap_percentage": 100,
+      "mean_entry_cost_kusd": 3.3075520004642334,
       "pnl_sd_kusd": 215.71996101835992,
       "mean_downside_loss_kusd": 83.68280669553423,
-      "mean_entry_cost_kusd": 3.3075520004642334
+      "mean_absolute_error_kusd": 158.90227125972604,
+      "mean_predicted_factor_variance_kusd2": 2.4564615773022233e-22,
+      "binding_fraction": 0.0
+    },
+    {
+      "method": "per_hedge_fraction",
+      "cap_percentage": 0,
+      "mean_entry_cost_kusd": 0.0,
+      "pnl_sd_kusd": 299.2575972255925,
+      "mean_downside_loss_kusd": 131.08522311600672,
+      "mean_absolute_error_kusd": 255.63293178566875,
+      "mean_predicted_factor_variance_kusd2": 16418.18008554141,
+      "binding_fraction": 1.0
+    },
+    {
+      "method": "per_hedge_fraction",
+      "cap_percentage": 10,
+      "mean_entry_cost_kusd": 0.33075520035505085,
+      "pnl_sd_kusd": 281.7978528767842,
+      "mean_downside_loss_kusd": 116.53817909819504,
+      "mean_absolute_error_kusd": 232.31990791337088,
+      "mean_predicted_factor_variance_kusd2": 1536.0928124352338,
+      "binding_fraction": 1.0
+    },
+    {
+      "method": "per_hedge_fraction",
+      "cap_percentage": 20,
+      "mean_entry_cost_kusd": 0.6615104002639491,
+      "pnl_sd_kusd": 266.03069742105305,
+      "mean_downside_loss_kusd": 103.41043382270068,
+      "mean_absolute_error_kusd": 213.85406960772798,
+      "mean_predicted_factor_variance_kusd2": 429.0545295475213,
+      "binding_fraction": 1.0
+    },
+    {
+      "method": "per_hedge_fraction",
+      "cap_percentage": 30,
+      "mean_entry_cost_kusd": 0.9922656003229362,
+      "pnl_sd_kusd": 252.09042576432995,
+      "mean_downside_loss_kusd": 93.18106946820026,
+      "mean_absolute_error_kusd": 195.46695737006377,
+      "mean_predicted_factor_variance_kusd2": 208.58655648844942,
+      "binding_fraction": 1.0
+    },
+    {
+      "method": "per_hedge_fraction",
+      "cap_percentage": 40,
+      "mean_entry_cost_kusd": 1.3230208004690476,
+      "pnl_sd_kusd": 239.59166990013372,
+      "mean_downside_loss_kusd": 86.03904291129915,
+      "mean_absolute_error_kusd": 179.4223388253657,
+      "mean_predicted_factor_variance_kusd2": 101.80392289388163,
+      "binding_fraction": 1.0
+    },
+    {
+      "method": "per_hedge_fraction",
+      "cap_percentage": 50,
+      "mean_entry_cost_kusd": 1.6537759998884574,
+      "pnl_sd_kusd": 230.99686206783886,
+      "mean_downside_loss_kusd": 82.09419278713527,
+      "mean_absolute_error_kusd": 170.19678594137264,
+      "mean_predicted_factor_variance_kusd2": 47.42727743367052,
+      "binding_fraction": 1.0
+    },
+    {
+      "method": "per_hedge_fraction",
+      "cap_percentage": 60,
+      "mean_entry_cost_kusd": 1.984531199886431,
+      "pnl_sd_kusd": 224.7879067844147,
+      "mean_downside_loss_kusd": 81.52590540067905,
+      "mean_absolute_error_kusd": 166.00938951788012,
+      "mean_predicted_factor_variance_kusd2": 20.716800124472687,
+      "binding_fraction": 1.0
+    },
+    {
+      "method": "per_hedge_fraction",
+      "cap_percentage": 70,
+      "mean_entry_cost_kusd": 2.3152863998894624,
+      "pnl_sd_kusd": 220.73421244844627,
+      "mean_downside_loss_kusd": 82.09212261918546,
+      "mean_absolute_error_kusd": 162.9012955788789,
+      "mean_predicted_factor_variance_kusd2": 8.119143978457425,
+      "binding_fraction": 1.0
+    },
+    {
+      "method": "per_hedge_fraction",
+      "cap_percentage": 80,
+      "mean_entry_cost_kusd": 2.646041599773141,
+      "pnl_sd_kusd": 217.1772936304044,
+      "mean_downside_loss_kusd": 82.19137354527018,
+      "mean_absolute_error_kusd": 159.19474798201026,
+      "mean_predicted_factor_variance_kusd2": 2.6141878663842966,
+      "binding_fraction": 1.0
+    },
+    {
+      "method": "per_hedge_fraction",
+      "cap_percentage": 90,
+      "mean_entry_cost_kusd": 2.976796799449976,
+      "pnl_sd_kusd": 215.28799814478097,
+      "mean_downside_loss_kusd": 82.59522800596417,
+      "mean_absolute_error_kusd": 157.97985035364047,
+      "mean_predicted_factor_variance_kusd2": 0.5072459165499315,
+      "binding_fraction": 1.0
+    },
+    {
+      "method": "per_hedge_fraction",
+      "cap_percentage": 100,
+      "mean_entry_cost_kusd": 3.3075520004642334,
+      "pnl_sd_kusd": 215.71996101835992,
+      "mean_downside_loss_kusd": 83.68280669553423,
+      "mean_absolute_error_kusd": 158.90227125972604,
+      "mean_predicted_factor_variance_kusd2": 2.4564615773022233e-22,
+      "binding_fraction": 0.0
     }
-  }
+  ]
 }

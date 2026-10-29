@@ -11,6 +11,7 @@ from time import monotonic
 
 import numpy as np
 
+from quantdata.hedging.mean_reduction import reduce_one_day_means
 from quantdata.hedging.scenario_optimization import ScenarioObjective
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.digital_daily import (
     build_daily_digital_sample,
@@ -32,6 +33,7 @@ def replay_funvol_scenarios(
     output_directory: Path,
     objective: ScenarioObjective,
     risk_parameter: float,
+    raw_action_ridge: float = 0.0,
     stop_after: int | None = None,
 ) -> None:
     """Fit a new action on each authenticated, unchanged scenario book."""
@@ -48,6 +50,7 @@ def replay_funvol_scenarios(
         GeneratedHedgeConfig(scenario_count=source["hedge_config_scenario_count"]),
         objective=objective,
         risk_parameter=risk_parameter,
+        raw_action_ridge=raw_action_ridge,
     )
     identity = {
         "schema": "funvol-objective-replay-v1",
@@ -56,13 +59,32 @@ def replay_funvol_scenarios(
         "dataset_manifest_sha256": panel.dataset_manifest_sha256,
         "objective": objective.value,
         "risk_parameter": risk_parameter,
+        "raw_action_ridge": raw_action_ridge,
+        "optimizer_certificate_tolerance": config.certificate_tolerance,
         "mean_reduction": config.mean_reduction.value,
         "cost_convention": "spot at mid; option entry only; formal exit reported",
     }
     output_directory.mkdir(parents=True, exist_ok=True)
     manifest = output_directory / "run.json"
     if manifest.exists():
-        if json.loads(manifest.read_text(encoding="utf-8")) != identity:
+        existing = json.loads(manifest.read_text(encoding="utf-8"))
+        older_identity = {
+            key: value
+            for key, value in identity.items()
+            if key != "optimizer_certificate_tolerance"
+        }
+        if existing == older_identity:
+            if any(
+                not result["converged"] or result["cap_hits"]
+                for path in (output_directory / "records").glob("*.json")
+                for result in json.loads(path.read_text(encoding="utf-8"))
+            ):
+                raise RuntimeError("legacy FuNVol record failed its stricter certificate")
+            manifest.write_text(
+                json.dumps(identity, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+        elif existing != identity:
             raise RuntimeError("FuNVol replay identity changed")
     else:
         manifest.write_text(json.dumps(identity, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -115,14 +137,51 @@ def replay_funvol_scenarios(
             )
             for target_index, sample in enumerate(samples)
         )
-        fits = fit_generated_objective_book(
-            scenarios,
-            samples[0],
-            config=config,
-            claim_quantities=quantities,
+        try:
+            fits = fit_generated_objective_book(
+                scenarios,
+                samples[0],
+                config=config,
+                claim_quantities=quantities,
+            )
+        except Exception as error:
+            failures_directory = output_directory / "failures"
+            failures_directory.mkdir(exist_ok=True)
+            failure_path = failures_directory / f"{origin_date.isoformat()}.json"
+            failure_path.write_text(
+                json.dumps(
+                    {
+                        "origin_date": origin_date.isoformat(),
+                        "objective": objective.value,
+                        "risk_parameter": risk_parameter,
+                        "source_scenario_sha256": scenario_sha256,
+                        "error_type": type(error).__name__,
+                        "error": str(error),
+                    },
+                    indent=2,
+                    sort_keys=True,
+                ) + "\n",
+                encoding="utf-8",
+            )
+            raise RuntimeError(f"FuNVol replay failed on {origin_date}: {error}") from error
+        reduced = reduce_one_day_means(
+            instrument_returns,
+            target_returns,
+            method=config.mean_reduction,
         )
-        results = [
-            evaluate_daily_digital_hedge(
+        results = []
+        for target_index, (sample, fit, quantity) in enumerate(
+            zip(samples, fits, quantities, strict=True)
+        ):
+            scenario_wealth = (
+                quantity * reduced.target_returns[:, target_index]
+                + reduced.instrument_returns @ fit.action
+            )
+            weighted_mean = float(reduced.weights @ scenario_wealth)
+            training_standard_deviation = float(
+                np.sqrt(reduced.weights @ (scenario_wealth - weighted_mean) ** 2)
+            )
+            result = evaluate_daily_digital_hedge(
                 sample,
                 model="funvol-single-asset",
                 measure="historical-P",
@@ -138,11 +197,26 @@ def replay_funvol_scenarios(
                     "objective": objective.value,
                     "risk_parameter": risk_parameter,
                     "mean_reduction": config.mean_reduction.value,
+                    "raw_action_ridge": raw_action_ridge,
+                    "optimizer_certificate_tolerance": config.certificate_tolerance,
+                    "training_standard_deviation": training_standard_deviation,
+                    "training_standard_deviation_per_unit_payout": (
+                        training_standard_deviation / float(quantity)
+                    ),
+                    "optimizer_kkt_residual": fit.optimizer.maximum_kkt_residual,
+                    "optimizer_solver_message": fit.optimizer.solver_message,
+                    "optimizer_iterations": fit.optimizer.iterations,
                 },
             ).to_dict()
-            for sample, fit, quantity in zip(samples, fits, quantities, strict=True)
-        ]
+            results.append(result)
         if any(not result["converged"] or result["cap_hits"] for result in results):
+            failures_directory = output_directory / "failures"
+            failures_directory.mkdir(exist_ok=True)
+            failure_path = failures_directory / f"{origin_date.isoformat()}.json"
+            failure_path.write_text(
+                json.dumps(results, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
             raise RuntimeError(f"FuNVol replay did not converge: {origin_date}")
         temporary = destination.with_suffix(".tmp")
         temporary.write_text(json.dumps(results, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -162,6 +236,7 @@ def main() -> None:
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument("--objective", type=ScenarioObjective, required=True)
     parser.add_argument("--risk-parameter", type=float, required=True)
+    parser.add_argument("--raw-action-ridge", type=float, default=0.0)
     parser.add_argument("--stop-after", type=int)
     replay_funvol_scenarios(**vars(parser.parse_args()))
 

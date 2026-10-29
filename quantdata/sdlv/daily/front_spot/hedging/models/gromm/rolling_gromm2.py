@@ -58,6 +58,8 @@ COMPATIBLE_ROLLING_GROMM2_V5_SOURCE_IDENTITY = (
 COMPATIBLE_ROLLING_GROMM2_V5_SOURCE_IDENTITIES = frozenset({
     COMPATIBLE_ROLLING_GROMM2_V5_SOURCE_IDENTITY,
     "bae743d2dc838740cca7fbd0c9570864a618d58586ba160491d940c7d798855e",
+    "c6e246c50d251f2a508b7cd6d067c563a4297d58f6acdc6f4be6b37516370f27",
+    "4e8748d49d8940c75c7e617f57b776aab80e34b791d89b3b6502a95629097b3f",
 })
 LEGACY_PHYSICAL_PROJECTION_FRACTION = 0.5
 _CALIBRATION_EPOCH_MULTIPLIERS = (1, 2, 4)
@@ -531,24 +533,40 @@ def fit_rolling_gromm2_market(
         config=config,
         dataset_manifest_sha256=dataset_manifest_sha256,
     )
-    origin_dates, _ = _manifest_transition_dates(
-        prepared,
-        window_transitions=config.window_transitions,
-    )
-    previous_date = origin_dates[-1]
-    panel = PublicHedgingPanel(Path(dataset))
-    try:
-        panel.prior_one_day_origins(previous_date, count=config.window_transitions)
-    except ValueError:
+    exact_reuse = prepared.get("exact_input_affine_reuse")
+    if exact_reuse is not None:
+        if (
+            not isinstance(exact_reuse, dict)
+            or file_sha256(paths.affine_history)
+            != exact_reuse.get("affine_history_sha256")
+            or (
+                exact_reuse.get("affine_checkpoint_sha256") is not None
+                and file_sha256(paths.affine_checkpoint)
+                != exact_reuse["affine_checkpoint_sha256"]
+            )
+        ):
+            raise ValueError("exact-input affine reuse provenance is invalid")
+        previous_date = None
         previous_paths = None
     else:
-        previous = load_rolling_gromm2(
-            artifact_root,
-            as_of_date=previous_date,
-            config=config,
-            dataset_manifest_sha256=dataset_manifest_sha256,
+        origin_dates, _ = _manifest_transition_dates(
+            prepared,
+            window_transitions=config.window_transitions,
         )
-        previous_paths = previous.paths
+        previous_date = origin_dates[-1]
+        panel = PublicHedgingPanel(Path(dataset))
+        try:
+            panel.prior_one_day_origins(previous_date, count=config.window_transitions)
+        except ValueError:
+            previous_paths = None
+        else:
+            previous = load_rolling_gromm2(
+                artifact_root,
+                as_of_date=previous_date,
+                config=config,
+                dataset_manifest_sha256=dataset_manifest_sha256,
+            )
+            previous_paths = previous.paths
     (
         percent_inside,
         calibration_epochs_completed,
@@ -589,6 +607,8 @@ def fit_rolling_gromm2_market(
     )
     complete = {
         **prepared,
+        "prepared_source_identity": prepared["source_identity"],
+        "source_identity": rolling_gromm2_source_identity(),
         "status": "complete",
         "affine_history_sha256": file_sha256(paths.affine_history),
         "affine_calibration_config": json.loads(
@@ -1059,7 +1079,11 @@ def _validate_prepared_manifest(
         or manifest.get("state_count") != len(unique_states)
         or manifest.get("transition_count") != config.window_transitions
         or manifest.get("dataset_manifest_sha256") != dataset_manifest_sha256
-        or manifest.get("source_identity") != rolling_gromm2_source_identity()
+        or manifest.get("source_identity") not in {
+            rolling_gromm2_source_identity(),
+            "c6e246c50d251f2a508b7cd6d067c563a4297d58f6acdc6f4be6b37516370f27",
+            "4e8748d49d8940c75c7e617f57b776aab80e34b791d89b3b6502a95629097b3f",
+        }
         or manifest.get("config") != _config_snapshot(config)
     ):
         raise ValueError("rolling GROMM2 manifest is stale or incompatible")

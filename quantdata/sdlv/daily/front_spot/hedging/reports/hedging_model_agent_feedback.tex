@@ -68,19 +68,23 @@ must be verified before accepting new rolling results.
 
 \section{Models and what they do}
 
+Greek, parametric, statistical, and normal-statistical below are four hedge
+constructions for the same fitted SANOS market model. The first two are being
+re-estimated from daily SANOS-derived coordinates; their 252-transition
+rolling PCA is not the more expensive DYSANOS AR(1) estimation.
+
 \begin{tabularx}{\linewidth}{@{}p{28mm}X p{29mm}@{}}
 \toprule
 Method & Construction and hedge & April--May evidence \\
 \midrule
 Unhedged; BS delta+vega & No hedge; or spot delta plus the two vanilla options
 bracketing the digital strike, weighted for vega and re-delta-hedged. & Baselines complete \\
-SANOS Greek & DLV local-vol repricing gives spot delta and eight rolling DLV
-factor vegas; a minimum-spread-cost factor hedge uses eligible options, then
-spot removes residual delta. For a settling 1D digital, future-DLV vega is
-zero, so this hedge trades spot only. & Complete \\
+SANOS Greek & Spot and fitted-state factor Greeks from SANOS-derived daily
+states. Ordinary PCA and spot-orthogonal residual PCA are separate proposed
+variants. & Previous results withdrawn; new fit pending \\
 SANOS parametric & Uses the same Greeks and a 252-transition spot/factor
-covariance to minimize one-day P\&L variance plus executable cost. & 44-date
-run complete \\
+covariance to minimize one-day P\&L variance plus executable cost. & Previous
+results withdrawn; new fit pending \\
 SANOS statistical & Replays historical SANOS-based hedge and target returns;
 optimizes the empirical scenario objective with spread costs and no Gaussian
 return assumption. & Corrected 44-date run complete \\
@@ -128,8 +132,6 @@ Model & Hedge method & April 2024 & May 2024 \\
 \midrule
 Baseline & Unhedged & 0.011128 & 0.010825 \\
 Baseline & Black delta+vega & 0.006416 & 0.005733 \\
-SANOS & Greek & 0.007284 & 0.007479 \\
-SANOS & Parametric & 0.010585 & 0.008980 \\
 SANOS & Statistical & 0.003707 & 0.005035 \\
 SANOS & Normal-statistical & 0.007735 & 0.005843 \\
 Legacy DLV & Statistical replay & 0.003706 & 0.005034 \\
@@ -146,22 +148,9 @@ clearly labelled legacy diagnostic; the corrected SANOS-state replay completed
 all 440 target-date cells in a separate, authenticated cohort, with no solver
 nonconvergence or cap hit. The two replays produce similar, but not identical,
 results. The SANOS normal-statistical fit also completed all 440 cells with no
-solver nonconvergence or cap hit. The SANOS parametric fit likewise completed
-440 cells with no solver nonconvergence or cap hit, but its hedge error exceeds
-the Greek hedge in both months. SANOS Greek is the method
-previously named SANOS--LV, not a different model.
-For a settling 1D digital, both the earlier and current Greek runs have zero
-future-DLV factor vega and trade spot only; statistical replay may also trade
-options. This difference in hedge instruments does \emph{not} explain a change
-in ranking between the two runs. The earlier 283-date comparison used a
-different period, an entropy-$\lambda=1$ historical policy rather than the
-present mean--variance risk-10 policy, and a $0.01\%$ rather than $1\%$
-relative-spot finite-difference bump for the Greek delta. On the matched
-April dates, the earlier Greek and statistical mean absolute errors were
-$0.007738$ and $0.007388$; the current errors are $0.007284$ and $0.003706$.
-On the matched May dates, the corresponding pairs were $0.006855$, $0.007571$
-and $0.007479$, $0.005034$. The ranking reversal is therefore not a model
-rename or evidence of a new Greek hedge. VolGAN has 440 completed target-date results, zero
+solver nonconvergence or cap hit. The previous SANOS Greek and parametric
+results have been withdrawn pending the SANOS-derived daily-state fit and
+the two 252-transition rolling PCA Greek constructions. VolGAN has 440 completed target-date results, zero
 numerical nonconvergences and zero cap hits, but its hedge error is marginally
 above unhedged and its conditional shocks are under-dispersed. AD--Seq--Vol,
 its FT variant, FuNVol, and GROMM variants have no validated

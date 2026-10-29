@@ -19,6 +19,7 @@ from quantdata.hedging.data.normalization import (
 )
 
 HEDGING_PUBLIC_SCHEMA = "hedging-public-candidate-v1"
+HEDGING_PUBLIC_SCHEMA_V2 = "hedging-public-candidate-v2"
 
 DATA_FILE_SCHEMAS: dict[str, dict[str, pl.DataType]] = {
     "observations.parquet": {
@@ -82,6 +83,26 @@ DATA_FILE_SCHEMAS: dict[str, dict[str, pl.DataType]] = {
 
 DATA_FILE_COLUMNS = {
     filename: tuple(schema) for filename, schema in DATA_FILE_SCHEMAS.items()
+}
+SANOS_DYSANOS_GRID_FILE = "sanos_dysanos_grid.parquet"
+SANOS_DYSANOS_GRID_SCHEMA: dict[str, pl.DataType] = {
+    "date": pl.Date,
+    "support_strikes": pl.List(pl.Float64),
+    "source_call_prices": pl.List(pl.List(pl.Float64)),
+    "fitted_call_prices": pl.List(pl.List(pl.Float64)),
+    "decoded_call_prices": pl.List(pl.List(pl.Float64)),
+    "densities": pl.List(pl.List(pl.Float64)),
+    "dlvsqs": pl.List(pl.List(pl.Float64)),
+    "forward_vols": pl.List(pl.Float64),
+    "eta_front": pl.Float64,
+    "eta_term": pl.Float64,
+    "raw_u": pl.List(pl.Float64),
+    "fit_max_abs_core": pl.Float64,
+    "fit_mean_abs_core": pl.Float64,
+    "fit_max_weighted_error": pl.Float64,
+    "decode_max_abs_core": pl.Float64,
+    "decode_max_weighted_error": pl.Float64,
+    "variance_increments_repaired": pl.Int64,
 }
 METADATA_FILES = (
     "config.json",
@@ -170,7 +191,7 @@ class PublicHedgingDataset:
     def read(self, filename: str) -> pl.DataFrame:
         """Read one allowlisted Parquet member."""
         verify_inp(
-            filename in DATA_FILE_COLUMNS,
+            filename in DATA_FILE_COLUMNS or filename == SANOS_DYSANOS_GRID_FILE,
             lambda: f"Unknown public dataset member {filename!r}",
         )
         return pl.read_parquet(self.directory / filename)
@@ -190,9 +211,9 @@ class PublicHedgingDataset:
 def _validate_metadata(dataset: PublicHedgingDataset) -> tuple[dict[str, object], dict[str, object]]:
     config = dataset.config
     geometry = dataset.geometry
-    if config.get("schema") != HEDGING_PUBLIC_SCHEMA:
+    if config.get("schema") not in {HEDGING_PUBLIC_SCHEMA, HEDGING_PUBLIC_SCHEMA_V2}:
         raise ValueError(f"Unexpected config schema {config.get('schema')!r}")
-    if geometry.get("schema") != HEDGING_PUBLIC_SCHEMA:
+    if geometry.get("schema") != config.get("schema"):
         raise ValueError(f"Unexpected geometry schema {geometry.get('schema')!r}")
     required_geometry = {
         "days_per_year",
@@ -236,28 +257,36 @@ def _validate_tabular_structure(
     verify_checksums: bool,
 ) -> tuple[dict[str, pl.DataFrame], dict[str, int]]:
     manifest = dataset.manifest
+    is_v2 = manifest.get("schema") == HEDGING_PUBLIC_SCHEMA_V2
+    expected_schemas = (
+        {**DATA_FILE_SCHEMAS, SANOS_DYSANOS_GRID_FILE: SANOS_DYSANOS_GRID_SCHEMA}
+        if is_v2
+        else DATA_FILE_SCHEMAS
+    )
+    checksum_files = (*CHECKSUM_FILES, SANOS_DYSANOS_GRID_FILE) if is_v2 else CHECKSUM_FILES
+    dataset_files = (*checksum_files, "manifest.json")
     checksums = manifest.get("checksums")
-    if not isinstance(checksums, dict) or set(checksums) != set(CHECKSUM_FILES):
+    if not isinstance(checksums, dict) or set(checksums) != set(checksum_files):
         raise ValueError("Manifest checksums must cover every public member except manifest.json")
 
     visible_members = {
         path.name for path in dataset.directory.iterdir() if not path.name.startswith(".")
     }
-    if visible_members != set(PUBLIC_DATASET_FILES):
+    if visible_members != set(dataset_files):
         raise ValueError(
             "Unexpected public dataset members: "
-            f"missing={sorted(set(PUBLIC_DATASET_FILES) - visible_members)}, "
-            f"extra={sorted(visible_members - set(PUBLIC_DATASET_FILES))}"
+            f"missing={sorted(set(dataset_files) - visible_members)}, "
+            f"extra={sorted(visible_members - set(dataset_files))}"
         )
     if verify_checksums:
-        for filename in CHECKSUM_FILES:
+        for filename in checksum_files:
             if checksums.get(filename) != _sha256(dataset.directory / filename):
                 raise ValueError(f"Checksum mismatch for {filename}")
 
     frames: dict[str, pl.DataFrame] = {}
     row_counts: dict[str, int] = {}
     expected_dates: pl.Series | None = None
-    for filename, expected_schema in DATA_FILE_SCHEMAS.items():
+    for filename, expected_schema in expected_schemas.items():
         path = dataset.directory / filename
         actual_schema = dict(pl.read_parquet_schema(path))
         if actual_schema != expected_schema:
@@ -325,6 +354,48 @@ def _validate_observations(frame: pl.DataFrame, expiry_frame: pl.DataFrame) -> N
             raise ValueError(
                 f"{row['date']}: stored interval discount factor does not match expiry curve"
             )
+
+
+def _validate_sanos_dysanos_grid(frame: pl.DataFrame) -> None:
+    """Check the shape and martingale invariants of each derived daily state."""
+    for row in frame.iter_rows(named=True):
+        trading_date = row["date"]
+        support = np.asarray(row["support_strikes"], dtype=np.float64)
+        densities = np.asarray(row["densities"], dtype=np.float64)
+        dlvsqs = np.asarray(row["dlvsqs"], dtype=np.float64)
+        forward_vols = np.asarray(row["forward_vols"], dtype=np.float64)
+        raw_state = np.asarray(row["raw_u"], dtype=np.float64)
+        if (
+            support.shape != (202,)
+            or densities.shape != (9, 202)
+            or dlvsqs.shape != (9, 200)
+            or forward_vols.shape != (9,)
+            or raw_state.shape != (1811,)
+            or not np.all(np.isfinite(support))
+            or not np.all(np.diff(support) > 0.0)
+            or not np.all(np.isfinite(densities))
+            or not np.all(np.isfinite(dlvsqs))
+            or not np.all(np.isfinite(forward_vols))
+            or not np.all(np.isfinite(raw_state))
+            or np.min(densities) < -1.0e-7
+            or np.any(np.abs(densities.sum(axis=1) - 1.0) > 1.0e-4)
+            or np.any(np.abs(densities @ support - 1.0) > 1.0e-4)
+            or np.any((dlvsqs < 0.01**2) | (dlvsqs > 3.0**2))
+            or np.any((forward_vols <= 0.01) | (forward_vols >= 1.0))
+            or not 0.01 < row["eta_front"] < 0.50
+            or not 0.01 < row["eta_term"] < 0.50
+        ):
+            raise ValueError(f"{trading_date}: invalid SANOS-derived DYSANOS state")
+        for name in (
+            "source_call_prices",
+            "fitted_call_prices",
+            "decoded_call_prices",
+        ):
+            prices = np.asarray(row[name], dtype=np.float64)
+            if prices.shape != (9, 200) or not np.all(np.isfinite(prices)):
+                raise ValueError(f"{trading_date}: invalid {name}")
+        if row["variance_increments_repaired"] < 0:
+            raise ValueError(f"{trading_date}: invalid variance repair count")
 
 
 def _validate_day_and_reconstruction(
@@ -622,7 +693,7 @@ def validate_public_dataset(
     """Validate public schema, leakage controls, invariants, and reconstruction."""
     dataset = PublicHedgingDataset(Path(directory))
     manifest = dataset.manifest
-    if manifest.get("schema") != HEDGING_PUBLIC_SCHEMA:
+    if manifest.get("schema") not in {HEDGING_PUBLIC_SCHEMA, HEDGING_PUBLIC_SCHEMA_V2}:
         raise ValueError(f"Unexpected dataset schema {manifest.get('schema')!r}")
     distribution = manifest.get("distribution")
     if distribution not in {"public_candidate", "public"}:
@@ -687,6 +758,8 @@ def validate_public_dataset(
         frames["observations.parquet"],
         frames["expiries.parquet"],
     )
+    if manifest["schema"] == HEDGING_PUBLIC_SCHEMA_V2:
+        _validate_sanos_dysanos_grid(frames[SANOS_DYSANOS_GRID_FILE])
     if reconstruct_models:
         for row_index in range(int(expected_count)):
             _validate_day_and_reconstruction(

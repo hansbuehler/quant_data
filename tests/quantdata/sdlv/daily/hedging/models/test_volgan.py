@@ -10,9 +10,16 @@ import pytest
 import torch
 from cdxcore.uniquehash import named_unique_filename48_8
 
+from quantdata.hedging.contracts import OptionRight
+from quantdata.sdlv.daily.front_spot.hedging.benchmark.digital_daily import (
+    DailyDigitalTarget,
+)
 from quantdata.sdlv.daily.front_spot.hedging.data.generative_surfaces import (
     GenerativeSurfaceGrid,
     SanosFixedGridHistory,
+)
+from quantdata.sdlv.daily.front_spot.hedging.models.generated_scenarios import (
+    GeneratedDailyScenarios,
 )
 from quantdata.sdlv.daily.front_spot.hedging.models.volgan import adapter as volgan_adapter
 from quantdata.sdlv.daily.front_spot.hedging.models.volgan import training as volgan_training
@@ -55,6 +62,40 @@ def _history(count: int = 30) -> SanosFixedGridHistory:
             (np.asarray([0]), np.ones(count - 1, dtype=np.int64))
         ),
     )
+
+
+def test_volgan_scenario_book_is_authenticated_and_idempotent(tmp_path: Path) -> None:
+    scenario = GeneratedDailyScenarios(
+        spot_returns=np.asarray([-0.01, 0.02]),
+        option_returns=np.asarray([[-0.02], [0.03]]),
+        claim_returns=np.asarray([-0.4, 0.6]),
+        claim_terminal_values=np.asarray([0.0, 1.0]),
+    )
+    target = DailyDigitalTarget(
+        maturity_business_days=1,
+        right=OptionRight.CALL,
+        nms=0.0,
+    )
+    path = tmp_path / "volgan-scenarios.npz"
+    kwargs = {
+        "origin_date": date(2024, 4, 1),
+        "dataset_manifest_sha256": "a" * 64,
+        "fit_checkpoint_sha256": "b" * 64,
+        "scenarios": (scenario,),
+        "targets": (target,),
+        "quantities": np.asarray([0.02]),
+    }
+
+    first_sha = volgan_adapter._save_volgan_scenario_book(path, **kwargs)
+    assert volgan_adapter._save_volgan_scenario_book(path, **kwargs) == first_sha
+    with np.load(path, allow_pickle=False) as saved:
+        np.testing.assert_array_equal(saved["instrument_returns"], scenario.instrument_returns)
+        np.testing.assert_array_equal(saved["target_returns"], scenario.claim_returns[:, None])
+    with pytest.raises(RuntimeError, match="changed"):
+        volgan_adapter._save_volgan_scenario_book(
+            path,
+            **{**kwargs, "fit_checkpoint_sha256": "c" * 64},
+        )
 
 
 def test_volgan_pca_uses_training_rows_only() -> None:

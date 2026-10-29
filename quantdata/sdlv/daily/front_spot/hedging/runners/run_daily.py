@@ -144,6 +144,7 @@ def main() -> None:
             "covariance",
             "covariance-pca",
             "sanos-normal-statistical",
+            "sanos-normal-statistical-pca",
             "historical-sanos",
             "gromm",
             "gromm-q-dlv-vega",
@@ -158,6 +159,7 @@ def main() -> None:
     parser.add_argument("--volgan-pca-rank", type=int)
     parser.add_argument("--dataset-manifest-sha256")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--scenario-output-directory", type=Path)
     parser.add_argument("--label")
     parser.add_argument("--model-label")
     parser.add_argument("--start", type=date.fromisoformat, default=date(2023, 1, 1))
@@ -165,6 +167,9 @@ def main() -> None:
     parser.add_argument("--objective", default="mean-variance")
     parser.add_argument("--target-maturity", type=int, choices=(1, 3))
     parser.add_argument("--risk-parameter", type=float, default=10.0)
+    parser.add_argument("--raw-action-ridge", type=float, default=0.0)
+    parser.add_argument("--entropy-raw-ridge", type=float, default=0.0)
+    parser.add_argument("--historical-scaled-ridge", type=float, default=1.0e-4)
     parser.add_argument(
         "--mean-reduction",
         choices=tuple(method.value for method in MeanReduction),
@@ -204,6 +209,8 @@ def main() -> None:
     arguments = parser.parse_args()
     if arguments.progress_every <= 0:
         parser.error("--progress-every must be positive")
+    if arguments.scenario_output_directory is not None and arguments.model != "volgan":
+        parser.error("--scenario-output-directory currently requires VolGAN")
 
     panel = PublicHedgingPanel(
         arguments.dataset,
@@ -512,18 +519,20 @@ def _build_model(
         "covariance",
         "covariance-pca",
         "sanos-normal-statistical",
+        "sanos-normal-statistical-pca",
     }:
         try:
             objective = CovarianceObjective(arguments.objective)
         except ValueError as error:
             raise ValueError(
                 "covariance supports Gaussian mean-variance, entropy, "
-                "mean-volatility, and power-exponential objectives"
+                "mean-volatility, power-exponential, and CVaR objectives"
             ) from error
         config = CovarianceHedgeConfig(
             label=label,
             objective=objective,
             risk_parameter=arguments.risk_parameter,
+            entropy_raw_ridge=getattr(arguments, "entropy_raw_ridge", 0.0),
             mean_reduction=mean_reduction,
             position_cap=(
                 default_position_cap
@@ -531,18 +540,29 @@ def _build_model(
                 else arguments.position_cap
             ),
             spot_residual_pca_rank=(
-                8 if arguments.model == "covariance-pca" else None
+                8
+                if arguments.model in {
+                    "covariance-pca",
+                    "sanos-normal-statistical-pca",
+                }
+                else None
             ),
             return_price_source=(
                 "sanos"
-                if arguments.model == "sanos-normal-statistical"
+                if arguments.model in {
+                    "sanos-normal-statistical",
+                    "sanos-normal-statistical-pca",
+                }
                 else "dlv"
             ),
         )
         return (
             (
-                "sanos-normal-statistical"
-                if arguments.model == "sanos-normal-statistical"
+                arguments.model
+                if arguments.model in {
+                    "sanos-normal-statistical",
+                    "sanos-normal-statistical-pca",
+                }
                 else (
                     "robust-covariance-pca"
                     if arguments.model == "covariance-pca"
@@ -792,6 +812,7 @@ def _build_model(
             scenario_count=arguments.scenario_count,
             objective=ScenarioObjective(arguments.objective),
             risk_parameter=arguments.risk_parameter,
+            raw_action_ridge=arguments.raw_action_ridge,
             mean_reduction=mean_reduction,
             position_cap=(
                 default_position_cap
@@ -854,6 +875,11 @@ def _build_model(
                 ),
                 environment=environment,
                 claim_quantities=claim_quantities,
+                scenario_output_path=(
+                    arguments.scenario_output_directory / f"{origin.isoformat()}.npz"
+                    if arguments.scenario_output_directory is not None
+                    else None
+                ),
             ),
         )
     if arguments.model.startswith("diffusion-"):
@@ -911,6 +937,7 @@ def _build_model(
             scenario_count=arguments.scenario_count,
             objective=ScenarioObjective(arguments.objective),
             risk_parameter=arguments.risk_parameter,
+            raw_action_ridge=arguments.raw_action_ridge,
             mean_reduction=mean_reduction,
             position_cap=(
                 default_position_cap
@@ -993,6 +1020,8 @@ def _build_model(
         rolling_observations=arguments.observation_count,
         objective=historical_objective,
         risk_parameter=arguments.risk_parameter,
+        entropy_raw_ridge=getattr(arguments, "entropy_raw_ridge", 0.0),
+        quadratic_ridge=getattr(arguments, "historical_scaled_ridge", 1.0e-4),
         mean_reduction=mean_reduction,
         position_cap=(
             default_position_cap

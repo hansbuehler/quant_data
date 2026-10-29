@@ -21,7 +21,7 @@ class HistoricalSanosObjective(StrEnum):
     POWER_EXPONENTIAL = "power-exponential"
 
 
-@version("1.31", dependencies=[MeanReductionConfig])
+@version("1.32", dependencies=[MeanReductionConfig])
 @dataclass(frozen=True, kw_only=True)
 class HistoricalSanosConfig:
     """Logical settings for rolling empirical SANOS hedging."""
@@ -44,6 +44,7 @@ class HistoricalSanosConfig:
     solver_cap_stability_tolerance: float = 1.0e-6
     cost_smoothing: float = 1.0e-6
     quadratic_ridge: float = 1.0e-4
+    entropy_raw_ridge: float = 0.0
     force_null_policy: bool = False
     certificate_tolerance: float = 1.0e-6
     objective_agreement_tolerance: float = 1.0e-7
@@ -119,6 +120,15 @@ class HistoricalSanosConfig:
         verify_inp(
             math.isfinite(self.quadratic_ridge) and self.quadratic_ridge >= 0.0,
             lambda: "quadratic_ridge must be finite and non-negative",
+        )
+        verify_inp(
+            math.isfinite(self.entropy_raw_ridge) and self.entropy_raw_ridge >= 0.0,
+            lambda: "entropy_raw_ridge must be finite and non-negative",
+        )
+        verify_inp(
+            self.entropy_raw_ridge == 0.0
+            or self.objective is HistoricalSanosObjective.ENTROPY,
+            lambda: "entropy_raw_ridge requires the entropy objective",
         )
         verify_inp(
             type(self.force_null_policy) is bool,

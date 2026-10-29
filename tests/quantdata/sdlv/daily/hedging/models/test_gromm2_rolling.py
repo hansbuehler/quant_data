@@ -416,6 +416,18 @@ def test_prepared_rolling_gromm2_loader_authenticates_source_files(
     )
 
     assert loaded == paths
+    manifest["source_identity"] = (
+        "c6e246c50d251f2a508b7cd6d067c563a4297d58f6acdc6f4be6b37516370f27"
+    )
+    paths.manifest.write_text(json.dumps(manifest), encoding="utf-8")
+    assert load_prepared_rolling_gromm2(
+        tmp_path,
+        as_of_date=as_of,
+        config=config,
+        dataset_manifest_sha256=dataset_manifest_sha256,
+    ) == paths
+    manifest["source_identity"] = rolling_gromm2_source_identity()
+    paths.manifest.write_text(json.dumps(manifest), encoding="utf-8")
     with monkeypatch.context() as patch:
         patch.setattr(
             rolling_gromm2_module,

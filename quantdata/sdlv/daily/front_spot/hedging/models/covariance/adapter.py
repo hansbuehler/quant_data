@@ -116,7 +116,11 @@ def run_covariance_daily_book(
             evaluate_daily_digital_hedge(
                 sample,
                 model=(
-                    "sanos-normal-statistical"
+                    (
+                        "sanos-normal-statistical-pca"
+                        if config.spot_residual_pca_rank is not None
+                        else "sanos-normal-statistical"
+                    )
                     if config.return_price_source == "sanos"
                     else (
                         "robust-covariance-pca"
@@ -162,6 +166,7 @@ def run_covariance_daily_book(
                     "recession_ratio": action.zero_policy.recession_ratio,
                     "expected_profit": action.expected_profit,
                     "robust_standard_deviation": action.standard_deviation,
+                    "entropy_raw_ridge": config.entropy_raw_ridge,
                     "claim_policy_iterations": action.claim_policy.iterations,
                     "zero_policy_iterations": action.zero_policy.iterations,
                     "claim_policy_gross_exposure": claim_gross,
@@ -208,8 +213,8 @@ def run_covariance_daily_book(
                         "fixed-weight target cross-scatter blocks"
                     ),
                     "optimization_cost_semantics": (
-                        "two basis points for spot; one current half-spread for "
-                        "next-date settlement; twice current half-spread otherwise"
+                        "spot trades at mid; one current option half-spread "
+                        "on entry; no exit cost in the objective"
                     ),
                     "terminal_value_semantics": (
                         "settlement for 1D targets; discounted next-date market "

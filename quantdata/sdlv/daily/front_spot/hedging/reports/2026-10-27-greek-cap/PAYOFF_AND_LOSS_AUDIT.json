@@ -5,30 +5,37 @@
   "mean_absolute_error_definition": "E[abs(costed_long_claim_pnl)]",
   "short_candidate": "reverse the fitted long-claim action, fund with market digital premium, pay entry costs",
   "short_terminal_formula": "market_price - (hedged_pnl - unhedged_pnl + 2 * transaction_cost) / claim_quantity",
-  "greek_cost_cap_report": "/home/hans/quantdata_data/experiments/hedging/sanos-greek-cost-cap-20261027-v1/RESULTS.json",
+  "greek_cost_cap_report": "/home/hans/quantdata_data/experiments/hedging/sanos-greek-cost-cap-reoptimized-20261027-v1/SUMMARY.json",
   "risk_parameters_plotted": [
     "1",
     "10",
-    "100"
+    "100",
+    "1000"
   ],
   "metrics": {
-    "Historical SANOS|mean-variance|1": {
+    "SANOS historical|mean-variance|1": {
       "standard_deviation": 413.82454540690253,
       "mean_downside_loss": 186.99141707377075,
       "mean_absolute_error": 367.7992585939994,
       "mean_entry_cost": 0.0867031613840816
     },
-    "Historical SANOS|mean-variance|10": {
+    "SANOS historical|mean-variance|10": {
       "standard_deviation": 279.71563300729656,
       "mean_downside_loss": 113.6041229270877,
       "mean_absolute_error": 224.52110123250037,
       "mean_entry_cost": 1.906102661887217
     },
-    "Historical SANOS|mean-variance|100": {
+    "SANOS historical|mean-variance|100": {
       "standard_deviation": 234.691113260333,
       "mean_downside_loss": 91.95413793229173,
       "mean_absolute_error": 180.26979100995737,
       "mean_entry_cost": 4.017045724231286
+    },
+    "SANOS historical|mean-variance|1000": {
+      "standard_deviation": 196.28447678581534,
+      "mean_downside_loss": 80.2214064671685,
+      "mean_absolute_error": 145.99229886215457,
+      "mean_entry_cost": 8.92015875859877
     },
     "FuNVol|mean-variance|1": {
       "standard_deviation": 424.1830934176088,
@@ -47,6 +54,12 @@
       "mean_downside_loss": 97.2786157311987,
       "mean_absolute_error": 186.26972137444992,
       "mean_entry_cost": 4.196034469104822
+    },
+    "FuNVol|mean-variance|1000": {
+      "standard_deviation": 199.67839893078073,
+      "mean_downside_loss": 69.52656864854376,
+      "mean_absolute_error": 130.99410873364272,
+      "mean_entry_cost": 9.379349355997451
     },
     "VolGAN|mean-variance|1": {
       "standard_deviation": 435.8708873574631,
@@ -84,6 +97,12 @@
       "mean_absolute_error": 162.00799288640317,
       "mean_entry_cost": 4.545145785750978
     },
+    "GROMM P|mean-variance|1000": {
+      "standard_deviation": 173.00984505848558,
+      "mean_downside_loss": 60.87936679840955,
+      "mean_absolute_error": 107.19455162753522,
+      "mean_entry_cost": 9.519394105045961
+    },
     "GROMM Q|mean-variance|1": {
       "standard_deviation": 409.3492903232965,
       "mean_downside_loss": 184.1842282489125,
@@ -102,59 +121,107 @@
       "mean_absolute_error": 161.55514213368838,
       "mean_entry_cost": 4.563279519585903
     },
+    "GROMM Q|mean-variance|1000": {
+      "standard_deviation": 172.86119818658503,
+      "mean_downside_loss": 60.66979693736117,
+      "mean_absolute_error": 107.08343271138736,
+      "mean_entry_cost": 9.569974397299436
+    },
+    "AD-Seq-Vol|mean-variance|1": {
+      "standard_deviation": 401.886577415663,
+      "mean_downside_loss": 181.8842943558307,
+      "mean_absolute_error": 357.5339966610808,
+      "mean_entry_cost": 0.2054086471634094
+    },
+    "AD-Seq-Vol|mean-variance|10": {
+      "standard_deviation": 301.6919692059355,
+      "mean_downside_loss": 127.44470090935995,
+      "mean_absolute_error": 250.5479501749998,
+      "mean_entry_cost": 1.5970222142509733
+    },
+    "AD-Seq-Vol|mean-variance|100": {
+      "standard_deviation": 237.6481118379607,
+      "mean_downside_loss": 90.87274421978347,
+      "mean_absolute_error": 175.02679186277993,
+      "mean_entry_cost": 4.3695414901930265
+    },
+    "AD-Seq-Vol|mean-variance|1000": {
+      "standard_deviation": 181.69048445018262,
+      "mean_downside_loss": 66.19242555335826,
+      "mean_absolute_error": 116.03445737992959,
+      "mean_entry_cost": 9.603735081210125
+    },
     "SANOS parametric|mean-variance|1": {
       "standard_deviation": 294.82041974729,
-      "mean_downside_loss": 128.9058696540986,
-      "mean_absolute_error": 250.7325805616543,
-      "mean_entry_cost": 0.0909325392313124
+      "mean_downside_loss": 128.90586965409872,
+      "mean_absolute_error": 250.732580561654,
+      "mean_entry_cost": 0.09093253923131904
     },
     "SANOS parametric|mean-variance|10": {
-      "standard_deviation": 288.3555950599972,
-      "mean_downside_loss": 124.17393758736418,
-      "mean_absolute_error": 242.5997587818853,
-      "mean_entry_cost": 0.19982212237366265
+      "standard_deviation": 288.3555950579854,
+      "mean_downside_loss": 124.173937587365,
+      "mean_absolute_error": 242.59975878051205,
+      "mean_entry_cost": 0.19982212237089772
     },
     "SANOS parametric|mean-variance|100": {
-      "standard_deviation": 267.7463565189581,
-      "mean_downside_loss": 104.79283598617015,
-      "mean_absolute_error": 215.70094240801623,
-      "mean_entry_cost": 0.602275573962613
+      "standard_deviation": 267.7463565185902,
+      "mean_downside_loss": 104.79283598260447,
+      "mean_absolute_error": 215.70094240337045,
+      "mean_entry_cost": 0.6022755739620853
     },
-    "Historical-PCA|mean-variance|1": {
+    "SANOS parametric|mean-variance|1000": {
+      "standard_deviation": 238.00538212366337,
+      "mean_downside_loss": 85.94390137252103,
+      "mean_absolute_error": 179.66077040344845,
+      "mean_entry_cost": 1.451874884817105
+    },
+    "SANOS historical PCA|mean-variance|1": {
       "standard_deviation": 355.9229939038596,
       "mean_downside_loss": 146.24498078192622,
       "mean_absolute_error": 286.4120499093846,
       "mean_entry_cost": 0.005067855551157527
     },
-    "Historical-PCA|mean-variance|10": {
+    "SANOS historical PCA|mean-variance|10": {
       "standard_deviation": 342.6834385135548,
       "mean_downside_loss": 121.60329020282438,
       "mean_absolute_error": 246.81244298746975,
       "mean_entry_cost": 1.6285891117490106
     },
-    "Historical-PCA|mean-variance|100": {
+    "SANOS historical PCA|mean-variance|100": {
       "standard_deviation": 313.00103814273893,
       "mean_downside_loss": 112.73086520319035,
       "mean_absolute_error": 217.81722411398573,
       "mean_entry_cost": 5.412143107949909
     },
-    "Historical SANOS|entropy|1": {
+    "SANOS historical PCA|mean-variance|1000": {
+      "standard_deviation": 352.90087597454345,
+      "mean_downside_loss": 123.13304880053609,
+      "mean_absolute_error": 225.3840251332782,
+      "mean_entry_cost": 10.935376481837864
+    },
+    "SANOS historical|entropy|1": {
       "standard_deviation": 414.0402273648653,
       "mean_downside_loss": 187.0839850093903,
       "mean_absolute_error": 367.98043067482547,
       "mean_entry_cost": 0.08508586682546385
     },
-    "Historical SANOS|entropy|10": {
+    "SANOS historical|entropy|10": {
       "standard_deviation": 281.21148687984123,
       "mean_downside_loss": 113.90318456602624,
       "mean_absolute_error": 225.2374150428829,
       "mean_entry_cost": 1.869918668547823
     },
-    "Historical SANOS|entropy|100": {
+    "SANOS historical|entropy|100": {
       "standard_deviation": 246.70601056811523,
       "mean_downside_loss": 94.51918539840423,
       "mean_absolute_error": 187.04385373863977,
       "mean_entry_cost": 3.4167874872708226
+    },
+    "SANOS historical|entropy|1000": {
+      "standard_deviation": 288.59121751010514,
+      "mean_downside_loss": 113.80484341344145,
+      "mean_absolute_error": 226.14306674536974,
+      "mean_entry_cost": 3.027590975431433
     },
     "FuNVol|entropy|1": {
       "standard_deviation": 424.2750242540542,
@@ -210,6 +277,12 @@
       "mean_absolute_error": 176.9016590418192,
       "mean_entry_cost": 3.8053854954041633
     },
+    "GROMM P|entropy|1000": {
+      "standard_deviation": 283.0086084107693,
+      "mean_downside_loss": 116.56070190416192,
+      "mean_absolute_error": 224.51439935216445,
+      "mean_entry_cost": 3.8028364380577684
+    },
     "GROMM Q|entropy|1": {
       "standard_deviation": 409.5558088936913,
       "mean_downside_loss": 184.27894008603064,
@@ -228,23 +301,107 @@
       "mean_absolute_error": 176.54129340745502,
       "mean_entry_cost": 3.8275259656047544
     },
-    "Historical SANOS|power-exponential|1": {
+    "GROMM Q|entropy|1000": {
+      "standard_deviation": 283.05476531778197,
+      "mean_downside_loss": 116.4482054665528,
+      "mean_absolute_error": 224.44762925624522,
+      "mean_entry_cost": 3.8478538335840318
+    },
+    "AD-Seq-Vol|entropy|1": {
+      "standard_deviation": 401.96554672472257,
+      "mean_downside_loss": 181.93692336451969,
+      "mean_absolute_error": 357.61589192275767,
+      "mean_entry_cost": 0.20459031224408383
+    },
+    "AD-Seq-Vol|entropy|10": {
+      "standard_deviation": 302.97861021565785,
+      "mean_downside_loss": 128.16258845161468,
+      "mean_absolute_error": 251.80550730555302,
+      "mean_entry_cost": 1.5684560949969335
+    },
+    "AD-Seq-Vol|entropy|100": {
+      "standard_deviation": 250.03524539389954,
+      "mean_downside_loss": 98.21169665513331,
+      "mean_absolute_error": 189.85065578395592,
+      "mean_entry_cost": 3.8061049493893178
+    },
+    "AD-Seq-Vol|entropy|1000": {
+      "standard_deviation": 283.33821351854584,
+      "mean_downside_loss": 117.33206044420444,
+      "mean_absolute_error": 225.63736315165016,
+      "mean_entry_cost": 4.29567762977957
+    },
+    "SANOS parametric|entropy|1": {
+      "standard_deviation": 294.82041974729,
+      "mean_downside_loss": 128.90586965409872,
+      "mean_absolute_error": 250.732580561654,
+      "mean_entry_cost": 0.09093253923131904
+    },
+    "SANOS parametric|entropy|10": {
+      "standard_deviation": 288.3555950579854,
+      "mean_downside_loss": 124.173937587365,
+      "mean_absolute_error": 242.59975878051205,
+      "mean_entry_cost": 0.19982212237089772
+    },
+    "SANOS parametric|entropy|100": {
+      "standard_deviation": 267.7463565185902,
+      "mean_downside_loss": 104.79283598260447,
+      "mean_absolute_error": 215.70094240337045,
+      "mean_entry_cost": 0.6022755739620853
+    },
+    "SANOS parametric|entropy|1000": {
+      "standard_deviation": 238.00538212366337,
+      "mean_downside_loss": 85.94390137252103,
+      "mean_absolute_error": 179.66077040344845,
+      "mean_entry_cost": 1.451874884817105
+    },
+    "SANOS historical PCA|entropy|1": {
+      "standard_deviation": 355.9229939038596,
+      "mean_downside_loss": 146.24498078192622,
+      "mean_absolute_error": 286.4120499093846,
+      "mean_entry_cost": 0.005067855551157527
+    },
+    "SANOS historical PCA|entropy|10": {
+      "standard_deviation": 342.6834385135548,
+      "mean_downside_loss": 121.60329020282438,
+      "mean_absolute_error": 246.81244298746975,
+      "mean_entry_cost": 1.6285891117490106
+    },
+    "SANOS historical PCA|entropy|100": {
+      "standard_deviation": 313.00103814273893,
+      "mean_downside_loss": 112.73086520319035,
+      "mean_absolute_error": 217.81722411398573,
+      "mean_entry_cost": 5.412143107949909
+    },
+    "SANOS historical PCA|entropy|1000": {
+      "standard_deviation": 352.90087597454345,
+      "mean_downside_loss": 123.13304880053609,
+      "mean_absolute_error": 225.3840251332782,
+      "mean_entry_cost": 10.935376481837864
+    },
+    "SANOS historical|power-exponential|1": {
       "standard_deviation": 414.10447647073215,
       "mean_downside_loss": 187.1160532587983,
       "mean_absolute_error": 368.04381978904723,
       "mean_entry_cost": 0.08458442053542312
     },
-    "Historical SANOS|power-exponential|10": {
+    "SANOS historical|power-exponential|10": {
       "standard_deviation": 281.27515883456095,
       "mean_downside_loss": 114.04970223461847,
       "mean_absolute_error": 225.44558356532144,
       "mean_entry_cost": 1.8697741075504228
     },
-    "Historical SANOS|power-exponential|100": {
+    "SANOS historical|power-exponential|100": {
       "standard_deviation": 243.9849774934251,
       "mean_downside_loss": 94.08689054128166,
       "mean_absolute_error": 186.10901643511764,
       "mean_entry_cost": 3.4509205796898357
+    },
+    "SANOS historical|power-exponential|1000": {
+      "standard_deviation": 269.02703039549937,
+      "mean_downside_loss": 104.42804736062503,
+      "mean_absolute_error": 206.34647227343436,
+      "mean_entry_cost": 3.439365338719983
     },
     "FuNVol|power-exponential|1": {
       "standard_deviation": 424.31362478683076,
@@ -263,6 +420,12 @@
       "mean_downside_loss": 105.05264590265092,
       "mean_absolute_error": 200.1498763488412,
       "mean_entry_cost": 3.4519817546982354
+    },
+    "FuNVol|power-exponential|1000": {
+      "standard_deviation": 293.4498438307327,
+      "mean_downside_loss": 117.46976647246143,
+      "mean_absolute_error": 226.27924183103943,
+      "mean_entry_cost": 3.7091171715585873
     },
     "VolGAN|power-exponential|1": {
       "standard_deviation": 435.8709560731486,
@@ -300,6 +463,12 @@
       "mean_absolute_error": 171.8214690684065,
       "mean_entry_cost": 3.837397509140716
     },
+    "GROMM P|power-exponential|1000": {
+      "standard_deviation": 258.11096684960864,
+      "mean_downside_loss": 104.08967359556098,
+      "mean_absolute_error": 199.74594032065266,
+      "mean_entry_cost": 4.205470223341093
+    },
     "GROMM Q|power-exponential|1": {
       "standard_deviation": 409.6178868116061,
       "mean_downside_loss": 184.31167872873525,
@@ -318,23 +487,107 @@
       "mean_absolute_error": 171.30763811203786,
       "mean_entry_cost": 3.855481666605601
     },
-    "Historical SANOS|cvar|1": {
+    "GROMM Q|power-exponential|1000": {
+      "standard_deviation": 258.03521248485424,
+      "mean_downside_loss": 103.96616608763756,
+      "mean_absolute_error": 199.706803906988,
+      "mean_entry_cost": 4.250855258031075
+    },
+    "AD-Seq-Vol|power-exponential|1": {
+      "standard_deviation": 402.06733138529296,
+      "mean_downside_loss": 181.98070110796456,
+      "mean_absolute_error": 357.7102229762601,
+      "mean_entry_cost": 0.20371654239854453
+    },
+    "AD-Seq-Vol|power-exponential|10": {
+      "standard_deviation": 303.19024327917725,
+      "mean_downside_loss": 128.28991438024772,
+      "mean_absolute_error": 252.1113412962856,
+      "mean_entry_cost": 1.5625083534920872
+    },
+    "AD-Seq-Vol|power-exponential|100": {
+      "standard_deviation": 248.14353228562877,
+      "mean_downside_loss": 96.05951784978484,
+      "mean_absolute_error": 186.1268557371347,
+      "mean_entry_cost": 3.758666218635761
+    },
+    "AD-Seq-Vol|power-exponential|1000": {
+      "standard_deviation": 260.0962964819533,
+      "mean_downside_loss": 106.31647356438323,
+      "mean_absolute_error": 203.42172025813562,
+      "mean_entry_cost": 4.5059810179039195
+    },
+    "SANOS parametric|power-exponential|1": {
+      "standard_deviation": 294.82419616756283,
+      "mean_downside_loss": 128.90736840463904,
+      "mean_absolute_error": 250.73761882344752,
+      "mean_entry_cost": 0.090856382638855
+    },
+    "SANOS parametric|power-exponential|10": {
+      "standard_deviation": 288.3737180863982,
+      "mean_downside_loss": 124.18731730531529,
+      "mean_absolute_error": 242.62027037759077,
+      "mean_entry_cost": 0.19965305596327693
+    },
+    "SANOS parametric|power-exponential|100": {
+      "standard_deviation": 268.0586866422224,
+      "mean_downside_loss": 105.00952542833996,
+      "mean_absolute_error": 216.05673536763,
+      "mean_entry_cost": 0.5954285790096734
+    },
+    "SANOS parametric|power-exponential|1000": {
+      "standard_deviation": 238.88317142272143,
+      "mean_downside_loss": 86.38720465079759,
+      "mean_absolute_error": 180.72598895137344,
+      "mean_entry_cost": 1.4172441948897339
+    },
+    "SANOS historical PCA|power-exponential|1": {
+      "standard_deviation": 355.9249492814639,
+      "mean_downside_loss": 146.24502767649247,
+      "mean_absolute_error": 286.4138879817382,
+      "mean_entry_cost": 0.00498240881833068
+    },
+    "SANOS historical PCA|power-exponential|10": {
+      "standard_deviation": 342.0237023826775,
+      "mean_downside_loss": 121.50900612976629,
+      "mean_absolute_error": 246.6515040750528,
+      "mean_entry_cost": 1.6025580537199005
+    },
+    "SANOS historical PCA|power-exponential|100": {
+      "standard_deviation": 312.0874222005859,
+      "mean_downside_loss": 111.54700032782303,
+      "mean_absolute_error": 217.09374837979362,
+      "mean_entry_cost": 5.02940435516497
+    },
+    "SANOS historical PCA|power-exponential|1000": {
+      "standard_deviation": 319.38891301864993,
+      "mean_downside_loss": 115.10568907524517,
+      "mean_absolute_error": 215.30026754815972,
+      "mean_entry_cost": 7.563732730011713
+    },
+    "SANOS historical|cvar|1": {
       "standard_deviation": 243.9802687600166,
       "mean_downside_loss": 92.12510349128002,
       "mean_absolute_error": 182.0402294825906,
       "mean_entry_cost": 4.136911776216382
     },
-    "Historical SANOS|cvar|10": {
+    "SANOS historical|cvar|10": {
       "standard_deviation": 308.98894773398035,
       "mean_downside_loss": 123.07603082777432,
       "mean_absolute_error": 244.9404102475891,
       "mean_entry_cost": 2.7673821658526725
     },
-    "Historical SANOS|cvar|100": {
+    "SANOS historical|cvar|100": {
       "standard_deviation": 323.61288259950356,
       "mean_downside_loss": 130.2982349472575,
       "mean_absolute_error": 259.9169581416725,
       "mean_entry_cost": 2.7689245920487813
+    },
+    "SANOS historical|cvar|1000": {
+      "standard_deviation": 324.92584100623924,
+      "mean_downside_loss": 130.86648001107605,
+      "mean_absolute_error": 261.0517885474434,
+      "mean_entry_cost": 2.7760628653437536
     },
     "FuNVol|cvar|1": {
       "standard_deviation": 294.98915700147757,
@@ -347,6 +600,12 @@
       "mean_downside_loss": 141.6726370042241,
       "mean_absolute_error": 274.2178108398567,
       "mean_entry_cost": 2.8183358903496383
+    },
+    "FuNVol|cvar|1000": {
+      "standard_deviation": 351.7010248272205,
+      "mean_downside_loss": 152.27244497956247,
+      "mean_absolute_error": 291.61869880885314,
+      "mean_entry_cost": 2.496686812498519
     },
     "VolGAN|cvar|1": {
       "standard_deviation": 435.8431240476906,
@@ -366,11 +625,101 @@
       "mean_absolute_error": 394.72379009498866,
       "mean_entry_cost": 0.11424631042260021
     },
+    "VolGAN|cvar|1000": {
+      "standard_deviation": 454.066676872271,
+      "mean_downside_loss": 201.14980027316474,
+      "mean_absolute_error": 394.49512554044884,
+      "mean_entry_cost": 0.18568904983791196
+    },
+    "GROMM P|cvar|1": {
+      "standard_deviation": 222.79705818808202,
+      "mean_downside_loss": 84.02501862490962,
+      "mean_absolute_error": 158.9089400146703,
+      "mean_entry_cost": 4.7565946397427465
+    },
+    "GROMM P|cvar|10": {
+      "standard_deviation": 307.83767359615047,
+      "mean_downside_loss": 127.05230787987168,
+      "mean_absolute_error": 245.91284051996126,
+      "mean_entry_cost": 3.227377715449829
+    },
     "GROMM Q|cvar|1": {
       "standard_deviation": 222.2861413828225,
       "mean_downside_loss": 83.39185670948021,
       "mean_absolute_error": 157.61319543599433,
       "mean_entry_cost": 4.805562830317825
+    },
+    "GROMM Q|cvar|10": {
+      "standard_deviation": 307.5051789731403,
+      "mean_downside_loss": 126.74455907952895,
+      "mean_absolute_error": 245.40222760008095,
+      "mean_entry_cost": 3.270028153638269
+    },
+    "GROMM Q|cvar|100": {
+      "standard_deviation": 328.7465807799652,
+      "mean_downside_loss": 137.34976344102557,
+      "mean_absolute_error": 266.4573356806633,
+      "mean_entry_cost": 2.919330709053557
+    },
+    "GROMM Q|cvar|1000": {
+      "standard_deviation": 331.658040440413,
+      "mean_downside_loss": 138.90241633978485,
+      "mean_absolute_error": 269.4981363005375,
+      "mean_entry_cost": 2.832681326188058
+    },
+    "AD-Seq-Vol|cvar|1": {
+      "standard_deviation": 234.1127013417742,
+      "mean_downside_loss": 89.69532334645763,
+      "mean_absolute_error": 171.22061024974838,
+      "mean_entry_cost": 4.7610094870212185
+    },
+    "SANOS parametric|cvar|1": {
+      "standard_deviation": 217.74293654694694,
+      "mean_downside_loss": 84.18814679742518,
+      "mean_absolute_error": 162.01781551452706,
+      "mean_entry_cost": 3.1489726181085933
+    },
+    "SANOS parametric|cvar|10": {
+      "standard_deviation": 216.77818286712994,
+      "mean_downside_loss": 83.90806053962216,
+      "mean_absolute_error": 159.88429671386228,
+      "mean_entry_cost": 3.487776689698169
+    },
+    "SANOS parametric|cvar|100": {
+      "standard_deviation": 217.44888858261334,
+      "mean_downside_loss": 83.84562912047618,
+      "mean_absolute_error": 160.24176483927658,
+      "mean_entry_cost": 3.517540667202995
+    },
+    "SANOS parametric|cvar|1000": {
+      "standard_deviation": 217.36844055357477,
+      "mean_downside_loss": 84.41910361208025,
+      "mean_absolute_error": 160.43367475444873,
+      "mean_entry_cost": 3.5211305601759846
+    },
+    "SANOS historical PCA|cvar|1": {
+      "standard_deviation": 307.25238051489384,
+      "mean_downside_loss": 112.20808524857614,
+      "mean_absolute_error": 213.01589122240793,
+      "mean_entry_cost": 6.197822978407207
+    },
+    "SANOS historical PCA|cvar|10": {
+      "standard_deviation": 319.75397032832086,
+      "mean_downside_loss": 115.22094477775894,
+      "mean_absolute_error": 214.8821758878512,
+      "mean_entry_cost": 7.941767346234229
+    },
+    "SANOS historical PCA|cvar|100": {
+      "standard_deviation": 329.5961674315911,
+      "mean_downside_loss": 117.67424350011557,
+      "mean_absolute_error": 217.97375572736118,
+      "mean_entry_cost": 8.963474998847705
+    },
+    "SANOS historical PCA|cvar|1000": {
+      "standard_deviation": 338.0951540335257,
+      "mean_downside_loss": 119.47275324181444,
+      "mean_absolute_error": 220.49811105718913,
+      "mean_entry_cost": 9.630490902389203
     },
     "Unhedged|baseline": {
       "standard_deviation": 435.8845380834438,
@@ -398,76 +747,292 @@
     }
   },
   "observed_payoff_gaps": {
-    "Historical SANOS|mean-variance|1": {
+    "SANOS parametric|mean-variance|1": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.42954545454545456,
+      "maximum_observed_top_up_per_unit_payout": 0.6327598050800936,
+      "off_chart_observations": 0
+    },
+    "SANOS parametric|mean-variance|10": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.43863636363636366,
+      "maximum_observed_top_up_per_unit_payout": 0.6314855615031345,
+      "off_chart_observations": 0
+    },
+    "SANOS parametric|mean-variance|100": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.4431818181818182,
+      "maximum_observed_top_up_per_unit_payout": 0.7837032749301505,
+      "off_chart_observations": 0
+    },
+    "SANOS parametric|mean-variance|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.45227272727272727,
+      "maximum_observed_top_up_per_unit_payout": 0.6461199238577913,
+      "off_chart_observations": 0
+    },
+    "SANOS parametric|entropy|1": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.42954545454545456,
+      "maximum_observed_top_up_per_unit_payout": 0.6327598050800936,
+      "off_chart_observations": 0
+    },
+    "SANOS parametric|entropy|10": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.43863636363636366,
+      "maximum_observed_top_up_per_unit_payout": 0.6314855615031345,
+      "off_chart_observations": 0
+    },
+    "SANOS parametric|entropy|100": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.4431818181818182,
+      "maximum_observed_top_up_per_unit_payout": 0.7837032749301505,
+      "off_chart_observations": 0
+    },
+    "SANOS parametric|entropy|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.45227272727272727,
+      "maximum_observed_top_up_per_unit_payout": 0.6461199238577913,
+      "off_chart_observations": 0
+    },
+    "SANOS parametric|power-exponential|1": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.42954545454545456,
+      "maximum_observed_top_up_per_unit_payout": 0.6327598050910634,
+      "off_chart_observations": 0
+    },
+    "SANOS parametric|power-exponential|10": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.43863636363636366,
+      "maximum_observed_top_up_per_unit_payout": 0.6314574072952135,
+      "off_chart_observations": 0
+    },
+    "SANOS parametric|power-exponential|100": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.44545454545454544,
+      "maximum_observed_top_up_per_unit_payout": 0.7843690794906972,
+      "off_chart_observations": 0
+    },
+    "SANOS parametric|power-exponential|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.45454545454545453,
+      "maximum_observed_top_up_per_unit_payout": 0.649515285894684,
+      "off_chart_observations": 0
+    },
+    "SANOS parametric|cvar|1": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.4659090909090909,
+      "maximum_observed_top_up_per_unit_payout": 0.6557183389686714,
+      "off_chart_observations": 0
+    },
+    "SANOS parametric|cvar|10": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.47954545454545455,
+      "maximum_observed_top_up_per_unit_payout": 0.6796142517457234,
+      "off_chart_observations": 0
+    },
+    "SANOS parametric|cvar|100": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.4863636363636364,
+      "maximum_observed_top_up_per_unit_payout": 0.6773257821739764,
+      "off_chart_observations": 0
+    },
+    "SANOS parametric|cvar|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.475,
+      "maximum_observed_top_up_per_unit_payout": 0.6761091311680989,
+      "off_chart_observations": 0
+    },
+    "SANOS historical PCA|mean-variance|1": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.3795454545454545,
+      "maximum_observed_top_up_per_unit_payout": 1.3065111377283913,
+      "off_chart_observations": 2
+    },
+    "SANOS historical PCA|mean-variance|10": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.4,
+      "maximum_observed_top_up_per_unit_payout": 1.6801049041543976,
+      "off_chart_observations": 7
+    },
+    "SANOS historical PCA|mean-variance|100": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.45454545454545453,
+      "maximum_observed_top_up_per_unit_payout": 1.102752879723451,
+      "off_chart_observations": 3
+    },
+    "SANOS historical PCA|mean-variance|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.45,
+      "maximum_observed_top_up_per_unit_payout": 3.384734736692544,
+      "off_chart_observations": 3
+    },
+    "SANOS historical PCA|entropy|1": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.3795454545454545,
+      "maximum_observed_top_up_per_unit_payout": 1.3065111377283913,
+      "off_chart_observations": 2
+    },
+    "SANOS historical PCA|entropy|10": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.4,
+      "maximum_observed_top_up_per_unit_payout": 1.6801049041543976,
+      "off_chart_observations": 7
+    },
+    "SANOS historical PCA|entropy|100": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.45454545454545453,
+      "maximum_observed_top_up_per_unit_payout": 1.102752879723451,
+      "off_chart_observations": 3
+    },
+    "SANOS historical PCA|entropy|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.45,
+      "maximum_observed_top_up_per_unit_payout": 3.384734736692544,
+      "off_chart_observations": 3
+    },
+    "SANOS historical PCA|power-exponential|1": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.3795454545454545,
+      "maximum_observed_top_up_per_unit_payout": 1.3065111373003346,
+      "off_chart_observations": 2
+    },
+    "SANOS historical PCA|power-exponential|10": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.4022727272727273,
+      "maximum_observed_top_up_per_unit_payout": 1.6697121549379,
+      "off_chart_observations": 7
+    },
+    "SANOS historical PCA|power-exponential|100": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.45454545454545453,
+      "maximum_observed_top_up_per_unit_payout": 1.2944911494973368,
+      "off_chart_observations": 4
+    },
+    "SANOS historical PCA|power-exponential|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.45227272727272727,
+      "maximum_observed_top_up_per_unit_payout": 2.2302971244131804,
+      "off_chart_observations": 3
+    },
+    "SANOS historical PCA|cvar|1": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.45227272727272727,
+      "maximum_observed_top_up_per_unit_payout": 1.3948479373612632,
+      "off_chart_observations": 3
+    },
+    "SANOS historical PCA|cvar|10": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.44545454545454544,
+      "maximum_observed_top_up_per_unit_payout": 2.28730359487387,
+      "off_chart_observations": 2
+    },
+    "SANOS historical PCA|cvar|100": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.45227272727272727,
+      "maximum_observed_top_up_per_unit_payout": 2.623628360144031,
+      "off_chart_observations": 3
+    },
+    "SANOS historical PCA|cvar|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.44545454545454544,
+      "maximum_observed_top_up_per_unit_payout": 2.915824631628624,
+      "off_chart_observations": 3
+    },
+    "SANOS historical|mean-variance|1": {
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.30227272727272725,
       "maximum_observed_top_up_per_unit_payout": 0.8404430089126578,
       "off_chart_observations": 0
     },
-    "Historical SANOS|mean-variance|10": {
+    "SANOS historical|mean-variance|10": {
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.4113636363636364,
       "maximum_observed_top_up_per_unit_payout": 0.7097613339870669,
       "off_chart_observations": 0
     },
-    "Historical SANOS|mean-variance|100": {
+    "SANOS historical|mean-variance|100": {
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.45227272727272727,
       "maximum_observed_top_up_per_unit_payout": 0.693893952604684,
       "off_chart_observations": 0
     },
-    "Historical SANOS|entropy|1": {
+    "SANOS historical|mean-variance|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.43863636363636366,
+      "maximum_observed_top_up_per_unit_payout": 0.6558942281966875,
+      "off_chart_observations": 0
+    },
+    "SANOS historical|entropy|1": {
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.30227272727272725,
       "maximum_observed_top_up_per_unit_payout": 0.8407864014737041,
       "off_chart_observations": 0
     },
-    "Historical SANOS|entropy|10": {
+    "SANOS historical|entropy|10": {
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.4022727272727273,
       "maximum_observed_top_up_per_unit_payout": 0.7116789579251053,
       "off_chart_observations": 0
     },
-    "Historical SANOS|entropy|100": {
+    "SANOS historical|entropy|100": {
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.3840909090909091,
       "maximum_observed_top_up_per_unit_payout": 0.7203629088073892,
       "off_chart_observations": 0
     },
-    "Historical SANOS|power-exponential|1": {
+    "SANOS historical|entropy|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.2681818181818182,
+      "maximum_observed_top_up_per_unit_payout": 0.8051233057521148,
+      "off_chart_observations": 0
+    },
+    "SANOS historical|power-exponential|1": {
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.30227272727272725,
       "maximum_observed_top_up_per_unit_payout": 0.8407883948080588,
       "off_chart_observations": 0
     },
-    "Historical SANOS|power-exponential|10": {
+    "SANOS historical|power-exponential|10": {
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.40454545454545454,
       "maximum_observed_top_up_per_unit_payout": 0.7111089073005927,
       "off_chart_observations": 0
     },
-    "Historical SANOS|power-exponential|100": {
+    "SANOS historical|power-exponential|100": {
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.4022727272727273,
       "maximum_observed_top_up_per_unit_payout": 0.7152612475768798,
       "off_chart_observations": 0
     },
-    "Historical SANOS|cvar|1": {
+    "SANOS historical|power-exponential|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.27954545454545454,
+      "maximum_observed_top_up_per_unit_payout": 0.7532174445378579,
+      "off_chart_observations": 0
+    },
+    "SANOS historical|cvar|1": {
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.34545454545454546,
       "maximum_observed_top_up_per_unit_payout": 0.7642208630640752,
       "off_chart_observations": 0
     },
-    "Historical SANOS|cvar|10": {
+    "SANOS historical|cvar|10": {
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.2681818181818182,
       "maximum_observed_top_up_per_unit_payout": 0.8421809805788626,
       "off_chart_observations": 0
     },
-    "Historical SANOS|cvar|100": {
+    "SANOS historical|cvar|100": {
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.275,
       "maximum_observed_top_up_per_unit_payout": 0.876217508195939,
+      "off_chart_observations": 0
+    },
+    "SANOS historical|cvar|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.275,
+      "maximum_observed_top_up_per_unit_payout": 0.8762131990317301,
       "off_chart_observations": 0
     },
     "FuNVol|mean-variance|1": {
@@ -487,6 +1052,12 @@
       "observed_superhedge_violation_fraction": 0.4659090909090909,
       "maximum_observed_top_up_per_unit_payout": 1.1167099336363502,
       "off_chart_observations": 1
+    },
+    "FuNVol|mean-variance|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.575,
+      "maximum_observed_top_up_per_unit_payout": 0.7229130939945828,
+      "off_chart_observations": 0
     },
     "FuNVol|entropy|1": {
       "observations": 440,
@@ -524,6 +1095,12 @@
       "maximum_observed_top_up_per_unit_payout": 1.1515988127857035,
       "off_chart_observations": 0
     },
+    "FuNVol|power-exponential|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.25227272727272726,
+      "maximum_observed_top_up_per_unit_payout": 1.4078708461389389,
+      "off_chart_observations": 1
+    },
     "FuNVol|cvar|1": {
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.31363636363636366,
@@ -535,6 +1112,12 @@
       "observed_superhedge_violation_fraction": 0.26136363636363635,
       "maximum_observed_top_up_per_unit_payout": 1.4188120894453458,
       "off_chart_observations": 1
+    },
+    "FuNVol|cvar|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.2727272727272727,
+      "maximum_observed_top_up_per_unit_payout": 0.8731914043883879,
+      "off_chart_observations": 0
     },
     "VolGAN|mean-variance|1": {
       "observations": 440,
@@ -608,6 +1191,12 @@
       "maximum_observed_top_up_per_unit_payout": 1.1158064256618754,
       "off_chart_observations": 1
     },
+    "VolGAN|cvar|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.3090909090909091,
+      "maximum_observed_top_up_per_unit_payout": 1.0660517598013826,
+      "off_chart_observations": 1
+    },
     "GROMM P|mean-variance|1": {
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.30227272727272725,
@@ -624,6 +1213,12 @@
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.5136363636363637,
       "maximum_observed_top_up_per_unit_payout": 0.6642576989995725,
+      "off_chart_observations": 0
+    },
+    "GROMM P|mean-variance|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.5977272727272728,
+      "maximum_observed_top_up_per_unit_payout": 0.6054092118347434,
       "off_chart_observations": 0
     },
     "GROMM P|entropy|1": {
@@ -644,6 +1239,12 @@
       "maximum_observed_top_up_per_unit_payout": 0.6968251320245736,
       "off_chart_observations": 0
     },
+    "GROMM P|entropy|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.2545454545454545,
+      "maximum_observed_top_up_per_unit_payout": 0.8206269762072175,
+      "off_chart_observations": 0
+    },
     "GROMM P|power-exponential|1": {
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.30227272727272725,
@@ -660,6 +1261,24 @@
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.31136363636363634,
       "maximum_observed_top_up_per_unit_payout": 0.6945910904703485,
+      "off_chart_observations": 0
+    },
+    "GROMM P|power-exponential|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.24772727272727274,
+      "maximum_observed_top_up_per_unit_payout": 0.7804095796929102,
+      "off_chart_observations": 0
+    },
+    "GROMM P|cvar|1": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.27954545454545454,
+      "maximum_observed_top_up_per_unit_payout": 0.7287003976619635,
+      "off_chart_observations": 0
+    },
+    "GROMM P|cvar|10": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.2545454545454545,
+      "maximum_observed_top_up_per_unit_payout": 0.8618217847199439,
       "off_chart_observations": 0
     },
     "GROMM Q|mean-variance|1": {
@@ -680,6 +1299,12 @@
       "maximum_observed_top_up_per_unit_payout": 0.6603829524640648,
       "off_chart_observations": 0
     },
+    "GROMM Q|mean-variance|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.5954545454545455,
+      "maximum_observed_top_up_per_unit_payout": 0.6041272137192086,
+      "off_chart_observations": 0
+    },
     "GROMM Q|entropy|1": {
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.30227272727272725,
@@ -696,6 +1321,12 @@
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.275,
       "maximum_observed_top_up_per_unit_payout": 0.6945123073437289,
+      "off_chart_observations": 0
+    },
+    "GROMM Q|entropy|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.2545454545454545,
+      "maximum_observed_top_up_per_unit_payout": 0.8201779467902228,
       "off_chart_observations": 0
     },
     "GROMM Q|power-exponential|1": {
@@ -716,47 +1347,113 @@
       "maximum_observed_top_up_per_unit_payout": 0.6917176688751612,
       "off_chart_observations": 0
     },
+    "GROMM Q|power-exponential|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.24772727272727274,
+      "maximum_observed_top_up_per_unit_payout": 0.7806183090002337,
+      "off_chart_observations": 0
+    },
     "GROMM Q|cvar|1": {
       "observations": 440,
       "observed_superhedge_violation_fraction": 0.2863636363636364,
       "maximum_observed_top_up_per_unit_payout": 0.7262280569723967,
       "off_chart_observations": 0
     },
-    "SANOS parametric|mean-variance|1": {
+    "GROMM Q|cvar|10": {
       "observations": 440,
-      "observed_superhedge_violation_fraction": 0.42954545454545456,
-      "maximum_observed_top_up_per_unit_payout": 0.6327598050800933,
+      "observed_superhedge_violation_fraction": 0.25681818181818183,
+      "maximum_observed_top_up_per_unit_payout": 0.8637606563616389,
       "off_chart_observations": 0
     },
-    "SANOS parametric|mean-variance|10": {
+    "GROMM Q|cvar|100": {
       "observations": 440,
-      "observed_superhedge_violation_fraction": 0.43863636363636366,
-      "maximum_observed_top_up_per_unit_payout": 0.631485561503135,
+      "observed_superhedge_violation_fraction": 0.2590909090909091,
+      "maximum_observed_top_up_per_unit_payout": 0.8758207201808371,
       "off_chart_observations": 0
     },
-    "SANOS parametric|mean-variance|100": {
+    "GROMM Q|cvar|1000": {
       "observations": 440,
-      "observed_superhedge_violation_fraction": 0.4431818181818182,
-      "maximum_observed_top_up_per_unit_payout": 0.7837032749311487,
+      "observed_superhedge_violation_fraction": 0.2590909090909091,
+      "maximum_observed_top_up_per_unit_payout": 0.8766603878989866,
       "off_chart_observations": 0
     },
-    "Historical-PCA|mean-variance|1": {
+    "AD-Seq-Vol|mean-variance|1": {
       "observations": 440,
-      "observed_superhedge_violation_fraction": 0.3795454545454545,
-      "maximum_observed_top_up_per_unit_payout": 1.3065111377283913,
-      "off_chart_observations": 2
+      "observed_superhedge_violation_fraction": 0.30227272727272725,
+      "maximum_observed_top_up_per_unit_payout": 0.8583003889733823,
+      "off_chart_observations": 0
     },
-    "Historical-PCA|mean-variance|10": {
+    "AD-Seq-Vol|mean-variance|10": {
       "observations": 440,
-      "observed_superhedge_violation_fraction": 0.4,
-      "maximum_observed_top_up_per_unit_payout": 1.6801049041543976,
-      "off_chart_observations": 7
+      "observed_superhedge_violation_fraction": 0.3659090909090909,
+      "maximum_observed_top_up_per_unit_payout": 0.6979173068346242,
+      "off_chart_observations": 0
     },
-    "Historical-PCA|mean-variance|100": {
+    "AD-Seq-Vol|mean-variance|100": {
       "observations": 440,
-      "observed_superhedge_violation_fraction": 0.45454545454545453,
-      "maximum_observed_top_up_per_unit_payout": 1.102752879723451,
-      "off_chart_observations": 3
+      "observed_superhedge_violation_fraction": 0.4954545454545455,
+      "maximum_observed_top_up_per_unit_payout": 0.6383560147751111,
+      "off_chart_observations": 0
+    },
+    "AD-Seq-Vol|mean-variance|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.5659090909090909,
+      "maximum_observed_top_up_per_unit_payout": 0.5970916309413858,
+      "off_chart_observations": 0
+    },
+    "AD-Seq-Vol|entropy|1": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.30227272727272725,
+      "maximum_observed_top_up_per_unit_payout": 0.8586674798621016,
+      "off_chart_observations": 0
+    },
+    "AD-Seq-Vol|entropy|10": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.3613636363636364,
+      "maximum_observed_top_up_per_unit_payout": 0.7114739329490316,
+      "off_chart_observations": 0
+    },
+    "AD-Seq-Vol|entropy|100": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.3181818181818182,
+      "maximum_observed_top_up_per_unit_payout": 0.7145354610969281,
+      "off_chart_observations": 0
+    },
+    "AD-Seq-Vol|entropy|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.2545454545454545,
+      "maximum_observed_top_up_per_unit_payout": 0.8316896698230818,
+      "off_chart_observations": 0
+    },
+    "AD-Seq-Vol|power-exponential|1": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.30227272727272725,
+      "maximum_observed_top_up_per_unit_payout": 0.8586666306599285,
+      "off_chart_observations": 0
+    },
+    "AD-Seq-Vol|power-exponential|10": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.3613636363636364,
+      "maximum_observed_top_up_per_unit_payout": 0.710434138527855,
+      "off_chart_observations": 0
+    },
+    "AD-Seq-Vol|power-exponential|100": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.3659090909090909,
+      "maximum_observed_top_up_per_unit_payout": 0.6966819101005414,
+      "off_chart_observations": 0
+    },
+    "AD-Seq-Vol|power-exponential|1000": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.25227272727272726,
+      "maximum_observed_top_up_per_unit_payout": 0.8072270081735697,
+      "off_chart_observations": 0
+    },
+    "AD-Seq-Vol|cvar|1": {
+      "observations": 440,
+      "observed_superhedge_violation_fraction": 0.3568181818181818,
+      "maximum_observed_top_up_per_unit_payout": 0.7806674559089302,
+      "off_chart_observations": 0
     },
     "Unhedged|baseline": {
       "observations": 440,

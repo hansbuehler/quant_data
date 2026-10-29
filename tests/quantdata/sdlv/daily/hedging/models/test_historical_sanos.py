@@ -61,6 +61,38 @@ def test_historical_sanos_defaults_use_regularized_one_year_history() -> None:
     assert config.solver_cap_stability_tolerance == pytest.approx(1.0e-6)
 
 
+def test_entropy_raw_ridge_matches_requested_cash_equivalent() -> None:
+    instruments = np.array([[0.02, -0.01], [-0.01, 0.03], [0.04, 0.02]])
+    claim = np.array([0.1, -0.2, 0.05])
+    costs = np.array([0.003, 0.002])
+    action = np.array([0.4, -0.3])
+    risk = 2.0
+    ridge = 0.001
+    weights = np.full(3, 1.0 / 3.0)
+    value, gradient = _objective_and_gradient(
+        action,
+        instruments,
+        claim,
+        costs,
+        weights,
+        config=HistoricalSanosConfig(
+            objective=HistoricalSanosObjective.ENTROPY,
+            risk_parameter=risk,
+            quadratic_ridge=0.0,
+            entropy_raw_ridge=ridge,
+        ),
+        include_translation=False,
+        action_scale=np.array([5.0, 10.0]),
+    )
+    wealth = claim + instruments @ action - costs @ np.abs(action)
+    exponent = np.exp(-risk * wealth)
+    tilted = exponent / np.sum(exponent)
+    expected = np.log(np.mean(exponent)) / risk + 0.5 * ridge * action @ action
+    expected_gradient = -instruments.T @ tilted + costs * np.sign(action) + ridge * action
+    assert value == pytest.approx(expected)
+    np.testing.assert_allclose(gradient, expected_gradient, atol=1.0e-12)
+
+
 def test_entropy_fit_expands_binding_internal_bound_and_certifies_stability() -> None:
     observations = 40
     fit = fit_historical_sanos_hedge(

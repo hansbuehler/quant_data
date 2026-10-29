@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -231,7 +232,8 @@ def test_warm_start_checkpoint_loads_parameters_and_validates_shapes(
         },
     )
     assert parameters["codes"].shape == (4, 5)
-    assert identity == "source-identity:completed-epochs=17"
+    digest = hashlib.sha256(b"source-identity").hexdigest()
+    assert identity == f"sha256:{digest}:completed-epochs=17"
     with pytest.raises(ValueError, match="does not match"):
         _load_warm_start_parameters(
             path,
@@ -241,6 +243,33 @@ def test_warm_start_checkpoint_loads_parameters_and_validates_shapes(
                 "loadings": (5, 2, 3),
             },
         )
+
+
+def test_warm_start_identity_remains_bounded_for_long_checkpoint_lineage(
+    tmp_path: Path,
+) -> None:
+    source_identity = "nested-lineage" * 100_000
+    path = tmp_path / "long-lineage.npz"
+    np.savez(
+        path,
+        schema=np.asarray("gromm2-affine-jax-checkpoint-v1"),
+        identity=np.asarray(source_identity),
+        completed_epochs=np.asarray(2000, dtype=np.int32),
+        parameter_mean=np.ones((2, 3), dtype=np.float32),
+        parameter_codes=np.ones((4, 5), dtype=np.float32),
+        parameter_loadings=np.ones((5, 2, 3), dtype=np.float32),
+    )
+    _, identity = _load_warm_start_parameters(
+        path,
+        expected_shapes={
+            "mean": (2, 3),
+            "codes": (4, 5),
+            "loadings": (5, 2, 3),
+        },
+    )
+    digest = hashlib.sha256(source_identity.encode("utf-8")).hexdigest()
+    assert identity == f"sha256:{digest}:completed-epochs=2000"
+    assert len(identity) < 128
 
 
 def test_rolling_warm_start_shifts_date_codes_causally(tmp_path: Path) -> None:
@@ -271,7 +300,10 @@ def test_rolling_warm_start_shifts_date_codes_causally(tmp_path: Path) -> None:
         parameters["codes"],
         np.asarray([[3, 4, 5], [6, 7, 8], [9, 10, 11], [9, 10, 11]]),
     )
-    assert identity == "prior-fit:completed-epochs=20:rolled=2024-03-28->2024-04-01"
+    digest = hashlib.sha256(b"prior-fit").hexdigest()
+    assert identity == (
+        f"sha256:{digest}:completed-epochs=20:rolled=2024-03-28->2024-04-01"
+    )
     with pytest.raises(ValueError, match="date windows do not align"):
         _load_warm_start_parameters(
             checkpoint,
@@ -281,6 +313,50 @@ def test_rolling_warm_start_shifts_date_codes_causally(tmp_path: Path) -> None:
                 ["2024-03-25", "2024-03-27", "2024-03-28", "2024-04-01"]
             ),
         )
+
+
+@pytest.mark.parametrize(
+    ("target_dates", "expected_codes"),
+    [
+        (
+            ["2024-03-27", "2024-03-28", "2024-04-01"],
+            [[6, 7, 8], [9, 10, 11], [9, 10, 11]],
+        ),
+        (
+            ["2024-03-25", "2024-03-26", "2024-03-27", "2024-03-28", "2024-04-01"],
+            [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11], [9, 10, 11]],
+        ),
+    ],
+)
+def test_rolling_warm_start_aligns_variable_window_lengths(
+    tmp_path: Path,
+    target_dates: list[str],
+    expected_codes: list[list[int]],
+) -> None:
+    checkpoint = tmp_path / "warm-start.npz"
+    np.savez(
+        checkpoint,
+        schema=np.asarray("gromm2-affine-jax-checkpoint-v1"),
+        identity=np.asarray("prior-fit"),
+        completed_epochs=np.asarray(20, dtype=np.int32),
+        parameter_mean=np.ones((2, 3), dtype=np.float32),
+        parameter_codes=np.arange(12, dtype=np.float32).reshape(4, 3),
+        parameter_loadings=np.ones((3, 2, 3), dtype=np.float32),
+    )
+    source_dates = np.asarray(
+        ["2024-03-25", "2024-03-26", "2024-03-27", "2024-03-28"]
+    )
+    parameters, _ = _load_warm_start_parameters(
+        checkpoint,
+        expected_shapes={
+            "mean": (2, 3),
+            "codes": (len(target_dates), 3),
+            "loadings": (3, 2, 3),
+        },
+        source_dates=source_dates,
+        target_dates=np.asarray(target_dates),
+    )
+    np.testing.assert_array_equal(parameters["codes"], expected_codes)
 
 
 def test_date_varying_kernel_bundle_interpolates_prices(tmp_path: Path) -> None:

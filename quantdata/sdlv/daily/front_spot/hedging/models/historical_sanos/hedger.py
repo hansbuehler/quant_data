@@ -1621,6 +1621,9 @@ def _objective_and_gradient(
     scaled_action = action / action_scale
     loss += 0.5 * config.quadratic_ridge * float(scaled_action @ scaled_action)
     gradient += config.quadratic_ridge * action / action_scale**2
+    if config.entropy_raw_ridge:
+        loss += 0.5 * config.entropy_raw_ridge * float(action @ action)
+        gradient += config.entropy_raw_ridge * action
     if include_translation:
         translation_gradient = -1.0 - float(np.sum(path_gradient))
         gradient = np.concatenate((gradient, np.asarray([translation_gradient])))

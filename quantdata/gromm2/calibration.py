@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -561,6 +562,8 @@ def _load_warm_start_parameters(
         source_identity = str(values["identity"].item())
         completed_epochs = int(values["completed_epochs"])
     for name, expected_shape in expected_shapes.items():
+        if name == "codes" and source_dates is not None:
+            continue
         actual_shape = parameters[name].shape
         if actual_shape != expected_shape:
             raise ValueError(
@@ -575,18 +578,39 @@ def _load_warm_start_parameters(
         source = np.asarray(source_dates).astype("U10")
         target = np.asarray(target_dates).astype("U10")
         if (
-            source.shape != target.shape
-            or source.shape != (parameters["codes"].shape[0],)
-            or not np.array_equal(source[1:], target[:-1])
+            source.shape != (parameters["codes"].shape[0],)
+            or target.shape != (expected_shapes["codes"][0],)
+            or len(source) < 2
+            or len(target) < 2
+            or not np.all(source[:-1] < source[1:])
+            or not np.all(target[:-1] < target[1:])
             or len(set(source)) != len(source)
             or len(set(target)) != len(target)
+            or source[-1] != target[-2]
+            or target[-1] <= source[-1]
+        ):
+            raise ValueError("warm-start rolling date windows do not align")
+        shared_indices = np.searchsorted(source, target[:-1])
+        if (
+            np.any(shared_indices >= len(source))
+            or not np.array_equal(source[shared_indices], target[:-1])
+            or not np.array_equal(
+                shared_indices,
+                np.arange(shared_indices[0], len(source))
+            )
         ):
             raise ValueError("warm-start rolling date windows do not align")
         previous_codes = parameters["codes"]
         parameters["codes"] = np.concatenate(
-            (previous_codes[1:], previous_codes[-1:]), axis=0
+            (previous_codes[shared_indices], previous_codes[-1:]), axis=0
         )
-    identity = f"{source_identity}:completed-epochs={completed_epochs}"
+    if parameters["codes"].shape != expected_shapes["codes"]:
+        raise ValueError(
+            f"warm-start codes shape {parameters['codes'].shape} does not match "
+            f"expected {expected_shapes['codes']}"
+        )
+    source_digest = hashlib.sha256(source_identity.encode("utf-8")).hexdigest()
+    identity = f"sha256:{source_digest}:completed-epochs={completed_epochs}"
     if source_dates is not None and target_dates is not None:
         identity += f":rolled={source[-1]}->{target[-1]}"
     return parameters, identity

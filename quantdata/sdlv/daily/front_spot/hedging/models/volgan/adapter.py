@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import os
+import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
@@ -111,6 +114,7 @@ def run_volgan_one_day(
     retain_fit_checkpoint: bool = True,
     environment: BaseEnvironment | None = None,
     claim_quantity: float = 1.0,
+    scenario_output_path: Path | None = None,
 ) -> HedgeSmokeResult:
     """Fit, generate, hedge, and score one daily digital target."""
     if target is None:
@@ -133,6 +137,7 @@ def run_volgan_one_day(
         retain_fit_checkpoint=retain_fit_checkpoint,
         environment=environment,
         claim_quantities={target.label: claim_quantity},
+        scenario_output_path=scenario_output_path,
     )[0]
 
 
@@ -151,6 +156,7 @@ def run_volgan_daily_book(
     retain_fit_checkpoint: bool = True,
     environment: BaseEnvironment | None = None,
     claim_quantities: Mapping[str, float] | None = None,
+    scenario_output_path: Path | None = None,
 ) -> tuple[HedgeSmokeResult, ...]:
     """Fit and generate once, then hedge all 20 daily digital targets."""
     return _run_volgan_targets(
@@ -167,6 +173,7 @@ def run_volgan_daily_book(
         retain_fit_checkpoint=retain_fit_checkpoint,
         environment=environment,
         claim_quantities=claim_quantities,
+        scenario_output_path=scenario_output_path,
     )
 
 
@@ -185,6 +192,7 @@ def _run_volgan_targets(
     retain_fit_checkpoint: bool,
     environment: BaseEnvironment | None,
     claim_quantities: Mapping[str, float] | None,
+    scenario_output_path: Path | None,
 ) -> tuple[HedgeSmokeResult, ...]:
     require_public_hedging_panel(panel)
     samples = tuple(
@@ -238,6 +246,19 @@ def _run_volgan_targets(
         )
         for sample in samples
     )
+    scenario_book_sha256 = (
+        _save_volgan_scenario_book(
+            scenario_output_path,
+            origin_date=origin_date,
+            dataset_manifest_sha256=panel.dataset_manifest_sha256,
+            fit_checkpoint_sha256=fit_checkpoint_sha256,
+            scenarios=scenarios,
+            targets=targets,
+            quantities=quantities,
+        )
+        if scenario_output_path is not None
+        else None
+    )
     hedges = fit_generated_objective_book(
         scenarios,
         samples[0],
@@ -255,12 +276,61 @@ def _run_volgan_targets(
             target_count=len(samples),
             claim_quantity=float(quantities[index]),
             fit_checkpoint_sha256=fit_checkpoint_sha256,
+            scenario_book_sha256=scenario_book_sha256,
         )
         for index, sample in enumerate(samples)
     )
     if not retain_fit_checkpoint:
         remove_completed_checkpoint(public_fit.result.checkpoint_path)
     return results
+
+
+def _save_volgan_scenario_book(
+    path: Path,
+    *,
+    origin_date: date,
+    dataset_manifest_sha256: str,
+    fit_checkpoint_sha256: str,
+    scenarios: tuple[GeneratedDailyScenarios, ...],
+    targets: tuple[DailyDigitalTarget, ...],
+    quantities: np.ndarray,
+) -> str:
+    """Atomically retain the shared generated return book for objective replay."""
+    provenance = {
+        "schema": "volgan-generated-scenarios-v1",
+        "origin_date": origin_date.isoformat(),
+        "dataset_manifest_sha256": dataset_manifest_sha256,
+        "fit_checkpoint_sha256": fit_checkpoint_sha256,
+        "target_labels": [target.label for target in targets],
+        "target_quantities": quantities.tolist(),
+    }
+    arrays = {
+        "provenance_json": json.dumps(provenance, sort_keys=True),
+        "instrument_returns": scenarios[0].instrument_returns,
+        "target_returns": np.column_stack(
+            [scenario.claim_returns for scenario in scenarios]
+        ),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        with np.load(path, allow_pickle=False) as saved:
+            if any(
+                key not in saved or not np.array_equal(saved[key], value)
+                for key, value in arrays.items()
+            ):
+                raise RuntimeError(f"VolGAN scenario book changed: {path}")
+        return file_sha256(path)
+    with tempfile.NamedTemporaryFile(dir=path.parent, suffix=".npz", delete=False) as handle:
+        temporary = Path(handle.name)
+        try:
+            np.savez_compressed(handle, **arrays)
+            handle.flush()
+            os.fsync(handle.fileno())
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+    os.replace(temporary, path)
+    return file_sha256(path)
 
 
 def _evaluate_volgan_target(
@@ -274,6 +344,7 @@ def _evaluate_volgan_target(
     target_count: int,
     claim_quantity: float,
     fit_checkpoint_sha256: str,
+    scenario_book_sha256: str | None,
 ) -> HedgeSmokeResult:
     return evaluate_daily_digital_hedge(
         sample,
@@ -294,6 +365,7 @@ def _evaluate_volgan_target(
             "validation_loss": public_fit.result.validation_loss,
             "warm_start_sha256": public_fit.result.warm_start_sha256,
             "fit_checkpoint_sha256": fit_checkpoint_sha256,
+            "scenario_book_sha256": scenario_book_sha256,
             "fit_checkpoint_path": str(public_fit.result.checkpoint_path),
             "generated_paths": len(generated_forward_log_returns),
             "generated_mean_forward_log_return": float(

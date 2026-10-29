@@ -4,6 +4,7 @@ import math
 from dataclasses import replace
 from types import SimpleNamespace
 
+import cvxpy as cp
 import numpy as np
 import pytest
 from scipy.special import ndtr
@@ -12,7 +13,11 @@ from quantdata.biz_calendar import NMS
 from quantdata.hedging.claims import DigitalClaim
 from quantdata.hedging.contracts import OptionRight
 from quantdata.hedging.mean_reduction import MeanReduction
-from quantdata.hedging.scenario_optimization import ScenarioObjective
+from quantdata.hedging.scenario_optimization import (
+    ScenarioObjective,
+    ScenarioOptimizationConfig,
+    fit_static_scenario_hedge,
+)
 from quantdata.sdlv.daily.front_spot.hedging.benchmark.digital_daily import (
     DailyDigitalSample,
     DailyDigitalTarget,
@@ -233,6 +238,142 @@ def test_generated_objective_book_supports_full_tensor(
     assert fits[0].mean_reduction.method is mean_reduction
     np.testing.assert_allclose(fits[0].action, [0.7, -0.25], atol=5.0e-7)
     np.testing.assert_allclose(fits[1].action, [-0.8, -0.2], atol=5.0e-7)
+
+
+@pytest.mark.parametrize(
+    ("risk_parameter", "expected_objective"),
+    [(1.0, 0.5), (10.0, 1.0), (math.inf, 1.0)],
+)
+def test_cvar_oce_matches_weighted_lower_tail(
+    risk_parameter: float,
+    expected_objective: float,
+) -> None:
+    fit = fit_static_scenario_hedge(
+        instrument_returns=np.zeros((4, 1)),
+        claim_returns=np.asarray([-1.0, 0.0, 1.0, 2.0]),
+        scenario_weights=np.full(4, 0.25),
+        linear_transaction_costs=np.asarray([0.0]),
+        config=ScenarioOptimizationConfig(
+            objective=ScenarioObjective.CVAR_OCE,
+            risk_parameter=risk_parameter,
+            raw_action_ridge=0.001,
+        ),
+    )
+
+    assert fit.converged
+    assert fit.action[0] == pytest.approx(0.0, abs=1.0e-5)
+    assert fit.objective_value == pytest.approx(expected_objective, abs=1.0e-6)
+
+
+@pytest.mark.parametrize("risk_parameter", (10.0, math.inf))
+def test_cvar_active_set_matches_full_scenario_problem(
+    risk_parameter: float,
+) -> None:
+    generator = np.random.default_rng(17)
+    instruments = generator.normal(scale=0.2, size=(1_000, 3))
+    claim = (
+        0.3 * instruments[:, 0]
+        - 0.4 * instruments[:, 1]
+        + 0.15 * instruments[:, 2] ** 2
+    )
+    weights = np.full(len(claim), 1.0 / len(claim))
+    costs = np.full(instruments.shape[1], 0.001)
+    fit = fit_static_scenario_hedge(
+        instrument_returns=instruments,
+        claim_returns=claim,
+        scenario_weights=weights,
+        linear_transaction_costs=costs,
+        config=ScenarioOptimizationConfig(
+            objective=ScenarioObjective.CVAR_OCE,
+            risk_parameter=risk_parameter,
+            raw_action_ridge=0.001,
+        ),
+    )
+
+    full_action = cp.Variable(instruments.shape[1])
+    threshold = cp.Variable()
+    full_objective = (
+        -threshold
+        + costs @ cp.abs(full_action)
+        + 0.0005 * cp.sum_squares(full_action)
+    )
+    if math.isinf(risk_parameter):
+        constraints = [threshold <= claim + instruments @ full_action]
+    else:
+        shortfall = cp.Variable(len(claim), nonneg=True)
+        full_objective += (1.0 + risk_parameter) * (weights @ shortfall)
+        constraints = [shortfall >= threshold - claim - instruments @ full_action]
+    full_problem = cp.Problem(
+        cp.Minimize(full_objective),
+        constraints,
+    )
+    full_problem.solve(solver=cp.CLARABEL)
+
+    assert fit.converged
+    assert fit.objective_value == pytest.approx(full_problem.value, abs=2.0e-6)
+    assert "active_scenarios=" in fit.solver_message
+
+
+@pytest.mark.parametrize(
+    "objective",
+    (
+        ScenarioObjective.ENTROPY,
+        ScenarioObjective.POWER_EXPONENTIAL,
+        ScenarioObjective.CVAR_OCE,
+    ),
+)
+def test_tail_objectives_share_sample_worst_case_limit(
+    objective: ScenarioObjective,
+) -> None:
+    fit = fit_static_scenario_hedge(
+        instrument_returns=np.zeros((3, 1)),
+        claim_returns=np.asarray([-2.0, 0.0, 1.0]),
+        scenario_weights=np.full(3, 1.0 / 3.0),
+        linear_transaction_costs=np.asarray([0.0]),
+        config=ScenarioOptimizationConfig(
+            objective=objective,
+            risk_parameter=math.inf,
+            raw_action_ridge=0.001,
+        ),
+    )
+
+    assert fit.converged
+    assert fit.objective_value == pytest.approx(2.0, abs=1.0e-6)
+
+
+def test_infinite_mean_variance_hedges_the_variance_only() -> None:
+    fit = fit_static_scenario_hedge(
+        instrument_returns=np.asarray([[-1.0], [0.0], [1.0]]),
+        claim_returns=np.asarray([2.0, 0.0, -2.0]),
+        scenario_weights=np.asarray([0.2, 0.3, 0.5]),
+        linear_transaction_costs=np.asarray([0.1]),
+        config=ScenarioOptimizationConfig(
+            objective=ScenarioObjective.MEAN_VARIANCE,
+            risk_parameter=math.inf,
+            raw_action_ridge=0.001,
+        ),
+    )
+
+    assert fit.converged
+    assert fit.action[0] == pytest.approx(2.0, abs=1.0e-7)
+    assert fit.objective_value == pytest.approx(0.0, abs=1.0e-12)
+
+
+def test_finite_mean_variance_uses_raw_action_ridge() -> None:
+    fit = fit_static_scenario_hedge(
+        instrument_returns=np.asarray([[-1.0], [1.0]]),
+        claim_returns=np.asarray([1.0, -1.0]),
+        scenario_weights=np.asarray([0.5, 0.5]),
+        linear_transaction_costs=np.asarray([0.0]),
+        config=ScenarioOptimizationConfig(
+            objective=ScenarioObjective.MEAN_VARIANCE,
+            risk_parameter=1.0,
+            raw_action_ridge=1.0,
+        ),
+    )
+
+    assert fit.converged
+    assert fit.action[0] == pytest.approx(0.5, abs=1.0e-6)
 
 
 @pytest.mark.parametrize(

@@ -14,17 +14,26 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.lines import Line2D
-from plot_frontiers import BASELINE_STYLES, LAMBDA_MARKERS, MODEL_COLORS
+from plot_frontiers import (
+    BASELINE_STYLES,
+    HISTORICAL_LABEL,
+    HISTORICAL_PCA_LABEL,
+    LAMBDA_MARKERS,
+    MODEL_COLORS,
+    PARAMETRIC_LABEL,
+    PARAMETRIC_OBJECTIVES,
+    pca_record_pattern,
+)
 
 DATA_ROOT = Path(os.environ.get("QUANTDATA_ROOT", "/home/hans/quantdata_data")) / "experiments/hedging"
-OUTPUT = DATA_ROOT / "payoff-loss-plots-20261027-v1"
-GREEK_CAP_REPORT = DATA_ROOT / "sanos-greek-cost-cap-20261027-v1/RESULTS.json"
+OUTPUT = DATA_ROOT / "payoff-loss-plots-20261027-v2"
+GREEK_CAP_REPORT = DATA_ROOT / "sanos-greek-cost-cap-reoptimized-20261027-v1/SUMMARY.json"
 
 
 OBJECTIVES = ("mean-variance", "entropy", "power-exponential", "cvar")
-GENERATORS = ("Historical SANOS", "FuNVol", "VolGAN", "GROMM P", "GROMM Q")
-RISK_PARAMETERS = ("1", "10", "100")
-RISK_COLORS = {"1": "#0072B2", "10": "#E69F00", "100": "#009E73"}
+GENERATORS = (HISTORICAL_LABEL, "FuNVol", "VolGAN", "GROMM P", "GROMM Q", "AD-Seq-Vol", "AD-Seq-Vol-FT")
+RISK_PARAMETERS = ("1", "10", "100", "1000")
+RISK_COLORS = {"1": "#0072B2", "10": "#E69F00", "100": "#009E73", "1000": "#CC79A7"}
 GENERATED_ROOT = DATA_ROOT / "generated-objective-grid-20261026-v1"
 HISTORICAL_ROOT = DATA_ROOT / "sanos-objective-grid-20261027-v1/historical-sanos"
 
@@ -50,13 +59,14 @@ def read_records(pattern: str) -> list[dict[str, object]] | None:
 def objective_records(model: str, objective: str,
                       risk_parameter: str) -> list[dict[str, object]] | None:
     risk_label = risk_parameter
-    if model == "Historical SANOS":
+    if model == HISTORICAL_LABEL:
         name = "cvar-oce" if objective == "cvar" else objective
         risk_label += ".0"
         folder = HISTORICAL_ROOT / f"{name}-lambda{risk_label}/records"
     else:
         generator = {"FuNVol": "funvol", "VolGAN": "volgan",
-                     "GROMM P": "gromm-P", "GROMM Q": "gromm-Q"}[model]
+                     "GROMM P": "gromm-P", "GROMM Q": "gromm-Q",
+                     "AD-Seq-Vol": "diffusion-base", "AD-Seq-Vol-FT": "diffusion-ft"}[model]
         name = "cvar" if objective == "cvar" else objective
         folder = GENERATED_ROOT / generator / f"{name}-lambda{risk_label}/records"
     return read_records(str(folder / "2024-*.json"))
@@ -93,24 +103,12 @@ def read_records_with_multiple_models(pattern: str) -> list[dict[str, object]]:
 
 
 def supplemental_records() -> dict[str, dict[str, list[dict[str, object]]]]:
-    parametric = {
-        "1": DATA_ROOT / "lambda-1-10-aprmay-20261026-v1/sanos-greek-parametric-lambda1/run/2024-*.json",
-        "10": DATA_ROOT / "sanos-full-aprmay-20261026-v1/results/2024-*.json",
-        "100": DATA_ROOT / "sanos-lambda100-aprmay-20261026-v1/sanos-greek-parametric/run/2024-*.json",
-    }
-    extra = {"SANOS parametric": {}, "Historical-PCA": {}}
-    for risk_parameter, pattern in parametric.items():
-        rows = read_records_with_multiple_models(str(pattern))
-        selected = [row for row in rows if row["model"] == "sanos-parametric-ordinary"]
-        if len(selected) != 440:
-            raise RuntimeError(f"SANOS parametric {risk_parameter} has {len(selected)} rows")
-        extra["SANOS parametric"][risk_parameter] = selected
-    for risk_parameter in RISK_PARAMETERS:
-        directory = f"lambda{risk_parameter}"
-        pattern = DATA_ROOT / f"sanos-normal-pca-aprmay-20261026-v1/{directory}/run/records/2024-*.json"
-        rows = read_records(str(pattern))
-        if rows is not None:
-            extra["Historical-PCA"][risk_parameter] = rows
+    extra = {objective: {} for objective in OBJECTIVES}
+    for objective in OBJECTIVES:
+        for risk_parameter in RISK_PARAMETERS:
+            rows = read_records(str(pca_record_pattern(objective, risk_parameter)))
+            if rows is not None:
+                extra[objective][risk_parameter] = rows
     return extra
 
 
@@ -148,18 +146,29 @@ def load_results() -> tuple[dict[str, dict[str, dict[str, list[dict[str, object]
             if cases:
                 results[objective][model] = cases
     extra = supplemental_records()
-    results["mean-variance"].update(extra)
+    for objective in OBJECTIVES:
+        for risk_parameter in RISK_PARAMETERS:
+            pattern = (PARAMETRIC_OBJECTIVES / objective / f"lambda{risk_parameter}"
+                       / "records/2024-*.json")
+            rows = read_records(str(pattern))
+            if rows is not None:
+                results[objective].setdefault(PARAMETRIC_LABEL, {})[risk_parameter] = rows
+    for objective, cases in extra.items():
+        if cases:
+            results[objective][HISTORICAL_PCA_LABEL] = cases
     return results, baseline_records()
 
 
 def add_loss_frontier(ax: plt.Axes, *, objective: str, loss_key: str,
                       results: dict[str, dict[str, dict[str, list[dict[str, object]]]]],
                       baselines: dict[str, list[dict[str, object]]]) -> None:
+    plotted = []
     for model, cases in results[objective].items():
         color = MODEL_COLORS[model]
-        finite = [(risk, metrics(cases[risk])) for risk in ("1", "10", "100")
+        finite = [(risk, metrics(cases[risk])) for risk in RISK_PARAMETERS
                   if risk in cases]
         if finite:
+            plotted.extend(value for _, value in finite)
             ax.plot([value[loss_key] for _, value in finite],
                     [value["mean_entry_cost"] for _, value in finite],
                     color=color, linewidth=2.0, alpha=0.9, zorder=2)
@@ -167,16 +176,18 @@ def add_loss_frontier(ax: plt.Axes, *, objective: str, loss_key: str,
                 ax.scatter(value[loss_key], value["mean_entry_cost"],
                            color=color, marker=LAMBDA_MARKERS[risk], s=80,
                            edgecolor="white", linewidth=0.8, zorder=3)
-    greek_cap = json.loads(GREEK_CAP_REPORT.read_text())["curves"]["global_cap"]
-    cap_metric = "mean_downside_loss_kusd" if loss_key == "mean_downside_loss" else None
-    if cap_metric is not None:
-        ax.plot([point[cap_metric] for point in greek_cap],
-                [point["mean_entry_cost_kusd"] for point in greek_cap],
-                color=BASELINE_STYLES["SANOS Greek"][0], linestyle="--",
-                marker="o", markersize=3.5, linewidth=1.9, zorder=2)
+    greek_cap = [point for point in json.loads(GREEK_CAP_REPORT.read_text())["curves"]
+                 if point["method"] == "global_cap"]
+    cap_metric = ("mean_downside_loss_kusd" if loss_key == "mean_downside_loss"
+                  else "mean_absolute_error_kusd")
+    ax.plot([point[cap_metric] for point in greek_cap],
+            [point["mean_entry_cost_kusd"] for point in greek_cap],
+            color=BASELINE_STYLES["SANOS Greek"][0],
+            marker="o", markersize=3.5, linewidth=2.0, zorder=2)
     for name, rows in baselines.items():
         color, marker = BASELINE_STYLES[name]
         value = metrics(rows)
+        plotted.append(value)
         ax.scatter(value[loss_key], value["mean_entry_cost"],
                    color=color, marker=marker, s=165 if name == "SANOS Greek" else 125,
                    edgecolor="white", linewidth=1.0, zorder=5)
@@ -186,8 +197,9 @@ def add_loss_frontier(ax: plt.Axes, *, objective: str, loss_key: str,
     ax.set_xlabel("Mean downside loss  ·  USD thousands" if loss_key == "mean_downside_loss"
                   else "Mean absolute hedging error  ·  USD thousands", fontsize=11)
     ax.set_ylabel("Mean entry cost  ·  USD thousands", fontsize=11)
-    ax.set_ylim(-0.15, 6.3)
-    ax.set_xlim(0.0, 280.0 if loss_key == "mean_downside_loss" else 500.0)
+    ax.set_ylim(-0.15, max(6.3, max(value["mean_entry_cost"] for value in plotted) * 1.08))
+    ax.set_xlim(0.0, max(280.0 if loss_key == "mean_downside_loss" else 500.0,
+                         max(value[loss_key] for value in plotted) * 1.08))
     ax.grid(color="#D9DEE3", linewidth=0.8, alpha=0.85)
     ax.set_axisbelow(True)
 
@@ -201,16 +213,15 @@ def plot_loss_frontier(results: dict[str, dict[str, dict[str, list[dict[str, obj
                           results=results, baselines=baselines)
     label = ("mean downside loss E[max(−PnL, 0)]" if loss_key == "mean_downside_loss"
              else "mean absolute hedging error E[|PnL|]")
-    fig.suptitle(f"Entry cost versus {label} · one-day digital hedges", fontsize=18, y=0.985)
-    handles = [Line2D([0], [0], color=color, linewidth=2.2, label=model)
-               for model, color in MODEL_COLORS.items()]
-    if loss_key == "mean_downside_loss":
-        handles += [Line2D([0], [0], color=BASELINE_STYLES["SANOS Greek"][0],
-                           linestyle="--", marker="o", markersize=4,
-                           label="SANOS Greek cost cap")]
+    fig.suptitle(f"Entry cost versus {label} · one-day digital hedges", fontsize=16, y=0.985)
+    handles = [Line2D([0], [0], color=BASELINE_STYLES["SANOS Greek"][0],
+                      marker="o", markersize=4, label="SANOS Greek")]
+    handles += [Line2D([0], [0], color=color, linewidth=2.2, label=model)
+               for model, color in MODEL_COLORS.items()
+               if any(model in models and models[model] for models in results.values())]
     handles += [Line2D([0], [0], color=color, marker=marker, linestyle="none",
                        markersize=10, label=name)
-                for name, (color, marker) in BASELINE_STYLES.items()]
+                for name, (color, marker) in BASELINE_STYLES.items() if name != "SANOS Greek"]
     handles += [Line2D([0], [0], color="#555555", marker=marker, linestyle="none",
                        markersize=8, markerfacecolor="#555555",
                        label=f"λ = {risk}")
@@ -219,7 +230,8 @@ def plot_loss_frontier(results: dict[str, dict[str, dict[str, list[dict[str, obj
                bbox_to_anchor=(0.5, 0.06), frameon=False, fontsize=10)
     fig.text(0.5, 0.025,
              "44 April–May 2024 dates; ten targets. Loss uses costed out-of-sample long-claim P&L. "
-             "Risk aversions λ = 1, 10, 100. The Greek cap curve scales existing positions.",
+             "Risk aversions λ = 1, 10, 100, 1000 where complete. Greek caps optimize factor risk separately; "
+             "SANOS parametric appears only where independently fitted for the plotted objective.",
              ha="center", fontsize=10, color="#555555")
     fig.subplots_adjust(left=0.07, right=0.97, bottom=0.22, top=0.92,
                         wspace=0.22, hspace=0.33)
@@ -243,8 +255,8 @@ def plot_payoff_panels(results: dict[str, dict[str, dict[str, list[dict[str, obj
                       baselines: dict[str, list[dict[str, object]]]) -> dict[str, object]:
     audit = {}
     with PdfPages(OUTPUT / "HEDGE_VERSUS_PAYOFF.pdf") as pdf:
-        for model in GENERATORS + ("SANOS parametric", "Historical-PCA"):
-            objectives = OBJECTIVES if model in GENERATORS else ("mean-variance",)
+        for model in (PARAMETRIC_LABEL, HISTORICAL_PCA_LABEL) + GENERATORS:
+            objectives = OBJECTIVES
             fig, axes = plt.subplots(2, 2, figsize=(15.5, 11.5))
             for ax, objective in zip(axes.flat, OBJECTIVES, strict=True):
                 ax.plot([-0.15, 1.15], [-0.15, 1.15], color="#222222",
@@ -269,7 +281,7 @@ def plot_payoff_panels(results: dict[str, dict[str, dict[str, list[dict[str, obj
                     payoff, terminal = payoff_values(cells[risk_parameter])
                     random = np.random.default_rng(20261027)
                     jitter = random.uniform(-0.018, 0.018, size=len(payoff))
-                    shift = {"1": -0.06, "10": 0.0, "100": 0.06}[risk_parameter]
+                    shift = {"1": -0.09, "10": -0.03, "100": 0.03, "1000": 0.09}[risk_parameter]
                     ax.scatter(payoff + shift + jitter, terminal, s=12,
                                color=RISK_COLORS[risk_parameter], alpha=0.22,
                                linewidth=0.0, rasterized=True)
@@ -299,7 +311,7 @@ def plot_payoff_panels(results: dict[str, dict[str, dict[str, list[dict[str, obj
             fig.text(0.5, 0.025,
                      "Out-of-sample market transitions; 44 dates × 10 digitals per complete cell. "
                      "Below diagonal violates short-side coverage at the market premium. "
-                     "These are reversed long-side actions, not reoptimized superhedges.",
+                     "These are reversed long-side actions, not separately optimized superhedges.",
                      ha="center", fontsize=9.5, color="#555555")
             fig.subplots_adjust(left=0.07, right=0.97, bottom=0.17, top=0.93,
                                 wspace=0.18, hspace=0.3)

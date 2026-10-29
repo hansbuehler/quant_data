@@ -20,9 +20,10 @@ class CovarianceObjective(StrEnum):
     MEAN_VOLATILITY = "mean-volatility"
     ENTROPY = "entropy"
     POWER_EXPONENTIAL = "power-exponential"
+    CVAR_OCE = "cvar-oce"
 
 
-@version("3.8")
+@version("4.0")
 @dataclass(frozen=True, kw_only=True)
 class CovarianceHedgeConfig:
     """Logical and numerical settings for the rolling covariance hedge."""
@@ -46,6 +47,7 @@ class CovarianceHedgeConfig:
     minimum_standard_deviation: float = 1.0e-10
     spot_residual_pca_rank: int | None = None
     return_price_source: Literal["dlv", "sanos"] = "dlv"
+    entropy_raw_ridge: float = 0.0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "mean_reduction", MeanReduction(self.mean_reduction))
@@ -116,4 +118,13 @@ class CovarianceHedgeConfig:
         verify_inp(
             self.return_price_source in ("dlv", "sanos"),
             lambda: "return_price_source must be DLV or SANOS",
+        )
+        verify_inp(
+            math.isfinite(self.entropy_raw_ridge) and self.entropy_raw_ridge >= 0.0,
+            lambda: "entropy_raw_ridge must be finite and non-negative",
+        )
+        verify_inp(
+            self.entropy_raw_ridge == 0.0
+            or self.objective is CovarianceObjective.ENTROPY,
+            lambda: "entropy_raw_ridge requires the entropy objective",
         )

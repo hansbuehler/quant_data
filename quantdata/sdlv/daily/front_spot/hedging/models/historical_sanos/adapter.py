@@ -226,7 +226,13 @@ def evaluate_historical_sanos_daily_book(
                         for key, value in asdict(reduction.diagnostics).items()
                     },
                     "quadratic_ridge": config.quadratic_ridge,
-                    "regularization_coordinates": "unit-rms instrument gains",
+                    "entropy_raw_ridge": config.entropy_raw_ridge,
+                    "regularization_coordinates": (
+                        "raw action"
+                        if config.quadratic_ridge == 0.0
+                        and config.entropy_raw_ridge > 0.0
+                        else "unit-rms instrument gains"
+                    ),
                     "certificate_tolerance": config.certificate_tolerance,
                     "claim_training_loss": fit.claim_policy.training_loss,
                     "claim_validation_loss": fit.claim_policy.validation_loss,

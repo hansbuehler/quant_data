@@ -5,10 +5,11 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import cvxpy as cp
 import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import brentq, minimize
-from scipy.special import log_ndtr, ndtr
+from scipy.special import log_ndtr, ndtr, ndtri
 
 from quantdata.hedging.objectives import (
     CovarianceEstimate,
@@ -31,6 +32,12 @@ from quantdata.sdlv.daily.front_spot.hedging.models.covariance.returns import (
 FloatArray = NDArray[np.float64]
 _LOG_TWO_PI = math.log(2.0 * math.pi)
 _LOG_MAX_FLOAT = math.log(np.finfo(np.float64).max)
+
+
+def _gaussian_cvar_loading(risk_parameter: float) -> float:
+    alpha = 1.0 / (1.0 + risk_parameter)
+    quantile = float(ndtri(alpha))
+    return math.exp(-0.5 * quantile**2 - 0.5 * _LOG_TWO_PI - math.log(alpha))
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -189,15 +196,26 @@ def fit_covariance_book_actions(
     instrument_center = np.zeros(instrument_count, dtype=np.float64)
     penalty = config.cost_multiplier * costs
     recession_ratio = 0.0
-    if config.objective is CovarianceObjective.MEAN_VOLATILITY:
+    if config.objective in {
+        CovarianceObjective.MEAN_VOLATILITY,
+        CovarianceObjective.CVAR_OCE,
+    }:
         recession_ratio = _mean_volatility_recession_ratio(
             instrument_center=instrument_center,
             covariance=covariance,
             penalty=penalty,
         )
+    volatility_aversion = (
+        _gaussian_cvar_loading(config.risk_parameter)
+        if config.objective is CovarianceObjective.CVAR_OCE
+        else config.risk_parameter
+    )
     bounded = (
-        config.objective is not CovarianceObjective.MEAN_VOLATILITY
-        or recession_ratio <= config.risk_parameter + config.recession_tolerance
+        config.objective not in {
+            CovarianceObjective.MEAN_VOLATILITY,
+            CovarianceObjective.CVAR_OCE,
+        }
+        or recession_ratio <= volatility_aversion + config.recession_tolerance
     )
     zero_policy = _fit_policy(
         instrument_center=instrument_center,
@@ -475,10 +493,19 @@ def _fit_policy(
             claim_cross_covariance=claim_cross_covariance,
             penalty=penalty,
             variance_aversion=config.risk_parameter,
+            action_ridge=config.entropy_raw_ridge,
             initial_action=np.zeros_like(instrument_center),
             config=config,
         )
-    elif config.objective is CovarianceObjective.MEAN_VOLATILITY:
+    elif config.objective in {
+        CovarianceObjective.MEAN_VOLATILITY,
+        CovarianceObjective.CVAR_OCE,
+    }:
+        volatility_aversion = (
+            _gaussian_cvar_loading(config.risk_parameter)
+            if config.objective is CovarianceObjective.CVAR_OCE
+            else config.risk_parameter
+        )
         action, iterations, converged, cap_hits = _solve_mean_volatility(
             instrument_center=instrument_center,
             covariance=covariance,
@@ -486,6 +513,7 @@ def _fit_policy(
             claim_variance=claim_variance,
             penalty=penalty,
             config=config,
+            volatility_aversion=volatility_aversion,
         )
         converged = converged and bounded
     elif config.objective is CovarianceObjective.POWER_EXPONENTIAL:
@@ -530,10 +558,11 @@ def _solve_mean_volatility(
     claim_variance: float,
     penalty: FloatArray,
     config: CovarianceHedgeConfig,
+    volatility_aversion: float,
 ) -> tuple[FloatArray, int, bool, int]:
     action = np.zeros_like(instrument_center)
     initial_standard_deviation = math.sqrt(max(claim_variance, 0.0))
-    variance_aversion = config.risk_parameter / max(
+    variance_aversion = volatility_aversion / max(
         initial_standard_deviation,
         config.minimum_standard_deviation,
     )
@@ -558,7 +587,7 @@ def _solve_mean_volatility(
             claim_cross_covariance=claim_cross_covariance,
             claim_variance=claim_variance,
         )
-        updated_aversion = config.risk_parameter / max(
+        updated_aversion = volatility_aversion / max(
             math.sqrt(variance),
             config.minimum_standard_deviation,
         )
@@ -819,9 +848,10 @@ def _solve_quadratic_lasso(
     variance_aversion: float,
     initial_action: FloatArray,
     config: CovarianceHedgeConfig,
+    action_ridge: float = 0.0,
 ) -> tuple[FloatArray, int, bool, int]:
     quadratic = variance_aversion * covariance.copy()
-    quadratic.flat[:: len(quadratic) + 1] += 1.0e-12
+    quadratic.flat[:: len(quadratic) + 1] += action_ridge + 1.0e-12
     linear = variance_aversion * claim_cross_covariance - instrument_center
     action = np.asarray(initial_action, dtype=np.float64).copy()
     converged = False
@@ -845,6 +875,55 @@ def _solve_quadratic_lasso(
         if np.max(np.abs(action - previous)) <= config.action_tolerance:
             converged = True
             break
+    residual = _lasso_kkt_residual(
+        action=action,
+        instrument_center=instrument_center,
+        covariance=covariance,
+        claim_cross_covariance=claim_cross_covariance,
+        penalty=penalty,
+        variance_aversion=variance_aversion,
+        position_cap=config.solver_position_cap,
+    )
+    converged = residual <= config.action_tolerance
+    if not converged:
+        candidate = cp.Variable(len(action))
+        problem = cp.Problem(
+            cp.Minimize(
+                0.5 * cp.quad_form(candidate, cp.psd_wrap(quadratic))
+                + linear @ candidate
+                + penalty @ cp.abs(candidate)
+            ),
+            [
+                candidate <= config.solver_position_cap,
+                candidate >= -config.solver_position_cap,
+            ],
+        )
+        try:
+            problem.solve(
+                solver=cp.OSQP,
+                eps_abs=0.01 * config.action_tolerance,
+                eps_rel=0.01 * config.action_tolerance,
+                max_iter=max(config.maximum_solver_iterations, 200_000),
+            )
+        except cp.SolverError:
+            pass
+        if problem.status in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE):
+            polished = np.asarray(candidate.value, dtype=np.float64)
+            polished[np.abs(polished) <= config.action_tolerance] = 0.0
+            polished_residual = _lasso_kkt_residual(
+                action=polished,
+                instrument_center=instrument_center,
+                covariance=covariance,
+                claim_cross_covariance=claim_cross_covariance,
+                penalty=penalty,
+                variance_aversion=variance_aversion,
+                position_cap=config.solver_position_cap,
+            )
+            if polished_residual < residual:
+                action = polished
+                residual = polished_residual
+            iterations += int(problem.solver_stats.num_iters or 0)
+            converged = residual <= config.action_tolerance
     cap_hits = int(
         np.count_nonzero(
             np.isclose(
@@ -884,6 +963,8 @@ def _policy_statistics(
         risk = 0.5 * config.risk_parameter * variance
     elif config.objective is CovarianceObjective.MEAN_VOLATILITY:
         risk = config.risk_parameter * standard_deviation
+    elif config.objective is CovarianceObjective.CVAR_OCE:
+        risk = _gaussian_cvar_loading(config.risk_parameter) * standard_deviation
     elif config.objective is CovarianceObjective.POWER_EXPONENTIAL:
         risk, _, _ = _gaussian_power_risk(
             standard_deviation,
@@ -891,7 +972,10 @@ def _policy_statistics(
         )
     else:
         raise ValueError(f"unsupported covariance objective {config.objective!r}")
-    objective = float(-expected_profit + risk + penalty @ np.abs(action))
+    objective = float(
+        -expected_profit + risk + penalty @ np.abs(action)
+        + 0.5 * config.entropy_raw_ridge * (action @ action)
+    )
     return expected_profit, standard_deviation, objective
 
 

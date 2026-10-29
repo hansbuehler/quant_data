@@ -41,13 +41,18 @@
   the same risk parameter. Power-exponential uses its distinct exact Gaussian
   OCE, profiling the scalar cash translation with stable truncated-normal
   formulas and solving the resulting convex spread-lasso problem; it is not
-  relabelled from mean--variance.
+  relabelled from mean--variance. Gaussian CVaR OCE uses the exact mean--
+  volatility coefficient \(\phi(\Phi^{-1}(1/(1+\lambda)))(1+\lambda)\).
 - **Hedge:** claim-policy minus zero-claim-policy action with
   transaction-cost-weighted lasso. Mean-variance, mean-volatility, and
-  Gaussian power-exponential are supported. The deterministic regression uses
+  Gaussian power-exponential, and Gaussian CVaR are supported. The deterministic regression uses
   mean-variance risk aversion 10 and a loose numerical cap of one million. The
   spot penalty is zero because spot trades at mid; each option pays only its
   current opening half-spread. Formal exit cost is a separate diagnostic.
+- **Numerical certificate:** the quadratic cost-lasso first uses coordinate
+  descent; if its final KKT residual misses tolerance, a bounded OSQP solve
+  is attempted and accepted only after independent KKT verification. A solver
+  status alone never certifies the hedge.
 - **Mean-volatility boundedness:** the objective is positively homogeneous. A
   covariance-metric distance-to-cost-box calculation checks its recession
   condition before optimization. An unbounded fit is solved under the

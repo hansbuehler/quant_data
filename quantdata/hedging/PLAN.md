@@ -1553,3 +1553,28 @@ inception-forward barrier reference are also resolved in the implementation
 and their dated review or calibration reports. No benchmark-design decision
 remains open before production; incomplete production cases remain gated only
 on their required authenticated model evidence.
+# SANOS-derived rolling Greek comparison
+
+After the daily SANOS-derived 9-by-200 state build and v2 dataset validation,
+fit two distinct eight-factor PCA models on the last 252 exact one-session
+changes in the daily raw state, using only transitions ending on or before the
+hedge decision date. This is a SANOS factor estimate, not the substantially
+more expensive rolling DYSANOS AR(1) fit. SANOS Greek, SANOS parametric,
+SANOS statistical, and SANOS normal-statistical are four hedge methods applied
+to the same SANOS market model. The ordinary Greek variant applies PCA to centered
+state changes and retains their empirical correlation with normalized spot
+returns. The spot-orthogonal variant first projects each state change onto
+the normalized spot return and applies PCA to the residual. Its fitted
+spot-correlated state loading remains a separate, explicitly reported state
+shock rather than being discarded. Both variants use the same dates, state
+coordinates, target/hedge contracts, costs, eight-factor rank, and one-standard-
+deviation factor bumps.
+
+For both variants, the spot *partial* Greek moves spot while holding the raw
+state fixed. Factor Greeks subsequently reprice each fixed-cash-strike
+contract after a state bump. For the orthogonal variant, distinguish the
+fixed-state spot partial from the additional price exposure to the fitted
+spot-correlated state loading; only their sum is the exposure to the
+orthogonalized joint spot shock. Do not silently call that sum the spot
+partial. No hedge result from the withdrawn Greek or parametric runs is a
+substitute for this matched rolling comparison.

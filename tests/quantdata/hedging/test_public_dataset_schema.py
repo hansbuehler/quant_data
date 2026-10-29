@@ -10,6 +10,7 @@ import polars as pl
 import pytest
 
 from quantdata.biz_calendar import DAYS_PER_YEAR, ONE_MINUTE
+from quantdata.hedging.data.build_sanos_derived_grid import _target_variances
 from quantdata.hedging.data.pricing import (
     implied_volatilities_with_validity,
     price_dlv_surface,
@@ -19,6 +20,9 @@ from quantdata.hedging.data.public_dataset import (
     CHECKSUM_FILES,
     DATA_FILE_SCHEMAS,
     HEDGING_PUBLIC_SCHEMA,
+    HEDGING_PUBLIC_SCHEMA_V2,
+    SANOS_DYSANOS_GRID_FILE,
+    SANOS_DYSANOS_GRID_SCHEMA,
     validate_public_dataset,
 )
 
@@ -241,3 +245,58 @@ def test_public_dataset_detects_population_mask_tampering(tmp_path: Path) -> Non
     frame.write_parquet(path)
     with pytest.raises(ValueError, match="num_paper_retained_quote_side_books"):
         validate_public_dataset(tmp_path, verify_checksums=False)
+
+
+def test_sanos_derived_variance_curve_repairs_negative_increments() -> None:
+    model_times = np.asarray([1.0, 2.0, 25.0]) / DAYS_PER_YEAR
+    model_variances = np.asarray([0.001, 0.0009, 0.01])
+    target, repaired = _target_variances(model_times, model_variances)
+    assert target.shape == (9,)
+    assert repaired >= 1
+    assert np.all(np.diff(target) > 0.0)
+
+
+def test_public_dataset_v2_accepts_derived_grid(tmp_path: Path) -> None:
+    _write_minimal_dataset(tmp_path)
+    support = np.linspace(0.5, 1.5, 202)
+    density = np.zeros(202)
+    density[100:102] = 0.5
+    prices = np.maximum(1.0 - support[1:-1], 0.0)
+    grid = pl.DataFrame(
+        {
+            "date": [date(2024, 1, 2)],
+            "support_strikes": [support.tolist()],
+            "source_call_prices": [[prices.tolist()] * 9],
+            "fitted_call_prices": [[prices.tolist()] * 9],
+            "decoded_call_prices": [[prices.tolist()] * 9],
+            "densities": [[density.tolist()] * 9],
+            "dlvsqs": [[np.full(200, 0.02).tolist()] * 9],
+            "forward_vols": [[0.2] * 9],
+            "eta_front": [0.49],
+            "eta_term": [0.17],
+            "raw_u": [[0.0] * 1811],
+            "fit_max_abs_core": [0.0],
+            "fit_mean_abs_core": [0.0],
+            "fit_max_weighted_error": [0.0],
+            "decode_max_abs_core": [0.0],
+            "decode_max_weighted_error": [0.0],
+            "variance_increments_repaired": [0],
+        },
+        schema=SANOS_DYSANOS_GRID_SCHEMA,
+        strict=True,
+    )
+    grid.write_parquet(tmp_path / SANOS_DYSANOS_GRID_FILE)
+    for filename in ("config.json", "geometry.json"):
+        path = tmp_path / filename
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["schema"] = HEDGING_PUBLIC_SCHEMA_V2
+        path.write_text(json.dumps(payload), encoding="utf-8")
+    path = tmp_path / "manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest["schema"] = HEDGING_PUBLIC_SCHEMA_V2
+    manifest["checksums"] = {
+        **{filename: _sha256(tmp_path / filename) for filename in CHECKSUM_FILES},
+        SANOS_DYSANOS_GRID_FILE: _sha256(tmp_path / SANOS_DYSANOS_GRID_FILE),
+    }
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    assert validate_public_dataset(tmp_path)["schema"] == HEDGING_PUBLIC_SCHEMA_V2
