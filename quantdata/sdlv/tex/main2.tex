@@ -155,7 +155,7 @@ We follow the core SANOS~\citep{SANOS2026} idea of writing our equity process $S
   S_t = X_t Y_t 
 \end{equation}
 of a \emph{Stochastic Discrete Local Volatility (SDLV)} process $X$ which is used to fit to current market conditions and 
-whose state parameters will have consistent $\PP$ and $\Q$ dynamics, and an independent\footnote{Under both $\PP$ and $\Q$.} and rather trivial smoothing process $Y$ whose dynamics under $\PP$ and $\Q$ are the same.
+whose state parameters will have consistent $\PP$ and $\Q$ dynamics, and an independent\footnote{Under both $\PP$ and $\Q$.} simple smoothing process $Y$ whose dynamics under $\PP$ and $\Q$ are the same.
 
 The process $Y$ will just be a Black~\&~Scholes process with fixed volatility~5\%. Given observed bid-ask market data it was shown in~\cite{SANOS2026} how to fit
 a discrete local volatility surface in the presence of such a process. 
@@ -475,7 +475,7 @@ Let $L_t^{j,i}\coloneqq\log\Sigma_t^{j,i}$ and let $B_t = W_t^1 - W_{T_{k-1}}^1$
 \end{equation}
 where $\xi_t^{j,i;f} = \xi^{j,i;f}(t, B_t, L_t)$ and $\eta_t^{j,i;f} = \eta^{j,i;f}(t, B_t, L_t)$.
 
-Upon inspection of \eqref{eq:log_dlv_sde_mw}, the drift restriction can cause instabilities that call the existence of the process into question: as time approaches the front's expiry $T_k$, the densities of the future expiries lose mass on the wing nodes the front abandons, which causes $\eta^{j, i; 1} = E^{j, i; 1} / q^{j, i}$ to blow up. 
+Existence is not immediate from \eqref{eq:log_dlv_sde_mw}: as time approaches the front's expiry $T_k$, the densities of the future expiries lose mass on the wing nodes the front abandons, which causes the relative volatility $\eta^{j, i; 1} = E^{j, i; 1} / q^{j, i}$ to become unbounded. 
 Moreover, for the Gaussian bridge front as introduced in Section~\ref{sec:front-density}, $\eta_t^{k}$ grows asymptotically at the rate $(T_k - t)^{-1}$ on nodes it abandons\footnote{
 Let $K^i$ be a node that is abandoned at $T_k$ and $K^i < K^J$ without loss of generality where $K^J$ is the node at which spot settles. Let $\varepsilon_i$ denote the distance to the bucket $a_i$: 
 $$ \varepsilon_i \coloneqq (W^1_s - W^1_{T_{k-1}}) - \sqrt{T_k - T_{k-1}} \, a_i > 0 \, . $$ 
@@ -489,7 +489,7 @@ As $z_i, z_{i-1} \to - \infty$, the terms in $z_{i-1}$ become negligible for bot
 \begin{equation*}
   \eta^{k, i; 1} \sim \frac{-\phi(z_i)}{\phi(z_i)\,(T_k-s)/\varepsilon_i} = -\frac{\varepsilon_i}{T_k - s} \, . 
 \end{equation*}
-which grows to negative infinity since $\varepsilon_i$ converges to a positive limit. Hence, $\eta^{k,i}$ is not square-integrable. 
+which diverges to $-\infty$ since $\varepsilon_i$ converges to a positive limit. Hence, $\eta^{k,i}$ is not square-integrable. 
 }, invalidating a proof that relies on the integrability of the relative density volatility. We therefore turn towards investigating the relationship between (a positive multiple of) the calendar spread $R^{j, i} = \Sigma^{j, i} q^{j, i}$ and (a positive multiple of) the butterfly spread $q^{j, i}$ near settlement, which in turn will allow us to read off the DLV. 
 
 Throughout this section fix the front expiration $k$ with expiration time $T_k$ and denote by $J$ the node at which spot settles: $X_{T_k} = K^J$. To prove the existence of $L$ on $[T_{k-1}, T_k]$ we make the following two assumptions: 
@@ -968,7 +968,7 @@ with four matched Model~D paths (Section~\ref{sec:numerics}).
 
 In this section we assess whether the model is indeed free of dynamic arbitrage.
 We are not aware of an accessible numerical benchmark for dynamic arbitrage in the literature, so
-the methodology described here is a contribution in its own right, first presented in~\cite{DYSANOS2026}.
+we describe the methodology here; it was first presented in~\cite{DYSANOS2026}.
 
 We compare four model specifications:
 \begin{center}
@@ -983,8 +983,8 @@ D & 16 & 8\\
 \bottomrule
 \end{tabular}
 \end{center}
-Every statistical audit uses 100,000 paths arranged as 50,000 independent antithetic
-pairs.  The restricted-universe audits use a 20-business-day horizon; the full
+Every test uses 100,000 paths arranged as 50,000 independent antithetic
+pairs.  The restricted-universe tests use a 20-business-day horizon; the full
 instrument-grid extension below uses 25 business days.  For a live instrument $i$, the
 one-day return used in both diagnostics is
 \begin{equation}\label{eq:numerics-spot-scaled-return}
@@ -1061,12 +1061,7 @@ dynamic no-arbitrage rejection.
 
 \subsection{Risk-Neutral Diagnostics}
 \label{sec:numerics-audit-definition}
-
-Numerically, it is clear that as the number
-of instruments increases on a fixed set of paths, the likelihood of a risk-free return
-of a linear combination of instruments simply due to sampling error increases.
-
-We will therefore test absence of dynamic arbitrage on a reduced trading universe which consists of spot and
+With an increasing number of instruments, the likelihood of finding a risk-free return simply due to sampling error increases. We therefore test absence of dynamic arbitrage on a reduced trading universe which consists of spot and
 44 options with cash strikes fixed at the initial date: eleven OTM calls or
 puts at each of 5, 10, 15, and 20 business days.  Thus 45 instruments are live
 initially, giving 20 spot and 550 option day--instrument coordinates over the
@@ -1089,13 +1084,7 @@ The tables report the maximum and 99th percentile of $\abs{z_{n,i}}$ and the
 number of coordinates beyond fixed thresholds.  This checks the unconditional
 implication $\E^\Q[R_{n+1}^i]=0$ separately at every day and instrument.  It
 does not test $\E^\Q[R_{n+1}^i\mid\mathcal F_n]=0$ at every simulated state.
-Under~$\PP$ the same zero-mean statistics describe fitted physical drift; they
-are not no-arbitrage violations.  For one standard-normal coordinate the 99th
-percentile of $\abs{z}$ is 2.576.  Coordinate dependence and the simultaneous
-screen mean that the reported counts are diagnostics, not family-wise
-$p$-values.  The $1.96$ and $2.576$ thresholds apply to each coordinate-level
-$z$-score, not directly to the maximum or empirical quantiles across all
-coordinates.
+With 570 coordinates, about 1\% of the $\abs{z_{n,i}}$ exceed 2.576 by chance alone; the largest $\abs{z_{n,i}}$ should be around $3$. However, as the coordinates are correlated, the counts are not family-wise $p$-values and as such should only be treated as diagnostics. 
 
 \paragraph{Conditional diagnostics.}
 We split complete antithetic pairs into two equal path sets $A$ and $B$, and
@@ -1168,8 +1157,7 @@ diagnostics, in this order.
     \right].
   \end{equation}
   For conditionally Gaussian returns the population action is
-  approximately\footnote{On the filtration generated by the tangent space of
-  the optimal action.}
+  approximately
   \[
     a_{\mathrm{ent}}^\star(X_t)
     \approx (I+\operatorname{Cov}_t(R))^{-1}\E_t[R].
@@ -1206,8 +1194,7 @@ Table~\ref{tab:numerics-restricted-q} shows the $\Q$ results for the restricted
 trading universe.  Orange marks a moderate departure from the Gaussian
 benchmark and red would mark a five-standard-error violation in the
 coordinate-wise screen.  The separate conditional-statistic rule is given
-above.  All eight GROMM conditional entries and both Tangent L\'evy conditional
-entries are black.
+above. All GROMM and Tangent L\'evy conditional statistics are below 1.96 in absolute value.
 
 \begin{table}[H]
 \centering
@@ -1252,8 +1239,7 @@ exceeds 2.576, and the two conditional statistics are
 $T_{\mathrm{sqr}}=-0.768$ and $T_{\mathrm{ent}}=-0.575$.  Both corresponding
 95\% confidence intervals contain zero.  These results use the paper-aligned
 daily-grid state and constrained reduced-node diffusion described in
-Appendix~\ref{app:tangent-levy}; the poor initial market fit reported above is
-therefore distinct from the absence of a rejection in these dynamic tests.
+Appendix~\ref{app:tangent-levy}.
 In contrast, the generalized-Bates CRC implementation fails the no-arbitrage tests
 in our implementation and calibration of the model.
 Its learned daily reset map fails the independent exact
@@ -1264,7 +1250,7 @@ $\CrcResetGateMedianError$; maximum $\CrcResetGateMaximumError$).}  The resultin
 therefore have artificial resets in option prices which our tests detect:
 \CrcQAboveTwoFiveSevenSix\ of \CrcQCoordinates\ coordinates exceed 2.576 standard
 errors, \CrcQAboveFive\ exceed five, and $T_{\mathrm{sqr}}=\CrcQSquaredT$,
-$T_{\mathrm{ent}}=\CrcQEntropyT$.  This is somewhat expected as our model as calibrated does not satisfy
+$T_{\mathrm{ent}}=\CrcQEntropyT$.  This is somewhat expected: in our implementation, the model as calibrated does not satisfy
 condition~(i) of Definition~6.3 in~\cite{DysLitGambaraTeichmann2021}.
 
 \begin{remark}
@@ -1273,8 +1259,7 @@ In this case we \emph{expect} the tests to fail.
 Table~\ref{tab:numerics-restricted-p} confirms the failure:
 all 570 coordinates exceed five standard errors under every physical-measure
 specification, and the out-of-fold entropy statistics range from 89.205 to
-646.645.  Thus the same diagnostics that remain small under~$\Q$ recover both
-unconditional and state-predictable drift after the fitted change to~$\PP$.
+646.645.  Thus the same diagnostics that remain small under~$\Q$ detect the drift introduced by the change to~$\PP$.
 \begin{table}[H]
 \centering
 \small
@@ -1314,8 +1299,7 @@ Thus short expiries contain fewer eligible strikes and the traded set changes
 with spot.  Ineligible and expired actions are exactly zero.  Each conditional
 policy maps 5,035 pre-trade state variables to the masked 5,001-dimensional
 action.  Each path score in~\eqref{eq:numerics-action-path-score} is averaged
-over 25 rather than 20 daily transitions; this changes its units but not either
-conditional statistic.
+over 25 rather than 20 daily transitions.
 
 \begin{table}[H]
 \centering
