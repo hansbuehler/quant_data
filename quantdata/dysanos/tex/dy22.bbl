@@ -37,12 +37,14 @@ Christian Bayer and Benjamin Stemper.
 \newblock Deep calibration of rough stochastic volatility models, 2018.
 \newblock URL \url{https://arxiv.org/abs/1810.03399}.
 
-\bibitem[Bayer et~al.(2019)Bayer, Horvath, Muguruza, Stemper, and
+\bibitem[Bayer et~al.(2025)Bayer, Horvath, Muguruza, Stemper, and
   Tomas]{BayerEtAl2019DeepCalibration}
 Christian Bayer, Blanka Horvath, Aitor Muguruza, Benjamin Stemper, and Mehdi
   Tomas.
-\newblock On deep calibration of (rough) stochastic volatility models, 2019.
-\newblock URL \url{https://arxiv.org/abs/1908.08806}.
+\newblock On deep calibration of (rough) stochastic volatility models.
+\newblock \emph{The Journal of FinTech}, 5\penalty0 (1):\penalty0 2550005,
+  2025.
+\newblock \doi{10.1142/S2705109925500051}.
 
 \bibitem[Bender and Thiel(2020)]{BenderThiel2020}
 Christian Bender and Matthias Thiel.
@@ -50,10 +52,13 @@ Christian Bender and Matthias Thiel.
 \newblock \emph{Stat. Risk Model.}, 37\penalty0 (1--2):\penalty0 55--78, 2020.
 \newblock \doi{10.1515/strm-2018-0026}.
 
-\bibitem[Bergeron et~al.(2021)Bergeron, Fung, Hull, and
-  Poulos]{BergeronEtAl2021}
-Maxime Bergeron, Nicholas Fung, John Hull, and Zissis Poulos.
-\newblock Variational autoencoders: A hands-off approach to volatility, 2021.
+\bibitem[Bergeron et~al.(2022)Bergeron, Fung, Hull, Poulos, and
+  Veneris]{BergeronEtAl2021}
+Maxime Bergeron, Nicholas Fung, John Hull, Zissis Poulos, and Andreas Veneris.
+\newblock Variational autoencoders: A hands-off approach to volatility.
+\newblock \emph{The Journal of Financial Data Science}, 4\penalty0
+  (2):\penalty0 125--138, 2022.
+\newblock \doi{10.3905/jfds.2022.1.093}.
 
 \bibitem[Bloch(2013)]{Bloch2013MixVar}
 Daniel~Alexandre Bloch.
@@ -66,11 +71,13 @@ Daniel~Alexandre Bloch.
 Oscar Brooks, Dusica Bajalica, Yating Liu, and Imen Ben~Tahar.
 \newblock Latent flow matching for arbitrage-aware implied volatility surface
   generation, 2026.
+\newblock URL \url{https://arxiv.org/abs/2608.00616}.
 
 \bibitem[Buchegger and Gonon(2026)]{BucheggerGonon2026}
 Dominik~Manuel Buchegger and Lukas Gonon.
-\newblock Arbitrage-aware multi-step forecasting of implied volatility
-  surfaces: Modelling surface trajectories using latent diffusion, 2026.
+\newblock Arbitrage-aware probabilistic multi-step forecasting of implied
+  volatility surfaces: Joint generation of surface-return trajectories using
+  latent diffusion, 2026.
 \newblock URL \url{https://arxiv.org/abs/2608.22478}.
 
 \bibitem[Buehler(2006)]{buehler2006expensive}
@@ -123,9 +130,11 @@ Ren{\'e} Carmona and Sergey Nadtochiy.
 
 \bibitem[Carmona and Nadtochiy(2012)]{TangentLevy}
 Ren{\'e} Carmona and Sergey Nadtochiy.
-\newblock Tangent l{\'e}vy market models.
-\newblock \emph{Finance Stoch.}, 16:\penalty0 63--104, 2012.
+\newblock Tangent {L}{\'e}vy market models.
+\newblock \emph{Finance and Stochastics}, 16\penalty0 (1):\penalty0 63--104,
+  2012.
 \newblock \doi{10.1007/s00780-011-0158-8}.
+\newblock URL \url{https://doi.org/10.1007/s00780-011-0158-8}.
 
 \bibitem[Carmona et~al.(2017)Carmona, Ma, and
   Nadtochiy]{CarmonaMaNadtochiy2017}
@@ -201,6 +210,7 @@ Christa Cuchiero, Wahid Khosrawi, and Josef Teichmann.
 \bibitem[Dellaportas and Mijatovi{\'c}(2014)]{DellaportasMijatovic2014}
 Petros Dellaportas and Aleksandar Mijatovi{\'c}.
 \newblock Arbitrage-free prediction of the implied volatility smile, 2014.
+\newblock URL \url{https://arxiv.org/abs/1407.5528}.
 
 \bibitem[Desch{\^a}tres(2024)]{Deschatres2024}
 Fabrice Desch{\^a}tres.
@@ -312,20 +322,26 @@ Lifeng Hao and Shaolin Ji.
 \bibitem[Hendriks and Martini(2019)]{HendriksMartini2019}
 Sebas Hendriks and Claude Martini.
 \newblock The extended {SSVI} volatility surface.
-\newblock \emph{J. Comput. Finance}, 22\penalty0 (5):\penalty0 25--39, 2019.
+\newblock \emph{The Journal of Computational Finance}, 22\penalty0
+  (5):\penalty0 25--39, 2019.
 \newblock \doi{10.21314/JCF.2019.365}.
+\newblock URL
+  \url{https://www.risk.net/journal-of-computational-finance/6555351}.
 
-\bibitem[Hernandez(2016)]{Hernandez2016}
+\bibitem[Hernandez(2017)]{Hernandez2016}
 Andres Hernandez.
 \newblock Model calibration with neural networks.
-\newblock SSRN working paper 2812140, 2016.
-\newblock URL \url{https://papers.ssrn.com/abstract=2812140}.
+\newblock \emph{Risk}, June 2017.
+\newblock URL
+  \url{https://www.risk.net/derivatives/5288126/model-calibration-with-neural-networks}.
 
-\bibitem[Horvath et~al.(2019)Horvath, Muguruza, and
+\bibitem[Horvath et~al.(2021)Horvath, Muguruza, and
   Tomas]{HorvathMuguruzaTomas2019}
 Blanka Horvath, Aitor Muguruza, and Mehdi Tomas.
-\newblock Deep learning volatility, 2019.
-\newblock URL \url{https://arxiv.org/abs/1901.09647}.
+\newblock Deep learning volatility: a deep neural network perspective on
+  pricing and calibration in (rough) volatility models.
+\newblock \emph{Quantitative Finance}, 21\penalty0 (1):\penalty0 11--27, 2021.
+\newblock \doi{10.1080/14697688.2020.1817974}.
 
 \bibitem[Itkin(2019)]{Itkin2019}
 Andrey Itkin.
@@ -337,6 +353,7 @@ Andrey Itkin.
 Chen Jin and Ankush Agarwal.
 \newblock Forecasting implied volatility surface with generative diffusion
   models, 2025.
+\newblock URL \url{https://arxiv.org/abs/2511.07571}.
 
 \bibitem[Kahal{\'e}(2004)]{Kahale2004}
 Nabil Kahal{\'e}.
@@ -359,8 +376,10 @@ Shuaiqiang Liu, Anastasia Borovykh, Lech~A. Grzelak, and Cornelis~W. Oosterlee.
 \bibitem[Martini and Mingone(2022)]{MartiniMingone2022}
 Claude Martini and Arianna Mingone.
 \newblock No arbitrage {SVI}.
-\newblock \emph{SIAM J. Financial Math.}, 13\penalty0 (1):\penalty0 227--261,
-  2022.
+\newblock \emph{SIAM Journal on Financial Mathematics}, 13\penalty0
+  (1):\penalty0 227--261, 2022.
+\newblock \doi{10.1137/20M1351060}.
+\newblock URL \url{https://epubs.siam.org/doi/10.1137/20M1351060}.
 
 \bibitem[Medvedev and Wang(2022)]{MedvedevWang2022}
 Nikita Medvedev and Zhiguang Wang.
@@ -373,7 +392,10 @@ Nikita Medvedev and Zhiguang Wang.
 Arianna Mingone.
 \newblock No arbitrage global parametrization for the {eSSVI} volatility
   surface.
-\newblock \emph{Quant. Finance}, 22\penalty0 (12):\penalty0 2205--2217, 2022.
+\newblock \emph{Quantitative Finance}, 22\penalty0 (12):\penalty0 2205--2217,
+  2022.
+\newblock \doi{10.1080/14697688.2022.2117076}.
+\newblock URL \url{https://doi.org/10.1080/14697688.2022.2117076}.
 
 \bibitem[Ning et~al.(2023)Ning, Jaimungal, Zhang, and
   Bergeron]{vae_ning2023arbitrage}
@@ -424,11 +446,13 @@ Mathieu Rosenbaum and Jianfei Zhang.
 \newblock Deep calibration of the quadratic rough {Heston} model, 2021.
 \newblock URL \url{https://arxiv.org/abs/2107.01611}.
 
-\bibitem[Schlenkrich(2025)]{Schlenkrich2025}
+\bibitem[Schlenkrich(2026)]{Schlenkrich2025}
 Sebastian Schlenkrich.
-\newblock A piece-wise model for vanilla option pricing.
-\newblock SSRN working paper 5214566, 2025.
-\newblock URL \url{https://papers.ssrn.com/abstract=5214566}.
+\newblock A piecewise model for vanilla option pricing.
+\newblock \emph{Journal of Computational Finance}, 30\penalty0 (2):\penalty0
+  1--20, 2026.
+\newblock \doi{10.21314/JCF.2026.006}.
+\newblock URL \url{https://www.risk.net/node/7964100}.
 
 \bibitem[Sch{\"o}nbucher(1999)]{Schonbucher1999}
 Philipp~J. Sch{\"o}nbucher.
@@ -496,6 +520,7 @@ Magnus Wiese, Ben Wood, Alexandre Pachoud, Ralf Korn, Hans Buehler, Phillip
 Mingzhi Yang, Sheng Wang, Chao Zhang, and Ruikun Li.
 \newblock Universal diffusion models for implied volatility surfaces: Learning
   shared dynamics across stocks, 2026.
+\newblock URL \url{https://arxiv.org/abs/2609.22893}.
 
 \bibitem[Yang et~al.(2025)Yang, Chen, Shu, and
   Hospedales]{YangChenShuHospedales2025}
@@ -506,11 +531,12 @@ Yongxin Yang, Wenqi Chen, Chao Shu, and Timothy~M. Hospedales.
   pages 70550--70564. PMLR, 2025.
 \newblock URL \url{https://proceedings.mlr.press/v267/yang25d.html}.
 
-\bibitem[Zhang et~al.(2024)Zhang, Amici, and
+\bibitem[Zhang et~al.(2025)Zhang, Amici, and
   Morandotti]{ZhangAmiciMorandotti2024}
 Chen Zhang, Giovanni Amici, and Marco Morandotti.
-\newblock Calibrating the {Heston} model with deep differential networks, 2024.
-\newblock URL \url{https://arxiv.org/abs/2407.15536}.
+\newblock Calibrating the {Heston} model with deep differential networks.
+\newblock \emph{Decisions in Economics and Finance}, 2025.
+\newblock \doi{10.1007/s10203-025-00558-1}.
 
 \bibitem[Zhang et~al.(2023)Zhang, Li, and Zhang]{ZhangLiZhang2021}
 Wenyong Zhang, Lingfei Li, and Gongqiu Zhang.
