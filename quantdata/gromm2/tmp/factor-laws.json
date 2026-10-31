@@ -1,0 +1,79 @@
+{
+  "base_estimate": "/home/hans/quantdata_data/training/gromm2/inputs/2025-08-29-affine200/affine-200-models-rank16-final.npz",
+  "base_estimate_sha256": "4e5e594187dae7cefe77eb12ae4f3eb04612c420783a1426b2efdf6fe1b73937",
+  "config": {
+    "drift_loss_weight": 1.0,
+    "hidden_size": 32,
+    "learning_rate": 0.002,
+    "log_scale_bound": 1.0986122886681098,
+    "max_epochs": 2000,
+    "patience": 200,
+    "progress_every": 100,
+    "ridge": 0.001,
+    "seed": 20261013,
+    "squared_score_floor": 0.0025000000000000005,
+    "validation_fraction": 0.2
+  },
+  "dataset": "/home/hans/quantdata_data/datasets/hedging/spx-2022-2025-hedging-public-candidate-v1",
+  "factor_count": 16,
+  "history_path": "/home/hans/quantdata_data/training/gromm2/inputs/2025-08-29-affine200/affine-200-history.h5",
+  "history_sha256": "487f781cd786ceaf3461a4cfd1d8b4e8883a95b452960a912e46058bb037f492",
+  "interpretation": {
+    "mamba": "bounded selective state-space recurrence",
+    "p": "Q drift plus the base loading field times fitted attainable factor-drift coefficients; with conditional scale s, the equivalent market price of risk is coefficient/s",
+    "q": "zero factor means with fitted conditional scales"
+  },
+  "models": {
+    "ar1": {
+      "accepted_p": true,
+      "accepted_q": true,
+      "architecture": "ar1",
+      "epochs": 0,
+      "train_p_drift_standardized_rmse": 0.7085316469842802,
+      "train_q_negative_log_likelihood": 0.4787528707345388,
+      "validation_p_drift_r2": 0.5236642141722143,
+      "validation_p_drift_standardized_rmse": 0.6429404706925107,
+      "validation_q_negative_log_likelihood": 0.5537632003756312
+    },
+    "fixed": {
+      "accepted_p": true,
+      "accepted_q": true,
+      "architecture": "fixed",
+      "epochs": 0,
+      "train_p_drift_standardized_rmse": 0.9675439547368513,
+      "train_q_negative_log_likelihood": 0.4843578015850111,
+      "validation_p_drift_r2": 0.0,
+      "validation_p_drift_standardized_rmse": 0.8713009230942136,
+      "validation_q_negative_log_likelihood": 0.5675686062342954
+    },
+    "lstm": {
+      "accepted_p": true,
+      "accepted_q": true,
+      "architecture": "lstm",
+      "epochs": 300,
+      "train_p_drift_standardized_rmse": 0.3163912500038409,
+      "train_q_negative_log_likelihood": 0.28672897817121956,
+      "validation_p_drift_r2": 0.695658428556378,
+      "validation_p_drift_standardized_rmse": 0.5272137218076967,
+      "validation_q_negative_log_likelihood": 0.5658336478511637
+    },
+    "mamba": {
+      "accepted_p": true,
+      "accepted_q": true,
+      "architecture": "mamba",
+      "epochs": 190,
+      "train_p_drift_standardized_rmse": 0.44242128778491646,
+      "train_q_negative_log_likelihood": 0.37178487941205524,
+      "validation_p_drift_r2": 0.5951070539450956,
+      "validation_p_drift_standardized_rmse": 0.5912644392692418,
+      "validation_q_negative_log_likelihood": 0.483097927321518
+    }
+  },
+  "pair_count": 863,
+  "schema": "gromm2-factor-laws-v1",
+  "train_count": 690,
+  "train_end_date": "2024-12-05",
+  "validation_count": 173,
+  "validation_end_date": "2025-08-28",
+  "validation_start_date": "2024-12-06"
+}

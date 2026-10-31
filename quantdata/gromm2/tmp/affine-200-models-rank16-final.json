@@ -1,0 +1,22 @@
+{
+  "schema": "gromm2-estimate-v1",
+  "history_path": "/tmp/quant_data/gromm2/affine-200-history.h5",
+  "dataset": "/home/hans/quantdata_data/datasets/hedging/spx-2022-2025-hedging-public-candidate-v1",
+  "factor_count": 16,
+  "pair_count": 863,
+  "explained_variance_ratio": 0.9245835802027638,
+  "physical_baseline": "coordinatewise AR(1) with Gaussian-smoothed innovations",
+  "fixed_contract_interpolation_clip_fraction": 0.10802815232276414,
+  "spot_market_price_of_risk": 0.6958578525741281,
+  "physical_projection_fraction": 0.3591029025232546,
+  "selective_state_space": {
+    "architecture": "bounded selective state-space factor amplitudes",
+    "hidden_size": 32,
+    "log_scale_bound": 1.0986122886681098,
+    "epochs": 50,
+    "train_negative_log_likelihood": 0.42261081641695125,
+    "validation_negative_log_likelihood": 0.4663511301982194,
+    "constant_validation_negative_log_likelihood": 0.5539122565704804,
+    "accepted": true
+  }
+}
