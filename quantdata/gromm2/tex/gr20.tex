@@ -70,6 +70,118 @@
 
 \section{Introduction}\label{sec:intro}
 
+
+\section{General grids}
+In \cite{GROMM2026} GROMM was introduced for a time-homogeneous grid of strikes. Following, we introduce an interpolation matrix $\mathcal{I}^j$ that maps the density at $T_{j-1}$ barycentrically to the strikes of maturity $T_j$. This interpolation matrix coincides with the one introduced in \cite{DLV} for general grids, where the authors show that $\mathcal{I}^j$ (in their notation $\Xi_j$) is a transition matrix. We then demonstrate that the global existence result holds on general grids as long as each expiration has at least one interior strike and the ceiling / floor strike is an increasing / decreasing sequence across expirations. 
+
+Denote by $K^j, j \geq k$ the sequence of strikes at maturity $T_j$ with $K^{j, 0} < \dots < K^{j, N_j} < K^{j, N_j+1} \eqqcolon U^{j}$, $N_j$ denoting the number of interior strikes and $U^j$ the upper exterior strike of the $j$-th maturity. For such an interpolation matrix we obtain the following code book: 
+\begin{equation}\label{eq:codebook}
+  M^j_t\,q^j_t=\mathcal{I}^j\,q^{j-1}_t,\qquad M^j_t=I-\Omega_jS^j_t  \ . 
+\end{equation}
+
+Grid $j-1$ has nodes $y^m:=K^{j-1,m}$, grid $j$ has nodes $K^{j,i}$. Assume every $y^m$ lies in
+$[K^{j,0},K^{j,N_j+1}]$ (automatic if both grids share the outer nodes, e.g.\ $0$ and a cap
+$U$). If $K^{j,i}\le y^m\le K^{j,i+1}$, set
+\begin{equation}\label{eq:R}
+  (\mathcal{I}^j)_{i,m}=\frac{K^{j,i+1}-y^m}{K^{j,i+1}-K^{j,i}},\qquad
+  (\mathcal{I}^j)_{i+1,m}=\frac{y^m-K^{j,i}}{K^{j,i+1}-K^{j,i}},
+\end{equation}
+and all other entries of column $m$ zero; if $y^m=K^{j,i}$, column $m$ is $e_i$. So
+$\mathcal{I}^j\in\R^{(N_j+2)\times(N_{j-1}+2)}$ has at most two non-zero entries per column.
+
+The following lemma shows that the construction preserves the mean and unit mass: 
+\begin{lemma}\label{lemma:R}
+\begin{enumerate}[label=(\roman*)]
+\item $\mathcal{I}^j\ge0$, $\one^{\!\top}\mathcal{I}^j=\one^{\!\top}$ and $(K^{j})^{\!\top}\mathcal{I}^j=(K^{j-1})^{\!\top}$:
+  mass and mean are kept.
+\item The interpolation matrix preserves prices obtained from linear interpolation on the new strike grid. Write $C[q](K)$ for the call price of a density $q$ at strike $K$. Then
+  \[
+    C[\mathcal{I}^jq](K)=C[q](K)\qquad\text{for every strike $K$ of grid $j$.}
+  \]
+\end{enumerate}
+\end{lemma}
+\begin{proof}
+  \begin{enumerate}[label=(\roman*)]
+    \item The weights are non-negative by construction and by \eqref{eq:R} $(\mathcal{I}^j)_{i, m} + (\mathcal{I}^j)_{i+1, m} = 1$. Moreover, we have for a single column $m$: $(\mathcal{I}^j)_{i, m} K^{j, i} + (\mathcal{I}^j)_{i+1, m} K^{j, i+1} = y^m$. 
+    \item \begin{equation*}
+  \Delta^2_i\,(y-\cdot)^+
+  \coloneqq \frac{(y-K^{j,i+1})^+-(y-K^{j,i})^+}{K^{j,i+1}-K^{j,i}}
+          -\frac{(y-K^{j,i})^+-(y-K^{j,i-1})^+}{K^{j,i}-K^{j,i-1}}
+  = h^{j,i}(y),
+\end{equation*}
+where $h^{j,i}$ is the hat function of node $K^{j,i}$: $h^{j,i}(K^{j,i})=1$, $h^{j,i}(K^{j,i\pm1})=0$, linear in between and zero outside $[K^{j,i-1},K^{j,i+1}]$. Hence, with $\tilde C(K)=\sum_m q^m\,(y^m-K)^+$,
+\begin{equation*}
+  \bigl(\Delta^2\tilde C\bigr)_i=\sum_m q^m\,h^{j,i}(y^m)=\bigl(\mathcal I^j q\bigr)_i .
+\end{equation*}
+
+  \end{enumerate}
+\end{proof}
+
+\subsection{Existence theorem for general grids}
+
+\begin{equation}
+  \label{eq:log_dlv_sde}
+  dL_t^{j, i} = -\Bigl(\ip{\xi_t^{j,i}}{\eta_t^{j,i}} + \tfrac12\|\xi_t^{j,i}\|^2\Bigr)\,dt + \ip{\xi_t^{j,i}}{dW_t}
+\end{equation}
+
+In \cite{GROMM2026} the existence Theorem~2.1 holds for a grid of time-homogeneous strikes across all expiries. Following we generalise this result to general lattices. For the generalised existence theorem on general grids we make the following assumption: 
+\begin{assumption}
+  \label{assumption:existence_general_grids}
+  \begin{enumerate}[label=(\roman*)]
+    \item \textbf{Grid}: Let $\mathcal{I}^{j}, j > k$ define interpolation matrices such that: $ K^{j, 0} = 0$ for all $j \geq k$, $ U^{j} = U^{j+1} $ for all $j \geq k $, $N_j \geq 1 $ for all $ j \geq k$. 
+  \item \textbf{Model}: 
+  \begin{enumerate}[label=(\alph*)]
+    \item For the front, the density has mass on the interior strikes $\sum_{i=1}^{N_k} q_{T_{k-1}}^{k, i} > 0 \, .$
+  \item For all $j=k+1, \dots, M$ and $i=1, \dots, N_j$, the vol-of-vol $\xi^{j, i}$ is locally Lipschitz continuous in $(t, B, L)$ and is uniformly bounded in $(B, L)$ by a square-integrable function in time: 
+  \begin{equation*}
+    \|\xi^{j, i}(t, B, L)\| \leq c_t \quad \textrm{where} \quad \int_{T_{k-1}}^{T_k}c_t^2dt<\infty
+  \end{equation*}
+  where $\|\cdot\|$ is the Euclidean norm.
+  \end{enumerate}
+  \end{enumerate}
+\end{assumption}
+Assumption~\ref{assumption:existence_general_grids}~(i) is made to make the theorem more concrete. In general, we only need an increasing sequence of ceilings $U^{j} \leq U^{j+1} $ for $j \geq k$. 
+
+\begin{theorem}[Existence on general grids]
+  \label{thm:existence_general_grids}
+  Let $L_{T_{k-1}} $ be finite. Under Assumption~\ref{assumption:existence_general_grids} the following hold: 
+  \begin{enumerate}[label=(\roman*)]
+  \item There is a unique strong solution for $L$ on $[T_{k-1},T_k)$, and every $\Sigma^{j,i}$ stays
+    finite and strictly positive.
+  \item If spot settles at an interior strike, $ J \in \lbrace 1, \dots, N_k \rbrace $, then $L$ extends continuously to $T_k$
+    with $L_{T_k}$ finite.
+  \item If spot settles at an extreme strike $ J \in \lbrace 0, N_k +1 \rbrace$, then $q^j_{T_k} = e_0$ resp.\ $q^j_{T_k} = e_{N_j+1}$ for all $j > k$. Moreover, the remaining DLVs $\Sigma$ no longer affect the model. 
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+  The proof follows \cite[Theorem 2.1]{GROMM2026} with the following additions: (a) a single positive interior front density node spreads, (b) $\eta$ remains locally Lipschitz, (c) the calendar-like spread $ R $ is bounded on the general grid, (d) terminal settlement.
+  \begin{enumerate}[label=(\alph*)]
+    \item By Lemma~\ref{lemma:R}~(i) $p\coloneqq \mathcal{I}^j q^{j-1} \geq 0$ has unit mass. If $q^{j-1}$ has interior mass, so does $p$: an interior node $y^m\in(0,U)$ of grid $j-1$ puts positive weight on an interior node of grid $j$; if $y^m<K^{j,1}$ the weight on $K^{j,1}$ is $y^m/K^{j,1}>0$, if $y^m>K^{j,N_j}$ the weight on $K^{j,N_j}$ is $(U-y^m)/(U-K^{j,N_j})>0$, and otherwise both neighbours are interior. For $j-1=k$ the interior mass of the front is given as in \cite[Theorem 2.1]{GROMM2026} under Assumption~\ref{assumption:existence_general_grids}~(ii)(a), and the claim follows by induction over $j$. Since $M^j$ is a non-singular M-matrix, its inverse has strictly positive interior columns and $(M^j)^{-1}e_0 =e_0$, $(M^j)^{-1}e_{N_j+1}=e_{N_j+1}$. Since $N_j \geq 1$ for all $j > k$, $q^{j} > 0$ if $p_i > 0$ for some $i = 1, \dots, N_j$, and $q^{j}$ has no interior mass if $p_i = 0$ for all $i = 1, \dots, N_j$. 
+    
+    \item Let $j>k$. $\eta^{j}$ locally Lipschitz implies that $L$ remains locally Lipschitz. The only term affected by the modified codebook \eqref{eq:codebook} is $\eta^{j}_t = E^{j}_t / q^{j}_t$. Due to \eqref{eq:codebook} we obtain for the volatility recursion
+    \begin{equation*}
+      E^{j;f}=(M^j)^{-1}\bigl(\mathcal{I}^jE^{j-1;f}+\Omega_jB^{j;f}q^j\bigr)  \ . 
+    \end{equation*}
+    Since $\mathcal{I}^j$ is a constant matrix, $E^{j;f}$ remains a smooth function of the state, and since $q_{t}^{j} > 0$ by (a), the coefficient $\eta_t^{j}$ remains locally Lipschitz.
+    
+    \item Moreover, we need to show that the calendar spread $R^j = \Sigma^j q^j$ defined in \cite[Theorem 2.2]{GROMM2026} remains a martingale. \eqref{eq:codebook} gives $\Omega_j R^j = q^j - \mathcal{I}^j q^{j-1} $. Applying the discrete integration matrix $\Pi^j$ with strikes defined on $K^j$, we obtain $\Pi^j \Omega_j R^j = C^j - C[\mathcal{I}^j q^{j-1}]$ where $\Pi^j \Omega_j$ has positive interior diagonal. Since prices are bounded on the grid, $R^j$ remains bounded. 
+    
+    \item If spot settles at an interior strike $J\in\lbrace 1,\dots,N_k\rbrace$, the front of the next slab is $q^{k+1}_{T_k}=(M^{k+1})^{-1}\mathcal{I}^{k+1}e_J$, which has interior mass by (a), so Assumption~\ref{assumption:existence_general_grids}~(ii)(a) holds on $[T_k,T_{k+1})$; $L_{T_k}$ is finite as in \cite[Theorem 2.1]{GROMM2026}. If $J\in\lbrace 0,N_k+1\rbrace$, the shared outer nodes give $\mathcal{I}^{j}e_0=e_0$ and $\mathcal{I}^{j}e_{N_{j-1}+1}=e_{N_j+1}$, hence $q^j_{T_k}=e_0$ resp.\ $q^j_{T_k}=e_{N_j+1}$ for all $j>k$, as in \cite[Theorem 2.1]{GROMM2026}.
+  \end{enumerate}
+\end{proof}
+
+\begin{remark}[Growing boundary strikes]
+  In general, assumption~(i) can be relaxed to a grid with growing exterior boundaries: 
+  $$ [K^{j,0}, U^{j}] \subseteq [K^{j+1,0}, U^{j+1}], \quad j \geq k \, . $$
+  In this case Theorem~\ref{thm:existence_general_grids}~(iii) is modified: a boundary strike $U^{k}$ is not a boundary post settlement if $U^{k+1} > U^{k}$. In this case the interpolation matrix $\mathcal{I}^{k+1}$ will distribute barycentrically some of the density to the neighbouring node $K^{k+1, N_{k+1}}$. In turn, this fulfills the assumptions of 
+  
+  which by proof of Theorem~\ref{thm:existence_general_grids} is going to be. 
+
+
+\end{remark}
+
+
 \section{Factor-Law Evaluation and Conditional Arbitrage Check}
 \label{sec:factor-law-and-hedging}
 
