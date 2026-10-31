@@ -1,0 +1,26 @@
+{
+  "figure": "dysanos_variance_index_histograms.pdf",
+  "run": "vix-sequence-20261027-v1/pilot",
+  "source_run_directory": "/home/hans/quantdata_data/experiments/dysanos/v11/vix-sequence-20261027-v1/pilot",
+  "plot_program": "quantdata/dysanos/v11/plot_vix_sequence.py",
+  "training_program": "quantdata/dysanos/v11/train_vix_sequence.py",
+  "target_program": "quantdata/dysanos/v11/variance_indices.py",
+  "initial_model_as_of": "2025-08-29",
+  "initial_model_sha256": "e7bc579d8734a6554bd1a4ca5717fa8dc21c7687f75a32d9c1c6d91266e38440",
+  "historic_target_sha256": "c0a6251538f0b6c3dde49741eacdd5a063cbb8fc1274c8792aaca9a562ef2dec",
+  "historic_period": ["2022-01-03", "2025-08-29"],
+  "historic_dates": 891,
+  "business_day_tenors": [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70],
+  "historic_counts": [891, 891, 891, 891, 891, 891, 891, 891, 891, 891, 890, 796, 504, 83],
+  "samples_per_model": 2048,
+  "neural_burn_in_sessions": 256,
+  "neural_epochs": 200,
+  "definition": "Analytic continuous-strike variance-swap volatility, business-time annualization; not discrete Cboe VIX",
+  "frozen_decoder_and_ar": true,
+  "not_forward_validation": true,
+  "aggregate_standardized_squared_log_quantile_error": {
+    "gaussian_ar": 0.06810771180199712,
+    "lstm": 0.012279390197179815,
+    "mamba_style_selective_ssm": 0.013467052897656092
+  }
+}

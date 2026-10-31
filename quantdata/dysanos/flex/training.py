@@ -1083,6 +1083,7 @@ def _market_training_phase(
     pre_training_score: dict[str, float],
     resume_state: TrainingState | None = None,
     checkpoint_callback: Callable[[TrainingState], None] | None = None,
+    evaluation_callback: Callable[[int, FitEvaluation], None] | None = None,
 ) -> tuple[tuple[dict[str, float], ...], TrainingState]:
     """Fine-tune a native or compressed model against every real quote."""
     optimizers, schedulers = _market_optimizers(
@@ -1165,6 +1166,7 @@ def _market_training_phase(
             **_torch_rng_state(model),
         }
 
+    started = perf_counter()
     model.train()
     for epoch in range(start_epoch, train_config.num_epochs):
         used_learning_rate = float(optimizers[0].param_groups[0]["lr"])
@@ -1235,14 +1237,28 @@ def _market_training_phase(
                 if isinstance(model, NativeStateSanosModel)
                 else model.config.state_size
             )
+            elapsed = perf_counter() - started
+            remaining = elapsed * (train_config.num_epochs - epoch - 1) / (epoch + 1 - start_epoch)
             print(
                 f"batch-descent state={state_size} epoch={epoch + 1}/"
                 f"{train_config.num_epochs} objective="
-                f"{history[-1]['objective']:.8g}",
+                f"{history[-1]['objective']:.8g} elapsed={elapsed:.1f}s "
+                f"remaining={remaining:.1f}s",
                 flush=True,
             )
         if checkpoint_callback is not None and (epoch + 1) % train_config.checkpoint_every == 0:
             checkpoint_callback(training_state(epoch + 1))
+        if evaluation_callback is not None and (
+            epoch == start_epoch
+            or (epoch + 1) % train_config.report_every == 0
+            or epoch + 1 == train_config.num_epochs
+        ):
+            evaluation = evaluate_model(
+                model, days, env=env, objective_config=objective_config,
+                day_batch_size=train_config.day_batch_size, equal_date_weighting=True,
+            )
+            evaluation_callback(epoch + 1, evaluation)
+            model.train()
     final_state = training_state(train_config.num_epochs)
     return tuple(history), final_state
 
@@ -1255,6 +1271,7 @@ def fit_native_states(
     train_config: FlexTrainConfig = FlexTrainConfig(),
     checkpoint_path: Path | None = None,
     weights_only_warm_start_path: Path | None = None,
+    evaluation_callback: Callable[[int, FitEvaluation], None] | None = None,
 ) -> NativeStateFitResult:
     """Fit one independent bounded raw state per day by batch descent."""
     if len(market_days) == 0:
@@ -1371,6 +1388,7 @@ def fit_native_states(
         train_config=train_config,
         pre_training_score=_evaluation_score(initial_evaluation),
         resume_state=resume_state,
+        evaluation_callback=evaluation_callback,
         checkpoint_callback=(
             None
             if checkpoint_path is None
@@ -1838,6 +1856,7 @@ def fit_latent_states(
     supervised_train_config: FlexTrainConfig = FlexTrainConfig(),
     market_train_config: FlexTrainConfig = FlexTrainConfig(),
     checkpoint_path: Path | None = None,
+    evaluation_callback: Callable[[int, FitEvaluation], None] | None = None,
 ) -> LatentStateFitResult:
     """Fit and fine-tune one lower-dimensional shared decoder."""
     if len(market_days) == 0 or len(market_days) != native_fit.model.num_days:
@@ -2088,6 +2107,7 @@ def fit_latent_states(
         train_config=market_train_config,
         pre_training_score=_evaluation_score(supervised_evaluation),
         resume_state=market_resume_state,
+        evaluation_callback=evaluation_callback,
         checkpoint_callback=(
             None
             if checkpoint_path is None

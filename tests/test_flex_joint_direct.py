@@ -205,6 +205,20 @@ def test_joint_generator_is_real_stationary_and_differentiable() -> None:
         torch.as_tensor(endpoint),
     ) + 0.1 * factor_gauge_penalty(model.daily_states)
     assert torch.isfinite(loss)
+    with torch.no_grad():
+        prediction = model.equilibrium_mean + (
+            model.daily_states[torch.as_tensor(origin)] - model.equilibrium_mean
+        ) @ model.weekly_transition()
+        spot_scores = (
+            model.daily_states[torch.as_tensor(endpoint)] - prediction
+        )[:, 0].detach()
+    conditional_loss = joint_dynamics_loss(
+        model,
+        torch.as_tensor(origin),
+        torch.as_tensor(endpoint),
+        spot_scores=spot_scores,
+    )
+    assert conditional_loss <= loss
     loss.backward()
     for parameter in (
         model.daily_states,
@@ -215,6 +229,34 @@ def test_joint_generator_is_real_stationary_and_differentiable() -> None:
     ):
         assert parameter.grad is not None
         assert torch.all(torch.isfinite(parameter.grad))
+
+
+def test_daily_joint_initializer_can_shrink_short_sample_covariance() -> None:
+    env = BaseEnvironment(precision=64, device="cpu", debug=True)
+    source = _source(env)
+    initialization = standardize_affine_direct_model(source)
+    model = JointDirectDynamicsModel(
+        env,
+        num_days=source.num_days,
+        config=JointDirectDynamicsConfig(
+            label="joint-direct-daily-shrinkage-test",
+            state_size=4,
+            geometry=_geometry(),
+        ),
+    )
+    origin = np.arange(source.num_days - 1, dtype=np.int64)
+    audit = initialize_joint_model(
+        model,
+        initialization,
+        origin_indices=origin,
+        endpoint_indices=origin + 1,
+        diagonal_transition=True,
+        covariance_shrinkage=0.5,
+    )
+    assert audit["initial_diagonal_transition"] == 1
+    assert audit["initial_covariance_shrinkage"] == 0.5
+    assert torch.max(torch.abs(torch.linalg.eigvals(model.weekly_transition()))) < 1.0
+    assert torch.all(torch.diagonal(model.innovation_cholesky()) > 0)
 
 
 def test_projection_recovers_states_on_joint_affine_manifold() -> None:
