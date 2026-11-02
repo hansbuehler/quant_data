@@ -38,11 +38,19 @@ gradient gates.
 - Removing unconditional ten-iteration restarts solved the shifted system in
   76 iterations, but its accepted shadow worsened the affine residual; it was
   not adopted. Smaller initial damping also exhausted its 120-product budget.
-- The current read-only trial uses unshifted exact-H, full-reorthogonalized
+- The completed read-only trial used unshifted exact-H, full-reorthogonalized
   P-weighted Arnoldi with frozen positive history preconditioning. It is not
   SPD-CG or Euclidean MINRES on a nonsymmetric left-preconditioned operator.
   CPU regressions and a tiny managed-GPU parity check pass; the complete
-  population result remains pending at this snapshot.
+  population trial exhausted 120 Hessian products without selecting a
+  proposal. It used 121 full passes including source restoration, made no
+  native update and produced no shadow. Its logged recursive residuals are
+  not final true-residual certificates.
+- The separately reviewed original-M right-preconditioned GMRES comparison
+  minimizes and stops in the same original residual geometry. CPU regression
+  and independent mathematical tests pass; its complete-population pilot
+  has not launched. It changes only the numerical proposal, not the Q law,
+  objective, training population or original stationarity gates.
 
 The new proposal requires independently confirmed original-metric residuals,
 strict canonical descent and non-worsening predicted gradient norms before
@@ -53,8 +61,10 @@ or absence of arbitrage. Existing unconditional rejections remain reported.
 
 ## Entry points
 
+- `metric_gmres_audit.py` and `metric_gmres_audit_proposal.py`: the prospective
+  original-M experimental numerical proposal and deterministic tests.
 - `weighted_arnoldi_audit.py` and `minimum_residual_audit_proposal.py`: the
-  current experimental unshifted numerical proposal and deterministic tests.
+  completed P-weighted control and deterministic tests.
 - `shifted_exact_audit_proposal.py`, `shifted_exact_gate_audit_proposal.py`
   and `trust_region_audit_optimization.py`: provenance-preserved control
   methods, not default certified replacements.
@@ -63,6 +73,8 @@ or absence of arbitrage. Existing unconditional rejections remain reported.
   They do not yet support a future native Arnoldi training phase; a shadow
   must not be relabelled as a supported trained checkpoint.
 
-The active external trial is `unshifted-arnoldi-probe-20261102-v1/`.
-Its source-pinned declaration, independent reviews, progress ledger and final
-report are authoritative; no outcome is implied by committing these sources.
+The completed external control is `unshifted-arnoldi-probe-20261102-v1/`.
+Its source-pinned declaration, independent terminal review, progress ledger
+and final report are authoritative. The prospective comparison is
+`metric-gmres-probe-20261102-v1/`; no population outcome or convergence is
+implied by committing its numerical sources.
