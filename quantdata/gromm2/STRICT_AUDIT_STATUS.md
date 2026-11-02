@@ -48,9 +48,26 @@ gradient gates.
   not final true-residual certificates.
 - The separately reviewed original-M right-preconditioned GMRES comparison
   minimizes and stops in the same original residual geometry. CPU regression
-  and independent mathematical tests pass; its complete-population pilot
-  has not launched. It changes only the numerical proposal, not the Q law,
+  and independent mathematical tests pass. Its complete-population pilot
+  exhausted 120 Hessian products without selecting a proposal or changing
+  native1628. The 119 logged recursive residuals decreased monotonically to
+  approximately `0.00164106`, about 9.5 times the inner target; none is a
+  final true-residual certificate. Measured M-orthogonality error remained
+  below `1.56e-15`. This changes only the numerical proposal, not the Q law,
   objective, training population or original stationarity gates.
+- CPU diagnosis finds that 30 raw secants add at most 60 ranks to a scalar
+  base across 130,836 deep parameters. Hidden blocks account for about 97.90%
+  of squared raw-gradient energy. Separately reviewed layerwise SPD
+  GGN/Kronecker base, training-only factor collector and exact-H proposal
+  modules now pass 64 combined canonical CPU tests plus independent checks.
+  They retain every raw secant and original M/raw gates. Factor separation
+  and spectral floors are optimizer approximations, not model changes.
+  The source-bound, all-cost same-point GPU benchmark is running in
+  `kronecker-gmres-probe-20261102-v2/`. Its CPU/GPU fixture parity gate passed
+  and factors were collected from all 5,625,000 original inner-training rows.
+  The latest observed inner residual is still above its target; no proposal
+  has been selected and native1628 is unchanged. A completed benchmark and
+  independent terminal review are required before any native continuation.
 
 The new proposal requires independently confirmed original-metric residuals,
 strict canonical descent and non-worsening predicted gradient norms before
@@ -63,6 +80,10 @@ or absence of arbitrage. Existing unconditional rejections remain reported.
 
 - `metric_gmres_audit.py` and `metric_gmres_audit_proposal.py`: the prospective
   original-M experimental numerical proposal and deterministic tests.
+- `kronecker_audit_preconditioner.py`, `kronecker_audit_collection.py` and
+  `kronecker_audit_proposal.py`: CPU-reviewed prospective full-rank base,
+  all-inner-row factor collection and same-H/M proposal machinery. They are
+  not yet a native training phase or a certified production replacement.
 - `weighted_arnoldi_audit.py` and `minimum_residual_audit_proposal.py`: the
   completed P-weighted control and deterministic tests.
 - `shifted_exact_audit_proposal.py`, `shifted_exact_gate_audit_proposal.py`
@@ -75,6 +96,8 @@ or absence of arbitrage. Existing unconditional rejections remain reported.
 
 The completed external control is `unshifted-arnoldi-probe-20261102-v1/`.
 Its source-pinned declaration, independent terminal review, progress ledger
-and final report are authoritative. The prospective comparison is
-`metric-gmres-probe-20261102-v1/`; no population outcome or convergence is
-implied by committing its numerical sources.
+and final report are authoritative. The completed original-M comparison is
+`metric-gmres-probe-20261102-v1/`, with terminal report SHA256
+`83336c3e299e2a03111f0aea396a57d0e99bf4080ec4ed1b2650ccf691e7e9e4`.
+Its GPU allocation was released cleanly. No strict-convergence or conditional
+martingale pass follows from either completed numerical pilot.
