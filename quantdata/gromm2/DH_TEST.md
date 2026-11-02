@@ -1,5 +1,87 @@
 # GROMM2 deep-hedging experiment: code-review guide
 
+For the measured GPU throughput review, captured training transaction,
+bounded pinned streaming and checkpoint corrections, see
+[GPU_TRAINING_REVIEW.md](GPU_TRAINING_REVIEW.md). These execution changes
+preserve the experiment and saved model identity described here.
+
+**31 October combined-book extension:** `combined_hedging.py` joins the
+84 ordinary-option controls, 15 PCA baskets, one spot position and the
+daily 1D ATM call into 101 jointly selected controls. It uses the same
+one-million training and one-million validation paths, zero-background Q
+simulation, lambda 100, 0.1 bp unit turnover costs and validation stopping.
+The ordinary cohorts retain their listing/holding/settlement rules, including
+subsequent trading of the day-10 ATM call expiring on day 20. Ordinary option
+cash settlement and daily-call settlement remain free; spot and PCA baskets
+pay final liquidation costs. PCA costs remain per basket, without an S factor.
+
+Each of the three independent policies initializes from its previously
+validation-selected PCA weights, with the ordinary actions initially zero.
+Input, recurrent and output matrices are expanded so the existing PCA
+holdings and gains are preserved up to floating-point summation differences.
+The unchanged training-only feature normalization is reused only after
+checking the original scenario identities. Optimizers start fresh for the
+expanded architecture. The PCA strategy is therefore an explicit epoch-zero
+candidate, not merely a separate reported benchmark. Training-only checkpoint
+selection remains an additional saved-history diagnostic.
+
+The subsequent user-requested continuation requires at least **100 completed
+epochs**, with the maximum remaining 2,000. The trainer resumes the saved
+model, independent optimizers and schedulers, random generators, partial
+epoch order, and validation-best checkpoints; it does not restart from the
+PCA initialization. Validation selection is unchanged, and the normal
+50-stagnant-epoch stopping condition applies only after the 100-epoch floor.
+The continuation's external control directory is
+`combined-pca-options-20261031-v1/resume-min100-20261031-v1/`.
+
+The reviewed host-memory continuation uses
+`combined-pca-options-20261031-v1/resume-host-cache-20261101-v1/`.
+It preserves the verified epoch-59 partial-epoch checkpoint after correcting
+a CUDA graph-workspace lifetime defect exposed by full-batch graph reuse.
+Suspect later work is archived, not silently reused. Exact raw training
+fields are cached only to the extent admitted by the resource manager;
+cached names, bytes, input waits and captures are logged. The review and
+failure/success regressions are documented in `GPU_TRAINING_REVIEW.md`.
+
+Combined-run artifacts are outside Git at
+`/home/hans/quantdata_data/experiments/gromm2/paired-real-books-20261028-v1/combined-pca-options-20261031-v1/`.
+
+**29 October update:** spot is restored to the ordinary-option/cohort book.
+The new `SpotCohortBookConfig` / `SpotCohortBookPolicy` add a daily spot action
+to the same 84 option controls. Spot pays 0.1 bp of absolute unit turnover,
+without an (S_t) multiplier, including final liquidation; option cash
+settlement remains free. Spot inventory enters the common action/LSTM state.
+The legacy control-end metadata uses day 20 as spot's last trading bound,
+not an option payoff or a free spot settlement. The original path files and
+information set are unchanged. This is a new policy geometry and checkpoint
+identity, not a relabelling of the completed options-only result.
+
+The fresh spot/cohort run is followed by a fresh PCA run: 15 real-option
+baskets, spot and a daily 1D ATM call. Both use the original zero-background
+Q paths, one million training plus one million validation paths, risk
+aversion 100 and the same 0.1 bp unit-L1 normalizers. The PCA basket cost is
+per basket, not netted underlying-leg turnover. Training and validation
+results are reported separately using the validation-selected policies.
+
+There is one GPU, so `market_hedge_schedule.py` runs the books **sequentially**,
+with independent parameters, optimizers, stopping decisions and outputs.
+The briefly launched shared-GPU attempt stopped during normalization before
+any optimizer updates. The two-book comparison run root is:
+
+`/home/hans/quantdata_data/experiments/gromm2/paired-real-books-20261028-v1/spot-pca-sequential-20261029-v1/`
+
+Completed **options-only** reference results, percent of inception spot,
+with three antithetic-pair Monte Carlo standard errors:
+
+| Quantity | Training | Validation |
+|---|---:|---:|
+| Q expectation | 1.7621 ± 0.0085 | 1.7566 ± 0.0082 |
+| Buyer bid | 1.2947 ± 0.0225 | 1.1488 ± 0.2054 |
+| Seller ask | 2.8198 ± 0.0365 | 2.8843 ± 0.1557 |
+
+The empty hedge selected no trading in both sets. These are frozen-policy
+Monte Carlo errors, not bounds on fitting or validation-selection error.
+
 Snapshot: **28 October 2026**. Implementation baseline: `a5d5743` on `main`,
 following `581a54b` and `e543868`. This document records the latest agreed
 experiment, what the committed code actually implements, and how to review
@@ -518,6 +600,14 @@ material work. Acquire CUDA only through `gpuctl`, never by choosing a device
 independently. Use `gpuctl resources --json` before starting and at most
 five-minute intervals during background inspections; honor its configured
 WARN/STOP actions. The existing supervisors emit flushed progress every minute.
+
+For this experiment, a resource-probe timeout is retried before stopping:
+three reads at most, with 15-second and 30-second backoffs. Both the GPU
+supervisor and the training heartbeat use this same rule. A timeout-only
+manager ERROR blocks work only if it persists through those retries;
+confirmed STOP readings and non-timeout ERROR/UNAVAILABLE readings still
+stop immediately. A failed `gpuctl` command remains an explicit warning
+under the host policy. No RAM or disk threshold is redefined here.
 
 Sampling and training run as separate processes so JAX and Torch do not retain
 both allocators' GPU caches throughout a stage. Scenario HDF5 checkpoints

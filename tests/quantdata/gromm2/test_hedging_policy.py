@@ -419,6 +419,40 @@ def test_resource_stop_enforces_own_process_graceful_deadline(monkeypatch) -> No
     assert killed == [(hedging.os.getpid(), signal.SIGKILL)]
 
 
+def test_progress_checks_optional_host_cache_cleanup_between_heartbeats(monkeypatch) -> None:
+    progress = hedging._Progress(label="cache-cleanup-test", interval=60.0)
+    waits = iter((False, True))
+    calls = []
+    monkeypatch.setattr(progress.closed, "wait", lambda seconds: next(waits))
+    monkeypatch.setattr(hedging, "check_resource_headroom", lambda: calls.append("guard"))
+    monkeypatch.setattr(progress, "emit", lambda: calls.append("emit"))
+    progress.resource_cleanup = lambda: calls.append("cleanup") or True
+    progress._run()
+    assert calls == ["guard", "cleanup", "emit"]
+    assert progress.checkpoint_requested.is_set()
+
+
+@pytest.mark.parametrize("error_source", ["guard", "cleanup"])
+def test_resource_error_releases_cache_without_reprobing_before_stop_deadline(monkeypatch, error_source: str) -> None:
+    progress = hedging._Progress(label="cache-stop-test", interval=60.0)
+    calls = []
+    monkeypatch.setattr(progress.closed, "wait", lambda seconds: False)
+
+    def check(stage):
+        calls.append(stage)
+        if stage == error_source:
+            raise RuntimeError("STOP test resource pressure")
+        return True
+
+    monkeypatch.setattr(hedging, "check_resource_headroom", lambda: check("guard"))
+    progress.resource_cleanup = lambda: check("cleanup")
+    progress.resource_release = lambda: calls.append("release")
+    monkeypatch.setattr(progress, "_resource_stop", lambda error: calls.append("stop"))
+    progress._run()
+    assert calls == (["guard", "release", "stop"] if error_source == "guard"
+        else ["guard", "cleanup", "release", "stop"])
+
+
 def test_failed_checkpoint_save_is_not_retried_under_pressure(tmp_path: Path, monkeypatch) -> None:
     attempts = []
 

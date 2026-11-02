@@ -39,10 +39,17 @@ def _write(path: Path, value: dict) -> None:
     temporary.replace(path)
 
 
+def final_quotes_match_selection(quotes: dict, report: dict) -> bool:
+    """Never overlay resumed training prices with an older completed valuation."""
+    expected = {"epoch": report["epoch"],
+        "best_epochs": {name: record["best_epoch"] for name, record in report["policies"].items()}}
+    return quotes.get("selection") == expected
+
+
 def monitor_prices(run_directory: Path, *, control_directory: Path, output_directory: Path,
-                    case: str, kind: str, interval: float = 60.0) -> None:
+                    case: str, kind: str, interval: float = 60.0, policy_directory: Path | None = None) -> None:
     """Read tiny saved reports only; never load scenarios or run neural evaluation."""
-    if case not in {"black0", "black5"} or kind not in {"cohorts", "factors"} or not 0 < interval <= 60:
+    if case not in {"black0", "black5"} or kind not in {"cohorts", "factors", "combined"} or not 0 < interval <= 60:
         raise ValueError("invalid monitored book or polling interval")
     output_directory.mkdir(parents=True, exist_ok=False)
     expectation = json.loads((run_directory / "validation_report.json").read_text())["prices"][case]
@@ -54,7 +61,11 @@ def monitor_prices(run_directory: Path, *, control_directory: Path, output_direc
         if resources["warning"]:
             print(json.dumps(dict(event="price-monitor-resource-warning", resources=resources)), flush=True)
         snapshot = None
-        for path in sorted((run_directory / "hedges" / case / kind).glob("*/training_report.json")):
+        report_paths = ([policy_directory / "training_report.json"] if policy_directory is not None else
+            sorted((run_directory / "hedges" / case / kind).glob("*/training_report.json")))
+        for path in report_paths:
+            if not path.exists():
+                continue
             report = json.loads(path.read_text())
             if report["config"].get("turnover_cost_basis") != "unit_l1":
                 continue
@@ -69,8 +80,9 @@ def monitor_prices(run_directory: Path, *, control_directory: Path, output_direc
                 raise ValueError("multiple unit-turnover runs for the same monitored book")
             snapshot = candidate | dict(policy_directory=str(path.parent))
             quote_path = path.with_name("quotes.json")
-            if quote_path.exists():
-                final = json.loads(quote_path.read_text())["validation"]["statistics"]
+            quotes = json.loads(quote_path.read_text()) if quote_path.exists() else {}
+            if final_quotes_match_selection(quotes, report):
+                final = quotes["validation"]["statistics"]
                 snapshot.update(bid=final["bid"]["mean"], ask=final["ask"]["mean"],
                     bid_mc_standard_error=final["bid"]["standard_error"],
                     ask_mc_standard_error=final["ask"]["standard_error"],
@@ -104,10 +116,13 @@ def main() -> None:
     parser.add_argument("--control-directory", type=Path, required=True)
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument("--case", choices=("black0", "black5"), required=True)
-    parser.add_argument("--kind", choices=("cohorts", "factors"), required=True)
+    parser.add_argument("--kind", choices=("cohorts", "factors", "combined"), required=True)
+    parser.add_argument("--policy-directory", type=Path,
+        help="Track a separate fresh-run checkpoint directory rather than the legacy default root")
     arguments = parser.parse_args()
     monitor_prices(arguments.run_directory, control_directory=arguments.control_directory,
-        output_directory=arguments.output_directory, case=arguments.case, kind=arguments.kind)
+        output_directory=arguments.output_directory, case=arguments.case, kind=arguments.kind,
+        policy_directory=arguments.policy_directory)
 
 
 if __name__ == "__main__":

@@ -4,10 +4,80 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+
+
+def checkpoint_selection_comparison(report: dict, rows: list[dict]) -> dict[str, object]:
+    """Compare training-only epoch selection with the existing validation selection.
+
+    Selection uses the recorded objective, including its numerical penalty and
+    training-fitted translation. Prices use the selected policies' net-of-cost
+    DH values on each population. Saved epoch aggregates do not determine MC
+    errors for differences between independently selected policies.
+    """
+    rows = sorted((row for row in rows if row["epoch"] <= report["epoch"]), key=lambda row: row["epoch"])
+    if not rows or len({row["epoch"] for row in rows}) != len(rows):
+        raise ValueError("selection requires nonempty, uniquely numbered completed epochs")
+    if rows[-1]["epoch"] != report["epoch"]:
+        raise ValueError("report and history must describe the same completed epoch")
+    names = ("zero", "short", "long")
+    for row in rows:
+        for name in names:
+            values = [row["train"][name]["objective"], row["train"][name]["DH"], row["validation"][name]["DH"]]
+            if not all(math.isfinite(value) for value in values):
+                raise ValueError("checkpoint selection requires finite losses and DH values")
+    by_epoch = {row["epoch"]: row for row in rows}
+    selections = {"training": {name: min(rows, key=lambda row: row["train"][name]["objective"])["epoch"]
+        for name in names}, "validation": {name: report["policies"][name]["best_epoch"] for name in names}}
+    result = {"completed_epochs": report["epoch"],
+        "selection_objective": "Training-fitted OCE risk plus numerical action penalty; earliest epoch wins exact training ties.",
+        "units": "inception spot", "mc_standard_errors": None,
+        "interpretation": "Retrospective saved-epoch comparison, not a new training run. Training-only selection never reads validation losses. Validation results use the same training-selected policy epochs. Paired price MC errors require per-path reevaluation."}
+    for criterion, selected_epochs in selections.items():
+        if any(epoch not in by_epoch for epoch in selected_epochs.values()):
+            raise ValueError("a selected checkpoint is missing from completed epoch history")
+        result[criterion] = {"best_epochs": selected_epochs}
+        for split in ("train", "validation"):
+            risks = {name: float(by_epoch[selected_epochs[name]][split][name]["DH"]) for name in names}
+            result[criterion][split] = {"DH": risks,
+                "bid": risks["zero"] - risks["long"], "ask": risks["short"] - risks["zero"]}
+    return result
+
+
+def plot_selection_comparison(policy_directory: Path, *, output: Path) -> dict[str, object]:
+    """Plot both epoch-selection rules from saved losses without scenario or GPU work."""
+    report = json.loads((policy_directory / "training_report.json").read_text())
+    history = json.loads((policy_directory / "training_history.json").read_text())["epochs"]
+    result = checkpoint_selection_comparison(report, history)
+    rows = sorted((row for row in history if row["epoch"] <= report["epoch"]), key=lambda row: row["epoch"])
+    epochs = [row["epoch"] for row in rows]
+    settings = {"font.size": 12, "axes.titlesize": 14, "legend.fontsize": 10}
+    with plt.rc_context(settings):
+        figure, axes = plt.subplots(3, 1, figsize=(11, 11), layout="constrained")
+        for axis, name, title in zip(axes, ("zero", "short", "long"),
+                ("Zero portfolio", "Short payoff: seller hedge", "Long payoff: buyer hedge"), strict=True):
+            for split, color in (("train", "#c93c55"), ("validation", "#258b57")):
+                axis.plot(epochs, [100 * row[split][name]["objective"] for row in rows],
+                    color=color, label=f"{split.title()} loss")
+            for criterion, color, style in (("training", "#d88717", ":"), ("validation", "#8b43b0", "--")):
+                best = result[criterion]["best_epochs"][name]
+                axis.axvline(best, color=color, linestyle=style, linewidth=1.6,
+                    label=f"{criterion.title()} selection: epoch {best}")
+            axis.set(title=title, xlabel="Epoch", ylabel="Objective (% initial spot); lower is better")
+            axis.grid(alpha=0.2)
+            axis.legend(loc="upper right", ncol=2)
+        figure.suptitle(f"GROMM2 · {report['config']['label']} · λ={report['config']['risk_aversion']:g}\n"
+            "Training-only versus validation-selected checkpoints · original Q, equal weights", fontsize=16)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        figure.savefig(output, dpi=170)
+        plt.close(figure)
+    result.update(plot=str(output), source=str(policy_directory), report=report, epochs=rows)
+    output.with_suffix(".json").write_text(json.dumps(result, indent=2, allow_nan=False) + "\n")
+    return {key: value for key, value in result.items() if key not in {"report", "epochs"}}
 
 
 def plot_training_loss(policy_directory: Path, *, output: Path) -> dict[str, object]:
@@ -169,9 +239,19 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--policy-directory", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--subtasks", action="store_true", help="Plot joint, zero-portfolio and exotic losses together and separately")
+    parser.add_argument("--subtasks", action="store_true", help="Plot the saved joint or independent portfolio subtask losses")
+    parser.add_argument("--selection-comparison", action="store_true", help="Compare training-only and validation-selected independent policy epochs")
     arguments = parser.parse_args()
-    plot = plot_joint_losses if arguments.subtasks else plot_training_loss
+    if arguments.subtasks and arguments.selection_comparison:
+        parser.error("choose subtasks or selection comparison, not both")
+    if arguments.selection_comparison:
+        print(json.dumps(plot_selection_comparison(arguments.policy_directory, output=arguments.output)), flush=True)
+        return
+    plot = plot_training_loss
+    if arguments.subtasks:
+        report = json.loads((arguments.policy_directory / "training_report.json").read_text())
+        independent = set(report.get("policies", {})) == {"zero", "short", "long"}
+        plot = plot_independent_losses if independent else plot_joint_losses
     print(json.dumps(plot(arguments.policy_directory, output=arguments.output)), flush=True)
 
 

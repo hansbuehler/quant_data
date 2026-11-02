@@ -56,6 +56,29 @@ def test_shocks_and_statistics_keep_antithetic_pairs_together() -> None:
     np.testing.assert_array_equal(actual, 0.5 * (values[::2] + values[1::2]))
 
 
+def test_float32_saved_expiry_settles_front_without_residual_black_time(small_audit_inputs) -> None:
+    inputs = dict(small_audit_inputs)
+    inputs["expiries_y"] = np.asarray(inputs["expiries_y"], dtype=np.float32).astype(np.float64)
+    config = UnconditionalAuditConfig(path_count=4, batch_size=4, substeps=1, nms=(-0.1, 0.0, 0.1))
+    inputs["dlvsq"] = np.zeros_like(inputs["dlvsq"])
+    front = np.zeros_like(inputs["initial_densities"])
+    support = np.asarray(inputs["supports"])
+    lower = np.searchsorted(support[0], 1.0) - 1
+    weight = (1.0 - support[0, lower]) / (support[0, lower + 1] - support[0, lower])
+    front[0, lower:lower + 2] = (1.0 - weight, weight)
+    front[1] = inputs["transports"][0] @ front[0]
+    inputs["initial_densities"] = front
+    simulate, instruments = audit_batch_function(**inputs, config=config)
+    factors = np.zeros((1, 4, 2))
+    background = np.full(4, 0.5 * inputs["background_volatility"] / np.sqrt(252.0))
+    gains, _, _, _, _ = simulate(jnp.asarray(factors), jnp.asarray(background))
+    spot = np.asarray(gains)[:, 0] + 1.0
+    strikes = instruments["option_strikes"][0]
+    terminal = np.where(strikes >= 1.0, np.maximum(spot[:, None] - strikes, 0.0), np.maximum(strikes - spot[:, None], 0.0))
+    recovered = np.asarray(gains)[:, 1:4] + instruments["initial_option_prices"][0]
+    np.testing.assert_allclose(recovered, terminal, rtol=0.0, atol=1.0e-14)
+
+
 def test_cpu_worker_does_not_claim_a_gpu(tmp_path) -> None:
     command = audit_worker_command(
         calibration_root=tmp_path, origin="2025-08-29", backend="cpu",
@@ -120,7 +143,7 @@ def test_one_day_audit_uses_production_q_step_and_preserves_density_invariants(s
 
 
 def test_resource_stop_prevents_work_but_probe_failure_is_logged_as_warning(monkeypatch, capsys) -> None:
-    response = SimpleNamespace(stdout=json.dumps({"checks": [{"health": "STOP", "name": "ram"}]}))
+    response = SimpleNamespace(returncode=0, stdout=json.dumps({"checks": [{"health": "STOP", "name": "ram"}]}))
     monkeypatch.setattr(rolling_audit.subprocess, "run", lambda *args, **kwargs: response)
     with pytest.raises(rolling_audit.ResourceHeadroomError):
         rolling_audit.check_resource_headroom()
@@ -129,6 +152,7 @@ def test_resource_stop_prevents_work_but_probe_failure_is_logged_as_warning(monk
         raise subprocess.TimeoutExpired("gpuctl", 15)
 
     monkeypatch.setattr(rolling_audit.subprocess, "run", failed_probe)
+    monkeypatch.setattr(rolling_audit.time, "sleep", lambda _: None)
     rolling_audit.check_resource_headroom()
     assert "gpuctl resources could not be read" in capsys.readouterr().out
 

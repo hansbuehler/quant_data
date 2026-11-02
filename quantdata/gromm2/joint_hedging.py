@@ -68,10 +68,19 @@ class JointTrainConfig(TrainConfig):
     relative_improvement: float = 1.0e-4
     absolute_improvement: float = 1.0e-7
     plot_every_epochs: int = 5
+    prefetch_workers: int = 2
+    cuda_memory_fraction: float | None = None
+    host_cache_training: bool = False
 
     def __post_init__(self) -> None:
         super().__post_init__()
+        verify_inp(1 <= self.minimum_epochs <= self.maximum_epochs,
+                   lambda: "minimum_epochs must lie between one and maximum_epochs")
         verify_inp(self.plot_every_epochs > 0, lambda: "plot interval must be positive")
+        verify_inp(self.prefetch_workers in {1, 2}, lambda: "prefetch_workers must be one or two")
+        verify_inp(isinstance(self.host_cache_training, bool), lambda: "host_cache_training must be boolean")
+        verify_inp(self.cuda_memory_fraction is None or (np.isfinite(self.cuda_memory_fraction)
+            and 0 < self.cuda_memory_fraction <= 1), lambda: "cuda_memory_fraction must be in (0,1]")
 
 
 class OptionsOutput(NamedTuple):

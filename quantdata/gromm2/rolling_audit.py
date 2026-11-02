@@ -24,12 +24,13 @@ from filelock import FileLock
 from scipy.stats import norm
 
 from quantdata.gromm2.calibration import _atomic_npz
+from quantdata.gromm2.gpu_forward_queue import resource_report
 from quantdata.gromm2.pricing import price_active_calls
 from quantdata.gromm2.rolling_calibration import write_json
 from quantdata.gromm2.simulation import SimulationState, one_day_risk_neutral_step
 
 
-@version("0.1")
+@version("0.2")
 @dataclass(frozen=True, kw_only=True)
 class UnconditionalAuditConfig:
     """Fixed sampling plan with no learned action or empirical measure change."""
@@ -56,18 +57,12 @@ class ResourceHeadroomError(RuntimeError):
 
 
 def check_resource_headroom() -> None:
-    """Use the host manager's thresholds, without separate resource measurements."""
-    gpuctl = shutil.which("gpuctl") or str(Path.home() / ".local/bin/gpuctl")
-    try:
-        result = subprocess.run([gpuctl, "resources", "--json"], capture_output=True, text=True, timeout=15, check=True)
-        unhealthy = [item for item in json.loads(result.stdout)["checks"] if item["health"] != "OK"]
-    except Exception as error:
-        print(json.dumps(dict(event="resource_warning", message=f"gpuctl resources could not be read: {error}")), flush=True)
-        return
-    if unhealthy:
-        print(json.dumps(dict(event="resource_alert", checks=unhealthy)), flush=True)
-    if any(item["health"] in {"STOP", "ERROR", "UNAVAILABLE"} for item in unhealthy):
-        raise ResourceHeadroomError("resource pressure forbids material work")
+    """Share timeout retries with the supervisor; use only manager thresholds."""
+    resources = resource_report()
+    if resources["warning"]:
+        print(json.dumps(dict(event="resource_alert" if resources["blocked"] else "resource_warning", **resources)), flush=True)
+    if resources["blocked"]:
+        raise ResourceHeadroomError("resource health forbids material work")
 
 
 def paired_samples(values: np.ndarray) -> np.ndarray:
@@ -139,7 +134,7 @@ def audit_batch_function(
     dlvsq_jax, tower_jax, loadings_jax = jnp.asarray(dlvsq), jnp.asarray(initial_densities), jnp.asarray(loadings)
     selected_supports, strikes_jax = supports_jax[selected], jnp.asarray(strikes)
     initial_spot = float(initial_densities[0] @ supports[0])
-    initial_calls = price_active_calls(selected_supports, tower_jax[selected][None], jnp.ones(1), jnp.asarray(expiries_y[selected]), strikes_jax, background_annual_volatility=background_volatility)[0]
+    initial_calls = price_active_calls(selected_supports, tower_jax[selected][None], jnp.ones(1), jnp.asarray(dtes[selected] / 252.0), strikes_jax, background_annual_volatility=background_volatility)[0]
     initial_prices = jnp.where(strikes_jax >= 1.0, initial_calls, initial_calls - initial_spot + strikes_jax)
     intervals = jnp.asarray(np.diff(expiries_y)[...])
 
@@ -159,7 +154,7 @@ def audit_batch_function(
         )
         calls = price_active_calls(
             selected_supports, result.density_tower[:, selected], result.state.background_level,
-            jnp.asarray(expiries_y[selected] - 1.0 / 252.0), strikes_jax,
+            jnp.asarray((dtes[selected] - 1) / 252.0), strikes_jax,
             background_annual_volatility=background_volatility,
         )
         prices = jnp.where(strikes_jax >= 1.0, calls, calls - result.spot[:, None, None] + strikes_jax)

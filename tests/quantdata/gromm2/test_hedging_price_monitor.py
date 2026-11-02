@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from quantdata.gromm2.hedging_price_monitor import selected_price_snapshot
+from quantdata.gromm2.hedging_price_monitor import (
+    final_quotes_match_selection,
+    selected_price_snapshot,
+)
 
 
 def _report():
@@ -35,3 +38,13 @@ def test_point_crossing_is_flagged_without_claiming_mc_significance():
 
 def test_missing_history_for_an_atomically_newer_report_is_retried():
     assert selected_price_snapshot(_report(), _history()[:2], dict(mean=0.0175)) is None
+
+
+def test_final_quotes_require_matching_epoch_and_independent_best_epochs():
+    report = _report()
+    selection = dict(epoch=3, best_epochs=dict(zero=0, short=2, long=1))
+    assert final_quotes_match_selection(dict(selection=selection), report)
+    assert not final_quotes_match_selection({}, report)
+    assert not final_quotes_match_selection(dict(selection=selection | dict(epoch=2)), report)
+    assert not final_quotes_match_selection(dict(selection=selection
+        | dict(best_epochs=dict(zero=0, short=1, long=1))), report)

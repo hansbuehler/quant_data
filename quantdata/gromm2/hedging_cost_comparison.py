@@ -13,11 +13,15 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from filelock import FileLock
 
-from quantdata.gromm2.hedging_policy import _batch, _Progress, _write_json, pair_statistics
+from quantdata.gromm2.hedging_policy import _Progress, _write_json, pair_statistics
+from quantdata.gromm2.market_batching import MarketBatchIterator
 from quantdata.gromm2.market_hedging import (
     MarketBookConfig,
     MarketBookPolicy,
+    SpotCohortBookConfig,
+    SpotCohortBookPolicy,
     UnitTurnoverBookConfig,
     UnitTurnoverBookPolicy,
     load_market_scenarios,
@@ -53,6 +57,29 @@ def transaction_cost_quotes(payoff: np.ndarray, gains: dict[str, np.ndarray],
     }
 
 
+def frozen_policy_fingerprint(checkpoint: dict) -> str:
+    """Identify selected actions and source populations, excluding optimizer progress.
+
+    Precision and the simulated background case affect valuation even when the
+    selected weights are unchanged. Epoch and optimizer metadata do not.
+    """
+    payload = {"identity": checkpoint["identity"],
+        "precision": checkpoint["report"]["train_config"]["precision"],
+        "simulation_case": checkpoint["report"]["scenario_model"]["simulation_case"]}
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True, allow_nan=False).encode())
+    for name in sorted(LIABILITIES):
+        state = checkpoint["state"]["policies"][name]["best_state"]
+        if not state:
+            raise ValueError("selected portfolio state must not be empty")
+        for key, value in sorted(state.items()):
+            if not isinstance(value, torch.Tensor) or not torch.isfinite(value).all():
+                raise ValueError(f"selected portfolio {name}.{key} must be a finite tensor")
+            value = value.detach().cpu().contiguous()
+            digest.update(json.dumps([name, key, str(value.dtype), list(value.shape)]).encode())
+            digest.update(value.reshape(-1).view(torch.uint8).numpy().tobytes())
+    return digest.hexdigest()
+
+
 def frozen_market_model(checkpoint: dict) -> IndependentHedges:
     """Load the previously selected weights and normalization, on CPU only."""
     values = dict(checkpoint["identity"]["config"])
@@ -60,6 +87,12 @@ def frozen_market_model(checkpoint: dict) -> IndependentHedges:
     unit_costs = "turnover_cost_basis" in values
     config_class = UnitTurnoverBookConfig if unit_costs else MarketBookConfig
     policy_class = UnitTurnoverBookPolicy if unit_costs else MarketBookPolicy
+    if values.get("spot_in_cohort_book", False):
+        config_class, policy_class = SpotCohortBookConfig, SpotCohortBookPolicy
+    if values.get("kind") == "combined":
+        from quantdata.gromm2.combined_hedging import CombinedBookConfig, CombinedBookPolicy
+
+        config_class, policy_class = CombinedBookConfig, CombinedBookPolicy
     config = config_class(**values)
     identity = checkpoint["identity"]
     if (identity["config"] != asdict(config) or identity["code_version"] != config.version.unique_id48
@@ -76,18 +109,39 @@ def frozen_market_model(checkpoint: dict) -> IndependentHedges:
 
 def evaluate_frozen_costs(policy_directory: Path, *, run_directory: Path, output_directory: Path,
                           batch_size: int = 4096, cpu_threads: int = 4,
-                          splits: tuple[str, ...] = ("validation", "train")) -> dict[str, object]:
-    """Reprice a fixed checkpoint's net and gross gains, without changing the running job."""
-    if batch_size <= 0 or cpu_threads <= 0 or not splits or any(split not in {"train", "validation"} for split in splits):
+                          splits: tuple[str, ...] = ("validation", "train"),
+                          resume: bool = False) -> dict[str, object]:
+    """Evaluate frozen net/gross gains, optionally reusing verified completed splits.
+
+    Resuming requires identical checkpoint bytes and source populations. An
+    interrupted split is recomputed; a committed split is checked by its archive
+    hash and never evaluated again. No training state or normalization is changed.
+    """
+    if (batch_size <= 0 or cpu_threads <= 0 or not splits or len(set(splits)) != len(splits)
+            or any(split not in {"train", "validation"} for split in splits)):
         raise ValueError("evaluation requires positive batch/thread counts and valid splits")
     check_resource_headroom()
+    output_directory.mkdir(parents=True, exist_ok=resume)
+    with FileLock(str(output_directory) + ".lock", timeout=0):
+        return _evaluate_frozen_costs(policy_directory, run_directory=run_directory,
+            output_directory=output_directory, batch_size=batch_size, cpu_threads=cpu_threads, splits=splits)
+
+
+def _archive_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _evaluate_frozen_costs(policy_directory: Path, *, run_directory: Path, output_directory: Path,
+                           batch_size: int, cpu_threads: int, splits: tuple[str, ...]) -> dict[str, object]:
     torch.set_num_threads(cpu_threads)
     serialized = (policy_directory / "checkpoint.pt").read_bytes()
     checkpoint = torch.load(io.BytesIO(serialized), map_location="cpu", weights_only=False)
     model = frozen_market_model(checkpoint)
     case = checkpoint["report"]["scenario_model"]["simulation_case"]
-    output_directory.mkdir(parents=True, exist_ok=False)
-    (output_directory / "frozen_checkpoint.pt").write_bytes(serialized)
     result = {
         "schema": "gromm2-frozen-cost-comparison-v1", "complete": False,
         "policy_directory": str(policy_directory), "checkpoint_sha256": hashlib.sha256(serialized).hexdigest(),
@@ -98,26 +152,65 @@ def evaluate_frozen_costs(policy_directory: Path, *, run_directory: Path, output
         "training_stop_reason": checkpoint["report"]["stop_reason"],
         "method": "Identical frozen holdings and path weights; add actual per-path costs back, then recompute OCE translations. No retraining or checkpoint reselection.",
         "caveat": "Cost-removed evaluation of cost-trained policies, not a newly optimized zero-cost hedge. MC errors exclude fitting and validation-selection uncertainty.",
-        "units": "inception spot", "device": "cpu", "splits": {},
+        "units": "inception spot", "device": "cpu", "splits": {}, "artifacts": {},
+        "requested_splits": list(splits),
     }
+    report_path = output_directory / "cost_comparison.json"
+    frozen_path = output_directory / "frozen_checkpoint.pt"
+    if frozen_path.exists():
+        if _archive_sha256(frozen_path) != result["checkpoint_sha256"]:
+            raise ValueError("frozen cost checkpoint changed; preserve the earlier evaluation")
+    elif report_path.exists():
+        raise ValueError("frozen cost report has no checkpoint snapshot; preserve the earlier evaluation")
+    else:
+        temporary = frozen_path.with_suffix(".partial")
+        temporary.write_bytes(serialized)
+        temporary.replace(frozen_path)
+    if report_path.exists():
+        previous = json.loads(report_path.read_text())
+        for key in ("schema", "checkpoint_sha256", "policy_directory", "case", "kind", "best_epochs"):
+            if previous.get(key) != result[key]:
+                raise ValueError(f"frozen cost {key} changed; preserve the earlier evaluation")
+        result = previous
+        result["requested_splits"] = list(dict.fromkeys((*previous.get("requested_splits", previous["splits"]), *splits)))
+    result["complete"] = False
+    _write_json(report_path, result)
     progress = _Progress(label=f"cost-comparison-{case}-{model.config.kind}", interval=60.0)
     handlers = {sig: signal.signal(sig, lambda *_: progress.stop.set()) for sig in (signal.SIGTERM, signal.SIGINT)}
     progress.thread.start()
     try:
-        for split in splits:
+        for split in result["requested_splits"]:
             progress.state.update(stage=f"loading-{split}")
-            data, _ = load_market_scenarios(run_directory / f"{split}.h5", split=split, case=case, kind=model.config.kind)
+            if model.config.kind == "combined":
+                from quantdata.gromm2.combined_hedging import load_combined_scenarios
+
+                data, _ = load_combined_scenarios(run_directory / f"{split}.h5", split=split, case=case)
+            else:
+                data, _ = load_market_scenarios(run_directory / f"{split}.h5", split=split, case=case, kind=model.config.kind,
+                    with_spot=getattr(model.config, "spot_in_cohort_book", False))
             source_key = "training_scenarios_sha256" if split == "train" else "validation_scenarios_sha256"
             if data.sha256 != checkpoint["identity"][source_key]:
                 raise ValueError("evaluation scenarios differ from the fitted checkpoint")
+            archive = output_directory / f"{split}_frozen_gains.npz"
+            if split in result["splits"]:
+                artifact = result.get("artifacts", {}).get(split, {})
+                if (artifact.get("source_sha256") != data.sha256 or artifact.get("paths") != len(data.payoff)
+                        or not archive.exists() or artifact.get("sha256") != _archive_sha256(archive)):
+                    raise ValueError(f"frozen cost {split} archive is missing or changed; preserve the earlier evaluation")
+                progress.emit(reused_completed_split=split)
+                continue
             gains = {name: np.empty(len(data.payoff), dtype=np.float64) for name in LIABILITIES}
             costs = {name: np.empty(len(data.payoff), dtype=np.float64) for name in LIABILITIES}
             progress.state.update(stage=f"evaluating-{split}", completed=0, total=len(data.payoff))
-            with torch.inference_mode():
-                for start in range(0, len(data.payoff), batch_size):
+            last_resource_check = time.monotonic()
+            with torch.inference_mode(), MarketBatchIterator(data, env=model.env, batch_size=batch_size) as batches:
+                for batch_number, (features, prices, _) in enumerate(batches):
                     if progress.stop.is_set():
                         raise InterruptedError("cost evaluation stopped; training checkpoint remains untouched")
-                    features, prices, _ = _batch(data, slice(start, start + batch_size), env=model.env)
+                    if time.monotonic() - last_resource_check >= 300.0:
+                        check_resource_headroom()
+                        last_resource_check = time.monotonic()
+                    start = batch_number * batch_size
                     for name, policy in model.policies.items():
                         output = policy(features, prices)
                         stop = start + len(features)
@@ -126,13 +219,16 @@ def evaluate_frozen_costs(policy_directory: Path, *, run_directory: Path, output
                     progress.state["completed"] = stop
             progress.state["stage"] = f"oce-and-paired-errors-{split}"
             result["splits"][split] = transaction_cost_quotes(data.payoff, gains, costs, risk_aversion=model.config.risk_aversion)
-            np.savez_compressed(output_directory / f"{split}_frozen_gains.npz", payoff=data.payoff,
+            temporary = archive.with_suffix(".partial.npz")
+            np.savez_compressed(temporary, payoff=data.payoff,
                 **{f"{name}_gain": value for name, value in gains.items()},
                 **{f"{name}_cost": value for name, value in costs.items()})
-            _write_json(output_directory / "cost_comparison.json", result)
+            temporary.replace(archive)
+            result["artifacts"][split] = dict(sha256=_archive_sha256(archive), source_sha256=data.sha256, paths=len(data.payoff))
+            _write_json(report_path, result)
             progress.emit(completed_split=split, best_epochs=result["best_epochs"])
         result["complete"] = True
-        _write_json(output_directory / "cost_comparison.json", result)
+        _write_json(report_path, result)
         return result
     finally:
         progress.closed.set()
@@ -157,10 +253,8 @@ def follow_final_hedges(run_directory: Path, *, output_directory: Path, batch_si
                     raise ValueError("multiple finalized policies found for one hedge book")
                 if policies:
                     target = output_directory / name
-                    if target.exists():
-                        raise FileExistsError(f"preserve previous evaluation rather than overwrite {target}")
                     evaluate_frozen_costs(policies[0].parent, run_directory=run_directory, output_directory=target,
-                        batch_size=batch_size, cpu_threads=cpu_threads)
+                        batch_size=batch_size, cpu_threads=cpu_threads, resume=True)
                     completed.append(name)
         print(json.dumps(dict(event="waiting-for-final-hedges", elapsed_seconds=time.monotonic() - started,
             completed=completed, total=4)), flush=True)
@@ -176,13 +270,14 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=4096)
     parser.add_argument("--cpu-threads", type=int, default=4)
     parser.add_argument("--follow-finals", action="store_true")
+    parser.add_argument("--resume", action="store_true")
     arguments = parser.parse_args()
     if arguments.policy_directory is None and not arguments.follow_finals:
         parser.error("a policy directory or --follow-finals is required")
     if arguments.policy_directory is not None:
         evaluate_frozen_costs(arguments.policy_directory, run_directory=arguments.run_directory,
             output_directory=arguments.output_directory / "current", batch_size=arguments.batch_size,
-            cpu_threads=arguments.cpu_threads)
+            cpu_threads=arguments.cpu_threads, resume=arguments.resume)
     if arguments.follow_finals:
         follow_final_hedges(arguments.run_directory, output_directory=arguments.output_directory / "final",
             batch_size=arguments.batch_size, cpu_threads=arguments.cpu_threads)

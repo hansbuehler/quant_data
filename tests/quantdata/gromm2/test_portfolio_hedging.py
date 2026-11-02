@@ -89,6 +89,21 @@ def test_training_records_separate_best_epochs_and_both_quote_sides(tmp_path) ->
     assert (tmp_path / "validation_frozen_pnl.npz").exists()
 
 
+def test_raised_minimum_epochs_survives_resume_and_defers_plateau_stop(tmp_path) -> None:
+    kwargs = dict(train=_data(), validation=_data(2, "validation"), directory=tmp_path, config=_config())
+    portfolio.train_independent_portfolios(**kwargs,
+        train_config=_training(maximum_epochs=1, convergence_patience=2, absolute_improvement=1.0e6))
+    portfolio.train_independent_portfolios(**kwargs,
+        train_config=_training(maximum_epochs=4, minimum_epochs=3, convergence_patience=2, absolute_improvement=1.0e6))
+    checkpoint = torch.load(tmp_path / "checkpoint.pt", weights_only=False)
+    assert checkpoint["state"]["epoch"] == 3
+    assert checkpoint["report"]["train_config"]["minimum_epochs"] == 3
+    assert checkpoint["report"]["stop_reason"] == "validation_plateau"
+    for record in checkpoint["state"]["policies"].values():
+        assert record["best_epoch"] == 0
+        assert record["early_stopped"]
+
+
 def test_complete_three_policy_minibatch_resume_is_exact(tmp_path, monkeypatch) -> None:
     original = torch.optim.Adam.step
 
@@ -109,3 +124,84 @@ def test_complete_three_policy_minibatch_resume_is_exact(tmp_path, monkeypatch) 
     for name, values in full["model"].items():
         torch.testing.assert_close(resumed["model"][name], values, rtol=0.0, atol=0.0)
     assert resumed["state"]["history"] == full["state"]["history"]
+
+
+def test_resume_reuses_checkpoint_normalization_without_rescanning(tmp_path, monkeypatch) -> None:
+    kwargs = dict(train=_data(), validation=_data(2, "validation"), directory=tmp_path,
+        config=_config(), train_config=_training())
+    expected = portfolio.train_independent_portfolios(**kwargs)
+
+    def forbidden_normalization(*args, **kwargs):
+        raise AssertionError("saved normalization must be reused on resume")
+
+    monkeypatch.setattr(portfolio, "feature_normalization", forbidden_normalization)
+    actual = portfolio.train_independent_portfolios(**kwargs, just_load=True)
+    assert actual == expected
+
+
+def test_warm_start_retains_policy_translation_and_training_normalization(tmp_path, monkeypatch) -> None:
+    model, train, validation = _model(), _data(), _data(2, "validation")
+    with torch.no_grad():
+        for policy in model.policies.values():
+            policy.translation.fill_(0.123)
+    initial_state = copy_state = {key: value.clone() for key, value in model.state_dict().items()}
+    expected, _ = portfolio.evaluate_portfolios(model, train, batch_size=4)
+    def forbidden_normalization(*args, **kwargs):
+        raise AssertionError("an identical-population warm start must reuse its saved training normalization")
+    monkeypatch.setattr(portfolio, "feature_normalization", forbidden_normalization)
+    initialization = dict(kind="test-warm-start", training_scenarios_sha256=train.sha256)
+    portfolio.train_independent_portfolios(train, validation, directory=tmp_path, config=_config(), train_config=_training(maximum_epochs=1),
+        initial_model_state=initial_state, initialization=initialization)
+    checkpoint = torch.load(tmp_path / "checkpoint.pt", weights_only=False)
+    assert checkpoint["report"]["initialization"] == initialization
+    assert checkpoint["state"]["history"][0]["train"] == expected
+    for key, value in model.state_dict().items():
+        torch.testing.assert_close(copy_state[key], value, rtol=0, atol=0)
+
+
+def test_warm_start_rejects_normalization_from_other_training_paths(tmp_path) -> None:
+    with pytest.raises(ValueError, match="identical training population"):
+        portfolio.train_independent_portfolios(_data(), _data(2, "validation"), directory=tmp_path,
+            config=_config(), train_config=_training(), initial_model_state=_model().state_dict(),
+            initialization=dict(training_scenarios_sha256="other"))
+
+
+def test_population_evaluation_keeps_final_partial_batch_and_packs_diagnostics() -> None:
+    model, data = _model(), _data()
+    reference, reference_gains = portfolio.evaluate_portfolios(model, data, batch_size=4)
+    packed_forward = portfolio.portfolio_evaluation_forward(model)
+    counts = []
+
+    def counted_forward(features, prices):
+        counts.append(len(features))
+        return packed_forward(features, prices)
+
+    actual, actual_gains = portfolio.evaluate_portfolios(model, data, batch_size=3, forward=counted_forward)
+    assert counts == [3, 3, 2]
+    for name in portfolio.LIABILITIES:
+        np.testing.assert_allclose(actual_gains[name], reference_gains[name], rtol=0.0, atol=1e-15)
+        for key, expected in reference[name].items():
+            assert actual[name][key] == pytest.approx(expected, abs=1e-14)
+
+
+def test_exception_inside_batch_never_overwrites_complete_checkpoint(tmp_path, monkeypatch) -> None:
+    saved_bytes = []
+
+    class FailingStep:
+        def __init__(self, model, optimizers, **kwargs):
+            self.model = model
+
+        def __call__(self, *args):
+            saved_bytes.append((tmp_path / "checkpoint.pt").read_bytes())
+            with torch.no_grad():
+                next(self.model.parameters()).add_(1.0)
+            raise RuntimeError("injected failure after partial optimizer mutation")
+
+    monkeypatch.setattr(portfolio, "IndependentPortfolioStep", FailingStep)
+    with pytest.raises(RuntimeError, match="injected failure"):
+        portfolio.train_independent_portfolios(_data(), _data(2, "validation"), directory=tmp_path,
+            config=_config(), train_config=_training())
+    assert (tmp_path / "checkpoint.pt").read_bytes() == saved_bytes[0]
+    checkpoint = torch.load(tmp_path / "checkpoint.pt", weights_only=False)
+    assert checkpoint["state"]["next_batch"] == 0
+    assert checkpoint["state"]["epoch"] == 0

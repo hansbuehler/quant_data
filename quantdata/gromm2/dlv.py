@@ -205,7 +205,7 @@ def _solve_sanos_symmetrized(
         + jnp.min(log_scale, axis=-1, keepdims=True)
     )
     scale = jnp.exp(log_scale)
-    off_diagonal = -jnp.sqrt(interior_lower * interior_upper)
+    off_diagonal = -jnp.exp(.5 * (jnp.log(-interior_lower) + jnp.log(-interior_upper)))
     symmetric_zero = jnp.zeros_like(diagonal[..., 1:2])
     symmetric_lower = jnp.concatenate(
         (symmetric_zero, off_diagonal), axis=-1
@@ -222,26 +222,27 @@ def _solve_sanos_symmetrized(
         solve = solve_tridiagonal_pcr
     else:
         raise ValueError(f"unknown tridiagonal solver: {linear_solver}")
-    transformed = solve(
-        symmetric_lower,
-        diagonal[..., 1:-1],
-        symmetric_upper,
-        interior_right_hand_side,
-    )
-    interior = transformed * scale[..., :, None]
-    left = (
-        right_hand_side[..., :1, :]
-        - upper[..., :1, None] * interior[..., :1, :]
-    )
-    right = (
-        right_hand_side[..., -1:, :]
-        - lower[..., -1:, None] * interior[..., -1:, :]
-    )
-    return jnp.concatenate((left, interior, right), axis=-2)
+    safe_transform = jnp.all(jnp.isfinite(interior_right_hand_side)) & jnp.all(
+        (right_hand_side[..., 1:-1, :] == 0.) | (interior_right_hand_side != 0.))
+
+    def transformed_solve():
+        transformed = solve(symmetric_lower, diagonal[..., 1:-1], symmetric_upper, interior_right_hand_side)
+        interior = transformed * scale[..., :, None]
+        left = right_hand_side[..., :1, :] - upper[..., :1, None] * interior[..., :1, :]
+        right = right_hand_side[..., -1:, :] - lower[..., -1:, None] * interior[..., -1:, :]
+        return jnp.concatenate((left, interior, right), axis=-2)
+
+    return jax.lax.cond(safe_transform, transformed_solve,
+                        lambda: solve(lower, diagonal, upper, right_hand_side))
 
 
 def solve_sanos_step(support: Array, previous: Array, dlvsq_dt: Array, *, linear_solver: str = "thomas") -> Array:
-    """Solve one variable-support SANOS step for vector or matrix RHS."""
+    """Solve the same SANOS system, including zero-volatility limiting columns.
+
+    A zero coefficient breaks the positive diagonal similarity transform,
+    not the original nonsingular M-matrix. Use its untransformed solve in
+    that case rather than flooring local variance or taking log(0).
+    """
     result_dtype = previous.dtype
     solve_dtype = jnp.float64 if jax.config.x64_enabled else result_dtype
     solve_support = support.astype(solve_dtype)
@@ -252,7 +253,19 @@ def solve_sanos_step(support: Array, previous: Array, dlvsq_dt: Array, *, linear
     vector_rhs = previous.ndim == dlvsq_dt.ndim
     solve_previous = previous.astype(solve_dtype)
     rhs = solve_previous[..., :, None] if vector_rhs else solve_previous
-    result = _solve_sanos_symmetrized(lower, diagonal, upper, rhs, linear_solver=linear_solver)
+    if linear_solver in ('thomas', 'thomas_unsymmetric'):
+        solve = _solve_tridiagonal_thomas
+    elif linear_solver in ('pcr', 'pcr_unsymmetric'):
+        solve = solve_tridiagonal_pcr
+    else:
+        raise ValueError(f'unknown tridiagonal solver: {linear_solver}')
+    if linear_solver.endswith('_unsymmetric'):
+        result = solve(lower, diagonal, upper, rhs)
+    else:
+        strictly_coupled = jnp.all((lower[..., 2:-1] < 0.) & (upper[..., 1:-2] < 0.))
+        result = jax.lax.cond(strictly_coupled,
+            lambda: _solve_sanos_symmetrized(lower, diagonal, upper, rhs, linear_solver=linear_solver),
+            lambda: solve(lower, diagonal, upper, rhs))
     result = result.astype(result_dtype)
     return result[..., 0] if vector_rhs else result
 
@@ -312,6 +325,7 @@ def decode_density_tower_from_front(
     interval_years: Array,
     *,
     linear_solver: str = "thomas",
+    active_maturity_count: Array | None = None,
 ) -> Array:
     """Decode a variable-support tower from its current front density."""
     calculation_dtype = (
@@ -336,6 +350,18 @@ def decode_density_tower_from_front(
 
     if supports.shape[0] == 1:
         return front_density[..., None, :]
+    if active_maturity_count is not None:
+        tower = jnp.broadcast_to(front_density[..., None, :], future_dlvsq.shape[:-2] + supports.shape)
+
+        def active_step(index, carry):
+            previous, values = carry
+            transport = jax.tree.map(lambda value: value[index - 1], transports)
+            current, _ = step(previous, (supports[index], transport,
+                                         future_dlvsq[..., index - 1, :], interval_years[index - 1]))
+            return current, values.at[..., index, :].set(current)
+
+        _, tower = jax.lax.fori_loop(1, active_maturity_count, active_step, (front_density, tower))
+        return tower
     _, remainder = jax.lax.scan(
         step,
         front_density,
@@ -350,6 +376,22 @@ def decode_density_tower_from_front(
     return jnp.concatenate((front_density[..., None, :], remainder), axis=-2)
 
 
+def risk_neutral_relative_drift(raw_loading: Array, density_loading: Array,
+                               density: Array, *, density_loading_floor: float = 0.) -> Array:
+    """Evaluate the Q restriction without forming an overflowing E/q intermediate.
+
+    For attenuation xi=B*q/(q+f), its drift is -sum(B*E)/(q+f). The expression
+    is identical for positive q and supplies its finite limit when f>0.
+    A singular zero denominator is not regularized into a different model.
+    """
+    interior = density[..., 1:-1]
+    floor = density_loading_floor * jnp.max(jnp.maximum(interior, 0.), axis=-1, keepdims=True)
+    numerator = jnp.sum(raw_loading * density_loading[..., 1:-1, :], axis=-1)
+    result = -numerator / (interior + floor)
+    result = jnp.where(jnp.all(raw_loading == 0., axis=-1), 0., result)
+    return jnp.where(interior >= 0., result, jnp.nan)
+
+
 def risk_neutral_log_drift(
     supports: Array,
     transports: Array | SparseTransport,
@@ -360,6 +402,8 @@ def risk_neutral_log_drift(
     front_density_loading: Array,
     *,
     linear_solver: str = "thomas",
+    raw_log_dlvsq_loadings: Array | None = None,
+    density_loading_floor: float = 0.,
 ) -> tuple[Array, Array, Array]:
     """Return densities, density loadings and the Q drift of log-DLV-squared.
 
@@ -376,6 +420,7 @@ def risk_neutral_log_drift(
     future_dlvsq = future_dlvsq.astype(calculation_dtype)
     interval_years = interval_years.astype(calculation_dtype)
     log_dlvsq_loadings = log_dlvsq_loadings.astype(calculation_dtype)
+    raw_log_dlvsq_loadings = log_dlvsq_loadings if raw_log_dlvsq_loadings is None else raw_log_dlvsq_loadings.astype(calculation_dtype)
     front_density_loading = front_density_loading.astype(calculation_dtype)
     factor_count = log_dlvsq_loadings.shape[-1]
     if front_density_loading.shape[-1] != factor_count:
@@ -383,10 +428,10 @@ def risk_neutral_log_drift(
 
     def step(
         carry: tuple[Array, Array],
-        inputs: tuple[Array, Array, Array, Array, Array],
+        inputs: tuple[Array, Array, Array, Array, Array, Array],
     ) -> tuple[tuple[Array, Array], tuple[Array, Array, Array]]:
         previous_density, previous_loading = carry
-        support, transport, local_variance, interval, current_xi = inputs
+        support, transport, local_variance, interval, current_xi, raw_xi = inputs
         transported_density = apply_transport(transport, previous_density)
         transported_loading = apply_transport(transport, previous_loading, matrix=True)
         current_density = solve_sanos_step(
@@ -414,15 +459,8 @@ def risk_neutral_log_drift(
             local_variance * interval,
             linear_solver=linear_solver,
         )
-        safe_density = jnp.maximum(
-            current_density[..., 1:-1, None],
-            jnp.finfo(current_density.dtype).tiny,
-        )
-        relative_density_loading = current_loading[..., 1:-1, :] / safe_density
-        relative_level_drift = -jnp.sum(
-            current_xi * relative_density_loading,
-            axis=-1,
-        )
+        relative_level_drift = risk_neutral_relative_drift(raw_xi, current_loading,
+            current_density, density_loading_floor=density_loading_floor)
         log_drift = relative_level_drift - 0.5 * jnp.sum(current_xi**2, axis=-1)
         return (current_density, current_loading), (
             current_density,
@@ -439,6 +477,7 @@ def risk_neutral_log_drift(
             jnp.moveaxis(future_dlvsq, -2, 0),
             interval_years,
             jnp.moveaxis(log_dlvsq_loadings, -3, 0),
+            jnp.moveaxis(raw_log_dlvsq_loadings, -3, 0),
         ),
     )
     densities, density_loadings, log_drift = outputs
