@@ -15,6 +15,8 @@
 \setbeamertemplate{background}{\begin{tikzpicture}[remember picture,overlay]
   \node[anchor=north east,inner sep=0pt] at ([xshift=-4pt,yshift=-4pt]current page.north east) {\includegraphics[height=0.95cm]{oxford_logo.png}};
 \end{tikzpicture}}
+\tikzset{testbox/.style={draw=#1!60!black,fill=#1!6,rounded corners=4pt,line width=0.8pt,inner sep=8pt,anchor=north},
+  testttl/.style={fill=#1!60!black,text=white,rounded corners=3pt,font=\bfseries\small,inner sep=4pt}}
 \newcommand{\Q}{\mathbb Q}
 \newcommand{\PP}{\mathbb P}
 \newcommand{\E}{\mathbb E}
@@ -46,9 +48,9 @@
 \begin{enumerate}
 \setlength{\itemsep}{0.9em}
 \item \textbf{Why:} desks need dynamics, not just today's fit
-\item \textbf{The model:} local volatility on a grid, with an explicit risk-neutral drift
+\item \textbf{The model:} discrete local volatility (DLV), with an explicit risk-neutral drift
 \item \textbf{Evidence:} S\&P~500, and the same arbitrage test against other generators
-\item \textbf{Outlook:} $\PP$ and $\Q$ in one model, hedging
+\item \textbf{Summary:} what GROMM does, and what it doesn't
 \end{enumerate}
 \end{frame}
 
@@ -77,15 +79,16 @@ The whole surface is the state: its dynamics are \textbf{estimated from history}
 % ===================================================================
 \begin{frame}{The missing model}
 \begin{center}
-\begin{tikzpicture}[x=1cm,y=0.76cm,every node/.style={font=\small,align=center}]
+\begin{tikzpicture}[x=1cm,y=0.95cm,every node/.style={font=\small,align=center}]
   \draw (0,0) rectangle (10,5); \draw[gray!50,dashed] (5,0) -- (5,5); \draw[gray!50,dashed] (0,2.5) -- (10,2.5);
   \node[gray] at (2.5,-0.3) {\footnotesize no}; \node[gray] at (7.5,-0.3) {\footnotesize yes};
   \node[gray] at (-0.42,1.25) {\footnotesize no}; \node[gray] at (-0.42,3.75) {\footnotesize yes};
   \node at (5,-0.8) {\textbf{fits today's market}\ {\footnotesize(thousands of options, within bid-ask)}};
   \node[rotate=90] at (-0.95,2.5) {\textbf{arbitrage-free tomorrow}};
-  \uncover<2->{\node[fill=gray!12,rounded corners] at (2.5,4.5) {Heston, SABR, LSV};}
-  \uncover<3->{\node[fill=gray!12,rounded corners,font=\footnotesize] at (2.6,3.2) {HJM-type market models\\Carmona--Nadtochiy, tangent L\'evy, CRC};}
-  \uncover<4->{\node[fill=red!10,rounded corners] at (7.5,1.25) {factor models, VolGAN,\\neural SDEs (CRW), diffusion};}
+  \uncover<2->{\node[fill=gray!12,rounded corners] at (2.0,4.5) {Heston, SABR, LSV};}
+  \uncover<3->{\node[fill=gray!12,rounded corners,font=\footnotesize] at (2.6,3.1) {HJM-type market models\\Carmona--Nadtochiy, tangent L\'evy, CRC};}
+  \uncover<4->{\node[fill=red!10,rounded corners] at (7.5,1.25) {factor models, VolGAN,\\neural SDEs, diffusion};}
+  \uncover<4->{\node[fill=gray!12,rounded corners,font=\footnotesize] at (5,4.05) {Wissel (2007)\\not implemented};}
   \uncover<5->{\node[fill=blue!15,rounded corners,font=\large\bfseries] at (7.5,3.75) {GROMM};}
 \end{tikzpicture}
 \end{center}
@@ -103,7 +106,7 @@ Train any optimiser on a simulator, and it finds the simulator's arbitrage:
 \begin{tikzpicture}
   \node[anchor=south west,inner sep=0] (img) {\includegraphics[width=\textwidth,height=.47\textheight,keepaspectratio]{opener_pnl.pdf}};
   \begin{scope}[x={(img.south east)},y={(img.north west)}]
-    \node[callout] (c1) at (0.82,0.45) {CRW: +257\,bp\\from a model that should be fair};
+    \node[callout] (c1) at (0.82,0.45) {neural SDE: +257\,bp\\from a model that should be fair};
     \draw[calloutarrow] (c1.west) -- (0.462,0.62);
     \node[callout,draw=blue!60!black,text=blue!60!black] (c2) at (0.13,0.45) {GROMM: 0,\\as it must be};
     \draw[calloutarrow,blue!60!black] (c2.east) -- (0.398,0.55);
@@ -125,9 +128,9 @@ Train any optimiser on a simulator, and it finds the simulator's arbitrage:
 % ===================================================================
 % B  THE IDEA
 % ===================================================================
-\divider{The model}{local volatility on a grid, with an explicit drift}
+\divider{The model}{DLV, with an explicit drift}
 
-\begin{frame}{The state: local volatility on a grid}
+\begin{frame}{The state: discrete local volatility (DLV)}
 Fixed cash strikes $K^0<\dots<K^{N+1}$, fixed expiries $T_1<\dots<T_M$, call prices
 $C^{j,i}=C(K^i,T_j)$.
 \vfill
@@ -165,12 +168,10 @@ $q^j$: risk-neutral density of $S_{T_j}$ on the grid $=$ butterfly prices.
 \begin{tikzpicture}[node distance=1.6cm, every node/.style={font=\small}]
   \node (q1) {$q^1$};
   \node[right=of q1] (q2) {$q^2$};
-  \node[right=of q2] (q3) {$q^3$};
-  \node[right=of q3] (qd) {$\cdots$};
+  \node[right=of q2] (qd) {$\cdots$};
   \node[right=of qd] (qM) {$q^M$};
   \draw[-{Latex}] (q1) -- node[above]{$\Sigma^2$} (q2);
-  \draw[-{Latex}] (q2) -- node[above]{$\Sigma^3$} (q3);
-  \draw[-{Latex}] (q3) -- (qd);
+  \draw[-{Latex}] (q2) -- node[above]{$\Sigma^3$} (qd);
   \draw[-{Latex}] (qd) -- node[above]{$\Sigma^M$} (qM);
 \end{tikzpicture}
 \end{center}
@@ -183,7 +184,7 @@ Front density $q^1$ $+$ any $\Sigma\ge0$ $\;\Longrightarrow\;$ every density, ev
 
 % -------------------------------------------------------------------
 \begin{frame}{Itô on the recursion}
-\cin{\textbf{Input:}} the volatility of local volatility, any number of factors. \cout{\textbf{Unknown:}} the drift.
+\cin{\textbf{Input:}} the vol of DLV, any number of factors. \cout{\textbf{Unknown:}} the drift.
 \[
   \frac{\dd\Sigma^{j}_t}{\Sigma^{j}_t}=\cout{\mu^j_t}\,\dd t+\cin{\xi^j_t}\,\dd W_t .
 \]
@@ -213,16 +214,77 @@ $\dd q^j_t=E^j_t\,\dd W_t$.
 \end{columns}
 \vfill
 \pause
-\begin{alertblock}{And the model exists}
-Unique strong solution, any number of factors, no conditions on the wings.
+\slideref{Drift restriction: Wissel (2007), in local implied volatilities; continuum: Carmona, Nadtochiy (2009).}
+\end{frame}
+
+\begin{frame}{Where the recursion starts: the front density}
+\vspace{0.5em}
+Front density $q^1$: \textbf{any martingale on the grid} with
+\[
+  \boxed{\;\dd q^{1}_t=\cin{E^{1}_t}\,\dd W_t\;},\qquad
+  q^1_t\ge0,\quad \mathbf 1^\top q^1_t=1,\qquad
+  q^1_{T_1}=e_J\ \text{for some node } J .
+\]
+Spot is a read-off, the mean of the front density:
+\(
+  X_t=K^\top q^1_t,\ X_{T_1}=K^J .
+\)
+\begin{center}
+\includegraphics[width=.95\textwidth]{front_quantile_1d.pdf}
+\end{center}
+\end{frame}
+
+\begin{frame}{No arbitrage, and the model exists}
+\begin{alertblock}{Proposition (drift restriction)}
+\[
+  \text{every } q^j \text{ is a martingale}
+  \qquad\Longleftrightarrow\qquad
+  \cout{\mu^{j,i}}=-\ip{\cin{\xi^{j,i}}}{\eta^{j,i}}\ \text{ at every node}
+\]
 \end{alertblock}
-\slideref{Drift restriction on a fixed lattice: Wissel (2007); continuum: Carmona, Nadtochiy (2009).}
+\vfill
+\begin{alertblock}{Theorem (existence)}
+If the vol of vol $\cin{\xi}$ is locally Lipschitz and bounded, GROMM has a unique solution: every $\Sigma^{j,i}$ stays finite and positive, and at each expiry spot settles on a node and the model continues.
+\end{alertblock}
+\vfill
+\begin{itemize}
+\item any number of factors, no conditions on the wings
+\item any network decoder with bounded output (tanh, clip) qualifies
+\end{itemize}
+\end{frame}
+
+% -------------------------------------------------------------------
+\begin{frame}{Estimating the dynamics from history}
+\textbf{AR(1)} per node, same contract from day $d$ to $d+1$, with $L=\log\Sigma$:
+\[
+  L_{d+1}=a+b\,L_d+{\color{gray}\varepsilon_d}
+  \qquad\Longrightarrow\qquad
+  \mu^{\PP}_{\text{emp}}=252\,\bigl[a+(b-1)L_d\bigr]+\tfrac12|\cin{\xi}|^2
+\]
+\vspace{-0.3em}
+\textbf{Loadings} from the residuals: factor 1 is the spot shock (regression), the rest is PCA:
+\[
+  {\color{gray}\varepsilon_d}\approx\sum_{f}\ell_f\,Z^f_d,
+  \qquad
+  \cin{\xi^f}=\sqrt{252}\,\ell_f
+\]
+\vspace{-0.3em}
+\textbf{Drifts:} $\Q$ (pricing) is computed; $\PP$ (risk) adds a market price of risk $\theta$:
+\[
+  \cout{\mu^\Q}=-\ip{\cin{\xi}}{\eta},
+  \qquad
+  \mu^\PP=\cout{\mu^\Q}+\cin{\xi}\,\theta
+\]
+\vfill
+\begin{center}
+\includegraphics[width=\textwidth,height=.42\textheight,keepaspectratio]{est_pipeline.pdf}
+\end{center}
 \end{frame}
 
 % ===================================================================
 % C  EVIDENCE
 % ===================================================================
-\divider{Evidence}{S\&P~500, and the same test against other generators}
+\divider{Evidence}{fit $\cdot$ test $\cdot$ S\&P~500 $\cdot$ head-to-head}
 
 \begin{frame}{Day 0: fitting SPX}
 \begin{center}
@@ -231,144 +293,120 @@ Unique strong solution, any number of factors, no conditions on the wings.
 \end{center}
 \vfill
 \begin{center}
-\headline{97.3\%}\ of 2.2M SPX quotes (2022--25) inside bid-ask
+\headline{97\%}\ of 2.2M SPX quotes (2022--25) inside bid-ask
 \end{center}
 \end{frame}
 
 % -------------------------------------------------------------------
 \begin{frame}{How to test for dynamic arbitrage: the BHW test}
-Under $\Q$ every traded price is a martingale:
-\[
-  \E\bigl[C_{t+1}-C_t\bigr]=0\qquad\text{for every contract and every day.}
-\]
-\pause
-Simulate many paths and average:
-\[
-  z=\frac{\text{mean price change}}{\text{standard error}}\;\sim\;N(0,1)\quad\text{if no arbitrage.}
-\]
-
-\begin{itemize}
-\item 1\% of tests beyond 2.576 and \textbf{none beyond 5}: e.g.\ 780 tests (39 options $\times$ 20 days) $\Rightarrow$ about 8 beyond 2.576, 0.0005 expected beyond 5
-\item conditional version: train a trading strategy on half the paths, test it on the other half
-\end{itemize}
-\end{frame}
-
-% -------------------------------------------------------------------
-\begin{frame}{Same data, same BHW test}
+\begin{center}
+Under $\Q$ every traded price is a martingale:\quad $\E_t\bigl[\Delta C_t\bigr]=0,\qquad \Delta C_t=C_{t+1}-C_t$.
+\end{center}
+\vspace{0.6em}
 \begin{center}
 \begin{tikzpicture}
-  \node[anchor=south west,inner sep=0] (img) {\includegraphics[width=\textwidth,height=.38\textheight,keepaspectratio]{zmap.pdf}};
-  \begin{scope}[x={(img.south east)},y={(img.north west)}]
-    \node[callout,anchor=east,overlay] (c) at (-0.06,0.62) {red $=$\\predictable drift};
-    \draw[calloutarrow,overlay] (c.east) -- (0.12,0.62);
-  \end{scope}
+  \node[testbox=blue] (u) at (-0.24\textwidth,0) {\begin{minipage}[t][3.75cm][t]{0.42\textwidth}
+    \vspace{0.3em}\textit{every contract, every day}\\[0.5em]
+    \centering$\displaystyle z=\frac{\text{mean of }\Delta C_t}{\text{standard error}}\;\sim\;N(0,1)$\\[0.8em]
+    \raggedright\small pass: about 1\% beyond 2.576,\\ \textbf{none beyond 5}
+  \end{minipage}};
+  \node[testttl=blue] at (u.north) {Unconditional};
+  \node[testbox=orange] (c) at (0.24\textwidth,0) {\begin{minipage}[t][3.75cm][t]{0.42\textwidth}
+    \vspace{0.3em}\textit{every trading strategy $a_\theta$}\\[0.5em]
+    \centering$\displaystyle \E\bigl[\,a_\theta(\text{state}_t)\cdot\Delta C_t\,\bigr]=0\quad\forall\theta$\\[0.8em]
+    \raggedright\small fit $\hat\theta$ on half the paths, trade it on the other half:
+    $T=\text{mean P\&L}/\text{s.e.}\sim N(0,1)$\\[0.4em]
+    catches drifts that average out ($+\delta$ when vol is high, $-\delta$ when low)
+  \end{minipage}};
+  \node[testttl=orange] at (c.north) {Conditional};
 \end{tikzpicture}
-\end{center}
-{\footnotesize CRW's own Heston-SLV benchmark and trained models (Cohen, Reisinger, Wang 2023); GROMM fitted to the same data,
-rank 3 $=$ CRW's 3 Brownian motions; same start state, 39 contracts, 20 days, 48{,}000 path pairs.}
-\vfill
-\begin{center}
-\begin{tabular}{@{}lccc@{}}
-\toprule
- & max $|z|$ & tests beyond 5 & of \\
-\midrule
-CRW & 294 & 320 & 724\\
-GROMM & 2.4 & 0 & 780\\
-exact Heston (control) & 3.0 & 0 & 723\\
-\bottomrule
-\end{tabular}
 \end{center}
 \end{frame}
 
 % -------------------------------------------------------------------
-\begin{frame}{Same data, same BHW test: every contract}
-\begin{center}
-\begin{tikzpicture}
-  \node[anchor=south west,inner sep=0] (img) {\includegraphics[width=\textwidth,height=.6\textheight,keepaspectratio]{fan_open.pdf}};
-  \begin{scope}[x={(img.south east)},y={(img.north west)}]
-    \node[callout] (c) at (0.27,0.76) {CRW: means drift off 0};
-    \draw[calloutarrow] (c.south) -- (0.40,0.58);
-    \node[callout,draw=blue!60!black,text=blue!60!black] (g) at (0.74,0.76) {GROMM: means stay at 0};
-    \draw[calloutarrow,blue!60!black] (g.south) -- (0.80,0.49);
-  \end{scope}
-\end{tikzpicture}
-\end{center}
-{\footnotesize P\&L of holding one contract, in units of its daily standard deviation. Grey: spread of individual paths (5--95\%, 25--75\%). Lines: mean over all paths, one per contract.}
-\end{frame}
+\begin{frame}{SPX: GROMM passes, and the test has power}
+\begin{columns}[T]
+\column{.5\textwidth}
+\textbf{Full grid:} 5{,}001 instruments, 62{,}569 tests
+\vspace{0.6em}
 
-% -------------------------------------------------------------------
-\begin{frame}{SPX, the full grid}
-\begin{center}
-\headline{5{,}001 instruments \quad 62{,}569 BHW tests}
-\end{center}
-\vfill
-\begin{center}
 \begin{tabular}{@{}lcc@{}}
 \toprule
  & expected & GROMM \\
 \midrule
-tests beyond 2.576 & 626 & 635 \\
-tests beyond 5 & 0 & 0 \\
-conditional $T_{\mathrm{sqr}}$, $T_{\mathrm{ent}}$ & $N(0,1)$ & 0.84, 0.84 \\
+beyond 2.576 & 626 & 635 \\
+beyond 5 & 0 & 0 \\
+conditional $T$ & $N(0,1)$ & 0.84 \\
+\bottomrule
+\end{tabular}
+\column{.48\textwidth}
+\textbf{Power check:} 570 instruments
+\vspace{0.6em}
+
+\begin{tabular}{@{}lcc@{}}
+\toprule
+ & max $|z|$ & beyond 5 \\
+\midrule
+GROMM under $\Q$ & 2.7--3.7 & 0 \\
+GROMM under $\PP$ & 342 & 570 \\
+CRC under $\Q$ & 140 & 320 \\
+\bottomrule
+\end{tabular}
+\end{columns}
+\vfill
+\begin{itemize}
+\item under $\Q$: as many exceedances as chance predicts
+\item under $\PP$ (risk premia) and for CRC (generalised Bates): rejected everywhere
+\end{itemize}
+\slideref{5{,}001 instruments $=$ 25 daily expiries $\times$ 200 strikes $+$ spot. Tests $=$ (instrument, day) pairs live and near the money on enough of 100{,}000 paths.}
+\end{frame}
+
+
+% -------------------------------------------------------------------
+\begin{frame}{Head-to-head: same data, same BHW test}
+\begin{center}
+\begin{tikzpicture}
+  \node[anchor=south west,inner sep=0] (img) {\includegraphics[width=\textwidth,height=.44\textheight,keepaspectratio]{zmap.pdf}};
+  \begin{scope}[x={(img.south east)},y={(img.north west)}]
+    \node[callout,anchor=east,overlay] (c) at (-0.06,0.52) {red $=$\\predictable drift};
+    \draw[calloutarrow,overlay] (c.east) -- (0.09,0.52);
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+\vspace{0.3em}
+\begin{center}\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+ & max $|z|$, 20-day hold & daily tests beyond 5 & tests \\
+\midrule
+neural SDE & 92.2 & 320 & 724\\
+GROMM & 2.3 & 0 & 780\\
+exact Heston (control) & 1.9 & 0 & 723\\
 \bottomrule
 \end{tabular}
 \end{center}
-\vfill
-{\footnotesize 5{,}001 instruments $=$ 25 daily expiries $\times$ 200 strikes $+$ spot. 62{,}569 tests $=$ (instrument, day) pairs that are live and near the money on enough of the 100{,}000 paths.}
+\slideref{Heston-SLV benchmark and trained neural SDE of Cohen, Reisinger, Wang (2023); GROMM fitted to the same data,
+rank 3 $=$ the neural SDE's 3 Brownian motions; same start state, 39 contracts, 20 days, 48{,}000 path pairs.}
 \end{frame}
 
 % -------------------------------------------------------------------
-\begin{frame}{Can the test detect arbitrage?}
-\begin{center}
-\begin{tabular}{@{}lccc@{}}
-\toprule
- & max $|z|$ & beyond 5 & of \\
-\midrule
-GROMM under $\Q$ & 2.7--3.7 & 0 & 570 \\
-GROMM under $\PP$ & 342 & 570 & 570 \\
-generalised Bates (CRC) under $\Q$ & 140 & 320 & 570 \\
-\bottomrule
-\end{tabular}
-\end{center}
-\vfill
-\begin{itemize}
-\item $\PP$ carries risk premia, so it \emph{should} fail: the test detects drift.
-\item The same test passes GROMM under $\Q$.
-\end{itemize}
+\begin{frame}{Deep hedging: no free lunch under GROMM}
+\centering
+\includegraphics[width=\linewidth]{figs/dh_summary.pdf}
+\vspace{-0.4em}
+\[
+  \text{hedge gain } G=\sum_t \delta_t\cdot\Delta C_t,
+  \qquad
+  \text{no arbitrage}\;\Longrightarrow\;\E_\Q[G]=0
+\]
+\slideref{GROMM rank 3 and neural SDE on the Heston-SLV benchmark; 20 days; spot $+$ 3 options; $\lambda=100$ with spot $=1$; error bars $\pm2$ s.e.; quadratic benchmark $=$ least-squares hedge. Small networks on an Apple M1 Pro laptop; not tuned for performance.}
 \end{frame}
 
 % ===================================================================
 % D  CLOSE
 % ===================================================================
-\divider{Outlook}{$\PP$ and $\Q$ in one model, hedging}
+\divider{Summary}{what GROMM does, and what it doesn't}
 
-\begin{frame}{$\PP$ and $\Q$ in one model}
-\[
-  \underbrace{\cout{\mu^{\Q}}=-\ip{\cin{\xi}}{\eta}}_{\text{computed}}
-  \qquad\qquad
-  \mu^{\PP}=\cout{\mu^{\Q}}+\cin{\xi}\,\theta_t
-\]
-\begin{itemize}
-\item same state, same loadings $\xi$, estimated from history
-\item $\theta_t$: market price of risk. AR(1) in the paper; any model can be used
-\item simulate under $\PP$ for risk, under $\Q$ for pricing and hedging
-\end{itemize}
-\end{frame}
-
-% -------------------------------------------------------------------
-\begin{frame}{Outlook: hedging}
-Bellman hedging needs one expectation per step. GROMM gives its generator in closed form:
-\[
-  \E\bigl[V(s_{t+\Delta})\mid s_t\bigr]=V+\Delta\Bigl(\mu\cdot\nabla V+\tfrac12\sum_{f=1}^k\xi_f^\top\nabla^2V\,\xi_f\Bigr)+O(\Delta^2).
-\]
-\begin{itemize}
-\item small steps: a PDE with \textbf{known, arbitrage-free coefficients} for the entire surface
-\item no nested Monte Carlo; $k$ Hessian--vector products per step
-\item matters with trading costs and a limited set of hedges, where replication is no longer optimal
-\end{itemize}
-\end{frame}
-
-% -------------------------------------------------------------------
 \begin{frame}{What GROMM does, and what it doesn't (yet)}
 \begin{columns}[T]
 \column{.48\textwidth}
@@ -376,14 +414,14 @@ Bellman hedging needs one expectation per step. GROMM gives its generator in clo
 \begin{itemize}
 \item explicit $\Q$ for every option on the grid
 \item no static and no dynamic arbitrage, by construction
-\item fits S\&P~500 within bid-ask, including the next-day expiry
+\item 97\% of S\&P~500 quotes inside bid-ask, including the next-day expiry
 \item $\PP$ and $\Q$ from one state
-\item fast: one tridiagonal solve per factor and expiry; 96{,}000 paths $\times$ 20 days in about 4 minutes on one CPU core
+\item fast: one tridiagonal solve per factor and expiry
 \end{itemize}
 \column{.48\textwidth}
 \textbf{Doesn't (yet)}
 \begin{itemize}
-\item loadings estimated from history: the number of factors is limited by the data
+\item vol of vol is estimated once from history: it does not change with the market state
 \item continuous paths: no jumps
 \end{itemize}
 \end{columns}
@@ -392,9 +430,9 @@ Bellman hedging needs one expectation per step. GROMM gives its generator in clo
 % -------------------------------------------------------------------
 \begin{frame}{Takeaways}
 \begin{enumerate}
-\item \textbf{State $=$ local volatility on a grid:} static arbitrage is impossible by construction.
+\item \textbf{State $=$ discrete local volatility (DLV):} static arbitrage is impossible by construction.
 \item \textbf{Itô on the density recursion:} an explicit drift, node by node. Dynamic arbitrage is impossible by construction.
-\item \textbf{On SPX:} 97\% inside bid-ask, and 62{,}569 BHW arbitrage tests passed. Neural competitors fail the same test.
+\item \textbf{On SPX:} 97\% inside bid-ask, and 62{,}569 BHW arbitrage tests passed. Other generators fail the same test.
 \end{enumerate}
 \vfill
 \begin{center}
@@ -409,6 +447,27 @@ arXiv:2610.16732
 
 % ===================================================================
 \appendix
+\begin{frame}{Appendix: our front, spot as a quantile of a Brownian motion}
+Spot at the front expiry lands on a grid node, drawn with the spot factor $W^1$:
+\[
+  X_{T_1}=F^{-1}\!\bigl(\Phi(W^1_{T_1}/\sqrt{T_1})\bigr),\qquad F:\ \text{CDF of today's } q^1 .
+\]
+$W^1$ is revealed over time. With $a_i=\Phi^{-1}(q^{1,0}+\dots+q^{1,i})$,
+\[
+  q^{1,i}_t=\Q\bigl(X_{T_1}=K^i\mid\mathcal F_t\bigr)=\Phi(z_i)-\Phi(z_{i-1}),\qquad
+  z_i=\frac{\sqrt{T_1}\,a_i-W^1_t}{\sqrt{T_1-t}} .
+\]
+\[
+  \boxed{\;\dd q^{1,i}_t=\cin{E^{1,i}_t}\,\dd W^1_t,\qquad
+  \cin{E^{1,i}_t}=\frac{\phi(z_{i-1})-\phi(z_i)}{\sqrt{T_1-t}}\;}
+\]
+\vfill
+\begin{itemize}
+\item a martingale by construction, in closed form: the front density vol $E^1$
+\item at $T_1$ spot settles on a node
+\end{itemize}
+\end{frame}
+
 \begin{frame}{Appendix: who has tried (1/2), generative and ML simulators}
 \scriptsize
 \resizebox{\textwidth}{!}{%
@@ -448,13 +507,14 @@ Buchegger, Gonon (2026) & latent diffusion & \approxm & \no & \\
  & model & no static arb. & explicit $\Q$ & fit / scale \\
 \midrule
 Cont, da Fonseca (2002); Fengler, H\"ardle, Villa (2003) & IV factor models & \no & \no & empirical $\PP$ \\
+Wissel (2007) & option lattice, local implied volatilities & \yes & \yes{} drift, existence & not implemented \\
 Schweizer, Wissel (2008) & local implied volatility & \yes & \yes{} theory & one expiry \\
 Carmona, Nadtochiy (2009) & local-volatility codebook & --- & drift only & no existence proof \\
 Carmona, Ma, Nadtochiy (2017) & tangent L\'evy & \yes & \yes & 98.9\% outside bid-ask$^{\ast}$ \\
 Gambara, Teichmann (2021) & consistent recalibration (Bates) & \yes & \approxm{} fails as calibrated & 65.2\% outside bid-ask$^{\ast}$ \\
 Buehler, Horvath, Kratsios, Wiese (2026) & DySANOS & \yes & \approxm{} 48 options & SPX \\
 \midrule
-\textbf{GROMM} & \textbf{stochastic DLV} & \yes & \yes{} \textbf{5{,}000 options} & \textbf{97.3\% inside bid-ask} \\
+\textbf{GROMM} & \textbf{stochastic DLV} & \yes & \yes{} \textbf{5{,}000 options} & \textbf{97\% inside bid-ask} \\
 \bottomrule
 \end{tabular}}
 \vfill
