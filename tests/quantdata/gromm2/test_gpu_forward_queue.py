@@ -29,6 +29,61 @@ def test_resource_probe_failure_is_an_explicit_warning(monkeypatch) -> None:
     assert "could not be read" in report["message"]
 
 
+def timeout_check():
+    return {"health": "ERROR", "name": "storage", "current": None,
+        "error": "TimeoutError: probe did not finish within 10s"}
+
+
+def test_transient_embedded_timeout_recovers_without_stopping(monkeypatch, capsys) -> None:
+    replies = iter([result(stdout=json.dumps({"checks": [timeout_check()]})),
+        result(stdout=json.dumps({"checks": [{"health": "OK"}]}))])
+    delays = []
+    monkeypatch.setattr(queue.subprocess, "run", lambda *args, **kwargs: next(replies))
+    monkeypatch.setattr(queue.time, "sleep", delays.append)
+    report = queue.resource_report()
+    assert not report["blocked"] and not report["warning"]
+    assert report["probe_attempts"] == 2
+    assert delays == [15.0]
+    assert "resource-probe-timeout-retry" in capsys.readouterr().out
+
+
+def test_persistent_embedded_timeout_blocks_only_after_bounded_retries(monkeypatch) -> None:
+    calls, delays = [], []
+    monkeypatch.setattr(queue.subprocess, "run", lambda *args, **kwargs:
+        calls.append(args) or result(stdout=json.dumps({"checks": [timeout_check()]})))
+    monkeypatch.setattr(queue.time, "sleep", delays.append)
+    report = queue.resource_report()
+    assert report["blocked"] and report["warning"]
+    assert report["probe_attempts"] == len(calls) == 3
+    assert delays == [15.0, 30.0]
+
+
+@pytest.mark.parametrize("other", [{"health": "STOP", "name": "ram"},
+    {"health": "ERROR", "name": "disk", "error": "permission denied"},
+    {"health": "UNAVAILABLE", "name": "disk", "error": "not mounted"},
+    {"health": "ERROR", "name": "disk", "current": {"free_pct": 1}, "error": "TimeoutError"}])
+def test_timeout_never_delays_another_confirmed_resource_problem(monkeypatch, other) -> None:
+    monkeypatch.setattr(queue.subprocess, "run", lambda *args, **kwargs:
+        result(stdout=json.dumps({"checks": [timeout_check(), other]})))
+    def forbidden_sleep(_):
+        raise AssertionError("confirmed resource problems must not be delayed")
+    monkeypatch.setattr(queue.time, "sleep", forbidden_sleep)
+    assert queue.resource_report()["blocked"]
+
+
+def test_cli_timeout_is_retried_but_remains_a_warning_under_host_policy(monkeypatch) -> None:
+    calls, delays = [], []
+    def timeout(*args, **kwargs):
+        calls.append(args)
+        raise subprocess.TimeoutExpired("gpuctl resources", 20)
+    monkeypatch.setattr(queue.subprocess, "run", timeout)
+    monkeypatch.setattr(queue.time, "sleep", delays.append)
+    report = queue.resource_report()
+    assert not report["blocked"] and report["warning"]
+    assert report["probe_attempts"] == len(calls) == 3
+    assert delays == [15.0, 30.0]
+
+
 @pytest.mark.parametrize("code", [3, 4])
 def test_only_explicit_gpu_busy_codes_retry(monkeypatch, code: int) -> None:
     monkeypatch.setattr(queue.subprocess, "run", lambda command, **kwargs: result(code=code))
@@ -108,6 +163,51 @@ def test_queue_handoff_and_release_never_touch_unrelated_service(monkeypatch, tm
     assert calls[3] == ("run", ["gpuctl", "release", "--allocation", "owned-allocation"])
     saved = json.loads((tmp_path / "gpu_queue_status.json").read_text())
     assert saved["allocation_released"] and saved["child_returncode"] == 0
+
+
+@pytest.mark.parametrize("failure", [subprocess.TimeoutExpired("gpuctl status", 20),
+    queue.GpuProbeUnavailableError("driver health is temporarily unknown")])
+def test_gpu_probe_failure_waits_without_claiming_and_recovers(monkeypatch, tmp_path: Path, capsys, failure) -> None:
+    calls = []
+    responses = iter([failure, {"available": 1, "driver": "ok"}])
+
+    def status():
+        value = next(responses)
+        calls.append("probe")
+        if isinstance(value, Exception):
+            raise value
+        return value
+
+    class Child:
+        pid = 43210
+        returncode = 0
+
+        def poll(self):
+            return self.returncode
+
+    monkeypatch.setattr(queue, "resource_report", lambda: {"blocked": False, "warning": False})
+    monkeypatch.setattr(queue, "available_gpu_status", status)
+    monkeypatch.setattr(queue, "claim_gpu", lambda: calls.append("claim") or "owned-allocation")
+    monkeypatch.setattr(queue.subprocess, "Popen", lambda *args, **kwargs: Child())
+    monkeypatch.setattr(queue.subprocess, "run", lambda command, **kwargs: calls.append(command) or result())
+    assert queue.run_queue(run_directory=tmp_path, command=["owned-job"], poll_seconds=.001) == 0
+    assert calls[:3] == ["probe", "probe", "claim"]
+    events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert events[0]["event"] == "waiting_for_gpu_status"
+    assert events[0]["allocation"] is None
+    assert events[-1]["allocation_released"]
+
+
+def test_gpu_status_cli_timeout_is_transient_but_permission_errors_are_not(monkeypatch) -> None:
+    monkeypatch.setattr(queue.subprocess, "run", lambda *args, **kwargs:
+        result(code=5, stderr="cannot talk to resourced: timed out"))
+    with pytest.raises(queue.GpuProbeUnavailableError):
+        queue.available_gpu_status()
+    monkeypatch.setattr(queue.subprocess, "run", lambda *args, **kwargs:
+        result(code=5, stderr="permission denied"))
+    with pytest.raises(RuntimeError, match="permission denied") as caught:
+        queue.available_gpu_status()
+    assert not isinstance(caught.value, queue.GpuProbeUnavailableError)
 
 
 def test_resource_stop_keeps_claim_until_explicit_release_approval(monkeypatch, tmp_path: Path, capsys) -> None:

@@ -1221,6 +1221,29 @@ antithetic paths per origin.}
 \label{tab:daily-dynamics-leverage}
 \end{table}
 
+As a mark-to-market diagnostic, Figure~\ref{fig:dysanos-vix} applies the
+VIX functional to the two PM-listed expiries bracketing 30 calendar days.
+It uses the Cboe-style discrete strike sum and total-variance interpolation.
+The filtered WRDS midpoint and its DYSANOS repricing use exactly the same
+bid--ask/static-arbitrage-filtered strike book; the dashed series instead is
+the continuous 30-day marginal-density proxy.  The 891-date repricing has
+mean error \(-1.03\) volatility points and RMSE \(1.30\) points against the
+official close, versus \(-0.70\) and \(1.05\) points for the filtered market
+book itself.  This is a static reconstruction diagnostic, not a dynamic
+no-arbitrage test.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{generated/dysanos_vix_comparison.png}
+  \caption{Thirty-day VIX comparison, 891 daily closes from 2022-01-03 to
+  2025-08-29.  The DYSANOS fitted-book line reprices the exact filtered WRDS
+  strikes under the decoded daily state; the WRDS fitted-book line uses their
+  bid--ask midpoints.  Both use the two PM expiries bracketing 30 days and
+  total-variance interpolation.  The continuous marginal line is a useful
+  DYSANOS proxy but not the listed-expiry VIX calculation.}
+  \label{fig:dysanos-vix}
+\end{figure}
+
 The rank-201 daily increment experiment is the strongest preliminary
 mechanism result, but it is not a strict forecast because its terminal
 252-session fit includes 2025 observations.  Conversely, the low-rank
@@ -1247,6 +1270,26 @@ The primary objective is the joint one-session conditional likelihood; an
 auxiliary decoded-moment loss can match selected spot--ATM leverage moments
 and 5- and 20-session volatility-clustering moments.  This is a proposed
 extension, not a fitted result in this paper.
+
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=\textwidth,height=0.76\textheight,keepaspectratio]{generated/dysanos_variance_index_histograms.pdf}
+  \caption{Analytic variance-index level distributions at 5, 10, \ldots, 70
+  business days, using continuous-strike log-contract variance rather than
+  discrete Cboe VIX.  Blue: historical SANOS surfaces, 2022-01-03--2025-08-29;
+  available counts appear in each panel, without expiry extrapolation.
+  Grey: daily Gaussian AR baseline; orange: LSTM; purple: Mamba-style selective
+  state-space overlay.  The affine-200 decoder and AR coefficients from the
+  252-date fit ending 2025-08-29, with NMS range $[-4,3]$, remain fixed.
+  Each overlay is trained for 200 epochs against the 14 historical
+  log-quantile curves, with smaller daily-change-variance and cross-tenor
+  correlation penalties.  All 200 Gaussian innovation directions remain;
+  14 price-sensitive directions receive learned drift and scale corrections.
+  Each model uses 2,048 independent samples; neural samples follow 256 daily
+  burn-in steps.  This is in-sample distribution calibration, not a forward
+  validation or a test of dynamic no-arbitrage.}
+  \label{fig:variance-index-distribution-calibration}
+\end{figure}
 
 \begin{table}[H]
 \centering

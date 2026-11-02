@@ -741,6 +741,147 @@ grid and time steps are unchanged.  These checks establish numerical
 equivalence of the implementation; they do not replace the unconditional
 and held-out strategy-conditional martingale diagnostics.
 
+\section{Deep Hedging of a Forward-Start Straddle}
+\label{sec:deep-hedging-forward-start}
+
+\subsection{Experiment and Hedge Books}
+\label{sec:deep-hedging-setup}
+
+We compare two completed daily hedging experiments for the cash payoff
+\begin{equation}
+  H=\abs{S_{20}/S_{10}-1},
+  \label{eq:forward-start-hedging-payoff}
+\end{equation}
+with initial normalized spot $S_0=1$.  Both use the same one million
+training paths and one million independent validation paths from the saved
+GROMM2 $(-3,2)$ affine-200, 16-factor AR(1) model, initialized on
+29 August 2025.  This is not the newer $(-4,3)$ rolling calibration.
+The Black background volatility is set to zero in the simulator, without
+refitting the historically estimated DLVs or factor law, which used a
+$5\%$ background.  There are eight Brownian substeps per business day,
+but trading occurs only daily.  Paths retain their original equal
+$\Q$ weights: no recentering or empirical change of measure is applied.
+
+The two hedge books are:
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Ordinary options and spot (85 controls).}
+  Fourteen contracts have fixed inception-relative strikes
+  $\{0.95,0.98,0.99,1,1.01,1.02,1.05\}$ and expiries on days 10 and 20;
+  they can be rebalanced daily before expiry.  On each day 1 through 10,
+  seven additional options are issued at those strikes relative to that
+  day's spot, with ten business days to expiry.  These cohorts are held
+  to cash settlement, except that the day-10 ATM call expiring on day 20
+  remains tradable on days 10 through 19.  Puts are used below ATM and
+  calls at or above ATM, with the side fixed at issuance.  The day-zero
+  cohort duplicates the fixed ten-day contracts and is not counted twice.
+  Spot can be traded daily.
+  \item \textbf{PCA baskets, spot and a one-day ATM call (17 controls).}
+  Fifteen PCA-mimicking portfolios are formed at inception from 44 vanilla
+  contracts with expiries of at least 25 business days.  Their constituent
+  weights remain fixed, while basket holdings can change daily.  Spot and
+  a newly issued one-day ATM call are also tradable each day.  This book
+  does not contain the day-10 ATM call expiring on day 20.
+\end{enumerate}
+Transaction costs are $0.1$ basis points of absolute unit turnover, without
+an $S_t$ multiplier.  PCA costs are charged per basket, not per underlying
+leg.  Option cash settlement is free; spot and basket liquidation is charged.
+
+\subsection{Objective and Price Convention}
+\label{sec:deep-hedging-objective}
+
+For risk aversion $\lambda=100$, we use the power-exponential utility and
+its optimized certainty equivalent
+\begin{equation}
+  \begin{aligned}
+    u_\lambda(x)&=
+    \begin{cases}
+      (1-e^{-\lambda x})/\lambda,&x\geq0,\\
+      x-\lambda x^2/2,&x<0,
+    \end{cases}\\
+    \operatorname{OCE}_\lambda(X)
+      &:=\sup_{m\in\R}\{m+\E^\Q[u_\lambda(X-m)]\}.
+  \end{aligned}
+  \label{eq:deep-hedging-power-oce}
+\end{equation}
+Let $G_\theta$ denote terminal trading gains after costs.  Separate policies
+are trained for the empty, short-claim and long-claim portfolios, with no
+shared trainable parameters.  The risks and indifference quotes are
+\begin{equation}
+  \begin{gathered}
+    \rho_0=\inf_\theta[-\operatorname{OCE}_\lambda(G_\theta)],\qquad
+    \rho_-=\inf_\theta[-\operatorname{OCE}_\lambda(G_\theta-H)],\\
+    \rho_+=\inf_\theta[-\operatorname{OCE}_\lambda(G_\theta+H)],\qquad
+    p_{\mathrm{ask}}=\rho_--\rho_0,\quad
+    p_{\mathrm{bid}}=\rho_0-\rho_+.
+  \end{gathered}
+  \label{eq:deep-hedging-indifference-quotes}
+\end{equation}
+The reported values approximate these optimizations within the chosen
+policy class.  Each policy combines an affine and a two-layer deep action
+head with a 32-dimensional LSTM state.  Its information includes time,
+latent model state, current option prices and inventory.  Positions have
+a numerical cap of ten units and a soft near-cap penalty.  Training uses
+batches of 256 paths; validation selects checkpoints and stops each
+policy after 50 epochs without sufficient improvement, with learning-rate
+reductions after 25 stagnant epochs.  The no-trading policy is retained
+as an epoch-zero candidate.
+
+\subsection{Results}
+\label{sec:deep-hedging-results}
+
+Table~\ref{tab:deep-hedging-two-books} reports the final validation-selected
+policies on both complete samples.\footnote{Run identifier:
+\path{spot-pca-sequential-20261029-v1}; the archived
+\path{quotes.json} and \path{training_report.json} files record each book's
+prices, sampling errors, model provenance and stopping decisions.}
+Antithetic partners remain together in each sample, giving 500,000
+independent pairs per set.  The displayed errors are three plug-in Monte
+Carlo standard errors for frozen policies, including covariance when
+forming price differences.  They exclude fitting and checkpoint-selection
+uncertainty and are marginal error bounds, not a simultaneous coverage
+guarantee.  Validation is used for model selection, not as a third,
+untouched test sample.
+
+\begin{table}[H]
+  \centering
+  \small
+  \caption{Forward-start straddle prices, in percent of initial spot.
+  Every entry is an estimate $\pm$ three antithetic-pair Monte Carlo
+  standard errors.  Transaction costs are included.}
+  \label{tab:deep-hedging-two-books}
+  \begin{tabular}{lrr}
+    \toprule
+    Quantity & Training & Validation \\
+    \midrule
+    $\E^\Q[H]$ & $1.7621\pm0.0085$ & $1.7566\pm0.0082$ \\
+    Ordinary-book bid & $1.0623\pm0.0025$ & $1.0627\pm0.0025$ \\
+    Ordinary-book ask & $2.4457\pm0.0246$ & $2.8092\pm0.6186$ \\
+    PCA-book bid & $1.5308\pm0.0017$ & $1.5006\pm0.0053$ \\
+    PCA-book ask & $2.0300\pm0.0028$ & $2.0724\pm0.0193$ \\
+    Empty-portfolio risk, both books & $0$ & $0$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The ordinary-book run stopped after 54 epochs, selecting epochs
+0, 4 and 0 for the empty, short and long portfolios respectively.
+The PCA run stopped after 63 epochs, selecting epochs 0, 8 and 13.
+Thus both empty portfolios select no trading; the ordinary-book buyer
+also selects the unhedged baseline.  The PCA book narrows the validation
+bid--ask spread from $1.7466$ to $0.5718$ percentage points, with the
+Monte Carlo expectation inside both brackets.  Its three-standard-error
+expanded validation bracket is $[1.4953\%,2.0917\%]$, compared with
+$[1.0601\%,3.4278\%]$ for the ordinary book.  The ordinary seller's much
+larger error indicates sensitivity to rare losses.
+
+These are learned, daily hedging results for different trading universes,
+not exact replication bounds or a proof of risk neutrality.  No-trading
+selection only says that training did not find a validation-improving
+empty-portfolio strategy.  Finite-step martingale defects remain a
+separate model diagnostic.  Instantaneous factor spanning does not imply
+perfect replication with daily trading, fixed basket weights, costs and
+position limits.
+
 \section{VIX Reconstruction}
 \label{sec:vix-reconstruction}
 

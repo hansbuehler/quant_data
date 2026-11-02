@@ -2466,6 +2466,26 @@ def test_schema_one_native_checkpoint_load_is_read_only(
     assert checkpoint_path.read_bytes() == checkpoint_bytes
 
 
+def test_native_fit_progress_evaluation_preserves_optimizer_result() -> None:
+    geometry, day, _ = _synthetic_market_and_surface()
+    config = NativeStateConfig(label="native-progress-invariance", geometry=geometry)
+    train = FlexTrainConfig(
+        num_epochs=2, day_batch_size=1, learning_rate=1.0e-3,
+        report_every=1, convergence_window=1,
+        convergence_relative_tolerance=0.999999, precision=64, device="cpu",
+    )
+    reference = fit_native_states((day,), config=config, train_config=train)
+    observed = []
+    monitored = fit_native_states(
+        (day,), config=config, train_config=train,
+        evaluation_callback=lambda epoch, evaluation: observed.append((epoch, evaluation)),
+    )
+    assert [epoch for epoch, _ in observed] == [1, 2]
+    assert observed[-1][1].objective == pytest.approx(monitored.evaluation.objective)
+    for name, value in reference.model.state_dict().items():
+        torch.testing.assert_close(monitored.model.state_dict()[name], value, rtol=0, atol=0)
+
+
 def test_latent_checkpoint_resumes_supervised_then_market_phases(
     tmp_path: Path,
     monkeypatch,

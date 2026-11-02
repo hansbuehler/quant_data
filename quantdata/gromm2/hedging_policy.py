@@ -11,6 +11,7 @@ import signal
 import threading
 import time
 import warnings
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import NamedTuple
@@ -157,7 +158,7 @@ def optimized_oce(pnl: np.ndarray, risk_aversion: float) -> tuple[float, float, 
     return float(translation + utility.mean()), translation, utility
 
 
-def feature_normalization(features: np.ndarray, *, floor: float) -> tuple[np.ndarray, np.ndarray]:
+def feature_normalization(features: np.ndarray, *, floor: float, progress: _Progress | None = None) -> tuple[np.ndarray, np.ndarray]:
     """Fit population mean/SD across training path and time axes, never holdout."""
     if features.ndim != 3 or not len(features) or floor <= 0.0:
         raise ValueError("normalization needs nonempty (path,time,feature) training data")
@@ -175,6 +176,11 @@ def feature_normalization(features: np.ndarray, *, floor: float) -> tuple[np.nda
         squares += block_squares + difference**2 * count * len(block) / total
         mean += difference * len(block) / total
         count = total
+        if progress is not None:
+            progress.state.update(normalization_completed=min(start + 1024, len(features)),
+                normalization_total=len(features))
+            if progress.stop.is_set():
+                raise InterruptedError("stopped during training-only normalization; existing checkpoints preserved")
     return mean, np.maximum(np.sqrt(squares / count), floor)
 
 
@@ -310,13 +316,24 @@ class _Progress:
         self.state: dict[str, object] = {"stage": "initializing", "epoch": 0, "completed": 0, "total": 0}
         self.initial_completed = 0
         self.resource_error: BaseException | None = None
+        self.resource_cleanup: Callable[[], bool] | None = None
+        self.resource_release: Callable[[], None] | None = None
         self.thread = threading.Thread(target=self._run, daemon=True)
 
     def _run(self) -> None:
         while not self.closed.wait(self.interval):
             try:
                 check_resource_headroom()
+                cleanup = self.resource_cleanup
+                if cleanup is not None:
+                    cleanup()
             except BaseException as error:
+                release = self.resource_release
+                if release is not None:
+                    try:
+                        release()
+                    except BaseException:
+                        pass
                 self._resource_stop(error)
                 return
             self.checkpoint_requested.set()
@@ -377,6 +394,9 @@ def training_environment(config: TrainConfig) -> BaseEnvironment:
         if env.device.type != "cuda":
             raise RuntimeError("the allocated CUDA backend is unavailable; refusing to fall back")
         torch.cuda.set_device(env.device)
+        memory_fraction = getattr(config, "cuda_memory_fraction", None)
+        if memory_fraction is not None:
+            torch.cuda.set_per_process_memory_fraction(memory_fraction, device=env.device)
         torch.cuda.manual_seed(config.seed)
         return env
     return BaseEnvironment(device="cpu", precision=config.precision, debug=False)

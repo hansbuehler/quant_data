@@ -175,16 +175,56 @@ class UnitTurnoverBookPolicy(MarketBookPolicy):
             output.cap_fraction, output.positions, costs, output.gross_gain)
 
 
+@version("0.1", dependencies=[UnitTurnoverBookConfig])
+@dataclass(frozen=True, kw_only=True)
+class SpotCohortBookConfig(UnitTurnoverBookConfig):
+    """Append spot to the action book, using the horizon as its last trading bound."""
+
+    spot_in_cohort_book: bool = True
+    spot_cost_bps: float = 0.1
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        verify_inp(self.kind == "cohorts" and self.spot_in_cohort_book is True,
+            lambda: "the spot extension requires the cohort book")
+        verify_inp(self.option_start_days[-1] == 0 and self.option_expiry_days[-1] == 20
+            and not self.locked[-1] and not self.call_sides[-1],
+            lambda: "the final control must be freely tradable spot through the day-20 horizon")
+        verify_inp(np.isfinite(self.spot_cost_bps), lambda: "spot turnover costs must be finite")
+
+
+class SpotCohortBookPolicy(UnitTurnoverBookPolicy):
+    """Joint recurrent option/spot actions; spot liquidates with cost, not settlement."""
+
+    def forward(self, features: torch.Tensor, prices: torch.Tensor) -> OptionsOutput:
+        output = super().forward(features, prices)
+        holdings = output.positions.to(prices.dtype)
+        options = holdings[:, :, :-1]
+        prior_options = torch.cat((torch.zeros_like(options[:, :1]), options[:, :-1]), dim=1)
+        alive = torch.arange(options.shape[1], device=self.device)[:, None] < self.option_expiries[:-1]
+        option_turnover = ((options - prior_options).abs() * alive).sum(dim=(1, 2))
+        spot_units = holdings[:, :, -1]
+        prior_spot = torch.cat((torch.zeros_like(spot_units[:, :1]), spot_units[:, :-1]), dim=1)
+        spot_turnover = (spot_units - prior_spot).abs().sum(dim=1) + spot_units[:, -1].abs()
+        costs = 1e-4 * (self.config.transaction_cost_bps * option_turnover
+            + self.config.spot_cost_bps * spot_turnover)
+        return OptionsOutput(output.gross_gain - costs, output.penalty, output.action_squared,
+            output.cap_fraction, output.positions, costs, output.gross_gain)
+
+
 class MarketView:
     """Map shared latent paths and materialize only the requested neural batch."""
 
-    def __init__(self, arrays: dict, book: dict, *, kind: str, features: bool) -> None:
+    def __init__(self, arrays: dict, book: dict, *, kind: str, features: bool, with_spot: bool = False) -> None:
+        verify_inp(not with_spot or kind == "cohorts", lambda: "explicit spot extension is only for the cohort book")
         self.arrays, self.book, self.kind, self.features = arrays, book, kind, features
+        self.with_spot = with_spot
         paths = arrays["spots"].shape[0]
         if features:
             columns = arrays["core_features"].shape[-1] + 3 + 3 * len(book["starts"]) + arrays["factor_prices"].shape[-1] + 1
         else:
             columns = 1 + 2 * len(book["starts"]) if kind == "cohorts" else arrays["factor_prices"].shape[-1] + 2
+            columns += 2 if with_spot else 0
         self.shape = (paths, 20 if features else 21, columns)
         self.ndim, self.dtype = 3, np.dtype("f4" if features else "f8")
 
@@ -209,12 +249,16 @@ class MarketView:
                 np.broadcast_to(alive, values["option_prices"][:, :20].shape),
                 values["factor_prices"][:, :20], values["daily_calls"][..., None]), axis=-1).astype("f4")
         if self.kind == "cohorts":
+            if self.with_spot:
+                return np.concatenate((values["spots"][..., None], values["option_prices"],
+                    values["spots"][..., None], known, np.zeros_like(values["spots"])[..., None]), axis=-1)
             return np.concatenate((values["spots"][..., None], values["option_prices"], known), axis=-1)
         calls = np.pad(values["daily_calls"], ((0, 0), (0, 1)))
         return np.concatenate((values["spots"][..., None], values["factor_prices"], calls[..., None]), axis=-1)
 
 
-def load_market_scenarios(path: Path, *, split: str, case: str, kind: str) -> tuple[ScenarioData, dict]:
+def load_market_scenarios(path: Path, *, split: str, case: str, kind: str,
+                           with_spot: bool = False) -> tuple[ScenarioData, dict]:
     """Require complete independent samples; both books observe identical information."""
     with h5py.File(path, "r") as stream:
         identity = json.loads(str(stream.attrs["identity"]))
@@ -227,18 +271,27 @@ def load_market_scenarios(path: Path, *, split: str, case: str, kind: str) -> tu
         book = {name: stream[f"primary/{name}"][:] for name in ("starts", "expiries", "levels", "locked", "calls")}
     identity["model"] = identity["model"] | dict(simulation_case=case,
         simulated_background_volatility=0.05 if case == "black5" else 0.0)
-    features = MarketView(arrays, book, kind=kind, features=True)
-    prices = MarketView(arrays, book, kind=kind, features=False)
+    features = MarketView(arrays, book, kind=kind, features=True, with_spot=with_spot)
+    prices = MarketView(arrays, book, kind=kind, features=False, with_spot=with_spot)
     expiries = tuple(map(int, book["expiries"])) if kind == "cohorts" else (20,) * (arrays["factor_prices"].shape[-1] + 2)
+    if with_spot:
+        expiries += (20,)
     digest = scenario_digest(path)
     return ScenarioData(features, prices, payoff, expiries, identity, digest), book
 
 
 def run_market_hedges(directory: Path, *, case: str, kind: str, device: str,
                       compile_policies: bool = True, maximum_epochs: int = 2000,
-                      just_load: bool = False, legacy_spot_costs: bool = False) -> dict[str, object]:
-    train, book = load_market_scenarios(directory / "train.h5", split="train", case=case, kind=kind)
-    validation, _ = load_market_scenarios(directory / "validation.h5", split="validation", case=case, kind=kind)
+                      just_load: bool = False, legacy_spot_costs: bool = False,
+                      output_directory: Path | None = None, with_spot: bool = False,
+                      spot_cost_bps: float | None = None,
+                      cuda_memory_fraction: float | None = None) -> dict[str, object]:
+    verify_inp(not with_spot or (kind == "cohorts" and not legacy_spot_costs),
+        lambda: "restoring spot requires the unit-L1 cohort book")
+    verify_inp(spot_cost_bps is None or (np.isfinite(spot_cost_bps) and spot_cost_bps >= 0),
+        lambda: "spot costs must be finite and nonnegative")
+    train, book = load_market_scenarios(directory / "train.h5", split="train", case=case, kind=kind, with_spot=with_spot)
+    validation, _ = load_market_scenarios(directory / "validation.h5", split="validation", case=case, kind=kind, with_spot=with_spot)
     if train.sha256 == validation.sha256 or train.identity["model"] != validation.identity["model"]:
         raise ValueError("training and validation must be independent samples of the same model")
     report = json.loads((directory / "factor_baskets.json").read_text())
@@ -246,15 +299,20 @@ def run_market_hedges(directory: Path, *, case: str, kind: str, device: str,
     config_class = MarketBookConfig if legacy_spot_costs else UnitTurnoverBookConfig
     policy_class = MarketBookPolicy if legacy_spot_costs else UnitTurnoverBookPolicy
     suffix = "" if legacy_spot_costs else "-unit-l1"
+    if with_spot:
+        config_class, policy_class = SpotCohortBookConfig, SpotCohortBookPolicy
+        suffix += "-spot"
     config = config_class(label=f"{case}-{kind}-lambda100{suffix}", kind=kind,
         feature_count=train.features.shape[-1], option_expiry_days=train.option_expiry_days,
-        option_start_days=tuple(map(int, book["starts"])) if kind == "cohorts" else (0,) * len(train.option_expiry_days),
-        call_sides=tuple(map(bool, book["calls"])) if kind == "cohorts" else (),
-        locked=tuple(map(bool, book["locked"])) if kind == "cohorts" else (),
+        option_start_days=(tuple(map(int, book["starts"])) + ((0,) if with_spot else ())) if kind == "cohorts" else (0,) * len(train.option_expiry_days),
+        call_sides=(tuple(map(bool, book["calls"])) + ((False,) if with_spot else ())) if kind == "cohorts" else (),
+        locked=(tuple(map(bool, book["locked"])) + ((False,) if with_spot else ())) if kind == "cohorts" else (),
         basket_weights=tuple(tuple(map(float, row)) for row in weights) if kind == "factors" else (),
-        risk_aversion=100.0)
-    return train_independent_portfolios(train, validation, directory=directory / "hedges" / case / kind / config.filename,
-        config=config, train_config=JointTrainConfig(device=device, compile=compile_policies, maximum_epochs=maximum_epochs),
+        risk_aversion=100.0, **({"spot_cost_bps": spot_cost_bps} if spot_cost_bps is not None else {}))
+    destination = directory / "hedges" / case / kind if output_directory is None else output_directory
+    return train_independent_portfolios(train, validation, directory=destination / config.filename,
+        config=config, train_config=JointTrainConfig(device=device, compile=compile_policies, maximum_epochs=maximum_epochs,
+            cuda_memory_fraction=cuda_memory_fraction),
         policy_class=policy_class, just_load=just_load)
 
 
@@ -267,11 +325,17 @@ def main() -> None:
     parser.add_argument("--maximum-epochs", type=int, default=2000)
     parser.add_argument("--compile", action="store_true")
     parser.add_argument("--just-load", action="store_true")
+    parser.add_argument("--output-directory", type=Path,
+        help="Separate checkpoint root for a fresh run using the existing scenario files")
     parser.add_argument("--legacy-spot-costs", action="store_true", help="Load or resume the archived spot-notional cost convention")
+    parser.add_argument("--with-spot", action="store_true", help="Add freely tradable spot to the cohort book")
+    parser.add_argument("--spot-cost-bps", type=float, help="Unit-L1 spot turnover normalizer, including final liquidation")
+    parser.add_argument("--cuda-memory-fraction", type=float, help="Bound CUDA allocator usage for concurrent book fits")
     args = parser.parse_args()
     run_market_hedges(args.run_directory, case=args.case, kind=args.kind, device=args.device,
         compile_policies=args.compile, maximum_epochs=args.maximum_epochs, just_load=args.just_load,
-        legacy_spot_costs=args.legacy_spot_costs)
+        legacy_spot_costs=args.legacy_spot_costs, output_directory=args.output_directory, with_spot=args.with_spot,
+        spot_cost_bps=args.spot_cost_bps, cuda_memory_fraction=args.cuda_memory_fraction)
 
 
 if __name__ == "__main__":

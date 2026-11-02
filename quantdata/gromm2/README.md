@@ -138,6 +138,26 @@ mode. It saves chunk-level restart state and per-date statistics under
 `rolling/YYYY-MM-DD/unconditional_q/`, with an aggregate JSON summary in the
 calibration root. No conditional policy is trained for these daily audits.
 
+### Saved-model CPU origin checks
+
+`saved_model_audit.py` adapts the archived `(-3,2)` 16-factor AR(1) model to
+the same CPU audit without refitting it. The first day's predictable AR(1)
+factor amplitudes are applied exactly once. The fitted 5% Black background
+is retained; this is not the zero-background hedging control. Both the eight-
+and one-substep checks use 100,000 complete-antithetic paths and the same
+11-strike reference-ATM-normalized book at 1D and every fifth business-day
+expiry through 125D, including spot (287 coordinates). They retain original
+Q weights and report ordinary and economic-floor scores separately.
+
+These checks simulate **one day from the fixed initial state**. They do not
+replace full-path daily/expiry audits or a learned conditional-drift test.
+The adapter retains the saved DLV expiry intervals; payoff settlement clocks
+use integer business-day maturities so archived float32 year fractions cannot
+leave residual Black time at cash settlement. Inputs and source hashes are
+recorded in each external adapter manifest. The 31 October CPU run and
+post-combined-hedge analysis waiter live outside Git under
+`/home/hans/quantdata_data/experiments/gromm2/noarb-pca16-20261031-v1/`.
+
 ## Forward-start straddle hedging
 
 `forward_hedging.py` generates 100,000 training and 100,000 independently
@@ -383,3 +403,53 @@ moments once per simulated batch, avoiding repeated reads of growing path
 prefixes. Raw paths, checkpoints, progress logs and loss plots stay in the
 unique external run directory. Interrupts save a complete simulation batch
 or complete three-policy optimizer batch; resumed stages validate identities.
+
+The combined-book continuation supports `--host-cache-training`. It retains
+exact raw training arrays in host RAM, or a manager-admitted subset when the
+complete 39.272 GiB does not fit with required headroom. Other fields and all
+validation inputs remain mapped; transfers use bounded pinned staging.
+The model, Q weights, sample order and optimizer batch size are unchanged.
+See `GPU_TRAINING_REVIEW.md` for measured I/O amplification, graph-workspace
+lifetime regression tests and the limits of short throughput benchmarks.
+
+## Full-path no-arbitrage audits
+
+`path_audit.py` retains 125-day populations for the saved `(-3,2)` AR(1)
+model or a completed, quality-gated rolling `(-4,3)` estimate. The book contains
+spot and eleven fixed inception-NMS strikes at each fifth business-day expiry.
+Each contract's OTM payoff side stays fixed, settlement is counted once, and
+daily gains are divided by the spot known before trading. Original Q weights
+are retained: there is no return centering or fitted measure change.
+
+The JAX sampler streams loadings one maturity at a time, uses the PCR solver,
+and skips expired tower rows. Retained float32 states and returns support
+follow-up tests; unconditional daily and settlement moments are accumulated
+from float64 gains before storage rounding. Model inputs, code and sampling
+identities are recorded, and only complete antithetic batches are committed.
+
+`conditional_audit.py` and `local_audit_training.py` implement independent,
+uncapped affine-plus-deep actions for the local entropy and squared objectives.
+Both use a unit quadratic action penalty; the squared objective also penalizes
+the squared one-day portfolio return with lambda one. A positive training-only
+scale improves numerical conditioning without changing these objectives or Q.
+There are no transaction costs or cumulative-horizon utility objectives.
+
+Complete paths are split in two, keeping antithetic partners together. Each
+training fold has a separate internal pair split for normalization, learning-rate
+control and checkpoint selection; the opposite outer fold stays untouched.
+The default schedule has 100 affine epochs and at least 200 full-network epochs,
+then training-fold validation-plateau stopping. Operational schedule changes
+can resume saved model, Adam, scheduler, RNG and within-epoch order state.
+The training fold is GPU-resident when it fits, with bounded host uploads;
+compiled, captured updates reuse nearby exact-divisor batch sizes where possible.
+
+Frozen actions are tested on the opposite fold using pair-clustered means of
+daily `a'R`, action norms and both held-out objectives. Foldwise statistics are
+reported separately. Combining exchanged-fold scores does not assume that
+their fitted-policy errors are independent: the report includes a conservative
+combined standard-error estimate and a Bonferroni foldwise p-value.
+These are strategy-class diagnostics, not proofs over all predictable actions.
+
+The full-path reports are distinct from `saved_model_audit.py`'s one-day
+initial-state checks. A small CPU integration pilot is not a production audit.
+Large retained populations belong in dedicated external run directories, not Git.

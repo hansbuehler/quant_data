@@ -1,0 +1,7 @@
+# Compiled documents are local build products, not versioned sources.
+# Keep PDF figure assets and reference papers trackable.
+/AllinOne.pdf
+/DySANOS.pdf
+/arbitrage.pdf
+/dy2*.pdf
+/offline.pdf

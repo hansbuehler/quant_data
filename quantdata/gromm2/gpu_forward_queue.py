@@ -14,21 +14,53 @@ from pathlib import Path
 from typing import Any
 
 
+class GpuProbeUnavailableError(RuntimeError):
+    """The manager cannot yet confirm a healthy GPU; no claim is authorized."""
+
+
+def _timeout_only_blockers(checks: list[dict]) -> bool:
+    """Distinguish missing timeout measurements from confirmed resource problems."""
+    blockers = [check for check in checks if str(check["health"]).upper() in {"STOP", "UNAVAILABLE", "ERROR"}]
+    return bool(blockers) and all(str(check["health"]).upper() != "STOP" and check.get("current") is None
+        and any(marker in str(check.get("error", "")).lower()
+            for marker in ("timeouterror", "timeoutexpired", "timed out", "did not finish within"))
+        for check in blockers)
+
+
 def resource_report() -> dict[str, Any]:
-    """Read only resource-manager thresholds; a failed probe is a warning."""
-    try:
-        result = subprocess.run(["gpuctl", "resources", "--json"], capture_output=True, text=True, timeout=20, check=False)
-        if result.returncode:
-            raise RuntimeError(result.stderr.strip() or f"exit {result.returncode}")
-        report = json.loads(result.stdout)
-        if not isinstance(report.get("checks"), list) or not report["checks"]:
-            raise ValueError("missing resource checks")
-        health = [str(check["health"]).upper() for check in report["checks"]]
-        blocked = any(value in {"STOP", "UNAVAILABLE", "ERROR"} for value in health)
-        warned = any(value != "OK" for value in health)
-        return {"blocked": blocked, "warning": warned, "report": report}
-    except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, RuntimeError) as error:
-        return {"blocked": False, "warning": True, "probe_error": str(error), "message": "gpuctl resources could not be read"}
+    """Retry probe-only timeouts, never delay confirmed STOP or other resource errors.
+
+    Embedded timeout errors get two retries after 15 and 30 seconds before
+    persistent missing measurements block work. A failed CLI remains a warning,
+    as required by the host policy. No capacity threshold is duplicated here.
+    """
+    delays = (15.0, 30.0)
+    for attempt in range(1, len(delays) + 2):
+        try:
+            result = subprocess.run(["gpuctl", "resources", "--json"], capture_output=True, text=True, timeout=20, check=False)
+            if result.returncode:
+                raise RuntimeError(result.stderr.strip() or f"exit {result.returncode}")
+            report = json.loads(result.stdout)
+            if not isinstance(report.get("checks"), list) or not report["checks"]:
+                raise ValueError("missing resource checks")
+            health = [str(check["health"]).upper() for check in report["checks"]]
+            outcome = {"blocked": any(value in {"STOP", "UNAVAILABLE", "ERROR"} for value in health),
+                "warning": any(value != "OK" for value in health), "report": report}
+            timeout_only = _timeout_only_blockers(report["checks"])
+        except subprocess.TimeoutExpired as error:
+            outcome = {"blocked": False, "warning": True, "probe_error": str(error),
+                "message": "gpuctl resources could not be read"}
+            timeout_only = True
+        except (OSError, ValueError, KeyError, RuntimeError) as error:
+            return {"blocked": False, "warning": True, "probe_error": str(error), "message": "gpuctl resources could not be read"}
+        if not timeout_only or attempt > len(delays):
+            if attempt > 1:
+                outcome["probe_attempts"] = attempt
+            return outcome
+        print(json.dumps(dict(event="resource-probe-timeout-retry", attempt=attempt, maximum_attempts=3,
+            retry_after_seconds=delays[attempt - 1], message="Probe timeout is not a confirmed capacity breach; retrying without stopping the job.")), flush=True)
+        time.sleep(delays[attempt - 1])
+    raise RuntimeError("resource probe retry loop exhausted unexpectedly")
 
 
 def claim_gpu() -> str | None:
@@ -50,11 +82,13 @@ def available_gpu_status() -> dict[str, Any]:
     """Fail closed unless the manager confirms both a healthy driver and free count."""
     result = subprocess.run(["gpuctl", "status", "--json"], capture_output=True, text=True, timeout=20, check=False)
     if result.returncode:
+        if any(marker in result.stderr.lower() for marker in ("timed out", "timeout")):
+            raise GpuProbeUnavailableError(f"gpuctl status probe timed out: {result.stderr.strip()}")
         raise RuntimeError(f"gpuctl status failed ({result.returncode}): {result.stderr.strip()}")
     report = json.loads(result.stdout)
     available = report.get("available")
     if str(report.get("driver", "")).lower() != "ok":
-        raise RuntimeError("GPU manager did not confirm a healthy driver; no claim attempted")
+        raise GpuProbeUnavailableError("GPU manager did not confirm a healthy driver; no claim attempted")
     if isinstance(available, bool) or not isinstance(available, int) or available < 0:
         raise ValueError("GPU manager returned no valid available-device count; no claim attempted")
     return report
@@ -149,7 +183,14 @@ def run_queue(*, run_directory: Path, command: list[str], cpu_service: str | Non
                 continue
             if resources["warning"]:
                 status.update("resource_warning", resources=resources)
-            manager_status = available_gpu_status()
+            try:
+                manager_status = available_gpu_status()
+            except (subprocess.TimeoutExpired, GpuProbeUnavailableError) as error:
+                status.update("waiting_for_gpu_status", resources=resources, error=str(error),
+                    completed_work_units=0, total_work_units=1, remaining_seconds=None,
+                    message="GPU health is unconfirmed; no claim attempted. Retrying the read-only probe without touching any running job.")
+                stop.wait(poll_seconds)
+                continue
             if manager_status["available"] == 0:
                 status.update("waiting_for_gpu", resources=resources, manager_status=manager_status, completed_work_units=0, total_work_units=1,
                               remaining_seconds=None, message="Manager reports no free GPU; no claim attempted and unrelated GPU jobs are untouched")
