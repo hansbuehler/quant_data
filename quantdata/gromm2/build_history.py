@@ -144,7 +144,7 @@ def build_history(
             )
             stream.create_dataset("model_expiries_y", data=expiries)
             stream.create_dataset("model_business_dtes", data=geometry.model_business_dtes)
-            stream.create_dataset("nms_nodes", data=geometry.nms_nodes)
+            stream.create_dataset("nms_nodes", data=geometry.support_nms_nodes)
             stream.create_dataset("supports", data=supports)
             stream.create_dataset("transports", data=transport_tower(supports))
             stream.create_dataset("reference_raw_total_variances", data=reference_raw)

@@ -469,7 +469,7 @@ def reconstruct_public_day(
             previous_density=previous,
             target_calls=target_calls,
             interval_years=float(intervals[index]),
-            nms_nodes=geometry.nms_nodes,
+            nms_nodes=geometry.support_nms_nodes,
             fit_nms_range=geometry.fit_nms_range,
             minimum_dlvsq=minimum_dlvsq,
             maximum_dlvsq=maximum_dlvsq,

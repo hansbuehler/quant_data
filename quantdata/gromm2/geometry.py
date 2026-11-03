@@ -28,6 +28,13 @@ class Gromm2GeometryConfig:
     outer_fit_weight: float = 0.10
     lower_boundary_multiplier: float = 0.5
     upper_boundary_multiplier: float = 1.5
+    # Geometric fill of the outer gaps [K_0, K_1] and [K_N, K_{N+1}].  The
+    # gap ratios are the boundary multipliers for every expiry, so n nodes
+    # give the constant step ratio multiplier**(-1/(n+1)) resp.
+    # multiplier**(1/(n+1)); 14 and 8 give steps of about 5%.  Tail nodes have
+    # no fixed NMS and sit outside every NMS range (support_nms_nodes = -/+inf).
+    lower_tail_nodes: int = 0
+    upper_tail_nodes: int = 0
     forward_volatility_floor: float = 0.01
     backbone_annual_volatility: float = 0.05
 
@@ -62,6 +69,10 @@ class Gromm2GeometryConfig:
             lambda: "upper_boundary_multiplier must exceed one",
         )
         verify_inp(
+            self.lower_tail_nodes >= 0 and self.upper_tail_nodes >= 0,
+            lambda: "tail node counts must be non-negative",
+        )
+        verify_inp(
             self.forward_volatility_floor > 0.0,
             lambda: "forward_volatility_floor must be positive",
         )
@@ -77,6 +88,22 @@ class Gromm2GeometryConfig:
             (
                 np.arange(1.0, 26.0, dtype=np.float64),
                 np.arange(30.0, 126.0, 5.0, dtype=np.float64),
+            )
+        )
+
+    @property
+    def num_interior_nodes(self) -> int:
+        """Interior support nodes, tail fill included."""
+        return self.num_inner_strikes + self.lower_tail_nodes + self.upper_tail_nodes
+
+    @property
+    def support_nms_nodes(self) -> FloatArray:
+        """NMS of every interior support node; tail-fill nodes are -inf / +inf."""
+        return np.concatenate(
+            (
+                np.full(self.lower_tail_nodes, -np.inf),
+                self.nms_nodes,
+                np.full(self.upper_tail_nodes, np.inf),
             )
         )
 
@@ -188,14 +215,11 @@ def expanding_supports(
         raise ValueError("projected_total_variances must be a positive finite vector")
     scales = np.sqrt(variances)
     interior = np.exp(scales[:, None] * config.nms_nodes[None, :])
-    supports = np.concatenate(
-        (
-            config.lower_boundary_multiplier * interior[:, :1],
-            interior,
-            config.upper_boundary_multiplier * interior[:, -1:],
-        ),
-        axis=1,
-    )
+    lower = config.lower_boundary_multiplier * interior[:, :1]
+    upper = config.upper_boundary_multiplier * interior[:, -1:]
+    lower_fill = np.geomspace(lower, interior[:, :1], config.lower_tail_nodes + 2, axis=1)[:, 1:-1, 0]
+    upper_fill = np.geomspace(interior[:, -1:], upper, config.upper_tail_nodes + 2, axis=1)[:, 1:-1, 0]
+    supports = np.concatenate((lower, lower_fill, interior, upper_fill, upper), axis=1)
     if np.any(np.diff(supports, axis=1) <= 0.0):
         raise RuntimeError("constructed supports are not strictly increasing")
     if len(supports) > 1 and (

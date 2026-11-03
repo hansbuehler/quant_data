@@ -249,7 +249,7 @@ def prepare_observed_fit(
             reference_date = str(saved["date"].item())
             if str(payload["d"]) >= reference_date:
                 raise ValueError("historical fixed-grid fits must precede the reference date")
-        if supports.shape != (len(expiries), geometry.num_inner_strikes + 2):
+        if supports.shape != (len(expiries), geometry.num_interior_nodes + 2):
             raise ValueError("reference and fitting strike-grid dimensions differ")
     quotes = extract_observed_quotes({**payload, "market": _observed_market(payload, pricer)}, geometry=geometry, pricer=pricer,
                                     reference_nms_curve=reference_nms_curve)
@@ -264,7 +264,7 @@ def prepare_observed_fit(
     intervals = np.diff(expiries, prepend=0.0)
     forward_variances = np.diff(variances, prepend=0.0) / intervals
     initial = np.clip(forward_variances - geometry.backbone_annual_volatility**2, config.minimum_dlvsq + 1.0e-6, config.maximum_dlvsq * 0.9)
-    initial_raw = np.broadcast_to(np.log(initial[:, None] - config.minimum_dlvsq), (len(expiries), geometry.num_inner_strikes)).copy()
+    initial_raw = np.broadcast_to(np.log(initial[:, None] - config.minimum_dlvsq), (len(expiries), geometry.num_interior_nodes)).copy()
     initialization_date = ""
     if initializer is not None:
         initial_raw, initialization_date = load_initial_state(
