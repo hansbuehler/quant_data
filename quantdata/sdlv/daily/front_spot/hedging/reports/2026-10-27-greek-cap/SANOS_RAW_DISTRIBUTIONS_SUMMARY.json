@@ -1,0 +1,244 @@
+{
+  "schema": "sanos-raw-distributions-v2",
+  "cohort": "44 April-May 2024 origins, ten one-day digitals",
+  "units": "USD thousands per USD 1 million digital payout",
+  "products": [
+    "digital-put-1d-nms-1.00",
+    "digital-put-1d-nms-0.75",
+    "digital-put-1d-nms-0.50",
+    "digital-put-1d-nms-0.25",
+    "digital-put-1d-atm",
+    "digital-call-1d-atm",
+    "digital-call-1d-nms+0.25",
+    "digital-call-1d-nms+0.50",
+    "digital-call-1d-nms+0.75",
+    "digital-call-1d-nms+1.00"
+  ],
+  "risk_parameters": [
+    "1",
+    "10",
+    "100",
+    "1000"
+  ],
+  "estimated_distributions": {
+    "unhedged": "252 preceding raw historical SANOS returns per origin",
+    "bs-delta-vega": "252 preceding raw historical SANOS returns per origin",
+    "sanos-greek": "252 preceding raw historical SANOS returns per origin",
+    "historical": "252 preceding demeaned historical SANOS returns per origin",
+    "parametric": "centered first-order SANOS factor Gaussian mixture"
+  },
+  "realized_distributions": "raw market P&L, with no mean adjustment",
+  "corrected_mean": "frozen training means used only on corrected frontier axes",
+  "tail_risk": "target-averaged centered 5% ES: worst two of 44 dates plus 20% of third worst, divided by 2.2",
+  "frontier_metrics": {
+    "baselines": {
+      "unhedged": {
+        "mean_entry_cost": 0.0,
+        "mean_training_corrected_pre_cost_loss": 1.4325831001217177,
+        "cost_plus_corrected_mean_loss": 1.4325831001217177,
+        "raw_realized_sd": 435.88453808344366,
+        "raw_realized_centered_es05": 327.22164795544137
+      },
+      "bs-delta-vega": {
+        "mean_entry_cost": 1.1293624062264298,
+        "mean_training_corrected_pre_cost_loss": 4.4403950510356935,
+        "cost_plus_corrected_mean_loss": 5.569757457262123,
+        "raw_realized_sd": 276.42083698944737,
+        "raw_realized_centered_es05": 483.5959751100789
+      },
+      "sanos-greek": {
+        "mean_entry_cost": 3.3075520004642334,
+        "mean_training_corrected_pre_cost_loss": 6.495543637642702,
+        "cost_plus_corrected_mean_loss": 9.803095638106935,
+        "raw_realized_sd": 215.71996101835992,
+        "raw_realized_centered_es05": 411.00159220821917
+      }
+    },
+    "objectives": {
+      "historical": {
+        "mean-variance": {
+          "1": {
+            "mean_entry_cost": 0.0867031613840816,
+            "mean_training_corrected_pre_cost_loss": 1.283665103605755,
+            "cost_plus_corrected_mean_loss": 1.3703682649898365,
+            "raw_realized_sd": 413.82454540690253,
+            "raw_realized_centered_es05": 325.06139941507087
+          },
+          "10": {
+            "mean_entry_cost": 1.9061026618872172,
+            "mean_training_corrected_pre_cost_loss": 1.2360116769289504,
+            "cost_plus_corrected_mean_loss": 3.1421143388161674,
+            "raw_realized_sd": 279.71563300729656,
+            "raw_realized_centered_es05": 385.9017526744953
+          },
+          "100": {
+            "mean_entry_cost": 4.017045724231286,
+            "mean_training_corrected_pre_cost_loss": 3.005124869442086,
+            "cost_plus_corrected_mean_loss": 7.022170593673372,
+            "raw_realized_sd": 234.69111326033294,
+            "raw_realized_centered_es05": 387.1578219486611
+          },
+          "1000": {
+            "mean_entry_cost": 8.92015875859877,
+            "mean_training_corrected_pre_cost_loss": 5.262331582077706,
+            "cost_plus_corrected_mean_loss": 14.182490340676477,
+            "raw_realized_sd": 196.28447678581531,
+            "raw_realized_centered_es05": 365.71967494041814
+          }
+        },
+        "entropy": {
+          "1": {
+            "mean_entry_cost": 0.08508586682546386,
+            "mean_training_corrected_pre_cost_loss": 1.2802209299776983,
+            "cost_plus_corrected_mean_loss": 1.3653067968031622,
+            "raw_realized_sd": 414.0402273648653,
+            "raw_realized_centered_es05": 324.9421768412128
+          },
+          "10": {
+            "mean_entry_cost": 1.8699186685478233,
+            "mean_training_corrected_pre_cost_loss": 1.1726216325825787,
+            "cost_plus_corrected_mean_loss": 3.042540301130402,
+            "raw_realized_sd": 281.21148687984123,
+            "raw_realized_centered_es05": 381.4702310417007
+          },
+          "100": {
+            "mean_entry_cost": 3.4167874872708217,
+            "mean_training_corrected_pre_cost_loss": 3.060380273833137,
+            "cost_plus_corrected_mean_loss": 6.477167761103958,
+            "raw_realized_sd": 246.70601056811523,
+            "raw_realized_centered_es05": 342.5801272686203
+          },
+          "1000": {
+            "mean_entry_cost": 3.0275909754314334,
+            "mean_training_corrected_pre_cost_loss": 2.3239256562631465,
+            "cost_plus_corrected_mean_loss": 5.3515166316945795,
+            "raw_realized_sd": 288.59121751010514,
+            "raw_realized_centered_es05": 250.55651308413152
+          }
+        },
+        "power-exponential": {
+          "1": {
+            "mean_entry_cost": 0.08458442053542312,
+            "mean_training_corrected_pre_cost_loss": 1.2818109868124916,
+            "cost_plus_corrected_mean_loss": 1.3663954073479148,
+            "raw_realized_sd": 414.10447647073215,
+            "raw_realized_centered_es05": 324.9472595521657
+          },
+          "10": {
+            "mean_entry_cost": 1.8697741075504226,
+            "mean_training_corrected_pre_cost_loss": 1.184041985950774,
+            "cost_plus_corrected_mean_loss": 3.0538160935011964,
+            "raw_realized_sd": 281.275158834561,
+            "raw_realized_centered_es05": 382.6363266541971
+          },
+          "100": {
+            "mean_entry_cost": 3.4509205796898357,
+            "mean_training_corrected_pre_cost_loss": 2.733144503516551,
+            "cost_plus_corrected_mean_loss": 6.184065083206386,
+            "raw_realized_sd": 243.9849774934251,
+            "raw_realized_centered_es05": 358.0958905562302
+          },
+          "1000": {
+            "mean_entry_cost": 3.439365338719983,
+            "mean_training_corrected_pre_cost_loss": 2.9799898521514705,
+            "cost_plus_corrected_mean_loss": 6.419355190871453,
+            "raw_realized_sd": 269.02703039549937,
+            "raw_realized_centered_es05": 267.12207579356203
+          }
+        }
+      },
+      "parametric": {
+        "mean-variance": {
+          "1": {
+            "mean_entry_cost": 0.09093253923131903,
+            "mean_training_corrected_pre_cost_loss": 3.492230483044321,
+            "cost_plus_corrected_mean_loss": 3.5831630222756403,
+            "raw_realized_sd": 294.82041974729,
+            "raw_realized_centered_es05": 418.96556386491255
+          },
+          "10": {
+            "mean_entry_cost": 0.19982212237089772,
+            "mean_training_corrected_pre_cost_loss": 3.522453744493065,
+            "cost_plus_corrected_mean_loss": 3.7222758668639626,
+            "raw_realized_sd": 288.3555950579854,
+            "raw_realized_centered_es05": 413.3171446559898
+          },
+          "100": {
+            "mean_entry_cost": 0.6022755739620852,
+            "mean_training_corrected_pre_cost_loss": -5.722145838184947,
+            "cost_plus_corrected_mean_loss": -5.119870264222861,
+            "raw_realized_sd": 267.7463565185902,
+            "raw_realized_centered_es05": 419.5505379405393
+          },
+          "1000": {
+            "mean_entry_cost": 1.451874884817105,
+            "mean_training_corrected_pre_cost_loss": -6.5795595204034685,
+            "cost_plus_corrected_mean_loss": -5.1276846355863634,
+            "raw_realized_sd": 238.00538212366337,
+            "raw_realized_centered_es05": 413.16722752392553
+          }
+        },
+        "entropy": {
+          "1": {
+            "mean_entry_cost": 0.09093253923131903,
+            "mean_training_corrected_pre_cost_loss": 3.492230483044321,
+            "cost_plus_corrected_mean_loss": 3.5831630222756403,
+            "raw_realized_sd": 294.82041974729,
+            "raw_realized_centered_es05": 418.96556386491255
+          },
+          "10": {
+            "mean_entry_cost": 0.19982212237089772,
+            "mean_training_corrected_pre_cost_loss": 3.522453744493065,
+            "cost_plus_corrected_mean_loss": 3.7222758668639626,
+            "raw_realized_sd": 288.3555950579854,
+            "raw_realized_centered_es05": 413.3171446559898
+          },
+          "100": {
+            "mean_entry_cost": 0.6022755739620852,
+            "mean_training_corrected_pre_cost_loss": -5.722145838184947,
+            "cost_plus_corrected_mean_loss": -5.119870264222861,
+            "raw_realized_sd": 267.7463565185902,
+            "raw_realized_centered_es05": 419.5505379405393
+          },
+          "1000": {
+            "mean_entry_cost": 1.451874884817105,
+            "mean_training_corrected_pre_cost_loss": -6.5795595204034685,
+            "cost_plus_corrected_mean_loss": -5.1276846355863634,
+            "raw_realized_sd": 238.00538212366337,
+            "raw_realized_centered_es05": 413.16722752392553
+          }
+        },
+        "power-exponential": {
+          "1": {
+            "mean_entry_cost": 0.090856382638855,
+            "mean_training_corrected_pre_cost_loss": 3.48913923189885,
+            "cost_plus_corrected_mean_loss": 3.579995614537705,
+            "raw_realized_sd": 294.8241961675629,
+            "raw_realized_centered_es05": 418.96943968307534
+          },
+          "10": {
+            "mean_entry_cost": 0.1996530559632769,
+            "mean_training_corrected_pre_cost_loss": 3.526543093048755,
+            "cost_plus_corrected_mean_loss": 3.726196149012032,
+            "raw_realized_sd": 288.3737180863982,
+            "raw_realized_centered_es05": 413.2907761495283
+          },
+          "100": {
+            "mean_entry_cost": 0.5954285790096732,
+            "mean_training_corrected_pre_cost_loss": -5.6609704670085135,
+            "cost_plus_corrected_mean_loss": -5.06554188799884,
+            "raw_realized_sd": 268.0586866422224,
+            "raw_realized_centered_es05": 419.32655994660024
+          },
+          "1000": {
+            "mean_entry_cost": 1.4172441948897336,
+            "mean_training_corrected_pre_cost_loss": -6.728563124472449,
+            "cost_plus_corrected_mean_loss": -5.311318929582715,
+            "raw_realized_sd": 238.88317142272143,
+            "raw_realized_centered_es05": 413.6090656383045
+          }
+        }
+      }
+    }
+  }
+}
