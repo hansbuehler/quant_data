@@ -1,0 +1,240 @@
+{
+  "status": "complete",
+  "scenarios": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-1step-warm500-20261103-vi9yMf/scenarios",
+  "scenario_identity": {
+    "schema": "dhgromm1-expiry-options-v3",
+    "calibration": "/home/hans/quantdata_data/experiments/quant_data/sdlv/Gromm-v1-4,3/20261023-kVyePV/rolling252-full-q-20261026-wpxWhA/full",
+    "calibration_sha256": "cd45b039b570424ed277cd168e5af9ffae9029dade8c3c5c280032f927762cbb",
+    "source_sha256": "7bc7696a51b5544b8862fa1e6721999e5d3db29464310705ff8b27d5d746bfad",
+    "paths_per_sample": 100000,
+    "chunk_size": 4000,
+    "batch_size": 128,
+    "substeps": 1,
+    "seed": 20261102,
+    "strikes": "exp(z*0.20*sqrt(dte/252))*spot",
+    "z": [
+      -2.0,
+      -1.5,
+      -1.0,
+      -0.5,
+      -0.25
+    ],
+    "strike_menu": "itm",
+    "instruments": 21,
+    "dte": "[1,5,min(10,25-day)]",
+    "option_type": "call",
+    "terminal_call": "daily ATM strike reset; fixed day-20 expiration",
+    "samples": [
+      "train",
+      "evaluation"
+    ],
+    "zero_strike_calls": [
+      "terminal_day20",
+      "dte1",
+      "dte5",
+      "longest_dte"
+    ],
+    "instrument_order": [
+      "spot",
+      "terminal_atm_call",
+      "dte1_call_z-2",
+      "dte1_call_z-1.5",
+      "dte1_call_z-1",
+      "dte1_call_z-0.5",
+      "dte1_call_z-0.25",
+      "dte5_call_z-2",
+      "dte5_call_z-1.5",
+      "dte5_call_z-1",
+      "dte5_call_z-0.5",
+      "dte5_call_z-0.25",
+      "longest_dte_call_z-2",
+      "longest_dte_call_z-1.5",
+      "longest_dte_call_z-1",
+      "longest_dte_call_z-0.5",
+      "longest_dte_call_z-0.25",
+      "terminal_forward",
+      "dte1_forward",
+      "dte5_forward",
+      "longest_dte_forward"
+    ],
+    "return_definition": "Each trade held to expiry; expiry after day 20 marked at day 20; spot held to day 20",
+    "gain_definition": "sum over opening dates and instruments: new_trade_notional * cohort_return"
+  },
+  "scenario_identity_sha256": "5073635bfbbbd6b5b26d9325dbdec7233254a1a6d9ffc18c36d6d1e0cded0087",
+  "joint_epochs": 500,
+  "epochs_per_network": 500,
+  "training_mode": "sum of bid/ask losses, separate networks/translations",
+  "checkpoint_selection": "minimum training SUM at a common epoch",
+  "joint_model_config": {
+    "label": "bid-ask",
+    "group": "sdlv/dhgromm1",
+    "user_version": "0.1",
+    "long": {
+      "label": "long",
+      "group": "sdlv/dhgromm1",
+      "user_version": "0.1",
+      "instruments": 21,
+      "horizon_days": 20,
+      "hidden_size": 32,
+      "latent_width": 5003,
+      "action_deep": {
+        "activation": "Tanh",
+        "num_depth": 2,
+        "num_width": 32,
+        "use_bias": true
+      },
+      "time_gate": {
+        "activation": "Tanh",
+        "num_depth": 1,
+        "num_width": 8,
+        "use_bias": true
+      },
+      "risk_aversion": 100.0,
+      "trade_l1": 0.0001,
+      "trade_l2": 1e-08
+    },
+    "short": {
+      "label": "short",
+      "group": "sdlv/dhgromm1",
+      "user_version": "0.1",
+      "instruments": 21,
+      "horizon_days": 20,
+      "hidden_size": 32,
+      "latent_width": 5003,
+      "action_deep": {
+        "activation": "Tanh",
+        "num_depth": 2,
+        "num_width": 32,
+        "use_bias": true
+      },
+      "time_gate": {
+        "activation": "Tanh",
+        "num_depth": 1,
+        "num_width": 8,
+        "use_bias": true
+      },
+      "risk_aversion": 100.0,
+      "trade_l1": 0.0001,
+      "trade_l2": 1e-08
+    }
+  },
+  "joint_model_code_version": "0.1 { FeedbackConfig: 0.1 { HedgeConfig 2494b159",
+  "paths_per_sample": 100000,
+  "simulation_substeps_per_day": 1,
+  "trading_days": 20,
+  "train_config": {
+    "epochs": 500,
+    "batch_size": 256,
+    "learning_rate": 1e-05,
+    "patience": 0,
+    "seed": 20261102,
+    "gradient_clip": 10.0,
+    "resident_data": true,
+    "compile_model": true
+  },
+  "latent_encoding": "front density; log1p future DLVSQ; log background; FP32",
+  "replay_tolerance": {
+    "atol": 5e-08,
+    "rtol": 2e-07,
+    "original_training_marks_unchanged": true
+  },
+  "replay_backend": "cpu",
+  "claim_gpu_after_replay": true,
+  "warm_start": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-1step-fused-20261103-OZWNEm/training",
+  "inputs": "t, 21 prices, full GROMM state, previous trades, live cohort units, LSTM memory",
+  "recurrence": "two compiled differentiable scans",
+  "time_gate": "1+tanh(G(t)-G0(t)); identity initially; raw t bypass; action uncapped",
+  "empty": "frozen zero-trading baseline, OCE exactly zero",
+  "q_warning": "Accepted one-step unconditional-drift warning; not an unconditional no-arbitrage pass",
+  "code_sha256": {
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/feedback_run.py": "12bcef403901b7efff1c679dff5ab4d08ec52abf4e85a1e9f9035e7df49acbb4",
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/feedback.py": "bc12a3ff8165611a85fec72d57c020b08019c41b2a247c2ad38a9c9035e3dfe1",
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/feedback_data.py": "5df14dcf427ff4537a379826e736547de84995738bf3a7c233a3bada9857ed4d",
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/rolling_simulation.py": "efdac796ad56dda86f49be7b59e11783d5e752840404378a74efc455224ab7e6",
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/allocation.py": "4dcc965eabedd57b79057e9715792a04475bf826e0467c380fbfd0cb68badea6",
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/joint.py": "3db526cad680db2429845fd3936a542397609808b6e950eabe7bcbdf26e6564d"
+  },
+  "source_checkpoints": {
+    "long": "d54839eade3896e5d4cbf8210365f9f4c4cbecae033b21fa88bdeda5eccf30a0",
+    "short": "fdbe1c54934627872b4a58ecc960af932d856d766fd73f7e69b4a559726fa141"
+  },
+  "statistics": {
+    "long": {
+      "economic_oce_frozen_translation": {
+        "mean": -931.6216608189717,
+        "standard_error": 322.64093680361407,
+        "ci95_lower": -1563.9978969540552,
+        "ci95_upper": -299.24542468388813,
+        "paths": 100000,
+        "independent_pairs": 50000
+      },
+      "mean_regularizer": {
+        "mean": 0.011812390734250658,
+        "standard_error": 2.410507902503939e-05,
+        "ci95_lower": 0.01176514477936158,
+        "ci95_upper": 0.011859636689139735,
+        "paths": 100000,
+        "independent_pairs": 50000
+      },
+      "fit": {
+        "initial_training_loss": -0.017335884895920754,
+        "selected_training_loss": -0.01721956146001816,
+        "selected_epoch": 386,
+        "selection": "minimum joint training SUM",
+        "best_joint_loss": -0.014538268198370936,
+        "epochs_run": 500,
+        "source_selected_epoch": 489,
+        "joint_checkpoint": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-joint500-20261104-Ll97mr/joint.checkpoint.pt"
+      }
+    },
+    "short": {
+      "economic_oce_frozen_translation": {
+        "mean": -524.5960548525685,
+        "standard_error": 169.29264269519933,
+        "ci95_lower": -856.4096345351592,
+        "ci95_upper": -192.78247516997783,
+        "paths": 100000,
+        "independent_pairs": 50000
+      },
+      "mean_regularizer": {
+        "mean": 0.008641702010391746,
+        "standard_error": 2.5080962374401348e-05,
+        "ci95_lower": 0.008592543324137919,
+        "ci95_upper": 0.008690860696645573,
+        "paths": 100000,
+        "independent_pairs": 50000
+      },
+      "fit": {
+        "initial_training_loss": 0.02163613572359085,
+        "selected_training_loss": 0.0026812932616472247,
+        "selected_epoch": 386,
+        "selection": "minimum joint training SUM",
+        "best_joint_loss": -0.014538268198370936,
+        "epochs_run": 500,
+        "source_selected_epoch": 466,
+        "joint_checkpoint": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-joint500-20261104-Ll97mr/joint.checkpoint.pt"
+      }
+    }
+  },
+  "q_expectation": {
+    "mean": 0.019370211595217807,
+    "standard_error": 8.511538414503112e-05,
+    "ci95_lower": 0.019203385442293545,
+    "ci95_upper": 0.01953703774814207,
+    "paths": 100000,
+    "independent_pairs": 50000
+  },
+  "bid": -931.6216608189717,
+  "ask": 524.5960548525685,
+  "empty_oce": 0,
+  "benchmark": {
+    "long": {
+      "penalized_training_loss": -0.017335347198017863
+    },
+    "short": {
+      "penalized_training_loss": 0.023601445345692668
+    }
+  },
+  "benchmark_identity_max_error": 2.9531473655364238e-08,
+  "convergence_claim": "not assumed; compare benchmark and independent-sample performance"
+}
