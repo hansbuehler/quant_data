@@ -1,0 +1,111 @@
+{
+  "objective": "oce",
+  "policy_kind": "centered floating contracts; generic LSTM + deterministic a0/a10",
+  "cost_treatment": "inside_utility",
+  "epochs": 362,
+  "model_config": {
+    "label": "centered-floating-empty-long-short",
+    "group": "sdlv/dhgromm1/floating",
+    "user_version": "0.1",
+    "policy": {
+      "label": "policy",
+      "group": "sdlv/dhgromm1/floating",
+      "user_version": "0.1",
+      "instruments": 21,
+      "return_convention": "floating-payoff-minus-price-v1",
+      "horizon_days": 20,
+      "hidden_size": 32,
+      "latent_width": 43,
+      "action_deep": {
+        "activation": "Tanh",
+        "num_depth": 2,
+        "num_width": 32,
+        "use_bias": true
+      },
+      "time_gate": {
+        "activation": "Tanh",
+        "num_depth": 1,
+        "num_width": 8,
+        "use_bias": true
+      },
+      "risk_aversion": 100.0,
+      "trade_l1": 0.0,
+      "trade_l2": 0.0,
+      "event_days": [
+        0,
+        10
+      ],
+      "event_deep": {
+        "activation": "Tanh",
+        "num_depth": 2,
+        "num_width": 32,
+        "use_bias": true
+      },
+      "strike_levels": [
+        -2.0,
+        -1.5,
+        -1.0,
+        -0.5,
+        -0.25
+      ],
+      "gain_convention": "floating-contract-gain-centered-controls-v1",
+      "dated_actions": "deterministic-quantity-vectors"
+    }
+  },
+  "train_config": {
+    "epochs": 362,
+    "batch_size": 512,
+    "learning_rate": 1e-05,
+    "patience": 0,
+    "seed": 20261102,
+    "gradient_clip": 10.0,
+    "resident_data": true,
+    "compile_model": true
+  },
+  "checkpoint_selection": "independent_policy_best",
+  "compiler_options": {
+    "eager_numerics.division_rounding": true
+  },
+  "model_code_version": "0.1 { FloatingConfig: 0.1 { ObservableC cfdf6897",
+  "scenarios": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-1step-warm500-20261103-vi9yMf/scenarios",
+  "scenario_identity_sha256": "5073635bfbbbd6b5b26d9325dbdec7233254a1a6d9ffc18c36d6d1e0cded0087",
+  "cache": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-observable500-20261104-Hde4Xv/market-cache",
+  "return_definition": "(close-open)/S_open minus frozen date/slot training mean; same convention for options and spot",
+  "claim": "s*(H-frozen_training_mean(H))",
+  "initialization": "current saved policy/Adam/RNG/minibatch; cost-only objective change",
+  "objective_formula": "SUM_s[-c_s-mean(u_100(G_s+s*(H-mean_H)-C_s-c_s))]",
+  "regularizer": "0*sum(abs(floating quantities))+0*sum(quantities**2), inside utility",
+  "paths": 100000,
+  "simulation_substeps_per_day": 1,
+  "validation_used": false,
+  "q_warning": "Marginal centering does not imply conditional drift zero; accepted one-step Q warning remains",
+  "code_sha256": {
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/floating_run.py": "694a19907d6af64ad70d582fb55f988015303644c5039083e65af1b490ccfef6",
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/floating.py": "fc641c473bc5655cf67c1b71f677f9f8b31ce4b0c7cb74e347c97b39e923f2f1",
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/contracts.py": "6d8c31245008289201cc51b478ede442d6b5d37c6dfa466ac84eaa3fa55afbba",
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/feedback.py": "5da78ea56187c8793bdf146040500ce76f0135ddd6aebf2818339af49911d73c",
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/hedge.py": "d53cbd257e6d68bb86c0070e67a3678b07bb9724ac5771c39fdfef32c617ec8e",
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/observable_data.py": "9354e5419a4290e50b07d68b22440a6e16da4884bfba3f30d248f41725ed7961",
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/triple_run.py": "08d7dbb29714dcc33e8180d96e51142d834ab65bcafa45c3491927f41f62863c",
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/triple_plot.py": "cfb3311e0609e6f9fc5f4f22b9236a3f322b9b2b013f24b3ff73580c7ab0b2d4",
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/training.py": "2b277cd3d6b39d72df495e294fdefae926a3ad896286a292e3003c755318ff12",
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/allocation.py": "4dcc965eabedd57b79057e9715792a04475bf826e0467c380fbfd0cb68badea6",
+    "/home/hans/python/quant_data/quantdata/torch/utility.py": "90037fa045beda0e2ae4f1736ec515a532e7642c5084cd6d46024e515c268983"
+  },
+  "continuation": {
+    "source": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-floating-centered500-20261105-n0QhMI/floating.checkpoint.pt",
+    "source_sha256": "f7b49cac5cbb731d0fb95956f8c86215907b68854d4074512613c9a22e32b337",
+    "source_resume_epoch": 138,
+    "source_resume_offset": 94720,
+    "optimizer_preserved": true,
+    "original_total_epoch_target": 500,
+    "old_costs": {
+      "trade_l1": 0.0001,
+      "trade_l2": 1e-08
+    },
+    "new_costs": {
+      "trade_l1": 0.0,
+      "trade_l2": 0.0
+    }
+  }
+}

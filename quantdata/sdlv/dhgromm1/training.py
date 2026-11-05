@@ -17,6 +17,7 @@ from filelock import FileLock
 from scipy.optimize import brentq
 
 from quantdata.sdlv.daily.wide_audit import AuditMonitor, resource_health, sha256
+from quantdata.sdlv.dhgromm1.contracts import SCENARIO_SCHEMA, canonical_gains, scenario_identity
 from quantdata.sdlv.dhgromm1.hedge import (
     HedgeConfig,
     RecurrentHedge,
@@ -71,7 +72,8 @@ def load_frozen_policy(path: Path, *, config: HedgeConfig, device: str) -> Recur
 
 
 def read_sample(directory: Path, *, paths: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Load complete chunked paths in their original antithetic order."""
+    """Load complete paths, explicitly converting identified legacy return units."""
+    identity = scenario_identity(directory)
     prices, returns, payoffs = [], [], []
     for path in sorted(directory.glob("[0-9]*.npz")):
         with np.load(path, allow_pickle=False) as saved:
@@ -83,7 +85,7 @@ def read_sample(directory: Path, *, paths: int) -> tuple[np.ndarray, np.ndarray,
         if not np.isfinite(price).all() or not np.isfinite(ret).all() or not np.isfinite(payoff).all():
             raise FloatingPointError(f"non-finite scenario chunk: {path}")
         prices.append(price)
-        returns.append(ret)
+        returns.append(canonical_gains(price, ret, identity=identity))
         payoffs.append(payoff)
     if not prices or sum(map(len, prices)) != paths:
         raise ValueError(f"expected {paths} complete paths in {directory}")
@@ -135,12 +137,12 @@ def day10_straddle_benchmark(prices: np.ndarray, returns: np.ndarray,
     17-instrument scenarios the terminal spot trade is the available substitute.
     """
     spot = prices[:, 10, 0].astype(np.float64)
-    call_notional = 2 * prices[:, 10, 1].astype(np.float64) / spot
+    call_price = 2 * prices[:, 10, 1].astype(np.float64) / spot
     forward_index = 17 if prices.shape[2] == 21 else 0
-    forward_notional = prices[:, 10, forward_index].astype(np.float64) / spot
-    gain = call_notional * returns[:, 10, 1] - forward_notional * returns[:, 10, forward_index]
-    premium = call_notional - forward_notional + 1
-    penalty = 1e-4 * (call_notional + forward_notional) + 1e-8 * (call_notional**2 + forward_notional**2)
+    forward_price = prices[:, 10, forward_index].astype(np.float64) / spot
+    gain = 2 * returns[:, 10, 1] - returns[:, 10, forward_index]
+    premium = call_price - forward_price + 1
+    penalty = np.full(len(spot), 3e-4 + 5e-8)
     error = float(np.max(np.abs(gain - payoff + premium)))
     if error > 1e-5:
         raise ValueError(f"day-10 straddle replication identity failed: {error}")
@@ -366,7 +368,7 @@ def main() -> None:
     if any(check["health"] != "OK" for check in checks):
         print(json.dumps(dict(event="resource_warning", checks=checks)), flush=True)
     source = json.loads((scenarios / "complete.json").read_text())
-    if source.get("status") != "complete" or source.get("schema") not in {"dhgromm1-expiry-options-v2", "dhgromm1-expiry-options-v3"}:
+    if source.get("status") != "complete" or source.get("schema") not in {"dhgromm1-expiry-options-v2", "dhgromm1-expiry-options-v3", SCENARIO_SCHEMA}:
         raise ValueError("complete expiry-return scenarios are required; one-day returns are incompatible")
     resume = args.resume_from.resolve() if args.resume_from else None
     warm = args.warm_start_from.resolve() if args.warm_start_from else None
@@ -484,7 +486,7 @@ def main() -> None:
                     recovered_incomplete=not (resume / "report.json").exists(),
                     checkpoints={label: sha256(resume / f"{label}.checkpoint.pt") for label in ("empty", "long", "short")})
                     if resume else None),
-                gain_definition="sum of new trade notional times its expiry-or-day-20 return; no accumulation across trade cohorts",
+                gain_definition="sum of floating quantities times (close-open)/S_open; no premium division",
                 interpretation="Original Q weights; fixed-policy pair errors exclude policy-fitting uncertainty.")
             (output / "report.json").write_text(json.dumps(result, indent=2) + "\n")
             monitor.stage("complete")

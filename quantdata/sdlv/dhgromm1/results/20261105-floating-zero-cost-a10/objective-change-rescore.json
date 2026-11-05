@@ -1,0 +1,24 @@
+{
+  "current_zero_cost_losses": {
+    "empty": -1.4160687269177288e-05,
+    "long": 0.0008795763764157892,
+    "short": 0.0011369127992913127
+  },
+  "old_best_zero_cost_losses": {
+    "empty": -2.308110739453696e-05,
+    "long": 0.000863979268539697,
+    "short": 0.0010319311878085138
+  },
+  "scalar_zero_cost_losses": {
+    "empty": -0.0,
+    "long": 0.001933063067574495,
+    "short": 0.004129075106275555
+  },
+  "old_selected_epochs": {
+    "empty": 130,
+    "long": 135,
+    "short": 138
+  },
+  "initialization": "latest current weights, translations and optimizer; old best retained in source",
+  "history": "new objective; zero-cost phase epoch 0; no old penalized losses copied"
+}

@@ -11,6 +11,7 @@ from cdxcore.err import verify_inp
 from cdxcore.version import version
 from torch._higher_order_ops.scan import scan
 
+from quantdata.sdlv.dhgromm1.contracts import RETURN_CONVENTION
 from quantdata.sdlv.dhgromm1.hedge import HedgeConfig, HedgeOutput, RecurrentHedge
 from quantdata.torch import BaseEnvironment, BaseModel
 from quantdata.torch.ffw import FeedForward, FeedForwardConfig
@@ -42,7 +43,7 @@ def contract_expiries() -> np.ndarray:
     return expiry
 
 
-@version("0.1", dependencies=[HedgeConfig])
+@version("0.2", dependencies=[HedgeConfig])
 @dataclass(frozen=True, kw_only=True)
 class FeedbackConfig:
     """A distinct architecture identity; old checkpoints require explicit migration."""
@@ -51,6 +52,7 @@ class FeedbackConfig:
     group: str = "sdlv/dhgromm1"
     user_version: str = "0.1"
     instruments: int = 21
+    return_convention: str = RETURN_CONVENTION
     horizon_days: int = 20
     hidden_size: int = 32
     latent_width: int = 5003
@@ -65,15 +67,16 @@ class FeedbackConfig:
                    lambda: "feedback hedge requires the existing 20-day, 21-instrument experiment")
         verify_inp(self.hidden_size > 0 and self.latent_width > 0,
                    lambda: "hidden and latent dimensions must be positive")
+        verify_inp(self.return_convention == RETURN_CONVENTION, lambda: "feedback requires floating-contract gains")
 
 
 class FeedbackHedge(BaseModel):
     """Scan LSTM, action, and live cohort book jointly, without Python time steps.
 
     A book entry is actual contract units, indexed by opening date and instrument.
-    Settled contracts disappear before the next action. New premium-normalized
-    trades are converted to units with their own opening mark, not today's
-    replacement contract's price. Realized future returns enter only final P&L.
+    Settled contracts disappear before the next action. A floating quantity a
+    converts to actual contract units a/S_open, never a/option_premium.
+    Realized future gains enter only final P&L.
     """
 
     def __init__(self, env: BaseEnvironment, *, config: FeedbackConfig,
@@ -120,7 +123,7 @@ class FeedbackHedge(BaseModel):
         modulation = 1 + torch.tanh(self.gate(time) - self.reference_gate(time))
         state = torch.cat((state[:, :1], state[:, 1:] * modulation), dim=-1)
         trade = self.action(state)
-        next_book = live_book + insert[None, :, None] * (trade / marks)[:, None, :]
+        next_book = live_book + insert[None, :, None] * (trade / marks[:, :1])[:, None, :]
         # scan also saves cell/gate intermediates for its backward scan. Clone
         # every carry so AOT's saved intermediates cannot alias carry outputs.
         # Clones preserve derivatives; no feedback is detached.

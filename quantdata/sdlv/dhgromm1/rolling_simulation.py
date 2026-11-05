@@ -17,9 +17,11 @@ from filelock import FileLock
 from quantdata.sdlv.daily.front_spot.jax_model import (
     RiskNeutralState,
     black_mixture_call_prices,
+    one_day_physical_substepped,
     one_day_risk_neutral_substepped,
 )
 from quantdata.sdlv.daily.wide_audit import AuditMonitor, resource_health, sha256
+from quantdata.sdlv.dhgromm1.contracts import RETURN_CONVENTION, SCENARIO_SCHEMA
 
 jax.config.update("jax_enable_x64", True)
 ITM_LEVELS = (-2., -1.5, -1., -.5, -.25)
@@ -35,7 +37,10 @@ def zero_strike_call_prices(support: jax.Array, densities: jax.Array,
 def generate_chunk(*, calibration: Path, paths: int, batch_size: int, substeps: int,
                    seed: np.random.SeedSequence, strike_levels: tuple[float, ...] = ITM_LEVELS,
                    include_forwards: bool = True,
+                   market_price_of_risk: np.ndarray | None = None,
                    state_sink: Callable[[int, int, int, RiskNeutralState], None] | None = None,
+                   market_sink: Callable[..., None] | None = None,
+                   opening_sink: Callable[..., None] | None = None,
                    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Generate paired paths with returns for each separately opened trade.
 
@@ -43,7 +48,7 @@ def generate_chunk(*, calibration: Path, paths: int, batch_size: int, substeps: 
     each day's spot, at each of 1/5/10 days. Defaults are strictly ITM calls.
     Every option is a call. The separate terminal call expires at t=20 and
     resets its ATM strike to the current spot at each trading day. Each trade
-    earns its expiry return, with contracts expiring after day 20 instead
+    pays (S_expiry/S_open-K)^+ minus its normalized opening price, with contracts expiring after day 20 instead
     liquidated at their day-20 model marks. Spot trades are valued at day 20.
     """
     if paths < 2 or paths % 2 or batch_size < 2 or batch_size % 2 or substeps < 1:
@@ -57,7 +62,12 @@ def generate_chunk(*, calibration: Path, paths: int, batch_size: int, substeps: 
         loadings = jnp.asarray(data["annualized_loadings"], dtype=jnp.float64)
     if loadings.shape[-1] != 8:
         raise ValueError("expected eight PCA drivers")
-    step = jax.jit(one_day_risk_neutral_substepped, static_argnames=("expiry_dt", "time_power"))
+    if market_price_of_risk is not None:
+        market_price_of_risk = np.asarray(market_price_of_risk, dtype=np.float64)
+        if market_price_of_risk.shape != (8,) or not np.isfinite(market_price_of_risk).all():
+            raise ValueError("P simulation requires eight finite fitted Brownian risk prices")
+    step_function = one_day_risk_neutral_substepped if market_price_of_risk is None else one_day_physical_substepped
+    step = jax.jit(step_function, static_argnames=("expiry_dt", "time_power"))
     pricer = jax.jit(black_mixture_call_prices)
     instrument_count = 21 if include_forwards else 17
     prices = np.zeros((paths, 21, instrument_count), dtype=np.float64)
@@ -80,6 +90,8 @@ def generate_chunk(*, calibration: Path, paths: int, batch_size: int, substeps: 
         cohort_strikes = np.empty((batch_size, 20, 3, 5), dtype=np.float64)
         cohort_days = np.empty((20, 3), dtype=np.int64)
         for day in range(20):
+            if market_sink is not None:
+                market_sink(day, start, valid, support, tower, state.background_level, spot)
             # Observe the opening state, before drawing/using this day's shocks.
             # The optional observer must not mutate the simulation state.
             if state_sink is not None:
@@ -101,11 +113,14 @@ def generate_chunk(*, calibration: Path, paths: int, batch_size: int, substeps: 
                 opening = np.column_stack((opening, np.asarray(forwards)))
             cohort_strikes[:, day] = np.asarray(strikes)
             cohort_days[day] = np.asarray(maturities) + day
-            result = step(support, state, loadings[:state.future_dlvsq.shape[-2]], jnp.asarray(shocks[day]),
+            if opening_sink is not None:
+                opening_sink(day, start, valid, opening)
+            measure_args = () if market_price_of_risk is None else (jnp.asarray(market_price_of_risk),)
+            result = step(support, state, loadings[:state.future_dlvsq.shape[-2]], *measure_args, jnp.asarray(shocks[day]),
                           jnp.asarray(black[day]), expiry_dt=1.0 / 252.0, time_power=1.0)
             next_spot = result.spot
             next_tower = result.density_tower
-            if not np.isfinite(opening).all() or np.any(opening <= 0):
+            if not np.isfinite(opening).all() or np.any(opening < 0) or np.any(opening[:, 0] <= 0):
                 raise FloatingPointError(f"invalid rolling-option marks at day {day}")
             prices[start:start + valid, day] = opening[:valid]
             spot_path[:, day + 1] = np.asarray(next_spot)
@@ -141,7 +156,9 @@ def generate_chunk(*, calibration: Path, paths: int, batch_size: int, substeps: 
             opening = prices[start:start + valid, day]
             if not np.isfinite(close).all() or np.any(close < 0):
                 raise FloatingPointError(f"invalid expiry/day-20 closing marks for day-{day} trades")
-            returns[start:start + valid, day] = (close - opening) / opening
+            # Quantity of a floating contract, NOT cash invested in a premium.
+            # This remains defined for an option with zero opening premium.
+            returns[start:start + valid, day] = (close - opening) / opening[:, :1]
     payoff = np.abs(prices[:, 20, 0] / prices[:, 10, 0] - 1)
     return prices, returns, payoff
 
@@ -173,7 +190,7 @@ def main() -> None:
     strike_levels = ITM_LEVELS if args.strike_menu == "itm" else CENTERED_LEVELS
     include_forwards = not args.without_forwards
     instrument_count = 21 if include_forwards else 17
-    identity = dict(schema="dhgromm1-expiry-options-v3", calibration=str(calibration),
+    identity = dict(schema=SCENARIO_SCHEMA, return_convention=RETURN_CONVENTION, calibration=str(calibration),
         calibration_sha256=sha256(calibration / "diffusion.npz"), source_sha256=sha256(Path(__file__)),
         paths_per_sample=args.paths_per_sample, chunk_size=args.chunk_size, batch_size=args.batch_size,
         substeps=args.substeps, seed=args.seed, strikes="exp(z*0.20*sqrt(dte/252))*spot",
@@ -184,8 +201,8 @@ def main() -> None:
     identity["instrument_order"] = (["spot", "terminal_atm_call"]
         + [f"{tenor}_call_z{z:g}" for tenor in ("dte1", "dte5", "longest_dte") for z in strike_levels]
         + (["terminal_forward", "dte1_forward", "dte5_forward", "longest_dte_forward"] if include_forwards else []))
-    identity["return_definition"] = "Each trade held to expiry; expiry after day 20 marked at day 20; spot held to day 20"
-    identity["gain_definition"] = "sum over opening dates and instruments: new_trade_notional * cohort_return"
+    identity["return_definition"] = "(closing_mark-opening_mark)/S_open; actual expiry, or day-20 mark if later; no premium division"
+    identity["gain_definition"] = "sum over opening dates and instruments: floating_contract_quantity * floating_contract_gain"
     output.mkdir(parents=True, exist_ok=True)
     monitor = AuditMonitor(output)
     monitor.thread.start()

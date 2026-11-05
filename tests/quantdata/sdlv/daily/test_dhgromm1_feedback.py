@@ -103,7 +103,9 @@ def test_inventory_uses_cohort_units_and_clears_expired_contracts() -> None:
     book[0, 0, 7] = 3
     carry = (torch.zeros(1, 3, dtype=dtype), torch.zeros(1, 3, dtype=dtype), book,
              torch.zeros(1, 21, dtype=dtype))
-    args = (torch.ones(1, 22, dtype=dtype), torch.full((1, 21), 2., dtype=dtype),
+    marks = torch.full((1, 21), .02, dtype=dtype)
+    marks[:, 0] = 2.
+    args = (torch.ones(1, 22, dtype=dtype), marks,
             torch.ones(1, 4, dtype=dtype), policy.live[1], policy.insert[1])
     new, trade = policy._body(carry, args)
     assert new[2][0, 0, 2] == 0

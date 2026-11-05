@@ -267,7 +267,8 @@ def train_joint(*, source: Path, output: Path, train: TrainConfig, sample: Resid
 
 def verify_joint_gpu(*, batch_size: int = 256, config: JointConfig | None = None,
                      model_type: type[JointHedges] = JointHedges,
-                     prepare: Callable[[JointHedges], None] | None = None) -> dict:
+                     prepare: Callable[[JointHedges], None] | None = None,
+                     state_width: int | None = None) -> dict:
     """Compare compiled summed CUDA losses and every gradient to the reference."""
     torch.manual_seed(819)
     env = BaseEnvironment(device="cuda", precision=32, debug=False)
@@ -285,7 +286,8 @@ def verify_joint_gpu(*, batch_size: int = 256, config: JointConfig | None = None
     execute = candidate.compiled_losses()
     price = torch.rand(batch_size, 21, 21, device="cuda") + .8
     ret = torch.randn(batch_size, 20, 21, device="cuda") * .01
-    state = torch.randn(batch_size, 20, 5003, device="cuda") * .1
+    state_width = config.long.latent_width if state_width is None else state_width
+    state = torch.randn(batch_size, 20, state_width, device="cuda") * .1
     payoff = torch.linspace(.005, .04, batch_size, device="cuda")
     started = time.monotonic()
     expected = model(price, state, ret, payoff, eager=True)

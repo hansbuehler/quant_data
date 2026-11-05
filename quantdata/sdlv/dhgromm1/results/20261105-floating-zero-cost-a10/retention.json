@@ -1,0 +1,47 @@
+{
+  "source": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-floating-zero-cost-20261105-KMBK8u",
+  "status": "complete",
+  "files": [
+    {
+      "path": "identity.json",
+      "source_sha256": "4d29369d449083908e15298629d1a4aa5fa8f306469b5f8a0d801d1bdfdfd06c",
+      "retained_sha256": "4d29369d449083908e15298629d1a4aa5fa8f306469b5f8a0d801d1bdfdfd06c"
+    },
+    {
+      "path": "report.json",
+      "source_sha256": "38b7298bda46cebcb668b95233ce8a2849af267c76e6aadd2d079e39feba99f5",
+      "retained_sha256": "38b7298bda46cebcb668b95233ce8a2849af267c76e6aadd2d079e39feba99f5"
+    },
+    {
+      "path": "status.json",
+      "source_sha256": "3074d1ad39d3d4b8baa23b39d47caaa6445018a1ea9f488d549835ccea2970f9",
+      "retained_sha256": "3074d1ad39d3d4b8baa23b39d47caaa6445018a1ea9f488d549835ccea2970f9"
+    },
+    {
+      "path": "scalar-benchmarks.json",
+      "source_sha256": "00b03ad9366c85170a279485462fa441efca1efb79007c69c349634ea48eef04",
+      "retained_sha256": "00b03ad9366c85170a279485462fa441efca1efb79007c69c349634ea48eef04"
+    },
+    {
+      "path": "gpu-verification.json",
+      "source_sha256": "9467ef00f109f48c7c3853164ae4ee0871ed51d7bdb9bb895c5cb22cedb6d008",
+      "retained_sha256": "9467ef00f109f48c7c3853164ae4ee0871ed51d7bdb9bb895c5cb22cedb6d008"
+    },
+    {
+      "path": "objective-change-rescore.json",
+      "source_sha256": "cb854c672853031e1cc2a6176a845138cb123121e3b863f9123a4218907d205f",
+      "retained_sha256": "cb854c672853031e1cc2a6176a845138cb123121e3b863f9123a4218907d205f"
+    },
+    {
+      "path": "triple-losses.csv",
+      "source_sha256": "331636497da72b5e4ff7c84e655c09e914cd91ca770d1c23f6682858b4c83b1e",
+      "retained_sha256": "bc046d8c97e9f77aeac242d48072723fdbfe2a39a67e43bc4ce016cf5988da6a"
+    },
+    {
+      "path": "figures/losses.png",
+      "source_sha256": "8758285405c69ead6e2319ea3afb3ab05d898ce72682206c9378e8f0b55dd332",
+      "retained_sha256": "8758285405c69ead6e2319ea3afb3ab05d898ce72682206c9378e8f0b55dd332"
+    }
+  ],
+  "retained": "deliberate compact result snapshot; CSV line endings normalized to LF; raw scenarios, market cache, weights, logs and scratch stay outside Git"
+}

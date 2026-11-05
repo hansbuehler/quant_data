@@ -11,12 +11,13 @@ import torch
 from cdxcore.err import verify_inp
 from cdxcore.version import version
 
+from quantdata.sdlv.dhgromm1.contracts import RETURN_CONVENTION
 from quantdata.torch import BaseEnvironment, BaseModel
 from quantdata.torch.ffw import FeedForward, FeedForwardConfig
 from quantdata.torch.utility import torch_utility
 
 
-@version("0.6", dependencies=[torch_utility])
+@version("0.7", dependencies=[torch_utility])
 @dataclass(frozen=True, kw_only=True)
 class HedgeConfig:
     """Logical identity for the recurrent affine-plus-deep hedge."""
@@ -26,6 +27,7 @@ class HedgeConfig:
     user_version: str = "0.1"
     instruments: int = 21
     gain_mode: str = "expiry_trades"
+    return_convention: str = RETURN_CONVENTION
     horizon_days: int = 20
     hidden_size: int = 32
     action_deep: FeedForwardConfig = FeedForwardConfig(activation="Tanh", num_depth=2, num_width=32)
@@ -37,6 +39,7 @@ class HedgeConfig:
         verify_inp(bool(self.label), lambda: "a hedge label is required")
         verify_inp(self.gain_mode in {"expiry_trades", "daily_positions"},
                    lambda: f"unknown gain mode {self.gain_mode!r}")
+        verify_inp(self.return_convention == RETURN_CONVENTION, lambda: "hedge requires floating-contract gains")
         verify_inp(self.instruments > 0 and self.horizon_days > 0 and self.hidden_size > 0,
                    lambda: "instrument, horizon and hidden dimensions must be positive")
         verify_inp(np.isfinite(self.risk_aversion) and self.risk_aversion > 0,
@@ -135,7 +138,7 @@ class RecurrentHedge(BaseModel):
     def forward_eager(self, prices: torch.Tensor, *, returns: torch.Tensor | None = None) -> HedgeOutput:
         """Trade causally using returns for the actual selected contracts.
 
-        In expiry mode each action opens a separate cash-notional trade cohort;
+        In expiry mode each action opens a separate floating-contract quantity;
         the supplied return is realized at expiry or at day-20 liquidation.
         Future realized returns never enter the policy state. The legacy daily
         mode accumulates holdings before multiplying one-day returns. This

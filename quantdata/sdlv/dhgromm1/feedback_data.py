@@ -11,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
+from quantdata.sdlv.dhgromm1.contracts import canonical_gains
 from quantdata.sdlv.dhgromm1.feedback import packed_geometry
 
 
@@ -46,6 +47,7 @@ def _replay(sender: object, scenarios: str, paths: int,
                     break
                 with np.load(path, allow_pickle=False) as saved:
                     expected = tuple(saved[key] for key in ("prices", "returns", "payoff"))
+                expected = (expected[0], canonical_gains(expected[0], expected[1], identity=identity), expected[2])
                 count = len(expected[0])
                 states = np.empty((count, offsets[-1]), dtype=np.float32)
 

@@ -1,0 +1,268 @@
+{
+  "status": "deleted",
+  "targets": [
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-1step-fused-20261103-OZWNEm",
+      "files": 13,
+      "file_bytes": 2022934
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-itm-forwards-20261103-EgzLAZ",
+      "files": 17,
+      "file_bytes": 1151875
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-training-diagnosis-20261104-j3gmUa",
+      "files": 11,
+      "file_bytes": 1165645
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-cont500-20261103-4GnfMn",
+      "files": 6,
+      "file_bytes": 976800
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-loss-snapshot-20261104-n7gghK",
+      "files": 3,
+      "file_bytes": 215407
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-triple-oce-mse-20261105-9F5qox",
+      "files": 13,
+      "file_bytes": 11259408
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-joint500-20261104-Ll97mr",
+      "files": 20,
+      "file_bytes": 55327519
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-event500-20261104-OwzFgf",
+      "files": 13,
+      "file_bytes": 69079273
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-expiry-20261103-4YviPf",
+      "files": 16,
+      "file_bytes": 1052071
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-time-only-oce50-20261105-iXZSsq",
+      "files": 10,
+      "file_bytes": 313941
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-rolling-20261102-fhAXS8",
+      "files": 12,
+      "file_bytes": 455863
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-floating-zero-cost-20261105-x6TLxq",
+      "files": 8,
+      "file_bytes": 20819
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-floating-zero-cost-20261105-vlGvq7",
+      "files": 8,
+      "file_bytes": 21617
+    },
+    {
+      "path": "/home/hans/quantdata_data/tmp/quant_data/dhgromm1-triple-oce-mse-20261105-kC7rMR",
+      "files": 4330,
+      "file_bytes": 196350199
+    },
+    {
+      "path": "/home/hans/quantdata_data/tmp/quant_data/dhgromm1-time-only-oce50-20261105-WJaEKl",
+      "files": 1,
+      "file_bytes": 160829
+    },
+    {
+      "path": "/home/hans/quantdata_data/tmp/quant_data/dhgromm1-event500-20261104-WePfZb",
+      "files": 3995,
+      "file_bytes": 220895839
+    },
+    {
+      "path": "/home/hans/quantdata_data/tmp/quant_data/dhgromm1-observable500-20261104-sMz3Qx",
+      "files": 4329,
+      "file_bytes": 196143499
+    },
+    {
+      "path": "/home/hans/quantdata_data/tmp/quant_data/dhgromm1-floating-zero-cost-20261105-DuAWQj",
+      "files": 10255,
+      "file_bytes": 337640555
+    },
+    {
+      "path": "/tmp/quant_data/dhgromm1-zero-cost-tests-20261105-a1",
+      "files": 4,
+      "file_bytes": 4060597
+    },
+    {
+      "path": "/tmp/quant_data/dhgromm1-zero-cost-tests-20261105-a2",
+      "files": 48,
+      "file_bytes": 45407892
+    },
+    {
+      "path": "/tmp/quant_data/dhgromm1-zero-cost-tests-20261105-a3",
+      "files": 4,
+      "file_bytes": 4060597
+    },
+    {
+      "path": "/tmp/quant_data/dhgromm1-zero-cost-tests-20261105-a4",
+      "files": 48,
+      "file_bytes": 45407892
+    },
+    {
+      "path": "/tmp/quant_data/dhgromm1-floating-tests-20261105-a2",
+      "files": 13,
+      "file_bytes": 27831302
+    },
+    {
+      "path": "/tmp/quant_data/dhgromm1-floating-tests-20261105-a3",
+      "files": 4,
+      "file_bytes": 2058946
+    },
+    {
+      "path": "/tmp/quant_data/dhgromm1-floating-tests-20261105-a4",
+      "files": 47,
+      "file_bytes": 43397009
+    },
+    {
+      "path": "/tmp/quant_data/dhgromm1-floating-tests-20261105-a5",
+      "files": 3,
+      "file_bytes": 2049716
+    },
+    {
+      "path": "/tmp/quant_data/dhgromm1-floating-tests-20261105-a6",
+      "files": 26,
+      "file_bytes": 8871101
+    },
+    {
+      "path": "/tmp/quant_data/dhgromm1-loss-plot-20261105-iDttCi",
+      "files": 16,
+      "file_bytes": 1819875
+    },
+    {
+      "path": "/tmp/quant_data/dhgromm1-observable-tests-20261104-vrrJlW",
+      "files": 40,
+      "file_bytes": 67203877
+    },
+    {
+      "path": "/tmp/quant_data/dhgromm1-time-only-tests-20261105-luPers",
+      "files": 15,
+      "file_bytes": 7403976
+    },
+    {
+      "path": "/tmp/quant_data/dhgromm1-mcerror-mpl-20261105",
+      "files": 1,
+      "file_bytes": 160829
+    },
+    {
+      "path": "/tmp/quant_data/dhgromm1-triple-tests-20261105-AfioYF",
+      "files": 55,
+      "file_bytes": 48708497
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-1step-warm500-20261103-vi9yMf/job.log",
+      "files": 1,
+      "file_bytes": 342826
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-1step-warm500-20261103-vi9yMf/training",
+      "files": 5,
+      "file_bytes": 1667250
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-1step-warm500-20261103-vi9yMf/pipeline.json",
+      "files": 1,
+      "file_bytes": 5392
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-observable500-20261104-Hde4Xv/job.log",
+      "files": 1,
+      "file_bytes": 248363
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-observable500-20261104-Hde4Xv/gpu-verification.json",
+      "files": 1,
+      "file_bytes": 4174
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-observable500-20261104-Hde4Xv/progress.json",
+      "files": 1,
+      "file_bytes": 102
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-observable500-20261104-Hde4Xv/identity.json",
+      "files": 1,
+      "file_bytes": 6378
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-observable500-20261104-Hde4Xv/gpu-allocation.json",
+      "files": 1,
+      "file_bytes": 115
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-observable500-20261104-Hde4Xv/training.lock",
+      "files": 1,
+      "file_bytes": 0
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-observable500-20261104-Hde4Xv/joint.checkpoint.pt",
+      "files": 1,
+      "file_bytes": 7584401
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-observable500-20261104-Hde4Xv/verification",
+      "files": 4,
+      "file_bytes": 4413
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-observable500-20261104-Hde4Xv/long.selected.pt",
+      "files": 1,
+      "file_bytes": 1102538
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-observable500-20261104-Hde4Xv/short.selected.pt",
+      "files": 1,
+      "file_bytes": 1102609
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-observable500-20261104-Hde4Xv/loss-plot-20261105-iFkDv4",
+      "files": 3,
+      "file_bytes": 321980
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-observable500-20261104-Hde4Xv/report.json",
+      "files": 1,
+      "file_bytes": 9320
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-observable500-20261104-Hde4Xv/smoke",
+      "files": 5,
+      "file_bytes": 956998
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-observable500-20261104-Hde4Xv/verification.log",
+      "files": 1,
+      "file_bytes": 5851
+    },
+    {
+      "path": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-observable500-20261104-Hde4Xv/joint-losses.csv",
+      "files": 1,
+      "file_bytes": 39306
+    }
+  ],
+  "total_file_bytes": 1416098215,
+  "protected": [
+    "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-1step-warm500-20261103-vi9yMf/scenarios",
+    "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-observable500-20261104-Hde4Xv/market-cache",
+    "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-floating-zero-cost-20261105-KMBK8u",
+    "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-floating-centered500-20261105-n0QhMI",
+    "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-q1-noa10-20261105-w4aKQh",
+    "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-P1-sequence-20261105-3Cq7c9",
+    "/home/hans/quantdata_data/tmp/quant_data/dhgromm1-q1-noa10-20261105-e74g9F",
+    "/home/hans/quantdata_data/tmp/quant_data/dhgromm1-P1-sequence-20261105-rAvGbK"
+  ],
+  "scope": "obsolete project-owned hedge fits, plots, checkpoints and compiler scratch; reusable source paths/marks protected",
+  "recovery": "Git deletions remain recoverable from history; external run/scratch deletions are permanent"
+}

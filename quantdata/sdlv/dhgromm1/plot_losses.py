@@ -32,18 +32,23 @@ def joint_history(run: Path) -> list[dict]:
     return rows
 
 
-def plot_joint_losses(run: Path, output: Path, *, partial: bool) -> dict:
+def plot_joint_losses(run: Path, output: Path, *, partial: bool, log_y: bool = False) -> dict:
     """Plot epoch-end training losses without reading or changing checkpoints."""
     report_path = run / "report.json"
     if not partial and not report_path.exists():
-        raise ValueError("evaluation report unavailable; use --partial for an active run")
+        raise ValueError("completion report unavailable; use --partial for an active run")
     rows = joint_history(run)
     identity = json.loads((run / "identity.json").read_text())
     selected = min(rows, key=lambda row: row["sum_loss"])
+    if log_y and any(row[key] <= 0 for row in rows for key in ("long_loss", "short_loss", "sum_loss")):
+        raise ValueError("logarithmic loss axes require strictly positive losses")
+    policy_inputs = ("observable-only" if "simulator latent state" in identity.get("excluded_inputs", [])
+                     else "full-state")
     summary = dict(run=str(run), epochs_run=rows[-1]["epoch"], target_epochs=identity["joint_epochs"],
         selected_epoch=selected["epoch"], initial=rows[0], latest=rows[-1], selected=selected,
         statistic="full training sample, frozen epoch-end policy; negative OCE plus trade regularizer",
-        selection="minimum training SUM, same epoch for both independent networks", validation=False)
+        selection="minimum training SUM, same epoch for both independent networks", validation=False,
+        policy_inputs=policy_inputs, y_scale="log" if log_y else "linear")
     output.mkdir(parents=True, exist_ok=True)
     for name in ("losses.png", "epoch_losses.csv", "summary.json"):
         if (output / name).exists():
@@ -60,8 +65,11 @@ def plot_joint_losses(run: Path, output: Path, *, partial: bool) -> dict:
         ax.scatter([selected["epoch"]], [selected[key]], marker="*", s=110, color=color,
                    edgecolors="black", linewidths=.6, zorder=5, label="Selected common checkpoint")
         ax.set(title=title, xlabel="Epoch (0 = warm start)", ylabel="Penalized negative OCE — lower is better")
+        if log_y:
+            ax.set_yscale("log")
+            ax.set_ylabel("Training loss (log axis) — lower is better")
         ax.grid(alpha=.18)
-    fig.suptitle(f"GROMM v1 (−4,3): full-state, one-step/day deep hedge — training losses\n"
+    fig.suptitle(f"GROMM v1 (−4,3): {policy_inputs}, one-step/day deep hedge — training losses\n"
                  f"{run.name}; through epoch {rows[-1]['epoch']}/{identity['joint_epochs']}; "
                  f"selected epoch {selected['epoch']}", fontsize=11)
     handles, labels = axes[0].get_legend_handles_labels()
@@ -133,6 +141,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--wait", action="store_true", help="wait for the active run to finish before plotting")
     parser.add_argument("--partial", action="store_true", help="plot the available epochs of an active run")
+    parser.add_argument("--log-y", action="store_true", help="logarithmic axes for positive joint training losses")
     args = parser.parse_args()
     run, output = args.run.resolve(), args.output.resolve()
     if not output.is_relative_to(Path(os.environ["QUANTDATA_ROOT"]).resolve()):
@@ -141,7 +150,7 @@ def main() -> None:
         while args.wait and not (run / "report.json").exists():
             print(json.dumps(dict(stage="waiting_for_joint_training_report")), flush=True)
             time.sleep(30)
-        summary = plot_joint_losses(run, output, partial=args.partial)
+        summary = plot_joint_losses(run, output, partial=args.partial, log_y=args.log_y)
         print(json.dumps(dict(output=str(output), summary=summary), indent=2))
         return
     # Historical independent-policy plots also compute the no-trade baseline.

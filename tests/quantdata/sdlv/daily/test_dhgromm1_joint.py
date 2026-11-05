@@ -112,6 +112,22 @@ def test_joint_loss_plot_selects_a_common_training_sum_epoch(tmp_path) -> None:
     assert len(joint_history(run)) == 3
 
 
+def test_observable_joint_plot_labels_log_axes_and_rejects_negative_values(tmp_path) -> None:
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "identity.json").write_text(json.dumps(dict(joint_epochs=2, excluded_inputs=["simulator latent state"])))
+    path = run / "joint-losses.csv"
+    path.write_text("epoch,long_loss,short_loss,sum_loss,online_sum_loss\n0,1,2,3,3\n1,.1,.2,.3,1\n2,5,6,11,4\n")
+    result = plot_joint_losses(run, tmp_path / "log-figure", partial=True, log_y=True)
+    assert result["policy_inputs"] == "observable-only"
+    assert result["y_scale"] == "log"
+    assert result["selected_epoch"] == 1
+    assert result["validation"] is False
+    path.write_text("epoch,long_loss,short_loss,sum_loss,online_sum_loss\n0,-1,2,1,1\n")
+    with pytest.raises(ValueError, match="strictly positive"):
+        plot_joint_losses(run, tmp_path / "invalid", partial=True, log_y=True)
+
+
 @pytest.mark.parametrize("row", ["2,0,1,1,1", "1,0,1,2,1", "1,nan,1,nan,1"])
 def test_joint_history_rejects_rewound_invalid_or_nonfinite_losses(tmp_path, row: str) -> None:
     (tmp_path / "joint-losses.csv").write_text(
