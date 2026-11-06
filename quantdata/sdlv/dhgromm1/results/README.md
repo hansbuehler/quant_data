@@ -29,7 +29,7 @@ plain-MC comparator. It is an evaluation, not conditional-weighted training.
 
 Each retention manifest binds compact files to their external sources by
 SHA256. Neither folder is a result for the new 1 bp premium-cost model,
-which is still training outside Git.
+which was stopped after 128 complete epochs; its checkpoint remains outside Git.
 
 `python -m quantdata.sdlv.dhgromm1.retain_result --source <completed-run>
 --output <new-results-directory>` intentionally retains small final outputs.

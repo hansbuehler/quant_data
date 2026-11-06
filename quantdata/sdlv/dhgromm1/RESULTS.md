@@ -3,7 +3,7 @@
 The original training table is a 5 November 2026 snapshot. The P row remains
 the saved epoch-89 snapshot, not a completed P result or a live checkpoint.
 Independent validation and the conditional-MC pilot were added on 6 November;
-the new premium-based transaction-cost experiment is still running.
+the premium-based transaction-cost experiment was stopped on 6 November.
 
 ## Reporting convention
 
@@ -20,7 +20,7 @@ The Empty column reports unadjusted \(U_0\). The claim is
 \(H=|S_{20}/S_{10}-1|\), with unchanged notional; the claim supplied to each
 policy is \(s(H-m_Q)\), where \(m_Q\) is the frozen Q training mean.
 Power-exponential risk aversion is 100. The historical results below have zero
-transaction costs; the active cost experiment is described separately below.
+transaction costs; the stopped cost experiment is described separately below.
 These runs use one simulation step per business day and daily trading for 20 days.
 
 ## Best training OCEs
@@ -140,9 +140,9 @@ Full fixed-cash/profiled-cash and matched plain-MC results are in
 [the retained pilot report](results/20261106-conditional-boundary-pilot/report.json).
 External source: `dhgromm1-conditional-boundary-20261106-aSKrb1`.
 
-## Active replacement: 1 bp cash-value costs inside utility
+## Stopped experiment: 1 bp cash-value costs inside utility
 
-Only ordinary DH and DH with actual transaction costs are active comparisons.
+The comparison was ordinary DH against DH with actual transaction costs.
 The latter replaces the L1/L2 treatment; bottom-90% training is discontinued.
 Its pathwise cost is `C=0.0001*sum(abs(a[t,i])*P[t,i]/S[t])`, where P is the
 current traded cash price. Options therefore pay 1 bp of premium. Fees are
@@ -153,9 +153,16 @@ The run retains Q one-step simulation, daily hedging, a0/a10, the same original
 100,000 training paths and frozen centering. It warm-starts the selected
 historical L1/L2 weights with those penalties removed, then runs 500 additional
 epochs with fresh Adam at 1e-5. GPU compiled/eager value and gradient checks
-passed. No completed cost-model OCE or validation result is claimed yet.
+passed. Training stopped on request after 128 complete epochs and 69,632 paths
+of epoch 129; the checkpoint was saved and the GPU released. Training-best
+epochs were Empty 124, Long 128 and Short 128. The stopped checkpoint has not
+been independently scored with ±3 MC errors or validated, and is not a
+completed 500-epoch result. The saved per-epoch training losses are in the
+external run's `triple-losses.csv`.
 
 External run: `dhgromm1-cost1bp-20261106-hcgjex`. Source checkpoint SHA256:
 `db14199246734963e788ab79541478954f20794e001040751d87c4028d48d955`.
+Stopped checkpoint SHA256:
+`5f35ee8ca2b6969f4ae77c9a220ab1fbf1baf912b9f10992cc2ad0a87b7ad2c3`.
 See [the model description](README.md#cash-value-transaction-costs-6-november-2026)
 for accounting, initialization and the reproduction command.

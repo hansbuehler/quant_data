@@ -5,12 +5,13 @@ on the preceding 252 observed dates. Claim `H=abs(S_20/S_10-1)`, unchanged
 notional. This is separate from GROMM2. Checkpoint selection is training-only;
 independent validation is reported separately in [RESULTS.md](RESULTS.md).
 
-Current experiment (6 November 2026): ordinary Q one-step DH with a0/a10,
-warm-started for 500 additional epochs with **1 bp of cash value traded inside
+Most recent experiment (6 November 2026): ordinary Q one-step DH with a0/a10,
+warm-started with a target of 500 additional epochs and **1 bp of cash value traded inside
 utility**. Option costs are proportional to option premium, not underlying
 notional. L1/L2 regularizers are zero. The no-cost baseline remains the control;
-bottom-90% training is discontinued. The earlier plans below are historical,
-not additional active jobs.
+bottom-90% training is discontinued. The cost run was stopped on request after
+128 complete epochs; its checkpoint was saved and the GPU released. The earlier
+plans below are historical, not additional active jobs.
 
 ## Contracts, utility and causality
 
@@ -271,7 +272,7 @@ loader for the new versioned cost checkpoints. Reports distinguish net OCE,
 unpenalized economic OCE, and cash fees; long/short are Empty-adjusted, with
 paired +/-3 MC errors conditional on frozen centering and selected policies.
 
-The active run is
+The stopped run is
 `/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-cost1bp-20261106-hcgjex`.
 It reuses the original 100,000 Q training paths (50,000 antithetic pairs),
 one simulation step/day and daily hedging; no paths or causal marks are rebuilt.
@@ -294,6 +295,11 @@ must use the existing `allocation --release-after-exit <run>` post-exit hook
 to release the allocation; do not release it while the trainer is alive.
 `identity.json` records units, cost timing, source/data hashes and code versions;
 `job.log`, `progress.json`, `triple-losses.csv` and the atomic checkpoint track
-the active run outside Git. Its result is not yet final. The cost-model checks
+the run outside Git. On 6 November 2026 it stopped cleanly after 128 complete
+epochs and 69,632 paths of epoch 129; the GPU was released. The checkpoint
+SHA256 is `5f35ee8ca2b6969f4ae77c9a220ab1fbf1baf912b9f10992cc2ad0a87b7ad2c3`.
+Training-best checkpoint epochs are Empty 124, Long 128 and Short 128; these
+are training selections, not independent validation or a completed 500-epoch
+result. The cost-model checks
 include fee timing/gradients, zero-fee equivalence, paid-fee causal feedback,
 read-only checkpoint/version roundtrips, and GPU compiled/eager gradients.
