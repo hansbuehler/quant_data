@@ -1,7 +1,9 @@
 # GROMM v1 deep-hedging results
 
-Snapshot recorded on 5 November 2026. The P row is the saved epoch-89
-snapshot, not a completed P result or a live reading of its advancing checkpoint.
+The original training table is a 5 November 2026 snapshot. The P row remains
+the saved epoch-89 snapshot, not a completed P result or a live checkpoint.
+Independent validation and the conditional-MC pilot were added on 6 November;
+the new premium-based transaction-cost experiment is still running.
 
 ## Reporting convention
 
@@ -17,7 +19,8 @@ learned empty-claim strategy, not the utility of literal zero trading:
 The Empty column reports unadjusted \(U_0\). The claim is
 \(H=|S_{20}/S_{10}-1|\), with unchanged notional; the claim supplied to each
 policy is \(s(H-m_Q)\), where \(m_Q\) is the frozen Q training mean.
-Power-exponential risk aversion is 100 and both trade-cost coefficients are zero.
+Power-exponential risk aversion is 100. The historical results below have zero
+transaction costs; the active cost experiment is described separately below.
 These runs use one simulation step per business day and daily trading for 20 days.
 
 ## Best training OCEs
@@ -77,3 +80,82 @@ All external run paths below are relative to
   Snapshot checkpoint SHA256:
   `2a70755a556e59cd3aefcc894f725f38f27a3c5e75a6009aff24d877ed1adc22`.
   The live checkpoint continues advancing; this table remains the epoch-89 record.
+
+## Independent validation, 6 November 2026
+
+Frozen training-selected policies, 100,000 separate validation paths arranged
+as 50,000 antithetic pairs. These are full-distribution ordinary OCEs, not
+bottom-90% scores. Cash is profiled globally to evaluate each fixed hedge;
+no policy, quote scaling or return/payoff centering is fitted to validation.
+The historical L1/L2 row reports raw OCE, without subtracting its training
+regularizer and without inserting cash costs that were not present in that run.
+
+| Frozen policy | Long − Empty | Short − Empty | Empty |
+|---|---:|---:|---:|
+| Ordinary DH, Q+a10 | +0.006458 ± 0.007256 | −0.001981 ± 0.005326 | −0.009574 ± 0.008200 |
+| Historical DH+L1/L2, Q+a10 | +0.019585 ± 0.021417 | −0.024007 ± 0.033670 | −0.031638 ± 0.026101 |
+
+Errors are ±3 antithetic-pair MC standard errors, adding the independent
+validation and original-training centering contributions. Fitting/selection
+uncertainty is excluded. The large errors and negative Empty OCE contrast
+with the in-sample results: these estimates do not establish converged prices
+or an arbitrage-free model. A few absorbing-boundary paths dominate the
+validation utility variance; small action regularizers did not solve it.
+
+Full frozen-cash and profiled-cash statistics and checkpoint hashes are in
+[the retained validation report](results/20261106-independent-validation/report.json).
+The report also preserves the discontinued robust experiment as historical
+evidence; that model is not part of the current comparison.
+External source: `dhgromm1-heldout-20261106-vBdW4J`.
+
+## Conditional absorbing-boundary MC pilot
+
+This is a CPU evaluation of the same two frozen policies, not new training.
+Before each one-day transition, both absorbing endpoint continuations are
+included with weights `W*p_endpoint/M`, with M=2 background continuations.
+The surviving spine is sampled conditional on remaining interior and receives
+weight `W*p_interior`; its terminal weight is retained. Background Black risk
+and subsequent adaptive hedge decisions remain stochastic after absorption.
+Utility is averaged across branches, not evaluated at their mean wealth.
+
+There are 1,024 outer paths (512 independent antithetic pairs), with 82,944
+weighted terminal branches. Cash is one global scalar per policy, never a
+separate scalar per branch. Branch weights for each outer path sum to one.
+
+| Frozen policy | Long − Empty | Short − Empty | Empty |
+|---|---:|---:|---:|
+| Ordinary DH | +0.005405 ± 0.007960 | +0.001152 ± 0.003631 | −0.007659 ± 0.008957 |
+| Historical DH+L1/L2 | +0.016283 ± 0.024494 | −0.007036 ± 0.028016 | −0.027271 ± 0.028623 |
+
+Errors are ±3 MC standard errors clustered by OUTER antithetic pair, keeping
+all branch covariance. Original training constants and policies are fixed;
+these pilot errors exclude training-centering uncertainty, unlike the larger
+validation table above. All six paired conditional-minus-plain OCE differences
+at fixed cash include zero within ±3 errors. Variance reduction is promising,
+not evidence that the learned tail hedge has been repaired. Reconstruction
+checks matched saved prices, gains, payoff and causal policy outputs before
+running this pilot.
+
+Full fixed-cash/profiled-cash and matched plain-MC results are in
+[the retained pilot report](results/20261106-conditional-boundary-pilot/report.json).
+External source: `dhgromm1-conditional-boundary-20261106-aSKrb1`.
+
+## Active replacement: 1 bp cash-value costs inside utility
+
+Only ordinary DH and DH with actual transaction costs are active comparisons.
+The latter replaces the L1/L2 treatment; bottom-90% training is discontinued.
+Its pathwise cost is `C=0.0001*sum(abs(a[t,i])*P[t,i]/S[t])`, where P is the
+current traded cash price. Options therefore pay 1 bp of premium. Fees are
+deducted before applying utility and reduce subsequent causal running P&L.
+There is no L2 term, outside-utility penalty or mean subtraction from fees.
+
+The run retains Q one-step simulation, daily hedging, a0/a10, the same original
+100,000 training paths and frozen centering. It warm-starts the selected
+historical L1/L2 weights with those penalties removed, then runs 500 additional
+epochs with fresh Adam at 1e-5. GPU compiled/eager value and gradient checks
+passed. No completed cost-model OCE or validation result is claimed yet.
+
+External run: `dhgromm1-cost1bp-20261106-hcgjex`. Source checkpoint SHA256:
+`db14199246734963e788ab79541478954f20794e001040751d87c4028d48d955`.
+See [the model description](README.md#cash-value-transaction-costs-6-november-2026)
+for accounting, initialization and the reproduction command.

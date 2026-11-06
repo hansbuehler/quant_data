@@ -1,0 +1,57 @@
+{
+  "schema": "dhgromm1-conditional-absorption-v1",
+  "paths": 1024,
+  "inner": 2,
+  "batch_size": 128,
+  "seed": 20261107,
+  "device": "CPU only",
+  "sources": [
+    {
+      "name": "dh",
+      "source": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-floating-zero-cost-20261105-KMBK8u",
+      "checkpoint_sha256": "4b9d88e4b2359993091ecb5e84cde02baeb23c236607080485cd5cdf8576ab1e",
+      "selected_epochs": {
+        "empty": 362,
+        "long": 357,
+        "short": 355
+      },
+      "regularizer": null
+    },
+    {
+      "name": "dh_l1_l2",
+      "source": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-regularized500-20261105-HGtddI/01-dhgromm1-floating-zero-cost-20261105-KMBK8u",
+      "checkpoint_sha256": "db14199246734963e788ab79541478954f20794e001040751d87c4028d48d955",
+      "selected_epochs": {
+        "empty": 497,
+        "long": 496,
+        "short": 500
+      },
+      "regularizer": {
+        "label": "floating-action-L1-L2",
+        "group": "sdlv/dhgromm1/regularized",
+        "user_version": "0.1",
+        "l1": 0.0001,
+        "l2": 1e-08,
+        "treatment": "outside_utility",
+        "reduction": "mean_paths_sum_dates_instruments"
+      }
+    }
+  ],
+  "calibration": "/home/hans/quantdata_data/experiments/quant_data/sdlv/Gromm-v1-4,3/20261023-kVyePV/rolling252-full-q-20261026-wpxWhA/full",
+  "calibration_sha256": "cd45b039b570424ed277cd168e5af9ffae9029dade8c3c5c280032f927762cbb",
+  "simulation_substeps": 1,
+  "hedge_decisions_per_day": 1,
+  "objective": "ordinary OCE only; DH and DH+L1/L2; no robust case",
+  "centering": "unchanged original training return/payoff means; no new means fitted",
+  "conditional_law": "Gaussian factor zero truncated to interior CDF interval; both absorbing endpoint branches use exact 5% Black continuation",
+  "branch_weights": "W_t*p_endpoint/M; W_(t+1)=W_t*p_interior; terminal survivor W_20",
+  "training": false,
+  "validation_checkpoint_selection": false,
+  "reconstruction_gate": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-conditional-boundary-20261106-aSKrb1/gate/report.json",
+  "reconstruction_gate_sha256": "0ed36026afba642f57a3a29d9cbbbf76b39935f067a61d62ef8842cbb1684dcb",
+  "code_sha256": {
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/conditional_run.py": "30ec6b87f2fd857c3da1210a6105e5173c38be9560cccad0d72cd785f13b67f6",
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/conditional_paths.py": "f26950ab6eb0803a11fd3c68278052979143113b4c37f0c39aa92f0606c6801d",
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/conditional_oce.py": "50552a909a4206b77339b7aa9bbdf66c283eaa3f80d0fc3e73ddad09368ec318"
+  }
+}

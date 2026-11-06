@@ -18,14 +18,20 @@ from quantdata.sdlv.dhgromm1.observable import market_geometry
 from quantdata.sdlv.dhgromm1.persistence import atomic_json
 
 
-def cache_market_changes(*, scenarios: Path, output: Path, paths: int, monitor: AuditMonitor) -> np.ndarray:
+def cache_market_changes(*, scenarios: Path, output: Path, paths: int, monitor: AuditMonitor,
+                         sample: str = "train") -> np.ndarray:
     """Replay CPU paths, retaining only observable current marks of past trades.
 
     The callback executes BEFORE that day's shock. It maintains its own
     observed spot history; settlement uses only an already observed expiry
     spot, never a saved future expiry return. Check every replay against the
     original prices, returns and payoff before publishing a cache chunk.
+    The evaluation split uses its original sample-index-1 innovations, never
+    the training split's sample-index-0 innovations.
     """
+    if sample not in {"train", "evaluation"}:
+        raise ValueError("cache sample must be train or evaluation")
+    sample_index = {"train": 0, "evaluation": 1}[sample]
     os.environ["JAX_PLATFORMS"] = "cpu"
     import jax
     import jax.numpy as jnp
@@ -58,14 +64,14 @@ def cache_market_changes(*, scenarios: Path, output: Path, paths: int, monitor: 
         calibration_sha256=identity["calibration_sha256"], generator_sha256=sha256(Path(__file__).with_name("rolling_simulation.py")),
         cache_code_sha256=sha256(Path(__file__)), values_per_path=int(offsets[-1]), dtype="float32",
         meaning="current mark minus opening mark for each previously opened actual contract; frozen at settlement",
-        sample="train", no_simulator_state_saved=True)
+        sample=sample, no_simulator_state_saved=True)
     with FileLock(output / "cache.lock", timeout=0):
         manifest = output / "identity.json"
         if manifest.exists() and json.loads(manifest.read_text()) != cache_identity:
             raise ValueError("market cache identity changed; use a new run directory")
         atomic_json(manifest, cache_identity)
         completed = 0
-        for file in sorted((scenarios / "train").glob("[0-9]*.npz")):
+        for file in sorted((scenarios / sample).glob("[0-9]*.npz")):
             start = int(file.stem)
             if start >= paths:
                 break
@@ -134,7 +140,7 @@ def cache_market_changes(*, scenarios: Path, output: Path, paths: int, monitor: 
 
                 actual = generate_chunk(calibration=Path(identity["calibration"]), paths=count,
                     batch_size=identity["batch_size"], substeps=1,
-                    seed=np.random.SeedSequence([identity["seed"], 0, start]),
+                    seed=np.random.SeedSequence([identity["seed"], sample_index, start]),
                     strike_levels=tuple(identity["z"]), include_forwards=True, market_sink=observe)
                 errors = []
                 for a, b in zip(actual, expected, strict=True):

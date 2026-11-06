@@ -12,9 +12,24 @@ phase epochs: empty 362, long 357, short 355. Selected centered OCEs:
 +0.000303270, −0.000287635, −0.000090033. These are training-only results,
 not a no-arbitrage pass. MC errors condition on fitted means/policies.
 
-The no-a10 and P comparisons are running/queued, not included as completed
-results. Paths and sequence are documented in the parent README. Old
-premium-control experiment snapshots have been removed.
+The no-a10 and P comparisons are not retained here; their dated snapshots and
+external paths are documented in the parent RESULTS.md. Earlier queue plans
+are historical, not a list of currently active jobs. Old premium-control
+experiment snapshots have been removed.
+
+`20261106-independent-validation/` retains the completed 100,000-path frozen
+policy validation report, including both fixed training cash and globally
+profiled OCE. Original training centering is unchanged. The discontinued
+bottom-90% model appears only as historical evidence in this verbatim report.
+
+`20261106-conditional-boundary-pilot/` retains the completed CPU pilot for
+ordinary DH and the historical L1/L2 control: 1,024 outer paths, weighted
+absorbing endpoint continuations, outer-antithetic-pair errors, and a matched
+plain-MC comparator. It is an evaluation, not conditional-weighted training.
+
+Each retention manifest binds compact files to their external sources by
+SHA256. Neither folder is a result for the new 1 bp premium-cost model,
+which is still training outside Git.
 
 `python -m quantdata.sdlv.dhgromm1.retain_result --source <completed-run>
 --output <new-results-directory>` intentionally retains small final outputs.

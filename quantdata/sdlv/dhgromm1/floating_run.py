@@ -31,6 +31,11 @@ from quantdata.sdlv.dhgromm1.floating import (
 )
 from quantdata.sdlv.dhgromm1.observable_data import ObservableSample
 from quantdata.sdlv.dhgromm1.persistence import atomic_json, write_history
+from quantdata.sdlv.dhgromm1.regularization import (
+    ActionRegularizerConfig,
+    action_metrics,
+    regularized_losses,
+)
 from quantdata.sdlv.dhgromm1.time_decider import (
     TimeDeciderTriple,
     TimeDeciderTripleConfig,
@@ -89,12 +94,17 @@ def scalar_benchmarks(*, prices: np.ndarray, returns: np.ndarray, payoff: np.nda
     return report
 
 
-def load_floating_checkpoint(path: Path, *, config: FloatingTripleConfig) -> dict:
+def load_floating_checkpoint(path: Path, *, config: FloatingTripleConfig,
+                             regularizer: ActionRegularizerConfig | None = None) -> dict:
     saved = torch.load(path, map_location="cpu", weights_only=False)
     if (saved.get("model_code_version") != type(config).version.unique_id48
             or saved.get("model_config") != asdict(config) or saved.get("user_version") != config.user_version
             or saved.get("cost_treatment") != "inside_utility"):
         raise ValueError("floating checkpoint gain/architecture/objective version differs")
+    expected = asdict(regularizer) if regularizer is not None else None
+    code = ActionRegularizerConfig.version.unique_id48 if regularizer is not None else None
+    if saved.get("action_regularizer") != expected or saved.get("regularizer_code_version") != code:
+        raise ValueError("checkpoint action regularizer/objective version differs")
     return saved
 
 
@@ -111,9 +121,10 @@ def load_cost_continuation(path: Path, *, config: FloatingTripleConfig) -> dict:
     return load_floating_checkpoint(path, config=source_config)
 
 
-def load_floating_model(path: Path, *, config: FloatingTripleConfig, env: BaseEnvironment) -> FloatingTriple:
+def load_floating_model(path: Path, *, config: FloatingTripleConfig, env: BaseEnvironment,
+                        regularizer: ActionRegularizerConfig | None = None) -> FloatingTriple:
     """Read selected per-policy weights without fitting or holding a training lock."""
-    saved = load_floating_checkpoint(path, config=config)
+    saved = load_floating_checkpoint(path, config=config, regularizer=regularizer)
     state = saved["state_dict"]
     model_class = (TimeDeciderWithA10Triple if isinstance(config,TimeDeciderWithA10Config) else
                    TimeDeciderTriple if isinstance(config,TimeDeciderTripleConfig) else FloatingTriple)
@@ -126,7 +137,8 @@ def load_floating_model(path: Path, *, config: FloatingTripleConfig, env: BaseEn
     return model
 
 
-def verify_compiled(model: FloatingTriple, sample: ObservableSample, *, batch_size: int) -> dict:
+def verify_compiled(model: FloatingTriple, sample: ObservableSample, *, batch_size: int,
+                    regularizer: ActionRegularizerConfig | None = None) -> dict:
     """Compare GPU scan with same-device eager; report CPU rounding separately."""
     original = {k:v.detach().clone() for k,v in model.state_dict().items()}
     with torch.no_grad():
@@ -141,11 +153,15 @@ def verify_compiled(model: FloatingTriple, sample: ObservableSample, *, batch_si
     price, ret, payoff, changes = sample.batch(slice(0, batch_size))
     functions = model.policy_functions(compile_model=True)
     actual_results = tuple(f(price, changes, returns=ret) for f in functions)
-    actual = model.losses(actual_results, payoff)
-    expected = reference.losses(tuple(getattr(reference,k)(price,changes,returns=ret,eager=True)
-                                     for k in LABELS),payoff)
-    cpu_expected = cpu_reference.losses(tuple(getattr(cpu_reference,k)(price.cpu(),changes.cpu(),returns=ret.cpu(),eager=True)
-                                             for k in LABELS),payoff.cpu())
+    def objective(which, results, claim):
+        raw = which.losses(results, claim)
+        return regularized_losses(raw, results, regularizer) if regularizer is not None else raw
+
+    actual = objective(model, actual_results, payoff)
+    expected = objective(reference, tuple(getattr(reference,k)(price,changes,returns=ret,eager=True)
+                                         for k in LABELS),payoff)
+    cpu_expected = objective(cpu_reference, tuple(getattr(cpu_reference,k)(price.cpu(),changes.cpu(),returns=ret.cpu(),eager=True)
+                                                 for k in LABELS),payoff.cpu())
     actual.sum().backward()
     expected.sum().backward()
     cpu_expected.sum().backward()
@@ -154,7 +170,17 @@ def verify_compiled(model: FloatingTriple, sample: ObservableSample, *, batch_si
         cash = getattr(model,label).translation
         z = (out.gain+sign*(payoff-model.payoff_mean)-out.penalty-cash).detach().double()
         derivative = torch.exp(-100*z.clamp_min(0))+100*(-z).clamp_min(0)
-        value = derivative.mean()-1
+        if hasattr(getattr(model,label),"tail_threshold") and model.config.tail_fraction<1:
+            # The shared lower-tail threshold is a training-only scalar.
+            # Match the actual FP32 hinge boundary and its valid q tie slope.
+            utility = model._utility(z.to(out.gain.dtype),torch.zeros_like(out.gain)).detach()
+            threshold = getattr(model,label).tail_threshold
+            weight = ((utility<threshold.detach()).double()/model.config.tail_fraction
+                      +(utility==threshold.detach()).double())
+            value = (weight*derivative).mean()-1
+            torch.testing.assert_close(threshold.grad.double(),weight.mean()-1,atol=2e-6,rtol=1e-4)
+        else:
+            value = derivative.mean()-1
         torch.testing.assert_close(cash.grad.double(),value,atol=2e-6,rtol=1e-4)
         analytic_cash[label] = float(value)
     diagnostics = dict(gpu_compiled_losses=actual.detach().cpu().tolist(),
@@ -187,21 +213,48 @@ def verify_compiled(model: FloatingTriple, sample: ObservableSample, *, batch_si
 
 def train_floating(*, model: FloatingTriple, sample: ObservableSample, config: FloatingTripleConfig,
                    train: TrainConfig, output: Path, monitor: AuditMonitor, stop: dict,
-                   initial_benchmark: np.ndarray, continuation: dict | None = None) -> dict:
+                   initial_benchmark: np.ndarray | None, continuation: dict | None = None,
+                   regularizer: ActionRegularizerConfig | None = None,
+                   warm_start: dict | None = None,
+                   allow_selected_cost_warm_start: bool = False) -> dict:
+    if regularizer is not None and (config.policy.trade_l1 or config.policy.trade_l2):
+        raise ValueError("this regularization experiment requires zero transaction costs")
+    if continuation is not None and warm_start is not None:
+        raise ValueError("choose cost continuation or selected-weight regularizer warm start")
     checkpoint = output/"floating.checkpoint.pt"
+    device = sample.arrays[0].device
+    on_cuda = device.type == "cuda"
     optimizer = torch.optim.Adam([dict(params=list(getattr(model,k).parameters()),name=k) for k in LABELS],lr=train.learning_rate)
     start, offset, order = 0, 0, None
     functions = model.policy_functions(compile_model=train.compile_model)
 
-    def execute(prices,changes,returns,payoff):
-        return model.losses(tuple(f(prices,changes,returns=returns) for f in functions),payoff)
+    score_metrics = None
+
+    def execute(prices,changes,returns,payoff, *, diagnostics=False):
+        results = tuple(f(prices,changes,returns=returns) for f in functions)
+        raw = model.losses(results,payoff)
+        if regularizer is None:
+            return raw
+        values = regularized_losses(raw,results,regularizer)
+        return (values,action_metrics(raw,results,regularizer)) if diagnostics else values
 
     def score():
-        total = torch.zeros(3,device="cuda",dtype=torch.float64)
+        nonlocal score_metrics
+        total = torch.zeros(3,device=device,dtype=torch.float64)
+        metrics = torch.zeros((3,5),device=device,dtype=torch.float64) if regularizer is not None else None
         with torch.no_grad():
             for begin in range(0,sample.size,train.batch_size):
                 p,r,h,m = sample.batch(slice(begin,begin+train.batch_size))
-                total += execute(p,m,r,h).double()*len(p)
+                if regularizer is None:
+                    total += execute(p,m,r,h).double()*len(p)
+                else:
+                    values,details = execute(p,m,r,h,diagnostics=True)
+                    total += values.double()*len(p)
+                    metrics[:,:4] += details[:,:4].double()*len(p)
+                    metrics[:,4] = torch.maximum(metrics[:,4],details[:,4])
+        if metrics is not None:
+            metrics[:,:4] /= sample.size
+            score_metrics = metrics.cpu().numpy()
         values = (total/sample.size).cpu().numpy()
         if not np.isfinite(values).all():
             raise FloatingPointError("nonfinite centered floating OCE; prior checkpoint remains recovery point")
@@ -211,11 +264,16 @@ def train_floating(*, model: FloatingTriple, sample: ObservableSample, config: F
         return {k:v.detach().cpu().clone() for k,v in getattr(model,label).state_dict().items()}
 
     def record(epoch,values):
-        return dict(epoch=epoch,**{f"{k}_loss":float(v) for k,v in zip(LABELS,values,strict=True)},
-                    sum_loss=float(values.sum()),learning_rate=train.learning_rate)
+        row = dict(epoch=epoch,**{f"{k}_loss":float(v) for k,v in zip(LABELS,values,strict=True)},
+                   sum_loss=float(values.sum()),learning_rate=train.learning_rate)
+        if regularizer is not None:
+            for label,detail in zip(LABELS,score_metrics,strict=True):
+                row.update({f"{label}_{k}":float(v) for k,v in zip(
+                    ("raw_oce","regularizer","mean_sum_abs_trades","mean_sum_squared_trades","max_abs_trade"),detail,strict=True)})
+        return row
 
     if checkpoint.exists():
-        saved = load_floating_checkpoint(checkpoint,config=config)
+        saved = load_floating_checkpoint(checkpoint,config=config,regularizer=regularizer)
         if saved["training_paths"] != sample.size:
             raise ValueError("floating checkpoint training population differs")
         model.load_state_dict(saved["state_dict"])
@@ -223,10 +281,29 @@ def train_floating(*, model: FloatingTriple, sample: ObservableSample, config: F
         for group in optimizer.param_groups:
             group["lr"] = train.learning_rate
         start,offset = saved["resume_epoch"],saved["resume_offset"]
-        order = saved["pair_order"].to("cuda") if saved["pair_order"] is not None else None
+        order = saved["pair_order"].to(device) if saved["pair_order"] is not None else None
         best,best_states,selected,history = saved["best_losses"],saved["best_states"],saved["selected_epochs"],saved["history"]
         torch.set_rng_state(saved["torch_rng"])
-        torch.cuda.set_rng_state_all(saved["cuda_rng"])
+        if on_cuda:
+            torch.cuda.set_rng_state_all(saved["cuda_rng"])
+    elif warm_start is not None:
+        selected_cost = (allow_selected_cost_warm_start
+            and getattr(config.policy,"transaction_cost_rate",0)>0 and regularizer is None)
+        if (regularizer is None and not selected_cost) or warm_start["training_paths"] != sample.size:
+            raise ValueError("selected-weight objective warm start requires explicit authorization and the same training population")
+        model.load_state_dict(warm_start["state_dict"])
+        for label in LABELS:
+            getattr(model,label).load_state_dict(warm_start["best_states"][label])
+        # A changed objective and independently selected policy epochs have no
+        # matching joint Adam moments. Keep learned weights/cash, use fresh Adam.
+        torch.set_rng_state(warm_start["torch_rng"])
+        if on_cuda:
+            torch.cuda.set_rng_state_all(warm_start["cuda_rng"])
+        initial = score()
+        best = initial.copy()
+        best_states = {k:snapshot_policy(k) for k in LABELS}
+        selected = {k:0 for k in LABELS}
+        history = [record(0,initial)]
     elif continuation is not None:
         if continuation["training_paths"] != sample.size:
             raise ValueError("cost continuation requires the same training population")
@@ -235,9 +312,10 @@ def train_floating(*, model: FloatingTriple, sample: ObservableSample, config: F
         for group in optimizer.param_groups:
             group["lr"] = train.learning_rate
         offset = continuation["resume_offset"]
-        order = continuation["pair_order"].to("cuda") if continuation["pair_order"] is not None else None
+        order = continuation["pair_order"].to(device) if continuation["pair_order"] is not None else None
         torch.set_rng_state(continuation["torch_rng"])
-        torch.cuda.set_rng_state_all(continuation["cuda_rng"])
+        if on_cuda:
+            torch.cuda.set_rng_state_all(continuation["cuda_rng"])
         # Keep the CURRENT optimizer trajectory. Old best weights are rescored
         # diagnostically, not silently substituted under unrelated Adam moments.
         initial = score()
@@ -247,7 +325,8 @@ def train_floating(*, model: FloatingTriple, sample: ObservableSample, config: F
         old_best_rescored = score()
         model.load_state_dict(current_state)
         torch.set_rng_state(continuation["torch_rng"])
-        torch.cuda.set_rng_state_all(continuation["cuda_rng"])
+        if on_cuda:
+            torch.cuda.set_rng_state_all(continuation["cuda_rng"])
         atomic_json(output/"objective-change-rescore.json",dict(
             current_zero_cost_losses=dict(zip(LABELS,map(float,initial),strict=True)),
             old_best_zero_cost_losses=dict(zip(LABELS,map(float,old_best_rescored),strict=True)),
@@ -260,6 +339,8 @@ def train_floating(*, model: FloatingTriple, sample: ObservableSample, config: F
         selected = {k:0 for k in LABELS}
         history = [record(0,initial)]
     else:
+        if initial_benchmark is None:
+            raise ValueError("cold starts require the scalar reconstruction benchmark")
         initial = score()
         np.testing.assert_allclose(initial,initial_benchmark,atol=3e-6,rtol=1e-4,
             err_msg="production policy must reproduce its contained scalar benchmark before training")
@@ -277,19 +358,22 @@ def train_floating(*, model: FloatingTriple, sample: ObservableSample, config: F
             best_states=best_states,best_losses=best,selected_epochs=selected,history=history,
             training_paths=sample.size,resume_epoch=resume_epoch,resume_offset=resume_offset,
             pair_order=pair_order.cpu() if pair_order is not None else None,
-            torch_rng=torch.get_rng_state(),cuda_rng=torch.cuda.get_rng_state_all(),scheduler=None,scaler=None)
+            torch_rng=torch.get_rng_state(),cuda_rng=torch.cuda.get_rng_state_all() if on_cuda else [],scheduler=None,scaler=None)
+        if regularizer is not None:
+            payload.update(action_regularizer=asdict(regularizer),
+                           regularizer_code_version=ActionRegularizerConfig.version.unique_id48)
         temporary = checkpoint.with_suffix(".tmp.pt")
         torch.save(payload,temporary)
         temporary.replace(checkpoint)
 
     print(json.dumps(dict(stage="floating-initial",**history[-1],selected_epochs=selected)),flush=True)
     if not checkpoint.exists():
-        save(0,0,None)
+        save(start,offset,order)
     for epoch in range(start,train.epochs):
         if offset == 0:
-            order = torch.randperm(sample.size//2,device="cuda")
-        indices = (2*order[:,None]+torch.arange(2,device="cuda")).reshape(-1)
-        bad_norm = torch.zeros((),device="cuda",dtype=torch.bool)
+            order = torch.randperm(sample.size//2,device=device)
+        indices = (2*order[:,None]+torch.arange(2,device=device)).reshape(-1)
+        bad_norm = torch.zeros((),device=device,dtype=torch.bool)
         monitor.stage("train-centered-floating-oce",epoch*sample.size+offset,train.epochs*sample.size)
         for begin in range(offset,sample.size,train.batch_size):
             # Only the 60-second monitor writes progress while minibatches run;
@@ -331,7 +415,9 @@ def train_floating(*, model: FloatingTriple, sample: ObservableSample, config: F
     for label in LABELS:
         getattr(model,label).load_state_dict(best_states[label])
     return dict(status="complete",selected_epochs=selected,best_losses={k:float(v) for k,v in zip(LABELS,best,strict=True)},
-                initial=history[0],latest=history[-1],selection="independent training-best policy; disjoint weights")
+                initial=history[0],latest=history[-1],selection=(
+                    "independent training-best regularized objective; disjoint weights" if regularizer is not None else
+                    "independent training-best policy; disjoint weights"))
 
 
 def summarize(model: FloatingTriple,sample: ObservableSample,*,payoff: np.ndarray,batch_size: int) -> dict:

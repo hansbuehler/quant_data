@@ -1,0 +1,1299 @@
+{
+  "status": "complete",
+  "reports": {
+    "ordinary": {
+      "fixed_training_cash": {
+        "ordinary": {
+          "statistics": {
+            "empty": {
+              "oce": -0.009585157670674522,
+              "three_standard_errors": 0.008205399139162295,
+              "three_validation_only_errors": 0.008205348730214416,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": 0.00038190826307982206,
+              "retained_paths": 100000
+            },
+            "long": {
+              "oce": -0.003120757503133326,
+              "three_standard_errors": 0.0022136815993242655,
+              "three_validation_only_errors": 0.0022102605354991887,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -3.934171036235057e-05,
+              "retained_paths": 100000
+            },
+            "short": {
+              "oce": -0.011565175700042648,
+              "three_standard_errors": 0.010487551472109197,
+              "three_validation_only_errors": 0.010486571732886493,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": 0.00015513190010096878,
+              "retained_paths": 100000
+            }
+          },
+          "long_minus_empty": {
+            "oce": 0.006464400167541194,
+            "three_standard_errors": 0.007260360729269945,
+            "three_validation_only_errors": 0.007259354969020653,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "short_minus_empty": {
+            "oce": -0.00198001802936813,
+            "three_standard_errors": 0.005329302919242942,
+            "three_validation_only_errors": 0.005327395237805151,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "bid": {
+            "oce": 0.025682250807957344,
+            "three_standard_errors": 0.007264822072799454,
+            "three_validation_only_errors": 0.007259354969020653,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "ask": {
+            "oce": 0.021197868669784275,
+            "three_standard_errors": 0.00533577585561282,
+            "three_validation_only_errors": 0.005327395237805151,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          }
+        },
+        "bottom90": {
+          "statistics": {
+            "empty": {
+              "oce": -0.010970859585694605,
+              "three_standard_errors": 0.009117198634383988,
+              "three_validation_only_errors": 0.009117148287391212,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": 0.00038190826307982206,
+              "retained_paths": 90000
+            },
+            "long": {
+              "oce": -0.003972320673790474,
+              "three_standard_errors": 0.002459234924034124,
+              "three_validation_only_errors": 0.0024558049712884475,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -3.934171036235057e-05,
+              "retained_paths": 90000
+            },
+            "short": {
+              "oce": -0.013352702646788473,
+              "three_standard_errors": 0.01165269877074633,
+              "three_validation_only_errors": 0.01165172053070972,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": 0.00015513190010096878,
+              "retained_paths": 90000
+            }
+          },
+          "long_minus_empty": {
+            "oce": 0.006998538911904129,
+            "three_standard_errors": 0.008066927817854164,
+            "three_validation_only_errors": 0.008065912885012239,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "short_minus_empty": {
+            "oce": -0.002381843061093869,
+            "three_standard_errors": 0.00592108173469994,
+            "three_validation_only_errors": 0.0059191901470285295,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "bid": {
+            "oce": 0.026216389552320276,
+            "three_standard_errors": 0.008070972755991052,
+            "three_validation_only_errors": 0.008065912885012239,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "ask": {
+            "oce": 0.021599693701510013,
+            "three_standard_errors": 0.005926892233269223,
+            "three_validation_only_errors": 0.0059191901470285295,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          }
+        }
+      },
+      "profiled_cash": {
+        "ordinary": {
+          "statistics": {
+            "empty": {
+              "oce": -0.009573697496853889,
+              "three_standard_errors": 0.008199696583169542,
+              "three_validation_only_errors": 0.008199651033880755,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -0.00011063842934276836,
+              "retained_paths": 100000
+            },
+            "long": {
+              "oce": -0.003115224167650335,
+              "three_standard_errors": 0.0022114765251342924,
+              "three_validation_only_errors": 0.0022082618721196434,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -0.00039098581457501464,
+              "retained_paths": 100000
+            },
+            "short": {
+              "oce": -0.011554989463258204,
+              "three_standard_errors": 0.01048166213454173,
+              "three_validation_only_errors": 0.010480765833356111,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -0.00032582471528164024,
+              "retained_paths": 100000
+            }
+          },
+          "long_minus_empty": {
+            "oce": 0.006458473329203553,
+            "three_standard_errors": 0.0072558107683874645,
+            "three_validation_only_errors": 0.007254867026347829,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "short_minus_empty": {
+            "oce": -0.001981291966404318,
+            "three_standard_errors": 0.005326499821580543,
+            "three_validation_only_errors": 0.005324749930672798,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "bid": {
+            "oce": 0.025676323969619698,
+            "three_standard_errors": 0.007260257908091624,
+            "three_validation_only_errors": 0.007254867026347829,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "ask": {
+            "oce": 0.02119914260682046,
+            "three_standard_errors": 0.005332930626132855,
+            "three_validation_only_errors": 0.005324749930672798,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          }
+        },
+        "bottom90": {
+          "statistics": {
+            "empty": {
+              "oce": -0.010938106402789449,
+              "three_standard_errors": 0.009106538230275336,
+              "three_validation_only_errors": 0.009106495848662417,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -0.0004463782186487879,
+              "retained_paths": 90000
+            },
+            "long": {
+              "oce": -0.003932671948865386,
+              "three_standard_errors": 0.002452853279211153,
+              "three_validation_only_errors": 0.002449946626411445,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -0.000968454481354067,
+              "retained_paths": 90000
+            },
+            "short": {
+              "oce": -0.01330262303039498,
+              "three_standard_errors": 0.011638367915751567,
+              "three_validation_only_errors": 0.011637564044464078,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -0.0009007115147607601,
+              "retained_paths": 90000
+            }
+          },
+          "long_minus_empty": {
+            "oce": 0.00700543445392406,
+            "three_standard_errors": 0.008059258723032488,
+            "three_validation_only_errors": 0.008058401030805164,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "short_minus_empty": {
+            "oce": -0.0023645166276055327,
+            "three_standard_errors": 0.005913966968236866,
+            "three_validation_only_errors": 0.005912403133467196,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "bid": {
+            "oce": 0.026223285094340205,
+            "three_standard_errors": 0.008063280744585784,
+            "three_validation_only_errors": 0.008058401030805164,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "ask": {
+            "oce": 0.02158236726802168,
+            "three_standard_errors": 0.005919680193175566,
+            "three_validation_only_errors": 0.005912403133467196,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          }
+        }
+      },
+      "evaluation_paths": 100000,
+      "training_paths": 100000,
+      "training_payoff_mean": 0.019217850640416145,
+      "validation_payoff_mean": {
+        "three_standard_errors": 0.00025534615243509335,
+        "three_validation_only_errors": 0.00025534615243509335,
+        "paths": 100000,
+        "independent_pairs": 50000,
+        "centering_training_paths": 100000,
+        "centering_independent_pairs": 50000,
+        "mean": 0.019370211595217807
+      },
+      "action_sizes": {
+        "empty": {
+          "mean_sum_abs_trades": {
+            "three_standard_errors": 0.056126947170008816,
+            "three_validation_only_errors": 0.056126947170008816,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000,
+            "mean": 17.042486751371502
+          },
+          "mean_sum_squared_trades": {
+            "three_standard_errors": 0.03475221114881897,
+            "three_validation_only_errors": 0.03475221114881897,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000,
+            "mean": 1.6288082852749568
+          },
+          "max_abs_trade": 2.9740476608276367
+        },
+        "long": {
+          "mean_sum_abs_trades": {
+            "three_standard_errors": 0.04263626835497688,
+            "three_validation_only_errors": 0.04263626835497688,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000,
+            "mean": 33.289196478112125
+          },
+          "mean_sum_squared_trades": {
+            "three_standard_errors": 0.026753554860908205,
+            "three_validation_only_errors": 0.026753554860908205,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000,
+            "mean": 8.324317765379492
+          },
+          "max_abs_trade": 2.5191597938537598
+        },
+        "short": {
+          "mean_sum_abs_trades": {
+            "three_standard_errors": 0.048870357506732645,
+            "three_validation_only_errors": 0.048870357506732645,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000,
+            "mean": 34.98145939090498
+          },
+          "mean_sum_squared_trades": {
+            "three_standard_errors": 0.034214946788987274,
+            "three_validation_only_errors": 0.034214946788987274,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000,
+            "mean": 8.478186349274251
+          },
+          "max_abs_trade": 2.727694511413574
+        }
+      },
+      "q_centering": "Frozen original TRAINING return/payoff means; NEVER subtract validation return means",
+      "uncertainty": "\u00b13 antithetic-pair MC SE: independent validation sampling plus original-training Q-centering variance; matched policies retain covariance. Feature/hedge fitting and checkpoint selection excluded.",
+      "cash_treatment": "fixed_training_cash changes no learned parameter; profiled_cash only estimates the OCE of each fixed policy",
+      "training_or_checkpoint_selection_on_validation": false,
+      "transaction_costs": 0,
+      "checkpoint": {
+        "source": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-floating-zero-cost-20261105-KMBK8u",
+        "checkpoint_sha256": "4b9d88e4b2359993091ecb5e84cde02baeb23c236607080485cd5cdf8576ab1e",
+        "selected_epochs": {
+          "empty": 362,
+          "long": 357,
+          "short": 355
+        },
+        "completed_training_epoch": 362,
+        "resume_offset": 0,
+        "source_training_status": {
+          "status": "complete",
+          "selected_epochs": {
+            "empty": 362,
+            "long": 357,
+            "short": 355
+          },
+          "best_losses": {
+            "empty": -0.00030326985600404445,
+            "long": 0.0002876349664572627,
+            "short": 9.003277806565166e-05
+          },
+          "initial": {
+            "epoch": 0,
+            "empty_loss": -1.4160687269177288e-05,
+            "long_loss": 0.0008795763764157892,
+            "short_loss": 0.0011369127992913127,
+            "sum_loss": 0.002002328488437925,
+            "learning_rate": 1e-05
+          },
+          "latest": {
+            "epoch": 362,
+            "empty_loss": -0.00030326985600404445,
+            "long_loss": 0.000294727452872321,
+            "short_loss": 0.00011388776786625386,
+            "sum_loss": 0.00010534536473453044,
+            "learning_rate": 1e-05
+          },
+          "selection": "independent training-best policy; disjoint weights"
+        },
+        "weights_selected_on": "TRAINING ONLY"
+      },
+      "sample": "original independent evaluation paths, not training"
+    },
+    "regularized": {
+      "fixed_training_cash": {
+        "ordinary": {
+          "statistics": {
+            "empty": {
+              "oce": -0.03167380665122213,
+              "three_standard_errors": 0.0261190689091442,
+              "three_validation_only_errors": 0.026119006383363296,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": 0.000516552128829062,
+              "retained_paths": 100000
+            },
+            "long": {
+              "oce": -0.012070815909113672,
+              "three_standard_errors": 0.009544963045377112,
+              "three_validation_only_errors": 0.009544402437650036,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": 2.4561169993830845e-05,
+              "retained_paths": 100000
+            },
+            "short": {
+              "oce": -0.05570465068135955,
+              "three_standard_errors": 0.05533225240487528,
+              "three_validation_only_errors": 0.055332150710878325,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": 0.0004457203613128513,
+              "retained_paths": 100000
+            }
+          },
+          "long_minus_empty": {
+            "oce": 0.019602990742108462,
+            "three_standard_errors": 0.021429748449109703,
+            "three_validation_only_errors": 0.02142956356915163,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "short_minus_empty": {
+            "oce": -0.02403084403013742,
+            "three_standard_errors": 0.03368647556759801,
+            "three_validation_only_errors": 0.0336863659095395,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "bid": {
+            "oce": 0.03882084138252461,
+            "three_standard_errors": 0.02143098775152205,
+            "three_validation_only_errors": 0.02142956356915163,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "ask": {
+            "oce": 0.04324869467055356,
+            "three_standard_errors": 0.03368711004547459,
+            "three_validation_only_errors": 0.0336863659095395,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          }
+        },
+        "bottom90": {
+          "statistics": {
+            "empty": {
+              "oce": -0.03554343413997115,
+              "three_standard_errors": 0.02902124777269096,
+              "three_validation_only_errors": 0.029021184179088597,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": 0.000516552128829062,
+              "retained_paths": 90000
+            },
+            "long": {
+              "oce": -0.014021325675475118,
+              "three_standard_errors": 0.010605426057687085,
+              "three_validation_only_errors": 0.010604854565258604,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": 2.4561169993830845e-05,
+              "retained_paths": 90000
+            },
+            "short": {
+              "oce": -0.06247495294690229,
+              "three_standard_errors": 0.0614803817760495,
+              "three_validation_only_errors": 0.06148027410882853,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": 0.0004457203613128513,
+              "retained_paths": 90000
+            }
+          },
+          "long_minus_empty": {
+            "oce": 0.021522108464496034,
+            "three_standard_errors": 0.02381081184896932,
+            "three_validation_only_errors": 0.02381062104414243,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "short_minus_empty": {
+            "oce": -0.02693151880693114,
+            "three_standard_errors": 0.037429342644560853,
+            "three_validation_only_errors": 0.03742922948729949,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "bid": {
+            "oce": 0.040739959104912175,
+            "three_standard_errors": 0.023811918516281127,
+            "three_validation_only_errors": 0.02381062104414243,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "ask": {
+            "oce": 0.04614936944734728,
+            "three_standard_errors": 0.03742987871810083,
+            "three_validation_only_errors": 0.03742922948729949,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          }
+        }
+      },
+      "profiled_cash": {
+        "ordinary": {
+          "statistics": {
+            "empty": {
+              "oce": -0.031637928557291174,
+              "three_standard_errors": 0.026100786839670195,
+              "three_validation_only_errors": 0.026100728045918266,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -0.00036264501391510787,
+              "retained_paths": 100000
+            },
+            "long": {
+              "oce": -0.0120530631935634,
+              "three_standard_errors": 0.009537216012412248,
+              "three_validation_only_errors": 0.00953670963308475,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -0.0006159474629048306,
+              "retained_paths": 100000
+            },
+            "short": {
+              "oce": -0.05564505611117897,
+              "three_standard_errors": 0.055300131589590504,
+              "three_validation_only_errors": 0.055300038800695464,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -0.0007444047020890784,
+              "retained_paths": 100000
+            }
+          },
+          "long_minus_empty": {
+            "oce": 0.01958486536372778,
+            "three_standard_errors": 0.02141711514724574,
+            "three_validation_only_errors": 0.021416947294549512,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "short_minus_empty": {
+            "oce": -0.02400712755388779,
+            "three_standard_errors": 0.033669781395913645,
+            "three_validation_only_errors": 0.03366968654030629,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "bid": {
+            "oce": 0.03880271600414393,
+            "three_standard_errors": 0.021418363378727115,
+            "three_validation_only_errors": 0.021416947294549512,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "ask": {
+            "oce": 0.04322497819430394,
+            "three_standard_errors": 0.033670420619304885,
+            "three_validation_only_errors": 0.03366968654030629,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          }
+        },
+        "bottom90": {
+          "statistics": {
+            "empty": {
+              "oce": -0.035467650974137434,
+              "three_standard_errors": 0.028991817397631115,
+              "three_validation_only_errors": 0.028991758599612102,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -0.0007570297884526816,
+              "retained_paths": 90000
+            },
+            "long": {
+              "oce": -0.01393898119967268,
+              "three_standard_errors": 0.010587198772556367,
+              "three_validation_only_errors": 0.010586737979134115,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -0.001333821799916435,
+              "retained_paths": 90000
+            },
+            "short": {
+              "oce": -0.06232061618908947,
+              "three_standard_errors": 0.06142347075480728,
+              "three_validation_only_errors": 0.061423376541459906,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -0.0014516180881874732,
+              "retained_paths": 90000
+            }
+          },
+          "long_minus_empty": {
+            "oce": 0.021528669774464746,
+            "three_standard_errors": 0.023793184443666307,
+            "three_validation_only_errors": 0.023793030303595183,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "short_minus_empty": {
+            "oce": -0.026852965214952045,
+            "three_standard_errors": 0.03739791847452573,
+            "three_validation_only_errors": 0.03739782731298201,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "bid": {
+            "oce": 0.040746520414880895,
+            "three_standard_errors": 0.023794300226315478,
+            "three_validation_only_errors": 0.023793030303595183,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "ask": {
+            "oce": 0.0460708158553682,
+            "three_standard_errors": 0.03739846324593616,
+            "three_validation_only_errors": 0.03739782731298201,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          }
+        }
+      },
+      "evaluation_paths": 100000,
+      "training_paths": 100000,
+      "training_payoff_mean": 0.019217850640416145,
+      "validation_payoff_mean": {
+        "three_standard_errors": 0.00025534615243509335,
+        "three_validation_only_errors": 0.00025534615243509335,
+        "paths": 100000,
+        "independent_pairs": 50000,
+        "centering_training_paths": 100000,
+        "centering_independent_pairs": 50000,
+        "mean": 0.019370211595217807
+      },
+      "action_sizes": {
+        "empty": {
+          "mean_sum_abs_trades": {
+            "three_standard_errors": 0.048269609101309605,
+            "three_validation_only_errors": 0.048269609101309605,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000,
+            "mean": 1.7397757708538015
+          },
+          "mean_sum_squared_trades": {
+            "three_standard_errors": 0.02952528062416438,
+            "three_validation_only_errors": 0.02952528062416438,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000,
+            "mean": 0.23576180671069902
+          },
+          "max_abs_trade": 5.356873512268066
+        },
+        "long": {
+          "mean_sum_abs_trades": {
+            "three_standard_errors": 0.04471555449974603,
+            "three_validation_only_errors": 0.04471555449974603,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000,
+            "mean": 5.801706170043587
+          },
+          "mean_sum_squared_trades": {
+            "three_standard_errors": 0.030020542979773142,
+            "three_validation_only_errors": 0.030020542979773142,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000,
+            "mean": 3.8852516262476207
+          },
+          "max_abs_trade": 5.349447727203369
+        },
+        "short": {
+          "mean_sum_abs_trades": {
+            "three_standard_errors": 0.06557835470411912,
+            "three_validation_only_errors": 0.06557835470411912,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000,
+            "mean": 6.073731366154391
+          },
+          "mean_sum_squared_trades": {
+            "three_standard_errors": 0.05335110373559981,
+            "three_validation_only_errors": 0.05335110373559981,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000,
+            "mean": 4.286743111059901
+          },
+          "max_abs_trade": 3.803609848022461
+        }
+      },
+      "q_centering": "Frozen original TRAINING return/payoff means; NEVER subtract validation return means",
+      "uncertainty": "\u00b13 antithetic-pair MC SE: independent validation sampling plus original-training Q-centering variance; matched policies retain covariance. Feature/hedge fitting and checkpoint selection excluded.",
+      "cash_treatment": "fixed_training_cash changes no learned parameter; profiled_cash only estimates the OCE of each fixed policy",
+      "training_or_checkpoint_selection_on_validation": false,
+      "transaction_costs": 0,
+      "checkpoint": {
+        "source": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-regularized500-20261105-HGtddI/01-dhgromm1-floating-zero-cost-20261105-KMBK8u",
+        "checkpoint_sha256": "db14199246734963e788ab79541478954f20794e001040751d87c4028d48d955",
+        "selected_epochs": {
+          "empty": 497,
+          "long": 496,
+          "short": 500
+        },
+        "completed_training_epoch": 500,
+        "resume_offset": 0,
+        "source_training_status": {
+          "status": "complete",
+          "selected_epochs": {
+            "empty": 497,
+            "long": 496,
+            "short": 500
+          },
+          "best_losses": {
+            "empty": -0.00029002999625168745,
+            "long": 0.0008540058989077807,
+            "short": 0.0005006664716452361
+          },
+          "initial": {
+            "epoch": 0,
+            "empty_loss": 0.0014016921140626074,
+            "long_loss": 0.0036166788580268626,
+            "short_loss": 0.003589494678974152,
+            "sum_loss": 0.008607865651063622,
+            "learning_rate": 1e-05,
+            "empty_raw_oce": 0.00030326985600404445,
+            "empty_regularizer": 0.001704961975850165,
+            "empty_mean_sum_abs_trades": 17.04945622558594,
+            "empty_mean_sum_squared_trades": 1.638419464530945,
+            "empty_max_abs_trade": 2.9804012775421143,
+            "long_raw_oce": -0.0002876349664572627,
+            "long_regularizer": 0.0033290438932180406,
+            "long_mean_sum_abs_trades": 33.28960700561524,
+            "long_mean_sum_squared_trades": 8.327145854187012,
+            "long_max_abs_trade": 2.6344950199127197,
+            "short_raw_oce": -9.003277806565166e-05,
+            "short_regularizer": 0.003499461899623275,
+            "short_mean_sum_abs_trades": 34.99377153686524,
+            "short_mean_sum_squared_trades": 8.483949756469727,
+            "short_max_abs_trade": 2.873718738555908
+          },
+          "latest": {
+            "epoch": 500,
+            "empty_loss": -0.00028751953950151803,
+            "long_loss": 0.0008741348939388991,
+            "short_loss": 0.0005006664716452361,
+            "sum_loss": 0.001087281826082617,
+            "learning_rate": 1e-05,
+            "empty_raw_oce": 0.0004619059784617275,
+            "empty_regularizer": 0.0001743864388111979,
+            "empty_mean_sum_abs_trades": 1.743841173400879,
+            "empty_mean_sum_squared_trades": 0.2325905898356438,
+            "empty_max_abs_trade": 4.486144542694092,
+            "long_raw_oce": -0.0002934981399402023,
+            "long_regularizer": 0.0005806367562711239,
+            "long_mean_sum_abs_trades": 5.805979542388917,
+            "long_mean_sum_squared_trades": 3.881572203445435,
+            "long_max_abs_trade": 4.816100597381592,
+            "short_raw_oce": 0.00010727385827340187,
+            "short_regularizer": 0.000607940331157297,
+            "short_mean_sum_abs_trades": 6.078974362945557,
+            "short_mean_sum_squared_trades": 4.291595283355713,
+            "short_max_abs_trade": 5.062692165374756
+          },
+          "selection": "independent training-best regularized objective; disjoint weights"
+        },
+        "weights_selected_on": "TRAINING ONLY"
+      },
+      "sample": "original independent evaluation paths, not training"
+    },
+    "robust": {
+      "fixed_training_cash": {
+        "ordinary": {
+          "statistics": {
+            "empty": {
+              "oce": -0.2860397192512262,
+              "three_standard_errors": 0.2226650349384341,
+              "three_validation_only_errors": 0.22266426579489723,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": 0.0013720463030040264,
+              "retained_paths": 100000
+            },
+            "long": {
+              "oce": -0.10099629895527058,
+              "three_standard_errors": 0.07275076973220465,
+              "three_validation_only_errors": 0.07274993647036446,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": 0.00043142648064531386,
+              "retained_paths": 100000
+            },
+            "short": {
+              "oce": -0.21397489904148012,
+              "three_standard_errors": 0.18021469246991426,
+              "three_validation_only_errors": 0.1802141563461673,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": 0.0009820800041779876,
+              "retained_paths": 100000
+            }
+          },
+          "long_minus_empty": {
+            "oce": 0.1850434202959556,
+            "three_standard_errors": 0.17395533367580587,
+            "three_validation_only_errors": 0.17395497538436344,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "short_minus_empty": {
+            "oce": 0.07206482020974607,
+            "three_standard_errors": 0.11510452398227641,
+            "three_validation_only_errors": 0.11510416710996445,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "bid": {
+            "oce": 0.2042612709363718,
+            "three_standard_errors": 0.17395519702253937,
+            "three_validation_only_errors": 0.17395497538436344,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "ask": {
+            "oce": -0.052846969569329924,
+            "three_standard_errors": 0.11510493170156706,
+            "three_validation_only_errors": 0.11510416710996445,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          }
+        },
+        "bottom90": {
+          "statistics": {
+            "empty": {
+              "oce": -0.31840137780304295,
+              "three_standard_errors": 0.24740558854669342,
+              "three_validation_only_errors": 0.24740475467718445,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": 0.0013720463030040264,
+              "retained_paths": 90000
+            },
+            "long": {
+              "oce": -0.11285463641014744,
+              "three_standard_errors": 0.0808341219534226,
+              "three_validation_only_errors": 0.08083323779068832,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": 0.00043142648064531386,
+              "retained_paths": 90000
+            },
+            "short": {
+              "oce": -0.23840170251403506,
+              "three_standard_errors": 0.2002386428052873,
+              "three_validation_only_errors": 0.20023805281200174,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": 0.0009820800041779876,
+              "retained_paths": 90000
+            }
+          },
+          "long_minus_empty": {
+            "oce": 0.2055467413928955,
+            "three_standard_errors": 0.1932836884750264,
+            "three_validation_only_errors": 0.1932832967613011,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "short_minus_empty": {
+            "oce": 0.07999967528900785,
+            "three_standard_errors": 0.12789383352357206,
+            "three_validation_only_errors": 0.12789345500935956,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "bid": {
+            "oce": 0.22476459203331164,
+            "three_standard_errors": 0.19328353569460943,
+            "three_validation_only_errors": 0.1932832967613011,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "ask": {
+            "oce": -0.0607818246485917,
+            "three_standard_errors": 0.12789420866788895,
+            "three_validation_only_errors": 0.12789345500935956,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          }
+        }
+      },
+      "profiled_cash": {
+        "ordinary": {
+          "statistics": {
+            "empty": {
+              "oce": -0.28577545832523027,
+              "three_standard_errors": 0.22250179934985334,
+              "three_validation_only_errors": 0.22250108370930327,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -0.00121639835872709,
+              "retained_paths": 100000
+            },
+            "long": {
+              "oce": -0.10093561980652177,
+              "three_standard_errors": 0.07270529878912944,
+              "three_validation_only_errors": 0.07270453939609012,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -0.000781057706493699,
+              "retained_paths": 100000
+            },
+            "short": {
+              "oce": -0.21380432118682136,
+              "three_standard_errors": 0.18010281256138097,
+              "three_validation_only_errors": 0.18010228936802708,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -0.001095011694156335,
+              "retained_paths": 100000
+            }
+          },
+          "long_minus_empty": {
+            "oce": 0.18483983851870844,
+            "three_standard_errors": 0.17383329318442708,
+            "three_validation_only_errors": 0.17383295324366344,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "short_minus_empty": {
+            "oce": 0.07197113713840891,
+            "three_standard_errors": 0.11504007667697533,
+            "three_validation_only_errors": 0.11503976841324537,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "bid": {
+            "oce": 0.2040576891591246,
+            "three_standard_errors": 0.17383316457098763,
+            "three_validation_only_errors": 0.17383295324366344,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "ask": {
+            "oce": -0.05275328649799277,
+            "three_standard_errors": 0.1150404686111465,
+            "three_validation_only_errors": 0.11503976841324537,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          }
+        },
+        "bottom90": {
+          "statistics": {
+            "empty": {
+              "oce": -0.3179531851327681,
+              "three_standard_errors": 0.24716832735286415,
+              "three_validation_only_errors": 0.24716755908003946,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -0.002014272538739656,
+              "retained_paths": 90000
+            },
+            "long": {
+              "oce": -0.11268681244475211,
+              "three_standard_errors": 0.08075071277579877,
+              "three_validation_only_errors": 0.08074994470264538,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -0.0015710508724876672,
+              "retained_paths": 90000
+            },
+            "short": {
+              "oce": -0.23806061111001062,
+              "three_standard_errors": 0.20006325009677145,
+              "three_validation_only_errors": 0.20006267645369777,
+              "paths": 100000,
+              "independent_pairs": 50000,
+              "centering_training_paths": 100000,
+              "centering_independent_pairs": 50000,
+              "cash": -0.0019482859780634526,
+              "retained_paths": 90000
+            }
+          },
+          "long_minus_empty": {
+            "oce": 0.20526637268801606,
+            "three_standard_errors": 0.19311721929517778,
+            "three_validation_only_errors": 0.19311685151930308,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "short_minus_empty": {
+            "oce": 0.07989257402275748,
+            "three_standard_errors": 0.12780329992083594,
+            "three_validation_only_errors": 0.1278029789576412,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "bid": {
+            "oce": 0.2244842233284322,
+            "three_standard_errors": 0.1931170746141267,
+            "three_validation_only_errors": 0.19311685151930308,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          },
+          "ask": {
+            "oce": -0.060674723382341346,
+            "three_standard_errors": 0.12780365687241133,
+            "three_validation_only_errors": 0.1278029789576412,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000
+          }
+        }
+      },
+      "evaluation_paths": 100000,
+      "training_paths": 100000,
+      "training_payoff_mean": 0.019217850640416145,
+      "validation_payoff_mean": {
+        "three_standard_errors": 0.00025534615243509335,
+        "three_validation_only_errors": 0.00025534615243509335,
+        "paths": 100000,
+        "independent_pairs": 50000,
+        "centering_training_paths": 100000,
+        "centering_independent_pairs": 50000,
+        "mean": 0.019370211595217807
+      },
+      "action_sizes": {
+        "empty": {
+          "mean_sum_abs_trades": {
+            "three_standard_errors": 0.153914180208789,
+            "three_validation_only_errors": 0.153914180208789,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000,
+            "mean": 30.952901567028253
+          },
+          "mean_sum_squared_trades": {
+            "three_standard_errors": 0.7025675532388682,
+            "three_validation_only_errors": 0.7025675532388682,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000,
+            "mean": 7.762222355391593
+          },
+          "max_abs_trade": 35.101829528808594
+        },
+        "long": {
+          "mean_sum_abs_trades": {
+            "three_standard_errors": 0.12894383370217088,
+            "three_validation_only_errors": 0.12894383370217088,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000,
+            "mean": 38.49280311932359
+          },
+          "mean_sum_squared_trades": {
+            "three_standard_errors": 0.6543845764041056,
+            "three_validation_only_errors": 0.6543845764041056,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000,
+            "mean": 10.937064895973338
+          },
+          "max_abs_trade": 27.561189651489258
+        },
+        "short": {
+          "mean_sum_abs_trades": {
+            "three_standard_errors": 0.13982084660124638,
+            "three_validation_only_errors": 0.13982084660124638,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000,
+            "mean": 40.944168416245745
+          },
+          "mean_sum_squared_trades": {
+            "three_standard_errors": 0.39471769479062513,
+            "three_validation_only_errors": 0.39471769479062513,
+            "paths": 100000,
+            "independent_pairs": 50000,
+            "centering_training_paths": 100000,
+            "centering_independent_pairs": 50000,
+            "mean": 11.982861986510423
+          },
+          "max_abs_trade": 19.04939842224121
+        }
+      },
+      "q_centering": "Frozen original TRAINING return/payoff means; NEVER subtract validation return means",
+      "uncertainty": "\u00b13 antithetic-pair MC SE: independent validation sampling plus original-training Q-centering variance; matched policies retain covariance. Feature/hedge fitting and checkpoint selection excluded.",
+      "cash_treatment": "fixed_training_cash changes no learned parameter; profiled_cash only estimates the OCE of each fixed policy",
+      "training_or_checkpoint_selection_on_validation": false,
+      "transaction_costs": 0,
+      "checkpoint": {
+        "source": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-robust90-q1-a10-20261106-tGNgnK",
+        "checkpoint_sha256": "994e7cdbd2b72f601d7db10ed6be6ff6185971e1ec91fe4ebc4a1c1d361c515c",
+        "selected_epochs": {
+          "empty": 498,
+          "long": 494,
+          "short": 497
+        },
+        "completed_training_epoch": 498,
+        "resume_offset": 28672,
+        "source_training_status": {
+          "status": "stopped",
+          "selected_epochs": {
+            "empty": 498,
+            "long": 494,
+            "short": 497
+          }
+        },
+        "weights_selected_on": "TRAINING ONLY"
+      },
+      "sample": "original independent evaluation paths, not training"
+    }
+  },
+  "provenance": {
+    "scenario_identity_sha256": "5073635bfbbbd6b5b26d9325dbdec7233254a1a6d9ffc18c36d6d1e0cded0087",
+    "sample": "evaluation",
+    "paths": 100000,
+    "original_sample": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-1step-warm500-20261103-vi9yMf/scenarios/evaluation",
+    "training_sample": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-1step-warm500-20261103-vi9yMf/scenarios/train",
+    "split_innovations": "SeedSequence([original_seed, 1, chunk_start]); training uses index 0",
+    "approved_stopped_robust_checkpoint_sha256": "994e7cdbd2b72f601d7db10ed6be6ff6185971e1ec91fe4ebc4a1c1d361c515c",
+    "device": "CPU only; CUDA_VISIBLE_DEVICES empty; no GPU allocation",
+    "validation_used_for_training": false,
+    "code_sha256": {
+      "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/heldout_run.py": "90253bed0bb2a410ed2b6d5dfa58d2a4d1444521e5284477ade71bba15640a6a",
+      "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/heldout_evaluation.py": "02f0debd7e27da21a38479a59ab0958e4feb42bdeb394b1de82c7997b50cce38",
+      "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/observable_data.py": "c3e9bd5496112ccd9fa5befb61abd83af4cc24cff8b75de410be5341e3747513",
+      "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/cache_load.py": "8f430231f12f55cf800d5b6d9873a6057280cfc8341e258f55d3865e21a4be4f"
+    }
+  }
+}

@@ -12,14 +12,16 @@ from quantdata.sdlv.dhgromm1.observable import market_geometry
 
 
 def load_retained_market_cache(*, cache: Path, scenarios: Path, paths: int,
-                               monitor: AuditMonitor) -> tuple[np.ndarray, dict]:
+                               monitor: AuditMonitor, sample: str = "train") -> tuple[np.ndarray, dict]:
+    if sample not in {"train", "evaluation"}:
+        raise ValueError("cache sample must be train or evaluation")
     manifest,complete = cache/"identity.json",cache/"complete.json"
     identity = json.loads(manifest.read_text())
     report = json.loads(complete.read_text())
     if (report.get("status")!="complete" or identity.get("schema")!="dhgromm1-causal-market-marks-v1"
-            or identity.get("paths")!=paths or identity.get("sample")!="train"
+            or identity.get("paths")!=paths or identity.get("sample")!=sample
             or identity.get("scenario_identity_sha256")!=sha256(scenarios/"identity.json")):
-        raise ValueError("retained market cache does not match the complete original training sample")
+        raise ValueError(f"retained market cache does not match the complete original {sample} sample")
     if any(report.get(k)!=v for k,v in identity.items()):
         raise ValueError("cache completion manifest and identity differ")
     width = int(market_geometry()[0][-1])
@@ -32,7 +34,7 @@ def load_retained_market_cache(*, cache: Path, scenarios: Path, paths: int,
         if start!=completed or count<1 or start+count>paths:
             raise ValueError("market cache chunks are not a complete ordered population")
         path = cache/f"{start:06d}.npz"
-        if sha256(scenarios/"train"/path.name)!=record["scenario_chunk_sha256"]:
+        if sha256(scenarios/sample/path.name)!=record["scenario_chunk_sha256"]:
             raise ValueError(f"original scenario changed: {path.name}")
         with np.load(path,allow_pickle=False) as saved:
             values = saved["changes"]
