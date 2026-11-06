@@ -19,6 +19,11 @@ directly on these arrays without replaying GROMM, accessing the original data
 storage, or recalibrating the model. The dataset is independent of whether a
 policy uses an explicit a10 action.
 
+For a runnable, CPU-only introductory hedge, see
+[the deep-hedging guide](DEEP_HEDGING.md) and
+[`example_deep_hedging.py`](example_deep_hedging.py). The example uses current
+prices and time only; it does not consume the optional contract-mark cache.
+
 ## Download and verify
 
 Clone this repository with Git LFS enabled. If it was cloned without downloading
