@@ -2,6 +2,10 @@
 
 Last updated: 2026-09-09 on Sommer WSL.
 
+Historical snapshot, not live process status. Current DYSANOS work is indexed
+in [MODELS.md](../MODELS.md) and [REVIEW.md](../REVIEW.md). The figures and
+restart notes below retain their original experimental scope.
+
 ## Executive status
 
 FLEX has two distinct workstreams that must not be conflated:

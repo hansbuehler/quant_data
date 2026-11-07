@@ -1,11 +1,15 @@
 # FLEX: fixed-weekly SANOS market model
 
+Historical specification. Its dated baselines and weekly research gates do
+not define new DYSANOS estimation. The current specification is
+[MODELS.md](../MODELS.md); the review entry point is [REVIEW.md](../REVIEW.md).
+
 FLEX is the Torch-native fixed-weekly SANOS research code path under
 `quantdata/dysanos/flex`.
 It may use `quantdata/dysanos/market.py` and the common SANOS mathematics, but
 it does not depend on the old `quantdata/dysanos/grid` model implementation.
 
-This file is the authoritative specification. Earlier FLEX experiments using
+This file specifies that historical FLEX workstream. Earlier FLEX experiments using
 NMS5, 49 strikes, a `(-5,2)` range, or one model-density node per observed
 market expiry are provisional and are not evidence for this project.
 
