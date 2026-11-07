@@ -142,5 +142,14 @@ should prioritize:
    diagnostics, full-gradient checks, device-capacity growth and interrupted
    rolling-resume tests beyond the focused invariants already covered.
 
+A checkpoint sensitivity audit found that rescaling `h`, `m` and `L` by
+0.1 and `B` by 10 preserved native states and physical innovation loadings
+to numerical precision, but reduced the combined objective from 0.419 to
+0.156. The likelihood and soft gauge therefore leave a scale-identification
+issue: a lower loss alone need not mean better prices or physical dynamics.
+The audit is `cpu-audits/latent-rescaling-2023-07-05.json` within the current
+external run directory identified in [MODELS.md](MODELS.md). The running
+objective has not been changed.
+
 Static no-arbitrage of the SANOS decoder does not establish that the generated
 `P` option-price paths are martingales. No `Q` claim is made here.
