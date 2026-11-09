@@ -116,6 +116,17 @@ not proof of AR convergence. The configured iteration ceilings still apply.
 
 ## Verification and review priorities
 
+The completed sweep has 661 checked checkpoint/report sets. Independent
+NumPy/SciPy repricing reproduced containment on 2,910,048 own-day quotes
+and matched all 661 full-window daily AR likelihoods; all fitted transitions
+were stable and innovation covariances positive definite. The other 249 dates'
+stored fit reports per origin were checked for consistency, not independently
+repriced under every model. Source coverage, causal warm starts, reporting
+weights and five preserved 70-day checkpoint hashes also passed. See
+`review/completion-audit.json` and `review/fit-review.csv` in the external
+run identified in [MODELS.md](MODELS.md). These are numerical-consistency
+checks, not independent scientific approval of the fitted dynamics.
+
 CPU checks cover JAX/Torch price parity, the independent grid pricer, date
 weights, daily AR timing and masked gaps, price-preserving re-gauging,
 one-day device-buffer replacement, reporter weighting and legacy checkpoint

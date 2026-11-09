@@ -3,8 +3,10 @@
 Dynamic Smooth Arbitrage-Free Non-Parametric Option Surfaces.
 
 The current calibration is a rolling affine-200 surface with a directly
-estimated **daily Gaussian AR(1)**. Its sweep is running; older results must
-not be presented as completed results for this calibration.
+estimated **daily Gaussian AR(1)**. Its 661-origin sweep is complete through
+29 August 2025, the last available source date. Calibration consistency is
+checked; forward dynamics quality remains unvalidated. See the current
+results and limitations in [MODELS.md](MODELS.md).
 
 ## Documentation
 

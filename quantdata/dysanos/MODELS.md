@@ -39,9 +39,10 @@ one allocated GPU process, saves a distinct checkpoint and fit report for
 each origin, and writes `progress.json` and `daily-rolling-fit.png` in its
 external run directory. `COMPLETE.json` is written only after the last
 available date has finished. The current source panel has 661 calibration
-origins from 30 December 2022 through 29 August 2025. The sweep launched on
-7 November 2026 is in progress, not a completed rolling result. Its run label
-is `daily-ar1-25d-full-sweep-20261107-v1`, under
+origins from 30 December 2022 through 29 August 2025, the last available
+2025 source date. All 661 origins completed on 9 November 2026; the producer
+and reporting services have exited and the GPU allocation is released.
+Its run label is `daily-ar1-25d-full-sweep-20261107-v1`, under
 `experiments/dysanos/v11/` in the configured external data root.
 
 `v11/daily_fit_report.py` maintains `daily-fit-report.csv` alongside the
@@ -50,6 +51,27 @@ and median fit of its previous 249 dates under the same fitted model, and
 the daily update's runtime in seconds and minutes. Today is excluded from
 the historical comparison; the median is the inverse weighted empirical
 CDF at 50%.
+
+The completed sweep's own-day bid/ask containment is:
+
+| Statistic | Fit |
+| --- | --- |
+| Median across all 661 origins | 90.95% |
+| Median across the final 50 origins | 85.01% |
+| Final origin, 29 August 2025 | 84.93% |
+| Origins reaching at least 90% | 377 / 661 |
+
+The final origin's previous-249-date decay-weighted mean and median are
+88.72% and 88.51%. The producer loop took 36.36 hours; the median daily
+update after initialization took 78 seconds. There were 518 market-plateau
+stops and 143 stops at the 1,000-iteration ceiling, not 661 convergence
+certificates. Recent fit is materially weaker than the full-sweep median.
+
+The external run's `review/fit-review.csv` consolidates fit, grid error,
+conditional excess, convergence and runtime for every origin.
+`review/completion-audit.json` records the final coverage and consistency
+checks. Older 70-day checkpoints were preserved; no path-validation or
+risk-neutrality conclusion follows from completion of this sweep.
 
 Fit percentages are market-price calibration diagnostics, not AR forecast
 or simulated-path validation. Per-origin reports retain convergence flags,
