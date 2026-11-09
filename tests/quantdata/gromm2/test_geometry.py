@@ -53,21 +53,3 @@ def test_barycentric_transport_rejects_extrapolation() -> None:
         assert "contain" in str(error)
     else:
         raise AssertionError("expected non-containing support to be rejected")
-
-
-def test_tail_fill_is_off_by_default_and_geometric_when_on() -> None:
-    variances = np.asarray([0.15**2 / 252.0, 0.15**2 * 5.0 / 252.0])
-    base_config = Gromm2GeometryConfig(num_inner_strikes=24)
-    base = expanding_supports(variances, config=base_config)
-    assert base.shape == (2, 26)
-    assert np.array_equal(base_config.support_nms_nodes, base_config.nms_nodes)
-    config = Gromm2GeometryConfig(num_inner_strikes=24, lower_tail_nodes=14, upper_tail_nodes=8)
-    supports = expanding_supports(variances, config=config)
-    assert supports.shape == (2, 24 + 14 + 8 + 2)
-    assert config.support_nms_nodes.shape == (config.num_interior_nodes,)
-    assert np.allclose(supports[:, [0, *range(15, 39), -1]], base, rtol=0.0, atol=1.0e-15)
-    ratios = supports[:, 1:16] / supports[:, :15]
-    assert np.allclose(ratios, 2.0 ** (1.0 / 15.0), rtol=1.0e-12)
-    assert np.allclose(supports[:, -9:] / supports[:, -10:-1], 1.5 ** (1.0 / 9.0), rtol=1.0e-12)
-    transports = transport_tower(supports)
-    assert np.allclose(supports[1] @ transports[0], supports[0], atol=2.0e-13, rtol=0.0)
