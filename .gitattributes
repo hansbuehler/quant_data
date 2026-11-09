@@ -6,3 +6,6 @@
 
 quantdata/ncde/implied/notebooks/viz_day_paired_price.ipynb filter=lfs diff=lfs merge=lfs -text
 quantdata/ncde/implied/notebooks/viz_day_vol.ipynb filter=lfs diff=lfs merge=lfs -text
+
+# Deliberately retained synthetic GROMM training benchmark, requested for sharing.
+quantdata/sdlv/dhgromm1/datasets/q1_20250829_100k/chunks/*.npz filter=lfs diff=lfs merge=lfs -text

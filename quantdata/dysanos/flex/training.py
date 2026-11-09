@@ -1084,6 +1084,7 @@ def _market_training_phase(
     resume_state: TrainingState | None = None,
     checkpoint_callback: Callable[[TrainingState], None] | None = None,
     evaluation_callback: Callable[[int, FitEvaluation], None] | None = None,
+    early_stop_min_epochs: int | None = None,
 ) -> tuple[tuple[dict[str, float], ...], TrainingState]:
     """Fine-tune a native or compressed model against every real quote."""
     optimizers, schedulers = _market_optimizers(
@@ -1259,7 +1260,12 @@ def _market_training_phase(
             )
             evaluation_callback(epoch + 1, evaluation)
             model.train()
-    final_state = training_state(train_config.num_epochs)
+        if (early_stop_min_epochs is not None and epoch + 1 >= early_stop_min_epochs
+                and (epoch + 1) % train_config.report_every == 0
+                and training_convergence_audit(history, metric="objective", train_config=train_config)["converged"]):
+            print(f"early-stop epoch={epoch + 1}", flush=True)
+            break
+    final_state = training_state(len(history))
     return tuple(history), final_state
 
 

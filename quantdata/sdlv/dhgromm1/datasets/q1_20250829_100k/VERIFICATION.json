@@ -1,0 +1,8 @@
+{
+  "paths": 100000,
+  "independent_antithetic_pairs": 50000,
+  "mean_payoff": 0.01921785086478261,
+  "three_mc_standard_errors": 0.0002504226819659547,
+  "schema": "dhgromm1-share-q1-training-v1",
+  "status": "verified"
+}

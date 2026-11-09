@@ -1,0 +1,22 @@
+{
+  "source": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-heldout-20261106-vBdW4J",
+  "status": "complete",
+  "files": [
+    {
+      "path": "identity.json",
+      "source_sha256": "7111dda739cd3d68f8dcc371f5af3ab0115d63d2d0ac4dbedeb4b7f4a69f6017",
+      "retained_sha256": "7111dda739cd3d68f8dcc371f5af3ab0115d63d2d0ac4dbedeb4b7f4a69f6017"
+    },
+    {
+      "path": "report.json",
+      "source_sha256": "a1d0e8af246ae51ff111e462c81ebf1233768a0d8405cf97b9647d3499445e16",
+      "retained_sha256": "a1d0e8af246ae51ff111e462c81ebf1233768a0d8405cf97b9647d3499445e16"
+    },
+    {
+      "path": "status.json",
+      "source_sha256": "3cf18b58e6659b9090893fdaa84ecc2240446e835c3bd9e9cb6abae7f62916ad",
+      "retained_sha256": "3cf18b58e6659b9090893fdaa84ecc2240446e835c3bd9e9cb6abae7f62916ad"
+    }
+  ],
+  "retained": "deliberate compact result snapshot; CSV line endings normalized to LF; raw scenarios, market cache, weights, logs and scratch stay outside Git"
+}

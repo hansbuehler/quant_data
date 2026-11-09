@@ -1,0 +1,374 @@
+{
+  "schema": "dhgromm1-share-q1-training-v1",
+  "created_utc": "2026-11-06T08:24:26.337159+00:00",
+  "measure": "Q",
+  "reference_date": "2025-08-29",
+  "paths": 100000,
+  "independent_antithetic_pairs": 50000,
+  "chunk_size": 4000,
+  "observation_days": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20
+  ],
+  "decision_days": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19
+  ],
+  "simulation_substeps_per_day": 1,
+  "hedge_decisions_per_day": 1,
+  "instruments": 21,
+  "instrument_order": [
+    "spot",
+    "terminal_atm_call",
+    "dte1_call_z-2",
+    "dte1_call_z-1.5",
+    "dte1_call_z-1",
+    "dte1_call_z-0.5",
+    "dte1_call_z-0.25",
+    "dte5_call_z-2",
+    "dte5_call_z-1.5",
+    "dte5_call_z-1",
+    "dte5_call_z-0.5",
+    "dte5_call_z-0.25",
+    "longest_dte_call_z-2",
+    "longest_dte_call_z-1.5",
+    "longest_dte_call_z-1",
+    "longest_dte_call_z-0.5",
+    "longest_dte_call_z-0.25",
+    "terminal_forward",
+    "dte1_forward",
+    "dte5_forward",
+    "longest_dte_forward"
+  ],
+  "strike_levels": [
+    -2.0,
+    -1.5,
+    -1.0,
+    -0.5,
+    -0.25
+  ],
+  "return_convention": "floating-payoff-minus-price-v1",
+  "payoff": "abs(S_20/S_10-1)",
+  "antithetic_order": "consecutive original paths (2*k,2*k+1); do not separate pairs for MC errors or splits",
+  "arrays": {
+    "prices": {
+      "shape": [
+        100000,
+        21,
+        21
+      ],
+      "dtype": "float64"
+    },
+    "gains": {
+      "shape": [
+        100000,
+        20,
+        21
+      ],
+      "dtype": "float64",
+      "units": "(close_cash_mark-open_cash_mark)/S_open; UNCENTERED"
+    },
+    "payoff": {
+      "shape": [
+        100000
+      ],
+      "dtype": "float64"
+    },
+    "changes_packed": {
+      "shape": [
+        100000,
+        3990
+      ],
+      "dtype": "float32",
+      "units": "raw cash mark minus opening cash mark; earlier cohorts only"
+    }
+  },
+  "normalization": {
+    "file": "normalization.npz",
+    "sha256": "c33b1f5adafb0b8fd43f10b967c87e407f251f47fb82bcc458da07640de7b902",
+    "fitted_on": "ALL original 100000 Q TRAINING paths, never P or evaluation paths",
+    "model_prefix": "model_* arrays are the exact float32 values used by policy buffers"
+  },
+  "source": {
+    "scenario_run": "dhgromm1-1step-warm500-20261103-vi9yMf",
+    "scenario_identity_sha256": "5073635bfbbbd6b5b26d9325dbdec7233254a1a6d9ffc18c36d6d1e0cded0087",
+    "marks_run": "dhgromm1-observable500-20261104-Hde4Xv",
+    "marks_identity_sha256": "7a791a049b7627d4f416daceaadc04abbfa30f22d146309c8150f28132958a66",
+    "marks_completion_sha256": "71531a2031df49f014c759001d811192229b07986246f1df9cce6bc2fd6a36b4",
+    "normalization_run": "dhgromm1-floating-zero-cost-20261105-KMBK8u",
+    "normalization_sha256": "c38111a67d216deaf9ad4e3e615688c70c10c05437a6da0797fcc485e63d6529",
+    "calibration_sha256": "cd45b039b570424ed277cd168e5af9ffae9029dade8c3c5c280032f927762cbb",
+    "simulation_seed": 20261102,
+    "exporter_sha256": "259f0dae81b252c8c3b05b1a63e9c9007194dcf77e1527d683f98c48adaa944a",
+    "contracts_code_sha256": "6d8c31245008289201cc51b478ede442d6b5d37c6dfa466ac84eaa3fa55afbba",
+    "original_schema": "dhgromm1-expiry-options-v3"
+  },
+  "contents": "Synthetic simulated training inputs, not raw market quotes. No simulator states, neural weights, logs or evaluation paths.",
+  "q_warning": "Same accepted one-step Q drift warnings; marginal centering is not conditional drift correction or an arb-free proof",
+  "deliberately_retained": "Dataset explicitly requested for Git sharing on 2026-11-06; bulk chunks use Git LFS",
+  "chunks": [
+    {
+      "file": "chunks/000000.npz",
+      "start": 0,
+      "count": 4000,
+      "sha256": "3c5741894f3a7a94d8367e06542563b79a7c0c9ed05ab18c0efd0bbdc2bf4b8e",
+      "bytes": 52696357,
+      "source_scenario_sha256": "073ec2a0649618bcd2c32d531cca1483f38677d93ae10c2c1a3a800e904f2c68",
+      "source_marks_sha256": "3db9bc4f41a3aef057bffd1b6e119e791ba5dfee00621a6a1f9b2dcc2157fffd"
+    },
+    {
+      "file": "chunks/004000.npz",
+      "start": 4000,
+      "count": 4000,
+      "sha256": "282aa9d2ab0dc242362f3b1b313a744ee66b6d41eef7da7c2beeb4a99f5b7cfe",
+      "bytes": 52699125,
+      "source_scenario_sha256": "3fe18cdcf209aeb251e7bdaab6d2bf775b0f1d3d17f5d475f29048c2f4e51ba1",
+      "source_marks_sha256": "e26635be806e1fa8c11c2bcd69ff01043abaa46be259562db52a99e841c075d9"
+    },
+    {
+      "file": "chunks/008000.npz",
+      "start": 8000,
+      "count": 4000,
+      "sha256": "f618843f8849e2d65c6d0fb337b41d54324633c5b5dfd5020efc6f5be674f343",
+      "bytes": 52680069,
+      "source_scenario_sha256": "b987f8b3ca25c861fac9d71a76e59e0a200341fea84c8e4e521a0b33f6347a42",
+      "source_marks_sha256": "cc7477a5a19ef545b8c0679976ab4a4d16113ea50ae2aaf8ca26c8fba0d83136"
+    },
+    {
+      "file": "chunks/012000.npz",
+      "start": 12000,
+      "count": 4000,
+      "sha256": "2b25a4735648813b9cc291f0db21b7f8da73cf50adc6666327906ba3a9152f7e",
+      "bytes": 52692412,
+      "source_scenario_sha256": "154d197b8c7d7074cb455c0222bbb5f9e2480ce81161d5b4832f2361beacedf3",
+      "source_marks_sha256": "5f98e989b1ab8b0a8d0b73b745a0a9a92502b7370c74e9ba9b2f7d7f3f50920b"
+    },
+    {
+      "file": "chunks/016000.npz",
+      "start": 16000,
+      "count": 4000,
+      "sha256": "5b515d0e7074ca73d1992942be4d6ce86ac3e086d2242e3e53a8e1a74f328eb3",
+      "bytes": 52697786,
+      "source_scenario_sha256": "bef0f697f9f5b65f5b956ba3c6d83a2974a0e9ea6a8f7939ca97a589c8b65c0c",
+      "source_marks_sha256": "d0907cce7e9e5ce6d25199cabe45266a37fe978ef564127e27290fe03260834b"
+    },
+    {
+      "file": "chunks/020000.npz",
+      "start": 20000,
+      "count": 4000,
+      "sha256": "c65d9a7725d70d9be05f9002cefc9cdc65e97ea22c4c7f2998b42e8b2b5efb27",
+      "bytes": 52695318,
+      "source_scenario_sha256": "4cb6d67321b13a0f5aa6464a566d96b2c9ba226005e6a6cac00e3e6a0add2418",
+      "source_marks_sha256": "c08c6d0624c36956576c3aaacf7ab6dceed429edfa69cd9e82293a5f0affee52"
+    },
+    {
+      "file": "chunks/024000.npz",
+      "start": 24000,
+      "count": 4000,
+      "sha256": "cd973528130cceca40ad252c442c0b95ae7ace2a6096798854cee455f1a8da18",
+      "bytes": 52701098,
+      "source_scenario_sha256": "8a7c5c3bbe83517dd453c4536ac3ba33531da8b666b632149685025708b469ef",
+      "source_marks_sha256": "064d95c841c1047c48154eebc46e5a627aa040afc75ad8e3ff89356b829edad6"
+    },
+    {
+      "file": "chunks/028000.npz",
+      "start": 28000,
+      "count": 4000,
+      "sha256": "12bdec6aee628bb9bbc0f274d804d2ed85de1628427359cf277beb65553e855d",
+      "bytes": 52688703,
+      "source_scenario_sha256": "233269dfef29e6c35da5e22bdbf03d44b2016ef980f306ae841e26d7c41e13fc",
+      "source_marks_sha256": "fb02de1f0c8c5fb1c606ac63d805f197bbe0a897114f2be6d9804fdd3262c203"
+    },
+    {
+      "file": "chunks/032000.npz",
+      "start": 32000,
+      "count": 4000,
+      "sha256": "f5ec4a6ff697a59d6f14092625943ca98152839c3da0a82ff72dbe2d41a6b63e",
+      "bytes": 52689415,
+      "source_scenario_sha256": "2e6d9bfc3a943df6d29c84b6d0d72f057ec22a9176977d4de5ec0731c7bedaa2",
+      "source_marks_sha256": "1c21566770f737bb1394459eef75cf40028eea46066e1afd8c5bcb4598e8ee50"
+    },
+    {
+      "file": "chunks/036000.npz",
+      "start": 36000,
+      "count": 4000,
+      "sha256": "64c36f923e53324bc24584b3c7266944526db99c75bd2f5af0c56133fb07669e",
+      "bytes": 52698476,
+      "source_scenario_sha256": "e0c96a00c053be1776da382dbb8da01c16e5001dece07d6140bf986df0c23f44",
+      "source_marks_sha256": "435f3469efedc3183772d075fa5468d742501b6184f989dd67634ecb84a18309"
+    },
+    {
+      "file": "chunks/040000.npz",
+      "start": 40000,
+      "count": 4000,
+      "sha256": "2aa0cf3cf9b8e85b1c498274aecac45d5df77028d4f558e448886fe5c8535bfe",
+      "bytes": 52694750,
+      "source_scenario_sha256": "76b35be14f154f26d001c51e7180aec22d881529e0cf188bd82240887e29a59d",
+      "source_marks_sha256": "c4537e9ff3d6e36bc49383651e82e87c846194191ef39a866d159b2b2de383f7"
+    },
+    {
+      "file": "chunks/044000.npz",
+      "start": 44000,
+      "count": 4000,
+      "sha256": "f1c287e917df8ee15b31eef8bb5c885821cdea30429eb2d6e0b38b798a042e81",
+      "bytes": 52689476,
+      "source_scenario_sha256": "bda3be7fc2f506fe77b3c19cfddcd75f5e0d68bd8a73b05e02cd9f80764fbb8b",
+      "source_marks_sha256": "995077dc4fb22bd290e6622ee50acc73993ec970213b27692f7ca0de4564a120"
+    },
+    {
+      "file": "chunks/048000.npz",
+      "start": 48000,
+      "count": 4000,
+      "sha256": "5f7058811a31ae0fc4261b89e86368039c934bf051d70699897fb5b02aefc2c3",
+      "bytes": 52683597,
+      "source_scenario_sha256": "cb507fef7cd2863771286ebbe94cdf969293ea5b06c14f7843eda9e166a18512",
+      "source_marks_sha256": "f64623765db204a6a2c5536bc7dcc815075d53d2dfdebcbdaf45e8fe591906fb"
+    },
+    {
+      "file": "chunks/052000.npz",
+      "start": 52000,
+      "count": 4000,
+      "sha256": "7de818a6f62e9b39838c121f827bc42234e3c9a853642bfa6b5d5b2cfcacad24",
+      "bytes": 52677253,
+      "source_scenario_sha256": "33d1aac10085258b0455e9b0b68ff0e87e9e7a364efe4e55813e43748f900226",
+      "source_marks_sha256": "e0a539472bd824bfb95f74edca87fe93f11afcf9b9d5577cf9fa8e52e502e1b0"
+    },
+    {
+      "file": "chunks/056000.npz",
+      "start": 56000,
+      "count": 4000,
+      "sha256": "2a7a468eb848260e58f2247b0253f282c042535620f77f7b5c30f2e08c3052e6",
+      "bytes": 52700021,
+      "source_scenario_sha256": "6305e2a23aa6f2eb924f8f9f1ad9fbcd7e9c6a95e8d3651838045f39c9ef1040",
+      "source_marks_sha256": "002befea1c42efa329a1516ee6e1bf59178de5510fd51d095aa476750948923a"
+    },
+    {
+      "file": "chunks/060000.npz",
+      "start": 60000,
+      "count": 4000,
+      "sha256": "a728979cad47bbbb4ca102b29d64b10f0e7eb35750647d79f48ea6ced3dce218",
+      "bytes": 52688049,
+      "source_scenario_sha256": "cfdec78ff1c6b3f0a61a39ad1c331842de7f58e87afc5b6980ebaa3ec0b874aa",
+      "source_marks_sha256": "f5594e3fc505c16ed32b327f5efcfd576c89645db657b6d860a10af7bc03cdd0"
+    },
+    {
+      "file": "chunks/064000.npz",
+      "start": 64000,
+      "count": 4000,
+      "sha256": "71c7e795df8771782a14928e2fb707c08c289dc9ae677454ab0bd36dd3d25eb5",
+      "bytes": 52698034,
+      "source_scenario_sha256": "f4adcf419412ba2d176e36983904fd762833ef2b64b2c1df1bb8f3c184cfd75f",
+      "source_marks_sha256": "263f565c4c781a0348b9888b19ffcf04f7206cbd4e6d51b2850ed6d6f8e1fc83"
+    },
+    {
+      "file": "chunks/068000.npz",
+      "start": 68000,
+      "count": 4000,
+      "sha256": "1a6cf471de5ae94d491f398a49a7bec087bcf786466196c407ecfac986ae051c",
+      "bytes": 52681820,
+      "source_scenario_sha256": "21e6dfb944bafd874e093f0789b07c866bded4646e5843a3e630505b44a6c5de",
+      "source_marks_sha256": "fca50f6ca715b143c38ec676e2fb6cecb2337c5205fb8aaa4a822c5b0ad84b93"
+    },
+    {
+      "file": "chunks/072000.npz",
+      "start": 72000,
+      "count": 4000,
+      "sha256": "0cc1796b59087de1a9ac18ef97036e2d45be5541bc51c38bcbf7af9bfa0c9126",
+      "bytes": 52696592,
+      "source_scenario_sha256": "64a5b92d98693eb8636996ccd1674effc0c6a272036dba473cb5eb06b3ceeafa",
+      "source_marks_sha256": "1220d99adbd7198442f668601206ce8f0d78272ca2af5e4f74409a43dd25994c"
+    },
+    {
+      "file": "chunks/076000.npz",
+      "start": 76000,
+      "count": 4000,
+      "sha256": "b2922548e215fef0ba3196d9cb23444d694557eb909e116b49417f2f5f5f9cb5",
+      "bytes": 52699417,
+      "source_scenario_sha256": "d295a248396040ecfbc18bbd2d3d50dfc4de6f437a54e5f144a8aea000f983f4",
+      "source_marks_sha256": "5a99d22139fff712ecfaa17290b16a2a2b201d21006d6ec7b9ab73ee7abcbfcd"
+    },
+    {
+      "file": "chunks/080000.npz",
+      "start": 80000,
+      "count": 4000,
+      "sha256": "0378e0bffd43734ae3e25eb16962be8d91bdce5e43711f5dd85b0b0b71c52983",
+      "bytes": 52684543,
+      "source_scenario_sha256": "3aa3c0b7ab8d5a4f02c026602274f0733c5a5b6bd339381eb7de520190c6dadf",
+      "source_marks_sha256": "5599a4b7cea96ced35d2e4d8dca07b739ec892d93faf2019070b10eeb3c0932e"
+    },
+    {
+      "file": "chunks/084000.npz",
+      "start": 84000,
+      "count": 4000,
+      "sha256": "92a687f25f36ce9694aa78b16b1cd7e556783d698ff73ac73f3da6e091a632a9",
+      "bytes": 52690167,
+      "source_scenario_sha256": "55bb7f26a41e42b93905060788ce4bb68f1d1e4712cc081f29140eee51bf2aa7",
+      "source_marks_sha256": "e4d5c25bc5009716abe5d66dfeb13de49940103fb698e8895e7167347498a2ec"
+    },
+    {
+      "file": "chunks/088000.npz",
+      "start": 88000,
+      "count": 4000,
+      "sha256": "5a8da701f5af07d83c752c91cc3e96d71b6be7d9dd4bf1c62ef8059e3985f620",
+      "bytes": 52691673,
+      "source_scenario_sha256": "5b986fc64514edd8ddfc888589b67a3d064a1638434ca1db8d241eef7c57f2f5",
+      "source_marks_sha256": "c5c21769d701ee6603a71f615601c13be2a61166b79706f65b92e13f1e3aa5ce"
+    },
+    {
+      "file": "chunks/092000.npz",
+      "start": 92000,
+      "count": 4000,
+      "sha256": "562bd3ee178e5af09692caff0a25aff0f8bbd3ce004e7a09835836eb662a92b5",
+      "bytes": 52691045,
+      "source_scenario_sha256": "591e1e6f6cf86e5bd9411005c60edd38a99fc40b5d474325bcb833fea1a79e41",
+      "source_marks_sha256": "0c6de78fd0bb2fb8a5fbe0ffaa080c3a7cedbea062c50d67670733919be64d24"
+    },
+    {
+      "file": "chunks/096000.npz",
+      "start": 96000,
+      "count": 4000,
+      "sha256": "32cc4d840c0050eac1c53e05bffc643586323134151107d6465616af9a5a4c8f",
+      "bytes": 52691688,
+      "source_scenario_sha256": "eae98ac43c993b8e2dfb6b461e6d4809b26def5ad62a83a780eb5cb10e40661e",
+      "source_marks_sha256": "1407e698908731711aaf472707719157d7bead8c0417a53fc63a0ba113297fd4"
+    }
+  ],
+  "total_compressed_chunk_bytes": 1317296884
+}

@@ -1,0 +1,46 @@
+{
+  "status": "pass",
+  "batch_size": 512,
+  "maximum_loss_error": 8.149072527885437e-10,
+  "maximum_gradient_error": 3.2223761081695557e-07,
+  "cpu_maximum_loss_difference": 4.6566128730773926e-09,
+  "cpu_maximum_gradient_difference": 8.791685104370117e-07,
+  "diagnostics": {
+    "gpu_compiled_losses": [
+      3.176846803398803e-07,
+      0.0008280667243525386,
+      0.0012253192253410816
+    ],
+    "gpu_eager_losses": [
+      3.171362550347112e-07,
+      0.0008280668989755213,
+      0.0012253200402483344
+    ],
+    "cpu_eager_losses": [
+      3.175400706822984e-07,
+      0.0008280660258606076,
+      0.0012253145687282085
+    ],
+    "cash_gradients": {
+      "empty": {
+        "compiled": -0.0009061098098754883,
+        "gpu_eager": -0.0009061098098754883,
+        "cpu_eager": -0.0009061098098754883,
+        "analytic": -0.0009061303784547725
+      },
+      "long": {
+        "compiled": -0.04754793643951416,
+        "gpu_eager": -0.04754793643951416,
+        "cpu_eager": -0.04754805564880371,
+        "analytic": -0.04754795071653506
+      },
+      "short": {
+        "compiled": -0.038617730140686035,
+        "gpu_eager": -0.038617610931396484,
+        "cpu_eager": -0.038617730140686035,
+        "analytic": -0.03861767545313266
+      }
+    }
+  },
+  "recurrent_execution": "three separately compiled differentiable scans; same-device eager reference; CPU diagnostic"
+}

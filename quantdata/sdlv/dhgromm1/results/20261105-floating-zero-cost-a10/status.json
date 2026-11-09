@@ -1,0 +1,30 @@
+{
+  "status": "complete",
+  "selected_epochs": {
+    "empty": 362,
+    "long": 357,
+    "short": 355
+  },
+  "best_losses": {
+    "empty": -0.00030326985600404445,
+    "long": 0.0002876349664572627,
+    "short": 9.003277806565166e-05
+  },
+  "initial": {
+    "epoch": 0,
+    "empty_loss": -1.4160687269177288e-05,
+    "long_loss": 0.0008795763764157892,
+    "short_loss": 0.0011369127992913127,
+    "sum_loss": 0.002002328488437925,
+    "learning_rate": 1e-05
+  },
+  "latest": {
+    "epoch": 362,
+    "empty_loss": -0.00030326985600404445,
+    "long_loss": 0.000294727452872321,
+    "short_loss": 0.00011388776786625386,
+    "sum_loss": 0.00010534536473453044,
+    "learning_rate": 1e-05
+  },
+  "selection": "independent training-best policy; disjoint weights"
+}

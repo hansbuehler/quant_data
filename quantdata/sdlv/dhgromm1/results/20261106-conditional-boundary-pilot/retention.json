@@ -1,0 +1,22 @@
+{
+  "source": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-conditional-boundary-20261106-aSKrb1",
+  "status": "complete",
+  "files": [
+    {
+      "path": "identity.json",
+      "source_sha256": "5f9317e09913f69bf608fbeb2e7ab84d45c046aafa81e4bbb0c3a50f68423031",
+      "retained_sha256": "5f9317e09913f69bf608fbeb2e7ab84d45c046aafa81e4bbb0c3a50f68423031"
+    },
+    {
+      "path": "report.json",
+      "source_sha256": "843d3056d595a1d79c406ec305bed617e513c0a236856bf534ff39f3b74d62df",
+      "retained_sha256": "843d3056d595a1d79c406ec305bed617e513c0a236856bf534ff39f3b74d62df"
+    },
+    {
+      "path": "status.json",
+      "source_sha256": "cc145e33c34f911088d6ae320930d05f841c738fb3cfeacd776ea3dd977f4749",
+      "retained_sha256": "cc145e33c34f911088d6ae320930d05f841c738fb3cfeacd776ea3dd977f4749"
+    }
+  ],
+  "retained": "deliberate compact result snapshot; CSV line endings normalized to LF; raw scenarios, market cache, weights, logs and scratch stay outside Git"
+}

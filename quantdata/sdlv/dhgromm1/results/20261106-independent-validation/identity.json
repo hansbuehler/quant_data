@@ -1,0 +1,17 @@
+{
+  "scenario_identity_sha256": "5073635bfbbbd6b5b26d9325dbdec7233254a1a6d9ffc18c36d6d1e0cded0087",
+  "sample": "evaluation",
+  "paths": 100000,
+  "original_sample": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-1step-warm500-20261103-vi9yMf/scenarios/evaluation",
+  "training_sample": "/home/hans/quantdata_data/experiments/quant_data/sdlv/dhgromm1-1step-warm500-20261103-vi9yMf/scenarios/train",
+  "split_innovations": "SeedSequence([original_seed, 1, chunk_start]); training uses index 0",
+  "approved_stopped_robust_checkpoint_sha256": "994e7cdbd2b72f601d7db10ed6be6ff6185971e1ec91fe4ebc4a1c1d361c515c",
+  "device": "CPU only; CUDA_VISIBLE_DEVICES empty; no GPU allocation",
+  "validation_used_for_training": false,
+  "code_sha256": {
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/heldout_run.py": "90253bed0bb2a410ed2b6d5dfa58d2a4d1444521e5284477ade71bba15640a6a",
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/heldout_evaluation.py": "02f0debd7e27da21a38479a59ab0958e4feb42bdeb394b1de82c7997b50cce38",
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/observable_data.py": "c3e9bd5496112ccd9fa5befb61abd83af4cc24cff8b75de410be5341e3747513",
+    "/home/hans/python/quant_data/quantdata/sdlv/dhgromm1/cache_load.py": "8f430231f12f55cf800d5b6d9873a6057280cfc8341e258f55d3865e21a4be4f"
+  }
+}

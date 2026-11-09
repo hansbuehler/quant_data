@@ -1,0 +1,9 @@
+{
+  "status": "complete",
+  "models": [
+    "ordinary",
+    "regularized",
+    "robust"
+  ],
+  "paths": 100000
+}
