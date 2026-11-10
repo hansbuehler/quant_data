@@ -118,13 +118,15 @@ where $h^{j,i}$ is the hat function of node $K^{j,i}$: $h^{j,i}(K^{j,i})=1$, $h^
 \end{proof}
 
 \subsection{Existence theorem for general grids}
-
+Recall from \cite{GROMM2026} that under $\Q$ log-DLV squared $L^{j, i}_t = \log \Sigma^{j, i}$ is governed by the SDE: 
 \begin{equation}
   \label{eq:log_dlv_sde}
   dL_t^{j, i} = -\Bigl(\ip{\xi_t^{j,i}}{\eta_t^{j,i}} + \tfrac12\|\xi_t^{j,i}\|^2\Bigr)\,dt + \ip{\xi_t^{j,i}}{dW_t}
 \end{equation}
+where $\eta^{j,i}=E^{j,i}/q^{j,i}$.
 
-In \cite{GROMM2026} the existence Theorem~2.1 holds for a grid of time-homogeneous strikes across all expiries. Following we generalise this result to general lattices. For the generalised existence theorem on general grids we make the following assumption: 
+
+In \cite{GROMM2026} the existence Theorem~2.2 holds for a grid of time-homogeneous strikes across all expiries. Following we generalise this result to general lattices. For the generalised existence theorem on general grids we make the following assumption: 
 \begin{assumption}
   \label{assumption:existence_general_grids}
   \begin{enumerate}[label=(\roman*)]
@@ -155,9 +157,9 @@ Assumption~\ref{assumption:existence_general_grids}~(i) is made to make the theo
 \end{theorem}
 
 \begin{proof}
-  The proof follows \cite[Theorem 2.1]{GROMM2026} with the following additions: (a) a single positive interior front density node spreads, (b) $\eta$ remains locally Lipschitz, (c) the calendar-like spread $ R $ is bounded on the general grid, (d) terminal settlement.
+  The proof follows \cite[Theorem 2.2]{GROMM2026} with the following additions: (a) a single positive interior front density node spreads, (b) $\eta$ remains locally Lipschitz, (c) the calendar-like spread $ R $ is bounded on the general grid, (d) terminal settlement.
   \begin{enumerate}[label=(\alph*)]
-    \item By Lemma~\ref{lemma:R}~(i) $p\coloneqq \mathcal{I}^j q^{j-1} \geq 0$ has unit mass. If $q^{j-1}$ has interior mass, so does $p$: an interior node $y^m\in(0,U)$ of grid $j-1$ puts positive weight on an interior node of grid $j$; if $y^m<K^{j,1}$ the weight on $K^{j,1}$ is $y^m/K^{j,1}>0$, if $y^m>K^{j,N_j}$ the weight on $K^{j,N_j}$ is $(U-y^m)/(U-K^{j,N_j})>0$, and otherwise both neighbours are interior. For $j-1=k$ the interior mass of the front is given as in \cite[Theorem 2.1]{GROMM2026} under Assumption~\ref{assumption:existence_general_grids}~(ii)(a), and the claim follows by induction over $j$. Since $M^j$ is a non-singular M-matrix, its inverse has strictly positive interior columns and $(M^j)^{-1}e_0 =e_0$, $(M^j)^{-1}e_{N_j+1}=e_{N_j+1}$. Since $N_j \geq 1$ for all $j > k$, $q^{j} > 0$ if $p_i > 0$ for some $i = 1, \dots, N_j$, and $q^{j}$ has no interior mass if $p_i = 0$ for all $i = 1, \dots, N_j$. 
+    \item By Lemma~\ref{lemma:R}~(i) $p\coloneqq \mathcal{I}^j q^{j-1} \geq 0$ has unit mass. If $q^{j-1}$ has interior mass, so does $p$: an interior node $y^m\in(0,U)$ of grid $j-1$ puts positive weight on an interior node of grid $j$; if $y^m<K^{j,1}$ the weight on $K^{j,1}$ is $y^m/K^{j,1}>0$, if $y^m>K^{j,N_j}$ the weight on $K^{j,N_j}$ is $(U-y^m)/(U-K^{j,N_j})>0$, and otherwise both neighbours are interior. For $j-1=k$ the interior mass of the front is given as in \cite[Theorem 2.2]{GROMM2026} under Assumption~\ref{assumption:existence_general_grids}~(ii)(a), and the claim follows by induction over $j$. Since $M^j$ is a non-singular M-matrix, its inverse has strictly positive interior columns and $(M^j)^{-1}e_0 =e_0$, $(M^j)^{-1}e_{N_j+1}=e_{N_j+1}$. Since $N_j \geq 1$ for all $j > k$, $q^{j} > 0$ if $p_i > 0$ for some $i = 1, \dots, N_j$, and $q^{j}$ has no interior mass if $p_i = 0$ for all $i = 1, \dots, N_j$. 
     
     \item Let $j>k$. $\eta^{j}$ locally Lipschitz implies that $L$ remains locally Lipschitz. The only term affected by the modified codebook \eqref{eq:codebook} is $\eta^{j}_t = E^{j}_t / q^{j}_t$. Due to \eqref{eq:codebook} we obtain for the volatility recursion
     \begin{equation*}
@@ -165,9 +167,10 @@ Assumption~\ref{assumption:existence_general_grids}~(i) is made to make the theo
     \end{equation*}
     Since $\mathcal{I}^j$ is a constant matrix, $E^{j;f}$ remains a smooth function of the state, and since $q_{t}^{j} > 0$ by (a), the coefficient $\eta_t^{j}$ remains locally Lipschitz.
     
-    \item Moreover, we need to show that the calendar spread $R^j = \Sigma^j q^j$ defined in \cite[Theorem 2.2]{GROMM2026} remains a martingale. \eqref{eq:codebook} gives $\Omega_j R^j = q^j - \mathcal{I}^j q^{j-1} $. Applying the discrete integration matrix $\Pi^j$ with strikes defined on $K^j$, we obtain $\Pi^j \Omega_j R^j = C^j - C[\mathcal{I}^j q^{j-1}]$ where $\Pi^j \Omega_j$ has positive interior diagonal. Since prices are bounded on the grid, $R^j$ remains bounded. 
+    \item Moreover, we need to show that the calendar spread $R^j = \Sigma^j q^j$ defined in \cite[Theorem 2.2]{GROMM2026} remains a martingale. \eqref{eq:codebook} gives $\Omega_j R^j = q^j - \mathcal{I}^j q^{j-1} $. Applying the discrete integration matrix $\Pi^j$ with strikes defined on $K^j$, we obtain $$\Pi^j \Omega_j R^j = C^j - \tilde C^j \, .$$ 
+    $\Pi^j \Omega_j$ is a diagonal matrix for the interior nodes with $c_i=(K^{j,i})^2(T_j-T_{j-1})/(K^{j,i+1}-K^{j,i-1})>0$ for $i = 1, \dots, N_j$. Thus, $R^{j, i} = (C^{j, i} - \tilde C^{j, i}) / c_i$ for $i = 1, \dots, N_j$. Since prices are bounded on the grid, $R^j$ is a bounded local martingale and therefore a martingale. 
     
-    \item If spot settles at an interior strike $J\in\lbrace 1,\dots,N_k\rbrace$, the front of the next slab is $q^{k+1}_{T_k}=(M^{k+1})^{-1}\mathcal{I}^{k+1}e_J$, which has interior mass by (a), so Assumption~\ref{assumption:existence_general_grids}~(ii)(a) holds on $[T_k,T_{k+1})$; $L_{T_k}$ is finite as in \cite[Theorem 2.1]{GROMM2026}. If $J\in\lbrace 0,N_k+1\rbrace$, the shared outer nodes give $\mathcal{I}^{j}e_0=e_0$ and $\mathcal{I}^{j}e_{N_{j-1}+1}=e_{N_j+1}$, hence $q^j_{T_k}=e_0$ resp.\ $q^j_{T_k}=e_{N_j+1}$ for all $j>k$, as in \cite[Theorem 2.1]{GROMM2026}.
+    \item If spot settles at an interior strike $J\in\lbrace 1,\dots,N_k\rbrace$, the front of the next slab is $q^{k+1}_{T_k}=(M^{k+1})^{-1}\mathcal{I}^{k+1}e_J$, which has interior mass by (a), so Assumption~\ref{assumption:existence_general_grids}~(ii)(a) holds on $[T_k,T_{k+1})$; $L_{T_k}$ is finite as in \cite[Theorem 2.2]{GROMM2026}. If $J\in\lbrace 0,N_k+1\rbrace$, the shared outer nodes give $\mathcal{I}^{j}e_0=e_0$ and $\mathcal{I}^{j}e_{N_{j-1}+1}=e_{N_j+1}$, hence $q^j_{T_k}=e_0$ resp.\ $q^j_{T_k}=e_{N_j+1}$ for all $j>k$, as in \cite[Theorem 2.2]{GROMM2026}.
   \end{enumerate}
 \end{proof}
 
@@ -180,6 +183,93 @@ Assumption~\ref{assumption:existence_general_grids}~(i) is made to make the theo
 
 
 \end{remark}
+
+\begin{remark}[Boundary strikes and tail mass]
+Write the interpolated put price for some expiration $j$ evaluated at $K$ as $P^j(K) = \sum_{i=0}^{N_j} (K - K^{j, i})^+ q^{j, i}$. The put price at $K^{j, 1}$ is determined by the tail density $q^{j, 0}$ and the boundary node's distance to the interior grid: $P^{j, 1} = (K^1 - K^0) q^{j, 0}$. Therefore the tail mass is pinned by the market quote $p^{j,0}$ and scales linearly with $(K^1 - K^0)$, though a too close setting of boundary strike at the interior would dramatically reduce the fitting performance since $P^{j, 0} = 0$ by construction, forcing the neighbouring nodes to be close to zero to gurantee convexity.
+\end{remark}
+
+\subsection{Barycentric payoffs: no pinning of the front}
+In \cite{GROMM2026}, the front density follows a construction motivated through a Brownian bridge. Moreover, the SANOS fitting procedure was used to smooth the call price surface. In what follows we show that through a front construction that uses the barycentric weights, we can allow spot to land in between nodes while satisfying the terminal condition. 
+
+Let $S_{T_k}$ be the spot at the next expiration $T_k$. We can write the discrete density for $i = 1, \dots, N_k$ as
+\begin{equation*}
+  q^{k, i}_t = \mathbb{E}_t\big[h^{k, i}(S_{T_k})\big]
+\end{equation*}
+where $h^{k, i}$ is the hat function of node $i$ defined as
+\begin{equation*}
+  h^{k, i}(s) = \frac{(s-K^{k, i-1})^+ - (s-K^{k, i})^+}{K^{k, i}-K^{k, i-1}}
+         - \frac{(s-K^{k, i})^+ - (s-K^{k, i+1})^+}{K^{k, i+1}-K^{k, i}} \ ,
+\end{equation*}
+with $h^{k,1} = 1$ on $(-\infty, K^{k,1}]$ and $h^{k,N_k} = 1$ on $[K^{k,N_k}, \infty)$.
+
+Let $\psi_t$ be the risk-neutral density of $S_{T_k}$ conditional on $\mathcal{F}_t$.
+Then $$q^{k,i}_t = \int h^{k,i}(s)\,\psi_t(s)\,ds \, ,$$ and since $\sum_i K^{k,i} h^{k,i}(s) = s$,
+\begin{equation*}
+  S_t = \mathbb{E}_t[S_{T_k}] = \int s\,\psi_t(s)\,ds = \sum_i K^{k,i} q^{k,i}_t .
+\end{equation*}
+
+\begin{equation*}
+  \mathbb{E}_t\big[h^{k, i}(S_{T_k})\big] = \int_{K^{k, i-1}}^{K^{k, i+1}} h^{k,i}(s) \psi_t(s) ds
+\end{equation*}
+where $\psi_t$ is the density of $S_t$ at time $s$. 
+
+\begin{equation*}
+  q^{k,i}_t = \mathbb{E}_t\big[h^{k,i}(S_{T_k})\big]
+            = \frac{C^k_t(K^{k,i-1}) - C^k_t(K^{k,i})}{K^{k,i}-K^{k,i-1}}
+            - \frac{C^k_t(K^{k,i}) - C^k_t(K^{k,i+1})}{K^{k,i+1}-K^{k,i}},
+\end{equation*}
+where $C^k_t(K) = \mathbb{E}_t\big[(S_{T_k}-K)^+\big]$.
+
+Let $S_{T_k} = G(W_{T_k})$ for some smooth $G: \mathbb{R} \to \R_{\geq 0}$. 
+\begin{equation*}
+  S_t = \mathbb{E}_t [G(W_{T_k})] 
+\end{equation*}
+For $W_T = W_t + Z \sqrt{T - t}$ for $Z \sim \mathcal{N}(0, 1)$ we obtain 
+\begin{equation*}
+  S_t = \mathbb{E}_t [ G(W_t + Z \sqrt{T -t}) ] = \int_{\mathbb{R}} G(w_t + z \sqrt{T-t})\phi(z) dz
+\end{equation*} 
+with $\phi(z) = e^{\frac{-z^2}{2}} (2\pi)^{-\frac{1}{2}}$. For which we obtain $dS_t = \mathbb{E}_t[G'(w_t + Z \sqrt{T - t}) ] dW_t $. Moreover, for density $q_t^{k, i} = \mathbb{E}_t[h(G(W_T))]$ we have 
+\begin{equation}
+d q_t^{k, i} = \mathbb{E}_t [h_i'(G(w_t + Z \sqrt{T-t})) G'(w_t + Z \sqrt{T-t})] dW_t = E^{k, i} dW_t
+\end{equation}
+where 
+\begin{equation}
+h_i'(x) = 
+\begin{cases}
+  (K^{j, i} - K^{j, i-1})^{-1} & x \in [K^{j, i-1}, K^{j, i}]\\
+  -  (K^{j, i+1} - K^{j, i})^{-1}  & x \in [K^{j, i}, K^{j, i+1}] \\ 
+  0 & \textrm{else} 
+\end{cases}
+\end{equation}
+Thus, 
+\begin{equation}
+  \| E_t^{k, i} \| \leq \max_{i} (K^{j, i} - K^{j, i-1})^{-1}  \sup_{x \in [K^{j, 0}, K^{j, N+1}]} G'(x)  
+\end{equation}
+
+\subsection{Existence reloaded}
+\begin{equation}
+  \eta^j = P^j q^{j-1} \eta^{j-1} / P^j q^{j-1} + (P^j \Omega_j B^j q^j) / q^j 
+\end{equation}
+
+$ (P^j q^{j-1} \eta^{j-1} / P^j q^{j-1})_{i} = \sum_{k} P^{j}_{ik} q^{j-1}_k \eta^{j-1}_k / \sum_{k} P^{j}_{ik} q^{j-1}_k $ 
+
+$I = P^j M^j = P^j - P^j \Omega_j S^j $, hence, $P^j \Omega_j S^j = P^j - I $. We get,
+
+$$P^j \Omega_j B^j q^j = P^j \Omega_j S^j (\xi^j \circ q^j) =   (P^j - I) (\xi^j \circ q^j) $$
+
+Thus, $(P^j - I) (\xi^j \circ q^j) / q^j = P^j (\xi^j \circ q^j) / \xi^j - \xi^j$.
+
+$\| (P^j \Omega_j B^j q^j) / q^j \| \leq \| \xi^j\| \left((P^j q^j) / q^j +  1 \right) $
+
+$$\|\eta^j\|_\infty \leq \|\eta^{j-1}\|_\infty + \| \xi^j\|_\infty \left((P^j q^j) / q^j +  1 \right) $$
+
+For the last part observe that 
+$$(P^j q^j) / q^j = (P^j P^j q^{j-1}) / P^j q^{j-1} \leq \frac{C}{\min_{i=1, \dots, N} P^j_i } $$ 
+for some $C > 1$. We obtain the final bound 
+$$
+\|\eta^j\|_\infty \leq \|\eta^{j-1}\|_\infty + \| \xi^j\|_\infty \left(\frac{C}{\min_{i=1, \dots, N} P^j_i } +  1 \right) . 
+$$
+
 
 
 \section{Factor-Law Evaluation and Conditional Arbitrage Check}
