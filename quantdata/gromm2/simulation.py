@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import os
 from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
 
 from quantdata.gromm2.bridge import advance_front_density, front_density_volatility
+from quantdata.gromm2 import hat_front
 from quantdata.gromm2.dlv import (
     SparseTransport,
     apply_sanos_matrix,
@@ -19,6 +21,7 @@ from quantdata.gromm2.dlv import (
 )
 
 Array = jax.Array
+_HAT_FRONT = os.environ.get("GROMM2_FRONT", "bridge") == "hat"
 
 
 class SimulationState(NamedTuple):
@@ -212,11 +215,16 @@ def one_day_risk_neutral_step(
         current_front, current_dlvsq = carry[:2]
         substep_index, factor_normal = inputs
         remaining_time = day_start_remaining - substep_index * substep_size
-        front_loading = _front_loading(
-            current_front,
-            remaining_time=remaining_time,
-            factor_count=factor_count,
-        )
+        if _HAT_FRONT:
+            current_front, hat_w = current_front
+            _, hat_loading = hat_front.hat_density(hat_interval, hat_w, elapsed=substep_index * substep_size)
+            front_loading = jnp.zeros(current_front.shape + (factor_count,), current_front.dtype).at[..., 0].set(hat_loading)
+        else:
+            front_loading = _front_loading(
+                current_front,
+                remaining_time=remaining_time,
+                factor_count=factor_count,
+            )
         if factor_scales is not None:
             relative_drift, factor_variance, diffusion = fused_risk_neutral_increments(
                 supports, transports, current_front, current_dlvsq, interval_years,
@@ -255,13 +263,21 @@ def one_day_risk_neutral_step(
             next_log_dlvsq = carry[2] + log_increment
             next_dlvsq = jnp.exp(next_log_dlvsq)
         final_step = (remaining_front_days == 1) & (substep_index == substeps - 1)
-        next_front = advance_front_density(
-            current_front,
-            factor_normal[..., 0],
-            remaining_time=remaining_time,
-            step_size=substep_size,
-            final_step=final_step,
-        )
+        if _HAT_FRONT:
+            hat_w = hat_w + jnp.sqrt(substep_size) * factor_normal[..., 0]
+            next_front = (jax.lax.cond(
+                final_step,
+                lambda: hat_front.settle_density(hat_interval, hat_w),
+                lambda: hat_front.hat_density(hat_interval, hat_w, elapsed=(substep_index + 1) * substep_size)[0],
+            ), hat_w)
+        else:
+            next_front = advance_front_density(
+                current_front,
+                factor_normal[..., 0],
+                remaining_time=remaining_time,
+                step_size=substep_size,
+                final_step=final_step,
+            )
         tamed_fraction = (
             jnp.asarray(0.0, dtype=current_front.dtype)
             if tamed.size == 0
@@ -281,7 +297,20 @@ def one_day_risk_neutral_step(
                            integrated_log_drift + drift_increment - .5 * factor_variance * substep_size)
         return next_carry, tamed_fraction
 
-    initial_carry = (front_density, future_dlvsq)
+    if _HAT_FRONT:
+        # The hat front fixes G for one interval; carrying it across days is not implemented. Multi-day fronts
+        # raise when remaining_front_days is static and turn the front into NaN when it is traced.
+        try:
+            static_days = int(remaining_front_days)
+        except TypeError:                                                     # traced or per-path array
+            static_days = None
+        if static_days is not None and static_days != 1:
+            raise NotImplementedError("hat front supports one-day fronts only (G is not carried across days)")
+        front_density = front_density + jnp.where(remaining_front_days == 1, 0., jnp.nan)
+        hat_interval = hat_front.start_interval(front_density, supports[..., 0, :], remaining_time=day_start_remaining)
+        initial_carry = ((front_density, jnp.zeros(front_density.shape[:-1], front_density.dtype)), future_dlvsq)
+    else:
+        initial_carry = (front_density, future_dlvsq)
     if log_dlvsq is not None:
         initial_carry += (log_dlvsq[..., 1:, :],)
     if collect_dlv_variation:
@@ -292,6 +321,8 @@ def one_day_risk_neutral_step(
         (jnp.arange(substeps), factor_normals),
     )
     updated_front, updated_future = final_carry[:2]
+    if _HAT_FRONT:
+        updated_front = updated_front[0]
     variation = None
     if collect_dlv_variation:
         noise, expected_variance, log_drift = final_carry[2 if log_dlvsq is None else 3:]
