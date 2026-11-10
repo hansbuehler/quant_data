@@ -115,14 +115,14 @@ where
 \begin{equation}
 (\varphi^{k,i})'(x) = 
 \begin{cases}
-  (K^{j, i} - K^{j, i-1})^{-1} & x \in [K^{j, i-1}, K^{j, i}]\\
-  -  (K^{j, i+1} - K^{j, i})^{-1}  & x \in [K^{j, i}, K^{j, i+1}] \\ 
+  (K^{k, i} - K^{k, i-1})^{-1} & x \in [K^{k, i-1}, K^{k, i}]\\
+  -  (K^{k, i+1} - K^{k, i})^{-1}  & x \in [K^{k, i}, K^{k, i+1}] \\ 
   0 & \textrm{else} 
 \end{cases}
 \end{equation}
 Thus, 
 \begin{equation}
-  \| E_t^{k, i} \| \leq \max_{i} (K^{j, i} - K^{j, i-1})^{-1}  \sup_{x \in [K^{j, 0}, K^{j, N+1}]} G'(x)  
+  \| E_t^{k, i} \| \leq \max_{i} (K^{k, i} - K^{k, i-1})^{-1}  \sup_{w \in \R} G'(w)  
 \end{equation}
 
 \subsection{Existence reloaded}
