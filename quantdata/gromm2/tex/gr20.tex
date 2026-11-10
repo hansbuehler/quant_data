@@ -252,7 +252,7 @@ In \cite{GROMM2026} the existence Theorem~2.2 holds for a grid of time-homogeneo
 \end{assumption}
 Assumption~\ref{assumption:existence_general_grids}~(i) is made to make the theorem more concrete. In general, we only need an increasing sequence of ceilings $U^{j} \leq U^{j+1} $ for $j \geq k$. 
 
-\begin{theorem}[Existence on general grids]
+\begin{corollary}[Existence on general grids]
   \label{thm:existence_general_grids}
   Let $L_{T_{k-1}} $ be finite. Under Assumption~\ref{assumption:existence_general_grids} the following hold: 
   \begin{enumerate}[label=(\roman*)]
@@ -262,32 +262,15 @@ Assumption~\ref{assumption:existence_general_grids}~(i) is made to make the theo
     with $L_{T_k}$ finite.
   \item If spot settles at an extreme strike $ J \in \lbrace 0, N_k +1 \rbrace$, then $q^j_{T_k} = e_0$ resp.\ $q^j_{T_k} = e_{N_j+1}$ for all $j > k$. Moreover, the remaining DLVs $\Sigma$ no longer affect the model. 
 \end{enumerate}
-\end{theorem}
+\end{corollary}
 
-\begin{proof}
-  The proof follows \cite[Theorem 2.2]{GROMM2026} with the following additions: (a) a single positive interior front density node spreads, (b) $\eta$ remains locally Lipschitz, (c) the calendar-like spread $ R $ is bounded on the general grid, (d) terminal settlement.
-  \begin{enumerate}[label=(\alph*)]
-    \item By Lemma~\ref{lemma:R}~(i) $p\coloneqq \mathcal{I}^j q^{j-1} \geq 0$ has unit mass. If $q^{j-1}$ has interior mass, so does $p$: an interior node $y^m\in(0,U)$ of grid $j-1$ puts positive weight on an interior node of grid $j$; if $y^m<K^{j,1}$ the weight on $K^{j,1}$ is $y^m/K^{j,1}>0$, if $y^m>K^{j,N_j}$ the weight on $K^{j,N_j}$ is $(U-y^m)/(U-K^{j,N_j})>0$, and otherwise both neighbours are interior. For $j-1=k$ the interior mass of the front is given as in \cite[Theorem 2.2]{GROMM2026} under Assumption~\ref{assumption:existence_general_grids}~(ii)(a), and the claim follows by induction over $j$. Since $M^j$ is a non-singular M-matrix, its inverse has strictly positive interior columns and $(M^j)^{-1}e_0 =e_0$, $(M^j)^{-1}e_{N_j+1}=e_{N_j+1}$. Since $N_j \geq 1$ for all $j > k$, $q^{j} > 0$ if $p_i > 0$ for some $i = 1, \dots, N_j$, and $q^{j}$ has no interior mass if $p_i = 0$ for all $i = 1, \dots, N_j$. 
-    
-    \item Let $j>k$. $\eta^{j}$ locally Lipschitz implies that $L$ remains locally Lipschitz. The only term affected by the modified codebook \eqref{eq:codebook} is $\eta^{j}_t = E^{j}_t / q^{j}_t$. Due to \eqref{eq:codebook} we obtain for the volatility recursion
-    \begin{equation*}
-      E^{j;f}=(M^j)^{-1}\bigl(\mathcal{I}^jE^{j-1;f}+\Omega_jB^{j;f}q^j\bigr)  \ . 
-    \end{equation*}
-    Since $\mathcal{I}^j$ is a constant matrix, $E^{j;f}$ remains a smooth function of the state, and since $q_{t}^{j} > 0$ by (a), the coefficient $\eta_t^{j}$ remains locally Lipschitz.
-    
-    \item Moreover, we need to show that the calendar spread $R^j = \Sigma^j q^j$ defined in \cite[Theorem 2.2]{GROMM2026} remains a martingale. \eqref{eq:codebook} gives $\Omega_j R^j = q^j - \mathcal{I}^j q^{j-1} $. Applying the discrete integration matrix $\Pi^j$ with strikes defined on $K^j$, we obtain $$\Pi^j \Omega_j R^j = C^j - \tilde C^j \, .$$ 
-    $\Pi^j \Omega_j$ is a diagonal matrix for the interior nodes with $c_i=(K^{j,i})^2(T_j-T_{j-1})/(K^{j,i+1}-K^{j,i-1})>0$ for $i = 1, \dots, N_j$. Thus, $R^{j, i} = (C^{j, i} - \tilde C^{j, i}) / c_i$ for $i = 1, \dots, N_j$. Since prices are bounded on the grid, $R^j$ is a bounded local martingale and therefore a martingale. 
-    
-    \item If spot settles at an interior strike $J\in\lbrace 1,\dots,N_k\rbrace$, the front of the next slab is $q^{k+1}_{T_k}=(M^{k+1})^{-1}\mathcal{I}^{k+1}e_J$, which has interior mass by (a), so Assumption~\ref{assumption:existence_general_grids}~(ii)(a) holds on $[T_k,T_{k+1})$; $L_{T_k}$ is finite as in \cite[Theorem 2.2]{GROMM2026}. If $J\in\lbrace 0,N_k+1\rbrace$, the shared outer nodes give $\mathcal{I}^{j}e_0=e_0$ and $\mathcal{I}^{j}e_{N_{j-1}+1}=e_{N_j+1}$, hence $q^j_{T_k}=e_0$ resp.\ $q^j_{T_k}=e_{N_j+1}$ for all $j>k$, as in \cite[Theorem 2.2]{GROMM2026}.
-  \end{enumerate}
-\end{proof}
 
 \begin{remark}[Growing boundary strikes]
   In general, assumption~(i) can be relaxed to a grid with growing exterior boundaries: 
   $$ [K^{j,0}, U^{j}] \subseteq [K^{j+1,0}, U^{j+1}], \quad j \geq k \, . $$
-  In this case Theorem~\ref{thm:existence_general_grids}~(iii) is modified: a boundary strike $U^{k}$ is not a boundary post settlement if $U^{k+1} > U^{k}$. In this case the interpolation matrix $\mathcal{I}^{k+1}$ will distribute barycentrically some of the density to the neighbouring node $K^{k+1, N_{k+1}}$. In turn, this fulfills the assumptions of 
+  In this case Corollary~\ref{thm:existence_general_grids}~(iii) is modified: a boundary strike $U^{k}$ is not a boundary post settlement if $U^{k+1} > U^{k}$. In this case the interpolation matrix $\mathcal{I}^{k+1}$ will distribute barycentrically some of the density to the neighbouring node $K^{k+1, N_{k+1}}$. In turn, this fulfills the assumptions of 
   
-  which by proof of Theorem~\ref{thm:existence_general_grids} is going to be. 
+  which by proof of Corollary~\ref{thm:existence_general_grids} is going to be. 
 
 
 \end{remark}
