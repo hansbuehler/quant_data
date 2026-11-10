@@ -71,9 +71,117 @@
 \section{Introduction}\label{sec:intro}
 
 
+\section{Barycentric payoffs: no pinning of the front}
+In \cite{GROMM2026}, the front density is constructed by transforming $W^1_{T_k}$ such that the resulting spot process $ S_{T_k} = G(W^1_{T_k})$ pins the discrete strikes, is a martingale and coincides with the risk-neutral density $q_{T_{k-1}}^{k}$ at inception $T_{k-1}$. Such a transformation results in an unbounded volatility of the spot process at settlement time $T_k$ and resulted in a more involved existence result \cite[Theorem 2.2]{GROMM2026}. In what follows, we introduce a continuous spot process that settles on the full spectrum of values $[K^{k, 0}, \dots, K^{k, N+1}]$. This results in two benefits:
+\begin{enumerate}
+  \item A simpler existence result which allows us to generalise the assumptions on the vol-of-vol $\xi$. \textcolor{red}{TODO: not shown yet, see corollary.} 
+  \item The removal of the independent smoothing process $Y$  \cite{SANOS2026}. 
+\end{enumerate}
+
+Let $S_{T_k} = G(W^1_{T_k})$ be the spot at the next expiration $T_k$ and $G: \R \to [K^{k,0}, K^{k,N_k+1}]$ some smooth, strictly increasing function with bounded derivative $G'$. Denote by $\varphi^{k,i}$, $i = 0, \dots, N_k+1$, the barycentric hat function for node $i$ as
+\begin{equation*}
+  \varphi^{k,i}(s) =
+  \begin{cases}
+    \dfrac{s - K^{k,i-1}}{K^{k,i} - K^{k,i-1}}, & s \in [K^{k,i-1}, K^{k,i}], \\[1ex]
+    \dfrac{K^{k,i+1} - s}{K^{k,i+1} - K^{k,i}}, & s \in [K^{k,i}, K^{k,i+1}], \\[1ex]
+    0, & \text{otherwise},
+  \end{cases}
+\end{equation*}
+where we used the convention that $K^{k,-1} = -\infty$ and $K^{k,N_k+2} = +\infty$, read as
+$\varphi^{k,0} = 1$ on $(-\infty, K^{k,0}]$ and $\varphi^{k,N_k+1} = 1$ on $[K^{k,N_k+1}, \infty)$ (see Figure~\ref{fig:barycentric-hats}). 
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{generated/barycentric_hats.pdf}
+  \caption{Barycentric hat functions on a non-uniform grid. The hat $\varphi^{k,i}$ (red) is supported on $[K^{k,i-1},K^{k,i+1}]$; the other hats (light) overlap their neighbours, and all hats sum to one (dashed).}
+  \label{fig:barycentric-hats}
+\end{figure}
+
+The barycentric hat function is a projection of the density to the discrete risk-neutral density. For interior nodes $i = 1, \dots, N_k$ we have
+\begin{equation}
+  q^{k, i}_t = \frac{C^{k, i-1}_t - C^{k, i}_t}{K^{k,i}-K^{k,i-1}}
+            - \frac{C^{k, i}_t - C^{k, i+1}_t}{K^{k,i+1}-K^{k,i}} = \mathbb{E}_t\big[\varphi^{k,i}(S_{T_k})\big] \, . 
+\end{equation}
+In particular, since $\sum_{i}K^{k, i} \varphi^{k, i}(s) = s$, we have $S_t = \mathbb{E}_t[S_{T_k}] = \sum_{i}K^{k, i} q^{k, i}_t$.
+
+We now want to show that for such a spot process $S_{T_k} = G(W_{T_k})$ the volatility of the density is bounded. For this purpose impose $S_t = \mathbb{E}_t [G(W_{T_k})] $. For $W_T = W_t + Z \sqrt{T - t}$ for $Z \sim \mathcal{N}(0, 1)$ we obtain 
+\begin{equation*}
+  S_t = \mathbb{E}_t [ G(W_t + Z \sqrt{T -t}) ] = \int_{\mathbb{R}} G(w_t + z \sqrt{T-t})n(z) dz
+\end{equation*} 
+with $n(z) = e^{\frac{-z^2}{2}} (2\pi)^{-\frac{1}{2}}$. For which we obtain $dS_t = \mathbb{E}_t[G'(w_t + Z \sqrt{T - t}) ] dW_t $. Moreover, for density $q_t^{k, i} = \mathbb{E}_t[\varphi^{k,i}(G(W_T))]$ we have 
+\begin{equation}
+d q_t^{k, i} = \mathbb{E}_t [(\varphi^{k,i})'(G(w_t + Z \sqrt{T-t})) G'(w_t + Z \sqrt{T-t})] dW_t = E^{k, i} dW_t
+\end{equation}
+where 
+\begin{equation}
+(\varphi^{k,i})'(x) = 
+\begin{cases}
+  (K^{j, i} - K^{j, i-1})^{-1} & x \in [K^{j, i-1}, K^{j, i}]\\
+  -  (K^{j, i+1} - K^{j, i})^{-1}  & x \in [K^{j, i}, K^{j, i+1}] \\ 
+  0 & \textrm{else} 
+\end{cases}
+\end{equation}
+Thus, 
+\begin{equation}
+  \| E_t^{k, i} \| \leq \max_{i} (K^{j, i} - K^{j, i-1})^{-1}  \sup_{x \in [K^{j, 0}, K^{j, N+1}]} G'(x)  
+\end{equation}
+
+\subsection{Existence reloaded}
+Let $P^j = (M^j)^{-1}$ and suppress the time index $t$. Recall from \cite{GROMM2026} the volatility recursion for $j > k$: 
+\begin{equation}
+  \label{eq:vol_recursion}
+  E^{j} = P^j(E^{j-1} + \Omega_j B^j q^j) \ . 
+\end{equation}
+Dividing by $q^j$ yields a recursion on the relative volatility $\eta^j$ 
+\begin{align}
+  \eta^j & = P^j E^{j-1} / q^{j} + (P^j \Omega_j B^j q^j) / q^j  \\
+  \label{eq:eta_recursion}
+  & = P^j q^{j-1} \eta^{j-1} / P^j q^{j-1} + (P^j \Omega_j B^j q^j) / q^j 
+\end{align}
+Writing the first term as a sum we can see that this is a weighted average of $\eta^{j-1}$
+\begin{equation} 
+  \label{eq:weighted_average}
+  (P^j q^{j-1} \eta^{j-1} / P^j q^{j-1})_{i} = \sum_{k} P^{j}_{ik} q^{j-1}_k \eta^{j-1}_k / \sum_{k} P^{j}_{ik} q^{j-1}_k 
+\end{equation}
+which we can bound with $\|\eta^{j-1}\|_\infty$ for $j > k+1$. For $j = k+1$ we cannot use $\eta^k$ since the front density vanishes on all but the two nodes neighbouring $S_{T_k}$ at settlement. Instead we bound $P^{k+1} E^k / q^{k+1}$ directly with $\|E^k\|_\infty$ and the lower bound on $q^{k+1}$ below.
+For the second term first observe that $I = P^j M^j = P^j - P^j \Omega_j S^j $ hence, 
+$P^j \Omega_j S^j = P^j - I \, . $ We get,
+\begin{equation}
+  \label{eq:distributed}
+  P^j \Omega_j B^j q^j / q^j = P^j \Omega_j S^j (\xi^j \circ q^j) / q^j =   (P^j - I) (\xi^j \circ q^j) / q^j = P^j (\xi^j \circ q^j) / q^j - \xi^j \, .
+\end{equation}
+Putting \eqref{eq:eta_recursion}, \eqref{eq:weighted_average} and \eqref{eq:distributed} together we obtain the upper-bound on $\eta^j$
+\begin{equation}\|\eta^j\|_\infty \leq \|\eta^{j-1}\|_\infty + \| \xi^j\|_\infty \left((P^j q^j) / q^j +  1 \right) \,. \end{equation}
+The dependence on $q^j$ in the last term is removed with a similar argument as in \eqref{eq:weighted_average}. Apply the density recursion (DLV) $q^{j} = P^j q^{j-1}$ on the remaining term to obtain $(P^j q^j) / q^j = (P^j P^j q^{j-1}) / P^j q^{j-1}$. Observe that both the numerator and the denominator are stochastic matrices $P^j$ applied to a density vector $v$.
+
+$$\| (P^j q^j) / q^j \| \leq \frac{C}{\min_{i=1, \dots, N} P^j_i } $$ 
+for $C > 1$. 
+
+We obtain the final bound 
+$$
+\|\eta^j\|_\infty \leq \|\eta^{j-1}\|_\infty + \| \xi^j\|_\infty \left(\frac{C}{\min_{i=1, \dots, N} P^j_i } +  1 \right) . 
+$$
+
+\begin{assumption}  
+\begin{enumerate}
+  \item The spot process $S_{T_k} = G(W_{T_k}^1)$ follows the hats construction. 
+  \item $\|\xi_t\|_\infty \leq c_t$ with $\int_{T_{k-1}}^{T_{k}} c_t^2 dt < \infty$
+\end{enumerate}
+\end{assumption}
+
+\begin{theorem}[Existence with barycentric settlement]
+\end{theorem}
+\begin{proof}
+\end{proof}
+
+\begin{corollary}[Existence with weaker assumption on the vol of vol]
+  
+\end{corollary}
+
+
 \section{General grids}
 In \cite{GROMM2026} GROMM was introduced for a time-homogeneous grid of strikes. Following, we introduce an interpolation matrix $\mathcal{I}^j$ that maps the density at $T_{j-1}$ barycentrically to the strikes of maturity $T_j$. This interpolation matrix coincides with the one introduced in \cite{DLV} for general grids, where the authors show that $\mathcal{I}^j$ (in their notation $\Xi_j$) is a transition matrix. We then demonstrate that the global existence result holds on general grids as long as each expiration has at least one interior strike and the ceiling / floor strike is an increasing / decreasing sequence across expirations. 
 
+\subsection{Definition}
 Denote by $K^j, j \geq k$ the sequence of strikes at maturity $T_j$ with $K^{j, 0} < \dots < K^{j, N_j} < K^{j, N_j+1} \eqqcolon U^{j}$, $N_j$ denoting the number of interior strikes and $U^j$ the upper exterior strike of the $j$-th maturity. For such an interpolation matrix we obtain the following code book: 
 \begin{equation}\label{eq:codebook}
   M^j_t\,q^j_t=\mathcal{I}^j\,q^{j-1}_t,\qquad M^j_t=I-\Omega_jS^j_t  \ . 
@@ -188,87 +296,6 @@ Assumption~\ref{assumption:existence_general_grids}~(i) is made to make the theo
 Write the interpolated put price for some expiration $j$ evaluated at $K$ as $P^j(K) = \sum_{i=0}^{N_j} (K - K^{j, i})^+ q^{j, i}$. The put price at $K^{j, 1}$ is determined by the tail density $q^{j, 0}$ and the boundary node's distance to the interior grid: $P^{j, 1} = (K^1 - K^0) q^{j, 0}$. Therefore the tail mass is pinned by the market quote $p^{j,0}$ and scales linearly with $(K^1 - K^0)$, though a too close setting of boundary strike at the interior would dramatically reduce the fitting performance since $P^{j, 0} = 0$ by construction, forcing the neighbouring nodes to be close to zero to gurantee convexity.
 \end{remark}
 
-\subsection{Barycentric payoffs: no pinning of the front}
-In \cite{GROMM2026}, the front density follows a construction motivated through a Brownian bridge. Moreover, the SANOS fitting procedure was used to smooth the call price surface. In what follows we show that through a front construction that uses the barycentric weights, we can allow spot to land in between nodes while satisfying the terminal condition. 
-
-Let $S_{T_k}$ be the spot at the next expiration $T_k$. We can write the discrete density for $i = 1, \dots, N_k$ as
-\begin{equation*}
-  q^{k, i}_t = \mathbb{E}_t\big[h^{k, i}(S_{T_k})\big]
-\end{equation*}
-where $h^{k, i}$ is the hat function of node $i$ defined as
-\begin{equation*}
-  h^{k, i}(s) = \frac{(s-K^{k, i-1})^+ - (s-K^{k, i})^+}{K^{k, i}-K^{k, i-1}}
-         - \frac{(s-K^{k, i})^+ - (s-K^{k, i+1})^+}{K^{k, i+1}-K^{k, i}} \ ,
-\end{equation*}
-with $h^{k,1} = 1$ on $(-\infty, K^{k,1}]$ and $h^{k,N_k} = 1$ on $[K^{k,N_k}, \infty)$.
-
-Let $\psi_t$ be the risk-neutral density of $S_{T_k}$ conditional on $\mathcal{F}_t$.
-Then $$q^{k,i}_t = \int h^{k,i}(s)\,\psi_t(s)\,ds \, ,$$ and since $\sum_i K^{k,i} h^{k,i}(s) = s$,
-\begin{equation*}
-  S_t = \mathbb{E}_t[S_{T_k}] = \int s\,\psi_t(s)\,ds = \sum_i K^{k,i} q^{k,i}_t .
-\end{equation*}
-
-\begin{equation*}
-  \mathbb{E}_t\big[h^{k, i}(S_{T_k})\big] = \int_{K^{k, i-1}}^{K^{k, i+1}} h^{k,i}(s) \psi_t(s) ds
-\end{equation*}
-where $\psi_t$ is the density of $S_t$ at time $s$. 
-
-\begin{equation*}
-  q^{k,i}_t = \mathbb{E}_t\big[h^{k,i}(S_{T_k})\big]
-            = \frac{C^k_t(K^{k,i-1}) - C^k_t(K^{k,i})}{K^{k,i}-K^{k,i-1}}
-            - \frac{C^k_t(K^{k,i}) - C^k_t(K^{k,i+1})}{K^{k,i+1}-K^{k,i}},
-\end{equation*}
-where $C^k_t(K) = \mathbb{E}_t\big[(S_{T_k}-K)^+\big]$.
-
-Let $S_{T_k} = G(W_{T_k})$ for some smooth $G: \mathbb{R} \to \R_{\geq 0}$. 
-\begin{equation*}
-  S_t = \mathbb{E}_t [G(W_{T_k})] 
-\end{equation*}
-For $W_T = W_t + Z \sqrt{T - t}$ for $Z \sim \mathcal{N}(0, 1)$ we obtain 
-\begin{equation*}
-  S_t = \mathbb{E}_t [ G(W_t + Z \sqrt{T -t}) ] = \int_{\mathbb{R}} G(w_t + z \sqrt{T-t})\phi(z) dz
-\end{equation*} 
-with $\phi(z) = e^{\frac{-z^2}{2}} (2\pi)^{-\frac{1}{2}}$. For which we obtain $dS_t = \mathbb{E}_t[G'(w_t + Z \sqrt{T - t}) ] dW_t $. Moreover, for density $q_t^{k, i} = \mathbb{E}_t[h(G(W_T))]$ we have 
-\begin{equation}
-d q_t^{k, i} = \mathbb{E}_t [h_i'(G(w_t + Z \sqrt{T-t})) G'(w_t + Z \sqrt{T-t})] dW_t = E^{k, i} dW_t
-\end{equation}
-where 
-\begin{equation}
-h_i'(x) = 
-\begin{cases}
-  (K^{j, i} - K^{j, i-1})^{-1} & x \in [K^{j, i-1}, K^{j, i}]\\
-  -  (K^{j, i+1} - K^{j, i})^{-1}  & x \in [K^{j, i}, K^{j, i+1}] \\ 
-  0 & \textrm{else} 
-\end{cases}
-\end{equation}
-Thus, 
-\begin{equation}
-  \| E_t^{k, i} \| \leq \max_{i} (K^{j, i} - K^{j, i-1})^{-1}  \sup_{x \in [K^{j, 0}, K^{j, N+1}]} G'(x)  
-\end{equation}
-
-\subsection{Existence reloaded}
-\begin{equation}
-  \eta^j = P^j q^{j-1} \eta^{j-1} / P^j q^{j-1} + (P^j \Omega_j B^j q^j) / q^j 
-\end{equation}
-
-$ (P^j q^{j-1} \eta^{j-1} / P^j q^{j-1})_{i} = \sum_{k} P^{j}_{ik} q^{j-1}_k \eta^{j-1}_k / \sum_{k} P^{j}_{ik} q^{j-1}_k $ 
-
-$I = P^j M^j = P^j - P^j \Omega_j S^j $, hence, $P^j \Omega_j S^j = P^j - I $. We get,
-
-$$P^j \Omega_j B^j q^j = P^j \Omega_j S^j (\xi^j \circ q^j) =   (P^j - I) (\xi^j \circ q^j) $$
-
-Thus, $(P^j - I) (\xi^j \circ q^j) / q^j = P^j (\xi^j \circ q^j) / \xi^j - \xi^j$.
-
-$\| (P^j \Omega_j B^j q^j) / q^j \| \leq \| \xi^j\| \left((P^j q^j) / q^j +  1 \right) $
-
-$$\|\eta^j\|_\infty \leq \|\eta^{j-1}\|_\infty + \| \xi^j\|_\infty \left((P^j q^j) / q^j +  1 \right) $$
-
-For the last part observe that 
-$$(P^j q^j) / q^j = (P^j P^j q^{j-1}) / P^j q^{j-1} \leq \frac{C}{\min_{i=1, \dots, N} P^j_i } $$ 
-for some $C > 1$. We obtain the final bound 
-$$
-\|\eta^j\|_\infty \leq \|\eta^{j-1}\|_\infty + \| \xi^j\|_\infty \left(\frac{C}{\min_{i=1, \dots, N} P^j_i } +  1 \right) . 
-$$
 
 
 
