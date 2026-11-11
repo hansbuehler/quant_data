@@ -85,7 +85,7 @@ def _forecast_identity(*, state: DailyState, dynamics: FittedDynamics,
 def generate_front_scenarios(*, state: DailyState, dynamics: FittedDynamics,
                              coupling: EmpiricalFrontCopula | GaussianFrontCopula,
                              curve: CashCurve, book: pd.DataFrame, claims: tuple[Claim, ...],
-                             initial_spot: float, current_claim_marks: np.ndarray, elapsed_day: int = 0,
+                             initial_spot: float, elapsed_day: int = 0,
                              draw_count: int | None = None, seed: int = 1,
                              pricing_batch_size: int = 256, diagnostic_only: bool = False) -> FrontScenarioSet:
     """Sample current front spot and explicit joint innovations, then remove asset alpha.
@@ -96,22 +96,24 @@ def generate_front_scenarios(*, state: DailyState, dynamics: FittedDynamics,
     Population front calibration is exact; finite-sample moments retain normal
     Monte Carlo error. Claim gains are not demeaned. Raw gains are recoverable
     by adding the recorded removed mean, with one fixed inception numeraire.
+    Claims are marked with the zero-smoothing DLV (LV mode) at both ends, like
+    the hedge instruments.
     """
     minimum_count = max(10000, 10 * (1 + len(book)))
     count = minimum_count if draw_count is None else draw_count
-    previous_claims = np.asarray(current_claim_marks, dtype=float)
     if (not np.isfinite(initial_spot) or initial_spot <= 0. or not claims
             or isinstance(pricing_batch_size, bool) or not isinstance(pricing_batch_size, int)
             or pricing_batch_size < 1 or any(claim.terminal_day <= elapsed_day for claim in claims)):
         raise ValueError("Front scenarios require live claims, positive inception spot and integer batch size")
-    if previous_claims.shape != (len(claims),) or not np.isfinite(previous_claims).all() or np.any(previous_claims < 0.):
-        raise ValueError("Front scenarios require aligned finite nonnegative common-market target marks")
     if count < minimum_count and not diagnostic_only:
         raise ValueError("Production front scenarios require max(10000, 10 * instruments) draws; use diagnostic_only for a small test")
     if state.day != dynamics.as_of_date or len(state.native) != dynamics.directions.shape[0]:
         raise ValueError("Front scenario model and pricing state must have the same date and geometry")
     coupling.validate_model(dynamics)
     current = state.decode().pricer
+    previous_claims = np.array([claim.price(current, curve, elapsed_day=elapsed_day) for claim in claims])
+    if not np.isfinite(previous_claims).all() or np.any(previous_claims < 0.):
+        raise ValueError("Front scenarios require finite nonnegative DLV claim marks")
     parity, reference, discount = (float(value) for value in curve.at(1.))
     front = DiscreteFrontLaw.from_pricer(pricer=current, parity_forward=parity)
     draws = coupling.sample(front=front, reference_forward=reference, count=count, rng=np.random.default_rng(seed))

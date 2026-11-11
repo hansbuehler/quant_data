@@ -17,7 +17,8 @@ from quantdata.biz_calendar import DAYS_PER_YEAR, get_business_days
 from quantdata.hedge2.claims import Claim, make_claims
 from quantdata.hedge2.historical import licensed_curve
 from quantdata.hedge2.metrics import summarize_products
-from quantdata.hedge2.source import SourceArchive, surface_digitals
+from quantdata.hedge2.source import SourceArchive
+from quantdata.hedge2.state import DailyState
 
 
 def unhedged_digital_rows(*, claims: tuple[Claim, ...], market_marks: np.ndarray,
@@ -43,8 +44,8 @@ def run_unhedged_coverage(*, source_configuration: Path, coverage_path: Path,
                          output_directory: Path) -> dict[str, object]:
     """Compare the fitted-origin population with its ex-post complete-book subset.
 
-    Only saved SANOS models and licensed spot/carry inputs enter these cash
-    returns. Missing European quote books do not exclude an otherwise usable
+    Claims are valued with the zero-smoothing DLV (LV mode); saved SANOS
+    models only set claim strikes. Licensed spot/carry inputs settle them. Missing European quote books do not exclude an otherwise usable
     spot settlement. Actual returns are never centered or volatility-scaled.
     Coverage labels affect reporting only, not prices, strikes or payoffs.
     """
@@ -54,6 +55,7 @@ def run_unhedged_coverage(*, source_configuration: Path, coverage_path: Path,
     if selected.empty or selected.index.has_duplicates:
         raise ValueError("Coverage must identify each one-day fitted origin exactly once")
     dynamics = Path(sources["dynamics_directory"])
+    daily_directory = Path(sources["daily_directory"])
     dates = [path.stem for path in sorted((dynamics / "days").glob("*.npz"))
         if date(2023, 1, 1) <= date.fromisoformat(path.stem) <= date(2025, 12, 31)]
     if not dates or set(dates) != set(selected.index):
@@ -67,13 +69,15 @@ def run_unhedged_coverage(*, source_configuration: Path, coverage_path: Path,
         if (output_directory / "config.json").exists():
             raise ValueError("Preserve the existing coverage run; use a new uniquely identified output directory")
         implementation = {name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
-            for name in ("unhedged_coverage.py", "historical.py", "claims.py", "source.py", "cash.py", "metrics.py")}
+            for name in ("unhedged_coverage.py", "historical.py", "claims.py", "source.py", "cash.py", "metrics.py",
+                         "state.py", "pricing.py", "dlv.py")}
         identity = {"dates": dates, "source_configuration": str(source_configuration.resolve()),
             "source_configuration_sha256": hashlib.sha256(source_configuration.read_bytes()).hexdigest(),
             "coverage_path": str(coverage_path.resolve()), "coverage_sha256": hashlib.sha256(coverage_path.read_bytes()).hexdigest(),
             "implementation_sha256": implementation,
             "sample": "all fitted origins; observed spot and carry required, not complete European quote books",
-            "units": "unit cash digital payout; zero trading cost; raw realized returns"}
+            "units": "unit cash digital payout; zero trading cost; raw realized returns",
+            "daily_directory": str(daily_directory), "claim_valuation": "zero-smoothing DLV (LV mode)"}
         (output_directory / "config.json").write_text(json.dumps(identity, indent=2) + "\n")
         archive = SourceArchive(root=Path(sources["source_root"]))
         licensed = Path(sources["licensed_fit_directory"])
@@ -89,14 +93,12 @@ def run_unhedged_coverage(*, source_configuration: Path, coverage_path: Path,
                 continue
             curve, following_curve = (licensed_curve(licensed, selected_day) for selected_day in (day, following))
             source, metadata = archive.load(day)
-            forward, reference, discount = curve.at(1.)
+            _, reference, discount = curve.at(1.)
             claims = tuple(claim for claim in make_claims(initial_spot=curve.spot,
                 atm_vols_by_day={tenor: float(source.interpolate_atm_vols(tenor / DAYS_PER_YEAR)) for tenor in (1, 2, 3, 5)})
                 if claim.kind == "digital" and claim.terminal_day == 1)
-            call_probabilities = surface_digitals(source, expiry_y=1. / DAYS_PER_YEAR,
-                strikes=np.array([claim.strike / forward for claim in claims]))
-            marks = float(discount) * np.where(np.array([claim.is_call for claim in claims]),
-                call_probabilities, 1. - call_probabilities)
+            pricer = DailyState.load(daily_directory, day).decode().pricer
+            marks = np.array([claim.price(pricer, curve, elapsed_day=0) for claim in claims])
             complete = bool(selected.loc[value, "eligible"])
             for row in unhedged_digital_rows(claims=claims, market_marks=marks,
                     following_spot=following_curve.spot, discount=float(discount)):

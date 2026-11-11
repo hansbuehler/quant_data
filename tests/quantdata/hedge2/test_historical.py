@@ -1,6 +1,7 @@
 """Historical instruments float across pairs but keep cash strike within a pair."""
 
 from datetime import date
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -28,6 +29,18 @@ def source() -> ArbFreePricer:
     return pricer
 
 
+class DigitalPricer:
+    """DLV stand-in whose digitals equal the saved test surface, so expected values stay explicit."""
+
+    def __init__(self, surface: ArbFreePricer | None = None, shift: float = 0.) -> None:
+        self.surface, self.shift = surface or source(), shift
+
+    def european_at(self, *, expiry_y: float, strikes: np.ndarray, is_call: bool = True,
+                    digital: bool = False) -> np.ndarray:
+        assert digital
+        return surface_digitals(self.surface, expiry_y=expiry_y, strikes=strikes, is_call=is_call) + self.shift
+
+
 def curve(spot: float, *, forward: float = 1., reference: float = 1., discount: float = 1.) -> CashCurve:
     times = np.array([1., 3., 5., 25.])
     return CashCurve(spot=spot, business_dtes=times, forwards=spot * forward**times,
@@ -40,6 +53,7 @@ def test_historical_cash_strike_does_not_move_with_next_spot() -> None:
     book = pd.DataFrame({"strike": [5000.], "bdte": [1.], "option_type": ["call"]})
     claim = Claim(label="atm", kind="digital", terminal_day=1, strike=5000., initial_spot=5000.)
     gains, target = historical_pair_returns(before_source=pricer, after_source=pricer,
+        before_pricer=DigitalPricer(pricer), after_pricer=DigitalPricer(pricer),
         before_curve=old, after_curve=following, current_spot=5000., episode_initial_spot=5000.,
         book=book, claims=(claim,))
     old_option = sanos_europeans(source=pricer, curve=old, business_dtes=np.array([1.]),
@@ -48,13 +62,20 @@ def test_historical_cash_strike_does_not_move_with_next_spot() -> None:
     assert gains[0] == pytest.approx(.99 * (102. - 101.) / 100.)
     assert gains[1] == pytest.approx((.99 * 2. - old_option) / 100.)
     assert target[0] == pytest.approx(.99 - expected_digital)
+    # The hedged digital is marked by the DLV pricer, never by the SANOS surface itself.
+    _, shifted = historical_pair_returns(before_source=pricer, after_source=pricer,
+        before_pricer=DigitalPricer(pricer, shift=.01), after_pricer=DigitalPricer(pricer),
+        before_curve=old, after_curve=following, current_spot=5000., episode_initial_spot=5000.,
+        book=book, claims=(claim,))
+    assert shifted[0] == pytest.approx(target[0] - .99 * .01)
 
 
 def test_unit_digital_has_no_spot_notional_multiplier_and_tie_is_put() -> None:
     book = pd.DataFrame({"strike": [5000.], "bdte": [1.], "option_type": ["put"]})
     claims = tuple(Claim(label=str(side), kind="digital", terminal_day=1,
         strike=5000., initial_spot=10000., is_call=side) for side in (False, True))
-    arguments = dict(before_source=source(), after_source=source(), before_curve=curve(100.),
+    arguments = dict(before_source=source(), after_source=source(), before_pricer=DigitalPricer(),
+        after_pricer=DigitalPricer(), before_curve=curve(100.),
         after_curve=curve(100.), current_spot=5000., book=book, claims=claims)
     gains, target = historical_pair_returns(**arguments, episode_initial_spot=5000.)
     smaller, same_target = historical_pair_returns(**arguments, episode_initial_spot=10000.)
@@ -69,7 +90,8 @@ def test_source_forward_prices_and_reference_forward_finances_spot_separately() 
     pricer, old = source(), curve(100., forward=1.005, reference=.999, discount=.998)
     book = pd.DataFrame({"strike": [4950., 5050.], "bdte": [3., 3.], "option_type": ["put", "call"]})
     claim = Claim(label="3D", kind="digital", terminal_day=3, strike=5000., initial_spot=5000.)
-    arguments = dict(before_source=pricer, after_source=pricer, before_curve=old, after_curve=curve(101.),
+    arguments = dict(before_source=pricer, after_source=pricer, before_pricer=DigitalPricer(pricer),
+        after_pricer=DigitalPricer(pricer), before_curve=old, after_curve=curve(101.),
         current_spot=5000., episode_initial_spot=5000., book=book, claims=(claim,))
     gains, target = historical_pair_returns(**arguments)
     assert gains[0] == pytest.approx(.998 * (101. - 99.9) / 100.)
@@ -96,7 +118,8 @@ def test_exotic_joint_law_is_not_invented_from_saved_european_marginals() -> Non
     claim = Claim(label="ko", kind="ko", terminal_day=5, observation_day=3,
         barrier=5000., strike=4950., initial_spot=5000.)
     with pytest.raises(ValueError, match="digital targets"):
-        historical_pair_returns(before_source=source(), after_source=source(), before_curve=curve(100.),
+        historical_pair_returns(before_source=source(), after_source=source(), before_pricer=DigitalPricer(),
+            after_pricer=DigitalPricer(), before_curve=curve(100.),
             after_curve=curve(101.), current_spot=5000., episode_initial_spot=5000., book=book, claims=(claim,))
 
 
@@ -118,9 +141,11 @@ def test_joint_window_preserves_raw_returns_and_causal_pair_provenance(monkeypat
         (directory / f"{day.isoformat()}.pdq").write_bytes(day.isoformat().encode())
     monkeypatch.setattr("quantdata.hedge2.historical.licensed_curve",
         lambda directory, day: curve(100. + dates.index(day)))
+    monkeypatch.setattr("quantdata.hedge2.historical.DailyState.load",
+        lambda directory, day: SimpleNamespace(decode=lambda: SimpleNamespace(pricer=DigitalPricer())))
     book = pd.DataFrame({"strike": [5000.], "bdte": [1.], "option_type": ["call"]})
     claim = Claim(label="1D", kind="digital", terminal_day=1, strike=5000., initial_spot=5000.)
-    result = build_historical_returns(archive=Archive(), licensed_fit_directory=directory.parent,
+    result = build_historical_returns(archive=Archive(), licensed_fit_directory=directory.parent, daily_directory=tmp_path,
         as_of_date=dates[2], current_spot=5000., book=book, claims=(claim,), window_transitions=2)
     np.testing.assert_allclose(result.weights @ result.instrument_gains, 0., atol=1e-14)
     np.testing.assert_allclose(result.raw_instrument_gains - result.instrument_gains,
@@ -131,7 +156,7 @@ def test_joint_window_preserves_raw_returns_and_causal_pair_provenance(monkeypat
     assert result.carry_inputs.shape == (2, 2, 2, 3)
     assert result.source_hashes.shape == result.curve_hashes.shape == (2, 2)
     assert result.weights @ result.claim_gains[:, 0] > .1
-    premium = build_historical_returns(archive=Archive(), licensed_fit_directory=directory.parent,
+    premium = build_historical_returns(archive=Archive(), licensed_fit_directory=directory.parent, daily_directory=tmp_path,
         as_of_date=dates[2], current_spot=5000., book=book, claims=(claim,), window_transitions=2,
         return_basis="premium")
     np.testing.assert_allclose(premium.raw_instrument_gains,
@@ -147,6 +172,7 @@ def test_zero_strike_calls_use_source_forward_not_financing_forward() -> None:
         "instrument_kind": ["zero_strike_call"]})
     claim = Claim(label="1D", kind="digital", terminal_day=1, strike=5000., initial_spot=5000.)
     gains, _ = historical_pair_returns(before_source=source(), after_source=source(),
+        before_pricer=DigitalPricer(), after_pricer=DigitalPricer(),
         before_curve=old, after_curve=curve(102.), current_spot=5000., episode_initial_spot=5000.,
         book=book, claims=(claim,))
     assert gains[0] == pytest.approx(.99 * (102. - 101.) / 100.)

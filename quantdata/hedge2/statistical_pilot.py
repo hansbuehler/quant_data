@@ -17,7 +17,7 @@ from quantdata.hedge2.claims import make_claims
 from quantdata.hedge2.optimization import ScenarioOptimizer
 from quantdata.hedge2.rolling import load_dynamics
 from quantdata.hedge2.scenarios import generate_scenarios
-from quantdata.hedge2.source import SourceArchive, surface_digitals
+from quantdata.hedge2.source import SourceArchive
 from quantdata.hedge2.state import DailyState
 
 
@@ -63,8 +63,7 @@ def run_statistical_pilot(*, source_root: Path, licensed_fit_directory: Path, ra
         print(f"statistical pilot date={day} scenarios={scenarios.draw_count} "
               f"distinct={scenarios.distinct_innovations} instruments={len(costs)} cells={total_cells}", flush=True)
         for target_index, claim in enumerate(claims):
-            market_price = float(discount * surface_digitals(source, expiry_y=1. / DAYS_PER_YEAR,
-                strikes=np.array([claim.strike / forward]), is_call=claim.is_call)[0])
+            market_price = float(claim.price(state.decode().pricer, market.curve, elapsed_day=0))
             target_gain = float(discount * claim.payoff(following.curve.spot) - market_price)
             for side in (-1, 1):
                 for objective in ("mean_variance", "power_exponential"):

@@ -161,23 +161,34 @@ def surface_digitals(pricer: ArbFreePricer, *, expiry_y: float,
 
 @dataclass(frozen=True, kw_only=True)
 class SourceArchive:
+    """Saved SANOS fits of one smoothness: 0 (DLV), 0.1 (SANOS benchmark) or 0.25."""
+
     root: Path
+    smoothness: float = 0.1
+
+    def __post_init__(self) -> None:
+        if self.smoothness not in (0., .1, .25):
+            raise ValueError(f"Saved SANOS fits exist for smoothness 0, 0.1 and 0.25, not {self.smoothness}")
+
+    @property
+    def model_name(self) -> str:
+        return f"all-{self.smoothness:g}"
 
     def model_path(self, day: date) -> Path:
         candidates = [
-            self.root / location / day.isoformat() / "models" / "all-0.1" / "model.h5"
+            self.root / location / day.isoformat() / "models" / self.model_name / "model.h5"
             for location in ("days", "pilot")
         ]
         found = [path for path in candidates if path.is_file()]
         if not found:
-            raise FileNotFoundError(f"Missing saved all-0.1 model for {day}")
+            raise FileNotFoundError(f"Missing saved {self.model_name} model for {day}")
         return found[0]
 
     def dates(self) -> tuple[date, ...]:
         return tuple(sorted({
             date.fromisoformat(path.parents[2].name)
             for location in ("days", "pilot")
-            for path in (self.root / location).glob("*/models/all-0.1/model.h5")
+            for path in (self.root / location).glob(f"*/models/{self.model_name}/model.h5")
         }))
 
     def load(self, day: date) -> tuple[ArbFreePricer, dict[str, object]]:
@@ -189,8 +200,8 @@ class SourceArchive:
             raise ValueError(f"Source certificate/checksum failed for {day}")
         directory = SubDir(str(path.parent), fmt=SubDir.PYTREE_HDF5, create_directory=False)
         pricer = ArbFreePricer.from_dict(directory.read("model"))
-        if pricer.smoothness != 0.1 or pricer.mdensities is None:
-            raise ValueError(f"Expected the stored 0.1 surface model on {day}")
+        if pricer.smoothness != self.smoothness or pricer.mdensities is None:
+            raise ValueError(f"Expected the stored {self.model_name} surface model on {day}")
         for support, density in zip(pricer.mstrikes, pricer.mdensities, strict=True):
             if (
                 not np.isfinite(density).all() or not np.isfinite(support).all()

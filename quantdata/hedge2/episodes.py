@@ -41,7 +41,7 @@ from quantdata.hedge2.premium import (
 )
 from quantdata.hedge2.rolling import load_dynamics
 from quantdata.hedge2.scenarios import generate_scenarios
-from quantdata.hedge2.source import SourceArchive, surface_digitals, surface_implied_vols
+from quantdata.hedge2.source import SourceArchive, surface_implied_vols
 from quantdata.hedge2.state import DailyState
 
 
@@ -151,15 +151,8 @@ def run_episode(*, origin: date, family: str, store: MarketStore, archive: Sourc
         observed_marks(active, market)
     initial_state = DailyState.load(daily_directory, origin)
     initial_pricer = initial_state.decode().pricer
-    initial_prices = []
-    for claim in claims:
-        if claim.kind == "digital":
-            forward, _, discount = first.curve.at(float(horizon))
-            price = discount * surface_digitals(source, expiry_y=horizon / DAYS_PER_YEAR,
-                strikes=np.array([claim.strike / forward]), is_call=claim.is_call)[0]
-        else:
-            price = claim.price(initial_pricer, first.curve, elapsed_day=0)
-        initial_prices.append(float(price))
+    # Every hedged claim, digitals included, is valued with the zero-smoothing DLV in LV mode.
+    initial_prices = [float(claim.price(initial_pricer, first.curve, elapsed_day=0)) for claim in claims]
     input_hashes = {}
     if checkpoint_directory is not None:
         observation_digest = hashlib.sha256()
@@ -527,7 +520,7 @@ def run_episode(*, origin: date, family: str, store: MarketStore, archive: Sourc
             "contractual_terminal_date": sessions[-1].isoformat(), "hedge_end_date": hedge_end_dates[portfolio],
             "termination_reason": termination_reasons[portfolio],
             "claim": claim.label, **asdict(rule), "initial_price": initial_prices[target],
-            "initial_price_source": "SANOS European derivative" if claim.kind == "digital" else "DLV joint model",
+            "initial_price_source": "zero-smoothing DLV (LV mode)",
             "terminal_payoff": payoff, "discount_to_terminal": discount_to_current,
             "hedge_gain": cumulative_gains[portfolio], "entry_cost": cumulative_costs[portfolio],
             "hypothetical_exit_cost_sum": cumulative_exit_metric[portfolio], "cap_days": int(cap_days[portfolio]),

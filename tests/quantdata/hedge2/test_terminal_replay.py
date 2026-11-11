@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quantdata.biz_calendar import get_business_days
+from quantdata.biz_calendar import DAYS_PER_YEAR, get_business_days
 from quantdata.hedge2 import terminal_replay
 from quantdata.hedge2.audit_terminal_replay import audit_terminal_replay
 from quantdata.hedge2.cash import MarketDay, model_europeans, observed_marks
@@ -68,7 +68,6 @@ def replay_inputs(monkeypatch, root: Path, *, kind="digital", horizon=3):
     source = SimpleNamespace(interpolate_atm_vols=lambda values: np.full_like(np.asarray(values, dtype=float), .2))
     archive = SimpleNamespace(load=lambda day: (source, {"source_date": day.isoformat(), "source_smoothness": .1}))
     monkeypatch.setattr(terminal_replay, "make_claims", lambda **kwargs: (claim,))
-    monkeypatch.setattr(terminal_replay, "surface_digitals", lambda *args, **kwargs: np.array([.5]))
     monkeypatch.setattr(terminal_replay, "select_book", lambda *args, **kwargs: book.copy())
     monkeypatch.setattr(terminal_replay.DailyState, "load", lambda directory, day: states[day])
     monkeypatch.setattr(terminal_replay, "load_dynamics", lambda path: models[date.fromisoformat(path.stem)])
@@ -150,7 +149,11 @@ def test_saved_cashflows_replay_independently_without_forecast_demeaning_or_exit
             total_cost += float(discount * np.abs(positions[1:] - previous[1 + active]) @ spreads / 100.)
             previous = saved["holdings_after"]
         discount *= one_day_discount
-    expected_unhedged = .5 * float(markets[sessions[0]].curve.at(3.)[2]) - discount
+    # The short digital's premium is the inception zero-smoothing DLV value (LV mode).
+    forward, _, discount_to_terminal = markets[sessions[0]].curve.at(3.)
+    premium = float(discount_to_terminal * inputs()["state"].decode().pricer.european_at(expiry_y=3. / DAYS_PER_YEAR,
+        strikes=np.array([100. / forward]), is_call=True, digital=True)[0])
+    expected_unhedged = premium - discount
     assert result.summary["hedge_gain"] == pytest.approx(total_gain, abs=1e-13)
     assert result.summary["entry_cost"] == pytest.approx(total_cost, abs=1e-13)
     assert result.summary["unhedged_pnl"] == pytest.approx(expected_unhedged, abs=1e-13)

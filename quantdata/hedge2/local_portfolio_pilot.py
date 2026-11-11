@@ -35,7 +35,7 @@ from quantdata.hedge2.local_portfolios import (
     minimize_basis_costs,
 )
 from quantdata.hedge2.rolling import load_dynamics
-from quantdata.hedge2.source import SourceArchive, surface_digitals, surface_implied_vols
+from quantdata.hedge2.source import SourceArchive, surface_implied_vols
 from quantdata.hedge2.state import DailyState
 
 
@@ -149,8 +149,7 @@ def run_local_pilot(*, source_configuration: Path, output_directory: Path, dates
             forward = market.curve.at(1.)[0]
             dated_rows, portfolio_positions, replay_errors = [], [], []
             for claim_index, claim in enumerate(claims):
-                mark = float(discount * surface_digitals(source, expiry_y=1. / DAYS_PER_YEAR,
-                    strikes=np.array([claim.strike / forward]), is_call=claim.is_call)[0])
+                mark = float(claim.price(state.decode().pricer, market.curve, elapsed_day=0))
                 target_gain = float(discount * claim.payoff(following.curve.spot) - mark)
                 target_vol = surface_implied_vols(source, expiries_y=np.array([1. / DAYS_PER_YEAR]),
                     strikes=np.array([claim.strike / forward]))
@@ -176,7 +175,7 @@ def run_local_pilot(*, source_configuration: Path, output_directory: Path, dates
                         residual = exposure_map @ positions + side * target_exposures[claim_index]
                         dated_rows.append({"date": day.isoformat(), "next_date": next_day.isoformat(),
                             "claim": claim.label, "side": side, "method": method,
-                            "source_sanos_target_mark": mark, "dlv_target_price": float(greeks.claim_prices[claim_index]),
+                            "target_mark": mark, "dlv_target_price": float(greeks.claim_prices[claim_index]),
                             "target_gain": side * target_gain, "hedge_gain": hedge_gain, "entry_cost": entry_cost,
                             "costed_pnl": side * target_gain + hedge_gain - entry_cost,
                             "hypothetical_exit_cost": float(discount * np.abs(cash_holdings[1:]) @ next_spreads),

@@ -23,7 +23,7 @@ from quantdata.hedge2.cash import (
 )
 from quantdata.hedge2.claims import Claim, make_claims
 from quantdata.hedge2.rolling import load_dynamics
-from quantdata.hedge2.source import SourceArchive, surface_digitals
+from quantdata.hedge2.source import SourceArchive
 from quantdata.hedge2.state import DailyState
 from quantdata.hedge2.terminal_cache import ForecastCheckpointStop, saved_terminal_forecast
 from quantdata.hedge2.terminal_decision import TerminalDecision, fit_terminal_decision
@@ -190,12 +190,8 @@ def replay_terminal_episode(*, origin: date, claim_label: str, store: MarketStor
         initial_state = DailyState.load(daily_directory, origin)
         initial_model = load_dynamics(dynamics_directory / "days" / f"{origin}.npz")
         configuration = model_config or TerminalPolicyConfig(label="terminal-policy", feature_count=initial_model.directions.shape[1] + 4)
-        if original.kind == "digital":
-            forward, _, discount = first.curve.at(float(horizon))
-            initial_price = float(discount * surface_digitals(source, expiry_y=horizon / DAYS_PER_YEAR,
-                strikes=np.array([original.strike / forward]), is_call=original.is_call)[0])
-        else:
-            initial_price = original.price(initial_state.decode().pricer, first.curve, elapsed_day=0)
+        # Every hedged claim, digitals included, is valued with the zero-smoothing DLV in LV mode.
+        initial_price = float(original.price(initial_state.decode().pricer, first.curve, elapsed_day=0))
         modules = ("terminal_replay.py", "terminal_decision.py", "terminal_train.py", "terminal_policy.py",
             "terminal_features.py", "terminal_torch.py", "terminal_market.py", "terminal.py", "cash.py",
             "claims.py", "pricing.py", "batch_pricing.py", "source.py", "state.py", "rolling.py", "dynamics.py",
@@ -256,7 +252,6 @@ def replay_terminal_episode(*, origin: date, claim_label: str, store: MarketStor
             daily = DailyState.load(daily_directory, current.day)
             dynamics_path = dynamics_directory / "days" / f"{current.day}.npz"
             model = load_dynamics(dynamics_path)
-            surface, _ = archive.load(current.day)
             active = np.flatnonzero(initial_book["bdte"].to_numpy(dtype=float) > elapsed + 1e-6)
             columns = np.r_[0, 1 + active]
             book = initial_book.iloc[active].copy().reset_index(drop=True)
@@ -266,12 +261,7 @@ def replay_terminal_episode(*, origin: date, claim_label: str, store: MarketStor
             directory = output_directory / f"step-{elapsed:02d}"
             directory.mkdir(parents=True, exist_ok=True)
             _save_book(directory / "book.parquet", book)
-            if claim.kind == "digital":
-                forward, _, discount = current.curve.at(float(horizon - elapsed))
-                mark = float(discount * surface_digitals(surface, expiry_y=(horizon - elapsed) / DAYS_PER_YEAR,
-                    strikes=np.array([claim.strike / forward]), is_call=claim.is_call)[0])
-            else:
-                mark = claim.price(daily.decode().pricer, current.curve, elapsed_day=elapsed)
+            mark = float(claim.price(daily.decode().pricer, current.curve, elapsed_day=elapsed))
             forecast_identity = {"date": current.day.isoformat(), "elapsed_day": elapsed,
                 "state_sha256": hashlib.sha256(
                 (daily_directory / "days" / f"{current.day}.npz").read_bytes()).hexdigest(),

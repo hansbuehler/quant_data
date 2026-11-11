@@ -30,6 +30,8 @@ class DailyState:
     @classmethod
     def load(cls, directory: Path, day: date) -> DailyState:
         configuration = json.loads((directory / "config.json").read_text())
+        if configuration.get("source_smoothness") != 0.:
+            raise ValueError(f"Daily DLV states in {directory} were not built from the 0-SANOS fit; rebuild them")
         names = {field.name for field in fields(DlvConfig)}
         config = DlvConfig(**{name: value for name, value in configuration.items() if name in names})
         with np.load(directory / "days" / f"{day.isoformat()}.npz", allow_pickle=False) as saved:

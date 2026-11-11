@@ -90,6 +90,7 @@ def run_factor_pilot(*, source_root: Path, licensed_fit_directory: Path, raw_quo
                 atm_vols_by_day={tenor: float(source.interpolate_atm_vols(tenor / DAYS_PER_YEAR)) for tenor in (1, 2, 3, 5)})
                 if claim.kind == "digital" and claim.terminal_day == 1)
             returns = build_historical_returns(archive=archive, licensed_fit_directory=licensed_fit_directory,
+                daily_directory=daily_directory,
                 as_of_date=day, current_spot=market.curve.spot, book=book, claims=claims,
                 window_transitions=len(pairs), training_pairs=pairs, return_basis="premium",
                 progress=lambda message: print(message, flush=True))

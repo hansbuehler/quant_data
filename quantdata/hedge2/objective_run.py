@@ -30,7 +30,7 @@ from quantdata.hedge2.optimization import ScenarioOptimizer
 from quantdata.hedge2.parametric import ParametricOptimizer
 from quantdata.hedge2.rolling import load_dynamics
 from quantdata.hedge2.scenarios import generate_scenarios
-from quantdata.hedge2.source import SourceArchive, surface_digitals
+from quantdata.hedge2.source import SourceArchive
 from quantdata.hedge2.state import DailyState
 
 
@@ -131,8 +131,10 @@ def _run_objectives_locked(*, method: str, source_root: Path, licensed_fit_direc
                            front_surface_law: str | None, run_lock: FileLock) -> dict[str, object]:
     if method not in ("parametric", "statistical", "historical") or not dates or tuple(sorted(set(dates))) != dates:
         raise ValueError("Choose a hedge method and nonempty, strictly increasing origin dates")
-    if method != "historical" and (daily_directory is None or dynamics_directory is None):
-        raise ValueError("DLV methods require daily states and rolling dynamics")
+    if daily_directory is None:
+        raise ValueError("Every method requires daily DLV states to value the hedged claims")
+    if method != "historical" and dynamics_directory is None:
+        raise ValueError("DLV methods require rolling dynamics")
     if (front_scores_path is None) != (front_surface_law is None):
         raise ValueError("Choose both a front-score panel and an explicit surface-shock law, or neither")
     if front_surface_law not in (None, "empirical_rank", "joint_gaussian") or method == "historical" and front_surface_law is not None:
@@ -160,9 +162,9 @@ def _run_objectives_locked(*, method: str, source_root: Path, licensed_fit_direc
         "front_scores_sha256": front_scores_sha256,
         "position_basis": "current_cash_premium_dollars" if itm_premium_book else "episode_spot_normalized_contracts",
         "include_co_terminal_forwards": itm_premium_book, "same_close_execution_idealization": True}
-    configuration["model_configuration_sha256"] = ({name: hashlib.sha256((directory / "config.json").read_bytes()).hexdigest()
-        for name, directory in (("daily_decoder", daily_directory), ("dynamics", dynamics_directory))}
-        if method != "historical" else {})
+    configuration["model_configuration_sha256"] = {name: hashlib.sha256((directory / "config.json").read_bytes()).hexdigest()
+        for name, directory in (("daily_decoder", daily_directory), ("dynamics", dynamics_directory)) if directory is not None}
+    configuration["claim_valuation"] = "zero-smoothing DLV (LV mode)"
     _identity(output_directory=output_directory, configuration=configuration)
     store = MarketStore(market_directory=market_directory, licensed_fit_directory=licensed_fit_directory,
                          raw_quote_directory=raw_quote_directory)
@@ -203,8 +205,8 @@ def _run_objectives_locked(*, method: str, source_root: Path, licensed_fit_direc
                 following_day = get_business_days(day, day + timedelta(days=10))[1]
                 following = store.load(following_day)
                 source, source_provenance = archive.load(day)
+                state = DailyState.load(daily_directory, day)
                 if method != "historical":
-                    state = DailyState.load(daily_directory, day)
                     model_path = dynamics_directory / "days" / f"{day.isoformat()}.npz"
                     model = load_dynamics(model_path)
                     if (model.training_start < date(2022, 1, 1) or model.training_end > day
@@ -220,10 +222,10 @@ def _run_objectives_locked(*, method: str, source_root: Path, licensed_fit_direc
                     atm_vols_by_day={tenor: float(source.interpolate_atm_vols(tenor / DAYS_PER_YEAR))
                                     for tenor in (1, 2, 3, 5)})
                     if claim.kind == "digital" and claim.terminal_day == 1)
-                parity, _, one_day_discount = market.curve.at(1.)
-                common_target_marks = np.array([one_day_discount * surface_digitals(source,
-                    expiry_y=1. / DAYS_PER_YEAR, strikes=np.array([claim.strike / parity]),
-                    is_call=claim.is_call)[0] for claim in claims])
+                parity = market.curve.at(1.)[0]
+                # Hedged claims are valued with the zero-smoothing DLV in LV mode, like every claim type.
+                state_pricer = state.decode().pricer
+                common_target_marks = np.array([claim.price(state_pricer, market.curve, elapsed_day=0) for claim in claims])
                 save_verified_book(directory / "book.parquet", book)
                 costs = np.r_[0., book["observed_half_spread"].to_numpy(dtype=float) / market.curve.spot]
                 cash_prices = np.r_[market.curve.spot, book["observed_mid"].to_numpy(dtype=float)]
@@ -241,16 +243,17 @@ def _run_objectives_locked(*, method: str, source_root: Path, licensed_fit_direc
                     "scenario_seed": day.toordinal(), "realized_coverage": "explicit supplied complete-book date cohort",
                     "position_basis": configuration["position_basis"],
                     "option_side": "itm" if itm_premium_book else "otm",
-                    "target_mark": "source SANOS interpolation, not an observed digital quote"}
+                    "target_mark": "zero-smoothing DLV (LV mode), not an observed digital quote"}
                 dated_files = {f"{kind}_{when}": root / suffix / f"{selected.isoformat()}.{extension}"
                     for kind, root, suffix, extension in (
                         ("observed_quotes", market_directory, "days", "parquet"),
                         ("licensed_carry", licensed_fit_directory, "SPX", "pdq"),
                         ("licensed_raw_quotes", raw_quote_directory, "SPX", "pdq"))
                     for when, selected in (("current", day), ("following", following_day))}
+                dated_files.update(daily_state=daily_directory / "days" / f"{day.isoformat()}.npz",
+                    daily_decoder_configuration=daily_directory / "config.json")
                 if method != "historical":
-                    dated_files.update(daily_state=daily_directory / "days" / f"{day.isoformat()}.npz",
-                        daily_decoder_configuration=daily_directory / "config.json", dynamics=model_path)
+                    dated_files["dynamics"] = model_path
                     if front_scores_path is not None:
                         dated_files["front_score_panel"] = front_scores_path
                 metadata["input_sha256"] = {name: {"path": str(path.resolve()),
@@ -269,10 +272,11 @@ def _run_objectives_locked(*, method: str, source_root: Path, licensed_fit_direc
                             front_short_expiry_extrapolations=int(training_scores["source_short_expiry_extrapolation"].sum()),
                             historical_score_mean=float(coupling.historical_scores.mean()),
                             historical_score_std_population=float(coupling.historical_scores.std()),
-                            target_mark_convention="common source SANOS marks; not replaced by recovered DLV prices")
+                            target_mark_convention="common zero-smoothing DLV marks, as in the scenario repricing")
                 if method in ("statistical", "historical"):
                     if method == "historical":
                         scenarios = build_historical_returns(archive=archive, licensed_fit_directory=licensed_fit_directory,
+                            daily_directory=daily_directory,
                             as_of_date=day, current_spot=market.curve.spot, book=book, claims=claims,
                             return_basis="premium" if itm_premium_book else "spot_notional",
                             progress=lambda message: print(message, flush=True))
@@ -286,8 +290,7 @@ def _run_objectives_locked(*, method: str, source_root: Path, licensed_fit_direc
                         arguments = dict(state=state, dynamics=model, curve=market.curve,
                             book=book, claims=claims, initial_spot=market.curve.spot, seed=day.toordinal())
                         scenarios = (generate_scenarios(**arguments) if coupling is None else
-                            generate_front_scenarios(**arguments, coupling=coupling,
-                                current_claim_marks=common_target_marks, diagnostic_only=diagnostic_only))
+                            generate_front_scenarios(**arguments, coupling=coupling, diagnostic_only=diagnostic_only))
                         if itm_premium_book:
                             scenarios = replace(scenarios,
                                 instrument_gains=scenarios.instrument_gains * unit_conversion[None, :],
@@ -308,7 +311,7 @@ def _run_objectives_locked(*, method: str, source_root: Path, licensed_fit_direc
                         book=book, claims=claims, initial_spot=market.curve.spot)
                     covariance = (parametric_factor_covariance(model) if coupling is None else
                         parametric_factor_covariance(model, front_coupling=coupling,
-                            front=DiscreteFrontLaw.from_pricer(pricer=state.decode().pricer, parity_forward=float(parity)),
+                            front=DiscreteFrontLaw.from_pricer(pricer=state_pricer, parity_forward=float(parity)),
                             reference_forward=float(market.curve.at(1.)[1])))
                     greeks = replace(greeks, instrument_exposures=greeks.instrument_exposures * unit_conversion[:, None],
                         combined_spot_instrument_exposures=(None if greeks.combined_spot_instrument_exposures is None

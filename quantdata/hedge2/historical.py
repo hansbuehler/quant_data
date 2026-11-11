@@ -16,7 +16,9 @@ import pandas as pd
 from quantdata.biz_calendar import DAYS_PER_YEAR, count_business_days_between, get_business_days
 from quantdata.hedge2.cash import CashCurve
 from quantdata.hedge2.claims import Claim
-from quantdata.hedge2.source import SourceArchive, surface_digitals
+from quantdata.hedge2.pricing import DlvPricer
+from quantdata.hedge2.source import SourceArchive
+from quantdata.hedge2.state import DailyState
 from quantdata.sanos.arbfree import ArbFreePricer
 
 
@@ -42,7 +44,7 @@ class HistoricalReturns:
     return_basis: str
     return_convention: str = "one-day fixed-instrument P&L, not premium returns"
     contract_mapping: str = "K_history=K_today*S_history_start/S_today; fixed through each pair"
-    target_convention: str = "historical P&L with historical initial marks, not today's conditional payoff law"
+    target_convention: str = "historical zero-smoothing DLV digital P&L with historical initial marks, not today's conditional payoff law"
     strike_coverage_convention: str = "global latent-density support envelope, not observed-quote or maturity-specific coverage"
 
 
@@ -103,6 +105,7 @@ def sanos_europeans(*, source: ArbFreePricer, curve: CashCurve, business_dtes: n
 
 
 def historical_pair_returns(*, before_source: ArbFreePricer, after_source: ArbFreePricer,
+                            before_pricer: DlvPricer, after_pricer: DlvPricer,
                             before_curve: CashCurve, after_curve: CashCurve,
                             current_spot: float, episode_initial_spot: float,
                             book: pd.DataFrame, claims: tuple[Claim, ...],
@@ -112,6 +115,8 @@ def historical_pair_returns(*, before_source: ArbFreePricer, after_source: ArbFr
     Each pair starts at today's spot-relative strike and remaining expiry.
     Unit-cash digital returns are not multiplied by the spot notional scale.
     These are historical mark changes, not today's fixed-premium payoff law.
+    Hedge instruments use the saved SANOS surfaces; the hedged digitals are
+    valued with each day's zero-smoothing DLV (LV mode).
     """
     if (current_spot <= 0 or episode_initial_spot <= 0 or discount_to_current <= 0
             or not np.isfinite([current_spot, episode_initial_spot, discount_to_current]).all()
@@ -134,21 +139,21 @@ def historical_pair_returns(*, before_source: ArbFreePricer, after_source: ArbFr
         remaining = claim.terminal_day - elapsed_day
         strike = claim.strike * before_curve.spot / current_spot
         forward, _, discount = before_curve.at(float(remaining))
-        old_price = float(discount * surface_digitals(before_source, expiry_y=remaining / DAYS_PER_YEAR,
-            strikes=np.array([strike / forward]), is_call=claim.is_call)[0])
+        old_price = float(discount * before_pricer.european_at(expiry_y=remaining / DAYS_PER_YEAR,
+            strikes=np.array([strike / forward]), is_call=claim.is_call, digital=True)[0])
         if remaining == 1:
             new_price = float(after_curve.spot > strike if claim.is_call else after_curve.spot <= strike)
         else:
             forward, _, discount = after_curve.at(float(remaining - 1))
-            new_price = float(discount * surface_digitals(after_source, expiry_y=(remaining - 1) / DAYS_PER_YEAR,
-                strikes=np.array([strike / forward]), is_call=claim.is_call)[0])
+            new_price = float(discount * after_pricer.european_at(expiry_y=(remaining - 1) / DAYS_PER_YEAR,
+                strikes=np.array([strike / forward]), is_call=claim.is_call, digital=True)[0])
         target_gains[index] = discount_to_current * (one_day_discount * new_price - old_price)
     if not np.isfinite(gains).all() or not np.isfinite(target_gains).all():
         raise ValueError("Historical joint instrument/target returns are non-finite")
     return gains, target_gains
 
 
-def build_historical_returns(*, archive: SourceArchive, licensed_fit_directory: Path,
+def build_historical_returns(*, archive: SourceArchive, licensed_fit_directory: Path, daily_directory: Path,
                              as_of_date: date, current_spot: float,
                              book: pd.DataFrame, claims: tuple[Claim, ...],
                              episode_initial_spot: float | None = None,
@@ -177,7 +182,9 @@ def build_historical_returns(*, archive: SourceArchive, licensed_fit_directory: 
     def load(day: date):
         source, metadata = archive.load(day)
         curve_path = licensed_fit_directory / "SPX" / f"{day.isoformat()}.pdq"
-        return source, metadata, licensed_curve(licensed_fit_directory, day), hashlib.sha256(curve_path.read_bytes()).hexdigest()
+        pricer = DailyState.load(daily_directory, day).decode().pricer
+        return (source, metadata, licensed_curve(licensed_fit_directory, day),
+                hashlib.sha256(curve_path.read_bytes()).hexdigest(), pricer)
 
     instruments, targets, hashes, curve_hashes, carry, old_spots, starting_prices = [], [], [], [], [], [], []
     first_tenors, extrapolated, outside = [], [], []
@@ -185,10 +192,11 @@ def build_historical_returns(*, archive: SourceArchive, licensed_fit_directory: 
     remaining_days = np.r_[book["bdte"].to_numpy(dtype=float), [claim.terminal_day - elapsed_day for claim in claims]]
     cash_strikes = np.r_[book["strike"].to_numpy(dtype=float), [claim.strike for claim in claims]]
     for index, (before, after) in enumerate(pairs):
-        old_source, old_meta, old_curve, old_curve_hash = load(before)
-        new_source, new_meta, new_curve, new_curve_hash = load(after)
+        old_source, old_meta, old_curve, old_curve_hash, old_pricer = load(before)
+        new_source, new_meta, new_curve, new_curve_hash, new_pricer = load(after)
         old_spots.append(old_curve.spot)
         gains, claim_gains = historical_pair_returns(before_source=old_source, after_source=new_source,
+            before_pricer=old_pricer, after_pricer=new_pricer,
             before_curve=old_curve, after_curve=new_curve, current_spot=current_spot,
             episode_initial_spot=initial_spot, book=book, claims=claims, elapsed_day=elapsed_day,
             discount_to_current=discount_to_current)

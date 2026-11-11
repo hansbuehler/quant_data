@@ -15,7 +15,8 @@ import pandas as pd
 from quantdata.biz_calendar import DAYS_PER_YEAR, get_business_days
 from quantdata.hedge2.cash import MarketStore, observed_marks
 from quantdata.hedge2.claims import make_claims
-from quantdata.hedge2.source import SourceArchive, surface_digitals
+from quantdata.hedge2.source import SourceArchive
+from quantdata.hedge2.state import DailyState
 
 
 def completed_audit_dates(*, input_directory: Path, configuration: dict[str, object],
@@ -52,6 +53,9 @@ def audit_daily(*, input_directory: Path, output_directory: Path,
         licensed_fit_directory=Path(configuration["licensed_fit_directory"]),
         raw_quote_directory=Path(configuration["raw_quote_directory"]))
     archive = SourceArchive(root=Path(configuration["source_root"]))
+    if configuration.get("daily_directory") is None:
+        raise ValueError("The audited run does not identify the daily DLV states that value its claims")
+    daily_directory = Path(configuration["daily_directory"])
     output_directory.mkdir(parents=True, exist_ok=True)
     started = time.monotonic()
     rows = []
@@ -76,7 +80,7 @@ def audit_daily(*, input_directory: Path, output_directory: Path,
         denominator = (cash_prices if configuration.get("itm_premium_book", False)
                        else np.full(len(cash_prices), current.curve.spot))
         cash_holdings = positions / denominator[None, :]
-        forward, reference, discount = current.curve.at(1.)
+        _, reference, discount = current.curve.at(1.)
         gains = np.r_[discount * (following.curve.spot - reference), discount * next_marks - marks]
         costs = np.abs(cash_holdings[:, 1:]) @ spreads
         hedge_gains = cash_holdings @ gains
@@ -85,8 +89,9 @@ def audit_daily(*, input_directory: Path, output_directory: Path,
         claims = {claim.label: claim for claim in make_claims(initial_spot=current.curve.spot,
             atm_vols_by_day={tenor: float(source.interpolate_atm_vols(tenor / DAYS_PER_YEAR)) for tenor in (1, 2, 3, 5)})
             if claim.kind == "digital" and claim.terminal_day == 1}
-        initial_prices = {label: float(discount * surface_digitals(source, expiry_y=1. / DAYS_PER_YEAR,
-            strikes=np.array([claim.strike / forward]), is_call=claim.is_call)[0]) for label, claim in claims.items()}
+        # Hedged claims are valued with the zero-smoothing DLV in LV mode.
+        pricer = DailyState.load(daily_directory, day).decode().pricer
+        initial_prices = {label: float(claim.price(pricer, current.curve, elapsed_day=0)) for label, claim in claims.items()}
         target_gains = np.array([row.side * (discount * claims[row.claim].payoff(following.curve.spot)
             - initial_prices[row.claim]) for row in frame.itertuples()])
         differences = {

@@ -18,9 +18,11 @@ from quantdata.hedge2.source import SourceArchive, normalize_surface_moments, su
 from quantdata.sanos.tridiag import solve_sanos_tridiagonal
 
 
-@version("0.4")
+@version("0.5")
 @dataclass(frozen=True, kw_only=True)
 class DlvConfig:
+    # The DLV hedging model and all claim valuation use the 0-SANOS fit.
+    source_smoothness: float = 0.
     business_dtes: tuple[float, ...] = (1., 2., 3., 4., 5., 10., 15., 20., 25.)
     num_inner_strikes: int = 200
     nms_range: tuple[float, float] = (-4., 3.)
@@ -202,6 +204,9 @@ def recover_dlvs(support: np.ndarray, calls: np.ndarray, *, forward_vols: np.nda
 
 def build_day(archive: SourceArchive, day: date, *, config: DlvConfig) -> dict[str, object]:
     started = time.monotonic()
+    if archive.smoothness != config.source_smoothness:
+        raise ValueError(f"DLV states require the smoothness-{config.source_smoothness:g} SANOS fit, "
+                         f"not {archive.model_name}")
     source, provenance = archive.load(day)
     times = config.expiries_y
     variance = np.asarray(source.interpolate_atm_vols(times)) ** 2 * times
@@ -278,8 +283,8 @@ def main() -> None:
     parser.add_argument("--start", type=date.fromisoformat, required=True)
     parser.add_argument("--end", type=date.fromisoformat, required=True)
     args = parser.parse_args()
-    archive = SourceArchive(root=args.source_root)
     config = DlvConfig()
+    archive = SourceArchive(root=args.source_root, smoothness=config.source_smoothness)
     days = [day for day in archive.dates() if args.start <= day <= args.end]
     if not days:
         raise ValueError("No source dates in the requested interval")

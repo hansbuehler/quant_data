@@ -291,7 +291,7 @@ def test_one_day_greek_keeps_the_entire_short_dated_book_and_charges_entry_only(
         return book.copy()
 
     monkeypatch.setattr("quantdata.hedge2.episodes.select_book", select)
-    monkeypatch.setattr("quantdata.hedge2.episodes.surface_digitals", lambda *args, **kwargs: np.array([.4]))
+    monkeypatch.setattr(Claim, "price", lambda self, pricer, curve, *, elapsed_day: .4)
     monkeypatch.setattr("quantdata.hedge2.episodes.DailyState.load", lambda *args:
         SimpleNamespace(decode=lambda: SimpleNamespace(pricer=object())))
     monkeypatch.setattr("quantdata.hedge2.episodes.load_dynamics", lambda path: SimpleNamespace(

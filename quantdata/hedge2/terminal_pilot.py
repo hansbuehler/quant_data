@@ -19,7 +19,7 @@ from quantdata.biz_calendar import DAYS_PER_YEAR
 from quantdata.hedge2.cash import CashCurve, MarketStore, select_book
 from quantdata.hedge2.claims import Claim, make_claims
 from quantdata.hedge2.rolling import load_dynamics
-from quantdata.hedge2.source import SourceArchive, surface_digitals
+from quantdata.hedge2.source import SourceArchive
 from quantdata.hedge2.state import DailyState
 from quantdata.hedge2.terminal_market import (
     TerminalMarketPaths,
@@ -134,16 +134,8 @@ def run_pilot(*, source_configuration: Path, output_directory: Path, day: date,
             coterminal = None if label == "digital-1D" else ((3, 5) if label == "exotic-3D-5D" else (group[0].terminal_day,))
             book = select_book(market, atm_vols=vols, co_terminal_business_dtes=coterminal,
                 option_side="itm", include_co_terminal_forwards=True)
-            marks = []
-            for claim in group:
-                if claim.kind == "digital":
-                    forward, _, discount = market.curve.at(float(claim.terminal_day))
-                    mark = discount * surface_digitals(source, expiry_y=claim.terminal_day / DAYS_PER_YEAR,
-                        strikes=np.array([claim.strike / forward]), is_call=claim.is_call)[0]
-                else:
-                    mark = claim.price(baseline, market.curve, elapsed_day=0)
-                marks.append(mark)
-            marks = np.array(marks)
+            # Every hedged claim is valued with the zero-smoothing DLV in LV mode.
+            marks = np.array([claim.price(baseline, market.curve, elapsed_day=0) for claim in group])
             print(f"terminal pilot group={label} paths={paths} instruments={1+len(book)} claims={len(group)}", flush=True)
             group_started = time.monotonic()
             result = generate_terminal_paths(state=state, dynamics=dynamics, curve=market.curve,
@@ -156,7 +148,7 @@ def run_pilot(*, source_configuration: Path, output_directory: Path, day: date,
             book.to_parquet(directory / "book.parquet", index=False)
             np.savez_compressed(directory / "paths.npz", **asdict(result))
             (directory / "claims.json").write_text(json.dumps({"claims": [asdict(claim) for claim in group],
-                "initial_marks": marks.tolist(), "digital_mark": "saved smoothness-0.1 SANOS derivative",
+                "initial_marks": marks.tolist(), "digital_mark": "zero-smoothing DLV (LV mode)",
                 "exotic_mark": "inception decoded DLV joint-law price; no observed exotic quote"}, indent=2) + "\n")
             diagnostic = {"group": label, "paths": len(result.weights), "instruments": 1 + len(book), "claims": len(group),
                 "horizon": result.instrument_gains.shape[1], "elapsed_seconds": time.monotonic()-group_started,

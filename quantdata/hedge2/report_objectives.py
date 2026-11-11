@@ -105,7 +105,7 @@ def build_objective_report(*, greek_ordinary_directory: Path, greek_orthogonal_d
             "Parametric: same finite-shock exposures, full spot/factor covariance, separately optimized MV and Gaussian power-exponential OCE.",
             "Lambda is 1,10,100,1000 in initial-notional wealth units. Infinite MV is pure variance; costs do not affect its optimizer but are paid in realized P&L.",
             "All parametric objective certificates passed; independent cash replay is reported in separate linked audit artifacts. Exact solver warnings remain saved.",
-            "Major modeling caveat: 66.5% of latent change energy involves guarded tail nodes; atomic DLV digitals differ from smooth SANOS market marks.",
+            "Major modeling caveat: 66.5% of latent change energy involves guarded tail nodes; hedged digitals are valued with the zero-smoothing DLV (LV mode), not smooth SANOS.",
             "Statistics: average of ten product-specific sample statistics across dates, never a pooled portfolio or independent-strike test.",
             "Uncertainty: 2,000 paired circular 20-business-session block draws, sharing date weights across products and models and retaining quote gaps.",
             "Intervals are descriptive 95%, without multiple-comparison adjustment. No configuration is selected using these same out-of-sample outcomes.",

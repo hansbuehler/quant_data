@@ -46,9 +46,8 @@ def inputs(kind):
             observation_day=3))
     coupling = kind(historical_scores=np.linspace(-2., 2., len(dynamics.residuals)),
         factor_residuals=dynamics.residuals[:, 1:], as_of_date=state.day)
-    marks = np.array([claim.price(state.decode().pricer, curve, elapsed_day=0) for claim in claims])
     return dict(state=state, dynamics=dynamics, coupling=coupling, curve=curve, book=book,
-        claims=claims, initial_spot=100., current_claim_marks=marks, draw_count=41, seed=92, diagnostic_only=True)
+        claims=claims, initial_spot=100., draw_count=41, seed=92, diagnostic_only=True)
 
 
 @pytest.mark.parametrize("kind", [EmpiricalFrontCopula, GaussianFrontCopula])
@@ -116,7 +115,6 @@ def test_batch_size_cannot_change_draws_or_weighted_scenario_law(kind, tmp_path)
 def test_historical_raw_spot_volatility_is_not_reused_for_front_sampling(kind) -> None:
     arguments = inputs(kind)
     arguments["claims"] = arguments["claims"][:2]
-    arguments["current_claim_marks"] = arguments["current_claim_marks"][:2]
     first = generate_front_scenarios(**arguments)
     model = arguments["dynamics"]
     arguments["dynamics"] = replace(model, residuals=np.c_[1000. * model.residuals[:, 0], model.residuals[:, 1:]])
@@ -132,8 +130,6 @@ def test_one_day_digital_settlement_is_complementary_and_claim_alpha_is_not_remo
     arguments["curve"] = replace(arguments["curve"], forwards=np.full(4, 100.),
         reference_forwards=np.full(4, 100.), discounts=np.ones(4))
     arguments["draw_count"] = 1
-    arguments["current_claim_marks"] = np.array([claim.price(arguments["state"].decode().pricer,
-        arguments["curve"], elapsed_day=0) for claim in arguments["claims"]])
     result = generate_front_scenarios(**arguments)
     np.testing.assert_allclose(result.claim_gains.sum(axis=1), 0., atol=1e-15)
     assert np.max(np.abs(result.claim_gains)) > .1
@@ -153,17 +149,13 @@ def test_mismatched_coupling_date_and_expired_hedge_book_are_rejected() -> None:
         generate_front_scenarios(**arguments)
 
 
-def test_common_market_target_marks_are_preserved_instead_of_replaced_by_dlv_prices() -> None:
+def test_claim_marks_come_from_the_dlv_state_and_cannot_be_supplied_by_the_caller() -> None:
     arguments = inputs(EmpiricalFrontCopula)
+    with pytest.raises(TypeError):
+        generate_front_scenarios(**arguments, current_claim_marks=np.zeros(len(arguments["claims"])))
     original = generate_front_scenarios(**arguments)
-    adjustment = np.array([.01, .02, .01, .03, .02])
-    arguments["current_claim_marks"] += adjustment
-    changed = generate_front_scenarios(**arguments)
-    np.testing.assert_array_equal(original.instrument_gains, changed.instrument_gains)
-    np.testing.assert_allclose(changed.claim_gains, original.claim_gains - adjustment[None, :], atol=1e-15)
-    assert original.forecast_identity != changed.forecast_identity
     arguments["seed"] += 1
-    assert changed.forecast_identity != generate_front_scenarios(**arguments).forecast_identity
+    assert original.forecast_identity != generate_front_scenarios(**arguments).forecast_identity
 
 
 def test_small_forecasts_cannot_be_mistaken_for_production() -> None:

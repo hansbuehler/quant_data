@@ -19,7 +19,7 @@ from quantdata.hedge2.claims import make_claims
 from quantdata.hedge2.greek_hedge import solve_greek_hedge
 from quantdata.hedge2.greeks import calculate_greeks, factor_risk_covariance
 from quantdata.hedge2.rolling import load_dynamics
-from quantdata.hedge2.source import SourceArchive, surface_digitals, surface_implied_vols
+from quantdata.hedge2.source import SourceArchive, surface_implied_vols
 from quantdata.hedge2.state import DailyState
 
 
@@ -86,8 +86,7 @@ def run_pilot(*, source_root: Path, licensed_fit_directory: Path, market_directo
         rows = []
         portfolios = []
         for index, claim in enumerate(claims):
-            market_price = float(discount * surface_digitals(source, expiry_y=1. / DAYS_PER_YEAR,
-                                 strikes=np.array([claim.strike / forward]), is_call=claim.is_call)[0])
+            market_price = float(claim.price(native.decode().pricer, market.curve, elapsed_day=0))
             target_gain = float(discount * claim.payoff(following.curve.spot) - market_price)
             target_vol = surface_implied_vols(source, expiries_y=np.array([1. / DAYS_PER_YEAR]),
                 strikes=np.array([claim.strike / forward]))

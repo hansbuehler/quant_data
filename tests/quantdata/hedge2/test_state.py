@@ -40,3 +40,24 @@ def test_native_guards_are_reported_and_extreme_geometry_is_rejected() -> None:
     changed.reshape(9, 21)[:, -1] = 100.
     with pytest.raises(ValueError, match="geometry"):
         state.decode(changed)
+
+
+def test_states_not_built_from_zero_sanos_are_refused(tmp_path) -> None:
+    import json
+    from dataclasses import asdict
+
+    configuration = asdict(DlvConfig())
+    assert configuration["source_smoothness"] == 0.
+    for stale in ({k: v for k, v in configuration.items() if k != "source_smoothness"},
+                  {**configuration, "source_smoothness": .1}):
+        (tmp_path / "config.json").write_text(json.dumps(stale))
+        with pytest.raises(ValueError, match="0-SANOS"):
+            DailyState.load(tmp_path, date(2024, 1, 2))
+
+
+def test_dlv_build_refuses_an_archive_of_the_wrong_smoothness(tmp_path) -> None:
+    from quantdata.hedge2.dlv import build_day
+    from quantdata.hedge2.source import SourceArchive
+
+    with pytest.raises(ValueError, match="smoothness-0 SANOS fit"):
+        build_day(SourceArchive(root=tmp_path, smoothness=.1), date(2024, 1, 2), config=DlvConfig())

@@ -18,7 +18,8 @@ from quantdata.biz_calendar import DAYS_PER_YEAR, get_business_days
 from quantdata.hedge2.black_hedge import black_digital_exposures, black_digital_hedge
 from quantdata.hedge2.cash import MarketStore, observed_marks, select_book, zero_strike_mask
 from quantdata.hedge2.claims import make_claims
-from quantdata.hedge2.source import SourceArchive, surface_digitals, surface_implied_vols
+from quantdata.hedge2.source import SourceArchive, surface_implied_vols
+from quantdata.hedge2.state import DailyState
 
 
 def score_reference_positions(*, positions: np.ndarray, initial_spot: float,
@@ -75,7 +76,8 @@ def run_references(*, source_configuration: Path, coverage_path: Path,
     with FileLock(str(output_directory / "run.lock"), timeout=0):
         implementation = sorted(Path(__file__).parent.glob("*.py"))
         identity = {"method": "references", "dates": dates, "itm_premium_book": True,
-            **{name: sources[name] for name in ("source_root", "market_directory", "licensed_fit_directory", "raw_quote_directory")},
+            **{name: sources[name] for name in ("source_root", "market_directory", "licensed_fit_directory", "raw_quote_directory", "daily_directory")},
+            "claim_valuation": "zero-smoothing DLV (LV mode)",
             "source_configuration": str(source_configuration.resolve()),
             "source_configuration_sha256": hashlib.sha256(source_configuration.read_bytes()).hexdigest(),
             "coverage_path": str(coverage_path.resolve()), "coverage_sha256": hashlib.sha256(coverage_path.read_bytes()).hexdigest(),
@@ -110,6 +112,7 @@ def run_references(*, source_configuration: Path, coverage_path: Path,
             following_day = get_business_days(day, day + timedelta(days=10))[1]
             current, following = store.load(day), store.load(following_day)
             source, source_metadata = archive.load(day)
+            pricer = DailyState.load(Path(sources["daily_directory"]), day).decode().pricer
             atm_vols = np.asarray(source.interpolate_atm_vols(current.quotes["bdte"].to_numpy(dtype=float) / DAYS_PER_YEAR))
             book = select_book(current, atm_vols=atm_vols, option_side="itm", include_co_terminal_forwards=True)
             vols = np.asarray(source.interpolate_atm_vols(book["bdte"].to_numpy(dtype=float) / DAYS_PER_YEAR)).copy()
@@ -129,8 +132,8 @@ def run_references(*, source_configuration: Path, coverage_path: Path,
             gains = np.r_[discount * (following.curve.spot - reference), discount * following_marks - prices[1:]]
             dated_rows, portfolios, dated_exclusions = [], [], []
             for claim in claims:
-                mark = float(discount * surface_digitals(source, expiry_y=1. / DAYS_PER_YEAR,
-                    strikes=np.array([claim.strike / forward]), is_call=claim.is_call)[0])
+                # The premium is the zero-smoothing DLV value (LV mode); the Black inputs stay on SANOS.
+                mark = float(claim.price(pricer, current.curve, elapsed_day=0))
                 target_vols = surface_implied_vols(source, expiries_y=np.array([1. / DAYS_PER_YEAR]),
                     strikes=np.array([claim.strike / forward]))
                 target_vol = float(target_vols[0])
@@ -159,7 +162,7 @@ def run_references(*, source_configuration: Path, coverage_path: Path,
                             "target_gain": target_gain, "target_vol": target_vol, **accounting})
                         portfolios.append(allocations)
             inputs = {"source_model": source_metadata, "reference_exclusions": dated_exclusions,
-                "target_mark": "common source-SANOS digital; not an observed digital quote",
+                "target_mark": "zero-smoothing DLV (LV mode) digital; not an observed digital quote",
                 "synthetic_option_vols": "unused ATM placeholders; zero-strike calls never form Black brackets",
                 "input_sha256": {f"{kind}_{selected}": hashlib.sha256((Path(sources[kind]) / suffix /
                     f"{selected}.{extension}").read_bytes()).hexdigest()

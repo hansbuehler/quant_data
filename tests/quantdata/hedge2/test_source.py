@@ -113,3 +113,21 @@ def test_source_moment_roundoff_does_not_create_tail_put_value() -> None:
     np.testing.assert_allclose(digital, derivative, atol=1e-7)
     np.testing.assert_allclose(digital + surface_digitals(pricer, expiry_y=1. / 252., strikes=strikes,
                                                         is_call=False), 1.)
+
+
+def test_source_archive_reads_only_the_requested_sanos_smoothness(tmp_path) -> None:
+    from datetime import date
+
+    from quantdata.hedge2.source import SourceArchive
+
+    for name in ("all-0", "all-0.1", "all-0.25"):
+        path = tmp_path / "days" / "2024-01-02" / "models" / name / "model.h5"
+        path.parent.mkdir(parents=True)
+        path.touch()
+    for smoothness, name in ((0., "all-0"), (.1, "all-0.1"), (.25, "all-0.25")):
+        archive = SourceArchive(root=tmp_path, smoothness=smoothness)
+        assert archive.model_path(date(2024, 1, 2)).parent.name == name
+        assert archive.dates() == (date(2024, 1, 2),)
+    assert SourceArchive(root=tmp_path).smoothness == .1
+    with pytest.raises(ValueError, match="smoothness 0, 0.1 and 0.25"):
+        SourceArchive(root=tmp_path, smoothness=.2)
