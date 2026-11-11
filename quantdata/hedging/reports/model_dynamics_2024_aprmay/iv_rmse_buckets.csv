@@ -1,0 +1,491 @@
+model,business_dte,nms,rmse_log_iv,iv_rmse_geometric_point,point_forecast,origins
+DYSANOS ordinary (16 factors),1,-1.5,0.26174793607534586,0.03776063866289968,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),1,-1.0,0.28051349916412954,0.03883651543852207,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),1,-0.5,0.3058724127898266,0.04142051656580748,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),1,0.0,0.3256270581818682,0.04295858677859192,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),1,0.5,0.3307759394980949,0.04201680399335243,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),1,1.0,0.32545277219415275,0.03946324757185808,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),1,1.5,0.321082502653367,0.03736077395550054,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),2,-1.5,0.17217709439652912,0.024185551949222655,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),2,-1.0,0.1857065930511515,0.02463601857494329,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),2,-0.5,0.20316134495346563,0.025815733977456852,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),2,0.0,0.21596226630685264,0.02637862478370391,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),2,0.5,0.22178084859933525,0.025798335844608476,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),2,1.0,0.2181437952691485,0.02416172628004969,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),2,1.5,0.20822300166333343,0.022370606993576382,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),3,-1.5,0.14583023855523186,0.01966880935981935,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),3,-1.0,0.15156059588224646,0.01938729419097784,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),3,-0.5,0.16060309938805087,0.01975255086668818,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),3,0.0,0.1673806557478748,0.019773825291150748,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),3,0.5,0.17050686076468446,0.019169252913658022,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),3,1.0,0.16867710950497866,0.017987153734405136,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),3,1.5,0.166160188707119,0.017388993530886118,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),4,-1.5,0.126468146569477,0.01823909835644098,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),4,-1.0,0.1314111259151574,0.017779206171930764,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),4,-0.5,0.1386535310605113,0.017800863711585825,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),4,0.0,0.1430069491138163,0.017502666891114873,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),4,0.5,0.14430593779889714,0.016752792738785955,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),4,1.0,0.14095495087823878,0.01553558600505,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),4,1.5,0.13872929981150078,0.014765829274577036,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),5,-1.5,0.10784771122451153,0.015400027331621656,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),5,-1.0,0.11156381652647465,0.014892420768290894,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),5,-0.5,0.1157805453841404,0.014644104518488157,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),5,0.0,0.11791166506842685,0.01417998374226245,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),5,0.5,0.11841962081563612,0.0134746792383593,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),5,1.0,0.11663383676575091,0.01255373128787129,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),5,1.5,0.11417644772640387,0.011674046566046103,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),7,-1.5,0.09965771125992032,0.014755479086499435,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),7,-1.0,0.1008062790573462,0.013842731310277634,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),7,-0.5,0.10267775419799373,0.013219477236049023,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),7,0.0,0.1027308179023153,0.012436683963507614,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),7,0.5,0.10173837964948199,0.011508236200604685,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),7,1.0,0.09991053009516805,0.010580009538376884,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),7,1.5,0.09760445130066242,0.009907977564412262,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),10,-1.5,0.08851457420250551,0.013821665791332325,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),10,-1.0,0.08932809639315407,0.012808785649732535,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),10,-0.5,0.08938899799512688,0.011864904422842578,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),10,0.0,0.08709127803355735,0.010769326904275017,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),10,0.5,0.08335798225342927,0.009618658813955442,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),10,1.0,0.08011202044248113,0.008651794833752955,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors),10,1.5,0.07702042898397514,0.007959955940266892,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),1,-1.5,0.26215746197061107,0.03784779919589876,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),1,-1.0,0.2810603828094941,0.03889446702945795,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),1,-0.5,0.3067219385970663,0.04148742733816687,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),1,0.0,0.32687894994666983,0.04304813215148367,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),1,0.5,0.33210286502361364,0.04209617609566403,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),1,1.0,0.3268089354513975,0.03955354049907025,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),1,1.5,0.3226892628229975,0.03749954364580238,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),2,-1.5,0.17509804832633122,0.024553325377016058,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),2,-1.0,0.18895645197891314,0.025002601452309658,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),2,-0.5,0.20677421732925716,0.02618936468478391,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),2,0.0,0.21976392579678505,0.026740247803139633,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),2,0.5,0.22551270852659755,0.02612608884856966,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),2,1.0,0.22173888461537214,0.024472154431156082,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),2,1.5,0.21197667525711075,0.022733709788723012,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),3,-1.5,0.14758686731099188,0.019808941719714937,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),3,-1.0,0.15351949554619634,0.019525115859951925,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),3,-0.5,0.16281748750942732,0.01990326830685765,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),3,0.0,0.16972003009055953,0.019921487078428796,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),3,0.5,0.17277307732614555,0.01930039585718663,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),3,1.0,0.17085963086898381,0.018116909334572242,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),3,1.5,0.16864643283231293,0.01757480763043482,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),4,-1.5,0.127483117867389,0.01836440309410108,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),4,-1.0,0.13259988984056112,0.017900106043202513,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),4,-0.5,0.1401171078547281,0.0179371756643515,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),4,0.0,0.14460925917177908,0.01764090632442013,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),4,0.5,0.14590839196328334,0.016885363354817783,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),4,1.0,0.14248429245650227,0.015665753822699607,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),4,1.5,0.14037628446167125,0.014917114071340443,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),5,-1.5,0.10820531284876342,0.015412706634234965,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),5,-1.0,0.11212903631910966,0.014912002726046517,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),5,-0.5,0.11662103186970893,0.014683956235558342,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),5,0.0,0.1189393861293923,0.01423414646358937,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),5,0.5,0.1194998130027804,0.013533372421353346,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),5,1.0,0.11786930647949123,0.012633877579647573,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),5,1.5,0.11556189275915967,0.011778632979436288,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),7,-1.5,0.09990808224144823,0.014733422062152855,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),7,-1.0,0.1011466664349546,0.013822860955375032,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),7,-0.5,0.10315097873751924,0.013205915999225394,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),7,0.0,0.10335634715639712,0.012436260947205902,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),7,0.5,0.10239126046916135,0.011512742711303217,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),7,1.0,0.10087372514263115,0.01062300144531956,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),7,1.5,0.09896302563249126,0.00999968260830802,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),10,-1.5,0.08843294174214765,0.013748793289106779,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),10,-1.0,0.08932018865268826,0.012736632821935392,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),10,-0.5,0.08948991394806928,0.0118003527597948,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),10,0.0,0.08730150487995812,0.010717502235489356,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),10,0.5,0.08350986169745728,0.009566773949977223,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),10,1.0,0.08047500540168724,0.00863351104019467,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors),10,1.5,0.07763158717957987,0.007971053124083416,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,1,-1.5,0.30286466338393464,0.046042531585559474,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,1,-1.0,0.30844871152384506,0.0441464400867675,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,1,-0.5,0.3208459419874898,0.04395016972695611,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,1,0.0,0.3318156284115661,0.04381550926467765,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,1,0.5,0.33402337864346415,0.04239681835352835,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,1,1.0,0.3281882148177136,0.040008486732184934,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,1,1.5,0.3214797047142674,0.03794556737987286,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,2,-1.5,0.18008757355325894,0.026053366993792328,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,2,-1.0,0.18934296450866905,0.025793970730855157,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,2,-0.5,0.20296794128390164,0.02642573623564531,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,2,0.0,0.2124975815156204,0.026543734510176324,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,2,0.5,0.21513137246211445,0.025584330894636177,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,2,1.0,0.21107299052498898,0.02389704160188943,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,2,1.5,0.20482083289258665,0.0226061862556913,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,3,-1.5,0.148570755170966,0.02051379061442838,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,3,-1.0,0.15391464194252738,0.020055351092159456,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,3,-0.5,0.16237783133715722,0.020273105819866584,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,3,0.0,0.16849334942366043,0.02011145988991101,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,3,0.5,0.16946335059296702,0.01916763395477606,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,3,1.0,0.1661640307232913,0.01781881945488101,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,3,1.5,0.16388561832863552,0.017087318271768345,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,4,-1.5,0.13560254912678074,0.019404740821802494,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,4,-1.0,0.1361412106876549,0.01819423076303494,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,4,-0.5,0.1412049121698897,0.017831649566884964,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,4,0.0,0.14602545070935957,0.017470135648376437,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,4,0.5,0.1474222286710007,0.016643211299786263,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,4,1.0,0.14524554326516292,0.015559069390578622,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,4,1.5,0.14394927702018065,0.01499170087401909,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,5,-1.5,0.12876205820064518,0.018674418887289438,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,5,-1.0,0.12351882419377916,0.01666630733874756,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,5,-0.5,0.12221379936564568,0.015477119687955966,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,5,0.0,0.12300985990099743,0.01466814243098969,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,5,0.5,0.123789465443591,0.013908161558181238,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,5,1.0,0.1237824114858402,0.01323480531957591,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,5,1.5,0.12415060196020182,0.012859376330531988,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,7,-1.5,0.1347633181711862,0.02049292304853931,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,7,-1.0,0.12308033557700133,0.017286027152384427,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,7,-0.5,0.11308537550782762,0.014746163581841491,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,7,0.0,0.10654343993671396,0.012978659094355405,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,7,0.5,0.10456713831926225,0.011930603702970987,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,7,1.0,0.10487861652509678,0.011358828926058438,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,7,1.5,0.10595612576284338,0.011025559335187814,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,10,-1.5,0.16481890338938485,0.02625626527004629,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,10,-1.0,0.14944742555633084,0.021813326053469494,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,10,-0.5,0.13297808868788202,0.017903010760524637,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,10,0.0,0.11911472850809086,0.015005025693605699,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,10,0.5,0.11115575709931072,0.013264976703248393,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,10,1.0,0.107631265712172,0.012326062485095775,exp(observed log-IV at origin + model mean log-IV change),44
+FuNVol,10,1.5,0.10296106825404931,0.011347104297497905,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,1,-1.5,0.22642494062540902,0.03618477127030883,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,1,-1.0,0.23136308527888128,0.03591633567910051,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,1,-0.5,0.2522338858811542,0.03866927410428438,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,1,0.0,0.2724392276820689,0.04124951088572351,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,1,0.5,0.2824194530234262,0.041616687433093796,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,1,1.0,0.29930688032910674,0.04339155058668413,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,1,1.5,0.34811178205866894,0.05383891959185008,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,2,-1.5,0.23485403016082507,0.04082882510452825,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,2,-1.0,0.22186837763520925,0.037661189945025875,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,2,-0.5,0.22860998974094407,0.03785375689708873,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,2,0.0,0.2396274426060972,0.038381787385095144,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,2,0.5,0.24669125317096544,0.03775960925937268,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,2,1.0,0.2557941268636573,0.037408182652331506,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,2,1.5,0.27790755888082164,0.04058959471191584,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,3,-1.5,0.21515476502399788,0.03488746433920711,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,3,-1.0,0.21058217840040833,0.03279676824845631,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,3,-0.5,0.21676604026006663,0.03268209677197485,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,3,0.0,0.22445411689694214,0.03258488303080939,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,3,0.5,0.22850667111236603,0.031567456708007785,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,3,1.0,0.23422217609981583,0.030869794063507518,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,3,1.5,0.24301373674448268,0.03149674378317642,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,4,-1.5,0.2177018460661335,0.038375315049080636,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,4,-1.0,0.20790446754766104,0.034731233319435256,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,4,-0.5,0.20826499045635674,0.03334312027676617,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,4,0.0,0.2115101127909394,0.03247913822533857,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,4,0.5,0.2126299814072978,0.03109114984827735,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,4,1.0,0.2131326735307,0.02980407330413653,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,4,1.5,0.21454732745001381,0.02924714258591335,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,5,-1.5,0.19629713070330693,0.035307972425526954,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,5,-1.0,0.18874888734227444,0.03188131369627814,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,5,-0.5,0.18812453598893092,0.03016618349262266,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,5,0.0,0.189872546378988,0.02890030278461807,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,5,0.5,0.18996316063313923,0.027317006648420347,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,5,1.0,0.1901838452217671,0.025931793145835564,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,5,1.5,0.19092313692477492,0.025251982607164693,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,7,-1.5,0.18523987220720542,0.033855624385187924,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,7,-1.0,0.17882698220462634,0.030440896165178175,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,7,-0.5,0.177553512882749,0.028416610165477935,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,7,0.0,0.17703782830862932,0.026670671019199288,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,7,0.5,0.17400982390259137,0.02456337827229949,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,7,1.0,0.16844428078089524,0.02233132485787566,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,7,1.5,0.1668776652821636,0.021104465130286243,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,10,-1.5,0.16468946054301067,0.03021472125040364,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,10,-1.0,0.16035614460653128,0.027124350153535603,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,10,-0.5,0.16007601964459553,0.025178501461069577,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,10,0.0,0.15954912306815192,0.023397741338381788,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,10,0.5,0.15367732984553636,0.02093020220032364,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,10,1.0,0.144541498040773,0.018436065197363273,exp(observed log-IV at origin + model mean log-IV change),44
+VolGAN PCA8,10,1.5,0.13659319884862814,0.016638769654211374,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,1,-1.5,0.3021332139794497,0.04275128412949924,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,1,-1.0,0.3086724540770401,0.04180801054552025,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,1,-0.5,0.32897359327014547,0.043015838115121295,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,1,0.0,0.3409433791179667,0.043034573069188,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,1,0.5,0.345394144320538,0.04195894710276548,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,1,1.0,0.33966935371437307,0.03953918344305385,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,1,1.5,0.3400516285391979,0.0380857050665866,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,2,-1.5,0.2683762783500837,0.03760278562596879,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,2,-1.0,0.27514648215066295,0.03650065183825848,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,2,-0.5,0.28782096165115745,0.03644772763330175,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,2,0.0,0.2992534144248921,0.03615783379066705,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,2,0.5,0.29513728551828494,0.03407367084781034,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,2,1.0,0.29148132642451074,0.03222415687626108,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,2,1.5,0.28099710841786846,0.030615861390034645,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,3,-1.5,0.2618684575077787,0.03657486792026548,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,3,-1.0,0.2531961390970675,0.033694131820650286,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,3,-0.5,0.25883977013387666,0.03277405157758577,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,3,0.0,0.264424250287932,0.031629075751295914,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,3,0.5,0.259517094149264,0.02954584250072389,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,3,1.0,0.23774531367605467,0.02608566583368538,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,3,1.5,0.24181947892598787,0.025886123046134347,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,4,-1.5,0.22766423824324167,0.033137846005126356,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,4,-1.0,0.2135984798461354,0.029476795325432577,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,4,-0.5,0.22474746286250316,0.02908992230707986,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,4,0.0,0.21814757133488372,0.02692965524066166,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,4,0.5,0.21886020227024347,0.025410835835560048,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,4,1.0,0.20933333926596606,0.02330948425398015,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,4,1.5,0.21555590633360822,0.023255639855126343,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,5,-1.5,0.1946277261398583,0.029031254565107415,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,5,-1.0,0.19817208990920757,0.027681006988534224,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,5,-0.5,0.19366352807927217,0.02554295945731103,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,5,0.0,0.19508048131568903,0.024212679878565103,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,5,0.5,0.1833122951896732,0.021505806615830597,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,5,1.0,0.17781923025559307,0.019785902074363943,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,5,1.5,0.18125344152318953,0.01955916035382598,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,7,-1.5,0.1831999946745457,0.028373063080199216,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,7,-1.0,0.1767914963777332,0.02539579354485509,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,7,-0.5,0.17006378604418657,0.02289424117651517,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,7,0.0,0.16286189298633275,0.02054774738646223,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,7,0.5,0.16106830451479082,0.0189057781183544,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,7,1.0,0.15453781975465994,0.01715711057651189,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,7,1.5,0.14898854482290202,0.016010376696614766,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,10,-1.5,0.19281065305582962,0.030906364461923866,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,10,-1.0,0.1834571645708531,0.02679930440893027,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,10,-0.5,0.17170853465537111,0.02351877337752109,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,10,0.0,0.1560131460974626,0.01985063932002924,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,10,0.5,0.1525167160528524,0.017910827957000098,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,10,1.0,0.13661927628000503,0.01527345987913069,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol,10,1.5,0.13595382744985302,0.014752700101876116,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,1,-1.5,0.30620628668032635,0.042952630228134496,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,1,-1.0,0.30070394433935677,0.040713271647174656,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,1,-0.5,0.33655563528185795,0.043966232314144975,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,1,0.0,0.34737549905197257,0.04407089555758052,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,1,0.5,0.3594040135439499,0.043824418903844704,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,1,1.0,0.3443020894649103,0.0404860806434194,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,1,1.5,0.3371132239965765,0.0383443463694861,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,2,-1.5,0.3070986277335417,0.04143272692007332,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,2,-1.0,0.30157060762295823,0.03925434186366253,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,2,-0.5,0.33501650567928387,0.041225528481236326,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,2,0.0,0.33230330363781035,0.03951963925573634,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,2,0.5,0.33666229196760067,0.038288995392884696,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,2,1.0,0.32980856355722915,0.03598227145197717,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,2,1.5,0.3000955045416405,0.03275760133296444,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,3,-1.5,0.32306381257613537,0.042512486998268234,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,3,-1.0,0.2998153832756832,0.03836361970691837,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,3,-0.5,0.31957688726005434,0.03857421852872461,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,3,0.0,0.30578432423203084,0.03569811590146248,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,3,0.5,0.3133009316541615,0.03457133497132356,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,3,1.0,0.2650107308485319,0.028937524440585026,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,3,1.5,0.28699644399421786,0.03015390674346285,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,4,-1.5,0.2791580713432936,0.03828190288366052,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,4,-1.0,0.24728582593864848,0.03302680722976002,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,4,-0.5,0.2709548543007434,0.03368192437448449,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,4,0.0,0.25053383774752147,0.030137322389409076,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,4,0.5,0.26266499190772136,0.029644344874767605,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,4,1.0,0.25662033091247033,0.027524447074829515,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,4,1.5,0.2668440871693585,0.027807793441580783,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,5,-1.5,0.2182939178966025,0.03162102359503682,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,5,-1.0,0.2329970308275646,0.031278503518140634,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,5,-0.5,0.22462039953562205,0.02876490203387936,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,5,0.0,0.23262298316448377,0.027838537246880773,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,5,0.5,0.22982660835518243,0.02610351976492431,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,5,1.0,0.22563947691675812,0.02429159518617425,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,5,1.5,0.2236493706427588,0.02355633930518094,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,7,-1.5,0.17938298473071054,0.027419769739607684,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,7,-1.0,0.19098627212697716,0.02679119606899847,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,7,-0.5,0.19114241273037363,0.02505063516464758,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,7,0.0,0.17298325861674343,0.021591733477560708,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,7,0.5,0.21412214806348884,0.023827763293983853,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,7,1.0,0.21289727577971773,0.022299904024405463,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,7,1.5,0.18012394076164687,0.019180713087639585,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,10,-1.5,0.1677609740231536,0.02672135176158206,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,10,-1.0,0.16337261944478754,0.023890893602251443,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,10,-0.5,0.1702951018635102,0.022981392434633704,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,10,0.0,0.18053755339579472,0.02219424058406566,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,10,0.5,0.2032039880345781,0.02249380662869316,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,10,1.0,0.18494341522874827,0.019565640099703803,exp(observed log-IV at origin + model mean log-IV change),44
+AD-Seq-Vol-FT,10,1.5,0.16656359970259468,0.017566337178340274,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,1,-1.5,0.13891195646104,0.021046327440260332,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,1,-1.0,0.13306341422023407,0.01944325514558705,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,1,-0.5,0.1487137839852391,0.021456525640556983,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,1,0.0,0.16828188910627728,0.023674607745276587,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,1,0.5,0.1727614137743234,0.023011486055756855,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,1,1.0,0.17759597914859182,0.021794355261345707,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,1,1.5,0.19711464176789772,0.022636224995228254,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,2,-1.5,0.13732155647470817,0.020582360357621104,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,2,-1.0,0.12648461794828547,0.017949250727476593,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,2,-0.5,0.13245179160032985,0.01798255367478306,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,2,0.0,0.14192761858046957,0.01845715812506255,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,2,0.5,0.147437369177352,0.017999890019624386,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,2,1.0,0.15204972656056215,0.017369579750629142,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,2,1.5,0.15585596908992894,0.017293359163081935,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,3,-1.5,0.12298523657848609,0.018089229800630918,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,3,-1.0,0.11553949279286166,0.015953498441561256,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,3,-0.5,0.1190962993440497,0.015657586527536585,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,3,0.0,0.12468462211520405,0.015608297390608362,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,3,0.5,0.1276177424468988,0.015024848264444508,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,3,1.0,0.13287988697835637,0.014691326251708905,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,3,1.5,0.1406215173076299,0.015109905963607827,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,4,-1.5,0.11052647205031998,0.016259710441085963,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,4,-1.0,0.10333773312745072,0.014319045822804166,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,4,-0.5,0.1050076312034714,0.013836981051454955,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,4,0.0,0.10807051873334635,0.013548469019606164,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,4,0.5,0.11064523476931097,0.013002522649754822,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,4,1.0,0.11424561202042945,0.012540632688509627,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,4,1.5,0.11880403416326286,0.012548686215013106,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,5,-1.5,0.10841340749711353,0.01604144739648648,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,5,-1.0,0.10116604450192912,0.014067581074542408,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,5,-0.5,0.0999786907364379,0.013175957600724713,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,5,0.0,0.10023087049387182,0.012520490722147457,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,5,0.5,0.10103235566565333,0.011843925533205584,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,5,1.0,0.10373433814729074,0.01136120558891658,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,5,1.5,0.10740235882847281,0.011200509587321456,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,7,-1.5,0.09966225659885596,0.015122075328230709,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,7,-1.0,0.09355551372869263,0.013216151190285063,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,7,-0.5,0.09064160895772419,0.012041064067713245,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,7,0.0,0.08869037568174841,0.011078480781365706,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,7,0.5,0.08679101600463171,0.010129188398603568,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,7,1.0,0.08631921371030059,0.009379702266303044,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,7,1.5,0.09034173292577727,0.009362484499819643,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,10,-1.5,0.0880724879167648,0.013835208565911212,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,10,-1.0,0.08408675744616634,0.012211522125543479,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,10,-0.5,0.08057889899751478,0.010900711328827048,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,10,0.0,0.07646621470681783,0.009657138759108976,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,10,0.5,0.07185789173529807,0.008464679650804273,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,10,1.0,0.06878730873987374,0.007579489458951222,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-P,10,1.5,0.0704676213908662,0.007434324063262955,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,1,-1.5,0.14503988032128862,0.022030174023477195,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,1,-1.0,0.1511880645249866,0.021973651317855784,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,1,-0.5,0.1728847150167356,0.024668393324608406,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,1,0.0,0.1899841779210833,0.026551065906970407,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,1,0.5,0.18718638323284406,0.025129869790242496,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,1,1.0,0.1819923464061317,0.022801492806946735,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,1,1.5,0.19377977866527932,0.022585680612102154,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,2,-1.5,0.13593448980071215,0.020413348431180003,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,2,-1.0,0.13614563739478516,0.019290373759625026,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,2,-0.5,0.14874468629922463,0.020179998365376803,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,2,0.0,0.15732845099826234,0.020546296380337267,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,2,0.5,0.15728193940690516,0.01946094630829756,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,2,1.0,0.15496587571518036,0.018000605042014044,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,2,1.5,0.1541427379524098,0.01729373876759842,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,3,-1.5,0.12252027310228067,0.018092723243399153,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,3,-1.0,0.1238273408818591,0.017137374671055465,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,3,-0.5,0.13207924539851146,0.017438064656957627,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,3,0.0,0.1365560168381916,0.017228484953805596,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,3,0.5,0.1352416658471923,0.016129079859018677,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,3,1.0,0.13545650452841182,0.015162022329088877,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,3,1.5,0.13965211859825546,0.01509784887484789,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,4,-1.5,0.10774123631274701,0.01606395542896366,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,4,-1.0,0.10840105685738465,0.015153184428391683,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,4,-0.5,0.11451728351546737,0.015187870935745468,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,4,0.0,0.11736310737659714,0.014823612980034581,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,4,0.5,0.11683647282567215,0.013882515357418553,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,4,1.0,0.11646110558024236,0.012929127797163447,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,4,1.5,0.11846199019721791,0.01262146334620456,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,5,-1.5,0.10270533571433907,0.01536560101256496,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,5,-1.0,0.10271484302408065,0.014372810546401717,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,5,-0.5,0.10605185805067101,0.014029052030107996,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,5,0.0,0.1070533032763621,0.013427854023057396,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,5,0.5,0.10595911995642862,0.012491282926958489,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,5,1.0,0.10568281937053998,0.011630897290220325,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,5,1.5,0.10733588122668919,0.01123249156229628,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,7,-1.5,0.09328632156666558,0.014385229112658,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,7,-1.0,0.09211933102119356,0.013175753737797422,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,7,-0.5,0.09281623522426823,0.01243340257901159,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,7,0.0,0.092286010524667,0.011598853964904688,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,7,0.5,0.0900351249965917,0.010556891158832927,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,7,1.0,0.0879812370422234,0.009586728170780703,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,7,1.5,0.09060052268925792,0.009394615810589155,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,10,-1.5,0.08181714249650941,0.01312191638703237,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,10,-1.0,0.08099545848831835,0.01196683525688001,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,10,-0.5,0.0803525654159679,0.011002929215954051,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,10,0.0,0.07810443360495462,0.009942054036130231,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,10,0.5,0.07395812512376516,0.008753227724199397,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,10,1.0,0.07019527663865816,0.007751751211798974,exp(observed log-IV at origin + model mean log-IV change),44
+GROMM-Q,10,1.5,0.07146953336095653,0.007549858468384954,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),1,-1.5,0.261620327187563,0.0377380639900468,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),1,-1.0,0.2804003449643581,0.03881588551307382,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),1,-0.5,0.30577243580533997,0.04140162279979631,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),1,0.0,0.32552893139567235,0.04294023495239874,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),1,0.5,0.3306706677739324,0.041998681231932726,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),1,1.0,0.32532778707764765,0.039444289617876827,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),1,1.5,0.32094096122304666,0.037339702271145365,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),2,-1.5,0.17201751802927212,0.024162239473393302,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),2,-1.0,0.18556906970373663,0.024614031045776096,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),2,-0.5,0.20303884131991365,0.025795294613474167,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),2,0.0,0.21584736342416952,0.026359481620537712,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),2,0.5,0.22167371324050494,0.02578153543942644,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),2,1.0,0.21804565368549333,0.024147411699903646,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),2,1.5,0.20813996422068082,0.022360151991695592,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),3,-1.5,0.14570856419645445,0.019651517827884782,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),3,-1.0,0.151443317721105,0.019369602091015004,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),3,-0.5,0.1604886856949825,0.019734976552113377,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),3,0.0,0.16726770912719305,0.019756670968736182,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),3,0.5,0.1703978940595252,0.019153546307720346,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),3,1.0,0.16857362058609415,0.01797356967477018,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),3,1.5,0.1659605287458474,0.017364093957584394,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),4,-1.5,0.12637944812244395,0.018226148775671164,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),4,-1.0,0.13131908751308005,0.01776530310706625,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),4,-0.5,0.13855955439415588,0.017786341567744227,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),4,0.0,0.14291501773025855,0.017488564347804485,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),4,0.5,0.14421605832968898,0.01673973020929814,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),4,1.0,0.14088244654352644,0.015525961378112914,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),4,1.5,0.13860750360643795,0.014750279022980308,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),5,-1.5,0.10777129933197296,0.015389208948383987,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),5,-1.0,0.11147177856791311,0.01487882733993993,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),5,-0.5,0.1156835224591051,0.014629814854531907,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),5,0.0,0.11781590943557792,0.014166113723530618,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),5,0.5,0.1183279543591726,0.013461895704428913,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),5,1.0,0.11656539171848172,0.012544404936754518,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),5,1.5,0.11401869747885189,0.011656815339413236,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),7,-1.5,0.09960144081981677,0.014746051941157806,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),7,-1.0,0.1007523743114431,0.013834221226576855,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),7,-0.5,0.10261590035475936,0.013209943255179872,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),7,0.0,0.10266400712106535,0.012426910367515994,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),7,0.5,0.10167483908140053,0.011499360152456927,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),7,1.0,0.0998871612581908,0.010574877400545775,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),7,1.5,0.09754099900121325,0.009900135842683596,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),10,-1.5,0.08849865570492735,0.01381902249192175,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),10,-1.0,0.08929582471515499,0.012803423963389033,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),10,-0.5,0.08935019347939659,0.01185880681397076,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),10,0.0,0.08705049769215933,0.010763196552832565,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),10,0.5,0.0833198517811764,0.009613046023930231,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),10,1.0,0.08004370589659031,0.008643659877783691,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS ordinary (16 factors) (tail),10,1.5,0.07703245421565738,0.007960958325686898,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),1,-1.5,0.2620526336731179,0.03782173960959661,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),1,-1.0,0.2809516493227555,0.038866348991596904,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),1,-0.5,0.3066052730914781,0.04145657028900414,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),1,0.0,0.3267568914977456,0.043016309873280936,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),1,0.5,0.3319856575369739,0.042066397317904666,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),1,1.0,0.3266979431144745,0.039526841969019066,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),1,1.5,0.3225857768612893,0.03747466116841978,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),2,-1.5,0.1749631618994058,0.02452836726701534,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),2,-1.0,0.1888413219964268,0.024977082137350615,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),2,-0.5,0.20666876056597783,0.02616339710551502,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),2,0.0,0.21966159652588327,0.02671427513776355,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),2,0.5,0.22542015156862927,0.02610239278217605,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),2,1.0,0.22166482641219434,0.024452761365748064,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),2,1.5,0.21190723461412167,0.022719303562899442,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),3,-1.5,0.14745099177600252,0.019786860143299383,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),3,-1.0,0.15339367122889494,0.019502342785350454,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),3,-0.5,0.16270038804858067,0.019880735668894436,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),3,0.0,0.169605337949309,0.019899085851758824,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),3,0.5,0.17266232515599383,0.019279390116758707,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),3,1.0,0.17076175732110654,0.018098849400363073,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),3,1.5,0.16853259767962972,0.017554774880558708,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),4,-1.5,0.12739335739434207,0.018348972546466336,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),4,-1.0,0.13252001822010234,0.01788431309038985,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),4,-0.5,0.140045424273887,0.017921345285653752,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),4,0.0,0.14454199772190238,0.017625552946054283,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),4,0.5,0.14583903179487448,0.016870779436660693,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),4,1.0,0.1424188371058844,0.015653799069357426,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),4,1.5,0.1403112596661028,0.014903883191131902,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),5,-1.5,0.10807047583174757,0.015392855827759516,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),5,-1.0,0.11199694772920268,0.014891026458396505,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),5,-0.5,0.1164990765536031,0.014663844838739719,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),5,0.0,0.11882675237189005,0.014215521481091753,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),5,0.5,0.11938827214142939,0.013515912060361707,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),5,1.0,0.11777073546389144,0.012619591747176856,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),5,1.5,0.11545671445759985,0.011763247574306355,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),7,-1.5,0.09982420895618911,0.014717981339475291,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),7,-1.0,0.1010800665123969,0.01381000576458104,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),7,-0.5,0.10309187357717635,0.013193803193655077,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),7,0.0,0.10330476723535399,0.012425413429197969,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),7,0.5,0.10234474773858183,0.011503127191121724,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),7,1.0,0.10085409148749228,0.010616865007563073,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),7,1.5,0.09893857413972403,0.009993558882480115,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),10,-1.5,0.08839536877199992,0.013740369700621553,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),10,-1.0,0.0892775242927743,0.012726877719605047,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),10,-0.5,0.0894594899395138,0.01179218841987432,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),10,0.0,0.08728036628449187,0.01071090964493455,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),10,0.5,0.08349029857244161,0.009561134336087596,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),10,1.0,0.0804376294124266,0.008626684709631509,exp(observed log-IV at origin + model mean log-IV change),44
+DYSANOS spot-orthogonal (16 factors) (tail),10,1.5,0.07763013836107274,0.007969759031600656,exp(observed log-IV at origin + model mean log-IV change),44

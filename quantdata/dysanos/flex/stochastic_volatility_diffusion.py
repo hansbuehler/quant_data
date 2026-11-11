@@ -262,6 +262,7 @@ def fit_log_variance_diffusion(
     segment_starts: np.ndarray,
     *,
     dimension: int,
+    initial_config: LogVarianceDiffusionConfig | None = None,
 ) -> LogVarianceDiffusionFit:
     """Fit stationary OU log variance by approximate maximum likelihood."""
     radii = np.asarray(normalized_squared_radii, dtype=np.float64)
@@ -301,6 +302,9 @@ def fit_log_variance_diffusion(
         np.asarray((0.90, initial_log_variance, empirical_scale)),
         np.asarray((0.98, 0.5 * initial_log_variance, empirical_scale)),
     )
+    if initial_config is not None:
+        starts_to_try = (np.asarray((initial_config.persistence, initial_config.stationary_log_variance,
+                                    initial_config.unconditional_scale)), *starts_to_try)
     bounds = ((0.0, 0.999), (1.0e-8, 10.0), (0.05, 20.0))
     results: list[OptimizeResult] = []
     for initial in starts_to_try:

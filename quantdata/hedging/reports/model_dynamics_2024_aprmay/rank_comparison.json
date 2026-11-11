@@ -1,0 +1,1826 @@
+{
+  "protocol": {
+    "schema": "dysanos-rank-comparison-v1",
+    "source_run": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-common115-v2",
+    "source_protocol_sha256": "269e4a954f160dda59dea94b3af0a2b6be358ea8a8fb48103f3d35c9bd11d98a",
+    "ranks": [
+      8,
+      16
+    ],
+    "models": [
+      "DYSANOS ordinary",
+      "DYSANOS spot-orthogonal",
+      "DYSANOS ordinary (16 factors)",
+      "DYSANOS spot-orthogonal (16 factors)"
+    ],
+    "rolling_transitions": 252,
+    "paths": 32,
+    "sessions": 115,
+    "seed": 20261111,
+    "spot_law": "same paired empirical spot innovations",
+    "shocks_rescaled": false,
+    "decoder_changed": false,
+    "tail_diffusion": false,
+    "eight_factor_fits_retrained": false
+  },
+  "run_directory": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1",
+  "models": [
+    {
+      "model": "DYSANOS ordinary",
+      "rank": 8,
+      "origins": 44,
+      "recursive_origins": 44,
+      "native_coverage_mean": 0.7059807159563265,
+      "conditional_trace_ratio": 0.037331315255385716,
+      "pooled_trace_ratio": 0.05941024671632591,
+      "pooled_covariance_error": 0.938957016135135,
+      "spectral_radius_max": 0.6989760197055128,
+      "forecast_rmse": 0.17499870317374833,
+      "persistence_rmse": 0.19037731409697836,
+      "pc1_tail_counts": [
+        15,
+        16,
+        9,
+        9
+      ],
+      "invalid_path_rate": 0.0,
+      "extreme_surface_rate": 0.0,
+      "daily_decoder_lower_clips": 1272462,
+      "daily_decoder_upper_clips": 20982
+    },
+    {
+      "model": "DYSANOS spot-orthogonal",
+      "rank": 8,
+      "origins": 44,
+      "recursive_origins": 44,
+      "native_coverage_mean": 0.7077040162787059,
+      "conditional_trace_ratio": 0.13172455526603402,
+      "pooled_trace_ratio": 0.152350718368706,
+      "pooled_covariance_error": 0.8429374509875263,
+      "spectral_radius_max": 0.6947219198067331,
+      "forecast_rmse": 0.17630749791064793,
+      "persistence_rmse": 0.19037731409697836,
+      "pc1_tail_counts": [
+        9,
+        12,
+        9,
+        8
+      ],
+      "invalid_path_rate": 0.006392045454545455,
+      "extreme_surface_rate": 1.8527667984189725e-05,
+      "daily_decoder_lower_clips": 1272247,
+      "daily_decoder_upper_clips": 21544
+    },
+    {
+      "model": "DYSANOS ordinary (16 factors)",
+      "rank": 16,
+      "origins": 44,
+      "recursive_origins": 44,
+      "native_coverage_mean": 0.8377344927303096,
+      "conditional_trace_ratio": 0.07984489968044386,
+      "pooled_trace_ratio": 0.16553098636293703,
+      "pooled_covariance_error": 0.8206853656227977,
+      "spectral_radius_max": 0.7345071381368703,
+      "forecast_rmse": 0.17421763435005183,
+      "persistence_rmse": 0.19037731409697836,
+      "pc1_tail_counts": [
+        8,
+        13,
+        10,
+        9
+      ],
+      "invalid_path_rate": 0.0,
+      "extreme_surface_rate": 0.0,
+      "daily_decoder_lower_clips": 1266924,
+      "daily_decoder_upper_clips": 17722
+    },
+    {
+      "model": "DYSANOS spot-orthogonal (16 factors)",
+      "rank": 16,
+      "origins": 44,
+      "recursive_origins": 44,
+      "native_coverage_mean": 0.8386234789153374,
+      "conditional_trace_ratio": 0.15451749477441115,
+      "pooled_trace_ratio": 0.2144455492825377,
+      "pooled_covariance_error": 0.7754259724324981,
+      "spectral_radius_max": 0.7298512199566736,
+      "forecast_rmse": 0.17569241893345244,
+      "persistence_rmse": 0.19037731409697836,
+      "pc1_tail_counts": [
+        7,
+        11,
+        8,
+        7
+      ],
+      "invalid_path_rate": 0.0014204545454545455,
+      "extreme_surface_rate": 0.0,
+      "daily_decoder_lower_clips": 1269987,
+      "daily_decoder_upper_clips": 18274
+    }
+  ],
+  "reconciliation": [
+    {
+      "model": "DYSANOS ordinary",
+      "origin_date": "2024-04-01",
+      "training_start": "2023-03-23",
+      "training_end": "2024-04-01",
+      "historic_scenarios": 252,
+      "groups": {
+        "full_centered_native_changes": {
+          "native_centered_energy": 12526.20483704512,
+          "decoded_log_iv_variance_trace": 0.7372479208714521,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 17379,
+            "upper_clips": 2018,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.996455441196872e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 1.0,
+          "decoded_variance_fraction_of_full": 1.0
+        },
+        "pca8_centered_changes": {
+          "native_centered_energy": 8634.000294409903,
+          "decoded_log_iv_variance_trace": 0.05555778261526591,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 34835,
+            "upper_clips": 791,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.999337080568438e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.689275036352242,
+          "decoded_variance_fraction_of_full": 0.07535834424544015
+        },
+        "pca8_ar_innovations": {
+          "native_centered_energy": 5137.624769616113,
+          "decoded_log_iv_variance_trace": 0.035974866275083874,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 41814,
+            "upper_clips": 456,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.997949523832261e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.4101501481455941,
+          "decoded_variance_fraction_of_full": 0.048796158329697775
+        },
+        "pca8_ar_with_current_drift": {
+          "native_centered_energy": 5137.624769616113,
+          "decoded_log_iv_variance_trace": 0.036041858241510315,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 34899,
+            "upper_clips": 220,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.998200878325036e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.4101501481455941,
+          "decoded_variance_fraction_of_full": 0.04888702595309813
+        }
+      },
+      "scope": "same current decoder and historic rows; diagnostic ablation, not a fitted full-rank alternative model",
+      "shocks_rescaled": false
+    },
+    {
+      "model": "DYSANOS ordinary",
+      "origin_date": "2024-04-30",
+      "training_start": "2023-04-24",
+      "training_end": "2024-04-30",
+      "historic_scenarios": 252,
+      "groups": {
+        "full_centered_native_changes": {
+          "native_centered_energy": 13387.536062975392,
+          "decoded_log_iv_variance_trace": 0.9934276441849421,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 13963,
+            "upper_clips": 1692,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.992877914033471e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 1.0,
+          "decoded_variance_fraction_of_full": 1.0
+        },
+        "pca8_centered_changes": {
+          "native_centered_energy": 9510.030767564995,
+          "decoded_log_iv_variance_trace": 0.13941604933986063,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 30419,
+            "upper_clips": 941,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.980287950239752e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.710364530323542,
+          "decoded_variance_fraction_of_full": 0.1403384032606064
+        },
+        "pca8_ar_innovations": {
+          "native_centered_energy": 5427.508409541804,
+          "decoded_log_iv_variance_trace": 0.08436803209231236,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 37452,
+            "upper_clips": 453,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.996434138792587e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.4054150355980842,
+          "decoded_variance_fraction_of_full": 0.08492619727884876
+        },
+        "pca8_ar_with_current_drift": {
+          "native_centered_energy": 5427.508409541804,
+          "decoded_log_iv_variance_trace": 0.08402832887771831,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 30212,
+            "upper_clips": 66,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.999126138193759e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.4054150355980842,
+          "decoded_variance_fraction_of_full": 0.08458424664300476
+        }
+      },
+      "scope": "same current decoder and historic rows; diagnostic ablation, not a fitted full-rank alternative model",
+      "shocks_rescaled": false
+    },
+    {
+      "model": "DYSANOS ordinary",
+      "origin_date": "2024-05-31",
+      "training_start": "2023-05-24",
+      "training_end": "2024-05-31",
+      "historic_scenarios": 252,
+      "groups": {
+        "full_centered_native_changes": {
+          "native_centered_energy": 14008.429818338107,
+          "decoded_log_iv_variance_trace": 0.9738088054296752,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 15191,
+            "upper_clips": 7654,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.996845573567725e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 1.0,
+          "decoded_variance_fraction_of_full": 1.0
+        },
+        "pca8_centered_changes": {
+          "native_centered_energy": 10000.830488766225,
+          "decoded_log_iv_variance_trace": 0.14367122248510072,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 26027,
+            "upper_clips": 7129,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.993217753301309e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.7139151652581628,
+          "decoded_variance_fraction_of_full": 0.1475353495306591
+        },
+        "pca8_ar_innovations": {
+          "native_centered_energy": 5819.93179990351,
+          "decoded_log_iv_variance_trace": 0.08810119285776132,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 24720,
+            "upper_clips": 6440,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.992767502353672e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.41545925384762067,
+          "decoded_variance_fraction_of_full": 0.09047072933263146
+        },
+        "pca8_ar_with_current_drift": {
+          "native_centered_energy": 5819.93179990351,
+          "decoded_log_iv_variance_trace": 0.08678294577533578,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 30133,
+            "upper_clips": 1118,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.998598449190155e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.41545925384762067,
+          "decoded_variance_fraction_of_full": 0.08911702717356762
+        }
+      },
+      "scope": "same current decoder and historic rows; diagnostic ablation, not a fitted full-rank alternative model",
+      "shocks_rescaled": false
+    },
+    {
+      "model": "DYSANOS ordinary (16 factors)",
+      "origin_date": "2024-04-01",
+      "training_start": "2023-03-23",
+      "training_end": "2024-04-01",
+      "historic_scenarios": 252,
+      "groups": {
+        "full_centered_native_changes": {
+          "native_centered_energy": 12526.20483704512,
+          "decoded_log_iv_variance_trace": 0.7372479208714521,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 17379,
+            "upper_clips": 2018,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.996455441196872e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 1.0,
+          "decoded_variance_fraction_of_full": 1.0
+        },
+        "pca16_centered_changes": {
+          "native_centered_energy": 10380.220442808552,
+          "decoded_log_iv_variance_trace": 0.15784621626611753,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 34639,
+            "upper_clips": 1498,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.999483158162903e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.8286804006357925,
+          "decoded_variance_fraction_of_full": 0.21410194833718613
+        },
+        "pca16_ar_innovations": {
+          "native_centered_energy": 5775.520811828963,
+          "decoded_log_iv_variance_trace": 0.09507990521104188,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 40858,
+            "upper_clips": 990,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.998691763435374e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.4610750731736704,
+          "decoded_variance_fraction_of_full": 0.12896598622978037
+        },
+        "pca16_ar_with_current_drift": {
+          "native_centered_energy": 5775.520811828963,
+          "decoded_log_iv_variance_trace": 0.09875652067114744,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 31907,
+            "upper_clips": 473,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.985912541310427e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.4610750731736704,
+          "decoded_variance_fraction_of_full": 0.13395293208072243
+        }
+      },
+      "scope": "same current decoder and historic rows; diagnostic ablation, not a fitted full-rank alternative model",
+      "shocks_rescaled": false
+    },
+    {
+      "model": "DYSANOS ordinary (16 factors)",
+      "origin_date": "2024-04-30",
+      "training_start": "2023-04-24",
+      "training_end": "2024-04-30",
+      "historic_scenarios": 252,
+      "groups": {
+        "full_centered_native_changes": {
+          "native_centered_energy": 13387.536062975392,
+          "decoded_log_iv_variance_trace": 0.9934276441849421,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 13963,
+            "upper_clips": 1692,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.992877914033471e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 1.0,
+          "decoded_variance_fraction_of_full": 1.0
+        },
+        "pca16_centered_changes": {
+          "native_centered_energy": 11241.474211782153,
+          "decoded_log_iv_variance_trace": 0.32843929128014976,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 30283,
+            "upper_clips": 1341,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.98437374444272e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.8396970255692985,
+          "decoded_variance_fraction_of_full": 0.3306121922443761
+        },
+        "pca16_ar_innovations": {
+          "native_centered_energy": 6069.8660524404895,
+          "decoded_log_iv_variance_trace": 0.17972087402252399,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 36713,
+            "upper_clips": 659,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.998477157324714e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.4533968031075807,
+          "decoded_variance_fraction_of_full": 0.18090987811193437
+        },
+        "pca16_ar_with_current_drift": {
+          "native_centered_energy": 6069.866052440489,
+          "decoded_log_iv_variance_trace": 0.1704830974485413,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 35688,
+            "upper_clips": 152,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.987528221122588e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.45339680310758057,
+          "decoded_variance_fraction_of_full": 0.1716109859097128
+        }
+      },
+      "scope": "same current decoder and historic rows; diagnostic ablation, not a fitted full-rank alternative model",
+      "shocks_rescaled": false
+    },
+    {
+      "model": "DYSANOS ordinary (16 factors)",
+      "origin_date": "2024-05-31",
+      "training_start": "2023-05-24",
+      "training_end": "2024-05-31",
+      "historic_scenarios": 252,
+      "groups": {
+        "full_centered_native_changes": {
+          "native_centered_energy": 14008.429818338107,
+          "decoded_log_iv_variance_trace": 0.9738088054296752,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 15191,
+            "upper_clips": 7654,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.996845573567725e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 1.0,
+          "decoded_variance_fraction_of_full": 1.0
+        },
+        "pca16_centered_changes": {
+          "native_centered_energy": 11792.570570060107,
+          "decoded_log_iv_variance_trace": 0.27233480047814546,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 26664,
+            "upper_clips": 7381,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.998130434674124e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.8418195845634839,
+          "decoded_variance_fraction_of_full": 0.2796594146198778
+        },
+        "pca16_ar_innovations": {
+          "native_centered_energy": 6477.3401128935,
+          "decoded_log_iv_variance_trace": 0.16189655143713824,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 25313,
+            "upper_clips": 6313,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.997244698745078e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.4623887328481431,
+          "decoded_variance_fraction_of_full": 0.16625086006046574
+        },
+        "pca16_ar_with_current_drift": {
+          "native_centered_energy": 6477.3401128935,
+          "decoded_log_iv_variance_trace": 0.16133681896178345,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 25815,
+            "upper_clips": 785,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.993221916637651e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.4623887328481431,
+          "decoded_variance_fraction_of_full": 0.16567607323143535
+        }
+      },
+      "scope": "same current decoder and historic rows; diagnostic ablation, not a fitted full-rank alternative model",
+      "shocks_rescaled": false
+    },
+    {
+      "model": "DYSANOS spot-orthogonal",
+      "origin_date": "2024-04-01",
+      "training_start": "2023-03-23",
+      "training_end": "2024-04-01",
+      "historic_scenarios": 252,
+      "groups": {
+        "full_centered_native_changes": {
+          "native_centered_energy": 12526.20483704512,
+          "decoded_log_iv_variance_trace": 0.7372479208714521,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 17379,
+            "upper_clips": 2018,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.996455441196872e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 1.0,
+          "decoded_variance_fraction_of_full": 1.0
+        },
+        "pca8_centered_changes": {
+          "native_centered_energy": 8668.521612542014,
+          "decoded_log_iv_variance_trace": 0.19877407170816783,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 35254,
+            "upper_clips": 802,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.998803784938559e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.6920309643113646,
+          "decoded_variance_fraction_of_full": 0.26961632048173173
+        },
+        "pca8_ar_innovations": {
+          "native_centered_energy": 5172.021552736232,
+          "decoded_log_iv_variance_trace": 0.17687132047777188,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 41946,
+            "upper_clips": 451,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.996778072007828e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.41289613414595017,
+          "decoded_variance_fraction_of_full": 0.2399075202120665
+        },
+        "pca8_ar_with_current_drift": {
+          "native_centered_energy": 5172.021552736232,
+          "decoded_log_iv_variance_trace": 0.17906816410003884,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 34588,
+            "upper_clips": 254,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.997856653676251e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.41289613414595017,
+          "decoded_variance_fraction_of_full": 0.24288730972394496
+        }
+      },
+      "scope": "same current decoder and historic rows; diagnostic ablation, not a fitted full-rank alternative model",
+      "shocks_rescaled": false
+    },
+    {
+      "model": "DYSANOS spot-orthogonal",
+      "origin_date": "2024-04-30",
+      "training_start": "2023-04-24",
+      "training_end": "2024-04-30",
+      "historic_scenarios": 252,
+      "groups": {
+        "full_centered_native_changes": {
+          "native_centered_energy": 13387.536062975392,
+          "decoded_log_iv_variance_trace": 0.9934276441849421,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 13963,
+            "upper_clips": 1692,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.992877914033471e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 1.0,
+          "decoded_variance_fraction_of_full": 1.0
+        },
+        "pca8_centered_changes": {
+          "native_centered_energy": 9549.843976635633,
+          "decoded_log_iv_variance_trace": 0.35856194424249543,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 30432,
+            "upper_clips": 947,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.995767567827496e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.7133384314867849,
+          "decoded_variance_fraction_of_full": 0.36093413178236816
+        },
+        "pca8_ar_innovations": {
+          "native_centered_energy": 5468.033807668674,
+          "decoded_log_iv_variance_trace": 0.2955943461801067,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 37776,
+            "upper_clips": 457,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.995606120583034e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.4084421346801137,
+          "decoded_variance_fraction_of_full": 0.29754995032640463
+        },
+        "pca8_ar_with_current_drift": {
+          "native_centered_energy": 5468.033807668674,
+          "decoded_log_iv_variance_trace": 0.2939541545140736,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 30010,
+            "upper_clips": 69,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.99482868691004e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.4084421346801137,
+          "decoded_variance_fraction_of_full": 0.29589890741891756
+        }
+      },
+      "scope": "same current decoder and historic rows; diagnostic ablation, not a fitted full-rank alternative model",
+      "shocks_rescaled": false
+    },
+    {
+      "model": "DYSANOS spot-orthogonal",
+      "origin_date": "2024-05-31",
+      "training_start": "2023-05-24",
+      "training_end": "2024-05-31",
+      "historic_scenarios": 252,
+      "groups": {
+        "full_centered_native_changes": {
+          "native_centered_energy": 14008.429818338107,
+          "decoded_log_iv_variance_trace": 0.9738088054296752,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 15191,
+            "upper_clips": 7654,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.996845573567725e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 1.0,
+          "decoded_variance_fraction_of_full": 1.0
+        },
+        "pca8_centered_changes": {
+          "native_centered_energy": 10039.354801436606,
+          "decoded_log_iv_variance_trace": 0.3162235698009653,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 26297,
+            "upper_clips": 7095,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.999711225727737e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.7166652459717021,
+          "decoded_variance_fraction_of_full": 0.32472859973928603
+        },
+        "pca8_ar_innovations": {
+          "native_centered_energy": 5853.8568313145925,
+          "decoded_log_iv_variance_trace": 0.25805322007415643,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 25314,
+            "upper_clips": 6516,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.999481728750759e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.41788101216393614,
+          "decoded_variance_fraction_of_full": 0.26499372221253964
+        },
+        "pca8_ar_with_current_drift": {
+          "native_centered_energy": 5853.8568313145925,
+          "decoded_log_iv_variance_trace": 0.2531263780831089,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 29803,
+            "upper_clips": 1197,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.998852357195886e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.41788101216393614,
+          "decoded_variance_fraction_of_full": 0.2599343697363894
+        }
+      },
+      "scope": "same current decoder and historic rows; diagnostic ablation, not a fitted full-rank alternative model",
+      "shocks_rescaled": false
+    },
+    {
+      "model": "DYSANOS spot-orthogonal (16 factors)",
+      "origin_date": "2024-04-01",
+      "training_start": "2023-03-23",
+      "training_end": "2024-04-01",
+      "historic_scenarios": 252,
+      "groups": {
+        "full_centered_native_changes": {
+          "native_centered_energy": 12526.20483704512,
+          "decoded_log_iv_variance_trace": 0.7372479208714521,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 17379,
+            "upper_clips": 2018,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.996455441196872e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 1.0,
+          "decoded_variance_fraction_of_full": 1.0
+        },
+        "pca16_centered_changes": {
+          "native_centered_energy": 10400.056503430309,
+          "decoded_log_iv_variance_trace": 0.2621372151169704,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 34694,
+            "upper_clips": 1500,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.992508542833178e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.8302639657203339,
+          "decoded_variance_fraction_of_full": 0.35556182350045196
+        },
+        "pca16_ar_innovations": {
+          "native_centered_energy": 5799.395892554787,
+          "decoded_log_iv_variance_trace": 0.2101404207489623,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 41099,
+            "upper_clips": 972,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.997720207266525e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.4629810838957062,
+          "decoded_variance_fraction_of_full": 0.2850335888374825
+        },
+        "pca16_ar_with_current_drift": {
+          "native_centered_energy": 5799.395892554787,
+          "decoded_log_iv_variance_trace": 0.21648410339974103,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 31243,
+            "upper_clips": 507,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.997224603708332e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.4629810838957062,
+          "decoded_variance_fraction_of_full": 0.2936381334841195
+        }
+      },
+      "scope": "same current decoder and historic rows; diagnostic ablation, not a fitted full-rank alternative model",
+      "shocks_rescaled": false
+    },
+    {
+      "model": "DYSANOS spot-orthogonal (16 factors)",
+      "origin_date": "2024-04-30",
+      "training_start": "2023-04-24",
+      "training_end": "2024-04-30",
+      "historic_scenarios": 252,
+      "groups": {
+        "full_centered_native_changes": {
+          "native_centered_energy": 13387.536062975392,
+          "decoded_log_iv_variance_trace": 0.9934276441849421,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 13963,
+            "upper_clips": 1692,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.992877914033471e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 1.0,
+          "decoded_variance_fraction_of_full": 1.0
+        },
+        "pca16_centered_changes": {
+          "native_centered_energy": 11262.103694198255,
+          "decoded_log_iv_variance_trace": 0.46687304222433407,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 30110,
+            "upper_clips": 1347,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.999322238274377e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.8412379724858229,
+          "decoded_variance_fraction_of_full": 0.4699617983827903
+        },
+        "pca16_ar_innovations": {
+          "native_centered_energy": 6094.348985685573,
+          "decoded_log_iv_variance_trace": 0.34039169354143023,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 36872,
+            "upper_clips": 676,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.994529842627387e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.45522558871308083,
+          "decoded_variance_fraction_of_full": 0.34264366965618787
+        },
+        "pca16_ar_with_current_drift": {
+          "native_centered_energy": 6094.348985685574,
+          "decoded_log_iv_variance_trace": 0.330712384017777,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 35504,
+            "upper_clips": 153,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.998611799622026e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.4552255887130809,
+          "decoded_variance_fraction_of_full": 0.33290032339407066
+        }
+      },
+      "scope": "same current decoder and historic rows; diagnostic ablation, not a fitted full-rank alternative model",
+      "shocks_rescaled": false
+    },
+    {
+      "model": "DYSANOS spot-orthogonal (16 factors)",
+      "origin_date": "2024-05-31",
+      "training_start": "2023-05-24",
+      "training_end": "2024-05-31",
+      "historic_scenarios": 252,
+      "groups": {
+        "full_centered_native_changes": {
+          "native_centered_energy": 14008.429818338107,
+          "decoded_log_iv_variance_trace": 0.9738088054296752,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 15191,
+            "upper_clips": 7654,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.996845573567725e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 1.0,
+          "decoded_variance_fraction_of_full": 1.0
+        },
+        "pca16_centered_changes": {
+          "native_centered_energy": 11812.646471102586,
+          "decoded_log_iv_variance_trace": 0.3926972296685242,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 26688,
+            "upper_clips": 7405,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.997934424799126e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.8432527145646921,
+          "decoded_variance_fraction_of_full": 0.4032590663372096
+        },
+        "pca16_ar_innovations": {
+          "native_centered_energy": 6500.679895415476,
+          "decoded_log_iv_variance_trace": 0.3046379609557454,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 25420,
+            "upper_clips": 6319,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.997041638953874e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.46405485694803483,
+          "decoded_variance_fraction_of_full": 0.3128313887255615
+        },
+        "pca16_ar_with_current_drift": {
+          "native_centered_energy": 6500.679895415476,
+          "decoded_log_iv_variance_trace": 0.30365609063373267,
+          "valid_scenarios": 252,
+          "guards": {
+            "lower_clips": 25370,
+            "upper_clips": 750,
+            "invalid_node_rate": 0.0,
+            "invalid_path_rate": 0.0,
+            "atm_invalid_scenario_count": 0,
+            "iv_inversion": {
+              "count": 14112,
+              "failed": 0,
+              "outside_price_bounds": 0,
+              "library_intrinsic_cases": 0,
+              "library_min_vol_cases": 0,
+              "library_max_vol_cases": 0,
+              "unusable": 0,
+              "max_repricing_error": 9.99862215245173e-09,
+              "policy": "direct vector cdxcore.bs.implied; no custom intrinsic-distance exclusion or input clipping"
+            }
+          },
+          "native_energy_fraction_of_full": 0.46405485694803483,
+          "decoded_variance_fraction_of_full": 0.3118231103894671
+        }
+      },
+      "scope": "same current decoder and historic rows; diagnostic ablation, not a fitted full-rank alternative model",
+      "shocks_rescaled": false
+    }
+  ],
+  "fit_files": [
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/config.json",
+      "sha256": "13f1298f772011d974d85111f3e69fcf4a4e88f603352ed0f8e18a739e3af0e6"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/config.json",
+      "sha256": "d26acf5439cf802629a5abdf7c5a4cd13d950e26edbe6556a62d16529762e87c"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-03-28.npz",
+      "sha256": "0a13a349ecb9b493ccb88f9bb04352185d7366fe675689de57f00117abe3b2e7"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-01.npz",
+      "sha256": "588c638758356d569deb6679cf3cc7033e9648db9c57ecfdb9ac8f413de7eeda"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-02.npz",
+      "sha256": "18d34a06cb2d310a354a2905a6e9f04856b58a5953dbd99a368e719b0a21ff25"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-03.npz",
+      "sha256": "e9571a9d2c4ba0d4cdef6b417cdebb1c2f1243eb213f1e57a9490d431be67892"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-04.npz",
+      "sha256": "69c93975c8c0395664ccd3af5e8f86c7bf9534e67393fd29e9f2acf199fd0f75"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-05.npz",
+      "sha256": "caa157b942307798d8836ef80ae8eb0d1ebf475f8a7e35282dc271c0873a8d03"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-08.npz",
+      "sha256": "a81f182c995060bfd8d4ade7438372cdee718e565fa78d56cd3636dc09979dc0"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-09.npz",
+      "sha256": "37799d7785dee8e9e463226c664173a22481b137a216180f636d97fcad9815f2"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-10.npz",
+      "sha256": "bd728e150decfbc256838c80432060c1c24b3574a1d0ba7d2df07281c5e6f2d8"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-11.npz",
+      "sha256": "76cb371ebf270ce6f0a454f0b70c850a102a77e2c924e07596ba746fa0f0d09b"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-12.npz",
+      "sha256": "8363c76826dca7bdc9b455316b3610c43f024297c5489a291b79b0332bdd7f3f"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-15.npz",
+      "sha256": "8dc83ee15b1133e08227520e4b9e07483d8ded2379ee1d8e5d8662ec4713d5c1"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-16.npz",
+      "sha256": "1f4e2a7108bd6363da1fa5f109e3afcaf881a4a54880df3f1cd250a36248aab8"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-17.npz",
+      "sha256": "a1737aec9d164695a68dc38ec30f5fc38f677b30294b0417be11e2e07af49eb8"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-18.npz",
+      "sha256": "dabb592128b83a9c1598d319bb3bfaf4412526afd662f65083de5f2e3f29fd91"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-19.npz",
+      "sha256": "4fab400a8bdbd574d20f2ed11356e094b0bfb8d3f4abb3f1f1250ad963eeb6b7"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-22.npz",
+      "sha256": "ae5382479f45cba7ef6dd9ddd894df2be07cf14b02aea4ff3a6d1f376e1fc2b8"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-23.npz",
+      "sha256": "b76eaf604c99a37a3371985b10304ef78fec78cb019fcfe5af94cd14278631d2"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-24.npz",
+      "sha256": "b16c6dd663e06d62eae0d9ed14fcd2a1d041c6166246e7e4836e755da2110794"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-25.npz",
+      "sha256": "d87febd0bc602218b65be3b27c91b9ec584cdb87470d61e7cdec0c579317e418"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-26.npz",
+      "sha256": "b57d8a695f58e8edfb6cdd6f1904830866b6aafc1859e13ffd7d16f0c6267dee"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-29.npz",
+      "sha256": "9d17374fe0398d9a144108f9083b2e7570365257477fffa7f39d8b311990266b"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-04-30.npz",
+      "sha256": "46bae1ef21102b67d2e2a1867c422c509d84a0d40e35c86f6d3747788c17a8b4"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-01.npz",
+      "sha256": "c131a29e43f8506f144a1d3be5e254ffe539cc0c3826476cdd71d5f628cb2753"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-02.npz",
+      "sha256": "65ff43621723f5794f186f073667867088b6a985bcc118e6039cfa7cdd84a9aa"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-03.npz",
+      "sha256": "28836f058eb8026222f847f516e5c976313997d727a8510eb2f21ee54da273e7"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-06.npz",
+      "sha256": "fbc79fb38e300a386e2ea325deefde816d8784332caec8cddc5e716ef4e94baf"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-07.npz",
+      "sha256": "de898a51f85d19e6ce56d9adc3b85d622ddd7964876f7076e791356be0431aaa"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-08.npz",
+      "sha256": "eccb8b58f7e69623e0b63da636a6563bf35080764b7ac8c7308a69efd38e2c9a"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-09.npz",
+      "sha256": "4abf4837e88bec2f332ef1b58bcd26af46572c6d9532e997b0446f0904a74c6d"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-10.npz",
+      "sha256": "6f4d1eacf4da40eca193cc83b4bde806c349bb414524d75446e3f238ea20df5d"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-13.npz",
+      "sha256": "6488880fe9b0e2b2b73b7687ffd6d74185a4504c8522f21a7f41e277c45d1d0d"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-14.npz",
+      "sha256": "da1339aa00c8615a3e075bf785cf1bee671a416dbcc10271a517eb5eb201d8f9"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-15.npz",
+      "sha256": "95c61d00bcaf0c313a7d623dfa9a3c652b205baa34512952afcab9610e52f38e"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-16.npz",
+      "sha256": "50e196d2279efc19c322dd2448e433cbbd3297e13fb0cdf18379efe155dc2f31"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-17.npz",
+      "sha256": "a56c7e438df86dc5175cfebaeedc3b4fe2be7b525aa2c8db144f80d20e10a19c"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-20.npz",
+      "sha256": "f3c4f2154e114152d871a52f0675a9196e4671a8216a62ddb0097665d7f0871f"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-21.npz",
+      "sha256": "5c51742acbf43347b2f109d8ea1cd9a216a9df7c84fa340298d11972b9e561d1"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-22.npz",
+      "sha256": "7280a992773913d8e259d2982916ff90cc778ffa7dd8d2d9f58e88c0011e13df"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-23.npz",
+      "sha256": "586f7ac56697163ec15dbef6d0bd532b03afa60d2ad7fedb5e890af7cef52d7b"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-24.npz",
+      "sha256": "09bdea6343ae31f4781dc6beb1fea76a21a1321055b653d53e9a2f004a80020f"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-28.npz",
+      "sha256": "486fd9c2a23ab6d84b83c25ec9efd76adea407cfe8148e9901b544b241dc7475"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-29.npz",
+      "sha256": "9fc1b2ddb2481e5c1d69383002bc7ce054961a24b335c5ed192ad425cfd567e8"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-30.npz",
+      "sha256": "190d6d18adffaac1870b36deecf83f4e98665a85c6a62dfb0a057ee6724cd573"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/ordinary/days/2024-05-31.npz",
+      "sha256": "34b8c06cfa80ad2ba22481b8c638ef6648e0b92793fb5fd28a951d1a0d4a4b35"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-03-28.npz",
+      "sha256": "1151840cd894ac2c9fe33a4c387a5a757be36513a39267b776dbe9c988731644"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-01.npz",
+      "sha256": "d0dfba5bfe114daf81119ee9abec201f39cb4838c8f768577af023c65a4ff47b"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-02.npz",
+      "sha256": "8915a9443d789a1d964088cb0dc3a5e67f7bc723d5ee5ad534406881053b0392"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-03.npz",
+      "sha256": "07b4fb3d1fb19e107f79b5453c06ca765ac11bf471b8495c00c07d06eba92a14"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-04.npz",
+      "sha256": "67bf8c3cfe2104bb7780c837cf985a212aa6c1634dda4eedac071363132f7bab"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-05.npz",
+      "sha256": "d03948e2db1a7a6d3dbfc66937bf3880cbe1ca52981f5abdf23ba8d7bff3dae3"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-08.npz",
+      "sha256": "a6bf4ddd1f0e1f08b6fb50815ea210439c517d99e2c51668e3b1cdb65c699dd3"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-09.npz",
+      "sha256": "01d8181b94deffc42cf272f011003f8e6d18ca24da6511cdc3b899145e4b7192"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-10.npz",
+      "sha256": "7625d860d87449d31756fc3b7b7ab823c50a61c05c0815753d09e71654407260"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-11.npz",
+      "sha256": "baf3ebccc07a03cb8e63f5be3bd778aa6ea8d50ff9be4da7bad671a3bde9a003"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-12.npz",
+      "sha256": "c915660c491649cd8f8a27c1d36b14f7b24303d22b16aaa4431503d7a49886cb"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-15.npz",
+      "sha256": "9e49d08ed539b597633e16f7efb5b4df7004cf9f12abfe75874cbffe488c0316"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-16.npz",
+      "sha256": "cc09fe7c22a8fa01895222c2f2844319f84c34e95bb51ddd0a95809ed7010f2f"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-17.npz",
+      "sha256": "b497477409da7ac8e29ef3aa1d9939c8d4e0d702d47df37b3eeee4a1422010de"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-18.npz",
+      "sha256": "f405c0505049378ea3f56d1057692ac422a2eb8187a62cdd17b089a217b79fc9"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-19.npz",
+      "sha256": "4b5d576429c6e01714f612ac95319507f12401f9c4614c1200f88f64bc586b5c"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-22.npz",
+      "sha256": "da936474dbac331ec808e57f45282b39745fd6375ab3ad1f5cf0084b1d083a1f"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-23.npz",
+      "sha256": "3ded6756547985b0e4852ca0e31bce78c3bf9ad6a735f8e74fc64ba0cbde64cb"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-24.npz",
+      "sha256": "f92757018330c6b860f42665075be51409fdd710fb5959dedbc338cecbe234bc"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-25.npz",
+      "sha256": "cc410e8b0b366c4a65a47756fd094f3ab763a7a06875d82dd0ce3e4b82681ff4"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-26.npz",
+      "sha256": "e4f9e6518a54a27900e862e5c1c606a66fb37fef44a7b25f7ca14aa020e9269a"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-29.npz",
+      "sha256": "be4606f3337d039ebe84d458c5e8a98e51a67ea7fc1a8de0d569cebc9a9306d7"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-04-30.npz",
+      "sha256": "06daaa14e6fb1ecbaf748b8527ade126749d65c7fa05e0d0124d2ca4886b7722"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-01.npz",
+      "sha256": "4beadb5906e174242762405855244e8746f6b3930cd2b575664ba7a68a5cb580"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-02.npz",
+      "sha256": "ef8d97b09e71db0da1108f012dc9a4dec4ad06a5884d68b6635de58df3f4aaaf"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-03.npz",
+      "sha256": "c65ff5f6f271a88b8d7f5d89b750b7c292d523cf3a1f93e62c4eb415d2acf889"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-06.npz",
+      "sha256": "25b98344213d93292596c869b0707b7dde71b732eb37123ab1823d2c0dbc557f"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-07.npz",
+      "sha256": "c748f929cf124488f5d5c66af429e81d10e4bd6900012872d8dbb3921ce277d0"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-08.npz",
+      "sha256": "0c9bdfab9fb98f943d55974828337fabdf495d6115e762a1a997b6aa23c209ad"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-09.npz",
+      "sha256": "6eccfa14f4456530eb28d90077748031122a1d70cced21f412c105aef7826d02"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-10.npz",
+      "sha256": "11b09246ab9dcb3a69c55130e04ab440a40b6447445d5a18a8c25c490b6e394e"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-13.npz",
+      "sha256": "70a531cffcc2e533188d91684ec329b2b2140a322d4c46d08e695c43f9df4596"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-14.npz",
+      "sha256": "a487cf575d9fc10f8e411a9f540899def1bb0c3ed68a898807c132413134a052"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-15.npz",
+      "sha256": "d1ea1f22c4f806c555ea778a7ffd4b93eaefac01aa2b568f29d6bd8e38f90c1e"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-16.npz",
+      "sha256": "36557d7d54c155e7a01386e672ed08d13978539bd93e8ecc44e91a1b85e97817"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-17.npz",
+      "sha256": "c327b237eb686e72c0e0fab69546e81309c450ad682e9a59901d8f4bb3f6ca5f"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-20.npz",
+      "sha256": "cb8680e973775ce587af20b70c0f110089f8efe70423e9acedec49ac7fdd0f62"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-21.npz",
+      "sha256": "d603c59c3e10400a4b75164cb0ba7a459789a7d32c8f69933b469bb2760037f1"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-22.npz",
+      "sha256": "6103642a199c05d78bf0d3263b5f0a0961ad8105f125ab264873dc38b0dd3a72"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-23.npz",
+      "sha256": "ad68773d35263e60c690d257c9c107c4e2149abb72dc56759580715f8c888dfb"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-24.npz",
+      "sha256": "2626bde555b66cf1c306c83977228dfd5e216b9e1ce4c573f868d20be0f360b4"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-28.npz",
+      "sha256": "2bace825fdccf4f4c742b5c1b26e0450f17a85df917a5fa8ba1dfadf0407e24a"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-29.npz",
+      "sha256": "7d6c8ad97518dd49b4390ab1fef7094cc897e3044a45c7bfce0c6b5c175f2ca8"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-30.npz",
+      "sha256": "82790df2fe6f2364c4e0768e201cea4fececb03cb1c3a9096bba513985e07cb5"
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1/fits/orthogonal/days/2024-05-31.npz",
+      "sha256": "070402de6b2e1ec51f72697ff09022d5556a466b20edd704ec6c82fe9c1dca2a"
+    }
+  ],
+  "scope": "controlled factor-count experiment; original native decoder/guards and reference smoothness mismatch remain unchanged"
+}

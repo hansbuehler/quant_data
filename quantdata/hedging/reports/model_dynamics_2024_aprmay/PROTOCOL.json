@@ -1,0 +1,22 @@
+{
+  "schema": "hedging-model-audit-final16-v3",
+  "source_run": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-common115-v2",
+  "rank_run": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-rank16-v1",
+  "paths": 32,
+  "sessions": 115,
+  "seed": 20261111,
+  "dysanos_rank": 16,
+  "models": [
+    "DYSANOS ordinary (16 factors)",
+    "DYSANOS spot-orthogonal (16 factors)",
+    "FuNVol",
+    "VolGAN PCA8",
+    "AD-Seq-Vol",
+    "AD-Seq-Vol-FT",
+    "GROMM-P",
+    "GROMM-Q",
+    "DYSANOS ordinary (16 factors) (tail)",
+    "DYSANOS spot-orthogonal (16 factors) (tail)"
+  ],
+  "other_models_retrained": false
+}

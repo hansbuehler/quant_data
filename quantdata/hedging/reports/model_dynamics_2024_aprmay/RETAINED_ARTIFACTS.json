@@ -1,0 +1,111 @@
+{
+  "external_run": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-final16-v3",
+  "files": {
+    "INFERENCE_MODELS.json": {
+      "sha256": "0e42a639b8d3c797570499747b83cbd37809e4a8c648f40f96544b2444289453",
+      "bytes": 87125
+    },
+    "MANIFEST.json": {
+      "sha256": "e0c314e643a0dbef7f87df09eacc76169c6b8c18aac3f7f7e0c92618ae72b996",
+      "bytes": 7606
+    },
+    "MODEL_DYNAMICS_REPORT.pdf": {
+      "sha256": "ba958579617b81229ca300a879644015e2acdae261c361812d3ae9d41ca4b1be",
+      "bytes": 337592
+    },
+    "MODEL_DYNAMICS_REPORT.tex": {
+      "sha256": "743e95f792bdabc20acd92f2327bf13e21b6ee77b34f5c6e837d981e431faf2a",
+      "bytes": 64274
+    },
+    "MODEL_SELECTION.json": {
+      "sha256": "6a295b23336087dcb8bb22fbaccd0b1a5936ed8ac6e3a5bb0e61ca6df5a77b4c",
+      "bytes": 441
+    },
+    "PROTOCOL.json": {
+      "sha256": "32bfacb28bbf30e11899b3ac3542a5433c99f91fd16a732ed6966fe8381d5ce7",
+      "bytes": 673
+    },
+    "SOURCE_INPUTS.json": {
+      "sha256": "2fbcf2784b4fc0c34276a351605284d9dbbfe62101dc0380f8aeae383f682b6f",
+      "bytes": 628630
+    },
+    "SOURCE_REUSE.json": {
+      "sha256": "15f26e3ca178a7235bf76e866ea611978b6d89a77b9b2cab32983034ecc0c6a1",
+      "bytes": 402125
+    },
+    "STATS.md": {
+      "sha256": "105c7ba31b502a99435079dd638ad21f6fce3c320d7124a7140dc53ef88b7774",
+      "bytes": 2866
+    },
+    "TRAFFIC_LIGHT_RULES.json": {
+      "sha256": "92f196bd3123353b93581812cf25cbb3b8e59062002cef49bce0114d10911285",
+      "bytes": 4130
+    },
+    "acf.pdf": {
+      "sha256": "32dc0c2c10d3311e62692cfbed20b24448458c88fded7fdb54a7a8269d21258e",
+      "bytes": 35024
+    },
+    "covariance.pdf": {
+      "sha256": "d66e605c99c10024b1459948390f235010e48a736f458553534be2d8ee84a958",
+      "bytes": 19348
+    },
+    "coverage.csv": {
+      "sha256": "26924ab6f1fe6f046709387d8a0df28e996141c97b3a310e0623aaca42743756",
+      "bytes": 581
+    },
+    "daily_scores.csv": {
+      "sha256": "ef4dbe6bc86243eda36fbe3a92e758587c31ed011da276e6b19f26b4f090445a",
+      "bytes": 42188
+    },
+    "iv_rmse_buckets.csv": {
+      "sha256": "707689532ff76b1edb0849a5561b88dd6eab252d9cab58de840b02ef0639059d",
+      "bytes": 63113
+    },
+    "linear_stability.csv": {
+      "sha256": "a0c496d2e6caef9f50235888d3b397c537a26d4ed8018f74cb1773739433cf8f",
+      "bytes": 31622
+    },
+    "monthly_scores.csv": {
+      "sha256": "a7c99b38a85c9d404cbe2e4e6cebd4311ba6ec56596c3792801a0a05e812aa72",
+      "bytes": 1472
+    },
+    "observable_reference.json": {
+      "sha256": "72df73763800cadf691176132836cfce88ccb21ed75da15d14e4e8a8e3114d25",
+      "bytes": 5011
+    },
+    "quote_forecast_scores.csv": {
+      "sha256": "70516fb564444625ee4e3fddc6d616bdd86b5f3c899b0ac5e94cc97ab11c79de",
+      "bytes": 248442
+    },
+    "rank_comparison.json": {
+      "sha256": "a65f04dd0ea1450c81f80c7ef7cf0cc32c0e33c741728df638a870ad9707667a",
+      "bytes": 79379
+    },
+    "reconstruction_scores.csv": {
+      "sha256": "4d2a941a64e957e9f87010f1f0c39c97645cd6ef1f6c9a1b5904396d0157649b",
+      "bytes": 51301
+    },
+    "rolling_scores.csv": {
+      "sha256": "730239aee682de3eccfdea6da7a7462ddf90a16dcd6638595ef2cdf64b36ca8a",
+      "bytes": 52820
+    },
+    "summary.json": {
+      "sha256": "5513511e40a122201175e9a36e9a29eaa19647a78e2bd172ea2640e0e6656c47",
+      "bytes": 136519
+    },
+    "summary_matched_dates.json": {
+      "sha256": "b077eae370d0f98db50319cc27e69662071905d988897b0dcdaf9b0077a6e14c",
+      "bytes": 147086
+    },
+    "tail_scores.csv": {
+      "sha256": "f8843f60831a043e69fc893e31eae008d0f2bafceb1f91a873deaff2642a1f4d",
+      "bytes": 29682
+    },
+    "tails.pdf": {
+      "sha256": "ad9c7cbcf28b9967a85600f1181c58d9599927d3b3005264083e2d46597ffdc5",
+      "bytes": 46700
+    }
+  },
+  "large_files_external": true,
+  "raw_licensed_quotes_included": false
+}

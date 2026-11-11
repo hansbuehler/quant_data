@@ -1,0 +1,11 @@
+model,requested_origins,surface_origins,quote_forecast_origins,recursive_origins,recursive_invalid_origins,recursive_min_sessions,recursive_max_sessions
+DYSANOS ordinary (16 factors),44,44,44,44,0,115,115
+DYSANOS spot-orthogonal (16 factors),44,44,44,44,0,115,115
+FuNVol,44,44,44,44,0,115,115
+VolGAN PCA8,44,44,44,44,0,115,115
+AD-Seq-Vol,44,44,44,44,0,115,115
+AD-Seq-Vol-FT,44,44,44,44,0,115,115
+GROMM-P,44,44,44,44,0,115,115
+GROMM-Q,44,44,44,44,0,115,115
+DYSANOS ordinary (16 factors) (tail),44,44,44,44,0,115,115
+DYSANOS spot-orthogonal (16 factors) (tail),44,44,44,44,0,115,115

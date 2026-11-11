@@ -1,0 +1,114 @@
+{
+  "interpretation": "retrospective descriptive review tolerances, not model-selection or arbitrage tests",
+  "colors": {
+    "pass": "black",
+    "warn": "orange",
+    "fail": "red"
+  },
+  "rules": {
+    "cov_frob_rel": {
+      "name": "Relative covariance Frobenius error",
+      "pass_limit": 0.25,
+      "warn_limit": 0.5,
+      "transform": "upper",
+      "origin": "Working tolerances of 25% and 50% of observed covariance norm."
+    },
+    "trace_ratio": {
+      "name": "Model/data surface variance ratio",
+      "pass_limit": 1.25,
+      "warn_limit": 2.0,
+      "transform": "factor",
+      "origin": "Within a factor 1.25, or within a factor two, of observed total variance."
+    },
+    "subspace_angle_max": {
+      "name": "Maximum principal-subspace angle (degrees)",
+      "pass_limit": 15.0,
+      "warn_limit": 30.0,
+      "transform": "upper",
+      "origin": "Working angular tolerances of 15 and 30 degrees, not confidence bounds."
+    },
+    "eig_share_err_k": {
+      "name": "Leading eigenvalue-share L1 error",
+      "pass_limit": 0.1,
+      "warn_limit": 0.25,
+      "transform": "upper",
+      "origin": "Total absolute leading-share discrepancies of 10 and 25 percentage points."
+    },
+    "spot_corr_abs_error": {
+      "name": "Absolute spot/PC correlation error",
+      "pass_limit": 0.1,
+      "warn_limit": 0.2,
+      "transform": "upper",
+      "origin": "Working correlation tolerances of 0.10 and 0.20, not significance cutoffs."
+    },
+    "forecast_ratio": {
+      "name": "Forecast loss / persistence loss",
+      "pass_limit": 1.0,
+      "warn_limit": 1.1,
+      "transform": "upper",
+      "origin": "No worse than persistence; warning allows at most 10% deterioration."
+    },
+    "fit_in_spread": {
+      "name": "Same-day reconstruction in-spread fraction",
+      "pass_limit": 0.95,
+      "warn_limit": 0.8,
+      "transform": "lower",
+      "origin": "Working reconstruction goals: at most 1 in 20, or 1 in 5, prices outside the spread."
+    },
+    "fit_outside_mean": {
+      "name": "Same-day mean outside-spread distance",
+      "pass_limit": 0.25,
+      "warn_limit": 1.0,
+      "transform": "upper",
+      "origin": "Working distances of one-quarter and one full quoted spread width."
+    },
+    "fit_outside_q95": {
+      "name": "Same-day 95th-percentile outside distance",
+      "pass_limit": 1.0,
+      "warn_limit": 2.0,
+      "transform": "upper",
+      "origin": "Working tail distances of one and two full quoted spread widths."
+    },
+    "window_deterioration": {
+      "name": "Relative forecast-skill deterioration",
+      "pass_limit": 1.1,
+      "warn_limit": 1.25,
+      "transform": "upper",
+      "origin": "Working deterioration tolerances of 10% and 25%, after scaling by contemporaneous persistence risk."
+    },
+    "acf_abs_error": {
+      "name": "Absolute floating-IV PC ACF error",
+      "pass_limit": 0.1,
+      "warn_limit": 0.2,
+      "transform": "upper",
+      "origin": "Working ACF tolerances of 0.10 and 0.20; fewer than 30 observed lag pairs forces at least warning."
+    },
+    "ar_radius": {
+      "name": "PCA AR spectral radius",
+      "pass_limit": 0.99,
+      "warn_limit": 1.0,
+      "transform": "upper",
+      "origin": "Stationarity boundary is one. The .99 proximity warning corresponds to a modal half-life of about 69 sessions."
+    },
+    "invalid_rate": {
+      "name": "Invalid decoded path fraction",
+      "pass_limit": 0.0,
+      "warn_limit": 0.01,
+      "transform": "upper",
+      "origin": "No invalid paths is the target; up to 1% is a numerical warning, beyond 1% a review failure."
+    },
+    "extreme_rate": {
+      "name": "Fraction of surfaces with IV above 300%",
+      "pass_limit": 0.0,
+      "warn_limit": 0.001,
+      "transform": "upper",
+      "origin": "300% IV is the stated sanity threshold; any occurrence warns and more than 0.1% fails this finite-horizon screen."
+    }
+  },
+  "tail_coverage": {
+    "pass_p_min": 0.05,
+    "warn_p_min": 0.01,
+    "minimum_expected_exceptions_for_pass": 10,
+    "test": "two-sided exact binomial; pointwise, exploratory, no across-model multiplicity correction"
+  }
+}

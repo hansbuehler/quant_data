@@ -1,0 +1,16 @@
+{
+  "dysanos_rank": 16,
+  "models": [
+    "DYSANOS ordinary (16 factors)",
+    "DYSANOS spot-orthogonal (16 factors)",
+    "FuNVol",
+    "VolGAN PCA8",
+    "AD-Seq-Vol",
+    "AD-Seq-Vol-FT",
+    "GROMM-P",
+    "GROMM-Q",
+    "DYSANOS ordinary (16 factors) (tail)",
+    "DYSANOS spot-orthogonal (16 factors) (tail)"
+  ],
+  "selection": "user-requested sixteen-factor primary comparison; eight-factor results remain in rank_comparison.json"
+}
