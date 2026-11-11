@@ -5,12 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import warnings
 from dataclasses import asdict, dataclass, fields, replace
 from datetime import date
 from pathlib import Path
 
 from cdxcore.util import is_filename
 from cdxcore.verbose import Context
+from cvxpy.error import SolverError
 from filelock import FileLock
 
 from quantdata import env as quantdata_env
@@ -46,6 +48,7 @@ from quantdata.dysanos.flex.training import (
     native_target_identity,
 )
 from quantdata.pool import PoolConfig
+from quantdata.sanos.arbfree import MkArbFree
 from quantdata.torch.ffw import FeedForwardConfig
 
 _DEFAULT_STATE_SIZES = (20, 100, 200, 1_000)
@@ -146,10 +149,11 @@ def _triangular_pca_decoder_config(
 
 @dataclass(frozen=True)
 class _MarketLoadResult:
-    """One market outcome without allowing an isolated bad day to abort a run."""
+    """One market outcome, retaining the primary error when recovery was needed."""
 
     day: FlexMarketDay | None
     error: str | None
+    retry_error: str | None = None
 
 
 def _statistics_rows(
@@ -924,22 +928,33 @@ def _load_market_job(
     geometry: FlexGeometryConfig,
     market_config: FlexMarketConfig,
 ) -> _MarketLoadResult:
-    try:
-        return _MarketLoadResult(
-            day=load_market_day(
-                ticker,
-                trading_date,
-                geometry=geometry,
-                config=market_config,
-                verbose=Context.quiet,
-            ),
-            error=None,
-        )
-    except Exception as error:  # noqa: BLE001
-        return _MarketLoadResult(
-            day=None,
-            error=f"{type(error).__name__}: {error}",
-        )
+    retry_error = None
+    for recovery in (False, True):
+        try:
+            # Keep the same book and objective; only extend the solver budget.
+            recovery_options = {"mk_arb_free": MkArbFree(timeout_seconds=3000.0)} if recovery else {}
+            return _MarketLoadResult(
+                day=load_market_day(
+                    ticker, trading_date, geometry=geometry, config=market_config,
+                    verbose=Context.quiet, **recovery_options,
+                ),
+                error=None,
+                retry_error=retry_error,
+            )
+        except Exception as error:  # noqa: BLE001
+            message = f"{type(error).__name__}: {error}"
+            if not recovery and (isinstance(error, SolverError) or (
+                isinstance(error, RuntimeError) and (
+                    "reached timeout" in str(error) or "Cannot find no-arbitrage surface mids" in str(error)
+                )
+            )):
+                retry_error = message
+                warnings.warn(
+                    f"{ticker} {trading_date}: {message} Retrying the same market with a 3000-second solver limit.",
+                    RuntimeWarning,
+                )
+                continue
+            return _MarketLoadResult(day=None, error=message, retry_error=retry_error)
 
 
 def run_production_gates(
@@ -1181,6 +1196,7 @@ def _run_production_gates_locked(
     days: list[FlexMarketDay] = []
     failed_market_dates: list[dict[str, str]] = []
     missing_market_dates: list[str] = []
+    recovered_market_dates: list[dict[str, object]] = []
     for index, result in enumerate(pool.parallel(jobs)):
         trading_date, outcome = result
         if outcome.error is not None:
@@ -1188,6 +1204,7 @@ def _run_production_gates_locked(
                 {
                     "date": trading_date.isoformat(),
                     "error": outcome.error,
+                    **({"primary_error": outcome.retry_error} if outcome.retry_error is not None else {}),
                 }
             )
             print(
@@ -1197,6 +1214,8 @@ def _run_production_gates_locked(
             )
         elif outcome.day is not None:
             days.append(outcome.day)
+            if outcome.retry_error is not None:
+                recovered_market_dates.append(dict(date=trading_date.isoformat(), primary_error=outcome.retry_error, timeout_seconds=3000.0))
             print(
                 f"market {index + 1}/{len(load_dates)} date={trading_date} "
                 f"quotes={outcome.day.num_quotes}",
@@ -1210,18 +1229,24 @@ def _run_production_gates_locked(
                 flush=True,
             )
     days.sort(key=lambda day: day.trading_date)
-    if len(days) == 0:
-        raise RuntimeError("No eligible FLEX market days were loaded")
     market_days = tuple(days)
     report["market_dates"] = [day.trading_date.isoformat() for day in market_days]
     report["failed_market_dates"] = failed_market_dates
     report["missing_market_dates"] = missing_market_dates
+    report["recovered_market_dates"] = recovered_market_dates
     report["num_days"] = len(market_days)
     report["num_quotes"] = sum(day.num_quotes for day in market_days)
-    report["status"] = (
+    incomplete = bool(failed_market_dates or missing_market_dates)
+    report["status"] = "market_loading_failed" if incomplete else (
         "compression_native_loading" if run_compression else "native_running"
     )
     _write_report(report, output_directory=output_directory, label=label)
+    if incomplete:
+        unresolved = sorted([item["date"] for item in failed_market_dates] + missing_market_dates)
+        raise RuntimeError(
+            f"Market loading failed for {len(unresolved)} requested dates after recovery: {unresolved}. "
+            f"See {output_directory / (label + '.json')}; training was not started."
+        )
 
     with training_lock:
         native_reprice_train_config = train_config

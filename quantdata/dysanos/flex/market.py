@@ -17,7 +17,7 @@ from cdxcore.verbose import Context
 from quantdata.biz_calendar import DAYS_PER_YEAR, NMS
 from quantdata.dysanos.flex.config import FlexGeometryConfig, FlexMarketConfig
 from quantdata.dysanos.market import smooth_interpolated_market
-from quantdata.sanos.arbfree import ArbFreePricer
+from quantdata.sanos.arbfree import ArbFreePricer, MkArbFree
 from quantdata.widb.options_filter import OptionsFilter
 
 MAX_MARKET_LP_PROCESSES = 4
@@ -442,15 +442,21 @@ def load_market_day(
     *,
     geometry: FlexGeometryConfig = FlexGeometryConfig(),
     config: FlexMarketConfig = FlexMarketConfig(),
+    mk_arb_free: MkArbFree = MkArbFree(),
     override_cache_mode: CacheMode | str | None = None,
     verbose: Context | None = Context.all,
     restrict_nms: bool = True,
 ) -> FlexMarketDay | None:
-    """Load one market and apply FLEX's exact floating horizon and NMS range."""
+    """Load one market and apply FLEX's exact floating horizon and NMS range.
+
+    ``mk_arb_free`` controls the initial fit; its solver timeout also applies
+    to the final smooth fit, allowing recovery without changing the book.
+    """
     payload = smooth_interpolated_market(
         ticker,
         trading_date,
         smoothness=config.smoothness,
+        mk_arb_free=mk_arb_free,
         options_filter=OptionsFilter(
             max_num_options=config.max_num_options,
             # The smooth arbitrage-free market is canonical input data rather

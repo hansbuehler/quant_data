@@ -84,6 +84,12 @@ def test_smooth_interpolated_market_one_day_reconstructs_arb_free_pricer(
     ticker = "TEST"
     market_date = date(2025, 6, 3)
     day = _one_day_market()
+    constructor_arguments = []
+    actual_constructor = dysanos_market.MkArbFree
+
+    def configured_fitter(**kwargs):
+        constructor_arguments.append(kwargs)
+        return actual_constructor(**kwargs)
 
     def load_day(requested_ticker, requested_date, **kwargs):
         assert requested_ticker == ticker
@@ -92,13 +98,16 @@ def test_smooth_interpolated_market_one_day_reconstructs_arb_free_pricer(
         return day
 
     monkeypatch.setattr(dysanos_market, "filter_options_day", load_day)
+    monkeypatch.setattr(dysanos_market, "MkArbFree", configured_fitter)
 
     result = dysanos_market.smooth_interpolated_market.__wrapped__(
         ticker,
         market_date,
+        mk_arb_free=actual_constructor(timeout_seconds=1234.0),
         verbose=Context.quiet,
     )
 
+    assert constructor_arguments[0]["timeout_seconds"] == 1234.0
     assert result["ticker"] == ticker
     assert result["schema_version"] == 4
     assert result["d"] == market_date

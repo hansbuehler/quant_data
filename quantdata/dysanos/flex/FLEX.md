@@ -587,6 +587,16 @@ The earlier LP containment ratio is reported nowhere and does not stop
 training. The benchmark stops after writing this report; compression is not
 started automatically.
 
+Market loading retries recognized surface-solver errors and timeout/iteration-limit
+failures once with a 3,000-second solver budget, preserving the date, quotes,
+filters, geometry and smoothness. The existing HiGHS-to-Clarabel solver fallback
+remains in use. Successful recoveries are recorded in `recovered_market_dates`
+with the original error and retry budget. Any unresolved failed or empty requested
+day writes `status="market_loading_failed"` and raises before training; a smaller
+date population is never accepted implicitly. Explicit calendar exclusions must
+be reflected in the requested date list. This applies to subsequent runs and
+does not alter retained historical datasets or checkpoints.
+
 In-progress checkpoints record the exact training phase, completed epoch,
 optimizer and scheduler states, NumPy and Torch random-generator states, and
 the accumulated history. Market-phase checkpoints retain only the pre-training
