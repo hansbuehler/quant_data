@@ -32,6 +32,7 @@ from quantdata.hedging.model_audit.metrics import (
     covariance,
     covariance_comparison,
     factor_innovation_covariance,
+    forecast_variance_calibration,
     frozen_pca,
     linear_stability,
     mixture_covariance,
@@ -324,6 +325,7 @@ def _summarize(records: list[dict], basis: np.ndarray) -> dict:
         "persistence_rmse": float(np.sqrt(np.mean(actual**2))),
         "invalid_surface_rate": float(np.mean([item["invalid_surface_rate"] for item in surface_records])),
         "extreme_surface_rate": float(np.mean([item["extreme_surface_rate"] for item in surface_records]))}
+    summary["forecast_variance_calibration"] = forecast_variance_calibration(means, covariances, actual)
     joint_cov = mixture_covariance(np.array([item["joint_mean"] for item in surface_records]),
                                    np.array([item["joint_covariance"] for item in surface_records]))
     model_corr = correlation_from_covariance(joint_cov)[0, 1:]

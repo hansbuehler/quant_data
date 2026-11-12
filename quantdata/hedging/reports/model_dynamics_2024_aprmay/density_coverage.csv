@@ -1,0 +1,3 @@
+model,requested_origins,surface_origins,quote_forecast_origins,recursive_origins,recursive_invalid_origins,recursive_min_sessions,recursive_max_sessions
+DYSANOS ordinary (16 factors) density-weighted,44,44,44,44,0,115,115
+DYSANOS spot-orthogonal (16 factors) density-weighted,44,44,44,44,0,115,115

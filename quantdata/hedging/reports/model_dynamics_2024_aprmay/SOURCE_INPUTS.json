@@ -42,6 +42,36 @@
       "origin_dates": []
     },
     {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-final16-v3/covariance_extension.json",
+      "sha256": "43d08ed49dfee8f4c46fc8ec2a9805b78112761d731e14f9735e9b33c0d3cc8f",
+      "bytes": 33491,
+      "roles": [
+        "audit protocol and selected-model provenance"
+      ],
+      "models": [],
+      "origin_dates": []
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-final16-v3/density_weighted_diagnostics.json",
+      "sha256": "3f6faccb23bf70c2cb30740233e7ff2783d69a8580b652bc32d9872421ea75fe",
+      "bytes": 132134,
+      "roles": [
+        "audit protocol and selected-model provenance"
+      ],
+      "models": [],
+      "origin_dates": []
+    },
+    {
+      "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-final16-v3/DENSITY_WEIGHTED_INPUTS.json",
+      "sha256": "5676e3e8c1e47a8408179b486e4d3a719f5a3af9d93487cd7af07d8fabc09174",
+      "bytes": 118420,
+      "roles": [
+        "audit protocol and selected-model provenance"
+      ],
+      "models": [],
+      "origin_dates": []
+    },
+    {
       "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-final16-v3/INFERENCE_MODELS.json",
       "sha256": "0e42a639b8d3c797570499747b83cbd37809e4a8c648f40f96544b2444289453",
       "bytes": 87125,
@@ -20185,7 +20215,7 @@
       ]
     }
   ],
-  "file_count": 1440,
-  "total_unique_bytes": 5275940274,
+  "file_count": 1443,
+  "total_unique_bytes": 5276224319,
   "warning": "External paths/hashes are an inventory, not redistribution rights; licensed inputs and large model files stay external."
 }

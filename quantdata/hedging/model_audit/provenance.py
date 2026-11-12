@@ -41,7 +41,8 @@ def main() -> None:
     public = root / "datasets/hedging/spx-2022-2025-hedging-public-candidate-v1"
     selection_path = output / "MODEL_SELECTION.json"
     selected = json.loads(selection_path.read_text())["models"] if selection_path.exists() else []
-    for name in ("MODEL_SELECTION.json", "PROTOCOL.json", "SOURCE_REUSE.json", "rank_comparison.json"):
+    for name in ("MODEL_SELECTION.json", "PROTOCOL.json", "SOURCE_REUSE.json", "rank_comparison.json", "covariance_extension.json",
+                 "density_weighted_diagnostics.json", "DENSITY_WEIGHTED_INPUTS.json"):
         register(output / name, "audit protocol and selected-model provenance")
     inference_catalog = output / "INFERENCE_MODELS.json"
     if inference_catalog.exists():

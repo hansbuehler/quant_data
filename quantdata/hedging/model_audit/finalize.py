@@ -131,11 +131,21 @@ def retain_deck(output: Path, repository_directory: Path) -> None:
             record = json.loads(path.read_text())
             if (record["path_count"], record["steps"], record["seed"]) != (32, 115, 20_261_111):
                 raise ValueError(f"The final deck has a mismatched path count, horizon or seed: {path}")
+    weighted_path = output / "density_weighted_diagnostics.json"
+    if weighted_path.exists():
+        weighted = json.loads(weighted_path.read_text())
+        for model in weighted["models"]:
+            if any(model["coverage"][key] != 44 for key in ("surface_origins", "quote_forecast_origins", "recursive_origins")):
+                raise ValueError("The weighted follow-up has missing origin-level diagnostics")
+            if (weighted["paths"], weighted["sessions"], weighted["seed"]) != (32, 115, 20_261_111):
+                raise ValueError("The weighted follow-up has mismatched paths or horizons")
     repository_directory.mkdir(parents=True, exist_ok=True)
     names = {path.name for pattern in ("*.pdf", "*.tex", "*.csv") for path in output.glob(pattern)}
     names.update({"STATS.md", "summary.json", "summary_matched_dates.json", "observable_reference.json",
         "TRAFFIC_LIGHT_RULES.json", "MODEL_SELECTION.json", "PROTOCOL.json", "SOURCE_REUSE.json",
         "SOURCE_INPUTS.json", "INFERENCE_MODELS.json", "rank_comparison.json", "MANIFEST.json"})
+    names.update(name for name in ("covariance_extension.json", "covariance.png", "density_weighted_diagnostics.json",
+                                  "DENSITY_WEIGHTED_INPUTS.json") if (output / name).is_file())
     retained = {}
     for name in sorted(names):
         original = output / name

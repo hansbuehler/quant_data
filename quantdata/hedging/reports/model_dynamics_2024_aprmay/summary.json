@@ -53,6 +53,13 @@
     "persistence_rmse": 0.19037731409697836,
     "invalid_surface_rate": 0.0,
     "extreme_surface_rate": 0.0,
+    "forecast_variance_calibration": {
+      "predicted_conditional_variance_trace": 0.1450531737199309,
+      "forecast_error_squared_norm_mean": 1.48723742180789,
+      "conditional_variance_over_forecast_mse": 0.0975319552836452,
+      "forecast_error_mean_squared_norm": 0.013747045720676128,
+      "centered_forecast_error_covariance_trace": 1.5077575941357537
+    },
     "spot_pc_correlations_model": [
       -0.14884622488497926,
       0.034665950411708585,
@@ -540,6 +547,13 @@
     "persistence_rmse": 0.19037731409697836,
     "invalid_surface_rate": 0.0,
     "extreme_surface_rate": 0.0,
+    "forecast_variance_calibration": {
+      "predicted_conditional_variance_trace": 0.2807098900741781,
+      "forecast_error_squared_norm_mean": 1.5125234774637002,
+      "conditional_variance_over_forecast_mse": 0.1855904349629608,
+      "forecast_error_mean_squared_norm": 0.006504661659837825,
+      "centered_forecast_error_covariance_trace": 1.5410425091946498
+    },
     "spot_pc_correlations_model": [
       -0.6935681869225744,
       0.7291677838330064,
@@ -1027,6 +1041,13 @@
     "persistence_rmse": 0.19037731409697836,
     "invalid_surface_rate": 0.0,
     "extreme_surface_rate": 0.0,
+    "forecast_variance_calibration": {
+      "predicted_conditional_variance_trace": 0.7209326109373774,
+      "forecast_error_squared_norm_mean": 1.6498862330277104,
+      "conditional_variance_over_forecast_mse": 0.4369589832957101,
+      "forecast_error_mean_squared_norm": 0.1002085539778248,
+      "centered_forecast_error_covariance_trace": 1.5857166948417436
+    },
     "spot_pc_correlations_model": [
       -0.7107789891657205,
       0.45692370929171816,
@@ -1514,6 +1535,13 @@
     "persistence_rmse": 0.19037731409697836,
     "invalid_surface_rate": 0.0,
     "extreme_surface_rate": 0.0,
+    "forecast_variance_calibration": {
+      "predicted_conditional_variance_trace": 0.0004558589741790347,
+      "forecast_error_squared_norm_mean": 2.257340310215169,
+      "conditional_variance_over_forecast_mse": 0.00020194517065775624,
+      "forecast_error_mean_squared_norm": 0.43693332651084327,
+      "centered_forecast_error_covariance_trace": 1.8627420298369841
+    },
     "spot_pc_correlations_model": [
       -0.4508630175284575,
       0.33793098060354115,
@@ -2001,6 +2029,13 @@
     "persistence_rmse": 0.19037731409697836,
     "invalid_surface_rate": 0.0,
     "extreme_surface_rate": 0.0,
+    "forecast_variance_calibration": {
+      "predicted_conditional_variance_trace": 0.6797638682166206,
+      "forecast_error_squared_norm_mean": 2.7463199115887145,
+      "conditional_variance_over_forecast_mse": 0.24751809333945549,
+      "forecast_error_mean_squared_norm": 0.10034090628579145,
+      "centered_forecast_error_covariance_trace": 2.707513400775084
+    },
     "spot_pc_correlations_model": [
       -0.26862290178084436,
       0.31793135283959606,
@@ -2488,6 +2523,13 @@
     "persistence_rmse": 0.19037731409697836,
     "invalid_surface_rate": 0.0,
     "extreme_surface_rate": 0.0,
+    "forecast_variance_calibration": {
+      "predicted_conditional_variance_trace": 0.5481922976931096,
+      "forecast_error_squared_norm_mean": 3.4601963610851327,
+      "conditional_variance_over_forecast_mse": 0.158428089185434,
+      "forecast_error_mean_squared_norm": 0.8833771392806302,
+      "centered_forecast_error_covariance_trace": 2.6367452502185604
+    },
     "spot_pc_correlations_model": [
       -0.340150974757478,
       0.436338168837926,
@@ -2975,6 +3017,13 @@
     "persistence_rmse": 0.19037731409697836,
     "invalid_surface_rate": 0.0,
     "extreme_surface_rate": 0.0,
+    "forecast_variance_calibration": {
+      "predicted_conditional_variance_trace": 1.446109415228222,
+      "forecast_error_squared_norm_mean": 0.7007749666800652,
+      "conditional_variance_over_forecast_mse": 2.0635860069020344,
+      "forecast_error_mean_squared_norm": 0.023042457468052068,
+      "centered_forecast_error_covariance_trace": 0.6934937303564784
+    },
     "spot_pc_correlations_model": [
       -0.2504388774639058,
       0.15732324427992428,
@@ -3462,6 +3511,13 @@
     "persistence_rmse": 0.19037731409697836,
     "invalid_surface_rate": 0.0,
     "extreme_surface_rate": 0.0,
+    "forecast_variance_calibration": {
+      "predicted_conditional_variance_trace": 1.3861318070324105,
+      "forecast_error_squared_norm_mean": 0.763478863203198,
+      "conditional_variance_over_forecast_mse": 1.8155470620586058,
+      "forecast_error_mean_squared_norm": 0.07383822345415221,
+      "centered_forecast_error_covariance_trace": 0.7056787941618142
+    },
     "spot_pc_correlations_model": [
       -0.21427937066650482,
       0.1485889223049427,
@@ -3949,6 +4005,13 @@
     "persistence_rmse": 0.19037731409697836,
     "invalid_surface_rate": 0.0,
     "extreme_surface_rate": 0.0,
+    "forecast_variance_calibration": {
+      "predicted_conditional_variance_trace": 0.14480972979568799,
+      "forecast_error_squared_norm_mean": 1.4856747973620292,
+      "conditional_variance_over_forecast_mse": 0.09747067800625869,
+      "forecast_error_mean_squared_norm": 0.012836979673120606,
+      "centered_forecast_error_covariance_trace": 1.5070898599607436
+    },
     "spot_pc_correlations_model": [
       -0.14723807451955503,
       0.04643780017661619,
@@ -4436,6 +4499,13 @@
     "persistence_rmse": 0.19037731409697836,
     "invalid_surface_rate": 0.0,
     "extreme_surface_rate": 0.0,
+    "forecast_variance_calibration": {
+      "predicted_conditional_variance_trace": 0.2801015770545774,
+      "forecast_error_squared_norm_mean": 1.5110566580867568,
+      "conditional_variance_over_forecast_mse": 0.18536801750983414,
+      "forecast_error_mean_squared_norm": 0.00526823215357026,
+      "centered_forecast_error_covariance_trace": 1.5408067614200047
+    },
     "spot_pc_correlations_model": [
       -0.6930159567537177,
       0.7398982132601379,

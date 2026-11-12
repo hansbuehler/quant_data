@@ -56,7 +56,16 @@ def path_acf(scores: np.ndarray) -> list[dict]:
 def _dysanos(root: Path, model: str, day: date, *, paths: int, steps: int,
               output: Path | None = None) -> tuple[np.ndarray, dict]:
     base = root / "quant_data/hedge2/runs"
-    fit = load_dynamics(retained_dynamics_path(root, model, day, output=output))
+    weighted = None
+    if model.endswith("density-weighted"):
+        from quantdata.hedging.model_audit.density_weighted import load_weighted_model
+
+        if output is None:
+            raise ValueError("Density-weighted recursive tests require their experiment directory")
+        weighted = load_weighted_model(output, model, day)
+        fit = weighted.weighted_fit
+    else:
+        fit = load_dynamics(retained_dynamics_path(root, model, day, output=output))
     if "(16 factors)" in model and fit.directions.shape[1] != 16:
         raise ValueError("The requested sixteen-factor checkpoint has a different rank")
     directory = base / "dlv-full-v4-20261106T1130"
@@ -73,19 +82,26 @@ def _dysanos(root: Path, model: str, day: date, *, paths: int, steps: int,
             raise ValueError("Tail Diffusion requires its dedicated output directory")
         tail_record = fit_tail(fit, root=root, output=output, model=model)
         tail_sampler = TailSampler(fit, tail_record, paths=paths, seed=20_261_111)
-    scores = np.broadcast_to(fit.current_scores, (paths, len(fit.current_scores))).copy()
     projected_spot = fit.spot_state_loading @ fit.directions
     perpendicular = fit.spot_state_loading - fit.directions @ projected_spot
-    base_state = state.native - fit.directions @ fit.current_scores
-    accumulated_spot = np.zeros(paths)
-    natives = []
-    for _ in range(steps):
-        innovations = (fit.residuals[rng.integers(0, len(fit.residuals), paths)]
-                       if tail_sampler is None else tail_sampler.draw())
-        scores = scores @ fit.ar_matrix.T + fit.ar_intercept + innovations[:, 1:] + innovations[:, :1] * projected_spot
-        accumulated_spot += innovations[:, 0]
-        natives.append(base_state + scores @ fit.directions.T + accumulated_spot[:, None] * perpendicular)
-    natives = np.stack(natives, axis=1).reshape(paths * steps, -1)
+    extra_diagnostics = {}
+    if weighted is not None:
+        from quantdata.hedging.model_audit.density_weighted import recursive_native_paths
+
+        natives, extra_diagnostics = recursive_native_paths(weighted, state.native, paths=paths, steps=steps, seed=20_261_111)
+        natives = natives.reshape(paths * steps, -1)
+    else:
+        scores = np.broadcast_to(fit.current_scores, (paths, len(fit.current_scores))).copy()
+        base_state = state.native - fit.directions @ fit.current_scores
+        accumulated_spot = np.zeros(paths)
+        natives = []
+        for _ in range(steps):
+            innovations = (fit.residuals[rng.integers(0, len(fit.residuals), paths)]
+                           if tail_sampler is None else tail_sampler.draw())
+            scores = scores @ fit.ar_matrix.T + fit.ar_intercept + innovations[:, 1:] + innovations[:, :1] * projected_spot
+            accumulated_spot += innovations[:, 0]
+            natives.append(base_state + scores @ fit.directions.T + accumulated_spot[:, None] * perpendicular)
+        natives = np.stack(natives, axis=1).reshape(paths * steps, -1)
     surfaces, lower, upper, invalid, inversion_records = [], 0, 0, 0, []
     for begin in range(0, len(natives), 256):
         decoded, guards = _dlv_surface(state, natives[begin:begin + 256])
@@ -100,6 +116,7 @@ def _dysanos(root: Path, model: str, day: date, *, paths: int, steps: int,
         "invalid_surface_count": invalid, "spot_loading_outside_factor_span_fraction": ratio,
         "full_native_unit_root_from_spot_loading": bool(ratio > 1e-8),
         "iv_inversion": summarize_inversions(inversion_records)}
+    diagnostics.update(extra_diagnostics)
     if tail_record is not None:
         diagnostics["tail_diffusion"] = tail_record
     return np.concatenate(surfaces).reshape(paths, steps, -1), diagnostics

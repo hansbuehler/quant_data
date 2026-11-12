@@ -1,0 +1,5 @@
+model,month,origins,pooled_log_iv_rmse,persistence_rmse_log_iv
+DYSANOS ordinary (16 factors) density-weighted,2024-04,22,0.12356276559441587,0.187444026995482
+DYSANOS ordinary (16 factors) density-weighted,2024-05,22,0.12481763913111764,0.19326608649547417
+DYSANOS spot-orthogonal (16 factors) density-weighted,2024-04,22,0.11674137818281073,0.187444026995482
+DYSANOS spot-orthogonal (16 factors) density-weighted,2024-05,22,0.12220458196020394,0.19326608649547417

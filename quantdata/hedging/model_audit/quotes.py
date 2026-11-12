@@ -59,7 +59,16 @@ def _dysanos(root: Path, model: str, day: date, endpoint: date, *, licensed: Pat
              output: Path | None = None) -> tuple[pd.DataFrame, np.ndarray, float]:
     base = root / "quant_data/hedge2/runs"
     directory = base / "dlv-full-v4-20261106T1130"
-    dynamics = load_dynamics(retained_dynamics_path(root, model, day, output=output))
+    weighted = None
+    if model.endswith("density-weighted"):
+        from quantdata.hedging.model_audit.density_weighted import load_weighted_model
+
+        if output is None:
+            raise ValueError("Density-weighted quote tests require their experiment directory")
+        weighted = load_weighted_model(output, model, day)
+        dynamics = weighted.weighted_fit
+    else:
+        dynamics = load_dynamics(retained_dynamics_path(root, model, day, output=output))
     if "(16 factors)" in model and dynamics.directions.shape[1] != 16:
         raise ValueError("The requested sixteen-factor quote forecast has a different rank")
     config_values = json.loads((directory / "config.json").read_text())
@@ -79,8 +88,11 @@ def _dysanos(root: Path, model: str, day: date, endpoint: date, *, licensed: Pat
             raise ValueError("Tail Diffusion quotes require a dedicated output directory")
         residuals = TailSampler(dynamics, fit_tail(dynamics, root=root, output=output, model=model),
             paths=10_000, seed=20_261_111).draw()
-    natives = (state.native + dynamics.forecast_state_change(state.native)
-        + residuals[:, :1] * dynamics.spot_state_loading + residuals[:, 1:] @ dynamics.directions.T)
+    if weighted is not None:
+        natives = weighted.next_native(state.native)
+    else:
+        natives = (state.native + dynamics.forecast_state_change(state.native)
+            + residuals[:, :1] * dynamics.spot_state_loading + residuals[:, 1:] @ dynamics.directions.T)
     decoded = decode_batch(state, natives, max_business_dte=5.)
     future = cash_europeans_batch(decoded=decoded, template=curve.roll(1., new_spot=curve.spot),
         spots=reference * (1. + residuals[:, 0]), business_dtes=quotes.bdte.to_numpy() - 1.,

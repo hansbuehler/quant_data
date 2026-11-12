@@ -1,0 +1,1786 @@
+[
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/PROTOCOL.json",
+    "sha256": "da8b4473cd31b0ee06af862757662d4fce49572be469df5e4816845a21e7e290"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/SPOT_IMPLEMENTATION_CHECK.json",
+    "sha256": "9b1fb84cdb84feef66fcfb014563fcae61c03f695001e9c45f76cfdbb856ca99"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-01.json",
+    "sha256": "52a9cbe0a214a8b7902d03984607ed77b5606b1ca13af5c7219ab9a5c857300c"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-02.json",
+    "sha256": "232f13d11a6fdec67e000654bbd70e07b96d92defe60106f8d02d3eaf27d00e0"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-03.json",
+    "sha256": "5d6fb9fde38e0d63804e66f49a39bc29acfbc7bae0cd2f42e618498bbce39b1b"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-04.json",
+    "sha256": "5f2bf953dafa7cd7024fa62f26b94fe03f179828b5d0690c2f256d040c2becee"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-05.json",
+    "sha256": "e6fc32be21b6e7b111500f8851941a0113bdf57e8d65cbd091a49a1d3a6d364e"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-08.json",
+    "sha256": "7772089f1908ddb1392686305a60f842298ab41af2ea301b93da50ee1d1874b0"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-09.json",
+    "sha256": "1c78b706414fd62c5e21b7e63853308a8ef89a4b9d18f56e0f5847d12e2f7d49"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-10.json",
+    "sha256": "92e0c3954544b7b01438b423e7e30076943f00be1ea013c5bbb0b6a4e6339d11"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-11.json",
+    "sha256": "40137a508db8bb99cfbe26c39b2e743cd13c3596faac0dbe692bf7119371cfa4"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-12.json",
+    "sha256": "7026520b4b4972bd90b2afb6bcfef7108d95636597db826fcda7caf3fde42d55"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-15.json",
+    "sha256": "2f6ec4bf5e403e2ef36eb2407b9f0fc9f5b5df8479bb62ce4a91cf58cc59117a"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-16.json",
+    "sha256": "39aca10e3ae29a253d665697c833855854e398abc22979268bede21ecd011b0e"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-17.json",
+    "sha256": "ba8ede345c07bb46508aa57e778fff742a19a2bc0c0bd4f2e194035b3e887328"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-18.json",
+    "sha256": "a61ff544698d9133ffbbc7de1468d5eee180b5db05432a298c93ef40a9559c01"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-19.json",
+    "sha256": "ce20f9f2ae132d8bce719b18fff68830a0f09bcec5de097e0d6af16e21f1b83d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-22.json",
+    "sha256": "1ab27b4759cbac5905354985aea61c376732077059e074dbe89c667636424fc4"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-23.json",
+    "sha256": "00411fe2e8706ad976965a69d28dfbebe6c734d18046c5193a9870830a3f50eb"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-24.json",
+    "sha256": "30624c3cb4da619b87c441d7b7b1c13c07b0ee249334939c4274da94a4145b80"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-25.json",
+    "sha256": "e756b5b783f2282764eea0dd701b8e6259a6368ce529e2cbaf73d1587ff436cf"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-26.json",
+    "sha256": "becf296ce7d42a703b5c3ae8382c8fc47b5cdd9f5453d1bdfd10c5b35959230d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-29.json",
+    "sha256": "42d810ab4d89527d8db02f7e8adf152ecabb1852d6c5fb2c8bc722a0d46ef266"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-30.json",
+    "sha256": "fc15603b395a278b660893f70c5189436a503bbfdc4b8053d87ea6f83ad7f410"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-01.json",
+    "sha256": "02fda65d8af370cf13936ded0da7e5f3c3574e2e4cac8882074fc7e44150479f"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-02.json",
+    "sha256": "d5ac11eb22ba77be2039ab991a80e191418ca60fe9bae63acd45c02365545230"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-03.json",
+    "sha256": "5bc1defae9abddda8a5d19c91b28fe8aadd2390e075b91be087bcfa9a348509f"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-06.json",
+    "sha256": "ac9cb43e2723c00f0f0073aa0c06cc5935601b914ee0d84e99e43ba2fef70667"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-07.json",
+    "sha256": "b75451b45dc4d54bfff153198c9f0de94e3f285a2479d35fc9c744828808f66f"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-08.json",
+    "sha256": "d97c00eeee8502aca622eaf2e3751461df8d8ca248148ba21b80efbdbfd9c00d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-09.json",
+    "sha256": "79aeea363a64046d43391c7be11bb4ec1f230636e68784931a2b08372a777272"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-10.json",
+    "sha256": "c3c2759bfeca2fba16b47e9fc7334f70cfd3c910e7e612a1e1fce5f554ab873d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-13.json",
+    "sha256": "42e1b712f46dc1d7b882f31c944c5756cf906e8dc415c3f1e74a7369ed6cf662"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-14.json",
+    "sha256": "453c48122a5a6309426b3e31808ff90e398b9c772ce5cc32676e0ccf177a2f01"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-15.json",
+    "sha256": "2a98003218eac25b4b1e8485ffceab97f4c8badf207889068a8960def3c11cd0"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-16.json",
+    "sha256": "2707ede6ee32fb3fe321a81df145fbff41717aada47b9ef1da2b55c0354840e3"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-17.json",
+    "sha256": "9b201ac581a686e59a34bf42ba12e33c211b3c82adde6d8c12db9d9ab5604e78"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-20.json",
+    "sha256": "3dee3662d03379417f8ac4cb0e0849703e00e3e538dad5678f6434c07d361d2a"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-21.json",
+    "sha256": "7032be9f8275e86b6a9155c08bbf4a90c90ddf183ee69cdec01412fa80b9ed3d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-22.json",
+    "sha256": "6201e0afcff68322a8f596c652b2c904db47dfc7b03d539fe153930d5e6841c6"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-23.json",
+    "sha256": "b0ac49174057ba38c87fc0e1ad5ce389e140651061403ac4c7c5c173fbeaccb6"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-24.json",
+    "sha256": "557cb2cbd8eabf803a2cc7a83aa62cf7dc177ade640ee8919bcec608ed5ba5c8"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-28.json",
+    "sha256": "e0d2d97b669562b848b6c0f8b5ae5a607317560db6cb16272f2de4a873393d32"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-29.json",
+    "sha256": "5c730a730d5ea24991467115564f5e5d04af798e34e32952e18d32187f9af9c4"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-30.json",
+    "sha256": "ed953bf9bbdac275bc79bfee7af284b28f6125ed3ecd47eea7638ff3f0d22532"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-31.json",
+    "sha256": "e2839a87136bf195e0f02584187f708ed731b5ba5c11ea679c1187afc47645c2"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-01.json",
+    "sha256": "3a9d2f76d45f1ecd0af81dd3015da7b9eadb3f69df9f9b38e2d5c78977fcaf29"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-02.json",
+    "sha256": "0f8226c76bfc04ee105177dc25695acbf6841e1e12841998b15cc6fde5e00173"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-03.json",
+    "sha256": "c9e5938550d6b534ee92cc984bf419b329c637d5cb60e78ee4a831f2290ee075"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-04.json",
+    "sha256": "5df6f9224d9dd6f9f2e1ceced1a310fad1b77733d0d4fa38e667cd2007dbe25d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-05.json",
+    "sha256": "f10e624328dae21a6064efa3be0f4c0ebab830d6e25d12a84d2cc80a365ca76e"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-08.json",
+    "sha256": "ba3ebf9f406598c20656d2a1a1b35562eef073a5932b3a0688590b6d5619c2cb"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-09.json",
+    "sha256": "adda5e893d40834538fb8bef9ba3debda91170a606b7e8ae607b0d6c177e895b"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-10.json",
+    "sha256": "e1ce89a5ace88ac1ff94197be8c22879a88c6dd55e5c3164ca1a1a5194b2fd71"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-11.json",
+    "sha256": "c79eb5455a2e35644e108f1c4a7f6cf4250c21898e28c30f4be3365ebc239606"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-12.json",
+    "sha256": "71461f07c270597e94a616a23728bbb384faab0b19885d4e2d5e54f212793ddb"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-15.json",
+    "sha256": "1309f452858c89144919725999f011306284c3a5c717c732a69dbe9ee9e7efe8"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-16.json",
+    "sha256": "3c1606b17acc5cf16d5765bb10e0aca77381a5a544cbe31d15326f96b5357c20"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-17.json",
+    "sha256": "9b2ca1cd7786cc37f7dbd439ed0b4943fb462f91b76afbace2a33a6a9dc0e21b"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-18.json",
+    "sha256": "0562db510ea50a01218184842a467e5e28a41eb8d984c39332ced000dd91417b"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-19.json",
+    "sha256": "b855a56bd8f5f0c56c6ca15da4ee460097f0e6b51ff2c4979b1262cf1eeed1ee"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-22.json",
+    "sha256": "29000de271192b45daeefd395de43191d12e7f38c2545f10fbc53abeeabddf90"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-23.json",
+    "sha256": "8b6399fed7196069b3920e75ce7725e7e932dd238b72ac120504343d75992d1b"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-24.json",
+    "sha256": "df455abf7f48e6051d826c228b0ad9c50235526576b8b06ce1dddfad2ee775c1"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-25.json",
+    "sha256": "f037fd21398b4489f87b25267ea7a5b4793af0c9366510667de0d3a6d48b4f91"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-26.json",
+    "sha256": "8d288c491682ea065556141d9558f0b35508a2205dbd140aa96cc55aa4972727"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-29.json",
+    "sha256": "124b29603ca593f19cd42e4c681f7f538886875a754d57a3f92f6958afefc6b5"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-30.json",
+    "sha256": "3f6b275027aee0ff0f2456a5596076a285cedfa95cdf29cd9a397139da093158"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-01.json",
+    "sha256": "49d6305da4fff6e1a7155b3f6a309011d669676a783fa49f90f3b106cf088649"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-02.json",
+    "sha256": "336450df4c16d749b2a629f150f2afedf51c393627e3e0eb81267be651ed927b"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-03.json",
+    "sha256": "a5f0c7ba2406034aba4dec50ac5a5e869f3834bbfc1d99c07e161ca79e991e1f"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-06.json",
+    "sha256": "d254f86ba612004e1361946cb67103b3e20f08a9c39a7528675bf75e6d57f63b"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-07.json",
+    "sha256": "ec14ae4e6e60cf6329f2410e775ce6717bd767e1834362704c418dcc8c432202"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-08.json",
+    "sha256": "ac3809ad254e8175485caf83434a3bcf4db471277c7f4af09e0f9ae3a1cf661d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-09.json",
+    "sha256": "0917faf487d9441aa158ec071f49b1f900c998256902696de148a598f3dcf1ef"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-10.json",
+    "sha256": "701ce6419b47c51747b8c647f8e9777cbbcf459bf0ba917ec8c42d2260214a90"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-13.json",
+    "sha256": "eb1d9c24fd53c08313280dd818335c4805bef935557118f86e0676863cc9c6b3"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-14.json",
+    "sha256": "16219d6b054434914f6cf1bdf7b47136acf7cee27d7f5b6f002900f778c1e7da"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-15.json",
+    "sha256": "30462e546408891f1100a129e20ad4a2a64dc088e7e9ba7baa2d93dbdb913f64"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-16.json",
+    "sha256": "7d10153515f69223eab25ffaf0bea3cfddcc4f2299d5e1c9721100a917bedf74"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-17.json",
+    "sha256": "132c875c7dee0c43928ccad33b5f516f41d3a2c62ab0692dde7b56221f756e08"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-20.json",
+    "sha256": "115557d533a4cf46ed498846adbe648a5a244ba3a10ed85b11485a42254a8e4f"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-21.json",
+    "sha256": "720f1316432c0e5a167ad3a4cfe6edf61fbbe044fc204fc768c604d31ef98910"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-22.json",
+    "sha256": "19965ad7e70bca303346c4db2f0d3a7809e7c874a622aaa7030109700f0fe5a2"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-23.json",
+    "sha256": "aa74a2f80ffd8f11ba0b6294f5c852c6f6c6685f16bfd6c9812e86fefdbb6bc0"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-24.json",
+    "sha256": "7264787686ba852dbf968c549478abb4dca96b5cfcd20a9720b923ee53440cb7"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-28.json",
+    "sha256": "892ce85a385a579ecdacb38d7a2cd3d15b7389d2595539a3fda3418a8f83c3e9"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-29.json",
+    "sha256": "50fd6f2bb57362a5a5f4d52b840baac9b4ca6a62349c0eb7ffb5ae641576536f"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-30.json",
+    "sha256": "494c4e3dfce02acdc16faf9242589790c59a44adac91a3441067b5afac04f6e1"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/daily/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-31.json",
+    "sha256": "ba6bca7b45cdbb903733300cdce91bbe1b08838cc06feaa64339d81dd07e91c1"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-03-28/dynamics.npz",
+    "sha256": "e8fa410eeff434012dc664d738e8ee41f2541271cb03309d4118859bb6b739cc"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-03-28/metric.npz",
+    "sha256": "69fa2b03f6ec69ade6d841145a14c2a4935a2de212b9ab008e0c1f367b4f9a89"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-01/dynamics.npz",
+    "sha256": "5c856520d446273fbe31ffeafd61f4e9422893d923af6c66565948a4c3fb7a47"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-01/metric.npz",
+    "sha256": "30f2e664a61af76ce1297801ad62d094147c4e1f85285d3744ceb21970d7bac0"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-02/dynamics.npz",
+    "sha256": "6ce704c138452d9f091f4c7132519232b7a136cf0005a2976a95e0c47bb5bf07"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-02/metric.npz",
+    "sha256": "e3c71f9f928cee3f9605d268cd8c1f44284ad241af45686622fada9a6e960997"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-03/dynamics.npz",
+    "sha256": "7610d42109ea293f1556d6def02aa4f9aeb4f1dc4a26c328d23ce81123894a71"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-03/metric.npz",
+    "sha256": "00fe75ede4574e61eb1555673543272338eb3ec70db405dfe9834bd0f9c61ef6"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-04/dynamics.npz",
+    "sha256": "97fbcd28863c0ea02ba5548590d581c92abea34e97945beae6afdfe9978429a6"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-04/metric.npz",
+    "sha256": "b2aa82c7800ce1ccbc6c76f749362a8fce7c280931638cecedaab6031591eb59"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-05/dynamics.npz",
+    "sha256": "7df03ebbaef47695226a9ed14c3423ccd526b35c978f171f58dc4309ea74eea5"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-05/metric.npz",
+    "sha256": "d2c53e9fc252c9cfc803442b05781679e591f12e2414319903f4b2b4f692c233"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-08/dynamics.npz",
+    "sha256": "e50259808fcbcad0c98b10804fa26880cd943a13f0c7b82ddfba4f8d904d2b68"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-08/metric.npz",
+    "sha256": "c37e527ebf0fe6e30821ff8906427c483720f3e04f7da686568af88e8a609f42"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-09/dynamics.npz",
+    "sha256": "12b6507366382d323dbae4237b9d93872efe08d1ae89b7c65963b775fdec52c4"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-09/metric.npz",
+    "sha256": "4fd1d2e33d639bac2a90a56424170f94ea9cad137bcc0bf3c79da9676566ab2a"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-10/dynamics.npz",
+    "sha256": "88e23e08105a75219fdd39775579d2d40abd62e4ddea1897b604857f7ead8805"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-10/metric.npz",
+    "sha256": "0072c71cbe8d5364e60b215bf4dcbe22b31ff69471d3820a6912f0ddde0982c2"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-11/dynamics.npz",
+    "sha256": "416b10f5b714fa6a7c43ed98a6c05378a5237b30d609b29cc746e3c3155b1be7"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-11/metric.npz",
+    "sha256": "cd5fe855a6f8f6d0318a993392a78e1fbebd32495400424cbd4a4ddba15b6113"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-12/dynamics.npz",
+    "sha256": "a16be0cc373aeafa9844c5e8e757ac2d8dc75c5058a14eade886b8180dcd568b"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-12/metric.npz",
+    "sha256": "f32edf42492bf5bde87abdd4bb7d6e5e5067343681df0fd45322e8781bd976db"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-15/dynamics.npz",
+    "sha256": "b13247f6a10030fdb8b7f694ea604a3a8db668d02cfabaaedbe0fdf1250ff1c7"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-15/metric.npz",
+    "sha256": "98e6c485d141d8f3c08cdc9a160bd2e42d30f87cbef998f9baac5618e5181054"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-16/dynamics.npz",
+    "sha256": "0dc944a1c1149d832eb5954b518b331cc16614b41c1ccdb730e6f75dc8cc3f50"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-16/metric.npz",
+    "sha256": "46a1792a70fbfb9080e6e58e5a4f2eec648ab8dec3f5622e1c85a88b4e9d8f1d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-17/dynamics.npz",
+    "sha256": "b882de515b723521c6a67c9042b52c44678af06befa768c57201ac7c791c71ae"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-17/metric.npz",
+    "sha256": "6494edba1a0f94d1a8817c227838224d317f93170858c46c3cefe3ae778a80b3"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-18/dynamics.npz",
+    "sha256": "3a4cf37320cd31312aba15d6d0d7e64b6164f31866c583c2ac6e6a18aff52855"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-18/metric.npz",
+    "sha256": "001dc05663d4003792ef13c844f45b59f2c903d965b337f60ff950c810b7a2a1"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-19/dynamics.npz",
+    "sha256": "aa49f7e50f3ccf4d52fc5d84811eb4ee2be7cb1fce9ad515a6ae888b26a7829a"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-19/metric.npz",
+    "sha256": "fb973dc3314f7d11fb35456fb81c2faf40401d56d296edc81b785c8bd2572b51"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-22/dynamics.npz",
+    "sha256": "577068d116d989fc9e4bcdf686a8aaad96d07721cc392f293b6bf1cbab0acb3c"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-22/metric.npz",
+    "sha256": "cfb3e40df1c79a3a331c183c769489bed16ad33749324c4ab0edfda8c32f7015"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-23/dynamics.npz",
+    "sha256": "6373e44ca828bc9b4169f796b3318bfa812f14e62a336442835aca716fc54ea8"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-23/metric.npz",
+    "sha256": "f912080871c78dd7b9abe1875f119f039a64810da3c68a949b21ef62ee68c265"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-24/dynamics.npz",
+    "sha256": "153a162ae17bb21fcdfa8a0cc927957103a52c8841c93c8a44379a80694d5834"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-24/metric.npz",
+    "sha256": "bc0e426df550f607909e207a6b215dd9fbc817084366a223c01e16de3e2f5a60"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-25/dynamics.npz",
+    "sha256": "a17a58be80afaf6d5ccbc7f405a80be149fb8a8eb02c4beded575e6143364322"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-25/metric.npz",
+    "sha256": "2b0563ff10cccef04b7902aa9f08982ed89e909fb09185812085c3ad1878ee59"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-26/dynamics.npz",
+    "sha256": "7721c5b6cb8195d9cd0b4ab855ff19411b36fe73abed72f8e902aadf3668d6f2"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-26/metric.npz",
+    "sha256": "e8102b00b8082d8e9f83fc80a67f02e34af8650ef4ef2616a84f48edd4140618"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-29/dynamics.npz",
+    "sha256": "e281d2a343f8d26c750290f3e0f73612723acf7f68ff9fef4139b062bdd4260c"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-29/metric.npz",
+    "sha256": "99d7ccb8fd5b9e91f2692e0d1252c4264d37f0d8ca1b057dd7893c0ff5d1baff"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-30/dynamics.npz",
+    "sha256": "9220d503250b7025ba2850e9abe8d9b6c1b7ce2a014c5ec6e007a191ea3d272c"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-04-30/metric.npz",
+    "sha256": "28b5bb18332fe71e89837f0adc722ba7fffb7e212d74a70ed133f5a8aa1bec71"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-01/dynamics.npz",
+    "sha256": "5aff48c2e390fe917198ec48c677e87309eaf479cbc526cf0136e0895cfcdca7"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-01/metric.npz",
+    "sha256": "9922dbdbe6f0c557fec0d42a11d6e7e5839081a26733e73293f21c841398ad57"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-02/dynamics.npz",
+    "sha256": "b14494623184450fc153bd620a0814567ee202e68a8f5567affd483d2e1f8ced"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-02/metric.npz",
+    "sha256": "3b9f9418af7f7bb2e131c276f9b02ab386d8dde206e595aaec71cb7c682896cb"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-03/dynamics.npz",
+    "sha256": "9bd7c209ae8656a95cca99e242701ff43ac62ec8f6d97a85f72bb0977df3b452"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-03/metric.npz",
+    "sha256": "5b50985938e43c0303a89f2b72ce23474b61509a7e2111521b28557faca66ab5"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-06/dynamics.npz",
+    "sha256": "f68af142825e0a9cbe02b8a4f67d8770c50293217c7e064b0936f3d6393b0d9f"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-06/metric.npz",
+    "sha256": "3f77084e73291556126f5a69952405b955fb51d0eb89a3776872148299e6837d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-07/dynamics.npz",
+    "sha256": "a092032fff90e93e08dd6da28a39ab3717e2d956b67df6af3fce419a5088e08e"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-07/metric.npz",
+    "sha256": "36620541cf697e8f7c04fbd2bd7128ce9e661fd5f9b414d3e2579aa1e9a24798"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-08/dynamics.npz",
+    "sha256": "ab22a3d535730a9a4bc6268f187b1fcc476170339fe13bb4f939f58f692cde3d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-08/metric.npz",
+    "sha256": "38b4050e32abad8ae72aed5b669b0507973dcfbcdc2a4025708d6d70c2040bfc"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-09/dynamics.npz",
+    "sha256": "ba5c06103b1f2cfebd1952e7cb968a18813803fac537228622e9101c8f20bb07"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-09/metric.npz",
+    "sha256": "ef0301cf30736586293104a69aaf3f7680d472ab0d1e519a7d03be51ceb79e96"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-10/dynamics.npz",
+    "sha256": "d438d7909bdc99edffb5c6b76ac7bc10ad29bd46f096368f96193aff6fa84318"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-10/metric.npz",
+    "sha256": "f5136744fa6227a98de2c0d74979e457ec5ee314c795429f481b25c0f8f88623"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-13/dynamics.npz",
+    "sha256": "a1237042c8a119d3cb028a4c622111d7c39ecf7f049d3f27d1906bf1a97f75e5"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-13/metric.npz",
+    "sha256": "2d9311521a75e3507166bb8ad6aaa63f84d3e7fb3c5ab03f9e556ffba8296c66"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-14/dynamics.npz",
+    "sha256": "5e623141c8e46fa63fa2b4bac3ffe17f2abb5de141acdb7ff7e1a54695d4bb12"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-14/metric.npz",
+    "sha256": "4deb18c599e1243c346c9eb4dcbcca6b535d327120b78e51e64591fa3e5a559f"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-15/dynamics.npz",
+    "sha256": "c08e8dcd1450eb3bbfe68aca83213fa5dcb002be33e760613334f50fbf55a676"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-15/metric.npz",
+    "sha256": "f3792b546074df93cd8fdc691e4485a9310729579d5662ccebcdee4994a9e1b4"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-16/dynamics.npz",
+    "sha256": "b8c5bae30744e62c8ce76606c497ef3bb46f85d8d7243cbc7cadded8ff01431e"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-16/metric.npz",
+    "sha256": "e6309b04a0b763c2fcd00ba556d493951854edd80a94f5d79f9ed7a2bc91a125"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-17/dynamics.npz",
+    "sha256": "a89e4b936f0c1a1318174fbdbd77f0edea4a456e59b765c16996f3bce3014f2d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-17/metric.npz",
+    "sha256": "f27f88a70b6e64fe0ffb95ec7c52d08ecabab7f491245dc8af630f630f635e55"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-20/dynamics.npz",
+    "sha256": "8a37aed53be06e49e486a4133ec3649544675c61725b3095c978cae1e32dfe47"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-20/metric.npz",
+    "sha256": "5c1bc1d9783356f96987faf673cd1eb7ae65909dc92752fb0f9922b2219fee80"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-21/dynamics.npz",
+    "sha256": "1b75eebafd24cb3144326af13fb001e7ba869ed0c0239d01f725771cbda6ecdf"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-21/metric.npz",
+    "sha256": "c29ec4c33da9b67c9d023636952b363edb83115a96bb1da528664aca6014f279"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-22/dynamics.npz",
+    "sha256": "3b696efb07fb3f7a660291456ae28b5586c00ab793053ed6488e7fd73cf21e82"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-22/metric.npz",
+    "sha256": "f481f0d9b9a75af0a7c602eccfd2d13a4b6ebca5fbadb94755cbe42713f38385"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-23/dynamics.npz",
+    "sha256": "acad0202e4c2ecb34645d81fe49a06c914a98bc355732a02ddace9600be9e32f"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-23/metric.npz",
+    "sha256": "b389294799347f70c146dddfbdabdbcb9bbc012caf60fa751947115fb56d8df4"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-24/dynamics.npz",
+    "sha256": "4dbae91c5e17a0cceda0cce301bb678dd5b86f861f6e0161523cfde9fb281035"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-24/metric.npz",
+    "sha256": "9857ea5255fb58db37b63843ed48132ab20cd257a5fba7bd6995c69c51a1519e"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-28/dynamics.npz",
+    "sha256": "c611924cb287bb9b161ae358a6e13c913fd88e8ca85e4682348ccdfd865488fd"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-28/metric.npz",
+    "sha256": "ddbc4baf3f349a5a592cd04a3073e26c568f2e33770d5f21290619a7c6055a1c"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-29/dynamics.npz",
+    "sha256": "242c9d158b13d936827f41eae5a2f4ca55ae0023e1d01890cc6cd29c78d9bc7a"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-29/metric.npz",
+    "sha256": "8db82913fc3a93a669696e628211a9542cf9b2ee976de6dd81ea51b5949f2bb8"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-30/dynamics.npz",
+    "sha256": "25177f07868fa6dc8d36fd29129e2252205673690d8ee0085e0935881e75d56e"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-30/metric.npz",
+    "sha256": "78f2bb18c3a0846e45451491a5c1d39c64ca8f9fad6edcaed8e68876cbdd4203"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-31/dynamics.npz",
+    "sha256": "573e3038e5aefcebdd896783129e8836acbb84f6593d0bb97a2ac3e6956df245"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/ordinary/2024-05-31/metric.npz",
+    "sha256": "99ecc8d39c336d001204f26df73a4aba44aa903d251b4aacaab7f6c6f7adb787"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-03-28/dynamics.npz",
+    "sha256": "515ef5fe6c870dcf45e5597668696ed5ec626e326c977d663ab9306392b375a3"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-03-28/metric.npz",
+    "sha256": "69fa2b03f6ec69ade6d841145a14c2a4935a2de212b9ab008e0c1f367b4f9a89"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-01/dynamics.npz",
+    "sha256": "a381b9dae02ce3037fbc412472da02b058777759d7cf425a6ec0098500f1978a"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-01/metric.npz",
+    "sha256": "30f2e664a61af76ce1297801ad62d094147c4e1f85285d3744ceb21970d7bac0"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-02/dynamics.npz",
+    "sha256": "26776a80c0536c0a61e0391044584529eba8d7474249091ad443755c65082587"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-02/metric.npz",
+    "sha256": "e3c71f9f928cee3f9605d268cd8c1f44284ad241af45686622fada9a6e960997"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-03/dynamics.npz",
+    "sha256": "f88e06f9d28b5f8df1ce455301562aa19c6987e5b082dcc5ce79fd8a95be2200"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-03/metric.npz",
+    "sha256": "00fe75ede4574e61eb1555673543272338eb3ec70db405dfe9834bd0f9c61ef6"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-04/dynamics.npz",
+    "sha256": "e1f1a6388648580228c45bea6a90965c2612b5f4ff3c4e66de9dbd246939e1f1"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-04/metric.npz",
+    "sha256": "b2aa82c7800ce1ccbc6c76f749362a8fce7c280931638cecedaab6031591eb59"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-05/dynamics.npz",
+    "sha256": "0a25ac40d26a112c15681d9697ba9e985d8e395265969f31888f835bf7470f20"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-05/metric.npz",
+    "sha256": "d2c53e9fc252c9cfc803442b05781679e591f12e2414319903f4b2b4f692c233"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-08/dynamics.npz",
+    "sha256": "225126b045c3ba0e2d4d9916dbf55cf431035b9cc6274d18636355482493c436"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-08/metric.npz",
+    "sha256": "c37e527ebf0fe6e30821ff8906427c483720f3e04f7da686568af88e8a609f42"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-09/dynamics.npz",
+    "sha256": "52dd6c70772237a3cabb1abd878be5cd2809b217b59ca892ba67594b0b3e5cf7"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-09/metric.npz",
+    "sha256": "4fd1d2e33d639bac2a90a56424170f94ea9cad137bcc0bf3c79da9676566ab2a"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-10/dynamics.npz",
+    "sha256": "9edc6f583a57faac0c17ae0a7d0771587f4dc5e10ee5ded929235822b930cf99"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-10/metric.npz",
+    "sha256": "0072c71cbe8d5364e60b215bf4dcbe22b31ff69471d3820a6912f0ddde0982c2"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-11/dynamics.npz",
+    "sha256": "f995f242acbb5f14e8c560b41a76ab96330cf017da6ccc60adf253f36bb1a094"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-11/metric.npz",
+    "sha256": "cd5fe855a6f8f6d0318a993392a78e1fbebd32495400424cbd4a4ddba15b6113"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-12/dynamics.npz",
+    "sha256": "45122705616c32ed4b4055b6c686a0e9fb5405bbf6103ad8c97712544932c8e7"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-12/metric.npz",
+    "sha256": "f32edf42492bf5bde87abdd4bb7d6e5e5067343681df0fd45322e8781bd976db"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-15/dynamics.npz",
+    "sha256": "75479b5f1428000682829777c636ad227a079f91235181f000dc1fce99e32217"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-15/metric.npz",
+    "sha256": "98e6c485d141d8f3c08cdc9a160bd2e42d30f87cbef998f9baac5618e5181054"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-16/dynamics.npz",
+    "sha256": "3453c6eadc11eaadf69b5d0a19d158b04151605399580ef2b52af7562eab8287"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-16/metric.npz",
+    "sha256": "46a1792a70fbfb9080e6e58e5a4f2eec648ab8dec3f5622e1c85a88b4e9d8f1d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-17/dynamics.npz",
+    "sha256": "9eb2b241d06845dc50ea0e61eef9953924c9a51722eca16b95671c932efd13fe"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-17/metric.npz",
+    "sha256": "6494edba1a0f94d1a8817c227838224d317f93170858c46c3cefe3ae778a80b3"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-18/dynamics.npz",
+    "sha256": "0ed57e48b5411d3a0655efb729985388cc99466ada80e95de764220274d29302"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-18/metric.npz",
+    "sha256": "001dc05663d4003792ef13c844f45b59f2c903d965b337f60ff950c810b7a2a1"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-19/dynamics.npz",
+    "sha256": "20a770b3eeff0e74aeca47aab63f5a510ac227ec509cd49782eb71005434e2aa"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-19/metric.npz",
+    "sha256": "fb973dc3314f7d11fb35456fb81c2faf40401d56d296edc81b785c8bd2572b51"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-22/dynamics.npz",
+    "sha256": "3e8ba88ede91a6b20e65d85b254a57cb671e9bb0b7e9bf078f8fa312d54bf995"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-22/metric.npz",
+    "sha256": "cfb3e40df1c79a3a331c183c769489bed16ad33749324c4ab0edfda8c32f7015"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-23/dynamics.npz",
+    "sha256": "1f4c143c929e9091f32e35f4db1d6eaa7dca29fa4c73714cdd8a15d80aeb3261"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-23/metric.npz",
+    "sha256": "f912080871c78dd7b9abe1875f119f039a64810da3c68a949b21ef62ee68c265"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-24/dynamics.npz",
+    "sha256": "c415f954b65f51df78b79b47d6ed0fbab952ce15e6c940dd67722086420ec472"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-24/metric.npz",
+    "sha256": "bc0e426df550f607909e207a6b215dd9fbc817084366a223c01e16de3e2f5a60"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-25/dynamics.npz",
+    "sha256": "34f11119a34885bb22fb175e3bb400750e46487e04e2f8f5c453b41ee88f1c0d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-25/metric.npz",
+    "sha256": "2b0563ff10cccef04b7902aa9f08982ed89e909fb09185812085c3ad1878ee59"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-26/dynamics.npz",
+    "sha256": "ebd9e7501fa1b2bcb71ec9055a3ef240dcc04dbc5def66ea94e3488004071355"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-26/metric.npz",
+    "sha256": "e8102b00b8082d8e9f83fc80a67f02e34af8650ef4ef2616a84f48edd4140618"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-29/dynamics.npz",
+    "sha256": "df8c048eb35bb4fdef6576387e26761ce628839f3a468a1c20359170db38c45e"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-29/metric.npz",
+    "sha256": "99d7ccb8fd5b9e91f2692e0d1252c4264d37f0d8ca1b057dd7893c0ff5d1baff"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-30/dynamics.npz",
+    "sha256": "44feaf1d98cebb47101fd6815c460b447db22d3807f61ef4e172fbc9c48e0bb7"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-04-30/metric.npz",
+    "sha256": "28b5bb18332fe71e89837f0adc722ba7fffb7e212d74a70ed133f5a8aa1bec71"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-01/dynamics.npz",
+    "sha256": "f2d7a581a8afc25e2c802f0054f3614cbc343f9d8250d0210786601f7dfcdec0"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-01/metric.npz",
+    "sha256": "9922dbdbe6f0c557fec0d42a11d6e7e5839081a26733e73293f21c841398ad57"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-02/dynamics.npz",
+    "sha256": "d0c5c210ffab573e674bd3f9fcf2bbb13bacecd931e488153964b35388306d34"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-02/metric.npz",
+    "sha256": "3b9f9418af7f7bb2e131c276f9b02ab386d8dde206e595aaec71cb7c682896cb"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-03/dynamics.npz",
+    "sha256": "29cb93fc2b0e7fe5dcc40a934efb338c484e9506aecf7d528b5b919f8ee06dca"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-03/metric.npz",
+    "sha256": "5b50985938e43c0303a89f2b72ce23474b61509a7e2111521b28557faca66ab5"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-06/dynamics.npz",
+    "sha256": "08a4bf62c36a5cb278a45f1a5d6cfd53b88363606c2b185dfd0877091d8f414f"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-06/metric.npz",
+    "sha256": "3f77084e73291556126f5a69952405b955fb51d0eb89a3776872148299e6837d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-07/dynamics.npz",
+    "sha256": "4665408efa5347138c3963065af3f386777b9a28ea111cc71d1c84d7be3000f3"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-07/metric.npz",
+    "sha256": "36620541cf697e8f7c04fbd2bd7128ce9e661fd5f9b414d3e2579aa1e9a24798"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-08/dynamics.npz",
+    "sha256": "8a245a2144e816eeb8010175669975c5bb2dfa8c76011a9b46659b0929f7a86a"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-08/metric.npz",
+    "sha256": "38b4050e32abad8ae72aed5b669b0507973dcfbcdc2a4025708d6d70c2040bfc"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-09/dynamics.npz",
+    "sha256": "b34cbe492fe1e772a26ebc07cfb65496b9715b3a3f0984572a7797bce27e2e54"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-09/metric.npz",
+    "sha256": "ef0301cf30736586293104a69aaf3f7680d472ab0d1e519a7d03be51ceb79e96"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-10/dynamics.npz",
+    "sha256": "6ec84b871d57425202f42f3131f5dc4389f4dc6de80ea937ff98f48caf2efcd5"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-10/metric.npz",
+    "sha256": "f5136744fa6227a98de2c0d74979e457ec5ee314c795429f481b25c0f8f88623"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-13/dynamics.npz",
+    "sha256": "c6bd3438b53f0251431bb51d913b9a37b11c06c3c01fe1cddd3fd7adaae07ecf"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-13/metric.npz",
+    "sha256": "2d9311521a75e3507166bb8ad6aaa63f84d3e7fb3c5ab03f9e556ffba8296c66"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-14/dynamics.npz",
+    "sha256": "7e845edd98c50131aee22d4c80d03e69181da58202beb13ee243d224f8068aa2"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-14/metric.npz",
+    "sha256": "4deb18c599e1243c346c9eb4dcbcca6b535d327120b78e51e64591fa3e5a559f"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-15/dynamics.npz",
+    "sha256": "d31ee6927995f6cc83d0c555a3126c1434419aff561b219243197eb7efc3334d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-15/metric.npz",
+    "sha256": "f3792b546074df93cd8fdc691e4485a9310729579d5662ccebcdee4994a9e1b4"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-16/dynamics.npz",
+    "sha256": "c7610cb6a802feefe0aafe4645cac4fda3621ead2a960c0e41293c9dccfc96b1"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-16/metric.npz",
+    "sha256": "e6309b04a0b763c2fcd00ba556d493951854edd80a94f5d79f9ed7a2bc91a125"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-17/dynamics.npz",
+    "sha256": "e1424c336cdbc92bf2b886acdac236d97bcc78b811af43fd965fef6c451d466c"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-17/metric.npz",
+    "sha256": "f27f88a70b6e64fe0ffb95ec7c52d08ecabab7f491245dc8af630f630f635e55"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-20/dynamics.npz",
+    "sha256": "958f8278dbc4a737629bcec2501dab3a5cea023329ce210d9a73a89e2cfa5fc8"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-20/metric.npz",
+    "sha256": "5c1bc1d9783356f96987faf673cd1eb7ae65909dc92752fb0f9922b2219fee80"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-21/dynamics.npz",
+    "sha256": "f3667415e60668509d99d50a869ee3bd1dc47f3aa9d261aeba062fffbb8ced3d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-21/metric.npz",
+    "sha256": "c29ec4c33da9b67c9d023636952b363edb83115a96bb1da528664aca6014f279"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-22/dynamics.npz",
+    "sha256": "8fd4eefae12515566af4167cc528fcf9940a924c8803158ec66de51dd27c4055"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-22/metric.npz",
+    "sha256": "f481f0d9b9a75af0a7c602eccfd2d13a4b6ebca5fbadb94755cbe42713f38385"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-23/dynamics.npz",
+    "sha256": "5b3036cf87cd7f605fea84072d4ba2413a4cb36b834d5415ee46073255dfcf0a"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-23/metric.npz",
+    "sha256": "b389294799347f70c146dddfbdabdbcb9bbc012caf60fa751947115fb56d8df4"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-24/dynamics.npz",
+    "sha256": "fc6788e14a8337065deefa8e3c4623b4291f29928afa0a13a64148251f1d6a8b"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-24/metric.npz",
+    "sha256": "9857ea5255fb58db37b63843ed48132ab20cd257a5fba7bd6995c69c51a1519e"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-28/dynamics.npz",
+    "sha256": "558ab7245c5f196d6668517161617ad18abba391bf941f4fdc8081d554175dca"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-28/metric.npz",
+    "sha256": "ddbc4baf3f349a5a592cd04a3073e26c568f2e33770d5f21290619a7c6055a1c"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-29/dynamics.npz",
+    "sha256": "dbecd35faf449927f263652368536f9f897ec529eb3587660716783785a4be84"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-29/metric.npz",
+    "sha256": "8db82913fc3a93a669696e628211a9542cf9b2ee976de6dd81ea51b5949f2bb8"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-30/dynamics.npz",
+    "sha256": "606ddce4d4ba01df46a4d4ec322f87440ce5122ed2ddb3d91c1cf7a0438e7112"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-30/metric.npz",
+    "sha256": "78f2bb18c3a0846e45451491a5c1d39c64ca8f9fad6edcaed8e68876cbdd4203"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-31/dynamics.npz",
+    "sha256": "709e44c62efb27ee0a4a0df614267809d4172cf29d83b2d3cf0634bec5779c2d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/fits/orthogonal/2024-05-31/metric.npz",
+    "sha256": "99ecc8d39c336d001204f26df73a4aba44aa903d251b4aacaab7f6c6f7adb787"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-01.json",
+    "sha256": "a9b9bdc42b12f47e69fc065003aea65f14e3556b6c4740b03a0e30ad221d01ab"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-02.json",
+    "sha256": "116f24381b45baab6877e716987e6ae043b7874830793adc012644f3f35cb85b"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-03.json",
+    "sha256": "9b785b020faf5228740ca4f1161fe2cd1089dff372036773527d481e46aae626"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-04.json",
+    "sha256": "bfd4c6916dc32429f5432792fba7a6eff6484b5b58a206373787b0e98394d301"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-05.json",
+    "sha256": "c3d994d464461d0baf9f22c80c19756aceef8e5af6026d4f36d956fc54bd67d5"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-08.json",
+    "sha256": "f6f19826da2e8129b4241c9628cf1cedab2c3884898aee254bd9f29931ec3ab9"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-09.json",
+    "sha256": "f70b0f5a0465ff8efb4593188584da3f9e8e4794948870bf94132fc7cd002e0f"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-10.json",
+    "sha256": "115f7213f937c47ef57b899d1a797a428207d6a7191685de037be1389976945d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-11.json",
+    "sha256": "8d4ee1264858c973f53c41aae4a80e93f9b580498d4008f8769223e77c97f303"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-12.json",
+    "sha256": "bb3f8576eb8a8d1072efebbc7daa96242e5c8850831ea215a7c0fcb6d003b73d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-15.json",
+    "sha256": "8986a20a7b618cccf7a140512b8e99a45011a1e086216b94b6e6d8000f76f421"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-16.json",
+    "sha256": "e37c109db41d6cf10e381dd3634bd6ca0057e4e592de4fb110b98b8da8ae8218"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-17.json",
+    "sha256": "67c9968c188fae4e7acd42852ec57835793135d508e90f26db14ad1532fad56e"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-18.json",
+    "sha256": "ef8449832d98043e8c046de820c51cc45b34a177a644138dac52f1cee7aa4fa6"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-19.json",
+    "sha256": "434e3975aa4bddf7015a3bd7681434113ec31fa7adc6fb199ea69bd1ec91f67e"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-22.json",
+    "sha256": "bae1b49de0e728e9f61d333431844a940239ebbf33fee0c6c1783235eb8af480"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-23.json",
+    "sha256": "2c5897ae0e5840e930ae110c7bbebb7d4ebcc9f9d4704499b3050b9d3f531eb8"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-24.json",
+    "sha256": "05f9e7c97760bcb2a49cd4432cbcc618bba762d61415d3959bc2f56edd056a39"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-25.json",
+    "sha256": "bc6d4c5b194115c971b6f1d29a11a53bc3f7d08473c3ed6028bf1944cd11e97d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-26.json",
+    "sha256": "192599aafc380ab5952b317f844c6a32b9c48c72616e39ee923e0b5e595715fb"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-29.json",
+    "sha256": "6b05a8a0ea1cd36ffcfcb6182c66f12dbc430e6328cb4355bd2be8ddab7b83b2"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-30.json",
+    "sha256": "dab5e3f151128866f67f6e6bbe62507efa54535d555cd85d7ae4ceaaa65f9370"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-01.json",
+    "sha256": "7c88403e550da5e589e1238ba899b183f70808dc16e149a9dce37d77130b01b1"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-02.json",
+    "sha256": "25bf2f3a8b722a41b1c2215b2e3ff0189a5930795736294e4d9f509dfbe99950"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-03.json",
+    "sha256": "12bffc2bf57b458c8e95ed98a14746a8af9e45a6dbc8e23771612fa01662261c"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-06.json",
+    "sha256": "13bb4665c2925797d9292201ce70460e434669c3923daec9c2ef16af4fe791f1"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-07.json",
+    "sha256": "c075d55c58a44102e0c2464a5f56052613e0bffa781240b895b8c6b1365c31b4"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-08.json",
+    "sha256": "3b609e0c10f51a263a526f204f650c374a698f785ae549287747b289b48b58b2"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-09.json",
+    "sha256": "0e16ca638c95204e75e8e1f2617f091cd97f5b4fc9f24726690798374c5425aa"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-10.json",
+    "sha256": "de0568236aa342f798546c448cf8bef8bac782e2e7c587353f4cd8beda95338a"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-13.json",
+    "sha256": "7e5dd432ec3173e382637ebdb23bece8767ea3ebd55077647c38c49e8abb8cac"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-14.json",
+    "sha256": "630579e316339d2e16c98a455a1cdf61db9632f7ef0b3f5615f6534ba4614212"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-15.json",
+    "sha256": "c4bd09145c666729f36efce90c3b1663eb0700b1868bd60e160ea7072ca99b35"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-16.json",
+    "sha256": "45f5001915742d03a5c6427f2d037784d43b7690e3efdd59d08318d2d0a23d82"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-17.json",
+    "sha256": "5456c0759d4518254d19209ccb0b010976522bb8999f3031f0d9ca6e7fc62928"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-20.json",
+    "sha256": "b059cc1b09cdf105c4f06dbae89f6eb7e8b7fbca74d66e4c1325fad5db95ae82"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-21.json",
+    "sha256": "0f2b00648e45dd22c137a6c6678deb07cf5755c8b2131b3d82bcf0cb54484dd9"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-22.json",
+    "sha256": "c37e9f0bf4d8fdf2071d67b61cab0dcf9aad7e59bf21b99480cc2704a7aaec0e"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-23.json",
+    "sha256": "b8b5e6cd392128f78d4668a17508ae5ecc201022733d4db3228523996562b329"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-24.json",
+    "sha256": "c6af0e25745c685641e4cb8b5153c884752aca73f62c4afe520120e23d19c394"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-28.json",
+    "sha256": "299e060f9c8df8309156e72c131457fb420fcc8bfb04c187d472449007263cc7"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-29.json",
+    "sha256": "68a3d1ae7a9d63dcaf26b849a98aa593467d37c3277ace5de0fab0886f3a83b2"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-30.json",
+    "sha256": "6bcda6716099c09363884dec07fefd52693200de662f8a9d419a8a5a13459084"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-31.json",
+    "sha256": "b22fca41790a4e3615dd5da764de7d7b6f9373e3a8acc03935b4cf5305023447"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-01.json",
+    "sha256": "2573614501fb4a123b3bbe14f256fe86d1438825ee6c1170989e4284a1ca86bc"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-02.json",
+    "sha256": "3254ecbb01bed57e27c05d2f5f2e80ee0d6c393296d23bd2ea24929690f4877a"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-03.json",
+    "sha256": "c462d92906fe49a15e80c4844c22d9f4642e0e09951e9b40cd559427d25aad14"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-04.json",
+    "sha256": "496c12bb3cbfa5c26848edfa7339ddf6f0fc88c08d98148780f9154579f086b0"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-05.json",
+    "sha256": "65627db771f26c32e82a4bdab1ce02f3374697e57afa67fe4b71664a85e6c180"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-08.json",
+    "sha256": "7da706342264abb95dd3ff3e68ee5da17c88dae557918b5f86b52d1e36087fa1"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-09.json",
+    "sha256": "68f86489c60815ae1f0f4b4a197f69e4a2b6064365fd199508f57f59e27c8a86"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-10.json",
+    "sha256": "38e62278e85510276d748c59c5414ef84d7721ee05a8b6a9a370deb9857d68e1"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-11.json",
+    "sha256": "1e365851afd6d81798ebb10dc10fb21f4abfce5d6d10a3bfb01f5535d9bad049"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-12.json",
+    "sha256": "9f04962576f3c42cc480a4d13b96a20df4daa5ae3e034565c9774aec3ef53515"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-15.json",
+    "sha256": "dc6c90ab92d2d50ba1ac94f52daf65c730a8a01fc74852d8916c9d4cebe8795a"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-16.json",
+    "sha256": "5ea121c5f58fcd411e59f6f5b20e7631adae775945f54d6cf766e2ea1fe9e3f1"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-17.json",
+    "sha256": "dbfd471287f4b36ca5f077261dbb741b3b13ed2db9e4e7a0d288ea8f8b99e480"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-18.json",
+    "sha256": "c8ff89dc9a183a20daee79fbcd086de1c21f3c37370b99ce1a351329109135ea"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-19.json",
+    "sha256": "cd23cec6c822a51336df4826c117d64eb4d544b8d667ccef89744297b51e3353"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-22.json",
+    "sha256": "0a7dcf13b2d32290ad30cad161624faf1aea52d870e044c5a92aa31a58203b89"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-23.json",
+    "sha256": "d53cec46e96c9a584caa68c9eee95a8ec7a191b22102fcbaa1ed87b02effd0a4"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-24.json",
+    "sha256": "197060a7992aebf7a1cf648be6f35760c7e7800d31fa4ac0c787401895bdf3ae"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-25.json",
+    "sha256": "5872ce337f039dab2e98e40eef255977ef1a9199af74b6153cab32f47e184d04"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-26.json",
+    "sha256": "acf6bd8c26322b2a6de887a2cc02e9c6b8f073f5416bdd7a70c24612b9ccdb0c"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-29.json",
+    "sha256": "4c987f296f380347e855f47913c6282e44e6558fa6a89fd4434863a1cccad2c9"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-30.json",
+    "sha256": "78ccecc57d788f06b426cb1ec4777e90dc896b0b457b68d7d795c7f2159e1f6d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-01.json",
+    "sha256": "0931cb0a775cadf003b0666127eb43fe28b5f0eec10ffde4c3d611fff358251e"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-02.json",
+    "sha256": "ec614b7997af614719e3a1259afbc09cf33957c11ed47697d968c91bcdadf79b"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-03.json",
+    "sha256": "0db29f03dc254d2a4163268febcc6bbd68a991c11cb1d355636d8afd3c4c1c16"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-06.json",
+    "sha256": "7b9d64ab7fcea9f818267947b01da5cb08eff6a5dab2a078b358c5c1bca86b20"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-07.json",
+    "sha256": "1dba4af1b376e625b602b9aed42e00a47cf57be44ccd198f81925e371fbfdf63"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-08.json",
+    "sha256": "531ca355e0c8507e7f2187cdaece1cb491be939119308d89cf316904f8d6e43d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-09.json",
+    "sha256": "0b4523e264a0ecc830ee2917dbed19406fe7a6ac0268f49bec3bbfdd1ed06f33"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-10.json",
+    "sha256": "d433df3ef87231ff8cf7755130a8d10c0dee97037d9a7a501d7a97535e140794"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-13.json",
+    "sha256": "c7131edc84dfbbe339d3d29600989be0901a735bd3f50fe6ab9a68776557cb85"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-14.json",
+    "sha256": "a5f7efe988dad83a2acac1f9ddb693922878844fad526fc87b8dbf60a7bb4bea"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-15.json",
+    "sha256": "d9afc29c4be14983d57aa249095b9c33606b4f0270cbd4d414937dd5507907bb"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-16.json",
+    "sha256": "98eeb59a131b0c7fa1aa335572b44aa22cd268b2ed3d16ade981ff765f3f01d2"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-17.json",
+    "sha256": "ea4d4f967c74851d7ac5d638087f81440a465de6b69d7c05675b33a2310d2af9"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-20.json",
+    "sha256": "ae1edcb02704db9c010990ad3ed7780c375bf63ff73353eb9d495d7f9ce785cc"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-21.json",
+    "sha256": "5eefbf4814cd1f3ebe46ac79661081bed26ac983317532d5bed1e07a5a903c4a"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-22.json",
+    "sha256": "508a1c6f3efc61d290815f2215e6a7b4708f356594561092f3af605fb8279c40"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-23.json",
+    "sha256": "50d8fb127170865160a245bed31d594cfaf06a84cc37e845f9da6e2b9ae9f101"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-24.json",
+    "sha256": "722da698e093c109ec5e90b91bf4b45759665c3a3c8cc852013d9ae983a587c1"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-28.json",
+    "sha256": "29b2390db2426d62e28f289e768b96d5eefb79e3ae35470bedea03d9cb3ad1e1"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-29.json",
+    "sha256": "62138d603dfae49dc21b00846e6329cd053c772d28b59a1cbad8768a577da7e2"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-30.json",
+    "sha256": "b218e0b91e98755c4bce7c5eeb666541dc798cf02477867511b3495a7f84c7c1"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/persistence/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-31.json",
+    "sha256": "42308f4594b4fe219bc3076be538e665a084c29f5a5e2052f2019597d617cbf5"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-01.json",
+    "sha256": "bee911cb2227289d96ea88453f62062d1d30f123dc02686d73bb2b80d9e8fc25"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-02.json",
+    "sha256": "d8a93a4e79975ccd7879fb02a4be665da2a56423d8aaff78e34d5f22ce96f0e4"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-03.json",
+    "sha256": "5e05207a9fc312dc7501d998ea92166c104cfbfe3d87b8a0f9acd517608b5e10"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-04.json",
+    "sha256": "590c3c6e7a4a44b580e1c421d020443bcfc91941ed151d2523206948a225a78b"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-05.json",
+    "sha256": "4f154b70f1dfc3fbd5f837575291daefa6253eb89fc9ea7c3a932fbeb7e0f929"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-08.json",
+    "sha256": "8825df910b2c79f0e4a3c8a3b7ae7d6ee46cddead87b17e192996dc84473b317"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-09.json",
+    "sha256": "218b95075dc034904467de547b06f2d4e06177d28d2caa39f7708a0506809ee1"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-10.json",
+    "sha256": "850aa86198cadb1a16391231b6269195f67d6bc53f80389adaebed3a539c20dd"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-11.json",
+    "sha256": "1f8179af366d1b21b6f57e3761fbfbb21e4bcb3e45e4605a184f18a77d0f2073"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-12.json",
+    "sha256": "fe5b66b6ceb9f8300638825d101866b3ae367810ebc17a92c2665e0bfd1001ec"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-15.json",
+    "sha256": "f90870702a852d4b30d38b8308e3ff9d6a5c61971a53505a8aa1deeccf839c44"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-16.json",
+    "sha256": "ea3fcd7dc1e85098f0c8bbfdd9a0c1d2661af6dfafd619137cc639555fb00861"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-17.json",
+    "sha256": "578189157eb1f15cd01c2b6fbcf22dcd4e857cb829934ab6595e3e8281932db3"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-18.json",
+    "sha256": "ce251c282472d03d36a6916b3321add319b6c825ce988c1528942e124e99b36f"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-19.json",
+    "sha256": "0d83e0c524a8731f02c94b474b80fab115385c39fd7df55152904db54f93adaa"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-22.json",
+    "sha256": "8f99a12b3f8a7bcc417e6de49a74539cf2331e7f69a238233723088ffb3bc343"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-23.json",
+    "sha256": "82c27f2f7f4970969218f82cb7dce6e9c34e95cd0a13c51685dd7072402d7ddb"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-24.json",
+    "sha256": "b4ef1c43ad259c349c05f2eace873ef03a2d0be577220ad45f98a8d0214a51f5"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-25.json",
+    "sha256": "8185a8396522423d81cd555f552562e5c3e96bf8deac69a4bc915006952a0465"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-26.json",
+    "sha256": "43190531007f7f5f958f0985c9d4dd1c842d5fcd5c9123245ba8e62bca493917"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-29.json",
+    "sha256": "b8575c3a8be33b6d552436c2a0724dcbc40a15bb2d19838dc6022ef3fd92ac38"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-04-30.json",
+    "sha256": "8f3e638d0343b2e844f638729fdead8dc6dd7268b31ee85fcd32c78c5d4cfad5"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-01.json",
+    "sha256": "4c13db1c75fe4fbcfb850e3221e92c8582695aa6865fed8c7a78bdee4874e2a5"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-02.json",
+    "sha256": "64d6a0830302e96e1818c670e6cfae0d40e81f55c4888d99407b9d939232d66e"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-03.json",
+    "sha256": "c38080ea7f07855002d3d5b379616e04a0abb580edc5bb2da65ec064e0d811a1"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-06.json",
+    "sha256": "9e005f91159e34507d3f6ec676e34bd19cf66eafe31882030214651f953eca53"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-07.json",
+    "sha256": "885e5a00b72731d1269db21fddc04d262a623caefe122d62e1d7938f14945568"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-08.json",
+    "sha256": "18b5b4b842b81d597f2ef358c85226175d8bf5d3f56b5492d5436193567441ad"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-09.json",
+    "sha256": "5adeddc7d026df0689ae4584038c2f5527416e304eb07976ae86ad3f08451be6"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-10.json",
+    "sha256": "fca96ed00549f4cca1dfb9c7ddadef1a830511be119372eed110b018b148fa29"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-13.json",
+    "sha256": "fc8f2383332585db09338d731b407164e8c62db111ebee5cfb51bb96fd2fa43b"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-14.json",
+    "sha256": "987cef07f3e46c64677d34b87ce31bc665105044ec0dbdac57f27bc5c3fd8e5d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-15.json",
+    "sha256": "d960fa0f508eca180d2e8e470c86e652342857f7a6ecb6b795b22f81ec8eb156"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-16.json",
+    "sha256": "2addee31f5b33ab46902b81fc7dd73ef221319e88b6905e6216ddcf1665db4be"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-17.json",
+    "sha256": "f14a5346e86d70c80214db952304990f5c7a1dd2fc36f8025892a1deec851b58"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-20.json",
+    "sha256": "989fe67c8652339481c1b8ebe8522c37cb56b5fc89fca9f81688fba11a9f5e75"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-21.json",
+    "sha256": "2e05c10afe0cc983584147163c7dc1a8f0b0aa8f8d773af4e9a5712ef2974b43"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-22.json",
+    "sha256": "0a360f26d4ac31a49f67faaac6bb4304f49ffd61a8fa1a99a5c0f42aab128072"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-23.json",
+    "sha256": "838594b52f40d2f894122b4260f88727eab5a78dee53531d8273aa1b87b0445b"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-24.json",
+    "sha256": "5bb2df387bf53ac5046c15a7742ae620f557f0791e964c108822ced3e9cd7fd0"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-28.json",
+    "sha256": "23df0e986cd530d936d33ea29d5aa16125271c280b706d815b6fe62b5b8f946b"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-29.json",
+    "sha256": "0a0e46b850904c0abfcd77dd37213da2c8fbaa9388486635b543abf65b391d39"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-30.json",
+    "sha256": "d681bff00c9a5c5be3dc99e9ee40c7104e9cc52054287c837a51e9f36e1dc3b3"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_ordinary_(16_factors)_density-weighted/2024-05-31.json",
+    "sha256": "b61c17f7319ccffe25a5b638e48ed447d1689cc26d1002f48d8ce445f2221670"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-01.json",
+    "sha256": "f20df818d2fa287fcef6eb49cec6a816c2e824ff438d41f7ada1a65742b58b97"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-02.json",
+    "sha256": "270b589ab7beff072fd4318db932bd89668d18cab9622886ecc63045e4ce90ad"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-03.json",
+    "sha256": "cb673873743b62c267ee322efdc4ab728ee051ca9db568ab8e880f77cbb5d1de"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-04.json",
+    "sha256": "0c0b529715e6e841e10e4e5a8ee454a68c8d9968b79ad9c0ea22d3c9b2a0fe13"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-05.json",
+    "sha256": "9f5206e2df7a1e728631ab4bd7b523b66449bb4e2ab162b80fe68379ac7e10d7"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-08.json",
+    "sha256": "71963b914f886654696004121d741b989b15e23f8900c4ac2c7910bd88f5fe95"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-09.json",
+    "sha256": "ef9dbc50056023dc78177a7f093fe178e850ac9f0133894606fea72c0e87563d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-10.json",
+    "sha256": "d1f17a24663accca66c00b27512430c4a4a2f5e6d87bea56b28c6884098f00fe"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-11.json",
+    "sha256": "9c6052499731184932b8df3a97159789ad9b788883929c590e612eed1dff43a0"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-12.json",
+    "sha256": "146e1b6d64fd329fb5e0f2cc2056a0dd911b4d2fa3ea692a43a06d74b15ab4bc"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-15.json",
+    "sha256": "c732c9932dbc29178c2372dac7aca6138f9f113419e4d1d776d1cbee9d127a4f"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-16.json",
+    "sha256": "f7d7b9a6b5a8602bf77f878df86472cffccd9470e26c31d0190ab6db6bbf8c58"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-17.json",
+    "sha256": "7741bae11dff2dfb5a8d607daef708f3ad313aaaac9237a28e8b787ccbc78c18"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-18.json",
+    "sha256": "a8aa546ddc3ab89d2db0116340d4f6799d266d4216ba2b62d81a7cf824c44b3d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-19.json",
+    "sha256": "823660ac26ac80c9f4ba6aae123fb78fe53bc105eca6ea5f19c35bc0ea7a4e06"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-22.json",
+    "sha256": "d1742d8be740cb16df5d042b4bc836fee03675f6a3072bc46429b0b6828397a3"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-23.json",
+    "sha256": "7f12633c8020d01a26f683617ab2c132dfb76c225b88494277b881e3fc03c1ae"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-24.json",
+    "sha256": "61817754edb7fc6dacf1b45582724374f5f3b4ea8fac2b9c7f6543073b55c9e8"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-25.json",
+    "sha256": "8b050ab3d21bc2e797eb29532b3349859f6ada570cd7aadc5ba6624060ac3867"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-26.json",
+    "sha256": "5ab2f79a65b6f14cc1df029d13c7836c896e993b6869cc2950afee549aaa3c28"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-29.json",
+    "sha256": "23029eedd25d4212fb26de34ca8be57de1efb13ca080986b196f3b37856536b0"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-04-30.json",
+    "sha256": "ac1f1ea7392ef29b3e64a9338a2a576a5cba6f9d5e91b2dab047e30a53c66cd5"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-01.json",
+    "sha256": "e9b8a529a44137293bf548aaca5832fb2b0e416f3bf134d7a4443d5d1f9a0368"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-02.json",
+    "sha256": "2e303962f3ff56ec4f7768cb22f471e3c82655d9bf103eb86fca13558e8ecd81"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-03.json",
+    "sha256": "033c4aaaad3fdd234bd9b0c5eb2aa9f649b225bcfea53b9518d992a986de4714"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-06.json",
+    "sha256": "dd6aafc894a3adcdb3958f06a79d3171dad1eebc3e6c8caceaad2871207466b4"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-07.json",
+    "sha256": "625bae1f5cc3338d5a0f5f8b7056660d683836ba6246b444a238803202bfed7e"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-08.json",
+    "sha256": "55ca49a9378d6ca56f3d3ea76985e6f2800e919a8a84608059b4509a87f69907"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-09.json",
+    "sha256": "9da6b4a59c88b2751c5fc81f01b479fccf1c5e916c539a44c64ebb92a28f68cf"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-10.json",
+    "sha256": "c034df75b93d11b69799c3f6e9792708bc3fe54c9846eef4d186187d918a8871"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-13.json",
+    "sha256": "75b93addbb39b18f7f496e4e833eb8614b7141049e99f712ee8e6b7aa04348dd"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-14.json",
+    "sha256": "4b8b5a3d11017392aed7ec4d80006a974bdb7781a04485ff7c9121b9953386b8"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-15.json",
+    "sha256": "4d90d92ca6d947a395ec49795c28445e534bdb84b1601efa172cc97ab3929a02"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-16.json",
+    "sha256": "5dba3951d88e20a4b668ac876917483a6c268562af5b2329702613ae3d05f8f8"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-17.json",
+    "sha256": "c292420d567abf4656c4247a8a21f7cd07b683e9ec27fc9b62f6a713974402b1"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-20.json",
+    "sha256": "107b2fa99e992c050c5f33a8407973591aed147366400eedee92a259211fa533"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-21.json",
+    "sha256": "a83e47211603ba3591bae4228567063f3c43af053103265548104f19638e158d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-22.json",
+    "sha256": "2d1eb5c9e97a579804cb7cfd6f479c7ce1506d375ab4bc41c7c95692634c798d"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-23.json",
+    "sha256": "9f7b07bcdde1667e99affaecb8898041a8d38b70d7ff742ad58a63d7f7ba4e5a"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-24.json",
+    "sha256": "293687a9787e4b95455cc164d4a947726095e8a7e313c7f7f540ea6f70106a87"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-28.json",
+    "sha256": "7d908fa0dccc02ad7e81ad11f689df201f3cdc6d10eed3e04d0d5f1cbc287303"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-29.json",
+    "sha256": "1eccfd165b1138891126a67b643a9fdd1dc8936b4dfe814b4beb12b04be9ed06"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-30.json",
+    "sha256": "b8466de79304f4dff055af0042dd2aff537069bcbf54912788575421e0f44607"
+  },
+  {
+    "path": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/quote_forecasts/DYSANOS_spot-orthogonal_(16_factors)_density-weighted/2024-05-31.json",
+    "sha256": "8539e963f9a3f83573f09620a9bbd74ca66f36d07ff82d6e67ea12ba26f9c310"
+  }
+]

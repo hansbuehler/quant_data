@@ -1,21 +1,25 @@
 {
   "external_run": "/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261111-final16-v3",
   "files": {
+    "DENSITY_WEIGHTED_INPUTS.json": {
+      "sha256": "5676e3e8c1e47a8408179b486e4d3a719f5a3af9d93487cd7af07d8fabc09174",
+      "bytes": 118420
+    },
     "INFERENCE_MODELS.json": {
       "sha256": "0e42a639b8d3c797570499747b83cbd37809e4a8c648f40f96544b2444289453",
       "bytes": 87125
     },
     "MANIFEST.json": {
-      "sha256": "e0c314e643a0dbef7f87df09eacc76169c6b8c18aac3f7f7e0c92618ae72b996",
-      "bytes": 7606
+      "sha256": "7818c2576559a118250b059f22f4b3fcdcdb4098c661ade5b4b3bb63f80d1dd7",
+      "bytes": 10792
     },
     "MODEL_DYNAMICS_REPORT.pdf": {
-      "sha256": "ba958579617b81229ca300a879644015e2acdae261c361812d3ae9d41ca4b1be",
-      "bytes": 337592
+      "sha256": "a5eb9fdef1530a6e1006ba9b799400a812e06f8cb91da71480c827713933fb16",
+      "bytes": 399370
     },
     "MODEL_DYNAMICS_REPORT.tex": {
-      "sha256": "743e95f792bdabc20acd92f2327bf13e21b6ee77b34f5c6e837d981e431faf2a",
-      "bytes": 64274
+      "sha256": "c13ce0c43afec2404304df29cd3d5802f5bd8a1e40c393fd9ba61631e57f91b1",
+      "bytes": 76395
     },
     "MODEL_SELECTION.json": {
       "sha256": "6a295b23336087dcb8bb22fbaccd0b1a5936ed8ac6e3a5bb0e61ca6df5a77b4c",
@@ -26,8 +30,8 @@
       "bytes": 673
     },
     "SOURCE_INPUTS.json": {
-      "sha256": "2fbcf2784b4fc0c34276a351605284d9dbbfe62101dc0380f8aeae383f682b6f",
-      "bytes": 628630
+      "sha256": "446b088fcd89db8d246eb8c050a83bce90404fef491463beaf5023e381603273",
+      "bytes": 629777
     },
     "SOURCE_REUSE.json": {
       "sha256": "15f26e3ca178a7235bf76e866ea611978b6d89a77b9b2cab32983034ecc0c6a1",
@@ -42,12 +46,20 @@
       "bytes": 4130
     },
     "acf.pdf": {
-      "sha256": "32dc0c2c10d3311e62692cfbed20b24448458c88fded7fdb54a7a8269d21258e",
+      "sha256": "d1983b43219d18bd3c66e61e135ce40b0cebbc24ee20ce6c62b86fc7f2b121ae",
       "bytes": 35024
     },
     "covariance.pdf": {
-      "sha256": "d66e605c99c10024b1459948390f235010e48a736f458553534be2d8ee84a958",
-      "bytes": 19348
+      "sha256": "fc9e4b7c7795ab5ad805b06c1afb8998430685a13ced457a3748b7b47dd31e27",
+      "bytes": 27406
+    },
+    "covariance.png": {
+      "sha256": "eedb2b115ff6a1de13645e5fb42585818e970afe52ab918df65817726afd1c77",
+      "bytes": 168148
+    },
+    "covariance_extension.json": {
+      "sha256": "43d08ed49dfee8f4c46fc8ec2a9805b78112761d731e14f9735e9b33c0d3cc8f",
+      "bytes": 33491
     },
     "coverage.csv": {
       "sha256": "26924ab6f1fe6f046709387d8a0df28e996141c97b3a310e0623aaca42743756",
@@ -57,13 +69,65 @@
       "sha256": "ef4dbe6bc86243eda36fbe3a92e758587c31ed011da276e6b19f26b4f090445a",
       "bytes": 42188
     },
+    "density_acf.pdf": {
+      "sha256": "66a04291dfbdacfd33701d351c86a7775655da7fee30df7bf93c4243ccd366ff",
+      "bytes": 23017
+    },
+    "density_comparison.csv": {
+      "sha256": "106b5f0f82d1b3146882c5fa824d5ac85293a69b4291433b52d9be6c8fce777b",
+      "bytes": 1077
+    },
+    "density_coverage.csv": {
+      "sha256": "ba8e4a2c5a91ab28e6f80c57f39c760e3a37c2c88a3b37a3b09bd89d9df901b2",
+      "bytes": 298
+    },
+    "density_daily_scores.csv": {
+      "sha256": "bd3b1aa4f0998cfa1206014aaa6014192ad8b5c394317713dc57342e38737df3",
+      "bytes": 11062
+    },
+    "density_iv_rmse_buckets.csv": {
+      "sha256": "36efc92efa3d6e216ecdca6c36e994b8c8598a9c4f478061649b6a24f34e0d2a",
+      "bytes": 15628
+    },
+    "density_linear_stability.csv": {
+      "sha256": "309e349388a9c93ef5630453ea0267f0368f0d76ca23891f70e3f9a064d742f8",
+      "bytes": 18720
+    },
+    "density_monthly_scores.csv": {
+      "sha256": "ac181a65001ea87a4b2b04df68d3b6f9f3ce1e1365fede29d24cb9f132601235",
+      "bytes": 465
+    },
+    "density_quote_forecast_scores.csv": {
+      "sha256": "912b390623abadf1ecf09d964f8f0e9eb4f70fe3ce5e787acac72d0cfd377ee3",
+      "bytes": 51759
+    },
+    "density_reconstruction_scores.csv": {
+      "sha256": "a5c068ee608403919e03ddeb9250b9c513162fded14349b9ccc667fd76ad9fac",
+      "bytes": 18419
+    },
+    "density_rolling_scores.csv": {
+      "sha256": "8b35ab68af74c6bbc524f66a1cd3dea43285e1145463c3802dd9d24ce6d31162",
+      "bytes": 13283
+    },
+    "density_tail_scores.csv": {
+      "sha256": "ce80d8b56ec501e25a3c0cc0fce2850cb2a8419922e520ef0d6397114fb5adcf",
+      "bytes": 6936
+    },
+    "density_tails.pdf": {
+      "sha256": "89d1ef472c03eb40d8f406179c9568ad473853680ff21632066456f6a7c613bf",
+      "bytes": 23903
+    },
+    "density_weighted_diagnostics.json": {
+      "sha256": "3f6faccb23bf70c2cb30740233e7ff2783d69a8580b652bc32d9872421ea75fe",
+      "bytes": 132134
+    },
     "iv_rmse_buckets.csv": {
       "sha256": "707689532ff76b1edb0849a5561b88dd6eab252d9cab58de840b02ef0639059d",
       "bytes": 63113
     },
     "linear_stability.csv": {
-      "sha256": "a0c496d2e6caef9f50235888d3b397c537a26d4ed8018f74cb1773739433cf8f",
-      "bytes": 31622
+      "sha256": "9d54d5ee396452e1b58760792265a464caaedf4d27fdcaf622a16b125cdc84ea",
+      "bytes": 36735
     },
     "monthly_scores.csv": {
       "sha256": "a7c99b38a85c9d404cbe2e4e6cebd4311ba6ec56596c3792801a0a05e812aa72",
@@ -90,19 +154,19 @@
       "bytes": 52820
     },
     "summary.json": {
-      "sha256": "5513511e40a122201175e9a36e9a29eaa19647a78e2bd172ea2640e0e6656c47",
-      "bytes": 136519
+      "sha256": "ec0f9695ee031cbbe0971e9e9e2651d4a5734e0ddf31637ecabfbc89458e8506",
+      "bytes": 140265
     },
     "summary_matched_dates.json": {
-      "sha256": "b077eae370d0f98db50319cc27e69662071905d988897b0dcdaf9b0077a6e14c",
-      "bytes": 147086
+      "sha256": "83f57b45b2b8738524955c3479156fe11ffa3efaa061804b30e91ec5104fd984",
+      "bytes": 150972
     },
     "tail_scores.csv": {
       "sha256": "f8843f60831a043e69fc893e31eae008d0f2bafceb1f91a873deaff2642a1f4d",
       "bytes": 29682
     },
     "tails.pdf": {
-      "sha256": "ad9c7cbcf28b9967a85600f1181c58d9599927d3b3005264083e2d46597ffdc5",
+      "sha256": "5e7510081ebf77f72e851677b3659e567f640a26f04dfe064d2d92a7f3dad1b2",
       "bytes": 46700
     }
   },

@@ -66,6 +66,25 @@ def mixture_covariance(means: ArrayLike, covariances: ArrayLike) -> np.ndarray:
     return covariance_array.mean(axis=0) + covariance(mean_array)
 
 
+def forecast_variance_calibration(means: ArrayLike, covariances: ArrayLike,
+                                  observed: ArrayLike) -> dict[str, float]:
+    """Compare average predictive variance with realized squared forecast errors."""
+    predictions, conditional, actual = np.asarray(means), np.asarray(covariances), np.asarray(observed)
+    if (predictions.ndim != 2 or predictions.shape != actual.shape or len(predictions) < 2
+            or conditional.shape != (len(predictions), predictions.shape[1], predictions.shape[1])
+            or not all(np.isfinite(values).all() for values in (predictions, conditional, actual))):
+        raise ValueError("Predictive variance calibration needs aligned finite forecast moments and outcomes")
+    errors = actual - predictions
+    variance = float(np.trace(conditional.mean(axis=0)))
+    mse = float(np.mean(np.sum(errors**2, axis=1)))
+    if mse <= 0. or variance < 0.:
+        raise ValueError("Forecast-error variance comparison requires positive MSE and nonnegative modeled variance")
+    return {"predicted_conditional_variance_trace": variance, "forecast_error_squared_norm_mean": mse,
+        "conditional_variance_over_forecast_mse": variance / mse,
+        "forecast_error_mean_squared_norm": float(np.sum(errors.mean(axis=0)**2)),
+        "centered_forecast_error_covariance_trace": float(np.trace(covariance(errors)))}
+
+
 def correlation_from_covariance(matrix: ArrayLike) -> np.ndarray:
     """Return correlations; unidentified zero-variance entries are NaN."""
     values = np.asarray(matrix, dtype=float)

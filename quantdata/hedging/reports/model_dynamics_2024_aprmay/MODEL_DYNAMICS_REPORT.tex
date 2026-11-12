@@ -30,6 +30,8 @@
 \textbf{Interpretation.} These are diagnostics of retained implementations, including disclosed numerical guards and differing SANOS input smoothnesses, not a controlled architecture-only comparison. Black/orange/red colors use the explicit review tolerances in each table caption; they are not universal statistical acceptance criteria.
 \clearpage
 
+\paragraph{Completed density-weighted follow-up.} Both additional sixteen-factor DYSANOS variants have all 44 surface, quote and recursive diagnostics completed. Pooled log-IV variance ratios improve to 0.784 and 0.722; weighted forecast accuracy is close to GROMM. However, predicted variance is only about 0.45--0.51 times realized squared forecast errors, versus 1.82--2.06 for GROMM; a larger conditional variance bar is therefore not automatically better calibrated. All weighted recursive paths decoded without invalid or above-300-percent-IV surfaces, but native clipping persists, tail/ACF mismatches remain, and next-day quoted-price MAE is slightly worse than persistence. The spot projection/add-back and all covariance cross terms were checked explicitly. See the completed follow-up section for the full definitions and limitations.
+
 \section{Scope and headline findings}
 
 The audit covers 44 origins from 1 April through 31 May 2024; the final one-session forecast settles on 3 June. Existing fits are retained unchanged. DYSANOS means our own saved floating-DLV PCA/AR(1) fits, not the latest external SANOS package. Results are diagnostics of retained legacy fits, not validation of the corrected hedge2 specification.
@@ -145,7 +147,7 @@ DYSANOS ordinary (16 factors) (tail) & 44 & \textcolor{red}{0.820} & \textcolor{
 DYSANOS spot-orthogonal (16 factors) (tail) & 44 & \textcolor{red}{0.776} & \textcolor{red}{0.154} & \textcolor{red}{0.214} \\
 \bottomrule\end{tabular}\end{table}
 
-\begin{figure}[H]\centering\includegraphics[width=\linewidth]{covariance.pdf}\caption{Conditional and pooled surface-variance ratios. The logarithmic scale makes underdispersion visible rather than hiding it behind changing forecast means.}\label{fig:surface-variance}\end{figure}
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{covariance.pdf}\caption{Conditional and pooled surface-variance ratios. The logarithmic scale makes underdispersion visible rather than hiding it behind changing forecast means. Hatched bars add the sixteen-factor density-weighted DYSANOS PCA/VAR experiment on the same 44 origins. Its squared log-DLV errors use causal training-window average grid probability masses; log-forward-vol coordinates keep unit weight. Their remaining diagnostics are reported in the density-weighted follow-up section.}\label{fig:surface-variance}\end{figure}
 
 \subsection{Why native PCA coverage need not preserve IV variance}
 
@@ -399,6 +401,110 @@ DYSANOS spot-orthogonal (16 factors) (tail) & 44 & \textcolor{black}{0.000} & \t
 \bottomrule\end{tabular}\end{table}
 
 An extreme surface has at least one common-grid annual IV above 3.0 (300\%). All option-price inversion uses vectorized \texttt{cdxcore.bs.implied} on raw, unclipped inputs, with its $10^{-8}$ price tolerance and an independent vectorized \texttt{bs.price} repricing check. The former additional time-value/interiority veto has been removed. The library's default 1\%--500\% volatility bounds and intrinsic-price conventions are retained and counted explicitly; a library boundary estimate is not called a failed model path solely for having tiny time value. Native-price bound violations and repricing residuals remain recorded. These numerical point estimates do not imply uniquely identified wing volatilities at sub-tolerance prices. A completed test with no usable complete IV paths remains in coverage and invalid-rate statistics but has no ACF. All DLV clipping counts are retained separately. Recursive paths use frozen fits and their original innovation laws; finite-horizon survival is not a non-explosion proof.
+
+\section{Density-weighted DYSANOS: completed follow-up}
+
+All 44 April--May origins have one-day surface/tail/leverage forecasts, quoted-contract forecasts and frozen-fit recursive tests for both weighted variants. Each recursive test uses 32 paths, 115 business sessions and seed 20261111, exactly as for the baselines. Existing baseline fits and diagnostics are retained, not replaced. The separate density-prefixed CSVs contain all target, tenor, moneyness, monthly and rolling-window scores.
+
+For each origin we average decoded grid probability masses over the 252 training origins, writing $w_{jk}=\overline p^j_k$. These are node probabilities, not probability-density heights on the nonuniform strike grid. Put $D=\operatorname{diag}(\sqrt w)$ for log-DLV-squared coordinates, and unit diagonal entries for log-forward-volatility coordinates. Both PCA and VAR are fitted to $z=Du$; simulated changes are mapped back with the same frozen $D$. No probability floor or shock multiplier is added. A zero-weight native coordinate is frozen. Rolling orientations map the preceding dated loadings into the new causal metric.
+
+In the spot-orthogonal variant, $\beta=\operatorname{Cov}(\Delta z,r)/\operatorname{Var}(r)$ is removed before PCA and restored in simulation. With $h=U'(z-\bar z)$, the update is
+
+\[u_{t+1}=u_t+D^+\{U[b+(A-I)h_t+\varepsilon_{t+1}]+\beta r_{t+1}\}.\]
+
+The paired empirical $(r,\varepsilon)$ law preserves all spot--factor cross-covariances, including residual dependence after VAR fitting. Ordinary PCA does not project out spot but keeps that joint dependence. Fixed-cash-strike option repricing separately uses the updated spot and forward. Across all 44 orthogonal fits, the pre-PCA spot-orthogonality error is below $4\cdot10^{-17}$; paired replay and covariance identities agree to about $10^{-15}$. The reported predictive variance already includes the stock contribution.
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Weighted and unweighted one-day observable covariance comparison, plus GROMM references, on the same 44 origins. RMSE here is ungraded; native and weighted PCA coverage have different denominators. Color rules: Frobenius error: black at most 0.25, orange above 0.25 through 0.50, red above 0.50. Trace ratio: black 0.80--1.25; orange 0.50--2.00 outside that band; red outside 0.50--2.00. These are descriptive review tolerances, not statistical acceptance tests. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:density-covariance}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Model & Trace cond. & Trace pooled & Frob. pooled & RMSE \\
+\midrule
+Ordinary / unweighted & \textcolor{red}{0.080} & \textcolor{red}{0.166} & \textcolor{red}{0.821} & 0.174 \\
+Ordinary / density & \textcolor{red}{0.187} & \textcolor{orange}{0.784} & \textcolor{black}{0.238} & 0.124 \\
+Spot-orthogonal / unweighted & \textcolor{red}{0.155} & \textcolor{red}{0.214} & \textcolor{red}{0.775} & 0.176 \\
+Spot-orthogonal / density & \textcolor{red}{0.195} & \textcolor{orange}{0.722} & \textcolor{orange}{0.310} & 0.120 \\
+GROMM-P & \textcolor{orange}{0.796} & \textcolor{orange}{1.268} & \textcolor{orange}{0.334} & 0.120 \\
+GROMM-Q & \textcolor{orange}{0.763} & \textcolor{black}{1.205} & \textcolor{orange}{0.280} & 0.125 \\
+\bottomrule\end{tabular}\end{table}
+
+A larger conditional bar in Figure~\ref{fig:surface-variance} is not automatically better calibrated. To remove the unconditional-variance denominator, also compare mean forecast variance with realized squared forecast errors:
+
+\[\mathcal V_{\rm err}=\frac{\operatorname{tr}(\overline C)}{n^{-1}\sum_t\|\Delta x_{t+1}-m_t\|^2}.\]
+
+One is the population reference if the conditional mean and covariance are correct. This is a descriptive 44-origin comparison, not an independent-sample acceptance test. Misspecified means can also distort it. Weighted DYSANOS is still narrow on this measure; GROMM is broader than the observed forecast errors. Hence neither a larger conditional trace nor a pooled ratio near one alone establishes superior uncertainty calibration.
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Predictive variance versus squared forecast-error scale. All values are ungraded descriptive diagnostics; no orange/red thresholds are assigned. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:density-calibration}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Model & Predicted trace & Forecast MSE & Variance / MSE \\
+\midrule
+Ordinary / unweighted & 0.145 & 1.487 & 0.098 \\
+Ordinary / density & 0.340 & 0.756 & 0.450 \\
+Spot-orthogonal / unweighted & 0.281 & 1.513 & 0.186 \\
+Spot-orthogonal / density & 0.354 & 0.700 & 0.506 \\
+GROMM-P & 1.446 & 0.701 & 2.064 \\
+GROMM-Q & 1.386 & 0.763 & 1.816 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Observed-quote tests. Same-day reconstruction is unchanged because the daily decoder was not refitted. Next-day scores use identical surviving 2--5D cash contracts; normalized price MAEs and their reference are averaged equally over origins. Color rules: Same-day in-spread share: black at least 95\%, orange 80\% to below 95\%, red below 80\%. Forecast MAE / same-contract persistence MAE: black at most 1.00, orange above 1.00 through 1.10, red above 1.10. Other forecast statistics are ungraded; next-day in-spread share is not a reconstruction test. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:density-quotes}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Model & Recon. inside & Quote count & Forecast MAE / spot & MAE / persistence \\
+\midrule
+Ordinary / density & \textcolor{red}{0.744} & 7610 & 0.002 & \textcolor{orange}{1.018} \\
+Spot-orthogonal / density & \textcolor{red}{0.744} & 7610 & 0.002 & \textcolor{orange}{1.012} \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Observable PC1 tail exceptions and lower-tail pinball score. All PC1--PC3 and spot quantiles, coverage/independence tests and joint VaR--ES scores are retained in the density-weighted JSON and CSV files. Expected counts are only 0.44 or 2.2 per tail. Color rules: Exception-count colors use pointwise two-sided exact-binomial coverage p-values: red below 0.01; orange from 0.01 to below 0.05, or whenever expected exceptions are fewer than 10; black requires p at least 0.05 and at least 10 expected exceptions. Pinball loss is ungraded. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:density-tails}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Model & 1\% & 5\% & 95\% & 99\% & 5\% pinball \\
+\midrule
+Ordinary / density & \textcolor{red}{3} & \textcolor{red}{10} & \textcolor{orange}{4} & \textcolor{red}{3} & 0.099 \\
+Spot-orthogonal / density & \textcolor{red}{3} & \textcolor{orange}{6} & \textcolor{orange}{5} & \textcolor{orange}{2} & 0.090 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{density_tails.pdf}\caption{Weighted-model PC1 forecast bands and realized changes, using the same pre-April observable PCA basis.}\end{figure}
+
+April/May summaries and rolling 21-session deterioration are reported in the density-prefixed monthly/rolling CSVs. The 44-origin window does not identify 63-session observed deterioration or ACF, and 1\% tail tests remain exploratory.
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Weighted floating-volatility PCA--VAR backbone stationarity. Half-lives are in business sessions; no stationarity claim is made for spot levels or for the whole daily re-estimated model sequence. Color rules: AR spectral radius: black below 0.99, orange from 0.99 to below 1, red at least 1. Stable-fit counts and half-lives are ungraded. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:density-stability}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Model & Stable fits & Min radius & Max radius & Max half-life \\
+\midrule
+Ordinary / density & 44/44 & \textcolor{black}{0.902} & \textcolor{black}{0.925} & 8.929 \\
+Spot-orthogonal / density & 44/44 & \textcolor{black}{0.903} & \textcolor{black}{0.926} & 9.042 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Maximum absolute ACF errors across the three fixed observable PC-level scores. Modeled ACF uses each path's first 44 sessions, not concatenated rolling native factors. Color rules: Maximum absolute PC-ACF error: black at most 0.10, orange above 0.10 through 0.20, red above 0.20. Fewer than 30 observed lag pairs forces at least orange, even for a small error. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:density-acf}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Model & Lag 1 & Lag 5 & Lag 21 \\
+\midrule
+Ordinary / density & \textcolor{black}{0.097} & \textcolor{red}{0.270} & \textcolor{red}{0.449} \\
+Spot-orthogonal / density & \textcolor{orange}{0.106} & \textcolor{red}{0.251} & \textcolor{red}{0.448} \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{density_acf.pdf}\caption{Weighted-model observable-PC persistence against the identical 44-origin observed window. Frozen native metrics are inverted before extracting common-grid IVs.}\end{figure}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Complete 32-path, 115-session recursive tests on all 44 origins. Rates are origin averages. Clips count individual native coordinates and remain disclosed even when decoded IVs are valid; finite-horizon survival is not a non-explosion proof. Color rules: Extreme-surface rate (any common-grid IV above 300\%): black zero, orange above zero through 0.1\%, red above 0.1\%. Invalid-path rate: black zero, orange above zero through 1\%, red above 1\%. Evaluated-origin counts are neutral. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:density-paths}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Model & Origins & Invalid paths & Extreme surfaces & Lower clips & Upper clips \\
+\midrule
+Ordinary / density & 44 & \textcolor{black}{0.000} & \textcolor{black}{0.000} & 14273189 & 615885 \\
+Spot-orthogonal / density & 44 & \textcolor{black}{0.000} & \textcolor{black}{0.000} & 16827255 & 1334816 \\
+\bottomrule\end{tabular}\end{table}
+
+Implementation feedback: density weighting largely restores forward-volatility variation lost by Euclidean native PCA, but numerical DLV floors/guards and the 0.1-input versus 0.25-observable-reference smoothing difference remain. This follow-up changes the fitted reduction metric, not the pricing geometry, spot law or hedge optimizer. Large fitted metrics and recursive arrays remain external; aggregates and checksummed loading manifests are retained.
 
 \appendix\section{Model-specific implementation choices and difficulties}
 

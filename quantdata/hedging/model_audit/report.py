@@ -16,6 +16,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.patches import Patch
 
 from quantdata.hedging.model_audit.grading import RULES, grade, tail_grade
 from quantdata.hedging.model_audit.run import _hash, _json, _summarize
@@ -178,28 +179,69 @@ def _executive_summary(summaries: dict, coverage: pd.DataFrame, stability: pd.Da
     ])
 
 
-def _plot_covariance(output: Path, summaries: dict) -> None:
+def _covariance_plot_data(output: Path, summaries: dict) -> tuple[list[str], dict]:
     labels = [model for model in MODEL_ORDER if summaries.get(model, {}).get("surface_days", 0) >= 2]
+    extended = dict(summaries)
+    extension_path = output / "covariance_extension.json"
+    if extension_path.exists():
+        extension = json.loads(extension_path.read_text())
+        reference = json.loads((output / "observable_reference.json").read_text())
+        if extension["origin_dates"] != reference["dates"]:
+            raise ValueError("Figure 1 extension does not use the same observed dates")
+        for entry in extension["models"]:
+            if entry["summary"]["surface_days"] != len(reference["dates"]) or entry["baseline_model"] not in labels:
+                raise ValueError("Figure 1 extension is incomplete or has no matching baseline")
+            if entry["model"] in extended:
+                raise ValueError("Figure 1 extension would overwrite an existing model")
+            extended[entry["model"]] = entry["summary"]
+            labels.insert(labels.index(entry["baseline_model"]) + 1, entry["model"])
+    return labels, extended
+
+
+def _covariance_label(model: str) -> str:
+    label = model.replace("DYSANOS ", "DYSANOS\n").replace("spot-orthogonal", "spot-orth.").replace(" (16 factors)", "\n16 PC")
+    return label.replace(" density-weighted", "\ndensity-weighted").replace(" (tail)", "\ntail diffusion")
+
+
+def _plot_covariance(output: Path, summaries: dict) -> None:
+    labels, summaries = _covariance_plot_data(output, summaries)
     conditional = [summaries[model]["conditional_covariance"]["trace_ratio"] for model in labels]
     pooled = [summaries[model]["pooled_covariance"]["trace_ratio"] for model in labels]
     positions = np.arange(len(labels))
-    figure, axis = plt.subplots(figsize=(11, 5.2))
-    axis.bar(positions - .18, conditional, .36, label="Average conditional variance / observed variance")
-    axis.bar(positions + .18, pooled, .36, label="Pooled variance / observed variance")
+    figure, axis = plt.subplots(figsize=(15, 6.3))
+    first = axis.bar(positions - .18, conditional, .36, label="Average conditional variance / observed variance")
+    second = axis.bar(positions + .18, pooled, .36, label="Pooled variance / observed variance")
+    for index, model in enumerate(labels):
+        if model.endswith("density-weighted"):
+            for bars in (first, second):
+                bars[index].set_hatch("///")
+                bars[index].set_edgecolor("black")
+                bars[index].set_linewidth(.7)
+            axis.annotate(f"{pooled[index]:.3f}", (positions[index] + .18, pooled[index]),
+                          xytext=(0, 5), textcoords="offset points", ha="center", fontsize=10, fontweight="bold")
     axis.axhline(1., color="black", linestyle="--", linewidth=1)
     axis.set_yscale("log")
-    axis.set_xticks(positions, labels, rotation=25, ha="right")
+    axis.set_xticks(positions, [_covariance_label(model) for model in labels], fontsize=10)
     axis.set_ylabel("Trace ratio (log scale)")
-    axis.legend(loc="lower right", fontsize=9)
+    axis.set_title("Floating-NMS log-IV variance · April–May 2024 · 44 daily forecast origins", pad=12)
+    handles, legend_labels = axis.get_legend_handles_labels()
+    if any(model.endswith("density-weighted") for model in labels):
+        handles.append(Patch(facecolor="white", edgecolor="black", hatch="///", label="Density-weighted PCA/VAR"))
+        legend_labels.append("Density-weighted PCA/VAR")
+    axis.legend(handles, legend_labels, loc="lower right", fontsize=10)
+    axis.grid(axis="y", which="major", alpha=.2)
+    axis.set_axisbelow(True)
     figure.tight_layout()
     figure.savefig(output / "covariance.pdf")
+    figure.savefig(output / "covariance.png", dpi=180)
     plt.close(figure)
 
 
-def _plot_tails(output: Path, records: dict) -> None:
-    figure, axes = plt.subplots((len(MODEL_ORDER) + 1) // 2, 2,
-                               figsize=(11, 2.5 * ((len(MODEL_ORDER) + 1) // 2)), sharex=False)
-    for axis, model in zip(axes.ravel(), MODEL_ORDER, strict=True):
+def _plot_tails(output: Path, records: dict, *, model_order: tuple[str, ...] | None = None) -> None:
+    models = MODEL_ORDER if model_order is None else model_order
+    figure, axes = plt.subplots((len(models) + 1) // 2, 2,
+                               figsize=(11, 2.5 * ((len(models) + 1) // 2)), sharex=False, squeeze=False)
+    for axis, model in zip(axes.ravel(), models, strict=True):
         rows = [row for row in records[model] if row.get("status") == "scored"]
         if rows:
             positions = np.arange(len(rows))
@@ -241,13 +283,14 @@ def _plot_acf(output: Path, reference: dict, persistence: dict) -> None:
     plt.close(figure)
 
 
-def _export(output: Path, records: dict, summaries: dict, quotes: dict, persistence: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
+def _export(output: Path, records: dict, summaries: dict, quotes: dict, persistence: dict,
+            *, model_order: tuple[str, ...] | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
     daily, tails, monthly, coverage, stability, iv_buckets = [], [], [], [], [], []
     with np.load(output / "reference_history.npz", allow_pickle=False) as saved:
         reference_dates = list(saved["dates"])
         reference_surfaces = saved["surfaces"][:, :, [4, 5, 7, 9, 11, 13, 14]].reshape(len(reference_dates), -1)
     initial_quote_rows, forecast_quote_rows = [], []
-    for model in MODEL_ORDER:
+    for model in MODEL_ORDER if model_order is None else model_order:
         rows = records[model]
         scored = [row for row in rows if row.get("status") == "scored"]
         completed_recursive = _completed_recursive(persistence[model])
@@ -269,7 +312,10 @@ def _export(output: Path, records: dict, summaries: dict, quotes: dict, persiste
                     "stationary_backbone": native["stability"]["stable_linear_core"],
                     "stationary_variance_trace": native["stability"]["stationary_variance_trace"],
                     "lyapunov_residual_relative": native["stability"]["lyapunov_residual_relative"],
-                    "native_pca_coverage": native["native_pca_coverage"], "floored_nodes": native["floored_nodes"],
+                    "native_pca_coverage": native.get("native_pca_coverage", np.nan),
+                    "metric_pca_coverage": native.get("metric_pca_coverage", native.get("native_pca_coverage")),
+                    "pca_metric": "grid-probability" if "metric_pca_coverage" in native else "Euclidean",
+                    "floored_nodes": native["floored_nodes"],
                     "undefined_nodes": native["undefined_nodes"], "capped_nodes": native["capped_nodes"],
                     "max_modal_half_life": max(value for value in native["stability"]["modal_half_lives"] if value is not None)})
         if scored:
@@ -329,6 +375,10 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
     output = arguments.output
+    from quantdata.hedging.model_audit.weighted_report import (
+        executive_update,
+        latex_section,
+    )
     selection_path = output / "MODEL_SELECTION.json"
     if selection_path.exists():
         selection = json.loads(selection_path.read_text())
@@ -460,6 +510,7 @@ def main() -> None:
         r"\title{Retained Hedging Models: Surface-Dynamics Audit}", r"\author{AI-agent implementation and diagnostic feedback}",
         r"\date{11 November 2026}", r"\begin{document}\maketitle",
         _executive_summary(summaries, coverage, stability),
+        executive_update(output),
         r"\section{Scope and headline findings}",
         r"The audit covers 44 origins from 1 April through 31 May 2024; the final one-session forecast settles on 3 June. Existing fits are retained unchanged. DYSANOS means our own saved floating-DLV PCA/AR(1) fits, not the latest external SANOS package. Results are diagnostics of retained legacy fits, not validation of the corrected hedge2 specification.",
         r"The observable reference is the retained public-candidate SANOS interpolation (smoothness 0.25), manifest \texttt{2add65d6\ldots}. Our DYSANOS coordinates instead came from the licensed smoothness-0.1 interpolation. These are not identical input pipelines; the comparison therefore measures retained-system behaviour, not architecture alone.",
@@ -492,7 +543,13 @@ def main() -> None:
             _rated("cov_frob_rel", item["pooled_covariance"]["cov_frob_rel"]), _rated("trace_ratio", item["conditional_covariance"]["trace_ratio"]), _rated("trace_ratio", item["pooled_covariance"]["trace_ratio"]) ]
             for model, item in matched.items() if item.get("surface_days", 0) >= 2],
             caption="Surface covariance comparison restricted to dates available for every model.", label="tab:matched-covariance"),
-        _figure("covariance.pdf", "Conditional and pooled surface-variance ratios. The logarithmic scale makes underdispersion visible rather than hiding it behind changing forecast means."),
+        _figure("covariance.pdf", "Conditional and pooled surface-variance ratios. The logarithmic scale makes underdispersion visible rather than hiding it behind changing forecast means."
+            + (" Hatched bars add the sixteen-factor density-weighted DYSANOS PCA/VAR experiment on the same 44 origins. "
+               "Its squared log-DLV errors use causal training-window average grid probability masses; log-forward-vol coordinates keep unit weight. "
+               + ("Their remaining diagnostics are reported in the density-weighted follow-up section."
+                  if (output / "density_weighted_diagnostics.json").exists() else
+                  "These additional one-day forecasts are not included in the baseline tables or recursive-path coverage.")
+               if (output / "covariance_extension.json").exists() else "")),
         r"\subsection{Why native PCA coverage need not preserve IV variance}",
         r"The retained DYSANOS PCs minimize Euclidean reconstruction error in 1809 native log-DLV/forward-vol coordinates, not in option prices or log implied volatilities. Locally, if $J$ is the pricing/IV decoder Jacobian, the observable covariance is $J\Sigma_uJ'$. A PCA truncation that retains much of $\operatorname{tr}(\Sigma_u)$ need not retain much of $\operatorname{tr}(J\Sigma_uJ')$. Drift-adjusting the retained factors for AR fitting can further reduce innovation variance. Floors and nonlinear decoder guards also affect this mapping. Therefore a native coverage percentage is not an observable-variance guarantee.",
         _table(["Model", "Origin", "Native retained %", "PCA IV %", "AR innovation IV %"], reconciliation_rows,
@@ -552,6 +609,7 @@ def main() -> None:
             _rated("invalid_rate", float(np.mean([row["diagnostics"]["invalid_path_rate"] for row in _completed_recursive(persistence[model])])) if _completed_recursive(persistence[model]) else None)] for model in MODEL_ORDER],
             caption="Recursive floating-IV diagnostics: evaluated origins and extreme/invalid rates.", label="tab:recursive-stability"),
         r"An extreme surface has at least one common-grid annual IV above 3.0 (300\%). All option-price inversion uses vectorized \texttt{cdxcore.bs.implied} on raw, unclipped inputs, with its $10^{-8}$ price tolerance and an independent vectorized \texttt{bs.price} repricing check. The former additional time-value/interiority veto has been removed. The library's default 1\%--500\% volatility bounds and intrinsic-price conventions are retained and counted explicitly; a library boundary estimate is not called a failed model path solely for having tiny time value. Native-price bound violations and repricing residuals remain recorded. These numerical point estimates do not imply uniquely identified wing volatilities at sub-tolerance prices. A completed test with no usable complete IV paths remains in coverage and invalid-rate statistics but has no ACF. All DLV clipping counts are retained separately. Recursive paths use frozen fits and their original innovation laws; finite-horizon survival is not a non-explosion proof.",
+        *latex_section(output),
         r"\appendix\section{Model-specific implementation choices and difficulties}",
         r"This appendix is AI-agent implementation feedback based on actual retained code and artifacts, not a claim that these choices are prescribed by the cited papers. Existing model laws and fits are unchanged; the additional May FT fits use the same rolling recipe and are separately identified. The audit does not treat legacy hedging results as newly validated.",
         r"\subsection{Our DYSANOS fits: ordinary and spot-orthogonal}",
@@ -604,7 +662,7 @@ def main() -> None:
         "models": list(MODEL_ORDER), "requested_origins": 44, "code_files": {}, "report_files": {}}
     for path in Path(__file__).parent.glob("*.py"):
         manifest["code_files"][path.name] = {"sha256": _hash(path), "bytes": path.stat().st_size}
-    for pattern in ("*.csv", "*.json", "*.pdf", "*.tex", "*.npz"):
+    for pattern in ("*.csv", "*.json", "*.pdf", "*.png", "*.tex", "*.npz"):
         for path in output.glob(pattern):
             if path.name != "MANIFEST.json":
                 manifest["report_files"][path.name] = {"sha256": _hash(path), "bytes": path.stat().st_size}

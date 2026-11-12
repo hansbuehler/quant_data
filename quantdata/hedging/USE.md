@@ -82,6 +82,54 @@ Optimizer/RNG/non-EMA state from retired files is no longer available for an
 exact training restart. Existing result records keep their original hashes as
 provenance, rather than being rewritten to pretend exports were the source fits.
 
+## Density-weighted DYSANOS follow-up
+
+The PDF now includes the density-weighted ordinary and spot-orthogonal
+sixteen-factor PCA/VAR models. Both have 44/44 surface forecasts, quote forecasts
+and recursive tests, using the same 32 paths, 115 sessions and seed as the
+baseline comparison. Baseline fitted laws are not replaced. The follow-up lives at:
+
+`/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1/`
+
+`density_weighted_diagnostics.json` contains the complete aggregate diagnostics;
+`density_*.csv` and `density_acf.pdf` / `density_tails.pdf` accompany the retained
+report. `DENSITY_WEIGHTED_INPUTS.json` hashes the external dated checkpoints,
+metrics and detailed diagnostics. The experimental directory additionally holds
+`SPOT_IMPLEMENTATION_CHECK.json`, `PROTOCOL.json` and `COMPLETE.json`.
+
+Each daily metric uses the mean **training-origin node probabilities** for
+squared log-DLV errors and unit weights for log-forward-vol coordinates. Fit and
+simulation use `sqrt(weight) * u`; native changes are unscaled before pricing.
+Load **both** the metric and fitted VAR, never the weighted `dynamics.npz` alone:
+
+```python
+from datetime import date
+from pathlib import Path
+
+import numpy as np
+
+from quantdata.hedging.model_audit.density_weighted import load_weighted_model
+
+experiment = Path("/home/hans/quantdata_data/quant_data/hedge2/runs/model-dynamics-audit-20261112-density-weighted-v1")
+model = load_weighted_model(experiment,
+    "DYSANOS spot-orthogonal (16 factors) density-weighted", date(2024, 4, 1))
+with np.load(experiment.parent / "dlv-full-v4-20261106T1130/days/2024-04-01.npz") as saved:
+    current_u = saved["raw_u"]
+following_u = model.next_native(current_u)
+```
+
+The returned rows enumerate the same 252 paired empirical innovations. The
+spot-orthogonal fit removes contemporaneous spot projection before PCA and adds
+it back during simulation, preserving residual spot/factor covariance. Recursive
+paths keep the dated metric fixed. `weighted_report.py` completes the diagnostics
+and exports the follow-up tables; `quotes.py` and `persistence.py` accept the
+explicit density-weighted labels.
+
+Predictive variance is also compared with **squared forecast errors**, not only
+unconditional observed changes. The denominator is `mean(||actual - mean||²)`;
+one is the population scale reference only with a correct conditional mean and
+covariance. This descriptive ratio is not a separate no-arbitrage test.
+
 ## Load a compact diffusion model for inference
 
 ```python
