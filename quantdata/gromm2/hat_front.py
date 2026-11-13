@@ -65,7 +65,7 @@ def max_entropy(density: Array, width: Array) -> Array:
     q = density / jnp.sum(density, axis=-1, keepdims=True)
     zero = jnp.zeros_like(width[..., :1])
     hat_width = .5 * (jnp.concatenate((zero, width), -1) + jnp.concatenate((width, zero), -1))
-    lam = jnp.clip(jnp.log(jnp.maximum(q, 1e-300) / hat_width), -700., 300.)
+    lam = jnp.clip(jnp.log(jnp.maximum(q, 1e-300) / hat_width), -1e5, 300.)
     steps = jnp.asarray(_STEP_SIZES, q.dtype)
 
     def newton(lam, _):
@@ -76,13 +76,21 @@ def max_entropy(density: Array, width: Array) -> Array:
         step = jax.lax.linalg.tridiagonal_solve(jnp.concatenate((zero, off), -1), diag,
                                                 jnp.concatenate((off, zero), -1), grad[..., None])[..., 0]
         step = jnp.where(jnp.isfinite(step), step, 0.)
-        trial = jnp.clip(lam[..., None, :] - steps[:, None] * step[..., None, :], -700., 300.)   # q = 0 nodes: lam -> -inf
+        trial = jnp.clip(lam[..., None, :] - steps[:, None] * step[..., None, :], -1e5, 300.)   # q = 0 nodes: lam -> -inf
         dual = jnp.sum(_cell_integrals(trial, width[..., None, :])[0], -1) - jnp.sum(trial * q[..., None, :], -1)
         dual = jnp.where(jnp.isfinite(dual), dual, jnp.inf)
         return jnp.take_along_axis(trial, jnp.argmin(dual, -1)[..., None, None], -2)[..., 0, :], None
 
-    lam, _ = jax.lax.scan(newton, lam, None, length=_NEWTON_STEPS)
-    return lam
+    lam, _ = jax.lax.scan(newton, jax.lax.stop_gradient(lam), None, length=_NEWTON_STEPS)
+    lam = jax.lax.stop_gradient(lam)
+    i0, i1, i2 = _cell_integrals(lam, width)                                            # one plain Newton step at the
+    grad = _project(i0 - i1, i1) - q                                                   # solution: its derivative is the
+    diag = _project(i0 - 2. * i1 + i2, i2)                                             # implicit-function derivative
+    diag = diag + 1e-12 * jnp.max(diag, axis=-1, keepdims=True) + 1e-300
+    off = i1 - i2
+    step = jax.lax.linalg.tridiagonal_solve(jnp.concatenate((zero, off), -1), diag,
+                                            jnp.concatenate((off, zero), -1), grad[..., None])[..., 0]
+    return jnp.clip(lam - step, -1e5, 300.)
 
 
 def start_interval(density: Array, supports: Array, *, remaining_time: Array) -> HatInterval:
@@ -113,7 +121,8 @@ def hat_density(interval: HatInterval, w: Array, *, elapsed: Array) -> tuple[Arr
     rest = interval.tau - elapsed
     x, w = interval.x, w[..., None, None]
     log_lr = .5 * jnp.log(interval.tau / rest) - .5 * (x - w)**2 / rest + .5 * x**2 / interval.tau
-    weight = jnp.exp(jnp.log(interval.psi_weight) + log_lr)                           # psi LR, no overflow in LR alone
+    positive = interval.psi_weight > 0
+    weight = jnp.where(positive, jnp.exp(jnp.log(jnp.where(positive, interval.psi_weight, 1.)) + log_lr), 0.)   # psi LR
     density = _project(jnp.sum(weight * (1. - interval.u), -1), jnp.sum(weight * interval.u, -1)) \
         + interval.density - interval.reference                                       # exact at w = 0, s = 0
     dweight = weight * (x - w) / rest

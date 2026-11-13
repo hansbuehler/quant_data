@@ -21,7 +21,6 @@ from quantdata.gromm2.dlv import (
 )
 
 Array = jax.Array
-_HAT_FRONT = os.environ.get("GROMM2_FRONT", "bridge") == "hat"
 
 
 class SimulationState(NamedTuple):
@@ -191,6 +190,7 @@ def one_day_risk_neutral_step(
     active_maturity_count: Array | None = None,
     collect_dlv_variation: bool = False,
     log_dlvsq: Array | None = None,
+    front: str | None = None,
 ) -> DailyStepResult:
     """Advance a day, with legacy drift taming only when explicitly enabled.
 
@@ -201,6 +201,10 @@ def one_day_risk_neutral_step(
     """
     if factor_normals.shape[0] != substeps:
         raise ValueError("factor_normals and substeps do not align")
+    front = front or os.environ.get("GROMM2_FRONT", "bridge")       # default: bridge; "hat" = barycentric hat front
+    if front not in ("bridge", "hat"):
+        raise ValueError(f"unknown front {front!r}")
+    use_hat = front == "hat"
     if active_maturity_count is not None and factor_scales is None:
         raise ValueError("a padded active tower requires the fused factor-scales path")
     future_dlvsq = state.dlvsq[..., 1:, :] if log_dlvsq is None else jnp.exp(log_dlvsq[..., 1:, :])
@@ -215,7 +219,7 @@ def one_day_risk_neutral_step(
         current_front, current_dlvsq = carry[:2]
         substep_index, factor_normal = inputs
         remaining_time = day_start_remaining - substep_index * substep_size
-        if _HAT_FRONT:
+        if use_hat:
             current_front, hat_w = current_front
             _, hat_loading = hat_front.hat_density(hat_interval, hat_w, elapsed=substep_index * substep_size)
             front_loading = jnp.zeros(current_front.shape + (factor_count,), current_front.dtype).at[..., 0].set(hat_loading)
@@ -263,7 +267,7 @@ def one_day_risk_neutral_step(
             next_log_dlvsq = carry[2] + log_increment
             next_dlvsq = jnp.exp(next_log_dlvsq)
         final_step = (remaining_front_days == 1) & (substep_index == substeps - 1)
-        if _HAT_FRONT:
+        if use_hat:
             hat_w = hat_w + jnp.sqrt(substep_size) * factor_normal[..., 0]
             next_front = (jax.lax.cond(
                 final_step,
@@ -297,7 +301,7 @@ def one_day_risk_neutral_step(
                            integrated_log_drift + drift_increment - .5 * factor_variance * substep_size)
         return next_carry, tamed_fraction
 
-    if _HAT_FRONT:
+    if use_hat:
         # The hat front fixes G for one interval; carrying it across days is not implemented. Multi-day fronts
         # raise when remaining_front_days is static and turn the front into NaN when it is traced.
         try:
@@ -321,7 +325,7 @@ def one_day_risk_neutral_step(
         (jnp.arange(substeps), factor_normals),
     )
     updated_front, updated_future = final_carry[:2]
-    if _HAT_FRONT:
+    if use_hat:
         updated_front = updated_front[0]
     variation = None
     if collect_dlv_variation:
