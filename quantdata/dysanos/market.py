@@ -252,7 +252,7 @@ def smooth_interpolated_market(
         lambda: f"\r{message()}Fitting {str_smth} SANOS to {num_strikes} strikes... ",
         end="",
     ) as tme:
-        sanos_fit = MkArbFree(smoothness=smoothness, surface_expiry_linear=True)
+        sanos_fit = MkArbFree(smoothness=smoothness, surface_expiry_linear=True, timeout_seconds=mk_arb_free.timeout_seconds)
         af_pricer: ArbFreePricer = sanos_fit(
             strikes=market.strikes,
             expiries=market.expiries,
