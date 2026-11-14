@@ -14,9 +14,181 @@
 
 \author{AI-agent implementation and diagnostic feedback}
 
-\date{11 November 2026}
+\date{14 November 2026}
+
 
 \begin{document}\maketitle
+\section*{Executive update: 14 November 2026}
+
+\textbf{Standalone DYSANOS v2 and the earlier STRT-16 alternative are distinct models.} Blue values throughout this document are earlier, unrefreshed evidence, not current refits. Current black/orange/red ratings retain their stated diagnostic meanings. Blue overrides the earlier traffic-light colors in the historical appendix, including plot numbers.
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Model-fit counts out of 44 April--May 2024 origins. Training does not imply forecast or diagnostic completion. Black: ungraded counts; no missing result is a pass. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:current-coverage}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Model & Completed origins & Current stage \\
+\midrule
+DYSANOS v1-P & 1 & paper fits; scoring pending \\
+Standalone DYSANOS v2-P & 44 & 44/44 one-day forecasts \\
+STRT-16 alternative & 44 & earlier separate experiment \\
+GROMM2-P/Q & 1 & fits; P/Q forecasts pending \\
+\bottomrule\end{tabular}\end{table}
+
+\section{Standalone DYSANOS v2: matched-date results}
+
+This is the 41-expiry density-weighted standalone model, with sixteen factors, a 250-change age-weighted window and Gaussian joint spot/factor innovations. It is distinct from the older nine-expiry STRT-16 alternative. The input SANOS smoothness is 0.1; the common observable reference has smoothness 0.25.
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Standalone V2 same-day reconstruction and out-of-sample straddle sensitivity-span capture. Each realized next-day change is projected ex post onto model sensitivities; these are not forecast variance or attainable trading returns. Black entries are descriptive and ungraded. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:standalone-v2-span}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Dates & Quotes & Inside spread \% & Spot + 8 \% & Spot + 16 \% \\
+\midrule
+44 & 103686 & 85.891 & 94.095 & 96.752 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Standalone V2 one-day Gaussian forecasts, 1,000 paths per origin, in the common 49-node observable grid. Conditional and pooled traces use observed change covariance as denominator; variance/MSE uses squared forecast errors. Black entries are descriptive and ungraded. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:standalone-v2-forecast}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Dates & Cond. trace & Pooled trace & Frob. & RMSE & Variance/MSE \\
+\midrule
+44 & 0.238 & 0.585 & 0.440 & 0.171 & 0.302 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Pooled spot--surface correlations in the fixed observable PCA basis. Black entries are descriptive and ungraded. Model and realized spot returns use the same forward numeraire. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:standalone-v2-leverage}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Observable PC & Model spot corr. & Data spot corr. \\
+\midrule
+1 & -0.449 & -0.680 \\
+2 & 0.308 & 0.157 \\
+3 & 0.137 & -0.008 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Standalone V2 Gaussian one-day PC1 tail diagnostics. Forty-four dates are too few for conclusive 1\% or 5\% tail calibration. Color rules: PC1 exceptions: red for exact-binomial p below 0.01; orange for p below 0.05 or fewer than 10 expected exceptions; black otherwise. Other entries are ungraded. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:standalone-v2-tails}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Quantile & Dates & PC1 exceptions & Expected & Exact p & Pinball \\
+\midrule
+0.01 & 44 & \textcolor{red}{4} & 0.440 & 0.000987 & 0.059 \\
+0.05 & 44 & \textcolor{orange}{5} & 2.200 & 0.067 & 0.137 \\
+0.95 & 44 & \textcolor{red}{9} & 2.200 & 0.000280 & 0.167 \\
+0.99 & 44 & \textcolor{red}{4} & 0.440 & 0.000987 & 0.068 \\
+\bottomrule\end{tabular}\end{table}
+
+The maximum fitted VAR spectral radius is 0.9690; this checks the fitted factor backbone, not the full nonlinear surface process.
+
+Forecast changes are measured relative to each model's own initial surface. Standalone V2 spot shocks are transformed deterministically from the fitted dividend-adjusted return to the common one-day-forward convention. Long-horizon recursive stability and static-arbitrage simulation remain pending for this standalone model.
+
+\begingroup\color{blue}
+
+\section{Earlier STRT-16 alternative and competitors}
+
+The STRT-16 alternative predicts 0.508 times realized squared forecast-error variance. Its common log-IV forecast RMSE is 0.1187, versus 0.1904 for persistence. All 44 fitted floating VAR backbones are stable, with spectral radii 0.9253--0.9550. No tested static-arbitrage violation or unusable IV occurs in these checks. These are guarded-decoder results, not unguarded diffusion or dynamic-martingale proofs.
+
+All rows use the same 44 forecast dates, common 49-coordinate floating log-IV grid and pre-April diagnostic PCA. Let $m_t=E_t[\Delta x]$ and $C_t=\operatorname{Cov}_t(\Delta x)$. Conditional trace divides $\operatorname{tr}(\bar C)$ by observed change covariance trace; pooled trace adds the across-origin covariance of $m_t$. These are different from forecast variance/MSE, $\sum_t\operatorname{tr}C_t/\sum_t\|\Delta x_t-m_t\|^2$. Smaller pooled Frobenius error and forecast RMSE are better; RMSE/persistence below one beats the zero-change forecast. None is an arbitrage test.
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Earlier STRT-16 and competitor results, not the standalone DYSANOS v2. Blue entries are retained earlier evidence, not current refits. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:current-covariance}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Model & Dates & Cond. trace & Pooled trace & Frob. pooled & RMSE & /persist. \\
+\midrule
+STRT-16 alternative & \textcolor{blue}{44} & \textcolor{blue}{0.193} & \textcolor{blue}{0.671} & \textcolor{blue}{0.385} & \textcolor{blue}{0.119} & \textcolor{blue}{0.624} \\
+FuNVol & \textcolor{blue}{44} & \textcolor{blue}{0.397} & \textcolor{blue}{0.495} & \textcolor{blue}{0.580} & \textcolor{blue}{0.183} & \textcolor{blue}{0.964} \\
+VolGAN PCA8 & \textcolor{blue}{44} & \textcolor{blue}{0.000251} & \textcolor{blue}{0.970} & \textcolor{blue}{0.283} & \textcolor{blue}{0.215} & \textcolor{blue}{1.127} \\
+AD-Seq-Vol & \textcolor{blue}{44} & \textcolor{blue}{0.374} & \textcolor{blue}{1.542} & \textcolor{blue}{0.786} & \textcolor{blue}{0.237} & \textcolor{blue}{1.244} \\
+AD-Seq-Vol-FT & \textcolor{blue}{44} & \textcolor{blue}{0.302} & \textcolor{blue}{1.455} & \textcolor{blue}{0.697} & \textcolor{blue}{0.266} & \textcolor{blue}{1.396} \\
+\bottomrule\end{tabular}\end{table}
+
+STRT-16 is an earlier spot-orthogonal tangent projection followed by a separately fitted daily VAR and scalar tail diffusion. Native spot loading outside the retained span is preserved. All fits use independent causal windows, without earlier-origin weights. Decoder guards activate frequently, so static validity does not establish calibrated diffusion tails.
+
+\subsection{Current reconstruction and next-day price forecast}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Earlier STRT-16 on the matched diagnostic book: OTM, 1<business-days-to-expiry<=5 and absolute NMS<=1.5. Statistics are quote-count weighted across dates. Outside distance uses full spread width. Next-day point forecasts versus realized quotes are distinct from same-day reconstruction. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:current-quotes}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Mode & Quotes & Inside spread \% & Mean outside & MAE / spot \\
+\midrule
+reconstruction & 8358 & 93.587 & 0.081 & 0.000009 \\
+next day & 7610 & 1.051 & 36.153 & 0.002 \\
+\bottomrule\end{tabular}\end{table}
+
+\subsection{Static arbitrage and simulated-IV stability}
+
+Each of 44 origins uses 1,000 paths, nested simulation days 1, 5, 10, 125 and 259, twenty-one NMS strikes in [-3,2], and remaining tenors 1, 2, 5 and 10 business days. Calendar checks use the next tenor in the native model grid at the same cash strikes. No separate stock path is needed. Prices and vector IV inversion use the existing decoder and cdxcore.bs without rejected-path filtering.
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Earlier STRT-16 violation counts summed across all 44 origins at each horizon and tenor. Zero violations in finite paths do not prove absence of arbitrage. Color rules: Blue: retained historical counts; no current grading. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:current-static}
+\begin{tabular}{@{}lrrrrrrrrr@{}}
+\toprule
+Day & Tenor & Decr. & Convex & Vertical & Intrinsic & Upper & K=0 & Calendar & Bad IV \\
+\midrule
+1 & 1 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+1 & 2 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+1 & 5 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+1 & 10 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+5 & 1 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+5 & 2 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+5 & 5 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+5 & 10 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+10 & 1 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+10 & 2 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+10 & 5 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+10 & 10 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+125 & 1 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+125 & 2 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+125 & 5 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+125 & 10 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+259 & 1 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+259 & 2 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+259 & 5 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+259 & 10 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{0} & 0 \\
+\bottomrule\end{tabular}\end{table}
+
+The largest decoded annual IV is 38.16\%; no IV exceeds 300\%. No inversion is unusable. Numerical DLV/forward bounds remain active and are disclosed in the dated records. Historical-range exceedances are recorded, not interpreted as arbitrage.
+
+\subsection{Frozen observable-PC persistence and tails}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Mean within-path Pearson ACF: first 32 of the same 1,000-path stream, 115 sessions, all 44 origins. Historical columns average each origin's causal training window, not a 44-day held-out ACF. A fixed pre-April observable basis is used throughout. Black: ungraded descriptive comparisons; no color inference is assigned. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:current-acf}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Lag & Model PC1 & PC2 & PC3 & History PC1 & PC2 & PC3 \\
+\midrule
+1 & 0.764 & 0.738 & 0.624 & 0.791 & 0.804 & 0.661 \\
+5 & 0.379 & 0.426 & 0.216 & 0.428 & 0.435 & 0.210 \\
+21 & 0.000099 & 0.007 & 0.009 & -0.006 & 0.033 & -0.010 \\
+63 & 0.006 & 0.003 & -0.003 & -0.336 & -0.318 & -0.185 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Earlier STRT-16 PC1 pointwise tail diagnostics. With only 44 dates all tails remain exploratory. Color rules: Blue: retained historical statistics; no current grading. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:current-tails}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Quantile & Dates & PC1 exceptions & Expected & Exact p & Pinball \\
+\midrule
+0.01 & 44 & \textcolor{blue}{2} & 0.440 & 0.072 & 0.017 \\
+0.05 & 44 & \textcolor{blue}{6} & 2.200 & 0.022 & 0.084 \\
+0.95 & 44 & \textcolor{blue}{6} & 2.200 & 0.022 & 0.111 \\
+0.99 & 44 & \textcolor{blue}{3} & 0.440 & 0.010 & 0.038 \\
+\bottomrule\end{tabular}\end{table}
+
+\endgroup
+
+\subsection{Outstanding work and objective differences}
+
+DYSANOS v1 uses the paper's full joint affine-200/five-session VAR. The replacement run centers its quote loss on observed bid/ask midpoints; the earlier SANOS-centered trial is not reused as a paper-objective fit. An intermediate, unaccepted weekly covariance from that earlier trial failed the daily-embedding positivity check; no eigenvalue clipping is used. No completed 44-origin result is claimed. GROMM2 uses a separately identified calibration with actual observed bid/ask, the paper's linear excess and 0.05 midpoint term plus restoring cap penalty. The old pseudo-Huber chunks are not loaded. Its requested GROMM2 geometry and latent-X dependence estimator remain explicit extensions. GPU training and GPU-dependent forecasts share one managed allocation, released when that work ends; remaining statistics run on CPU.
+
+\clearpage\appendix\section{Historical evidence: blue values are not updated refits}
+
+The following earlier report is retained for traceability. Its numbers, former quality colors and plot labels are blue. Its completion claims refer to those older model variants only, not to the currently requested DYSANOS v1/v2 and repository GROMM2 refits. Refer to the current coverage table for outstanding work.
+\begingroup\color{blue}
+
 
 \section*{Executive summary}
 \textbf{Purpose.} Assess the surface dynamics of retained rolling models on 44 April--May 2024 forecast origins, using one common log-IV grid and a PCA basis fixed before April. This is a model-law audit, not a rerun of hedging performance or a proof of no arbitrage.
@@ -46,16 +218,16 @@ The observable reference is the retained public-candidate SANOS interpolation (s
 \toprule
 Model & Requested dates & Surface dates & Quote dates & Path-test dates \\
 \midrule
-DYSANOS ordinary (16 factors) & 44 & \textcolor{black}{44} & \textcolor{black}{44} & \textcolor{black}{44} \\
-DYSANOS spot-orthogonal (16 factors) & 44 & \textcolor{black}{44} & \textcolor{black}{44} & \textcolor{black}{44} \\
-FuNVol & 44 & \textcolor{black}{44} & \textcolor{black}{44} & \textcolor{black}{44} \\
-VolGAN PCA8 & 44 & \textcolor{black}{44} & \textcolor{black}{44} & \textcolor{black}{44} \\
-AD-Seq-Vol & 44 & \textcolor{black}{44} & \textcolor{black}{44} & \textcolor{black}{44} \\
-AD-Seq-Vol-FT & 44 & \textcolor{black}{44} & \textcolor{black}{44} & \textcolor{black}{44} \\
-GROMM-P & 44 & \textcolor{black}{44} & \textcolor{black}{44} & \textcolor{black}{44} \\
-GROMM-Q & 44 & \textcolor{black}{44} & \textcolor{black}{44} & \textcolor{black}{44} \\
-DYSANOS ordinary (16 factors) (tail) & 44 & \textcolor{black}{44} & \textcolor{black}{44} & \textcolor{black}{44} \\
-DYSANOS spot-orthogonal (16 factors) (tail) & 44 & \textcolor{black}{44} & \textcolor{black}{44} & \textcolor{black}{44} \\
+DYSANOS ordinary (16 factors) & 44 & \textcolor{blue}{44} & \textcolor{blue}{44} & \textcolor{blue}{44} \\
+DYSANOS spot-orthogonal (16 factors) & 44 & \textcolor{blue}{44} & \textcolor{blue}{44} & \textcolor{blue}{44} \\
+FuNVol & 44 & \textcolor{blue}{44} & \textcolor{blue}{44} & \textcolor{blue}{44} \\
+VolGAN PCA8 & 44 & \textcolor{blue}{44} & \textcolor{blue}{44} & \textcolor{blue}{44} \\
+AD-Seq-Vol & 44 & \textcolor{blue}{44} & \textcolor{blue}{44} & \textcolor{blue}{44} \\
+AD-Seq-Vol-FT & 44 & \textcolor{blue}{44} & \textcolor{blue}{44} & \textcolor{blue}{44} \\
+GROMM-P & 44 & \textcolor{blue}{44} & \textcolor{blue}{44} & \textcolor{blue}{44} \\
+GROMM-Q & 44 & \textcolor{blue}{44} & \textcolor{blue}{44} & \textcolor{blue}{44} \\
+DYSANOS ordinary (16 factors) (tail) & 44 & \textcolor{blue}{44} & \textcolor{blue}{44} & \textcolor{blue}{44} \\
+DYSANOS spot-orthogonal (16 factors) (tail) & 44 & \textcolor{blue}{44} & \textcolor{blue}{44} & \textcolor{blue}{44} \\
 \bottomrule\end{tabular}\end{table}
 
 Table~\ref{tab:audit-coverage} is a coverage inventory, not a performance or pass/fail table. Surface dates count origins with evaluated next-day IV forecasts for covariance and tail diagnostics. Quote dates count origins with exact next-day contract matches for price-forecast scoring. Path-test dates count completed recursive floating-IV tests, including tests that produced no wholly valid decoded IV paths. Such failures contribute their actual invalid rates to Table~\ref{tab:recursive-stability}; they are not hidden as missing coverage. Each entry counts dates, not Monte Carlo paths; zero means no completed test, not a model-quality failure.
@@ -113,16 +285,16 @@ Let $x_t$ be the common log-IV vector, $U$ the fixed basis, $\Delta x_{t+1}=x_{t
 \toprule
 Model & Days & Frob. cond. & Frob. pooled & Trace cond. & Trace pooled \\
 \midrule
-DYSANOS ordinary (16 factors) & 44 & \textcolor{red}{0.914} & \textcolor{red}{0.821} & \textcolor{red}{0.080} & \textcolor{red}{0.166} \\
-DYSANOS spot-orthogonal (16 factors) & 44 & \textcolor{red}{0.839} & \textcolor{red}{0.775} & \textcolor{red}{0.155} & \textcolor{red}{0.214} \\
-FuNVol & 44 & \textcolor{red}{0.602} & \textcolor{red}{0.580} & \textcolor{red}{0.397} & \textcolor{red}{0.495} \\
-VolGAN PCA8 & 44 & \textcolor{red}{1.000} & \textcolor{orange}{0.283} & \textcolor{red}{0.000251} & \textcolor{black}{0.970} \\
-AD-Seq-Vol & 44 & \textcolor{red}{0.665} & \textcolor{red}{0.786} & \textcolor{red}{0.374} & \textcolor{orange}{1.542} \\
-AD-Seq-Vol-FT & 44 & \textcolor{red}{0.740} & \textcolor{red}{0.697} & \textcolor{red}{0.302} & \textcolor{orange}{1.455} \\
-GROMM-P & 44 & \textcolor{orange}{0.398} & \textcolor{orange}{0.334} & \textcolor{orange}{0.796} & \textcolor{orange}{1.268} \\
-GROMM-Q & 44 & \textcolor{orange}{0.410} & \textcolor{orange}{0.280} & \textcolor{orange}{0.763} & \textcolor{black}{1.205} \\
-DYSANOS ordinary (16 factors) (tail) & 44 & \textcolor{red}{0.914} & \textcolor{red}{0.820} & \textcolor{red}{0.080} & \textcolor{red}{0.166} \\
-DYSANOS spot-orthogonal (16 factors) (tail) & 44 & \textcolor{red}{0.839} & \textcolor{red}{0.776} & \textcolor{red}{0.154} & \textcolor{red}{0.214} \\
+DYSANOS ordinary (16 factors) & 44 & \textcolor{blue}{0.914} & \textcolor{blue}{0.821} & \textcolor{blue}{0.080} & \textcolor{blue}{0.166} \\
+DYSANOS spot-orthogonal (16 factors) & 44 & \textcolor{blue}{0.839} & \textcolor{blue}{0.775} & \textcolor{blue}{0.155} & \textcolor{blue}{0.214} \\
+FuNVol & 44 & \textcolor{blue}{0.602} & \textcolor{blue}{0.580} & \textcolor{blue}{0.397} & \textcolor{blue}{0.495} \\
+VolGAN PCA8 & 44 & \textcolor{blue}{1.000} & \textcolor{blue}{0.283} & \textcolor{blue}{0.000251} & \textcolor{blue}{0.970} \\
+AD-Seq-Vol & 44 & \textcolor{blue}{0.665} & \textcolor{blue}{0.786} & \textcolor{blue}{0.374} & \textcolor{blue}{1.542} \\
+AD-Seq-Vol-FT & 44 & \textcolor{blue}{0.740} & \textcolor{blue}{0.697} & \textcolor{blue}{0.302} & \textcolor{blue}{1.455} \\
+GROMM-P & 44 & \textcolor{blue}{0.398} & \textcolor{blue}{0.334} & \textcolor{blue}{0.796} & \textcolor{blue}{1.268} \\
+GROMM-Q & 44 & \textcolor{blue}{0.410} & \textcolor{blue}{0.280} & \textcolor{blue}{0.763} & \textcolor{blue}{1.205} \\
+DYSANOS ordinary (16 factors) (tail) & 44 & \textcolor{blue}{0.914} & \textcolor{blue}{0.820} & \textcolor{blue}{0.080} & \textcolor{blue}{0.166} \\
+DYSANOS spot-orthogonal (16 factors) (tail) & 44 & \textcolor{blue}{0.839} & \textcolor{blue}{0.776} & \textcolor{blue}{0.154} & \textcolor{blue}{0.214} \\
 \bottomrule\end{tabular}\end{table}
 
 In Table~\ref{tab:surface-covariance}, the two Frobenius columns measure relative covariance-matrix error (zero is exact agreement); the two trace columns divide model by observed total log-IV-change variance (one is scale agreement). Figure~\ref{fig:surface-variance} plots those same trace columns. Its conditional bar uses the average within-origin forecast covariance; its pooled bar additionally includes between-origin forecast-mean variation. The color bands in the table caption are retrospective engineering review tolerances, not precommitted statistical pass/fail criteria. In particular, the conditional ratio need not equal one because the observed denominator is unconditional.
@@ -135,19 +307,19 @@ Table~\ref{tab:surface-covariance} uses each model's available dates. Table~\ref
 \toprule
 Model & Matched days & Frob. pooled & Trace cond. & Trace pooled \\
 \midrule
-DYSANOS ordinary (16 factors) & 44 & \textcolor{red}{0.821} & \textcolor{red}{0.080} & \textcolor{red}{0.166} \\
-DYSANOS spot-orthogonal (16 factors) & 44 & \textcolor{red}{0.775} & \textcolor{red}{0.155} & \textcolor{red}{0.214} \\
-FuNVol & 44 & \textcolor{red}{0.580} & \textcolor{red}{0.397} & \textcolor{red}{0.495} \\
-VolGAN PCA8 & 44 & \textcolor{orange}{0.283} & \textcolor{red}{0.000251} & \textcolor{black}{0.970} \\
-AD-Seq-Vol & 44 & \textcolor{red}{0.786} & \textcolor{red}{0.374} & \textcolor{orange}{1.542} \\
-AD-Seq-Vol-FT & 44 & \textcolor{red}{0.697} & \textcolor{red}{0.302} & \textcolor{orange}{1.455} \\
-GROMM-P & 44 & \textcolor{orange}{0.334} & \textcolor{orange}{0.796} & \textcolor{orange}{1.268} \\
-GROMM-Q & 44 & \textcolor{orange}{0.280} & \textcolor{orange}{0.763} & \textcolor{black}{1.205} \\
-DYSANOS ordinary (16 factors) (tail) & 44 & \textcolor{red}{0.820} & \textcolor{red}{0.080} & \textcolor{red}{0.166} \\
-DYSANOS spot-orthogonal (16 factors) (tail) & 44 & \textcolor{red}{0.776} & \textcolor{red}{0.154} & \textcolor{red}{0.214} \\
+DYSANOS ordinary (16 factors) & 44 & \textcolor{blue}{0.821} & \textcolor{blue}{0.080} & \textcolor{blue}{0.166} \\
+DYSANOS spot-orthogonal (16 factors) & 44 & \textcolor{blue}{0.775} & \textcolor{blue}{0.155} & \textcolor{blue}{0.214} \\
+FuNVol & 44 & \textcolor{blue}{0.580} & \textcolor{blue}{0.397} & \textcolor{blue}{0.495} \\
+VolGAN PCA8 & 44 & \textcolor{blue}{0.283} & \textcolor{blue}{0.000251} & \textcolor{blue}{0.970} \\
+AD-Seq-Vol & 44 & \textcolor{blue}{0.786} & \textcolor{blue}{0.374} & \textcolor{blue}{1.542} \\
+AD-Seq-Vol-FT & 44 & \textcolor{blue}{0.697} & \textcolor{blue}{0.302} & \textcolor{blue}{1.455} \\
+GROMM-P & 44 & \textcolor{blue}{0.334} & \textcolor{blue}{0.796} & \textcolor{blue}{1.268} \\
+GROMM-Q & 44 & \textcolor{blue}{0.280} & \textcolor{blue}{0.763} & \textcolor{blue}{1.205} \\
+DYSANOS ordinary (16 factors) (tail) & 44 & \textcolor{blue}{0.820} & \textcolor{blue}{0.080} & \textcolor{blue}{0.166} \\
+DYSANOS spot-orthogonal (16 factors) (tail) & 44 & \textcolor{blue}{0.776} & \textcolor{blue}{0.154} & \textcolor{blue}{0.214} \\
 \bottomrule\end{tabular}\end{table}
 
-\begin{figure}[H]\centering\includegraphics[width=\linewidth]{covariance.pdf}\caption{Conditional and pooled surface-variance ratios. The logarithmic scale makes underdispersion visible rather than hiding it behind changing forecast means. Hatched bars add the sixteen-factor density-weighted DYSANOS PCA/VAR experiment on the same 44 origins. Its squared log-DLV errors use causal training-window average grid probability masses; log-forward-vol coordinates keep unit weight. Their remaining diagnostics are reported in the density-weighted follow-up section.}\label{fig:surface-variance}\end{figure}
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{legacy/covariance.pdf}\caption{Conditional and pooled surface-variance ratios. The logarithmic scale makes underdispersion visible rather than hiding it behind changing forecast means. Hatched bars add the sixteen-factor density-weighted DYSANOS PCA/VAR experiment on the same 44 origins. Its squared log-DLV errors use causal training-window average grid probability masses; log-forward-vol coordinates keep unit weight. Their remaining diagnostics are reported in the density-weighted follow-up section.}\label{fig:surface-variance}\end{figure}
 
 \subsection{Why native PCA coverage need not preserve IV variance}
 
@@ -177,10 +349,10 @@ Only the retained rank changes. Both variants use the same 44 origins, 252 exact
 \toprule
 Variant / rank & Days & Native \% & Trace cond. & Trace pooled & Frob. pooled & Max radius \\
 \midrule
-Ordinary / 8 & 44 & 70.598 & \textcolor{red}{0.037} & \textcolor{red}{0.059} & \textcolor{red}{0.939} & \textcolor{black}{0.699} \\
-Spot-orthogonal / 8 & 44 & 70.770 & \textcolor{red}{0.132} & \textcolor{red}{0.152} & \textcolor{red}{0.843} & \textcolor{black}{0.695} \\
-Ordinary / 16 & 44 & 83.773 & \textcolor{red}{0.080} & \textcolor{red}{0.166} & \textcolor{red}{0.821} & \textcolor{black}{0.735} \\
-Spot-orthogonal / 16 & 44 & 83.862 & \textcolor{red}{0.155} & \textcolor{red}{0.214} & \textcolor{red}{0.775} & \textcolor{black}{0.730} \\
+Ordinary / 8 & 44 & 70.598 & \textcolor{blue}{0.037} & \textcolor{blue}{0.059} & \textcolor{blue}{0.939} & \textcolor{blue}{0.699} \\
+Spot-orthogonal / 8 & 44 & 70.770 & \textcolor{blue}{0.132} & \textcolor{blue}{0.152} & \textcolor{blue}{0.843} & \textcolor{blue}{0.695} \\
+Ordinary / 16 & 44 & 83.773 & \textcolor{blue}{0.080} & \textcolor{blue}{0.166} & \textcolor{blue}{0.821} & \textcolor{blue}{0.735} \\
+Spot-orthogonal / 16 & 44 & 83.862 & \textcolor{blue}{0.155} & \textcolor{blue}{0.214} & \textcolor{blue}{0.775} & \textcolor{blue}{0.730} \\
 \bottomrule\end{tabular}\end{table}
 
 \begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
@@ -213,16 +385,16 @@ Leading eigenvalue shares use the full covariance trace as denominator. Principa
 \toprule
 Model & Forecast RMSE & Persistence RMSE & Max angle & Share L1 error \\
 \midrule
-DYSANOS ordinary (16 factors) & \textcolor{black}{0.174} & 0.190 & \textcolor{red}{79.259} & \textcolor{orange}{0.151} \\
-DYSANOS spot-orthogonal (16 factors) & \textcolor{black}{0.176} & 0.190 & \textcolor{red}{61.570} & \textcolor{orange}{0.127} \\
-FuNVol & \textcolor{black}{0.183} & 0.190 & \textcolor{red}{48.536} & \textcolor{orange}{0.134} \\
-VolGAN PCA8 & \textcolor{red}{0.215} & 0.190 & \textcolor{red}{48.630} & \textcolor{orange}{0.130} \\
-AD-Seq-Vol & \textcolor{red}{0.237} & 0.190 & \textcolor{red}{51.960} & \textcolor{black}{0.096} \\
-AD-Seq-Vol-FT & \textcolor{red}{0.266} & 0.190 & \textcolor{red}{52.164} & \textcolor{black}{0.077} \\
-GROMM-P & \textcolor{black}{0.120} & 0.190 & \textcolor{red}{85.623} & \textcolor{orange}{0.102} \\
-GROMM-Q & \textcolor{black}{0.125} & 0.190 & \textcolor{red}{85.754} & \textcolor{orange}{0.111} \\
-DYSANOS ordinary (16 factors) (tail) & \textcolor{black}{0.174} & 0.190 & \textcolor{red}{72.909} & \textcolor{orange}{0.154} \\
-DYSANOS spot-orthogonal (16 factors) (tail) & \textcolor{black}{0.176} & 0.190 & \textcolor{red}{58.317} & \textcolor{orange}{0.128} \\
+DYSANOS ordinary (16 factors) & \textcolor{blue}{0.174} & 0.190 & \textcolor{blue}{79.259} & \textcolor{blue}{0.151} \\
+DYSANOS spot-orthogonal (16 factors) & \textcolor{blue}{0.176} & 0.190 & \textcolor{blue}{61.570} & \textcolor{blue}{0.127} \\
+FuNVol & \textcolor{blue}{0.183} & 0.190 & \textcolor{blue}{48.536} & \textcolor{blue}{0.134} \\
+VolGAN PCA8 & \textcolor{blue}{0.215} & 0.190 & \textcolor{blue}{48.630} & \textcolor{blue}{0.130} \\
+AD-Seq-Vol & \textcolor{blue}{0.237} & 0.190 & \textcolor{blue}{51.960} & \textcolor{blue}{0.096} \\
+AD-Seq-Vol-FT & \textcolor{blue}{0.266} & 0.190 & \textcolor{blue}{52.164} & \textcolor{blue}{0.077} \\
+GROMM-P & \textcolor{blue}{0.120} & 0.190 & \textcolor{blue}{85.623} & \textcolor{blue}{0.102} \\
+GROMM-Q & \textcolor{blue}{0.125} & 0.190 & \textcolor{blue}{85.754} & \textcolor{blue}{0.111} \\
+DYSANOS ordinary (16 factors) (tail) & \textcolor{blue}{0.174} & 0.190 & \textcolor{blue}{72.909} & \textcolor{blue}{0.154} \\
+DYSANOS spot-orthogonal (16 factors) (tail) & \textcolor{blue}{0.176} & 0.190 & \textcolor{blue}{58.317} & \textcolor{blue}{0.128} \\
 \bottomrule\end{tabular}\end{table}
 
 RMSE is in log-IV units over scored dates and all 49 cells. Persistence predicts no surface change. RMSE values concern raw model forecasts, not the artificial demeaning used by some hedge optimizers.
@@ -236,16 +408,16 @@ Spot leverage is $\operatorname{Corr}(r_{t+1},U_j^\top\Delta x_{t+1})$, where $r
 Model & Days & Spot/PC1 & Spot/PC2 & Spot/PC3 \\
 \midrule
 Observed reference & 44 & -0.680 & 0.157 & -0.008 \\
-DYSANOS ordinary (16 factors) & 44 & \textcolor{red}{-0.149} & \textcolor{orange}{0.035} & \textcolor{black}{0.029} \\
-DYSANOS spot-orthogonal (16 factors) & 44 & \textcolor{black}{-0.694} & \textcolor{red}{0.729} & \textcolor{red}{0.568} \\
-FuNVol & 44 & \textcolor{black}{-0.711} & \textcolor{red}{0.457} & \textcolor{red}{0.232} \\
-VolGAN PCA8 & 44 & \textcolor{red}{-0.451} & \textcolor{orange}{0.338} & \textcolor{red}{0.534} \\
-AD-Seq-Vol & 44 & \textcolor{red}{-0.269} & \textcolor{orange}{0.318} & \textcolor{red}{0.263} \\
-AD-Seq-Vol-FT & 44 & \textcolor{red}{-0.340} & \textcolor{red}{0.436} & \textcolor{red}{0.311} \\
-GROMM-P & 44 & \textcolor{red}{-0.250} & \textcolor{black}{0.157} & \textcolor{black}{0.061} \\
-GROMM-Q & 44 & \textcolor{red}{-0.214} & \textcolor{black}{0.149} & \textcolor{black}{0.076} \\
-DYSANOS ordinary (16 factors) (tail) & 44 & \textcolor{red}{-0.147} & \textcolor{orange}{0.046} & \textcolor{black}{0.052} \\
-DYSANOS spot-orthogonal (16 factors) (tail) & 44 & \textcolor{black}{-0.693} & \textcolor{red}{0.740} & \textcolor{red}{0.566} \\
+DYSANOS ordinary (16 factors) & 44 & \textcolor{blue}{-0.149} & \textcolor{blue}{0.035} & \textcolor{blue}{0.029} \\
+DYSANOS spot-orthogonal (16 factors) & 44 & \textcolor{blue}{-0.694} & \textcolor{blue}{0.729} & \textcolor{blue}{0.568} \\
+FuNVol & 44 & \textcolor{blue}{-0.711} & \textcolor{blue}{0.457} & \textcolor{blue}{0.232} \\
+VolGAN PCA8 & 44 & \textcolor{blue}{-0.451} & \textcolor{blue}{0.338} & \textcolor{blue}{0.534} \\
+AD-Seq-Vol & 44 & \textcolor{blue}{-0.269} & \textcolor{blue}{0.318} & \textcolor{blue}{0.263} \\
+AD-Seq-Vol-FT & 44 & \textcolor{blue}{-0.340} & \textcolor{blue}{0.436} & \textcolor{blue}{0.311} \\
+GROMM-P & 44 & \textcolor{blue}{-0.250} & \textcolor{blue}{0.157} & \textcolor{blue}{0.061} \\
+GROMM-Q & 44 & \textcolor{blue}{-0.214} & \textcolor{blue}{0.149} & \textcolor{blue}{0.076} \\
+DYSANOS ordinary (16 factors) (tail) & 44 & \textcolor{blue}{-0.147} & \textcolor{blue}{0.046} & \textcolor{blue}{0.052} \\
+DYSANOS spot-orthogonal (16 factors) (tail) & 44 & \textcolor{blue}{-0.693} & \textcolor{blue}{0.740} & \textcolor{blue}{0.566} \\
 \bottomrule\end{tabular}\end{table}
 
 The JSON additionally separates correlations from the average conditional joint covariance and correlations of realized forecast residuals (observed changes minus each model's predicted means). This prevents between-origin mean variation from being mistaken for conditional spot leverage.
@@ -260,16 +432,16 @@ For quoted bid $b$, ask $a$ and predicted price $p$, outside distance is $d=\max
 \toprule
 Model & Recon. in & Pred. N & Pred. in & Mean distance & MAE / spot & MAE ratio \\
 \midrule
-DYSANOS ordinary (16 factors) & \textcolor{red}{0.744} & 44 & 0.013 & 36.830 & 0.002 & \textcolor{orange}{1.009} \\
-DYSANOS spot-orthogonal (16 factors) & \textcolor{red}{0.744} & 44 & 0.010 & 37.309 & 0.002 & \textcolor{orange}{1.011} \\
-FuNVol & \textcolor{orange}{--} & 44 & 0.013 & 43.205 & 0.002 & \textcolor{orange}{1.047} \\
-VolGAN PCA8 & \textcolor{orange}{--} & 44 & 0.006 & 139.538 & 0.005 & \textcolor{red}{2.785} \\
-AD-Seq-Vol & \textcolor{orange}{--} & 44 & 0.009 & 72.848 & 0.002 & \textcolor{red}{1.331} \\
-AD-Seq-Vol-FT & \textcolor{orange}{--} & 44 & 0.007 & 69.679 & 0.002 & \textcolor{red}{1.284} \\
-GROMM-P & \textcolor{orange}{0.928} & 44 & 0.009 & 43.425 & 0.002 & \textcolor{orange}{1.009} \\
-GROMM-Q & \textcolor{orange}{0.928} & 44 & 0.009 & 41.915 & 0.002 & \textcolor{black}{0.995} \\
-DYSANOS ordinary (16 factors) (tail) & \textcolor{red}{0.744} & 44 & 0.012 & 36.714 & 0.002 & \textcolor{orange}{1.010} \\
-DYSANOS spot-orthogonal (16 factors) (tail) & \textcolor{red}{0.744} & 44 & 0.011 & 37.114 & 0.002 & \textcolor{orange}{1.011} \\
+DYSANOS ordinary (16 factors) & \textcolor{blue}{0.744} & 44 & 0.013 & 36.830 & 0.002 & \textcolor{blue}{1.009} \\
+DYSANOS spot-orthogonal (16 factors) & \textcolor{blue}{0.744} & 44 & 0.010 & 37.309 & 0.002 & \textcolor{blue}{1.011} \\
+FuNVol & \textcolor{blue}{--} & 44 & 0.013 & 43.205 & 0.002 & \textcolor{blue}{1.047} \\
+VolGAN PCA8 & \textcolor{blue}{--} & 44 & 0.006 & 139.538 & 0.005 & \textcolor{blue}{2.785} \\
+AD-Seq-Vol & \textcolor{blue}{--} & 44 & 0.009 & 72.848 & 0.002 & \textcolor{blue}{1.331} \\
+AD-Seq-Vol-FT & \textcolor{blue}{--} & 44 & 0.007 & 69.679 & 0.002 & \textcolor{blue}{1.284} \\
+GROMM-P & \textcolor{blue}{0.928} & 44 & 0.009 & 43.425 & 0.002 & \textcolor{blue}{1.009} \\
+GROMM-Q & \textcolor{blue}{0.928} & 44 & 0.009 & 41.915 & 0.002 & \textcolor{blue}{0.995} \\
+DYSANOS ordinary (16 factors) (tail) & \textcolor{blue}{0.744} & 44 & 0.012 & 36.714 & 0.002 & \textcolor{blue}{1.010} \\
+DYSANOS spot-orthogonal (16 factors) (tail) & \textcolor{blue}{0.744} & 44 & 0.011 & 37.114 & 0.002 & \textcolor{blue}{1.011} \\
 \bottomrule\end{tabular}\end{table}
 
 Reconstruction uses all available quoted sides with origin tenors 1--10D and $|\mathrm{NMS}|\le1.5$ for DYSANOS and GROMM. Conditional IV generators do not have an independently fitted same-day observable decoder in this audit: their reconstruction is n/a, not perfect by copying their conditioning input. GROMM's stored 252-transition fit percentages are not substituted for today's measured quoted reconstruction.
@@ -290,16 +462,16 @@ Every available saved origin is scored. Monthly RMS errors are separated by Apri
 \toprule
 Model & April days & April RMSE & May days & May RMSE & Skill deterioration \\
 \midrule
-DYSANOS ordinary (16 factors) & 22 & \textcolor{black}{0.161} & 22 & \textcolor{black}{0.187} & \textcolor{orange}{1.127} \\
-DYSANOS spot-orthogonal (16 factors) & 22 & \textcolor{black}{0.164} & 22 & \textcolor{black}{0.187} & \textcolor{orange}{1.105} \\
-FuNVol & 22 & \textcolor{black}{0.183} & 22 & \textcolor{black}{0.184} & \textcolor{black}{0.973} \\
-VolGAN PCA8 & 22 & \textcolor{red}{0.234} & 22 & \textcolor{black}{0.193} & \textcolor{black}{0.800} \\
-AD-Seq-Vol & 22 & \textcolor{red}{0.256} & 22 & \textcolor{red}{0.216} & \textcolor{black}{0.819} \\
-AD-Seq-Vol-FT & 22 & \textcolor{red}{0.311} & 22 & \textcolor{orange}{0.211} & \textcolor{black}{0.659} \\
-GROMM-P & 22 & \textcolor{black}{0.128} & 22 & \textcolor{black}{0.110} & \textcolor{black}{0.835} \\
-GROMM-Q & 22 & \textcolor{black}{0.140} & 22 & \textcolor{black}{0.107} & \textcolor{black}{0.744} \\
-DYSANOS ordinary (16 factors) (tail) & 22 & \textcolor{black}{0.161} & 22 & \textcolor{black}{0.187} & \textcolor{orange}{1.125} \\
-DYSANOS spot-orthogonal (16 factors) (tail) & 22 & \textcolor{black}{0.164} & 22 & \textcolor{black}{0.186} & \textcolor{orange}{1.102} \\
+DYSANOS ordinary (16 factors) & 22 & \textcolor{blue}{0.161} & 22 & \textcolor{blue}{0.187} & \textcolor{blue}{1.127} \\
+DYSANOS spot-orthogonal (16 factors) & 22 & \textcolor{blue}{0.164} & 22 & \textcolor{blue}{0.187} & \textcolor{blue}{1.105} \\
+FuNVol & 22 & \textcolor{blue}{0.183} & 22 & \textcolor{blue}{0.184} & \textcolor{blue}{0.973} \\
+VolGAN PCA8 & 22 & \textcolor{blue}{0.234} & 22 & \textcolor{blue}{0.193} & \textcolor{blue}{0.800} \\
+AD-Seq-Vol & 22 & \textcolor{blue}{0.256} & 22 & \textcolor{blue}{0.216} & \textcolor{blue}{0.819} \\
+AD-Seq-Vol-FT & 22 & \textcolor{blue}{0.311} & 22 & \textcolor{blue}{0.211} & \textcolor{blue}{0.659} \\
+GROMM-P & 22 & \textcolor{blue}{0.128} & 22 & \textcolor{blue}{0.110} & \textcolor{blue}{0.835} \\
+GROMM-Q & 22 & \textcolor{blue}{0.140} & 22 & \textcolor{blue}{0.107} & \textcolor{blue}{0.744} \\
+DYSANOS ordinary (16 factors) (tail) & 22 & \textcolor{blue}{0.161} & 22 & \textcolor{blue}{0.187} & \textcolor{blue}{1.125} \\
+DYSANOS spot-orthogonal (16 factors) (tail) & 22 & \textcolor{blue}{0.164} & 22 & \textcolor{blue}{0.186} & \textcolor{blue}{1.102} \\
 \bottomrule\end{tabular}\end{table}
 
 \section{Tail risk calibration}
@@ -314,19 +486,19 @@ The following counts are for PC1; all four targets and all probabilities are in 
 \toprule
 Model & Days & Below 1\% & Below 5\% & Above 95\% & Above 99\% & 5\% pinball \\
 \midrule
-DYSANOS ordinary (16 factors) & 44 & \textcolor{red}{8} & \textcolor{red}{13} & \textcolor{red}{10} & \textcolor{red}{9} & 0.218 \\
-DYSANOS spot-orthogonal (16 factors) & 44 & \textcolor{red}{7} & \textcolor{red}{11} & \textcolor{red}{8} & \textcolor{red}{7} & 0.196 \\
-FuNVol & 44 & \textcolor{orange}{2} & \textcolor{orange}{4} & \textcolor{red}{9} & \textcolor{red}{3} & 0.115 \\
-VolGAN PCA8 & 44 & \textcolor{red}{34} & \textcolor{red}{34} & \textcolor{red}{10} & \textcolor{red}{10} & 0.810 \\
-AD-Seq-Vol & 44 & \textcolor{red}{12} & \textcolor{red}{15} & \textcolor{red}{11} & \textcolor{red}{5} & 0.258 \\
-AD-Seq-Vol-FT & 44 & \textcolor{red}{5} & \textcolor{red}{8} & \textcolor{red}{21} & \textcolor{red}{10} & 0.156 \\
-GROMM-P & 44 & \textcolor{orange}{0} & \textcolor{orange}{0} & \textcolor{orange}{1} & \textcolor{orange}{0} & 0.096 \\
-GROMM-Q & 44 & \textcolor{orange}{0} & \textcolor{orange}{0} & \textcolor{orange}{2} & \textcolor{orange}{1} & 0.106 \\
-DYSANOS ordinary (16 factors) (tail) & 44 & \textcolor{red}{10} & \textcolor{red}{14} & \textcolor{red}{9} & \textcolor{red}{7} & 0.233 \\
-DYSANOS spot-orthogonal (16 factors) (tail) & 44 & \textcolor{red}{4} & \textcolor{red}{10} & \textcolor{red}{9} & \textcolor{red}{7} & 0.177 \\
+DYSANOS ordinary (16 factors) & 44 & \textcolor{blue}{8} & \textcolor{blue}{13} & \textcolor{blue}{10} & \textcolor{blue}{9} & 0.218 \\
+DYSANOS spot-orthogonal (16 factors) & 44 & \textcolor{blue}{7} & \textcolor{blue}{11} & \textcolor{blue}{8} & \textcolor{blue}{7} & 0.196 \\
+FuNVol & 44 & \textcolor{blue}{2} & \textcolor{blue}{4} & \textcolor{blue}{9} & \textcolor{blue}{3} & 0.115 \\
+VolGAN PCA8 & 44 & \textcolor{blue}{34} & \textcolor{blue}{34} & \textcolor{blue}{10} & \textcolor{blue}{10} & 0.810 \\
+AD-Seq-Vol & 44 & \textcolor{blue}{12} & \textcolor{blue}{15} & \textcolor{blue}{11} & \textcolor{blue}{5} & 0.258 \\
+AD-Seq-Vol-FT & 44 & \textcolor{blue}{5} & \textcolor{blue}{8} & \textcolor{blue}{21} & \textcolor{blue}{10} & 0.156 \\
+GROMM-P & 44 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{1} & \textcolor{blue}{0} & 0.096 \\
+GROMM-Q & 44 & \textcolor{blue}{0} & \textcolor{blue}{0} & \textcolor{blue}{2} & \textcolor{blue}{1} & 0.106 \\
+DYSANOS ordinary (16 factors) (tail) & 44 & \textcolor{blue}{10} & \textcolor{blue}{14} & \textcolor{blue}{9} & \textcolor{blue}{7} & 0.233 \\
+DYSANOS spot-orthogonal (16 factors) (tail) & 44 & \textcolor{blue}{4} & \textcolor{blue}{10} & \textcolor{blue}{9} & \textcolor{blue}{7} & 0.177 \\
 \bottomrule\end{tabular}\end{table}
 
-\begin{figure}[H]\centering\includegraphics[width=\linewidth]{tails.pdf}\caption{Raw PC1 forecast bands and observed changes. Narrow forecast bands can reveal severe conditional underdispersion even when pooled covariance looks realistic.}\end{figure}
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{legacy/tails.pdf}\caption{Raw PC1 forecast bands and observed changes. Narrow forecast bands can reveal severe conditional underdispersion even when pooled covariance looks realistic.}\end{figure}
 
 The lower 5\% ES estimate is the Monte Carlo mean below the empirical 5\% quantile. The JSON contains the joint Fissler--Ziegel score, with $G_1=0$, $G_2(e)=\exp(e)$, for signed lower-tail ES:
 
@@ -348,7 +520,7 @@ The Lyapunov solution $V$ is the stationary covariance. If the complete innovati
 
 Let $z_{j,t}=U_j^\top x_t$. The PCA basis is fixed before April, while each model may continue using its own daily rolling factors internally. We never concatenate native factor scores across changing bases. We separately retain level ACF, change ACF and expiry-by-expiry ATM log-IV level ACF. Exact session separations are used; lag 21 has 23 observed pairs and lag 63 has none.
 
-\begin{figure}[H]\centering\includegraphics[width=\linewidth]{acf.pdf}\caption{PCA-level autocorrelation decay. Model curves average within-path Pearson ACFs from the first 44 simulated sessions, matching the observational window length; they are not formed by concatenating different dates' rolling models. The full 128-session checks are stored separately. Short-window detrending can itself produce negative long-lag estimates.}\end{figure}
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{legacy/acf.pdf}\caption{PCA-level autocorrelation decay. Model curves average within-path Pearson ACFs from the first 44 simulated sessions, matching the observational window length; they are not formed by concatenating different dates' rolling models. The full 128-session checks are stored separately. Short-window detrending can itself produce negative long-lag estimates.}\end{figure}
 
 \begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
 \caption{Maximum absolute floating-IV ACF discrepancy across the three fixed observable PCs. Lag 21 has only 23 observed pairs, so cannot receive black. Color rules: Maximum absolute PC-ACF error: black at most 0.10, orange above 0.10 through 0.20, red above 0.20. Fewer than 30 observed lag pairs forces at least orange, even for a small error. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:acf-errors}
@@ -356,16 +528,16 @@ Let $z_{j,t}=U_j^\top x_t$. The PCA basis is fixed before April, while each mode
 \toprule
 Model & Lag 1 error & Lag 5 error & Lag 21 error \\
 \midrule
-DYSANOS ordinary (16 factors) & \textcolor{red}{0.620} & \textcolor{red}{0.519} & \textcolor{red}{0.522} \\
-DYSANOS spot-orthogonal (16 factors) & \textcolor{red}{0.258} & \textcolor{red}{0.285} & \textcolor{red}{0.513} \\
-FuNVol & \textcolor{red}{0.419} & \textcolor{red}{0.378} & \textcolor{red}{0.391} \\
-VolGAN PCA8 & \textcolor{red}{0.437} & \textcolor{red}{0.692} & \textcolor{red}{1.004} \\
-AD-Seq-Vol & \textcolor{red}{0.212} & \textcolor{red}{0.497} & \textcolor{red}{0.807} \\
-AD-Seq-Vol-FT & \textcolor{orange}{0.185} & \textcolor{red}{0.293} & \textcolor{red}{0.668} \\
-GROMM-P & \textcolor{red}{0.269} & \textcolor{red}{0.224} & \textcolor{red}{0.481} \\
-GROMM-Q & \textcolor{red}{0.451} & \textcolor{red}{0.550} & \textcolor{red}{0.628} \\
-DYSANOS ordinary (16 factors) (tail) & \textcolor{red}{0.597} & \textcolor{red}{0.515} & \textcolor{red}{0.509} \\
-DYSANOS spot-orthogonal (16 factors) (tail) & \textcolor{red}{0.250} & \textcolor{red}{0.299} & \textcolor{red}{0.451} \\
+DYSANOS ordinary (16 factors) & \textcolor{blue}{0.620} & \textcolor{blue}{0.519} & \textcolor{blue}{0.522} \\
+DYSANOS spot-orthogonal (16 factors) & \textcolor{blue}{0.258} & \textcolor{blue}{0.285} & \textcolor{blue}{0.513} \\
+FuNVol & \textcolor{blue}{0.419} & \textcolor{blue}{0.378} & \textcolor{blue}{0.391} \\
+VolGAN PCA8 & \textcolor{blue}{0.437} & \textcolor{blue}{0.692} & \textcolor{blue}{1.004} \\
+AD-Seq-Vol & \textcolor{blue}{0.212} & \textcolor{blue}{0.497} & \textcolor{blue}{0.807} \\
+AD-Seq-Vol-FT & \textcolor{blue}{0.185} & \textcolor{blue}{0.293} & \textcolor{blue}{0.668} \\
+GROMM-P & \textcolor{blue}{0.269} & \textcolor{blue}{0.224} & \textcolor{blue}{0.481} \\
+GROMM-Q & \textcolor{blue}{0.451} & \textcolor{blue}{0.550} & \textcolor{blue}{0.628} \\
+DYSANOS ordinary (16 factors) (tail) & \textcolor{blue}{0.597} & \textcolor{blue}{0.515} & \textcolor{blue}{0.509} \\
+DYSANOS spot-orthogonal (16 factors) (tail) & \textcolor{blue}{0.250} & \textcolor{blue}{0.299} & \textcolor{blue}{0.451} \\
 \bottomrule\end{tabular}\end{table}
 
 For DYSANOS only, we report the saved backbone spectral radius, modal damping half-lives $\log(1/2)/\log|\lambda_j|$ for stable nonzero eigenvalues, and innovation variance traces at horizons 1,5,21,63. Complex/negative eigenvalues describe oscillatory damping, not a monotone scalar half-life. Half-lives are measured in business sessions. Stationary means, covariances and numerical Lyapunov residuals are retained in the dated JSON files. All 88 fitted radii are already below one before the configured spectral-radius cap is applied.
@@ -376,8 +548,8 @@ For DYSANOS only, we report the saved backbone spectral radius, modal damping ha
 \toprule
 DYSANOS backbone & Stable fits & Min radius & Max radius & Max half-life \\
 \midrule
-DYSANOS ordinary (16 factors) & 44/44 & \textcolor{black}{0.565} & \textcolor{black}{0.735} & 2.246 \\
-DYSANOS spot-orthogonal (16 factors) & 44/44 & \textcolor{black}{0.574} & \textcolor{black}{0.730} & 2.201 \\
+DYSANOS ordinary (16 factors) & 44/44 & \textcolor{blue}{0.565} & \textcolor{blue}{0.735} & 2.246 \\
+DYSANOS spot-orthogonal (16 factors) & 44/44 & \textcolor{blue}{0.574} & \textcolor{blue}{0.730} & 2.201 \\
 \bottomrule\end{tabular}\end{table}
 
 The separate recursive tests below concern decoded floating IVs, not stationarity of spot and not an additional acceptance condition for the PCA--AR backbone. They retain the original model laws without substituting Gaussian stock shocks or changing fitted coefficients.
@@ -388,16 +560,16 @@ The separate recursive tests below concern decoded floating IVs, not stationarit
 \toprule
 Model & Recursive origins & Extreme surface rate & Invalid path rate \\
 \midrule
-DYSANOS ordinary (16 factors) & 44 & \textcolor{black}{0.000} & \textcolor{black}{0.000} \\
-DYSANOS spot-orthogonal (16 factors) & 44 & \textcolor{black}{0.000} & \textcolor{orange}{0.001} \\
-FuNVol & 44 & \textcolor{black}{0.000} & \textcolor{black}{0.000} \\
-VolGAN PCA8 & 44 & \textcolor{red}{0.767} & \textcolor{black}{0.000} \\
-AD-Seq-Vol & 44 & \textcolor{black}{0.000} & \textcolor{black}{0.000} \\
-AD-Seq-Vol-FT & 44 & \textcolor{black}{0.000} & \textcolor{black}{0.000} \\
-GROMM-P & 44 & \textcolor{black}{0.000} & \textcolor{black}{0.000} \\
-GROMM-Q & 44 & \textcolor{black}{0.000} & \textcolor{black}{0.000} \\
-DYSANOS ordinary (16 factors) (tail) & 44 & \textcolor{black}{0.000} & \textcolor{black}{0.000} \\
-DYSANOS spot-orthogonal (16 factors) (tail) & 44 & \textcolor{black}{0.000} & \textcolor{black}{0.000} \\
+DYSANOS ordinary (16 factors) & 44 & \textcolor{blue}{0.000} & \textcolor{blue}{0.000} \\
+DYSANOS spot-orthogonal (16 factors) & 44 & \textcolor{blue}{0.000} & \textcolor{blue}{0.001} \\
+FuNVol & 44 & \textcolor{blue}{0.000} & \textcolor{blue}{0.000} \\
+VolGAN PCA8 & 44 & \textcolor{blue}{0.767} & \textcolor{blue}{0.000} \\
+AD-Seq-Vol & 44 & \textcolor{blue}{0.000} & \textcolor{blue}{0.000} \\
+AD-Seq-Vol-FT & 44 & \textcolor{blue}{0.000} & \textcolor{blue}{0.000} \\
+GROMM-P & 44 & \textcolor{blue}{0.000} & \textcolor{blue}{0.000} \\
+GROMM-Q & 44 & \textcolor{blue}{0.000} & \textcolor{blue}{0.000} \\
+DYSANOS ordinary (16 factors) (tail) & 44 & \textcolor{blue}{0.000} & \textcolor{blue}{0.000} \\
+DYSANOS spot-orthogonal (16 factors) (tail) & 44 & \textcolor{blue}{0.000} & \textcolor{blue}{0.000} \\
 \bottomrule\end{tabular}\end{table}
 
 An extreme surface has at least one common-grid annual IV above 3.0 (300\%). All option-price inversion uses vectorized \texttt{cdxcore.bs.implied} on raw, unclipped inputs, with its $10^{-8}$ price tolerance and an independent vectorized \texttt{bs.price} repricing check. The former additional time-value/interiority veto has been removed. The library's default 1\%--500\% volatility bounds and intrinsic-price conventions are retained and counted explicitly; a library boundary estimate is not called a failed model path solely for having tiny time value. Native-price bound violations and repricing residuals remain recorded. These numerical point estimates do not imply uniquely identified wing volatilities at sub-tolerance prices. A completed test with no usable complete IV paths remains in coverage and invalid-rate statistics but has no ACF. All DLV clipping counts are retained separately. Recursive paths use frozen fits and their original innovation laws; finite-horizon survival is not a non-explosion proof.
@@ -420,12 +592,12 @@ The paired empirical $(r,\varepsilon)$ law preserves all spot--factor cross-cova
 \toprule
 Model & Trace cond. & Trace pooled & Frob. pooled & RMSE \\
 \midrule
-Ordinary / unweighted & \textcolor{red}{0.080} & \textcolor{red}{0.166} & \textcolor{red}{0.821} & 0.174 \\
-Ordinary / density & \textcolor{red}{0.187} & \textcolor{orange}{0.784} & \textcolor{black}{0.238} & 0.124 \\
-Spot-orthogonal / unweighted & \textcolor{red}{0.155} & \textcolor{red}{0.214} & \textcolor{red}{0.775} & 0.176 \\
-Spot-orthogonal / density & \textcolor{red}{0.195} & \textcolor{orange}{0.722} & \textcolor{orange}{0.310} & 0.120 \\
-GROMM-P & \textcolor{orange}{0.796} & \textcolor{orange}{1.268} & \textcolor{orange}{0.334} & 0.120 \\
-GROMM-Q & \textcolor{orange}{0.763} & \textcolor{black}{1.205} & \textcolor{orange}{0.280} & 0.125 \\
+Ordinary / unweighted & \textcolor{blue}{0.080} & \textcolor{blue}{0.166} & \textcolor{blue}{0.821} & 0.174 \\
+Ordinary / density & \textcolor{blue}{0.187} & \textcolor{blue}{0.784} & \textcolor{blue}{0.238} & 0.124 \\
+Spot-orthogonal / unweighted & \textcolor{blue}{0.155} & \textcolor{blue}{0.214} & \textcolor{blue}{0.775} & 0.176 \\
+Spot-orthogonal / density & \textcolor{blue}{0.195} & \textcolor{blue}{0.722} & \textcolor{blue}{0.310} & 0.120 \\
+GROMM-P & \textcolor{blue}{0.796} & \textcolor{blue}{1.268} & \textcolor{blue}{0.334} & 0.120 \\
+GROMM-Q & \textcolor{blue}{0.763} & \textcolor{blue}{1.205} & \textcolor{blue}{0.280} & 0.125 \\
 \bottomrule\end{tabular}\end{table}
 
 A larger conditional bar in Figure~\ref{fig:surface-variance} is not automatically better calibrated. To remove the unconditional-variance denominator, also compare mean forecast variance with realized squared forecast errors:
@@ -454,8 +626,8 @@ GROMM-Q & 1.386 & 0.763 & 1.816 \\
 \toprule
 Model & Recon. inside & Quote count & Forecast MAE / spot & MAE / persistence \\
 \midrule
-Ordinary / density & \textcolor{red}{0.744} & 7610 & 0.002 & \textcolor{orange}{1.018} \\
-Spot-orthogonal / density & \textcolor{red}{0.744} & 7610 & 0.002 & \textcolor{orange}{1.012} \\
+Ordinary / density & \textcolor{blue}{0.744} & 7610 & 0.002 & \textcolor{blue}{1.018} \\
+Spot-orthogonal / density & \textcolor{blue}{0.744} & 7610 & 0.002 & \textcolor{blue}{1.012} \\
 \bottomrule\end{tabular}\end{table}
 
 \begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
@@ -464,11 +636,11 @@ Spot-orthogonal / density & \textcolor{red}{0.744} & 7610 & 0.002 & \textcolor{o
 \toprule
 Model & 1\% & 5\% & 95\% & 99\% & 5\% pinball \\
 \midrule
-Ordinary / density & \textcolor{red}{3} & \textcolor{red}{10} & \textcolor{orange}{4} & \textcolor{red}{3} & 0.099 \\
-Spot-orthogonal / density & \textcolor{red}{3} & \textcolor{orange}{6} & \textcolor{orange}{5} & \textcolor{orange}{2} & 0.090 \\
+Ordinary / density & \textcolor{blue}{3} & \textcolor{blue}{10} & \textcolor{blue}{4} & \textcolor{blue}{3} & 0.099 \\
+Spot-orthogonal / density & \textcolor{blue}{3} & \textcolor{blue}{6} & \textcolor{blue}{5} & \textcolor{blue}{2} & 0.090 \\
 \bottomrule\end{tabular}\end{table}
 
-\begin{figure}[H]\centering\includegraphics[width=\linewidth]{density_tails.pdf}\caption{Weighted-model PC1 forecast bands and realized changes, using the same pre-April observable PCA basis.}\end{figure}
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{legacy/density_tails.pdf}\caption{Weighted-model PC1 forecast bands and realized changes, using the same pre-April observable PCA basis.}\end{figure}
 
 April/May summaries and rolling 21-session deterioration are reported in the density-prefixed monthly/rolling CSVs. The 44-origin window does not identify 63-session observed deterioration or ACF, and 1\% tail tests remain exploratory.
 
@@ -478,8 +650,8 @@ April/May summaries and rolling 21-session deterioration are reported in the den
 \toprule
 Model & Stable fits & Min radius & Max radius & Max half-life \\
 \midrule
-Ordinary / density & 44/44 & \textcolor{black}{0.902} & \textcolor{black}{0.925} & 8.929 \\
-Spot-orthogonal / density & 44/44 & \textcolor{black}{0.903} & \textcolor{black}{0.926} & 9.042 \\
+Ordinary / density & 44/44 & \textcolor{blue}{0.902} & \textcolor{blue}{0.925} & 8.929 \\
+Spot-orthogonal / density & 44/44 & \textcolor{blue}{0.903} & \textcolor{blue}{0.926} & 9.042 \\
 \bottomrule\end{tabular}\end{table}
 
 \begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
@@ -488,11 +660,11 @@ Spot-orthogonal / density & 44/44 & \textcolor{black}{0.903} & \textcolor{black}
 \toprule
 Model & Lag 1 & Lag 5 & Lag 21 \\
 \midrule
-Ordinary / density & \textcolor{black}{0.097} & \textcolor{red}{0.270} & \textcolor{red}{0.449} \\
-Spot-orthogonal / density & \textcolor{orange}{0.106} & \textcolor{red}{0.251} & \textcolor{red}{0.448} \\
+Ordinary / density & \textcolor{blue}{0.097} & \textcolor{blue}{0.270} & \textcolor{blue}{0.449} \\
+Spot-orthogonal / density & \textcolor{blue}{0.106} & \textcolor{blue}{0.251} & \textcolor{blue}{0.448} \\
 \bottomrule\end{tabular}\end{table}
 
-\begin{figure}[H]\centering\includegraphics[width=\linewidth]{density_acf.pdf}\caption{Weighted-model observable-PC persistence against the identical 44-origin observed window. Frozen native metrics are inverted before extracting common-grid IVs.}\end{figure}
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{legacy/density_acf.pdf}\caption{Weighted-model observable-PC persistence against the identical 44-origin observed window. Frozen native metrics are inverted before extracting common-grid IVs.}\end{figure}
 
 \begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
 \caption{Complete 32-path, 115-session recursive tests on all 44 origins. Rates are origin averages. Clips count individual native coordinates and remain disclosed even when decoded IVs are valid; finite-horizon survival is not a non-explosion proof. Color rules: Extreme-surface rate (any common-grid IV above 300\%): black zero, orange above zero through 0.1\%, red above 0.1\%. Invalid-path rate: black zero, orange above zero through 1\%, red above 1\%. Evaluated-origin counts are neutral. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:density-paths}
@@ -500,13 +672,13 @@ Spot-orthogonal / density & \textcolor{orange}{0.106} & \textcolor{red}{0.251} &
 \toprule
 Model & Origins & Invalid paths & Extreme surfaces & Lower clips & Upper clips \\
 \midrule
-Ordinary / density & 44 & \textcolor{black}{0.000} & \textcolor{black}{0.000} & 14273189 & 615885 \\
-Spot-orthogonal / density & 44 & \textcolor{black}{0.000} & \textcolor{black}{0.000} & 16827255 & 1334816 \\
+Ordinary / density & 44 & \textcolor{blue}{0.000} & \textcolor{blue}{0.000} & 14273189 & 615885 \\
+Spot-orthogonal / density & 44 & \textcolor{blue}{0.000} & \textcolor{blue}{0.000} & 16827255 & 1334816 \\
 \bottomrule\end{tabular}\end{table}
 
 Implementation feedback: density weighting largely restores forward-volatility variation lost by Euclidean native PCA, but numerical DLV floors/guards and the 0.1-input versus 0.25-observable-reference smoothing difference remain. This follow-up changes the fitted reduction metric, not the pricing geometry, spot law or hedge optimizer. Large fitted metrics and recursive arrays remain external; aggregates and checksummed loading manifests are retained.
 
-\appendix\section{Model-specific implementation choices and difficulties}
+\section{Model-specific implementation choices and difficulties}
 
 This appendix is AI-agent implementation feedback based on actual retained code and artifacts, not a claim that these choices are prescribed by the cited papers. Existing model laws and fits are unchanged; the additional May FT fits use the same rolling recipe and are separately identified. The audit does not treat legacy hedging results as newly validated.
 
@@ -584,4 +756,6 @@ The report is generated by \path{quantdata/hedging/model_audit/report.py}; \path
 
 The JSON daily files retain failure reasons, no-data exclusions, quantile forecasts, full conditional covariance and source diagnostics. CSVs provide coverage, daily/monthly/rolling errors, per-expiry/NMS log-IV RMSE, tail tests and linear-core stability. Raw modeled means are retained: this is a model-law audit, not the demeaned hedge-optimization experiment. The 44-day report cannot establish 63-day observed ACF or reliable 1\% tail calibration. Missing diagnostics remain n/a.
 
+
+\endgroup
 \end{document}

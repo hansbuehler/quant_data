@@ -31,6 +31,11 @@ COVARIANCE_COLORS = (
     "These are descriptive review tolerances, not statistical acceptance tests."
 )
 TABLE_COLOR_RULES = {
+    "tab:standalone-v2-tails": (
+        "PC1 exceptions: red for exact-binomial p below 0.01; orange for p below 0.05 "
+        "or fewer than 10 expected exceptions; black otherwise. Other entries are ungraded."),
+    "tab:current-static": "Blue: retained historical counts; no current grading.",
+    "tab:current-tails": "Blue: retained historical statistics; no current grading.",
     "tab:audit-coverage": "Black: all 44 requested origins evaluated. Orange: fewer than 44. No red coverage grade; coverage is not model quality.",
     "tab:surface-covariance": COVARIANCE_COLORS,
     "tab:matched-covariance": COVARIANCE_COLORS,
@@ -121,7 +126,7 @@ def _escape(value: object) -> str:
 
 def _format(value: object, decimals: int = 3) -> str:
     if isinstance(value, Rated):
-        color = {"pass": "black", "warn": "orange", "fail": "red"}[value.level]
+        color = {"pass": "black", "warn": "orange", "fail": "red", "old": "blue"}[value.level]
         return f"\\textcolor{{{color}}}{{{_format(value.value, decimals)}}}"
     if value is None or (isinstance(value, float) and not np.isfinite(value)):
         return "--"
