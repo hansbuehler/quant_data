@@ -20,7 +20,7 @@
 \begin{document}\maketitle
 \section*{Executive update: 14 November 2026}
 
-\textbf{Standalone DYSANOS v2 and the earlier STRT-16 alternative are distinct models.} Blue values throughout this document are earlier, unrefreshed evidence, not current refits. Current black/orange/red ratings retain their stated diagnostic meanings. Blue overrides the earlier traffic-light colors in the historical appendix, including plot numbers.
+\textbf{Standalone DYSANOS v2 and the earlier STRT-16 alternative are distinct models.} Blue values throughout this document are earlier, unrefreshed evidence, not current refits. Current black/orange/red ratings retain their stated diagnostic meanings. Blue overrides the earlier traffic-light colors in the historical appendix, including plot numbers. Next-day conditional-mean price prediction is excluded: forecasting price drift is not the aim of this model comparison.
 
 \begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
 \caption{Model-fit counts out of 44 April--May 2024 origins. Training does not imply forecast or diagnostic completion. Black: ungraded counts; no missing result is a pass. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:current-coverage}
@@ -85,7 +85,7 @@ Forecast changes are measured relative to each model's own initial surface. Stan
 
 \subsection{Standalone V2: quote and simulation diagnostics}
 
-These diagnostics currently cover 44 of 44 origins; the results are preliminary. Next-day price forecasts average 1,000 simulated model prices at fixed cash strikes, using origin-date carry; the same-day reconstruction uses the origin surface. Only matched OTM quotes with 1<business-days-to-expiry$\leq5$ and absolute NMS$\leq1.5$ enter. Black numbers are descriptive, not pass/fail grades.
+These diagnostics cover 44 of 44 origins. Same-day reconstruction uses the origin surface and OTM quotes with 1<business-days-to-expiry$\leq5$ and absolute NMS$\leq1.5$. Black numbers are descriptive, not pass/fail grades.
 
 \begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
 \caption{Standalone V2 quote-count-weighted results on the available origins. Outside distance uses full bid--ask spread width. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:standalone-v2-quotes}
@@ -94,7 +94,6 @@ These diagnostics currently cover 44 of 44 origins; the results are preliminary.
 Mode & Quotes & Inside spread \% & Mean outside & MAE / spot \\
 \midrule
 reconstruction & 8358 & 86.659 & 0.131 & 0.000015 \\
-next day & 7610 & 0.854 & 35.889 & 0.002 \\
 \bottomrule\end{tabular}\end{table}
 
 \begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
@@ -199,7 +198,7 @@ Mean invalid long-path rate: 0.000\%; mean extreme-surface rate: 7.102\%.
 
 \section{GROMM2: partial matched forecasts}
 
-The model is fitted independently at each origin using the repository model and the paper quote objective. Results below use the available origins only; Q against realized data is descriptive, not a claim that Q is the physical law. Matched quote, long-horizon and static-arbitrage diagnostics remain outstanding.
+The model is fitted independently at each origin using the repository model and the paper quote objective. Results below use the available origins only; Q against realized data is descriptive, not a claim that Q is the physical law. Same-day quote fit, long-horizon and static-arbitrage diagnostics remain outstanding.
 
 \begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
 \caption{GROMM2 one-day forecasts, 1,000 paths per origin and measure. The number of completed dates may differ between P and Q while the run is active. Black: ungraded partial statistics. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:gromm2-partial}
@@ -234,16 +233,15 @@ AD-Seq-Vol-FT & \textcolor{blue}{44} & \textcolor{blue}{0.302} & \textcolor{blue
 
 STRT-16 is an earlier spot-orthogonal tangent projection followed by a separately fitted daily VAR and scalar tail diffusion. Native spot loading outside the retained span is preserved. All fits use independent causal windows, without earlier-origin weights. Decoder guards activate frequently, so static validity does not establish calibrated diffusion tails.
 
-\subsection{Current reconstruction and next-day price forecast}
+\subsection{Same-day reconstruction}
 
 \begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
-\caption{Earlier STRT-16 on the matched diagnostic book: OTM, 1<business-days-to-expiry<=5 and absolute NMS<=1.5. Statistics are quote-count weighted across dates. Outside distance uses full spread width. Next-day point forecasts versus realized quotes are distinct from same-day reconstruction. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:current-quotes}
+\caption{Earlier STRT-16 same-day reconstruction on the matched diagnostic book: OTM, 1<business-days-to-expiry<=5 and absolute NMS<=1.5. Statistics are quote-count weighted across dates. Outside distance uses full spread width. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:current-quotes}
 \begin{tabular}{@{}lrrrr@{}}
 \toprule
 Mode & Quotes & Inside spread \% & Mean outside & MAE / spot \\
 \midrule
 reconstruction & 8358 & 93.587 & 0.081 & 0.000009 \\
-next day & 7610 & 1.051 & 36.153 & 0.002 \\
 \bottomrule\end{tabular}\end{table}
 
 \subsection{Static arbitrage and simulated-IV stability}
@@ -560,7 +558,7 @@ The following earlier report is retained for traceability. Its numbers, former q
 \textbf{Interpretation.} These are diagnostics of retained implementations, including disclosed numerical guards and differing SANOS input smoothnesses, not a controlled architecture-only comparison. Black/orange/red colors use the explicit review tolerances in each table caption; they are not universal statistical acceptance criteria.
 \clearpage
 
-\paragraph{Completed density-weighted follow-up.} Both additional sixteen-factor DYSANOS variants have all 44 surface, quote and recursive diagnostics completed. Pooled log-IV variance ratios improve to 0.784 and 0.722; weighted forecast accuracy is close to GROMM. However, predicted variance is only about 0.45--0.51 times realized squared forecast errors, versus 1.82--2.06 for GROMM; a larger conditional variance bar is therefore not automatically better calibrated. All weighted recursive paths decoded without invalid or above-300-percent-IV surfaces, but native clipping persists, tail/ACF mismatches remain, and next-day quoted-price MAE is slightly worse than persistence. The spot projection/add-back and all covariance cross terms were checked explicitly. See the completed follow-up section for the full definitions and limitations.
+\paragraph{Completed density-weighted follow-up.} Both additional sixteen-factor DYSANOS variants have all 44 surface, quote and recursive diagnostics completed. Pooled log-IV variance ratios improve to 0.784 and 0.722; weighted forecast accuracy is close to GROMM. However, predicted variance is only about 0.45--0.51 times realized squared forecast errors, versus 1.82--2.06 for GROMM; a larger conditional variance bar is therefore not automatically better calibrated. All weighted recursive paths decoded without invalid or above-300-percent-IV surfaces, but native clipping persists, tail/ACF mismatches remain,. The spot projection/add-back and all covariance cross terms were checked explicitly. See the completed follow-up section for the full definitions and limitations.
 
 \section{Scope and headline findings}
 
@@ -623,7 +621,7 @@ Only the AR boundary $\rho(A)=1$ comes from the mathematical stationarity condit
 
 All remaining boundaries are explicit, round-number engineering tolerances introduced for this retrospective review, not confidence bounds, published universal standards, or thresholds selected on a separate validation set. Frobenius bounds permit 25\%/50\% norm error; trace bounds permit a factor 1.25/two mismatch; eigen-share bounds permit 10/25 percentage points of summed error; correlation bounds permit .10/.20 absolute error. The spread and forecast tolerances express stated reconstruction goals and allowed deterioration against a simple persistence forecast. They were not used to choose or retrain the models and should be sensitivity-tested before any production acceptance decision.
 
-Next-day forecast in-spread rates and mean outside distances are not graded as reconstruction: a correct conditional expectation need not lie in a narrow realized next-day spread. Price-prediction grading instead compares MAE with the same contracts' origin observed midpoints carried by the origin-only one-day discount factor. Log-IV forecast RMSE is compared with the no-change IV forecast. A ratio at most one means no deterioration; up to 1.10 is the explicit 10\% warning band. May/April deterioration compares these persistence-normalized log-IV losses, reducing confusion with changing market volatility. Pinball and joint VaR--ES scores are proper-score comparisons, not zero-centered tests; tail colors refer to coverage, not their raw score magnitudes.
+Log-IV forecast RMSE is compared with the no-change IV forecast. A ratio at most one means no deterioration; up to 1.10 is the explicit 10\% warning band. May/April deterioration compares these persistence-normalized log-IV losses, reducing confusion with changing market volatility. Pinball and joint VaR--ES scores are proper-score comparisons, not zero-centered tests; tail colors refer to coverage, not their raw score magnitudes.
 
 Colors on conditional covariance/trace are descriptive dispersion screens against realized total covariance, not formal conditional-covariance tests; between-origin predicted means can explain a difference. Tail p-values and colors are pointwise and exploratory; no across-model multiplicity correction is claimed. Historical-P comparisons for GROMM-Q are descriptive, not a demand that a Q generator reproduce P outcomes. The complete numeric rules are saved in \texttt{TRAFFIC\_LIGHT\_RULES.json}.
 
@@ -780,33 +778,27 @@ DYSANOS spot-orthogonal (16 factors) (tail) & 44 & \textcolor{blue}{-0.693} & \t
 
 The JSON additionally separates correlations from the average conditional joint covariance and correlations of realized forecast residuals (observed changes minus each model's predicted means). This prevents between-origin mean variation from being mistaken for conditional spot leverage.
 
-\section{Bid--ask fit and next-day prediction}
+\section{Same-day bid--ask fit}
 
 For quoted bid $b$, ask $a$ and predicted price $p$, outside distance is $d=\max(b-p,p-a,0)/(a-b)$. We report the in-spread share, mean and 95th percentile of $d$, and cash-price MAE. Crossed/zero-width/nonfinite inputs are excluded with counts. Quotes are licensed observed bid/ask, not fabricated spreads around fitted prices.
 
-\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
-\caption{Same-day quoted-spread reconstruction and next-day conditional-mean price prediction. Color rules: Same-day in-spread share: black at least 95\%, orange 80\% to below 95\%, red below 80\%. Forecast MAE / same-contract persistence MAE: black at most 1.00, orange above 1.00 through 1.10, red above 1.10. Other forecast statistics are ungraded; next-day in-spread share is not a reconstruction test. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:bidask-fit}
-\begin{tabular}{@{}lrrrrrr@{}}
-\toprule
-Model & Recon. in & Pred. N & Pred. in & Mean distance & MAE / spot & MAE ratio \\
+\begin{table}[H]\centering\small
+\caption{Earlier same-day quoted-spread reconstruction. Blue entries are historical results.}\label{tab:bidask-fit}
+\begin{tabular}{@{}lr@{}}\toprule Model & Reconstruction in spread \\
 \midrule
-DYSANOS ordinary (16 factors) & \textcolor{blue}{0.744} & 44 & 0.013 & 36.830 & 0.002 & \textcolor{blue}{1.009} \\
-DYSANOS spot-orthogonal (16 factors) & \textcolor{blue}{0.744} & 44 & 0.010 & 37.309 & 0.002 & \textcolor{blue}{1.011} \\
-FuNVol & \textcolor{blue}{--} & 44 & 0.013 & 43.205 & 0.002 & \textcolor{blue}{1.047} \\
-VolGAN PCA8 & \textcolor{blue}{--} & 44 & 0.006 & 139.538 & 0.005 & \textcolor{blue}{2.785} \\
-AD-Seq-Vol & \textcolor{blue}{--} & 44 & 0.009 & 72.848 & 0.002 & \textcolor{blue}{1.331} \\
-AD-Seq-Vol-FT & \textcolor{blue}{--} & 44 & 0.007 & 69.679 & 0.002 & \textcolor{blue}{1.284} \\
-GROMM-P & \textcolor{blue}{0.928} & 44 & 0.009 & 43.425 & 0.002 & \textcolor{blue}{1.009} \\
-GROMM-Q & \textcolor{blue}{0.928} & 44 & 0.009 & 41.915 & 0.002 & \textcolor{blue}{0.995} \\
-DYSANOS ordinary (16 factors) (tail) & \textcolor{blue}{0.744} & 44 & 0.012 & 36.714 & 0.002 & \textcolor{blue}{1.010} \\
-DYSANOS spot-orthogonal (16 factors) (tail) & \textcolor{blue}{0.744} & 44 & 0.011 & 37.114 & 0.002 & \textcolor{blue}{1.011} \\
+DYSANOS ordinary (16 factors) & \textcolor{blue}{0.744} \\
+DYSANOS spot-orthogonal (16 factors) & \textcolor{blue}{0.744} \\
+FuNVol & \textcolor{blue}{--} \\
+VolGAN PCA8 & \textcolor{blue}{--} \\
+AD-Seq-Vol & \textcolor{blue}{--} \\
+AD-Seq-Vol-FT & \textcolor{blue}{--} \\
+GROMM-P & \textcolor{blue}{0.928} \\
+GROMM-Q & \textcolor{blue}{0.928} \\
+DYSANOS ordinary (16 factors) (tail) & \textcolor{blue}{0.744} \\
+DYSANOS spot-orthogonal (16 factors) (tail) & \textcolor{blue}{0.744} \\
 \bottomrule\end{tabular}\end{table}
 
 Reconstruction uses all available quoted sides with origin tenors 1--10D and $|\mathrm{NMS}|\le1.5$ for DYSANOS and GROMM. Conditional IV generators do not have an independently fitted same-day observable decoder in this audit: their reconstruction is n/a, not perfect by copying their conditioning input. GROMM's stored 252-transition fit percentages are not substituted for today's measured quoted reconstruction.
-
-Next-day prediction uses surviving OTM hedge-book contracts with origin tenors 2--5D and $|\mathrm{NMS}|\le1.5$, matched at their exact cash strike, expiry and settlement type. The expected raw scenario price is compared with tomorrow's observed spread. Financing/carry is fixed from the origin; tomorrow's spot/forward curve is not inserted into the forecast. Expiring 1D contracts are settlements, not next-day quotes. This is a limited retained-book forecast population, not every model-grid contract. Population, matched and excluded counts and moneyness-bucket scores are retained per date. Reconstruction and forecast columns have different populations and should not be compared as like-for-like fit rates.
-
-A correct stochastic model need not put its conditional-mean forecast inside a narrow realized next-day spread. The forecast in-spread rate is a prediction diagnostic, not an arbitrage criterion. Quote aggregates give equal weight to dates, not to the number of contracts on each date. All daily counts, mean and 95th-percentile outside distances, price MAEs and buckets are retained in the CSV/JSON outputs.
 
 \texttt{iv\_rmse\_buckets.csv} separately reports both log-IV RMSE and annual-IV RMSE for the explicitly defined point forecast $\hat\sigma_{t+1}=\exp(x_t+m_t)$, anchored to the common observed origin surface. This is a geometric-IV point forecast, not $E_t[\sigma_{t+1}]$ and not IV obtained by inverting a mean option price. Errors are bucketed by expiry and NMS. No realized forward is used to manufacture an IV from a potentially non-arbitrage-bounded mean price.
 
@@ -978,14 +970,12 @@ GROMM-P & 1.446 & 0.701 & 2.064 \\
 GROMM-Q & 1.386 & 0.763 & 1.816 \\
 \bottomrule\end{tabular}\end{table}
 
-\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
-\caption{Observed-quote tests. Same-day reconstruction is unchanged because the daily decoder was not refitted. Next-day scores use identical surviving 2--5D cash contracts; normalized price MAEs and their reference are averaged equally over origins. Color rules: Same-day in-spread share: black at least 95\%, orange 80\% to below 95\%, red below 80\%. Forecast MAE / same-contract persistence MAE: black at most 1.00, orange above 1.00 through 1.10, red above 1.10. Other forecast statistics are ungraded; next-day in-spread share is not a reconstruction test. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:density-quotes}
-\begin{tabular}{@{}lrrrr@{}}
-\toprule
-Model & Recon. inside & Quote count & Forecast MAE / spot & MAE / persistence \\
+\begin{table}[H]\centering\small
+\caption{Earlier same-day quoted-spread reconstruction. Blue entries are historical results.}\label{tab:density-quotes}
+\begin{tabular}{@{}lr@{}}\toprule Model & Reconstruction in spread \\
 \midrule
-Ordinary / density & \textcolor{blue}{0.744} & 7610 & 0.002 & \textcolor{blue}{1.018} \\
-Spot-orthogonal / density & \textcolor{blue}{0.744} & 7610 & 0.002 & \textcolor{blue}{1.012} \\
+Ordinary / density & \textcolor{blue}{0.744} \\
+Spot-orthogonal / density & \textcolor{blue}{0.744} \\
 \bottomrule\end{tabular}\end{table}
 
 \begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}

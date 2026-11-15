@@ -60,6 +60,25 @@ def legacy_blue(tex: str) -> str:
     """Preserve historic values and make all their text, math and former ratings blue."""
     body = tex.split(r"\begin{document}", 1)[1].split(r"\end{document}", 1)[0]
     body = body.replace(r"\maketitle", "").replace(r"\appendix", "")
+    for label in ("bidask-fit", "density-quotes"):
+        pattern = (r"\\begin\{table\}\[H\](?:(?!\\end\{table\}).)*?\\label\{tab:" + label
+            + r"\}(?:(?!\\end\{table\}).)*?\\end\{table\}")
+        def same_day_table(match):
+            lines = match.group().splitlines()
+            start = lines.index(r"\midrule") + 1
+            end = next(index for index in range(start, len(lines)) if lines[index].startswith(r"\bottomrule"))
+            retained = [" & ".join(line.split(" & ")[:2]) + r" \\" for line in lines[start:end]]
+            return (r"\begin{table}[H]\centering\small" + "\n"
+                + r"\caption{Earlier same-day quoted-spread reconstruction. Blue entries are historical results.}\label{tab:" + label + "}\n"
+                + r"\begin{tabular}{@{}lr@{}}\toprule Model & Reconstruction in spread \\" + "\n"
+                + r"\midrule" + "\n" + "\n".join(retained) + "\n"
+                + r"\bottomrule\end{tabular}\end{table}")
+        body = re.sub(pattern, same_day_table, body, flags=re.DOTALL)
+    body = body.replace(r"\section{Bid--ask fit and next-day prediction}", r"\section{Same-day bid--ask fit}")
+    body = re.sub(r"Next-day prediction uses surviving OTM hedge-book contracts.*?\n\n", "", body, flags=re.DOTALL)
+    body = re.sub(r"A correct stochastic model need not put its conditional-mean forecast.*?\n\n", "", body, flags=re.DOTALL)
+    body = re.sub(r"Next-day forecast in-spread rates and mean outside distances.*?Price-prediction grading instead compares MAE with the same contracts' origin observed midpoints carried by the origin-only one-day discount factor\. ", "", body, flags=re.DOTALL)
+    body = body.replace(" and next-day quoted-price MAE is slightly worse than persistence", "")
     body = re.sub(r"\\textcolor\{(?:black|orange|red)\}", r"\\textcolor{blue}", body)
     body = re.sub(r"\\includegraphics(\[[^]]*\])?\{([^}]+)\}",
         lambda match: r"\includegraphics" + (match[1] or "") + "{legacy/" + match[2] + "}", body)
@@ -141,7 +160,7 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
             "pass" if group[f"{name}_violations"].sum() == 0 else "fail") for name in conditions],
             int(group.invalid_iv_count.sum())])
     quote_rows = []
-    for name in ("reconstruction", "next_day"):
+    for name in ("reconstruction",):
         counts = np.array([row["quotes"][name]["count"] for row in diagnostics])
         weight = counts / counts.sum()
         quote_rows.append([name.replace("_", " "), int(counts.sum()),
@@ -191,7 +210,7 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
     if gromm_rows:
         metrics["gromm2_partial_forecasts"] = gromm_summaries
         gromm_section = [r"\section{GROMM2: partial matched forecasts}",
-            r"The model is fitted independently at each origin using the repository model and the paper quote objective. Results below use the available origins only; Q against realized data is descriptive, not a claim that Q is the physical law. Matched quote, long-horizon and static-arbitrage diagnostics remain outstanding.",
+            r"The model is fitted independently at each origin using the repository model and the paper quote objective. Results below use the available origins only; Q against realized data is descriptive, not a claim that Q is the physical law. Same-day quote fit, long-horizon and static-arbitrage diagnostics remain outstanding.",
             report._table(["Measure", "Dates", "Cond. trace", "Pooled trace", "Frob.", "RMSE", "Variance/MSE"], gromm_rows,
                 caption="GROMM2 one-day forecasts, 1,000 paths per origin and measure. The number of completed dates may differ between P and Q while the run is active. Black: ungraded partial statistics.", label="tab:gromm2-partial")]
     literature_root = root.parent / "competitor-static-20261112-v1"
@@ -268,7 +287,7 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
         v2_iv_rows = [[int(row.simulation_day), int(row.business_dte), row.iv_library_min_vol_cases_pct,
             row.iv_library_max_vol_cases_pct, row.iv_failed_pct] for row in grid.itertuples()]
         v2_quote_rows = []
-        for mode in ("reconstruction", "next_day"):
+        for mode in ("reconstruction",):
             count = sum(row["quotes"][mode]["count"] for row in v2_partial)
             def weighted(key):
                 return sum(row["quotes"][mode]["count"] * row["quotes"][mode][key] for row in v2_partial) / count
@@ -279,7 +298,7 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
             "long_complete_origins": len(complete), "failures": [row["origin"] for row in v2_records if row.get("status") != "complete"],
             "source": str(v2_root), "paths_per_origin": 1000}
         v2_section = [r"\subsection{Standalone V2: quote and simulation diagnostics}",
-            rf"These diagnostics currently cover {len(v2_partial)} of 44 origins; the results are preliminary. Next-day price forecasts average 1,000 simulated model prices at fixed cash strikes, using origin-date carry; the same-day reconstruction uses the origin surface. Only matched OTM quotes with 1<business-days-to-expiry$\leq5$ and absolute NMS$\leq1.5$ enter. Black numbers are descriptive, not pass/fail grades.",
+            rf"These diagnostics cover {len(v2_partial)} of 44 origins. Same-day reconstruction uses the origin surface and OTM quotes with 1<business-days-to-expiry$\leq5$ and absolute NMS$\leq1.5$. Black numbers are descriptive, not pass/fail grades.",
             report._table(["Mode", "Quotes", "Inside spread %", "Mean outside", "MAE / spot"], v2_quote_rows,
                 caption="Standalone V2 quote-count-weighted results on the available origins. Outside distance uses full bid--ask spread width.", label="tab:standalone-v2-quotes"),
             report._table(["Day", "Tenor", "Decr.", "Convex", "Vert.", "Lower", "Upper", "K=0", "Cal.", "N/A"], v2_count_rows,
@@ -340,7 +359,7 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
             standalone_section.append(r"Matched one-day forecast covariance, long-horizon recursive stability and static-arbitrage simulation remain pending for this standalone model.")
     standalone_section.extend(v2_section)
     section = [r"\section*{Executive update: 14 November 2026}",
-        r"\textbf{Standalone DYSANOS v2 and the earlier STRT-16 alternative are distinct models.} Blue values throughout this document are earlier, unrefreshed evidence, not current refits. Current black/orange/red ratings retain their stated diagnostic meanings. Blue overrides the earlier traffic-light colors in the historical appendix, including plot numbers.",
+        r"\textbf{Standalone DYSANOS v2 and the earlier STRT-16 alternative are distinct models.} Blue values throughout this document are earlier, unrefreshed evidence, not current refits. Current black/orange/red ratings retain their stated diagnostic meanings. Blue overrides the earlier traffic-light colors in the historical appendix, including plot numbers. Next-day conditional-mean price prediction is excluded: forecasting price drift is not the aim of this model comparison.",
         table(["Model", "Completed origins", "Current stage"], coverage,
             caption="Model-fit counts out of 44 April--May 2024 origins. Training does not imply forecast or diagnostic completion. Black: ungraded counts; no missing result is a pass.", label="tab:current-coverage"),
         *standalone_section,
@@ -352,9 +371,9 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
         table(["Model", "Dates", "Cond. trace", "Pooled trace", "Frob. pooled", "RMSE", "/persist."], covariance_rows,
             caption="Earlier STRT-16 and competitor results, not the standalone DYSANOS v2. Blue entries are retained earlier evidence, not current refits.", label="tab:current-covariance"),
         r"STRT-16 is an earlier spot-orthogonal tangent projection followed by a separately fitted daily VAR and scalar tail diffusion. Native spot loading outside the retained span is preserved. All fits use independent causal windows, without earlier-origin weights. Decoder guards activate frequently, so static validity does not establish calibrated diffusion tails.",
-        r"\subsection{Current reconstruction and next-day price forecast}",
+        r"\subsection{Same-day reconstruction}",
         table(["Mode", "Quotes", "Inside spread %", "Mean outside", "MAE / spot"], quote_rows,
-            caption="Earlier STRT-16 on the matched diagnostic book: OTM, 1<business-days-to-expiry<=5 and absolute NMS<=1.5. Statistics are quote-count weighted across dates. Outside distance uses full spread width. Next-day point forecasts versus realized quotes are distinct from same-day reconstruction.", label="tab:current-quotes"),
+            caption="Earlier STRT-16 same-day reconstruction on the matched diagnostic book: OTM, 1<business-days-to-expiry<=5 and absolute NMS<=1.5. Statistics are quote-count weighted across dates. Outside distance uses full spread width.", label="tab:current-quotes"),
         r"\subsection{Static arbitrage and simulated-IV stability}",
         r"Each of 44 origins uses 1,000 paths, nested simulation days 1, 5, 10, 125 and 259, twenty-one NMS strikes in [-3,2], and remaining tenors 1, 2, 5 and 10 business days. Calendar checks use the next tenor in the native model grid at the same cash strikes. No separate stock path is needed. Prices and vector IV inversion use the existing decoder and cdxcore.bs without rejected-path filtering.",
         table(["Day", "Tenor", "Decr.", "Convex", "Vertical", "Intrinsic", "Upper", "K=0", "Calendar", "Bad IV"], static_rows,

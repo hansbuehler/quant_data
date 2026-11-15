@@ -18,6 +18,19 @@ def test_legacy_body_and_prior_ratings_are_blue_without_changing_values():
     assert "maketitle" not in updated and r"\textcolor{red}" not in updated
 
 
+def test_legacy_quote_table_keeps_reconstruction_not_next_day_prediction():
+    original = (r"\documentclass{article}\begin{document}" + "\n"
+        + r"\begin{table}[H] earlier content \end{table}" + "\n"
+        + r"\begin{table}[H]" + "\n" + r"\caption{Old}\label{tab:bidask-fit}" + "\n"
+        + r"\begin{tabular}{lrr}" + "\n" + r"\midrule" + "\n"
+        + r"model & 0.9 & 0.01 \\" + "\n" + r"\bottomrule\end{tabular}\end{table}" + "\n"
+        + r"\end{document}")
+    updated = legacy_blue(original)
+    assert "earlier content" in updated
+    assert "model & 0.9" in updated
+    assert "0.01" not in updated
+
+
 def test_historical_numeric_cells_override_quality_color_in_current_table():
     assert _format(Rated(.8145, "old")) == r"\textcolor{blue}{0.815}"
     assert _format(Rated(44, "old")) == r"\textcolor{blue}{44}"
