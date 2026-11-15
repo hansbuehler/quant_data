@@ -56,8 +56,15 @@ def path_acf(scores: np.ndarray) -> list[dict]:
 def _dysanos(root: Path, model: str, day: date, *, paths: int, steps: int,
               output: Path | None = None) -> tuple[np.ndarray, dict]:
     base = root / "quant_data/hedge2/runs"
-    weighted = None
-    if model.endswith("density-weighted"):
+    weighted, projected = None, None
+    if model in ("DYSANOS v1", "DYSANOS v2"):
+        from quantdata.hedging.model_audit.projected_law import load_law
+
+        if output is None:
+            raise ValueError("Versioned DYSANOS paths require their own run directory")
+        projected = load_law(output, model, day)
+        fit = projected.dynamics
+    elif model.endswith("density-weighted"):
         from quantdata.hedging.model_audit.density_weighted import load_weighted_model
 
         if output is None:
@@ -85,7 +92,11 @@ def _dysanos(root: Path, model: str, day: date, *, paths: int, steps: int,
     projected_spot = fit.spot_state_loading @ fit.directions
     perpendicular = fit.spot_state_loading - fit.directions @ projected_spot
     extra_diagnostics = {}
-    if weighted is not None:
+    if projected is not None:
+        natives = projected.recursive_paths(state.native, paths=paths, steps=steps, seed=20_261_111)
+        natives = natives.reshape(paths * steps, -1)
+        perpendicular = projected.perpendicular_spot_loading
+    elif weighted is not None:
         from quantdata.hedging.model_audit.density_weighted import recursive_native_paths
 
         natives, extra_diagnostics = recursive_native_paths(weighted, state.native, paths=paths, steps=steps, seed=20_261_111)
@@ -110,7 +121,8 @@ def _dysanos(root: Path, model: str, day: date, *, paths: int, steps: int,
         upper += guards["upper_clips"]
         invalid += int(round(guards["invalid_path_rate"] * len(decoded)))
         inversion_records.append(guards["iv_inversion"])
-    ratio = float(np.linalg.norm(perpendicular) / np.linalg.norm(fit.spot_state_loading)) if np.linalg.norm(fit.spot_state_loading) > 0 else 0.
+    full_loading = projected.spot_loading if projected is not None else fit.spot_state_loading
+    ratio = float(np.linalg.norm(perpendicular) / np.linalg.norm(full_loading)) if np.linalg.norm(full_loading) > 0 else 0.
     diagnostics = {
         "lower_clip_coordinates": lower, "upper_clip_coordinates": upper,
         "invalid_surface_count": invalid, "spot_loading_outside_factor_span_fraction": ratio,
@@ -123,10 +135,13 @@ def _dysanos(root: Path, model: str, day: date, *, paths: int, steps: int,
 
 
 def _neural(root: Path, model: str, day: date, history, index: int,
-            *, paths: int, steps: int) -> tuple[np.ndarray, dict]:
+            *, paths: int, steps: int, full_grid: bool = False,
+            snapshot_steps: tuple[int, ...] | None = None) -> tuple[np.ndarray, dict]:
     env = BaseEnvironment(precision=64, device="cpu")
     random = torch.Generator(device="cpu").manual_seed(20_261_111)
     surfaces = []
+    indices = np.arange(GRID.strike_count) if full_grid else COMMON_INDICES
+    snapshots = set(range(1, steps + 1) if snapshot_steps is None else snapshot_steps)
     if model == "FuNVol":
         checkpoint_path = root / f"training/hedging/funvol-causal-chain-20261025-warning-v1/aprmay/checkpoints/{day}.pt"
         saved = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
@@ -143,14 +158,15 @@ def _neural(root: Path, model: str, day: date, history, index: int,
         center, scale = saved["state_center"], saved["state_scale"]
         context = torch.as_tensor(np.broadcast_to((states - center) / scale, (paths, *states.shape)).copy(), dtype=env.fdtype)
         with torch.no_grad():
-            for _ in range(steps):
+            for position in range(steps):
                 drift, lower = network(context)
                 noise = torch.randn(paths, config.state_dimension, generator=random, dtype=env.fdtype)
                 next_state = context[:, -1] + drift / 252. + (lower @ noise[..., None]).squeeze(-1) / np.sqrt(252.)
                 context = torch.cat((context[:, 1:], next_state[:, None]), dim=1)
                 raw_state = next_state.numpy() * scale + center
-                decoded = saved["fpc"].decode(raw_state[:, :config.factor_count])
-                surfaces.append(np.log(decoded[:, :, COMMON_INDICES]).reshape(paths, -1))
+                if position + 1 in snapshots:
+                    decoded = saved["fpc"].decode(raw_state[:, :config.factor_count])
+                    surfaces.append(np.log(decoded[:, :, indices]).reshape(paths, -1))
     else:
         record_path = root / f"experiments/hedging/volgan-pca8-rolling-aprmay-20261024-v1/run/records/{day}.json"
         saved = torch.load(_record(record_path)["diagnostics"]["fit_checkpoint_path"], map_location="cpu", weights_only=False)
@@ -167,7 +183,7 @@ def _neural(root: Path, model: str, day: date, history, index: int,
         returns = np.broadcast_to(history.forward_log_returns_into_date[index - 20:index + 1], (paths, 21)).copy()
         sessions = np.broadcast_to(history.sessions_from_previous_observation[index - 20:index + 1], (paths, 21)).copy()
         with torch.no_grad():
-            for _ in range(steps):
+            for position in range(steps):
                 conditions = np.column_stack((returns[:, -1] * np.sqrt(252.), returns[:, -2] * np.sqrt(252.),
                     np.std(returns / np.sqrt(sessions), axis=1) * np.sqrt(252.), current.reshape(paths, -1)))
                 condition_tensor = torch.as_tensor(conditions, dtype=env.fdtype)
@@ -176,7 +192,8 @@ def _neural(root: Path, model: str, day: date, history, index: int,
                 current += decoded[:, 1:].reshape(paths, 7, 19)
                 returns = np.column_stack((returns[:, 1:], decoded[:, 0] / np.sqrt(252.)))
                 sessions = np.column_stack((sessions[:, 1:], np.ones(paths)))
-                surfaces.append(current[:, :, COMMON_INDICES].reshape(paths, -1).copy())
+                if position + 1 in snapshots:
+                    surfaces.append(current[:, :, indices].reshape(paths, -1).copy())
     return np.stack(surfaces, axis=1), {"lower_clip_coordinates": 0, "upper_clip_coordinates": 0}
 
 

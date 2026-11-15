@@ -28,10 +28,10 @@
 \toprule
 Model & Completed origins & Current stage \\
 \midrule
-DYSANOS v1-P & 1 & paper fits; scoring pending \\
+DYSANOS v1-P & 6 & paper fits; scoring pending \\
 Standalone DYSANOS v2-P & 44 & 44/44 one-day forecasts \\
 STRT-16 alternative & 44 & earlier separate experiment \\
-GROMM2-P/Q & 1 & fits; P/Q forecasts pending \\
+GROMM2-P/Q & 5 & fits; P/Q forecasts pending \\
 \bottomrule\end{tabular}\end{table}
 
 \section{Standalone DYSANOS v2: matched-date results}
@@ -151,6 +151,236 @@ Day & Tenor & Decr. & Convex & Vertical & Intrinsic & Upper & K=0 & Calendar & B
 \bottomrule\end{tabular}\end{table}
 
 The largest decoded annual IV is 38.16\%; no IV exceeds 300\%. No inversion is unusable. Numerical DLV/forward bounds remain active and are disclosed in the dated records. Historical-range exceedances are recorded, not interpreted as arbitrage.
+
+\subsection{Literature-model static-arbitrage and IV boundaries}
+
+The retained FuNVol and PCA8 VolGAN tests use the same 44 origins, 1,000 paths per origin, five simulation days and four tenor buckets described above. Percentages are pooled test-level counts, not percentages of paths. Decr., Convex, Vert., Lower, Upper, K=0 and Cal. are strike monotonicity, convexity, vertical spread, intrinsic and upper bounds, zero-strike identity and calendar checks. The 10D calendar comparison is unsupported where no later native tenor exists. The AD-Seq-Vol tables below report only the explicitly counted completed origins; the full test is running.
+
+The generated-surface repricer marks a whole surface unavailable when any log-IV is non-finite or too large for its numerical guard. These entries do not enter finite-test denominators and must not be counted as passes. Boundary percentages are reported separately from repricing errors: vectorized cdxcore returns 1\% and 500\% limits, and the lower limit can also reflect its intrinsic-price convention. A bounded IV need not reproduce the input price within tolerance. VolGAN is our trained PCA8 adaptation, not published model weights.
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{FuNVol: percentages of eligible finite price tests violating each condition by simulation day and business-day tenor. N/A is the percentage of price nodes unavailable; unsupported calendar tests show a dash. Color rules: Blue: earlier saved simulation results; no current grading. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:literature-static-funvol}
+\begin{tabular}{@{}lrrrrrrrrr@{}}
+\toprule
+Day & Tenor & Decr. & Convex & Vert. & Lower & Upper & K=0 & Cal. & N/A \\
+\midrule
+1 & 1 & 0.000 & 0.201 & 0.000 & 0.000 & 0.000 & 0.000 & 4.105 & 0.000 \\
+1 & 2 & 0.000 & 0.119 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+1 & 5 & 0.000 & 0.009 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+1 & 10 & 0.000 & 0.225 & 0.000 & 0.000 & 0.000 & 0.000 & -- & 0.000 \\
+5 & 1 & 0.000 & 0.311 & 0.000 & 0.000 & 0.000 & 0.000 & 7.470 & 0.000 \\
+5 & 2 & 0.000 & 0.156 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+5 & 5 & 0.000 & 0.046 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+5 & 10 & 0.000 & 0.574 & 0.000 & 0.000 & 0.000 & 0.000 & -- & 0.000 \\
+10 & 1 & 0.000 & 0.330 & 0.000 & 0.000 & 0.000 & 0.000 & 7.715 & 0.000 \\
+10 & 2 & 0.000 & 0.173 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+10 & 5 & 0.000 & 0.113 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+10 & 10 & 0.000 & 1.011 & 0.000 & 0.000 & 0.000 & 0.000 & -- & 0.000 \\
+125 & 1 & 0.000108 & 1.567 & 0.314 & 0.000 & 0.000 & 0.000 & 8.256 & 0.000 \\
+125 & 2 & 0.000 & 2.008 & 0.539 & 0.000 & 0.000 & 0.000 & 0.090 & 0.000 \\
+125 & 5 & 0.007 & 3.371 & 1.231 & 0.000 & 0.000 & 0.000 & 0.000541 & 0.000 \\
+125 & 10 & 0.019 & 5.078 & 1.861 & 0.000 & 0.000 & 0.000 & -- & 0.000 \\
+259 & 1 & 0.001 & 2.942 & 1.394 & 0.000 & 0.000 & 0.000 & 11.815 & 0.000 \\
+259 & 2 & 0.050 & 3.049 & 1.363 & 0.000 & 0.000 & 0.000 & 0.425 & 0.000 \\
+259 & 5 & 0.228 & 3.832 & 2.025 & 0.000 & 0.000 & 0.000 & 0.002 & 0.000 \\
+259 & 10 & 0.320 & 4.930 & 2.704 & 0.000 & 0.000 & 0.000 & -- & 0.000 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{FuNVol: price availability and library IV boundary percentages by simulation day and tenor. Priced uses all requested price nodes; other columns use finite prices submitted to inversion. Boundary entries and repricing failures can overlap. Color rules: Blue: earlier saved simulation results; no current grading. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:literature-boundary-funvol}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Day & Tenor & Priced \% & IV 1\% & IV 500\% & Reprice fail \% \\
+\midrule
+1 & 1 & 100.000 & 0.044 & 0.000 & 0.000 \\
+1 & 2 & 100.000 & 0.003 & 0.000 & 0.000 \\
+1 & 5 & 100.000 & 0.000 & 0.000 & 0.000 \\
+1 & 10 & 100.000 & 0.000 & 0.000 & 0.000 \\
+5 & 1 & 100.000 & 1.117 & 0.000 & 0.000 \\
+5 & 2 & 100.000 & 0.275 & 0.000 & 0.000 \\
+5 & 5 & 100.000 & 0.074 & 0.000 & 0.000 \\
+5 & 10 & 100.000 & 0.038 & 0.000 & 0.000 \\
+10 & 1 & 100.000 & 2.475 & 0.000 & 0.000 \\
+10 & 2 & 100.000 & 1.097 & 0.000 & 0.000 \\
+10 & 5 & 100.000 & 0.470 & 0.000 & 0.000 \\
+10 & 10 & 100.000 & 0.270 & 0.000 & 0.000 \\
+125 & 1 & 100.000 & 10.468 & 0.000 & 0.131 \\
+125 & 2 & 100.000 & 11.988 & 0.000 & 0.258 \\
+125 & 5 & 100.000 & 10.751 & 0.000 & 0.282 \\
+125 & 10 & 100.000 & 8.547 & 0.000 & 0.205 \\
+259 & 1 & 100.000 & 16.831 & 0.000 & 0.604 \\
+259 & 2 & 100.000 & 20.067 & 0.000 & 1.100 \\
+259 & 5 & 100.000 & 18.698 & 0.000 & 1.210 \\
+259 & 10 & 100.000 & 15.738 & 0.000 & 1.006 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{VolGAN PCA8: percentages of eligible finite price tests violating each condition by simulation day and business-day tenor. N/A is the percentage of price nodes unavailable; unsupported calendar tests show a dash. Color rules: Blue: earlier saved simulation results; no current grading. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:literature-static-volgan}
+\begin{tabular}{@{}lrrrrrrrrr@{}}
+\toprule
+Day & Tenor & Decr. & Convex & Vert. & Lower & Upper & K=0 & Cal. & N/A \\
+\midrule
+1 & 1 & 0.649 & 1.322 & 0.433 & 0.000 & 0.000 & 0.000 & 0.541 & 0.000 \\
+1 & 2 & 0.000 & 1.025 & 0.430 & 0.000 & 0.000 & 0.000 & 0.108 & 0.000 \\
+1 & 5 & 0.000 & 0.303 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+1 & 10 & 0.000 & 0.001 & 0.000 & 0.000 & 0.000 & 0.000 & -- & 0.000 \\
+5 & 1 & 2.466 & 3.293 & 0.253 & 0.000 & 0.000 & 0.000 & 26.021 & 0.000 \\
+5 & 2 & 4.851 & 4.177 & 0.219 & 0.000 & 0.000 & 0.000 & 12.985 & 0.000 \\
+5 & 5 & 0.245 & 2.411 & 0.321 & 0.000 & 0.000 & 0.000 & 11.522 & 0.000 \\
+5 & 10 & 0.497 & 2.128 & 0.912 & 0.000 & 0.000 & 0.000 & -- & 0.000 \\
+10 & 1 & 1.240 & 1.772 & 0.275 & 0.000 & 0.000 & 0.000 & 4.693 & 34.966 \\
+10 & 2 & 0.851 & 1.825 & 0.174 & 0.000 & 0.000 & 0.000 & 2.229 & 34.966 \\
+10 & 5 & 0.615 & 1.483 & 0.163 & 0.000 & 0.000 & 0.000 & 1.804 & 34.966 \\
+10 & 10 & 0.423 & 1.516 & 0.111 & 0.000 & 0.000 & 0.000 & -- & 34.966 \\
+125 & 1 & 1.204 & 9.251 & 0.407 & 0.000 & 0.000 & 0.000 & 9.994 & 95.236 \\
+125 & 2 & 0.682 & 4.115 & 0.148 & 0.000 & 0.000 & 0.000 & 6.661 & 95.236 \\
+125 & 5 & 0.364 & 1.198 & 0.048 & 0.000 & 0.000 & 0.000 & 1.399 & 95.236 \\
+125 & 10 & 0.332 & 0.744 & 0.039 & 0.000 & 0.000 & 0.000 & -- & 95.236 \\
+259 & 1 & 3.275 & 20.014 & 2.850 & 0.000 & 0.000 & 0.000 & 28.880 & 98.420 \\
+259 & 2 & 2.131 & 8.014 & 0.185 & 0.000 & 0.000 & 0.000 & 1.350 & 98.420 \\
+259 & 5 & 0.144 & 1.108 & 0.000 & 0.000 & 0.000 & 0.000 & 0.363 & 98.420 \\
+259 & 10 & 0.096 & 0.374 & 0.000 & 0.000 & 0.000 & 0.000 & -- & 98.420 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{VolGAN PCA8: price availability and library IV boundary percentages by simulation day and tenor. Priced uses all requested price nodes; other columns use finite prices submitted to inversion. Boundary entries and repricing failures can overlap. Color rules: Blue: earlier saved simulation results; no current grading. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:literature-boundary-volgan}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Day & Tenor & Priced \% & IV 1\% & IV 500\% & Reprice fail \% \\
+\midrule
+1 & 1 & 100.000 & 0.000 & 0.000 & 0.000 \\
+1 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+1 & 5 & 100.000 & 0.000 & 0.000 & 0.000 \\
+1 & 10 & 100.000 & 0.000 & 0.000 & 0.000 \\
+5 & 1 & 100.000 & 0.714 & 23.655 & 23.803 \\
+5 & 2 & 100.000 & 2.825 & 15.245 & 15.428 \\
+5 & 5 & 100.000 & 0.106 & 21.116 & 21.222 \\
+5 & 10 & 100.000 & 0.000 & 16.094 & 16.094 \\
+10 & 1 & 65.034 & 2.827 & 32.133 & 32.458 \\
+10 & 2 & 65.034 & 2.872 & 31.406 & 31.789 \\
+10 & 5 & 65.034 & 1.720 & 32.312 & 32.520 \\
+10 & 10 & 65.034 & 1.901 & 31.754 & 31.979 \\
+125 & 1 & 4.764 & 1.063 & 4.503 & 4.644 \\
+125 & 2 & 4.764 & 0.966 & 4.628 & 4.757 \\
+125 & 5 & 4.764 & 1.150 & 4.662 & 4.769 \\
+125 & 10 & 4.764 & 0.841 & 4.287 & 4.403 \\
+259 & 1 & 1.580 & 1.411 & 1.953 & 2.145 \\
+259 & 2 & 1.580 & 1.466 & 2.097 & 2.275 \\
+259 & 5 & 1.580 & 2.199 & 2.158 & 2.323 \\
+259 & 10 & 1.580 & 1.199 & 2.014 & 2.179 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{AD-Seq-Vol: preliminary percentages of eligible finite tests. Dates are completed origins out of 44. N/A is unavailable price nodes; unsupported calendar comparisons show a dash. Color rules: Blue: new partial simulations of a retained older fit; no current grading. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:diffusion-static-base}
+\begin{tabular}{@{}lrrrrrrrrrr@{}}
+\toprule
+Day & Tenor & Dates & Decr. & Convex & Vert. & Lower & Upper & K=0 & Cal. & N/A \\
+\midrule
+1 & 1 & 2 & 0.000 & 6.713 & 0.974 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+1 & 2 & 2 & 0.000 & 1.335 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+1 & 5 & 2 & 0.000 & 5.128 & 0.829 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+1 & 10 & 2 & 0.000 & 19.705 & 0.014 & 0.000 & 0.000 & 0.000 & -- & 0.000 \\
+5 & 1 & 2 & 0.000 & 7.735 & 1.221 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+5 & 2 & 2 & 0.000 & 2.295 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+5 & 5 & 2 & 0.000 & 5.647 & 0.871 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+5 & 10 & 2 & 0.000 & 21.300 & 0.048 & 0.000 & 0.000 & 0.000 & -- & 0.000 \\
+10 & 1 & 2 & 0.000 & 8.885 & 1.076 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+10 & 2 & 2 & 0.000 & 3.525 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+10 & 5 & 2 & 0.000 & 5.143 & 0.862 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+10 & 10 & 2 & 0.000 & 21.258 & 0.098 & 0.000 & 0.000 & 0.000 & -- & 0.000 \\
+125 & 1 & 2 & 0.000 & 1.260 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+125 & 2 & 2 & 0.000 & 2.612 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+125 & 5 & 2 & 0.000 & 5.433 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+125 & 10 & 2 & 0.000 & 4.383 & 0.000 & 0.000 & 0.000 & 0.000 & -- & 0.000 \\
+259 & 1 & 1 & 0.000 & 1.090 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+259 & 2 & 1 & 0.000 & 1.295 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+259 & 5 & 1 & 0.000 & 3.050 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+259 & 10 & 1 & 0.000 & 2.820 & 0.000 & 0.000 & 0.000 & 0.000 & -- & 0.000 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{AD-Seq-Vol: preliminary library IV boundaries and repricing errors. Priced uses all requested price nodes; other columns use finite prices submitted to inversion. Dates are completed origins out of 44. Color rules: Blue: new partial simulations of a retained older fit; no current grading. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:diffusion-boundary-base}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Day & Tenor & Dates & Priced \% & IV 1\% & IV 500\% & Reprice fail \% \\
+\midrule
+1 & 1 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+1 & 2 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+1 & 5 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+1 & 10 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+5 & 1 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+5 & 2 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+5 & 5 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+5 & 10 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+10 & 1 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+10 & 2 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+10 & 5 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+10 & 10 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+125 & 1 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+125 & 2 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+125 & 5 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+125 & 10 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+259 & 1 & 1 & 100.000 & 0.000 & 0.000 & 0.000 \\
+259 & 2 & 1 & 100.000 & 0.000 & 0.000 & 0.000 \\
+259 & 5 & 1 & 100.000 & 0.000 & 0.000 & 0.000 \\
+259 & 10 & 1 & 100.000 & 0.000 & 0.000 & 0.000 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{AD-Seq-Vol-FT: preliminary percentages of eligible finite tests. Dates are completed origins out of 44. N/A is unavailable price nodes; unsupported calendar comparisons show a dash. Color rules: Blue: new partial simulations of a retained older fit; no current grading. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:diffusion-static-ft}
+\begin{tabular}{@{}lrrrrrrrrrr@{}}
+\toprule
+Day & Tenor & Dates & Decr. & Convex & Vert. & Lower & Upper & K=0 & Cal. & N/A \\
+\midrule
+1 & 1 & 2 & 0.000 & 9.250 & 1.190 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+1 & 2 & 2 & 0.000 & 1.673 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+1 & 5 & 2 & 0.000 & 7.390 & 2.652 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+1 & 10 & 2 & 0.000 & 23.125 & 2.874 & 0.000 & 0.000 & 0.000 & -- & 0.000 \\
+5 & 1 & 2 & 0.000 & 11.143 & 2.133 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+5 & 2 & 2 & 0.000 & 3.725 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+5 & 5 & 2 & 0.000 & 8.762 & 4.314 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+5 & 10 & 2 & 0.000 & 22.490 & 4.324 & 0.000 & 0.000 & 0.000 & -- & 0.000 \\
+10 & 1 & 2 & 0.000 & 13.623 & 2.950 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+10 & 2 & 2 & 0.000 & 3.608 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+10 & 5 & 2 & 0.000 & 8.525 & 4.988 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+10 & 10 & 2 & 0.000 & 21.843 & 4.898 & 0.000 & 0.000 & 0.000 & -- & 0.000 \\
+125 & 1 & 2 & 0.000 & 17.475 & 4.117 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+125 & 2 & 2 & 0.000 & 3.163 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+125 & 5 & 2 & 0.000 & 10.585 & 6.257 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+125 & 10 & 2 & 0.000 & 19.828 & 5.964 & 0.000 & 0.000 & 0.000 & -- & 0.000 \\
+259 & 1 & 1 & 0.000 & 18.545 & 1.300 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+259 & 2 & 1 & 0.000 & 4.065 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+259 & 5 & 1 & 0.000 & 9.095 & 6.881 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+259 & 10 & 1 & 0.000 & 20.635 & 6.738 & 0.000 & 0.000 & 0.000 & -- & 0.000 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{AD-Seq-Vol-FT: preliminary library IV boundaries and repricing errors. Priced uses all requested price nodes; other columns use finite prices submitted to inversion. Dates are completed origins out of 44. Color rules: Blue: new partial simulations of a retained older fit; no current grading. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:diffusion-boundary-ft}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Day & Tenor & Dates & Priced \% & IV 1\% & IV 500\% & Reprice fail \% \\
+\midrule
+1 & 1 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+1 & 2 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+1 & 5 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+1 & 10 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+5 & 1 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+5 & 2 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+5 & 5 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+5 & 10 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+10 & 1 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+10 & 2 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+10 & 5 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+10 & 10 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+125 & 1 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+125 & 2 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+125 & 5 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+125 & 10 & 2 & 100.000 & 0.000 & 0.000 & 0.000 \\
+259 & 1 & 1 & 100.000 & 0.000 & 0.000 & 0.000 \\
+259 & 2 & 1 & 100.000 & 0.000 & 0.000 & 0.000 \\
+259 & 5 & 1 & 100.000 & 0.000 & 0.000 & 0.000 \\
+259 & 10 & 1 & 100.000 & 0.000 & 0.000 & 0.000 \\
+\bottomrule\end{tabular}\end{table}
 
 \subsection{Frozen observable-PC persistence and tails}
 

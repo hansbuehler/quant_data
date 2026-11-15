@@ -19,10 +19,41 @@ from quantdata.hedging.model_audit.grading import tail_grade
 from quantdata.hedging.model_audit.run import _hash, _json
 
 COMPETITORS = ("FuNVol", "VolGAN PCA8", "AD-Seq-Vol", "AD-Seq-Vol-FT")
+STATIC_CONDITIONS = ("decreasing", "convexity", "vertical_spread", "intrinsic_lower_bound",
+                     "upper_bound", "zero_strike_identity", "calendar")
 
 
 def rows(directory: Path) -> list[dict]:
     return [json.loads(path.read_text()) for path in sorted(directory.glob("*.json"))]
+
+
+def literature_static_summary(records: list[dict], dates: list[str], *, horizons: tuple[int, ...] = (1, 5, 10, 125, 259)) -> pd.DataFrame:
+    """Aggregate saved checks without treating unavailable prices as passes."""
+    if sorted(record["origin_date"] for record in records) != sorted(dates):
+        raise ValueError("Literature static results do not cover exactly the approved origins")
+    expected = {(day, tenor) for day in horizons for tenor in (1., 2., 5., 10.)}
+    entries = []
+    for record in records:
+        checks = record["results"]
+        if record["status"] != "scored" or {(row["simulation_day"], row["business_dte"]) for row in checks} != expected or len(checks) != len(expected):
+            raise ValueError("Incomplete literature static-arbitrage simulation")
+        for row in checks:
+            entry = {"simulation_day": row["simulation_day"], "business_dte": row["business_dte"],
+                "price_nodes": row["paths"] * row["strikes"], "unavailable_prices": row["invalid_price_nodes"]}
+            for name in STATIC_CONDITIONS:
+                entry[f"{name}_violations"] = row.get(f"{name}_violations", 0) or 0
+                entry[f"{name}_tests"] = row.get(f"{name}_tests", 0) or 0
+            for name in ("count", "library_min_vol_cases", "library_max_vol_cases", "failed"):
+                entry[f"iv_{name}"] = sum(item[name] for item in row.get("inversion", []))
+            entries.append(entry)
+    grouped = pd.DataFrame(entries).groupby(["simulation_day", "business_dte"], as_index=False).sum()
+    for name in STATIC_CONDITIONS:
+        denominator = grouped[f"{name}_tests"]
+        grouped[f"{name}_pct"] = 100. * grouped[f"{name}_violations"].div(denominator.where(denominator > 0))
+    grouped["unavailable_pct"] = 100. * grouped["unavailable_prices"] / grouped["price_nodes"]
+    for name in ("library_min_vol_cases", "library_max_vol_cases", "failed"):
+        grouped[f"iv_{name}_pct"] = 100. * grouped[f"iv_{name}"].div(grouped["iv_count"].where(grouped["iv_count"] > 0))
+    return grouped
 
 
 def legacy_blue(tex: str) -> str:
@@ -145,6 +176,63 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
         "standalone_v2": standalone, "standalone_v2_forecast": standalone_forecast,
         "standalone_v2_forecast_protocol_sha256": _hash(forecast_dir / "PROTOCOL.json") if standalone_forecast else None,
         "objective_audit": "/home/hans/python/quant_data-hedging/quantdata/hedging/OBJECTIVES.md"}
+    literature_root = root.parent / "competitor-static-20261112-v1"
+    literature = {}
+    literature_tables = []
+    for model, label in (("FuNVol", "funvol"), ("VolGAN PCA8", "volgan")):
+        records = rows(literature_root / "static/daily" / model.replace(" ", "_"))
+        if not records:
+            continue
+        result = literature_static_summary(records, dates)
+        result.insert(0, "model", model)
+        literature[model] = result
+        violations = [[int(row.simulation_day), int(row.business_dte), *[getattr(row, f"{name}_pct") for name in STATIC_CONDITIONS], row.unavailable_pct]
+            for row in result.itertuples()]
+        boundaries = [[int(row.simulation_day), int(row.business_dte),
+            100. * row.iv_count / row.price_nodes, row.iv_library_min_vol_cases_pct,
+            row.iv_library_max_vol_cases_pct, row.iv_failed_pct] for row in result.itertuples()]
+        literature_tables.extend([report._table(["Day", "Tenor", "Decr.", "Convex", "Vert.", "Lower", "Upper", "K=0", "Cal.", "N/A"], violations,
+            caption=f"{model}: percentages of eligible finite price tests violating each condition by simulation day and business-day tenor. N/A is the percentage of price nodes unavailable; unsupported calendar tests show a dash.", label=f"tab:literature-static-{label}"),
+            report._table(["Day", "Tenor", "Priced %", "IV 1%", "IV 500%", "Reprice fail %"], boundaries,
+            caption=f"{model}: price availability and library IV boundary percentages by simulation day and tenor. Priced uses all requested price nodes; other columns use finite prices submitted to inversion. Boundary entries and repricing failures can overlap.", label=f"tab:literature-boundary-{label}")])
+    if literature:
+        pd.concat(literature.values(), ignore_index=True).to_csv(output / "current_literature_static.csv", index=False)
+        metrics["literature_static"] = {"models": list(literature), "origins": len(dates),
+            "protocol_path": str(literature_root / "STATIC_PROTOCOL.json"),
+            "protocol_sha256": _hash(literature_root / "STATIC_PROTOCOL.json"),
+            "source_daily_csv_sha256": _hash(literature_root / "static_arb_daily.csv")}
+    diffusion_tables, diffusion_frames = [], []
+    for variant, model in (("base", "AD-Seq-Vol"), ("ft", "AD-Seq-Vol-FT")):
+        partial_root = root.parent / f"diffusion-static-jax-{variant}-20261114/static/partial" / model
+        grouped = {}
+        for partial in sorted(partial_root.glob("*/day-*.json")):
+            record = json.loads(partial.read_text())
+            if record["model"] != model or record["origin_date"] not in dates:
+                raise ValueError("Diffusion partial simulation provenance does not match the comparison")
+            day = record["results"][0]["simulation_day"]
+            grouped.setdefault(day, []).append({**record, "status": "scored"})
+        if not grouped:
+            continue
+        frames = []
+        for day, records in sorted(grouped.items()):
+            current = literature_static_summary(records, [record["origin_date"] for record in records], horizons=(day,))
+            current.insert(0, "origins", len(records))
+            frames.append(current)
+        combined = pd.concat(frames, ignore_index=True)
+        combined.insert(0, "model", model)
+        diffusion_frames.append(combined)
+        violations = [[int(row.simulation_day), int(row.business_dte), int(row.origins),
+            *[getattr(row, f"{name}_pct") for name in STATIC_CONDITIONS], row.unavailable_pct] for row in combined.itertuples()]
+        boundaries = [[int(row.simulation_day), int(row.business_dte), int(row.origins), 100. * row.iv_count / row.price_nodes,
+            row.iv_library_min_vol_cases_pct, row.iv_library_max_vol_cases_pct, row.iv_failed_pct] for row in combined.itertuples()]
+        diffusion_tables.extend([report._table(["Day", "Tenor", "Dates", "Decr.", "Convex", "Vert.", "Lower", "Upper", "K=0", "Cal.", "N/A"], violations,
+            caption=f"{model}: preliminary percentages of eligible finite tests. Dates are completed origins out of 44. N/A is unavailable price nodes; unsupported calendar comparisons show a dash.", label=f"tab:diffusion-static-{variant}"),
+            report._table(["Day", "Tenor", "Dates", "Priced %", "IV 1%", "IV 500%", "Reprice fail %"], boundaries,
+            caption=f"{model}: preliminary library IV boundaries and repricing errors. Priced uses all requested price nodes; other columns use finite prices submitted to inversion. Dates are completed origins out of 44.", label=f"tab:diffusion-boundary-{variant}")])
+    if diffusion_frames:
+        pd.concat(diffusion_frames, ignore_index=True).to_csv(output / "current_diffusion_static_partial.csv", index=False)
+        metrics["diffusion_static_partial"] = {frame.model.iloc[0]: {str(int(day)): int(group.origins.iloc[0])
+            for day, group in frame.groupby("simulation_day")} for frame in diffusion_frames}
     _json(output / "CURRENT_RESULTS.json", metrics)
     static.to_csv(output / "current_v2_static_daily.csv", index=False)
     pd.DataFrame(quote_rows, columns=["mode", "quotes", "in_spread_pct", "mean_outside_spreads", "mae_spot_units"]).to_csv(output / "current_v2_quotes.csv", index=False)
@@ -203,6 +291,11 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
         table(["Day", "Tenor", "Decr.", "Convex", "Vertical", "Intrinsic", "Upper", "K=0", "Calendar", "Bad IV"], static_rows,
             caption="Earlier STRT-16 violation counts summed across all 44 origins at each horizon and tenor. Zero violations in finite paths do not prove absence of arbitrage.", label="tab:current-static"),
         rf"The largest decoded annual IV is {100*metrics['static_max_iv']:.2f}\%; no IV exceeds 300\%. No inversion is unusable. Numerical DLV/forward bounds remain active and are disclosed in the dated records. Historical-range exceedances are recorded, not interpreted as arbitrage.",
+        r"\subsection{Literature-model static-arbitrage and IV boundaries}",
+        r"The retained FuNVol and PCA8 VolGAN tests use the same 44 origins, 1,000 paths per origin, five simulation days and four tenor buckets described above. Percentages are pooled test-level counts, not percentages of paths. Decr., Convex, Vert., Lower, Upper, K=0 and Cal. are strike monotonicity, convexity, vertical spread, intrinsic and upper bounds, zero-strike identity and calendar checks. The 10D calendar comparison is unsupported where no later native tenor exists. The AD-Seq-Vol tables below report only the explicitly counted completed origins; the full test is running.",
+        r"The generated-surface repricer marks a whole surface unavailable when any log-IV is non-finite or too large for its numerical guard. These entries do not enter finite-test denominators and must not be counted as passes. Boundary percentages are reported separately from repricing errors: vectorized cdxcore returns 1\% and 500\% limits, and the lower limit can also reflect its intrinsic-price convention. A bounded IV need not reproduce the input price within tolerance. VolGAN is our trained PCA8 adaptation, not published model weights.",
+        *literature_tables,
+        *diffusion_tables,
         r"\subsection{Frozen observable-PC persistence and tails}",
         table(["Lag", "Model PC1", "PC2", "PC3", "History PC1", "PC2", "PC3"], acf_rows,
             caption="Mean within-path Pearson ACF: first 32 of the same 1,000-path stream, 115 sessions, all 44 origins. Historical columns average each origin's causal training window, not a 44-day held-out ACF. A fixed pre-April observable basis is used throughout. Black: ungraded descriptive comparisons; no color inference is assigned.", label="tab:current-acf"),
@@ -244,6 +337,7 @@ def build(root: Path, gromm: Path, source: Path, output: Path, retain: Path) -> 
             f"Standalone one-day forecasts scored: {metrics['standalone_v2_forecast']['scored'] if metrics['standalone_v2_forecast'] else 0}/44.\n"
             "Standalone long-horizon recursive and static diagnostics remain pending.\n"
             "Earlier STRT-16 is a different model; its old guarded-decoder results are blue.\n"
+            "Saved FuNVol and VolGAN PCA8 static checks include per-tenor violation and IV-boundary rates in current_literature_static.csv. AD-Seq-Vol partial results, where present, are in current_diffusion_static_partial.csv; full coverage remains pending.\n"
             "DYSANOS v1 and paper-objective repository GROMM2 remain incomplete.\n")
         retain.mkdir(parents=True, exist_ok=True)
         selected = [tex, output / "MODEL_DYNAMICS_REPORT.pdf", output / "CURRENT_RESULTS.json", output / "STATS.md",

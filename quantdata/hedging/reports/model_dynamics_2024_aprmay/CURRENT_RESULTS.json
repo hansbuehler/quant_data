@@ -588,7 +588,7 @@
   "coverage": [
     [
       "DYSANOS v1-P",
-      1,
+      6,
       "paper fits; scoring pending"
     ],
     [
@@ -603,7 +603,7 @@
     ],
     [
       "GROMM2-P/Q",
-      1,
+      5,
       "fits; P/Q forecasts pending"
     ]
   ],
@@ -1195,5 +1195,31 @@
     }
   },
   "standalone_v2_forecast_protocol_sha256": "1f5b942c97e052aaa78182f924bbc655cf6037eb2c191cf4d55aaafb35138470",
-  "objective_audit": "/home/hans/python/quant_data-hedging/quantdata/hedging/OBJECTIVES.md"
+  "objective_audit": "/home/hans/python/quant_data-hedging/quantdata/hedging/OBJECTIVES.md",
+  "literature_static": {
+    "models": [
+      "FuNVol",
+      "VolGAN PCA8"
+    ],
+    "origins": 44,
+    "protocol_path": "/home/hans/quantdata_data/quant_data/hedge2/runs/competitor-static-20261112-v1/STATIC_PROTOCOL.json",
+    "protocol_sha256": "0b3705242889299c17b8d8e8716b1b3bf15cf661c53fc6633aa08dd0684ae1eb",
+    "source_daily_csv_sha256": "56a394b40dbefcb1aa45e2dbb033d76d5288700c4e50495e2c3c79dcc0b46302"
+  },
+  "diffusion_static_partial": {
+    "AD-Seq-Vol": {
+      "1": 2,
+      "5": 2,
+      "10": 2,
+      "125": 2,
+      "259": 1
+    },
+    "AD-Seq-Vol-FT": {
+      "1": 2,
+      "5": 2,
+      "10": 2,
+      "125": 2,
+      "259": 1
+    }
+  }
 }
