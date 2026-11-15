@@ -158,6 +158,7 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
     v1_root = root.parent / "paper-dysanos1-rolling-20261114"
     v1_count = sum((v1_root / f"fits/dysanos1/{day}/FIT_COMPLETE.json").exists() for day in dates)
     g2_count = sum((gromm / f"gromm2/{day}/ESTIMATION_COMPLETE.json").exists() for day in dates)
+    g2_forecasts = sum((gromm / f"gromm2/{day}/FORECAST_COMPLETE.json").exists() for day in dates)
     standalone_path = root.parent / "standalone-v2-paper-metrics-20261114/STANDALONE_V2_METRICS.json"
     forecast_dir = root.parent / "standalone-v2-forecast-nms-20261114"
     standalone = json.loads(standalone_path.read_text()) if standalone_path.exists() else None
@@ -165,10 +166,10 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
     if standalone is not None and standalone["dates"] != dates:
         raise ValueError("Standalone V2 statistics have different comparison dates")
     forecast_count = standalone_forecast["scored"] if standalone_forecast else 0
-    coverage = [["DYSANOS v1-P", v1_count, "paper fits; scoring pending"],
+    coverage = [["DYSANOS v1-P", v1_count, "stopped at user request"],
         ["Standalone DYSANOS v2-P", len(dates) if standalone else 0, f"{forecast_count}/44 one-day forecasts"],
         ["STRT-16 alternative", 44, "earlier separate experiment"],
-        ["GROMM2-P/Q", g2_count, "fits; P/Q forecasts pending"]]
+        ["GROMM2-P/Q", g2_count, f"fits; {g2_forecasts}/44 paired P/Q forecasts"]]
     metrics = {"schema": "current-rolling-model-report-v2", "origins": dates, "earlier_results": {"STRT-16 alternative": summary},
         "legacy_models": list(COMPETITORS), "static_checks": checks, "static_max_iv": float(static.iv_max.max()),
         "invalid_iv_count": int(static.invalid_iv_count.sum()), "above_300pct_iv_count": int(static.above_300pct_iv_count.sum()),
@@ -176,6 +177,23 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
         "standalone_v2": standalone, "standalone_v2_forecast": standalone_forecast,
         "standalone_v2_forecast_protocol_sha256": _hash(forecast_dir / "PROTOCOL.json") if standalone_forecast else None,
         "objective_audit": "/home/hans/python/quant_data-hedging/quantdata/hedging/OBJECTIVES.md"}
+    gromm_section = []
+    gromm_rows, gromm_summaries = [], {}
+    for measure in ("P", "Q"):
+        path = gromm / f"GROMM2-{measure}-summary.json"
+        if not path.exists():
+            continue
+        item = json.loads(path.read_text())
+        gromm_summaries[measure] = item
+        gromm_rows.append([measure, item["surface_days"], item["conditional_covariance"]["trace_ratio"],
+            item["pooled_covariance"]["trace_ratio"], item["pooled_covariance"]["cov_frob_rel"],
+            item["forecast_rmse"], item["forecast_variance_calibration"]["conditional_variance_over_forecast_mse"]])
+    if gromm_rows:
+        metrics["gromm2_partial_forecasts"] = gromm_summaries
+        gromm_section = [r"\section{GROMM2: partial matched forecasts}",
+            r"The model is fitted independently at each origin using the repository model and the paper quote objective. Results below use the available origins only; Q against realized data is descriptive, not a claim that Q is the physical law. Matched quote, long-horizon and static-arbitrage diagnostics remain outstanding.",
+            report._table(["Measure", "Dates", "Cond. trace", "Pooled trace", "Frob.", "RMSE", "Variance/MSE"], gromm_rows,
+                caption="GROMM2 one-day forecasts, 1,000 paths per origin and measure. The number of completed dates may differ between P and Q while the run is active. Black: ungraded partial statistics.", label="tab:gromm2-partial")]
     literature_root = root.parent / "competitor-static-20261112-v1"
     literature = {}
     literature_tables = []
@@ -233,6 +251,55 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
         pd.concat(diffusion_frames, ignore_index=True).to_csv(output / "current_diffusion_static_partial.csv", index=False)
         metrics["diffusion_static_partial"] = {frame.model.iloc[0]: {str(int(day)): int(group.origins.iloc[0])
             for day, group in frame.groupby("simulation_day")} for frame in diffusion_frames}
+    v2_root = root.parent / "standalone-v2-full-diagnostics-20261115-v2"
+    v2_records = rows(v2_root / "daily")
+    v2_partial = rows(v2_root / "partial")
+    v2_section = []
+    if v2_partial:
+        if any(row["origin"] not in dates for row in v2_partial):
+            raise ValueError("Standalone V2 diagnostic origin is outside the comparison")
+        checked = [{"origin_date": row["origin"], "status": "scored", "results": row["static"]} for row in v2_partial]
+        grid = literature_static_summary(checked, [row["origin"] for row in v2_partial])
+        grid.to_csv(output / "current_standalone_v2_static.csv", index=False)
+        v2_static_rows = [[int(row.simulation_day), int(row.business_dte),
+            *[getattr(row, f"{name}_pct") for name in STATIC_CONDITIONS], row.unavailable_pct] for row in grid.itertuples()]
+        v2_count_rows = [[int(row.simulation_day), int(row.business_dte),
+            *[int(getattr(row, f"{name}_violations")) for name in STATIC_CONDITIONS], int(row.unavailable_prices)] for row in grid.itertuples()]
+        v2_iv_rows = [[int(row.simulation_day), int(row.business_dte), row.iv_library_min_vol_cases_pct,
+            row.iv_library_max_vol_cases_pct, row.iv_failed_pct] for row in grid.itertuples()]
+        v2_quote_rows = []
+        for mode in ("reconstruction", "next_day"):
+            count = sum(row["quotes"][mode]["count"] for row in v2_partial)
+            def weighted(key):
+                return sum(row["quotes"][mode]["count"] * row["quotes"][mode][key] for row in v2_partial) / count
+            mae = sum(row["quotes"][mode]["count"] * row["quotes"][mode]["price_mae"] / row["quotes"]["origin_spot"] for row in v2_partial) / count
+            v2_quote_rows.append([mode.replace("_", " "), count, 100 * weighted("in_spread_rate"), weighted("out_dist_mean"), mae])
+        complete = [row for row in v2_records if row.get("status") == "complete"]
+        metrics["standalone_v2_full_diagnostics"] = {"quotes_and_static_origins": len(v2_partial),
+            "long_complete_origins": len(complete), "failures": [row["origin"] for row in v2_records if row.get("status") != "complete"],
+            "source": str(v2_root), "paths_per_origin": 1000}
+        v2_section = [r"\subsection{Standalone V2: quote and simulation diagnostics}",
+            rf"These diagnostics currently cover {len(v2_partial)} of 44 origins; the results are preliminary. Next-day price forecasts average 1,000 simulated model prices at fixed cash strikes, using origin-date carry; the same-day reconstruction uses the origin surface. Only matched OTM quotes with 1<business-days-to-expiry$\leq5$ and absolute NMS$\leq1.5$ enter. Black numbers are descriptive, not pass/fail grades.",
+            report._table(["Mode", "Quotes", "Inside spread %", "Mean outside", "MAE / spot"], v2_quote_rows,
+                caption="Standalone V2 quote-count-weighted results on the available origins. Outside distance uses full bid--ask spread width.", label="tab:standalone-v2-quotes"),
+            report._table(["Day", "Tenor", "Decr.", "Convex", "Vert.", "Lower", "Upper", "K=0", "Cal.", "N/A"], v2_count_rows,
+                caption="Standalone V2 counts of violated individual tests and unavailable price nodes, summed across the completed origins and 1,000 paths per origin. A zero calendar count may also mean no eligible tests; consult the percentage table.", label="tab:standalone-v2-static-counts"),
+            report._table(["Day", "Tenor", "Decr.", "Convex", "Vert.", "Lower", "Upper", "K=0", "Cal.", "N/A"], v2_static_rows,
+                caption="Standalone V2 static violation percentages of eligible tests, by simulation day and business-day tenor. N/A is unavailable price nodes; a dash denotes no eligible calendar tests. Zero observed violations is not a proof of no arbitrage.", label="tab:standalone-v2-static"),
+            report._table(["Day", "Tenor", "IV 1%", "IV 500%", "Reprice fail %"], v2_iv_rows,
+                caption="Standalone V2 library-implied volatility boundary and repricing-failure percentages among inverted finite prices. Boundary values are retained; boundary and repricing-failure counts can overlap.", label="tab:standalone-v2-iv")]
+        if complete:
+            v2_acf = []
+            for lag in (1, 5, 21, 63):
+                model = np.array([next(item["correlations"] for item in row["long"]["observable_acf"] if item["lag"] == lag) for row in complete])
+                history = np.array([next(item["correlations"] for item in row["long"]["historical_observable_acf"] if item["lag"] == lag) for row in complete])
+                v2_acf.append([lag, *model.mean(axis=0), *history.mean(axis=0)])
+            v2_section += [rf"Long-path diagnostics are complete for {len(complete)} origins. Each uses 32 paths over 115 sessions in a fixed observable PCA basis. History uses each origin's causal training window.",
+                report._table(["Lag", "Model PC1", "PC2", "PC3", "History PC1", "PC2", "PC3"], v2_acf,
+                    caption="Standalone V2 mean within-path autocorrelations on completed origins. Black: descriptive, ungraded.", label="tab:standalone-v2-acf")]
+            invalid = np.mean([row["long"]["invalid_path_rate"] for row in complete])
+            extreme = np.mean([row["long"]["extreme_surface_rate"] for row in complete])
+            v2_section.append(rf"Mean invalid long-path rate: {100*invalid:.3f}\%; mean extreme-surface rate: {100*extreme:.3f}\%.")
     _json(output / "CURRENT_RESULTS.json", metrics)
     static.to_csv(output / "current_v2_static_daily.csv", index=False)
     pd.DataFrame(quote_rows, columns=["mode", "quotes", "in_spread_pct", "mean_outside_spreads", "mae_spot_units"]).to_csv(output / "current_v2_quotes.csv", index=False)
@@ -268,14 +335,16 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
                 table(["Quantile", "Dates", "PC1 exceptions", "Expected", "Exact p", "Pinball"], standalone_tail_rows,
                     caption="Standalone V2 Gaussian one-day PC1 tail diagnostics. Forty-four dates are too few for conclusive 1% or 5% tail calibration.", label="tab:standalone-v2-tails"),
                 rf"The maximum fitted VAR spectral radius is {max(standalone_radii):.4f}; this checks the fitted factor backbone, not the full nonlinear surface process.",
-                r"Forecast changes are measured relative to each model's own initial surface. Standalone V2 spot shocks are transformed deterministically from the fitted dividend-adjusted return to the common one-day-forward convention. Long-horizon recursive stability and static-arbitrage simulation remain pending for this standalone model."]
+                r"Forecast changes are measured relative to each model's own initial surface. Standalone V2 spot shocks are transformed deterministically from the fitted dividend-adjusted return to the common one-day-forward convention."]
         else:
             standalone_section.append(r"Matched one-day forecast covariance, long-horizon recursive stability and static-arbitrage simulation remain pending for this standalone model.")
+    standalone_section.extend(v2_section)
     section = [r"\section*{Executive update: 14 November 2026}",
         r"\textbf{Standalone DYSANOS v2 and the earlier STRT-16 alternative are distinct models.} Blue values throughout this document are earlier, unrefreshed evidence, not current refits. Current black/orange/red ratings retain their stated diagnostic meanings. Blue overrides the earlier traffic-light colors in the historical appendix, including plot numbers.",
         table(["Model", "Completed origins", "Current stage"], coverage,
             caption="Model-fit counts out of 44 April--May 2024 origins. Training does not imply forecast or diagnostic completion. Black: ungraded counts; no missing result is a pass.", label="tab:current-coverage"),
         *standalone_section,
+        *gromm_section,
         r"\begingroup\color{blue}",
         r"\section{Earlier STRT-16 alternative and competitors}",
         rf"The STRT-16 alternative predicts {variance['conditional_variance_over_forecast_mse']:.3f} times realized squared forecast-error variance. Its common log-IV forecast RMSE is {summary['forecast_rmse']:.4f}, versus {summary['persistence_rmse']:.4f} for persistence. All 44 fitted floating VAR backbones are stable, with spectral radii {min(radius):.4f}--{max(radius):.4f}. No tested static-arbitrage violation or unusable IV occurs in these checks. These are guarded-decoder results, not unguarded diffusion or dynamic-martingale proofs.",
@@ -292,7 +361,7 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
             caption="Earlier STRT-16 violation counts summed across all 44 origins at each horizon and tenor. Zero violations in finite paths do not prove absence of arbitrage.", label="tab:current-static"),
         rf"The largest decoded annual IV is {100*metrics['static_max_iv']:.2f}\%; no IV exceeds 300\%. No inversion is unusable. Numerical DLV/forward bounds remain active and are disclosed in the dated records. Historical-range exceedances are recorded, not interpreted as arbitrage.",
         r"\subsection{Literature-model static-arbitrage and IV boundaries}",
-        r"The retained FuNVol and PCA8 VolGAN tests use the same 44 origins, 1,000 paths per origin, five simulation days and four tenor buckets described above. Percentages are pooled test-level counts, not percentages of paths. Decr., Convex, Vert., Lower, Upper, K=0 and Cal. are strike monotonicity, convexity, vertical spread, intrinsic and upper bounds, zero-strike identity and calendar checks. The 10D calendar comparison is unsupported where no later native tenor exists. The AD-Seq-Vol tables below report only the explicitly counted completed origins; the full test is running.",
+        r"The retained FuNVol and PCA8 VolGAN tests use the same 44 origins, 1,000 paths per origin, five simulation days and four tenor buckets described above. Percentages are pooled test-level counts, not percentages of paths. Decr., Convex, Vert., Lower, Upper, K=0 and Cal. are strike monotonicity, convexity, vertical spread, intrinsic and upper bounds, zero-strike identity and calendar checks. The 10D calendar comparison is unsupported where no later native tenor exists. The AD-Seq-Vol tables use only the counted completed origins.\footnote{The AD-Seq-Vol and AD-Seq-Vol-FT simulations were stopped at the user's request. Results are partial, their date counts vary by simulation horizon, and they are not a complete 44-origin comparison.}",
         r"The generated-surface repricer marks a whole surface unavailable when any log-IV is non-finite or too large for its numerical guard. These entries do not enter finite-test denominators and must not be counted as passes. Boundary percentages are reported separately from repricing errors: vectorized cdxcore returns 1\% and 500\% limits, and the lower limit can also reflect its intrinsic-price convention. A bounded IV need not reproduce the input price within tolerance. VolGAN is our trained PCA8 adaptation, not published model weights.",
         *literature_tables,
         *diffusion_tables,
@@ -303,7 +372,7 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
             caption="Earlier STRT-16 PC1 pointwise tail diagnostics. With only 44 dates all tails remain exploratory.", label="tab:current-tails"),
         r"\endgroup",
         r"\subsection{Outstanding work and objective differences}",
-        r"DYSANOS v1 uses the paper's full joint affine-200/five-session VAR. The replacement run centers its quote loss on observed bid/ask midpoints; the earlier SANOS-centered trial is not reused as a paper-objective fit. An intermediate, unaccepted weekly covariance from that earlier trial failed the daily-embedding positivity check; no eigenvalue clipping is used. No completed 44-origin result is claimed. GROMM2 uses a separately identified calibration with actual observed bid/ask, the paper's linear excess and 0.05 midpoint term plus restoring cap penalty. The old pseudo-Huber chunks are not loaded. Its requested GROMM2 geometry and latent-X dependence estimator remain explicit extensions. GPU training and GPU-dependent forecasts share one managed allocation, released when that work ends; remaining statistics run on CPU.",
+        r"DYSANOS v1 used the paper's full joint affine-200/five-session VAR; the run was stopped at the user's request and its partial fits are retained. No completed 44-origin result is claimed. GROMM2 uses a separately identified calibration with actual observed bid/ask, the paper's linear excess and 0.05 midpoint term plus restoring cap penalty. The old pseudo-Huber chunks are not loaded. Its requested GROMM2 geometry and latent-X dependence estimator remain explicit extensions. GROMM GPU training and forecasts now run independently; remaining statistics run on CPU.",
         r"\clearpage\appendix\section{Historical evidence: blue values are not updated refits}",
         r"The following earlier report is retained for traceability. Its numbers, former quality colors and plot labels are blue. Its completion claims refer to those older model variants only, not to the currently requested DYSANOS v1/v2 and repository GROMM2 refits. Refer to the current coverage table for outstanding work.",
     ]
@@ -335,10 +404,10 @@ def build(root: Path, gromm: Path, source: Path, output: Path, retain: Path) -> 
         (output / "STATS.md").write_text("# Current rolling-model results — 14 November 2026\n\n"
             "Standalone DYSANOS v2: 44/44 fitted dates; matched quote and ex-post sensitivity-span results are in CURRENT_RESULTS.json.\n"
             f"Standalone one-day forecasts scored: {metrics['standalone_v2_forecast']['scored'] if metrics['standalone_v2_forecast'] else 0}/44.\n"
-            "Standalone long-horizon recursive and static diagnostics remain pending.\n"
+            f"Standalone quote/static origins: {metrics.get('standalone_v2_full_diagnostics', {}).get('quotes_and_static_origins', 0)}/44; long-path origins: {metrics.get('standalone_v2_full_diagnostics', {}).get('long_complete_origins', 0)}/44.\n"
             "Earlier STRT-16 is a different model; its old guarded-decoder results are blue.\n"
-            "Saved FuNVol and VolGAN PCA8 static checks include per-tenor violation and IV-boundary rates in current_literature_static.csv. AD-Seq-Vol partial results, where present, are in current_diffusion_static_partial.csv; full coverage remains pending.\n"
-            "DYSANOS v1 and paper-objective repository GROMM2 remain incomplete.\n")
+            "Saved FuNVol and VolGAN PCA8 static checks include per-tenor violation and IV-boundary rates in current_literature_static.csv. AD-Seq-Vol partial results are in current_diffusion_static_partial.csv; simulations were stopped at the user's request.\n"
+            "DYSANOS v1 was stopped at the user's request; paper-objective repository GROMM2 fitting and P/Q forecasts remain incomplete.\n")
         retain.mkdir(parents=True, exist_ok=True)
         selected = [tex, output / "MODEL_DYNAMICS_REPORT.pdf", output / "CURRENT_RESULTS.json", output / "STATS.md",
             *output.glob("current_*.csv"), *list((output / "legacy").glob("*.pdf"))]

@@ -28,10 +28,10 @@
 \toprule
 Model & Completed origins & Current stage \\
 \midrule
-DYSANOS v1-P & 6 & paper fits; scoring pending \\
+DYSANOS v1-P & 6 & stopped at user request \\
 Standalone DYSANOS v2-P & 44 & 44/44 one-day forecasts \\
 STRT-16 alternative & 44 & earlier separate experiment \\
-GROMM2-P/Q & 5 & fits; P/Q forecasts pending \\
+GROMM2-P/Q & 6 & fits; 6/44 paired P/Q forecasts \\
 \bottomrule\end{tabular}\end{table}
 
 \section{Standalone DYSANOS v2: matched-date results}
@@ -81,7 +81,135 @@ Quantile & Dates & PC1 exceptions & Expected & Exact p & Pinball \\
 
 The maximum fitted VAR spectral radius is 0.9690; this checks the fitted factor backbone, not the full nonlinear surface process.
 
-Forecast changes are measured relative to each model's own initial surface. Standalone V2 spot shocks are transformed deterministically from the fitted dividend-adjusted return to the common one-day-forward convention. Long-horizon recursive stability and static-arbitrage simulation remain pending for this standalone model.
+Forecast changes are measured relative to each model's own initial surface. Standalone V2 spot shocks are transformed deterministically from the fitted dividend-adjusted return to the common one-day-forward convention.
+
+\subsection{Standalone V2: quote and simulation diagnostics}
+
+These diagnostics currently cover 2 of 44 origins; the results are preliminary. Next-day price forecasts average 1,000 simulated model prices at fixed cash strikes, using origin-date carry; the same-day reconstruction uses the origin surface. Only matched OTM quotes with 1<business-days-to-expiry$\leq5$ and absolute NMS$\leq1.5$ enter. Black numbers are descriptive, not pass/fail grades.
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Standalone V2 quote-count-weighted results on the available origins. Outside distance uses full bid--ask spread width. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:standalone-v2-quotes}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Mode & Quotes & Inside spread \% & Mean outside & MAE / spot \\
+\midrule
+reconstruction & 359 & 89.136 & 0.052 & 0.000008 \\
+next day & 317 & 0.946 & 26.698 & 0.001 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Standalone V2 counts of violated individual tests and unavailable price nodes, summed across the completed origins and 1,000 paths per origin. A zero calendar count may also mean no eligible tests; consult the percentage table. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:standalone-v2-static-counts}
+\begin{tabular}{@{}lrrrrrrrrr@{}}
+\toprule
+Day & Tenor & Decr. & Convex & Vert. & Lower & Upper & K=0 & Cal. & N/A \\
+\midrule
+1 & 1 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+1 & 2 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+1 & 5 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+1 & 10 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+5 & 1 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+5 & 2 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+5 & 5 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+5 & 10 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+10 & 1 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+10 & 2 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+10 & 5 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+10 & 10 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+125 & 1 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+125 & 2 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+125 & 5 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+125 & 10 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+259 & 1 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+259 & 2 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+259 & 5 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+259 & 10 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Standalone V2 static violation percentages of eligible tests, by simulation day and business-day tenor. N/A is unavailable price nodes; a dash denotes no eligible calendar tests. Zero observed violations is not a proof of no arbitrage. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:standalone-v2-static}
+\begin{tabular}{@{}lrrrrrrrrr@{}}
+\toprule
+Day & Tenor & Decr. & Convex & Vert. & Lower & Upper & K=0 & Cal. & N/A \\
+\midrule
+1 & 1 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+1 & 2 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+1 & 5 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+1 & 10 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+5 & 1 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+5 & 2 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+5 & 5 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+5 & 10 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+10 & 1 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+10 & 2 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+10 & 5 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+10 & 10 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+125 & 1 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+125 & 2 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+125 & 5 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+125 & 10 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+259 & 1 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+259 & 2 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+259 & 5 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+259 & 10 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Standalone V2 library-implied volatility boundary and repricing-failure percentages among inverted finite prices. Boundary values are retained; boundary and repricing-failure counts can overlap. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:standalone-v2-iv}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Day & Tenor & IV 1\% & IV 500\% & Reprice fail \% \\
+\midrule
+1 & 1 & 0.057 & 0.000 & 0.000 \\
+1 & 2 & 0.000 & 0.000 & 0.000 \\
+1 & 5 & 0.000 & 0.000 & 0.000 \\
+1 & 10 & 0.000 & 0.000 & 0.000 \\
+5 & 1 & 0.762 & 0.000 & 0.000 \\
+5 & 2 & 0.019 & 0.000 & 0.000 \\
+5 & 5 & 0.002 & 0.000 & 0.000 \\
+5 & 10 & 0.000 & 0.000 & 0.000 \\
+10 & 1 & 1.829 & 0.000 & 0.000 \\
+10 & 2 & 0.217 & 0.000 & 0.000 \\
+10 & 5 & 0.024 & 0.000 & 0.000 \\
+10 & 10 & 0.000 & 0.000 & 0.000 \\
+125 & 1 & 13.548 & 0.150 & 1.317 \\
+125 & 2 & 6.336 & 0.050 & 0.248 \\
+125 & 5 & 2.255 & 0.000 & 0.007 \\
+125 & 10 & 0.129 & 0.000 & 0.000 \\
+259 & 1 & 27.193 & 1.200 & 4.379 \\
+259 & 2 & 16.162 & 0.814 & 2.331 \\
+259 & 5 & 5.021 & 0.550 & 0.757 \\
+259 & 10 & 0.302 & 0.400 & 0.414 \\
+\bottomrule\end{tabular}\end{table}
+
+Long-path diagnostics are complete for 2 origins. Each uses 32 paths over 115 sessions in a fixed observable PCA basis. History uses each origin's causal training window.
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{Standalone V2 mean within-path autocorrelations on completed origins. Black: descriptive, ungraded. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:standalone-v2-acf}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Lag & Model PC1 & PC2 & PC3 & History PC1 & PC2 & PC3 \\
+\midrule
+1 & 0.924 & 0.846 & 0.788 & 0.868 & 0.874 & 0.768 \\
+5 & 0.783 & 0.713 & 0.718 & 0.626 & 0.669 & 0.487 \\
+21 & 0.333 & 0.248 & 0.280 & 0.182 & 0.296 & 0.257 \\
+63 & 0.005 & 0.057 & 0.109 & -0.251 & -0.309 & -0.252 \\
+\bottomrule\end{tabular}\end{table}
+
+Mean invalid long-path rate: 0.000\%; mean extreme-surface rate: 0.000\%.
+
+\section{GROMM2: partial matched forecasts}
+
+The model is fitted independently at each origin using the repository model and the paper quote objective. Results below use the available origins only; Q against realized data is descriptive, not a claim that Q is the physical law. Matched quote, long-horizon and static-arbitrage diagnostics remain outstanding.
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{GROMM2 one-day forecasts, 1,000 paths per origin and measure. The number of completed dates may differ between P and Q while the run is active. Black: ungraded partial statistics. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:gromm2-partial}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Measure & Dates & Cond. trace & Pooled trace & Frob. & RMSE & Variance/MSE \\
+\midrule
+P & 6 & 0.337 & 0.785 & 0.380 & 0.164 & 0.805 \\
+Q & 6 & 0.358 & 0.745 & 0.437 & 0.159 & 0.910 \\
+\bottomrule\end{tabular}\end{table}
 
 \begingroup\color{blue}
 
@@ -154,7 +282,7 @@ The largest decoded annual IV is 38.16\%; no IV exceeds 300\%. No inversion is u
 
 \subsection{Literature-model static-arbitrage and IV boundaries}
 
-The retained FuNVol and PCA8 VolGAN tests use the same 44 origins, 1,000 paths per origin, five simulation days and four tenor buckets described above. Percentages are pooled test-level counts, not percentages of paths. Decr., Convex, Vert., Lower, Upper, K=0 and Cal. are strike monotonicity, convexity, vertical spread, intrinsic and upper bounds, zero-strike identity and calendar checks. The 10D calendar comparison is unsupported where no later native tenor exists. The AD-Seq-Vol tables below report only the explicitly counted completed origins; the full test is running.
+The retained FuNVol and PCA8 VolGAN tests use the same 44 origins, 1,000 paths per origin, five simulation days and four tenor buckets described above. Percentages are pooled test-level counts, not percentages of paths. Decr., Convex, Vert., Lower, Upper, K=0 and Cal. are strike monotonicity, convexity, vertical spread, intrinsic and upper bounds, zero-strike identity and calendar checks. The 10D calendar comparison is unsupported where no later native tenor exists. The AD-Seq-Vol tables use only the counted completed origins.\footnote{The AD-Seq-Vol and AD-Seq-Vol-FT simulations were stopped at the user's request. Results are partial, their date counts vary by simulation horizon, and they are not a complete 44-origin comparison.}
 
 The generated-surface repricer marks a whole surface unavailable when any log-IV is non-finite or too large for its numerical guard. These entries do not enter finite-test denominators and must not be counted as passes. Boundary percentages are reported separately from repricing errors: vectorized cdxcore returns 1\% and 500\% limits, and the lower limit can also reflect its intrinsic-price convention. A bounded IV need not reproduce the input price within tolerance. VolGAN is our trained PCA8 adaptation, not published model weights.
 
@@ -412,7 +540,7 @@ Quantile & Dates & PC1 exceptions & Expected & Exact p & Pinball \\
 
 \subsection{Outstanding work and objective differences}
 
-DYSANOS v1 uses the paper's full joint affine-200/five-session VAR. The replacement run centers its quote loss on observed bid/ask midpoints; the earlier SANOS-centered trial is not reused as a paper-objective fit. An intermediate, unaccepted weekly covariance from that earlier trial failed the daily-embedding positivity check; no eigenvalue clipping is used. No completed 44-origin result is claimed. GROMM2 uses a separately identified calibration with actual observed bid/ask, the paper's linear excess and 0.05 midpoint term plus restoring cap penalty. The old pseudo-Huber chunks are not loaded. Its requested GROMM2 geometry and latent-X dependence estimator remain explicit extensions. GPU training and GPU-dependent forecasts share one managed allocation, released when that work ends; remaining statistics run on CPU.
+DYSANOS v1 used the paper's full joint affine-200/five-session VAR; the run was stopped at the user's request and its partial fits are retained. No completed 44-origin result is claimed. GROMM2 uses a separately identified calibration with actual observed bid/ask, the paper's linear excess and 0.05 midpoint term plus restoring cap penalty. The old pseudo-Huber chunks are not loaded. Its requested GROMM2 geometry and latent-X dependence estimator remain explicit extensions. GROMM GPU training and forecasts now run independently; remaining statistics run on CPU.
 
 \clearpage\appendix\section{Historical evidence: blue values are not updated refits}
 
