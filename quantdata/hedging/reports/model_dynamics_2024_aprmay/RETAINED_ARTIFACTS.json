@@ -5,16 +5,16 @@
   "gromm_pending_run": "/home/hans/quantdata_data/quant_data/hedge2/runs/repository-gromm2-paper-20261114",
   "files": {
     "MODEL_DYNAMICS_REPORT.tex": {
-      "sha256": "a2f772d9f69f6af2c9318ee7b6aceafbf33fd31188c5b476a9c865708a116cd0",
-      "bytes": 112830
+      "sha256": "2437354458d369c33842dc97ffc93b9b8ae299236549b07fcff85a7d21280433",
+      "bytes": 113540
     },
     "MODEL_DYNAMICS_REPORT.pdf": {
-      "sha256": "9285ae5b3e14c913b02244528be17bab339dd4a6a94237297c9a7ddfb0d61653",
-      "bytes": 449503
+      "sha256": "2b8023e15a397fd1ea578b229760461c7a94d3a58baa56637877f51ac634ecea",
+      "bytes": 450245
     },
     "CURRENT_RESULTS.json": {
-      "sha256": "9e52fad1bd72c145a6e8af992eb752c43c487d8a25b73d114edf70508c4aa592",
-      "bytes": 64601
+      "sha256": "f90df42a1f72d6f0af6b20971399a734e8bd535bf98f9b6b9f9e7942702d0911",
+      "bytes": 65048
     },
     "STATS.md": {
       "sha256": "f246f34071992e0403fd52753b2e8bd10c0469a39340c47a64ebd0995367ff93",
@@ -45,28 +45,28 @@
       "bytes": 556
     },
     "legacy/density_tails.pdf": {
-      "sha256": "e6ed22a4293bd47129eb5095ad3a547e2adf984e6a29806b16cd698ba9b2f490",
+      "sha256": "68be6a67558b1d3b24da76e0153744ea594953691d272858afbad8b2c70a8e0a",
       "bytes": 24080
     },
     "legacy/density_acf.pdf": {
-      "sha256": "c8562ecbc90120744597a22d2d65fb829b9e3d7f03edd00f5e3e3dde53176823",
+      "sha256": "70493c361e86ab9348013368a54523dfb2dcf260bb79bc0bc00f74b7951315a6",
       "bytes": 23050
     },
     "legacy/tails.pdf": {
-      "sha256": "46e31c346cda2732935b32a568d89a49350ce0c692b04011bb7983f098ddf1bb",
+      "sha256": "a366b5618b1ed98d94a65f9180ca38ffe0f57eb04bf6f95422e8352d872dafc6",
       "bytes": 46760
     },
     "legacy/covariance.pdf": {
-      "sha256": "4234799f58036aaed7d210f29786e36fa0683302a035996043ecc8154457425f",
+      "sha256": "d801735d537326a5ae2848d681ee4f370ac091e70cadd82d3e3beb94f9570764",
       "bytes": 27329
     },
     "legacy/acf.pdf": {
-      "sha256": "566155d12f4f3be6ddca76cd1726a83c08f806d7c33672e96f7a1e44e9021bb0",
+      "sha256": "5c375faedd8bc4be05c836135351259c479d888e67ee19bf49b35f1ff93ee550",
       "bytes": 34919
     }
   },
   "large_files_external": true,
   "raw_licensed_quotes_included": false,
   "legacy_tex_sha256": "c13ce0c43afec2404304df29cd3d5802f5bd8a1e40c393fd9ba61631e57f91b1",
-  "code_sha256": "eaeac36e6c235748226cb74746351f7b2ba3a52f699e55f7d243db4827b79e30"
+  "code_sha256": "61853d3d88c4bc4c1eda7a60e412e365973b5f469496109104b2e437409ce5e5"
 }

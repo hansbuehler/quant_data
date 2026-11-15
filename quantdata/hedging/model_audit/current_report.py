@@ -210,9 +210,26 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
     if gromm_rows:
         metrics["gromm2_partial_forecasts"] = gromm_summaries
         gromm_section = [r"\section{GROMM2: partial matched forecasts}",
-            r"The model is fitted independently at each origin using the repository model and the paper quote objective. Results below use the available origins only; Q against realized data is descriptive, not a claim that Q is the physical law. Same-day quote fit, long-horizon and static-arbitrage diagnostics remain outstanding.",
+            r"The model is fitted independently at each origin using the repository model and the paper quote objective. Results below use the available origins only; Q against realized data is descriptive, not a claim that Q is the physical law. Long-horizon and static-arbitrage diagnostics remain outstanding.",
             report._table(["Measure", "Dates", "Cond. trace", "Pooled trace", "Frob.", "RMSE", "Variance/MSE"], gromm_rows,
                 caption="GROMM2 one-day forecasts, 1,000 paths per origin and measure. The number of completed dates may differ between P and Q while the run is active. Black: ungraded partial statistics.", label="tab:gromm2-partial")]
+        fit_rows = []
+        for day in dates:
+            folder = gromm / f"gromm2/{day}"
+            if (folder / "ESTIMATION_COMPLETE.json").exists():
+                fitted = json.loads((folder / "fit.json").read_text())["current"]
+                if fitted["date"] != day or fitted["kind"] != "start":
+                    raise ValueError(f"GROMM2 current fit does not match {day}")
+                fit_rows.append(fitted)
+        if fit_rows:
+            total = sum(row["reported"] for row in fit_rows)
+            weighted = lambda key: sum(row["reported"] * row[key] for row in fit_rows) / total
+            metrics["gromm2_same_day_quote_fit"] = {"origins": len(fit_rows), "reported_quotes": total,
+                "in_spread_rate": weighted("coverage"), "mean_outside_half_spreads": weighted("mean_excess"),
+                "mid_mae_half_spreads": weighted("mid_mae")}
+            gromm_section.append(report._table(["Dates", "Quotes", "Inside spread %", "Mean outside / half-spread", "MAE / half-spread"],
+                [[len(fit_rows), total, 100 * weighted("coverage"), weighted("mean_excess"), weighted("mid_mae")]],
+                caption="GROMM2 same-day observed-quote fit on the repository's reported calibration population, pooled by quote count. Outside distance and midpoint MAE are in units of half-spread. This is a different quote population from the standalone V2 table. Black: descriptive and ungraded.", label="tab:gromm2-same-day-fit"))
     literature_root = root.parent / "competitor-static-20261112-v1"
     literature = {}
     literature_tables = []
