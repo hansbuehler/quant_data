@@ -31,7 +31,7 @@ Model & Completed origins & Current stage \\
 DYSANOS v1-P & 6 & stopped at user request \\
 Standalone DYSANOS v2-P & 44 & 44/44 one-day forecasts \\
 STRT-16 alternative & 44 & earlier separate experiment \\
-GROMM2-P/Q & 6 & fits; 6/44 paired P/Q forecasts \\
+GROMM2-P/Q & 16 & fits; 16/44 paired P/Q forecasts \\
 \bottomrule\end{tabular}\end{table}
 
 \section{Standalone DYSANOS v2: matched-date results}
@@ -85,7 +85,7 @@ Forecast changes are measured relative to each model's own initial surface. Stan
 
 \subsection{Standalone V2: quote and simulation diagnostics}
 
-These diagnostics currently cover 2 of 44 origins; the results are preliminary. Next-day price forecasts average 1,000 simulated model prices at fixed cash strikes, using origin-date carry; the same-day reconstruction uses the origin surface. Only matched OTM quotes with 1<business-days-to-expiry$\leq5$ and absolute NMS$\leq1.5$ enter. Black numbers are descriptive, not pass/fail grades.
+These diagnostics currently cover 44 of 44 origins; the results are preliminary. Next-day price forecasts average 1,000 simulated model prices at fixed cash strikes, using origin-date carry; the same-day reconstruction uses the origin surface. Only matched OTM quotes with 1<business-days-to-expiry$\leq5$ and absolute NMS$\leq1.5$ enter. Black numbers are descriptive, not pass/fail grades.
 
 \begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
 \caption{Standalone V2 quote-count-weighted results on the available origins. Outside distance uses full bid--ask spread width. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:standalone-v2-quotes}
@@ -93,8 +93,8 @@ These diagnostics currently cover 2 of 44 origins; the results are preliminary. 
 \toprule
 Mode & Quotes & Inside spread \% & Mean outside & MAE / spot \\
 \midrule
-reconstruction & 359 & 89.136 & 0.052 & 0.000008 \\
-next day & 317 & 0.946 & 26.698 & 0.001 \\
+reconstruction & 8358 & 86.659 & 0.131 & 0.000015 \\
+next day & 7610 & 0.854 & 35.889 & 0.002 \\
 \bottomrule\end{tabular}\end{table}
 
 \begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
@@ -119,10 +119,10 @@ Day & Tenor & Decr. & Convex & Vert. & Lower & Upper & K=0 & Cal. & N/A \\
 125 & 2 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
 125 & 5 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
 125 & 10 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
-259 & 1 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
-259 & 2 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
-259 & 5 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
-259 & 10 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+259 & 1 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 63 \\
+259 & 2 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 63 \\
+259 & 5 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 63 \\
+259 & 10 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 63 \\
 \bottomrule\end{tabular}\end{table}
 
 \begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
@@ -147,10 +147,10 @@ Day & Tenor & Decr. & Convex & Vert. & Lower & Upper & K=0 & Cal. & N/A \\
 125 & 2 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
 125 & 5 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
 125 & 10 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
-259 & 1 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
-259 & 2 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
-259 & 5 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
-259 & 10 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 \\
+259 & 1 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.007 \\
+259 & 2 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.007 \\
+259 & 5 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.007 \\
+259 & 10 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.000 & 0.007 \\
 \bottomrule\end{tabular}\end{table}
 
 \begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
@@ -159,29 +159,29 @@ Day & Tenor & Decr. & Convex & Vert. & Lower & Upper & K=0 & Cal. & N/A \\
 \toprule
 Day & Tenor & IV 1\% & IV 500\% & Reprice fail \% \\
 \midrule
-1 & 1 & 0.057 & 0.000 & 0.000 \\
-1 & 2 & 0.000 & 0.000 & 0.000 \\
-1 & 5 & 0.000 & 0.000 & 0.000 \\
+1 & 1 & 0.776 & 0.000 & 0.000 \\
+1 & 2 & 0.028 & 0.000 & 0.000 \\
+1 & 5 & 0.000649 & 0.000 & 0.000 \\
 1 & 10 & 0.000 & 0.000 & 0.000 \\
-5 & 1 & 0.762 & 0.000 & 0.000 \\
-5 & 2 & 0.019 & 0.000 & 0.000 \\
-5 & 5 & 0.002 & 0.000 & 0.000 \\
+5 & 1 & 1.218 & 0.000 & 0.000 \\
+5 & 2 & 0.314 & 0.000 & 0.000 \\
+5 & 5 & 0.019 & 0.000 & 0.000 \\
 5 & 10 & 0.000 & 0.000 & 0.000 \\
-10 & 1 & 1.829 & 0.000 & 0.000 \\
-10 & 2 & 0.217 & 0.000 & 0.000 \\
-10 & 5 & 0.024 & 0.000 & 0.000 \\
-10 & 10 & 0.000 & 0.000 & 0.000 \\
-125 & 1 & 13.548 & 0.150 & 1.317 \\
-125 & 2 & 6.336 & 0.050 & 0.248 \\
-125 & 5 & 2.255 & 0.000 & 0.007 \\
-125 & 10 & 0.129 & 0.000 & 0.000 \\
-259 & 1 & 27.193 & 1.200 & 4.379 \\
-259 & 2 & 16.162 & 0.814 & 2.331 \\
-259 & 5 & 5.021 & 0.550 & 0.757 \\
-259 & 10 & 0.302 & 0.400 & 0.414 \\
+10 & 1 & 2.118 & 0.000 & 0.000 \\
+10 & 2 & 0.756 & 0.000 & 0.000 \\
+10 & 5 & 0.081 & 0.000 & 0.000 \\
+10 & 10 & 0.003 & 0.000 & 0.000 \\
+125 & 1 & 16.793 & 1.481 & 2.639 \\
+125 & 2 & 8.663 & 0.899 & 1.235 \\
+125 & 5 & 1.540 & 0.372 & 0.378 \\
+125 & 10 & 0.251 & 0.203 & 0.204 \\
+259 & 1 & 27.540 & 6.561 & 9.016 \\
+259 & 2 & 17.251 & 5.103 & 6.379 \\
+259 & 5 & 3.107 & 3.452 & 3.622 \\
+259 & 10 & 0.499 & 2.436 & 2.462 \\
 \bottomrule\end{tabular}\end{table}
 
-Long-path diagnostics are complete for 2 origins. Each uses 32 paths over 115 sessions in a fixed observable PCA basis. History uses each origin's causal training window.
+Long-path diagnostics are complete for 44 origins. Each uses 32 paths over 115 sessions in a fixed observable PCA basis. History uses each origin's causal training window.
 
 \begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
 \caption{Standalone V2 mean within-path autocorrelations on completed origins. Black: descriptive, ungraded. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:standalone-v2-acf}
@@ -189,13 +189,13 @@ Long-path diagnostics are complete for 2 origins. Each uses 32 paths over 115 se
 \toprule
 Lag & Model PC1 & PC2 & PC3 & History PC1 & PC2 & PC3 \\
 \midrule
-1 & 0.924 & 0.846 & 0.788 & 0.868 & 0.874 & 0.768 \\
-5 & 0.783 & 0.713 & 0.718 & 0.626 & 0.669 & 0.487 \\
-21 & 0.333 & 0.248 & 0.280 & 0.182 & 0.296 & 0.257 \\
-63 & 0.005 & 0.057 & 0.109 & -0.251 & -0.309 & -0.252 \\
+1 & 0.919 & 0.861 & 0.816 & 0.805 & 0.832 & 0.701 \\
+5 & 0.769 & 0.744 & 0.721 & 0.476 & 0.523 & 0.309 \\
+21 & 0.286 & 0.299 & 0.292 & 0.019 & 0.114 & 0.085 \\
+63 & 0.010 & 0.033 & 0.006 & -0.334 & -0.348 & -0.232 \\
 \bottomrule\end{tabular}\end{table}
 
-Mean invalid long-path rate: 0.000\%; mean extreme-surface rate: 0.000\%.
+Mean invalid long-path rate: 0.000\%; mean extreme-surface rate: 7.102\%.
 
 \section{GROMM2: partial matched forecasts}
 
@@ -207,8 +207,8 @@ The model is fitted independently at each origin using the repository model and 
 \toprule
 Measure & Dates & Cond. trace & Pooled trace & Frob. & RMSE & Variance/MSE \\
 \midrule
-P & 6 & 0.337 & 0.785 & 0.380 & 0.164 & 0.805 \\
-Q & 6 & 0.358 & 0.745 & 0.437 & 0.159 & 0.910 \\
+P & 16 & 0.899 & 1.413 & 0.293 & 0.175 & 0.965 \\
+Q & 16 & 0.941 & 1.376 & 0.281 & 0.156 & 1.271 \\
 \bottomrule\end{tabular}\end{table}
 
 \begingroup\color{blue}
