@@ -124,6 +124,7 @@ def main() -> None:
     for step in range(args.steps):
         health_check()
         state, _, _, _ = simulator.day(state, jnp.int32(step), jax.random.fold_in(key, step), 8)
+        state = jax.block_until_ready(state)
         if step + 1 in (1, 5, 10):
             results.extend(checks(simulator, state, step + 1, surface=history.log_implied_volatilities[index],
                 history=history.log_implied_volatilities[training]))
