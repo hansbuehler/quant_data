@@ -59,8 +59,15 @@ def _dysanos(root: Path, model: str, day: date, endpoint: date, *, licensed: Pat
              output: Path | None = None) -> tuple[pd.DataFrame, np.ndarray, float]:
     base = root / "quant_data/hedge2/runs"
     directory = base / "dlv-full-v4-20261106T1130"
-    weighted = None
-    if model.endswith("density-weighted"):
+    weighted, projected = None, None
+    if model in ("DYSANOS v1", "DYSANOS v2"):
+        from quantdata.hedging.model_audit.projected_law import load_law
+
+        if output is None:
+            raise ValueError("Versioned DYSANOS quotes require their own run directory")
+        projected = load_law(output, model, day)
+        dynamics = projected.dynamics
+    elif model.endswith("density-weighted"):
         from quantdata.hedging.model_audit.density_weighted import load_weighted_model
 
         if output is None:
@@ -88,7 +95,9 @@ def _dysanos(root: Path, model: str, day: date, endpoint: date, *, licensed: Pat
             raise ValueError("Tail Diffusion quotes require a dedicated output directory")
         residuals = TailSampler(dynamics, fit_tail(dynamics, root=root, output=output, model=model),
             paths=10_000, seed=20_261_111).draw()
-    if weighted is not None:
+    if projected is not None:
+        natives = projected.next_native(state.native)
+    elif weighted is not None:
         natives = weighted.next_native(state.native)
     else:
         natives = (state.native + dynamics.forecast_state_change(state.native)

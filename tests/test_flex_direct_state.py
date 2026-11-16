@@ -2071,6 +2071,65 @@ def test_full_capacity_decoder_control_has_no_hidden_dimensional_bottleneck() ->
     assert pca_config.decoder_network.num_depth == 0
 
 
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_compiled_sanos_solver_preserves_values_and_gradients(dtype) -> None:
+    generator = torch.Generator().manual_seed(9128)
+    inputs = [torch.rand((2, 6), generator=generator, dtype=dtype, requires_grad=True),
+        torch.rand((2, 6), generator=generator, dtype=dtype, requires_grad=True),
+        torch.rand((2, 8), generator=generator, dtype=dtype, requires_grad=True)]
+    compiled_inputs = [value.detach().clone().requires_grad_(True) for value in inputs]
+    eager = FlexSanosDecoder._solve_sanos_step(w_minus=inputs[0], w_plus=inputs[1], rhs=inputs[2])
+    compiled_solver = torch.compile(FlexSanosDecoder._solve_sanos_step, dynamic=True)
+    compiled = compiled_solver(w_minus=compiled_inputs[0], w_plus=compiled_inputs[1], rhs=compiled_inputs[2])
+    eager.square().sum().backward()
+    compiled.square().sum().backward()
+    tolerance = 1e-5 if dtype == torch.float32 else 1e-10
+    torch.testing.assert_close(compiled, eager, rtol=tolerance, atol=tolerance)
+    for actual, expected in zip(compiled_inputs, inputs, strict=True):
+        torch.testing.assert_close(actual.grad, expected.grad, rtol=tolerance, atol=tolerance)
+
+
+def test_compiled_solver_covers_native_and_pca_evaluations(tmp_path: Path, monkeypatch) -> None:
+    geometry, day, _ = _synthetic_market_and_surface()
+    original_evaluate = flex_training.evaluate_model
+    original_compile = torch.compile
+    evaluations = []
+
+    def compile_solver(function, **kwargs):
+        compiled = original_compile(function, backend="eager", **kwargs)
+        compiled._test_compiled_solver = True
+        return compiled
+
+    def evaluate_compiled(model, *args, **kwargs):
+        assert getattr(model.sanos_decoder._sanos_step, "_test_compiled_solver", False)
+        evaluations.append(type(model).__name__)
+        return original_evaluate(model, *args, **kwargs)
+
+    monkeypatch.setattr(torch, "compile", compile_solver)
+    monkeypatch.setattr(flex_training, "evaluate_model", evaluate_compiled)
+    train_config = FlexTrainConfig(num_epochs=2, day_batch_size=1, learning_rate=1.0e-3,
+        checkpoint_every=1, report_every=1, convergence_window=1,
+        convergence_relative_tolerance=0.999999, precision=64, device="cpu",
+        compile_sanos_solver=True)
+    native_config = NativeStateConfig(label="compiled-evaluation-native", geometry=geometry)
+    native_path = tmp_path / "native.pt"
+    native_fit = fit_native_states((day,), config=native_config, train_config=train_config,
+        checkpoint_path=native_path)
+    loaded_native = fit_native_states((day,), config=native_config,
+        train_config=replace(train_config, just_load=True), checkpoint_path=native_path)
+    np.testing.assert_allclose(native_fit.evaluation.fits[0], loaded_native.evaluation.fits[0])
+    pca_config = PcaDecoderConfig(label="compiled-evaluation-pca", state_size=2, geometry=geometry)
+    pca_path = tmp_path / "pca.pt"
+    pca_fit = fit_latent_states((day,), native_fit, config=pca_config,
+        supervised_train_config=train_config, market_train_config=train_config, checkpoint_path=pca_path)
+    loaded_pca = fit_latent_states((day,), native_fit, config=pca_config,
+        supervised_train_config=train_config, market_train_config=replace(train_config, just_load=True),
+        checkpoint_path=pca_path)
+    np.testing.assert_allclose(pca_fit.evaluation.fits[0], loaded_pca.evaluation.fits[0])
+    assert evaluations.count("NativeStateSanosModel") == 3
+    assert evaluations.count("LatentStateSanosModel") == 4
+
+
 def test_batch_descent_and_compression_do_not_require_an_lp(
     tmp_path: Path,
 ) -> None:

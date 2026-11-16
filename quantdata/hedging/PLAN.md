@@ -2,6 +2,410 @@
 
 ## Status
 
+### Current execution and objective audit — 2026-11-14
+
+This section supersedes historical queue descriptions below. The report's
+completed 44-date DYSANOS v2-labelled STRT-16 results use the earlier nine-expiry
+implementation, not the standalone 41-expiry density-mode DYSANOS v2. Do not
+attribute those simulated forecast and stability metrics to the standalone model.
+Earlier results, including DYSANOS v1 and GROMM, are blue.
+
+The actual standalone V2 density-mode fit and ex-post straddle projection cover
+all 44 dates. Their matched-date extracted results are under the external run
+`standalone-v2-paper-metrics-20261114`: 103,686 same-day quotes, 85.8911% inside
+spread, and straddle squared-change span capture of 94.0955% with spot plus
+eight factors and 96.7522% with spot plus sixteen. Span capture fits coefficients
+to each realized change; it is not a predicted variance or trading performance.
+Matched one-day forecast covariance and tail metrics have now been calculated;
+long-path stability and static-arbitrage tests remain outstanding.
+
+The standalone V2 one-day forecast evaluation completed 44/44 dates on CPU under
+`standalone-v2-forecast-nms-20261114`. It uses the shared NMS convention, the
+standalone Gaussian factor/spot law and a deterministic conversion from its
+dividend-adjusted spot return to the common one-day-forward numeraire. Earlier
+preliminary results omitted the NMS offset and are not comparable. V2 source
+surfaces use smoothness 0.1 while the common realized reference uses 0.25.
+The conditional predicted variance divided by squared forecast error is 0.3025;
+the pooled covariance Frobenius error is 0.4399. These are forecast metrics,
+not the ex-post straddle-span measure above.
+
+The code-agent batching review found independent GROMM view fits suitable for
+larger chunks when the prior weight is zero. Benchmark 16, 32 and 64 on identical
+inputs, reporting prices, gradients, time per view and peak GPU memory; each
+chunk-size change needs its own checkpoint identity. DYSANOS minibatches each
+perform an Adam step, so changing their size changes the optimization path.
+First benchmark fewer GPU synchronizations and less frequent checkpointing while
+preserving fail-fast checks, progress and restart semantics. No larger chunk is
+adopted before a numerical and throughput comparison.
+
+GPU allocation `e4190cbd46d7` belongs to this thread,
+`01a12f09-4975-7431-a499-7c321ab35fa5`, “Hedging — DYSANOS and GROMM”.
+`hedging-paper-gpu-completion-20261114.service` runs independent 44-origin
+DYSANOS v1 and GROMM2 fits and releases the allocation after GPU work.
+One CPU producer prepares GROMM quote views concurrently. Only completely
+prepared origins enter GPU training. GPU-dependent GROMM P/Q forecasts precede
+release; other statistics can run on CPU.
+
+DYSANOS v1 uses a fresh run, `paper-dysanos1-rolling-20261114`, with observed
+midpoint centering and the joint affine-200/five-session VAR. GROMM2 uses
+`repository-gromm2-paper-20261114`, with the paper quote objective and explicit
+repository geometry/dependence extensions. Neither loads retired-objective
+weights or preceding-origin fits. Details are in `OBJECTIVES.md`.
+
+Progress and exact errors are external under
+`paper-completion-20261114/logs/completion.log` and `progress.json`.
+Fit completion is distinct from forecast validity and no-arbitrage tests.
+The retired intermediate v1 daily-embedding failure is retained without
+eigenvalue repairs. V2's variance/MSE is 0.5084; its guarded static tests
+have zero violations, invalid IVs or IVs above 300%, with maximum IV 38.16%.
+This is not an unguarded non-explosion or dynamic-martingale proof.
+
+### Takeover — 2026-11-13
+
+**Latest instruction supersedes the frozen-standalone proposal below:** use
+this project's original `quantdata` research engines, not the failed standalone
+model repositories. Original-code run directory:
+`/home/hans/quantdata_data/quant_data/hedge2/runs/original-rolling-20261113T1500/`.
+Entry points are `model_audit.legacy_queue` (paper DYSANOS v1) and
+`model_audit.legacy_v2` (direct STRT-16). All 44 April--May origins are fresh,
+independent 250-session windows including the decision date. Two omitted
+historical states are recreated from the identical saved smoothness-0.1
+market fits, without extending or shortening a window. The source files and
+original comparison reference remain unchanged. Recovery provenance is in
+`RECOVERED_INPUTS.json`.
+
+V1 uses the current paper's front/term-eta, 18-tenor, 3,620-control chart;
+PCA initializes a market-refined affine-200 and full five-session joint VAR.
+V2 uses the retained nine-tenor direct chart, STRT-16 and daily VAR/tail law,
+with the complete spot-correlated native loading preserved. Both define P
+only. DYSANOS v1 and v2 run on CPU. The original v1 wrapper hard-coded a CUDA
+device, although neither the paper model nor its trainer requires a GPU.
+The CPU continuation preserves completed native/affine stages, same-origin
+joint optimizer/scheduler state, precision, objective, and convergence audit;
+device-specific numerical/RNG trajectories need not be bitwise identical.
+GROMM alone retains the managed-GPU queue after DYSANOS v1 completes.
+Original GROMM v1 uses `sdlv/daily/train.py` and `front_spot`, not `gromm2`;
+its causal-window integration follows the DYSANOS work. A queued fit is not
+a completed or statistically validated model.
+
+Execution checkpoint: v2 has 44/44 independent fitted and one-day-scored
+origins with 1,000 scenarios each and no unusable IV paths. Its conditional
+variance/forecast-MSE ratio is 0.5084 under the **original bounded decoder**.
+Coordinate guards activate in almost every path; these are not unguarded
+diffusion results or a static-arbitrage certificate. Per-tenor path rates,
+grid-coordinate rates and origin-probability masses on clipped nodes are
+saved in each result. No forward-grid scale clips were observed. The
+Apr19 tail optimizer warning `ABNORMAL: ` is retained; independent projected
+gradients at two finite-difference scales are below 1e-6, verifying local
+accuracy without altering parameters. Model-specific result provenance is
+separate from the common reference outcomes.
+
+V1's first native and affine market fits are complete. Joint epoch 300 missed
+the original trailing-window convergence gate (0.00479997 versus 0.002), so its
+saved model/optimizer/scheduler/RNG state is continued in 100-epoch audit blocks,
+preserving the original schedule horizon and accuracy thresholds. Completed
+surface stages are not retrained. On November 14 the GPU worker was stopped
+and its valid epoch-365 checkpoint backed up with its checksum and CUDA RNG
+state. The queue now continues on CPU, without claiming or waiting for a GPU.
+GROMM v1's first independent input window has been validated through the
+original daily25 loader (250 dates, 853,514 separate market books); production
+market training follows v1, with no preceding-origin weights. Other quote,
+recursive stability and static-arbitrage diagnostics remain pending.
+GROMM has also passed synthetic CPU checks of its full native-dimension
+probability-PCA/P-Q drift estimation and both one-day bridge/repricing paths;
+those synthetic outputs are confined to `checks/`, never production results.
+
+Superseded preparation record (not an active production implementation):
+
+The user requests local execution of DYSANOS v1-P and v2-P, followed by
+GROMM v1-P/Q. GROMM v2 is not in this takeover queue. Use the same 44
+April--May 2024 origins and independent rolling fits. The sibling DYSANOS
+repository was deliberately cleared; do not restore or modify it. Runtime
+source is copied from this project's reviewed frozen snapshot, with exact
+source hashes and an explicit operational change to use the equivalent
+compiled SANOS band solve rather than Python-unrolled elimination in v1.
+Validate forward values and adjoint directional derivatives, then select
+date batch size by measured full-geometry quote-gradient throughput.
+
+Inputs are actual market bid/ask from the unchanged licensed smoothness-0.1
+cache, not fitted-price targets. V2 daily quote-shape fits are deterministic,
+independent single-date computations and may be memoized; each window's
+PCA, AR and tail law is fitted afresh. No prior-window parameters initialize
+any fit. Preserve numerical warnings and fit-quality gates; a saved model
+alone is not an accepted fit or a successful forecast audit.
+
+Entry point: `quantdata.hedging.model_audit.takeover`. Run artifacts:
+`/home/hans/quantdata_data/quant_data/hedge2/runs/takeover-dysanos-gromm1-20261113-142518/`.
+
+### Corrected 44-origin rolling comparison — 2026-11-13
+
+The current production comparison uses exactly the existing 44 April--May
+2024 origins and unchanged observable reference, outcomes, frozen diagnostic
+PCA and statistical definitions. Retain only DYSANOS v1-P (the actual
+market-refined affine-200, jointly refined five-session VAR), DYSANOS v2-P
+(direct STRT-16), GROMM v1-P/Q (probability-weighted innovation PCA), and
+GROMM v2-P/Q. DYSANOS has no invented Q construction.
+
+**Independent fits at every origin; no warm starts for any model**, as
+explicitly requested on 2026-11-13. No previous rolling date's fitted weights,
+all-history checkpoint or later-origin fit initializes these windows. A saved
+checkpoint from the same origin remains a resumable calculation, not a rolling
+warm start. DYSANOS uses 250-session windows under the standalone specification;
+each model's exact dated inputs are retained with its checkpoint.
+
+The GPU queue is fitting GROMM and will dispatch ready DYSANOS origins inside
+its allocation-owned process tree. DYSANOS v2 daily quote-shape calibration
+runs separately on CPU. DYSANOS v1's initial 128-date GPU batch exhausted VRAM
+before its first update; retain the exact error and retry with batch size 16,
+without reducing the observations, model dimensions or training stages.
+Fit completion is not statistical validation. Evaluate all six cases on the
+same reference before updating comparisons; then run the requested
+no-arbitrage tests for all models. Historical pilots below remain controls,
+not substitutes for the rolling results.
+
+Production artifacts and logs:
+`/home/hans/quantdata_data/quant_data/hedge2/runs/rolling-six-cases-44origins-20261112-v1/`.
+
+### Model correction execution — 2026-11-12
+
+Code and focused mathematical tests now implement the actual 200-state paper
+adapter (`model_audit/paper_v1.py`) and the standalone GROMM1 probability-PCA
+control (`model_audit/gromm_probability.py`). The authenticated paper checkpoint
+has a positive daily covariance: minimum eigenvalue 0.0009287881, no projection;
+five daily steps reproduce its fitted weekly covariance to numerical precision.
+Its one-origin, 64-path decoder pilot passed. The 44-origin April--May evaluation
+completed with 512 antithetic paths per origin: predicted variance trace
+0.494684, forecast MSE 1.684396, ratio 0.293686. The available checkpoint fits all 891
+dates, so this is explicitly **in-sample parameter evaluation**, not a corrected
+causal rolling out-of-sample backtest.
+
+The GROMM1 probability-weighted refit completed on its saved 2025-08-29 origin,
+using the unchanged 247 historical pairs, calibrated representation and
+independent-Y likelihood. Weighted-metric innovation retention increases from
+90.9079% to 91.8520%; native-coordinate retention changes from 90.8956% to
+89.3852%. Compatible P/Q drifts are finite and recomputed. These retention
+numbers are not decoded-IV variance or forecast-MSE results. A matched 512-path
+P/Q decoded-IV comparison uses `model_audit/gromm_probability_forecast.py`.
+The validated weighted inference archive is in `gromm1-pweight-v2/`; the initial
+export omitted its new latent-initialization schema marker and is not the
+retained inference result. The corrected writer verifies a round trip through
+the unmodified production loader before declaring success. The matched decoded
+comparison is in `gromm1-pweight-forecast-v2/`. This single-origin experiment is
+not the older April--May GROMM2 cohort. The decoded comparison completed all
+four baseline/weighted P/Q cells, 512 paths each, with no invalid paths. Q
+log-IV variance trace changes from 1.481412 to 1.521679 (+2.72%); P changes
+from 2.230006 to 2.758307 (+23.69%). Probability weighting alone therefore
+does not reduce decoded variance on this pilot. No forecast-MSE ratio is
+claimed because a matched next-session outcome is not included in this
+single-origin control. These are descriptive Monte Carlo comparisons, not
+new no-arbitrage certificates or a multi-origin calibration result.
+
+Jobs, logs, protocols and numeric outputs are isolated below
+`/home/hans/quantdata_data/quant_data/hedge2/runs/model-corrections-20261112-v1/`.
+Source changes stay on `hedging-benchmark` in
+`/home/hans/python/quant_data-hedging`; the user's main checkout is untouched.
+
+### Execution order and GROMM weighting control — 2026-11-12
+
+First evaluate the actual paper affine-200 v1 and the agreed new SANOS v2;
+do not run their static-arbitrage tests, or GROMM static tests, ahead of that
+variance/model-identity work. Independent FuNVol, VolGAN and AD-Seq-Vol/FT
+static tests may proceed in the background on the requested 44 origins,
+1,000 paths and shared 1/5/10/125/259-session snapshots.
+
+The current standalone GROMM1 does select log-DLV innovation directions by
+PCA, followed by an independent-Y-compatible latent dependence fit and a
+residual-factor truncation. Its temporal observation weights are not node
+probability weights. A proposed controlled probability-weighted PCA ablation
+must preserve the calibrated representation and factor budget, unscale the
+loadings back to native coordinates, retain the independent-Y observation
+law, and recompute the compatible P/Q drift fields. It must not simply
+attenuate volatility or change the pricing/data convention. Probability
+weighting need not reduce decoded variance.
+
+The GROMM-P/Q ratios already reported here came from the retained older
+hedging GROMM2 artifacts, not the new standalone GROMM1. Do not transfer
+those results or labels between the implementations. The v1/v2 SANOS
+correction remains the first priority.
+
+### Paper-model identity correction — 2026-11-12
+
+The current audit row labelled DYSANOS v1 is an eight-PC, separately fitted
+one-session PCA/VAR surrogate, **not the paper's market-calibrated affine-200
+model with jointly refined five-session VAR dynamics**. The eight decoded-IV
+PCs in the paper are descriptive invariant-distribution diagnostics, not a
+replacement for its 200-dimensional state process. Do not attribute the
+surrogate's weak variance calibration to the paper model, or present its
+weighted-PCA ablations as a controlled replacement for the paper calibration.
+
+The mismatch is confirmed from the paper, training code and checkpoint tensor
+dimensions. The correct paper-model variance/forecast-MSE ratio has not yet
+been computed here. Hold affected paper-v1 comparisons and reruns until the
+adapter is corrected; preserve existing arrays as explicitly labelled
+surrogate controls. A full-history paper checkpoint also cannot supply a
+causal rolling out-of-sample result for dates inside its fitting history.
+See `quantdata/hedging/MODEL_IDENTITY_REVIEW.md` for evidence and the existing
+ratios. This correction supersedes the model-identity interpretation of the
+historical entries below; it does not retrospectively change their numbers.
+
+### SANOS v2 — agreed representation and dynamics
+
+SANOS v2 uses the observed market ATM-volatility curve to determine grid and
+backbone scale through the existing SANOS construction. Smoothness is an
+explicit input, default **0.1**, in the core SANOS convention; it is not an
+independently learned front/later-term backbone multiplier. Fit DLVs against
+the unchanged externally defined quote population, without allowing a shrinking
+grid to remove difficult quotes from the fitting or reporting population.
+
+ATM remains **stochastic**: estimate one-business-day ATM and DLV-shape changes
+with 16 surface factors, default STRT metric and Tail Diffusion driver, retaining
+spot/Y dependence. Gaussian diffusion remains an alternative. In default JOINT
+mode, ATM and DLV-shape coordinates share a factor basis. Optional SEPARATE mode
+allocates the same total factor budget between ATM and residual DLV-shape
+blocks, retaining regression cross-loadings and a joint innovation covariance.
+In both cases ATM shocks move the grid and backbone through the fixed mapping;
+there are no additional free smoothing factors. The separate-mode rank allocation
+has not yet been agreed.
+
+Requested exports are 201 relative strikes including exactly one ATM strike 1,
+NMS [-4,3], at business days 1--20 and 25,30,...,125 (41 maturities). This differs
+from the standalone package's existing 45-tenor calendar and the nine-tenor
+legacy audit. The implementation request and findings are in
+`/home/hans/python/openqdata_models_dysanos/HANDOVER.md`.
+
+This is the agreed **new specification**, not an implemented or validated model.
+The earlier DYSANOS v1/v2 labels identify retained affine-200/eight-PC and direct
+STRT/sixteen-PC experiments; their results must not be relabelled as SANOS v2.
+The historical results below remain evidence for the design, not new-v2 results.
+
+### Model-dynamics audit follow-up — 2026-11-12
+
+The 44 April–May 2024 origins remain the common comparison window, with
+252 causal one-session transitions per fit and a fixed 16-factor innovation
+budget. The retained daily-state DYSANOS-labelled audit fits projections and
+VAR separately; it is not a jointly trained JAX affine/dynamics model.
+
+The explicit ATM-derived grid experiment is complete: three grid-volatility
+factors plus thirteen residual DLV-shape factors. Its spot-orthogonal forecast
+RMSE improves from 0.1195 to 0.1162, but conditional predicted variance divided
+by realized forecast-error variance remains low, improving from 0.506 to 0.525.
+The grid factors describe the ATM-derived forward-volatility curve, not pure
+decoded ATM-IV shocks.
+
+The completed first controlled comparison learns the affine level projection using
+training-window mean grid probability masses before fitting factor changes.
+It uses rank 200 and retains an unweighted affine-200 control. Separately learn
+16 change directions using local option/density sensitivities: ITM premium
+returns, straddle changes per initial spot, straddle changes divided by
+initial spot and square-root maturity, and absolute probability-mass changes.
+The latter are not relative returns divided by tiny probabilities. Reprice
+on each origin's fixed spot, cash strikes, tenors and probability grid, with
+spot dependence retained separately. Fit ordinary and spot-orthogonal versions.
+
+All twelve projection/spot variants have completed all 44 origins: 528 scored
+origin-model cells, without invalid forecast surfaces. The ordinary weighted
+affine-200 control has forecast RMSE 0.1242 versus 0.1742 unweighted. The ITM
+premium-return metric reduces ordinary RMSE to 0.1139; raw and square-root-time
+scaled straddles give 0.1157 and 0.1156, and probability changes give 0.1231.
+These are local-sensitivity projections, not nonlinear return-loss calibration.
+Predicted variance divided by realized forecast-error variance remains about
+0.45–0.53 for the weighted/observable alternatives. All fitted unconstrained
+VAR spectral radii are below 0.957; no stability rescaling was needed. Native
+decoder clipping persists and is retained rather than silently dropped.
+
+The full ordinary/orthogonal comparison, checkpoints, 304 checked input
+hashes, Jacobian half-step checks and validation ledger are stored under
+`$QUANTDATA_ROOT/quant_data/hedge2/runs/model-dynamics-audit-20261112-projection-metrics-v3/`.
+The earlier narrow-strike v1 pilot is superseded by this full-native-strike
+comparison and is not a reported model result. Revision v3 also preserves the
+entire native spot/surface regression loading: the earlier reduced-coordinate
+simulation had dropped its component outside the affine span. This affects
+the orthogonal forecast rows, not the ordinary rows or learned projection
+coefficients. A regression test explicitly checks that missing contribution.
+
+### Fixed-instrument return variance explained — 2026-11-12
+
+The log-IV forecast RMSE above is not the fraction of option-return variance
+represented by factors. A separate evaluation holds each origin's cash
+strikes and terminal expiries fixed for one business day, with actual
+normalized spot movement, remaining maturity reduced by one day and exact
+settlement of 1D instruments. Both endpoint surfaces come from the same saved
+0.1 decoded daily source, removing the previous 0.1-versus-0.25 reference
+mismatch for this attribution. Straddle gains are divided by initial spot
+and square-root initial maturity. Factor bases and encoders are fitted
+through the origin only; next-day realized native changes supply factor
+values, with no hindsight least-squares coefficients.
+
+Report one minus centered residual-return variance divided by centered
+realized-return variance, across the 44 origins and all nine-by-200 source
+coordinates. Also report the same fraction after removing exact frozen-u
+spot/time repricing. The latter avoids hiding surface-factor losses behind
+spot, whose frozen-surface repricing alone explains 98.90% of total variance.
+Separate all-node, central NMS (-2,2), surviving-expiry and tenor-level
+summaries are retained, including every prefix from zero to sixteen factors.
+
+Before the sixteen-factor change compression, unweighted affine-200 retains
+98.02% of surface-related return variance and probability-weighted
+affine-200 retains 99.97%. After sixteen change factors, the ordinary
+weighted-native and weighted-affine models retain 96.49%; the separate-grid
+model retains 95.81%. ITM premium-return factors retain 99.55%, unscaled
+straddles 99.51%, square-root-time-scaled straddles 99.55%, and absolute
+probability-change factors 96.60%. The unweighted-affine/Euclidean-change
+pipeline retains only 25.30%. Orthogonal return-based variants are similar.
+These are reconstruction results, not evidence that the simulated factor
+innovation distribution has the correct forecast covariance.
+
+Results, per-origin arrays, all input checksums and pipeline-stage scores:
+`$QUANTDATA_ROOT/quant_data/hedge2/runs/model-dynamics-audit-20261112-fixed-straddles-v3/`.
+Twenty focused regression and mathematical tests pass. Numerical guard clips
+are retained explicitly; finite decoded prices do not establish a good fit.
+
+### Fitting effort and the direct-straddle baseline — 2026-11-12
+
+A single-thread CPU timing study uses three representative rolling origins,
+one warm-up and four measured repetitions per origin. With saved daily states
+resident in memory, direct probability-weighted PCA plus VAR takes a median
+0.0160 seconds per fit; adding weighted affine-200 takes 0.0266 seconds, or
+1.66 times as much. Ordinary PCA takes 0.0182 seconds, the same practical
+cost class. The four standalone return/density-metric fits each take about
+0.672–0.675 seconds, or 42 times the weighted-native fit, including the
+native-span decomposition and both Jacobian step sizes. Those four metrics
+can share that expensive preparation. Original surface fitting, data loading,
+checkpointing and forecast evaluation are excluded. The raw repeated timings
+are in `model-dynamics-audit-20261112-effort-v1/TIMINGS.json` beneath the run root.
+
+On the 44-origin return-reconstruction test, direct weighted PCA and weighted
+affine-200 followed by weighted-metric PCA retain 96.4883% and 96.4903% of
+surface-related straddle-return variance with sixteen factors. With eight,
+the corresponding fractions are 95.3714% and 95.3737%. This does not justify
+the extra affine level-compression stage for this saved-state dynamics
+experiment; it is not a conclusion about jointly calibrated DYSANOS market
+representations. These are causal out-of-sample reconstruction results using
+realized factor values, not in-sample fits or forecasts.
+
+The next variance-forecast control is direct PCA of scaled fixed-instrument
+straddle returns, without DLV/native coordinates. Build a price-only panel
+using the saved 0.1 SANOS market interpolation, fixed strikes/terminal dates
+inside each one-day pair and the same causal 252-transition windows. Report
+total returns and the residual after frozen-surface spot/time repricing
+separately. Start with a rolling PCA covariance forecast and a full empirical
+covariance control; this baseline does not require a VAR on changing option
+contracts. Keep panel-construction cost separate from PCA fitting effort.
+
+For forecast calibration, report forecast covariance trace divided by realized
+forecast-error squared norm, using forecast means estimated through the origin
+only. Also report pooled forecast variance versus centered realized variance.
+Ratios can exceed 100%; they are calibration ratios, not variance-explained
+scores. This direct observable-return baseline has not yet been run.
+
+Use the existing decoder, paired historical spot/factor law and common
+49-coordinate floating log-IV forecast tests. Keep weights and projections
+causal; retain Jacobian half-step convergence diagnostics, clipping, fit
+coverage and per-origin checkpoints. No ex-post factor-span score substitutes
+for predictive covariance calibration. The source-state smoothness 0.1 versus
+the common reference smoothness 0.25 remains explicitly disclosed. New
+recursive-path and quote tests follow only after the one-day comparison.
+
 ### Rolling 1D stage — 2026-10-17
 
 The first rolling launch stopped because the 1D target selection received

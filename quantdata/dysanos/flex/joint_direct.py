@@ -412,7 +412,7 @@ def _atomic_torch_save(payload: object, path: Path) -> None:
 def _restart_train_config_identity(
     config: JointDirectTrainConfig | dict[str, object],
 ) -> dict[str, object]:
-    """Allow operational batch changes and longer runs with unchanged losses."""
+    """Allow operational batch/compiler changes and longer runs with unchanged losses."""
     values = (
         asdict(config)
         if isinstance(config, JointDirectTrainConfig)
@@ -420,6 +420,9 @@ def _restart_train_config_identity(
     )
     values.pop("day_batch_size", None)
     values.pop("num_epochs", None)
+    values.pop("compile_sanos_solver", None)
+    values.pop("checkpoint_every", None)
+    values.pop("report_every", None)
     return values
 
 

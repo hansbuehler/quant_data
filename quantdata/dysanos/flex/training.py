@@ -1313,6 +1313,8 @@ def fit_native_states(
             "or explicit 'warm_start' instead of implicit retraining"
         )
     started = perf_counter()
+    if train_config.compile_sanos_solver:
+        model.sanos_decoder.enable_solver_compile()
     initial_evaluation = evaluate_model(
         model,
         days,
@@ -1321,6 +1323,8 @@ def fit_native_states(
         day_batch_size=train_config.day_batch_size,
     )
     if train_config.just_load:
+        if train_config.compile_sanos_solver:
+            model.sanos_decoder.disable_solver_compile()
         history = tuple(
             {
                 str(key): float(value)
@@ -1354,8 +1358,6 @@ def fit_native_states(
                 else None
             ),
         )
-    if train_config.compile_sanos_solver:
-        model.sanos_decoder.enable_solver_compile()
     resume_state = (
         cast(TrainingState, checkpoint_payload["training_state"])
         if checkpoint_payload is not None
@@ -1389,8 +1391,6 @@ def fit_native_states(
         phase="native market training",
         train_config=train_config,
     )
-    if train_config.compile_sanos_solver:
-        model.sanos_decoder.disable_solver_compile()
     evaluation = _evaluate_fine_tuned_model(
         model,
         days,
@@ -1403,6 +1403,8 @@ def fit_native_states(
         ),
         phase="native market training",
     )
+    if train_config.compile_sanos_solver:
+        model.sanos_decoder.disable_solver_compile()
     if checkpoint_path is not None:
         save_model_checkpoint(
             model,
@@ -2005,6 +2007,8 @@ def fit_latent_states(
             supervision_target_identity=supervision_target_identity,
             training_audits={"supervised": supervised_convergence},
         )
+    if market_train_config.compile_sanos_solver:
+        model.sanos_decoder.enable_solver_compile()
     if market_train_config.just_load:
         market_history = tuple(
             {
@@ -2031,6 +2035,8 @@ def fit_latent_states(
                 initialize_triangular_pca_decoder_(initial_model, target_raw)
             else:
                 initialize_pca_decoder_(initial_model, target_raw)
+            if market_train_config.compile_sanos_solver:
+                initial_model.sanos_decoder.enable_solver_compile()
             initial_evaluation = evaluate_model(
                 initial_model,
                 days,
@@ -2047,6 +2053,8 @@ def fit_latent_states(
             day_batch_size=market_train_config.day_batch_size,
             equal_date_weighting=True,
         )
+        if market_train_config.compile_sanos_solver:
+            model.sanos_decoder.disable_solver_compile()
         market_convergence = _require_training_convergence(
             market_history,
             metric="objective",
@@ -2071,8 +2079,6 @@ def fit_latent_states(
         day_batch_size=market_train_config.day_batch_size,
         equal_date_weighting=True,
     )
-    if market_train_config.compile_sanos_solver:
-        model.sanos_decoder.enable_solver_compile()
     market_resume_state = (
         cast(TrainingState, checkpoint_payload["training_state"])
         if checkpoint_payload is not None
@@ -2108,8 +2114,6 @@ def fit_latent_states(
         phase="latent market fine-tuning",
         train_config=market_train_config,
     )
-    if market_train_config.compile_sanos_solver:
-        model.sanos_decoder.disable_solver_compile()
     evaluation = _evaluate_fine_tuned_model(
         model,
         days,
@@ -2123,6 +2127,8 @@ def fit_latent_states(
         phase="latent market fine-tuning",
         equal_date_weighting=True,
     )
+    if market_train_config.compile_sanos_solver:
+        model.sanos_decoder.disable_solver_compile()
     if checkpoint_path is not None:
         save_model_checkpoint(
             model,
