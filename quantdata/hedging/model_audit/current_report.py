@@ -213,6 +213,48 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
             r"The model is fitted independently at each origin using the repository model and the paper quote objective. Results below use the available origins only; Q against realized data is descriptive, not a claim that Q is the physical law. Long-horizon diagnostics and full-origin static-arbitrage diagnostics remain outstanding.",
             report._table(["Measure", "Dates", "Cond. trace", "Pooled trace", "Frob.", "RMSE", "Variance/MSE"], gromm_rows,
                 caption="GROMM2 one-day forecasts, 1,000 paths per origin and measure. Dates show completed origins out of 44. Black: descriptive, ungraded statistics.", label="tab:gromm2-partial")]
+        leverage_rows, gromm_tail_rows, monthly_rows, rolling_rows, covariance_detail = [], [], [], [], []
+        for measure, summary_item in gromm_summaries.items():
+            covariance_detail.append([measure, summary_item["pooled_covariance"]["eig_share_err_k"],
+                summary_item["pooled_covariance"]["subspace_angle_max"]])
+            for index, (model, observed) in enumerate(zip(summary_item["spot_pc_correlations_model"],
+                    summary_item["spot_pc_correlations_data"], strict=True), start=1):
+                leverage_rows.append([measure, index, model, observed, model - observed])
+            for level, entry in summary_item["tails"]["PC1"].items():
+                if level != "ES":
+                    gromm_tail_rows.append([measure, level, entry["count"], report.Rated(entry["exceptions"], tail_grade(entry)),
+                        entry["expected_exceptions"], entry["exact_binomial_p"], entry["pinball_q"]])
+            forecasts = rows(gromm / f"daily/GROMM2-{measure}")
+            if len(forecasts) >= 21:
+                window_ratios = []
+                for start in range(len(forecasts) - 20):
+                    window = forecasts[start:start + 21]
+                    realized = np.asarray([row["actual_change"] for row in window])
+                    expected = np.asarray([row["surface_mean"] for row in window])
+                    denominator = float(np.sqrt(np.mean(realized ** 2)))
+                    window_ratios.append(float(np.sqrt(np.mean((realized - expected) ** 2))) / denominator if denominator > 0 else None)
+                first, last = window_ratios[0], window_ratios[-1]
+                rolling_rows.append([measure, 21, len(window_ratios), first, last,
+                    last / first if first is not None and last is not None and first > 0 else None])
+            rolling_rows.append([measure, 63, max(0, len(forecasts) - 62), None, None, None])
+            for month in sorted({row["origin_date"][:7] for row in forecasts}):
+                selected = [row for row in forecasts if row["origin_date"].startswith(month)]
+                observed = np.asarray([row["actual_change"] for row in selected])
+                predicted = np.asarray([row["surface_mean"] for row in selected])
+                error = float(np.sqrt(np.mean((observed - predicted) ** 2)))
+                baseline = float(np.sqrt(np.mean(observed ** 2)))
+                monthly_rows.append([measure, month, len(selected), error, baseline, error / baseline if baseline > 0 else None])
+        gromm_section.extend([
+            report._table(["Measure", "Eigen-share error", "Max angle (degrees)"], covariance_detail,
+                caption="GROMM2 pooled observable covariance: error of the first three eigenvalue shares and maximum angle of the leading three-dimensional subspaces against the data. Black: descriptive, ungraded.", label="tab:gromm2-covariance-detail"),
+            report._table(["Measure", "Observable PC", "Model spot corr.", "Data spot corr.", "Difference"], leverage_rows,
+                caption="GROMM2 pooled spot--surface correlations in the fixed observable PCA basis. P and Q use the same observed data; Q comparison is descriptive. Black: ungraded.", label="tab:gromm2-leverage"),
+            report._table(["Measure", "Quantile", "Dates", "Exceptions", "Expected", "Exact p", "Pinball"], gromm_tail_rows,
+                caption="GROMM2 one-day observable PC1 tail diagnostics. Forty-four dates make 1% and 5% tails exploratory. Colors apply only to exception counts; other entries are ungraded.", label="tab:gromm2-tails"),
+            report._table(["Measure", "Month", "Dates", "RMSE", "Persistence", "Ratio"], monthly_rows,
+                caption="GROMM2 one-day observable log-IV forecast errors by month; ratio compares the model with the zero-change persistence forecast. These are surface-dynamics diagnostics, not next-day option-price alpha tests. Black: descriptive, ungraded.", label="tab:gromm2-monthly"),
+            report._table(["Measure", "Window", "Windows", "First ratio", "Last ratio", "Last / first"], rolling_rows,
+                caption="GROMM2 rolling persistence-normalized log-IV RMSE: first and last full windows and their ratio. The 44-date sample cannot form a 63-date window. Black: descriptive, ungraded.", label="tab:gromm2-rolling")])
         fit_rows = []
         for day in dates:
             folder = gromm / f"gromm2/{day}"
@@ -252,6 +294,28 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
                 caption=f"GROMM2-{measure} static violation counts on completed origins only, with 1,000 paths per origin. N/A counts unavailable price nodes; a zero count does not prove no arbitrage.", label=f"tab:gromm2-{measure.lower()}-static"),
             report._table(["Day", "Tenor", "IV 1%", "IV 500%", "Reprice fail %"], boundaries,
                 caption=f"GROMM2-{measure} library-implied volatility boundary and repricing-failure percentages among finite prices. Boundary estimates are retained, and boundary and repricing-failure counts can overlap.", label=f"tab:gromm2-{measure.lower()}-static-iv")])
+    recursive_root = root.parent / "repository-gromm2-recursive-full-20261116/recursive"
+    for measure in ("P", "Q"):
+        saved = rows(recursive_root / measure)
+        if not saved:
+            continue
+        if any(row["origin"] not in dates or row["model"] != f"repository GROMM2-{measure}"
+                or row["paths"] != 32 or row["total_static_paths"] != 1000 or row["steps"] != 115 for row in saved):
+            raise ValueError("GROMM2 recursive results do not match the approved comparison")
+        valid = [row for row in saved if row["status"] == "complete"]
+        metrics.setdefault("gromm2_recursive_partial", {})[measure] = {"origins": len(saved),
+            "valid_origins": len(valid), "source": str(recursive_root / measure)}
+        if valid:
+            acf = []
+            for lag in (1, 5, 21, 63):
+                model = np.asarray([next(item["correlations"] for item in row["observable_acf"] if item["lag"] == lag) for row in valid])
+                observed = np.asarray([next(item["correlations"] for item in row["historical_observable_acf"] if item["lag"] == lag) for row in valid])
+                acf.append([lag, *model.mean(axis=0), *observed.mean(axis=0)])
+            invalid = np.mean([row["invalid_path_rate"] for row in saved])
+            extreme = np.mean([row["extreme_surface_rate"] for row in valid])
+            gromm_section.extend([rf"GROMM2-{measure} recursive checks cover {len(saved)} of 44 origins, with {len(valid)} origins admitting at least one valid path. Mean invalid-path rate: {100*invalid:.3f}\%; mean extreme-surface rate among valid paths: {100*extreme:.3f}\%.",
+                report._table(["Lag", "Model PC1", "PC2", "PC3", "History PC1", "PC2", "PC3"], acf,
+                    caption=f"GROMM2-{measure} mean within-path observable PCA autocorrelations. The 32 simulated paths are the leading paths of the 1,000-path static audit; historical columns use causal training windows. Black: descriptive, ungraded.", label=f"tab:gromm2-{measure.lower()}-acf")])
     literature_root = root.parent / "competitor-static-20261112-v1"
     literature = {}
     literature_tables = []

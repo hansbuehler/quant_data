@@ -2195,7 +2195,7 @@
   },
   "gromm2_static_partial": {
     "Q": {
-      "origins": 1,
+      "origins": 12,
       "paths": 1000,
       "source": "/home/hans/quantdata_data/quant_data/hedge2/runs/repository-gromm2-static-full-20261115/static/Q",
       "unsupported_horizons": [

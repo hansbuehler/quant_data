@@ -211,6 +211,70 @@ Q & 44 & 0.701 & 1.239 & 0.190 & 0.129 & 1.567 \\
 \bottomrule\end{tabular}\end{table}
 
 \begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{GROMM2 pooled observable covariance: error of the first three eigenvalue shares and maximum angle of the leading three-dimensional subspaces against the data. Black: descriptive, ungraded. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:gromm2-covariance-detail}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Measure & Eigen-share error & Max angle (degrees) \\
+\midrule
+P & 0.198 & 85.264 \\
+Q & 0.209 & 85.382 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{GROMM2 pooled spot--surface correlations in the fixed observable PCA basis. P and Q use the same observed data; Q comparison is descriptive. Black: ungraded. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:gromm2-leverage}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Measure & Observable PC & Model spot corr. & Data spot corr. & Difference \\
+\midrule
+P & 1 & -0.213 & -0.680 & 0.467 \\
+P & 2 & 0.175 & 0.157 & 0.019 \\
+P & 3 & 0.128 & -0.008 & 0.136 \\
+Q & 1 & -0.083 & -0.680 & 0.597 \\
+Q & 2 & 0.183 & 0.157 & 0.026 \\
+Q & 3 & 0.238 & -0.008 & 0.245 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{GROMM2 one-day observable PC1 tail diagnostics. Forty-four dates make 1\% and 5\% tails exploratory. Colors apply only to exception counts; other entries are ungraded. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:gromm2-tails}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Measure & Quantile & Dates & Exceptions & Expected & Exact p & Pinball \\
+\midrule
+P & 0.01 & 44 & \textcolor{orange}{0} & 0.440 & 1.000 & 0.032 \\
+P & 0.05 & 44 & \textcolor{orange}{0} & 2.200 & 0.172 & 0.101 \\
+P & 0.95 & 44 & \textcolor{orange}{6} & 2.200 & 0.022 & 0.116 \\
+P & 0.99 & 44 & \textcolor{orange}{2} & 0.440 & 0.072 & 0.042 \\
+Q & 0.01 & 44 & \textcolor{orange}{0} & 0.440 & 1.000 & 0.033 \\
+Q & 0.05 & 44 & \textcolor{orange}{0} & 2.200 & 0.172 & 0.095 \\
+Q & 0.95 & 44 & \textcolor{red}{7} & 2.200 & 0.006 & 0.106 \\
+Q & 0.99 & 44 & \textcolor{orange}{2} & 0.440 & 0.072 & 0.039 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{GROMM2 one-day observable log-IV forecast errors by month; ratio compares the model with the zero-change persistence forecast. These are surface-dynamics diagnostics, not next-day option-price alpha tests. Black: descriptive, ungraded. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:gromm2-monthly}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Measure & Month & Dates & RMSE & Persistence & Ratio \\
+\midrule
+P & 2024-04 & 22 & 0.166 & 0.187 & 0.887 \\
+P & 2024-05 & 22 & 0.115 & 0.193 & 0.594 \\
+Q & 2024-04 & 22 & 0.148 & 0.187 & 0.791 \\
+Q & 2024-05 & 22 & 0.106 & 0.193 & 0.547 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{GROMM2 rolling persistence-normalized log-IV RMSE: first and last full windows and their ratio. The 44-date sample cannot form a 63-date window. Black: descriptive, ungraded. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:gromm2-rolling}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Measure & Window & Windows & First ratio & Last ratio & Last / first \\
+\midrule
+P & 21 & 24 & 0.886 & 0.585 & 0.661 \\
+P & 63 & 0 & -- & -- & -- \\
+Q & 21 & 24 & 0.795 & 0.544 & 0.684 \\
+Q & 63 & 0 & -- & -- & -- \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
 \caption{GROMM2 same-day observed-quote fit on the repository's reported calibration population, pooled by quote count. Outside distance and midpoint MAE are in units of half-spread. This is a different quote population from the standalone V2 table. Black: descriptive and ungraded. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:gromm2-same-day-fit}
 \begin{tabular}{@{}lrrrr@{}}
 \toprule
@@ -219,7 +283,7 @@ Dates & Quotes & Inside spread \% & Mean outside / half-spread & MAE / half-spre
 44 & 236347 & 99.541 & 0.001 & 0.164 \\
 \bottomrule\end{tabular}\end{table}
 
-GROMM2-Q static checks currently cover 1 of 44 origins. The fixed-expiry tower does not support simulation days 125 or 259 without an unapproved expiry-replenishment extension.
+GROMM2-Q static checks currently cover 12 of 44 origins. The fixed-expiry tower does not support simulation days 125 or 259 without an unapproved expiry-replenishment extension.
 
 \begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
 \caption{GROMM2-Q static violation counts on completed origins only, with 1,000 paths per origin. N/A counts unavailable price nodes; a zero count does not prove no arbitrage. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:gromm2-q-static}
@@ -247,18 +311,18 @@ Day & Tenor & Decr. & Convex & Vert. & Lower & Upper & K=0 & Cal. & N/A \\
 \toprule
 Day & Tenor & IV 1\% & IV 500\% & Reprice fail \% \\
 \midrule
-1 & 1 & 0.033 & 0.000 & 0.000 \\
-1 & 2 & 0.014 & 0.000 & 0.000 \\
-1 & 5 & 0.000 & 0.000 & 0.000 \\
-1 & 10 & 0.000 & 0.000 & 0.000 \\
-5 & 1 & 0.033 & 0.000 & 0.000 \\
-5 & 2 & 0.000 & 0.000 & 0.000 \\
-5 & 5 & 0.000 & 0.000 & 0.000 \\
-5 & 10 & 0.010 & 0.000 & 0.000 \\
-10 & 1 & 0.095 & 0.000 & 0.000 \\
-10 & 2 & 0.105 & 0.000 & 0.000 \\
-10 & 5 & 0.110 & 0.000 & 0.000 \\
-10 & 10 & 0.162 & 0.000 & 0.000 \\
+1 & 1 & 1.870 & 0.000 & 0.000 \\
+1 & 2 & 1.364 & 0.000 & 0.000 \\
+1 & 5 & 0.415 & 0.000 & 0.000 \\
+1 & 10 & 0.031 & 0.000 & 0.000 \\
+5 & 1 & 2.572 & 0.000 & 0.000 \\
+5 & 2 & 2.742 & 0.000 & 0.000 \\
+5 & 5 & 1.557 & 0.000 & 0.000 \\
+5 & 10 & 0.907 & 0.000 & 0.000 \\
+10 & 1 & 0.987 & 0.000 & 0.000 \\
+10 & 2 & 1.286 & 0.000 & 0.000 \\
+10 & 5 & 1.410 & 0.000 & 0.000 \\
+10 & 10 & 1.311 & 0.000 & 0.000 \\
 \bottomrule\end{tabular}\end{table}
 
 \begingroup\color{blue}
