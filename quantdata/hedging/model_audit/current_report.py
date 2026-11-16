@@ -78,7 +78,7 @@ def legacy_blue(tex: str) -> str:
     body = re.sub(r"Next-day prediction uses surviving OTM hedge-book contracts.*?\n\n", "", body, flags=re.DOTALL)
     body = re.sub(r"A correct stochastic model need not put its conditional-mean forecast.*?\n\n", "", body, flags=re.DOTALL)
     body = re.sub(r"Next-day forecast in-spread rates and mean outside distances.*?Price-prediction grading instead compares MAE with the same contracts' origin observed midpoints carried by the origin-only one-day discount factor\. ", "", body, flags=re.DOTALL)
-    body = body.replace(" and next-day quoted-price MAE is slightly worse than persistence", "")
+    body = body.replace(", tail/ACF mismatches remain, and next-day quoted-price MAE is slightly worse than persistence", ", and tail/ACF mismatches remain")
     body = re.sub(r"\\textcolor\{(?:black|orange|red)\}", r"\\textcolor{blue}", body)
     body = re.sub(r"\\includegraphics(\[[^]]*\])?\{([^}]+)\}",
         lambda match: r"\includegraphics" + (match[1] or "") + "{legacy/" + match[2] + "}", body)
@@ -209,10 +209,10 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
             item["forecast_rmse"], item["forecast_variance_calibration"]["conditional_variance_over_forecast_mse"]])
     if gromm_rows:
         metrics["gromm2_partial_forecasts"] = gromm_summaries
-        gromm_section = [r"\section{GROMM2: partial matched forecasts}",
-            r"The model is fitted independently at each origin using the repository model and the paper quote objective. Results below use the available origins only; Q against realized data is descriptive, not a claim that Q is the physical law. Long-horizon and static-arbitrage diagnostics remain outstanding.",
+        gromm_section = [r"\section{GROMM2: matched forecasts}",
+            r"The model is fitted independently at each origin using the repository model and the paper quote objective. Results below use the available origins only; Q against realized data is descriptive, not a claim that Q is the physical law. Long-horizon diagnostics and full-origin static-arbitrage diagnostics remain outstanding.",
             report._table(["Measure", "Dates", "Cond. trace", "Pooled trace", "Frob.", "RMSE", "Variance/MSE"], gromm_rows,
-                caption="GROMM2 one-day forecasts, 1,000 paths per origin and measure. The number of completed dates may differ between P and Q while the run is active. Black: ungraded partial statistics.", label="tab:gromm2-partial")]
+                caption="GROMM2 one-day forecasts, 1,000 paths per origin and measure. Dates show completed origins out of 44. Black: descriptive, ungraded statistics.", label="tab:gromm2-partial")]
         fit_rows = []
         for day in dates:
             folder = gromm / f"gromm2/{day}"
@@ -230,6 +230,28 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
             gromm_section.append(report._table(["Dates", "Quotes", "Inside spread %", "Mean outside / half-spread", "MAE / half-spread"],
                 [[len(fit_rows), total, 100 * weighted("coverage"), weighted("mean_excess"), weighted("mid_mae")]],
                 caption="GROMM2 same-day observed-quote fit on the repository's reported calibration population, pooled by quote count. Outside distance and midpoint MAE are in units of half-spread. This is a different quote population from the standalone V2 table. Black: descriptive and ungraded.", label="tab:gromm2-same-day-fit"))
+    gromm_static = root.parent / "repository-gromm2-static-full-20261115/static"
+    for measure in ("P", "Q"):
+        saved = rows(gromm_static / measure)
+        if not saved:
+            continue
+        if any(row["origin"] not in dates or row["model"] != f"repository GROMM2-{measure}" or row["paths"] != 1000 for row in saved):
+            raise ValueError("GROMM2 static results do not match the approved 1,000-path comparison")
+        grouped = literature_static_summary([{"origin_date": row["origin"], "status": "scored", "results": row["results"]}
+            for row in saved], [row["origin"] for row in saved], horizons=(1, 5, 10))
+        grouped.to_csv(output / f"current_gromm2_{measure.lower()}_static.csv", index=False)
+        counts = [[int(row.simulation_day), int(row.business_dte),
+            *[int(getattr(row, f"{name}_violations")) for name in STATIC_CONDITIONS], int(row.unavailable_prices)]
+            for row in grouped.itertuples()]
+        boundaries = [[int(row.simulation_day), int(row.business_dte), row.iv_library_min_vol_cases_pct,
+            row.iv_library_max_vol_cases_pct, row.iv_failed_pct] for row in grouped.itertuples()]
+        metrics.setdefault("gromm2_static_partial", {})[measure] = {"origins": len(saved), "paths": 1000,
+            "source": str(gromm_static / measure), "unsupported_horizons": [125, 259]}
+        gromm_section.extend([rf"GROMM2-{measure} static checks currently cover {len(saved)} of 44 origins. The fixed-expiry tower does not support simulation days 125 or 259 without an unapproved expiry-replenishment extension.",
+            report._table(["Day", "Tenor", "Decr.", "Convex", "Vert.", "Lower", "Upper", "K=0", "Cal.", "N/A"], counts,
+                caption=f"GROMM2-{measure} static violation counts on completed origins only, with 1,000 paths per origin. N/A counts unavailable price nodes; a zero count does not prove no arbitrage.", label=f"tab:gromm2-{measure.lower()}-static"),
+            report._table(["Day", "Tenor", "IV 1%", "IV 500%", "Reprice fail %"], boundaries,
+                caption=f"GROMM2-{measure} library-implied volatility boundary and repricing-failure percentages among finite prices. Boundary estimates are retained, and boundary and repricing-failure counts can overlap.", label=f"tab:gromm2-{measure.lower()}-static-iv")])
     literature_root = root.parent / "competitor-static-20261112-v1"
     literature = {}
     literature_tables = []
@@ -408,7 +430,7 @@ def updated_section(root: Path, gromm: Path, source: Path, output: Path) -> tupl
             caption="Earlier STRT-16 PC1 pointwise tail diagnostics. With only 44 dates all tails remain exploratory.", label="tab:current-tails"),
         r"\endgroup",
         r"\subsection{Outstanding work and objective differences}",
-        r"DYSANOS v1 used the paper's full joint affine-200/five-session VAR; the run was stopped at the user's request and its partial fits are retained. No completed 44-origin result is claimed. GROMM2 uses a separately identified calibration with actual observed bid/ask, the paper's linear excess and 0.05 midpoint term plus restoring cap penalty. The old pseudo-Huber chunks are not loaded. Its requested GROMM2 geometry and latent-X dependence estimator remain explicit extensions. GROMM GPU training and forecasts now run independently; remaining statistics run on CPU.",
+        r"DYSANOS v1 used the paper's full joint affine-200/five-session VAR; the run was stopped at the user's request and its partial fits are retained. No completed 44-origin result is claimed. GROMM2 uses a separately identified calibration with actual observed bid/ask, the paper's linear excess and 0.05 midpoint term plus restoring cap penalty. The old pseudo-Huber chunks are not loaded. Its requested GROMM2 geometry and latent-X dependence estimator remain explicit extensions. The coverage table distinguishes completed fits and one-day forecasts from outstanding diagnostics.",
         r"\clearpage\appendix\section{Historical evidence: blue values are not updated refits}",
         r"The following earlier report is retained for traceability. Its numbers, former quality colors and plot labels are blue. Its completion claims refer to those older model variants only, not to the currently requested DYSANOS v1/v2 and repository GROMM2 refits. Refer to the current coverage table for outstanding work.",
     ]
@@ -443,7 +465,8 @@ def build(root: Path, gromm: Path, source: Path, output: Path, retain: Path) -> 
             f"Standalone quote/static origins: {metrics.get('standalone_v2_full_diagnostics', {}).get('quotes_and_static_origins', 0)}/44; long-path origins: {metrics.get('standalone_v2_full_diagnostics', {}).get('long_complete_origins', 0)}/44.\n"
             "Earlier STRT-16 is a different model; its old guarded-decoder results are blue.\n"
             "Saved FuNVol and VolGAN PCA8 static checks include per-tenor violation and IV-boundary rates in current_literature_static.csv. AD-Seq-Vol partial results are in current_diffusion_static_partial.csv; simulations were stopped at the user's request.\n"
-            "DYSANOS v1 was stopped at the user's request; paper-objective repository GROMM2 fitting and P/Q forecasts remain incomplete.\n")
+            "DYSANOS v1 was stopped at the user's request; "
+            f"repository GROMM2: {metrics['coverage'][-1][1]}/44 fits; {metrics['coverage'][-1][2]}.\n")
         retain.mkdir(parents=True, exist_ok=True)
         selected = [tex, output / "MODEL_DYNAMICS_REPORT.pdf", output / "CURRENT_RESULTS.json", output / "STATS.md",
             *output.glob("current_*.csv"), *list((output / "legacy").glob("*.pdf"))]
