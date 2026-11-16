@@ -37,6 +37,15 @@ def read_view(path: Path):
     return View(**values), initial
 
 
+def prepared_complete(directory: Path) -> dict | None:
+    """Regenerate preparation arrays if retained metadata outlives cleaned files."""
+    marker = directory / "COMPLETE.json"
+    if not marker.exists():
+        return None
+    manifest = json.loads(marker.read_text())
+    return manifest if all((directory / filename).is_file() for filename in manifest["files_sha256"]) else None
+
+
 def prepare_origin(run: Path, origin: str, *, reuse_from: Path | None = None) -> dict:
     """Cache every CPU view and initializer before this origin may claim a GPU."""
     import jax
@@ -62,8 +71,9 @@ def prepare_origin(run: Path, origin: str, *, reuse_from: Path | None = None) ->
                 raise ValueError(f"Prepared GROMM2 data identity changed: {directory}")
         else:
             _json(directory / "IDENTITY.json", identity)
-        if (directory / "COMPLETE.json").exists():
-            return json.loads((directory / "COMPLETE.json").read_text())
+        existing = prepared_complete(directory)
+        if existing is not None:
+            return existing
         started = time.monotonic()
         days = {day: data.load_day(run / "data-cache", day) for day in [*history, current]}
         previous = None if reuse_from is None else pipeline.origin_dir(reuse_from, "gromm2", current) / "prepared"

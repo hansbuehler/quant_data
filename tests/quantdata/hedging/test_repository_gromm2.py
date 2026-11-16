@@ -95,6 +95,18 @@ def test_prepared_view_roundtrip_preserves_arrays_and_initializer(tmp_path):
     np.testing.assert_array_equal(restored_initial, initial)
 
 
+def test_missing_preparation_arrays_are_not_marked_complete(tmp_path):
+    import json
+
+    from quantdata.hedging.model_audit.repository_gromm2_inputs import prepared_complete
+
+    manifest = {"files_sha256": {"0000.npz": "digest"}}
+    (tmp_path / "COMPLETE.json").write_text(json.dumps(manifest))
+    assert prepared_complete(tmp_path) is None
+    (tmp_path / "0000.npz").touch()
+    assert prepared_complete(tmp_path) == manifest
+
+
 def test_all_cpu_preparation_finishes_before_gpu_allocation(tmp_path, monkeypatch):
     import sys
 
