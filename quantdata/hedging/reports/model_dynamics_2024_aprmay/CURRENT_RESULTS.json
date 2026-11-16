@@ -2194,14 +2194,35 @@
     "mid_mae_half_spreads": 0.16369852386033643
   },
   "gromm2_static_partial": {
+    "P": {
+      "origins": 44,
+      "paths": 1000,
+      "source": "/home/hans/quantdata_data/quant_data/hedge2/runs/repository-gromm2-static-full-20261115/static/P",
+      "unsupported_horizons": [
+        125,
+        259
+      ]
+    },
     "Q": {
-      "origins": 12,
+      "origins": 44,
       "paths": 1000,
       "source": "/home/hans/quantdata_data/quant_data/hedge2/runs/repository-gromm2-static-full-20261115/static/Q",
       "unsupported_horizons": [
         125,
         259
       ]
+    }
+  },
+  "gromm2_recursive_partial": {
+    "P": {
+      "origins": 44,
+      "valid_origins": 44,
+      "source": "/home/hans/quantdata_data/quant_data/hedge2/runs/repository-gromm2-recursive-full-20261116/recursive/P"
+    },
+    "Q": {
+      "origins": 44,
+      "valid_origins": 44,
+      "source": "/home/hans/quantdata_data/quant_data/hedge2/runs/repository-gromm2-recursive-full-20261116/recursive/Q"
     }
   },
   "literature_static": {

@@ -283,7 +283,49 @@ Dates & Quotes & Inside spread \% & Mean outside / half-spread & MAE / half-spre
 44 & 236347 & 99.541 & 0.001 & 0.164 \\
 \bottomrule\end{tabular}\end{table}
 
-GROMM2-Q static checks currently cover 12 of 44 origins. The fixed-expiry tower does not support simulation days 125 or 259 without an unapproved expiry-replenishment extension.
+GROMM2-P static checks currently cover 44 of 44 origins. The fixed-expiry tower does not support simulation days 125 or 259 without an unapproved expiry-replenishment extension.
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{GROMM2-P static violation counts on completed origins only, with 1,000 paths per origin. N/A counts unavailable price nodes; a zero count does not prove no arbitrage. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:gromm2-p-static}
+\begin{tabular}{@{}lrrrrrrrrr@{}}
+\toprule
+Day & Tenor & Decr. & Convex & Vert. & Lower & Upper & K=0 & Cal. & N/A \\
+\midrule
+1 & 1 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+1 & 2 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+1 & 5 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+1 & 10 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+5 & 1 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+5 & 2 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+5 & 5 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+5 & 10 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+10 & 1 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+10 & 2 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+10 & 5 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+10 & 10 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+\bottomrule\end{tabular}\end{table}
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{GROMM2-P library-implied volatility boundary and repricing-failure percentages among finite prices. Boundary estimates are retained, and boundary and repricing-failure counts can overlap. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:gromm2-p-static-iv}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Day & Tenor & IV 1\% & IV 500\% & Reprice fail \% \\
+\midrule
+1 & 1 & 1.633 & 0.000 & 0.000108 \\
+1 & 2 & 0.926 & 0.000 & 0.000 \\
+1 & 5 & 0.196 & 0.000 & 0.000 \\
+1 & 10 & 0.027 & 0.000 & 0.000 \\
+5 & 1 & 1.468 & 0.002 & 0.002 \\
+5 & 2 & 1.554 & 0.000 & 0.000 \\
+5 & 5 & 1.084 & 0.000 & 0.000 \\
+5 & 10 & 0.827 & 0.000 & 0.000 \\
+10 & 1 & 1.062 & 0.000 & 0.000433 \\
+10 & 2 & 1.270 & 0.000 & 0.000325 \\
+10 & 5 & 1.318 & 0.000 & 0.000325 \\
+10 & 10 & 1.637 & 0.000 & 0.000 \\
+\bottomrule\end{tabular}\end{table}
+
+GROMM2-Q static checks currently cover 44 of 44 origins. The fixed-expiry tower does not support simulation days 125 or 259 without an unapproved expiry-replenishment extension.
 
 \begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
 \caption{GROMM2-Q static violation counts on completed origins only, with 1,000 paths per origin. N/A counts unavailable price nodes; a zero count does not prove no arbitrage. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:gromm2-q-static}
@@ -311,18 +353,46 @@ Day & Tenor & Decr. & Convex & Vert. & Lower & Upper & K=0 & Cal. & N/A \\
 \toprule
 Day & Tenor & IV 1\% & IV 500\% & Reprice fail \% \\
 \midrule
-1 & 1 & 1.870 & 0.000 & 0.000 \\
-1 & 2 & 1.364 & 0.000 & 0.000 \\
-1 & 5 & 0.415 & 0.000 & 0.000 \\
-1 & 10 & 0.031 & 0.000 & 0.000 \\
-5 & 1 & 2.572 & 0.000 & 0.000 \\
-5 & 2 & 2.742 & 0.000 & 0.000 \\
-5 & 5 & 1.557 & 0.000 & 0.000 \\
-5 & 10 & 0.907 & 0.000 & 0.000 \\
-10 & 1 & 0.987 & 0.000 & 0.000 \\
-10 & 2 & 1.286 & 0.000 & 0.000 \\
-10 & 5 & 1.410 & 0.000 & 0.000 \\
-10 & 10 & 1.311 & 0.000 & 0.000 \\
+1 & 1 & 1.668 & 0.000 & 0.000 \\
+1 & 2 & 0.955 & 0.000 & 0.000 \\
+1 & 5 & 0.225 & 0.000 & 0.000 \\
+1 & 10 & 0.017 & 0.000 & 0.000 \\
+5 & 1 & 1.548 & 0.000 & 0.000974 \\
+5 & 2 & 1.662 & 0.000 & 0.000 \\
+5 & 5 & 1.020 & 0.000 & 0.000 \\
+5 & 10 & 0.681 & 0.000 & 0.000 \\
+10 & 1 & 0.758 & 0.000 & 0.000433 \\
+10 & 2 & 0.971 & 0.000 & 0.000325 \\
+10 & 5 & 1.133 & 0.000 & 0.000325 \\
+10 & 10 & 1.196 & 0.000 & 0.000 \\
+\bottomrule\end{tabular}\end{table}
+
+GROMM2-P recursive checks cover 44 of 44 origins, with 44 origins admitting at least one valid path. Mean invalid-path rate: 0.000\%; mean extreme-surface rate among valid paths: 2.415\%.
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{GROMM2-P mean within-path observable PCA autocorrelations. The 32 simulated paths are the leading paths of the 1,000-path static audit; historical columns use causal training windows. Black: descriptive, ungraded. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:gromm2-p-acf}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Lag & Model PC1 & PC2 & PC3 & History PC1 & PC2 & PC3 \\
+\midrule
+1 & 0.906 & 0.915 & 0.891 & 0.805 & 0.832 & 0.701 \\
+5 & 0.607 & 0.641 & 0.592 & 0.476 & 0.523 & 0.309 \\
+21 & 0.064 & 0.071 & 0.075 & 0.019 & 0.114 & 0.085 \\
+63 & 0.010 & 0.010 & 0.013 & -0.334 & -0.348 & -0.232 \\
+\bottomrule\end{tabular}\end{table}
+
+GROMM2-Q recursive checks cover 44 of 44 origins, with 44 origins admitting at least one valid path. Mean invalid-path rate: 0.000\%; mean extreme-surface rate among valid paths: 0.000\%.
+
+\begin{table}[H]\centering\small\setlength{\tabcolsep}{4pt}
+\caption{GROMM2-Q mean within-path observable PCA autocorrelations. The 32 simulated paths are the leading paths of the 1,000-path static audit; historical columns use causal training windows. Black: descriptive, ungraded. Color rules: Black: ungraded entries. No orange or red grades are assigned. Missing graded entries are orange; other raw quantities are ungraded.}\label{tab:gromm2-q-acf}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Lag & Model PC1 & PC2 & PC3 & History PC1 & PC2 & PC3 \\
+\midrule
+1 & 0.846 & 0.843 & 0.800 & 0.805 & 0.832 & 0.701 \\
+5 & 0.498 & 0.518 & 0.418 & 0.476 & 0.523 & 0.309 \\
+21 & 0.064 & 0.076 & 0.101 & 0.019 & 0.114 & 0.085 \\
+63 & -0.011 & -0.016 & -0.010 & -0.334 & -0.348 & -0.232 \\
 \bottomrule\end{tabular}\end{table}
 
 \begingroup\color{blue}
