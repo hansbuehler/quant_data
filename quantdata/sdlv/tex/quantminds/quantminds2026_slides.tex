@@ -7,7 +7,7 @@
 \setbeamercolor{frametitle}{fg=black}
 \setbeamerfont{frametitle}{series=\bfseries}
 \usepackage{amsmath,amssymb,mathtools}
-\usepackage{booktabs}
+\usepackage{booktabs,array}
 \usepackage{graphicx}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning}
@@ -51,7 +51,7 @@
 \item \textbf{Why:} desks need dynamics, not just today's fit
 \item \textbf{The model:} discrete local variance (DLV), with an explicit risk-neutral drift
 \item \textbf{Evidence:} S\&P~500, and the same arbitrage test against other generators
-\item \textbf{Summary:} what GROMM does, and what it doesn't
+\item \textbf{Takeaways}
 \end{enumerate}
 \end{frame}
 
@@ -130,6 +130,27 @@ The surface cannot move freely: no arbitrage within a day (\textbf{static}) and 
 The whole surface is the state: its dynamics are \textbf{estimated from history} and \textbf{arbitrage-free from one day to the next}.
 \end{alertblock}
 \slideref{Dupire (1994). Pricing with a smile; Guyon, Henry-Labord\`ere (2011). The smile calibration problem solved.}
+\end{frame}
+
+% -------------------------------------------------------------------
+\begin{frame}{Related work: option-surface dynamics}
+\vspace{-0.4em}\scriptsize
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{3.5cm}>{\raggedright\arraybackslash}p{2.9cm}>{\raggedright\arraybackslash}p{3.8cm}>{\raggedright\arraybackslash}p{1.7cm}@{}}
+\toprule
+ & \textbf{state} & \textbf{risk-neutral dynamics} & \textbf{implemented} \\
+\midrule
+Schweizer--Wissel (2008) & local implied vols, one expiry & drift restriction and existence & theory \\
+Wissel (2007) & discrete set of options & drift restriction on discrete tradables & theory \\
+Carmona--Nadtochiy (2009) & local-vol surface & drift conditions; general existence open & static fit \\
+Tangent L\'evy (2012, 2017) & L\'evy code book & arbitrage-free by construction & yes; limited fit \\
+CRC (Gambara--Teichmann 2021) & generalised Bates & arbitrage-free between recalibrations & yes \\
+Neural SDE (Cohen et al.\ 2023) & call lattice, latent factors & static: exact; dynamic: diagnostic & yes ($\PP$) \\
+VolGAN, diffusion, \dots & implied-vol grids & arbitrage penalised and reweighted & yes ($\PP$) \\
+\midrule
+\textbf{GROMM} & \textbf{DLV on fixed contracts} & \textbf{explicit drift, existence proved} & \textbf{SPX} \\
+\bottomrule
+\end{tabular}
 \end{frame}
 
 
@@ -329,6 +350,7 @@ If the vol of vol $\cin{\xi}$ is locally Lipschitz and bounded, GROMM has a uniq
 \begin{center}
 \headline{97\%}\ of 2.2M SPX quotes (2022--25) inside bid-ask
 \end{center}
+\slideref{CRC: our own implementation, following Gambara--Teichmann.}
 \end{frame}
 
 % -------------------------------------------------------------------
@@ -392,7 +414,7 @@ CRC under $\Q$ & 140 & 320 \\
 \item under $\Q$: as many exceedances as chance predicts
 \item under $\PP$ (risk premia) and for CRC (generalised Bates): rejected everywhere
 \end{itemize}
-\slideref{5{,}001 instruments $=$ 25 daily expiries $\times$ 200 strikes $+$ spot. Tests $=$ (instrument, day) pairs live and near the money on enough of 100{,}000 paths.}
+\slideref{5{,}001 instruments $=$ 25 daily expiries $\times$ 200 strikes $+$ spot. Tests $=$ (instrument, day) pairs live and near the money on enough of 100{,}000 paths. CRC: our own implementation, following Gambara--Teichmann.}
 \end{frame}
 
 
@@ -439,34 +461,17 @@ rank 3 $=$ the neural SDE's 3 Brownian motions; same start state, 39 contracts, 
 % ===================================================================
 % D  CLOSE
 % ===================================================================
-\divider{Summary}{what GROMM does, and what it doesn't}
-
-\begin{frame}{What GROMM does, and what it doesn't (yet)}
-\begin{columns}[T]
-\column{.48\textwidth}
-\textbf{Does}
-\begin{itemize}
-\item explicit $\Q$ for every option on the grid
-\item no static and no dynamic arbitrage, by construction
-\item 97\% of S\&P~500 quotes inside bid-ask, including the next-day expiry
-\item $\PP$ and $\Q$ from one state
-\item fast: one tridiagonal solve per factor and expiry
-\end{itemize}
-\column{.48\textwidth}
-\textbf{Doesn't (yet)}
-\begin{itemize}
-\item vol of vol is estimated once from history: it does not change with the market state
-\item continuous paths: no jumps
-\end{itemize}
-\end{columns}
-\end{frame}
+\divider{Takeaways}{three things to remember}
 
 % -------------------------------------------------------------------
 \begin{frame}{Takeaways}
-\begin{enumerate}
-\item \textbf{State $=$ discrete local variance (DLV):} static arbitrage is impossible by construction.
-\item \textbf{Itô on the density recursion:} an explicit drift, node by node. Dynamic arbitrage is impossible by construction.
-\item \textbf{On SPX:} 97\% inside bid-ask, and 62{,}569 BHW arbitrage tests passed. Other generators fail the same test.
+\begin{enumerate}\setlength\itemsep{1.2em}
+\item {\large\textbf{No static arbitrage, and it fits the market.}}\\
+Any DLV grid $\Sigma\ge0$ is an arbitrage-free surface, and \textbf{97\% of 2.2 million} SPX quotes lie inside bid-ask.
+\item {\large\textbf{No dynamic arbitrage: analytic $\Q$.}}\\
+The risk-neutral drift is a closed-form formula, node by node. Every option price is a martingale by construction.
+\item {\large\textbf{Tested, not assumed.}}\\
+SPX passes \textbf{62{,}569} BHW arbitrage tests; competing generators either fail the test or cannot fit the market.
 \end{enumerate}
 \vfill
 \begin{center}
