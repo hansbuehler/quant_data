@@ -28,6 +28,7 @@ from quantdata.gromm2.hedging_policy import (
     _batch,
     _Progress,
     _write_json,
+    centered_gain,
     feature_normalization,
     load_scenarios,
     power_exponential_utility,
@@ -141,9 +142,12 @@ def weighted_oce(pnl: torch.Tensor, translation: torch.Tensor, risk_aversion: fl
 
 def joint_objective(model: JointOptionsHedge, output: JointOutput, payoff: torch.Tensor,
                     observation_multipliers: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-    empty = -weighted_oce(output.empty.trading_gain, model.empty.translation,
+    gains = [policy.trading_gain for policy in (output.empty, output.claim)]
+    if model.config.center_gains:
+        gains = [centered_gain(gain, observation_multipliers) for gain in gains]
+    empty = -weighted_oce(gains[0], model.empty.translation,
                           model.config.risk_aversion, observation_multipliers)
-    claim = -weighted_oce(output.claim.trading_gain - payoff, model.claim.translation,
+    claim = -weighted_oce(gains[1] - payoff, model.claim.translation,
                           model.config.risk_aversion, observation_multipliers)
     penalty = (observation_multipliers * (output.empty.penalty + output.claim.penalty)).mean()
     return empty + claim + model.config.penalty_weight * penalty, penalty

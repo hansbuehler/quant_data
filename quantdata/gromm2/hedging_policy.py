@@ -59,6 +59,7 @@ class HedgingPolicyConfig:
     soft_cap_fraction: float = 0.8
     penalty_weight: float = 1.0e-4
     normalization_floor: float = 1.0e-4
+    center_gains: bool = False
 
     def __post_init__(self) -> None:
         verify_inp(bool(self.label) and (self.label.startswith("*") or is_filename(self.label)), lambda: f"invalid policy label {self.label!r}")
@@ -131,6 +132,12 @@ def power_exponential_utility(value: torch.Tensor, risk_aversion: float) -> torc
     positive_utility = -torch.expm1(-risk_aversion * positive) / risk_aversion
     negative_utility = negative - 0.5 * risk_aversion * negative.square()
     return torch.where(value >= 0.0, positive_utility, negative_utility)
+
+
+def centered_gain(gain: torch.Tensor, weights: torch.Tensor | None = None) -> torch.Tensor:
+    """Subtract the batch (weighted) mean trading gain, so the training loss cannot reward in-sample statistical arbitrage."""
+    mean = gain.mean() if weights is None else (weights * gain).sum() / weights.sum()
+    return gain - mean
 
 
 def oce_value(pnl: torch.Tensor, translation: torch.Tensor, risk_aversion: float) -> torch.Tensor:
@@ -410,7 +417,8 @@ def _full_training_objective(model: HedgingPolicy, forward, data: ScenarioData, 
         for start in range(0, len(data.payoff), batch_size):
             features, prices, payoff = _batch(data, slice(start, start + batch_size), env=model.env)
             result = forward(features, prices)
-            pnl = result.trading_gain + model.config.liability_units * (claim_price - payoff)
+            gain = centered_gain(result.trading_gain) if model.config.center_gains else result.trading_gain
+            pnl = gain + model.config.liability_units * (claim_price - payoff)
             loss = -oce_value(pnl, model.translation, model.config.risk_aversion) + model.config.penalty_weight * result.penalty.mean()
             if not torch.isfinite(loss):
                 raise FloatingPointError("non-finite full-training objective")
@@ -527,7 +535,8 @@ def fit_policy(data: ScenarioData, *, directory: Path, config: HedgingPolicyConf
                         features, prices, payoff = _batch(data, indices, env=env)
                         optimizer.zero_grad(set_to_none=True)
                         result = forward(features, prices)
-                        pnl = result.trading_gain + config.liability_units * (claim_price - payoff)
+                        gain = centered_gain(result.trading_gain) if config.center_gains else result.trading_gain
+                        pnl = gain + config.liability_units * (claim_price - payoff)
                         loss = -oce_value(pnl, model.translation, config.risk_aversion) + config.penalty_weight * result.penalty.mean()
                         if not torch.isfinite(loss):
                             raise FloatingPointError("non-finite training loss; no paths are discarded")

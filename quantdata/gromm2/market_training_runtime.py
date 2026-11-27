@@ -11,6 +11,7 @@ from contextlib import contextmanager
 import torch
 from cdxcore.err import verify_inp
 
+from quantdata.gromm2.hedging_policy import centered_gain
 from quantdata.gromm2.joint_hedging import weighted_oce
 from quantdata.gromm2.market_batching import GPU_CAPTURE_LOCK
 
@@ -87,7 +88,8 @@ class IndependentPortfolioStep:
             policy = self.model.policies[name]
             self.optimizers[name].zero_grad(set_to_none=not self.use_cuda_graphs)
             output = self.forwards[name](features, prices)
-            loss = -weighted_oce(output.trading_gain - self.liabilities[name] * payoff,
+            gain = centered_gain(output.trading_gain) if self.model.config.center_gains else output.trading_gain
+            loss = -weighted_oce(gain - self.liabilities[name] * payoff,
                                  policy.translation, self.model.config.risk_aversion, torch.ones_like(payoff))
             loss = loss + self.model.config.penalty_weight * output.penalty.mean()
             loss.backward()

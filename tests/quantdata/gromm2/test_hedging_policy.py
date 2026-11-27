@@ -520,3 +520,12 @@ def test_device_is_operational_not_financial_checkpoint_identity(tmp_path: Path)
     assert "device" not in checkpoint["identity"]["config"]
     assert checkpoint["torch_cuda_rng"] is None
     assert checkpoint["runtime_device"] == report["device"] == "cpu"
+
+
+def test_centered_gain_has_zero_weighted_mean_and_is_shift_invariant():
+    from quantdata.gromm2.hedging_policy import centered_gain
+    gain = torch.tensor([1.0, -2.0, 4.0, 0.5], dtype=torch.float64)
+    weights = torch.tensor([0.5, 1.0, 2.0, 0.5], dtype=torch.float64)
+    assert abs(float(centered_gain(gain).mean())) < 1e-12
+    assert abs(float((weights * centered_gain(gain, weights)).sum())) < 1e-12
+    assert torch.allclose(centered_gain(gain + 3.0, weights), centered_gain(gain, weights))
